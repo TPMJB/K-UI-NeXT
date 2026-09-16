@@ -10,8 +10,9 @@ external serial SD adapter.
 **This is an early diagnostic, not a game dumper yet. The SD runtime launch
 and its disc/exFAT probes have passed on a physical console.** The user also
 confirms B selects CD fallback and reports successful cold boots; the boot count
-was not specified. Missing/corrupt-runtime fallback remains untested on hardware;
-see the [hardware evidence](docs/hardware-evidence.md).
+was not specified. Missing-file detection, checksum rejection and restoring the
+good runtime have now passed by user report; see the
+[hardware evidence](docs/hardware-evidence.md) for remaining coverage.
 New project code uses GPLv3; dependencies retain their own licenses. There is no
 separate contribution or commercial-relicensing agreement.
 
@@ -82,7 +83,7 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | --- | --- |
 | M1.0: source/build foundation and visible boot diagnostic | Diagnostic runs and display fix confirmed; cold boots reported working, count unspecified |
 | M1.1: raw-disc and FAT32/exFAT capability probes | Nine disc samples and exFAT fixture verified; FAT32 console-reported pass, PC verification pending |
-| M1.2: validated runtime loading from SD | exFAT SD handoff/runtime probes and B-selected fallback confirmed; missing/invalid-package fallback and restoration checks pending |
+| M1.2: validated runtime loading from SD | exFAT SD handoff/runtime probes and B-selected fallback confirmed; missing-file/checksum rejection and good-runtime restoration pass by user report; four other malformed fixtures remain untested on hardware |
 | M1.3: full-track GDI capture | Planned |
 | M1.4: SHA-256 capture verification and controlled stop/resume | Planned |
 | M1.5: hardware acceptance and minimal UI refinement | Planned |

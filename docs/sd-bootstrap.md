@@ -8,8 +8,10 @@ by copying new files to the card. Keep it as a known-working diagnostic disc.
 The uploaded log from build `addd439aaea5` confirms the SD runtime launch and
 passing disc/exFAT probes. The user also confirms that B selects CD bootstrap,
 normal startup reaches SD runtime, and cold boots work (count unspecified).
-Missing/corrupt-runtime fallback and restoring the good file remain untested on
-hardware. Ordinary runtime updates should need only a new
+The user has also confirmed the expected missing-file and bad-checksum messages
+and successful normal operation after restoring the good file. The other four
+malformed-package fixtures still lack hardware results; see the
+[hardware evidence](hardware-evidence.md). Ordinary runtime updates should need only a new
 `/KUI/runtime.kui` on the SD card. A bootstrap bug, new unsupported
 storage hardware or a future incompatible package format could still require
 a replacement CD. Do not burn each newly generated CDI for normal runtime tests.

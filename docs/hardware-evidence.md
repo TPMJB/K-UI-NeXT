@@ -22,13 +22,24 @@ Source inspection shows both the title and saved report header use the same
 compile-time role. The CD shows its own role during startup even on a successful
 load; it remains there when loading is skipped or fails. The user also reports
 that cold boots work. No count was supplied, so this is recorded as a successful
-user-reported check rather than a documented five-boot sequence. Missing-file
-and corrupt-package fallback have not yet been tested on hardware.
+user-reported check rather than a documented five-boot sequence.
+
+The user then completed the three-step missing-file/checksum/restoration check
+on the same disc. With the runtime renamed, the console reported that
+`runtime.kui` failed or was missing (wording recalled approximately). The
+`bad-checksum.kui` test produced `Runtime Checksum mismatch`. Renaming the good
+file back restored normal operation. These are user-reported hardware passes
+for missing-file detection, payload-checksum rejection and good-runtime
+restoration. No new log or screenshot was supplied, and diagnostic probes or
+controller responsiveness during automatic fallback were not separately reported.
 
 | Check | Observed result |
 | --- | --- |
 | SD execution handoff | Confirmed by the runtime log and the user's no-buttons startup report |
 | Hold B at startup | User confirms CD bootstrap selection; fallback probe results were not separately supplied |
+| Missing runtime file | User-reported pass: failed/missing-file explanation shown |
+| Bad payload checksum | User-reported pass: `Runtime Checksum mismatch` shown |
+| Restore good runtime | User-reported pass: normal operation returns after renaming the original file back |
 | Cold boots | User reports they work; count unspecified |
 | Video mode | 640x480 NTSC interlaced, buffered |
 | Disc TOCs | Both density regions parsed; three tracks |
@@ -72,11 +83,11 @@ These are unconfirmed by the supplied logs and user reports. If they were alread
 record the observed outcome rather than asking for another burn or repeating
 successful work.
 
-1. Boot without holding B and with the runtime file temporarily renamed;
-   confirm the missing-file explanation and usable CD fallback.
-2. Try the five supplied rejection fixtures without holding B, then restore the good package and
-   confirm the SD runtime starts again.
-3. Confirm the cold-boot count and controller response for the planned five-boot
+1. The other four supplied rejection fixtures (`bad-magic.kui`, `truncated.kui`,
+   `oversized.kui` and `wrong-version.kui`) still lack hardware results. Their
+   host checks pass. Record fallback usability when testing them; missing-file,
+   bad-checksum and restoration checks need not be repeated.
+2. Confirm the cold-boot count and controller response for the planned five-boot
    check. Existing successful boots count; do not repeat them just for a log.
 
 Follow the [one-disc test guide](sd-bootstrap.md) for the file changes. All
