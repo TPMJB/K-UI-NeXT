@@ -5,8 +5,10 @@ a separate diagnostic runtime loaded from SD. Both are independent KOS programs.
 The earlier `cf8210bc5442` CD has no SD loader; it cannot gain that ability just
 by copying new files to the card. Keep it as a known-working diagnostic disc.
 
-Once the bootstrap passes on the console, ordinary runtime updates should need
-only a new `/KUI/runtime.kui` on the SD card. A bootstrap bug, new unsupported
+The first console log from build `addd439aaea5` confirms an SD runtime launch
+and passing disc/exFAT probes. Recovery and repeated cold boots still need
+confirmation. Ordinary runtime updates should need only a new
+`/KUI/runtime.kui` on the SD card. A bootstrap bug, new unsupported
 storage hardware or a future incompatible package format could still require
 a replacement CD. Do not burn each newly generated CDI for normal runtime tests.
 

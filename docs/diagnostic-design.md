@@ -22,7 +22,8 @@ frame into the non-displayed drawing buffer, waits for vertical blank, then
 calls `vid_flip(-1)` to display it and select another drawing buffer. Waiting
 before drawing into the displayed buffer does not protect a redraw that lasts
 beyond the blanking interval. The startup log records the selected cable/mode
-and interlace state. Display stability still needs a physical-console check.
+and interlace state. The user confirmed the fix removes the visual errors on
+their setup; see the [hardware evidence](hardware-evidence.md).
 
 The drive adapter uses direct documented KOS firmware calls and PIO only. The
 small upstream BSD bus-activation helper retains its source attribution. No
