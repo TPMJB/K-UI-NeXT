@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-3.0-only
+ifndef KOS_BASE
+$(error Source .deps/kos/environ.sh before building)
+endif
+
+TARGET := build/kui-diagnostic.elf
+SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/storage_probe.c \
+           src/dreamcast/main.c src/dreamcast/disc.c src/dreamcast/drive_bus.c src/dreamcast/sd.c
+OBJECTS := $(patsubst %.c,build/dc/%.o,$(SOURCES)) build/dc/ff.o build/dc/ffunicode.o
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
+
+.PHONY: all force-build-id
+all: $(TARGET)
+include $(KOS_BASE)/Makefile.rules
+
+CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
+
+# Refresh the visible source identifier after every commit, even if main.c did
+# not change. Relinking also records the exact source state used by packaging.
+build/dc/src/dreamcast/main.o: force-build-id
+force-build-id:
+
+build/dc/%.o: %.c
+	@mkdir -p $(@D)
+	kos-cc -std=c11 -Wall -Wextra -Werror -MMD -MP $(CPPFLAGS) -c $< -o $@
+build/dc/ff.o: .deps/fatfs/source/ff.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	kos-cc -std=c11 -Wall -Wextra -MMD -MP $(CPPFLAGS) -c $< -o $@
+build/dc/ffunicode.o: .deps/fatfs/source/ffunicode.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	kos-cc -std=c11 -Wall -Wextra -MMD -MP $(CPPFLAGS) -c $< -o $@
+$(TARGET): $(OBJECTS)
+	kos-cc -o $@ $(OBJECTS) -Wl,-Map,build/kui-diagnostic.map
+	python3 tools/record_build.py
+
+-include $(OBJECTS:.o=.d)

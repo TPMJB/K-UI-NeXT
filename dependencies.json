@@ -1,0 +1,16 @@
+{
+  "kos": {
+    "url": "https://github.com/KallistiOS/KallistiOS.git",
+    "commit": "fcfa7d869471591ca1c777543261a7bfea7cb726"
+  },
+  "mkdcdisc": {
+    "url": "https://gitlab.com/simulant/mkdcdisc.git",
+    "commit": "4d74e40dd2122e14389a305ed1d86dd024201389"
+  },
+  "fatfs": [
+    {"url": "https://elm-chan.org/fsw/ff/arc/ff16.zip", "sha256": "99f7dc1f7e095356e4a9e3dbe29959090d8b948afe2bbc5441e52fdf4b85449e"},
+    {"url": "https://elm-chan.org/fsw/ff/patch/ff16p1.diff", "sha256": "7996ddc3135f3d534a8153f7d75d587030e5c8551b003c3b7ee823ffb7fc64bf"},
+    {"url": "https://elm-chan.org/fsw/ff/patch/ff16p2.diff", "sha256": "5cd39f1fc299f0f1dec9fa1ce544dc0bc048b2f6eb3b8161476ed20f9cf1e290"}
+  ],
+  "toolchain": {"profile": "stable", "gcc": "15.2.0", "binutils": "2.45.1", "newlib": "4.6.0.20260123"}
+}
