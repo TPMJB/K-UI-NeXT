@@ -102,7 +102,8 @@ static void draw(unsigned scroll) {
         busy ? (cancel_requested ? "STOP REQUESTED" : "WORKING") : "READY",
         line_count, log_truncated ? " (earlier lines truncated)" : "");
     mutex_unlock(&lock);
-    vid_waitvbl();
+    /* Multibuffer mode keeps this drawing area separate from the displayed
+     * frame. Clearing the displayed frame exposes blank/partial redraws. */
     vid_clear(8, 16, 24);
     minifont_set_color(100, 220, 220);
     minifont_draw_str(vram_s + 20 * 640 + 16, 640, "K-UI NeXT | Independent Dreamcast diagnostic");
@@ -113,11 +114,19 @@ static void draw(unsigned scroll) {
     minifont_draw_str(vram_s + 116 * 640 + 16, 640, status);
     for(unsigned i = 0; i < VISIBLE_LINES; ++i)
         minifont_draw_str(vram_s + (144 + i * 16) * 640 + 16, 640, visible[i]);
+    /* Publish the completed frame, then let KOS select the next drawing area. */
+    vid_waitvbl();
+    vid_flip(-1);
 }
 
 int main(void) {
-    vid_set_mode(DM_640x480, PM_RGB565);
+    vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
     kui_log("Boot diagnostic loaded entirely in RAM.");
+    kui_log("Video: %ux%u %s %s, buffered",
+        (unsigned)vid_mode->width, (unsigned)vid_mode->height,
+        vid_mode->cable_type == CT_VGA ? "VGA" :
+            (vid_mode->flags & VID_PAL ? "PAL" : "NTSC"),
+        vid_mode->flags & VID_INTERLACE ? "interlaced" : "progressive");
     kui_log("Replace boot CD with a known-good retail GD-ROM; close lid.");
     kui_log("A reads disc samples. X writes new test files to SD.");
     kui_log("Use a spare test card. No formatting; existing files preserved.");

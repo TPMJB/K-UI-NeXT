@@ -20,6 +20,15 @@ with a spare test card and a known-good retail disc.
 4. With power off, connect the SD adapter, insert the card and attach a controller.
    Boot the diagnostic CD. Photograph any failure screen, including the build ID.
 
+## Display stability
+
+Leave the initial screen idle for 30 seconds, then check it while a probe runs
+and while scrolling the log. The background and text should remain visible
+without whole-screen flashing or blank redraws. Record the `Video:` line and
+the actual cable/adapter and display being used. If the picture still flickers,
+describe whether the whole image flashes, only fine text shimmers, or the display
+loses signal; a short video can distinguish these symptoms without an SD reader.
+
 ## Disc samples
 
 1. Confirm the K-UI screen appears and the controller responds.

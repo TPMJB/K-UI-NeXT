@@ -11,6 +11,13 @@ It never checks the drive or writes a log concurrently with the worker. KOS's
 optional CD-ROM/ISO9660, dcload and serial debug output are disabled. Code and the
 KOS minifont are in the executable, so the boot CD can be removed.
 
+Video uses KOS's multibuffer mode. The main thread clears and draws a complete
+frame into the non-displayed drawing buffer, waits for vertical blank, then
+calls `vid_flip(-1)` to display it and select another drawing buffer. Waiting
+before drawing into the displayed buffer does not protect a redraw that lasts
+beyond the blanking interval. The startup log records the selected cable/mode
+and interlace state. Display stability still needs a physical-console check.
+
 The drive adapter uses direct documented KOS firmware calls and PIO only. The
 small upstream BSD bus-activation helper retains its source attribution. No
 firmware patch, DMA, streaming command or shared CD wrapper is used.
