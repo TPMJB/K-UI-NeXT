@@ -107,12 +107,15 @@ void kui_pattern(uint8_t *out, uint64_t offset, size_t size) {
 }
 
 uint32_t kui_crc32(uint32_t previous, const void *data, size_t size) {
+    static const uint32_t nibble[16]={0,0x1db71064,0x3b6e20c8,0x26d930ac,
+        0x76dc4190,0x6b6b51f4,0x4db26158,0x5005713c,0xedb88320,0xf00f9344,
+        0xd6d6a3e8,0xcb61b38c,0x9b64c2b0,0x86d3d2d4,0xa00ae278,0xbdbdf21c};
     const uint8_t *p = data;
     uint32_t crc = ~previous;
     for(size_t i = 0; i < size; ++i) {
         crc ^= p[i];
-        for(unsigned bit = 0; bit < 8; ++bit)
-            crc = (crc >> 1) ^ (UINT32_C(0xedb88320) & (0u - (crc & 1u)));
+        crc=(crc>>4)^nibble[crc&15];
+        crc=(crc>>4)^nibble[crc&15];
     }
     return ~crc;
 }

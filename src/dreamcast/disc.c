@@ -8,13 +8,16 @@
 
 /* All firmware-visible objects survive a failed abort. Once poisoned, this
  * adapter will not touch them again, and requires a console reset. */
-static bool initialized, poisoned;
+static bool initialized, poisoned, media_changed;
 static cd_read_params_t read_params;
 static cd_cmd_toc_params_t toc_params;
 static cd_cmd_chk_status_t detail;
 static struct { uint8_t before[32]; cd_toc_t data; uint8_t after[32]; } toc;
 static _Alignas(32) struct { uint8_t before[32], data[KUI_RAW_BYTES], after[32]; } raw[2];
 static _Alignas(32) struct { uint8_t before[32], data[KUI_DATA_BYTES], after[32]; } cooked[2];
+static _Alignas(32) struct {
+    uint8_t before[32], data[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES], after[32];
+} capture_raw[2];
 
 static uint64_t now(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
 static void pause_worker(void *ctx) { (void)ctx; thd_sleep(1); }
@@ -43,6 +46,7 @@ static bool command(int code, void *params, uint32_t timeout) {
     kui_log("  sense=%" PRId32 "/%" PRId32 " size=%lu ATA=%d",
         detail.err1, detail.err2, (unsigned long)detail.size, detail.ata);
     if(result == KUI_CMD_RECOVERY_FAILED) poisoned = true;
+    if(detail.err1 == 6 || detail.err1 == 2) media_changed = true;
     return false;
 }
 
@@ -110,9 +114,8 @@ static bool sample(const struct kui_track *track, uint32_t fad) {
     return true;
 }
 
-void kui_disc_probe(void) {
-    if(poisoned) { kui_log("Drive unavailable after failed recovery; reset console"); return; }
-    kui_log("DISC PROBE: insert a known-good retail GD-ROM first");
+bool kui_disc_prepare(struct kui_toc sessions[2]) {
+    if(poisoned) { kui_log("Drive unavailable after failed recovery; reset console"); return false; }
     if(!initialized) { kui_drive_init_bus(); initialized = true; }
     bool ready = false;
     /* Two additional INIT attempts for disc-change sense only. */
@@ -120,20 +123,20 @@ void kui_disc_probe(void) {
         if(command(CD_CMD_INIT, NULL, 10000)) { ready = true; break; }
         if(poisoned || detail.err1 != 6) break;
     }
-    if(!ready) { kui_log("Disc initialization did not complete"); return; }
-    struct kui_toc sessions[2];
+    if(!ready) { kui_log("Disc initialization did not complete"); return false; }
+    media_changed = false;
     for(unsigned area = 0; area < 2; ++area) {
         memset(&toc, 0xa5, sizeof(toc));
         toc_params = (cd_cmd_toc_params_t){(cd_area_t)area, &toc.data};
-        if(!command(CD_CMD_GETTOC2, &toc_params, 5000)) return;
+        if(!command(CD_CMD_GETTOC2, &toc_params, 5000)) return false;
         if(!kui_guard_is(toc.before, 32, 0xa5) || !kui_guard_is(toc.after, 32, 0xa5)) {
-            kui_log("TOC GUARD CORRUPTION: RESET REQUIRED"); poisoned = true; return;
+            kui_log("TOC GUARD CORRUPTION: RESET REQUIRED"); poisoned = true; return false;
         }
         kui_log("%s TOC first=%08" PRIx32 " last=%08" PRIx32 " end=%08" PRIx32,
             area ? "HIGH" : "LOW", toc.data.first, toc.data.last, toc.data.leadout_sector);
         if(!kui_parse_toc(toc.data.entry, toc.data.first, toc.data.last,
                            toc.data.leadout_sector, &sessions[area])) {
-            kui_log("TOC invalid or unsupported; no sample reads issued"); return;
+            kui_log("TOC invalid or unsupported; no sample reads issued"); return false;
         }
         for(unsigned j = 0; j < sessions[area].count; ++j) {
             const struct kui_track *t = &sessions[area].tracks[j];
@@ -141,6 +144,37 @@ void kui_disc_probe(void) {
                 t->number, t->control, t->start, t->end);
         }
     }
+    return true;
+}
+
+enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+    (void)ctx;
+    if(!out || !sectors || sectors>KUI_CAPTURE_CHUNK || fad<150 || fad>0xffffff ||
+       sectors>0x1000000u-fad || poisoned || media_changed || kui_cancelled()) return KUI_READ_FATAL;
+    if(!set_mode(2352,0)) return KUI_READ_FATAL;
+    size_t bytes=(size_t)sectors*KUI_RAW_BYTES;
+    for(unsigned i=0;i<2;i++) {
+        uint8_t fill=i?0x5a:0xa5;
+        memset(&capture_raw[i],fill,sizeof(capture_raw[i]));
+        read_params=(cd_read_params_t){.start_sec=fad,.num_sec=sectors,.buffer=capture_raw[i].data,.is_test=0};
+        if(!command(CD_CMD_PIOREAD,&read_params,5000))
+            return poisoned || media_changed || kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;
+        if(!kui_guard_is(capture_raw[i].before,32,fill) ||
+           !kui_guard_is(capture_raw[i].after,32,fill) ||
+           !kui_guard_is(capture_raw[i].data+bytes,sizeof(capture_raw[i].data)-bytes,fill)) {
+            poisoned=true;kui_log("CAPTURE GUARD CORRUPTION: RESET REQUIRED");return KUI_READ_FATAL;
+        }
+    }
+    if(memcmp(capture_raw[0].data,capture_raw[1].data,bytes)) {
+        kui_log("Raw repeat mismatch at FAD=%" PRIu32,fad);return KUI_READ_RETRY;
+    }
+    memcpy(out,capture_raw[0].data,bytes);return KUI_READ_OK;
+}
+
+void kui_disc_probe(void) {
+    kui_log("DISC PROBE: insert a known-good retail GD-ROM first");
+    struct kui_toc sessions[2];
+    if(!kui_disc_prepare(sessions)) return;
     unsigned passed = 0;
     for(unsigned area = 0; area < 2; ++area) {
         for(unsigned i = 0; i < sessions[area].count; ++i) {

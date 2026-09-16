@@ -69,3 +69,10 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 30
+      - name: Upload small SD update for existing bootstrap discs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sd-update
+          path: dist/sd-update/
+          if-no-files-found: error
+          retention-days: 30

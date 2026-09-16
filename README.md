@@ -2,13 +2,14 @@
 
 An independent Dreamcast environment built directly on upstream KallistiOS.
 
-The first implementation is a **hardware capability diagnostic** with a CD
-bootstrap and a replaceable SD runtime. It stays in RAM after you swap discs,
-probes raw GD-ROM samples, and tests FAT32/exFAT storage through the standard
-external serial SD adapter.
+The current SD runtime adds **raw-track GDI capture, saved-file verification and
+controlled resume** to the independently booting hardware diagnostic. It stays
+in RAM after you swap discs and uses FAT32/exFAT through the standard external
+serial SD adapter. Keep the reusable CD and update `/KUI/runtime.kui`.
 
-**This is an early diagnostic, not a game dumper yet. The SD runtime launch
-and its disc/exFAT probes have passed on a physical console.** The user also
+**The capture engine passes host-image tests; complete physical-console ripping
+and reference accuracy remain untested.** Earlier SD runtime launch and disc/exFAT
+probes passed on a physical console. The user also
 confirms B selects CD fallback and reports successful cold boots; the boot count
 was not specified. Missing-file detection, checksum rejection and restoring the
 good runtime have now passed by user report; see the
@@ -17,6 +18,16 @@ New project code uses GPLv3; dependencies retain their own licenses. There is no
 separate contribution or commercial-relicensing agreement.
 
 ## Try the diagnostic
+
+For a console with the working bootstrap CD, download **sd-update** and follow
+[the combined capture/resume test](docs/capture-test.md). A new burn is unnecessary.
+The runtime opens on the capture page: A creates a new dump, X resumes the newest
+matching job, Y verifies it, and B stops. Left/Right switches to diagnostics.
+The **left trigger runs mstats** at any time, including during capture; a live
+RAM estimate and sampled peak appear on the capture page. See
+[memory counter definitions](docs/memory-stats.md) for comparisons with other software.
+Read [the capture format](docs/capture-format.md) for gap/audio conventions and
+the distinction between saved-data verification and an independent reference match.
 
 Use the `diagnostic` artifact from a successful **Diagnostic build** workflow run.
 It includes `kui-diagnostic.cdi`, `sd/KUI/runtime.kui`, loader rejection fixtures,
@@ -33,7 +44,7 @@ Use a spare FAT32 or exFAT card for initial testing. Bundle boot, loader-error,
 disc, storage and display checks into the same session using the same burned CD.
 See [the hardware test instructions](docs/hardware-test.md) for the probes.
 
-| Controller | Action |
+| Controller | Action on diagnostics page |
 | --- | --- |
 | A | Read both TOCs and selected raw samples from the inserted retail GD-ROM |
 | X | Write a new SD fixture; close/remount/reopen and verify every byte |
@@ -41,11 +52,14 @@ See [the hardware test instructions](docs/hardware-test.md) for the probes.
 | B | Request Stop; an active operation finishes or follows its bounded abort path |
 | D-pad Up / Down | Scroll the diagnostic log |
 | Start | Return to the latest log lines |
+| Left / Right or stick | Switch capture/diagnostics pages while idle |
+| Left trigger | mstats snapshot, including during an active operation |
 
 The screen explicitly identifies incomplete operations. A sample pass is evidence
-about those reads, not full-disc accuracy. The app has no formatting command and
-creates new files only under `/KUI/probes/pNNNN/`. GPT, multiple-partition cards,
-FAT12/16 and the internal SCI adapter are not supported by this diagnostic.
+about those reads, not full-disc accuracy. Probes use `/KUI/probes/`; captures use
+new directories under `/KUI/dumps/`. Resume validates disc identity and all saved
+prefixes before appending. GPT, multiple-partition cards, FAT12/16 and the internal
+SCI adapter are unsupported. There is no formatting or zero-fill command.
 
 ## Build and test
 
@@ -84,8 +98,8 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | M1.0: source/build foundation and visible boot diagnostic | Diagnostic runs and display fix confirmed; cold boots reported working, count unspecified |
 | M1.1: raw-disc and FAT32/exFAT capability probes | Nine disc samples and exFAT fixture verified; FAT32 console-reported pass, PC verification pending |
 | M1.2: validated runtime loading from SD | exFAT SD handoff/runtime probes and B-selected fallback confirmed; missing-file/checksum rejection and good-runtime restoration pass by user report; four other malformed fixtures remain untested on hardware |
-| M1.3: full-track GDI capture | Planned |
-| M1.4: SHA-256 capture verification and controlled stop/resume | Planned |
+| M1.3: full-track GDI capture | Implemented; FAT32/exFAT image tests pass; physical full dump and compatible reference pending |
+| M1.4: SHA-256 capture verification and controlled stop/resume | Implemented; saved-file reread, prefix validation, fault injection and resume equality pass on host; console acceptance pending |
 | M1.5: hardware acceptance and minimal UI refinement | Planned |
 
 See [the research scope](docs/milestone-1-research.md),

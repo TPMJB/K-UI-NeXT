@@ -1,8 +1,9 @@
 # First hardware test
 
-This is a capability diagnostic for a real Dreamcast with a working GD-ROM drive
-and a standard external serial/SCIF SD adapter. It is not a full dumper. Start
-with a spare test card and a known-good retail disc.
+This page covers the capability probes for a real Dreamcast with a working
+GD-ROM drive and standard external serial/SCIF SD adapter. The newer runtime
+also has capture; use [the capture/resume guide](capture-test.md) for that test.
+Use Left/Right to select the **diagnostics page** for the controls below.
 
 For the current CD bootstrap and SD runtime, first follow
 [the one-disc bootstrap session](sd-bootstrap.md). Normal runtime updates are
@@ -86,4 +87,4 @@ M1.0 acceptance needs five successful cold boots and controller checks. M1.1
 needs both filesystem tests on hardware and working samples across both disc
 regions, preferably on a second disc with a different TOC layout. Do not start
 with a damaged disc. Full dumps, reference hashes, read recovery, power-loss
-behavior and stop/resume are separate later acceptance tests.
+behavior and stop/resume are separate acceptance tests in the capture guide.

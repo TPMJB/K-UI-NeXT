@@ -29,10 +29,14 @@ a replacement CD. Do not burn each newly generated CDI for normal runtime tests.
 5. Swap the CD for a retail GD-ROM after the runtime screen appears. A, X, Y,
    B and scrolling retain their diagnostic functions.
 
+The new `sd-update` artifact adds [full capture and controlled resume](capture-test.md)
+using this same bootstrap/package format. Physical full-capture acceptance is
+pending; earlier probe passes do not establish complete-dump accuracy.
+
 Future updates: replace only `KUI/runtime.kui`, safely eject the card, and boot
 the same CD. The runtime is entirely in RAM after launch, so disc probes can
-still use the optical drive. The initial SD runtime is a diagnostic, not a full
-dumper; future capture/verification development can use this update path.
+still use the optical drive. The original runtime was a diagnostic; newer SD
+updates supply capture/verification without replacing the burned CD.
 
 ## Distinguish startup from fallback
 

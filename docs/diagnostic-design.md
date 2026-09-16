@@ -3,6 +3,11 @@
 This implements the first M1.0/M1.1 test vehicle. Passing host tests and compiling
 are prerequisites to a console test; neither completes hardware acceptance.
 
+This page documents the original probes. The current SD runtime additionally
+implements M1.3/M1.4: [capture/checkpoint design](capture-format.md),
+[combined hardware test](capture-test.md), and [mstats accounting](memory-stats.md).
+References below to deferred capture/resume describe the original probe scope.
+
 The M1.2 bootstrap now loads a validated, versioned runtime from SD before an I/O
 worker exists. It closes/unmounts/disconnects SD before KOS's execution handoff.
 The runtime is a separate executable with its own kernel and no auto-loader, so

@@ -4,6 +4,21 @@ These results cover the uploaded logs, storage fixtures and user reports receive
 2026-09-16. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.
 
+## Capture runtime update awaiting console testing
+
+The subsequent SD update implements full-track GDI capture, CRC32/SHA-256 saved
+file reread, checkpointed controlled resume and an mstats action. Host FAT32 and
+exFAT image tests exercise complete six-track output, independent Python hash
+verification, early/middle/late/verification Stop, resumed-versus-uninterrupted
+equality, a damaged newest checkpoint, an uncommitted suffix, bounded retries,
+media-change and storage-failure handling, corrupt-prefix and wrong-disc refusal,
+and preservation of existing completed jobs. These are synthetic host tests.
+
+No full physical capture, hardware resume, independent disc-reference match or
+on-console memory measurement is claimed yet. Use [the capture guide](capture-test.md)
+with the existing bootstrap CD; the earlier physical evidence below applies to
+the diagnostic builds identified there.
+
 ## SD runtime session and confirmed startup selection
 
 Tested source: `addd439aaea504d765498f214a1e5409d5862fee`.

@@ -16,6 +16,13 @@ def run(*args):
     subprocess.run(args, cwd=ROOT, check=True)
 
 
+def guide(source):
+    text = (ROOT / "docs" / source).read_text()
+    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats"):
+        text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
+    return text
+
+
 def main():
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)
     if dirty:
@@ -60,10 +67,13 @@ def main():
         (cases / name).write_bytes(data)
     shutil.copyfile(ROOT / "LICENSE", dist / "LICENSE")
     shutil.copyfile(ROOT / "THIRD_PARTY.md", dist / "THIRD_PARTY.md")
-    (dist / "HARDWARE-TEST.md").write_text((ROOT / "docs/hardware-test.md").read_text()
-        .replace("(sd-bootstrap.md)", "(SD-BOOTSTRAP.md)"))
-    shutil.copyfile(ROOT / "docs/sd-bootstrap.md", dist / "SD-BOOTSTRAP.md")
+    (dist / "HARDWARE-TEST.md").write_text(guide("hardware-test.md"))
+    (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
+    (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     shutil.copyfile(ROOT / "tools/verify_probe.py", dist / "verify_probe.py")
+    shutil.copyfile(ROOT / "tools/verify_dump.py", dist / "verify_dump.py")
+    for src, name in (("capture-test.md", "CAPTURE-TEST.md"), ("capture-format.md", "CAPTURE-FORMAT.md"), ("memory-stats.md", "MEMORY-STATS.md")):
+        (dist / name).write_text(guide(src))
     shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
     shutil.copytree(ROOT / "LICENSES", dist / "LICENSES", dirs_exist_ok=True)
     kos = ROOT / ".deps/kos"
@@ -95,9 +105,29 @@ def main():
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
     (dist / "build.json").write_text(json.dumps(record, indent=2) + "\n")
+    # Existing boot discs need only the small runtime update. Full source and
+    # dependency archives remain available in this run's diagnostic artifact.
+    update = dist / "sd-update"
+    (update / "KUI").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
+    for name in ("CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+        shutil.copyfile(dist / name, update / name)
+    shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
+    (update / "SOURCE.txt").write_text(
+        f"K-UI NeXT source commit: {commit}\n"
+        f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
+        "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
+        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "original notices are also included in build.json and LICENSES/.\n\n"
+        "Install only KUI/runtime.kui on the SD card. Keep your existing boot CD.\n")
+    update_hashes=[]
+    for path in sorted(update.rglob("*")):
+        if path.is_file() and path.name != "SHA256SUMS":
+            update_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(update)}")
+    (update / "SHA256SUMS").write_text("\n".join(update_hashes) + "\n")
     hashes = []
     for path in sorted(dist.rglob("*")):
-        if path.is_file() and path.name != "SHA256SUMS":
+        if path.is_file() and path != dist / "SHA256SUMS":
             with path.open("rb") as stream:
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
             hashes.append(f"{digest}  {path.relative_to(dist)}")

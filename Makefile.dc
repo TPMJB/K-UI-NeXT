@@ -10,6 +10,8 @@ SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/storage
 OBJECTS := $(patsubst %.c,build/dc/%.o,$(SOURCES)) build/dc/ff.o build/dc/ffunicode.o
 LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/dreamcast/bootstrap.o
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/dc/main-runtime.o
+RUNTIME_OBJECTS += build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o build/dc/src/dreamcast/capture.o
+RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id
@@ -42,4 +44,4 @@ $(RUNTIME): $(RUNTIME_OBJECTS)
 	kos-cc -o $@ $(RUNTIME_OBJECTS) -Wl,-Map,build/kui-runtime.map
 	python3 tools/record_build.py $@
 
--include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) build/dc/main-runtime.d
+-include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)

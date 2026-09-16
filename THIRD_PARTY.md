@@ -38,7 +38,10 @@ status is not reduced to its top-level MIT label.
 ## Independent references
 
 The BSD `sega-dreamcast/httpd-ack` project informed the earlier feasibility
-research. No code from it is copied into this implementation. The command
+research and the declared GDI gap/address convention. No code from it is copied
+into this implementation. The SHA-256/CD EDC routines are new implementations
+of published algorithms; see [the capture format](docs/capture-format.md).
+The command
 adapter uses KOS's documented firmware structures and status values. It does
 not patch or call the KOS CD-ROM command wrappers.
 
