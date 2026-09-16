@@ -40,7 +40,7 @@ def main():
     data = binary.read_bytes()
     binary.write_bytes(data + b"\0" * (-len(data) % 2048))
     run(str(mkdcdisc / "builddir/mkdcdisc"), "-b", str(binary),
-        "-n", "K-UI NeXT Diagnostic", "-a", "K-UI Contributors", "-r", "20260916",
+        "-n", "K-UI NeXT Diagnostic", "-a", "K-UI Team", "-r", "20260916",
         "-m", "-N", "--allow-overwrite", "-o", "dist/kui-diagnostic.cdi")
     for name in ("kui-diagnostic.elf", "kui-diagnostic.bin", "kui-diagnostic.map"):
         shutil.copyfile(ROOT / "build" / name, dist / name)

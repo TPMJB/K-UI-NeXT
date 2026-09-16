@@ -130,12 +130,16 @@ static void test_diskio(void) {
     f.fail_sync = true;
     assert(disk_ioctl(0, CTRL_SYNC, NULL) == RES_ERROR);
     assert(disk_status(0) & STA_NOINIT);
+    assert(kui_media_problem() != NULL);
     assert(disk_initialize(0) & STA_NOINIT);
     assert(disk_write(0, data, 0, 1) != RES_OK && f.writes == 1);
     kui_media_set(&ops); f.fail_sync = false;
     assert(disk_initialize(0) == 0); f.fail = true;
     assert(disk_read(0, data, 0, 1) == RES_ERROR);
     assert(disk_status(0) & STA_NOINIT);
+    kui_media_set(&ops); f.fail = false; f.mbr[450] = 0xee;
+    assert(disk_initialize(0) & STA_NOINIT);
+    assert(strstr(kui_media_problem(), "layout") != NULL);
 }
 int main(void) {
     test_commands(); test_volume(); test_disc_data(); test_diskio();

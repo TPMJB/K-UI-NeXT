@@ -11,10 +11,15 @@ permissions:
 
 concurrency:
   group: diagnostic-${{ github.ref }}
-  cancel-in-progress: true
+  # Let the first expensive compiler build finish and save its cache. New
+  # revisions queue behind it and reuse that cache.
+  cancel-in-progress: false
 
 jobs:
   host:
+    # Milestone branches already build on push. Avoid compiling the entire
+    # toolchain again when the same branch is opened as a draft PR.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

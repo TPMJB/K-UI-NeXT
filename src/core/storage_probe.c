@@ -9,7 +9,13 @@ static uint8_t buffer[32768], expected[32768];
 
 bool kui_mount(FATFS *fs, kui_log_fn log) {
     FRESULT r = f_mount(fs, "0:", 1);
-    if(r != FR_OK) { log("Mount failed: FatFs=%u", (unsigned)r); return false; }
+    if(r != FR_OK) {
+        log("Mount failed: FatFs=%u", (unsigned)r);
+        const char *problem = kui_media_problem();
+        if(problem) log("%s", problem);
+        else log("Requires a valid FAT32 or exFAT filesystem");
+        return false;
+    }
     if(fs->fs_type != FS_FAT32 && fs->fs_type != FS_EXFAT) {
         log("Unsupported filesystem: FAT32 or exFAT required");
         f_mount(NULL, "0:", 0);

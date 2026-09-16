@@ -13,5 +13,6 @@ struct kui_media_ops {
 /* Set only while unmounted. One worker owns all filesystem/device calls. */
 void kui_media_set(const struct kui_media_ops *ops);
 const struct kui_volume *kui_media_volume(void);
+const char *kui_media_problem(void);
 
 #endif
