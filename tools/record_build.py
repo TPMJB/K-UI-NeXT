@@ -5,11 +5,13 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 root = Path(__file__).resolve().parents[1]
+elf = root / sys.argv[1]
 record = {
     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
     "source_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root)),
-    "elf_sha256": hashlib.sha256((root / "build/kui-diagnostic.elf").read_bytes()).hexdigest(),
+    "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
 }
-(root / "build/compile.json").write_text(json.dumps(record, indent=2) + "\n")
+elf.with_suffix(".compile.json").write_text(json.dumps(record, indent=2) + "\n")

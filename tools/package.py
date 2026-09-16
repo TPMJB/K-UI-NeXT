@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+from runtime_package import envelope, flatten_elf, rejection_cases, verify
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -24,11 +25,13 @@ def main():
     elf = ROOT / "build/kui-diagnostic.elf"
     if not elf.is_file():
         raise SystemExit("Build the Dreamcast diagnostic first")
-    compiled = json.loads((ROOT / "build/compile.json").read_text())
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    if (compiled["source_dirty"] or compiled["commit"] != commit or
-            compiled["elf_sha256"] != hashlib.sha256(elf.read_bytes()).hexdigest()):
-        raise SystemExit("Rebuild the diagnostic from the current clean commit before packaging")
+    runtime = ROOT / "build/kui-runtime.elf"
+    for image in (elf, runtime):
+        compiled = json.loads(image.with_suffix(".compile.json").read_text())
+        if (compiled["source_dirty"] or compiled["commit"] != commit or
+                compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
+            raise SystemExit("Rebuild both programs from the current clean commit before packaging")
     mkdcdisc = ROOT / ".deps/mkdcdisc"
     if not (mkdcdisc / "builddir/build.ninja").exists():
         run("meson", "setup", str(mkdcdisc / "builddir"), str(mkdcdisc), "-Dpng=disabled")
@@ -40,14 +43,28 @@ def main():
     data = binary.read_bytes()
     binary.write_bytes(data + b"\0" * (-len(data) % 2048))
     run(str(mkdcdisc / "builddir/mkdcdisc"), "-b", str(binary),
-        "-n", "K-UI NeXT Diagnostic", "-a", "K-UI Team", "-r", "20260916",
+        "-n", "K-UI NeXT Bootstrap", "-a", "K-UI Team", "-r", "20260916",
         "-m", "-N", "--allow-overwrite", "-o", "dist/kui-diagnostic.cdi")
     for name in ("kui-diagnostic.elf", "kui-diagnostic.bin", "kui-diagnostic.map"):
         shutil.copyfile(ROOT / "build" / name, dist / name)
+    for name in ("kui-runtime.elf", "kui-runtime.map"):
+        shutil.copyfile(ROOT / "build" / name, dist / name)
+    payload, memory = flatten_elf(runtime.read_bytes())
+    package = envelope(payload, memory, commit[:12])
+    sd = dist / "sd/KUI"
+    sd.mkdir(parents=True, exist_ok=True)
+    (sd / "runtime.kui").write_bytes(package)
+    cases = dist / "loader-tests"
+    cases.mkdir(exist_ok=True)
+    for name, data in rejection_cases(package).items():
+        (cases / name).write_bytes(data)
     shutil.copyfile(ROOT / "LICENSE", dist / "LICENSE")
     shutil.copyfile(ROOT / "THIRD_PARTY.md", dist / "THIRD_PARTY.md")
-    shutil.copyfile(ROOT / "docs/hardware-test.md", dist / "HARDWARE-TEST.md")
+    (dist / "HARDWARE-TEST.md").write_text((ROOT / "docs/hardware-test.md").read_text()
+        .replace("(sd-bootstrap.md)", "(SD-BOOTSTRAP.md)"))
+    shutil.copyfile(ROOT / "docs/sd-bootstrap.md", dist / "SD-BOOTSTRAP.md")
     shutil.copyfile(ROOT / "tools/verify_probe.py", dist / "verify_probe.py")
+    shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
     shutil.copytree(ROOT / "LICENSES", dist / "LICENSES", dirs_exist_ok=True)
     kos = ROOT / ".deps/kos"
     shutil.copytree(kos / "doc/license", dist / "LICENSES/KOS", dirs_exist_ok=True)
@@ -74,6 +91,7 @@ def main():
             shutil.copyfile(path, source / path.name)
     compiler = subprocess.check_output(["sh-elf-gcc", "--version"], text=True).splitlines()[0]
     record = {"commit": commit, "compiler": compiler, "dependencies": lock,
+              "runtime": verify(package),
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
     (dist / "build.json").write_text(json.dumps(record, indent=2) + "\n")

@@ -6,7 +6,7 @@ development, not a claim of a formal clean-room process.
 
 | Input | Exact selection and use | License/notice |
 | --- | --- | --- |
-| KallistiOS | Official upstream `fcfa7d869471591ca1c777543261a7bfea7cb726`; kernel, hardware APIs and minifont | KOS BSD terms and per-file exceptions; [LICENSE.KOS](LICENSES/LICENSE.KOS), upstream `AUTHORS` and `doc/license/` |
+| KallistiOS | Official upstream `fcfa7d869471591ca1c777543261a7bfea7cb726`; kernel, hardware APIs, minifont and `arch_exec` execution trampoline | KOS BSD terms and per-file exceptions; [LICENSE.KOS](LICENSES/LICENSE.KOS), upstream `AUTHORS` and `doc/license/` |
 | Bus activation helper | `src/dreamcast/drive_bus.c` adapts the activation portion of upstream KOS `cdrom_init` at that pin | Original KOS copyright holders and BSD terms retained in the file |
 | FatFs | ChaN R0.16, official patches 1 and 2; SHA-256-pinned downloads, original license and patched source retained | [FatFs notice](LICENSES/LICENSE.FatFs) |
 | GCC/Binutils/Newlib | KOS stable profile at the pinned KOS revision | Component licenses; GCC runtime exception and Newlib component notices apply to runtime code |

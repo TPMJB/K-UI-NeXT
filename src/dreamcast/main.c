@@ -11,6 +11,11 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #ifndef KUI_BUILD_ID
 #define KUI_BUILD_ID "local-unversioned"
 #endif
+#ifdef KUI_SD_RUNTIME
+#define KUI_ROLE "SD runtime"
+#else
+#define KUI_ROLE "CD bootstrap"
+#endif
 
 #define LOG_LINES 768
 #define LINE_BYTES 77
@@ -53,7 +58,7 @@ static void save_report(void) {
         if(kui_new_probe_dir(dir, kui_log)) {
             mutex_lock(&lock);
             size_t used = (size_t)snprintf(report, sizeof(report),
-                "K-UI diagnostic %s\nLog truncated: %s\n", KUI_BUILD_ID,
+                "K-UI " KUI_ROLE " %s\nLog truncated: %s\n", KUI_BUILD_ID,
                 log_truncated ? "YES" : "no");
             for(unsigned i = 0; i < line_count; ++i)
                 used += (size_t)snprintf(report + used, sizeof(report) - used, "%s\n", lines[i]);
@@ -106,7 +111,7 @@ static void draw(unsigned scroll) {
      * frame. Clearing the displayed frame exposes blank/partial redraws. */
     vid_clear(8, 16, 24);
     minifont_set_color(100, 220, 220);
-    minifont_draw_str(vram_s + 20 * 640 + 16, 640, "K-UI NeXT | Independent Dreamcast diagnostic");
+    minifont_draw_str(vram_s + 20 * 640 + 16, 640, "K-UI NeXT | " KUI_ROLE);
     minifont_set_color(220, 230, 235);
     minifont_draw_str(vram_s + 44 * 640 + 16, 640, "Build " KUI_BUILD_ID);
     minifont_draw_str(vram_s + 68 * 640 + 16, 640, "A Disc probe   X Write/read SD test   Y Save log");
@@ -119,18 +124,44 @@ static void draw(unsigned scroll) {
     vid_flip(-1);
 }
 
+static unsigned controller_buttons(void) {
+    maple_device_t *controller = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
+    cont_state_t *state = controller ? maple_dev_status(controller) : NULL;
+    return state ? state->buttons : 0;
+}
+
+#ifndef KUI_SD_RUNTIME
+static bool boot_cancelled(void) {
+    draw(0);
+    return (controller_buttons() & CONT_B) != 0;
+}
+#endif
+
 int main(void) {
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
-    kui_log("Boot diagnostic loaded entirely in RAM.");
+    kui_log("Running " KUI_ROLE " build " KUI_BUILD_ID);
     kui_log("Video: %ux%u %s %s, buffered",
         (unsigned)vid_mode->width, (unsigned)vid_mode->height,
         vid_mode->cable_type == CT_VGA ? "VGA" :
             (vid_mode->flags & VID_PAL ? "PAL" : "NTSC"),
         vid_mode->flags & VID_INTERLACE ? "interlaced" : "progressive");
+#ifndef KUI_SD_RUNTIME
+    kui_log("Hold B during startup for built-in diagnostics.");
+    kui_log("Otherwise load /KUI/runtime.kui from SD.");
+    uint64_t until = timer_ms_gettime64() + 1500;
+    bool fallback = false;
+    while(timer_ms_gettime64() < until) {
+        if(boot_cancelled()) { fallback = true; break; }
+        thd_sleep(16);
+    }
+    if(!fallback) kui_bootstrap_load(boot_cancelled);
+    kui_log("Using built-in CD diagnostics; SD runtime is not running.");
+#endif
+    kui_log("Diagnostic code and fonts are loaded entirely in RAM.");
     kui_log("Replace boot CD with a known-good retail GD-ROM; close lid.");
     kui_log("A reads disc samples. X writes new test files to SD.");
     kui_log("Use a spare test card. No formatting; existing files preserved.");
-    kui_log("This build does not dump games or load an SD runtime yet.");
+    kui_log("This diagnostic does not dump games yet.");
     kthread_attr_t attrs = {.stack_size = 64 * 1024, .label = "kui-io"};
     if(!thd_create_ex(&attrs, worker, NULL)) {
         kui_log("Unable to start I/O worker; reset console");
@@ -138,9 +169,7 @@ int main(void) {
     }
     unsigned previous = 0, scroll = 0;
     for(;;) {
-        maple_device_t *controller = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
-        cont_state_t *state = controller ? maple_dev_status(controller) : NULL;
-        unsigned buttons = state ? state->buttons : 0;
+        unsigned buttons = controller_buttons();
         unsigned pressed = buttons & ~previous;
         previous = buttons;
         mutex_lock(&lock);

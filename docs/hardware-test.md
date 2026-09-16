@@ -4,6 +4,10 @@ This is a capability diagnostic for a real Dreamcast with a working GD-ROM drive
 and a standard external serial/SCIF SD adapter. It is not a full dumper. Start
 with a spare test card and a known-good retail disc.
 
+For the current CD bootstrap and SD runtime, first follow
+[the one-disc bootstrap session](sd-bootstrap.md). Normal runtime updates are
+copied to SD. The checks below work in both the SD runtime and built-in fallback.
+
 ## Prepare
 
 1. Download the `diagnostic` artifact from a successful **Diagnostic build** run.

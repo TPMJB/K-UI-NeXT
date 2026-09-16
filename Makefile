@@ -22,8 +22,13 @@ build/storage-image: tests/storage_image.c $(CORE) src/core/storage_probe.c $(FA
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) src/core/storage_probe.c $(FATFS) tests/storage_image.c -o $@
 
-test-images: build/storage-image
+build/runtime-image: tests/runtime_image.c $(CORE) src/core/storage_probe.c src/core/runtime_image.c src/core/runtime_file.c $(FATFS) include/kui/runtime.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) src/core/storage_probe.c src/core/runtime_image.c src/core/runtime_file.c $(FATFS) tests/runtime_image.c -o $@
+
+test-images: build/storage-image build/runtime-image
 	python3 tests/test_images.py
+	python3 tests/test_runtime_images.py
 
 diagnostic:
 	$(MAKE) -f Makefile.dc

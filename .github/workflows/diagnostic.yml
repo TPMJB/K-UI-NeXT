@@ -52,12 +52,12 @@ jobs:
           key: sh-elf-ubuntu24-v1-${{ hashFiles('dependencies.json', 'tools/setup_kos.sh') }}
       - name: Build pinned toolchain and KOS
         run: bash tools/setup_kos.sh
-      - name: Compile independent diagnostic
+      - name: Compile CD bootstrap and SD runtime
         shell: bash
         run: |
           source .deps/kos/environ.sh
           make diagnostic BUILD_ID="${GITHUB_SHA:0:12}"
-      - name: Package CDI, verifier, notices and source records
+      - name: Package reusable CDI, SD runtime, loader tests and source records
         shell: bash
         run: |
           source .deps/kos/environ.sh

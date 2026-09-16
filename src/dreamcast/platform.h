@@ -8,4 +8,5 @@ bool kui_sd_connect(void);
 void kui_sd_disconnect(void);
 void kui_disc_probe(void);
 void kui_drive_init_bus(void);
+void kui_bootstrap_load(kui_cancel_fn cancelled);
 #endif

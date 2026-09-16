@@ -3,6 +3,12 @@
 This implements the first M1.0/M1.1 test vehicle. Passing host tests and compiling
 are prerequisites to a console test; neither completes hardware acceptance.
 
+The M1.2 bootstrap now loads a validated, versioned runtime from SD before an I/O
+worker exists. It closes/unmounts/disconnects SD before KOS's execution handoff.
+The runtime is a separate executable with its own kernel and no auto-loader, so
+it does not recursively reload itself. Missing/invalid files and startup B lead
+to the embedded diagnostic. See [the boot contract](sd-bootstrap.md).
+
 ## Ownership and lifetime
 
 One 64 KiB-stack worker owns optical and SD/filesystem I/O. The main thread polls
