@@ -10,12 +10,12 @@
 #include <unistd.h>
 
 struct image { FILE *file; uint64_t blocks; unsigned writes;
-               unsigned fail_write; bool fail_sync, cancel; };
+               unsigned fail_write; bool fail_sync, cancel, cancel_before; };
 static struct image image;
 static void log_line(const char *format, ...) {
     va_list args; va_start(args, format); vprintf(format, args); va_end(args); puts("");
 }
-static bool cancelled(void) { return image.cancel && image.writes >= 8; }
+static bool cancelled(void) { return image.cancel_before || (image.cancel && image.writes >= 8); }
 static uint64_t blocks(void *p) { return ((struct image *)p)->blocks; }
 static int read_image(void *p, uint32_t sector, size_t count, uint8_t *data) {
     struct image *i = p;
@@ -33,7 +33,7 @@ static int sync_image(void *p) {
     return i->fail_sync || fflush(i->file) || fsync(fileno(i->file)) ? -1 : 0;
 }
 int main(int argc, char **argv) {
-    if(argc < 2 || argc > 3) { fprintf(stderr, "Usage: %s REGULAR_IMAGE [write-fail|sync-fail|cancel|full]\n", argv[0]); return 2; }
+    if(argc < 2 || argc > 3) { fprintf(stderr, "Usage: %s REGULAR_IMAGE [write-fail|sync-fail|cancel|cancel-before|full]\n", argv[0]); return 2; }
     /* Test harness only: refuse block devices and symlinks. */
     struct stat st;
     if(lstat(argv[1], &st) || !S_ISREG(st.st_mode) || st.st_size % 512) return 2;
@@ -44,6 +44,7 @@ int main(int argc, char **argv) {
         if(!strcmp(argv[2], "write-fail")) image.fail_write = 8;
         else if(!strcmp(argv[2], "sync-fail")) image.fail_sync = true;
         else if(!strcmp(argv[2], "cancel")) image.cancel = true;
+        else if(!strcmp(argv[2], "cancel-before")) image.cancel_before = true;
         else if(strcmp(argv[2], "full")) { fclose(image.file); return 2; }
     }
     struct kui_media_ops ops = {&image, blocks, read_image, write_image, sync_image};

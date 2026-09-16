@@ -73,7 +73,9 @@ bool kui_storage_probe(kui_log_fn log, kui_cancel_fn cancelled) {
     FIL file;
     char dir[64], path[96];
     bool success = false, opened = false;
+    if(cancelled()) { log("Storage test stopped before starting"); return false; }
     if(!kui_mount(&fs, log)) { f_mount(NULL, "0:", 0); return false; }
+    if(cancelled()) { log("Storage test stopped before creating files"); goto out; }
     if(!kui_new_probe_dir(dir, log)) goto out;
     /* Cross at least two clusters, plus a partial sector, on either format. */
     uint64_t total = (uint64_t)fs.csize * 512 * 2;

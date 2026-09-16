@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Exercise the actual FatFs adapter/probe against disposable filesystem images."""
 from pathlib import Path
+import hashlib
 import shutil
 import struct
 import subprocess
@@ -31,7 +32,7 @@ def main():
                 run("mkfs.fat", "-F", "32", str(clean))
             else:
                 run("mkfs.exfat", str(clean))
-            for failure in (None, "write-fail", "sync-fail", "cancel", "full"):
+            for failure in (None, "write-fail", "sync-fail", "cancel", "cancel-before", "full"):
                 image = base / f"{kind}-{failure}.img"
                 shutil.copyfile(clean, image)
                 args = [str(ROOT / "build/storage-image"), str(image)]
@@ -39,6 +40,9 @@ def main():
                 output = run(*args, expected=1 if failure else 0)
                 if failure:
                     assert "STORAGE PASS" not in output
+                    if failure == "cancel-before":
+                        with clean.open("rb") as a, image.open("rb") as b:
+                            assert hashlib.file_digest(a, "sha256").digest() == hashlib.file_digest(b, "sha256").digest()
                     if failure == "full":
                         assert "Write failed" in output
                         run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))

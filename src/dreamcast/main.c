@@ -74,12 +74,15 @@ static void *worker(void *unused) {
         pending = 0;
         mutex_unlock(&lock);
         if(!action) { thd_sleep(16); continue; }
-        if(action == 1) kui_disc_probe();
-        if(action == 2 && kui_sd_connect()) {
-            kui_storage_probe(kui_log, kui_cancelled);
-            kui_sd_disconnect();
+        if(kui_cancelled()) kui_log("Operation stopped before starting.");
+        else {
+            if(action == 1) kui_disc_probe();
+            if(action == 2 && kui_sd_connect()) {
+                kui_storage_probe(kui_log, kui_cancelled);
+                kui_sd_disconnect();
+            }
+            if(action == 3) save_report();
         }
-        if(action == 3) save_report();
         kui_log("Operation ended. Y saves the current log to SD.");
         mutex_lock(&lock);
         busy = false;
@@ -133,7 +136,7 @@ int main(void) {
         previous = buttons;
         mutex_lock(&lock);
         if(pressed & CONT_B) cancel_requested = true;
-        if(!busy) {
+        if(!busy && !(buttons & CONT_B)) {
             unsigned action = pressed & CONT_A ? 1 : pressed & CONT_X ? 2 : pressed & CONT_Y ? 3 : 0;
             if(action) { pending = action; busy = true; cancel_requested = false; scroll = 0; }
         }
