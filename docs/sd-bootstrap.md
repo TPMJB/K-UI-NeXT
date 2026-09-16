@@ -5,9 +5,11 @@ a separate diagnostic runtime loaded from SD. Both are independent KOS programs.
 The earlier `cf8210bc5442` CD has no SD loader; it cannot gain that ability just
 by copying new files to the card. Keep it as a known-working diagnostic disc.
 
-The first console log from build `addd439aaea5` confirms an SD runtime launch
-and passing disc/exFAT probes. Recovery and repeated cold boots still need
-confirmation. Ordinary runtime updates should need only a new
+The uploaded log from build `addd439aaea5` confirms the SD runtime launch and
+passing disc/exFAT probes. The user also confirms that B selects CD bootstrap,
+normal startup reaches SD runtime, and cold boots work (count unspecified).
+Missing/corrupt-runtime fallback and restoring the good file remain untested on
+hardware. Ordinary runtime updates should need only a new
 `/KUI/runtime.kui` on the SD card. A bootstrap bug, new unsupported
 storage hardware or a future incompatible package format could still require
 a replacement CD. Do not burn each newly generated CDI for normal runtime tests.
@@ -30,16 +32,55 @@ the same CD. The runtime is entirely in RAM after launch, so disc probes can
 still use the optical drive. The initial SD runtime is a diagnostic, not a full
 dumper; future capture/verification development can use this update path.
 
+## Distinguish startup from fallback
+
+Every normal boot initially shows `K-UI NeXT | CD bootstrap`, including while
+reading and validating the SD file. Successful handoff starts the separate
+program and changes the final heading to `K-UI NeXT | SD runtime`.
+
+If the heading stays on `CD bootstrap` after startup, the embedded diagnostics
+are running. Look for `Using built-in CD diagnostics; SD runtime is not running.`
+Earlier lines can show a missing file, SD initialization/mount problem, invalid
+package, cancellation or a staging-address rejection. Holding B also selects
+fallback. The disc and storage tests are available in either program, so those
+tests passing alone does not distinguish the execution path.
+
+Press Y once the screen is ready to save the current boot log. Wait for the save
+to finish, note the exact path shown by `Report saved`, then power off and retrieve
+that file. Its header and the on-screen heading use the same compile-time role;
+a CD fallback log starts with `K-UI CD bootstrap`, and an SD program log starts
+with `K-UI SD runtime`. A photo of the final heading and startup messages can
+also resolve the distinction.
+
 ## Recovery and one-disc acceptance session
 
 Hold **B** as the bootstrap appears to use the built-in diagnostics. Missing,
 invalid or unreadable runtime files also fall back with a visible explanation.
+This recovery is automatic; there is no recovery menu or test button. It keeps
+the CD diagnostics available when the SD runtime cannot load. Restoring the
+good runtime file is a manual step; the bootstrap does not repair SD files.
 An executable with valid checksums can still contain a software bug; if it
 hangs after launch, power off and boot again while holding B. This escape path
 does not depend on the SD runtime working.
 
 Use one burned bootstrap disc for all of these checks. Change files only with
 the console powered off, retaining the original good package on the PC.
+
+For the missing/corrupt-file checks, **do not hold B**: the loader must actually
+attempt to read the file for these tests to exercise automatic fallback.
+
+1. Rename `/KUI/runtime.kui` to `/KUI/runtime-good.kui` on the card and retain
+   a backup on the PC. Safely eject, then boot without touching any buttons.
+   Expect a missing-runtime explanation and the `CD bootstrap` diagnostics.
+2. Power off. From the downloaded `diagnostic` package, copy
+   `loader-tests/bad-checksum.kui` onto the card as `/KUI/runtime.kui`.
+   Safely eject and boot without holding B. Expect a checksum rejection and
+   usable `CD bootstrap` diagnostics. A photo or Y-saved log can record it.
+3. Repeat with the other supplied fixtures below, powering off before each
+   file change and using the exact destination name `/KUI/runtime.kui`.
+4. Power off, remove only the invalid test copy of `/KUI/runtime.kui`, and
+   rename `/KUI/runtime-good.kui` back to `/KUI/runtime.kui`. Safely eject and
+   confirm a normal boot reaches `SD runtime` again.
 
 | Check | Expected result |
 | --- | --- |

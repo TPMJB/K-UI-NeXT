@@ -7,9 +7,11 @@ bootstrap and a replaceable SD runtime. It stays in RAM after you swap discs,
 probes raw GD-ROM samples, and tests FAT32/exFAT storage through the standard
 external serial SD adapter.
 
-**This is an early diagnostic, not a game dumper yet. The first SD runtime launch
-and its disc/exFAT probes have passed on a physical console.** Recovery and
-repeated cold-boot checks remain open; see the [hardware evidence](docs/hardware-evidence.md).
+**This is an early diagnostic, not a game dumper yet. The SD runtime launch
+and its disc/exFAT probes have passed on a physical console.** The user also
+confirms B selects CD fallback and reports successful cold boots; the boot count
+was not specified. Missing/corrupt-runtime fallback remains untested on hardware;
+see the [hardware evidence](docs/hardware-evidence.md).
 New project code uses GPLv3; dependencies retain their own licenses. There is no
 separate contribution or commercial-relicensing agreement.
 
@@ -78,9 +80,9 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 
 | Stage | Status |
 | --- | --- |
-| M1.0: source/build foundation and visible boot diagnostic | Diagnostic runs confirmed; display fix confirmed; five cold boots still need confirmation |
+| M1.0: source/build foundation and visible boot diagnostic | Diagnostic runs and display fix confirmed; cold boots reported working, count unspecified |
 | M1.1: raw-disc and FAT32/exFAT capability probes | Nine disc samples and exFAT fixture verified; FAT32 console-reported pass, PC verification pending |
-| M1.2: validated runtime loading from SD | First exFAT SD handoff and runtime probes confirmed; fallback/rejection and repeated cold-boot acceptance pending |
+| M1.2: validated runtime loading from SD | exFAT SD handoff/runtime probes and B-selected fallback confirmed; missing/invalid-package fallback and restoration checks pending |
 | M1.3: full-track GDI capture | Planned |
 | M1.4: SHA-256 capture verification and controlled stop/resume | Planned |
 | M1.5: hardware acceptance and minimal UI refinement | Planned |

@@ -1,24 +1,35 @@
 # Hardware evidence
 
-These results cover the uploaded logs and storage fixtures received on
+These results cover the uploaded logs, storage fixtures and user reports received on
 2026-09-16. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.
 
-## First SD runtime session
+## SD runtime session and confirmed startup selection
 
 Tested source: `addd439aaea504d765498f214a1e5409d5862fee`.
 The [successful combined build](https://github.com/TPMJB/K-UI-NeXT/actions/runs/35147067592)
-contains the CD bootstrap and SD runtime used for this session. Keep using that
+contains the CD bootstrap and SD runtime for this build. Keep using the existing
 disc; this evidence update does not require a new binary or another burn.
 
 The uploaded `diagnostics(6).txt` starts with `K-UI SD runtime addd439aaea5`
-and records `Running SD runtime build addd439aaea5`. This confirms execution
-reached the separate SD program. Disc and storage operations then completed
-from that runtime.
+and records `Running SD runtime build addd439aaea5`, with successful disc and
+storage operations. After initially reporting a CD bootstrap heading, the user
+clarified that holding B selects CD bootstrap and booting without touching any
+buttons reaches SD runtime. This resolves the apparent discrepancy and confirms
+the normal SD handoff and manual fallback selection.
+
+Source inspection shows both the title and saved report header use the same
+compile-time role. The CD shows its own role during startup even on a successful
+load; it remains there when loading is skipped or fails. The user also reports
+that cold boots work. No count was supplied, so this is recorded as a successful
+user-reported check rather than a documented five-boot sequence. Missing-file
+and corrupt-package fallback have not yet been tested on hardware.
 
 | Check | Observed result |
 | --- | --- |
-| SD execution handoff | Confirmed in the runtime log |
+| SD execution handoff | Confirmed by the runtime log and the user's no-buttons startup report |
+| Hold B at startup | User confirms CD bootstrap selection; fallback probe results were not separately supplied |
+| Cold boots | User reports they work; count unspecified |
 | Video mode | 640x480 NTSC interlaced, buffered |
 | Disc TOCs | Both density regions parsed; three tracks |
 | Raw disc reads | All nine samples passed repeat and buffer-guard checks |
@@ -57,15 +68,16 @@ so its hash matching previous successful fixtures is expected.
 
 ## Remaining checks on the same bootstrap disc
 
-These are unconfirmed by the supplied SD runtime log. If they were already run,
+These are unconfirmed by the supplied logs and user reports. If they were already run,
 record the observed outcome rather than asking for another burn or repeating
 successful work.
 
-1. Hold B at startup with a valid package present; confirm usable CD fallback.
-2. Boot with the runtime file temporarily renamed; confirm usable fallback.
-3. Try the five supplied rejection fixtures, then restore the good package and
+1. Boot without holding B and with the runtime file temporarily renamed;
+   confirm the missing-file explanation and usable CD fallback.
+2. Try the five supplied rejection fixtures without holding B, then restore the good package and
    confirm the SD runtime starts again.
-4. Confirm five successful power-off/power-on boots with controller input.
+3. Confirm the cold-boot count and controller response for the planned five-boot
+   check. Existing successful boots count; do not repeat them just for a log.
 
 Follow the [one-disc test guide](sd-bootstrap.md) for the file changes. All
 these checks use the existing bootstrap CD and accessible exFAT card. A second
