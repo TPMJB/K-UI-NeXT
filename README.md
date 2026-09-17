@@ -9,7 +9,9 @@ serial SD adapter. Keep the reusable CD and update `/KUI/runtime.kui`.
 
 **Sword of the Berserk has completed capture and console saved-file verification.**
 Uploaded tracks 1 and 2 independently match their CRC32/SHA-256 records; track 3's
-PC check, an independent reference match and completed hardware Resume remain pending.
+PC check and an independent reference match remain pending. MDK2 has now resumed
+from a saved checkpoint, checked its prefix, written new audio and stopped safely;
+final verification of a complete resumed hardware dump remains pending.
 The capture engine also passes host-image tests. Earlier SD runtime launch and
 disc/exFAT probes passed on a physical console. The user also
 confirms B selects CD fallback and reports successful cold boots; the boot count
@@ -34,8 +36,10 @@ completion, including separate SHA-256, disc and SD time. See
 The first MDK2 data-track measurement attributes about 63% of capture time to
 the paired optical-read callback, 23% to SD writes and 11% to SHA-256; see
 [the measured evidence](docs/hardware-evidence.md#mdk2-capture-timing-and-resume-overhead).
-The longer trace reaches audio track 4 with about 72% optical time and stable
-SD write-call throughput. An audio-only sample is next; follow the
+The isolated audio-track sample now measures **57.46 KiB/s**, with **88.75%**
+of capture time inside the optical callback. Its 56.86 MiB resume prefix took
+167.47 seconds, mostly SD reads (75.36%) and SHA-256 (20.40%). This baseline
+test is complete; the next work is finer optical timing and faster resume. See the
 [performance and resume test plan](docs/performance-test-plan.md).
 Read [the capture format](docs/capture-format.md) for gap/audio conventions and
 the distinction between saved-data verification and an independent reference match.
@@ -110,7 +114,7 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | M1.1: raw-disc and FAT32/exFAT capability probes | Nine disc samples and exFAT fixture verified; FAT32 console-reported pass, PC verification pending |
 | M1.2: validated runtime loading from SD | exFAT SD handoff/runtime probes and B-selected fallback confirmed; missing-file/checksum rejection and good-runtime restoration pass by user report; four other malformed fixtures remain untested on hardware |
 | M1.3: full-track GDI capture | Sword of the Berserk completion supported by user report, manifest and valid final checkpoint with zero retries; tracks 1/2 independently checked; full PC/reference verification pending |
-| M1.4: SHA-256 capture verification and controlled stop/resume | Console reread passed by user report and published manifest; controlled MDK2 Stop logged; track 3 PC check and completed hardware reboot/Resume pending; saved-file/prefix checks, fault injection and resume equality pass on host |
+| M1.4: SHA-256 capture verification and controlled stop/resume | Console reread passed by user report and published manifest; MDK2 checkpoint/prefix validation, resumed audio writes and controlled Stop logged in a fresh runtime session; final verification of a complete resumed dump and Sword track 3 PC check pending; fault injection and resume equality pass on host |
 | M1.5: hardware acceptance and minimal UI refinement | Planned |
 
 See [the research scope](docs/milestone-1-research.md),

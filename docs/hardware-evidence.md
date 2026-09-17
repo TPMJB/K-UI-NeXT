@@ -4,6 +4,74 @@ These results cover the uploaded logs, storage fixtures and user reports receive
 2026-09-16 and 2026-09-17. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.
 
+## MDK2 isolated audio capture and successful checkpoint resume
+
+The untruncated `diagnostics(10).txt` comes from SD runtime `0ef58878ccdd` in
+a fresh runtime session. It resumes the same MDK2 job as `diagnostics(9).txt`,
+`/KUI/dumps/df838eac34967ae16-0002`, from checkpoint 9 with **59620848 committed
+bytes**. Tracks 1-3 and the saved track-4 prefix pass the console's CRC32 and
+SHA-256 checks before any new writes. Capture then starts at **track 4, FAD
+55672**, writes **15955968 new audio bytes** (6784 sectors), and stops with
+**75576816 committed bytes**. The counts reconcile exactly across the two logs.
+
+The entire new capture phase is audio. It lasts **271.160576 seconds** (4 minutes
+31 seconds), averaging **57.46 KiB/s**. This directly establishes slow audio
+capture in the reported 50-KiB/s range; the log does not record individual
+instantaneous screen readings or establish the earlier track-5 duration.
+
+| Capture category | Seconds | Share of capture wall time |
+| --- | ---: | ---: |
+| Optical read callback | 240.661598 | 88.75% |
+| Track-file writes | 19.840484 | 7.32% |
+| SHA-256 | 8.596927 | 3.17% |
+| CRC32 | 1.983868 | 0.73% |
+| Checkpoint sync/publication | 0.065075 | 0.02% |
+| Other | 0.012624 | less than 0.01% |
+
+SD write calls average **785.36 KiB/s**, compared with 801.95-804.21 KiB/s in
+the earlier runs. The much slower overall capture rate is dominated by the
+optical callback. Its combined timer still cannot identify how much belongs
+to mode setup, the first/second read, polling or buffer checks. SHA-256 is
+3.17% of this capture; removing it alone would not resolve the slowdown.
+There is no capture EDC bucket because the new bytes are all audio; the setup
+phase's EDC checks are separate.
+
+The preceding **resume prefix check** takes **167.466368 seconds** (2 minutes
+47 seconds) for 56.86 MiB, averaging **347.67 KiB/s**:
+
+| Resume category | Seconds | Share of resume wall time |
+| --- | ---: | ---: |
+| Saved-file reads | 126.206689 | 75.36% |
+| SHA-256 | 34.167135 | 20.40% |
+| CRC32 | 6.431161 | 3.84% |
+| Other | 0.661383 | 0.39% |
+
+The SD reads alone average **461.33 KiB/s** within those calls. Hashing adds
+about 40.60 seconds to the prefix pass. These are measurements of this build,
+not an A/B comparison with the other ripper. The 12.615276-second setup phase
+is separate from both resume and capture. Every phase's categories sum exactly
+to its wall time.
+
+The final `CMD 16 CANCELLED` is the controlled Stop; 213 optical calls versus
+212 successful writes account for the cancelled request. The log reports
+**zero application retries**, and memory use, sampled peak and allocator
+counters remain unchanged at the earlier values. This does not expose internal
+drive retries. The initial `CMD 24 FAILED` is followed by successful TOCs,
+identification, resume and capture; it is not a capture retry failure.
+
+This establishes checkpoint/prefix validation and continued hardware writing
+after a new runtime startup, followed by another controlled Stop. The log
+does not independently identify how the console was restarted. MDK2 remains
+incomplete; final saved-file verification and equality with an uninterrupted
+or independent reference dump are still untested for this resumed job.
+
+[Machine-readable results](evidence/mdk2-audio-resume-2026-09-17.json) retain
+the input fingerprint, exact counters, prefix hashes and continuity checks.
+The requested baseline test is complete. The [next steps](performance-test-plan.md)
+are optical subtimers/automatic reports and a versioned fast-resume design;
+another identical baseline or full rip is unnecessary. This evidence update
+does not change the runtime.
+
 ## MDK2 capture reaching high-density audio
 
 The follow-up `diagnostics(9).txt` is an untruncated log from SD runtime
@@ -51,12 +119,10 @@ and run conditions can invalidate this assumption. It is consistent with slow
 audio capture, not a replacement for a direct audio-only measurement.
 
 [Machine-readable follow-up results](evidence/mdk2-audio-entry-2026-09-17.json)
-retain exact counters and this estimate's limitations. The next test can resume
-this existing audio-track checkpoint: its current prefix check would take
-about 162 seconds at 360 KiB/s, then 30-60 seconds of new audio capture provides
-separate `TIMING resume` and `TIMING capture` measurements. Do not recreate the
-completed data tracks merely to get another baseline. See the
-[performance test plan](performance-test-plan.md).
+retain exact counters and this estimate's limitations. The isolated audio
+measurement above now supersedes the conditional estimate for choosing the
+next change. It resumes this exact prefix and measures resume and capture
+separately. See the [performance test plan](performance-test-plan.md).
 
 ## MDK2 capture timing and resume overhead
 
@@ -102,7 +168,7 @@ The user separately reports a longer run, roughly 20 minutes before noticing
 capture near 50 KiB/s around track 5. The TOC identifies tracks 1/3/31 as data,
 and 2 plus 4-30 as audio. The severe reported slowdown therefore occurred in
 the audio portion, which this track-1 trace does not measure. The later mixed
-data/audio log is analyzed above; audio-only timing remains pending. Photos show a
+data/audio and isolated audio logs are analyzed above. Photos show a
 later checkpoint with about 70 MiB saved and a resume prefix check near
 355-365 KiB/s, but not completion of that resume or its capture timing.
 
@@ -116,10 +182,10 @@ update. Full saved-file and independent-reference verification remain separate.
 
 [Machine-readable timing results](evidence/mdk2-timing-2026-09-17.json) retain
 input fingerprints, exact counters, memory values, assumptions and limitations.
-Next performance evidence should separate optical command work within the
-callback and cover the slow audio portion; hashing and SD I/O must remain
-separately accounted for. A short saved capture summary is sufficient; the
-[test plan](performance-test-plan.md) combines that measurement with the resume check.
+The isolated audio and resume baseline is now complete. Next performance
+evidence should separate optical command work within the callback; hashing
+and SD I/O must remain separately accounted for. See the
+[test plan](performance-test-plan.md) for the next runtime work.
 
 ## First completed capture: Sword of the Berserk
 
@@ -168,8 +234,9 @@ the original upload names, lengths, SHA-256 fingerprints, per-track checks and
 decoded checkpoints. No game track bytes are stored in the repository.
 
 Still needed: local PC verification of track 3, a compatible independent
-reference comparison and completed hardware reboot/Resume. MDK2 now supplies
-a logged controlled Stop and one data-track timing sample, as described above.
+reference comparison and final verification of a complete resumed hardware
+dump. MDK2 now supplies data/audio timing and a successful checkpoint resume
+through new audio writes, followed by controlled Stop, as described above.
 If the original capture log remains available, save/upload the report whose
 header says `K-UI SD runtime 2657a97031e3`; do not repeat the full capture just
 to replace a lost log. Keep the completed dump for later hash comparisons.
@@ -184,8 +251,9 @@ equality, a damaged newest checkpoint, an uncommitted suffix, bounded retries,
 media-change and storage-failure handling, corrupt-prefix and wrong-disc refusal,
 and preservation of existing completed jobs. These are synthetic host tests.
 
-The first physical completion is documented above; full PC track verification,
-hardware resume and an independent disc-reference match remain pending. Use
+The first physical completion and MDK2 resume through new writes are documented
+above. Full PC track verification, final verification of a complete resumed
+hardware dump and an independent disc-reference match remain pending. Use
 [the capture guide](capture-test.md) with the existing bootstrap CD; the earlier
 physical evidence below applies to the diagnostic builds identified there.
 
@@ -282,4 +350,5 @@ FAT32 PC verification can follow when a reader is available.
 
 The capture title is now recorded above. Its region, console revision, video
 cable/display and adapter/card model are not yet recorded. Independent full-dump
-verification and controlled stop/resume remain hardware acceptance checks.
+verification and final verification of a complete resumed dump remain hardware
+acceptance checks; MDK2's checkpoint resume through new writes is now recorded.

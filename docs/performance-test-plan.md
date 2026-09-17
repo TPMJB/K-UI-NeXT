@@ -13,68 +13,53 @@ of the Berserk dump. No additional CD burn is needed for these tests.
 | Evidence | Result | Remaining question |
 | --- | --- | --- |
 | MDK2 track-1 capture, P1/P2 snapshots | 186.99 KiB/s; optical callback 63.20%, writes 23.25%, SHA-256 10.66%; zero retries | Which optical operations consume the time? |
-| MDK2 through part of audio track 4, diagnostics(9) | 142.33 KiB/s across mixed tracks; optical 71.92%, writes 17.75%, SHA-256 8.20%; zero retries | What is the isolated audio rate and timing split? |
-| SD writes in those two traces | 804.21 and 801.95 KiB/s within write calls | No evidence here of SD writes slowing to 50 KiB/s |
+| MDK2 through part of audio track 4, diagnostics(9) | 142.33 KiB/s across mixed tracks; optical 71.92%, writes 17.75%, SHA-256 8.20%; zero retries | Audio-only follow-up now measured below |
+| Isolated track-4 audio after Resume, diagnostics(10) | 57.46 KiB/s; optical 88.75%, writes 7.32%, SHA-256 3.17%; zero retries | Which operation inside the optical callback is slow? |
+| SD writes across those three traces | 804.21, 801.95 and 785.36 KiB/s within write calls | No evidence here of SD writes slowing to 50 KiB/s |
 | Memory snapshots | About 861 KiB main RAM used/reserved, unchanged sampled peak and allocator counters | Longer-run behavior remains separate; no current memory-pressure signal |
-| Resume implementation and photos | All saved bytes are reread and hashed before appending | Measure read versus hash time; replace this preflight for a future fast-resume mode |
+| Resume in diagnostics(10) | 56.86 MiB checked in 167.47 seconds; SD reads 75.36%, SHA-256 20.40%, CRC32 3.84%; new writes then succeed | Avoid the repeated prefix pass with versioned incremental hash state; retain strict checks and final verification |
 
 The two P1/P2 files describe one operation. The longer trace is another job.
-Whole-phase averages do not establish track-4/5 throughput. The optical bucket
-includes paired reads, mode setup, polling/waits and buffer checks. Do not treat
+The mixed trace's whole-phase average does not establish track-4/5 throughput;
+the follow-up contains only new track-4 audio and supplies a direct measurement.
+The optical bucket includes paired reads, mode setup, polling/waits and buffer
+checks. Do not treat
 it as pure media transfer time or drop integrity checks solely from its share.
 
-## Next console test: one resumed audio sample
+## Completed console baseline: resumed audio
 
-Use the current timing runtime. Do not start another new dump for this test.
+`diagnostics(10).txt` completes the requested measurement on the same runtime
+and job `/KUI/dumps/df838eac34967ae16-0002`. It validates checkpoint 9's
+59620848-byte prefix, starts at audio track 4 FAD 55672, and captures another
+15955968 bytes in 271.160576 seconds before a controlled Stop. The final
+committed count is 75576816 bytes; all counts reconcile with the previous log.
+Startup, resume, new writes and Stop are logged; a full resumed MDK2 dump and
+its final verification remain untested. The log does not specify how the
+console was restarted.
 
-1. Boot the existing CD without holding B, confirm **SD runtime 0ef58878ccdd**,
-   then insert MDK2. On the capture page press **X Resume latest**.
-2. Check the displayed job. The longer uploaded log used
-   `/KUI/dumps/df838eac34967ae16-0002`, with 59620848 committed bytes and capture
-   stopped inside track 4. X selects the newest matching job, so a later job or
-   later checkpoint may change that position. Preserve all existing jobs; do
-   not rename/delete them to force selection. If the selected job is still in
-   a data track, record its path and advance to the audio portion before using
-   a new resume operation as the audio-only measurement.
-3. Let **Checking saved prefix** finish. At the previously observed readback
-   speed, the logged 56.86 MiB prefix takes about 2 minutes 42 seconds, plus
-   startup/disc identification. This delay is still present in this build.
-   Record a refusal or mismatch instead of treating it as a completed resume.
-4. Confirm the screen changes to **Capturing** on an audio track (4-30), then
-   capture for **30-60 seconds**. Note the track, displayed speed and retry
-   count. A left-trigger mstats snapshot during that interval is useful.
-5. Press **B** and wait for **STOPPED / READY**. Press Left/Right until the
-   controls explicitly say **Y Save log**. Press Y and wait for the displayed
-   **Report saved: /KUI/probes/pNNNN/diagnostics.txt** path and READY. Retrieve
-   that exact report before starting another operation or rebooting. Y on the
-   capture page means Verify, not Save log.
+The resume and capture durations are separate, and neither includes the
+12.615276-second setup phase. All phase counters reconcile. Exact counters,
+input fingerprint and the console's verified-prefix digests are in
+[the results](evidence/mdk2-audio-resume-2026-09-17.json).
 
-Upload the newly saved `diagnostics.txt`; raw track files are unnecessary for
-this timing test. Its header should identify `0ef58878ccdd`. The important
-sections are `TIMING resume` and `TIMING capture`, and the checkpoint, track
-and Stop lines that establish what was measured. The full capture phase must
-contain only new audio bytes to call it an audio-only result. The phase totals
-exclude setup and the earlier prefix reread; do not combine those rates.
+**No further identical baseline or full rip is needed.** Preserve this partial
+job and the completed Sword dump. The next console test should follow the next
+SD runtime change, with short data/audio comparisons and exact report paths.
+Until automatic reports are implemented, B/READY followed by the diagnostics
+page's **Y Save log** remains necessary before rebooting or another operation.
 
-One successful run is sufficient to choose the next change. Do not repeat the
-data-track baseline or complete a full MDK2 rip just for profiling. If the
-existing audio checkpoint has changed, use its reported state when assessing
-the result; the plan's byte count is evidence from the supplied log, not a
-claim about the card's current contents.
+## Next runtime change: optical timing and automatic reports
 
-## Use the result to choose the next change
-
-| Observation in the new trace | Next action |
+| Measured observation | Next action |
 | --- | --- |
-| Audio capture is near 50 KiB/s, optical bucket dominates, no application retries | Split and optimize optical command work first |
-| Many raw mismatches, read failures or one-sector recovery calls | Investigate the exact FAD, track type and error cause before changing the transfer loop |
-| SD write-call throughput drops substantially from the existing roughly 802 KiB/s baseline | Investigate card/filesystem allocation and write behavior separately |
-| Resume time is mostly SD reads, with a smaller hash share | Avoid the unconditional prefix reread through a future checkpoint-resume design |
-| SHA-256 is costly during resume/verification | Measure and optimize that phase independently; capture's 8-11% does not predict its share there |
+| Audio capture is 57.46 KiB/s, optical callback consumes 88.75%, no application retries | Split optical command work first, then optimize the measured cause |
+| SD write-call throughput remains 785-804 KiB/s | Retain the storage baseline; the evidence does not identify writes as the audio bottleneck |
+| Resume spends 126.21 of 167.47 seconds reading the old prefix | Implement and validate a separate fast-resume design before another long acceptance run |
+| SHA-256 consumes 34.17 seconds during resume but 8.60 seconds during audio capture | Assess hashing separately by phase; disabling it cannot resolve this capture slowdown |
 
 The current build cannot distinguish first-read, second-read and polling costs.
-After the audio sample, implement a single SD update with per-track timing and
-optical subtimers: sector-mode setup, each read command, buffer checks/copy, and
+The next SD update should add per-track timing and optical subtimers:
+sector-mode setup, each read command, buffer checks/copy, and
 poll counts/waits within each command. Command subtotals belong inside the
 optical total; do not add overlapping parent and child times together. Include
 maximum command duration and retry reasons. Keep counters bounded and avoid
