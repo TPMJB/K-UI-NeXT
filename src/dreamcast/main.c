@@ -247,6 +247,7 @@ int main(void) {
     kui_log("Left/Right switches capture/diagnostics. B stops and checkpoints.");
     kui_log("New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.");
     kui_log("Capture rereads saved files; a reference match is a separate PC check.");
+    kui_log("Capture uses single optical reads; final CRC32/SHA256 readback stays on.");
     kui_log("Capture/Resume/Verify auto-save a report after ending. Wait for READY.");
 #else
     kui_log("Full capture is available in the updated SD runtime.");

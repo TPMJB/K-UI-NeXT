@@ -29,11 +29,19 @@ struct command_timing {
 };
 static struct optical_timing {
     uint64_t us,requests,bytes,mode_us,modes,mode_failures,buffers_us;
-    uint64_t result[3],mismatches,guards,refused;
+    uint64_t result[3],mismatches,guards,refused,short_transfers;
     struct command_timing read[2];
 } optical[2];
 static unsigned optical_phase;
 static struct command_timing *active_command;
+/* PIO advances through exec_server calls. Sleeping after every busy status
+ * throttles that service loop to scheduler ticks (about 8 ms on our console).
+ * Keep servicing it, yielding the runnable worker every 2 ms for UI/Maple.
+ * The portable command loop still checks Stop and its deadline on every poll.
+ * Firmware calls themselves cannot be preempted by the software deadline. */
+#define PIO_SERVICE_QUANTUM_US 2000u
+static bool fast_pio;
+static uint64_t last_pass_us;
 
 void kui_disc_timing_reset(void) {
     memset(optical,0,sizeof(optical));optical_phase=0;active_command=NULL;
@@ -47,12 +55,14 @@ void kui_disc_timing_report(void) {
         if(!t->requests) continue;
         uint64_t children=t->mode_us+t->buffers_us+t->read[0].us+t->read[1].us;
         kui_log("OPTICAL %s: subtimers inside TIMING disc",p?"capture":"setup");
+        kui_log("opt policy=%s PIO yield_us=%u",p?"single":"paired",PIO_SERVICE_QUANTUM_US);
         kui_log("opt wall_us=%" PRIu64 " requests=%" PRIu64 " bytes=%" PRIu64,t->us,t->requests,t->bytes);
         kui_log("opt mode_us=%" PRIu64 " calls=%" PRIu64 " failed=%" PRIu64,t->mode_us,t->modes,t->mode_failures);
         kui_log("opt buffers_us=%" PRIu64 " other_us=%" PRIu64,t->buffers_us,t->us>=children?t->us-children:0);
         kui_log("opt requests ok=%" PRIu64 " retry=%" PRIu64 " fatal=%" PRIu64,
             t->result[KUI_READ_OK],t->result[KUI_READ_RETRY],t->result[KUI_READ_FATAL]);
         kui_log("opt mismatch=%" PRIu64 " guards=%" PRIu64 " refused=%" PRIu64,t->mismatches,t->guards,t->refused);
+        kui_log("opt short=%" PRIu64,t->short_transfers);
         for(unsigned i=0;i<2;i++) {
             const struct command_timing *c=&t->read[i];
             uint64_t nested=c->submit_us+c->poll_us+c->wait_us+c->abort_us;
@@ -74,8 +84,13 @@ void kui_disc_timing_report(void) {
 
 static uint64_t now(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
 static void pause_worker(void *ctx) {
-    (void)ctx;uint64_t start=active_command?timer_us_gettime64():0;
-    thd_sleep(1);
+    (void)ctx;
+    uint64_t start=timer_us_gettime64();
+    if(fast_pio) {
+        if(start-last_pass_us<PIO_SERVICE_QUANTUM_US) return;
+        thd_pass();
+        last_pass_us=timer_us_gettime64();
+    } else thd_sleep(1);
     if(active_command) {active_command->wait_us+=timer_us_gettime64()-start;++active_command->waits;}
 }
 static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
@@ -106,8 +121,11 @@ static bool command(int code, void *params, uint32_t timeout) {
         return false;
     }
     memset(&detail, 0, sizeof(detail));
+    fast_pio=code==CD_CMD_PIOREAD;
+    last_pass_us=timer_us_gettime64();
     struct kui_command_ops ops = {NULL, now, pause_worker, cancelled, submit, poll, abort_command};
     enum kui_command_result result = kui_command(&ops, code, params, timeout, 1000);
+    fast_pio=false;
     if(active_command) ++active_command->result[result];
     if(result == KUI_CMD_OK) return true;
     kui_log("CMD %d %s", code, kui_command_name(result));
@@ -227,7 +245,11 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
     t->mode_us+=timer_us_gettime64()-start;++t->modes;
     if(!mode_ok) {++t->mode_failures;goto done;}
     size_t bytes=(size_t)sectors*KUI_RAW_BYTES;
-    for(unsigned i=0;i<2;i++) {
+    /* Identification keeps its established paired samples and disc identity.
+     * Capture issues one sequential request; failures still use the core's
+     * bounded retry policy. Saved-file CRC/SHA verification is unchanged. */
+    unsigned reads=optical_phase?1:2;
+    for(unsigned i=0;i<reads;i++) {
         uint8_t fill=i?0x5a:0xa5;
         start=timer_us_gettime64();
         memset(&capture_raw[i],fill,sizeof(capture_raw[i]));
@@ -238,8 +260,8 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
         uint64_t duration=timer_us_gettime64()-start;active_command=NULL;
         c->us+=duration;++c->calls;
         if(duration>c->max_us) {c->max_us=duration;c->max_fad=fad;c->max_sectors=sectors;}
-        if(read_ok) c->bytes+=bytes;
-        else {result=poisoned || media_changed || kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;goto done;}
+        /* A failed abort may leave firmware owning these static objects. */
+        if(poisoned) goto done;
         start=timer_us_gettime64();
         bool guard_ok=kui_guard_is(capture_raw[i].before,32,fill) &&
            kui_guard_is(capture_raw[i].after,32,fill) &&
@@ -248,9 +270,20 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
         if(!guard_ok) {
             ++t->guards;poisoned=true;kui_log("CAPTURE GUARD CORRUPTION: RESET REQUIRED");goto done;
         }
+        if(!read_ok) {result=media_changed || kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;goto done;}
+        /* KOS defines status.size as transferred bytes. This check detects a
+         * reported short transfer without rereading CDDA or guessing from its
+         * contents (legitimate audio can match any buffer fill pattern). */
+        if(detail.size!=bytes) {
+            ++t->short_transfers;
+            kui_log("Transfer size mismatch FAD=%" PRIu32 " got=%lu want=%lu",
+                fad,(unsigned long)detail.size,(unsigned long)bytes);
+            result=KUI_READ_RETRY;goto done;
+        }
+        c->bytes+=bytes;
     }
     start=timer_us_gettime64();
-    bool mismatch=memcmp(capture_raw[0].data,capture_raw[1].data,bytes)!=0;
+    bool mismatch=reads==2 && memcmp(capture_raw[0].data,capture_raw[1].data,bytes)!=0;
     if(!mismatch) memcpy(out,capture_raw[0].data,bytes);
     t->buffers_us+=timer_us_gettime64()-start;
     if(mismatch) {

@@ -4,6 +4,89 @@ These results cover the uploaded logs, storage fixtures and user reports receive
 2026-09-16 and 2026-09-17. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.
 
+## MDK2 optical command timing and automatic report save
+
+The untruncated `diagnostics(20260917-220946).txt` identifies SD runtime
+`92484724c538`. It is a **manual report** containing the preceding automatic
+save's success message, `Report saved: /KUI/probes/p0005/diagnostics.txt`.
+Automatic report saving after controlled Stop therefore worked according to
+the console log; the separately saved automatic report was not uploaded.
+
+This run resumes the same MDK2 job, `/KUI/dumps/df838eac34967ae16-0002`, from
+checkpoint 11 with **75576816 committed bytes**, exactly where the prior log
+ended. The completed tracks 1-3 and partial track 4 pass the console's CRC32
+and SHA-256 checks. The 72.08-MiB prefix pass takes **212.448470 seconds**, or
+**347.40 KiB/s**. Saved-file read calls consume 160.577146 seconds; SHA-256
+and CRC32 together consume 51.099671 seconds. These are resume costs, separate
+from the capture measurements below.
+
+New capture spans **audio track 4, FAD [62456,70040)**: **17837568 bytes**
+(7584 sectors) in **305.611520 seconds**, averaging **57.00 KiB/s**. The final
+committed count is **93414384 bytes**. Thus the profiling build establishes
+essentially the same slow audio throughput as the preceding 57.46-KiB/s run;
+it does not establish a speed improvement.
+
+| Capture category | Seconds | Share of capture wall time |
+| --- | ---: | ---: |
+| Optical read callback | 270.600197 | 88.54% |
+| Track-file writes | 21.921474 | 7.17% |
+| SHA-256 | 11.033157 | 3.61% |
+| CRC32 | 1.989986 | 0.65% |
+| Checkpoint sync/publication | 0.050895 | 0.02% |
+| Other | 0.015811 | less than 0.01% |
+
+The new optical subtimers separate costs that the older logs combined:
+
+| Optical operation | Elapsed seconds | Calls | Time inside scheduler waits |
+| --- | ---: | ---: | ---: |
+| First PIO read | 130.570325 | 238 | 124.779241 s across 15687 waits |
+| Second PIO read of the same range | 138.971324 | 238 | 133.207952 s across 16684 waits |
+| Raw mode setup | 0.005312 | 238 | Not measured separately |
+| Buffer preparation, checking and copy | 1.033794 | — | Not applicable |
+
+The two read commands together spend **257.987193 seconds inside scheduler
+waits**, 84.42% of capture wall time and 95.34% of the optical adapter's timed
+interval. The runtime calls `thd_sleep(1)` at each wait; the measured elapsed
+averages are **7.954 ms** for the first read and **7.984 ms** for the second.
+There are 66.91 and 71.10 polls per command on average, respectively, for
+32-sector requests. This makes the repeated read and the frequency of waits
+between firmware service calls concrete optimization targets. These averages
+are not a distribution of individual sleeps, and elapsed wait time includes
+time in which the drive can progress or other threads run: it must not all be
+treated as recoverable overhead.
+
+Simply subtracting the measured second-read time while holding every other
+cost fixed gives **104.53 KiB/s**. That is an arithmetic comparison, not a
+prediction: a single sequential read and a different polling policy can also
+change the first read's latency and other costs. Removing SHA-256 alone cannot
+explain or fix this result; both capture hashes together account for 4.26%.
+Mode setup is only 0.00174% of capture time. SD write calls average
+**794.63 KiB/s**, so this trace does not show track-file writes imposing the
+57-KiB/s overall rate.
+
+There are **zero application retries, comparison mismatches or buffer-guard
+failures**. The extra optical request ends in the user's controlled Stop:
+read 1 completes 238 times; read 2 completes 237 times and is cancelled once.
+Its abort succeeds, and 237 successful 32-sector chunks are committed. The
+single optical `fatal` result describes that cancellation, not an exhausted
+sector retry or unrecoverable media error. Internal drive retries are not
+visible in these counters. The initial initialization command's sense 6/40
+is followed by successful identification, prefix validation and capture.
+
+Main-RAM use/reservations and sampled peak stay at **900888 bytes**, with
+**15876328 bytes available**. The allocator's 232 free bytes describe only
+its existing arena; a further 15876096 bytes remain unclaimed main RAM.
+This log supplies no evidence of memory pressure or growth during the run.
+
+[Machine-readable results](evidence/mdk2-optical-waits-2026-09-17.json) retain
+the upload's SHA-256, exact phase/track/optical counters, prefix hashes and
+derived rates. All timing groups and byte/FAD continuity checks reconcile.
+MDK2 remains incomplete, and the uploaded log alone does not independently
+verify the saved track bytes or an uninterrupted/reference dump match. The
+profiling test has answered its question; the next hardware round should
+measure the optical performance changes, using the existing bootstrap disc,
+rather than repeat this unchanged baseline. See the [optical test guide](optical-test.md).
+
 ## MDK2 isolated audio capture and successful checkpoint resume
 
 The untruncated `diagnostics(10).txt` comes from SD runtime `0ef58878ccdd` in

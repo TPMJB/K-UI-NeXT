@@ -1,86 +1,75 @@
-# MDK2 optical timing: next console test
+# Single-read capture: short console test
 
-This SD update measures the delay inside the optical read routine and saves
-capture reports automatically. The earlier `0ef58878ccdd` runtime measured
-57.46 KiB/s during MDK2 audio capture, with 88.75% inside that routine. It did
-not separate the two reads, mode setup or waits. This update adds that detail;
-it does not change the paired-read policy, hashes or checkpoint format.
+This update changes capture behavior: one PIO read per block, continuously
+serviced between periodic runnable scheduler yields. It removes the duplicate
+capture read and the sleep after every busy firmware status. It keeps transfer
+length checks, guards, data-sector EDC, bounded retries, Stop, and final saved-file
+CRC32/SHA-256 verification. Identification samples and diagnostic probes remain
+paired; existing disc identities, checkpoint v1 jobs and bootstrap CDs work.
 
-## One short run on the existing dump
+## Install and test MDK2 audio
 
 1. Download **sd-update** from this revision's successful Diagnostic build.
-   Keep your previous `runtime.kui` on the PC. With the console off, replace
-   only `/KUI/runtime.kui` with the artifact's `KUI/runtime.kui`.
-2. Boot your **existing bootstrap CD** without B. Confirm **SD runtime** and
-   the first 12 characters of the commit recorded in the artifact's `build.json`.
-   The startup log now says capture/resume/verify save reports automatically.
-3. Insert MDK2, close the lid and press **X Resume latest** on the capture page.
-   The last supplied log used `/KUI/dumps/df838eac34967ae16-0002`, with
-   75576816 committed bytes, partway through audio track 4. Keep existing jobs;
-   if the selected job differs, record what is shown rather than deleting or
-   renaming jobs to force selection.
-4. Allow **Checking saved prefix** to finish. For that 72.08 MiB checkpoint,
-   the previous measured rate suggests about **3 minutes 32 seconds**, plus
-   disc identification. Faster resume is still a future change. If checking
-   fails, keep the automatic failure report instead of starting over.
-5. Once **Capturing** appears on an audio track (4-30), let it run for about
-   **60 seconds**. Note the displayed rate, track and retry count. There is no
-   need to finish the disc or repeat the earlier data-track baseline.
-6. Press **B once**, then release it. After checkpointing and closing capture
-   I/O, the status changes to **SAVING LOG**. Wait for both **READY** and
-   **Report saved: /KUI/probes/pNNNN/diagnostics.txt** before powering off or
-   removing the card. Record that exact path; each report gets a fresh folder.
+   Keep the previous runtime on the PC. With the console off, replace only
+   `/KUI/runtime.kui` with the artifact's `KUI/runtime.kui`.
+2. Boot the **existing bootstrap CD** without B. Confirm **SD runtime** and
+   the commit's first 12 characters from the artifact's `build.json`.
+3. Insert MDK2, close the lid and press **X Resume latest**. The latest supplied
+   log ends with **93414384 committed bytes** in
+   `/KUI/dumps/df838eac34967ae16-0002`; its next capture FAD is **70040**, track 4.
+   If the selected job differs, record it and keep the existing folders.
+4. Allow **Checking saved prefix** to finish. This pass is unchanged: that
+   89.09 MiB prefix may take about **4 minutes 23 seconds**, plus identification,
+   based on the last measured prefix rate. Measure capture only after the
+   display says **Capturing**. A failure should produce a report; keep it.
+5. Capture audio for **60-90 seconds**, recording the track, displayed rate and
+   retry count. Only about 9.70 MiB remain in track 4, so reaching track 5 or
+   later is expected if faster. Per-track summaries separate these intervals.
+   Check that scrolling and the left-trigger memory snapshot still respond.
+6. Press **B once**, release it, and wait for **READY** and
+   **Report saved: /KUI/probes/pNNNN/diagnostics.txt**. Record that path.
+   Upload that report; track files are not needed for this first speed check.
 
-Upload that `diagnostics.txt`. Its header should say `Report trigger: auto
-resume` and `Capture result: stopped` for a normal short test. It should include
-`TIMING resume`, `TIMING capture`, `TRACK T04 ...` (or the actual audio track)
-and `OPTICAL capture`. Raw tracks are unnecessary for this timing test.
+The automatic report should say `Report trigger: auto resume` and
+`Capture result: stopped`. Under **OPTICAL capture**, expect `policy=single`,
+`read2 calls=0 bytes=0`, and no transfer-size failures (`opt short=0`). Setup
+still reports `policy=paired` and two reads. Ordinary cancellation is logged
+separately from retries and is expected at Stop. If transfer-size mismatches,
+new read failures or unresponsive controls appear, stop and send the report.
 
-The earlier B press stops capture and does not suppress its report. A **new** B
-press during SAVING LOG cancels the log save. If saving fails or is cancelled,
-the capture result stays separate and the display offers manual retry: switch
-to diagnostics and use **Y Save log**. Y on the capture page means Verify.
-An incomplete save may leave `diagnostics.tmp`; only the published
-`diagnostics.txt` is reported as saved. Do not deliberately fill the card or
-remove it mid-write for this test; report failure cases are exercised on host
-filesystem images.
+An earlier capture Stop does not cancel its report. A new B press during
+**SAVING LOG** cancels that save. For a failed/cancelled save, switch to the
+diagnostics page and use **Y Save log**; Y on capture means Verify. Wait for the
+exact saved path before shutting down. Existing reports and captures are kept.
 
-## How the measurements fit together
+## Compare and close correctness checks
 
-| Summary | Meaning |
-| --- | --- |
-| `TIMING` | Existing nonoverlapping setup, resume, capture, verification and finish categories |
-| `TRACK` | This operation's capture interval for that track, start/next FAD, successfully written bytes and category times; includes checkpointing and close |
-| `OPTICAL setup` / `OPTICAL capture` | Detail inside raw calls during identification or capture, kept separate |
-| `mode_us`, `buffers_us`, `read1`, `read2`, optical `other_us` | Nonoverlapping children of optical `wall_us` |
-| Each read's `submit_us`, `poll_us`, `wait_us`, `abort_us`, `other_us` | Children of that read's elapsed time, including the firmware server calls and actual scheduler waits |
-| `max_us`, `max_fad`, `max_sectors` | The slowest observed command and its requested range |
-| Outcomes, mismatches, guards and refused requests | Distinguish successful commands, ordinary Stop, failures, timeouts, unstable/underfilled data and refusal after unsafe recovery |
+The baseline on runtime `92484724c538` is **57.00 KiB/s** over new MDK2 audio,
+with zero application retries. Compare the new capture and per-track averages,
+not the prefix-check rate or only the highest display reading. Different FAD
+ranges and track transitions prevent a perfectly controlled A/B comparison;
+repeat a fixed range only if the first result is ambiguous. No new baseline
+full rip is needed. A substantial improvement with `read2=0` and much less
+scheduler waiting supports the targeted fix; no fixed 640 KiB/s is promised.
 
-Command submit/poll/wait totals are already included in the first/second read
-totals, which are included in the optical total and the core's disc category.
-**Do not add these levels together.** Timer calls and work outside the driver's
-measured interval can leave a small difference from the outer disc category.
-Polling/wait counts include abort draining when an operation stops or times out.
-Command bytes count each successful physical request; optical bytes count a
-successful paired request once. A cancelled request contributes time but no
-successful bytes. Track bytes need not equal checkpointed bytes after a storage
-failure; the separate committed count remains authoritative.
+After this short result, use one short **data-track** capture to check EDC and
+speed, then complete a mixed-track dump with final console readback and the PC
+verifier. Keep the completed Sword of the Berserk dump for comparison; its
+track 3 PC verification remains pending. Matching saved-file CRC/SHA proves
+storage consistency, not an independent reference match or CDDA offset accuracy.
 
-Counters use fixed memory. Per-track and detailed optical summaries are printed
-only when the operation ends; there are no new per-chunk logs or SD writes.
-Report creation runs after the measured operation and is outside its timers.
-Main-RAM usage will rise slightly because of the additional counters.
+## Reading the timers
 
-## Acceptance and following work
+`TIMING` splits setup, resume, capture, verification and finish. `TRACK` reports
+only this operation's capture interval for a track, including checkpoint/close.
+`OPTICAL` is detail already inside the core disc time. Its mode, buffer, read1,
+read2 and other buckets do not overlap. Each read's submit, poll, wait, abort
+and other buckets are nested inside that read: **do not add the levels**.
 
-The test succeeds as a measurement when it identifies the expected SD build,
-validates the existing prefix, appends audio, stops cleanly and automatically
-saves the complete timing summaries. A readable failure report is also useful;
-it is not a completed or verified dump. Capture may remain slow in this build.
-
-Use the measured mode/first-read/second-read/poll/wait split to choose one
-optical change. Compare identical data/audio ranges and output bytes before
-claiming a speed improvement. Full MDK2 verification and a faster checkpoint
-resume remain separate follow-up work. Keep the current partial MDK2 job and
-completed Sword of the Berserk dump. No new CD burn is required.
+`wait_us`/`waits` now measure actual periodic scheduler yields, not every busy
+status. Poll calls still include firmware service; deadlines and cancellation
+are checked on every command-loop iteration. A 2 ms service quantum is not a
+promise about how quickly a firmware syscall or another scheduled thread returns.
+Counters are fixed-size, and reporting happens after the operation. Automatic
+report SD writes are outside the capture timers. Short/overreported successful
+transfers are rejected before copying bytes to the capture core.

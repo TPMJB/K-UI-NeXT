@@ -1,88 +1,70 @@
 # Capture speed and resume: next tests
 
-This plan follows the measured MDK2 results in
-[hardware evidence](hardware-evidence.md). Baseline runtime **0ef58878ccdd**
-supplied the measurements below. This source revision implements the next
-profiling/report update; its **sd-update** artifact includes
-[the short console test](optical-test.md). Match the displayed runtime build
-to the included `build.json`; the old baseline lacks these new optical counters.
-Keep the existing bootstrap CD, SD card, partial MDK2 jobs and completed Sword
-of the Berserk dump. No additional CD burn is needed for these tests.
+The optical profiling round is complete. Runtime **92484724c538** still captured
+MDK2 audio at **57.00 KiB/s**. This revision implements a performance change;
+follow [the 60-90 second audio test](optical-test.md) using **sd-update** and the
+existing bootstrap CD. Keep all partial jobs and the completed Sword dump.
 
-## What we already know
+## Evidence and implementation
 
-| Evidence | Result | Remaining question |
-| --- | --- | --- |
-| MDK2 track-1 capture, P1/P2 snapshots | 186.99 KiB/s; optical callback 63.20%, writes 23.25%, SHA-256 10.66%; zero retries | Which optical operations consume the time? |
-| MDK2 through part of audio track 4, diagnostics(9) | 142.33 KiB/s across mixed tracks; optical 71.92%, writes 17.75%, SHA-256 8.20%; zero retries | Audio-only follow-up now measured below |
-| Isolated track-4 audio after Resume, diagnostics(10) | 57.46 KiB/s; optical 88.75%, writes 7.32%, SHA-256 3.17%; zero retries | Which operation inside the optical callback is slow? |
-| SD writes across those three traces | 804.21, 801.95 and 785.36 KiB/s within write calls | No evidence here of SD writes slowing to 50 KiB/s |
-| Memory snapshots | About 861 KiB main RAM used/reserved, unchanged sampled peak and allocator counters | Longer-run behavior remains separate; no current memory-pressure signal |
-| Resume in diagnostics(10) | 56.86 MiB checked in 167.47 seconds; SD reads 75.36%, SHA-256 20.40%, CRC32 3.84%; new writes then succeed | Avoid the repeated prefix pass with versioned incremental hash state; retain strict checks and final verification |
-
-The two P1/P2 files describe one operation. The longer trace is another job.
-The mixed trace's whole-phase average does not establish track-4/5 throughput;
-the follow-up contains only new track-4 audio and supplies a direct measurement.
-The optical bucket includes paired reads, mode setup, polling/waits and buffer
-checks. Do not treat it as pure media transfer time or drop integrity checks
-solely from its share.
-
-## Completed console baseline: resumed audio
-
-`diagnostics(10).txt` completes the requested measurement on the same runtime
-and job `/KUI/dumps/df838eac34967ae16-0002`. It validates checkpoint 9's
-59620848-byte prefix, starts at audio track 4 FAD 55672, and captures another
-15955968 bytes in 271.160576 seconds before a controlled Stop. The final
-committed count is 75576816 bytes; all counts reconcile with the previous log.
-Startup, resume, new writes and Stop are logged; a full resumed MDK2 dump and
-its final verification remain untested. The log does not specify how the
-console was restarted.
-
-The resume and capture durations are separate, and neither includes the
-12.615276-second setup phase. All phase counters reconcile. Exact counters,
-input fingerprint and the console's verified-prefix digests are in
-[the results](evidence/mdk2-audio-resume-2026-09-17.json).
-
-**No further identical baseline or full rip is needed.** Preserve this partial
-job and the completed Sword dump. Install the new profiling SD runtime and
-follow [one 60-second audio measurement](optical-test.md). Reports now save
-automatically after capture I/O ends; wait for the exact saved path and READY.
-Diagnostics **Y Save log** remains available for manual retry.
-
-## Implemented next test: optical timing and automatic reports
-
-| Measured observation | Next action |
+| Measured fact | Implemented response |
 | --- | --- |
-| Audio capture is 57.46 KiB/s, optical callback consumes 88.75%, no application retries | Split optical command work first, then optimize the measured cause |
-| SD write-call throughput remains 785-804 KiB/s | Retain the storage baseline; the evidence does not identify writes as the audio bottleneck |
-| Resume spends 126.21 of 167.47 seconds reading the old prefix | Implement and validate a separate fast-resume design before another long acceptance run |
-| SHA-256 consumes 34.17 seconds during resume but 8.60 seconds during audio capture | Assess hashing separately by phase; disabling it cannot resolve this capture slowdown |
+| Two PIO commands per capture block; second reads took 138.97 of 305.61 seconds | One sequential PIO command per capture block |
+| 257.99 seconds inside scheduler waits; nominal 1 ms sleeps averaged about 8 ms | Service PIO continuously, with runnable scheduler yields every 2 ms |
+| Mode changes took only 0.0053 seconds | Retain mode setup; it is not the significant delay |
+| SHA-256/CRC32 took 4.26% of this audio capture | Retain both hashes and full saved-file readback |
+| SD write calls averaged 794.63 KiB/s; no retries or memory growth | Keep storage path and chunk size stable for this test |
+| The 72.08 MiB prefix check took 212.45 seconds | Keep existing jobs compatible; fast resume remains a separate versioned change |
 
-The new update separates sector-mode setup, first/second commands and buffer
-work. Each command records submit/poll/wait/abort durations and counts, its
-maximum duration/FAD/size, and result categories. Optical counters separate
-identification from capture; per-track summaries record only newly attempted
-capture intervals. Counters are bounded and add no per-chunk log or SD writes.
-Their parent/child durations overlap by design; do not add the levels together.
+[Exact counters and caveats](evidence/mdk2-optical-waits-2026-09-17.json) are
+recorded with the upload fingerprint. Wait time includes real drive waiting and
+other thread execution; not all of it is recoverable overhead. Subtracting only
+the second read with all other costs fixed gives 104.53 KiB/s, so avoiding the
+per-service-call sleep is essential to address the larger gap. This arithmetic
+is not a hardware speed prediction.
 
-Capture/Resume/Verify now automatically save a fresh report after their I/O
-ends. Reports publish only after writing, syncing and closing a temporary file.
-Existing reports and capture files are preserved; saving/cancellation failures
-have a separate result and manual Y retry. The capture Stop is cleared only
-for this new log-save operation, where a new B press can cancel saving.
-Host cases cover paired-read equivalence, timing accounting, command failures,
-cancel/deadlines, report full-card/write/sync failures and file preservation.
-Physical-console acceptance of this update is still pending.
+## Independent source comparison
 
-For optical changes, compare the same fixed data and audio ranges on the same
-disc/card. Change one measured behavior at a time: redundant mode changes,
-polling overhead or request batching, selected from the subtimers. Keep finite
-deadlines, Stop responsiveness, guards, paired-read comparison and sector checks
-in the baseline. Require identical output bytes/hashes and no new read errors
-before claiming a speed improvement. A larger chunk must still meet command
-and cancellation bounds. Repeat a short comparison only if variability makes
-the effect unclear. Do not infer a fixed 640 KiB/s target from another program's
-peak display or claim speed gains before hardware measurements.
+The legacy project is now named K-UI_DS. Its
+[ripper at 2a530929](https://github.com/TPMJB/K-UI_DS/blob/2a5309298dde8fb100da1e2e4e10517695c9780f/applications/gd_ripper/modules/module.c)
+uses one 16-sector PIO command and prepares mode per track. Its timeout wrapper
+uses the KOS polling mechanism. Our
+[pinned KOS optical wrapper](https://github.com/KallistiOS/KallistiOS/blob/fcfa7d869471591ca1c777543261a7bfea7cb726/kernel/arch/dreamcast/hardware/cdrom.c)
+also uses scheduler polling, which allows prompt firmware service rather than
+sleeping after every busy status. In the
+[scheduler](https://github.com/KallistiOS/KallistiOS/blob/fcfa7d869471591ca1c777543261a7bfea7cb726/kernel/thread/thread.c),
+`thd_sleep(1)` blocks the worker until a timed wakeup; `thd_pass()` keeps it runnable.
+
+K-UI's change is independently authored around these general techniques. It
+retains its own bounded command/abort loop, 32-sector chunks, static guarded
+buffers, sector EDC and retry handling. No DreamShell implementation is imported.
+The
+[KOS status definition](https://github.com/KallistiOS/KallistiOS/blob/fcfa7d869471591ca1c777543261a7bfea7cb726/kernel/arch/dreamcast/include/dc/syscalls.h)
+defines `size` as transferred bytes; successful short/overreported raw transfers
+are rejected before forwarding bytes. Single-read CDDA relies on the firmware's
+status and count; it does not perform repeat comparison or offset correction.
+Paired identification samples keep the existing fingerprint and v1 job identity.
+
+## Acceptance order
+
+1. Resume the existing MDK2 job, allow the prefix check, capture audio for 60-90
+   seconds, then Stop and upload the automatically saved report. Expect capture
+   `policy=single`, `read2 calls=0`, no transfer-size errors, responsive controls,
+   and lower optical wait time. Compare phase/per-track averages with 57 KiB/s.
+2. After that short result, test a short data-track interval to confirm EDC and
+   speed. Different ranges and drive conditions limit the comparison; use an
+   identical fixed range only if the result is ambiguous. Do not claim a fixed
+   640 KiB/s target from another program's peak display.
+3. Once speed and Stop are sound, finish a mixed-track capture with final SD
+   readback and PC verification. A faster capture is not yet a verified dump.
+
+Automatic reports, phase/track/optical timers and fixed-memory accounting stay
+in place. Reports run after capture I/O and remain outside its timing buckets.
+Host tests cover actual-adapter fast service and fairness, single capture vs
+paired identification, transfer-count rejection, cancellation, deadlines,
+failed-abort/guard poisoning, and non-PIO scheduling. Filesystem tests retain
+CRC/SHA equality, Stop/Resume, corruption/failure rejection and report preservation.
+Physical speed and firmware byte-count compatibility require the console test.
 
 ## Plan faster resume separately
 

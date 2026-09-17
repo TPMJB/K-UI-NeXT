@@ -15,6 +15,8 @@ test: build/test-core build/test-capture-core build/test-timing build/test-disc
 	./build/test-disc
 	./build/test-disc abort-fail
 	./build/test-disc media-change
+	./build/test-disc guard-failed
+	./build/test-disc guard-before
 	python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 deps:

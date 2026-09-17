@@ -27,9 +27,10 @@ captures and reference comparisons remain the acceptance gate.
 ## Reads and identity
 
 Read at most 32 raw sectors (75,264 bytes) per PIO command. Firmware-visible
-buffers and parameters have static lifetime. Read the requested range twice
-with different fills; compare the full payload and inspect both guards and the
-unused tail. Failed aborts and guard corruption poison further drive access.
+buffers and parameters have static lifetime. Capture reads each range once;
+identification uses two reads with different fills and compares the payload.
+Both paths inspect the guards and unused tail. Failed aborts and guard corruption
+poison further drive access.
 Sense 2/6 stops capture and requires a fresh prepare/identity check on resume.
 
 Each data sector also passes its Mode 1 or Mode 2 Form 1 EDC check. This detects
@@ -44,7 +45,15 @@ are still necessary to establish whole-disc identity against a reference.
 
 A failing batch shrinks to single-sector reads for the affected window. The
 budget is ten additional attempts after the initial failed request; shrinking
-does not replenish it. Each attempt includes the adapter's paired raw reads.
+does not replenish it. Capture attempts use one guarded raw PIO read, check the
+firmware's transferred-byte count and retain data-sector EDC validation. The
+small identification samples and diagnostic probes still use paired reads.
+Capture services PIO continuously with a runnable scheduler yield every 2 ms,
+rather than sleeping after each busy firmware status. Deadlines and Stop checks
+remain active on every command-loop iteration. CDDA has no sector EDC; a single
+successful audio transfer is accepted without repeat comparison or offset/jitter
+correction. Final saved-file CRC32/SHA-256 readback proves storage consistency,
+not that the drive returned an independently correct audio sample.
 No data is written from a failed/invalid request and no sectors are zero-filled.
 
 ## Files and checkpoints

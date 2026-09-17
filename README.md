@@ -32,20 +32,23 @@ RAM estimate and sampled peak appear on the capture page. See
 [memory counter definitions](docs/memory-stats.md) for comparisons with other software.
 Capture, resume and verification also log elapsed-time breakdowns on Stop or
 completion, including separate SHA-256, disc and SD time. See
-[the short optical timing test](docs/optical-test.md). The current update adds
-mode/first-read/second-read/poll/wait counters and per-track capture summaries,
-and automatically saves a new report after Capture, Resume or Verify ends.
-Wait for **Report saved** and **READY** after Stop; diagnostics Y can retry a
-failed log save. Existing dump/checkpoint formats and read policies are retained.
-The first MDK2 data-track measurement attributes about 63% of capture time to
-the paired optical-read callback, 23% to SD writes and 11% to SHA-256; see
-[the measured evidence](docs/hardware-evidence.md#mdk2-capture-timing-and-resume-overhead).
-The isolated audio-track sample now measures **57.46 KiB/s**, with **88.75%**
-of capture time inside the optical callback. Its 56.86 MiB resume prefix took
-167.47 seconds, mostly SD reads (75.36%) and SHA-256 (20.40%). This baseline
-test is complete; the new optical subtimers are ready for the next short console
-measurement. Faster resume remains planned. See the
-[performance and resume test plan](docs/performance-test-plan.md).
+[the short optical speed test](docs/optical-test.md). The current update changes
+capture to **one optical read per block** and services PIO continuously with
+periodic scheduler yields. It removes the duplicate capture read and the sleep
+after every busy firmware status. Transfer-size checks, guards, data-sector EDC,
+bounded retries and final CRC32/SHA-256 saved-file verification remain enabled.
+Identification samples stay paired, so existing v1 jobs retain their identity.
+
+The latest MDK2 audio baseline measured **57.00 KiB/s**. Its two command loops
+spent about 258 of 306 capture seconds in scheduler waits; each nominal 1 ms
+sleep averaged about 8 ms. These counters motivate the change, but do not prove
+all waiting is removable or establish the new build's console throughput.
+See [the evidence](docs/hardware-evidence.md) and
+[the performance/resume plan](docs/performance-test-plan.md).
+Reports save automatically after Capture, Resume or Verify ends. Wait for
+**Report saved** and **READY**; diagnostics Y can retry a failed save.
+Existing dump/checkpoint formats are retained. The full saved-prefix pass on
+resume remains for now; a faster versioned resume format is separate work.
 Read [the capture format](docs/capture-format.md) for gap/audio conventions and
 the distinction between saved-data verification and an independent reference match.
 
