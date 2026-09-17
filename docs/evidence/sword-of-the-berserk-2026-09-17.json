@@ -1,0 +1,160 @@
+{
+  "uploads": [
+    {
+      "file": "checkpoint-a.bin",
+      "bytes": 4096,
+      "sha256": "2fc3f1d9cd97658532d07162962d25e1876a12a12db19c99c64514ccbdd563b2"
+    },
+    {
+      "file": "checkpoint-b.bin",
+      "bytes": 4096,
+      "sha256": "3dda9abd63d7f4da1c1281ec47aee66ee5fad607c40b700475ad445e58215bf2"
+    },
+    {
+      "file": "diagnostics(7).txt",
+      "bytes": 2514,
+      "sha256": "d2a93a39de88d08c3395d40c6031e8cbb29427c4d7301eec5cb029303d5310b3"
+    },
+    {
+      "file": "disc.gdi",
+      "bytes": 83,
+      "sha256": "3dd8cf8ec6bc7365b4ce748d021514ebd720379e4c82297f4ad8988c8503983d"
+    },
+    {
+      "file": "manifest.json",
+      "bytes": 1144,
+      "sha256": "ddc326aeae2a9e899153458fe0c27dff4d033f18740bd07f09126bab59e8baa2"
+    },
+    {
+      "file": "storage(3).bin",
+      "bytes": 2097325,
+      "sha256": "e19146d42e4161db7890e39427fc5ccb95ef1da2a97b910c224d03d8cda6daff"
+    },
+    {
+      "file": "storage(3).json",
+      "bytes": 115,
+      "sha256": "618b9b5553f0932666bcf0363e235ba7d5c1884974106cc353afd886f4b44849"
+    },
+    {
+      "file": "track01.bin",
+      "bytes": 1825152,
+      "sha256": "ee221a533016b6bddbc7676f4278fffe446eb05d5dc1932da1a73c6269ef2202"
+    },
+    {
+      "file": "track02.raw",
+      "bytes": 1237152,
+      "sha256": "8438ed3913c4b9a0f1f3b480a3b9c6e114e9ce30d623f02985d04a1b117502e8"
+    }
+  ],
+  "capture": {
+    "build": "2657a97031e3",
+    "title": "SWORD OF THE BERSERK GUTS RAGE",
+    "identity": "f4db30d38d4d8926df1cdd72945007948cf363d278614289e783478a380de69c",
+    "total_bytes": 1188823104,
+    "gdi_manifest_structure": "PASS",
+    "tracks": [
+      {
+        "file": "track01.bin",
+        "bytes": 1825152,
+        "sectors": 776,
+        "crc32": "bcec7767",
+        "sha256": "ee221a533016b6bddbc7676f4278fffe446eb05d5dc1932da1a73c6269ef2202",
+        "independent_pc_check": "PASS length, CRC32, SHA256"
+      },
+      {
+        "file": "track02.raw",
+        "bytes": 1237152,
+        "sectors": 526,
+        "crc32": "0ff934e3",
+        "sha256": "8438ed3913c4b9a0f1f3b480a3b9c6e114e9ce30d623f02985d04a1b117502e8",
+        "independent_pc_check": "PASS length, CRC32, SHA256"
+      },
+      {
+        "file": "track03.bin",
+        "bytes": 1185760800,
+        "sectors": 504150,
+        "crc32": "2cfb5dcb",
+        "sha256": "1f3be789259cdbd82089f23100765a9bb7039e56450d9b0af3a6988d1c1e5713",
+        "independent_pc_check": "NOT CHECKED: file not uploaded"
+      }
+    ],
+    "console_completion": "User-reported pass supported by published verified manifest and valid final checkpoint",
+    "full_pc_verification": "PENDING: track03.bin not uploaded; user can run tools/verify_dump.py on the full local dump",
+    "reference_comparison": "Not performed"
+  },
+  "checkpoints": [
+    {
+      "file": "checkpoint-a.bin",
+      "sequence": 127,
+      "retries": 0,
+      "record_crc32": "645ae9d7",
+      "structure_and_crc": "PASS",
+      "tracks": [
+        {
+          "track": 1,
+          "sectors": 776,
+          "complete": true,
+          "crc32": "bcec7767",
+          "sha256": "ee221a533016b6bddbc7676f4278fffe446eb05d5dc1932da1a73c6269ef2202"
+        },
+        {
+          "track": 2,
+          "sectors": 526,
+          "complete": true,
+          "crc32": "0ff934e3",
+          "sha256": "8438ed3913c4b9a0f1f3b480a3b9c6e114e9ce30d623f02985d04a1b117502e8"
+        },
+        {
+          "track": 3,
+          "sectors": 504150,
+          "complete": true,
+          "crc32": "2cfb5dcb",
+          "sha256": "1f3be789259cdbd82089f23100765a9bb7039e56450d9b0af3a6988d1c1e5713"
+        }
+      ]
+    },
+    {
+      "file": "checkpoint-b.bin",
+      "sequence": 126,
+      "retries": 0,
+      "record_crc32": "2fe0ac81",
+      "structure_and_crc": "PASS",
+      "tracks": [
+        {
+          "track": 1,
+          "sectors": 776,
+          "complete": true,
+          "crc32": "bcec7767",
+          "sha256": "ee221a533016b6bddbc7676f4278fffe446eb05d5dc1932da1a73c6269ef2202"
+        },
+        {
+          "track": 2,
+          "sectors": 526,
+          "complete": true,
+          "crc32": "0ff934e3",
+          "sha256": "8438ed3913c4b9a0f1f3b480a3b9c6e114e9ce30d623f02985d04a1b117502e8"
+        },
+        {
+          "track": 3,
+          "sectors": 503808,
+          "complete": false,
+          "crc32": "6b8f1c0f",
+          "sha256": "9354fb962ea7621f0b2d3facc9fda49c62678c8743f77b6a90a05c8c67483975"
+        }
+      ]
+    }
+  ],
+  "storage_probe": {
+    "bytes": 2097325,
+    "crc32": "a70f77ca",
+    "sha256": "e19146d42e4161db7890e39427fc5ccb95ef1da2a97b910c224d03d8cda6daff",
+    "check": "PASS: exact length, every deterministic pattern byte and CRC32",
+    "provenance": "Identical bytes to storage(2).bin/storage(2).json from the earlier recorded probe; no new session established"
+  },
+  "diagnostic_log": {
+    "first_line": "K-UI SD runtime addd439aaea5",
+    "capture_log": false,
+    "provenance": "Identical bytes to diagnostics(6).txt from the earlier recorded probe; no capture log supplied"
+  },
+  "received_date": "2026-09-17"
+}

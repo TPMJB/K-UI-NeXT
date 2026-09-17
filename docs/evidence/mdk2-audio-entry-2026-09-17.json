@@ -1,0 +1,144 @@
+{
+  "received_date": "2026-09-17",
+  "input": {
+    "file": "diagnostics(9).txt",
+    "bytes": 6715,
+    "sha256": "28ef8ed691ea5072cb1bf760c69c0a8237ea0ae0eb4f58e95dad9ade8e96cba3"
+  },
+  "runtime_build": "0ef58878ccdd",
+  "disc_title": "MDK2",
+  "job": "/KUI/dumps/df838eac34967ae16-0002",
+  "phases": {
+    "setup": {
+      "wall_us": 13471700,
+      "buckets": {
+        "disc": {
+          "us": 12331653,
+          "logged_pct": 91.5,
+          "bytes": 218736,
+          "calls": 93,
+          "calculated_pct": 91.53746743172725
+        },
+        "edc": {
+          "us": 1024,
+          "logged_pct": 0.0,
+          "bytes": 21168,
+          "calls": 9,
+          "calculated_pct": 0.007601119383596725
+        },
+        "checkpoint": {
+          "us": 42051,
+          "logged_pct": 0.3,
+          "bytes": 4096,
+          "calls": 1,
+          "calculated_pct": 0.31214323359338464
+        },
+        "other": {
+          "us": 1096972,
+          "calculated_pct": 8.142788215295768
+        }
+      }
+    },
+    "capture": {
+      "wall_us": 409071777,
+      "buckets": {
+        "disc": {
+          "us": 294224269,
+          "logged_pct": 71.9,
+          "bytes": 59620848,
+          "calls": 795,
+          "calculated_pct": 71.9248517112927
+        },
+        "edc": {
+          "us": 2005522,
+          "logged_pct": 0.4,
+          "bytes": 50782032,
+          "calls": 676,
+          "calculated_pct": 0.4902616393406187
+        },
+        "write": {
+          "us": 72602139,
+          "logged_pct": 17.7,
+          "bytes": 59620848,
+          "calls": 794,
+          "calculated_pct": 17.748019560880145
+        },
+        "sha256": {
+          "us": 33542500,
+          "logged_pct": 8.1,
+          "bytes": 59620848,
+          "calls": 794,
+          "calculated_pct": 8.199661254068868
+        },
+        "crc32": {
+          "us": 6281438,
+          "logged_pct": 1.5,
+          "bytes": 59620848,
+          "calls": 794,
+          "calculated_pct": 1.535534435072992
+        },
+        "checkpoint": {
+          "us": 354948,
+          "logged_pct": 0.0,
+          "bytes": 32768,
+          "calls": 8,
+          "calculated_pct": 0.08676912462724115
+        },
+        "other": {
+          "us": 60961,
+          "calculated_pct": 0.014902274717426913
+        }
+      }
+    }
+  },
+  "capture": {
+    "captured_bytes": 59620848,
+    "captured_mib": 56.85887145996094,
+    "duration_seconds": 409.071777,
+    "duration_minutes": 6.81786295,
+    "average_kib_s": 142.33072934532953,
+    "data_bytes": 50782032,
+    "audio_bytes": 8838816,
+    "completed_tracks": [
+      1,
+      2,
+      3
+    ],
+    "partial_track": 4,
+    "partial_track_type": "audio",
+    "partial_track_bytes": 7601664,
+    "partial_track_sectors": 3232,
+    "next_fad": 55672,
+    "retries": 0,
+    "cancelled_disc_commands": 1,
+    "stop": "controlled B cancellation; successfully written prefix checkpointed",
+    "standalone_audio_timing": false,
+    "instantaneous_50_kib_s_recorded": false
+  },
+  "derived": {
+    "sd_write_call_kib_s": 801.9527410204815,
+    "paired_optical_callback_kib_s": 197.88810954612313,
+    "illustrative_prefix_seconds_at_360_kib_s": 161.73190104166667,
+    "idealized_no_sha256_kib_s": 155.0437953603282
+  },
+  "audio_estimate": {
+    "assumption": "All data bytes have the same total per-byte processing time as the separate track-1-only test; track 3, different commands and trial conditions can violate this assumption. No per-track timing exists in this log.",
+    "estimated_audio_seconds": 143.8617138345395,
+    "estimated_audio_kib_s": 59.99967621633909,
+    "status": "Inference only; not a direct measurement or proof of a 50 KiB/s track rate"
+  },
+  "memory": {
+    "used_reserved_bytes": 881976,
+    "available_bytes": 15895240,
+    "sampled_peak_bytes": 881976,
+    "heap_in_use_bytes": 88948,
+    "heap_system_bytes": 91708,
+    "change_observed": false
+  },
+  "limitations": [
+    "No per-track or individual-command timing",
+    "Reported later near-50 KiB/s speed is compatible with the mixed trace but not printed as a rate",
+    "This operation measures 6.82 minutes of capture and does not establish the separate roughly-20-minute duration",
+    "No resume phase or completed MDK2 verification in this file"
+  ]
+}

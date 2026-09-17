@@ -1,0 +1,182 @@
+{
+  "received_date": "2026-09-17",
+  "runtime_build": "0ef58878ccdd",
+  "disc_title": "MDK2",
+  "job": "/KUI/dumps/df838eac34967ae16-0001",
+  "snapshot_relation": "P2 is P1 plus another log-save action; one capture operation",
+  "inputs": [
+    {
+      "file": "P1 diagnostics.txt",
+      "bytes": 6337,
+      "sha256": "1f2428d273ab8cb408959e5738ee1d58e897c0d7a4d088b1af516e81e958ccc5"
+    },
+    {
+      "file": "P2 diagnostics.txt",
+      "bytes": 6934,
+      "sha256": "7d73c360ed2502cfbe2f3021a8ac1d3ee5e40e7895a749306803cec92aaea852"
+    }
+  ],
+  "phases": {
+    "setup": {
+      "wall_us": 13426687,
+      "buckets": {
+        "disc": {
+          "us": 12409785,
+          "logged_pct": 92.4,
+          "bytes": 218736,
+          "calls": 93,
+          "calculated_pct": 92.42626271097255
+        },
+        "edc": {
+          "us": 1023,
+          "logged_pct": 0.0,
+          "bytes": 21168,
+          "calls": 9,
+          "calculated_pct": 0.0076191543006848975
+        },
+        "checkpoint": {
+          "us": 16536,
+          "logged_pct": 0.1,
+          "bytes": 4096,
+          "calls": 1,
+          "calculated_pct": 0.12315770822690661
+        },
+        "other": {
+          "us": 999343,
+          "calculated_pct": 7.442960426499851
+        }
+      }
+    },
+    "capture": {
+      "wall_us": 112024259,
+      "buckets": {
+        "disc": {
+          "us": 70794132,
+          "logged_pct": 63.1,
+          "bytes": 21450240,
+          "calls": 285,
+          "calculated_pct": 63.19535842678504
+        },
+        "edc": {
+          "us": 843589,
+          "logged_pct": 0.7,
+          "bytes": 21450240,
+          "calls": 285,
+          "calculated_pct": 0.7530413568725324
+        },
+        "write": {
+          "us": 26047232,
+          "logged_pct": 23.2,
+          "bytes": 21450240,
+          "calls": 285,
+          "calculated_pct": 23.251420926604833
+        },
+        "sha256": {
+          "us": 11945064,
+          "logged_pct": 10.6,
+          "bytes": 21450240,
+          "calls": 285,
+          "calculated_pct": 10.662926143523967
+        },
+        "crc32": {
+          "us": 2269059,
+          "logged_pct": 2.0,
+          "bytes": 21450240,
+          "calls": 285,
+          "calculated_pct": 2.0255068145552295
+        },
+        "checkpoint": {
+          "us": 104441,
+          "logged_pct": 0.0,
+          "bytes": 12288,
+          "calls": 3,
+          "calculated_pct": 0.0932306992541678
+        },
+        "other": {
+          "us": 20742,
+          "calculated_pct": 0.018515632404227732
+        }
+      }
+    }
+  },
+  "capture": {
+    "track": 1,
+    "track_type": "data",
+    "completed_sectors": 9120,
+    "captured_bytes": 21450240,
+    "duration_seconds": 112.024259,
+    "average_kib_s": 186.99074813786538,
+    "application_retries": 0,
+    "end_status": "controlled STOPPED",
+    "track_5_slowdown_measured": false
+  },
+  "derived": {
+    "write_callback_kib_s": 804.2121327901559,
+    "paired_disc_callback_kib_s": 295.89316809477936,
+    "idealized_no_sha256_kib_s": 209.30923754932283,
+    "idealized_no_sha256_speedup_pct": 11.935611592399397,
+    "caveat": "Wall-clock measurements include scheduling and instrumentation. Removing measured SHA256 time is arithmetic with other times held constant, not a hardware speedup prediction."
+  },
+  "layout": {
+    "total_tracks": 31,
+    "data_tracks": [
+      1,
+      3,
+      31
+    ],
+    "audio_tracks": [
+      2,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30
+    ],
+    "reported_slow_track": 5,
+    "reported_slow_track_type": "audio"
+  },
+  "memory": {
+    "main_ram_bytes": 16777216,
+    "used_reserved_bytes": 881976,
+    "available_bytes": 15895240,
+    "heap_in_use_bytes": 88948,
+    "heap_system_bytes": 91708,
+    "sampled_used_reserved_peak_bytes": 881976,
+    "unchanged_at": "startup, operation start, controlled stop, log save",
+    "excludes": "separate VRAM and audio RAM"
+  },
+  "remaining": "No completed resume, audio capture timing or full verification timing in these logs; MDK2 near 50 KiB/s remains user-reported.",
+  "user_report": {
+    "longer_capture": "roughly 20 minutes before noticing about 50 KiB/s around track 5",
+    "resume": "full saved-prefix reread felt much slower than the other GD-rip tool",
+    "covered_by_uploaded_timing": false
+  },
+  "resume_design": {
+    "behavior": "Reread all committed bytes, compare CRC32/SHA256 and rebuild incremental hash contexts before appending",
+    "checkpoint_hash_representation": "finalized per-track hashes; no serialized incremental SHA256 state",
+    "illustrative_70_mib_at_360_kib_s_seconds": 199.11111111111111,
+    "change_implemented": false
+  }
+}
