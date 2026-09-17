@@ -4,6 +4,123 @@ These results cover the uploaded logs, storage fixtures and user reports receive
 2026-09-16 and 2026-09-17. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.
 
+## MDK2 capture reaching high-density audio
+
+The follow-up `diagnostics(9).txt` is an untruncated log from SD runtime
+`0ef58878ccdd`, MDK2 job `/KUI/dumps/df838eac34967ae16-0002`. It completes tracks
+1-3 and stops inside **audio track 4**. The saved prefix is 59620848 bytes
+(56.86 MiB): 50782032 data bytes and 8838816 audio bytes. Track 4 has 3232
+committed sectors (7601664 bytes); the next FAD is 55672 if this checkpoint is
+still the newest job state. The preceding audio track 2 contributes 526 sectors.
+
+The measured capture lasts **409.071777 seconds** (6 minutes 49 seconds), with
+an overall rate of **142.33 KiB/s**. This mixes the earlier data tracks with audio;
+the file has no per-track durations or instantaneous speed records, so it does
+not directly measure the user's on-screen 50 KiB/s observation or their separate
+roughly-20-minute duration report.
+
+| Capture category | Seconds | Share of capture wall time |
+| --- | ---: | ---: |
+| Optical read callback | 294.224269 | 71.92% |
+| Track-file writes | 72.602139 | 17.75% |
+| SHA-256 | 33.542500 | 8.20% |
+| CRC32 | 6.281438 | 1.54% |
+| Sector EDC | 2.005522 | 0.49% |
+| Checkpoint sync/publication | 0.354948 | 0.09% |
+| Other | 0.060961 | 0.01% |
+
+The counters sum exactly to the phase wall time. SD write calls average
+**801.95 KiB/s**, close to 804.21 KiB/s in the earlier track-1 sample. Main-RAM
+use, sampled peak and allocator counters remain at the same values as that
+sample. There are **zero recorded application retries**. `CMD 16 CANCELLED`
+occurs at the controlled Stop; one extra optical call has time but no committed
+bytes (795 disc calls versus 794 successful writes). It is not evidence of a
+failed sector or an exhausted retry loop. Internal drive retry activity is not
+separately visible in this instrumentation.
+
+The larger optical share, stable write-call throughput and unchanged memory
+support investigating the optical path through the audio portion first. The
+callback still combines both reads, mode setup, polling and comparisons, so
+the mechanical transfer rate or one specific driver operation cannot yet be
+identified as the cause. SHA-256's 8.20% is not the dominant cost in this run.
+
+As an explicitly conditional estimate, charging data bytes at the earlier
+track-1 sample's total per-byte time leaves about 143.86 seconds for the audio
+bytes, equivalent to about 60 KiB/s. Different data-track speeds, command sizes
+and run conditions can invalidate this assumption. It is consistent with slow
+audio capture, not a replacement for a direct audio-only measurement.
+
+[Machine-readable follow-up results](evidence/mdk2-audio-entry-2026-09-17.json)
+retain exact counters and this estimate's limitations. The next test can resume
+this existing audio-track checkpoint: its current prefix check would take
+about 162 seconds at 360 KiB/s, then 30-60 seconds of new audio capture provides
+separate `TIMING resume` and `TIMING capture` measurements. Do not recreate the
+completed data tracks merely to get another baseline. See the
+[performance test plan](performance-test-plan.md).
+
+## MDK2 capture timing and resume overhead
+
+`P1 diagnostics.txt` and `P2 diagnostics.txt` identify SD runtime
+`0ef58878ccdd`, MDK2 and the same job `/KUI/dumps/df838eac34967ae16-0001`.
+P2 starts with the exact bytes of P1 and adds another log-save action. They are
+two snapshots of **one** operation, not separate capture trials. Both logs are
+untruncated. The operation stopped during data track 1 after 9120 sectors
+(21450240 bytes) and **112.024259 seconds** of measured capture, averaging
+**186.99 KiB/s**, with zero recorded application retries.
+
+| Capture category | Seconds | Share of capture wall time |
+| --- | ---: | ---: |
+| Optical read callback | 70.794132 | 63.20% |
+| Track-file writes | 26.047232 | 23.25% |
+| SHA-256 | 11.945064 | 10.66% |
+| CRC32 | 2.269059 | 2.03% |
+| Sector EDC | 0.843589 | 0.75% |
+| Checkpoint sync/publication | 0.104441 | 0.09% |
+| Other | 0.020742 | 0.02% |
+
+The buckets add exactly to the capture wall time. Disc, EDC, write and both
+hash buckets each account for the same 21450240 logical bytes in 285 chunks of
+32 raw sectors. The optical callback includes both guarded PIO reads, mode
+setup, polling, comparisons and scheduling. This measurement does not separate
+those costs or establish that optical media transfer alone consumed 63.20%.
+
+SHA-256 is a measurable cost but not the largest contributor in this trace.
+Subtracting all measured SHA-256 time while holding other costs fixed gives
+209.31 KiB/s, an idealized 11.94% speed increase, not a prediction of an actual
+modified build. It does not account for the gap to the previously reported
+DreamShell capture rates. SD write calls alone averaged 804.21 KiB/s for this
+sample; that is neither a complete-rip rate nor a hardware maximum. No saved-file
+verification or resume timing breakdown is present in these two logs.
+
+Startup, operation start, controlled Stop and log-save snapshots all report
+881976 bytes of main RAM used/reserved, 15895240 available, a sampled peak of
+881976, and heap in-use/system counts of 88948/91708 bytes. These snapshots show
+no growth or main-RAM pressure in this short operation; they do not establish
+long-run memory behavior.
+
+The user separately reports a longer run, roughly 20 minutes before noticing
+capture near 50 KiB/s around track 5. The TOC identifies tracks 1/3/31 as data,
+and 2 plus 4-30 as audio. The severe reported slowdown therefore occurred in
+the audio portion, which this track-1 trace does not measure. The later mixed
+data/audio log is analyzed above; audio-only timing remains pending. Photos show a
+later checkpoint with about 70 MiB saved and a resume prefix check near
+355-365 KiB/s, but not completion of that resume or its capture timing.
+
+Current Resume deliberately rereads all committed bytes, validates CRC32/SHA-256
+and rebuilds incremental hash contexts before appending. At 360 KiB/s, 70 MiB
+takes about 199 seconds for that prefix alone. This is a separate source of
+waiting from slow disc capture. Checkpoints currently retain finalized hashes,
+not resumable SHA-256 state; a faster checkpoint resume would require a format
+and validation-policy change. No checks have been removed by this evidence
+update. Full saved-file and independent-reference verification remain separate.
+
+[Machine-readable timing results](evidence/mdk2-timing-2026-09-17.json) retain
+input fingerprints, exact counters, memory values, assumptions and limitations.
+Next performance evidence should separate optical command work within the
+callback and cover the slow audio portion; hashing and SD I/O must remain
+separately accounted for. A short saved capture summary is sufficient; the
+[test plan](performance-test-plan.md) combines that measurement with the resume check.
+
 ## First completed capture: Sword of the Berserk
 
 The user reports that **SWORD OF THE BERSERK GUTS RAGE** completed capture and
@@ -43,15 +160,16 @@ The user reports capture around 210-220 KiB/s. Earlier photos show capture near
 209 KiB/s and saved-file verification near 311 KiB/s, with estimated main RAM
 around 860 KiB and a sampled peak around 869 KiB. These are spot observations,
 not whole-operation averages or detailed allocator measurements. The original
-capture build has no timing instrumentation. Timing build `0ef58878ccdd` remains
-the next SD-only measurement update; this evidence change adds no runtime code.
+capture build has no timing instrumentation. Timing build `0ef58878ccdd` has
+since supplied the MDK2 measurement above; this evidence change adds no runtime code.
 
 [Machine-readable results](evidence/sword-of-the-berserk-2026-09-17.json) retain
 the original upload names, lengths, SHA-256 fingerprints, per-track checks and
 decoded checkpoints. No game track bytes are stored in the repository.
 
 Still needed: local PC verification of track 3, a compatible independent
-reference comparison, controlled hardware Stop/reboot/Resume and timing results.
+reference comparison and completed hardware reboot/Resume. MDK2 now supplies
+a logged controlled Stop and one data-track timing sample, as described above.
 If the original capture log remains available, save/upload the report whose
 header says `K-UI SD runtime 2657a97031e3`; do not repeat the full capture just
 to replace a lost log. Keep the completed dump for later hash comparisons.

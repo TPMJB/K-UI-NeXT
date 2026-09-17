@@ -3,8 +3,13 @@
 This SD update implements M1.3 capture and M1.4 saved-file verification and
 controlled resume. One physical capture and console reread have completed;
 tracks 1 and 2 were independently checked on PC. Full PC/reference verification
-and hardware Stop/Resume remain pending; see [the evidence](hardware-evidence.md).
+and completed hardware reboot/Resume remain pending; controlled Stop is logged.
+See [the evidence](hardware-evidence.md).
 Keep the reusable bootstrap disc that already loads SD.
+
+For the current MDK2 speed investigation, use the
+[performance test plan](performance-test-plan.md). It resumes the existing audio
+checkpoint for one short measurement instead of repeating this full-dump test.
 
 ## Install the update
 
