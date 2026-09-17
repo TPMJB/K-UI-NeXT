@@ -26,6 +26,9 @@ matching job, Y verifies it, and B stops. Left/Right switches to diagnostics.
 The **left trigger runs mstats** at any time, including during capture; a live
 RAM estimate and sampled peak appear on the capture page. See
 [memory counter definitions](docs/memory-stats.md) for comparisons with other software.
+Capture, resume and verification also log elapsed-time breakdowns on Stop or
+completion, including separate SHA-256, disc and SD time. See
+[the short timing test](docs/capture-test.md#measure-capture-time).
 Read [the capture format](docs/capture-format.md) for gap/audio conventions and
 the distinction between saved-data verification and an independent reference match.
 

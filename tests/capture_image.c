@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 static struct {
-    FILE *image;uint64_t blocks,ticks;unsigned writes,reads,failures,bad_attempts;
+    FILE *image;uint64_t blocks,ticks,profile_ticks;unsigned writes,reads,failures,bad_attempts;
     const char *fault;bool stop,injected;enum kui_capture_phase phase;
     struct kui_capture_plan plan;
 } test;
@@ -21,12 +21,12 @@ static void log_line(const char *format,...) {
 static bool fault(const char *s) {return test.fault && !strcmp(test.fault,s);}
 static uint64_t blocks(void *p) {(void)p;return test.blocks;}
 static int read_image(void *p,uint32_t sector,size_t count,uint8_t *data) {
-    (void)p;++test.reads;
+    (void)p;++test.reads;test.profile_ticks+=2300;
     if(fault("read-fail") && test.phase==KUI_VERIFYING) return -1;
     return fseeko(test.image,(off_t)sector*512,SEEK_SET) || fread(data,512,count,test.image)!=count?-1:0;
 }
 static int write_image(void *p,uint32_t sector,size_t count,const uint8_t *data) {
-    (void)p;++test.writes;
+    (void)p;++test.writes;test.profile_ticks+=3100;
     if(fault("write-fail") && test.phase==KUI_CAPTURING && test.ticks>24) return -1;
     if(fault("corrupt-write") && test.phase==KUI_CAPTURING && !test.injected &&
        count && data[0]==0 && kui_guard_is(data+1,10,255) && data[15]==1) {
@@ -38,12 +38,14 @@ static int write_image(void *p,uint32_t sector,size_t count,const uint8_t *data)
     return fseeko(test.image,(off_t)sector*512,SEEK_SET) || fwrite(data,512,count,test.image)!=count?-1:0;
 }
 static int sync_image(void *p) {
-    (void)p;
+    (void)p;test.profile_ticks+=4700;
     if(fault("sync-fail") && test.phase==KUI_CAPTURING) return -1;
     return fflush(test.image) || fsync(fileno(test.image))?-1:0;
 }
 static bool cancelled(void *p) {(void)p;return test.stop || fault("cancel-before");}
 static uint64_t now(void *p) {(void)p;return test.ticks*100;}
+/* Deterministic observation clock, independent of fault/cancellation ticks. */
+static uint64_t now_us(void *p) {(void)p;return test.profile_ticks+=13;}
 static void exhaust_space(void) {
     FIL f;assert(f_open(&f,"0:/fill.bin",FA_CREATE_NEW|FA_WRITE)==FR_OK);
     static uint8_t zeros[65536];UINT done;
@@ -74,7 +76,7 @@ static void sector(uint32_t fad,bool data,uint8_t *out) {
     }
 }
 static enum kui_read_result read_disc(void *p,uint32_t fad,unsigned count,uint8_t *out) {
-    (void)p;++test.ticks;
+    (void)p;++test.ticks;test.profile_ticks+=17000;
     assert(count && count<=KUI_CAPTURE_CHUNK);
     const struct kui_capture_track *track=NULL;
     for(unsigned i=0;i<test.plan.count;i++)
@@ -177,7 +179,7 @@ int main(int argc,char **argv) {
     } else {
         enum kui_capture_mode mode=!strcmp(argv[2],"new")?KUI_CAPTURE_NEW:
             !strcmp(argv[2],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_VERIFY;
-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab"};
+        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us};
         enum kui_capture_result r=kui_capture(&test.plan,&ops,mode);
         printf("RESULT %u WRITES %u BAD_ATTEMPTS %u FATAL %u\n",r,test.writes,test.bad_attempts,test.failures);
         result=r==KUI_CAPTURE_COMPLETE?0:r==KUI_CAPTURE_STOPPED?3:1;

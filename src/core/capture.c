@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/capture.h"
+#include "kui/timing.h"
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -15,8 +16,41 @@ static struct {
     char dir[80], path[112], title[129], identity[65], text[32768];
     uint64_t started, committed;
     struct kui_capture_progress progress;
+    struct kui_timing timing;
 } job;
 
+static void report_timing(void) {
+    static const char *phases[]={"setup","resume","capture","verify","finish"};
+    static const char *buckets[]={"disc","edc","write","read","sha256","crc32","checkpoint"};
+    kui_timing_finish(&job.timing);
+    if(!job.ops->now_us) return;
+    job.ops->log("TIMING: wall time in microseconds; categories do not overlap");
+    for(unsigned p=0;p<KUI_TIME_PHASES;p++) {
+        uint64_t elapsed=job.timing.elapsed[p],accounted=0;
+        if(!elapsed) continue;
+        job.ops->log("TIMING %s wall_us=%" PRIu64,phases[p],elapsed);
+        for(unsigned b=0;b<KUI_TIME_BUCKETS;b++) {
+            const struct kui_timing_sample *s=&job.timing.samples[p][b];
+            if(!s->calls) continue;
+            uint64_t share=s->us*1000/elapsed;
+            job.ops->log("%s us=%" PRIu64 " pct=%" PRIu64 ".%" PRIu64 " bytes=%" PRIu64 " calls=%" PRIu64,
+                buckets[b],s->us,share/10,share%10,s->bytes,s->calls);
+            accounted+=s->us;
+        }
+        job.ops->log("other us=%" PRIu64,elapsed>accounted?elapsed-accounted:0);
+    }
+}
+static void hash_track(struct kui_sha256 *hash,const void *data,size_t bytes) {
+    uint64_t start=kui_timing_begin(&job.timing);
+    kui_sha256_update(hash,data,bytes);
+    kui_timing_end(&job.timing,KUI_TIME_SHA256,start,bytes);
+}
+static uint32_t crc_track(uint32_t crc,const void *data,size_t bytes) {
+    uint64_t start=kui_timing_begin(&job.timing);
+    crc=kui_crc32(crc,data,bytes);
+    kui_timing_end(&job.timing,KUI_TIME_CRC32,start,bytes);
+    return crc;
+}
 static bool cancelled(void) { return job.ops->cancelled(job.ops->ctx); }
 static uint64_t saved_bytes(void) {
     uint64_t n=0;
@@ -67,13 +101,20 @@ static bool sync_file(FIL *file) {
 static bool read_raw(unsigned i,uint32_t fad,unsigned *count) {
     for(unsigned attempt=0;attempt<=KUI_CAPTURE_RETRIES;attempt++) {
         if(cancelled()) return false;
+        uint64_t start=kui_timing_begin(&job.timing);
         enum kui_read_result r=job.ops->read(job.ops->ctx,fad,*count,job.data);
+        kui_timing_end(&job.timing,KUI_TIME_DISC,start,r==KUI_READ_OK?*count*KUI_RAW_BYTES:0);
         if(r==KUI_READ_FATAL) return false;
         if(r==KUI_READ_OK && job.plan->tracks[i].control==4) {
-            for(unsigned s=0;s<*count;s++) if(!kui_sector_edc_valid(job.data+s*KUI_RAW_BYTES)) {
-                job.ops->log("Invalid data-sector layout/EDC at FAD=%" PRIu32,fad+s);
-                r=KUI_READ_RETRY;break;
+            unsigned checked=0;start=kui_timing_begin(&job.timing);
+            for(unsigned s=0;s<*count;s++) {
+                ++checked;
+                if(!kui_sector_edc_valid(job.data+s*KUI_RAW_BYTES)) {
+                    job.ops->log("Invalid data-sector layout/EDC at FAD=%" PRIu32,fad+s);
+                    r=KUI_READ_RETRY;break;
+                }
             }
+            kui_timing_end(&job.timing,KUI_TIME_EDC,start,checked*KUI_RAW_BYTES);
         }
         if(r==KUI_READ_OK) return true;
         if(attempt==KUI_CAPTURE_RETRIES) break;
@@ -163,7 +204,7 @@ static bool choose_dir(enum kui_capture_mode mode) {
     }
     job.ops->log("Job: %s",job.dir+2);return true;
 }
-static bool save_checkpoint(FIL *track) {
+static bool save_checkpoint_inner(FIL *track) {
     if(track && !sync_file(track)) return false;
     if(job.state.sequence>=UINT64_MAX-1) return false;
     ++job.state.sequence;
@@ -183,6 +224,12 @@ static bool save_checkpoint(FIL *track) {
         job.ops->log("Checkpoint not committed; resume uses the last valid record");return false;
     }
     job.committed=saved_bytes();return true;
+}
+static bool save_checkpoint(FIL *track) {
+    uint64_t start=kui_timing_begin(&job.timing);
+    bool ok=save_checkpoint_inner(track);
+    kui_timing_end(&job.timing,KUI_TIME_CHECKPOINT,start,ok?sizeof(job.record):0);
+    return ok;
 }
 static bool load_checkpoint(void) {
     struct kui_checkpoint best={0},candidate;
@@ -214,6 +261,7 @@ static bool load_checkpoint(void) {
  * first incomplete file may contain a later uncommitted suffix after reset.
  * Other unexpected files/sizes cause refusal, never silent replacement. */
 static bool check_files(bool exact,enum kui_capture_phase phase) {
+    kui_timing_phase(&job.timing,exact?KUI_TIME_VERIFY:KUI_TIME_RESUME);
     uint64_t done=0,total=saved_bytes();bool partial_seen=false;
     for(unsigned i=0;i<job.plan->count;i++) {
         if(cancelled()) return false;
@@ -234,13 +282,18 @@ static bool check_files(bool exact,enum kui_capture_phase phase) {
         uint32_t crc=0;uint64_t offset=0;bool ok=true;
         while(offset<bytes && !cancelled()) {
             UINT n=bytes-offset>sizeof(job.data)?sizeof(job.data):(UINT)(bytes-offset);
-            if(!exact_read(&file,job.data,n)) {ok=false;break;}
-            kui_sha256_update(&job.hashes[i],job.data,n);crc=kui_crc32(crc,job.data,n);
+            uint64_t start=kui_timing_begin(&job.timing);
+            bool read_ok=exact_read(&file,job.data,n);
+            kui_timing_end(&job.timing,KUI_TIME_READ,start,read_ok?n:0);
+            if(!read_ok) {ok=false;break;}
+            hash_track(&job.hashes[i],job.data,n);crc=crc_track(crc,job.data,n);
             offset+=n;done+=n;progress(phase,i,done,total);
         }
         if(!close_file(&file)) ok=false;
         if(!ok || cancelled()) return false;
-        uint8_t digest[32];kui_sha256_digest(&job.hashes[i],digest);
+        uint8_t digest[32];uint64_t start=kui_timing_begin(&job.timing);
+        kui_sha256_digest(&job.hashes[i],digest);
+        kui_timing_end(&job.timing,KUI_TIME_SHA256,start,0);
         if(bytes && (crc!=job.state.track[i].crc32 || memcmp(digest,job.state.track[i].sha256,32))) {
             job.ops->log("Saved data mismatch: track %02u; refusing further writes",i+1);return false;
         }
@@ -253,6 +306,7 @@ static bool check_files(bool exact,enum kui_capture_phase phase) {
     return !cancelled();
 }
 static bool capture_tracks(void) {
+    kui_timing_phase(&job.timing,KUI_TIME_CAPTURE);
     for(unsigned i=0;i<job.plan->count;i++) {
         const struct kui_capture_track *t=&job.plan->tracks[i];
         uint32_t total=t->end-t->start,position=job.state.track[i].sectors;
@@ -274,9 +328,12 @@ static bool capture_tracks(void) {
             if(n<requested) recovery_until=position+requested;
             if(cancelled()) break;
             UINT bytes=n*KUI_RAW_BYTES;
-            if(!exact_write(&file,job.data,bytes)) {ok=false;storage_failed=true;break;}
-            kui_sha256_update(&job.hashes[i],job.data,bytes);
-            job.state.track[i].crc32=kui_crc32(job.state.track[i].crc32,job.data,bytes);
+            uint64_t start=kui_timing_begin(&job.timing);
+            bool write_ok=exact_write(&file,job.data,bytes);
+            kui_timing_end(&job.timing,KUI_TIME_WRITE,start,write_ok?bytes:0);
+            if(!write_ok) {ok=false;storage_failed=true;break;}
+            hash_track(&job.hashes[i],job.data,bytes);
+            job.state.track[i].crc32=crc_track(job.state.track[i].crc32,job.data,bytes);
             position+=n;job.state.track[i].sectors=position;
             progress(KUI_CAPTURING,i,saved_bytes(),job.plan->bytes);
             if(position-checkpoint_at>=KUI_CHECKPOINT_SECTORS || position==total) {
@@ -386,12 +443,16 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     for(unsigned i=0;i<12;i++) if(!((ops->build[i]>='0'&&ops->build[i]<='9') ||
                                   (ops->build[i]>='a'&&ops->build[i]<='f'))) return KUI_CAPTURE_FAILED;
     memset(&job,0,sizeof(job));job.plan=plan;job.ops=ops;
+    kui_timing_start(&job.timing,ops->now_us,ops->ctx);
     job.started=ops->now_ms(ops->ctx);job.state.count=plan->count;memcpy(job.state.build,ops->build,12);
     for(unsigned i=0;i<plan->count;i++) kui_sha256_init(&job.hashes[i]);
     FATFS fs;enum kui_capture_result result=KUI_CAPTURE_FAILED;
     ops->log("%s: guarded raw reads, data EDC, no zero-fill",mode==KUI_CAPTURE_NEW?"NEW CAPTURE":
         mode==KUI_CAPTURE_RESUME?"RESUME LATEST MATCHING JOB":"VERIFY LATEST MATCHING JOB");
-    if(cancelled() || !identify()) return cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+    if(cancelled() || !identify()) {
+        result=cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+        report_timing();return result;
+    }
     if(!kui_mount(&fs,ops->log)) goto out;
     if(cancelled()) goto out;
     if(mode==KUI_CAPTURE_NEW && !enough_space(&fs)) goto out;
@@ -407,11 +468,14 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     bool already_complete=all_captured();
     if(mode!=KUI_CAPTURE_VERIFY && !already_complete) {
         if(!enough_space(&fs) || !capture_tracks() || cancelled()) goto out;
+        kui_timing_phase(&job.timing,KUI_TIME_VERIFY);
         if(f_mount(NULL,"0:",0)!=FR_OK || !kui_mount(&fs,ops->log)) goto out;
         ops->log("Capture written. Rereading all saved tracks...");
         if(!check_files(true,KUI_VERIFYING)) goto out;
     }
-    if(cancelled() || !all_captured() || !final_metadata(mode!=KUI_CAPTURE_VERIFY)) goto out;
+    if(cancelled() || !all_captured()) goto out;
+    kui_timing_phase(&job.timing,KUI_TIME_FINISH);
+    if(!final_metadata(mode!=KUI_CAPTURE_VERIFY)) goto out;
     result=KUI_CAPTURE_COMPLETE;progress(KUI_FINISHED,plan->count-1,plan->bytes,plan->bytes);
     ops->log("SAVED DATA VERIFIED: all %u tracks; CRC32 and SHA-256",plan->count);
     ops->log("No independent reference compared. Output: %s/disc.gdi",job.dir+2);
@@ -423,5 +487,6 @@ out:
         if(job.dir[0]) ops->log("Partial job preserved: %s; Resume checks saved bytes first",job.dir+2);
     }
     if(f_mount(NULL,"0:",0)!=FR_OK) result=KUI_CAPTURE_FAILED;
+    report_timing();
     return result;
 }

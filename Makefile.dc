@@ -12,6 +12,7 @@ LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_fi
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/dc/main-runtime.o
 RUNTIME_OBJECTS += build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
+RUNTIME_OBJECTS += build/dc/src/core/timing.o
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id

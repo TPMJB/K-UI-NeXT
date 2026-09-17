@@ -37,6 +37,45 @@ The RAM line updates once per second. Pull the left trigger at idle, during
 track 3 and during verification to add detailed **mstats** snapshots to the log.
 See [counter definitions and DreamShell comparison notes](memory-stats.md).
 
+## Measure capture time
+
+Each operation now appends a **TIMING** summary when it stops, fails or finishes.
+For a short measurement, capture for one or two minutes in track 3, press B,
+wait for **READY**, then switch to diagnostics and press Y to save the log.
+Save before restarting or powering off: the timing summary lives in the log,
+not the checkpoint. Existing jobs can still resume with X after this SD update.
+There is no need to interrupt an already running rip to install it.
+
+The summary separates **setup**, **resume** prefix checking, **capture**,
+**verify** saved-file rereading, and **finish** metadata publication. Within
+each phase, `us` is elapsed microseconds, `pct` is that phase's wall-time share,
+and `calls` is the number of measured operations. Use the `sha256` percentage
+under **capture** to assess hashing during ripping; the later SD reread has
+its own SHA-256 percentage. A Stop summary measures just that operation's work.
+
+| Category | What its elapsed time includes |
+| --- | --- |
+| disc | The raw-read callback: both guarded PIO reads, mode setup, polling/waits, buffer checks and comparison; retries are timed too |
+| edc | Data-sector layout and EDC validation |
+| write / read | Track-file FatFs write / read calls, including their allocation and buffering work |
+| sha256 / crc32 | Track hash processing; final SHA-256 digests during prefix/full rereading also count |
+| checkpoint | Track sync, checkpoint hash finalization/encoding, metadata writes, sync and close; these are not counted again in the other categories |
+| other | Remaining work, including file open/close, progress updates, and work between measured calls |
+
+`bytes` counts logical bytes for successful disc/track I/O calls, bytes passed
+to each hash, bytes in sectors checked for EDC, or saved checkpoint records.
+A paired disc request counts its logical data once. Failed/short I/O contributes
+time and calls but zero bytes; successful retries can contribute repeated bytes.
+Final SHA digests contribute time/calls but zero additional input bytes.
+
+These are **wall-clock measurements**, including scheduling delays, not isolated
+CPU-cycle counts. They include timer overhead and are not a direct prediction of
+speed with a feature removed. Counters use KOS's 64-bit microsecond timer and
+fixed memory; they add no per-chunk log or SD writes. This update keeps the paired
+reads, hashes, validation, checkpoint interval and on-card formats unchanged.
+Measurement begins after initial TOC preparation and SD connection; the setup
+phase covers disc fingerprinting and filesystem/job preparation within capture.
+
 ## One combined capture/resume test
 
 1. Press A on the capture page. It reads both TOCs and content samples, checks
@@ -94,7 +133,8 @@ whether Stop, reboot, resume and final verification worked.
 
 ## Limits of this first capture update
 
-- Physical full-track reading and throughput are untested. Each raw request is
+- Complete physical dumps remain unverified. A user-reported partial capture on
+  build `2657a97031e3` showed about 209–211 KiB/s. Each raw request is
   read twice with different initial fills and compared. This favors detecting
   underfilled/unstable buffers at a potential speed cost.
 - Data sectors require a supported Mode 1/Mode 2 Form 1 layout and valid EDC.

@@ -4,6 +4,7 @@
 from pathlib import Path
 import hashlib
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -14,6 +15,28 @@ import verify_dump
 from test_images import run
 
 BINARY = str(ROOT / "build/capture-image")
+
+
+def timings(output):
+    phases = {}
+    for line in output.splitlines():
+        match = re.fullmatch(r"TIMING (\w+) wall_us=(\d+)", line)
+        if match:
+            name, wall = match.groups()
+            assert name not in phases
+            phase = phases[name] = {"wall": int(wall), "buckets": {}}
+        match = re.fullmatch(r"(\w+) us=(\d+) pct=(\d+)\.(\d) bytes=(\d+) calls=(\d+)", line)
+        if match:
+            bucket, us, percent, tenth, size, calls = match.groups()
+            us = int(us)
+            assert bucket not in phase["buckets"] and us > 0
+            assert int(percent) * 10 + int(tenth) == us * 1000 // phase["wall"]
+            phase["buckets"][bucket] = {"us": us, "bytes": int(size), "calls": int(calls)}
+        match = re.fullmatch(r"other us=(\d+)", line)
+        if match:
+            assert int(match[1]) + sum(b["us"] for b in phase["buckets"].values()) == phase["wall"]
+    assert phases, output
+    return phases
 
 
 def digest(path):
@@ -44,9 +67,24 @@ def main():
             run(checker, "-n", str(baseline))
             original = export(baseline, base / f"{kind}-original")[0]
             expected = verify_dump.verify(original)
+            total = sum(t["bytes"] for t in expected)
+            data_bytes = sum(t["bytes"] for t in expected if t["file"].endswith(".bin"))
+            stats = timings(output)
+            assert "resume" not in stats
+            for bucket in ("disc", "write", "sha256", "crc32"):
+                assert stats["capture"]["buckets"][bucket]["bytes"] == total
+            assert stats["capture"]["buckets"]["edc"]["bytes"] == data_bytes
+            assert stats["capture"]["buckets"]["checkpoint"]["calls"] > 0
+            for bucket in ("read", "sha256", "crc32"):
+                assert stats["verify"]["buckets"][bucket]["bytes"] == total
+            assert "read" not in stats["capture"]["buckets"]
+            assert "disc" not in stats["verify"]["buckets"]
             before = digest(baseline)
             output = run(BINARY, str(baseline), "verify")
             assert "WRITES 0" in output and digest(baseline) == before
+            stats = timings(output)
+            assert "capture" not in stats and "resume" not in stats
+            assert stats["verify"]["buckets"]["sha256"]["bytes"] == total
             print(f"PASS {kind}: six-track capture, independent hashes/GDI, fsck, read-only verification", flush=True)
 
             # Stop at early/middle/complete-capture/readback points. The resumed
@@ -56,6 +94,9 @@ def main():
                 shutil.copyfile(clean, image)
                 output = run(BINARY, str(image), "new", stop, expected=3)
                 assert "SAVED DATA VERIFIED" not in output
+                stopped = timings(output)
+                saved = stopped["capture"]["buckets"]["write"]["bytes"]
+                assert stopped["capture"]["buckets"]["sha256"]["bytes"] == saved
                 incomplete = export(image, base / f"{kind}-{stop}-partial")[0]
                 assert not (incomplete / "manifest.json").exists() and not (incomplete / "disc.gdi").exists()
                 if stop == "stop-middle":
@@ -68,7 +109,11 @@ def main():
                     run(BINARY, str(tail_image), "resume")
                     recovered = export(tail_image, base / f"{kind}-fallback")[0]
                     assert verify_dump.verify(recovered) == expected
-                run(BINARY, str(image), "resume")
+                output = run(BINARY, str(image), "resume")
+                stats = timings(output)
+                assert stats["resume"]["buckets"]["sha256"]["bytes"] == saved
+                if saved < total:
+                    assert stats["capture"]["buckets"]["sha256"]["bytes"] == total - saved
                 run(checker, "-n", str(image))
                 resumed = export(image, base / f"{kind}-{stop}-resumed")[0]
                 assert verify_dump.verify(resumed) == expected
@@ -80,6 +125,7 @@ def main():
                 before = digest(image)
                 output = run(BINARY, str(image), "new", fail, expected=3 if fail == "cancel-before" else 1)
                 assert "SAVED DATA VERIFIED" not in output
+                timings(output)
                 if fail == "cancel-before":
                     assert digest(image) == before
                 else:

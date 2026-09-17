@@ -29,6 +29,8 @@ struct kui_capture_ops {
     void (*progress)(void *, const struct kui_capture_progress *);
     kui_log_fn log;
     const char *build;
+    /* Optional observation only; no effect on deadlines or stored formats. */
+    uint64_t (*now_us)(void *);
 };
 struct kui_checkpoint {
     uint64_t sequence;
