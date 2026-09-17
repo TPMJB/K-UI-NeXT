@@ -1,12 +1,64 @@
 # Hardware evidence
 
 These results cover the uploaded logs, storage fixtures and user reports received on
-2026-09-16. They establish the specific checks below on the user's console;
+2026-09-16 and 2026-09-17. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.
 
-## Capture runtime update awaiting console testing
+## First completed capture: Sword of the Berserk
 
-The subsequent SD update implements full-track GDI capture, CRC32/SHA-256 saved
+The user reports that **SWORD OF THE BERSERK GUTS RAGE** completed capture and
+saved-file verification on SD runtime `2657a97031e3`. The uploaded manifest
+identifies that build/title and declares `complete` and `saved_data_verified`.
+This build publishes the final manifest/GDI only after the complete SD reread
+passes. Both checkpoints and the GDI layout support the reported completion.
+The uploaded raw bytes independently establish the checks for tracks 1 and 2
+below; track 3 was intentionally omitted.
+
+| Track | Sectors | Bytes | CRC32 | Independent PC result |
+| --- | ---: | ---: | --- | --- |
+| `track01.bin` | 776 | 1825152 | `bcec7767` | Length, CRC32 and SHA-256 match the manifest and both checkpoints |
+| `track02.raw` | 526 | 1237152 | `0ff934e3` | Length, CRC32 and SHA-256 match the manifest and both checkpoints |
+| `track03.bin` | 504150 | 1185760800 | `2cfb5dcb` | Not supplied; values are recorded by the console, not independently recomputed |
+
+The three declared tracks total **1188823104 bytes**. Their bounds, sector sizes,
+type-change gap exclusion and `disc.gdi` entries agree with the declared profile.
+This verifies metadata consistency, not agreement with an independent disc catalog.
+
+Both 4096-byte checkpoints pass independent Python CRC32 and structure checks,
+including identity/build, reserved bytes, track bounds/order and alternating
+sequence parity. `checkpoint-b.bin` is sequence 126 with 503808 track-3 sectors;
+`checkpoint-a.bin` is sequence 127 with all 504150 track-3 sectors and hashes
+matching the completed manifest. Both record **zero retries**. The earlier
+track-3 prefix hash could not be checked without track 3. Valid checkpoints on
+their own do not demonstrate a hardware Stop/reboot/Resume cycle.
+
+`diagnostics(7).txt` is from **addd439aaea5**, not the capture build. Its bytes
+are identical to the previously examined `diagnostics(6).txt`; it contains the
+earlier nine-sample disc probe and storage probe, with no capture/mstats/timing
+output. `storage(3).bin` and `storage(3).json` are also identical to the previous
+storage uploads. Rechecking them passes all 2097325 expected bytes and CRC32
+`a70f77ca`, but establishes no additional independent console session.
+
+The user reports capture around 210-220 KiB/s. Earlier photos show capture near
+209 KiB/s and saved-file verification near 311 KiB/s, with estimated main RAM
+around 860 KiB and a sampled peak around 869 KiB. These are spot observations,
+not whole-operation averages or detailed allocator measurements. The original
+capture build has no timing instrumentation. Timing build `0ef58878ccdd` remains
+the next SD-only measurement update; this evidence change adds no runtime code.
+
+[Machine-readable results](evidence/sword-of-the-berserk-2026-09-17.json) retain
+the original upload names, lengths, SHA-256 fingerprints, per-track checks and
+decoded checkpoints. No game track bytes are stored in the repository.
+
+Still needed: local PC verification of track 3, a compatible independent
+reference comparison, controlled hardware Stop/reboot/Resume and timing results.
+If the original capture log remains available, save/upload the report whose
+header says `K-UI SD runtime 2657a97031e3`; do not repeat the full capture just
+to replace a lost log. Keep the completed dump for later hash comparisons.
+
+## Capture runtime host coverage
+
+The SD capture runtime implements full-track GDI capture, CRC32/SHA-256 saved
 file reread, checkpointed controlled resume and an mstats action. Host FAT32 and
 exFAT image tests exercise complete six-track output, independent Python hash
 verification, early/middle/late/verification Stop, resumed-versus-uninterrupted
@@ -14,10 +66,10 @@ equality, a damaged newest checkpoint, an uncommitted suffix, bounded retries,
 media-change and storage-failure handling, corrupt-prefix and wrong-disc refusal,
 and preservation of existing completed jobs. These are synthetic host tests.
 
-No full physical capture, hardware resume, independent disc-reference match or
-on-console memory measurement is claimed yet. Use [the capture guide](capture-test.md)
-with the existing bootstrap CD; the earlier physical evidence below applies to
-the diagnostic builds identified there.
+The first physical completion is documented above; full PC track verification,
+hardware resume and an independent disc-reference match remain pending. Use
+[the capture guide](capture-test.md) with the existing bootstrap CD; the earlier
+physical evidence below applies to the diagnostic builds identified there.
 
 ## SD runtime session and confirmed startup selection
 
@@ -110,6 +162,6 @@ these checks use the existing bootstrap CD and accessible exFAT card. A second
 known-good retail disc with a different TOC layout would broaden disc coverage.
 FAT32 PC verification can follow when a reader is available.
 
-Disc title/region, console revision, video cable/display and adapter/card model
-are not yet recorded. Complete capture, reference verification, and controlled
-stop/resume remain later implementation and acceptance stages.
+The capture title is now recorded above. Its region, console revision, video
+cable/display and adapter/card model are not yet recorded. Independent full-dump
+verification and controlled stop/resume remain hardware acceptance checks.

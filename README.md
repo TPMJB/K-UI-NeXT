@@ -7,9 +7,11 @@ controlled resume** to the independently booting hardware diagnostic. It stays
 in RAM after you swap discs and uses FAT32/exFAT through the standard external
 serial SD adapter. Keep the reusable CD and update `/KUI/runtime.kui`.
 
-**The capture engine passes host-image tests; complete physical-console ripping
-and reference accuracy remain untested.** Earlier SD runtime launch and disc/exFAT
-probes passed on a physical console. The user also
+**Sword of the Berserk has completed capture and console saved-file verification.**
+Uploaded tracks 1 and 2 independently match their CRC32/SHA-256 records; track 3's
+PC check, an independent reference match and hardware Stop/Resume remain pending.
+The capture engine also passes host-image tests. Earlier SD runtime launch and
+disc/exFAT probes passed on a physical console. The user also
 confirms B selects CD fallback and reports successful cold boots; the boot count
 was not specified. Missing-file detection, checksum rejection and restoring the
 good runtime have now passed by user report; see the
@@ -101,8 +103,8 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | M1.0: source/build foundation and visible boot diagnostic | Diagnostic runs and display fix confirmed; cold boots reported working, count unspecified |
 | M1.1: raw-disc and FAT32/exFAT capability probes | Nine disc samples and exFAT fixture verified; FAT32 console-reported pass, PC verification pending |
 | M1.2: validated runtime loading from SD | exFAT SD handoff/runtime probes and B-selected fallback confirmed; missing-file/checksum rejection and good-runtime restoration pass by user report; four other malformed fixtures remain untested on hardware |
-| M1.3: full-track GDI capture | Implemented; FAT32/exFAT image tests pass; physical full dump and compatible reference pending |
-| M1.4: SHA-256 capture verification and controlled stop/resume | Implemented; saved-file reread, prefix validation, fault injection and resume equality pass on host; console acceptance pending |
+| M1.3: full-track GDI capture | Sword of the Berserk completion supported by user report, manifest and valid final checkpoint with zero retries; tracks 1/2 independently checked; full PC/reference verification pending |
+| M1.4: SHA-256 capture verification and controlled stop/resume | Console reread passed by user report and published manifest; track 3 PC check and hardware Stop/Resume pending; saved-file/prefix checks, fault injection and resume equality pass on host |
 | M1.5: hardware acceptance and minimal UI refinement | Planned |
 
 See [the research scope](docs/milestone-1-research.md),

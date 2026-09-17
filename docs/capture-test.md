@@ -1,8 +1,10 @@
 # First complete GDI capture test
 
 This SD update implements M1.3 capture and M1.4 saved-file verification and
-controlled resume. It has host-image tests; full capture on a physical Dreamcast
-is still pending. Keep the reusable bootstrap disc that already loads SD.
+controlled resume. One physical capture and console reread have completed;
+tracks 1 and 2 were independently checked on PC. Full PC/reference verification
+and hardware Stop/Resume remain pending; see [the evidence](hardware-evidence.md).
+Keep the reusable bootstrap disc that already loads SD.
 
 ## Install the update
 
@@ -133,9 +135,10 @@ whether Stop, reboot, resume and final verification worked.
 
 ## Limits of this first capture update
 
-- Complete physical dumps remain unverified. A user-reported partial capture on
-  build `2657a97031e3` showed about 209–211 KiB/s. Each raw request is
-  read twice with different initial fills and compared. This favors detecting
+- One physical capture has completed; full PC/reference verification remains
+  pending. Build `2657a97031e3` showed about 209-220 KiB/s during capture.
+  Each raw request is read twice with different initial fills and compared.
+  This favors detecting
   underfilled/unstable buffers at a potential speed cost.
 - Data sectors require a supported Mode 1/Mode 2 Form 1 layout and valid EDC.
   ECC correction, subchannels and audio-offset correction are not implemented.
