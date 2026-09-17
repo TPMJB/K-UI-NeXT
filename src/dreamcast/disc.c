@@ -19,28 +19,96 @@ static _Alignas(32) struct {
     uint8_t before[32], data[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES], after[32];
 } capture_raw[2];
 
+/* One I/O worker; fixed counters, no per-request formatting or SD writes.
+ * Raw-call children are exclusive. Command submit/poll/wait/abort timers are
+ * children of read1/read2, not extra time to add to TIMING disc. */
+struct command_timing {
+    uint64_t us,calls,bytes,max_us,submit_us,poll_us,wait_us,abort_us;
+    uint64_t submits,polls,waits,aborts,result[KUI_CMD_INVALID+1];
+    uint32_t max_fad,max_sectors;
+};
+static struct optical_timing {
+    uint64_t us,requests,bytes,mode_us,modes,mode_failures,buffers_us;
+    uint64_t result[3],mismatches,guards,refused;
+    struct command_timing read[2];
+} optical[2];
+static unsigned optical_phase;
+static struct command_timing *active_command;
+
+void kui_disc_timing_reset(void) {
+    memset(optical,0,sizeof(optical));optical_phase=0;active_command=NULL;
+}
+void kui_disc_timing_phase(void *ctx,bool capturing) {
+    (void)ctx;optical_phase=capturing?1:0;
+}
+void kui_disc_timing_report(void) {
+    for(unsigned p=0;p<2;p++) {
+        const struct optical_timing *t=&optical[p];
+        if(!t->requests) continue;
+        uint64_t children=t->mode_us+t->buffers_us+t->read[0].us+t->read[1].us;
+        kui_log("OPTICAL %s: subtimers inside TIMING disc",p?"capture":"setup");
+        kui_log("opt wall_us=%" PRIu64 " requests=%" PRIu64 " bytes=%" PRIu64,t->us,t->requests,t->bytes);
+        kui_log("opt mode_us=%" PRIu64 " calls=%" PRIu64 " failed=%" PRIu64,t->mode_us,t->modes,t->mode_failures);
+        kui_log("opt buffers_us=%" PRIu64 " other_us=%" PRIu64,t->buffers_us,t->us>=children?t->us-children:0);
+        kui_log("opt requests ok=%" PRIu64 " retry=%" PRIu64 " fatal=%" PRIu64,
+            t->result[KUI_READ_OK],t->result[KUI_READ_RETRY],t->result[KUI_READ_FATAL]);
+        kui_log("opt mismatch=%" PRIu64 " guards=%" PRIu64 " refused=%" PRIu64,t->mismatches,t->guards,t->refused);
+        for(unsigned i=0;i<2;i++) {
+            const struct command_timing *c=&t->read[i];
+            uint64_t nested=c->submit_us+c->poll_us+c->wait_us+c->abort_us;
+            kui_log("opt read%u us=%" PRIu64 " max_us=%" PRIu64,i+1,c->us,c->max_us);
+            kui_log("opt read%u calls=%" PRIu64 " bytes=%" PRIu64,i+1,c->calls,c->bytes);
+            kui_log("opt read%u max_fad=%" PRIu32 " max_sectors=%" PRIu32,i+1,c->max_fad,c->max_sectors);
+            kui_log("opt read%u submit_us=%" PRIu64 " submits=%" PRIu64,i+1,c->submit_us,c->submits);
+            kui_log("opt read%u poll_us=%" PRIu64 " polls=%" PRIu64,i+1,c->poll_us,c->polls);
+            kui_log("opt read%u wait_us=%" PRIu64 " waits=%" PRIu64,i+1,c->wait_us,c->waits);
+            kui_log("opt read%u abort_us=%" PRIu64 " aborts=%" PRIu64,i+1,c->abort_us,c->aborts);
+            kui_log("opt read%u other_us=%" PRIu64,i+1,c->us>=nested?c->us-nested:0);
+            kui_log("opt read%u ok=%" PRIu64 " failed=%" PRIu64 " timeout=%" PRIu64,
+                i+1,c->result[KUI_CMD_OK],c->result[KUI_CMD_FAILED],c->result[KUI_CMD_TIMEOUT]);
+            kui_log("opt read%u cancelled=%" PRIu64 " abort_failed=%" PRIu64 " invalid=%" PRIu64,
+                i+1,c->result[KUI_CMD_CANCELLED],c->result[KUI_CMD_RECOVERY_FAILED],c->result[KUI_CMD_INVALID]);
+        }
+    }
+}
+
 static uint64_t now(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
-static void pause_worker(void *ctx) { (void)ctx; thd_sleep(1); }
+static void pause_worker(void *ctx) {
+    (void)ctx;uint64_t start=active_command?timer_us_gettime64():0;
+    thd_sleep(1);
+    if(active_command) {active_command->wait_us+=timer_us_gettime64()-start;++active_command->waits;}
+}
 static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
 static int submit(void *ctx, int command, void *params) {
     (void)ctx;
+    uint64_t start=active_command?timer_us_gettime64():0;
     int handle = syscall_gdrom_send_command((cd_cmd_code_t)command, params);
     syscall_gdrom_exec_server();
+    if(active_command) {active_command->submit_us+=timer_us_gettime64()-start;++active_command->submits;}
     return handle;
 }
 static int poll(void *ctx, int handle) {
     (void)ctx;
+    uint64_t start=active_command?timer_us_gettime64():0;
     syscall_gdrom_exec_server();
-    return syscall_gdrom_check_command(handle, &detail);
+    int status=syscall_gdrom_check_command(handle, &detail);
+    if(active_command) {active_command->poll_us+=timer_us_gettime64()-start;++active_command->polls;}
+    return status;
 }
 static void abort_command(void *ctx, int handle) {
-    (void)ctx; syscall_gdrom_abort_command(handle);
+    (void)ctx;uint64_t start=active_command?timer_us_gettime64():0;
+    syscall_gdrom_abort_command(handle);
+    if(active_command) {active_command->abort_us+=timer_us_gettime64()-start;++active_command->aborts;}
 }
 static bool command(int code, void *params, uint32_t timeout) {
-    if(poisoned || kui_cancelled()) return false;
+    if(poisoned || kui_cancelled()) {
+        if(active_command) ++active_command->result[poisoned?KUI_CMD_RECOVERY_FAILED:KUI_CMD_CANCELLED];
+        return false;
+    }
     memset(&detail, 0, sizeof(detail));
     struct kui_command_ops ops = {NULL, now, pause_worker, cancelled, submit, poll, abort_command};
     enum kui_command_result result = kui_command(&ops, code, params, timeout, 1000);
+    if(active_command) ++active_command->result[result];
     if(result == KUI_CMD_OK) return true;
     kui_log("CMD %d %s", code, kui_command_name(result));
     kui_log("  sense=%" PRId32 "/%" PRId32 " size=%lu ATA=%d",
@@ -149,26 +217,49 @@ bool kui_disc_prepare(struct kui_toc sessions[2]) {
 
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
     (void)ctx;
+    struct optical_timing *t=&optical[optical_phase];
+    uint64_t request_start=timer_us_gettime64(),start;
+    enum kui_read_result result=KUI_READ_FATAL;
+    ++t->requests;
     if(!out || !sectors || sectors>KUI_CAPTURE_CHUNK || fad<150 || fad>0xffffff ||
-       sectors>0x1000000u-fad || poisoned || media_changed || kui_cancelled()) return KUI_READ_FATAL;
-    if(!set_mode(2352,0)) return KUI_READ_FATAL;
+       sectors>0x1000000u-fad || poisoned || media_changed || kui_cancelled()) {++t->refused;goto done;}
+    start=timer_us_gettime64();bool mode_ok=set_mode(2352,0);
+    t->mode_us+=timer_us_gettime64()-start;++t->modes;
+    if(!mode_ok) {++t->mode_failures;goto done;}
     size_t bytes=(size_t)sectors*KUI_RAW_BYTES;
     for(unsigned i=0;i<2;i++) {
         uint8_t fill=i?0x5a:0xa5;
+        start=timer_us_gettime64();
         memset(&capture_raw[i],fill,sizeof(capture_raw[i]));
         read_params=(cd_read_params_t){.start_sec=fad,.num_sec=sectors,.buffer=capture_raw[i].data,.is_test=0};
-        if(!command(CD_CMD_PIOREAD,&read_params,5000))
-            return poisoned || media_changed || kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;
-        if(!kui_guard_is(capture_raw[i].before,32,fill) ||
-           !kui_guard_is(capture_raw[i].after,32,fill) ||
-           !kui_guard_is(capture_raw[i].data+bytes,sizeof(capture_raw[i].data)-bytes,fill)) {
-            poisoned=true;kui_log("CAPTURE GUARD CORRUPTION: RESET REQUIRED");return KUI_READ_FATAL;
+        t->buffers_us+=timer_us_gettime64()-start;
+        struct command_timing *c=&t->read[i];active_command=c;
+        start=timer_us_gettime64();bool read_ok=command(CD_CMD_PIOREAD,&read_params,5000);
+        uint64_t duration=timer_us_gettime64()-start;active_command=NULL;
+        c->us+=duration;++c->calls;
+        if(duration>c->max_us) {c->max_us=duration;c->max_fad=fad;c->max_sectors=sectors;}
+        if(read_ok) c->bytes+=bytes;
+        else {result=poisoned || media_changed || kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;goto done;}
+        start=timer_us_gettime64();
+        bool guard_ok=kui_guard_is(capture_raw[i].before,32,fill) &&
+           kui_guard_is(capture_raw[i].after,32,fill) &&
+           kui_guard_is(capture_raw[i].data+bytes,sizeof(capture_raw[i].data)-bytes,fill);
+        t->buffers_us+=timer_us_gettime64()-start;
+        if(!guard_ok) {
+            ++t->guards;poisoned=true;kui_log("CAPTURE GUARD CORRUPTION: RESET REQUIRED");goto done;
         }
     }
-    if(memcmp(capture_raw[0].data,capture_raw[1].data,bytes)) {
-        kui_log("Raw repeat mismatch at FAD=%" PRIu32,fad);return KUI_READ_RETRY;
+    start=timer_us_gettime64();
+    bool mismatch=memcmp(capture_raw[0].data,capture_raw[1].data,bytes)!=0;
+    if(!mismatch) memcpy(out,capture_raw[0].data,bytes);
+    t->buffers_us+=timer_us_gettime64()-start;
+    if(mismatch) {
+        ++t->mismatches;kui_log("Raw repeat mismatch at FAD=%" PRIu32,fad);result=KUI_READ_RETRY;
+    } else {
+        t->bytes+=bytes;result=KUI_READ_OK;
     }
-    memcpy(out,capture_raw[0].data,bytes);return KUI_READ_OK;
+done:
+    ++t->result[result];t->us+=timer_us_gettime64()-request_start;return result;
 }
 
 void kui_disc_probe(void) {

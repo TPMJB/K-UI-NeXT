@@ -32,14 +32,19 @@ RAM estimate and sampled peak appear on the capture page. See
 [memory counter definitions](docs/memory-stats.md) for comparisons with other software.
 Capture, resume and verification also log elapsed-time breakdowns on Stop or
 completion, including separate SHA-256, disc and SD time. See
-[the short timing test](docs/capture-test.md#measure-capture-time).
+[the short optical timing test](docs/optical-test.md). The current update adds
+mode/first-read/second-read/poll/wait counters and per-track capture summaries,
+and automatically saves a new report after Capture, Resume or Verify ends.
+Wait for **Report saved** and **READY** after Stop; diagnostics Y can retry a
+failed log save. Existing dump/checkpoint formats and read policies are retained.
 The first MDK2 data-track measurement attributes about 63% of capture time to
 the paired optical-read callback, 23% to SD writes and 11% to SHA-256; see
 [the measured evidence](docs/hardware-evidence.md#mdk2-capture-timing-and-resume-overhead).
 The isolated audio-track sample now measures **57.46 KiB/s**, with **88.75%**
 of capture time inside the optical callback. Its 56.86 MiB resume prefix took
 167.47 seconds, mostly SD reads (75.36%) and SHA-256 (20.40%). This baseline
-test is complete; the next work is finer optical timing and faster resume. See the
+test is complete; the new optical subtimers are ready for the next short console
+measurement. Faster resume remains planned. See the
 [performance and resume test plan](docs/performance-test-plan.md).
 Read [the capture format](docs/capture-format.md) for gap/audio conventions and
 the distinction between saved-data verification and an independent reference match.

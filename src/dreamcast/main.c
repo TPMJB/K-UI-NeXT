@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
+#include "kui/report.h"
 #include <kos.h>
 #include <dc/minifont.h>
 #include <stdarg.h>
@@ -26,7 +27,7 @@ static bool memory_valid;
 static mutex_t lock = MUTEX_INITIALIZER;
 static char lines[LOG_LINES][LINE_BYTES];
 static unsigned line_count;
-static bool log_truncated, busy, cancel_requested;
+static bool log_truncated, busy, cancel_requested, saving_report;
 static unsigned pending;
 static char report[LOG_LINES * LINE_BYTES + 256];
 #ifdef KUI_SD_RUNTIME
@@ -68,29 +69,34 @@ bool kui_cancelled(void) {
     return requested;
 }
 
-static void save_report(void) {
+static void save_report(const char *trigger,const char *outcome,bool automatic) {
+    /* A new B press can cancel saving. The earlier capture Stop must not
+     * suppress its own report. Keep busy set until all report I/O has ended. */
+    mutex_lock(&lock);
+    if(automatic) cancel_requested=false;
+    saving_report=true;
+    mutex_unlock(&lock);
 #ifdef KUI_SD_RUNTIME
     kui_memory_log("save log");
 #endif
-    FATFS fs;
-    if(!kui_sd_connect()) return;
-    if(kui_mount(&fs, kui_log)) {
-        char dir[64], path[96];
-        if(kui_new_probe_dir(dir, kui_log)) {
-            mutex_lock(&lock);
-            size_t used = (size_t)snprintf(report, sizeof(report),
-                "K-UI " KUI_ROLE " %s\nLog truncated: %s\n", KUI_BUILD_ID,
-                log_truncated ? "YES" : "no");
-            for(unsigned i = 0; i < line_count; ++i)
-                used += (size_t)snprintf(report + used, sizeof(report) - used, "%s\n", lines[i]);
-            mutex_unlock(&lock);
-            snprintf(path, sizeof(path), "%s/diagnostics.txt", dir);
-            if(kui_write_new_file(path, report, used, kui_log))
-                kui_log("Report saved: %s", path + 2);
-        }
+    char path[96]={0};enum kui_report_result result=KUI_REPORT_FAILED;
+    if(kui_sd_connect()) {
+        mutex_lock(&lock);
+        size_t used=(size_t)snprintf(report,sizeof(report),
+            "K-UI " KUI_ROLE " %s\nLog truncated: %s\nReport trigger: %s\nCapture result: %s\n",
+            KUI_BUILD_ID,log_truncated?"YES":"no",trigger,outcome);
+        for(unsigned i=0;i<line_count;i++)
+            used+=(size_t)snprintf(report+used,sizeof(report)-used,"%s\n",lines[i]);
+        mutex_unlock(&lock);
+        result=kui_report_save(report,used,path,kui_log,kui_cancelled);
+        kui_sd_disconnect();
     }
-    f_mount(NULL, "0:", 0);
-    kui_sd_disconnect();
+    if(result==KUI_REPORT_SAVED) kui_log("Report saved: %s",path+2);
+    else {
+        kui_log("Report save %s; diagnostics Y can retry.",result==KUI_REPORT_STOPPED?"cancelled":"FAILED");
+        if(automatic) kui_log("Capture result remains: %s",outcome);
+    }
+    mutex_lock(&lock);saving_report=false;mutex_unlock(&lock);
 }
 static void *worker(void *unused) {
     (void)unused;
@@ -107,12 +113,16 @@ static void *worker(void *unused) {
                 kui_storage_probe(kui_log, kui_cancelled);
                 kui_sd_disconnect();
             }
-            if(action == 3) save_report();
+            if(action == 3) save_report("manual","see operation log",false);
 #ifdef KUI_SD_RUNTIME
             if(action >= 4 && action <= 6) {
                 kui_memory_log("capture/verify start");
-                kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID);
+                enum kui_capture_result result=kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID);
                 kui_memory_log("capture/verify end");
+                const char *outcome=result==KUI_CAPTURE_COMPLETE?"complete":result==KUI_CAPTURE_STOPPED?"stopped":"failed";
+                kui_log("Capture result: %s",outcome);
+                kui_log("Saving diagnostic report automatically; B cancels log save.");
+                save_report(action==4?"auto new capture":action==5?"auto resume":"auto verify",outcome,true);
             }
 #endif
         }
@@ -137,7 +147,8 @@ static void draw(unsigned scroll,unsigned page) {
     unsigned actual=end-first;
     for(unsigned i = first; i < end; ++i) strcpy(visible[i - first], lines[i]);
     snprintf(status, sizeof(status), "%s  |  %u log lines%s",
-        busy ? (cancel_requested ? "STOP REQUESTED" : "WORKING") : "READY",
+        busy ? (saving_report ? (cancel_requested?"STOPPING LOG SAVE":"SAVING LOG") :
+            (cancel_requested ? "STOP REQUESTED" : "WORKING")) : "READY",
         line_count, log_truncated ? " (earlier lines truncated)" : "");
     mutex_unlock(&lock);
     /* Multibuffer mode keeps this drawing area separate from the displayed
@@ -236,6 +247,7 @@ int main(void) {
     kui_log("Left/Right switches capture/diagnostics. B stops and checkpoints.");
     kui_log("New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.");
     kui_log("Capture rereads saved files; a reference match is a separate PC check.");
+    kui_log("Capture/Resume/Verify auto-save a report after ending. Wait for READY.");
 #else
     kui_log("Full capture is available in the updated SD runtime.");
 #endif

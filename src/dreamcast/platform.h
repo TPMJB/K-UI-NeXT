@@ -12,7 +12,10 @@ void kui_drive_init_bus(void);
 void kui_bootstrap_load(kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
-void kui_capture_start(enum kui_capture_mode mode,const char *build);
+enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build);
+void kui_disc_timing_reset(void);
+void kui_disc_timing_phase(void *ctx,bool capturing);
+void kui_disc_timing_report(void);
 void kui_capture_status(void *ctx,const struct kui_capture_progress *progress);
 struct kui_memory_stats {
     uint32_t physical,firmware,image,main_stack,heap_system,heap_used,heap_free;

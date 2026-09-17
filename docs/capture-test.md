@@ -10,9 +10,10 @@ See [the evidence](hardware-evidence.md).
 Keep the reusable bootstrap disc that already loads SD.
 
 For the current MDK2 speed investigation, use the
-[performance test plan](performance-test-plan.md). The isolated audio and resume
-baseline is complete; no repeat baseline or full-dump run is needed for profiling
-until the next runtime change is ready.
+[short optical timing test](optical-test.md). The isolated audio baseline is
+complete; this update separates the optical operations and saves reports
+automatically. The broader [performance plan](performance-test-plan.md) retains
+the later optimization and fast-resume work.
 
 ## Install the update
 
@@ -50,10 +51,12 @@ See [counter definitions and DreamShell comparison notes](memory-stats.md).
 ## Measure capture time
 
 Each operation now appends a **TIMING** summary when it stops, fails or finishes.
-For a short measurement, capture for one or two minutes in track 3, press B,
-wait for **READY**, then switch to diagnostics and press Y to save the log.
-Save before restarting or powering off: the timing summary lives in the log,
-not the checkpoint. Existing jobs can still resume with X after this SD update.
+For the current MDK2 test, resume its audio checkpoint and capture for about
+60 seconds. Press B and release it, then wait for **Report saved** and **READY**.
+Capture, Resume and Verify now save a fresh diagnostic report automatically
+after completion, failure or Stop. If saving fails, diagnostics Y can retry.
+The timing summary lives in that report, not the checkpoint. Existing jobs
+can still resume with X after this SD update.
 There is no need to interrupt an already running rip to install it.
 
 The summary separates **setup**, **resume** prefix checking, **capture**,
@@ -83,6 +86,13 @@ CPU-cycle counts. They include timer overhead and are not a direct prediction of
 speed with a feature removed. Counters use KOS's 64-bit microsecond timer and
 fixed memory; they add no per-chunk log or SD writes. This update keeps the paired
 reads, hashes, validation, checkpoint interval and on-card formats unchanged.
+The added `TRACK` and `OPTICAL` summaries break down capture tracks and raw-read
+work; their nested timer levels are explained in [the optical test](optical-test.md).
+Automatic reports use a fresh probe directory and a temporary file, publishing
+`diagnostics.txt` only after write/sync/close. Their I/O runs after capture ends,
+outside the timing totals. A log-save failure does not change the capture result.
+Even a refused capture/verify can write this separate report; it does not modify
+the rejected capture's track or checkpoint files.
 Measurement begins after initial TOC preparation and SD connection; the setup
 phase covers disc fingerprinting and filesystem/job preparation within capture.
 
@@ -100,8 +110,9 @@ phase covers disc fingerprinting and filesystem/job preparation within capture.
 4. Let it finish. Capture is followed by a complete SD reread. The success line
    must say **SAVED DATA VERIFIED** and give the output `disc.gdi` path. A failure,
    Stop, or **Capture written** alone is not completion.
-5. Switch to diagnostics with Left/Right and press Y. Save the log, then power
-   off and retrieve the job's `manifest.json`, `disc.gdi`, and the diagnostic log.
+5. Wait for the automatically saved report path and READY, then power off and
+   retrieve the job's `manifest.json`, `disc.gdi`, and that diagnostic log.
+   Diagnostics Y remains available for a manual report or retry.
 
 Do not press A to resume: A deliberately creates a separate new job. X chooses
 the newest directory for the current content fingerprint; it does not silently

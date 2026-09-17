@@ -18,7 +18,7 @@ def run(*args):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats"):
+    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     return text
 
@@ -72,7 +72,7 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     shutil.copyfile(ROOT / "tools/verify_probe.py", dist / "verify_probe.py")
     shutil.copyfile(ROOT / "tools/verify_dump.py", dist / "verify_dump.py")
-    for src, name in (("capture-test.md", "CAPTURE-TEST.md"), ("capture-format.md", "CAPTURE-FORMAT.md"), ("memory-stats.md", "MEMORY-STATS.md")):
+    for src, name in (("capture-test.md", "CAPTURE-TEST.md"), ("capture-format.md", "CAPTURE-FORMAT.md"), ("memory-stats.md", "MEMORY-STATS.md"), ("optical-test.md", "OPTICAL-TEST.md"), ("performance-test-plan.md", "PERFORMANCE-TEST-PLAN.md")):
         (dist / name).write_text(guide(src))
     shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
     shutil.copytree(ROOT / "LICENSES", dist / "LICENSES", dirs_exist_ok=True)
@@ -110,7 +110,7 @@ def main():
     update = dist / "sd-update"
     (update / "KUI").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
-    for name in ("CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     (update / "SOURCE.txt").write_text(

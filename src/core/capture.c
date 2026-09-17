@@ -17,8 +17,30 @@ static struct {
     uint64_t started, committed;
     struct kui_capture_progress progress;
     struct kui_timing timing;
+    struct {
+        uint64_t wall_us,bytes,us[KUI_TIME_BUCKETS];
+        uint32_t first_fad,next_fad;
+        bool attempted;
+    } track_timing[99];
+    uint64_t track_started,track_before[KUI_TIME_BUCKETS];
 } job;
 
+static void track_timing_start(unsigned i,uint32_t position) {
+    if(!job.ops->now_us) return;
+    job.track_started=job.ops->now_us(job.ops->ctx);
+    job.track_timing[i].attempted=true;
+    job.track_timing[i].first_fad=job.plan->tracks[i].start+position;
+    for(unsigned b=0;b<KUI_TIME_BUCKETS;b++)
+        job.track_before[b]=job.timing.samples[KUI_TIME_CAPTURE][b].us;
+}
+static void track_timing_finish(unsigned i) {
+    if(!job.ops->now_us) return;
+    job.track_timing[i].wall_us=job.ops->now_us(job.ops->ctx)-job.track_started;
+    job.track_timing[i].next_fad=job.plan->tracks[i].start+job.state.track[i].sectors;
+    job.track_timing[i].bytes=(uint64_t)(job.track_timing[i].next_fad-job.track_timing[i].first_fad)*KUI_RAW_BYTES;
+    for(unsigned b=0;b<KUI_TIME_BUCKETS;b++)
+        job.track_timing[i].us[b]=job.timing.samples[KUI_TIME_CAPTURE][b].us-job.track_before[b];
+}
 static void report_timing(void) {
     static const char *phases[]={"setup","resume","capture","verify","finish"};
     static const char *buckets[]={"disc","edc","write","read","sha256","crc32","checkpoint"};
@@ -38,6 +60,21 @@ static void report_timing(void) {
             accounted+=s->us;
         }
         job.ops->log("other us=%" PRIu64,elapsed>accounted?elapsed-accounted:0);
+    }
+    job.ops->log("TRACK TIMING: capture intervals, including checkpoints and close");
+    for(unsigned i=0;i<job.plan->count;i++) {
+        if(!job.track_timing[i].attempted) continue;
+        const uint64_t *us=job.track_timing[i].us;uint64_t accounted=0;
+        for(unsigned b=0;b<KUI_TIME_BUCKETS;b++) accounted+=us[b];
+        job.ops->log("TRACK T%02u %s FAD=[%" PRIu32 ",%" PRIu32 ")",i+1,
+            job.plan->tracks[i].control==4?"data":"audio",
+            job.track_timing[i].first_fad,job.track_timing[i].next_fad);
+        job.ops->log("track wall_us=%" PRIu64 " bytes=%" PRIu64,
+            job.track_timing[i].wall_us,job.track_timing[i].bytes);
+        job.ops->log("track disc_us=%" PRIu64 " write_us=%" PRIu64,us[KUI_TIME_DISC],us[KUI_TIME_WRITE]);
+        job.ops->log("track sha256_us=%" PRIu64 " crc32_us=%" PRIu64,us[KUI_TIME_SHA256],us[KUI_TIME_CRC32]);
+        job.ops->log("track edc_us=%" PRIu64 " checkpoint_us=%" PRIu64,us[KUI_TIME_EDC],us[KUI_TIME_CHECKPOINT]);
+        job.ops->log("track other_us=%" PRIu64,job.track_timing[i].wall_us>=accounted?job.track_timing[i].wall_us-accounted:0);
     }
 }
 static void hash_track(struct kui_sha256 *hash,const void *data,size_t bytes) {
@@ -307,14 +344,19 @@ static bool check_files(bool exact,enum kui_capture_phase phase) {
 }
 static bool capture_tracks(void) {
     kui_timing_phase(&job.timing,KUI_TIME_CAPTURE);
+    if(job.ops->read_phase) job.ops->read_phase(job.ops->ctx,true);
     for(unsigned i=0;i<job.plan->count;i++) {
         const struct kui_capture_track *t=&job.plan->tracks[i];
         uint32_t total=t->end-t->start,position=job.state.track[i].sectors;
         if(position==total) continue;
         if(cancelled()) return false;
+        track_timing_start(i,position);
         track_path(i);FIL file;
         FRESULT r=f_open(&file,job.path,FA_WRITE|FA_OPEN_ALWAYS);
-        if(r!=FR_OK) {job.ops->log("Open track %02u failed: FatFs=%u",i+1,(unsigned)r);return false;}
+        if(r!=FR_OK) {
+            job.ops->log("Open track %02u failed: FatFs=%u",i+1,(unsigned)r);
+            track_timing_finish(i);return false;
+        }
         FSIZE_t offset=(FSIZE_t)position*KUI_RAW_BYTES;
         bool ok=f_lseek(&file,offset)==FR_OK && f_tell(&file)==offset && f_truncate(&file)==FR_OK;
         uint32_t checkpoint_at=position,recovery_until=position;
@@ -346,6 +388,7 @@ static bool capture_tracks(void) {
          * Storage failures never advance the committed checkpoint. */
         if(!storage_failed && position!=checkpoint_at && !save_checkpoint(&file)) ok=false;
         if(!close_file(&file)) ok=false;
+        track_timing_finish(i);
         if(!ok || cancelled()) return false;
     }
     return all_captured();
@@ -443,6 +486,7 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     for(unsigned i=0;i<12;i++) if(!((ops->build[i]>='0'&&ops->build[i]<='9') ||
                                   (ops->build[i]>='a'&&ops->build[i]<='f'))) return KUI_CAPTURE_FAILED;
     memset(&job,0,sizeof(job));job.plan=plan;job.ops=ops;
+    if(ops->read_phase) ops->read_phase(ops->ctx,false);
     kui_timing_start(&job.timing,ops->now_us,ops->ctx);
     job.started=ops->now_ms(ops->ctx);job.state.count=plan->count;memcpy(job.state.build,ops->build,12);
     for(unsigned i=0;i<plan->count;i++) kui_sha256_init(&job.hashes[i]);

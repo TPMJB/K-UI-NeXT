@@ -19,6 +19,7 @@ BINARY = str(ROOT / "build/capture-image")
 
 def timings(output):
     phases = {}
+    tracks = []
     for line in output.splitlines():
         match = re.fullmatch(r"TIMING (\w+) wall_us=(\d+)", line)
         if match:
@@ -35,7 +36,31 @@ def timings(output):
         match = re.fullmatch(r"other us=(\d+)", line)
         if match:
             assert int(match[1]) + sum(b["us"] for b in phase["buckets"].values()) == phase["wall"]
+        match = re.fullmatch(r"TRACK T(\d+) (data|audio) FAD=\[(\d+),(\d+)\)", line)
+        if match:
+            number, kind, first, end = match.groups()
+            track = {"number": int(number), "kind": kind, "bytes": (int(end)-int(first))*2352, "buckets": {}}
+            tracks.append(track)
+        match = re.fullmatch(r"track wall_us=(\d+) bytes=(\d+)", line)
+        if match:
+            track["wall"] = int(match[1])
+            assert track["bytes"] == int(match[2])
+        if line.startswith("track ") and not line.startswith("track wall_us="):
+            for bucket, us in re.findall(r"(\w+)_us=(\d+)", line):
+                assert bucket not in track["buckets"]
+                track["buckets"][bucket] = int(us)
+            if "other" in track["buckets"]:
+                assert sum(track["buckets"].values()) == track["wall"]
+                if track["kind"] == "audio":
+                    assert track["buckets"]["edc"] == 0
     assert phases, output
+    if tracks:
+        assert len({t["number"] for t in tracks}) == len(tracks)
+        capture = phases["capture"]
+        assert sum(t["wall"] for t in tracks) <= capture["wall"]
+        assert sum(t["bytes"] for t in tracks) == capture["buckets"].get("write", {}).get("bytes", 0)
+        for bucket in ("disc", "write", "sha256", "crc32", "edc", "checkpoint"):
+            assert sum(t["buckets"][bucket] for t in tracks) == capture["buckets"].get(bucket, {}).get("us", 0)
     return phases
 
 

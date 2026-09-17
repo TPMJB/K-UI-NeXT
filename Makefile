@@ -8,10 +8,13 @@ CAPTURE = src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/ti
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-images deps diagnostic clean
-test: build/test-core build/test-capture-core build/test-timing
+test: build/test-core build/test-capture-core build/test-timing build/test-disc
 	./build/test-core
 	./build/test-capture-core
 	./build/test-timing
+	./build/test-disc
+	./build/test-disc abort-fail
+	./build/test-disc media-change
 	python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 deps:
@@ -29,6 +32,10 @@ build/test-timing: tests/test_timing.c src/core/timing.c include/kui/timing.h
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/timing.c tests/test_timing.c -o $@
 
+build/test-disc: tests/test_disc.c src/dreamcast/disc.c src/dreamcast/platform.h src/core/command.c src/core/data.c $(wildcard tests/stubs/dc/*.h tests/stubs/kos/*.h) .deps/fatfs/source/ff.h
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c tests/test_disc.c -o $@
+
 build/capture-image: tests/capture_image.c $(CORE) $(CAPTURE) src/core/storage_probe.c $(FATFS) include/kui/capture.h include/kui/timing.h
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(CAPTURE) src/core/storage_probe.c $(FATFS) tests/capture_image.c -o $@
@@ -41,10 +48,15 @@ build/runtime-image: tests/runtime_image.c $(CORE) src/core/storage_probe.c src/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) src/core/storage_probe.c src/core/runtime_image.c src/core/runtime_file.c $(FATFS) tests/runtime_image.c -o $@
 
-test-images: build/storage-image build/runtime-image build/capture-image
+build/report-image: tests/report_image.c $(CORE) src/core/storage_probe.c src/core/report.c $(FATFS) include/kui/report.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) src/core/storage_probe.c src/core/report.c $(FATFS) tests/report_image.c -o $@
+
+test-images: build/storage-image build/runtime-image build/capture-image build/report-image
 	python3 tests/test_images.py
 	python3 tests/test_runtime_images.py
 	python3 tests/test_capture_images.py
+	python3 tests/test_report_images.py
 
 diagnostic:
 	$(MAKE) -f Makefile.dc

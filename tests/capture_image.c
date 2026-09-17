@@ -179,7 +179,7 @@ int main(int argc,char **argv) {
     } else {
         enum kui_capture_mode mode=!strcmp(argv[2],"new")?KUI_CAPTURE_NEW:
             !strcmp(argv[2],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_VERIFY;
-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us};
+        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL};
         enum kui_capture_result r=kui_capture(&test.plan,&ops,mode);
         printf("RESULT %u WRITES %u BAD_ATTEMPTS %u FATAL %u\n",r,test.writes,test.bad_attempts,test.failures);
         result=r==KUI_CAPTURE_COMPLETE?0:r==KUI_CAPTURE_STOPPED?3:1;

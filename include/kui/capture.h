@@ -31,6 +31,8 @@ struct kui_capture_ops {
     const char *build;
     /* Optional observation only; no effect on deadlines or stored formats. */
     uint64_t (*now_us)(void *);
+    /* Optional adapter profiling label; never changes the read policy. */
+    void (*read_phase)(void *, bool capturing);
 };
 struct kui_checkpoint {
     uint64_t sequence;

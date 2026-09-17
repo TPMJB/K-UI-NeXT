@@ -1,10 +1,11 @@
 # Capture speed and resume: next tests
 
 This plan follows the measured MDK2 results in
-[hardware evidence](hardware-evidence.md). It is a testing and implementation
-plan, not a new runtime release. The current working timing build is
-**0ef58878ccdd**, available in the `sd-update` artifact from the
-[successful build](https://github.com/TPMJB/K-UI-NeXT/actions/runs/35166664869).
+[hardware evidence](hardware-evidence.md). Baseline runtime **0ef58878ccdd**
+supplied the measurements below. This source revision implements the next
+profiling/report update; its **sd-update** artifact includes
+[the short console test](optical-test.md). Match the displayed runtime build
+to the included `build.json`; the old baseline lacks these new optical counters.
 Keep the existing bootstrap CD, SD card, partial MDK2 jobs and completed Sword
 of the Berserk dump. No additional CD burn is needed for these tests.
 
@@ -23,8 +24,8 @@ The two P1/P2 files describe one operation. The longer trace is another job.
 The mixed trace's whole-phase average does not establish track-4/5 throughput;
 the follow-up contains only new track-4 audio and supplies a direct measurement.
 The optical bucket includes paired reads, mode setup, polling/waits and buffer
-checks. Do not treat
-it as pure media transfer time or drop integrity checks solely from its share.
+checks. Do not treat it as pure media transfer time or drop integrity checks
+solely from its share.
 
 ## Completed console baseline: resumed audio
 
@@ -43,12 +44,12 @@ input fingerprint and the console's verified-prefix digests are in
 [the results](evidence/mdk2-audio-resume-2026-09-17.json).
 
 **No further identical baseline or full rip is needed.** Preserve this partial
-job and the completed Sword dump. The next console test should follow the next
-SD runtime change, with short data/audio comparisons and exact report paths.
-Until automatic reports are implemented, B/READY followed by the diagnostics
-page's **Y Save log** remains necessary before rebooting or another operation.
+job and the completed Sword dump. Install the new profiling SD runtime and
+follow [one 60-second audio measurement](optical-test.md). Reports now save
+automatically after capture I/O ends; wait for the exact saved path and READY.
+Diagnostics **Y Save log** remains available for manual retry.
 
-## Next runtime change: optical timing and automatic reports
+## Implemented next test: optical timing and automatic reports
 
 | Measured observation | Next action |
 | --- | --- |
@@ -57,20 +58,21 @@ page's **Y Save log** remains necessary before rebooting or another operation.
 | Resume spends 126.21 of 167.47 seconds reading the old prefix | Implement and validate a separate fast-resume design before another long acceptance run |
 | SHA-256 consumes 34.17 seconds during resume but 8.60 seconds during audio capture | Assess hashing separately by phase; disabling it cannot resolve this capture slowdown |
 
-The current build cannot distinguish first-read, second-read and polling costs.
-The next SD update should add per-track timing and optical subtimers:
-sector-mode setup, each read command, buffer checks/copy, and
-poll counts/waits within each command. Command subtotals belong inside the
-optical total; do not add overlapping parent and child times together. Include
-maximum command duration and retry reasons. Keep counters bounded and avoid
-per-chunk log output or additional SD writes while capturing.
+The new update separates sector-mode setup, first/second commands and buffer
+work. Each command records submit/poll/wait/abort durations and counts, its
+maximum duration/FAD/size, and result categories. Optical counters separate
+identification from capture; per-track summaries record only newly attempted
+capture intervals. Counters are bounded and add no per-chunk log or SD writes.
+Their parent/child durations overlap by design; do not add the levels together.
 
-That update should also save a clearly named report automatically after each
-Stop, failure or completion, once capture I/O is finished. Preserve older
-reports and checkpoints, show the saved path, and report log-save failures
-separately from capture/verification success. Retain manual Save log. Exercise
-successful save, full-card/write failure and cancellation handling before
-handing over the update; logging must not create a misleading verified result.
+Capture/Resume/Verify now automatically save a fresh report after their I/O
+ends. Reports publish only after writing, syncing and closing a temporary file.
+Existing reports and capture files are preserved; saving/cancellation failures
+have a separate result and manual Y retry. The capture Stop is cleared only
+for this new log-save operation, where a new B press can cancel saving.
+Host cases cover paired-read equivalence, timing accounting, command failures,
+cancel/deadlines, report full-card/write/sync failures and file preservation.
+Physical-console acceptance of this update is still pending.
 
 For optical changes, compare the same fixed data and audio ranges on the same
 disc/card. Change one measured behavior at a time: redundant mode changes,
