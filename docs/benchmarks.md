@@ -154,6 +154,43 @@ Some things the model already tells you, before you change anything:
 - Both: 1/(1/818 + 1/8630) = 747 KiB/s.
 - The SD write rate is the ceiling nothing can pass.
 
+## The SD transport experiment
+
+`src/dreamcast/sd.c` asks KOS for a transport by name instead of calling plain
+`sd_init()`, which hardcodes `SD_IF_SCIF` with CRC checking on. Two knobs drive it:
+
+| bench.cfg | KOS call | What it does |
+|---|---|---|
+| `sd_if=scif` | `SD_IF_SCIF` | SPI emulated by bit-banging the SCIF pins. Works on the common jj1odm-style adapter. |
+| `sd_if=sci` | `SD_IF_SCI` | SH4 synchronous serial, DMA capable. Needs an adapter wired to the SCI pins. |
+| `sd_crc=on/off` | `check_crc` | Software CRC16 verification. KOS computes it on writes regardless, so this only moves the read rate. |
+
+Run the SD bench four ways: scif/on (the baseline every earlier report used),
+scif/off, sci/on, sci/off. Four configurations, two runs each.
+
+If `sci` is not wired on your adapter, `sd_init_ex` fails, the log says so, and
+the run falls back to `scif` and continues. Nothing is at risk, and the
+`SD transport:` line in every report names what the numbers were actually
+measured on, so a fallback can never be mistaken for a result.
+
+Reading `bench.cfg` always happens over `scif` with CRC on, before the file's
+own setting is applied. That is deliberate: a card cannot be made unreadable by
+the setting stored on it.
+
+What the outcomes mean:
+
+- **`sci` works and writes jump well above ~820 KiB/s** — the write ceiling was
+  the bit-bang driver, not the card. Every prediction in this document needs
+  redoing with the new number, and the SD write stops being the thing worth
+  hiding work behind.
+- **`sci` works but writes barely move** — ~820 KiB/s really is the card or the
+  adapter, and the pipeline restructuring is the remaining path.
+- **`sci` fails to initialise** — your adapter is SCIF-wired. The `sd_crc=off`
+  result still matters on its own for the read path.
+- **`sd_crc=off` lifts reads much above ~460 KiB/s** — software CRC16 is what
+  makes reads slower than writes, which mostly costs you on resume, where
+  prefix verification reads back everything already written.
+
 ## What to test first
 
 1. Defaults, twice. This gives you all four ceilings and a variance number.

@@ -25,6 +25,9 @@ int main(void) {
     assert(d.chunk_count == 3 && d.chunks[0] == 32 && d.chunks[2] == 512);
     assert(d.sd_mib == 8 && d.hash_mib == 8 && d.expand);
     assert(d.optical_fad == 45150 && d.optical_sectors == 4096 && d.yield_us == 2000);
+    /* Defaults must equal what KOS's own sd_init() does, so reading bench.cfg
+     * never depends on the setting bench.cfg is being read to discover. */
+    assert(d.sd_if == 0 && d.sd_crc);
     assert(!d.note[0]);
 
     /* Empty and comment-only files leave defaults untouched. */
@@ -42,12 +45,23 @@ int main(void) {
         "optical_fad=70040\n"
         "optical_sectors=2048\n"
         "yield_us=1000\n"
+        "sd_if=sci\n"
+        "sd_crc=off\n"
         "note=SanDisk 32GB, cold drive"));
     assert(logged == 0);
     assert(o.chunk_count == 2 && o.chunks[0] == 64 && o.chunks[1] == 256);
     assert(o.sd_mib == 16 && !o.expand && o.hash_mib == 4);
     assert(o.optical_fad == 70040 && o.optical_sectors == 2048 && o.yield_us == 1000);
+    assert(o.sd_if == 1 && !o.sd_crc);
     assert(!strcmp(o.note, "SanDisk 32GB, cold drive"));
+
+    /* The transport is a word, and only these two words. */
+    o = d; assert(parse(&o, "sd_if=scif") && o.sd_if == 0);
+    o = d; assert(parse(&o, "sd_if=sci") && o.sd_if == 1);
+    o = d; assert(parse(&o, "sd_if=SCI") == false && !memcmp(&o, &d, sizeof(o)));
+    o = d; assert(parse(&o, "sd_if=1") == false && !memcmp(&o, &d, sizeof(o)));
+    o = d; assert(parse(&o, "sd_if=scifx") == false && !memcmp(&o, &d, sizeof(o)));
+    o = d; assert(parse(&o, "sd_crc=off") && !o.sd_crc);
 
     /* Every accepted spelling of a boolean. */
     o = d; assert(parse(&o, "expand=0") && !o.expand);
@@ -80,8 +94,8 @@ int main(void) {
 
     /* The echo prints the list in file order. */
     o = d; logged = 0; kui_options_log(&o, log_line);
-    assert(logged == 3 && strstr(last, "note=(none)"));
+    assert(logged == 4 && strstr(last, "note=(none)"));
 
-    puts("PASS options: defaults, full file, booleans, unknown keys, rejection, note bounds");
+    puts("PASS options: defaults, full file, transport, booleans, unknown keys, rejection, note bounds");
     return 0;
 }

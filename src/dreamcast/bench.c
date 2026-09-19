@@ -18,6 +18,10 @@ static uint64_t now_us(void *ctx) { (void)ctx; return timer_us_gettime64(); }
  * applied to disc.c here because it affects captures, not just benches. */
 bool kui_options_refresh(void) {
     kui_options_default(&kui_options);
+    /* Read the file over the transport KOS itself defaults to. If a previous
+     * run left sd_if=sci set and that adapter cannot do SCI, this is what
+     * guarantees bench.cfg is still readable to change the value back. */
+    kui_sd_set_params(0, true);
     bool ok = false;
     if(kui_sd_connect()) {
         FATFS fs;
@@ -29,6 +33,9 @@ bool kui_options_refresh(void) {
     }
     kui_options_log(&kui_options, kui_log);
     kui_disc_set_yield_us(kui_options.yield_us);
+    /* A rejected file left kui_options at defaults, so this is always a
+     * transport the parser actually approved. */
+    kui_sd_set_params(kui_options.sd_if, kui_options.sd_crc);
     return ok;
 }
 

@@ -19,6 +19,10 @@ void kui_options_default(struct kui_options *out) {
     out->optical_fad = 45150;
     out->optical_sectors = 4096;
     out->yield_us = 2000;
+    /* The transport pair KOS's own sd_init() hardcodes. Defaulting to it keeps
+     * a card readable even if a previous run left an untested setting behind. */
+    out->sd_if = 0;
+    out->sd_crc = true;
 }
 
 /* --- small helpers ------------------------------------------------------ */
@@ -42,6 +46,13 @@ static bool parse_unsigned(const char *p, const char *end, unsigned long lo,
     unsigned long v = strtoul(tmp, &stop, 10);
     if(stop == tmp || *stop || v < lo || v > hi) return false;
     *out = v; return true;
+}
+/* "scif" -> 0, "sci" -> 1. A word rather than a number so a report says which. */
+static bool parse_interface(const char *p, const char *end, unsigned *out) {
+    size_t n = (size_t)(end - p);
+    if(n == 4 && !memcmp(p, "scif", 4)) { *out = 0; return true; }
+    if(n == 3 && !memcmp(p, "sci", 3)) { *out = 1; return true; }
+    return false;
 }
 static bool parse_bool(const char *p, const char *end, bool *out) {
     size_t n = (size_t)(end - p);
@@ -84,6 +95,8 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
     if(KEY("expand")) return parse_bool(v, vend, &o->expand);
     if(KEY("optical_fad")) { if(!parse_unsigned(v, vend, 150, 0xffffff, &n)) return false; o->optical_fad = (uint32_t)n; return true; }
     if(KEY("optical_sectors")) { if(!parse_unsigned(v, vend, 1, 65536, &n)) return false; o->optical_sectors = (unsigned)n; return true; }
+    if(KEY("sd_if")) return parse_interface(v, vend, &o->sd_if);
+    if(KEY("sd_crc")) return parse_bool(v, vend, &o->sd_crc);
     if(KEY("yield_us")) { if(!parse_unsigned(v, vend, 100, 20000, &n)) return false; o->yield_us = (unsigned)n; return true; }
     if(KEY("note")) {
         size_t len = (size_t)(vend - v);
@@ -113,7 +126,7 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
         size_t klen = (size_t)(key_end - key);
         if(!klen) { log("bench.cfg line %u: empty key", line_no); return false; }
         static const char *known[] = {"chunks", "sd_mib", "hash_mib", "expand",
-            "optical_fad", "optical_sectors", "yield_us", "note"};
+            "optical_fad", "optical_sectors", "yield_us", "sd_if", "sd_crc", "note"};
         bool is_known = false;
         for(size_t i = 0; i < sizeof(known) / sizeof(known[0]); ++i)
             if(strlen(known[i]) == klen && !memcmp(key, known[i], klen)) is_known = true;
@@ -135,5 +148,6 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
         list, o->sd_mib, o->expand ? "on" : "off", o->hash_mib);
     log("OPTIONS optical_fad=%" PRIu32 " optical_sectors=%u yield_us=%u",
         o->optical_fad, o->optical_sectors, o->yield_us);
+    log("OPTIONS sd_if=%s sd_crc=%s", o->sd_if ? "sci" : "scif", o->sd_crc ? "on" : "off");
     log("OPTIONS note=%s", o->note[0] ? o->note : "(none)");
 }

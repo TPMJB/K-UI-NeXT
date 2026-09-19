@@ -23,6 +23,19 @@ hash_mib=8
 optical_fad=45150
 optical_sectors=4096
 
+# SD transport. scif = bit-banged SPI, what KOS's sd_init() hardcodes and what
+# every run so far has used. sci = the SH4's synchronous serial mode, which can
+# move blocks by DMA, but needs an adapter wired to the SCI pins. If yours is
+# not, the run logs "SCI init failed" and falls back to scif automatically, so
+# trying it is safe. This is the test for whether ~820 KiB/s is your card or
+# your driver.
+sd_if=scif
+
+# Verify the SD data-block CRC16 in software on reads. KOS computes that CRC on
+# writes no matter what, so turning this off only changes the read rate. Leave
+# it on for real rips; turn it off only to measure what it costs.
+sd_crc=on
+
 # PIO service quantum for disc.c (microseconds between thd_pass yields).
 # Applies to captures too. 100..20000.
 yield_us=2000

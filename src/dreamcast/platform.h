@@ -6,6 +6,10 @@
 #include "kui/bench.h"
 void kui_log(const char *format, ...);
 bool kui_cancelled(void);
+/* Transport for the NEXT kui_sd_connect(): use_sci picks KOS SD_IF_SCI
+ * (synchronous serial, DMA capable) over the SD_IF_SCIF bit-bang default;
+ * check_crc verifies the data-block CRC16 on reads. */
+void kui_sd_set_params(unsigned use_sci, bool check_crc);
 bool kui_sd_connect(void);
 void kui_sd_disconnect(void);
 void kui_disc_probe(void);

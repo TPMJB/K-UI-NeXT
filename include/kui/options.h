@@ -22,6 +22,8 @@
  *   optical_fad=45150      start of the fixed optical read range
  *   optical_sectors=4096   length of that range
  *   yield_us=2000          PIO service quantum used by disc.c
+ *   sd_if=scif             SD transport: scif (bit-banged SPI) or sci (+DMA)
+ *   sd_crc=on              verify the SD data-block CRC16 on reads
  *   note=any text          echoed into the log (card model, drive, etc.)
  */
 
@@ -34,7 +36,8 @@ struct kui_options {
     unsigned chunks[KUI_OPT_LIST_MAX], chunk_count;
     unsigned sd_mib, hash_mib, optical_sectors, yield_us;
     uint32_t optical_fad;
-    bool expand;
+    unsigned sd_if;          /* 0 = SCIF (KOS default), 1 = SCI */
+    bool expand, sd_crc;
     char note[KUI_OPT_NOTE_MAX];
 };
 
