@@ -1,0 +1,31 @@
+# /KUI/bench.cfg  -  copy to the SD card as KUI/bench.cfg and edit freely.
+# One key=value per line. '#' starts a comment. Missing file = these defaults.
+# Every value is echoed into diagnostics.txt as OPTIONS lines, so a report
+# always shows the settings that produced it.
+
+# SD sweep: chunk sizes in raw 2352-byte sectors, up to 8 entries, each 1..512.
+# 32 = today's capture chunk (75,264 B). 512 = 1.2 MB, about ten exFAT clusters.
+chunks=32,128,512
+
+# MiB written (then read back) per SD run. 8 MiB at 512 sectors is only ~7
+# writes, so go bigger if a large-chunk number looks noisy.
+sd_mib=8
+
+# Also run each SD chunk with f_expand() preallocation (contiguous file).
+# Compare expand=1 vs expand=0 lines for the same chunk to see fragmentation cost.
+expand=on
+
+# MiB hashed per SHA-256 and CRC32 run. Pure CPU; 8 MiB takes a few seconds.
+hash_mib=8
+
+# Fixed optical range. 45150 is the start of the high-density area on every
+# GD-ROM, so this range compares across discs. 4096 sectors = 9.6 MB.
+optical_fad=45150
+optical_sectors=4096
+
+# PIO service quantum for disc.c (microseconds between thd_pass yields).
+# Applies to captures too. 100..20000.
+yield_us=2000
+
+# Free text for the report: card, drive, anything that could confound a run.
+note=

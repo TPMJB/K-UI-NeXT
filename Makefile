@@ -8,8 +8,9 @@ CAPTURE = src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/ti
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-images deps diagnostic clean
-test: build/test-core build/test-capture-core build/test-timing build/test-disc
+test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options
 	./build/test-core
+	./build/test-options
 	./build/test-capture-core
 	./build/test-timing
 	./build/test-disc
@@ -29,6 +30,10 @@ build/test-core: tests/test_core.c $(CORE) include/kui/core.h include/kui/media.
 build/test-capture-core: tests/test_capture_core.c src/core/hash.c src/core/capture_plan.c src/core/data.c include/kui/hash.h include/kui/capture.h
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/hash.c src/core/capture_plan.c tests/test_capture_core.c -o $@
+
+build/test-options: tests/test_options.c src/core/options.c include/kui/options.h .deps/fatfs/source/ff.h
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/options.c tests/test_options.c -o $@
 
 build/test-timing: tests/test_timing.c src/core/timing.c include/kui/timing.h
 	@mkdir -p build

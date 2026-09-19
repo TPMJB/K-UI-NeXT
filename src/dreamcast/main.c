@@ -14,6 +14,7 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #endif
 #ifdef KUI_SD_RUNTIME
 #define KUI_BUTTON_MSTATS (1u<<30)
+#define KUI_BUTTON_BENCH (1u<<29)
 static struct kui_memory_stats memory_status;
 static bool memory_valid;
 #define KUI_ROLE "SD runtime"
@@ -115,6 +116,15 @@ static void *worker(void *unused) {
             }
             if(action == 3) save_report("manual","see operation log",false);
 #ifdef KUI_SD_RUNTIME
+            if(action == 7) {
+                kui_memory_log("bench start");
+                enum kui_bench_result result=kui_bench_start();
+                kui_memory_log("bench end");
+                const char *outcome=result==KUI_BENCH_COMPLETE?"complete":result==KUI_BENCH_STOPPED?"stopped":"failed";
+                kui_log("Bench result: %s",outcome);
+                kui_log("Saving diagnostic report automatically; B cancels log save.");
+                save_report("auto bench",outcome,true);
+            }
             if(action >= 4 && action <= 6) {
                 kui_memory_log("capture/verify start");
                 enum kui_capture_result result=kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID);
@@ -159,7 +169,7 @@ static void draw(unsigned scroll,unsigned page) {
     minifont_set_color(220, 230, 235);
     minifont_draw_str(vram_s + 44 * 640 + 16, 640, "Build " KUI_BUILD_ID);
 #ifdef KUI_SD_RUNTIME
-    minifont_draw_str(vram_s + 44*640+360,640,"L trigger: mstats");
+    minifont_draw_str(vram_s + 44*640+360,640,"L: mstats   R: bench");
 #endif
     minifont_draw_str(vram_s + 68 * 640 + 16, 640,page?
         "A New dump   X Resume latest   Y Verify latest":
@@ -207,6 +217,7 @@ static unsigned controller_buttons(void) {
     if(state->joyy>48) buttons|=CONT_DPAD_DOWN;
 #ifdef KUI_SD_RUNTIME
     if(state->ltrig>128) buttons|=KUI_BUTTON_MSTATS;
+    if(state->rtrig>128) buttons|=KUI_BUTTON_BENCH;
 #endif
     return buttons;
 }
@@ -249,6 +260,7 @@ int main(void) {
     kui_log("Capture rereads saved files; a reference match is a separate PC check.");
     kui_log("Capture uses single optical reads; final CRC32/SHA256 readback stays on.");
     kui_log("Capture/Resume/Verify auto-save a report after ending. Wait for READY.");
+    kui_log("R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).");
 #else
     kui_log("Full capture is available in the updated SD runtime.");
 #endif
@@ -278,8 +290,12 @@ int main(void) {
             if(pressed & (CONT_DPAD_LEFT|CONT_DPAD_RIGHT)) {page^=1;scroll=0;}
 #endif
             unsigned action = pressed & CONT_A ? 1 : pressed & CONT_X ? 2 : pressed & CONT_Y ? 3 : 0;
+            if(action) action+=page?3:0;
+#ifdef KUI_SD_RUNTIME
+            if(pressed & KUI_BUTTON_BENCH) action=7;
+#endif
             if(action) {
-                pending = action+(page?3:0); busy = true; cancel_requested = false; scroll = 0;
+                pending = action; busy = true; cancel_requested = false; scroll = 0;
 #ifdef KUI_SD_RUNTIME
                 if(page) {capture_status=(struct kui_capture_progress){0};rate_at=rate_bytes=0;rate_kib=0;}
 #endif

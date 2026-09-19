@@ -3,6 +3,7 @@
 #define KUI_PLATFORM_H
 #include "kui/probe.h"
 #include "kui/capture.h"
+#include "kui/bench.h"
 void kui_log(const char *format, ...);
 bool kui_cancelled(void);
 bool kui_sd_connect(void);
@@ -16,6 +17,12 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
 void kui_disc_timing_reset(void);
 void kui_disc_timing_phase(void *ctx,bool capturing);
 void kui_disc_timing_report(void);
+/* PIO service quantum for pause_worker; 0 restores the built-in default. */
+void kui_disc_set_yield_us(unsigned us);
+/* src/dreamcast/bench.c: options loaded from /KUI/bench.cfg and the bench entry. */
+extern struct kui_options kui_options;
+bool kui_options_refresh(void);
+enum kui_bench_result kui_bench_start(void);
 void kui_capture_status(void *ctx,const struct kui_capture_progress *progress);
 struct kui_memory_stats {
     uint32_t physical,firmware,image,main_stack,heap_system,heap_used,heap_free;

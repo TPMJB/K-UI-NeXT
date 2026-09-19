@@ -6,6 +6,7 @@ static uint64_t now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static uint64_t now_us(void *ctx) { (void)ctx;return timer_us_gettime64(); }
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build) {
     struct kui_toc sessions[2];struct kui_capture_plan plan;
+    kui_options_refresh();   /* logs the options in effect; a bad file keeps defaults */
     kui_disc_timing_reset();
     if(!kui_disc_prepare(sessions) || kui_cancelled())
         return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;

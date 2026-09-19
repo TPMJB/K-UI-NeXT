@@ -40,8 +40,10 @@ static struct command_timing *active_command;
  * The portable command loop still checks Stop and its deadline on every poll.
  * Firmware calls themselves cannot be preempted by the software deadline. */
 #define PIO_SERVICE_QUANTUM_US 2000u
+static unsigned pio_quantum_us=PIO_SERVICE_QUANTUM_US;
 static bool fast_pio;
 static uint64_t last_pass_us;
+void kui_disc_set_yield_us(unsigned us) { pio_quantum_us=us?us:PIO_SERVICE_QUANTUM_US; }
 
 void kui_disc_timing_reset(void) {
     memset(optical,0,sizeof(optical));optical_phase=0;active_command=NULL;
@@ -55,7 +57,7 @@ void kui_disc_timing_report(void) {
         if(!t->requests) continue;
         uint64_t children=t->mode_us+t->buffers_us+t->read[0].us+t->read[1].us;
         kui_log("OPTICAL %s: subtimers inside TIMING disc",p?"capture":"setup");
-        kui_log("opt policy=%s PIO yield_us=%u",p?"single":"paired",PIO_SERVICE_QUANTUM_US);
+        kui_log("opt policy=%s PIO yield_us=%u",p?"single":"paired",pio_quantum_us);
         kui_log("opt wall_us=%" PRIu64 " requests=%" PRIu64 " bytes=%" PRIu64,t->us,t->requests,t->bytes);
         kui_log("opt mode_us=%" PRIu64 " calls=%" PRIu64 " failed=%" PRIu64,t->mode_us,t->modes,t->mode_failures);
         kui_log("opt buffers_us=%" PRIu64 " other_us=%" PRIu64,t->buffers_us,t->us>=children?t->us-children:0);
@@ -87,7 +89,7 @@ static void pause_worker(void *ctx) {
     (void)ctx;
     uint64_t start=timer_us_gettime64();
     if(fast_pio) {
-        if(start-last_pass_us<PIO_SERVICE_QUANTUM_US) return;
+        if(start-last_pass_us<pio_quantum_us) return;
         thd_pass();
         last_pass_us=timer_us_gettime64();
     } else thd_sleep(1);
