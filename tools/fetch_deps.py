@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import time
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -17,6 +19,31 @@ LOCK = json.loads((ROOT / "dependencies.json").read_text())
 
 def run(*args, cwd=None):
     subprocess.run(args, cwd=cwd, check=True)
+
+
+def download(url, attempts=5):
+    """Fetch one pinned file, retrying transient network failures.
+
+    elm-chan.org is a single small host and regularly times out from CI
+    runners. A single urlopen there fails the whole build for a reason that
+    has nothing to do with the code, so retry with a widening backoff and a
+    longer timeout. The caller still checks the SHA-256, so a retry can never
+    weaken the pin: a truncated or substituted body is rejected either way.
+    """
+    last = None
+    for attempt in range(1, attempts + 1):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "K-UI-NeXT/deps"})
+            with urllib.request.urlopen(request, timeout=180) as response:
+                return response.read()
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            last = error
+            if attempt == attempts:
+                break
+            delay = 2 ** attempt
+            print(f"  {url}: {error}; retry {attempt}/{attempts - 1} in {delay}s", flush=True)
+            time.sleep(delay)
+    raise SystemExit(f"Could not download {url} after {attempts} attempts: {last}")
 
 
 def fetch_git(name):
@@ -43,8 +70,8 @@ def fetch_fatfs():
     for spec in LOCK["fatfs"]:
         target = cache / spec["url"].rsplit("/", 1)[-1]
         if not target.exists():
-            with urllib.request.urlopen(spec["url"], timeout=60) as response:
-                data = response.read()
+            print(f"Downloading {spec['url']}", flush=True)
+            data = download(spec["url"])
             if hashlib.sha256(data).hexdigest() != spec["sha256"]:
                 raise SystemExit(f"Download checksum mismatch: {target.name}")
             target.write_bytes(data)
