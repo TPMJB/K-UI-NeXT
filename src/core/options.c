@@ -21,8 +21,8 @@ void kui_options_default(struct kui_options *out) {
     out->yield_us = 2000;
     /* The transport pair KOS's own sd_init() hardcodes. Defaulting to it keeps
      * a card readable even if a previous run left an untested setting behind. */
-    out->sd_if = 0;
-    out->sd_crc = true;
+    out->sd_if[0] = 0; out->sd_if_count = 1;
+    out->sd_crc[0] = true; out->sd_crc_count = 1;
 }
 
 /* --- small helpers ------------------------------------------------------ */
@@ -47,12 +47,41 @@ static bool parse_unsigned(const char *p, const char *end, unsigned long lo,
     if(stop == tmp || *stop || v < lo || v > hi) return false;
     *out = v; return true;
 }
+static bool parse_bool(const char *p, const char *end, bool *out);
+
 /* "scif" -> 0, "sci" -> 1. A word rather than a number so a report says which. */
 static bool parse_interface(const char *p, const char *end, unsigned *out) {
     size_t n = (size_t)(end - p);
     if(n == 4 && !memcmp(p, "scif", 4)) { *out = 0; return true; }
     if(n == 3 && !memcmp(p, "sci", 3)) { *out = 1; return true; }
     return false;
+}
+/* Walks "a,b" and hands each item to one of the two parsers above. Duplicates
+ * are rejected: sweeping the same setting twice is always a typo, and it would
+ * put two identically-labelled lines in the report. */
+static bool parse_sd_list(const char *p, const char *end, void *items, unsigned *count,
+                          bool is_bool) {
+    unsigned n = 0;
+    for(;;) {
+        const char *comma = memchr(p, ',', (size_t)(end - p));
+        const char *item_end = comma ? comma : end;
+        const char *s = skip_space(p, item_end), *e = trim_end(p, item_end);
+        if(n == KUI_OPT_SD_MAX) return false;
+        if(is_bool) {
+            bool v;
+            if(!parse_bool(s, e, &v)) return false;
+            for(unsigned i = 0; i < n; ++i) if(((bool *)items)[i] == v) return false;
+            ((bool *)items)[n++] = v;
+        } else {
+            unsigned v;
+            if(!parse_interface(s, e, &v)) return false;
+            for(unsigned i = 0; i < n; ++i) if(((unsigned *)items)[i] == v) return false;
+            ((unsigned *)items)[n++] = v;
+        }
+        if(!comma) break;
+        p = comma + 1;
+    }
+    *count = n; return true;
 }
 static bool parse_bool(const char *p, const char *end, bool *out) {
     size_t n = (size_t)(end - p);
@@ -95,8 +124,8 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
     if(KEY("expand")) return parse_bool(v, vend, &o->expand);
     if(KEY("optical_fad")) { if(!parse_unsigned(v, vend, 150, 0xffffff, &n)) return false; o->optical_fad = (uint32_t)n; return true; }
     if(KEY("optical_sectors")) { if(!parse_unsigned(v, vend, 1, 65536, &n)) return false; o->optical_sectors = (unsigned)n; return true; }
-    if(KEY("sd_if")) return parse_interface(v, vend, &o->sd_if);
-    if(KEY("sd_crc")) return parse_bool(v, vend, &o->sd_crc);
+    if(KEY("sd_if")) return parse_sd_list(v, vend, o->sd_if, &o->sd_if_count, false);
+    if(KEY("sd_crc")) return parse_sd_list(v, vend, o->sd_crc, &o->sd_crc_count, true);
     if(KEY("yield_us")) { if(!parse_unsigned(v, vend, 100, 20000, &n)) return false; o->yield_us = (unsigned)n; return true; }
     if(KEY("note")) {
         size_t len = (size_t)(vend - v);
@@ -148,6 +177,13 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
         list, o->sd_mib, o->expand ? "on" : "off", o->hash_mib);
     log("OPTIONS optical_fad=%" PRIu32 " optical_sectors=%u yield_us=%u",
         o->optical_fad, o->optical_sectors, o->yield_us);
-    log("OPTIONS sd_if=%s sd_crc=%s", o->sd_if ? "sci" : "scif", o->sd_crc ? "on" : "off");
+    char ifs[16] = "", crcs[16] = "";
+    for(unsigned i = 0; i < o->sd_if_count; ++i)
+        snprintf(ifs + strlen(ifs), sizeof(ifs) - strlen(ifs), "%s%s",
+            i ? "," : "", o->sd_if[i] ? "sci" : "scif");
+    for(unsigned i = 0; i < o->sd_crc_count; ++i)
+        snprintf(crcs + strlen(crcs), sizeof(crcs) - strlen(crcs), "%s%s",
+            i ? "," : "", o->sd_crc[i] ? "on" : "off");
+    log("OPTIONS sd_if=%s sd_crc=%s", ifs, crcs);
     log("OPTIONS note=%s", o->note[0] ? o->note : "(none)");
 }

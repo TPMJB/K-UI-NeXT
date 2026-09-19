@@ -22,6 +22,13 @@ struct kui_bench_ops {
     /* Optical raw read; same contract as kui_capture_ops.read. NULL skips
      * the optical bench so hash and SD benches still run without a disc. */
     enum kui_read_result (*read)(void *, uint32_t fad, unsigned sectors, uint8_t *out);
+    /* Tear down the SD link and bring it back on the requested transport
+     * (use_sci: 0 SCIF, 1 SCI) with CRC read-verification set. Returns the
+     * interface actually in use, which differs from the request when the
+     * adapter cannot do SCI and the platform falls back, or -1 if the card
+     * did not come back at all. NULL means no transport sweep: the SD benches
+     * run once on whatever link the caller already opened. */
+    int (*reconnect)(void *, unsigned use_sci, bool crc);
     bool (*cancelled)(void *);
     uint64_t (*now_us)(void *);
     kui_log_fn log;

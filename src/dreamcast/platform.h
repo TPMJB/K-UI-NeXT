@@ -10,6 +10,8 @@ bool kui_cancelled(void);
  * (synchronous serial, DMA capable) over the SD_IF_SCIF bit-bang default;
  * check_crc verifies the data-block CRC16 on reads. */
 void kui_sd_set_params(unsigned use_sci, bool check_crc);
+/* Which transport the last successful connect opened, after any fallback. */
+unsigned kui_sd_active_sci(void);
 bool kui_sd_connect(void);
 void kui_sd_disconnect(void);
 void kui_disc_probe(void);

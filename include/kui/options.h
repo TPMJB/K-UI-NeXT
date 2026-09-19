@@ -22,13 +22,14 @@
  *   optical_fad=45150      start of the fixed optical read range
  *   optical_sectors=4096   length of that range
  *   yield_us=2000          PIO service quantum used by disc.c
- *   sd_if=scif             SD transport: scif (bit-banged SPI) or sci (+DMA)
- *   sd_crc=on              verify the SD data-block CRC16 on reads
+ *   sd_if=scif,sci         SD transports to sweep: scif (bit-bang), sci (+DMA)
+ *   sd_crc=on,off          CRC16 read-verification settings to sweep
  *   note=any text          echoed into the log (card model, drive, etc.)
  */
 
 #define KUI_OPT_CHUNK_MAX 512u   /* raw sectors; sizes the bench buffer */
 #define KUI_OPT_LIST_MAX 8u
+#define KUI_OPT_SD_MAX 2u
 #define KUI_OPT_NOTE_MAX 64u
 #define KUI_OPT_FILE_MAX 2048u   /* a larger bench.cfg is refused */
 
@@ -36,8 +37,11 @@ struct kui_options {
     unsigned chunks[KUI_OPT_LIST_MAX], chunk_count;
     unsigned sd_mib, hash_mib, optical_sectors, yield_us;
     uint32_t optical_fad;
-    unsigned sd_if;          /* 0 = SCIF (KOS default), 1 = SCI */
-    bool expand, sd_crc;
+    /* Swept in one run so a transport comparison needs no card removal. */
+    unsigned sd_if[KUI_OPT_SD_MAX], sd_if_count;   /* 0 = SCIF, 1 = SCI */
+    bool sd_crc[KUI_OPT_SD_MAX];
+    unsigned sd_crc_count;
+    bool expand;
     char note[KUI_OPT_NOTE_MAX];
 };
 

@@ -10,6 +10,17 @@
 struct kui_options kui_options;   /* last loaded /KUI/bench.cfg; defaults until then */
 
 static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
+
+/* Drop the SD link and reopen it on the requested transport. kui_sd_connect
+ * falls back to SCIF when SCI will not initialise, so report what it actually
+ * opened rather than what was asked for. */
+static int reconnect(void *ctx, unsigned use_sci, bool crc) {
+    (void)ctx;
+    kui_sd_disconnect();
+    kui_sd_set_params(use_sci, crc);
+    if(!kui_sd_connect()) return -1;
+    return (int)kui_sd_active_sci();
+}
 static uint64_t now_us(void *ctx) { (void)ctx; return timer_us_gettime64(); }
 
 /* Re-read bench.cfg from the card and echo it into the log. Called at the
@@ -35,7 +46,6 @@ bool kui_options_refresh(void) {
     kui_disc_set_yield_us(kui_options.yield_us);
     /* A rejected file left kui_options at defaults, so this is always a
      * transport the parser actually approved. */
-    kui_sd_set_params(kui_options.sd_if, kui_options.sd_crc);
     return ok;
 }
 
@@ -50,8 +60,10 @@ enum kui_bench_result kui_bench_start(void) {
     if(disc) kui_disc_timing_phase(NULL, true);   /* single-read capture policy */
     else kui_log("No readable disc; hash and SD benches will still run");
     if(kui_cancelled()) return KUI_BENCH_STOPPED;
-    if(!kui_sd_connect()) return KUI_BENCH_FAILED;
-    struct kui_bench_ops ops = {NULL, disc ? kui_disc_read_raw : NULL, cancelled, now_us, kui_log};
+    /* No connect here: kui_bench opens the link itself once per swept
+     * transport, so the SD benches and the link always agree. */
+    struct kui_bench_ops ops = {NULL, disc ? kui_disc_read_raw : NULL, reconnect,
+                                cancelled, now_us, kui_log};
     enum kui_bench_result result = kui_bench(&ops, &kui_options);
     kui_sd_disconnect();
     /* Prints the OPTICAL capture subtimers (submit/poll/wait) for the bench

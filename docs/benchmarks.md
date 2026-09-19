@@ -165,8 +165,26 @@ Some things the model already tells you, before you change anything:
 | `sd_if=sci` | `SD_IF_SCI` | SH4 synchronous serial, DMA capable. Needs an adapter wired to the SCI pins. |
 | `sd_crc=on/off` | `check_crc` | Software CRC16 verification. KOS computes it on writes regardless, so this only moves the read rate. |
 
-Run the SD bench four ways: scif/on (the baseline every earlier report used),
-scif/off, sci/on, sci/off. Four configurations, two runs each.
+Both keys take a list, and the SD benches are swept over every combination in
+one run, dropping and reopening the SD link between each. `sd_if=scif,sci` with
+`sd_crc=on,off` measures all four configurations from a single boot, with no
+card removal. Every SD line then carries its own `if=` and `crc=`, so the lines
+stand alone:
+
+```
+BENCH sd write if=scif crc=on chunk=128 expand=0 bytes=8128512 us=9449030 kib_s=840.0
+```
+
+Run time multiplies, so pair a transport sweep with one chunk size and
+`expand=off`; four transports at `chunks=128`, `sd_mib=8` takes about two
+minutes. Optical and hash run once, before any mount, and are unaffected.
+
+A setting that cannot be opened is skipped rather than measured: if SCI will
+not initialise, the platform falls back to SCIF, the log says
+`BENCH sd if=sci skipped: fell back to scif`, and no line is recorded under the
+wrong name. The same guard drops a configuration whose actual transport was
+already measured, so a fallback can never produce two contradictory `if=sci`
+rows.
 
 If `sci` is not wired on your adapter, `sd_init_ex` fails, the log says so, and
 the run falls back to `scif` and continues. Nothing is at risk, and the

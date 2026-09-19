@@ -45,6 +45,9 @@ void kui_sd_set_params(unsigned use_sci, bool want_crc) {
     check_crc = want_crc;
 }
 
+/* What the last successful connect actually opened, after any fallback. */
+unsigned kui_sd_active_sci(void) { return interface == SD_IF_SCI ? 1u : 0u; }
+
 static const char *transport_name(sd_interface_t which) {
     return which == SD_IF_SCI ? "SCI (synchronous serial, DMA capable)"
                               : "SCIF (bit-banged SPI)";

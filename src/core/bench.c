@@ -14,6 +14,8 @@
  * allocates. It is ~1.2 MB of the 15+ MB the runtime leaves free. */
 static uint8_t buffer[KUI_OPT_CHUNK_MAX * KUI_RAW_BYTES];
 static const struct kui_bench_ops *ops;
+/* "if=scif crc=on"; prefixed to every SD line so a swept report is unambiguous. */
+static char transport[24];
 
 static bool cancelled(void) { return ops->cancelled(ops->ctx); }
 static uint64_t now(void) { return ops->now_us(ops->ctx); }
@@ -127,8 +129,8 @@ static bool ensure_dir(const char *path) {
  * chain on every later access), which is the test for fragmentation cost. */
 static enum kui_bench_result bench_sd_run(unsigned chunk, bool expand, uint64_t total) {
     UINT bytes = chunk * KUI_RAW_BYTES;
-    char detail[40];
-    snprintf(detail, sizeof(detail), "chunk=%u expand=%u", chunk, expand ? 1 : 0);
+    char detail[64];
+    snprintf(detail, sizeof(detail), "%s chunk=%u expand=%u", transport, chunk, expand ? 1 : 0);
     FIL file;
     FRESULT r = f_open(&file, SCRATCH, FA_WRITE | FA_CREATE_ALWAYS);
     if(r != FR_OK) { ops->log("Bench scratch open failed: FatFs=%u", (unsigned)r); return KUI_BENCH_FAILED; }
@@ -196,8 +198,8 @@ out:
     return rc;
 }
 
-static enum kui_bench_result bench_sd(const struct kui_options *o) {
-    uint64_t want = (uint64_t)o->sd_mib * MIB;
+/* Every chunk/expand combination on one already-mounted link. */
+static enum kui_bench_result bench_sd_chunks(const struct kui_options *o, uint64_t want) {
     if(!free_space_ok(want)) return KUI_BENCH_FAILED;
     if(!ensure_dir("0:/KUI") || !ensure_dir(SCRATCH_DIR)) return KUI_BENCH_FAILED;
     for(unsigned i = 0; i < o->chunk_count; ++i) {
@@ -213,20 +215,61 @@ static enum kui_bench_result bench_sd(const struct kui_options *o) {
     return KUI_BENCH_COMPLETE;
 }
 
+/* Sweeps transport x CRC around that, remounting between each, so comparing
+ * transports costs one boot instead of one card removal per setting. */
+static enum kui_bench_result bench_sd(const struct kui_options *o) {
+    uint64_t want = (uint64_t)o->sd_mib * MIB;
+    unsigned done_mask = 0;   /* actual (interface, crc) pairs already measured */
+    enum kui_bench_result last = KUI_BENCH_FAILED;
+    for(unsigned a = 0; a < o->sd_if_count; ++a) {
+        for(unsigned b = 0; b < o->sd_crc_count; ++b) {
+            unsigned want_if = o->sd_if[a];
+            bool crc = o->sd_crc[b];
+            int got = (int)want_if;
+            if(ops->reconnect) {
+                got = ops->reconnect(ops->ctx, want_if, crc);
+                if(got < 0) {
+                    ops->log("BENCH sd if=%s crc=%s skipped: card did not come back",
+                        want_if ? "sci" : "scif", crc ? "on" : "off");
+                    continue;
+                }
+                if((unsigned)got != want_if)
+                    /* kui_sd_connect fell back. Running anyway would file the
+                     * other transport's numbers under this one's name. */
+                    ops->log("BENCH sd if=%s skipped: fell back to %s",
+                        want_if ? "sci" : "scif", got ? "sci" : "scif");
+            }
+            unsigned bit = 1u << ((unsigned)got * 2 + (crc ? 1u : 0u));
+            if(done_mask & bit) continue;      /* same actual pair, already measured */
+            done_mask |= bit;
+            FATFS fs;
+            if(!kui_mount(&fs, ops->log)) { last = KUI_BENCH_FAILED; continue; }
+            ops->log("BENCH sd transport if=%s crc=%s", got ? "sci" : "scif", crc ? "on" : "off");
+            snprintf(transport, sizeof(transport), "if=%s crc=%s",
+                got ? "sci" : "scif", crc ? "on" : "off");
+            last = bench_sd_chunks(o, want);
+            f_mount(NULL, "0:", 0);
+            if(last == KUI_BENCH_STOPPED) return last;
+        }
+    }
+    return last;
+}
+
 /* --- entry ---------------------------------------------------------------- */
 
 enum kui_bench_result kui_bench(const struct kui_bench_ops *o, const struct kui_options *opt) {
-    if(!o || !o->cancelled || !o->now_us || !o->log || !opt || !opt->chunk_count)
+    if(!o || !o->cancelled || !o->now_us || !o->log || !opt || !opt->chunk_count ||
+       !opt->sd_if_count || !opt->sd_crc_count)
         return KUI_BENCH_FAILED;
     ops = o;
     kui_pattern(buffer, 0, sizeof(buffer));
     ops->log("BENCH: isolated measurements; each line is one component alone");
-    FATFS fs;
-    if(!kui_mount(&fs, ops->log)) return KUI_BENCH_FAILED;
+    snprintf(transport, sizeof(transport), "if=? crc=?");
+    /* Optical and hash touch no filesystem, so they run before any mount and
+     * are unaffected by the transport sweep that follows. */
     enum kui_bench_result rc = bench_optical(opt);
     if(rc == KUI_BENCH_COMPLETE) rc = bench_hash(opt->hash_mib);
     if(rc == KUI_BENCH_COMPLETE) rc = bench_sd(opt);
-    if(f_mount(NULL, "0:", 0) != FR_OK && rc == KUI_BENCH_COMPLETE) rc = KUI_BENCH_FAILED;
     if(rc == KUI_BENCH_STOPPED) ops->log("BENCH stopped; lines already printed are valid");
     ops->log("BENCH %s", rc == KUI_BENCH_COMPLETE ? "complete" : rc == KUI_BENCH_STOPPED ? "stopped" : "FAILED");
     return rc;
