@@ -169,6 +169,16 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
     return true;
 }
 
+/* Appends "word", comma-separated, never past cap. Written as a plain copy
+ * rather than snprintf(buf + strlen(buf), ...) because the compiler cannot
+ * prove that form leaves room for a %s and rejects it at -O2 -Werror. */
+static void append_word(char *dst, size_t cap, const char *word, bool first) {
+    size_t n = strlen(dst);
+    if(!first && n + 1 < cap) dst[n++] = ',';
+    for(size_t i = 0; word[i] && n + 1 < cap; ++i) dst[n++] = word[i];
+    dst[n] = 0;
+}
+
 void kui_options_log(const struct kui_options *o, kui_log_fn log) {
     char list[KUI_OPT_LIST_MAX * 5], *w = list;
     for(unsigned i = 0; i < o->chunk_count; ++i)
@@ -179,11 +189,9 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
         o->optical_fad, o->optical_sectors, o->yield_us);
     char ifs[16] = "", crcs[16] = "";
     for(unsigned i = 0; i < o->sd_if_count; ++i)
-        snprintf(ifs + strlen(ifs), sizeof(ifs) - strlen(ifs), "%s%s",
-            i ? "," : "", o->sd_if[i] ? "sci" : "scif");
+        append_word(ifs, sizeof(ifs), o->sd_if[i] ? "sci" : "scif", i == 0);
     for(unsigned i = 0; i < o->sd_crc_count; ++i)
-        snprintf(crcs + strlen(crcs), sizeof(crcs) - strlen(crcs), "%s%s",
-            i ? "," : "", o->sd_crc[i] ? "on" : "off");
+        append_word(crcs, sizeof(crcs), o->sd_crc[i] ? "on" : "off", i == 0);
     log("OPTIONS sd_if=%s sd_crc=%s", ifs, crcs);
     log("OPTIONS note=%s", o->note[0] ? o->note : "(none)");
 }
