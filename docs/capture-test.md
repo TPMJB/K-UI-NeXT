@@ -109,7 +109,10 @@ phase covers disc fingerprinting and filesystem/job preparation within capture.
    committed bytes before continuing. This prefix check is expected to take time.
 4. Let it finish. Capture is followed by a complete SD reread. The success line
    must say **SAVED DATA VERIFIED** and give the output `disc.gdi` path. A failure,
-   Stop, or **Capture written** alone is not completion.
+   Stop, or **Capture written** alone is not completion. If `KUI/redump.db` or
+   `KUI/tosec.db` is on the card, a `Reference check` line before the path says
+   how the finished capture compares with the known-good Redump/TOSEC CRCs
+   (`FULL TRACK MATCH` is the best result; no match is inconclusive, not a failure).
 5. Wait for the automatically saved report path and READY, then power off and
    retrieve the job's `manifest.json`, `disc.gdi`, and that diagnostic log.
    Diagnostics Y remains available for a manual report or retry.

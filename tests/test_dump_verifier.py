@@ -36,6 +36,44 @@ class DumpVerifierTests(unittest.TestCase):
         partial["tracks"][0]["sha256"]="1"*64
         with self.assertRaises(ValueError):v.compare_reference(results,partial)
 
+    def crc_only(self):
+        """The same dump as a schema 2 (CRC-only) manifest."""
+        m=copy.deepcopy(self.m);m["schema"]=2;m["hashes"]=["crc32"]
+        del m["saved_data_verified"]
+        for t in m["tracks"]: del t["sha256"]
+        return m
+
+    def test_schema2_crc_only(self):
+        self.m=self.crc_only();self.write()
+        results=v.verify(self.path)
+        self.assertEqual([r["sha256_recorded"] for r in results],[False,False])
+        self.assertEqual(len(results[0]["sha256"]),64)     # computed here for reference
+        self.assertEqual(v.compare_reference(results,self.m),(True,2))
+        # A reference that carries SHA-256 is still compared against the computed one.
+        ref=copy.deepcopy(self.m)
+        for r,t in zip(ref["tracks"],results): r["sha256"]=t["sha256"]
+        self.assertEqual(v.compare_reference(results,ref),(True,2))
+        ref["tracks"][0]["sha256"]="1"*64
+        with self.assertRaises(ValueError):v.compare_reference(results,ref)
+        # A tampered track fails on CRC32 alone.
+        p=self.path/"track01.bin";data=p.read_bytes();p.write_bytes(b"!"+data[1:])
+        with self.assertRaises(ValueError):v.verify(self.path)
+
+    def test_schema2_refuses_claims_and_wrong_shape(self):
+        base=self.crc_only()
+        for label,change in (("claim",lambda m:m.update(saved_data_verified=True)),
+                             ("reference",lambda m:m.update(reference="not compared")),
+                             ("hashes",lambda m:m.update(hashes=["crc32","sha256"])),
+                             ("nohashes",lambda m:m.pop("hashes")),
+                             ("incomplete",lambda m:m.update(complete=False)),
+                             ("sha",lambda m:m["tracks"][0].update(sha256="0"*64)),
+                             ("schema3",lambda m:m.update(schema=3))):
+            self.m=copy.deepcopy(base);change(self.m);self.write()
+            with self.assertRaises(ValueError,msg=label):v.verify(self.path)
+        # Schema 1 must still demand what it always did.
+        self.m=copy.deepcopy(base);self.m["schema"]=1;self.write()
+        with self.assertRaises(ValueError):v.verify(self.path)
+
     def test_corruption_and_incomplete(self):
         p=self.path/"track01.bin";data=p.read_bytes();p.write_bytes(b"!"+data[1:])
         with self.assertRaises(ValueError):v.verify(self.path)

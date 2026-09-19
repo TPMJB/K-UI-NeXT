@@ -3,6 +3,7 @@
 #define KUI_CAPTURE_H
 #include "kui/hash.h"
 #include "kui/probe.h"
+#include "kui/timing.h"
 #define KUI_CAPTURE_PROFILE "gdi-raw2352-typegap150-v1"
 #define KUI_CAPTURE_CHUNK 32u
 #define KUI_CAPTURE_RETRIES 10u
@@ -21,6 +22,40 @@ struct kui_capture_progress {
     uint32_t fad, retries;
     uint64_t done, total, committed, elapsed_ms;
 };
+/* Runtime choices for the capture engine. All-zero, or no options at all, is the
+ * engine exactly as it has always been: SHA-256 and CRC32 per track, every saved
+ * byte re-read after capture, a full prefix check on resume, no sampling. They
+ * exist so the alternatives can be measured (bench.cfg `capture_*`) before any
+ * of them is chosen as a default. */
+struct kui_capture_options {
+    /* Record CRC32 only, no SHA-256. Applies to NEW jobs; a job keeps the mode it
+     * started with (it is stored in the checkpoint), because SHA state cannot be
+     * resumed from a digest. A CRC-only job writes a schema 2 manifest. */
+    bool crc_only;
+    /* Do not re-read every saved byte after capture. Honoured for CRC-only jobs
+     * (a SHA-256 job's schema 1 manifest promises a read-back, so it always does
+     * one). The Verify action always re-reads. The report then says CAPTURED,
+     * never SAVED DATA VERIFIED. */
+    bool skip_end_readback;
+    /* On resume, check only file sizes instead of re-reading the committed bytes;
+     * the running CRC32 continues from the checkpoint. CRC-only jobs only. */
+    bool resume_size_only;
+    /* While capturing, re-read and byte-compare 1 chunk in this many right after
+     * it is written; a mismatch stops the capture. 0 = off. */
+    unsigned sample_every;
+    /* Benchmark run: publish no metadata and skip the reference check. */
+    bool bench;
+};
+/* What a run did, for the benchmark. Optional; filled when the run ends. */
+struct kui_capture_stats {
+    uint64_t phase_us[KUI_TIME_PHASES];             /* wall time per phase */
+    uint64_t capture_bucket_us[KUI_TIME_BUCKETS];   /* the capture phase by stage */
+    uint64_t bytes;         /* saved bytes when the run ended */
+    uint32_t sampled;       /* chunks re-read and compared while capturing */
+    bool verified;          /* every saved byte was re-read and matched this run */
+    bool crc_only;          /* the job's hash mode */
+    char job_dir[80];       /* where the job lives, so a benchmark can delete it */
+};
 struct kui_capture_ops {
     void *ctx;
     enum kui_read_result (*read)(void *, uint32_t fad, unsigned sectors, uint8_t *out);
@@ -33,12 +68,15 @@ struct kui_capture_ops {
     uint64_t (*now_us)(void *);
     /* Optional adapter profiling label; never changes the read policy. */
     void (*read_phase)(void *, bool capturing);
+    const struct kui_capture_options *options;   /* NULL = defaults */
+    struct kui_capture_stats *stats;             /* NULL = not wanted */
 };
 struct kui_checkpoint {
     uint64_t sequence;
     uint8_t identity[32];
     uint32_t count, retries;
     char build[13];
+    bool crc_only;   /* SHA-256 not recorded; the per-track sha256 fields are zero */
     struct { uint32_t sectors, crc32; uint8_t sha256[32]; } track[99];
 };
 void kui_checkpoint_encode(const struct kui_checkpoint *state, uint8_t record[KUI_CHECKPOINT_BYTES]);
@@ -49,4 +87,9 @@ bool kui_checkpoint_decode(const uint8_t record[KUI_CHECKPOINT_BYTES], const str
  */
 enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     const struct kui_capture_ops *ops, enum kui_capture_mode mode);
+/* Benchmark: capture `sectors` sectors from `fad` as one track (data with EDC
+ * checking, or audio) through the real engine, publishing nothing. NEW makes a
+ * job (stats->job_dir); RESUME re-opens it, which times the resume check. */
+enum kui_capture_result kui_capture_bench(const struct kui_capture_ops *ops,
+    uint32_t fad, unsigned sectors, bool audio, enum kui_capture_mode mode);
 #endif

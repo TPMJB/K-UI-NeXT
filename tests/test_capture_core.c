@@ -53,6 +53,20 @@ int main(void) {
     kui_checkpoint_encode(&a,record);put32(record+96+2*40,1);seal(record);assert(!kui_checkpoint_decode(record,&plan,a.identity,&b));
     kui_checkpoint_encode(&a,record);put32(record+96,351);seal(record);assert(!kui_checkpoint_decode(record,&plan,a.identity,&b));
     kui_checkpoint_encode(&a,record);record[90]=1;seal(record);assert(!kui_checkpoint_decode(record,&plan,a.identity,&b));
-    puts("PASS SHA-256 vectors/chunks, CD EDC, GDI gap/address plan, checkpoint identity/bounds/order");
+    /* CRC-only jobs: the flag round-trips, records carry no SHA, and anything that
+     * contradicts it or sets an unknown flag is refused. Records written before
+     * the flag existed have zero there and still mean "SHA-256 recorded". */
+    struct kui_checkpoint c=a;c.crc_only=true;memset(c.track[0].sha256,0,32);
+    kui_checkpoint_encode(&c,record);
+    assert(kui_checkpoint_decode(record,&plan,c.identity,&b) && b.crc_only && b.track[0].crc32==123);
+    kui_checkpoint_encode(&a,record);
+    assert(kui_checkpoint_decode(record,&plan,a.identity,&b) && !b.crc_only && b.track[0].sha256[0]==2);
+    kui_checkpoint_encode(&c,record);record[96+8]=1;seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
+    kui_checkpoint_encode(&c,record);put32(record+76,2);seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
+    kui_checkpoint_encode(&c,record);put32(record+76,3);seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
+    kui_checkpoint_encode(&c,record);record[80]=1;seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
+    kui_checkpoint_encode(&a,record);put32(record+76,1);seal(record);   /* SHA present but flagged CRC-only */
+    assert(!kui_checkpoint_decode(record,&plan,a.identity,&b));
+    puts("PASS SHA-256 vectors/chunks, CD EDC, GDI gap/address plan, checkpoint identity/bounds/order, CRC-only flag");
     return 0;
 }

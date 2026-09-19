@@ -108,7 +108,53 @@ the PC verifier requires both. Existing final metadata must match and is never
 silently overwritten. Verify performs no writes.
 
 `SAVED DATA VERIFIED` establishes saved-versus-captured consistency. It does not
-mean an independent disc-reference match. Python's `hashlib` and `zlib` recompute
+mean an independent disc-reference match.
+
+**Schema 2 and the capture options.** A job records SHA-256 and CRC32 per track
+(schema 1, as always) unless it was started CRC-only (`capture_hash=crc32` in
+`KUI/bench.cfg`), in which case its checkpoints carry a flag (header bytes 76-79,
+bit 0, zero in every older record) and its manifest is schema 2: `"hashes":["crc32"]`,
+no `sha256` fields, and **no verification claim** (no `saved_data_verified`, no
+`reference`). The claim is left out on purpose: published metadata is never
+overwritten, so a claim in it could not be upgraded by a later Verify, and how a
+run verified is recorded in that run's report instead. A job keeps the mode it
+started with, because SHA-256 state cannot be resumed from a digest. `verify_dump.py`
+accepts both schemas, always recomputes CRC32 (and SHA-256, for reference) from the
+files, and rejects a schema 2 manifest that carries a claim or a SHA field.
+
+Related options, all defaulting to the old behaviour: `end_readback=off` skips the
+re-read after capture (CRC-only jobs only; the report then says `CAPTURED`, never
+`SAVED DATA VERIFIED`, and Verify still works afterwards); `resume_check=size` checks
+file sizes on resume instead of re-reading the committed bytes and continues the
+CRC32 from the checkpoint (CRC-only jobs only; it catches a wrong size but **not** a
+corrupted prefix, which only the end read-back or the PC verifier will find);
+`sample_readback=N` re-reads and byte-compares 1 chunk in N while capturing, so a
+bad write stops the capture where it happens.
+
+**Reference check.** If `KUI/redump.db` and/or `KUI/tosec.db` are on the card
+(`data/known-dumps/`; the SD update includes them), the finished capture's
+per-track sizes and CRC32s, already in the checkpoint, are compared with those
+catalogues in one streaming pass over two small files, about a second whatever
+the disc's size. Nothing is re-read from the saved tracks. The report says
+`Reference check (Redump|TOSEC): <grade>` and names the matching entry:
+
+| Grade | Meaning |
+|---|---|
+| `FULL TRACK MATCH` | Every track equals one catalogue entry, size and CRC32. |
+| `DATA TRACKS MATCH` | Every data track matches; an audio track differs or is unlisted. |
+| `IDENTIFIED BY DATA TRACK` | The data tracks the entry lists match, but it lists fewer than the capture has. The bundled Redump catalogue lists one identifying track per game. |
+| `PARTIAL MATCH ONLY` | Some data tracks match. |
+| `NO CATALOGUE MATCH (INCONCLUSIVE)` | Another revision, a disc the catalogue lacks, a track-boundary convention, or a read error all look the same. Not a failure. |
+
+A match is stronger than a re-read: it shows the bytes equal the canonical dump,
+where a re-read only shows the card holds what the drive returned. It never
+changes whether the capture succeeded, and with no catalogue on the card the
+report says `No independent reference compared`. Both catalogues are consulted
+and the better grade is reported. The format is one header line
+(`DREAMSHELL_REDUMP_CRC_V1`) then `G<TAB>tracks<TAB>name`, `T<TAB>number<TAB>bytes<TAB>crc32`
+and `E` per game.
+
+Python's `hashlib` and `zlib` recompute
 the hashes independently in `verify_dump.py`, validate the GDI/manifest profile,
 and distinguish complete, partial and mismatching supplied references.
 

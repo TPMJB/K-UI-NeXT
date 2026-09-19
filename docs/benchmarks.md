@@ -209,7 +209,63 @@ What the outcomes mean:
   makes reads slower than writes, which mostly costs you on resume, where
   prefix verification reads back everything already written.
 
+## The experiment layer
+
+[experiment-plan.md](experiment-plan.md) is the plan: what is known, which
+question each run settles, and what each outcome means. This section is the
+reference for what was added to the bench to carry it out. **All of it is off by
+default.** With no new keys in `bench.cfg` the bench runs the same sections in
+the same order as before and adds only the `BENCH cpu` and `BENCH lat` lines
+described below.
+
+| Key | What it does |
+|---|---|
+| `ui_hz=full,8,2,0` | One full pass of the selected sections per value: the UI is capped to that many redraws per second while it measures. `full` is today's loop. Also applies to real captures. |
+| `sections=optical,hash,sd,sweep` | Which sections run. |
+| `sweep_chunks`, `sweep_fads`, `sweep_gap_us`, `sweep_service_us`, `sweep_sectors`, `sweep_verify` | The optical sweep: read size, start sector, idle gap after each command, spin after each firmware poll, and a byte-identity check across read sizes. |
+| `sd_bytes=65536,131072,...` | Extra SD write sizes in bytes, to test alignment with the 128 KiB clusters. |
+
+| `sections=capture`, `capture_hash`, `end_readback`, `resume_check`, `sample_readback`, `capture_sectors`, `capture_fad`, `capture_type` | The **real capture engine**, at every combination, on the real disc, with each job deleted afterwards. The same keys are options of a real capture (its first value of each list). |
+
+New lines (formats and how to read them: experiment-plan.md section 5):
+
+```
+BENCH pass 2/4 uihz=8
+BENCH cpu sha256 uihz=8 wall=4580 wk=4390 ui=175 oth=12 ui_pct=3.8
+BENCH lat write chunk=128 e=0 n=27 min=.. p50=.. p95=.. max=.. slow=0 slow_ms=0
+BENCH sweep uihz=1 fad=45150 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=.. min=.. max=.. bytes=.. us=.. kib_s=..
+BENCH poll fad=45150 c=32 n=a/b/c/d/e
+BENCH verify fad=45150 chunk=64 sectors=512 crc32=........ ref=........ OK
+BENCH capture uihz=full hash=crc32 end=off sample=0 sectors=4096 result=ok bytes=.. us=.. kib_s=..
+BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=.. sampled=0 verified=0
+BENCH capture parts hash=crc32 end=off sample=0 ms disc=.. edc=.. write=.. read=.. sha=.. crc=.. ckpt=..
+BENCH resume uihz=full hash=crc32 check=size sectors=4096 result=ok bytes=.. us=.. kib_s=..
+```
+`capture` is the capture phase alone (the rip rate); `total` adds the end read-back
+if one ran (the cost of a finished dump); `parts` is where the capture phase went;
+`resume` times the prefix check on the job just made. A run's setup (three sample
+reads) is outside every rate.
+
+(Illustrative shapes, not measurements.) The census is the important one: every
+rate in this file is bytes over wall-clock time on a single CPU that the UI
+thread also uses, so `ui_pct` says how much of each measurement the stage did
+not have. Captures print one for the whole operation as well.
+
+Hooks added for it: `src/dreamcast/main.c` (the redraw cap, decided by
+`include/kui/ui_rate.h`; the per-thread CPU snapshot), `src/dreamcast/disc.c`
+(poll-duration buckets in the OPTICAL report, and the bench-only probe read with
+its own guarded buffer), `src/dreamcast/capture.c` (the whole-operation census).
+`src/core/capture.c` and `kui_disc_read_raw` are unchanged. The three firmware
+callbacks that read uses (`submit`, `poll`, `pause_worker`) gained counters, a
+few instructions per call, which is what feeds the poll buckets in captures. Tests: `tests/test_ui_rate.c` and the shipped-config check in
+`tests/test_options.c` run in `make test`; `tests/bench_image.c` drives the
+whole bench against a fake drive and a real FAT32/exFAT image
+(`make test-images`).
+
 ## What to test first
+
+> The experiment plan supersedes this list for capture speed: start with its
+> Trip 1. The list below remains the right order for the SD experiments alone.
 
 1. Defaults, twice. This gives you all four ceilings and a variance number.
 2. `chunks=32,64,128,256,512` with `expand=on`, `sd_mib=16`. This is the

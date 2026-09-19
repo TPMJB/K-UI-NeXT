@@ -32,9 +32,18 @@ def load_json(path):
 def verify(directory):
     directory = Path(directory)
     m = load_json(directory / "manifest.json")
-    require(isinstance(m, dict) and m.get("schema") == 1, "Unsupported manifest schema")
-    require(m.get("complete") is True and m.get("saved_data_verified") is True,
-            "Capture is incomplete or has not passed console readback")
+    require(isinstance(m, dict) and m.get("schema") in (1, 2), "Unsupported manifest schema")
+    schema = m["schema"]
+    if schema == 1:
+        require(m.get("complete") is True and m.get("saved_data_verified") is True,
+                "Capture is incomplete or has not passed console readback")
+    else:
+        # Schema 2 (CRC-only captures) makes no verification claim of its own: how
+        # the console verified is in its report, and this tool recomputes from the files.
+        require(m.get("complete") is True and m.get("hashes") == ["crc32"],
+                "Capture is incomplete or records unexpected hashes")
+        require("saved_data_verified" not in m and "reference" not in m,
+                "Schema 2 must not embed a verification claim")
     require(m.get("profile") == PROFILE and m.get("sector_bytes") == 2352, "Unsupported GDI profile")
     require(isinstance(m.get("identity"), str) and re.fullmatch(r"[0-9a-f]{64}", m["identity"]), "Invalid disc identity")
     tracks = m.get("tracks")
@@ -60,7 +69,10 @@ def verify(directory):
         require(t.get("file") == expected_name, "Unsafe or inconsistent track filename")
         require(t["bytes"] == (t["end_fad"] - t["start_fad"]) * 2352 <= 0xFFFFFFFF, "Invalid track byte count")
         require(isinstance(t.get("crc32"), str) and re.fullmatch(r"[0-9a-f]{8}", t["crc32"]), "Invalid CRC32")
-        require(isinstance(t.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", t["sha256"]), "Invalid SHA-256")
+        if schema == 1:
+            require(isinstance(t.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", t["sha256"]), "Invalid SHA-256")
+        else:
+            require("sha256" not in t, "Schema 2 tracks record CRC32 only")
         file = directory / expected_name
         require(file.is_file() and not file.is_symlink(), f"Missing/unsafe {expected_name}")
         require(file.stat().st_size == t["bytes"], f"{expected_name}: size mismatch")
@@ -71,8 +83,12 @@ def verify(directory):
                 digest.update(block)
                 crc = zlib.crc32(block, crc)
         crc_text, sha_text = f"{crc:08x}", digest.hexdigest()
-        require(crc_text == t["crc32"] and sha_text == t["sha256"], f"{expected_name}: saved-data hash mismatch")
-        results.append({"file": expected_name, "bytes": t["bytes"], "crc32": crc_text, "sha256": sha_text})
+        require(crc_text == t["crc32"] and (schema == 2 or sha_text == t["sha256"]),
+                f"{expected_name}: saved-data hash mismatch")
+        # SHA-256 is always computed here (it is free on a PC); it is compared only
+        # when the manifest recorded one.
+        results.append({"file": expected_name, "bytes": t["bytes"], "crc32": crc_text, "sha256": sha_text,
+                        "sha256_recorded": schema == 1})
         lines.append(f"{i} {t['start_fad'] - 150} {t['control']} 2352 {expected_name} 0")
     require(tracks[0]["session"] == 0 and tracks[0]["start_fad"] == 150, "Invalid low-density start")
     high = next((t for t in tracks if t["session"] == 1), None)
@@ -112,8 +128,10 @@ def main():
     try:
         results = verify(args.directory)
         for t in results:
-            print(f"PASS {t['file']} {t['bytes']} bytes CRC32={t['crc32']} SHA256={t['sha256']}")
-        print("SAVED DATA VERIFIED: sizes, CRC32, SHA-256 and GDI layout agree")
+            note = "" if t["sha256_recorded"] else " (computed here; not in the manifest)"
+            print(f"PASS {t['file']} {t['bytes']} bytes CRC32={t['crc32']} SHA256={t['sha256']}{note}")
+        print("SAVED DATA VERIFIED: sizes, CRC32, SHA-256 and GDI layout agree" if results[0]["sha256_recorded"]
+              else "SAVED DATA VERIFIED: sizes, CRC32 and GDI layout agree")
         if args.reference:
             full, matched = compare_reference(results, load_json(args.reference))
             print(f"REFERENCE {'MATCH' if full else 'PARTIAL MATCH ONLY'}: {matched}/{len(results)} tracks from {args.reference}")

@@ -43,3 +43,48 @@ yield_us=2000
 
 # Free text for the report: card, drive, anything that could confound a run.
 note=
+
+# ---------------------------------------------------------------------------
+# Experiment keys. Everything below is OFF by default: uncomment to use.
+# docs/experiment-plan.md says what to run and how to read it; ready-made files
+# for each step are in docs/bench-cfgs/.
+#
+# UI redraws per second while an operation runs, one full pass of the selected
+# sections per value ('full' = today's unthrottled loop; 0..30 otherwise). The
+# UI thread shares the one CPU with the measurement, so every result depends on
+# it; each pass is tagged uihz= in its lines and BENCH cpu lines report the
+# UI's share. It also applies to real captures. 0 freezes the screen while
+# busy (B still stops). Up to 4 values.
+#ui_hz=full,8,2,0
+#
+# Which sections run. Default optical,hash,sd. 'sweep' is the optical sweep.
+#sections=optical,hash,sd,sweep
+#
+# The optical sweep (needs 'sweep' in sections and sweep_chunks set): reads
+# sweep_sectors sectors at every combination of the lists below.
+#sweep_chunks=8,16,32,64,128   # sectors per read command, 1..128, up to 8
+#sweep_fads=45150,150000       # start sectors, up to 4 (default: optical_fad)
+#sweep_gap_us=0,2000,10000     # CPU-busy spin after each command, up to 4
+#sweep_service_us=0,1000,4000  # spin after each firmware poll inside a command
+#sweep_sectors=2048            # per point; 32..65536
+#sweep_verify=on               # prove every read size returns identical bytes
+#                               (data tracks only; turn off for audio)
+#
+# Extra SD write sizes in BYTES (whole 512-byte blocks, 4096..1204224, up to 6),
+# run in addition to chunks= to test alignment with the 128 KiB clusters.
+#sd_bytes=65536,131072,262144,524288
+#
+# Capture engine choices. These are real options of the capture engine: a REAL
+# capture uses the FIRST value of each list; the bench's `capture` section runs
+# the engine at every combination. Defaults are the engine as it has always been.
+#capture_hash=both,crc32      # both = SHA-256 + CRC32; crc32 = CRC32 only (a job keeps
+#                               the mode it started with; schema 2 manifest)
+#end_readback=on,off          # re-read every saved byte after capture. off is for
+#                               crc32 jobs only; Verify always re-reads
+#resume_check=full,size       # size: sizes only, crc32 jobs only. It cannot see a
+#                               corrupted prefix; the end read-back or PC verifier will
+#sample_readback=0,32         # re-read + compare 1 chunk in N while capturing
+#capture_sectors=4096         # bench: sectors per capture run
+#capture_fad=45150            # bench: where it starts (default optical_fad)
+#capture_type=data            # data (EDC checked) or audio
+#sections=capture             # run the capture section

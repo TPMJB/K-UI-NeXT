@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
+#include "kui/ui_rate.h"
 #include "kui/report.h"
 #include <kos.h>
 #include <dc/minifont.h>
@@ -31,6 +32,31 @@ static unsigned line_count;
 static bool log_truncated, busy, cancel_requested, saving_report;
 static unsigned pending;
 static char report[LOG_LINES * LINE_BYTES + 256];
+/* The UI thread is main(). It shares the one CPU with the I/O worker, and a
+ * full-screen software redraw plus vid_waitvbl (a busy-wait in this KOS) is a
+ * lot of CPU. The cap below lets an operation trade screen updates for speed;
+ * KUI_OPT_UI_FULL is the loop exactly as it always was. */
+static kthread_t *ui_thread;
+static volatile unsigned ui_hz_busy = KUI_OPT_UI_FULL;
+void kui_ui_set_hz(unsigned hz) { ui_hz_busy = hz; }
+
+/* Per-thread CPU time in ms from the scheduler. A running thread's current
+ * slice is not in its total until the next switch, so add it here. */
+static uint64_t cpu_ms(kthread_t *t, uint64_t now_ms) {
+    uint64_t ms = thd_get_cpu_time(t);
+    if(t == thd_get_current()) ms += now_ms - t->cpu_time.scheduled;
+    return ms;
+}
+void kui_cpu_census_mark(struct kui_cpu_census *out) {
+    irq_mask_t irq = irq_disable();   /* one consistent snapshot: no switch mid-sum */
+    uint64_t ms = timer_ms_gettime64();
+    kthread_t *self = thd_get_current();
+    out->wall_us = timer_us_gettime64();
+    out->worker_ms = cpu_ms(self, ms);
+    out->ui_ms = ui_thread ? cpu_ms(ui_thread, ms) : 0;
+    out->total_ms = thd_get_total_cpu_time() + (ms - self->cpu_time.scheduled);
+    irq_restore(irq);
+}
 #ifdef KUI_SD_RUNTIME
 static struct kui_capture_progress capture_status;
 static uint64_t rate_at,rate_bytes;
@@ -119,6 +145,7 @@ static void *worker(void *unused) {
             if(action == 7) {
                 kui_memory_log("bench start");
                 enum kui_bench_result result=kui_bench_start();
+                kui_ui_set_hz(KUI_OPT_UI_FULL);   /* the cap is for the measurement, not the report save */
                 kui_memory_log("bench end");
                 const char *outcome=result==KUI_BENCH_COMPLETE?"complete":result==KUI_BENCH_STOPPED?"stopped":"failed";
                 kui_log("Bench result: %s",outcome);
@@ -128,6 +155,7 @@ static void *worker(void *unused) {
             if(action >= 4 && action <= 6) {
                 kui_memory_log("capture/verify start");
                 enum kui_capture_result result=kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID);
+                kui_ui_set_hz(KUI_OPT_UI_FULL);   /* the cap is for the capture, not the report save */
                 kui_memory_log("capture/verify end");
                 const char *outcome=result==KUI_CAPTURE_COMPLETE?"complete":result==KUI_CAPTURE_STOPPED?"stopped":"failed";
                 kui_log("Capture result: %s",outcome);
@@ -143,6 +171,7 @@ static void *worker(void *unused) {
 #endif
         mutex_lock(&lock);
         busy = false;
+        ui_hz_busy = KUI_OPT_UI_FULL;   /* no operation leaves its cap behind for the next */
         mutex_unlock(&lock);
     }
     return NULL;
@@ -230,6 +259,7 @@ static bool boot_cancelled(void) {
 #endif
 
 int main(void) {
+    ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
     kui_log("Running " KUI_ROLE " build " KUI_BUILD_ID);
     kui_log("Video: %ux%u %s %s, buffered",
@@ -275,6 +305,8 @@ int main(void) {
     uint64_t next_memory_sample=timer_ms_gettime64()+1000;
 #endif
     unsigned previous = 0, scroll = 0;
+    uint64_t last_draw = 0;
+    bool was_busy = false;
     unsigned page=0;
 #ifdef KUI_SD_RUNTIME
     page=1;
@@ -304,6 +336,7 @@ int main(void) {
         if((pressed & CONT_DPAD_UP) && scroll + (page?15:VISIBLE_LINES) < line_count) ++scroll;
         if((pressed & CONT_DPAD_DOWN) && scroll) --scroll;
         if(pressed & CONT_START) scroll = 0;
+        bool is_busy = busy;
         mutex_unlock(&lock);
 #ifdef KUI_SD_RUNTIME
         if(pressed & KUI_BUTTON_MSTATS) {kui_memory_log("L trigger");scroll=0;}
@@ -311,7 +344,18 @@ int main(void) {
             memory_valid=kui_memory_snapshot(&memory_status);next_memory_sample=timer_ms_gettime64()+1000;
         }
 #endif
-        draw(scroll,page);
+        /* Idle: always redraw, as before. Busy: at most ui_hz_busy redraws per
+         * second, plus one at each start and end so the screen is never stale
+         * about what state it is in. The controller is polled every loop either
+         * way, so B still stops an operation whatever the cap. Keyed on when
+         * the last draw happened, not on a precomputed deadline, so a cap that
+         * changes mid-operation (the bench changes it between passes) applies at
+         * once instead of waiting out the schedule the old value set. */
+        unsigned hz = ui_hz_busy;
+        uint64_t t = timer_ms_gettime64();
+        bool due = kui_ui_redraw_due(is_busy, was_busy, hz, t, last_draw);
+        was_busy = is_busy;
+        if(due) {draw(scroll,page);last_draw = t;}
         thd_sleep(33);
     }
 }

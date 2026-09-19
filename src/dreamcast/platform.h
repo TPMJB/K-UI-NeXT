@@ -25,6 +25,18 @@ void kui_disc_timing_phase(void *ctx,bool capturing);
 void kui_disc_timing_report(void);
 /* PIO service quantum for pause_worker; 0 restores the built-in default. */
 void kui_disc_set_yield_us(unsigned us);
+/* Bench-only optical read for the sweep (see kui/bench.h). */
+enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors,unsigned service_us,
+    const uint8_t **data,struct kui_probe_stats *stats);
+/* Cap UI redraws per second while an operation runs. KUI_OPT_UI_FULL restores
+ * the unthrottled loop. Input is still polled at the same rate, so B still stops. */
+void kui_ui_set_hz(unsigned hz);
+/* Scheduler CPU accounting snapshot: how the CPU split between the worker, the
+ * UI thread and everything else. Called from the worker thread. */
+void kui_cpu_census_mark(struct kui_cpu_census *out);
+/* Bench: the real capture engine on `sectors` sectors from `fad` (see kui_capture_bench). */
+enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool audio,
+    enum kui_capture_mode mode,const struct kui_capture_options *options,struct kui_capture_stats *stats);
 /* src/dreamcast/bench.c: options loaded from /KUI/bench.cfg and the bench entry. */
 extern struct kui_options kui_options;
 bool kui_options_refresh(void);

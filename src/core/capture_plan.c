@@ -38,6 +38,7 @@ void kui_checkpoint_encode(const struct kui_checkpoint *s,uint8_t b[KUI_CHECKPOI
     put32(b+16,(uint32_t)s->sequence);put32(b+20,(uint32_t)(s->sequence>>32));
     memcpy(b+24,s->identity,32);put32(b+56,s->count);put32(b+60,s->retries);
     memcpy(b+64,s->build,12);
+    put32(b+76,s->crc_only?1u:0u);   /* flags; bit 0 = SHA-256 not recorded. 0 in every older record. */
     for(unsigned i=0;i<s->count && i<99;i++) {
         uint8_t *p=b+96+i*40;
         put32(p,s->track[i].sectors);put32(p+4,s->track[i].crc32);memcpy(p+8,s->track[i].sha256,32);
@@ -49,14 +50,16 @@ bool kui_checkpoint_decode(const uint8_t b[KUI_CHECKPOINT_BYTES],const struct ku
     if(!p || !identity || !out || !p->count || p->count>99 || memcmp(b,"KUICKP1\0",8) ||
        get32(b+8)!=1 || get32(b+12)!=KUI_CHECKPOINT_BYTES || get32(b+56)!=p->count ||
        memcmp(b+24,identity,32) || get32(b+4092)!=kui_crc32(0,b,4092)) return false;
-    for(unsigned i=76;i<96;i++) if(b[i]) return false;
+    uint32_t flags=get32(b+76);
+    if(flags&~1u) return false;                       /* unknown flag: refuse rather than misread */
+    for(unsigned i=80;i<96;i++) if(b[i]) return false;
     for(unsigned i=96+p->count*40;i<4092;i++) if(b[i]) return false;
     struct kui_checkpoint s={.count=p->count,.retries=get32(b+60)};
     s.sequence=(uint64_t)get32(b+16)|((uint64_t)get32(b+20)<<32);
     if(!s.sequence || s.sequence==UINT64_MAX) return false;
     for(unsigned i=0;i<12;i++) if(!((b[64+i]>='0'&&b[64+i]<='9') ||
                                    (b[64+i]>='a'&&b[64+i]<='f'))) return false;
-    memcpy(s.build,b+64,12);memcpy(s.identity,identity,32);
+    memcpy(s.build,b+64,12);memcpy(s.identity,identity,32);s.crc_only=flags&1u;
     bool incomplete=false;
     for(unsigned i=0;i<s.count;i++) {
         const uint8_t *entry=b+96+i*40;
@@ -64,6 +67,7 @@ bool kui_checkpoint_decode(const uint8_t b[KUI_CHECKPOINT_BYTES],const struct ku
         if(count>expected || (incomplete && count)) return false;
         if(count<expected) incomplete=true;
         if(!count) for(unsigned j=4;j<40;j++) if(entry[j]) return false;
+        if(s.crc_only) for(unsigned j=8;j<40;j++) if(entry[j]) return false;   /* no SHA to record */
         s.track[i].sectors=count;s.track[i].crc32=get32(entry+4);memcpy(s.track[i].sha256,entry+8,32);
     }
     *out=s;return true;

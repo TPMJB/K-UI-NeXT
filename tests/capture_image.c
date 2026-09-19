@@ -128,6 +128,14 @@ static void export_all(const char *target) {
     }
     assert(f_closedir(&dirs)==FR_OK);
 }
+/* Copy a host file (a small catalogue) onto the card, creating KUI/ if needed.
+ * FatFs does the write, so it works on exFAT as well as FAT32. */
+static void put_file(const char *host,const char *card) {
+    static uint8_t data[65536];FILE *in=fopen(host,"rb");assert(in);
+    size_t n=fread(data,1,sizeof(data),in);assert(!ferror(in) && n<sizeof(data));assert(fclose(in)==0);
+    FRESULT r=f_mkdir("0:/KUI");assert(r==FR_OK || r==FR_EXIST);
+    assert(kui_write_new_file(card,data,n,log_line));
+}
 static void flip_byte(const char *path,FSIZE_t pos) {
     FIL f;UINT done;uint8_t byte;
     assert(f_open(&f,path,FA_READ|FA_WRITE)==FR_OK && f_lseek(&f,pos)==FR_OK);
@@ -160,8 +168,23 @@ static void mutate(const char *kind) {
         }
     } else assert(!"Unknown mutation");
 }
+/* Engine options from KUI_TEST_OPTS, e.g. "crc32,noend,size,sample=3". */
+static struct kui_capture_options test_options(void) {
+    struct kui_capture_options o={0};const char *env=getenv("KUI_TEST_OPTS");
+    if(!env) return o;
+    o.crc_only=strstr(env,"crc32")!=NULL;o.skip_end_readback=strstr(env,"noend")!=NULL;
+    o.resume_size_only=strstr(env,"size")!=NULL;
+    const char *sample=strstr(env,"sample=");if(sample) o.sample_every=(unsigned)atoi(sample+7);
+    return o;
+}
+static void print_stats(const struct kui_capture_stats *st) {
+    printf("STATS verified=%d crc_only=%d sampled=%u bytes=%llu setup_us=%llu resume_us=%llu capture_us=%llu verify_us=%llu job=%s\n",
+        st->verified,st->crc_only,(unsigned)st->sampled,(unsigned long long)st->bytes,
+        (unsigned long long)st->phase_us[KUI_TIME_SETUP],(unsigned long long)st->phase_us[KUI_TIME_RESUME],
+        (unsigned long long)st->phase_us[KUI_TIME_CAPTURE],(unsigned long long)st->phase_us[KUI_TIME_VERIFY],st->job_dir);
+}
 int main(int argc,char **argv) {
-    if(argc<3 || argc>4) return 2;
+    if(argc<3 || argc>5) return 2;
     struct stat st;if(lstat(argv[1],&st) || !S_ISREG(st.st_mode) || st.st_size%512) return 2;
     test.image=fopen(argv[1],"r+b");if(!test.image) return 2;test.blocks=(uint64_t)st.st_size/512;
     test.fault=argc>3?argv[3]:"none";
@@ -170,18 +193,30 @@ int main(int argc,char **argv) {
         {.tracks={{3,4,45150,50000},{4,0,50000,50400},{5,0,50400,51000},{6,4,51000,51813}},.count=4} };
     assert(kui_plan_tracks(sessions,&test.plan));
     int result=0;
-    if(!strcmp(argv[2],"export") || !strcmp(argv[2],"mutate") || !strcmp(argv[2],"seed")) {
+    if(!strcmp(argv[2],"bench")) {   /* bench new|resume <sectors>: the benchmark entry point, real engine */
+        assert(argc==5);
+        struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
+        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,&opts,&stats};
+        enum kui_capture_result r=kui_capture_bench(&ops,45150,(unsigned)atoi(argv[4]),false,
+            !strcmp(argv[3],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_NEW);
+        printf("RESULT %u\n",r);print_stats(&stats);
+        assert(fclose(test.image)==0);return r==KUI_CAPTURE_COMPLETE?0:1;
+    }
+    if(!strcmp(argv[2],"export") || !strcmp(argv[2],"mutate") || !strcmp(argv[2],"seed") || !strcmp(argv[2],"put")) {
         FATFS fs;assert(kui_mount(&fs,log_line));
-        if(!strcmp(argv[2],"export")) {assert(argc==4);export_all(argv[3]);}
+        if(!strcmp(argv[2],"put")) {assert(argc==5);put_file(argv[3],argv[4]);}
+        else if(!strcmp(argv[2],"export")) {assert(argc==4);export_all(argv[3]);}
         else if(!strcmp(argv[2],"mutate")) {assert(argc==4);mutate(argv[3]);}
         else assert(kui_write_new_file("0:/keep.txt","KEEP THIS FILE\n",15,log_line));
         assert(f_mount(NULL,"0:",0)==FR_OK);
     } else {
         enum kui_capture_mode mode=!strcmp(argv[2],"new")?KUI_CAPTURE_NEW:
             !strcmp(argv[2],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_VERIFY;
-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL};
+        struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
+        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,&opts,&stats};
         enum kui_capture_result r=kui_capture(&test.plan,&ops,mode);
         printf("RESULT %u WRITES %u BAD_ATTEMPTS %u FATAL %u\n",r,test.writes,test.bad_attempts,test.failures);
+        print_stats(&stats);
         result=r==KUI_CAPTURE_COMPLETE?0:r==KUI_CAPTURE_STOPPED?3:1;
     }
     assert(fclose(test.image)==0);return result;

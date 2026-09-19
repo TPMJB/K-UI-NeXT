@@ -23,6 +23,17 @@ void kui_options_default(struct kui_options *out) {
      * a card readable even if a previous run left an untested setting behind. */
     out->sd_if[0] = 0; out->sd_if_count = 1;
     out->sd_crc[0] = true; out->sd_crc_count = 1;
+    /* Experiment keys: defaults reproduce the bench as it was before they existed. */
+    out->ui_hz[0] = KUI_OPT_UI_FULL; out->ui_count = 1;
+    out->sections = KUI_SEC_OPTICAL | KUI_SEC_HASH | KUI_SEC_SD;
+    out->sweep_sectors = 2048;
+    out->sweep_verify = true;
+    /* Capture engine: the engine as it has always been. */
+    out->capture_hash_count = 1;      /* both */
+    out->end_readback[0] = true; out->end_readback_count = 1;
+    out->resume_check_count = 1;      /* full */
+    out->sample_readback_count = 1;   /* 0: off */
+    out->capture_sectors = 4096;
 }
 
 /* --- small helpers ------------------------------------------------------ */
@@ -83,6 +94,28 @@ static bool parse_sd_list(const char *p, const char *end, void *items, unsigned 
     }
     *count = n; return true;
 }
+/* A list drawn from exactly two words ("both,crc32"): the first word is false, the
+ * second true. Duplicates are rejected, as everywhere else. */
+static bool parse_two_words(const char *p, const char *end, const char *no, const char *yes,
+                            bool *items, unsigned *count) {
+    unsigned n = 0;
+    for(;;) {
+        const char *comma = memchr(p, ',', (size_t)(end - p));
+        const char *item_end = comma ? comma : end;
+        const char *s = skip_space(p, item_end), *e = trim_end(p, item_end);
+        size_t len = (size_t)(e - s);
+        bool v;
+        if(n == KUI_OPT_SD_MAX) return false;
+        if(len == strlen(no) && !memcmp(s, no, len)) v = false;
+        else if(len == strlen(yes) && !memcmp(s, yes, len)) v = true;
+        else return false;
+        for(unsigned i = 0; i < n; ++i) if(items[i] == v) return false;
+        items[n++] = v;
+        if(!comma) break;
+        p = comma + 1;
+    }
+    *count = n; return true;
+}
 static bool parse_bool(const char *p, const char *end, bool *out) {
     size_t n = (size_t)(end - p);
     static const struct { const char *word; bool value; } words[] = {
@@ -112,6 +145,66 @@ static bool parse_list(const char *p, const char *end, unsigned *list, unsigned 
     *count = n; return true;
 }
 
+/* "a,b,c" of decimal numbers in [lo, hi], each a multiple of `mult`. An empty
+ * item, a duplicate or too many items is an error: a repeated point would put
+ * two identically-labelled lines in the report. */
+static bool parse_ulist(const char *p, const char *end, unsigned long lo, unsigned long hi,
+                        unsigned long mult, unsigned max, unsigned *out, unsigned *count) {
+    unsigned n = 0;
+    for(;;) {
+        const char *comma = memchr(p, ',', (size_t)(end - p));
+        const char *item_end = comma ? comma : end;
+        unsigned long v;
+        if(n == max) return false;
+        if(!parse_unsigned(skip_space(p, item_end), trim_end(p, item_end), lo, hi, &v) || v % mult)
+            return false;
+        for(unsigned i = 0; i < n; ++i) if(out[i] == v) return false;
+        out[n++] = (unsigned)v;
+        if(!comma) break;
+        p = comma + 1;
+    }
+    *count = n; return true;
+}
+/* ui_hz items: the word "full" (today's unthrottled loop) or 0..30. */
+static bool parse_ui_list(const char *p, const char *end, unsigned *out, unsigned *count) {
+    unsigned n = 0;
+    for(;;) {
+        const char *comma = memchr(p, ',', (size_t)(end - p));
+        const char *item_end = comma ? comma : end;
+        const char *s = skip_space(p, item_end), *e = trim_end(p, item_end);
+        unsigned long v;
+        if(n == KUI_OPT_UI_MAX) return false;
+        if(e - s == 4 && !memcmp(s, "full", 4)) v = KUI_OPT_UI_FULL;
+        else if(!parse_unsigned(s, e, 0, KUI_OPT_UI_HZ_MAX, &v)) return false;
+        for(unsigned i = 0; i < n; ++i) if(out[i] == v) return false;
+        out[n++] = (unsigned)v;
+        if(!comma) break;
+        p = comma + 1;
+    }
+    *count = n; return true;
+}
+static bool parse_sections(const char *p, const char *end, unsigned *mask) {
+    static const struct { const char *word; unsigned bit; } secs[] = {
+        {"optical", KUI_SEC_OPTICAL}, {"hash", KUI_SEC_HASH},
+        {"sd", KUI_SEC_SD}, {"sweep", KUI_SEC_SWEEP}, {"capture", KUI_SEC_CAPTURE},
+    };
+    unsigned m = 0;
+    for(;;) {
+        const char *comma = memchr(p, ',', (size_t)(end - p));
+        const char *item_end = comma ? comma : end;
+        const char *s = skip_space(p, item_end), *e = trim_end(p, item_end);
+        unsigned bit = 0;
+        for(size_t i = 0; i < sizeof(secs) / sizeof(secs[0]); ++i)
+            if(strlen(secs[i].word) == (size_t)(e - s) && !memcmp(s, secs[i].word, (size_t)(e - s)))
+                bit = secs[i].bit;
+        if(!bit || (m & bit)) return false;   /* unknown word or repeated section */
+        m |= bit;
+        if(!comma) break;
+        p = comma + 1;
+    }
+    *mask = m; return true;
+}
+
 /* --- parser --------------------------------------------------------------- */
 
 static bool apply(struct kui_options *o, const char *key, size_t klen,
@@ -127,6 +220,34 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
     if(KEY("sd_if")) return parse_sd_list(v, vend, o->sd_if, &o->sd_if_count, false);
     if(KEY("sd_crc")) return parse_sd_list(v, vend, o->sd_crc, &o->sd_crc_count, true);
     if(KEY("yield_us")) { if(!parse_unsigned(v, vend, 100, 20000, &n)) return false; o->yield_us = (unsigned)n; return true; }
+    if(KEY("ui_hz")) return parse_ui_list(v, vend, o->ui_hz, &o->ui_count);
+    if(KEY("sections")) return parse_sections(v, vend, &o->sections);
+    if(KEY("sweep_chunks")) return parse_ulist(v, vend, 1, KUI_OPT_SWEEP_CHUNK_MAX, 1,
+        KUI_OPT_LIST_MAX, o->sweep_chunks, &o->sweep_chunk_count);
+    if(KEY("sweep_fads")) return parse_ulist(v, vend, 150, 0xffffff, 1,
+        KUI_OPT_SWEEP_LIST_MAX, o->sweep_fads, &o->sweep_fad_count);
+    if(KEY("sweep_gap_us")) return parse_ulist(v, vend, 0, 100000, 1,
+        KUI_OPT_SWEEP_LIST_MAX, o->sweep_gap_us, &o->sweep_gap_count);
+    if(KEY("sweep_service_us")) return parse_ulist(v, vend, 0, 50000, 1,
+        KUI_OPT_SWEEP_LIST_MAX, o->sweep_service_us, &o->sweep_service_count);
+    if(KEY("sweep_sectors")) { if(!parse_unsigned(v, vend, 32, 65536, &n)) return false; o->sweep_sectors = (unsigned)n; return true; }
+    if(KEY("sweep_verify")) return parse_bool(v, vend, &o->sweep_verify);
+    /* Whole 512-byte blocks, at least 4 KiB, at most the bench buffer. */
+    if(KEY("sd_bytes")) return parse_ulist(v, vend, 4096, (unsigned long)KUI_OPT_CHUNK_MAX * KUI_RAW_BYTES,
+        512, KUI_OPT_SDBYTES_MAX, o->sd_bytes, &o->sd_bytes_count);
+    if(KEY("capture_hash")) return parse_two_words(v, vend, "both", "crc32", o->capture_crc_only, &o->capture_hash_count);
+    if(KEY("end_readback")) return parse_sd_list(v, vend, o->end_readback, &o->end_readback_count, true);
+    if(KEY("resume_check")) return parse_two_words(v, vend, "full", "size", o->resume_size, &o->resume_check_count);
+    if(KEY("sample_readback")) return parse_ulist(v, vend, 0, 1024, 1, KUI_OPT_CAPTURE_MAX,
+        o->sample_readback, &o->sample_readback_count);
+    if(KEY("capture_sectors")) { if(!parse_unsigned(v, vend, 64, 262144, &n)) return false; o->capture_sectors = (unsigned)n; return true; }
+    if(KEY("capture_fad")) { if(!parse_unsigned(v, vend, 0, 0xffffff, &n) || (n && n < 150)) return false; o->capture_fad = (unsigned)n; return true; }
+    if(KEY("capture_type")) {
+        size_t len = (size_t)(vend - v);
+        if(len == 4 && !memcmp(v, "data", 4)) { o->capture_audio = false; return true; }
+        if(len == 5 && !memcmp(v, "audio", 5)) { o->capture_audio = true; return true; }
+        return false;
+    }
     if(KEY("note")) {
         size_t len = (size_t)(vend - v);
         if(len >= KUI_OPT_NOTE_MAX) len = KUI_OPT_NOTE_MAX - 1;
@@ -155,7 +276,11 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
         size_t klen = (size_t)(key_end - key);
         if(!klen) { log("bench.cfg line %u: empty key", line_no); return false; }
         static const char *known[] = {"chunks", "sd_mib", "hash_mib", "expand",
-            "optical_fad", "optical_sectors", "yield_us", "sd_if", "sd_crc", "note"};
+            "optical_fad", "optical_sectors", "yield_us", "sd_if", "sd_crc", "note",
+            "ui_hz", "sections", "sweep_chunks", "sweep_fads", "sweep_gap_us",
+            "sweep_service_us", "sweep_sectors", "sweep_verify", "sd_bytes",
+            "capture_hash", "end_readback", "resume_check", "sample_readback",
+            "capture_sectors", "capture_fad", "capture_type"};
         bool is_known = false;
         for(size_t i = 0; i < sizeof(known) / sizeof(known[0]); ++i)
             if(strlen(known[i]) == klen && !memcmp(key, known[i], klen)) is_known = true;
@@ -179,6 +304,18 @@ static void append_word(char *dst, size_t cap, const char *word, bool first) {
     dst[n] = 0;
 }
 
+/* "a,b,c", or `none` for an empty list. Plain copies for the same reason as
+ * append_word: the compiler cannot prove snprintf(buf + strlen(buf)) fits. */
+static void list_string(char *dst, size_t cap, const unsigned *v, unsigned n, const char *none) {
+    dst[0] = 0;
+    if(!n) { append_word(dst, cap, none, true); return; }
+    for(unsigned i = 0; i < n; ++i) {
+        char num[16];
+        snprintf(num, sizeof(num), "%u", v[i]);
+        append_word(dst, cap, num, i == 0);
+    }
+}
+
 void kui_options_log(const struct kui_options *o, kui_log_fn log) {
     char list[KUI_OPT_LIST_MAX * 5], *w = list;
     for(unsigned i = 0; i < o->chunk_count; ++i)
@@ -193,5 +330,41 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
     for(unsigned i = 0; i < o->sd_crc_count; ++i)
         append_word(crcs, sizeof(crcs), o->sd_crc[i] ? "on" : "off", i == 0);
     log("OPTIONS sd_if=%s sd_crc=%s", ifs, crcs);
+    char uis[32] = "", secs[32] = "", num[16];
+    for(unsigned i = 0; i < o->ui_count; ++i) {
+        snprintf(num, sizeof(num), "%u", o->ui_hz[i]);
+        append_word(uis, sizeof(uis), o->ui_hz[i] == KUI_OPT_UI_FULL ? "full" : num, i == 0);
+    }
+    static const struct { const char *word; unsigned bit; } names[] = {
+        {"optical", KUI_SEC_OPTICAL}, {"hash", KUI_SEC_HASH}, {"sd", KUI_SEC_SD}, {"sweep", KUI_SEC_SWEEP},
+        {"capture", KUI_SEC_CAPTURE}};
+    bool first = true;
+    for(size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
+        if(o->sections & names[i].bit) { append_word(secs, sizeof(secs), names[i].word, first); first = false; }
+    log("OPTIONS ui_hz=%s sections=%s", uis, secs);
+    char chunks[48], fads[48], gaps[48], svcs[48], bytes[64];
+    list_string(chunks, sizeof(chunks), o->sweep_chunks, o->sweep_chunk_count, "(sweep off)");
+    list_string(fads, sizeof(fads), o->sweep_fads, o->sweep_fad_count, "(optical_fad)");
+    list_string(gaps, sizeof(gaps), o->sweep_gap_us, o->sweep_gap_count, "0");
+    list_string(svcs, sizeof(svcs), o->sweep_service_us, o->sweep_service_count, "0");
+    list_string(bytes, sizeof(bytes), o->sd_bytes, o->sd_bytes_count, "(none)");
+    log("OPTIONS sweep_chunks=%s sweep_sectors=%u verify=%s", chunks, o->sweep_sectors,
+        o->sweep_verify ? "on" : "off");
+    log("OPTIONS sweep_fads=%s", fads);
+    log("OPTIONS sweep_gap_us=%s sweep_service_us=%s", gaps, svcs);
+    log("OPTIONS sd_bytes=%s", bytes);
+    char hashes[24] = "", ends[16] = "", checks[24] = "", samples[32];
+    for(unsigned i = 0; i < o->capture_hash_count; ++i)
+        append_word(hashes, sizeof(hashes), o->capture_crc_only[i] ? "crc32" : "both", i == 0);
+    for(unsigned i = 0; i < o->end_readback_count; ++i)
+        append_word(ends, sizeof(ends), o->end_readback[i] ? "on" : "off", i == 0);
+    for(unsigned i = 0; i < o->resume_check_count; ++i)
+        append_word(checks, sizeof(checks), o->resume_size[i] ? "size" : "full", i == 0);
+    list_string(samples, sizeof(samples), o->sample_readback, o->sample_readback_count, "0");
+    log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s", hashes, ends, checks);
+    log("OPTIONS sample_readback=%s capture_sectors=%u capture_type=%s", samples, o->capture_sectors,
+        o->capture_audio ? "audio" : "data");
+    if(o->capture_fad) log("OPTIONS capture_fad=%u", o->capture_fad);
+    else log("OPTIONS capture_fad=(optical_fad)");
     log("OPTIONS note=%s", o->note[0] ? o->note : "(none)");
 }

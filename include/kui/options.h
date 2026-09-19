@@ -25,11 +25,63 @@
  *   sd_if=scif,sci         SD transports to sweep: scif (bit-bang), sci (+DMA)
  *   sd_crc=on,off          CRC16 read-verification settings to sweep
  *   note=any text          echoed into the log (card model, drive, etc.)
+ *
+ * Experiment keys (docs/experiment-plan.md). All default to today's behaviour.
+ *
+ *   ui_hz=full,4,0         max UI redraws per second WHILE an operation runs;
+ *                          each value is one full pass of the sections below
+ *                          ('full' = the unthrottled loop that ships today)
+ *   sections=optical,hash,sd,sweep
+ *                          which bench sections run (default: optical,hash,sd)
+ *   sweep_chunks=8,32,128  optical read sizes in sectors (1..128); the sweep
+ *                          section runs only if this is set and 'sweep' is
+ *                          in sections
+ *   sweep_fads=45150,...   start sectors to sweep (default: optical_fad)
+ *   sweep_gap_us=0,5000    idle spin after each read command (drive unfed)
+ *   sweep_service_us=0     spin after each firmware poll inside a command
+ *                          (0 = today's yield policy)
+ *   sweep_sectors=2048     sectors read per sweep point
+ *   sweep_verify=on        re-read and CRC each (fad, chunk) to prove larger
+ *                          reads return identical bytes
+ *   sd_bytes=131072,...    extra SD write sizes in BYTES (multiples of 512),
+ *                          to test alignment against the 128 KiB clusters
+ *
+ * Capture engine choices. Each is a real option of the capture engine, so a
+ * REAL capture uses the FIRST value of each list, and the bench's `capture`
+ * section (sections=...,capture) runs the engine at every combination. The
+ * defaults are the engine as it has always been.
+ *
+ *   capture_hash=both,crc32    both = SHA-256 and CRC32 per track; crc32 = CRC32
+ *                              only (a schema 2 manifest; a job keeps the mode
+ *                              it started with)
+ *   end_readback=on,off        re-read every saved byte after capture. off
+ *                              applies to crc32 jobs only; Verify always reads
+ *   resume_check=full,size     full re-reads the committed bytes on resume;
+ *                              size checks sizes only (crc32 jobs only, and it
+ *                              cannot see a corrupted prefix)
+ *   sample_readback=0,32       re-read and compare 1 chunk in N while capturing
+ *   capture_sectors=4096       sectors per bench capture run
+ *   capture_fad=45150          where the bench capture starts (default:
+ *                              optical_fad)
+ *   capture_type=data|audio    data checks each sector's EDC; audio does not
  */
 
 #define KUI_OPT_CHUNK_MAX 512u   /* raw sectors; sizes the bench buffer */
 #define KUI_OPT_LIST_MAX 8u
 #define KUI_OPT_SD_MAX 2u
+#define KUI_OPT_UI_FULL 1000u    /* ui_hz value meaning "unthrottled, as before" */
+#define KUI_OPT_UI_MAX 4u
+#define KUI_OPT_UI_HZ_MAX 30u
+#define KUI_OPT_SWEEP_LIST_MAX 4u
+#define KUI_OPT_SWEEP_CHUNK_MAX 128u   /* sizes the optical probe buffer */
+#define KUI_OPT_SDBYTES_MAX 6u
+/* Bench sections; 'sections=' is a mask of these. */
+#define KUI_SEC_OPTICAL 1u
+#define KUI_SEC_HASH 2u
+#define KUI_SEC_SD 4u
+#define KUI_SEC_SWEEP 8u
+#define KUI_SEC_CAPTURE 16u
+#define KUI_OPT_CAPTURE_MAX 4u   /* values per numeric capture list */
 #define KUI_OPT_NOTE_MAX 64u
 #define KUI_OPT_FILE_MAX 2048u   /* a larger bench.cfg is refused */
 
@@ -43,6 +95,23 @@ struct kui_options {
     unsigned sd_crc_count;
     bool expand;
     char note[KUI_OPT_NOTE_MAX];
+    /* Experiment keys. A count of 0 means "single default", see options.c. */
+    unsigned ui_hz[KUI_OPT_UI_MAX], ui_count;
+    unsigned sections;
+    unsigned sweep_chunks[KUI_OPT_LIST_MAX], sweep_chunk_count;
+    unsigned sweep_fads[KUI_OPT_SWEEP_LIST_MAX], sweep_fad_count;   /* FAD < 2^24 */
+    unsigned sweep_gap_us[KUI_OPT_SWEEP_LIST_MAX], sweep_gap_count;
+    unsigned sweep_service_us[KUI_OPT_SWEEP_LIST_MAX], sweep_service_count;
+    unsigned sweep_sectors;
+    bool sweep_verify;
+    unsigned sd_bytes[KUI_OPT_SDBYTES_MAX], sd_bytes_count;
+    /* Capture engine choices; every list always has at least one value. */
+    bool capture_crc_only[KUI_OPT_SD_MAX];   unsigned capture_hash_count;
+    bool end_readback[KUI_OPT_SD_MAX];       unsigned end_readback_count;
+    bool resume_size[KUI_OPT_SD_MAX];        unsigned resume_check_count;
+    unsigned sample_readback[KUI_OPT_CAPTURE_MAX], sample_readback_count;
+    unsigned capture_sectors, capture_fad;   /* capture_fad 0 = optical_fad */
+    bool capture_audio;
 };
 
 void kui_options_default(struct kui_options *out);

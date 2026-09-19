@@ -61,6 +61,9 @@ def main():
     sd = dist / "sd/KUI"
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "runtime.kui").write_bytes(package)
+    # Reference catalogues for the end-of-capture check (optional on the card).
+    for name in ("redump.db", "tosec.db"):
+        shutil.copyfile(ROOT / "data/known-dumps" / name, sd / name)
     cases = dist / "loader-tests"
     cases.mkdir(exist_ok=True)
     for name, data in rejection_cases(package).items():
@@ -76,6 +79,7 @@ def main():
         (dist / name).write_text(guide(src))
     shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
     shutil.copytree(ROOT / "LICENSES", dist / "LICENSES", dirs_exist_ok=True)
+    shutil.copyfile(ROOT / "data/known-dumps/README.txt", dist / "LICENSES/known-dumps-README.txt")
     kos = ROOT / ".deps/kos"
     shutil.copytree(kos / "doc/license", dist / "LICENSES/KOS", dirs_exist_ok=True)
     for name in ("AUTHORS", "doc/LICENSE.md"):
@@ -110,6 +114,8 @@ def main():
     update = dist / "sd-update"
     (update / "KUI").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
+    for name in ("redump.db", "tosec.db"):
+        shutil.copyfile(sd / name, update / "KUI" / name)
     for name in ("CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
@@ -119,7 +125,11 @@ def main():
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
         "FatFs and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
-        "Install only KUI/runtime.kui on the SD card. Keep your existing boot CD.\n")
+        "Install KUI/runtime.kui on the SD card. Keep your existing boot CD.\n"
+        "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
+        "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
+        "works as before and reports that nothing was compared. Attribution and licence\n"
+        "for both catalogues: LICENSES/known-dumps-README.txt.\n")
     update_hashes=[]
     for path in sorted(update.rglob("*")):
         if path.is_file() and path.name != "SHA256SUMS":

@@ -26,6 +26,9 @@ struct command_timing {
     uint64_t us,calls,bytes,max_us,submit_us,poll_us,wait_us,abort_us;
     uint64_t submits,polls,waits,aborts,result[KUI_CMD_INVALID+1];
     uint32_t max_fad,max_sectors;
+    /* Firmware poll calls by duration (kui_probe_bucket): short ones are the
+     * CPU spinning on a busy drive, long ones are the PIO transfer itself. */
+    uint64_t poll_n[KUI_PROBE_BUCKETS],poll_hist_us[KUI_PROBE_BUCKETS];
 };
 static struct optical_timing {
     uint64_t us,requests,bytes,mode_us,modes,mode_failures,buffers_us;
@@ -43,6 +46,10 @@ static struct command_timing *active_command;
 static unsigned pio_quantum_us=PIO_SERVICE_QUANTUM_US;
 static bool fast_pio;
 static uint64_t last_pass_us;
+/* Bench sweep only: while set, the read being made reports into these instead
+ * of the capture counters, and pause_worker spins instead of yielding. */
+static struct kui_probe_stats *probe_stats;
+static unsigned probe_service_us;
 void kui_disc_set_yield_us(unsigned us) { pio_quantum_us=us?us:PIO_SERVICE_QUANTUM_US; }
 
 void kui_disc_timing_reset(void) {
@@ -65,6 +72,7 @@ void kui_disc_timing_report(void) {
             t->result[KUI_READ_OK],t->result[KUI_READ_RETRY],t->result[KUI_READ_FATAL]);
         kui_log("opt mismatch=%" PRIu64 " guards=%" PRIu64 " refused=%" PRIu64,t->mismatches,t->guards,t->refused);
         kui_log("opt short=%" PRIu64,t->short_transfers);
+        kui_log("opt poll buckets: call <25us/<100us/<400us/<1.6ms/more");
         for(unsigned i=0;i<2;i++) {
             const struct command_timing *c=&t->read[i];
             uint64_t nested=c->submit_us+c->poll_us+c->wait_us+c->abort_us;
@@ -76,6 +84,13 @@ void kui_disc_timing_report(void) {
             kui_log("opt read%u wait_us=%" PRIu64 " waits=%" PRIu64,i+1,c->wait_us,c->waits);
             kui_log("opt read%u abort_us=%" PRIu64 " aborts=%" PRIu64,i+1,c->abort_us,c->aborts);
             kui_log("opt read%u other_us=%" PRIu64,i+1,c->us>=nested?c->us-nested:0);
+            if(c->polls) {
+                kui_log("opt read%u poll_n %" PRIu64 "/%" PRIu64 "/%" PRIu64 "/%" PRIu64 "/%" PRIu64,i+1,
+                    c->poll_n[0],c->poll_n[1],c->poll_n[2],c->poll_n[3],c->poll_n[4]);
+                kui_log("opt read%u poll_ms %" PRIu64 "/%" PRIu64 "/%" PRIu64 "/%" PRIu64 "/%" PRIu64,i+1,
+                    c->poll_hist_us[0]/1000,c->poll_hist_us[1]/1000,c->poll_hist_us[2]/1000,
+                    c->poll_hist_us[3]/1000,c->poll_hist_us[4]/1000);
+            }
             kui_log("opt read%u ok=%" PRIu64 " failed=%" PRIu64 " timeout=%" PRIu64,
                 i+1,c->result[KUI_CMD_OK],c->result[KUI_CMD_FAILED],c->result[KUI_CMD_TIMEOUT]);
             kui_log("opt read%u cancelled=%" PRIu64 " abort_failed=%" PRIu64 " invalid=%" PRIu64,
@@ -88,28 +103,44 @@ static uint64_t now(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
 static void pause_worker(void *ctx) {
     (void)ctx;
     uint64_t start=timer_us_gettime64();
-    if(fast_pio) {
+    if(probe_service_us) {
+        /* Sweep only: stands in for the CPU being busy elsewhere between
+         * firmware service calls, so the drive is left unserviced that long. */
+        while(timer_us_gettime64()-start<probe_service_us) { }
+    } else if(fast_pio) {
         if(start-last_pass_us<pio_quantum_us) return;
         thd_pass();
         last_pass_us=timer_us_gettime64();
     } else thd_sleep(1);
     if(active_command) {active_command->wait_us+=timer_us_gettime64()-start;++active_command->waits;}
+    if(probe_stats) {probe_stats->pause_us+=timer_us_gettime64()-start;++probe_stats->pauses;}
 }
 static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
 static int submit(void *ctx, int command, void *params) {
     (void)ctx;
-    uint64_t start=active_command?timer_us_gettime64():0;
+    uint64_t start=(active_command||probe_stats)?timer_us_gettime64():0;
     int handle = syscall_gdrom_send_command((cd_cmd_code_t)command, params);
     syscall_gdrom_exec_server();
-    if(active_command) {active_command->submit_us+=timer_us_gettime64()-start;++active_command->submits;}
+    if(active_command||probe_stats) {
+        uint64_t d=timer_us_gettime64()-start;
+        if(active_command) {active_command->submit_us+=d;++active_command->submits;}
+        if(probe_stats) probe_stats->submit_us+=d;
+    }
     return handle;
 }
 static int poll(void *ctx, int handle) {
     (void)ctx;
-    uint64_t start=active_command?timer_us_gettime64():0;
+    uint64_t start=(active_command||probe_stats)?timer_us_gettime64():0;
     syscall_gdrom_exec_server();
     int status=syscall_gdrom_check_command(handle, &detail);
-    if(active_command) {active_command->poll_us+=timer_us_gettime64()-start;++active_command->polls;}
+    if(active_command||probe_stats) {
+        uint64_t d=timer_us_gettime64()-start;unsigned b=kui_probe_bucket(d);
+        if(active_command) {
+            active_command->poll_us+=d;++active_command->polls;
+            ++active_command->poll_n[b];active_command->poll_hist_us[b]+=d;
+        }
+        if(probe_stats) {++probe_stats->polls;++probe_stats->poll_n[b];probe_stats->poll_us[b]+=d;}
+    }
     return status;
 }
 static void abort_command(void *ctx, int handle) {
@@ -295,6 +326,53 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
     }
 done:
     ++t->result[result];t->us+=timer_us_gettime64()-request_start;return result;
+}
+
+/* --- bench-only optical probe ------------------------------------------------
+ * The same PIO command, mode setup, guards and error handling as capture, so a
+ * sweep measures the real path, but into its own buffer sized for the largest
+ * sweep read and reporting into caller-owned counters. The guard covers the
+ * before/after words and up to KUI_PROBE_GUARD_TAIL bytes past the request, so
+ * a transfer that overruns is still caught; only that tail is refilled, not the
+ * whole buffer, because a memset that grows with the read size would itself
+ * look like drive time and skew the very comparison the sweep is for. */
+#define KUI_PROBE_GUARD_TAIL 4096u
+static _Alignas(32) struct {
+    uint8_t before[32], data[KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES], after[32];
+} probe_raw;
+
+enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors,unsigned service_us,
+        const uint8_t **out,struct kui_probe_stats *stats) {
+    (void)ctx;
+    if(!out||!stats||!sectors||sectors>KUI_OPT_SWEEP_CHUNK_MAX||fad<150||fad>0xffffff||
+       sectors>0x1000000u-fad||poisoned||media_changed||kui_cancelled()) return KUI_READ_FATAL;
+    if(!set_mode(2352,0)) return KUI_READ_FATAL;
+    size_t bytes=(size_t)sectors*KUI_RAW_BYTES;
+    size_t tail=sizeof(probe_raw.data)-bytes;
+    if(tail>KUI_PROBE_GUARD_TAIL) tail=KUI_PROBE_GUARD_TAIL;
+    memset(probe_raw.before,0xa5,sizeof(probe_raw.before));
+    memset(probe_raw.after,0xa5,sizeof(probe_raw.after));
+    memset(probe_raw.data+bytes,0xa5,tail);
+    read_params=(cd_read_params_t){.start_sec=fad,.num_sec=sectors,.buffer=probe_raw.data,.is_test=0};
+    probe_stats=stats;probe_service_us=service_us;
+    uint64_t start=timer_us_gettime64();
+    bool read_ok=command(CD_CMD_PIOREAD,&read_params,5000);
+    uint64_t duration=timer_us_gettime64()-start;
+    probe_stats=NULL;probe_service_us=0;
+    stats->cmd_us+=duration;stats->last_us=duration;
+    /* A failed abort may leave firmware owning this static object. */
+    if(poisoned) return KUI_READ_FATAL;
+    bool guard_ok=kui_guard_is(probe_raw.before,32,0xa5)&&kui_guard_is(probe_raw.after,32,0xa5)&&
+        kui_guard_is(probe_raw.data+bytes,tail,0xa5);
+    if(!guard_ok) {poisoned=true;kui_log("PROBE GUARD CORRUPTION: RESET REQUIRED");return KUI_READ_FATAL;}
+    if(!read_ok) return media_changed||kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;
+    if(detail.size!=bytes) {
+        kui_log("Transfer size mismatch FAD=%" PRIu32 " got=%lu want=%lu",
+            fad,(unsigned long)detail.size,(unsigned long)bytes);
+        return KUI_READ_RETRY;
+    }
+    *out=probe_raw.data;
+    return KUI_READ_OK;
 }
 
 void kui_disc_probe(void) {
