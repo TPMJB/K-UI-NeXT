@@ -189,6 +189,46 @@ def check_capture(out):
     assert "JOBS_LEFT 0" in out and "BENCH complete" in out   # the card is left as it was found
 
 
+def pipeline_rows(out):
+    return {m[1]: float(m[2]) for m in re.finditer(r"^BENCH pipeline \S+ (\S+) chunk=\d+ .*? kib_s=([\d.]+)$", out, re.M)}
+
+
+def check_pipeline(out):
+    """PIO, DMA and overlapped DMA, each reading, writing and CRC32-ing the same bytes.
+    The fakes charge the drive only for the time the CPU had not already spent, so overlapping
+    must be faster than either sequential row, and every row must produce the same CRC32."""
+    rows = pipeline_rows(out)
+    assert set(rows) == {"pio-sequential", "dma-sequential", "dma-overlapped"}, rows
+    assert rows["dma-overlapped"] > rows["dma-sequential"] * 1.2, rows
+    assert rows["dma-overlapped"] > rows["pio-sequential"] * 1.2, rows
+    crcs = set(matching(out, r"crc32=([0-9a-f]{8})"))
+    assert len(set(re.findall(r"BENCH pipeline .*? crc32=([0-9a-f]{8})", out))) == 1, "the three rows must read identical bytes"
+    assert crcs
+    # Every begun read was ended: nothing may be left owning a buffer.
+    assert re.search(r"^DMA_BEGINS (\d+) ENDS \1 PENDING 0$", out, re.M), out
+    assert "BENCH complete" in out and "NOTHING was measured" not in out
+    # The scratch file is not left behind.
+    assert not matching(out, r"pipeline.*failed")
+
+
+def check_pipeline_nodma(out):
+    # The ordinary build has no split DMA: PIO only, and the log says why.
+    rows = pipeline_rows(out)
+    assert set(rows) == {"pio-sequential"}, rows
+    assert "the DMA rows need the experimental build" in out
+    assert re.search(r"^DMA_BEGINS 0 ENDS 0 PENDING 0$", out, re.M)
+    assert "BENCH complete" in out
+
+
+def check_pipeline_beginfail(out):
+    # A drive that will not start a DMA: the PIO row still stands, the DMA rows stop early,
+    # and nothing is left in flight.
+    assert pipeline_rows(out).get("pio-sequential")
+    assert matching(out, r"BENCH pipeline dma-sequential: stopped early")
+    assert re.search(r"^DMA_BEGINS 0 ENDS 0 PENDING 0$", out, re.M)
+    assert "BENCH complete" in out
+
+
 def check_capture_noop(out):
     # sections=capture with no readable disc: this is the shape of the T5B run of 2026-09-20 that
     # ended "BENCH complete" having measured nothing at all. It must now say so.
@@ -320,6 +360,9 @@ CASES = {
     "expand": (0, check_expand, True),
     "capture": (0, check_capture, True),
     "capture-noop": (0, check_capture_noop, False),
+    "pipeline": (0, check_pipeline, False),
+    "pipeline-nodma": (0, check_pipeline_nodma, False),
+    "pipeline-beginfail": (0, check_pipeline_beginfail, False),
     "capture-nolink": (1, check_capture_nolink, False),
     "mount-fail": (0, check_mount_fail, False),
     "dma": (0, check_dma, False),

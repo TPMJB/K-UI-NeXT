@@ -229,6 +229,14 @@ CRC16 candidates, and the capture engine at the four settings that matter), and
 setting, plus what the measured-but-unbuilt changes would be worth. Run it before and after a
 change. Lines it marks PROJECTED are arithmetic on measured rates, never an end-to-end run.
 
+**`sections=pipeline`** (`docs/bench-cfgs/t9-pipeline.cfg`) measures a capture's inner loop -
+read a chunk, write it to the card, CRC32 it - three ways on the real hardware: `pio-sequential`
+(what the engine does today), `dma-sequential`, and `dma-overlapped`, which double-buffers so the
+drive fills the next chunk while the CPU writes and hashes this one. It writes no dump and
+deletes its scratch file. **The three `crc32=` values must be identical**; they read the same
+bytes, so a difference means the overlap is broken. The DMA rows need the experimental build.
+This exists so the overlap is measured before the capture engine is restructured to use it.
+
 **The experimental GD-ROM DMA probe** is not in normal builds. To get one, push a branch whose
 name ends in `-experimental`:
 

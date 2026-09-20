@@ -33,6 +33,11 @@
  *   ui_hz=full,4,0         max UI redraws per second WHILE an operation runs;
  *                          each value is one full pass of the sections below
  *                          (default 2; 'full' = the old unthrottled loop)
+ *   sections=...,pipeline  measure a capture's inner loop three ways on the real drive and
+ *                          the real card: PIO reads, DMA reads, and DMA reads OVERLAPPED with
+ *                          the SD write (double-buffered). EXPERIMENTAL build only; without it
+ *                          the DMA rows say so. This measures the overlap before the capture
+ *                          engine is restructured to use it
  *   sections=optical,hash,sd,sweep
  *                          which bench sections run (default: optical,hash,sd)
  *   sweep_chunks=8,32,128  optical read sizes in sectors (1..128); the sweep
@@ -91,6 +96,7 @@
 #define KUI_SEC_SD 4u
 #define KUI_SEC_SWEEP 8u
 #define KUI_SEC_CAPTURE 16u
+#define KUI_SEC_PIPELINE 32u
 #define KUI_OPT_CAPTURE_MAX 4u   /* values per numeric capture list */
 #define KUI_OPT_NOTE_MAX 64u
 /* A larger bench.cfg is refused. 2048 was too small for the commented example this repository

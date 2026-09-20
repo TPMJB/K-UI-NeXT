@@ -443,6 +443,57 @@ static void *dma_address(void *p) {
 #endif
 }
 
+/* The same DMA read, split so the CPU can write the previous chunk to the SD card while the
+ * drive fills this one. Measured: a DMA read costs the CPU under 1% (Trip 6a), so the whole
+ * disc time can hide behind the SD write. The caller MUST call end after a successful begin:
+ * until it does, the firmware owns read_params and the buffer it was given.
+ * Bench-only, like the blocking probe; the capture engine does not use it yet. */
+static struct kui_command_async dma_async;
+static uint8_t *dma_target;
+static size_t dma_target_bytes;
+static bool dma_in_flight;
+
+bool kui_disc_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+    (void)ctx;
+    if(!out||!sectors||(sectors&1u)||sectors>KUI_OPT_SWEEP_CHUNK_MAX||fad<150||fad>0xffffff||
+       sectors>0x1000000u-fad||poisoned||media_changed||dma_broken||dma_in_flight||
+       ((uintptr_t)out&31u)||kui_cancelled()) return false;
+    if(!set_mode(2352,0)) return false;
+    dma_target=out;dma_target_bytes=(size_t)sectors*KUI_RAW_BYTES;
+    /* The CPU must not hold dirty lines over this range: the drive writes it behind our back. */
+    cache_purge((uintptr_t)out,dma_target_bytes);
+    cache_inval((uintptr_t)out,dma_target_bytes);
+    read_params=(cd_read_params_t){.start_sec=fad,.num_sec=sectors,
+        .buffer=dma_address(out),.is_test=0};
+    struct kui_command_ops ops={NULL,now,pause_worker,cancelled,submit,poll,abort_command};
+    memset(&detail,0,sizeof(detail));
+    if(kui_command_begin(&ops,CD_CMD_DMAREAD,&read_params,5000,1000,&dma_async)!=KUI_CMD_OK) return false;
+    dma_in_flight=true;
+    return true;
+}
+bool kui_disc_read_pending(void *ctx) {
+    (void)ctx;
+    if(!dma_in_flight) return false;
+    struct kui_command_ops ops={NULL,now,pause_worker,cancelled,submit,poll,abort_command};
+    return !kui_command_ready(&ops,&dma_async);
+}
+enum kui_read_result kui_disc_read_end(void *ctx) {
+    (void)ctx;
+    if(!dma_in_flight) return KUI_READ_FATAL;
+    struct kui_command_ops ops={NULL,now,pause_worker,cancelled,submit,poll,abort_command};
+    enum kui_command_result r=kui_command_end(&ops,&dma_async);
+    dma_in_flight=false;
+    /* Read what the drive wrote, not whatever the cache kept. */
+    cache_inval((uintptr_t)dma_target,dma_target_bytes);
+    if(r==KUI_CMD_RECOVERY_FAILED) {poisoned=true;dma_broken=true;return KUI_READ_FATAL;}
+    if(r!=KUI_CMD_OK) {
+        dma_broken=true;
+        kui_log("GD-ROM DMA read did not complete (%s); DMA stays off until reboot",kui_command_name(r));
+        return media_changed||kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;
+    }
+    return KUI_READ_OK;
+}
+
 enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sectors,
         const uint8_t **out,struct kui_probe_stats *stats) {
     (void)ctx;

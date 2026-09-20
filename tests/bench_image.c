@@ -30,6 +30,11 @@ static struct {
     /* The SD link, as the console has it: CLOSED when the bench starts (reading bench.cfg
      * closes it again), opened only by reconnect(), closed when the bench ends. */
     bool linked, reconnect_fail;
+    /* Split DMA: begin records the request, end completes it. The overlap is modelled by
+     * charging the drive's time only for whatever of it the CPU had not already spent. */
+    bool pend; uint32_t pend_fad; unsigned pend_sectors; uint8_t *pend_out;
+    uint64_t pend_started, pend_cost; unsigned begins, ends;
+    bool begin_fail;
     unsigned reconnects, last_sci;
     bool last_crc;
     uint64_t spin_total;
@@ -99,6 +104,25 @@ static uint16_t crc16_kos(void *p, const uint8_t *data, size_t bytes, uint16_t s
     (void)p;
     uint16_t value = kui_crc16_ref(start, data, bytes);
     return t.crc16_bad ? (uint16_t)(value ^ 1u) : value;
+}
+static bool read_begin(void *p, uint32_t fad, unsigned sectors, uint8_t *out) {
+    (void)p;
+    assert(!t.pend && out && sectors && !(sectors & 1u) && !((uintptr_t)out & 31u));
+    if(t.begin_fail) return false;
+    ++t.begins;
+    t.pend = true; t.pend_fad = fad; t.pend_sectors = sectors; t.pend_out = out;
+    t.pend_started = t.clock_us; t.pend_cost = 800 + sectors * 1000u;
+    return true;
+}
+static enum kui_read_result read_end(void *p) {
+    (void)p;
+    if(!t.pend) return KUI_READ_FATAL;
+    ++t.ends; t.pend = false;
+    uint64_t elapsed = t.clock_us - t.pend_started;   /* time the drive was already working */
+    if(elapsed < t.pend_cost) t.clock_us += t.pend_cost - elapsed;
+    for(unsigned i = 0; i < t.pend_sectors; ++i)
+        sector_data(t.pend_fad + i, t.pend_out + (size_t)i * KUI_RAW_BYTES);
+    return KUI_READ_OK;
 }
 static void set_ui(void *p, unsigned hz) { (void)p; if(t.ui_calls < 16) t.ui_seq[t.ui_calls] = hz; ++t.ui_calls; }
 static void cpu_mark(void *p, struct kui_cpu_census *out) {
@@ -193,7 +217,8 @@ int main(int argc, char **argv) {
     if(strcmp(scenario, "default-ui")) o.ui_hz[0] = KUI_OPT_UI_FULL;
     o.sd_mib = 1; o.hash_mib = 1; o.optical_sectors = 64; o.expand = false;
     struct kui_bench_ops ops = {NULL, read_disc, reconnect, cancelled, now_us, log_line, set_ui, cpu_mark, read_probe,
-                                capture_run, crc16_kos, read_probe_dma, spin, spin_count, sleep_ms};
+                                capture_run, crc16_kos, read_probe_dma, spin, spin_count, sleep_ms,
+                                read_begin, read_end};
 
     if(!strcmp(scenario, "default")) {
         /* Nothing new was asked for: the run must look like the bench before the
@@ -251,10 +276,15 @@ int main(int argc, char **argv) {
         if(!strcmp(scenario, "dma-midfail")) t.dma_fail_after = 2;
         if(!strcmp(scenario, "dma-none")) ops.read_probe_dma = NULL;
         if(!strcmp(scenario, "spin-none")) ops.spin = NULL;
+    } else if(!strncmp(scenario, "pipeline", 8)) {
+        o.sections = KUI_SEC_PIPELINE; o.capture_sectors = 256; o.capture_fad = 45150;
+        if(!strcmp(scenario, "pipeline-nodma")) { ops.read_begin = NULL; ops.read_end = NULL; }
+        if(!strcmp(scenario, "pipeline-beginfail")) t.begin_fail = true;
     } else if(!strcmp(scenario, "bare")) {
         /* A platform with no UI control and no scheduler census. */
         o.sections = KUI_SEC_OPTICAL | KUI_SEC_HASH;
         ops.set_ui = NULL; ops.cpu_mark = NULL; ops.crc16_kos = NULL;
+        ops.read_begin = NULL; ops.read_end = NULL;
     } else {
         return 2;
     }
@@ -262,6 +292,7 @@ int main(int argc, char **argv) {
     enum kui_bench_result r = kui_bench(&ops, &o);
     kui_media_set(NULL); t.linked = false;   /* the console closes the link when the bench ends */
     if(!strcmp(scenario, "capture")) printf("JOBS_LEFT %u\n", jobs_left());
+    if(!strncmp(scenario, "pipeline", 8)) printf("DMA_BEGINS %u ENDS %u PENDING %u\n", t.begins, t.ends, t.pend ? 1u : 0u);
     printf("RECONNECTS %u LAST sci=%u crc=%u\n", t.reconnects, t.last_sci, t.last_crc ? 1u : 0u);
     printf("RESULT %u READS %u PROBES %u UI_CALLS %u UI_SEQ", (unsigned)r, t.read_calls, t.probe_calls, t.ui_calls);
     for(unsigned i = 0; i < t.ui_calls && i < 16; ++i) printf(" %u", t.ui_seq[i]);

@@ -28,6 +28,24 @@ struct kui_command_ops {
  * further commands must be refused until a console reset. */
 enum kui_command_result kui_command(const struct kui_command_ops *ops,
     int command, void *params, uint32_t timeout_ms, uint32_t abort_ms);
+
+/* The same command, split so the CPU can do something else while the drive works. Only worth
+ * it for a GD-ROM DMA read, where the firmware moves the bytes and the CPU is free (measured:
+ * 0.4-0.9% of one core, docs/evidence/t6a-dma-probe-2026-09-20.json); a PIO read needs the CPU
+ * to move every byte, so splitting it would gain nothing.
+ *
+ * kui_command_begin submits and returns at once. kui_command_ready polls without blocking.
+ * kui_command_end waits for whatever is left and always finishes the command: it aborts and
+ * recovers exactly as kui_command does, so a caller that has begun MUST end (a begun command
+ * may still own its params and buffer). The deadline covers begin to end, not each call. */
+struct kui_command_async { int handle; uint64_t start; uint32_t timeout_ms, abort_ms; bool live; };
+enum kui_command_result kui_command_begin(const struct kui_command_ops *ops,
+    int command, void *params, uint32_t timeout_ms, uint32_t abort_ms,
+    struct kui_command_async *out);
+/* true when end will not have to wait. Never blocks; a failure is reported by end. */
+bool kui_command_ready(const struct kui_command_ops *ops, struct kui_command_async *async);
+enum kui_command_result kui_command_end(const struct kui_command_ops *ops,
+    struct kui_command_async *async);
 const char *kui_command_name(enum kui_command_result result);
 
 struct kui_volume { uint32_t start, count; bool partitioned; };

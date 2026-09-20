@@ -33,6 +33,76 @@ static enum kui_command_result execute(struct fake_command *f) {
     struct kui_command_ops ops = {f, now, yield, cancel, submit, poll, abort_cmd};
     return kui_command(&ops, 16, NULL, 10, 3);
 }
+/* The split form: begin, do something else, end. kui_command is now these two composed, so the
+ * cases above already prove the shared state machine; these prove the seam. */
+static struct kui_command_ops ops_for(struct fake_command *f) {
+    struct kui_command_ops o = {f, now, yield, cancel, submit, poll, abort_cmd};
+    return o;
+}
+static void test_split_commands(void) {
+    struct kui_command_async a;
+    /* The happy path: begin returns at once, ready goes false then true, end succeeds. */
+    struct fake_command f = {.status = 1};
+    struct kui_command_ops o = ops_for(&f);
+    assert(kui_command_begin(&o, 16, NULL, 10, 3, &a) == KUI_CMD_OK && a.live);
+    assert(f.submissions == 1 && f.polls == 0);          /* begin must not wait */
+    assert(!kui_command_ready(&o, &a));                  /* still running */
+    f.status = 2;
+    assert(kui_command_ready(&o, &a));
+    assert(kui_command_end(&o, &a) == KUI_CMD_OK && !f.aborted && !a.live);
+
+    /* end is mandatory, and a second one cannot abort again. A never-begun async and an
+     * already-ended one are the same thing to end, and both report FAILED rather than
+     * pretending something succeeded. */
+    assert(kui_command_end(&o, &a) == KUI_CMD_FAILED && !f.aborted);
+    memset(&a, 0, sizeof(a));
+    assert(kui_command_end(&o, &a) == KUI_CMD_FAILED && !f.aborted);
+    assert(kui_command_end(&o, NULL) == KUI_CMD_INVALID);
+    assert(kui_command_end(NULL, &a) == KUI_CMD_INVALID);
+
+    /* The deadline spans begin to end, not each call: time passing between them counts. */
+    f = (struct fake_command){.status = 1};
+    o = ops_for(&f);
+    assert(kui_command_begin(&o, 16, NULL, 10, 3, &a) == KUI_CMD_OK);
+    f.now = 10;                                          /* the caller was busy elsewhere */
+    assert(kui_command_end(&o, &a) == KUI_CMD_TIMEOUT && f.aborted);
+
+    /* A drive that never accepts the command fails inside begin, with nothing to end. */
+    f = (struct fake_command){.busy = 100};
+    o = ops_for(&f);
+    assert(kui_command_begin(&o, 16, NULL, 10, 3, &a) == KUI_CMD_TIMEOUT && !a.live && !f.aborted);
+    f = (struct fake_command){.status = 1, .cancel_at = 1, .now = 1};   /* already cancelled */
+    o = ops_for(&f);
+    assert(kui_command_begin(&o, 16, NULL, 10, 3, &a) == KUI_CMD_CANCELLED && !a.live);
+    assert(f.submissions == 0 && !f.aborted);   /* nothing was ever sent to the drive */
+
+    /* Cancellation after begin still aborts and recovers: the firmware owns the buffer. */
+    f = (struct fake_command){.status = 1};
+    o = ops_for(&f);
+    assert(kui_command_begin(&o, 16, NULL, 10, 3, &a) == KUI_CMD_OK);
+    f.cancel_at = 1; f.now = 1; f.abort_status = 0;
+    assert(kui_command_end(&o, &a) == KUI_CMD_CANCELLED && f.aborted);
+
+    /* A drive that will not even abort is the reset-required case, through this path too. */
+    f = (struct fake_command){.status = 4, .abort_status = 4};
+    o = ops_for(&f);
+    assert(kui_command_begin(&o, 16, NULL, 10, 3, &a) == KUI_CMD_OK);
+    assert(kui_command_end(&o, &a) == KUI_CMD_RECOVERY_FAILED);
+
+    /* ready never blocks and never aborts, whatever the drive says. */
+    f = (struct fake_command){.status = 4};
+    o = ops_for(&f);
+    assert(kui_command_begin(&o, 16, NULL, 10, 3, &a) == KUI_CMD_OK);
+    unsigned before = (unsigned)f.polls;
+    assert(!kui_command_ready(&o, &a) && f.polls == (int)before + 1 && !f.aborted);
+    f.status = -1;
+    assert(kui_command_ready(&o, &a) && !f.aborted);     /* a failure is "no longer waiting" */
+    assert(kui_command_end(&o, &a) == KUI_CMD_FAILED && !f.aborted);
+    /* Bad arguments are refused, not crashed on. */
+    assert(kui_command_begin(&o, 16, NULL, 0, 3, &a) == KUI_CMD_INVALID);
+    assert(kui_command_begin(&o, 16, NULL, 10, 3, NULL) == KUI_CMD_INVALID);
+    assert(kui_command_begin(NULL, 16, NULL, 10, 3, &a) == KUI_CMD_INVALID);
+}
 static void test_commands(void) {
     struct fake_command f = {.status = 2};
     assert(execute(&f) == KUI_CMD_OK && !f.aborted);
@@ -142,7 +212,8 @@ static void test_diskio(void) {
     assert(strstr(kui_media_problem(), "layout") != NULL);
 }
 int main(void) {
-    test_commands(); test_volume(); test_disc_data(); test_diskio();
+    test_commands();
+    test_split_commands(); test_volume(); test_disc_data(); test_diskio();
     assert(kui_crc32(0, "123456789", 9) == 0xcbf43926);
     assert(kui_crc32(kui_crc32(0, "1234", 4), "56789", 5) == 0xcbf43926);
     uint8_t a[200], b[200];

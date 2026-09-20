@@ -194,6 +194,7 @@ static bool parse_sections(const char *p, const char *end, unsigned *mask) {
     static const struct { const char *word; unsigned bit; } secs[] = {
         {"optical", KUI_SEC_OPTICAL}, {"hash", KUI_SEC_HASH},
         {"sd", KUI_SEC_SD}, {"sweep", KUI_SEC_SWEEP}, {"capture", KUI_SEC_CAPTURE},
+        {"pipeline", KUI_SEC_PIPELINE},
     };
     unsigned m = 0;
     for(;;) {
@@ -381,7 +382,7 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
     }
     static const struct { const char *word; unsigned bit; } names[] = {
         {"optical", KUI_SEC_OPTICAL}, {"hash", KUI_SEC_HASH}, {"sd", KUI_SEC_SD}, {"sweep", KUI_SEC_SWEEP},
-        {"capture", KUI_SEC_CAPTURE}};
+        {"capture", KUI_SEC_CAPTURE}, {"pipeline", KUI_SEC_PIPELINE}};
     bool first = true;
     for(size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
         if(o->sections & names[i].bit) { append_word(secs, sizeof(secs), names[i].word, first); first = false; }

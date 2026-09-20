@@ -87,6 +87,10 @@ struct kui_bench_ops {
     uint64_t (*spin_count)(void *);
     /* Block the calling thread (a sleep, not a busy-wait) so the spinner gets the CPU. */
     void (*sleep_ms)(void *, unsigned ms);
+    /* Split GD-ROM DMA read for the pipeline section: begin returns at once and end must always
+     * follow a true begin. NULL (the ordinary build) makes the section measure PIO only. */
+    bool (*read_begin)(void *, uint32_t fad, unsigned sectors, uint8_t *out);
+    enum kui_read_result (*read_end)(void *);
 };
 enum kui_bench_result { KUI_BENCH_FAILED, KUI_BENCH_STOPPED, KUI_BENCH_COMPLETE };
 

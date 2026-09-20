@@ -647,6 +647,119 @@ static enum kui_bench_result bench_sweep(const struct kui_options *o) {
     return KUI_BENCH_COMPLETE;
 }
 
+/* --- pipeline ---------------------------------------------------------------
+ * A capture's inner loop, measured three ways on the real drive and the real card: read a chunk,
+ * write it to the scratch file, CRC32 it, repeat. Sequential PIO is what the engine does today.
+ * Sequential DMA isolates the read. Overlapped DMA double-buffers: the drive fills the next
+ * chunk while the CPU writes and hashes this one, which is the design the numbers argue for
+ * (Trip 6a: a DMA read costs the CPU under 1%). Nothing here writes a dump; the scratch file is
+ * deleted afterwards and the capture engine is untouched. */
+static _Alignas(32) uint8_t pipe_buffer[2][KUI_CAPTURE_CHUNK * KUI_RAW_BYTES];
+
+static enum kui_bench_result pipeline_run(const char *label, unsigned fad, unsigned chunk,
+                                          unsigned sectors, bool dma, bool overlap) {
+    FIL file;
+    FRESULT fr = f_open(&file, SCRATCH, FA_WRITE | FA_CREATE_ALWAYS);
+    if(fr != FR_OK) { ops->log("BENCH pipeline scratch open failed: FatFs=%u", (unsigned)fr); return KUI_BENCH_FAILED; }
+    struct kui_probe_stats st;
+    memset(&st, 0, sizeof(st));
+    uint64_t bytes = 0, write_us = 0, read_us = 0, crc_us = 0;
+    uint32_t crc = 0;
+    unsigned cur = 0, remaining = sectors, position = 0;
+    bool ok = true, started = false;
+    cpu_begin();
+    uint64_t start = now();
+    if(overlap && remaining) {
+        unsigned n = remaining > chunk ? chunk : remaining;
+        if(!ops->read_begin(ops->ctx, fad, n, pipe_buffer[cur])) { ok = false; }
+        else started = true;
+    }
+    while(ok && remaining) {
+        unsigned n = remaining > chunk ? chunk : remaining;
+        const uint8_t *data = pipe_buffer[cur];
+        uint64_t t0 = now();
+        if(overlap) {
+            if(ops->read_end(ops->ctx) != KUI_READ_OK) { ok = false; started = false; break; }
+            started = false;
+            read_us += now() - t0;
+            /* The next read runs while this chunk is written and hashed: that is the whole point. */
+            unsigned left = remaining - n;
+            if(left) {
+                unsigned next = left > chunk ? chunk : left;
+                if(!ops->read_begin(ops->ctx, fad + position + n, next, pipe_buffer[cur ^ 1])) { ok = false; break; }
+                started = true;
+            }
+        } else if(dma) {
+            if(!ops->read_begin(ops->ctx, fad + position, n, pipe_buffer[cur])) { ok = false; break; }
+            started = true;
+            if(ops->read_end(ops->ctx) != KUI_READ_OK) { ok = false; started = false; break; }
+            started = false;
+            read_us += now() - t0;
+        } else {
+            const uint8_t *probe = NULL;
+            if(ops->read_probe(ops->ctx, fad + position, n, 0, &probe, &st) != KUI_READ_OK || !probe) { ok = false; break; }
+            read_us += now() - t0;
+            data = probe;
+        }
+        UINT written = 0, want = n * KUI_RAW_BYTES;
+        t0 = now();
+        ok = f_write(&file, data, want, &written) == FR_OK && written == want;
+        write_us += now() - t0;
+        if(!ok) { ops->log("BENCH pipeline write failed"); break; }
+        t0 = now();
+        crc = kui_crc32(crc, data, want);
+        crc_us += now() - t0;
+        bytes += want; position += n; remaining -= n;
+        if(overlap) cur ^= 1;
+        if(cancelled()) { ok = false; break; }
+    }
+    /* A begun read still owns its buffer; end it whatever went wrong. */
+    if(started) ops->read_end(ops->ctx);
+    uint64_t wall = now() - start;
+    f_close(&file);
+    f_unlink(SCRATCH);
+    if(!ok) {
+        cpu_end("pipeline", label);
+        if(cancelled()) return KUI_BENCH_STOPPED;
+        ops->log("BENCH pipeline %s: stopped early after %" PRIu64 " bytes", label, bytes);
+        return KUI_BENCH_COMPLETE;
+    }
+    char detail[176];
+    snprintf(detail, sizeof(detail),
+        "%s %s chunk=%u read_ms=%" PRIu64 " write_ms=%" PRIu64 " crc_ms=%" PRIu64 " crc32=%08" PRIx32,
+        ui_tag, label, chunk, read_us / 1000, write_us / 1000, crc_us / 1000, crc);
+    result("pipeline", detail, bytes, wall);
+    cpu_end("pipeline", label);
+    return KUI_BENCH_COMPLETE;
+}
+
+static enum kui_bench_result bench_pipeline(const struct kui_options *o) {
+    if(!ops->read_probe) { ops->log("BENCH pipeline skipped: no readable disc"); return KUI_BENCH_COMPLETE; }
+    if(ops->reconnect && ops->reconnect(ops->ctx, 0, true) < 0) {
+        ops->log("BENCH pipeline skipped: card did not come back");
+        return KUI_BENCH_FAILED;
+    }
+    FATFS fs;
+    if(!kui_mount(&fs, ops->log)) return KUI_BENCH_FAILED;
+    if(!ensure_dir("0:/KUI") || !ensure_dir(SCRATCH_DIR)) { f_mount(NULL, "0:", 0); return KUI_BENCH_FAILED; }
+    unsigned fad = o->capture_fad ? o->capture_fad : o->optical_fad;
+    unsigned sectors = o->capture_sectors;
+    if(sectors & 1u) ++sectors;   /* DMA moves whole 32-byte multiples; 2352 is one only in pairs */
+    bool dma = ops->read_begin && ops->read_end;
+    ops->log("BENCH pipeline fad=%u sectors=%u chunk=%u: a capture's inner loop, read+write+crc32",
+        fad, sectors, KUI_CAPTURE_CHUNK);
+    if(!dma) ops->log("BENCH pipeline: PIO only; the DMA rows need the experimental build "
+                      "(a branch whose name ends in -experimental)");
+    enum kui_bench_result rc = pipeline_run("pio-sequential", fad, KUI_CAPTURE_CHUNK, sectors, false, false);
+    if(rc == KUI_BENCH_COMPLETE && dma)
+        rc = pipeline_run("dma-sequential", fad, KUI_CAPTURE_CHUNK, sectors, true, false);
+    if(rc == KUI_BENCH_COMPLETE && dma)
+        rc = pipeline_run("dma-overlapped", fad, KUI_CAPTURE_CHUNK, sectors, true, true);
+    f_unlink(SCRATCH);
+    f_mount(NULL, "0:", 0);
+    return rc;
+}
+
 /* --- capture engine ------------------------------------------------------- */
 
 /* A bench job is one track and two checkpoints (nothing is published), so its few
@@ -791,6 +904,7 @@ enum kui_bench_result kui_bench(const struct kui_bench_ops *o, const struct kui_
         if(rc == KUI_BENCH_COMPLETE && (opt->sections & KUI_SEC_SWEEP) && opt->sweep_chunk_count)
             rc = bench_sweep(opt);
         if(rc == KUI_BENCH_COMPLETE && (opt->sections & KUI_SEC_CAPTURE)) rc = bench_capture(opt);
+        if(rc == KUI_BENCH_COMPLETE && (opt->sections & KUI_SEC_PIPELINE)) rc = bench_pipeline(opt);
     }
     if(o->set_ui) o->set_ui(o->ctx, KUI_OPT_UI_FULL);   /* the report save that follows is not a measurement */
     if(rc == KUI_BENCH_STOPPED) ops->log("BENCH stopped; lines already printed are valid");
