@@ -287,10 +287,11 @@ int main(void) {
     kui_log("Capture page: A new dump; X resume latest matching disc; Y verify.");
     kui_log("Left/Right switches capture/diagnostics. B stops and checkpoints.");
     kui_log("New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.");
-    kui_log("Capture rereads saved files; a reference match is a separate PC check.");
-    kui_log("Capture uses single optical reads; final CRC32/SHA256 readback stays on.");
+    kui_log("Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KUI/).");
+    kui_log("Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change them.");
     kui_log("Capture/Resume/Verify auto-save a report after ending. Wait for READY.");
     kui_log("R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).");
+    kui_log("The screen redraws 2x a second while working, which frees CPU (ui_hz=full: off).");
 #else
     kui_log("Full capture is available in the updated SD runtime.");
 #endif

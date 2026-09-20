@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
+#include <arch/cache.h>
 #include <dc/syscalls.h>
 #include <kos/thread.h>
 #include <kos/timer.h>
@@ -372,6 +373,86 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
         return KUI_READ_RETRY;
     }
     *out=probe_raw.data;
+    return KUI_READ_OK;
+}
+
+/* --- bench-only GD-ROM DMA probe --------------------------------------------------
+ * EXPERIMENTAL. Whether this drive can DMA raw 2352-byte sectors, what it costs, and how
+ * much CPU it leaves free are not known; this exists to find out, and is reached only by
+ * the bench's `sweep_mode=dma`. It goes through the same command layer as every other
+ * read here (deadlines, cancellation, abort, poisoning) and POLLS for completion. It does
+ * not use an interrupt: this runtime does not initialize KOS's CD-ROM subsystem (no
+ * INIT_CDROM), so nothing installs the DMA-end handler, and what that handler does in KOS
+ * is call exec_server and read the command status, which the polling loop does anyway. If
+ * a drive never completes a DMA that way the probe says so and an interrupt-driven
+ * variant is the next thing to try.
+ *
+ * Between polls the worker SLEEPS (thd_sleep, ~10 ms resolution) rather than yielding, so
+ * the CPU is genuinely free while the drive transfers, and a completion can be noticed up
+ * to one scheduler tick late: the rate includes that latency, about 8% at 32 sectors and
+ * 2% at 128.
+ *
+ * Three hazards this handles that a copy of KOS's own path would not:
+ *  - A sector is 2352 bytes, a multiple of 32 only for an even count: the transfer must be.
+ *  - KOS invalidates the cache over cnt * 2048 bytes (its default sector size, which this
+ *    code never sets); these sectors are 2352, so the whole range is invalidated here.
+ *  - The guard pattern is written by the CPU, so it is purged (written back) before the
+ *    DMA, or dirty lines could later be written back over what the drive wrote.
+ * After any failure to complete, DMA stays off until reboot: an unfinished transfer may
+ * still own the buffer, and an untested bus state is not one to keep poking. */
+static _Alignas(32) struct {
+    uint8_t before[32], data[KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES], after[32];
+} probe_dma_raw;
+static bool dma_broken;
+static void *dma_address(void *p) {
+#ifdef __SH4__
+    return (void *)((uintptr_t)p & 0x1fffffffu);   /* the DMA engine addresses physical memory */
+#else
+    return p;
+#endif
+}
+
+enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sectors,
+        const uint8_t **out,struct kui_probe_stats *stats) {
+    (void)ctx;
+    if(!out||!stats||!sectors||(sectors&1u)||sectors>KUI_OPT_SWEEP_CHUNK_MAX||fad<150||fad>0xffffff||
+       sectors>0x1000000u-fad||poisoned||media_changed||dma_broken||kui_cancelled()) return KUI_READ_FATAL;
+    if(!set_mode(2352,0)) return KUI_READ_FATAL;
+    size_t bytes=(size_t)sectors*KUI_RAW_BYTES;   /* a multiple of 32: sectors is even */
+    size_t tail=sizeof(probe_dma_raw.data)-bytes;
+    if(tail>KUI_PROBE_GUARD_TAIL) tail=KUI_PROBE_GUARD_TAIL;
+    memset(probe_dma_raw.before,0xa5,sizeof(probe_dma_raw.before));
+    memset(probe_dma_raw.after,0xa5,sizeof(probe_dma_raw.after));
+    memset(probe_dma_raw.data+bytes,0xa5,tail);
+    arch_dcache_purge_range((uintptr_t)probe_dma_raw.before,sizeof(probe_dma_raw.before));
+    arch_dcache_purge_range((uintptr_t)probe_dma_raw.data+bytes,tail);
+    arch_dcache_purge_range((uintptr_t)probe_dma_raw.after,sizeof(probe_dma_raw.after));
+    arch_dcache_inval_range((uintptr_t)probe_dma_raw.data,bytes);
+    read_params=(cd_read_params_t){.start_sec=fad,.num_sec=sectors,
+        .buffer=dma_address(probe_dma_raw.data),.is_test=0};
+    probe_stats=stats;probe_service_us=0;
+    uint64_t start=timer_us_gettime64();
+    bool read_ok=command(CD_CMD_DMAREAD,&read_params,5000);
+    uint64_t duration=timer_us_gettime64()-start;
+    probe_stats=NULL;
+    stats->cmd_us+=duration;stats->last_us=duration;stats->reported_bytes=detail.size;
+    arch_dcache_inval_range((uintptr_t)probe_dma_raw.data,bytes);   /* read what the drive wrote, not old lines */
+    if(!read_ok && !kui_cancelled()) {
+        dma_broken=true;
+        kui_log("GD-ROM DMA read did not complete; DMA stays off until reboot");
+    }
+    /* A failed abort may leave firmware owning this static object. */
+    if(poisoned) {dma_broken=true;return KUI_READ_FATAL;}
+    bool guard_ok=kui_guard_is(probe_dma_raw.before,32,0xa5)&&kui_guard_is(probe_dma_raw.after,32,0xa5)&&
+        kui_guard_is(probe_dma_raw.data+bytes,tail,0xa5);
+    if(!guard_ok) {
+        poisoned=true;dma_broken=true;
+        kui_log("DMA PROBE GUARD CORRUPTION: RESET REQUIRED");return KUI_READ_FATAL;
+    }
+    if(!read_ok) return media_changed||kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;
+    /* detail.size is recorded, not enforced: whether a DMA read reports it is unknown, and
+     * the CRC comparison against a PIO read is what proves the data. */
+    *out=probe_dma_raw.data;
     return KUI_READ_OK;
 }
 

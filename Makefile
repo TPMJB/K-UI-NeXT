@@ -8,11 +8,12 @@ CAPTURE = src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/kn
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-images deps diagnostic clean
-test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps
+test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16
 	./build/test-core
 	./build/test-options docs/bench.cfg.example docs/bench-cfgs/*.cfg
 	./build/test-ui-rate
 	./build/test-known-dumps
+	./build/test-crc16
 	./build/test-capture-core
 	./build/test-timing
 	./build/test-disc
@@ -20,6 +21,10 @@ test: build/test-core build/test-capture-core build/test-timing build/test-disc 
 	./build/test-disc media-change
 	./build/test-disc guard-failed
 	./build/test-disc guard-before
+	./build/test-disc dma
+	./build/test-disc dma-fail
+	./build/test-disc dma-timeout
+	./build/test-disc dma-guard
 	python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 deps:
@@ -45,11 +50,15 @@ build/test-known-dumps: tests/test_known_dumps.c src/core/known_dumps.c include/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/known_dumps.c tests/test_known_dumps.c -o $@
 
+build/test-crc16: tests/test_crc16.c src/core/crc16.c include/kui/crc16.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/crc16.c tests/test_crc16.c -o $@
+
 build/test-timing: tests/test_timing.c src/core/timing.c include/kui/timing.h
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/timing.c tests/test_timing.c -o $@
 
-build/test-disc: tests/test_disc.c src/dreamcast/disc.c src/dreamcast/platform.h src/core/command.c src/core/data.c $(wildcard tests/stubs/dc/*.h tests/stubs/kos/*.h) .deps/fatfs/source/ff.h
+build/test-disc: tests/test_disc.c src/dreamcast/disc.c src/dreamcast/platform.h src/core/command.c src/core/data.c $(wildcard tests/stubs/dc/*.h tests/stubs/kos/*.h tests/stubs/arch/*.h) .deps/fatfs/source/ff.h
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c tests/test_disc.c -o $@
 
@@ -65,9 +74,9 @@ build/runtime-image: tests/runtime_image.c $(CORE) src/core/storage_probe.c src/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) src/core/storage_probe.c src/core/runtime_image.c src/core/runtime_file.c $(FATFS) tests/runtime_image.c -o $@
 
-build/bench-image: tests/bench_image.c $(CORE) $(CAPTURE) src/core/options.c src/core/bench.c src/core/storage_probe.c $(FATFS) include/kui/bench.h include/kui/options.h
+build/bench-image: tests/bench_image.c $(CORE) $(CAPTURE) src/core/crc16.c src/core/options.c src/core/bench.c src/core/storage_probe.c $(FATFS) include/kui/bench.h include/kui/options.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(CAPTURE) src/core/options.c src/core/bench.c src/core/storage_probe.c $(FATFS) tests/bench_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(CAPTURE) src/core/crc16.c src/core/options.c src/core/bench.c src/core/storage_probe.c $(FATFS) tests/bench_image.c -o $@
 
 build/report-image: tests/report_image.c $(CORE) src/core/storage_probe.c src/core/report.c $(FATFS) include/kui/report.h
 	@mkdir -p $(@D)

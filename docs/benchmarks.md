@@ -214,17 +214,22 @@ What the outcomes mean:
 [experiment-plan.md](experiment-plan.md) is the plan: what is known, which
 question each run settles, and what each outcome means. This section is the
 reference for what was added to the bench to carry it out. **All of it is off by
-default.** With no new keys in `bench.cfg` the bench runs the same sections in
-the same order as before and adds only the `BENCH cpu` and `BENCH lat` lines
-described below.
+default, with one deliberate exception: the UI is capped at 2 redraws a second
+while an operation runs (`ui_hz=2`).** Trip 1 measured the unthrottled UI taking
+about a third of the CPU ([evidence](evidence/t1-ui-census-2026-09-19.json)), and
+2 Hz recovers nearly all of it (SD write +43%). `ui_hz=full` restores the old
+loop. With no other new keys in `bench.cfg` the bench runs the same sections in
+the same order as before and adds only the `BENCH cpu` and `BENCH lat` lines and
+the CRC16 lines in the hash section, described below.
 
 | Key | What it does |
 |---|---|
-| `ui_hz=full,8,2,0` | One full pass of the selected sections per value: the UI is capped to that many redraws per second while it measures. `full` is today's loop. Also applies to real captures. |
+| `ui_hz=full,8,2,0` | One full pass of the selected sections per value: the UI is capped to that many redraws per second while it measures. **Default 2**; `full` is the old unthrottled loop. Also applies to real captures, resumes and verifies (the first value). |
 | `sections=optical,hash,sd,sweep` | Which sections run. |
 | `sweep_chunks`, `sweep_fads`, `sweep_gap_us`, `sweep_service_us`, `sweep_sectors`, `sweep_verify` | The optical sweep: read size, start sector, idle gap after each command, spin after each firmware poll, and a byte-identity check across read sizes. |
+| `sweep_mode=pio,dma` | **EXPERIMENTAL.** Read with PIO (as capture does) and/or GD-ROM DMA. Needs an even sector count; skips `sweep_service_us`. Details below. |
+| `sweep_spin=off,on` | Run a competing CPU-bound thread during each point and report the CPU it got (`free=`) and how the read fared. |
 | `sd_bytes=65536,131072,...` | Extra SD write sizes in bytes, to test alignment with the 128 KiB clusters. |
-
 | `sections=capture`, `capture_hash`, `end_readback`, `resume_check`, `sample_readback`, `capture_sectors`, `capture_fad`, `capture_type` | The **real capture engine**, at every combination, on the real disc, with each job deleted afterwards. The same keys are options of a real capture (its first value of each list). |
 
 New lines (formats and how to read them: experiment-plan.md section 5):
@@ -236,6 +241,13 @@ BENCH lat write chunk=128 e=0 n=27 min=.. p50=.. p95=.. max=.. slow=0 slow_ms=0
 BENCH sweep uihz=1 fad=45150 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=.. min=.. max=.. bytes=.. us=.. kib_s=..
 BENCH poll fad=45150 c=32 n=a/b/c/d/e
 BENCH verify fad=45150 chunk=64 sectors=512 crc32=........ ref=........ OK
+BENCH dma check fad=45150 sectors=32 result=OK crc32=........ pio=........ reported_bytes=75264 us=..
+BENCH spin calibration: 412 iterations/ms with the worker asleep
+BENCH sweep uihz=1 fad=45150 chunk=128 gap=0 svc=0 reads=16 retry=0 rd=.. min=.. max=.. mode=dma free=99.0 bytes=.. us=.. kib_s=..
+BENCH verify fad=45150 chunk=128 mode=dma sectors=512 crc32=........ ref=........ OK
+BENCH hash uihz=0 crc16-kos cyc_b=.. bytes=.. us=.. kib_s=..
+BENCH hash uihz=0 crc16-table cyc_b=.. (also crc16-slice2, crc16-nibble)
+BENCH hash uihz=0 crc16 agree=OK (4 implementations, identical results)
 BENCH capture uihz=full hash=crc32 end=off sample=0 sectors=4096 result=ok bytes=.. us=.. kib_s=..
 BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=.. sampled=0 verified=0
 BENCH capture parts hash=crc32 end=off sample=0 ms disc=.. edc=.. write=.. read=.. sha=.. crc=.. ckpt=..
@@ -251,14 +263,49 @@ rate in this file is bytes over wall-clock time on a single CPU that the UI
 thread also uses, so `ui_pct` says how much of each measurement the stage did
 not have. Captures print one for the whole operation as well.
 
+**The CRC16 lines** (hash section, always) time KOS's own `net_crc16ccitt`, the loop
+the SD driver runs over every block it writes, against three table-driven versions
+in `src/core/crc16.c`, in 512-byte blocks each from state 0, on the same data.
+`cyc_b` is cycles per byte. `agree=OK` says every version returned the identical
+value; on `MISMATCH` ignore the timings. This is what decides whether patching KOS's
+`sd.c` is worth it (a saving of S cycles a byte speeds an SD write by S/165).
+`docs/bench-cfgs/t1b-crc16.cfg` runs just this in about half a minute.
+
+**The GD-ROM DMA probe and the competing thread** (`docs/bench-cfgs/t6a-dma-probe.cfg`).
+`sweep_mode=dma` reads raw sectors with the drive's DMA command instead of PIO.
+It is **experimental and bench-only**; the capture engine never uses it.
+Before any DMA point it does one checked read against PIO (`BENCH dma check`); a
+drive that cannot do it costs one line, and DMA stays off for the run. What to know:
+
+- It **polls** for completion instead of taking an interrupt. This runtime does not
+  initialize KOS's CD-ROM subsystem (no `INIT_CDROM`), so nothing installs the DMA-end
+  interrupt handler; KOS's own handler just calls `exec_server` and reads the command
+  status, which the polling loop does anyway. If a drive never completes a DMA that
+  way, the probe says so, and an interrupt-driven variant is the next thing to try.
+- Between polls the worker **sleeps**, so the CPU is really free, but completion is
+  noticed up to one 10 ms scheduler tick late: DMA rates are low by about 8% at 32
+  sectors and 2% at 128. Compare at chunk 128.
+- Any DMA that fails to complete, mismatches, or corrupts its guard bytes turns DMA off
+  until reboot: an unfinished transfer may still own the buffer. Every wait is bounded
+  (5 s), so a bad DMA cannot hang the console.
+- Sector counts must be even: 2352-byte sectors make a multiple of 32 bytes only in pairs.
+- `sweep_spin=on` starts a CPU-bound thread at the worker's priority for each point.
+  `free=` is the share of the CPU it got, against its own rate with the worker asleep
+  (`BENCH spin calibration`). During a DMA read it should be near 100%; during PIO it
+  shows what an SD-writing thread would actually be given, and that point's `rd=`
+  against the same PIO point without a competitor shows what it would cost the drive.
+
 Hooks added for it: `src/dreamcast/main.c` (the redraw cap, decided by
 `include/kui/ui_rate.h`; the per-thread CPU snapshot), `src/dreamcast/disc.c`
 (poll-duration buckets in the OPTICAL report, and the bench-only probe read with
-its own guarded buffer), `src/dreamcast/capture.c` (the whole-operation census).
-`src/core/capture.c` and `kui_disc_read_raw` are unchanged. The three firmware
+its own guarded buffer), `src/dreamcast/capture.c` (the whole-operation census), `src/dreamcast/bench.c`
+(the competing-thread spinner and the KOS CRC16 wrapper), and `disc.c`'s
+`kui_disc_read_probe_dma`. `src/core/capture.c` and `kui_disc_read_raw` are unchanged. The three firmware
 callbacks that read uses (`submit`, `poll`, `pause_worker`) gained counters, a
-few instructions per call, which is what feeds the poll buckets in captures. Tests: `tests/test_ui_rate.c` and the shipped-config check in
-`tests/test_options.c` run in `make test`; `tests/bench_image.c` drives the
+few instructions per call, which is what feeds the poll buckets in captures. Tests: `tests/test_ui_rate.c`, `tests/test_crc16.c`, the DMA probe against a fake
+firmware and a recording cache double (`test-disc dma`, `dma-fail`, `dma-timeout`,
+`dma-guard`) and the shipped-config check in `tests/test_options.c` run in
+`make test`; `tests/bench_image.c` drives the
 whole bench against a fake drive and a real FAT32/exFAT image
 (`make test-images`).
 

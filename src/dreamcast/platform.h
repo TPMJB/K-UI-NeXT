@@ -28,6 +28,9 @@ void kui_disc_set_yield_us(unsigned us);
 /* Bench-only optical read for the sweep (see kui/bench.h). */
 enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors,unsigned service_us,
     const uint8_t **data,struct kui_probe_stats *stats);
+/* Bench-only GD-ROM DMA read of raw sectors (EXPERIMENTAL; even sector counts only). */
+enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sectors,
+    const uint8_t **data,struct kui_probe_stats *stats);
 /* Cap UI redraws per second while an operation runs. KUI_OPT_UI_FULL restores
  * the unthrottled loop. Input is still polled at the same rate, so B still stops. */
 void kui_ui_set_hz(unsigned hz);

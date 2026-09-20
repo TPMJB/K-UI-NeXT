@@ -50,11 +50,12 @@ note=
 # for each step are in docs/bench-cfgs/.
 #
 # UI redraws per second while an operation runs, one full pass of the selected
-# sections per value ('full' = today's unthrottled loop; 0..30 otherwise). The
-# UI thread shares the one CPU with the measurement, so every result depends on
-# it; each pass is tagged uihz= in its lines and BENCH cpu lines report the
-# UI's share. It also applies to real captures. 0 freezes the screen while
-# busy (B still stops). Up to 4 values.
+# sections per value (0..30, or 'full' = the old unthrottled loop). DEFAULT 2:
+# measured on the console, the unthrottled UI took ~32% of the CPU and 2 Hz costs
+# ~5% (SD write +43%). The UI thread shares the one CPU with the measurement, so
+# every result depends on it; each pass is tagged uihz= in its lines and BENCH cpu
+# lines report the UI's share. It also applies to real captures (the first
+# value). 0 freezes the screen while busy (B still stops). Up to 4 values.
 #ui_hz=full,8,2,0
 #
 # Which sections run. Default optical,hash,sd. 'sweep' is the optical sweep.
@@ -69,6 +70,11 @@ note=
 #sweep_sectors=2048            # per point; 32..65536
 #sweep_verify=on               # prove every read size returns identical bytes
 #                               (data tracks only; turn off for audio)
+#sweep_mode=pio,dma            # EXPERIMENTAL: also read with GD-ROM DMA (even sector
+#                               counts; a DMA that never completes turns DMA off until
+#                               reboot). See docs/bench-cfgs/t6a-dma-probe.cfg
+#sweep_spin=off,on             # run a competing CPU-bound thread; reports free= (its
+#                               CPU share) and what it costs the read
 #
 # Extra SD write sizes in BYTES (whole 512-byte blocks, 4096..1204224, up to 6),
 # run in addition to chunks= to test alignment with the 128 KiB clusters.

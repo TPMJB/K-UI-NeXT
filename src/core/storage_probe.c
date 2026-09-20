@@ -14,6 +14,11 @@ bool kui_mount(FATFS *fs, kui_log_fn log) {
         const char *problem = kui_media_problem();
         if(problem) log("%s", problem);
         else log("Requires a valid FAT32 or exFAT filesystem");
+        /* FatFs registered `fs` BEFORE trying to mount and keeps that pointer until told
+         * otherwise, failure or not. Every caller returns after a failure and drops the
+         * object, so leaving it registered made the NEXT f_mount write a byte through a
+         * dangling pointer (into a dead stack frame, or freed heap). */
+        f_mount(NULL, "0:", 0);
         return false;
     }
     if(fs->fs_type != FS_FAT32 && fs->fs_type != FS_EXFAT) {

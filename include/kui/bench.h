@@ -37,6 +37,7 @@ static inline unsigned kui_probe_bucket(uint64_t us) {   /* <25 <100 <400 <1600 
 struct kui_probe_stats {
     uint64_t cmd_us, last_us;               /* read command time, total and last call */
     uint64_t submit_us, pause_us, polls, pauses;
+    uint64_t reported_bytes;   /* what the firmware said it transferred (DMA reports are unproven) */
     uint64_t poll_n[KUI_PROBE_BUCKETS], poll_us[KUI_PROBE_BUCKETS];
 };
 
@@ -72,12 +73,29 @@ struct kui_bench_ops {
     enum kui_capture_result (*capture_run)(void *, uint32_t fad, unsigned sectors, bool audio,
         enum kui_capture_mode mode, const struct kui_capture_options *options,
         struct kui_capture_stats *stats);
+    /* KOS's net_crc16ccitt, the SD driver's CRC on every block, so the bench can time it
+     * against kui_crc16_* on the same data. NULL where there is no such function. */
+    uint16_t (*crc16_kos)(void *, const uint8_t *data, size_t bytes, uint16_t start);
+    /* GD-ROM DMA variant of read_probe (sectors must be even; no service argument, since
+     * nothing needs polling). NULL = unavailable. EXPERIMENTAL: see kui/options.h. */
+    enum kui_read_result (*read_probe_dma)(void *, uint32_t fad, unsigned sectors,
+        const uint8_t **data, struct kui_probe_stats *stats);
+    /* A CPU-bound thread at the worker's priority, for measuring how much CPU a read leaves
+     * free and how a read fares when something else wants the CPU, which is what a thread
+     * that writes to the SD card would be. spin_count is its running loop count. */
+    void (*spin)(void *, bool on);
+    uint64_t (*spin_count)(void *);
+    /* Block the calling thread (a sleep, not a busy-wait) so the spinner gets the CPU. */
+    void (*sleep_ms)(void *, unsigned ms);
 };
 enum kui_bench_result { KUI_BENCH_FAILED, KUI_BENCH_STOPPED, KUI_BENCH_COMPLETE };
 
-/* Sole I/O worker, media connected. Mounts, runs optical -> hash -> SD in
- * that order (optical first so the drive state matches a fresh INIT plus one
- * warm-up read every time), unmounts. The SD scratch file is always removed. */
+/* Sole I/O worker. The SD link is CLOSED on entry (the console closes it after reading
+ * bench.cfg): the sections that need the card (sd, capture) open it themselves through
+ * ops->reconnect and mount and unmount around their own work, and the caller closes the
+ * link when the bench returns. Optical and hash touch no card. Runs optical -> hash -> SD ->
+ * sweep -> capture in that order (optical first so the drive state matches a fresh INIT plus
+ * one warm-up read every time). The SD scratch file and every capture job are always removed. */
 enum kui_bench_result kui_bench(const struct kui_bench_ops *ops,
                                 const struct kui_options *opt);
 #endif

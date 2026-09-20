@@ -16,12 +16,13 @@ static void bench_log(const char *format,...) {
 }
 enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool audio,
     enum kui_capture_mode mode,const struct kui_capture_options *options,struct kui_capture_stats *stats) {
-    if(!kui_sd_connect()) return KUI_CAPTURE_FAILED;
+    /* The card is the bench's, not this function's: bench_capture (src/core/bench.c) opens it,
+     * mounts it to check free space before the first run and again after every run to delete
+     * the job, and the console closes it when the bench ends. Opening and closing it here left
+     * it closed for both of those. */
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,NULL,bench_log,"000000000000",now_us,
         kui_disc_timing_phase,options,stats};
-    enum kui_capture_result result=kui_capture_bench(&ops,fad,sectors,audio,mode);
-    kui_sd_disconnect();
-    return result;
+    return kui_capture_bench(&ops,fad,sectors,audio,mode);
 }
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build) {
     struct kui_toc sessions[2];struct kui_capture_plan plan;

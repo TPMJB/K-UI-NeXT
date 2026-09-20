@@ -26,11 +26,13 @@
  *   sd_crc=on,off          CRC16 read-verification settings to sweep
  *   note=any text          echoed into the log (card model, drive, etc.)
  *
- * Experiment keys (docs/experiment-plan.md). All default to today's behaviour.
+ * Experiment keys (docs/experiment-plan.md). All default to the shipped behaviour
+ * except ui_hz, which defaults to 2: the unthrottled UI was measured taking ~32% of
+ * the CPU (docs/evidence/t1-ui-census-2026-09-19.json).
  *
  *   ui_hz=full,4,0         max UI redraws per second WHILE an operation runs;
  *                          each value is one full pass of the sections below
- *                          ('full' = the unthrottled loop that ships today)
+ *                          (default 2; 'full' = the old unthrottled loop)
  *   sections=optical,hash,sd,sweep
  *                          which bench sections run (default: optical,hash,sd)
  *   sweep_chunks=8,32,128  optical read sizes in sectors (1..128); the sweep
@@ -43,6 +45,14 @@
  *   sweep_sectors=2048     sectors read per sweep point
  *   sweep_verify=on        re-read and CRC each (fad, chunk) to prove larger
  *                          reads return identical bytes
+ *   sweep_mode=pio,dma     how the sweep reads: PIO (as capture does) and/or GD-ROM
+ *                          DMA. EXPERIMENTAL: DMA needs an even sector count, skips
+ *                          sweep_service_us (nothing to poll), and if a DMA read
+ *                          never completes the run says so and DMA stays off until
+ *                          a reboot
+ *   sweep_spin=off,on      run a competing CPU-bound thread during each point and
+ *                          report how much CPU it got (free=) and how the read fared:
+ *                          what a thread that writes to the SD card would see and cost
  *   sd_bytes=131072,...    extra SD write sizes in BYTES (multiples of 512),
  *                          to test alignment against the 128 KiB clusters
  *
@@ -104,6 +114,8 @@ struct kui_options {
     unsigned sweep_service_us[KUI_OPT_SWEEP_LIST_MAX], sweep_service_count;
     unsigned sweep_sectors;
     bool sweep_verify;
+    bool sweep_dma[KUI_OPT_SD_MAX];  unsigned sweep_mode_count;   /* false = PIO, true = DMA */
+    bool sweep_spin[KUI_OPT_SD_MAX]; unsigned sweep_spin_count;
     unsigned sd_bytes[KUI_OPT_SDBYTES_MAX], sd_bytes_count;
     /* Capture engine choices; every list always has at least one value. */
     bool capture_crc_only[KUI_OPT_SD_MAX];   unsigned capture_hash_count;

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/bench.h"
+#include "kui/crc16.h"
 #include "kui/hash.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -110,6 +111,58 @@ static enum kui_bench_result bench_optical(const struct kui_options *o) {
  * cycles per byte on the 200 MHz SH4: the number to compare implementations.
  * It is wall-clock cycles, so it includes whatever the UI thread took; the
  * census line after each result says how much that was. */
+/* --- CRC16 -----------------------------------------------------------------
+ * The SD driver computes a CRC16 over every 512-byte block it writes (and reads,
+ * with check_crc on). This times KOS's own function against the table versions in
+ * kui/crc16.h on the same data, in the same 512-byte blocks each from state 0, and
+ * checks all of them return identical values. It is what decides whether replacing
+ * KOS's loop is worth doing; nothing else on the console changes. */
+typedef uint16_t (*crc16_fn)(uint16_t, const void *, size_t);
+static uint16_t kos_crc16(uint16_t crc, const void *data, size_t bytes) {
+    return ops->crc16_kos(ops->ctx, data, bytes, crc);
+}
+static enum kui_bench_result time_crc16(const char *name, crc16_fn f, unsigned mib, uint32_t *fold_out) {
+    uint64_t target = (uint64_t)mib * MIB, done = 0;
+    uint32_t fold = 0;   /* every block's CRC folded into one value, to compare implementations */
+    char detail[48];
+    cpu_begin();
+    uint64_t start = now();
+    while(done < target) {
+        for(size_t offset = 0; offset + 512 <= sizeof(buffer); offset += 512)
+            fold = fold * 31u + f(0, buffer + offset, 512);
+        done += sizeof(buffer) / 512 * 512;
+        if(cancelled()) return KUI_BENCH_STOPPED;
+    }
+    uint64_t us = now() - start, cyc_b = done ? SH4_HZ * us / 1000000ull / done : 0;
+    snprintf(detail, sizeof(detail), "%s %s cyc_b=%" PRIu64, ui_tag, name, cyc_b);
+    result("hash", detail, done, us);
+    cpu_end(name, ui_tag);
+    *fold_out = fold;
+    return KUI_BENCH_COMPLETE;
+}
+static enum kui_bench_result bench_crc16(unsigned mib) {
+    static const struct { const char *name; crc16_fn f; } ours[] = {
+        {"crc16-table", kui_crc16_table}, {"crc16-slice2", kui_crc16_slice2},
+        {"crc16-nibble", kui_crc16_nibble}};
+    uint32_t fold[4];
+    unsigned n = 0;
+    enum kui_bench_result rc;
+    if(ops->crc16_kos) {
+        rc = time_crc16("crc16-kos", kos_crc16, mib, &fold[n++]);
+        if(rc != KUI_BENCH_COMPLETE) return rc;
+    }
+    for(unsigned i = 0; i < 3; ++i) {
+        rc = time_crc16(ours[i].name, ours[i].f, mib, &fold[n++]);
+        if(rc != KUI_BENCH_COMPLETE) return rc;
+    }
+    bool same = true;
+    for(unsigned i = 1; i < n; ++i) if(fold[i] != fold[0]) same = false;
+    if(same) ops->log("BENCH hash %s crc16 agree=OK (%u implementations, identical results)", ui_tag, n);
+    else ops->log("BENCH hash %s crc16 agree=MISMATCH %08" PRIx32 "/%08" PRIx32 "/%08" PRIx32 "/%08" PRIx32,
+        ui_tag, fold[0], fold[1], n > 2 ? fold[2] : 0, n > 3 ? fold[3] : 0);
+    return KUI_BENCH_COMPLETE;
+}
+
 static enum kui_bench_result bench_hash(unsigned mib) {
     uint64_t target = (uint64_t)mib * MIB, done = 0;
     struct kui_sha256 sha;
@@ -144,7 +197,7 @@ static enum kui_bench_result bench_hash(unsigned mib) {
     cpu_end("crc32", ui_tag);
     kui_hex(digest, 8, hex);
     ops->log("bench hash sha256=%s... crc32=%08" PRIx32, hex, crc);
-    return KUI_BENCH_COMPLETE;
+    return bench_crc16(mib);
 }
 
 /* --- SD ------------------------------------------------------------------- */
@@ -364,14 +417,16 @@ static enum kui_bench_result bench_sd(const struct kui_options *o) {
  * returns their CRC32. Reading the same range with different command sizes
  * must give identical bytes; if it does not, a faster size is not usable.
  * Meaningful on data tracks only: raw audio may legitimately differ per read. */
-static bool sweep_crc(unsigned fad, unsigned chunk, unsigned sectors, uint32_t *crc_out) {
+static bool sweep_crc(unsigned fad, unsigned chunk, unsigned sectors, bool dma, uint32_t *crc_out) {
     struct kui_probe_stats st;
     uint32_t crc = 0;
     memset(&st, 0, sizeof(st));
     while(sectors) {
         unsigned n = sectors > chunk ? chunk : sectors;
         const uint8_t *data = NULL;
-        if(ops->read_probe(ops->ctx, fad, n, 0, &data, &st) != KUI_READ_OK || !data) return false;
+        enum kui_read_result r = dma ? ops->read_probe_dma(ops->ctx, fad, n, &data, &st)
+                                     : ops->read_probe(ops->ctx, fad, n, 0, &data, &st);
+        if(r != KUI_READ_OK || !data) return false;
         crc = kui_crc32(crc, data, (size_t)n * KUI_RAW_BYTES);
         fad += n; sectors -= n;
         if(cancelled()) return false;
@@ -391,13 +446,70 @@ static void poll_lines(const char *brief, const struct kui_probe_stats *st) {
 /* One (fad, chunk, gap, service) point. Returns COMPLETE for a point that had
  * to be skipped (its reason is logged) so one unreadable range cannot end a
  * long sweep; STOPPED and FAILED end it. */
+/* The competing thread's loop iterations per millisecond when the worker is asleep
+ * and nothing else runs. "Free" CPU during a read is its count over that rate. */
+static uint64_t spin_per_ms;
+static bool dma_ok;   /* set by the capability check; cleared if a DMA read later fails */
+
+static bool calibrate_spin(void) {
+    uint64_t c0, c1, t0, t1;
+    ops->spin(ops->ctx, true);
+    c0 = ops->spin_count(ops->ctx); t0 = now();
+    ops->sleep_ms(ops->ctx, 100);
+    c1 = ops->spin_count(ops->ctx); t1 = now();
+    ops->spin(ops->ctx, false);
+    spin_per_ms = t1 > t0 ? (c1 - c0) * 1000 / (t1 - t0) : 0;
+    ops->log("BENCH spin calibration: %" PRIu64 " iterations/ms with the worker asleep", spin_per_ms);
+    return spin_per_ms != 0;
+}
+
+/* Before any DMA point: does a GD-ROM DMA read of raw 2352-byte sectors work at all on
+ * this drive, and does it return the same bytes as PIO? One read, checked, before
+ * anything is swept, so a drive that cannot do it costs one line, not a bad run. */
+static bool dma_check(const struct kui_options *o, unsigned fad) {
+    struct kui_probe_stats st;
+    const uint8_t *data = NULL;
+    uint32_t pio = 0, dma;
+    memset(&st, 0, sizeof(st));
+    if(!ops->read_probe_dma) {
+        ops->log("BENCH dma skipped: this platform has no GD-ROM DMA probe");
+        return false;
+    }
+    if(!sweep_crc(fad, KUI_CAPTURE_CHUNK, KUI_CAPTURE_CHUNK, false, &pio)) {
+        ops->log("BENCH dma check fad=%u: PIO reference read failed; DMA not tried", fad);
+        return false;
+    }
+    enum kui_read_result r = ops->read_probe_dma(ops->ctx, fad, KUI_CAPTURE_CHUNK, &data, &st);
+    if(r != KUI_READ_OK || !data) {
+        ops->log("BENCH dma check fad=%u sectors=%u result=FAILED; DMA stays off until reboot",
+            fad, KUI_CAPTURE_CHUNK);
+        return false;
+    }
+    dma = kui_crc32(0, data, (size_t)KUI_CAPTURE_CHUNK * KUI_RAW_BYTES);
+    bool same = dma == pio;
+    ops->log("BENCH dma check fad=%u sectors=%u result=%s crc32=%08" PRIx32 " pio=%08" PRIx32
+        " reported_bytes=%" PRIu64 " us=%" PRIu64, fad, KUI_CAPTURE_CHUNK,
+        same ? "OK" : o->sweep_verify ? "MISMATCH" : "OK(unverified)", dma, pio, st.reported_bytes, st.cmd_us);
+    return same || !o->sweep_verify;   /* audio may legitimately differ between two reads */
+}
+
+/* One (fad, chunk, gap, service, mode, spin) point. Returns COMPLETE for a point that
+ * had to be skipped (its reason is logged) so one unreadable range cannot end a long
+ * sweep; STOPPED and FAILED end it. A failed DMA read turns DMA off and skips. */
 static enum kui_bench_result sweep_point(unsigned fad, unsigned chunk, unsigned gap,
-                                         unsigned svc, unsigned sectors) {
+                                         unsigned svc, unsigned sectors, bool dma, bool spin) {
     struct kui_probe_stats st;
     const uint8_t *data = NULL;
     memset(&st, 0, sizeof(st));
     /* Discarded: seek, spin-up and the drive's first-command overhead. */
-    enum kui_read_result r = ops->read_probe(ops->ctx, fad, chunk, 0, &data, &st);
+    enum kui_read_result r = dma ? ops->read_probe_dma(ops->ctx, fad, chunk, &data, &st)
+                                 : ops->read_probe(ops->ctx, fad, chunk, 0, &data, &st);
+    if(dma && r != KUI_READ_OK) {
+        if(cancelled()) return KUI_BENCH_STOPPED;
+        ops->log("BENCH sweep dma fad=%u chunk=%u: warm-up failed; DMA off until reboot", fad, chunk);
+        dma_ok = false;
+        return KUI_BENCH_COMPLETE;
+    }
     if(r == KUI_READ_FATAL) {
         ops->log("BENCH sweep warm-up failed fad=%u chunk=%u", fad, chunk);
         return KUI_BENCH_FAILED;
@@ -408,38 +520,53 @@ static enum kui_bench_result sweep_point(unsigned fad, unsigned chunk, unsigned 
     }
     memset(&st, 0, sizeof(st));
     unsigned remaining = sectors, cur = fad, retries = 0;
-    uint64_t bytes = 0, reads = 0, min_us = UINT64_MAX, max_us = 0;
+    uint64_t bytes = 0, reads = 0, min_us = UINT64_MAX, max_us = 0, spin0 = 0;
     cpu_begin();
+    if(spin) { ops->spin(ops->ctx, true); spin0 = ops->spin_count(ops->ctx); }
     uint64_t start = now();
     while(remaining) {
         unsigned n = remaining > chunk ? chunk : remaining;
-        r = ops->read_probe(ops->ctx, cur, n, svc, &data, &st);
+        r = dma ? ops->read_probe_dma(ops->ctx, cur, n, &data, &st)
+                : ops->read_probe(ops->ctx, cur, n, svc, &data, &st);
         if(r == KUI_READ_OK) {
             cur += n; remaining -= n; bytes += (uint64_t)n * KUI_RAW_BYTES; ++reads;
             if(st.last_us < min_us) min_us = st.last_us;
             if(st.last_us > max_us) max_us = st.last_us;
-        } else if(r == KUI_READ_RETRY && retries < 2) {
+        } else if(r == KUI_READ_RETRY && retries < 2 && !dma) {
             ++retries;
         } else {
-            ops->log("BENCH sweep skipped fad=%u chunk=%u: read failed at %u", fad, chunk, cur);
-            return r == KUI_READ_FATAL ? KUI_BENCH_FAILED : KUI_BENCH_COMPLETE;
+            if(spin) ops->spin(ops->ctx, false);
+            if(cancelled()) return KUI_BENCH_STOPPED;
+            ops->log("BENCH sweep skipped fad=%u chunk=%u: read failed at %u%s", fad, chunk, cur,
+                dma ? " (DMA off until reboot)" : "");
+            if(dma) dma_ok = false;
+            return r == KUI_READ_FATAL && !dma ? KUI_BENCH_FAILED : KUI_BENCH_COMPLETE;
         }
-        if(cancelled()) return KUI_BENCH_STOPPED;
+        if(cancelled()) { if(spin) ops->spin(ops->ctx, false); return KUI_BENCH_STOPPED; }
         if(gap && remaining) spin_us(gap);
     }
-    uint64_t wall = now() - start;
+    uint64_t wall = now() - start, spun = 0;
+    if(spin) { spun = ops->spin_count(ops->ctx) - spin0; ops->spin(ops->ctx, false); }
     uint64_t rd = st.cmd_us ? bytes * 10000000ull / (st.cmd_us * 1024ull) : 0;   /* KiB/s x10 */
-    char detail[112], brief[48];
+    /* CPU left over for the competing thread, in tenths of a percent, capped at 100%. */
+    uint64_t expect = spin_per_ms * (wall / 1000), free_pm = expect ? spun * 1000 / expect : 0;
+    if(free_pm > 1000) free_pm = 1000;
+    char extra[48] = "", detail[256], brief[56];   /* 256: the worst case of every field at full width */
+    if(dma) snprintf(extra, sizeof(extra), " mode=dma");
+    if(spin) {
+        size_t used = strlen(extra);
+        snprintf(extra + used, sizeof(extra) - used, " free=%" PRIu64 ".%" PRIu64, free_pm / 10, free_pm % 10);
+    }
     snprintf(detail, sizeof(detail),
         "%s fad=%u chunk=%u gap=%u svc=%u reads=%" PRIu64 " retry=%u rd=%" PRIu64 ".%" PRIu64
-        " min=%" PRIu64 " max=%" PRIu64, ui_tag, fad, chunk, gap, svc, reads, retries,
-        rd / 10, rd % 10, reads ? min_us : 0, max_us);
+        " min=%" PRIu64 " max=%" PRIu64 "%s", ui_tag, fad, chunk, gap, svc, reads, retries,
+        rd / 10, rd % 10, reads ? min_us : 0, max_us, extra);
     result("sweep", detail, bytes, wall);
-    snprintf(brief, sizeof(brief), "c=%u g=%u s=%u", chunk, gap, svc);
+    snprintf(brief, sizeof(brief), "c=%u g=%u s=%u%s%s", chunk, gap, svc, dma ? " dma" : "", spin ? " spin" : "");
     cpu_end("sweep", brief);
-    /* Poll buckets only where they mean something: back-to-back commands with
-     * the normal policy. With a gap or a service spin they measure the spin. */
-    if(!gap && !svc) {
+    /* Poll buckets only where they mean something: back-to-back PIO commands with
+     * the normal policy. With a gap, a service spin, DMA or a competitor they do not. */
+    if(!gap && !svc && !dma && !spin) {
         snprintf(brief, sizeof(brief), "fad=%u c=%u", fad, chunk);
         poll_lines(brief, &st);
     }
@@ -456,12 +583,21 @@ static enum kui_bench_result bench_sweep(const struct kui_options *o) {
     unsigned ng = o->sweep_gap_count ? o->sweep_gap_count : 1;
     unsigned ns = o->sweep_service_count ? o->sweep_service_count : 1;
     unsigned vsec = o->sweep_sectors < 512 ? o->sweep_sectors : 512;
+    bool want_dma = false, want_spin = false, spin_ok = true;
+    for(unsigned m = 0; m < o->sweep_mode_count; ++m) want_dma = want_dma || o->sweep_dma[m];
+    for(unsigned p = 0; p < o->sweep_spin_count; ++p) want_spin = want_spin || o->sweep_spin[p];
+    if(want_spin) {
+        spin_ok = ops->spin && ops->spin_count && ops->sleep_ms && calibrate_spin();
+        if(!spin_ok) ops->log("BENCH spin skipped: no competing-thread support here");
+    }
+    dma_ok = want_dma && dma_check(o, o->sweep_fad_count ? o->sweep_fads[0] : o->optical_fad);
+    if(cancelled()) return KUI_BENCH_STOPPED;
     for(unsigned f = 0; f < nf; ++f) {
         unsigned fad = o->sweep_fad_count ? o->sweep_fads[f] : o->optical_fad;
         uint32_t ref = 0;
         bool have_ref = false;
         if(o->sweep_verify) {
-            have_ref = sweep_crc(fad, KUI_CAPTURE_CHUNK, vsec, &ref);
+            have_ref = sweep_crc(fad, KUI_CAPTURE_CHUNK, vsec, false, &ref);
             if(!have_ref && cancelled()) return KUI_BENCH_STOPPED;
             if(!have_ref) ops->log("BENCH verify fad=%u: reference read failed; skipped", fad);
         }
@@ -469,19 +605,40 @@ static enum kui_bench_result bench_sweep(const struct kui_options *o) {
             unsigned chunk = o->sweep_chunks[c];
             for(unsigned g = 0; g < ng; ++g) {
                 for(unsigned s = 0; s < ns; ++s) {
-                    enum kui_bench_result rc = sweep_point(fad, chunk,
-                        o->sweep_gap_count ? o->sweep_gap_us[g] : 0,
-                        o->sweep_service_count ? o->sweep_service_us[s] : 0, o->sweep_sectors);
-                    if(rc != KUI_BENCH_COMPLETE) return rc;
+                    unsigned gap = o->sweep_gap_count ? o->sweep_gap_us[g] : 0;
+                    unsigned svc = o->sweep_service_count ? o->sweep_service_us[s] : 0;
+                    for(unsigned m = 0; m < o->sweep_mode_count; ++m) {
+                        bool dma = o->sweep_dma[m];
+                        /* DMA has nothing to poll (no service spin) and moves whole 32-byte
+                         * multiples: 2352-byte sectors only make one for an even count. */
+                        if(dma && (!dma_ok || svc)) continue;
+                        if(dma && ((chunk & 1u) || (o->sweep_sectors & 1u))) {
+                            ops->log("BENCH sweep dma fad=%u chunk=%u skipped: needs an even sector count", fad, chunk);
+                            continue;
+                        }
+                        for(unsigned p = 0; p < o->sweep_spin_count; ++p) {
+                            if(o->sweep_spin[p] && !spin_ok) continue;
+                            enum kui_bench_result rc = sweep_point(fad, chunk, gap, svc, o->sweep_sectors,
+                                dma, o->sweep_spin[p]);
+                            if(rc != KUI_BENCH_COMPLETE) return rc;
+                        }
+                    }
                 }
             }
             if(have_ref) {
                 uint32_t crc = 0;
-                if(sweep_crc(fad, chunk, vsec, &crc))
+                if(sweep_crc(fad, chunk, vsec, false, &crc))
                     ops->log("BENCH verify fad=%u chunk=%u sectors=%u crc32=%08" PRIx32 " ref=%08" PRIx32 " %s",
                         fad, chunk, vsec, crc, ref, crc == ref ? "OK" : "MISMATCH");
                 else if(cancelled()) return KUI_BENCH_STOPPED;
                 else ops->log("BENCH verify fad=%u chunk=%u: read failed", fad, chunk);
+                if(want_dma && dma_ok && !(chunk & 1u) && !(vsec & 1u)) {
+                    if(sweep_crc(fad, chunk, vsec, true, &crc))
+                        ops->log("BENCH verify fad=%u chunk=%u mode=dma sectors=%u crc32=%08" PRIx32 " ref=%08" PRIx32 " %s",
+                            fad, chunk, vsec, crc, ref, crc == ref ? "OK" : "MISMATCH");
+                    else if(cancelled()) return KUI_BENCH_STOPPED;
+                    else { ops->log("BENCH verify fad=%u chunk=%u mode=dma: read failed; DMA off", fad, chunk); dma_ok = false; }
+                }
             }
         }
     }
@@ -528,6 +685,17 @@ static enum kui_bench_result bench_capture(const struct kui_options *o) {
     if(!ops->capture_run) {
         ops->log("BENCH capture skipped: no readable disc");
         return KUI_BENCH_COMPLETE;
+    }
+    /* The bench owns the card for this whole section: opened here, kept open through every
+     * run and the cleanup after each, closed by the console when the bench ends. The console
+     * closes it after reading bench.cfg, and this section used to mount it without opening it
+     * ("Mount failed: FatFs=3 / Storage device is not connected") and, had that worked, would
+     * have failed again in every job cleanup. A real capture always runs on the default
+     * transport (SCIF, read CRC checked), so that is what is measured here, whatever the SD
+     * section is sweeping. */
+    if(ops->reconnect && ops->reconnect(ops->ctx, 0, true) < 0) {
+        ops->log("BENCH capture skipped: card did not come back");
+        return KUI_BENCH_FAILED;
     }
     FATFS fs;
     bool room;

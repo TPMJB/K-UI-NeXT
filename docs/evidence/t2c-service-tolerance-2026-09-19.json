@@ -1,0 +1,195 @@
+{
+  "received_date": "2026-09-19",
+  "runtime_build": "8387322aa7e9",
+  "experiment": "Trip 2c: how long can the CPU be away from the drive between firmware polls? A spin of svc microseconds after every poll inside a 32-sector PIO read, at FAD 45150.",
+  "inputs": [
+    {
+      "file": "T2C diagnostics.txt",
+      "kept_as": "t2c-service-tolerance-2026-09-19.txt",
+      "bytes": 9525,
+      "sha256": "8ed7c1303366a2d7f544098ef3bf9278ec659b96383ec463a974753d32f08758",
+      "note": "two complete bench runs in one saved log; the on-screen log wraps at 76 characters and was re-joined for parsing"
+    }
+  ],
+  "config": {
+    "file": "docs/bench-cfgs/t2c-optical-service.cfg",
+    "ui_hz": [
+      1
+    ],
+    "sections": [
+      "sweep"
+    ],
+    "sweep_fads": [
+      45150
+    ],
+    "sweep_chunks": [
+      32
+    ],
+    "sweep_service_us": [
+      0,
+      1000,
+      4000,
+      10000
+    ],
+    "sweep_sectors": 2048,
+    "sweep_verify": false,
+    "yield_us": 2000
+  },
+  "hardware": {
+    "sd": {
+      "filesystem": "exFAT",
+      "sectors": 249997312,
+      "cluster_bytes": 131072,
+      "transport": "SCIF (bit-banged SPI)"
+    },
+    "disc": "Not named in the report. The TOC (tracks at FAD 150 / 1076 / 45150, lead-out 549300) matches Sword of the Berserk, as in t1-ui-census-2026-09-19.json.",
+    "note": "CMD 24 FAILED sense=6/40 at the start of a run is the drive's first INIT after a disc change, not an error."
+  },
+  "runs": [
+    {
+      "0": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1288.5,
+        "min_us": 24465,
+        "max_us": 67148,
+        "bytes": 4816896,
+        "us": 3663914,
+        "kib_s": 1283.8,
+        "ui_pct": 1.4
+      },
+      "1000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1259.0,
+        "min_us": 28227,
+        "max_us": 70952,
+        "bytes": 4816896,
+        "us": 3749251,
+        "kib_s": 1254.6,
+        "ui_pct": 3.2
+      },
+      "4000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1192.8,
+        "min_us": 43184,
+        "max_us": 86487,
+        "bytes": 4816896,
+        "us": 3956800,
+        "kib_s": 1188.8,
+        "ui_pct": 3.3
+      },
+      "10000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 978.5,
+        "min_us": 73124,
+        "max_us": 116400,
+        "bytes": 4816896,
+        "us": 4820328,
+        "kib_s": 975.8,
+        "ui_pct": 2.7
+      },
+      "poll_calls_by_duration_svc0": "262462/80/0/1955/14",
+      "poll_ms_by_duration_svc0": "1004/3/0/1426/68"
+    },
+    {
+      "0": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1190.0,
+        "min_us": 24694,
+        "max_us": 71496,
+        "bytes": 4816896,
+        "us": 3965870,
+        "kib_s": 1186.1,
+        "ui_pct": 2.5
+      },
+      "1000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1188.3,
+        "min_us": 28222,
+        "max_us": 78097,
+        "bytes": 4816896,
+        "us": 3971510,
+        "kib_s": 1184.4,
+        "ui_pct": 3.6
+      },
+      "4000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1181.7,
+        "min_us": 43207,
+        "max_us": 87527,
+        "bytes": 4816896,
+        "us": 3993760,
+        "kib_s": 1177.8,
+        "ui_pct": 3.5
+      },
+      "10000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 969.6,
+        "min_us": 73119,
+        "max_us": 111526,
+        "bytes": 4816896,
+        "us": 4864556,
+        "kib_s": 966.9,
+        "ui_pct": 3.2
+      },
+      "poll_calls_by_duration_svc0": "294680/71/0/1933/21",
+      "poll_ms_by_duration_svc0": "1128/3/0/1414/80"
+    }
+  ],
+  "derived": {
+    "mean_rd_kib_s": {
+      "0": 1239.2,
+      "1000": 1223.7,
+      "4000": 1187.2,
+      "10000": 974.0
+    },
+    "loss_vs_svc0_pct_per_run": [
+      {
+        "1000": -2.3,
+        "4000": -7.4,
+        "10000": -24.1
+      },
+      {
+        "1000": -0.1,
+        "4000": -0.7,
+        "10000": -18.5
+      }
+    ],
+    "rd_spread_between_runs_pct": {
+      "svc0": 7.9,
+      "svc1000": 5.8,
+      "svc4000": 0.9,
+      "svc10000": 0.9
+    },
+    "slice_bytes_of_cpu_work": {
+      "note": "CPU work that fits in one slice at the measured rates (ui_hz=0): SD write 1180 KiB/s, SHA-256 2480 KiB/s",
+      "sd_write_bytes": {
+        "1000": 1208,
+        "4000": 4833,
+        "10000": 12083
+      },
+      "sha256_bytes": {
+        "1000": 2540,
+        "4000": 10158,
+        "10000": 25395
+      }
+    },
+    "conclusions": [
+      "Reads lose 0.1% to 2.3% at 1 ms of CPU-away time per poll, 0.7% to 7.4% at 4 ms (the two runs differ because their svc=0 baselines differ), and 18.5% to 24.1% at 10 ms.",
+      "The svc>0 rates are consistent between runs (spread 0.9% at 4 ms, 0.9% at 10 ms); the svc=0 rate is not (7.9% apart). So the loss at 4 ms is somewhere between 0.7% and 7.4%, and at 10 ms it is a clear 18.5-24.1%.",
+      "Consequence for the design: a single-threaded pipeline that does at most about 4 ms of SD-write or hash work between polls of the drive costs little (SD write moves about 1.2 KB per ms and SHA-256 hashes about 2.5 KB per ms, so a 4 ms slice is roughly 4.8 KB written or 10.0 KB hashed); a slice of 10 ms costs about a fifth of the read rate. This is the cooperative-interleave regime of the plan's decision table, with a small penalty, not a thread-only regime.",
+      "This measures the drive's tolerance only. Whether the SD write can be cut into 4 ms slices cheaply is a separate question for Trip 3 (small write sizes)."
+    ]
+  },
+  "limitations": [
+    "One card, one disc, one console; two runs; the svc=0 baseline moved 8% between them, which is larger than the effect at 1 ms and 4 ms.",
+    "ui_hz=1, so the UI took 1.4-3.6% of the CPU in these runs."
+  ]
+}

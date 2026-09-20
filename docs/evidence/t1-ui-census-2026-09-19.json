@@ -1,0 +1,568 @@
+{
+  "received_date": "2026-09-19",
+  "runtime_build": "8387322aa7e9",
+  "experiment": "Trip 1 of docs/experiment-plan.md: does the UI thread cost CPU? One pass each at ui_hz=full, 8, 2, 0; run twice.",
+  "disc_title": "Not named in the report. The TOC matches Sword of the Berserk (tracks 2 and 3 are 526 and 504150 sectors as in sword-of-the-berserk-2026-09-17.json; track 1 is 776 sectors plus a 150-sector pregap).",
+  "inputs": [
+    {
+      "file": "T1_diagnostics.txt",
+      "kept_as": "t1-ui-census-2026-09-19.txt",
+      "bytes": 20665,
+      "sha256": "c815bdc2956b326248178995ddf747e27b252e81bb88238a0909c482f072cd5a",
+      "note": "two complete bench runs in one saved log; the on-screen log wraps at 76 characters and was re-joined for parsing"
+    }
+  ],
+  "config": {
+    "file": "docs/bench-cfgs/t1-ui-census.cfg",
+    "ui_hz": [
+      "full",
+      "8",
+      "2",
+      "0"
+    ],
+    "sections": [
+      "optical",
+      "hash",
+      "sd"
+    ],
+    "chunks": [
+      128
+    ],
+    "sd_mib": 8,
+    "hash_mib": 8,
+    "optical_fad": 45150,
+    "optical_sectors": 4096,
+    "yield_us": 2000,
+    "sd_if": "scif",
+    "sd_crc": true
+  },
+  "hardware": {
+    "sd": {
+      "filesystem": "exFAT",
+      "sectors": 249997312,
+      "cluster_bytes": 131072,
+      "transport": "SCIF (bit-banged SPI)",
+      "crc_check_on_reads": true
+    },
+    "disc_toc": [
+      {
+        "track": 1,
+        "ctrl": 4,
+        "start_fad": 150,
+        "next_fad": 1076
+      },
+      {
+        "track": 2,
+        "ctrl": 0,
+        "start_fad": 1076,
+        "next_fad": 1602
+      },
+      {
+        "track": 3,
+        "ctrl": 4,
+        "start_fad": 45150,
+        "next_fad": 549300
+      }
+    ],
+    "note": "CMD 24 FAILED sense=6/40 at the start of each run is the drive's first INIT after a disc change, not an error"
+  },
+  "runs": [
+    {
+      "passes": {
+        "full": {
+          "optical_kib_s": 1210.0,
+          "sha256_kib_s": 1752.6,
+          "sha256_cyc_per_byte": 111,
+          "crc32_kib_s": 9095.6,
+          "crc32_cyc_per_byte": 21,
+          "sd_write_kib_s": 780.2,
+          "sd_read_kib_s": 470.0,
+          "ui_pct": {
+            "optical": 29.1,
+            "sha256": 29.3,
+            "crc32": 31.4,
+            "sd_write": 34.3,
+            "sd_read": 30.5
+          },
+          "sd_write_latency_us": {
+            "n": 27,
+            "p50": 373207,
+            "p95": 434943,
+            "max": 519536,
+            "slow": 0
+          },
+          "sd_read_latency_us": {
+            "n": 27,
+            "p50": 624673,
+            "p95": 644988,
+            "max": 646014,
+            "slow": 0
+          },
+          "sd_write_census_ms": {
+            "wall": 10174,
+            "wk": 6607,
+            "ui": 3490,
+            "oth": 77
+          }
+        },
+        "8": {
+          "optical_kib_s": 1174.1,
+          "sha256_kib_s": 1976.2,
+          "sha256_cyc_per_byte": 98,
+          "crc32_kib_s": 9849.7,
+          "crc32_cyc_per_byte": 19,
+          "sd_write_kib_s": 932.4,
+          "sd_read_kib_s": 546.1,
+          "ui_pct": {
+            "optical": 19.1,
+            "sha256": 20.2,
+            "crc32": 25.8,
+            "sd_write": 21.5,
+            "sd_read": 19.2
+          },
+          "sd_write_latency_us": {
+            "n": 27,
+            "p50": 320571,
+            "p95": 340388,
+            "max": 415359,
+            "slow": 0
+          },
+          "sd_read_latency_us": {
+            "n": 27,
+            "p50": 541460,
+            "p95": 583516,
+            "max": 588014,
+            "slow": 0
+          },
+          "sd_write_census_ms": {
+            "wall": 8513,
+            "wk": 6606,
+            "ui": 1835,
+            "oth": 72
+          }
+        },
+        "2": {
+          "optical_kib_s": 1189.3,
+          "sha256_kib_s": 2340.8,
+          "sha256_cyc_per_byte": 83,
+          "crc32_kib_s": 12967.8,
+          "crc32_cyc_per_byte": 15,
+          "sd_write_kib_s": 1135.8,
+          "sd_read_kib_s": 647.8,
+          "ui_pct": {
+            "optical": 4.6,
+            "sha256": 5.6,
+            "crc32": 2.5,
+            "sd_write": 4.0,
+            "sd_read": 4.3
+          },
+          "sd_write_latency_us": {
+            "n": 27,
+            "p50": 249546,
+            "p95": 281753,
+            "max": 348210,
+            "slow": 0
+          },
+          "sd_read_latency_us": {
+            "n": 27,
+            "p50": 452819,
+            "p95": 477073,
+            "max": 486862,
+            "slow": 0
+          },
+          "sd_write_census_ms": {
+            "wall": 6988,
+            "wk": 6603,
+            "ui": 281,
+            "oth": 104
+          }
+        },
+        "0": {
+          "optical_kib_s": 1196.4,
+          "sha256_kib_s": 2480.6,
+          "sha256_cyc_per_byte": 78,
+          "crc32_kib_s": 13229.6,
+          "crc32_cyc_per_byte": 14,
+          "sd_write_kib_s": 1185.3,
+          "sd_read_kib_s": 676.4,
+          "ui_pct": {
+            "optical": 0.0,
+            "sha256": 0.0,
+            "crc32": 0.1,
+            "sd_write": 0.0,
+            "sd_read": 0.0
+          },
+          "sd_write_latency_us": {
+            "n": 27,
+            "p50": 243712,
+            "p95": 264315,
+            "max": 335279,
+            "slow": 0
+          },
+          "sd_read_latency_us": {
+            "n": 27,
+            "p50": 434906,
+            "p95": 438746,
+            "max": 438930,
+            "slow": 0
+          },
+          "sd_write_census_ms": {
+            "wall": 6696,
+            "wk": 6601,
+            "ui": 3,
+            "oth": 92
+          }
+        }
+      },
+      "optical_summary": {
+        "wall_us": 32043451,
+        "requests": 516,
+        "read1_us": 31100033,
+        "read1_poll_us": 19713395,
+        "read1_wait_us": 4166123,
+        "read1_other_us": 7210000,
+        "poll_calls_by_duration": "1681446/447/0/13488/675",
+        "poll_ms_by_duration": "7489/21/0/10079/2123",
+        "poll_buckets": "<25us / <100us / <400us / <1.6ms / more"
+      }
+    },
+    {
+      "passes": {
+        "full": {
+          "optical_kib_s": 1178.4,
+          "sha256_kib_s": 1641.0,
+          "sha256_cyc_per_byte": 119,
+          "crc32_kib_s": 8584.9,
+          "crc32_cyc_per_byte": 22,
+          "sd_write_kib_s": 785.5,
+          "sd_read_kib_s": 473.4,
+          "ui_pct": {
+            "optical": 32.4,
+            "sha256": 33.5,
+            "crc32": 35.0,
+            "sd_write": 34.0,
+            "sd_read": 30.0
+          },
+          "sd_write_latency_us": {
+            "n": 27,
+            "p50": 363411,
+            "p95": 435043,
+            "max": 531005,
+            "slow": 0
+          },
+          "sd_read_latency_us": {
+            "n": 27,
+            "p50": 619865,
+            "p95": 638890,
+            "max": 643699,
+            "slow": 0
+          },
+          "sd_write_census_ms": {
+            "wall": 10104,
+            "wk": 6606,
+            "ui": 3443,
+            "oth": 56
+          }
+        },
+        "8": {
+          "optical_kib_s": 1193.9,
+          "sha256_kib_s": 1944.5,
+          "sha256_cyc_per_byte": 100,
+          "crc32_kib_s": 9937.7,
+          "crc32_cyc_per_byte": 19,
+          "sd_write_kib_s": 943.2,
+          "sd_read_kib_s": 532.9,
+          "ui_pct": {
+            "optical": 19.9,
+            "sha256": 21.6,
+            "crc32": 25.1,
+            "sd_write": 20.6,
+            "sd_read": 21.2
+          },
+          "sd_write_latency_us": {
+            "n": 27,
+            "p50": 309960,
+            "p95": 340379,
+            "max": 448041,
+            "slow": 0
+          },
+          "sd_read_latency_us": {
+            "n": 27,
+            "p50": 550288,
+            "p95": 588630,
+            "max": 597749,
+            "slow": 0
+          },
+          "sd_write_census_ms": {
+            "wall": 8415,
+            "wk": 6592,
+            "ui": 1734,
+            "oth": 89
+          }
+        },
+        "2": {
+          "optical_kib_s": 1195.1,
+          "sha256_kib_s": 2332.0,
+          "sha256_cyc_per_byte": 83,
+          "crc32_kib_s": 12927.6,
+          "crc32_cyc_per_byte": 15,
+          "sd_write_kib_s": 1108.7,
+          "sd_read_kib_s": 640.8,
+          "ui_pct": {
+            "optical": 3.4,
+            "sha256": 5.9,
+            "crc32": 2.2,
+            "sd_write": 6.6,
+            "sd_read": 5.3
+          },
+          "sd_write_latency_us": {
+            "n": 27,
+            "p50": 258312,
+            "p95": 292959,
+            "max": 377604,
+            "slow": 0
+          },
+          "sd_read_latency_us": {
+            "n": 27,
+            "p50": 455505,
+            "p95": 483403,
+            "max": 483731,
+            "slow": 0
+          },
+          "sd_write_census_ms": {
+            "wall": 7159,
+            "wk": 6599,
+            "ui": 477,
+            "oth": 84
+          }
+        },
+        "0": {
+          "optical_kib_s": 1196.0,
+          "sha256_kib_s": 2480.7,
+          "sha256_cyc_per_byte": 78,
+          "crc32_kib_s": 13228.3,
+          "crc32_cyc_per_byte": 14,
+          "sd_write_kib_s": 1183.8,
+          "sd_read_kib_s": 676.7,
+          "ui_pct": {
+            "optical": 0.0,
+            "sha256": 0.1,
+            "crc32": 0.0,
+            "sd_write": 0.0,
+            "sd_read": 0.0
+          },
+          "sd_write_latency_us": {
+            "n": 27,
+            "p50": 244664,
+            "p95": 248024,
+            "max": 337402,
+            "slow": 0
+          },
+          "sd_read_latency_us": {
+            "n": 27,
+            "p50": 434973,
+            "p95": 437275,
+            "max": 438939,
+            "slow": 0
+          },
+          "sd_write_census_ms": {
+            "wall": 6705,
+            "wk": 6604,
+            "ui": 0,
+            "oth": 101
+          }
+        }
+      },
+      "optical_summary": {
+        "wall_us": 32151606,
+        "requests": 516,
+        "read1_us": 31211546,
+        "read1_poll_us": 19526312,
+        "read1_wait_us": 4530844,
+        "read1_other_us": 7143921,
+        "poll_calls_by_duration": "1663766/449/0/13409/679",
+        "poll_ms_by_duration": "7395/21/0/10068/2040",
+        "poll_buckets": "<25us / <100us / <400us / <1.6ms / more"
+      }
+    }
+  ],
+  "derived": {
+    "mean_kib_s_of_two_runs": {
+      "sd_write": {
+        "full": 782.9,
+        "8": 937.8,
+        "2": 1122.2,
+        "0": 1184.5
+      },
+      "sd_read": {
+        "full": 471.7,
+        "8": 539.5,
+        "2": 644.3,
+        "0": 676.5
+      },
+      "sha256": {
+        "full": 1696.8,
+        "8": 1960.3,
+        "2": 2336.4,
+        "0": 2480.6
+      },
+      "crc32": {
+        "full": 8840.2,
+        "8": 9893.7,
+        "2": 12947.7,
+        "0": 13229.0
+      },
+      "optical": {
+        "full": 1194.2,
+        "8": 1184.0,
+        "2": 1192.2,
+        "0": 1196.2
+      }
+    },
+    "gain_pct": {
+      "sd_write": {
+        "full_to_2hz_pct": 43.3,
+        "full_to_quiet_pct": 51.3,
+        "2hz_to_quiet_pct": 5.6
+      },
+      "sd_read": {
+        "full_to_2hz_pct": 36.6,
+        "full_to_quiet_pct": 43.4,
+        "2hz_to_quiet_pct": 5.0
+      },
+      "sha256": {
+        "full_to_2hz_pct": 37.7,
+        "full_to_quiet_pct": 46.2,
+        "2hz_to_quiet_pct": 6.2
+      },
+      "crc32": {
+        "full_to_2hz_pct": 46.5,
+        "full_to_quiet_pct": 49.6,
+        "2hz_to_quiet_pct": 2.2
+      },
+      "optical": {
+        "full_to_2hz_pct": -0.2,
+        "full_to_quiet_pct": 0.2,
+        "2hz_to_quiet_pct": 0.3
+      }
+    },
+    "ui_cpu_share_pct_mean_of_sha256_sd_write_sd_read": {
+      "full": 31.9,
+      "8": 20.7,
+      "2": 5.3,
+      "0": 0.0
+    },
+    "cost_per_redraw_ms_from_sd_write_census": {
+      "8hz_ms_per_redraw": 26.4,
+      "2hz_ms_per_redraw": 26.7
+    },
+    "true_cpu_cost_at_quiet_ui_cycles_per_byte": {
+      "sd_write": 165,
+      "sd_read_incl_crc16": 289,
+      "sha256_measured": 78,
+      "crc32_measured": 14,
+      "note": "sha256/crc32: the bench's own cyc_b at ui_hz=0. sd_write/sd_read: 200 MHz / (KiB/s x 1024) at ui_hz=0."
+    },
+    "conclusions": [
+      "H-UI holds, and by more than the model predicted: the unthrottled UI took 31.9% of the CPU (mean of SHA-256, SD write and SD read) at ui_hz=full.",
+      "ui_hz=2 recovers almost all of it (5.3% remains): against full, SD write +43.3%, SD read +36.6%, SHA-256 +37.7%, CRC32 +46.5%. ui_hz=0 adds a further 2.2-6.2%.",
+      "One redraw costs about 26.4 ms of CPU (26.7 ms measured at 2 Hz).",
+      "The optical read does not care: 1194.2 / 1192.2 / 1196.2 KiB/s at full / 2 / 0. It is drive-bound, so the UI takes nothing from it and freed CPU cannot speed it up.",
+      "The census and the measured slowdown agree within 0.2 percentage points across every CPU-bound stage and pass, so the two instruments corroborate each other.",
+      "The SD card showed no stalls in 8 MiB: slow=0 in the write and read latency lines of all 16 measurements; the worst single write call was 531 ms and the worst read call 646 ms.",
+      "In the optical read, poll calls of 400 us and longer (the PIO transfers and the longest waits) add up to 32-39% of the read time (400 us-1.6 ms alone: 32%); the ~1.7 million short status polls account for another 24% of it, spent waiting on the drive. That is the room an overlapped design could use (docs/experiment-plan.md, Trip 6)."
+    ],
+    "census_ui_pct_against_measured_slowdown": {
+      "per_stage_and_pass": [
+        {
+          "stage": "sha256",
+          "ui_hz": "full",
+          "census_ui_pct": 31.4,
+          "measured_slowdown_vs_quiet_pct": 31.6,
+          "difference_points": -0.2
+        },
+        {
+          "stage": "sha256",
+          "ui_hz": "8",
+          "census_ui_pct": 20.9,
+          "measured_slowdown_vs_quiet_pct": 21.0,
+          "difference_points": -0.1
+        },
+        {
+          "stage": "sha256",
+          "ui_hz": "2",
+          "census_ui_pct": 5.8,
+          "measured_slowdown_vs_quiet_pct": 5.8,
+          "difference_points": -0.1
+        },
+        {
+          "stage": "sd_write",
+          "ui_hz": "full",
+          "census_ui_pct": 34.1,
+          "measured_slowdown_vs_quiet_pct": 33.9,
+          "difference_points": 0.2
+        },
+        {
+          "stage": "sd_write",
+          "ui_hz": "8",
+          "census_ui_pct": 21.1,
+          "measured_slowdown_vs_quiet_pct": 20.8,
+          "difference_points": 0.2
+        },
+        {
+          "stage": "sd_write",
+          "ui_hz": "2",
+          "census_ui_pct": 5.3,
+          "measured_slowdown_vs_quiet_pct": 5.3,
+          "difference_points": 0.0
+        },
+        {
+          "stage": "sd_read",
+          "ui_hz": "full",
+          "census_ui_pct": 30.2,
+          "measured_slowdown_vs_quiet_pct": 30.3,
+          "difference_points": -0.0
+        },
+        {
+          "stage": "sd_read",
+          "ui_hz": "8",
+          "census_ui_pct": 20.2,
+          "measured_slowdown_vs_quiet_pct": 20.3,
+          "difference_points": -0.1
+        },
+        {
+          "stage": "sd_read",
+          "ui_hz": "2",
+          "census_ui_pct": 4.8,
+          "measured_slowdown_vs_quiet_pct": 4.8,
+          "difference_points": 0.0
+        }
+      ],
+      "largest_difference_points": 0.2,
+      "method": "For each CPU-bound stage and each pass, the census's ui_pct is compared with 1 - (rate / rate at ui_hz=0). If the census were wrong, or the slowdown were not the UI, these would disagree."
+    },
+    "run_to_run_spread_pct": {
+      "full": {
+        "min_pct": 0.68,
+        "max_pct": 6.58
+      },
+      "8": {
+        "min_pct": 0.89,
+        "max_pct": 2.45
+      },
+      "2": {
+        "min_pct": 0.31,
+        "max_pct": 2.41
+      },
+      "0": {
+        "min_pct": 0.0,
+        "max_pct": 0.13
+      }
+    }
+  },
+  "limitations": [
+    "One card, one disc, one console; two runs of each pass.",
+    "Run-to-run spread of the four rate figures: 0.0-0.13% with the UI quiet, 0.68-6.58% at full.",
+    "The census has 1 ms granularity; every interval here is several seconds, well above the ~1 s it needs."
+  ]
+}

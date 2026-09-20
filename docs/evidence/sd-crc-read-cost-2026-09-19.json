@@ -1,0 +1,134 @@
+{
+  "received_date": "2026-09-19",
+  "runtime_build": "8387322aa7e9",
+  "experiment": "SD read CRC16 check on/off with the UI quiet (ui_hz=0), chunk 128, 8 MiB, exFAT: what does KOS's CRC16 cost?",
+  "inputs": [
+    {
+      "file": "Request 4 diagnostics.txt",
+      "kept_as": "sd-crc-read-cost-2026-09-19.txt",
+      "bytes": 10912,
+      "sha256": "c5fb71a9dd77cb7076e545ed14de3dafaa59d55d2b5ef4337433218dbf735c92",
+      "note": "two complete bench runs in one saved log; the on-screen log wraps at 76 characters and was re-joined for parsing"
+    }
+  ],
+  "config": {
+    "ui_hz": [
+      0
+    ],
+    "sections": [
+      "sd"
+    ],
+    "chunks": [
+      128
+    ],
+    "sd_mib": 8,
+    "sd_if": "scif",
+    "sd_crc": [
+      "on",
+      "off"
+    ],
+    "note": "the run's note= still said 'T1 ui census'; the OPTIONS lines are what ran"
+  },
+  "hardware": {
+    "sd": {
+      "filesystem": "exFAT",
+      "sectors": 249997312,
+      "cluster_bytes": 131072,
+      "transport": "SCIF (bit-banged SPI)"
+    },
+    "disc": "Not named in the report. The TOC (tracks at FAD 150 / 1076 / 45150, lead-out 549300) matches Sword of the Berserk, as in t1-ui-census-2026-09-19.json.",
+    "note": "CMD 24 FAILED sense=6/40 at the start of a run is the drive's first INIT after a disc change, not an error."
+  },
+  "runs": [
+    {
+      "on": {
+        "write_kib_s": 1179.5,
+        "read_kib_s": 677.2,
+        "write_p50_us": 244146,
+        "read_p50_us": 433387,
+        "write_slow": 0,
+        "read_slow": 0,
+        "sdr_census": {
+          "wall": 11720,
+          "wk": 11643,
+          "ui": 5,
+          "oth": 72
+        }
+      },
+      "off": {
+        "write_kib_s": 1180.0,
+        "read_kib_s": 733.7,
+        "write_p50_us": 244164,
+        "read_p50_us": 400956,
+        "write_slow": 0,
+        "read_slow": 0,
+        "sdr_census": {
+          "wall": 10818,
+          "wk": 10744,
+          "ui": 5,
+          "oth": 70
+        }
+      }
+    },
+    {
+      "on": {
+        "write_kib_s": 1181.9,
+        "read_kib_s": 676.9,
+        "write_p50_us": 243895,
+        "read_p50_us": 434044,
+        "write_slow": 0,
+        "read_slow": 0,
+        "sdr_census": {
+          "wall": 11726,
+          "wk": 11647,
+          "ui": 5,
+          "oth": 74
+        }
+      },
+      "off": {
+        "write_kib_s": 1179.9,
+        "read_kib_s": 733.4,
+        "write_p50_us": 244702,
+        "read_p50_us": 400856,
+        "write_slow": 0,
+        "read_slow": 0,
+        "sdr_census": {
+          "wall": 10822,
+          "wk": 10741,
+          "ui": 8,
+          "oth": 74
+        }
+      }
+    }
+  ],
+  "derived": {
+    "mean_kib_s": {
+      "write_crc_on": 1180.7,
+      "write_crc_off": 1180.0,
+      "read_crc_on": 677.0,
+      "read_crc_off": 733.5
+    },
+    "read_speedup_with_crc_off_pct": 8.3,
+    "write_change_with_crc_off_pct": -0.06,
+    "cycles_per_byte": {
+      "write": 165.4,
+      "read_crc_on": 288.5,
+      "read_crc_off": 266.3
+    },
+    "crc16_cycles_per_byte_from_the_read_difference": 22.2,
+    "crc16_share_of_sd_write_pct": 13.4,
+    "crc16_share_of_sd_read_pct": 7.7,
+    "run_to_run_spread_pct_max": 0.2,
+    "method": "check_crc governs only the read side (writes always compute and send a CRC16, and the card verifies it, CMD59). So the read-rate difference is the cost of KOS's net_crc16ccitt alone: cycles/byte = 200 MHz / (KiB/s x 1024).",
+    "conclusions": [
+      "Turning the read CRC check off speeds SD reads by 8.3% (677.0 to 733.5 KiB/s) and leaves writes unchanged (-0.06%), as expected.",
+      "That difference is a direct measurement of KOS's CRC16 loop: 22.2 cycles a byte, 7.7% of an SD read. The write path runs the same function, so the same 22.2 cycles are 13.4% of an SD write (165.4 cycles a byte).",
+      "This agrees with the earlier estimate from Trip 1 (~21 cycles a byte) and with the instruction count of the compiled loop (28 instructions a byte at about 1.3 per cycle), so a faster CRC16 is the one SD-side change that recovers real time without weakening any check (Trip 1b measures the candidates).",
+      "Do not turn the read check off in the capture engine to gain this: it is the read-back's only wire-level protection. The gain is available from a faster function, not a weaker check."
+    ]
+  },
+  "limitations": [
+    "One card, one disc, one console; two runs.",
+    "Run-to-run spread of the four rates is at most 0.2%."
+  ]
+}

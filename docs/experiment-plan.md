@@ -159,6 +159,49 @@ The 8 / 2 / 0 spread is the dose-response: cost per redraw is
 Also read `ui_hz=2` as a candidate default: twice a second is a readable progress
 line.
 
+**Result (2026-09-19; two runs; exFAT card; a disc whose TOC matches Sword of the
+Berserk).** H-UI holds, and by more than the model said. Raw report and parsed
+numbers: [evidence/t1-ui-census-2026-09-19.json](evidence/t1-ui-census-2026-09-19.json)
+(every derived figure there is computed from the raw log, not typed).
+
+| KiB/s, mean of 2 runs | `full` | `8` | `2` | `0` | 2 vs full | 0 vs full |
+|---|---|---|---|---|---|---|
+| SD write (chunk 128) | 782.9 | 937.8 | 1122.2 | 1184.5 | +43.3% | +51.3% |
+| SD read | 471.7 | 539.5 | 644.3 | 676.5 | +36.6% | +43.4% |
+| SHA-256 | 1696.8 | 1960.3 | 2336.4 | 2480.6 | +37.7% | +46.2% |
+| CRC32 | 8840.2 | 9893.7 | 12947.7 | 13229.0 | +46.5% | +49.6% |
+| Optical @ FAD 45150 | 1194.2 | 1184.0 | 1192.2 | 1196.2 | -0.2% | +0.2% |
+
+- **UI share of the CPU** (census; mean of SHA-256, SD write, SD read): full 31.9%,
+  8 Hz 20.7%, 2 Hz 5.3%, 0 Hz 0%. **One redraw costs about 26.5 ms** (26.4 at 8 Hz,
+  26.7 at 2 Hz: the two agree, so the cost is per redraw, as modelled).
+- **The census and the speed-ups corroborate each other** to within 0.2 percentage
+  points, per stage and per pass (the census's `ui_pct` against `1 - rate/rate at 0`).
+  Run-to-run spread is 0-0.13% with the UI quiet and 0.7-6.6% at full.
+- **The optical read does not care** (drive-bound), so the freed CPU is worth
+  nothing to it directly; it matters for every stage that runs on the CPU.
+- True CPU cost per byte with the UI quiet: SD write 165 cycles, SD read 289 (which
+  includes the CRC16 check), SHA-256 78, CRC32 14.
+- **Decision taken: `ui_hz` now defaults to 2.** `ui_hz=full` restores the old loop.
+  Idle screens are never capped. What remains is about 5% at 2 Hz, which a lighter
+  partial-redraw UI could recover; it is small next to the rest of the plan.
+- A `CMD 24 FAILED sense=6/40` at the start of each run is the drive's first INIT
+  after a disc change, not an error.
+
+### Trip 1b: is KOS's CRC16 loop worth replacing? (`t1b-crc16.cfg`, ~30 s, no disc)
+
+Times KOS's own `net_crc16ccitt` against three table-driven versions on identical
+data in 512-byte blocks (what the SD driver does), and checks they agree. The
+driver's CRC16 was **measured directly** by the SD read-CRC on/off run (Trip 3b):
+22.2 cycles a byte, 13.4% of an SD write (165.4 cycles a byte) and
+7.7% of a read. **Predicted from instruction counts alone, not measured** (KOS's
+loop is 28 instructions a byte, the table loop 16, slice2 about 11.5, at the same
+~1.3 per cycle): table about 12 cycles a byte, slice2 about 9, nibble slower than
+KOS's. A saving of S cycles a byte cuts SD write time by S/165.4 and read time by
+S/288.5: for slice2 (S about 13.2) that is roughly +9% on write and
++5% on read. `agree=OK` must appear; on `MISMATCH` ignore the timings. If the
+measured saving is under a few percent, leave KOS alone.
+
 ### Trip 2: the drive (`t2a`..`t2e`, ~1 min each)
 
 `sections=sweep` reads sectors with the real PIO command in a bench-only buffer.
@@ -193,6 +236,36 @@ whatever its speed.**
 - **2e audio** (`8/32/128`, gap 0 / 40 ms): H-audio. Verification is off because
   raw audio can legitimately differ between reads.
 
+**Results, 2026-09-19 (two runs each; exFAT card; the disc whose TOC matches Sword of
+the Berserk).** Raw logs and parsed numbers:
+[2c](evidence/t2c-service-tolerance-2026-09-19.json),
+[2d](evidence/t2d-optical-radius-2026-09-19.json). Every derived figure is computed
+from the logs.
+
+- **2c service tolerance (32-sector reads, FAD 45150):** mean `rd` 1239.2 / 1223.7 / 1187.2 / 974.0 KiB/s at 0 / 1 / 4 / 10 ms.
+  Loss against the same run's `svc=0`: -2.3% / -7.4% / -24.1% in run 1 and
+  -0.1% / -0.7% / -18.5% in run 2. The `svc>0` rates agree between runs
+  (0.9% apart at 4 and 10 ms); the `svc=0` rate did not (7.9% apart), which is where
+  the difference between the runs comes from. **The drive tolerates about 1 ms of
+  CPU-away time between polls with no measurable loss, 4 ms with 0.7-7.4%, and 10 ms
+  costs a clear 18-24%.** By the table below that is the cooperative-interleave
+  regime with a small penalty: a 4 ms slice is about 4.8 KB of SD write or 10 KB of
+  SHA-256. It says nothing yet about whether the SD write can be sliced that finely
+  without per-call overhead (Trip 3).
+- **2d radius (32-sector reads):** mean `rd` 1251.6 / 1497.8 / 1741.2 / 2003.2 KiB/s at FAD
+  45150 / 150000 / 300000 / 450000: **60% faster at the outer edge**, as constant
+  angular velocity predicts. Every earlier optical figure here was the slowest point.
+  The time in long poll calls (the PIO transfers) is nearly constant across the radius
+  (1424 ms at 45150, 1368 ms at 450000, per 4.8 MB), so PIO costs the CPU about the
+  same per byte anywhere; what shrinks is the waiting (1051 ms in short polls at
+  45150, 381 ms at 450000, or 27.8% of the read down to 16.1%). **What overlap can hide with
+  PIO therefore shrinks toward the outer edge**; only DMA (Trip 6) could also hide the
+  transfers. Earlier real captures ran near 373 KiB/s (section 1) against 1250-2000
+  here, so the drive is not the limit at any radius. All verify lines OK.
+- Observation, cause unknown: the first run of a session read faster at FAD 45150 than
+  the second in this file, in the 2c file and in Trip 1 (2.7-8%). Compare runs from the
+  same position in a session and say which one it was in `note=`.
+
 The overlap decision, after Trip 2:
 
 | Finding | Choose |
@@ -209,6 +282,18 @@ can win on average and still stall: `slow=` counts calls over twice the median,
 `slow_ms` is the time they added, and the largest `max` is the write-behind
 buffer a pipeline would have to absorb. Adopt an aligned size only if it wins by
 about 5% *and* its p95 is no worse.
+
+### Trip 3b: what does the SD read CRC check cost? (`t3b-sd-crc.cfg`, ~2 min, no disc)
+
+`sd_crc=on,off` with the UI quiet. `check_crc` governs only reads (writes always
+compute and send a CRC16 and the card verifies it), so the read-rate difference is
+KOS's CRC16 function alone. **Result, 2026-09-19, two runs**
+([evidence](evidence/sd-crc-read-cost-2026-09-19.json)): reads 677.0 KiB/s with the check,
+733.5 without (+8.3%); writes 1180.7 vs 1180.0, unchanged. That is
+**22.2 cycles a byte for the CRC16: 13.4% of an SD write, 7.7% of an SD read**,
+matching the compiled loop's instruction count. The check stays on (it is the
+read-back's only wire-level protection); the gain is available from a faster
+function (Trip 1b).
 
 ### Trip 4: the same question on a real capture (`t4-capture-ui.cfg`, 2 x 4 min)
 
@@ -240,6 +325,78 @@ Decision rule: if `crc32` + `end=off` + a small `sample_readback` beats the old 
 by the model's margin (about 2.5x in total time on a data-heavy disc), it becomes the
 default. If it does not, the model is wrong somewhere and the `parts` lines say where.
 
+**Predictions for 5a, written before the run** (calibrated on Trip 1: 165 cycles a
+byte SD write, 289 read, 78 SHA-256, 14 CRC32; chunk 32, inner radius; capture rate
+first, total with the end read-back second; KiB/s):
+
+| UI | hash | end read-back | capture | total |
+|---|---|---|---|---|
+| full | both | on | ~350 | ~176 |
+| full | crc32 | on | ~440 | ~222 |
+| 2 | both | on | ~430 | ~228 |
+| 2 | crc32 | on | ~527 | ~283 |
+
+A miss of more than about 15% on the capture rate means the model is wrong somewhere
+and the `parts` lines say where; that is the useful outcome, not a failure.
+
+**Status: the first attempt (2026-09-19, twice) failed before measuring anything**
+(`Mount failed: FatFs=3`, `Storage device is not connected`, `BENCH FAILED`; see
+[the record](evidence/t5a-capture-matrix-FAILED-2026-09-19.json)). Not a card or
+procedure problem: the capture section mounted the card before opening the SD link,
+which the console closes after reading `bench.cfg`. A second, quieter bug came out
+with it: FatFs keeps the pointer given to `f_mount` even when the mount fails, so the
+report save wrote a byte through a dangling stack pointer. Both are fixed and each has
+a regression test (section 7). The predictions above stand; rerun 5a on the build that
+carries the fix.
+
+### Trip 6: GD-ROM DMA, and what a second thread would see (`t6a-dma-probe.cfg`, ~2 min)
+
+**Experimental.** The only route to overlapping the drive with SD and hash work that
+does not depend on a plain thread getting the CPU promptly is to stop spending CPU on
+the transfer. This trip finds out three things at once, on the real drive:
+
+1. **Does DMA of raw 2352-byte sectors work, and are the bytes identical to PIO?**
+   `BENCH dma check ... result=` and a CRC gate per read size (`BENCH verify ... mode=dma`).
+2. **How fast is it against PIO at the same size, and how much CPU does it leave?**
+   `rd=` on `mode=dma` points against plain ones; `free=` is the share of the CPU a
+   competing thread got (100% = it lost nothing).
+3. **What would a plain thread cost the drive today?** The PIO points with `free=`,
+   against the same PIO points without: an SD-writing thread at equal priority is
+   exactly a competitor that never sleeps.
+
+| Finding | Means | Choose |
+|---|---|---|
+| DMA `rd` >= PIO, `free` >= 90% | DMA hands the CPU back at no cost to the drive | An SD/hash worker thread beside a DMA reader: the overlap design with the highest ceiling |
+| DMA `rd` below PIO by more than 10%, `free` ~99% | A real trade | Compute the overlap ceiling from both rates before committing |
+| PIO `free` 40-60% and `rd` within 5% of PIO alone | A plain thread already works | Thread split with PIO: simpler, no DMA risk |
+| PIO `rd` falls sharply with a competitor | PIO needs the CPU promptly | DMA is the only way to overlap |
+| `dma check ... FAILED` | DMA never completed by polling | Reboot. Next step is an interrupt-driven variant (install KOS's `asic_evt` handler, wait on a semaphore) |
+| `dma check ... MISMATCH` | DMA returns different bytes: a cache, alignment or protocol problem | Do not use DMA; `reported_bytes` in that line is the first clue |
+
+Caveats that shape how to read it: the DMA probe **polls** rather than taking the
+interrupt (this runtime never starts KOS's CD-ROM subsystem, so nothing installs
+the handler), so completion is noticed up to one 10 ms tick late, about 8% at chunk
+32 and 2% at chunk 128; compare at chunk 128. It uses a fixed buffer with guard
+bytes and turns itself off for the rest of the boot after any failure. Nothing here
+writes to the card or the disc.
+
+### Trip 7: one real, complete capture with the fast settings (`t7-real-capture-fast.cfg`)
+
+The bench times 4096-sector slices of the engine. This is the only test that proves a
+whole disc, ripped with the fast settings (`ui_hz=2`, `capture_hash=crc32`,
+`end_readback=off`), comes out **byte-identical** to a known-good dump, and it is the
+first time the CRC-only, no-read-back path runs on hardware as a real capture. Use the
+Sword of the Berserk disc, whose correct CRC32s are known
+([reference](evidence/sword-of-the-berserk-reference.json)). Steps: copy the config to
+the card as `KUI/bench.cfg`; on the Capture page press **A** (a NEW dump, not X: a
+resumed job keeps the hash mode it started with); let it finish. It reports
+`CAPTURED`, not `SAVED DATA VERIFIED`, because the read-back is off; the proof is on the
+PC: `python3 tools/verify_dump.py <new folder> --reference
+docs/evidence/sword-of-the-berserk-reference.json`. Pass means three `PASS` lines with
+CRC32 `bcec7767`, `0ff934e3`, `2cfb5dcb` and no reference mismatch. If the two
+catalogue files are in `KUI/`, the console report also names the match. Do it after 5a
+has said which settings are fastest.
+
 ## 5. Reading the new lines
 
 - `BENCH pass n/m uihz=...`: the UI setting every line until the next pass line
@@ -254,6 +411,11 @@ default. If it does not, the model is wrong somewhere and the `parts` lines say 
   split by stage in ms.
 - `BENCH lat write|read ... n= min= p50= p95= max= slow= slow_ms=` (us): every
   `f_write`/`f_read` in the run, up to 512 calls.
+- `BENCH hash ... crc16-kos|table|slice2|nibble cyc_b=` and `BENCH hash ... crc16
+  agree=OK|MISMATCH` (Trip 1b): the SD driver's CRC16 against faster versions.
+- `BENCH dma check ... result=`, `BENCH sweep ... mode=dma`, `... free=` and `BENCH spin
+  calibration` (Trip 6): `free` is the CPU share a competing thread got, in percent,
+  against its own count with the worker asleep.
 - Lines wrap at 76 characters in the on-screen log, so a long line can appear as
   two; join them before parsing.
 - The log holds 768 lines. A large sweep can overflow it (the report says
@@ -268,12 +430,12 @@ only if the hypothesis they depend on does.
 
 | # | Change | Model gain | Depends on | Risk |
 |---|---|---|---|---|
-| 1 | **Light UI**: redraw a small status region at 1-2 Hz, no vblank spin | +30% (if H-UI) | Trip 1 | Low; the throttle is already in the tree |
+| 1 | **UI redraw cap, now the default (2 Hz)** | +43-51% on SD write, measured | Done (Trip 1) | None; `ui_hz=full` restores the old loop. A lighter partial-redraw UI could recover the remaining ~5% |
 | 2 | Capture chunk 128 (SD write +7%, optical unknown) | +3% | Trip 2a | Low; buffers grow to 301 KB and 602 KB |
 | 3 | SHA-256 out of the capture loop | +26-28% | Decided (section 6a) | Medium; a format change |
-| 4 | Overlap the drive with SD/hash work | +20-50% more, ideal | Trip 2 | Medium to high |
+| 4 | Overlap the drive with SD/hash work | +20-50% more, ideal | Trips 2 and 6 | Medium to high; Trip 6 is the first evidence, on the drive alone |
 | 5 | Aligned, coalesced SD writes | 0-8% | Trip 3 | Low |
-| 6 | Table-driven CRC16 in KOS's `sd.c` | +3-4% | none | Low; a one-line patch to the pinned KOS, not an override (`net_crc.o` also defines `net_crc32le`/`be`, so overriding one function risks a duplicate-symbol link error) |
+| 6 | Table-driven CRC16 in KOS's `sd.c` | write time -13.4% at most; predicted about +9% write, +5% read for slice2 (measured 22.2 cycles a byte; Trip 1b measures the candidates first) | Trip 1b | Low; a one-line patch to the pinned KOS, not an override (`net_crc.o` also defines `net_crc32le`/`be`, so overriding one function risks a duplicate-symbol link error) |
 | 7 | Faster SHA-256 in C | +3% | none | Low; compiles to ~69 instructions per round today |
 | 8 | Audio: larger commands | ~+20%? | Trip 2e | Low |
 
@@ -349,8 +511,8 @@ the read itself, so a catalogue match (or a second dump) is the check there.
 - **SCI/DMA SD transport.** Failed to initialise on hardware (errno 11): the
   adapter is SCIF-wired, so DMA for the *SD card* is ruled out. That leaves the
   SD side CPU-bound, so overlap can only come from hiding the drive behind it
-  (a thread, cooperative interleaving, or DMA on the *GD-ROM* read, a separate
-  and untested option).
+  (a thread, cooperative interleaving, or DMA on the *GD-ROM* read; a probe for that
+  last one is built, Trip 6, and is still untested on hardware).
 - **Sending CRC 0xFFFF on writes.** An earlier analysis proposed it
   (~939 KiB/s). **It is wrong.** KOS's `kernel/arch/dreamcast/hardware/sd.c`
   (line 433) sends CMD59 with argument 1 at init, so the card *verifies* every block's CRC16, and
@@ -358,6 +520,23 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   side. Sending 0xFFFF would fail every write block. Skipping the check would also
   need CMD59 with argument 0, which removes the card's own wire-level protection
   of every write. A faster CRC16 (item 6) recovers most of the time and keeps it.
+- **The CRC16 cost of 30.7 cycles a byte** quoted earlier was wall time with the UI
+  running. Trip 1 corrects it: about 21 cycles a byte of CPU, roughly 13% of an SD
+  write. The gain from replacing it is correspondingly smaller (Trip 1b).
+- **The capture bench that could not run (2026-09-19).** The bench's capture section
+  mounted the card before opening the SD link, and its cleanup after every run mounted
+  it after the console adapter had closed it; the first would not mount (T5a failed
+  in seconds) and the second would have left every bench job on the card. Fixed by
+  making the bench own the link for the whole section. **Why the tests missed it:** the
+  host harness attached the card once and offered no `reconnect`, so nothing could
+  observe the link closing. It now models the console (closed at the start, opened only
+  by `reconnect`, closed at the end); the capture scenario fails without the fix. The
+  lesson for the next section that touches the card: run it on the console before
+  trusting a host pass.
+- **A failed mount left FatFs pointing at freed memory.** `f_mount` registers the
+  caller's `FATFS` before it tries, and keeps it after a failure; every caller then
+  returns and drops the object. `kui_mount`, the only registration site, now unregisters
+  on failure. The `mount-fail` scenario trips AddressSanitizer without it.
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.

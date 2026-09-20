@@ -15,6 +15,7 @@ RUNTIME_OBJECTS += build/dc/src/core/hash.o build/dc/src/core/capture_plan.o bui
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 RUNTIME_OBJECTS += build/dc/src/core/timing.o
 RUNTIME_OBJECTS += build/dc/src/core/known_dumps.o
+RUNTIME_OBJECTS += build/dc/src/core/crc16.o
 RUNTIME_OBJECTS += build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 

@@ -1,0 +1,187 @@
+K-UI SD runtime 8387322aa7e9
+Log truncated: no
+Report trigger: auto bench
+Capture result: failed
+Running SD runtime build 8387322aa7e9
+Video: 640x480 NTSC interlaced, buffered
+Diagnostic code and fonts are loaded entirely in RAM.
+Replace boot CD with a known-good retail GD-ROM; close lid.
+Diagnostics page: A disc samples; X SD test; Y save log.
+Use a spare test card. No formatting; existing files preserved.
+Capture page: A new dump; X resume latest matching disc; Y verify.
+Left/Right switches capture/diagnostics. B stops and checkpoints.
+New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
+Capture rereads saved files; a reference match is a separate PC check.
+Capture uses single optical reads; final CRC32/SHA256 readback stays on.
+Capture/Resume/Verify auto-save a report after ending. Wait for READY.
+R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
+mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+DISC PROBE: insert a known-good retail GD-ROM first
+CMD 24 FAILED
+  sense=6/40 size=10 ATA=0
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+Track 01 FAD=150 LBA=0
+  raw repeat/guards OK CRC32=0d2a08b7
+  raw mode=1 header=00:02:00
+  cooked repeat/guards and raw payload MATCH
+Track 01 FAD=612 LBA=462
+  raw repeat/guards OK CRC32=e5b8d462
+  raw mode=1 header=00:08:12
+  cooked repeat/guards and raw payload MATCH
+Track 01 FAD=925 LBA=775
+  raw repeat/guards OK CRC32=b0aa66a6
+  raw mode=1 header=00:12:25
+  cooked repeat/guards and raw payload MATCH
+Track 02 FAD=1076 LBA=926
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 02 FAD=1338 LBA=1188
+  raw repeat/guards OK CRC32=96914455
+  audio sample (no offset/subchannel validation)
+Track 02 FAD=1451 LBA=1301
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 03 FAD=45150 LBA=45000
+  raw repeat/guards OK CRC32=94db666d
+  raw mode=1 header=10:02:00
+  cooked repeat/guards and raw payload MATCH
+Track 03 FAD=297224 LBA=297074
+  raw repeat/guards OK CRC32=9e3d62f2
+  raw mode=1 header=66:02:74
+  cooked repeat/guards and raw payload MATCH
+Track 03 FAD=549149 LBA=548999
+  raw repeat/guards OK CRC32=0ce34a3b
+  raw mode=1 header=c2:01:74
+  cooked repeat/guards and raw payload MATCH
+DISC PROBE PASS: both TOCs, 9 samples
+Samples only; full-disc accuracy and compatibility unproven
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=full,2 sections=capture
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=both,crc32 end_readback=on,off resume_check=full,size
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=45150
+OPTIONS note=T5a capture matrix. card=<model> disc=<title>
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/2 uihz=full
+Mount failed: FatFs=3
+Storage device is not connected
+BENCH FAILED
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: failed
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0001/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=full,2 sections=capture
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=both,crc32 end_readback=on,off resume_check=full,size
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=45150
+OPTIONS note=T5a capture matrix. card=<model> disc=<title>
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/2 uihz=full
+Mount failed: FatFs=3
+Storage device is not connected
+BENCH FAILED
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: failed
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on

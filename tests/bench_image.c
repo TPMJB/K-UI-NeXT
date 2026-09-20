@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define _POSIX_C_SOURCE 200809L
 #include "kui/bench.h"
+#include "kui/crc16.h"
 #include "kui/media.h"
 #include <assert.h>
 #include <stdarg.h>
@@ -23,6 +24,15 @@ static struct {
     uint64_t cancel_after_us;
     unsigned corrupt_chunk, retry_fad;
     bool fatal_probe;
+    /* DMA, competing thread and KOS's CRC16, each with a simple explicit model */
+    bool spin_on, dma_fail, dma_mismatch, crc16_bad;
+    unsigned dma_calls, dma_fail_after;
+    /* The SD link, as the console has it: CLOSED when the bench starts (reading bench.cfg
+     * closes it again), opened only by reconnect(), closed when the bench ends. */
+    bool linked, reconnect_fail;
+    unsigned reconnects, last_sci;
+    bool last_crc;
+    uint64_t spin_total;
 } t;
 
 static void log_line(const char *format, ...) {
@@ -58,11 +68,37 @@ static enum kui_read_result read_probe(void *p, uint32_t fad, unsigned sectors, 
     if(fad == t.retry_fad) return KUI_READ_RETRY;
     uint64_t cost = 800 + sectors * 1500u + service_us * 4u;   /* 4 polls per command */
     t.clock_us += cost; st->cmd_us += cost; st->last_us = cost;
+    if(t.spin_on) t.spin_total += cost * 400 / 1000;   /* PIO: the worker spins, a competitor gets ~40% */
     st->polls += 4; st->poll_n[0] += 3; st->poll_us[0] += 30; st->poll_n[2] += 1; st->poll_us[2] += 200;
     for(unsigned i = 0; i < sectors; ++i) sector_data(fad + i, probe_buf + (size_t)i * KUI_RAW_BYTES);
     if(t.corrupt_chunk && sectors == t.corrupt_chunk) probe_buf[100] ^= 1;   /* a size that returns wrong bytes */
     *data = probe_buf;
     return KUI_READ_OK;
+}
+/* GD-ROM DMA: faster than PIO, the worker sleeps, so a competitor gets ~99% of it. The real
+ * function refuses an odd sector count; the bench must never ask for one. */
+static enum kui_read_result read_probe_dma(void *p, uint32_t fad, unsigned sectors,
+                                           const uint8_t **data, struct kui_probe_stats *st) {
+    (void)p; ++t.dma_calls;
+    assert(!(sectors & 1u));
+    if(t.dma_fail || (t.dma_fail_after && t.dma_calls > t.dma_fail_after)) return KUI_READ_RETRY;
+    uint64_t cost = 800 + sectors * 1000u;
+    t.clock_us += cost; st->cmd_us += cost; st->last_us = cost;
+    st->reported_bytes = (uint64_t)sectors * KUI_RAW_BYTES;
+    if(t.spin_on) t.spin_total += cost * 990 / 1000;
+    for(unsigned i = 0; i < sectors; ++i) sector_data(fad + i, probe_buf + (size_t)i * KUI_RAW_BYTES);
+    if(t.dma_mismatch) probe_buf[100] ^= 1;
+    *data = probe_buf;
+    return KUI_READ_OK;
+}
+/* The competing thread counts 1 per microsecond while it runs and the worker sleeps. */
+static void spin(void *p, bool on) { (void)p; t.spin_on = on; }
+static uint64_t spin_count(void *p) { (void)p; return t.spin_total; }
+static void sleep_ms(void *p, unsigned ms) { (void)p; t.clock_us += ms * 1000u; if(t.spin_on) t.spin_total += ms * 1000u; }
+static uint16_t crc16_kos(void *p, const uint8_t *data, size_t bytes, uint16_t start) {
+    (void)p;
+    uint16_t value = kui_crc16_ref(start, data, bytes);
+    return t.crc16_bad ? (uint16_t)(value ^ 1u) : value;
 }
 static void set_ui(void *p, unsigned hz) { (void)p; if(t.ui_calls < 16) t.ui_seq[t.ui_calls] = hz; ++t.ui_calls; }
 static void cpu_mark(void *p, struct kui_cpu_census *out) {
@@ -91,9 +127,24 @@ static enum kui_read_result read_valid(void *p, uint32_t fad, unsigned sectors, 
 }
 static void quiet_log(const char *format, ...) { (void)format; }
 static uint64_t now_ms(void *p) { (void)p; return t.clock_us / 1000; }
+static struct kui_media_ops g_media;   /* the image-backed card */
+/* Any card access while the link is closed fails as it does on the console: "Mount failed:
+ * FatFs=3 / Storage device is not connected". The first version of this harness kept the card
+ * attached for the whole run, so a bench section that touched it without opening the link
+ * (the capture section did, on the console, and failed at once) could not fail here. */
+static int reconnect(void *p, unsigned use_sci, bool crc) {
+    (void)p;
+    ++t.reconnects; t.last_sci = use_sci; t.last_crc = crc;
+    if(t.reconnect_fail) { kui_media_set(NULL); t.linked = false; return -1; }
+    kui_media_set(&g_media); t.linked = true;
+    return (int)use_sci;
+}
 static enum kui_capture_result capture_run(void *p, uint32_t fad, unsigned sectors, bool audio,
         enum kui_capture_mode mode, const struct kui_capture_options *opt, struct kui_capture_stats *st) {
     (void)p;
+    /* The console adapter no longer opens or closes the card around each run: the bench owns
+     * the link for the whole section, so it must already be open. */
+    assert(t.linked);
     struct kui_capture_ops cops = {NULL, read_valid, cancelled, now_ms, NULL, quiet_log, "0123456789ab",
                                    now_us, NULL, opt, st};
     return kui_capture_bench(&cops, fad, sectors, audio, mode);
@@ -101,12 +152,14 @@ static enum kui_capture_result capture_run(void *p, uint32_t fad, unsigned secto
 /* Job directories still on the card: the bench must leave none behind. */
 static unsigned jobs_left(void) {
     FATFS fs; DIR d; FILINFO info; unsigned n = 0;
+    kui_media_set(&g_media);   /* this is the test looking at the card, not the bench */
     assert(kui_mount(&fs, quiet_log));
     if(f_opendir(&d, "0:/KUI/dumps") == FR_OK) {
         while(f_readdir(&d, &info) == FR_OK && info.fname[0]) if(info.fattrib & AM_DIR) ++n;
         f_closedir(&d);
     }
     assert(f_mount(NULL, "0:", 0) == FR_OK);
+    kui_media_set(NULL);
     return n;
 }
 
@@ -116,14 +169,31 @@ int main(int argc, char **argv) {
     if(lstat(argv[1], &st) || !S_ISREG(st.st_mode) || st.st_size % 512) return 2;
     t.image = fopen(argv[1], "r+b"); if(!t.image) return 2;
     t.blocks = (uint64_t)st.st_size / 512;
-    struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
-    kui_media_set(&media);
+    g_media = (struct kui_media_ops){NULL, blocks, read_image, write_image, sync_image};
+    kui_media_set(NULL);   /* closed, as the console leaves it after reading bench.cfg */
+    if(!strcmp(argv[2], "mount-fail")) {
+        /* A failed mount must not leave FatFs pointing at the caller's object: the caller returns
+         * and the memory is reused. Heap here, so the sanitizer catches the next f_mount writing
+         * through the stale pointer. */
+        FATFS *dead = malloc(sizeof(*dead));
+        assert(dead && !kui_mount(dead, quiet_log));   /* link closed: must fail */
+        free(dead);
+        FATFS live;
+        kui_media_set(&g_media);
+        assert(kui_mount(&live, quiet_log) && f_mount(NULL, "0:", 0) == FR_OK);
+        kui_media_set(NULL);
+        puts("MOUNT_FAIL_OK");
+        return 0;
+    }
 
     const char *scenario = argv[2];
     struct kui_options o; kui_options_default(&o);
+    /* These scenarios assert the per-pass tags, so they run the unthrottled UI. What the
+     * DEFAULT is (2 Hz) is tested in test_options and by the default-ui scenario. */
+    if(strcmp(scenario, "default-ui")) o.ui_hz[0] = KUI_OPT_UI_FULL;
     o.sd_mib = 1; o.hash_mib = 1; o.optical_sectors = 64; o.expand = false;
-    struct kui_bench_ops ops = {NULL, read_disc, NULL, cancelled, now_us, log_line, set_ui, cpu_mark, read_probe,
-                                capture_run};
+    struct kui_bench_ops ops = {NULL, read_disc, reconnect, cancelled, now_us, log_line, set_ui, cpu_mark, read_probe,
+                                capture_run, crc16_kos, read_probe_dma, spin, spin_count, sleep_ms};
 
     if(!strcmp(scenario, "default")) {
         /* Nothing new was asked for: the run must look like the bench before the
@@ -154,7 +224,7 @@ int main(int argc, char **argv) {
         o.sd_bytes[0] = 65536; o.sd_bytes[1] = 131072; o.sd_bytes[2] = 1048576; o.sd_bytes_count = 3;
     } else if(!strcmp(scenario, "expand")) {
         o.sections = KUI_SEC_SD; o.expand = true; o.chunks[0] = 32; o.chunk_count = 1;
-    } else if(!strcmp(scenario, "capture") || !strcmp(scenario, "capture-noop")) {
+    } else if(!strcmp(scenario, "capture") || !strcmp(scenario, "capture-noop") || !strcmp(scenario, "capture-nolink")) {
         /* Every combination: 2 hashes x 2 end read-backs x 2 sample rates, and both resume checks. */
         o.sections = KUI_SEC_CAPTURE; o.capture_sectors = 256;
         o.capture_crc_only[0] = false; o.capture_crc_only[1] = true; o.capture_hash_count = 2;
@@ -162,16 +232,37 @@ int main(int argc, char **argv) {
         o.sample_readback[0] = 0; o.sample_readback[1] = 3; o.sample_readback_count = 2;
         o.resume_size[0] = false; o.resume_size[1] = true; o.resume_check_count = 2;
         if(!strcmp(scenario, "capture-noop")) ops.capture_run = NULL;
+        if(!strcmp(scenario, "capture-nolink")) t.reconnect_fail = true;   /* the card will not come back */
+    } else if(!strcmp(scenario, "default-ui")) {
+        o.sections = KUI_SEC_OPTICAL;
+    } else if(!strcmp(scenario, "crc16") || !strcmp(scenario, "crc16-bad") || !strcmp(scenario, "crc16-nokos")) {
+        o.sections = KUI_SEC_HASH;
+        if(!strcmp(scenario, "crc16-bad")) t.crc16_bad = true;
+        if(!strcmp(scenario, "crc16-nokos")) ops.crc16_kos = NULL;
+    } else if(!strncmp(scenario, "dma", 3) || !strcmp(scenario, "spin-none")) {
+        /* chunk 32 and 128, PIO and DMA, with and without a competing thread. */
+        o.sections = KUI_SEC_SWEEP; o.sweep_sectors = 256;
+        o.sweep_chunks[0] = 32; o.sweep_chunks[1] = 128; o.sweep_chunk_count = 2;
+        o.sweep_dma[0] = false; o.sweep_dma[1] = true; o.sweep_mode_count = 2;
+        o.sweep_spin[0] = false; o.sweep_spin[1] = true; o.sweep_spin_count = 2;
+        if(!strcmp(scenario, "dma-fail")) t.dma_fail = true;
+        if(!strcmp(scenario, "dma-mismatch")) t.dma_mismatch = true;
+        if(!strcmp(scenario, "dma-odd")) o.sweep_sectors = 257;
+        if(!strcmp(scenario, "dma-midfail")) t.dma_fail_after = 2;
+        if(!strcmp(scenario, "dma-none")) ops.read_probe_dma = NULL;
+        if(!strcmp(scenario, "spin-none")) ops.spin = NULL;
     } else if(!strcmp(scenario, "bare")) {
         /* A platform with no UI control and no scheduler census. */
         o.sections = KUI_SEC_OPTICAL | KUI_SEC_HASH;
-        ops.set_ui = NULL; ops.cpu_mark = NULL;
+        ops.set_ui = NULL; ops.cpu_mark = NULL; ops.crc16_kos = NULL;
     } else {
         return 2;
     }
 
     enum kui_bench_result r = kui_bench(&ops, &o);
+    kui_media_set(NULL); t.linked = false;   /* the console closes the link when the bench ends */
     if(!strcmp(scenario, "capture")) printf("JOBS_LEFT %u\n", jobs_left());
+    printf("RECONNECTS %u LAST sci=%u crc=%u\n", t.reconnects, t.last_sci, t.last_crc ? 1u : 0u);
     printf("RESULT %u READS %u PROBES %u UI_CALLS %u UI_SEQ", (unsigned)r, t.read_calls, t.probe_calls, t.ui_calls);
     for(unsigned i = 0; i < t.ui_calls && i < 16; ++i) printf(" %u", t.ui_seq[i]);
     puts("");

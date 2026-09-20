@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
     assert(d.sd_crc_count == 1 && d.sd_crc[0]);
     assert(!d.note[0]);
     /* Experiment keys default to the bench as it was: nothing new runs. */
-    assert(d.ui_count == 1 && d.ui_hz[0] == KUI_OPT_UI_FULL);
+    assert(d.ui_count == 1 && d.ui_hz[0] == 2);   /* measured: 2 Hz costs ~5%, full costs ~31% */
     assert(d.sections == (KUI_SEC_OPTICAL | KUI_SEC_HASH | KUI_SEC_SD));
     assert(d.sweep_chunk_count == 0 && d.sweep_fad_count == 0);
     assert(d.sweep_gap_count == 0 && d.sweep_service_count == 0);
@@ -167,6 +167,27 @@ int main(int argc, char **argv) {
     o = d; assert(!parse(&o, "sd_bytes=131072,131072") && !memcmp(&o, &d, sizeof(o)));
     o = d; assert(!parse(&o, "sd_bytes=1,2,3,4,5,6,7") && !memcmp(&o, &d, sizeof(o)));
 
+    /* --- sweep_mode / sweep_spin ---------------------------------------------- */
+    assert(d.sweep_mode_count == 1 && !d.sweep_dma[0] && d.sweep_spin_count == 1 && !d.sweep_spin[0]);
+    o = d; assert(parse(&o, "sweep_mode=pio,dma") && o.sweep_mode_count == 2 && !o.sweep_dma[0] && o.sweep_dma[1]);
+    o = d; assert(parse(&o, "sweep_mode = dma") && o.sweep_mode_count == 1 && o.sweep_dma[0]);
+    o = d; assert(!parse(&o, "sweep_mode=dma,dma") && !memcmp(&o, &d, sizeof(o)));
+    o = d; assert(!parse(&o, "sweep_mode=pio,dma,pio") && !memcmp(&o, &d, sizeof(o)));
+    o = d; assert(!parse(&o, "sweep_mode=irq") && !memcmp(&o, &d, sizeof(o)));
+    o = d; assert(!parse(&o, "sweep_mode=") && !memcmp(&o, &d, sizeof(o)));
+    o = d; assert(parse(&o, "sweep_spin=off,on") && o.sweep_spin_count == 2 && !o.sweep_spin[0] && o.sweep_spin[1]);
+    o = d; assert(parse(&o, "sweep_spin=on") && o.sweep_spin[0]);
+    o = d; assert(!parse(&o, "sweep_spin=on,on") && !memcmp(&o, &d, sizeof(o)));
+    o = d; assert(!parse(&o, "sweep_spin=sometimes") && !memcmp(&o, &d, sizeof(o)));
+    o = d; logged = 0; transcript[0] = 0;
+    assert(parse(&o, "sweep_mode=pio,dma\nsweep_spin=off,on\n"));
+    kui_options_log(&o, log_line);
+    assert(strstr(transcript, "OPTIONS sweep_mode=pio,dma sweep_spin=off,on"));
+    logged = 0; transcript[0] = 0; kui_options_log(&d, log_line);
+    assert(strstr(transcript, "OPTIONS sweep_mode=pio sweep_spin=off"));
+    /* ui_hz=full is still a valid, explicit choice, and is what says so in the report. */
+    o = d; assert(parse(&o, "ui_hz=full") && o.ui_hz[0] == KUI_OPT_UI_FULL);
+
     /* --- capture engine keys ------------------------------------------------ */
     o = d; assert(parse(&o, "capture_hash=both,crc32") && o.capture_hash_count == 2 &&
                   !o.capture_crc_only[0] && o.capture_crc_only[1]);
@@ -225,14 +246,14 @@ int main(int argc, char **argv) {
 
     /* Defaults echo as "off/none" so a report never hides a sweep that ran. */
     logged = 0; transcript[0] = 0; kui_options_log(&d, log_line);
-    assert(strstr(transcript, "OPTIONS ui_hz=full sections=optical,hash,sd"));
+    assert(strstr(transcript, "OPTIONS ui_hz=2 sections=optical,hash,sd"));
     assert(strstr(transcript, "sweep_chunks=(sweep off)"));
     assert(strstr(transcript, "sweep_fads=(optical_fad)"));
     assert(strstr(transcript, "sd_bytes=(none)"));
 
     /* The echo prints the list in file order. */
     o = d; logged = 0; kui_options_log(&o, log_line);
-    assert(logged == 12 && strstr(last, "note=(none)"));
+    assert(logged == 13 && strstr(last, "note=(none)"));
 
     /* Every example config we ship (paths come from the Makefile) must parse
      * with no complaint, so a later change to a limit cannot silently break a

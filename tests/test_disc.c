@@ -4,6 +4,7 @@
  * bounded service/yield behavior, cancellation, deadlines and poisoned state. */
 #include "platform.h"
 #include <dc/syscalls.h>
+#include <arch/cache.h>
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -19,6 +20,7 @@ static struct {
     cd_read_params_t params;
     char log[32768];size_t used;
 } fake;
+char test_cache_log[64];unsigned test_cache_n;uintptr_t test_cache_start[16];size_t test_cache_bytes[16];
 uint64_t timer_ms_gettime64(void) {return fake.us/1000;}
 uint64_t timer_us_gettime64(void) {return fake.us;}
 void thd_sleep(unsigned ms) {
@@ -43,11 +45,12 @@ int syscall_gdrom_sector_mode(cd_sec_mode_params_t *p) {
     assert(p->size==2352 && p->track_type==0);fake.us+=7;++fake.modes;return fake.mode_fail?-1:0;
 }
 int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
-    assert(code==CD_CMD_PIOREAD || code==CD_CMD_INIT);
+    assert(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD || code==CD_CMD_INIT);
     fake.command=code;fake.us+=13;++fake.sends;
     if(fake.submit_busy || fake.submit_always_busy) {fake.submit_busy=false;return 0;}
     fake.polls=0;fake.abort_started=false;
-    if(code==CD_CMD_PIOREAD) {fake.params=*(cd_read_params_t *)params;++fake.reads;}
+    if(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD) {fake.params=*(cd_read_params_t *)params;++fake.reads;}
+    if(code==CD_CMD_DMAREAD) test_cache_note('D',0,0);   /* the transfer starts here */
     return 1;
 }
 void syscall_gdrom_exec_server(void) {fake.us+=3;}
@@ -61,14 +64,15 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
     assert(handle==1);fake.us+=fake.poll_us;++fake.polls;++fake.total_polls;
     if(fake.abort_started) return fake.abort_fail?1:0;
     if(fake.fail || fake.changed) {
-        if(fake.command==CD_CMD_PIOREAD) damage_guard();
+        if(fake.command==CD_CMD_PIOREAD || fake.command==CD_CMD_DMAREAD) damage_guard();
         detail->err1=fake.changed?6:3;return -1;
     }
     if(fake.cancel) fake.stop=true;
     if(fake.timeout || fake.cancel) return 1;
     unsigned needed=fake.target_polls?fake.target_polls:((fake.reads&1)?2u:4u);
     if(fake.polls<needed) return 1;
-    assert(fake.command==CD_CMD_PIOREAD);
+    assert(fake.command==CD_CMD_PIOREAD || fake.command==CD_CMD_DMAREAD);
+    if(fake.command==CD_CMD_DMAREAD) test_cache_note('C',0,0);   /* the transfer is done */
     size_t bytes=(size_t)fake.params.num_sec*KUI_RAW_BYTES;
     uint8_t *data=fake.params.buffer;
     kui_pattern(data,(uint64_t)fake.params.start_sec*KUI_RAW_BYTES,bytes-(fake.underfill?1:0));
@@ -89,8 +93,81 @@ static void check_refused(uint8_t *out) {
     unsigned sends=fake.sends;kui_disc_timing_reset();fake.stop=false;
     assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_FATAL && fake.sends==sends);
 }
+/* The bench's GD-ROM DMA probe against the fake firmware. Each failure mode that turns DMA off
+ * runs as its own process (like abort-fail above): the state it leaves is meant to persist. */
+static int run_dma(const char *mode) {
+    static uint8_t expected[KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES];
+    struct kui_probe_stats st;const uint8_t *data=NULL;
+    reset();memset(&st,0,sizeof(st));test_cache_n=0;test_cache_log[0]=0;
+    if(!strcmp(mode,"dma")) {
+        fake.target_polls=6;
+        assert(kui_disc_read_probe_dma(NULL,45150,32,&data,&st)==KUI_READ_OK && data);
+        kui_pattern(expected,(uint64_t)45150*KUI_RAW_BYTES,32*KUI_RAW_BYTES);
+        assert(!memcmp(data,expected,32*KUI_RAW_BYTES));
+        assert(fake.command==CD_CMD_DMAREAD && fake.reads==1 && fake.modes==1);
+        assert(fake.params.start_sec==45150 && fake.params.num_sec==32);
+        assert(((uintptr_t)fake.params.buffer&31u)==0);         /* the DMA engine needs 32-byte alignment */
+        /* The worker sleeps between polls; it never yields in a loop, so the CPU is really free. */
+        assert(fake.sleeps>0 && fake.passes==0);
+        assert(st.cmd_us>0 && st.last_us==st.cmd_us && st.reported_bytes==32*KUI_RAW_BYTES && st.polls>0);
+        /* Cache: the guard pattern purged (3 ranges) and the data range invalidated BEFORE the transfer
+         * starts, and the data range invalidated again after it: the whole 2352 bytes of every sector,
+         * not the 2048 KOS's own helper would cover. */
+        assert(!strcmp(test_cache_log,"PPPIDCI"));
+        assert(test_cache_start[3]==(uintptr_t)data && test_cache_bytes[3]==32*KUI_RAW_BYTES);
+        assert(test_cache_start[6]==(uintptr_t)data && test_cache_bytes[6]==32*KUI_RAW_BYTES);
+        assert(test_cache_bytes[1]==KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES-32*KUI_RAW_BYTES ||
+               test_cache_bytes[1]==4096);                      /* the tail guard, bounded */
+        /* The largest read, in the same run. */
+        test_cache_n=0;test_cache_log[0]=0;
+        assert(kui_disc_read_probe_dma(NULL,45150,KUI_OPT_SWEEP_CHUNK_MAX,&data,&st)==KUI_READ_OK);
+        kui_pattern(expected,(uint64_t)45150*KUI_RAW_BYTES,KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES);
+        assert(!memcmp(data,expected,KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES));
+        assert(test_cache_bytes[3]==KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES);
+        /* Statistics accumulate across reads; the caller owns them. */
+        assert(st.cmd_us>=st.last_us && st.polls>6);
+        /* Refusals send nothing: odd counts (a 2352-byte sector is a multiple of 32 only in pairs),
+         * zero, too many, bad addresses, missing pointers, and a stop request. */
+        unsigned sends=fake.sends;
+        assert(kui_disc_read_probe_dma(NULL,45150,31,&data,&st)==KUI_READ_FATAL);
+        assert(kui_disc_read_probe_dma(NULL,45150,1,&data,&st)==KUI_READ_FATAL);
+        assert(kui_disc_read_probe_dma(NULL,45150,0,&data,&st)==KUI_READ_FATAL);
+        assert(kui_disc_read_probe_dma(NULL,45150,KUI_OPT_SWEEP_CHUNK_MAX+2,&data,&st)==KUI_READ_FATAL);
+        assert(kui_disc_read_probe_dma(NULL,149,32,&data,&st)==KUI_READ_FATAL);
+        assert(kui_disc_read_probe_dma(NULL,0xffffff,32,&data,&st)==KUI_READ_FATAL);
+        assert(kui_disc_read_probe_dma(NULL,45150,32,NULL,&st)==KUI_READ_FATAL);
+        assert(kui_disc_read_probe_dma(NULL,45150,32,&data,NULL)==KUI_READ_FATAL);
+        fake.stop=true;
+        assert(kui_disc_read_probe_dma(NULL,45150,32,&data,&st)==KUI_READ_FATAL);
+        assert(fake.sends==sends);
+        puts("PASS dma probe: data, alignment, sleeping poll, cache order and 2352-byte ranges, refusals");
+        return 0;
+    }
+    /* Everything below leaves DMA off, and a second attempt must not even reach the drive. */
+    unsigned sends;
+    if(!strcmp(mode,"dma-fail")) {
+        fake.fail=true;
+        assert(kui_disc_read_probe_dma(NULL,45150,32,&data,&st)==KUI_READ_RETRY);
+        assert(strstr(fake.log,"DMA stays off until reboot"));
+    } else if(!strcmp(mode,"dma-timeout")) {
+        fake.timeout=true;
+        assert(kui_disc_read_probe_dma(NULL,45150,32,&data,&st)==KUI_READ_RETRY);
+        assert(fake.aborts==1 && fake.us>=5000000 && fake.us<5012000);   /* bounded: never a hang */
+        assert(strstr(fake.log,"DMA stays off until reboot"));
+    } else {
+        assert(!strcmp(mode,"dma-guard"));
+        fake.guard=1;   /* the fake drive writes one byte past the request */
+        assert(kui_disc_read_probe_dma(NULL,45150,32,&data,&st)==KUI_READ_FATAL);
+        assert(strstr(fake.log,"DMA PROBE GUARD CORRUPTION"));
+    }
+    sends=fake.sends;fake.fail=fake.timeout=false;fake.guard=0;fake.stop=false;
+    assert(kui_disc_read_probe_dma(NULL,45150,32,&data,&st)==KUI_READ_FATAL && fake.sends==sends);
+    printf("PASS dma probe: %s leaves DMA off and refuses further attempts without touching the drive\n",mode);
+    return 0;
+}
 int main(int argc,char **argv) {
     uint8_t out[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES],expected[sizeof(out)];
+    if(argc==2 && !strncmp(argv[1],"dma",3)) return run_dma(argv[1]);
     memset(out,0xd3,sizeof(out));reset();
     if(argc==2) {
         capture_phase();

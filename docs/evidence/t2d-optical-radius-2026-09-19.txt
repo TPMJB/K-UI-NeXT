@@ -1,0 +1,212 @@
+K-UI SD runtime 8387322aa7e9
+Log truncated: no
+Report trigger: manual
+Capture result: see operation log
+Running SD runtime build 8387322aa7e9
+Video: 640x480 NTSC interlaced, buffered
+Diagnostic code and fonts are loaded entirely in RAM.
+Replace boot CD with a known-good retail GD-ROM; close lid.
+Diagnostics page: A disc samples; X SD test; Y save log.
+Use a spare test card. No formatting; existing files preserved.
+Capture page: A new dump; X resume latest matching disc; Y verify.
+Left/Right switches capture/diagnostics. B stops and checkpoints.
+New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
+Capture rereads saved files; a reference match is a separate PC check.
+Capture uses single optical reads; final CRC32/SHA256 readback stays on.
+Capture/Resume/Verify auto-save a report after ending. Wait for READY.
+R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
+mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=1 sections=sweep
+OPTIONS sweep_chunks=32 sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=45150,150000,300000,450000
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=both end_readback=on resume_check=full
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=(optical_fad)
+OPTIONS note=T2d radius sweep. card=<model> disc=<title>
+CMD 24 FAILED
+  sense=6/40 size=10 ATA=0
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/1 uihz=1
+BENCH poll buckets: call duration <25us / <100us / <400us / <1.6ms / more
+BENCH sweep uihz=1 fad=45150 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1287.9
+ min=24545 max=66036 bytes=4816896 us=3665612 kib_s=1283.2
+BENCH cpu sweep c=32 g=0 s=0 wall=3665 wk=3598 ui=67 oth=0 ui_pct=1.8
+BENCH poll fad=45150 c=32 n=260899/69/0/1950/15
+BENCH poll fad=45150 c=32 ms=1003/3/0/1426/71
+BENCH verify fad=45150 chunk=32 sectors=512 crc32=71d42800 ref=71d42800 OK
+BENCH sweep uihz=1 fad=150000 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1509.
+9 min=24464 max=59418 bytes=4816896 us=3128539 kib_s=1503.5
+BENCH cpu sweep c=32 g=0 s=0 wall=3128 wk=3075 ui=54 oth=0 ui_pct=1.7
+BENCH poll fad=150000 c=32 n=194974/43/0/1931/17
+BENCH poll fad=150000 c=32 ms=749/2/0/1410/82
+BENCH verify fad=150000 chunk=32 sectors=512 crc32=6db7cb15 ref=6db7cb15 OK
+BENCH sweep uihz=1 fad=300000 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1756.
+2 min=24429 max=50372 bytes=4816896 us=2691596 kib_s=1747.6
+BENCH cpu sweep c=32 g=0 s=0 wall=2691 wk=2633 ui=59 oth=0 ui_pct=2.1
+BENCH poll fad=300000 c=32 n=138861/36/0/1872/29
+BENCH poll fad=300000 c=32 ms=533/1/0/1366/131
+BENCH verify fad=300000 chunk=32 sectors=512 crc32=390615af ref=390615af OK
+BENCH sweep uihz=1 fad=450000 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1969.
+4 min=25841 max=77033 bytes=4816896 us=2401692 kib_s=1958.6
+BENCH cpu sweep c=32 g=0 s=0 wall=2401 wk=2356 ui=46 oth=0 ui_pct=1.9
+BENCH poll fad=450000 c=32 n=104829/23/0/1914/20
+BENCH poll fad=450000 c=32 ms=400/1/0/1405/99
+BENCH verify fad=450000 chunk=32 sectors=512 crc32=1e3f3a3e ref=1e3f3a3e OK
+BENCH complete
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0001/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=1 sections=sweep
+OPTIONS sweep_chunks=32 sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=45150,150000,300000,450000
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=both end_readback=on resume_check=full
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=(optical_fad)
+OPTIONS note=T2d radius sweep. card=<model> disc=<title>
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/1 uihz=1
+BENCH poll buckets: call duration <25us / <100us / <400us / <1.6ms / more
+BENCH sweep uihz=1 fad=45150 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1215.2
+ min=24492 max=74039 bytes=4816896 us=3884025 kib_s=1211.1
+BENCH cpu sweep c=32 g=0 s=0 wall=3884 wk=3798 ui=86 oth=0 ui_pct=2.2
+BENCH poll fad=45150 c=32 n=285953/64/0/1945/20
+BENCH poll fad=45150 c=32 ms=1099/3/0/1421/78
+BENCH verify fad=45150 chunk=32 sectors=512 crc32=71d42800 ref=71d42800 OK
+BENCH sweep uihz=1 fad=150000 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1485.
+6 min=27105 max=58912 bytes=4816896 us=3179518 kib_s=1479.4
+BENCH cpu sweep c=32 g=0 s=0 wall=3179 wk=3058 ui=122 oth=0 ui_pct=3.8
+BENCH poll fad=150000 c=32 n=193017/36/0/1853/27
+BENCH poll fad=150000 c=32 ms=741/1/0/1354/157
+BENCH verify fad=150000 chunk=32 sectors=512 crc32=6db7cb15 ref=6db7cb15 OK
+BENCH sweep uihz=1 fad=300000 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1726.
+1 min=29428 max=80318 bytes=4816896 us=2738329 kib_s=1717.8
+BENCH cpu sweep c=32 g=0 s=0 wall=2738 wk=2658 ui=81 oth=0 ui_pct=2.9
+BENCH poll fad=300000 c=32 n=142720/36/0/1960/16
+BENCH poll fad=300000 c=32 ms=548/1/0/1429/65
+BENCH verify fad=300000 chunk=32 sectors=512 crc32=390615af ref=390615af OK
+BENCH sweep uihz=1 fad=450000 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=2036.
+9 min=24644 max=51955 bytes=4816896 us=2322520 kib_s=2025.3
+BENCH cpu sweep c=32 g=0 s=0 wall=2322 wk=2277 ui=46 oth=0 ui_pct=1.9
+BENCH poll fad=450000 c=32 n=94469/20/0/1820/30
+BENCH poll fad=450000 c=32 ms=362/0/0/1331/163
+BENCH verify fad=450000 chunk=32 sectors=512 crc32=1e3f3a3e ref=1e3f3a3e OK
+BENCH complete
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0002/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2455416 available~=14321800
+RAM sampled peak used/reserved=2455416
+Image+BSS=2235396 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=91132
+Heap system bytes=91132 in use bytes=88948 free bytes=2184
+Unclaimed main RAM=14319616; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on

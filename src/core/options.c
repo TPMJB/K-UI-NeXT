@@ -24,10 +24,17 @@ void kui_options_default(struct kui_options *out) {
     out->sd_if[0] = 0; out->sd_if_count = 1;
     out->sd_crc[0] = true; out->sd_crc_count = 1;
     /* Experiment keys: defaults reproduce the bench as it was before they existed. */
-    out->ui_hz[0] = KUI_OPT_UI_FULL; out->ui_count = 1;
+    /* While an operation runs the UI is capped at 2 redraws a second. Measured on the
+     * console (docs/evidence/t1-ui-census-2026-09-19.json): the unthrottled loop took
+     * 30-34% of the CPU, each redraw costs about 26 ms, so 2 Hz costs about 5% and
+     * SD writes run 43-51% faster. "full" restores the unthrottled loop. Idle
+     * screens are never capped. */
+    out->ui_hz[0] = 2; out->ui_count = 1;
     out->sections = KUI_SEC_OPTICAL | KUI_SEC_HASH | KUI_SEC_SD;
     out->sweep_sectors = 2048;
     out->sweep_verify = true;
+    out->sweep_mode_count = 1;   /* PIO only */
+    out->sweep_spin_count = 1;   /* no competing thread */
     /* Capture engine: the engine as it has always been. */
     out->capture_hash_count = 1;      /* both */
     out->end_readback[0] = true; out->end_readback_count = 1;
@@ -232,6 +239,8 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
         KUI_OPT_SWEEP_LIST_MAX, o->sweep_service_us, &o->sweep_service_count);
     if(KEY("sweep_sectors")) { if(!parse_unsigned(v, vend, 32, 65536, &n)) return false; o->sweep_sectors = (unsigned)n; return true; }
     if(KEY("sweep_verify")) return parse_bool(v, vend, &o->sweep_verify);
+    if(KEY("sweep_mode")) return parse_two_words(v, vend, "pio", "dma", o->sweep_dma, &o->sweep_mode_count);
+    if(KEY("sweep_spin")) return parse_sd_list(v, vend, o->sweep_spin, &o->sweep_spin_count, true);
     /* Whole 512-byte blocks, at least 4 KiB, at most the bench buffer. */
     if(KEY("sd_bytes")) return parse_ulist(v, vend, 4096, (unsigned long)KUI_OPT_CHUNK_MAX * KUI_RAW_BYTES,
         512, KUI_OPT_SDBYTES_MAX, o->sd_bytes, &o->sd_bytes_count);
@@ -279,6 +288,7 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
             "optical_fad", "optical_sectors", "yield_us", "sd_if", "sd_crc", "note",
             "ui_hz", "sections", "sweep_chunks", "sweep_fads", "sweep_gap_us",
             "sweep_service_us", "sweep_sectors", "sweep_verify", "sd_bytes",
+            "sweep_mode", "sweep_spin",
             "capture_hash", "end_readback", "resume_check", "sample_readback",
             "capture_sectors", "capture_fad", "capture_type"};
         bool is_known = false;
@@ -352,6 +362,12 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
         o->sweep_verify ? "on" : "off");
     log("OPTIONS sweep_fads=%s", fads);
     log("OPTIONS sweep_gap_us=%s sweep_service_us=%s", gaps, svcs);
+    char modes[16] = "", spins[16] = "";
+    for(unsigned i = 0; i < o->sweep_mode_count; ++i)
+        append_word(modes, sizeof(modes), o->sweep_dma[i] ? "dma" : "pio", i == 0);
+    for(unsigned i = 0; i < o->sweep_spin_count; ++i)
+        append_word(spins, sizeof(spins), o->sweep_spin[i] ? "on" : "off", i == 0);
+    log("OPTIONS sweep_mode=%s sweep_spin=%s", modes, spins);
     log("OPTIONS sd_bytes=%s", bytes);
     char hashes[24] = "", ends[16] = "", checks[24] = "", samples[32];
     for(unsigned i = 0; i < o->capture_hash_count; ++i)

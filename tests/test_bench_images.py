@@ -143,7 +143,22 @@ def check_expand(out):
     assert matching(out, r"BENCH sd write .* expand=1") or "f_expand not compiled in" in out
 
 
+def check_mount_fail(out):
+    assert "MOUNT_FAIL_OK" in out
+
+
+def check_capture_nolink(out):
+    # The card will not come back: the section says so and stops. It must not have touched the
+    # card (that is what crashed on the console), started a run, or left anything behind.
+    assert "BENCH capture skipped: card did not come back" in out
+    assert not matching(out, r"^BENCH capture uihz") and not matching(out, r"Mount failed")
+    assert re.search(r"^RECONNECTS 1 LAST sci=0 crc=1$", out, re.M) and re.search(r"^RESULT 0 ", out, re.M)   # 0 = KUI_BENCH_FAILED
+
+
 def check_capture(out):
+    # The bench opens the card itself, on the default transport a real capture uses.
+    assert re.search(r"^RECONNECTS 1 LAST sci=0 crc=1$", out, re.M), out
+    assert not matching(out, r"Mount failed|not connected")
     combos = [(h, e, s) for h in ("both", "crc32") for e in ("on", "off") for s in (0, 3)]
     for h, e, s in combos:
         brief = f"hash={h} end={e} sample={s}"
@@ -177,6 +192,104 @@ def check_capture_noop(out):
     assert "BENCH capture skipped: no readable disc" in out and "BENCH complete" in out
 
 
+def sweep_lines(out):
+    return matching(out, r"^BENCH sweep uihz=full fad=")
+
+
+def sweep_by_mode(out):
+    """{(chunk, 'pio'|'dma', competing thread?): line} for the sweep points."""
+    found = {}
+    for line in sweep_lines(out):
+        key = (int(field(line, "chunk")), "dma" if " mode=dma" in line else "pio", " free=" in line)
+        assert key not in found, key
+        found[key] = line
+    return found
+
+
+def check_dma(out):
+    """Chunk 32/128 x PIO/DMA x with/without a competing thread, against the fakes' models:
+    DMA is faster and leaves ~99% of the CPU, PIO leaves ~40%."""
+    assert re.search(r"^BENCH dma check fad=45150 sectors=32 result=OK crc32=(\w+) pio=\1 reported_bytes=75264 ", out, re.M)
+    calibration = int(re.search(r"BENCH spin calibration: (\d+) iterations/ms", out).group(1))
+    assert 990 <= calibration <= 1000, calibration
+    found = sweep_by_mode(out)
+    assert len(found) == 8, sorted(found)
+    for chunk in (32, 128):
+        pio, dma = found[(chunk, "pio", False)], found[(chunk, "dma", False)]
+        assert field(dma, "rd") > field(pio, "rd") * 1.3, (pio, dma)
+        assert 38.0 <= field(found[(chunk, "pio", True)], "free") <= 41.0, found[(chunk, "pio", True)]
+        assert 97.0 <= field(found[(chunk, "dma", True)], "free") <= 100.0, found[(chunk, "dma", True)]
+    # Poll buckets only mean something for PIO with nothing else running.
+    assert len(matching(out, r"^BENCH poll fad=\d+ c=\d+ n=")) == 2
+    # PIO and DMA both return the reference bytes at both sizes.
+    assert len(matching(out, r"^BENCH verify fad=45150 chunk=\d+ sectors=256 .* OK$")) == 2
+    assert len(matching(out, r"^BENCH verify fad=45150 chunk=\d+ mode=dma sectors=256 .* OK$")) == 2
+    assert not matching(out, "MISMATCH")
+    assert len(matching(out, r"^BENCH cpu sweep c=\d+ g=0 s=0 dma spin ")) == 2   # each point is census'd
+
+
+def check_dma_fail(out):
+    assert re.search(r"^BENCH dma check fad=45150 sectors=32 result=FAILED; DMA stays off until reboot", out, re.M)
+    found = sweep_by_mode(out)
+    assert len(found) == 4 and all(mode == "pio" for _, mode, _ in found), sorted(found)   # PIO carries on
+    assert "BENCH complete" in out and not matching(out, r"mode=dma")
+
+
+def check_dma_mismatch(out):
+    assert re.search(r"^BENCH dma check .* result=MISMATCH ", out, re.M)
+    assert len(sweep_by_mode(out)) == 4 and not matching(out, r"mode=dma")   # wrong bytes: never measured
+    assert "BENCH complete" in out
+
+
+def check_dma_odd(out):
+    # 257 sectors is odd: PIO measures it, DMA (which needs whole 32-byte multiples) skips.
+    assert len(matching(out, r"^BENCH sweep dma fad=45150 chunk=\d+ skipped: needs an even sector count")) == 2
+    assert len(sweep_by_mode(out)) == 4 and not matching(out, r"mode=dma sectors=")
+    assert "BENCH complete" in out
+
+
+def check_dma_midfail(out):
+    # The check passes, then a DMA read fails: that point is skipped, DMA turns off, PIO carries on.
+    assert re.search(r"^BENCH dma check .* result=OK ", out, re.M)
+    assert matching(out, r"DMA off until reboot")
+    found = sweep_by_mode(out)
+    assert len(found) == 4 and all(mode == "pio" for _, mode, _ in found), sorted(found)
+    assert not matching(out, r"mode=dma sectors=") and "BENCH complete" in out
+
+
+def check_dma_none(out):
+    assert "BENCH dma skipped: this platform has no GD-ROM DMA probe" in out
+    assert len(sweep_by_mode(out)) == 4 and "BENCH complete" in out
+
+
+def check_spin_none(out):
+    assert "BENCH spin skipped: no competing-thread support here" in out
+    found = sweep_by_mode(out)
+    assert len(found) == 4 and not any(spin for _, _, spin in found), sorted(found)   # no free= anywhere
+
+
+def check_crc16(out):
+    for name in ("crc16-kos", "crc16-table", "crc16-slice2", "crc16-nibble"):
+        assert matching(out, rf"^BENCH hash uihz=full {name} cyc_b=\d+ bytes="), name
+        assert matching(out, rf"^BENCH cpu {name} uihz=full "), name
+    assert "BENCH hash uihz=full crc16 agree=OK (4 implementations, identical results)" in out
+
+
+def check_crc16_bad(out):
+    assert "BENCH hash uihz=full crc16 agree=MISMATCH" in out and "BENCH complete" in out
+
+
+def check_crc16_nokos(out):
+    assert not matching(out, r"crc16-kos")
+    assert "BENCH hash uihz=full crc16 agree=OK (3 implementations, identical results)" in out
+
+
+def check_default_ui(out):
+    # With nothing configured the UI is capped at 2 Hz while the bench measures.
+    assert "BENCH pass 1/1 uihz=2" in out and "UI_CALLS 2 UI_SEQ 2 1000" in out
+    assert matching(out, r"^BENCH optical uihz=2 fad=")
+
+
 def check_bare(out):
     assert "BENCH complete" in out and "(no UI control on this platform)" in out
     assert not matching(out, r"BENCH cpu ")
@@ -197,6 +310,19 @@ CASES = {
     "expand": (0, check_expand, True),
     "capture": (0, check_capture, True),
     "capture-noop": (0, check_capture_noop, False),
+    "capture-nolink": (1, check_capture_nolink, False),
+    "mount-fail": (0, check_mount_fail, False),
+    "dma": (0, check_dma, False),
+    "dma-fail": (0, check_dma_fail, False),
+    "dma-mismatch": (0, check_dma_mismatch, False),
+    "dma-odd": (0, check_dma_odd, False),
+    "dma-midfail": (0, check_dma_midfail, False),
+    "dma-none": (0, check_dma_none, False),
+    "spin-none": (0, check_spin_none, False),
+    "crc16": (0, check_crc16, False),
+    "crc16-bad": (0, check_crc16_bad, False),
+    "crc16-nokos": (0, check_crc16_nokos, False),
+    "default-ui": (0, check_default_ui, False),
     "bare": (0, check_bare, False),
 }
 

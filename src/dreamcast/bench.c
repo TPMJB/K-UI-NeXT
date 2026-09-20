@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
+#include <kos/thread.h>
 #include <kos/timer.h>
 
 /* The console side of the bench: everything that needs KOS, the GD-ROM
@@ -23,6 +24,41 @@ static int reconnect(void *ctx, unsigned use_sci, bool crc) {
 }
 static uint64_t now_us(void *ctx) { (void)ctx; return timer_us_gettime64(); }
 static void set_ui(void *ctx, unsigned hz) { (void)ctx; kui_ui_set_hz(hz); }
+
+/* KOS's own CRC16 (kernel/net/net_crc.c), the one the SD driver runs over every block it
+ * writes. Declared here instead of including <kos/net.h>, which pulls in the network stack
+ * for one prototype. It is already linked: the SD driver calls it. */
+extern uint16_t net_crc16ccitt(const uint8_t *data, int size, uint16_t start);
+static uint16_t crc16_kos(void *ctx, const uint8_t *data, size_t bytes, uint16_t start) {
+    (void)ctx;
+    return net_crc16ccitt(data, (int)bytes, start);
+}
+
+/* A CPU-bound thread at the worker's priority: what an SD-writing thread would be. It bumps a
+ * counter every 64 iterations while enabled and sleeps while not, so the count is a direct
+ * measure of the CPU it was given. The counter is one 32-bit word, read atomically, that
+ * cannot wrap for hours (a 64-bit one could be read half-updated when the thread is
+ * preempted between its two stores). Created on first use and kept for the rest of the boot,
+ * asleep, at the cost of one idle wake-up every 10 ms. */
+static volatile bool spin_enabled;
+static volatile uint32_t spin_total;
+static kthread_t *spin_thread;
+static void *spin_main(void *arg) {
+    (void)arg;
+    for(;;) {
+        if(!spin_enabled) { thd_sleep(10); continue; }
+        for(unsigned i = 0; i < 64; ++i) __asm__ volatile("" ::: "memory");
+        ++spin_total;
+    }
+    return NULL;
+}
+static void spin(void *ctx, bool on) {
+    (void)ctx;
+    if(on && !spin_thread) spin_thread = thd_create(1, spin_main, NULL);
+    spin_enabled = on;
+}
+static uint64_t spin_count(void *ctx) { (void)ctx; return spin_total; }
+static void sleep_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep((int)ms); }
 static void cpu_mark(void *ctx, struct kui_cpu_census *out) { (void)ctx; kui_cpu_census_mark(out); }
 static enum kui_capture_result capture_run(void *ctx, uint32_t fad, unsigned sectors, bool audio,
     enum kui_capture_mode mode, const struct kui_capture_options *options, struct kui_capture_stats *stats) {
@@ -52,7 +88,8 @@ bool kui_options_refresh(void) {
     kui_options_log(&kui_options, kui_log);
     kui_disc_set_yield_us(kui_options.yield_us);
     /* The first ui_hz value applies to the whole operation; a bench overrides it
-     * per pass. Defaults to 'full', which is the loop as it always was. */
+     * per pass. Defaults to 2 (see kui_options_default for the measurements behind
+     * that); 'ui_hz=full' restores the unthrottled loop. */
     kui_ui_set_hz(kui_options.ui_hz[0]);
     /* A rejected file left kui_options at defaults, so this is always a
      * transport the parser actually approved. */
@@ -74,7 +111,9 @@ enum kui_bench_result kui_bench_start(void) {
      * transport, so the SD benches and the link always agree. */
     struct kui_bench_ops ops = {NULL, disc ? kui_disc_read_raw : NULL, reconnect,
                                 cancelled, now_us, kui_log, set_ui, cpu_mark,
-                                disc ? kui_disc_read_probe : NULL, disc ? capture_run : NULL};
+                                disc ? kui_disc_read_probe : NULL, disc ? capture_run : NULL,
+                                crc16_kos, disc ? kui_disc_read_probe_dma : NULL,
+                                spin, spin_count, sleep_ms};
     enum kui_bench_result result = kui_bench(&ops, &kui_options);
     kui_sd_disconnect();
     /* Prints the OPTICAL capture subtimers (submit/poll/wait) for the bench

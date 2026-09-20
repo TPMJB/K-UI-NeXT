@@ -1,0 +1,295 @@
+{
+  "received_date": "2026-09-19",
+  "runtime_build": "8387322aa7e9",
+  "experiment": "Trip 2d: the drive's read rate across the radius of the big data track. 32-sector PIO reads, FADs 45150 / 150000 / 300000 / 450000; each point 64 reads (4.8 MB).",
+  "inputs": [
+    {
+      "file": "T2D Optical Radius diagnostics.txt",
+      "kept_as": "t2d-optical-radius-2026-09-19.txt",
+      "bytes": 11084,
+      "sha256": "0f03c921fb6f6e7257c36782ae4750f204d1c4f3023e38e4407a2864b4478c59",
+      "note": "two complete bench runs in one saved log; the on-screen log wraps at 76 characters and was re-joined for parsing"
+    }
+  ],
+  "config": {
+    "file": "docs/bench-cfgs/t2d-optical-radius.cfg",
+    "ui_hz": [
+      1
+    ],
+    "sections": [
+      "sweep"
+    ],
+    "sweep_fads": [
+      45150,
+      150000,
+      300000,
+      450000
+    ],
+    "sweep_chunks": [
+      32
+    ],
+    "sweep_sectors": 2048,
+    "sweep_verify": true
+  },
+  "hardware": {
+    "sd": {
+      "filesystem": "exFAT",
+      "sectors": 249997312,
+      "cluster_bytes": 131072,
+      "transport": "SCIF (bit-banged SPI)"
+    },
+    "disc": "Not named in the report. The TOC (tracks at FAD 150 / 1076 / 45150, lead-out 549300) matches Sword of the Berserk, as in t1-ui-census-2026-09-19.json.",
+    "note": "CMD 24 FAILED sense=6/40 at the start of a run is the drive's first INIT after a disc change, not an error."
+  },
+  "runs": [
+    {
+      "45150": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1287.9,
+        "min_us": 24545,
+        "max_us": 66036,
+        "bytes": 4816896,
+        "us": 3665612,
+        "kib_s": 1283.2,
+        "poll_calls": [
+          260899,
+          69,
+          0,
+          1950,
+          15
+        ],
+        "poll_ms": [
+          1003,
+          3,
+          0,
+          1426,
+          71
+        ],
+        "verify": "OK"
+      },
+      "150000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1509.9,
+        "min_us": 24464,
+        "max_us": 59418,
+        "bytes": 4816896,
+        "us": 3128539,
+        "kib_s": 1503.5,
+        "poll_calls": [
+          194974,
+          43,
+          0,
+          1931,
+          17
+        ],
+        "poll_ms": [
+          749,
+          2,
+          0,
+          1410,
+          82
+        ],
+        "verify": "OK"
+      },
+      "300000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1756.2,
+        "min_us": 24429,
+        "max_us": 50372,
+        "bytes": 4816896,
+        "us": 2691596,
+        "kib_s": 1747.6,
+        "poll_calls": [
+          138861,
+          36,
+          0,
+          1872,
+          29
+        ],
+        "poll_ms": [
+          533,
+          1,
+          0,
+          1366,
+          131
+        ],
+        "verify": "OK"
+      },
+      "450000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1969.4,
+        "min_us": 25841,
+        "max_us": 77033,
+        "bytes": 4816896,
+        "us": 2401692,
+        "kib_s": 1958.6,
+        "poll_calls": [
+          104829,
+          23,
+          0,
+          1914,
+          20
+        ],
+        "poll_ms": [
+          400,
+          1,
+          0,
+          1405,
+          99
+        ],
+        "verify": "OK"
+      }
+    },
+    {
+      "45150": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1215.2,
+        "min_us": 24492,
+        "max_us": 74039,
+        "bytes": 4816896,
+        "us": 3884025,
+        "kib_s": 1211.1,
+        "poll_calls": [
+          285953,
+          64,
+          0,
+          1945,
+          20
+        ],
+        "poll_ms": [
+          1099,
+          3,
+          0,
+          1421,
+          78
+        ],
+        "verify": "OK"
+      },
+      "150000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1485.6,
+        "min_us": 27105,
+        "max_us": 58912,
+        "bytes": 4816896,
+        "us": 3179518,
+        "kib_s": 1479.4,
+        "poll_calls": [
+          193017,
+          36,
+          0,
+          1853,
+          27
+        ],
+        "poll_ms": [
+          741,
+          1,
+          0,
+          1354,
+          157
+        ],
+        "verify": "OK"
+      },
+      "300000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 1726.1,
+        "min_us": 29428,
+        "max_us": 80318,
+        "bytes": 4816896,
+        "us": 2738329,
+        "kib_s": 1717.8,
+        "poll_calls": [
+          142720,
+          36,
+          0,
+          1960,
+          16
+        ],
+        "poll_ms": [
+          548,
+          1,
+          0,
+          1429,
+          65
+        ],
+        "verify": "OK"
+      },
+      "450000": {
+        "reads": 64,
+        "retry": 0,
+        "rd_kib_s": 2036.9,
+        "min_us": 24644,
+        "max_us": 51955,
+        "bytes": 4816896,
+        "us": 2322520,
+        "kib_s": 2025.3,
+        "poll_calls": [
+          94469,
+          20,
+          0,
+          1820,
+          30
+        ],
+        "poll_ms": [
+          362,
+          0,
+          0,
+          1331,
+          163
+        ],
+        "verify": "OK"
+      }
+    }
+  ],
+  "derived": {
+    "mean_rd_kib_s": {
+      "45150": 1251.6,
+      "150000": 1497.8,
+      "300000": 1741.2,
+      "450000": 2003.2
+    },
+    "outer_over_inner": 1.6,
+    "read_time_share_pct_in_short_polls_under_25us": {
+      "45150": 27.8,
+      "150000": 23.6,
+      "300000": 19.9,
+      "450000": 16.1
+    },
+    "read_time_share_pct_in_polls_of_400us_or_more": {
+      "45150": 39.7,
+      "150000": 47.6,
+      "300000": 55.1,
+      "450000": 63.5
+    },
+    "ms_in_short_polls_per_4_8MB": {
+      "45150": 1051,
+      "150000": 745,
+      "300000": 540,
+      "450000": 381
+    },
+    "ms_in_polls_of_400us_to_1_6ms_per_4_8MB": {
+      "45150": 1424,
+      "150000": 1382,
+      "300000": 1398,
+      "450000": 1368
+    },
+    "all_verify_lines_ok": true,
+    "note_on_verify": "the reference and the 32-sector read use the same size here, so this proves repeatability, not that other sizes are identical; that comparison is Trip 2a",
+    "conclusions": [
+      "The read rate rises with radius, as constant angular velocity predicts: 1251.6 KiB/s at FAD 45150 to 2003.2 at 450000 (60% faster; mean of two runs). Every earlier optical figure in this project was the innermost, slowest point.",
+      "The time spent in the long poll calls (the PIO transfers) is nearly constant across the radius (1424 ms at FAD 45150, 1368 ms at 450000, per 4.8 MB): PIO transfer costs the CPU about the same per byte wherever the head is.",
+      "What shrinks with radius is the waiting: 1051 ms in short status polls at 45150 against 381 ms at 450000. That waiting is the only part of a PIO read that overlapping other work can hide (DMA, Trip 6, might also hide the transfers), so the value of overlap with PIO falls toward the outer edge (short polls are 27.8% of the read at 45150 and 16.1% at 450000).",
+      "Real captures measured earlier ran at about 373 KiB/s on high-density data (docs/experiment-plan.md section 1, paired reads, a different build) against drive-alone rates of 1251.6 to 2003.2 KiB/s here, so the drive is not the limit at any radius; the CPU work per byte is. (Trip 5a, which would measure the current engine, failed; see t5a-capture-matrix-FAILED-2026-09-19.json.)",
+      "Every verify line is OK."
+    ]
+  },
+  "limitations": [
+    "One card, one disc, one console; two runs. The first run of a session read faster at FAD 45150 than the second in this file, in the T2c file and in Trip 1 (2.7-8% each); cause unknown, so compare runs from the same position in a session."
+  ]
+}

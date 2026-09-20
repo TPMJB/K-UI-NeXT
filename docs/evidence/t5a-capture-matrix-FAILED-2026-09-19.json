@@ -1,0 +1,30 @@
+{
+  "received_date": "2026-09-19",
+  "runtime_build": "8387322aa7e9",
+  "experiment": "Trip 5a (capture matrix): FAILED before any measurement, both runs.",
+  "inputs": [
+    {
+      "file": "T5a diagnostics.txt",
+      "kept_as": "t5a-capture-matrix-FAILED-2026-09-19.txt",
+      "bytes": 8548,
+      "sha256": "395be2a7eeafd98b6656ee09e3ae94e9a756fd8bb167a9aa09d07a99ac331ffa",
+      "note": "two complete bench runs in one saved log; the on-screen log wraps at 76 characters and was re-joined for parsing"
+    }
+  ],
+  "result": "No capture ran. Each run printed 'BENCH pass 1/2 uihz=full', 'Mount failed: FatFs=3', 'Storage device is not connected', 'BENCH FAILED' and ended within seconds.",
+  "cause": [
+    "bench_capture (src/core/bench.c) mounted the card to check free space before opening the SD link. The console closes the link after reading bench.cfg, and only the SD section reopened it, so the mount found no media (FatFs error 3, NOT_READY).",
+    "Even with that fixed, the job cleanup after each run would have failed the same way: the console adapter closed the link at the end of every run, so no bench job would have been deleted from the card.",
+    "FatFs keeps the pointer passed to f_mount even when the mount fails; bench_capture returned and its FATFS went out of scope, so the next f_mount (the report save) wrote one byte through a dangling stack pointer. It did no visible harm here."
+  ],
+  "why_tests_missed_it": "The host harness attached the card once at startup and passed no reconnect function, so no test could observe the link being closed.",
+  "fix": [
+    "bench_capture opens the card (reconnect to the default transport a real capture uses) and owns it for the whole section; the console adapter no longer opens or closes it per run.",
+    "kui_mount unregisters the volume when it fails (the only f_mount registration in the tree)."
+  ],
+  "regression_tests": [
+    "tests/bench_image.c now models the link like the console (closed at the start, opened only by reconnect, closed at the end): scenarios capture, capture-nolink, mount-fail.",
+    "Each fix was reverted in turn and the suite went red for the right reason: the capture scenario fails as on the console; mount-fail trips AddressSanitizer heap-use-after-free in f_mount."
+  ],
+  "also_in_the_file": "A disc probe run before the bench: DISC PROBE PASS, both TOCs, 9 samples (same disc as T1)."
+}
