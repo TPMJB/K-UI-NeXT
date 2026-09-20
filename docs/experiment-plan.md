@@ -636,6 +636,12 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   shipped file exceeds the runtime's limit. The run did show the engine at 545.4 KiB/s on MDK2's data track 1
   with the old defaults, within 1.0% of Trip 5a on Sword, and a clean stop-and-checkpoint on a 31-track
   disc. **Lesson: a limit that the project's own example violates is a bug in the limit or the example.**
+- **"Audio is drive-bound" was wrong (2026-09-20).** The plan and `t5c-capture-audio.cfg` assumed audio tracks
+  would be limited by the drive, so the CPU choices would matter less there. A full MDK2 capture says otherwise:
+  audio runs at 539.8 KiB/s against 553.0 for data, 2.4% SLOWER, with the same mix (SD write 47.0%, SHA-256 22.9%).
+  Audio skips EDC (2.2% of a data track) but its raw transfer costs more per byte (2119.7 against 2534.6 KiB/s),
+  which cancels it. So every result measured on Sword carries over to an audio-heavy disc, and no separate audio
+  tuning is needed. [Evidence](evidence/mdk2-full-capture-resume-verify-2026-09-20.json).
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.

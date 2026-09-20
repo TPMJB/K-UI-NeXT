@@ -1,0 +1,772 @@
+K-UI SD runtime dbd8bd76fea0
+Log truncated: YES
+Report trigger: manual
+Capture result: see operation log
+T06 12288/20310 sectors; checkpoint saved
+T06 16384/20310 sectors; checkpoint saved
+T06 20310/20310 sectors; checkpoint saved
+Capturing T07 at FAD=115179; B stops safely
+T07 4096/19549 sectors; checkpoint saved
+STOPPED: last committed bytes=214558848; retries=0
+Partial job preserved: /KUI/dumps/df838eac34967ae16-0001; Resume checks save
+d bytes first
+TIMING: wall time in microseconds; categories do not overlap
+TIMING setup wall_us=8816658
+disc us=8666737 pct=98.2 bytes=218736 calls=93
+edc us=934 pct=0.0 bytes=21168 calls=9
+other us=148987
+TIMING resume wall_us=65156483
+read us=48837467 pct=74.9 bytes=32212992 calls=428
+sha256 us=13345511 pct=20.4 bytes=32212992 calls=429
+crc32 us=2542151 pct=3.9 bytes=32212992 calls=428
+other us=431354
+TIMING capture wall_us=329764303
+disc us=83191478 pct=25.2 bytes=182345856 calls=2426
+edc us=725658 pct=0.2 bytes=18569040 calls=248
+write us=155218632 pct=47.0 bytes=182345856 calls=2426
+sha256 us=75592217 pct=22.9 bytes=182345856 calls=2426
+crc32 us=14300587 pct=4.3 bytes=182345856 calls=2426
+checkpoint us=607921 pct=0.1 bytes=94208 calls=23
+other us=127810
+TRACK TIMING: capture intervals, including checkpoints and close
+TRACK T01 data FAD=[13846,14601)
+track wall_us=4385821 bytes=1775760
+track disc_us=1815317 write_us=1595100
+track sha256_us=742236 crc32_us=130598
+track edc_us=69036 checkpoint_us=23822
+track other_us=9712
+TRACK T02 audio FAD=[14751,15277)
+track wall_us=2481571 bytes=1237152
+track disc_us=680692 write_us=1191045
+track sha256_us=492680 crc32_us=91102
+track edc_us=0 checkpoint_us=21550
+track other_us=4502
+TRACK T03 data FAD=[45150,52290)
+track wall_us=30548913 bytes=16793280
+track disc_us=7350585 write_us=14255690
+track sha256_us=6883921 crc32_us=1336496
+track edc_us=656622 checkpoint_us=50136
+track other_us=15463
+TRACK T04 audio FAD=[52440,74365)
+track wall_us=92622353 bytes=51567600
+track disc_us=23343953 write_us=43601202
+track sha256_us=21427318 crc32_us=4074715
+track edc_us=0 checkpoint_us=145872
+track other_us=29293
+TRACK T05 audio FAD=[74365,94869)
+track wall_us=86913291 bytes=48225408
+track disc_us=21670513 write_us=41237113
+track sha256_us=20013831 crc32_us=3775841
+track edc_us=0 checkpoint_us=188190
+track other_us=27803
+TRACK T06 audio FAD=[94869,115179)
+track wall_us=85844157 bytes=47769120
+track disc_us=21589558 write_us=40530504
+track sha256_us=19837313 crc32_us=3736086
+track edc_us=0 checkpoint_us=123150
+track other_us=27546
+TRACK T07 audio FAD=[115179,121547)
+track wall_us=26968059 bytes=14977536
+track disc_us=6740860 write_us=12807978
+track sha256_us=6194918 crc32_us=1155749
+track edc_us=0 checkpoint_us=55201
+track other_us=13353
+BENCH cpu operation (setup+capture+verify) wall=403740 wk=382186 ui=18947 ot
+h=2608 ui_pct=4.6
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=8666249 requests=93 bytes=218736
+opt mode_us=541 calls=93 failed=0
+opt buffers_us=725231 other_us=1523
+opt requests ok=93 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=6748937 max_us=634007
+opt read1 calls=93 bytes=218736
+opt read1 max_fad=14600 max_sectors=1
+opt read1 submit_us=1915 submits=93
+opt read1 poll_us=3076796 polls=781118
+opt read1 wait_us=245879 waits=3175
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=3424347
+opt read1 poll_n 780825/194/0/93/6
+opt read1 poll_ms 2978/8/0/67/22
+opt read1 ok=93 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=1190017 max_us=542601
+opt read2 calls=93 bytes=218736
+opt read2 max_fad=14600 max_sectors=1
+opt read2 submit_us=1941 submits=93
+opt read2 poll_us=572439 polls=131809
+opt read2 wait_us=37190 waits=502
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=578447
+opt read2 poll_n 131680/36/0/93/0
+opt read2 poll_ms 502/1/0/67/0
+opt read2 ok=93 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=83179097 requests=2426 bytes=182345856
+opt mode_us=14188 calls=2426 failed=0
+opt buffers_us=4383815 other_us=28382
+opt requests ok=2426 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=78752712 max_us=696991
+opt read1 calls=2426 bytes=182345856
+opt read1 max_fad=13846 max_sectors=32
+opt read1 submit_us=51577 submits=2426
+opt read1 poll_us=65237003 polls=1982401
+opt read1 wait_us=3932668 waits=28654
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=9531464
+opt read1 poll_n 1911665/528/0/69627/581
+opt read1 poll_ms 7984/25/0/50746/6480
+opt read1 ok=2426 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [capture/verify end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2458456 available~=14318760
+RAM sampled peak used/reserved=2458456
+Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92188
+Heap system bytes=92188 in use bytes=88948 free bytes=3240
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Capture result: stopped
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2458456 available~=14318760
+RAM sampled peak used/reserved=2458456
+Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92188
+Heap system bytes=92188 in use bytes=88948 free bytes=3240
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0001/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [capture/verify start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2458456 available~=14318760
+RAM sampled peak used/reserved=2458456
+Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92188
+Heap system bytes=92188 in use bytes=88948 free bytes=3240
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=optical,hash,sd
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=crc32 end_readback=off resume_check=full
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=(optical_fad)
+OPTIONS note=T7 real capture, fast settings. card=<model> disc=Sword of the 
+LOW TOC first=41010000 last=01020000 end=01003bad
+  T01 ctrl=4 start=150 next=14751
+  T02 ctrl=0 start=14751 next=15277
+HIGH TOC first=41030000 last=411f0000 end=410861b4
+  T03 ctrl=4 start=45150 next=52440
+  T04 ctrl=0 start=52440 next=74365
+  T05 ctrl=0 start=74365 next=94869
+  T06 ctrl=0 start=94869 next=115179
+  T07 ctrl=0 start=115179 next=134728
+  T08 ctrl=0 start=134728 next=154770
+  T09 ctrl=0 start=154770 next=175115
+  T10 ctrl=0 start=175115 next=194021
+  T11 ctrl=0 start=194021 next=213613
+  T12 ctrl=0 start=213613 next=235268
+  T13 ctrl=0 start=235268 next=253844
+  T14 ctrl=0 start=253844 next=278526
+  T15 ctrl=0 start=278526 next=298167
+  T16 ctrl=0 start=298167 next=314259
+  T17 ctrl=0 start=314259 next=331123
+  T18 ctrl=0 start=331123 next=349624
+  T19 ctrl=0 start=349624 next=368357
+  T20 ctrl=0 start=368357 next=373197
+  T21 ctrl=0 start=373197 next=378099
+  T22 ctrl=0 start=378099 next=382778
+  T23 ctrl=0 start=382778 next=387562
+  T24 ctrl=0 start=387562 next=396538
+  T25 ctrl=0 start=396538 next=401038
+  T26 ctrl=0 start=401038 next=402698
+  T27 ctrl=0 start=402698 next=416725
+  T28 ctrl=0 start=416725 next=420202
+  T29 ctrl=0 start=420202 next=425104
+  T30 ctrl=0 start=425104 next=429648
+  T31 ctrl=4 start=429648 next=549300
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+RESUME LATEST MATCHING JOB: guarded raw reads, data EDC, no zero-fill
+Disc: MDK2
+Identity: f838eac34967ae1693217ed313906954d4a6644dd59f5aa50f0accba8cf54727
+Profile: gdi-raw2352-typegap150-v1
+T01 FAD [150,14601) data; gap excluded=150
+T02 FAD [14751,15277) audio; gap excluded=0
+T03 FAD [45150,52290) data; gap excluded=150
+T04 FAD [52440,74365) audio; gap excluded=0
+T05 FAD [74365,94869) audio; gap excluded=0
+T06 FAD [94869,115179) audio; gap excluded=0
+T07 FAD [115179,134728) audio; gap excluded=0
+T08 FAD [134728,154770) audio; gap excluded=0
+T09 FAD [154770,175115) audio; gap excluded=0
+T10 FAD [175115,194021) audio; gap excluded=0
+T11 FAD [194021,213613) audio; gap excluded=0
+T12 FAD [213613,235268) audio; gap excluded=0
+T13 FAD [235268,253844) audio; gap excluded=0
+T14 FAD [253844,278526) audio; gap excluded=0
+T15 FAD [278526,298167) audio; gap excluded=0
+T16 FAD [298167,314259) audio; gap excluded=0
+T17 FAD [314259,331123) audio; gap excluded=0
+T18 FAD [331123,349624) audio; gap excluded=0
+T19 FAD [349624,368357) audio; gap excluded=0
+T20 FAD [368357,373197) audio; gap excluded=0
+T21 FAD [373197,378099) audio; gap excluded=0
+T22 FAD [378099,382778) audio; gap excluded=0
+T23 FAD [382778,387562) audio; gap excluded=0
+T24 FAD [387562,396538) audio; gap excluded=0
+T25 FAD [396538,401038) audio; gap excluded=0
+T26 FAD [401038,402698) audio; gap excluded=0
+T27 FAD [402698,416725) audio; gap excluded=0
+T28 FAD [416725,420202) audio; gap excluded=0
+T29 FAD [420202,425104) audio; gap excluded=0
+T30 FAD [425104,429498) audio; gap excluded=150
+T31 FAD [429648,549300) data; gap excluded=0
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Job: /KUI/dumps/df838eac34967ae16-0001
+Checkpoint #28: 214558848 committed bytes
+This job records SHA-256 and CRC32; resuming it that way
+Checking saved bytes before any resume writes...
+T01 verified 33988752 bytes; CRC32=97aad8a5
+SHA256: 62f9981ec7d99987c7f850bc7814f91425d0464f34fed4864fd2df633fd23754
+T02 verified 1237152 bytes; CRC32=48fff429
+SHA256: 483662b5c19f78b23fc738ad028fbb7a7bcf1cf15488c0db1c1e1b59f3726370
+T03 verified 16793280 bytes; CRC32=4e3c1f3e
+SHA256: f29a394f64dc12ffb31f74489f3c1b4ce5a2d99da0d29ae009666d2a9e32fbe4
+T04 verified 51567600 bytes; CRC32=cc87fec7
+SHA256: 4331317a38a5daafbcb72d4372244af2d596af6cfb66a29008c89e7ca678db43
+T05 verified 48225408 bytes; CRC32=d47cd9cb
+SHA256: b18fcedbc27af3573cfbf01b37d9cfbab992b84f89066aa4fd870fd433656cf2
+T06 verified 47769120 bytes; CRC32=3f6896f5
+SHA256: 5ab3b88aa1ea9a3a4a022c7f5092046b56cf4c08ed8bb6df67824b1def4dab8e
+T07 verified 14977536 bytes; CRC32=9cc8c8fc
+SHA256: 572a9bd103c3e782bb1abb0570d594d4c01f18b53563eeedb400f8ea225cf33c
+End read-back stays on: this job records SHA-256
+Capturing T07 at FAD=121547; B stops safely
+T07 10464/19549 sectors; checkpoint saved
+T07 14560/19549 sectors; checkpoint saved
+T07 18656/19549 sectors; checkpoint saved
+T07 19549/19549 sectors; checkpoint saved
+Capturing T08 at FAD=134728; B stops safely
+T08 4096/20042 sectors; checkpoint saved
+T08 8192/20042 sectors; checkpoint saved
+T08 12288/20042 sectors; checkpoint saved
+T08 16384/20042 sectors; checkpoint saved
+T08 20042/20042 sectors; checkpoint saved
+Capturing T09 at FAD=154770; B stops safely
+T09 4096/20345 sectors; checkpoint saved
+T09 8192/20345 sectors; checkpoint saved
+T09 12288/20345 sectors; checkpoint saved
+T09 16384/20345 sectors; checkpoint saved
+T09 20345/20345 sectors; checkpoint saved
+Capturing T10 at FAD=175115; B stops safely
+T10 4096/18906 sectors; checkpoint saved
+T10 8192/18906 sectors; checkpoint saved
+T10 12288/18906 sectors; checkpoint saved
+T10 16384/18906 sectors; checkpoint saved
+T10 18906/18906 sectors; checkpoint saved
+Capturing T11 at FAD=194021; B stops safely
+T11 4096/19592 sectors; checkpoint saved
+T11 8192/19592 sectors; checkpoint saved
+T11 12288/19592 sectors; checkpoint saved
+T11 16384/19592 sectors; checkpoint saved
+T11 19592/19592 sectors; checkpoint saved
+Capturing T12 at FAD=213613; B stops safely
+T12 4096/21655 sectors; checkpoint saved
+T12 8192/21655 sectors; checkpoint saved
+T12 12288/21655 sectors; checkpoint saved
+T12 16384/21655 sectors; checkpoint saved
+T12 20480/21655 sectors; checkpoint saved
+T12 21655/21655 sectors; checkpoint saved
+Capturing T13 at FAD=235268; B stops safely
+T13 4096/18576 sectors; checkpoint saved
+T13 8192/18576 sectors; checkpoint saved
+T13 12288/18576 sectors; checkpoint saved
+T13 16384/18576 sectors; checkpoint saved
+T13 18576/18576 sectors; checkpoint saved
+Capturing T14 at FAD=253844; B stops safely
+T14 4096/24682 sectors; checkpoint saved
+T14 8192/24682 sectors; checkpoint saved
+T14 12288/24682 sectors; checkpoint saved
+T14 16384/24682 sectors; checkpoint saved
+T14 20480/24682 sectors; checkpoint saved
+T14 24576/24682 sectors; checkpoint saved
+T14 24682/24682 sectors; checkpoint saved
+Capturing T15 at FAD=278526; B stops safely
+T15 4096/19641 sectors; checkpoint saved
+T15 8192/19641 sectors; checkpoint saved
+T15 12288/19641 sectors; checkpoint saved
+T15 16384/19641 sectors; checkpoint saved
+T15 19641/19641 sectors; checkpoint saved
+Capturing T16 at FAD=298167; B stops safely
+T16 4096/16092 sectors; checkpoint saved
+T16 8192/16092 sectors; checkpoint saved
+T16 12288/16092 sectors; checkpoint saved
+T16 16092/16092 sectors; checkpoint saved
+Capturing T17 at FAD=314259; B stops safely
+T17 4096/16864 sectors; checkpoint saved
+T17 8192/16864 sectors; checkpoint saved
+T17 12288/16864 sectors; checkpoint saved
+T17 16384/16864 sectors; checkpoint saved
+T17 16864/16864 sectors; checkpoint saved
+Capturing T18 at FAD=331123; B stops safely
+T18 4096/18501 sectors; checkpoint saved
+T18 8192/18501 sectors; checkpoint saved
+T18 12288/18501 sectors; checkpoint saved
+T18 16384/18501 sectors; checkpoint saved
+T18 18501/18501 sectors; checkpoint saved
+Capturing T19 at FAD=349624; B stops safely
+T19 4096/18733 sectors; checkpoint saved
+T19 8192/18733 sectors; checkpoint saved
+T19 12288/18733 sectors; checkpoint saved
+T19 16384/18733 sectors; checkpoint saved
+T19 18733/18733 sectors; checkpoint saved
+Capturing T20 at FAD=368357; B stops safely
+T20 4096/4840 sectors; checkpoint saved
+T20 4840/4840 sectors; checkpoint saved
+Capturing T21 at FAD=373197; B stops safely
+T21 4096/4902 sectors; checkpoint saved
+T21 4902/4902 sectors; checkpoint saved
+Capturing T22 at FAD=378099; B stops safely
+T22 4096/4679 sectors; checkpoint saved
+T22 4679/4679 sectors; checkpoint saved
+Capturing T23 at FAD=382778; B stops safely
+T23 4096/4784 sectors; checkpoint saved
+T23 4784/4784 sectors; checkpoint saved
+Capturing T24 at FAD=387562; B stops safely
+T24 4096/8976 sectors; checkpoint saved
+T24 8192/8976 sectors; checkpoint saved
+T24 8976/8976 sectors; checkpoint saved
+Capturing T25 at FAD=396538; B stops safely
+T25 4096/4500 sectors; checkpoint saved
+T25 4500/4500 sectors; checkpoint saved
+Capturing T26 at FAD=401038; B stops safely
+T26 1660/1660 sectors; checkpoint saved
+Capturing T27 at FAD=402698; B stops safely
+T27 4096/14027 sectors; checkpoint saved
+T27 8192/14027 sectors; checkpoint saved
+T27 12288/14027 sectors; checkpoint saved
+T27 14027/14027 sectors; checkpoint saved
+Capturing T28 at FAD=416725; B stops safely
+T28 3477/3477 sectors; checkpoint saved
+Capturing T29 at FAD=420202; B stops safely
+T29 4096/4902 sectors; checkpoint saved
+T29 4902/4902 sectors; checkpoint saved
+Capturing T30 at FAD=425104; B stops safely
+T30 4096/4394 sectors; checkpoint saved
+T30 4394/4394 sectors; checkpoint saved
+Capturing T31 at FAD=429648; B stops safely
+T31 4096/119652 sectors; checkpoint saved
+T31 8192/119652 sectors; checkpoint saved
+T31 12288/119652 sectors; checkpoint saved
+T31 16384/119652 sectors; checkpoint saved
+T31 20480/119652 sectors; checkpoint saved
+T31 24576/119652 sectors; checkpoint saved
+T31 28672/119652 sectors; checkpoint saved
+T31 32768/119652 sectors; checkpoint saved
+T31 36864/119652 sectors; checkpoint saved
+T31 40960/119652 sectors; checkpoint saved
+T31 45056/119652 sectors; checkpoint saved
+T31 49152/119652 sectors; checkpoint saved
+T31 53248/119652 sectors; checkpoint saved
+T31 57344/119652 sectors; checkpoint saved
+T31 61440/119652 sectors; checkpoint saved
+T31 65536/119652 sectors; checkpoint saved
+T31 69632/119652 sectors; checkpoint saved
+T31 73728/119652 sectors; checkpoint saved
+T31 77824/119652 sectors; checkpoint saved
+T31 81920/119652 sectors; checkpoint saved
+T31 86016/119652 sectors; checkpoint saved
+T31 90112/119652 sectors; checkpoint saved
+T31 94208/119652 sectors; checkpoint saved
+T31 98304/119652 sectors; checkpoint saved
+T31 102400/119652 sectors; checkpoint saved
+T31 106496/119652 sectors; checkpoint saved
+T31 110592/119652 sectors; checkpoint saved
+T31 114688/119652 sectors; checkpoint saved
+T31 118784/119652 sectors; checkpoint saved
+T31 119652/119652 sectors; checkpoint saved
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Capture written. Rereading all saved tracks...
+T01 verified 33988752 bytes; CRC32=97aad8a5
+SHA256: 62f9981ec7d99987c7f850bc7814f91425d0464f34fed4864fd2df633fd23754
+T02 verified 1237152 bytes; CRC32=48fff429
+SHA256: 483662b5c19f78b23fc738ad028fbb7a7bcf1cf15488c0db1c1e1b59f3726370
+T03 verified 16793280 bytes; CRC32=4e3c1f3e
+SHA256: f29a394f64dc12ffb31f74489f3c1b4ce5a2d99da0d29ae009666d2a9e32fbe4
+T04 verified 51567600 bytes; CRC32=cc87fec7
+SHA256: 4331317a38a5daafbcb72d4372244af2d596af6cfb66a29008c89e7ca678db43
+T05 verified 48225408 bytes; CRC32=d47cd9cb
+SHA256: b18fcedbc27af3573cfbf01b37d9cfbab992b84f89066aa4fd870fd433656cf2
+T06 verified 47769120 bytes; CRC32=3f6896f5
+SHA256: 5ab3b88aa1ea9a3a4a022c7f5092046b56cf4c08ed8bb6df67824b1def4dab8e
+T07 verified 45979248 bytes; CRC32=8f5342b6
+SHA256: bcd3d6c7a9e5ccb761d02b3bd5a1494fedb87dbe481d448bb7c1dbcca1d33dcd
+T08 verified 47138784 bytes; CRC32=adee1d4c
+SHA256: 8ca572357c39e94f132d316711d82106a88db1ce226afd272679a3ed8256c0d8
+T09 verified 47851440 bytes; CRC32=dab41b3a
+SHA256: 1963d2210f6c029108259e9ee802b4d2f7f2678c56c110dca316275d82fa12bc
+T10 verified 44466912 bytes; CRC32=7f6cc66e
+SHA256: 78f7386bc5f31a7f17b25ba7a2ca1d2ec71d9b87b07ea59fdcf51b28935edd35
+T11 verified 46080384 bytes; CRC32=5e67208d
+SHA256: aca247bc8d4feaccf068a90a37e56817bc4514f887583d68dcad9ed0cb4eb3f2
+T12 verified 50932560 bytes; CRC32=4a413a6c
+SHA256: 768cd198c984fa7a359a6d99285eba9fd11e71fabc94339bae0d824883b85b5b
+T13 verified 43690752 bytes; CRC32=94835dd9
+SHA256: d1da906f051c32cbb29716776eee4dfa1c5537d980eb183918fd91e7e2aaa8eb
+T14 verified 58052064 bytes; CRC32=723757dd
+SHA256: 92095ccf2cb6cd54dcfd1419d205d934bf0d655e1dc77bb2b3afe756eef27e46
+T15 verified 46195632 bytes; CRC32=b68d3cb3
+SHA256: 51532e0506ec03601a46b71d00178135eb79cf77ec2ecec5c9ab90f87a350529
+T16 verified 37848384 bytes; CRC32=44227b4a
+SHA256: c615b539c631bf39c6bb1e0f47389838ca43d86ecd5747f60c6a068e2e2405d0
+T17 verified 39664128 bytes; CRC32=07bcaa27
+SHA256: c6a5f590892d6eed2e59a316e356a5f1de232599046f2f3532cecfee7a36f188
+T18 verified 43514352 bytes; CRC32=798fa247
+SHA256: 2e2d25066a7097fb1093ea9ff2075b22e7482ccecec6d706d0af300689d4043d
+T19 verified 44060016 bytes; CRC32=dd4640f0
+SHA256: f55f4d4f56b8b1e54829f92476f0263c927ece1047016fd12f3b62b304b74277
+T20 verified 11383680 bytes; CRC32=dd78b00f
+SHA256: 69cea49ac6331fa96b8f46639aefd38880bc90fe6e4739d2c65e514c6ab30331
+T21 verified 11529504 bytes; CRC32=9f16a7a8
+SHA256: 2b09c05ae2c06a78f266f22dc72a2e008159c3dce454f88216c28f263b931864
+T22 verified 11005008 bytes; CRC32=7dbb512c
+SHA256: d609e8bee181963aa5326ed49053cc9d06bb832a6dd72916cc3d030ffbdf987e
+T23 verified 11251968 bytes; CRC32=55a76a18
+SHA256: db36ff38e7f80b77a4488c0d24b2ae652f00eefd767506e1e28e961aaa8f7b12
+T24 verified 21111552 bytes; CRC32=37ae3a5a
+SHA256: eb340c973a5259b0a1953ff787970daf04821bd4a64cec06dfe731dd10a1934d
+T25 verified 10584000 bytes; CRC32=17ea1393
+SHA256: 339c60c73ca51a1830a23c446693c155cb039e5dc0d228547e8bb570617aa0df
+T26 verified 3904320 bytes; CRC32=54a5c001
+SHA256: 0e548720456fdded266b829c243761e70f72967784d5585b5b626bf4c67f0635
+T27 verified 32991504 bytes; CRC32=fe0036c4
+SHA256: dca7e4adc03670ae2564193f4c532f502e15e915f47d9b07d0e44755ece6608f
+T28 verified 8177904 bytes; CRC32=2faab9ea
+SHA256: 9f1856d1a139ab013ff589b029efaef754ccdd787aade625da400610971f8c85
+T29 verified 11529504 bytes; CRC32=e66436be
+SHA256: 5a6e67616999fedf427091ef4293794becf709dbc748485cbd3610a03f761032
+T30 verified 10334688 bytes; CRC32=647dd299
+SHA256: 7b51631a6b11c6dc9336d4a85d77ffc0acbfcd2b14edd6d9df013356faeddf4a
+T31 verified 281421504 bytes; CRC32=b2d0ccdb
+SHA256: d6a7397cc45224865b6569f7ac995929e774266e99fc2ac20123c696fcf2a387
+SAVED DATA VERIFIED: all 31 tracks; CRC32 and SHA-256
+Reference check (TOSEC): FULL TRACK MATCH
+  MDK 2 v1.100 (2000)(Interplay)(US)[!]
+Output: /KUI/dumps/df838eac34967ae16-0001/disc.gdi
+TIMING: wall time in microseconds; categories do not overlap
+TIMING setup wall_us=8721775
+disc us=8562150 pct=98.1 bytes=218736 calls=93
+edc us=841 pct=0.0 bytes=21168 calls=9
+other us=158784
+TIMING resume wall_us=432009954
+read us=326739989 pct=75.6 bytes=214558848 calls=2854
+sha256 us=88017293 pct=20.3 bytes=214558848 calls=2861
+crc32 us=16701841 pct=3.8 bytes=214558848 calls=2854
+other us=550831
+TIMING capture wall_us=1808238303
+disc us=442841983 pct=24.4 bytes=1005722256 calls=13375
+edc us=10966919 pct=0.6 bytes=281421504 calls=3740
+write us=855126615 pct=47.2 bytes=1005722256 calls=13375
+sha256 us=416457657 pct=23.0 bytes=1005722256 calls=13375
+crc32 us=78943698 pct=4.3 bytes=1005722256 calls=13375
+checkpoint us=3110305 pct=0.1 bytes=487424 calls=119
+other us=791126
+TIMING verify wall_us=2454107076
+read us=1857463197 pct=75.6 bytes=1220281104 calls=16229
+sha256 us=501476598 pct=20.4 bytes=1220281104 calls=16260
+crc32 us=94430959 pct=3.8 bytes=1220281104 calls=16229
+other us=736322
+TIMING finish wall_us=972675
+other us=972675
+TRACK TIMING: capture intervals, including checkpoints and close
+TRACK T07 audio FAD=[121547,134728)
+track wall_us=57237344 bytes=31001712
+track disc_us=15693399 write_us=26086518
+track sha256_us=12947634 crc32_us=2404180
+track edc_us=0 checkpoint_us=86933
+track other_us=18680
+TRACK T08 audio FAD=[134728,154770)
+track wall_us=84986174 bytes=47138784
+track disc_us=21499833 write_us=40106276
+track sha256_us=19598317 crc32_us=3646229
+track edc_us=0 checkpoint_us=108124
+track other_us=27395
+TRACK T09 audio FAD=[154770,175115)
+track wall_us=86320192 bytes=47851440
+track disc_us=21839435 write_us=40690377
+track sha256_us=19810779 crc32_us=3838087
+track edc_us=0 checkpoint_us=111813
+track other_us=29701
+TRACK T10 audio FAD=[175115,194021)
+track wall_us=80091085 bytes=44466912
+track disc_us=20172603 write_us=37808944
+track sha256_us=18493695 crc32_us=3476801
+track edc_us=0 checkpoint_us=110669
+track other_us=28373
+TRACK T11 audio FAD=[194021,213613)
+track wall_us=83145409 bytes=46080384
+track disc_us=21276827 write_us=39038327
+track sha256_us=19086101 crc32_us=3601901
+track edc_us=0 checkpoint_us=113015
+track other_us=29238
+TRACK T12 audio FAD=[213613,235268)
+track wall_us=92160529 bytes=50932560
+track disc_us=23330481 write_us=43437995
+track sha256_us=21195594 crc32_us=3995153
+track edc_us=0 checkpoint_us=160214
+track other_us=41092
+TRACK T13 audio FAD=[235268,253844)
+track wall_us=79121741 bytes=43690752
+track disc_us=19933244 write_us=37539360
+track sha256_us=18055985 crc32_us=3432015
+track edc_us=0 checkpoint_us=133282
+track other_us=27855
+TRACK T14 audio FAD=[253844,278526)
+track wall_us=104695944 bytes=58052064
+track disc_us=26682824 write_us=49161867
+track sha256_us=24021099 crc32_us=4611371
+track edc_us=0 checkpoint_us=180404
+track other_us=38379
+TRACK T15 audio FAD=[278526,298167)
+track wall_us=83552111 bytes=46195632
+track disc_us=21513727 write_us=39160969
+track sha256_us=19137647 crc32_us=3597602
+track edc_us=0 checkpoint_us=111150
+track other_us=31016
+TRACK T16 audio FAD=[298167,314259)
+track wall_us=68560316 bytes=37848384
+track disc_us=17569946 write_us=32231219
+track sha256_us=15689528 crc32_us=2955696
+track edc_us=0 checkpoint_us=86580
+track other_us=27347
+TRACK T17 audio FAD=[314259,331123)
+track wall_us=71677943 bytes=39664128
+track disc_us=18329261 write_us=33642556
+track sha256_us=16484615 crc32_us=3085435
+track edc_us=0 checkpoint_us=107908
+track other_us=28168
+TRACK T18 audio FAD=[331123,349624)
+track wall_us=78914544 bytes=43514352
+track disc_us=20206561 write_us=37084415
+track sha256_us=18083257 crc32_us=3374162
+track edc_us=0 checkpoint_us=136083
+track other_us=30066
+TRACK T19 audio FAD=[349624,368357)
+track wall_us=79653379 bytes=44060016
+track disc_us=20203495 write_us=37458240
+track sha256_us=18366087 crc32_us=3445330
+track edc_us=0 checkpoint_us=145976
+track other_us=34251
+TRACK T20 audio FAD=[368357,373197)
+track wall_us=20745665 bytes=11383680
+track disc_us=5266633 write_us=9742556
+track sha256_us=4748951 crc32_us=899343
+track edc_us=0 checkpoint_us=70152
+track other_us=18030
+TRACK T21 audio FAD=[373197,378099)
+track wall_us=21049510 bytes=11529504
+track disc_us=5316555 write_us=9928258
+track sha256_us=4824054 crc32_us=917654
+track edc_us=0 checkpoint_us=44910
+track other_us=18079
+TRACK T22 audio FAD=[378099,382778)
+track wall_us=20020856 bytes=11005008
+track disc_us=5098186 write_us=9519284
+track sha256_us=4482405 crc32_us=859055
+track edc_us=0 checkpoint_us=44035
+track other_us=17891
+TRACK T23 audio FAD=[382778,387562)
+track wall_us=20360332 bytes=11251968
+track disc_us=5201377 write_us=9671228
+track sha256_us=4582209 crc32_us=843680
+track edc_us=0 checkpoint_us=43895
+track other_us=17943
+TRACK T24 audio FAD=[387562,396538)
+track wall_us=38382945 bytes=21111552
+track disc_us=9826598 write_us=17843144
+track sha256_us=8902909 crc32_us=1721739
+track edc_us=0 checkpoint_us=66254
+track other_us=22301
+TRACK T25 audio FAD=[396538,401038)
+track wall_us=19182528 bytes=10584000
+track disc_us=4897779 write_us=9069055
+track sha256_us=4318710 crc32_us=822080
+track edc_us=0 checkpoint_us=45114
+track other_us=29790
+TRACK T26 audio FAD=[401038,402698)
+track wall_us=7255927 bytes=3904320
+track disc_us=1856167 write_us=3442114
+track sha256_us=1610452 crc32_us=307228
+track edc_us=0 checkpoint_us=23150
+track other_us=16816
+TRACK T27 audio FAD=[402698,416725)
+track wall_us=59864756 bytes=32991504
+track disc_us=15410489 write_us=27967950
+track sha256_us=13744981 crc32_us=2619201
+track edc_us=0 checkpoint_us=92652
+track other_us=29483
+TRACK T28 audio FAD=[416725,420202)
+track wall_us=14899480 bytes=8177904
+track disc_us=3801454 write_us=6986666
+track sha256_us=3435637 crc32_us=633080
+track edc_us=0 checkpoint_us=23944
+track other_us=18699
+TRACK T29 audio FAD=[420202,425104)
+track wall_us=21109020 bytes=11529504
+track disc_us=5514700 write_us=9837006
+track sha256_us=4802729 crc32_us=888725
+track edc_us=0 checkpoint_us=45655
+track other_us=20205
+TRACK T30 audio FAD=[425104,429498)
+track wall_us=19135665 bytes=10334688
+track disc_us=4849793 write_us=8955193
+track sha256_us=4274204 crc32_us=787341
+track edc_us=0 checkpoint_us=245219
+track other_us=23915
+TRACK T31 data FAD=[429648,549300)
+track wall_us=496114672 bytes=281421504
+track disc_us=107550616 write_us=238717098
+track sha256_us=115760078 crc32_us=22180610
+track edc_us=10966919 checkpoint_us=773174
+track other_us=166177
+BENCH cpu operation (setup+capture+verify) wall=4704176 wk=4450026 ui=229815
+ oth=24335 ui_pct=4.8
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=8561655 requests=93 bytes=218736
+opt mode_us=547 calls=93 failed=0
+opt buffers_us=699755 other_us=1531
+opt requests ok=93 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=6677315 max_us=594213
+opt read1 calls=93 bytes=218736
+opt read1 max_fad=14600 max_sectors=1
+opt read1 submit_us=1906 submits=93
+opt read1 poll_us=3021713 polls=762188
+opt read1 wait_us=311794 waits=3100
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=3341902
+opt read1 poll_n 761911/178/0/92/7
+opt read1 poll_ms 2906/7/0/67/40
+opt read1 ok=93 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=1182507 max_us=525827
+opt read2 calls=93 bytes=218736
+opt read2 max_fad=14600 max_sectors=1
+opt read2 submit_us=1945 submits=93
+opt read2 poll_us=568426 polls=130805
+opt read2 wait_us=30016 waits=494
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=582120
+opt read2 poll_n 130682/30/0/93/0
+opt read2 poll_ms 499/1/0/67/0
+opt read2 ok=93 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=442773717 requests=13375 bytes=1005722256
+opt mode_us=78087 calls=13375 failed=0
+opt buffers_us=24032731 other_us=158946
+opt requests ok=13375 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=418503953 max_us=1569840
+opt read1 calls=13375 bytes=1005722256
+opt read1 max_fad=121547 max_sectors=32
+opt read1 submit_us=304501 submits=13375
+opt read1 poll_us=354794755 polls=9126819
+opt read1 wait_us=19140083 waits=134048
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=44264614
+opt read1 poll_n 8808966/2342/0/307635/7876
+opt read1 poll_ms 36726/117/0/224226/93723
+opt read1 ok=13375 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [capture/verify end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2458456 available~=14318760
+RAM sampled peak used/reserved=2458456
+Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92188
+Heap system bytes=92188 in use bytes=88948 free bytes=3240
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Capture result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2458456 available~=14318760
+RAM sampled peak used/reserved=2458456
+Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92188
+Heap system bytes=92188 in use bytes=88948 free bytes=3240
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0002/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2458456 available~=14318760
+RAM sampled peak used/reserved=2458456
+Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92188
+Heap system bytes=92188 in use bytes=88948 free bytes=3240
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2458456 available~=14318760
+RAM sampled peak used/reserved=2458456
+Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92188
+Heap system bytes=92188 in use bytes=88948 free bytes=3240
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on

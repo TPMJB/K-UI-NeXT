@@ -222,6 +222,17 @@ loop. With no other new keys in `bench.cfg` the bench runs the same sections in
 the same order as before and adds only the `BENCH cpu` and `BENCH lat` lines and
 the CRC16 lines in the hash section, described below.
 
+**Whole-disc times from a report.** `docs/bench-cfgs/t8-full-profile.cfg` measures everything that
+decides rip time in one run (drive at four radii, SD at three command sizes, the hashes and the
+CRC16 candidates, and the capture engine at the four settings that matter), and
+`python3 tools/rip_time.py REPORT` turns any saved report into projected whole-disc minutes per
+setting, plus what the measured-but-unbuilt changes would be worth. Run it before and after a
+change. Lines it marks PROJECTED are arithmetic on measured rates, never an end-to-end run.
+
+**The experimental GD-ROM DMA probe** is not in normal builds. To get one: GitHub → Actions →
+"Diagnostic build" → "Run workflow", tick **experimental**. That build's artifacts are named
+`diagnostic-experimental` and `sd-update-experimental`; every push build is unaffected.
+
 **Two guards on a mis-aimed run:** before a capture section the bench checks `capture_fad` against the
 disc's TOC and warns (`BENCH WARNING: ...`) if it is not inside a track of the configured `capture_type`,
 or is not on the disc at all; and a run in which every section was skipped ends

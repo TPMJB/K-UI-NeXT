@@ -5,6 +5,11 @@ on:
     branches: [main, 'milestone/**']
   pull_request:
   workflow_dispatch:
+    inputs:
+      experimental:
+        description: 'Also build the EXPERIMENTAL GD-ROM DMA probe (Trip 6a). Never run on hardware; not for normal builds.'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -64,6 +69,10 @@ jobs:
         run: bash tools/setup_kos.sh
       - name: Compile CD bootstrap and SD runtime
         shell: bash
+        env:
+          # Empty on every push and pull request, so ordinary builds are untouched. It is set only
+          # when the box is ticked on a manual run (Actions -> Diagnostic build -> Run workflow).
+          KUI_EXPERIMENTAL_FLAG: ${{ inputs.experimental && 'KUI_EXPERIMENTAL=1' || '' }}
         run: |
           source .deps/kos/environ.sh
           # -k keeps compiling after a failure, so one run lists every file the pinned compiler
@@ -74,7 +83,8 @@ jobs:
           # The log must NOT live inside the checkout: record_build.py (at link time) and package.py
           # both refuse a dirty tree, and an untracked build.log counts. That broke packaging once.
           LOG="${RUNNER_TEMP:-/tmp}/kui-build.log"
-          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" 2>&1 | tee "$LOG"
+          echo "experimental GD-ROM DMA probe: ${KUI_EXPERIMENTAL_FLAG:-off}"
+          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" $KUI_EXPERIMENTAL_FLAG 2>&1 | tee "$LOG"
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             echo
@@ -91,14 +101,14 @@ jobs:
       - name: Upload diagnostic test artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: diagnostic
+          name: diagnostic${{ inputs.experimental && '-experimental' || '' }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
       - name: Upload small SD update for existing bootstrap discs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: sd-update
+          name: sd-update${{ inputs.experimental && '-experimental' || '' }}
           path: dist/sd-update/
           if-no-files-found: error
           retention-days: 30
