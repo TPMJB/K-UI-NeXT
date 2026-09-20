@@ -562,6 +562,13 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   competing thread compile only with `make diagnostic KUI_EXPERIMENTAL=1`, so they cannot break the build the
   capture engine ships in. The CI runs `make -k` and, after a failure, prints `BUILD FAILED: THE ERRORS, IN ONE
   PLACE`.
+- **The CI log that broke packaging (2026-09-20).** The error digest added to the compile step wrote its log
+  to `build.log` in the checkout. `record_build.py` (at link time) and `package.py` both refuse a dirty tree, and an
+  untracked file counts, so a build that compiled and linked still died at packaging with "Commit source changes
+  before packaging". The log now lives in `$RUNNER_TEMP`, and `tests/test_workflow_hygiene.py` runs the real step
+  text in a scratch git repository (build succeeding and failing) and requires a clean tree afterwards; with the
+  bug put back it reports `?? build.log`. **Lesson: a CI change is code with downstream consumers; read what runs
+  after it.**
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.

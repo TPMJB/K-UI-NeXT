@@ -71,12 +71,15 @@ jobs:
           # (the part that is easy to copy) is the part that matters. A failed build still fails
           # the job; nothing changes when the build succeeds.
           set +e
-          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" 2>&1 | tee build.log
+          # The log must NOT live inside the checkout: record_build.py (at link time) and package.py
+          # both refuse a dirty tree, and an untracked build.log counts. That broke packaging once.
+          LOG="${RUNNER_TEMP:-/tmp}/kui-build.log"
+          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" 2>&1 | tee "$LOG"
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             echo
             echo "=============== BUILD FAILED: THE ERRORS, IN ONE PLACE ==============="
-            grep -nE "error:|Error [0-9]+|undefined reference|multiple definition|\*\*\*" build.log | head -60
+            grep -nE "error:|Error [0-9]+|undefined reference|multiple definition|\*\*\*" "$LOG" | head -60
             echo "======================================================================"
           fi
           exit "$status"
