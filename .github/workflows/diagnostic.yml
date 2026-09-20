@@ -66,7 +66,10 @@ jobs:
         shell: bash
         run: |
           source .deps/kos/environ.sh
-          make diagnostic BUILD_ID="${GITHUB_SHA:0:12}"
+          # -k: keep compiling after a failure, so ONE run lists every file the pinned compiler
+          # rejects instead of stopping at the first (each extra error used to cost a round trip).
+          # A failed compile still fails the job; nothing changes when the build succeeds.
+          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}"
       - name: Package reusable CDI, SD runtime, loader tests and source records
         shell: bash
         run: |

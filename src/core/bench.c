@@ -144,7 +144,7 @@ static enum kui_bench_result bench_crc16(unsigned mib) {
     static const struct { const char *name; crc16_fn f; } ours[] = {
         {"crc16-table", kui_crc16_table}, {"crc16-slice2", kui_crc16_slice2},
         {"crc16-nibble", kui_crc16_nibble}};
-    uint32_t fold[4];
+    uint32_t fold[4] = {0, 0, 0, 0};
     unsigned n = 0;
     enum kui_bench_result rc;
     if(ops->crc16_kos) {

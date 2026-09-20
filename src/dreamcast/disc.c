@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
-#include <arch/cache.h>
+#ifndef __SH4__
+#include <arch/cache.h>   /* host tests only: a recording double. The console does not use KOS's header here. */
+#endif
 #include <dc/syscalls.h>
 #include <kos/thread.h>
 #include <kos/timer.h>
@@ -376,6 +378,28 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
     return KUI_READ_OK;
 }
 
+/* Data-cache maintenance for the DMA probe: one `ocbp` (write back, then invalidate) or `ocbi`
+ * (invalidate) per 32-byte line, each with a single register operand. KOS's own
+ * arch_dcache_purge_range/inval_range were used first and did not compile under the CI's GCC
+ * 15.2 ("asm operand has impossible constraints"): their per-line helper is one inline asm with
+ * EIGHT memory operands plus a register, which the allocator could not satisfy once inlined into
+ * a function with many live values, as the probe is. Nothing here needs that generality, and a
+ * one-register asm cannot fail that way. Kept out of line so the asm never sees the probe's
+ * register pressure at all. The host tests substitute KOS's header with a recording double. */
+#ifdef __SH4__
+__attribute__((noinline)) static void cache_purge(uintptr_t start,size_t bytes) {
+    uintptr_t end=start+bytes;
+    for(start&=~(uintptr_t)31;start<end;start+=32) __asm__ __volatile__("ocbp @%0"::"r"(start):"memory");
+}
+__attribute__((noinline)) static void cache_inval(uintptr_t start,size_t bytes) {
+    uintptr_t end=start+bytes;
+    for(start&=~(uintptr_t)31;start<end;start+=32) __asm__ __volatile__("ocbi @%0"::"r"(start):"memory");
+}
+#else
+static void cache_purge(uintptr_t start,size_t bytes) { arch_dcache_purge_range(start,bytes); }
+static void cache_inval(uintptr_t start,size_t bytes) { arch_dcache_inval_range(start,bytes); }
+#endif
+
 /* --- bench-only GD-ROM DMA probe --------------------------------------------------
  * EXPERIMENTAL. Whether this drive can DMA raw 2352-byte sectors, what it costs, and how
  * much CPU it leaves free are not known; this exists to find out, and is reached only by
@@ -424,10 +448,10 @@ enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sec
     memset(probe_dma_raw.before,0xa5,sizeof(probe_dma_raw.before));
     memset(probe_dma_raw.after,0xa5,sizeof(probe_dma_raw.after));
     memset(probe_dma_raw.data+bytes,0xa5,tail);
-    arch_dcache_purge_range((uintptr_t)probe_dma_raw.before,sizeof(probe_dma_raw.before));
-    arch_dcache_purge_range((uintptr_t)probe_dma_raw.data+bytes,tail);
-    arch_dcache_purge_range((uintptr_t)probe_dma_raw.after,sizeof(probe_dma_raw.after));
-    arch_dcache_inval_range((uintptr_t)probe_dma_raw.data,bytes);
+    cache_purge((uintptr_t)probe_dma_raw.before,sizeof(probe_dma_raw.before));
+    cache_purge((uintptr_t)probe_dma_raw.data+bytes,tail);
+    cache_purge((uintptr_t)probe_dma_raw.after,sizeof(probe_dma_raw.after));
+    cache_inval((uintptr_t)probe_dma_raw.data,bytes);
     read_params=(cd_read_params_t){.start_sec=fad,.num_sec=sectors,
         .buffer=dma_address(probe_dma_raw.data),.is_test=0};
     probe_stats=stats;probe_service_us=0;
@@ -436,7 +460,7 @@ enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sec
     uint64_t duration=timer_us_gettime64()-start;
     probe_stats=NULL;
     stats->cmd_us+=duration;stats->last_us=duration;stats->reported_bytes=detail.size;
-    arch_dcache_inval_range((uintptr_t)probe_dma_raw.data,bytes);   /* read what the drive wrote, not old lines */
+    cache_inval((uintptr_t)probe_dma_raw.data,bytes);   /* read what the drive wrote, not old lines */
     if(!read_ok && !kui_cancelled()) {
         dma_broken=true;
         kui_log("GD-ROM DMA read did not complete; DMA stays off until reboot");

@@ -377,7 +377,9 @@ Caveats that shape how to read it: the DMA probe **polls** rather than taking th
 interrupt (this runtime never starts KOS's CD-ROM subsystem, so nothing installs
 the handler), so completion is noticed up to one 10 ms tick late, about 8% at chunk
 32 and 2% at chunk 128; compare at chunk 128. It uses a fixed buffer with guard
-bytes and turns itself off for the rest of the boot after any failure. Nothing here
+bytes, does its own cache maintenance (a one-register `ocbp`/`ocbi` loop: KOS's helper
+did not compile on the CI toolchain), and turns itself off for the rest of the boot after
+any failure. Nothing here
 writes to the card or the disc.
 
 ### Trip 7: one real, complete capture with the fast settings (`t7-real-capture-fast.cfg`)
@@ -537,6 +539,17 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   caller's `FATFS` before it tries, and keeps it after a failure; every caller then
   returns and drops the object. `kui_mount`, the only registration site, now unregisters
   on failure. The `mount-fail` scenario trips AddressSanitizer without it.
+- **KOS's cache helpers and the CI compiler (2026-09-20).** The DMA probe called KOS's
+  `arch_dcache_purge_range`, and the CI's GCC 15.2 rejected it: `asm operand has impossible
+  constraints` at `arch/cache.h:126`. The per-line helper is one inline asm with eight memory
+  operands plus a register, which the allocator could not satisfy once it was inlined into a
+  function with many live values. It compiled on GCC 13.3 and 14.2 at every optimisation level and
+  under artificial register pressure, so nothing available on the PC could see it (those are Ubuntu's
+  `sh4-linux-gnu` cross-compilers, not the CI's bare-metal `sh-elf` 15.2, and they lack `-m4-single`).
+  The probe now uses its own one-register `ocbp`/`ocbi` loops, and `tests/test_asm_audit.py` fails if
+  any inline asm under `src/` has more than three operands or KOS's cache header reaches the console
+  build. **What "compiles clean" means here:** clean on the local cross-compilers. The CI toolchain
+  is the arbiter, so the CI now runs `make -k`: one run lists every file it rejects.
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.
