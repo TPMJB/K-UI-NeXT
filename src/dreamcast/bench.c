@@ -8,6 +8,14 @@
  * This mirrors src/dreamcast/capture.c, which plays the same role for the
  * capture engine. */
 
+/* The DMA probe and its competing thread: filled in only in the opt-in experimental build
+ * (make diagnostic KUI_EXPERIMENTAL=1). Otherwise the bench sees NULL and says so. */
+#ifdef KUI_EXPERIMENTAL_DMA
+#define KUI_DMA_OPS(disc) ((disc) ? kui_disc_read_probe_dma : NULL), spin, spin_count, sleep_ms
+#else
+#define KUI_DMA_OPS(disc) NULL, NULL, NULL, NULL
+#endif
+
 struct kui_options kui_options;   /* last loaded /KUI/bench.cfg; defaults until then */
 
 static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
@@ -34,6 +42,7 @@ static uint16_t crc16_kos(void *ctx, const uint8_t *data, size_t bytes, uint16_t
     return net_crc16ccitt(data, (int)bytes, start);
 }
 
+#ifdef KUI_EXPERIMENTAL_DMA   /* the competing thread exists for the DMA probe experiment (Trip 6) */
 /* A CPU-bound thread at the worker's priority: what an SD-writing thread would be. It bumps a
  * counter every 64 iterations while enabled and sleeps while not, so the count is a direct
  * measure of the CPU it was given. The counter is one 32-bit word, read atomically, that
@@ -59,6 +68,7 @@ static void spin(void *ctx, bool on) {
 }
 static uint64_t spin_count(void *ctx) { (void)ctx; return spin_total; }
 static void sleep_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep((int)ms); }
+#endif
 static void cpu_mark(void *ctx, struct kui_cpu_census *out) { (void)ctx; kui_cpu_census_mark(out); }
 static enum kui_capture_result capture_run(void *ctx, uint32_t fad, unsigned sectors, bool audio,
     enum kui_capture_mode mode, const struct kui_capture_options *options, struct kui_capture_stats *stats) {
@@ -112,8 +122,7 @@ enum kui_bench_result kui_bench_start(void) {
     struct kui_bench_ops ops = {NULL, disc ? kui_disc_read_raw : NULL, reconnect,
                                 cancelled, now_us, kui_log, set_ui, cpu_mark,
                                 disc ? kui_disc_read_probe : NULL, disc ? capture_run : NULL,
-                                crc16_kos, disc ? kui_disc_read_probe_dma : NULL,
-                                spin, spin_count, sleep_ms};
+                                crc16_kos, KUI_DMA_OPS(disc)};
     enum kui_bench_result result = kui_bench(&ops, &kui_options);
     kui_sd_disconnect();
     /* Prints the OPTICAL capture subtimers (submit/poll/wait) for the bench

@@ -70,7 +70,7 @@ note=
 #sweep_sectors=2048            # per point; 32..65536
 #sweep_verify=on               # prove every read size returns identical bytes
 #                               (data tracks only; turn off for audio)
-#sweep_mode=pio,dma            # EXPERIMENTAL: also read with GD-ROM DMA (even sector
+#sweep_mode=pio,dma            # EXPERIMENTAL, opt-in build only (KUI_EXPERIMENTAL=1): also read with GD-ROM DMA (even sector
 #                               counts; a DMA that never completes turns DMA off until
 #                               reboot). See docs/bench-cfgs/t6a-dma-probe.cfg
 #sweep_spin=off,on             # run a competing CPU-bound thread; reports free= (its

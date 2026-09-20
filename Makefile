@@ -60,7 +60,7 @@ build/test-timing: tests/test_timing.c src/core/timing.c include/kui/timing.h
 
 build/test-disc: tests/test_disc.c src/dreamcast/disc.c src/dreamcast/platform.h src/core/command.c src/core/data.c $(wildcard tests/stubs/dc/*.h tests/stubs/kos/*.h tests/stubs/arch/*.h) .deps/fatfs/source/ff.h
 	@mkdir -p build
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c tests/test_disc.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_EXPERIMENTAL_DMA=1 -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c tests/test_disc.c -o $@
 
 build/capture-image: tests/capture_image.c $(CORE) $(CAPTURE) src/core/storage_probe.c $(FATFS) include/kui/capture.h include/kui/timing.h
 	@mkdir -p build

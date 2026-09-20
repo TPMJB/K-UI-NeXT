@@ -66,10 +66,20 @@ jobs:
         shell: bash
         run: |
           source .deps/kos/environ.sh
-          # -k: keep compiling after a failure, so ONE run lists every file the pinned compiler
-          # rejects instead of stopping at the first (each extra error used to cost a round trip).
-          # A failed compile still fails the job; nothing changes when the build succeeds.
-          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}"
+          # -k keeps compiling after a failure, so one run lists every file the pinned compiler
+          # rejects. The digest at the END repeats just the errors, so the last screen of the log
+          # (the part that is easy to copy) is the part that matters. A failed build still fails
+          # the job; nothing changes when the build succeeds.
+          set +e
+          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo
+            echo "=============== BUILD FAILED: THE ERRORS, IN ONE PLACE ==============="
+            grep -nE "error:|Error [0-9]+|undefined reference|multiple definition|\*\*\*" build.log | head -60
+            echo "======================================================================"
+          fi
+          exit "$status"
       - name: Package reusable CDI, SD runtime, loader tests and source records
         shell: bash
         run: |

@@ -1,8 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
-#ifndef __SH4__
-#include <arch/cache.h>   /* host tests only: a recording double. The console does not use KOS's header here. */
-#endif
 #include <dc/syscalls.h>
 #include <kos/thread.h>
 #include <kos/timer.h>
@@ -378,6 +375,12 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
     return KUI_READ_OK;
 }
 
+/* The GD-ROM DMA probe is EXPERIMENTAL and opt-in at build time: `make diagnostic
+ * KUI_EXPERIMENTAL=1`. It is bench-only hardware probing that has never run on a console and
+ * that this project's CI compiler has already rejected once, so it is not compiled into the
+ * default build: nothing experimental may be able to break the build the capture engine ships
+ * in. The host tests build it (test-disc is compiled with the define). */
+#ifdef KUI_EXPERIMENTAL_DMA
 /* Data-cache maintenance for the DMA probe: one `ocbp` (write back, then invalidate) or `ocbi`
  * (invalidate) per 32-byte line, each with a single register operand. KOS's own
  * arch_dcache_purge_range/inval_range were used first and did not compile under the CI's GCC
@@ -386,6 +389,9 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
  * a function with many live values, as the probe is. Nothing here needs that generality, and a
  * one-register asm cannot fail that way. Kept out of line so the asm never sees the probe's
  * register pressure at all. The host tests substitute KOS's header with a recording double. */
+#ifndef __SH4__
+#include <arch/cache.h>   /* host tests only: a recording double. The console does not use KOS's header here. */
+#endif
 #ifdef __SH4__
 __attribute__((noinline)) static void cache_purge(uintptr_t start,size_t bytes) {
     uintptr_t end=start+bytes;
@@ -479,6 +485,7 @@ enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sec
     *out=probe_dma_raw.data;
     return KUI_READ_OK;
 }
+#endif /* KUI_EXPERIMENTAL_DMA */
 
 void kui_disc_probe(void) {
     kui_log("DISC PROBE: insert a known-good retail GD-ROM first");

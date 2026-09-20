@@ -24,6 +24,11 @@ all: $(TARGET) $(RUNTIME)
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
+# Experimental, never-run-on-hardware code (the GD-ROM DMA probe and its competing thread) is NOT in
+# the default build. Opt in with: make diagnostic KUI_EXPERIMENTAL=1
+ifdef KUI_EXPERIMENTAL
+CPPFLAGS += -DKUI_EXPERIMENTAL_DMA=1
+endif
 
 # Refresh the visible source identifier after every commit, even if main.c did
 # not change. Relinking also records the exact source state used by packaging.

@@ -351,7 +351,9 @@ carries the fix.
 
 ### Trip 6: GD-ROM DMA, and what a second thread would see (`t6a-dma-probe.cfg`, ~2 min)
 
-**Experimental.** The only route to overlapping the drive with SD and hash work that
+**Experimental, and not in the default build**: it needs `make diagnostic KUI_EXPERIMENTAL=1` (see
+section 7, 2026-09-20). Without it the run prints `BENCH dma skipped` / `BENCH spin skipped` and only
+measures PIO. The only route to overlapping the drive with SD and hash work that
 does not depend on a plain thread getting the CPU promptly is to stop spending CPU on
 the transfer. This trip finds out three things at once, on the real drive:
 
@@ -550,6 +552,17 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   any inline asm under `src/` has more than three operands or KOS's cache header reaches the console
   build. **What "compiles clean" means here:** clean on the local cross-compilers. The CI toolchain
   is the arbiter, so the CI now runs `make -k`: one run lists every file it rejects.
+- **A second failed build, and the response (2026-09-20).** After the cache-helper fix the CI
+  failed again. I could not read that log (GitHub's API refuses anonymous log downloads and was
+  rate-limited from here), and I could not reproduce either failure: GCC 15.2.0, the CI's exact
+  version, with KOS's flags (`-fno-PIC -fno-PIE -fomit-frame-pointer`) compiles every source cleanly on
+  the PC, including the v4 `disc.c` the CI rejected. What differs is the console toolchain itself
+  (`sh-elf`, `-m4-single`, newlib) which cannot be installed here. So the gap between "clean on the PC"
+  and "clean on the CI" is real and will recur. Two structural responses: (1) experimental,
+  never-run-on-hardware code (the DMA probe, the competing thread) is compiled only with
+  `KUI_EXPERIMENTAL=1`, so it cannot break the build the capture engine ships in; (2) the CI now
+  prints its errors in one block at the END of the log (`BUILD FAILED: THE ERRORS, IN ONE PLACE`), so
+  the part that is easy to copy is the part that matters.
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.

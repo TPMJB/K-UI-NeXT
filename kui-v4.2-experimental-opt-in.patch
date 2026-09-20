@@ -1,0 +1,241 @@
+diff --git a/.github/workflows/diagnostic.yml b/.github/workflows/diagnostic.yml
+index 886566b..3a2711e 100644
+--- a/.github/workflows/diagnostic.yml
++++ b/.github/workflows/diagnostic.yml
+@@ -66,10 +66,20 @@ jobs:
+         shell: bash
+         run: |
+           source .deps/kos/environ.sh
+-          # -k: keep compiling after a failure, so ONE run lists every file the pinned compiler
+-          # rejects instead of stopping at the first (each extra error used to cost a round trip).
+-          # A failed compile still fails the job; nothing changes when the build succeeds.
+-          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}"
++          # -k keeps compiling after a failure, so one run lists every file the pinned compiler
++          # rejects. The digest at the END repeats just the errors, so the last screen of the log
++          # (the part that is easy to copy) is the part that matters. A failed build still fails
++          # the job; nothing changes when the build succeeds.
++          set +e
++          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" 2>&1 | tee build.log
++          status=${PIPESTATUS[0]}
++          if [ "$status" -ne 0 ]; then
++            echo
++            echo "=============== BUILD FAILED: THE ERRORS, IN ONE PLACE ==============="
++            grep -nE "error:|Error [0-9]+|undefined reference|multiple definition|\*\*\*" build.log | head -60
++            echo "======================================================================"
++          fi
++          exit "$status"
+       - name: Package reusable CDI, SD runtime, loader tests and source records
+         shell: bash
+         run: |
+diff --git a/Makefile b/Makefile
+index 33fa07b..c09618a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -60,7 +60,7 @@ build/test-timing: tests/test_timing.c src/core/timing.c include/kui/timing.h
+ 
+ build/test-disc: tests/test_disc.c src/dreamcast/disc.c src/dreamcast/platform.h src/core/command.c src/core/data.c $(wildcard tests/stubs/dc/*.h tests/stubs/kos/*.h tests/stubs/arch/*.h) .deps/fatfs/source/ff.h
+ 	@mkdir -p build
+-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c tests/test_disc.c -o $@
++	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_EXPERIMENTAL_DMA=1 -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c tests/test_disc.c -o $@
+ 
+ build/capture-image: tests/capture_image.c $(CORE) $(CAPTURE) src/core/storage_probe.c $(FATFS) include/kui/capture.h include/kui/timing.h
+ 	@mkdir -p build
+diff --git a/Makefile.dc b/Makefile.dc
+index 8552b10..0c8b13e 100644
+--- a/Makefile.dc
++++ b/Makefile.dc
+@@ -24,6 +24,11 @@ all: $(TARGET) $(RUNTIME)
+ include $(KOS_BASE)/Makefile.rules
+ 
+ CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
++# Experimental, never-run-on-hardware code (the GD-ROM DMA probe and its competing thread) is NOT in
++# the default build. Opt in with: make diagnostic KUI_EXPERIMENTAL=1
++ifdef KUI_EXPERIMENTAL
++CPPFLAGS += -DKUI_EXPERIMENTAL_DMA=1
++endif
+ 
+ # Refresh the visible source identifier after every commit, even if main.c did
+ # not change. Relinking also records the exact source state used by packaging.
+diff --git a/docs/bench-cfgs/t6a-dma-probe.cfg b/docs/bench-cfgs/t6a-dma-probe.cfg
+index 30751df..c73cfcf 100644
+--- a/docs/bench-cfgs/t6a-dma-probe.cfg
++++ b/docs/bench-cfgs/t6a-dma-probe.cfg
+@@ -1,5 +1,8 @@
+ # TRIP 6a - does GD-ROM DMA work here, and what does a second thread see?  (about 2 minutes)
+-# EXPERIMENTAL. Use a disc you can afford to be careful with and expect to reboot
++# EXPERIMENTAL, and NOT IN THE DEFAULT BUILD: it needs the opt-in build (put KUI_EXPERIMENTAL=1
++# on the make line in .github/workflows/diagnostic.yml). In the default build this run prints
++# "BENCH dma skipped" and "BENCH spin skipped" and only measures PIO.
++# Use a disc you can afford to be careful with and expect to reboot
+ # afterwards if anything below says FAILED. Nothing here writes to the card or the disc.
+ #
+ # What it answers:
+diff --git a/docs/bench.cfg.example b/docs/bench.cfg.example
+index 9bf23a9..4b9a6ca 100644
+--- a/docs/bench.cfg.example
++++ b/docs/bench.cfg.example
+@@ -70,7 +70,7 @@ note=
+ #sweep_sectors=2048            # per point; 32..65536
+ #sweep_verify=on               # prove every read size returns identical bytes
+ #                               (data tracks only; turn off for audio)
+-#sweep_mode=pio,dma            # EXPERIMENTAL: also read with GD-ROM DMA (even sector
++#sweep_mode=pio,dma            # EXPERIMENTAL, opt-in build only (KUI_EXPERIMENTAL=1): also read with GD-ROM DMA (even sector
+ #                               counts; a DMA that never completes turns DMA off until
+ #                               reboot). See docs/bench-cfgs/t6a-dma-probe.cfg
+ #sweep_spin=off,on             # run a competing CPU-bound thread; reports free= (its
+diff --git a/docs/benchmarks.md b/docs/benchmarks.md
+index ebec12d..bcc7183 100644
+--- a/docs/benchmarks.md
++++ b/docs/benchmarks.md
+@@ -273,7 +273,11 @@ value; on `MISMATCH` ignore the timings. This is what decides whether patching K
+ 
+ **The GD-ROM DMA probe and the competing thread** (`docs/bench-cfgs/t6a-dma-probe.cfg`).
+ `sweep_mode=dma` reads raw sectors with the drive's DMA command instead of PIO.
+-It is **experimental and bench-only**; the capture engine never uses it.
++It is **experimental and bench-only**; the capture engine never uses it. **It is not in the
++default build**: it has never run on a console and the CI compiler rejected it once, so it
++compiles only with `make diagnostic KUI_EXPERIMENTAL=1` (add `KUI_EXPERIMENTAL=1` to the `make`
++line in `.github/workflows/diagnostic.yml`). Without it the bench prints `BENCH dma skipped: this
++platform has no GD-ROM DMA probe` and `BENCH spin skipped`, and everything else runs as usual.
+ Before any DMA point it does one checked read against PIO (`BENCH dma check`); a
+ drive that cannot do it costs one line, and DMA stays off for the run. What to know:
+ 
+diff --git a/docs/experiment-plan.md b/docs/experiment-plan.md
+index 254d848..7448b5f 100644
+--- a/docs/experiment-plan.md
++++ b/docs/experiment-plan.md
+@@ -351,7 +351,9 @@ carries the fix.
+ 
+ ### Trip 6: GD-ROM DMA, and what a second thread would see (`t6a-dma-probe.cfg`, ~2 min)
+ 
+-**Experimental.** The only route to overlapping the drive with SD and hash work that
++**Experimental, and not in the default build**: it needs `make diagnostic KUI_EXPERIMENTAL=1` (see
++section 7, 2026-09-20). Without it the run prints `BENCH dma skipped` / `BENCH spin skipped` and only
++measures PIO. The only route to overlapping the drive with SD and hash work that
+ does not depend on a plain thread getting the CPU promptly is to stop spending CPU on
+ the transfer. This trip finds out three things at once, on the real drive:
+ 
+@@ -550,6 +552,17 @@ the read itself, so a catalogue match (or a second dump) is the check there.
+   any inline asm under `src/` has more than three operands or KOS's cache header reaches the console
+   build. **What "compiles clean" means here:** clean on the local cross-compilers. The CI toolchain
+   is the arbiter, so the CI now runs `make -k`: one run lists every file it rejects.
++- **A second failed build, and the response (2026-09-20).** After the cache-helper fix the CI
++  failed again. I could not read that log (GitHub's API refuses anonymous log downloads and was
++  rate-limited from here), and I could not reproduce either failure: GCC 15.2.0, the CI's exact
++  version, with KOS's flags (`-fno-PIC -fno-PIE -fomit-frame-pointer`) compiles every source cleanly on
++  the PC, including the v4 `disc.c` the CI rejected. What differs is the console toolchain itself
++  (`sh-elf`, `-m4-single`, newlib) which cannot be installed here. So the gap between "clean on the PC"
++  and "clean on the CI" is real and will recur. Two structural responses: (1) experimental,
++  never-run-on-hardware code (the DMA probe, the competing thread) is compiled only with
++  `KUI_EXPERIMENTAL=1`, so it cannot break the build the capture engine ships in; (2) the CI now
++  prints its errors in one block at the END of the log (`BUILD FAILED: THE ERRORS, IN ONE PLACE`), so
++  the part that is easy to copy is the part that matters.
+ - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
+   slack a second thread could reclaim. It was the UI thread running. That is the
+   reason Trip 1 exists.
+diff --git a/src/dreamcast/bench.c b/src/dreamcast/bench.c
+index 7b1a648..9dae09a 100644
+--- a/src/dreamcast/bench.c
++++ b/src/dreamcast/bench.c
+@@ -8,6 +8,14 @@
+  * This mirrors src/dreamcast/capture.c, which plays the same role for the
+  * capture engine. */
+ 
++/* The DMA probe and its competing thread: filled in only in the opt-in experimental build
++ * (make diagnostic KUI_EXPERIMENTAL=1). Otherwise the bench sees NULL and says so. */
++#ifdef KUI_EXPERIMENTAL_DMA
++#define KUI_DMA_OPS(disc) ((disc) ? kui_disc_read_probe_dma : NULL), spin, spin_count, sleep_ms
++#else
++#define KUI_DMA_OPS(disc) NULL, NULL, NULL, NULL
++#endif
++
+ struct kui_options kui_options;   /* last loaded /KUI/bench.cfg; defaults until then */
+ 
+ static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
+@@ -34,6 +42,7 @@ static uint16_t crc16_kos(void *ctx, const uint8_t *data, size_t bytes, uint16_t
+     return net_crc16ccitt(data, (int)bytes, start);
+ }
+ 
++#ifdef KUI_EXPERIMENTAL_DMA   /* the competing thread exists for the DMA probe experiment (Trip 6) */
+ /* A CPU-bound thread at the worker's priority: what an SD-writing thread would be. It bumps a
+  * counter every 64 iterations while enabled and sleeps while not, so the count is a direct
+  * measure of the CPU it was given. The counter is one 32-bit word, read atomically, that
+@@ -59,6 +68,7 @@ static void spin(void *ctx, bool on) {
+ }
+ static uint64_t spin_count(void *ctx) { (void)ctx; return spin_total; }
+ static void sleep_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep((int)ms); }
++#endif
+ static void cpu_mark(void *ctx, struct kui_cpu_census *out) { (void)ctx; kui_cpu_census_mark(out); }
+ static enum kui_capture_result capture_run(void *ctx, uint32_t fad, unsigned sectors, bool audio,
+     enum kui_capture_mode mode, const struct kui_capture_options *options, struct kui_capture_stats *stats) {
+@@ -112,8 +122,7 @@ enum kui_bench_result kui_bench_start(void) {
+     struct kui_bench_ops ops = {NULL, disc ? kui_disc_read_raw : NULL, reconnect,
+                                 cancelled, now_us, kui_log, set_ui, cpu_mark,
+                                 disc ? kui_disc_read_probe : NULL, disc ? capture_run : NULL,
+-                                crc16_kos, disc ? kui_disc_read_probe_dma : NULL,
+-                                spin, spin_count, sleep_ms};
++                                crc16_kos, KUI_DMA_OPS(disc)};
+     enum kui_bench_result result = kui_bench(&ops, &kui_options);
+     kui_sd_disconnect();
+     /* Prints the OPTICAL capture subtimers (submit/poll/wait) for the bench
+diff --git a/src/dreamcast/disc.c b/src/dreamcast/disc.c
+index ec23acb..2674a0e 100644
+--- a/src/dreamcast/disc.c
++++ b/src/dreamcast/disc.c
+@@ -1,8 +1,5 @@
+ /* SPDX-License-Identifier: GPL-3.0-only */
+ #include "platform.h"
+-#ifndef __SH4__
+-#include <arch/cache.h>   /* host tests only: a recording double. The console does not use KOS's header here. */
+-#endif
+ #include <dc/syscalls.h>
+ #include <kos/thread.h>
+ #include <kos/timer.h>
+@@ -378,6 +375,12 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
+     return KUI_READ_OK;
+ }
+ 
++/* The GD-ROM DMA probe is EXPERIMENTAL and opt-in at build time: `make diagnostic
++ * KUI_EXPERIMENTAL=1`. It is bench-only hardware probing that has never run on a console and
++ * that this project's CI compiler has already rejected once, so it is not compiled into the
++ * default build: nothing experimental may be able to break the build the capture engine ships
++ * in. The host tests build it (test-disc is compiled with the define). */
++#ifdef KUI_EXPERIMENTAL_DMA
+ /* Data-cache maintenance for the DMA probe: one `ocbp` (write back, then invalidate) or `ocbi`
+  * (invalidate) per 32-byte line, each with a single register operand. KOS's own
+  * arch_dcache_purge_range/inval_range were used first and did not compile under the CI's GCC
+@@ -386,6 +389,9 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
+  * a function with many live values, as the probe is. Nothing here needs that generality, and a
+  * one-register asm cannot fail that way. Kept out of line so the asm never sees the probe's
+  * register pressure at all. The host tests substitute KOS's header with a recording double. */
++#ifndef __SH4__
++#include <arch/cache.h>   /* host tests only: a recording double. The console does not use KOS's header here. */
++#endif
+ #ifdef __SH4__
+ __attribute__((noinline)) static void cache_purge(uintptr_t start,size_t bytes) {
+     uintptr_t end=start+bytes;
+@@ -479,6 +485,7 @@ enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sec
+     *out=probe_dma_raw.data;
+     return KUI_READ_OK;
+ }
++#endif /* KUI_EXPERIMENTAL_DMA */
+ 
+ void kui_disc_probe(void) {
+     kui_log("DISC PROBE: insert a known-good retail GD-ROM first");
+diff --git a/src/dreamcast/platform.h b/src/dreamcast/platform.h
+index 067330c..b6dab67 100644
+--- a/src/dreamcast/platform.h
++++ b/src/dreamcast/platform.h
+@@ -28,9 +28,11 @@ void kui_disc_set_yield_us(unsigned us);
+ /* Bench-only optical read for the sweep (see kui/bench.h). */
+ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors,unsigned service_us,
+     const uint8_t **data,struct kui_probe_stats *stats);
+-/* Bench-only GD-ROM DMA read of raw sectors (EXPERIMENTAL; even sector counts only). */
++#ifdef KUI_EXPERIMENTAL_DMA
++/* Bench-only GD-ROM DMA read of raw sectors (EXPERIMENTAL, opt-in build; even sector counts only). */
+ enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sectors,
+     const uint8_t **data,struct kui_probe_stats *stats);
++#endif
+ /* Cap UI redraws per second while an operation runs. KUI_OPT_UI_FULL restores
+  * the unthrottled loop. Input is still polled at the same rate, so B still stops. */
+ void kui_ui_set_hz(unsigned hz);
