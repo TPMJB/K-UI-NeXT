@@ -629,6 +629,13 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   `capture_fad` is not inside a track of the configured type or is off the disc entirely, and a bench that
   measured nothing now ends `BENCH complete but NOTHING was measured` instead of `BENCH complete`.
   **Lesson: a measurement that silently answers a different question is worse than one that fails.**
+- **The example config could never be used (2026-09-20).** `/KUI/bench.cfg is larger than 2048 bytes; ignored`
+  stopped a Trip 5c run on MDK2 before it started. The only shipped file over that limit was
+  `docs/bench.cfg.example` (5347 bytes) — the file whose name invites copying it to the card. The limit is now
+  8192 bytes (6 KB of BSS out of ~14 MB free), the message names the fix, and `tests/test_options.c` fails if any
+  shipped file exceeds the runtime's limit. The run did show the engine at 545.4 KiB/s on MDK2's data track 1
+  with the old defaults, within 1.0% of Trip 5a on Sword, and a clean stop-and-checkpoint on a 31-track
+  disc. **Lesson: a limit that the project's own example violates is a bug in the limit or the example.**
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.

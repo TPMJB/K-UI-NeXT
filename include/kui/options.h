@@ -93,7 +93,11 @@
 #define KUI_SEC_CAPTURE 16u
 #define KUI_OPT_CAPTURE_MAX 4u   /* values per numeric capture list */
 #define KUI_OPT_NOTE_MAX 64u
-#define KUI_OPT_FILE_MAX 2048u   /* a larger bench.cfg is refused */
+/* A larger bench.cfg is refused. 2048 was too small for the commented example this repository
+ * ships (5.3 KB), which is exactly the file whose name invites copying to the card: on
+ * 2026-09-20 that silently cost a run. 8192 fits every shipped file with room to spare and
+ * costs 6 KB of BSS out of the ~14 MB free. tests/test_options.c checks every shipped file. */
+#define KUI_OPT_FILE_MAX 8192u
 
 struct kui_options {
     unsigned chunks[KUI_OPT_LIST_MAX], chunk_count;

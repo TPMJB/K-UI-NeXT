@@ -18,7 +18,8 @@ bool kui_options_load(struct kui_options *opt, const char *path, kui_log_fn log)
     if(r != FR_OK) { log("Cannot open %s: FatFs=%u", path + 2, (unsigned)r); return false; }
     bool ok = false;
     if(f_size(&file) > sizeof(text)) {
-        log("%s is larger than %u bytes; ignored", path + 2, (unsigned)sizeof(text));
+        log("%s is larger than %u bytes; ignored. Copy one file from docs/bench-cfgs/, "
+            "not the whole commented example", path + 2, (unsigned)sizeof(text));
     } else {
         UINT done = 0;
         r = f_read(&file, text, (UINT)f_size(&file), &done);

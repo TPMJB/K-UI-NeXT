@@ -306,6 +306,9 @@ int main(int argc, char **argv) {
         memcpy(with_bom, "\xef\xbb\xbf", 3); memcpy(with_bom + 3, plain, n);
         size_t c = 0;
         for(size_t k = 0; k < n; ++k) { if(plain[k] == '\n') crlf[c++] = '\r'; crlf[c++] = plain[k]; }
+        /* Every shipped file must fit the runtime's limit: the console refuses a larger one and
+         * runs nothing, and docs/bench.cfg.example (the name a person copies) was over it. */
+        if(n >= KUI_OPT_FILE_MAX) { fprintf(stderr, "%s: %zu bytes, over the %u-byte limit\n", argv[i], n, KUI_OPT_FILE_MAX); assert(0); }
         struct kui_options a = d, b = d, w = d;
         assert(kui_options_parse(&a, plain, n, log_line));
         if(!kui_options_parse(&b, with_bom, n + 3, log_line)) { fprintf(stderr, "%s: rejected with a byte-order mark\n", argv[i]); assert(0); }
