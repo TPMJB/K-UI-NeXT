@@ -1,0 +1,233 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "bd0a4d90b357",
+  "experiment": "Trip 5b: what the in-capture sampled read-back costs. crc32, no end read-back, 4096 sectors at FAD 45150, sample_readback=0/8/32/128; two runs.",
+  "inputs": [
+    {
+      "file": "T5B_diag_2.txt",
+      "kept_as": "t5b-capture-sampling-2026-09-20.txt",
+      "bytes": 17571,
+      "sha256": "ec6a0bab03d7e540060cafeb76d065b895e9c25fb410bd7303ece885105bfa17",
+      "note": "a first attempt the same evening ran with the K-UI boot CD still in the drive (a CD with no high-density area): the capture section was skipped and nothing was measured. See the plan, section 7."
+    }
+  ],
+  "config": {
+    "file": "docs/bench-cfgs/t5b-capture-sampling.cfg",
+    "ui_hz": [
+      2
+    ],
+    "capture_hash": "crc32",
+    "end_readback": "off",
+    "resume_check": "size",
+    "sample_readback": [
+      0,
+      8,
+      32,
+      128
+    ],
+    "capture_sectors": 4096,
+    "capture_fad": 45150
+  },
+  "hardware": {
+    "sd": {
+      "filesystem": "exFAT",
+      "sectors": 249997312,
+      "cluster_bytes": 131072,
+      "transport": "SCIF (bit-banged SPI)"
+    },
+    "disc": "Sword of the Berserk (TOC: T01 data 150-1076, T02 audio 1076-1602, T03 data 45150-549300)"
+  },
+  "rows": [
+    {
+      "sample_readback": 0,
+      "kib_s": 717.5,
+      "chunks_re_read": 0,
+      "time_cost_pct": 0.0,
+      "read_ms": 0,
+      "ms_per_sampled_chunk": null,
+      "spread_between_runs_pct": 0.5
+    },
+    {
+      "sample_readback": 8,
+      "kib_s": 587.3,
+      "chunks_re_read": 16,
+      "time_cost_pct": 22.2,
+      "read_ms": 2662,
+      "ms_per_sampled_chunk": 166.4,
+      "spread_between_runs_pct": 2.0
+    },
+    {
+      "sample_readback": 32,
+      "kib_s": 679.3,
+      "chunks_re_read": 4,
+      "time_cost_pct": 5.6,
+      "read_ms": 668,
+      "ms_per_sampled_chunk": 167.1,
+      "spread_between_runs_pct": 0.2
+    },
+    {
+      "sample_readback": 128,
+      "kib_s": 708.3,
+      "chunks_re_read": 1,
+      "time_cost_pct": 1.3,
+      "read_ms": 164,
+      "ms_per_sampled_chunk": 164.5,
+      "spread_between_runs_pct": 0.3
+    }
+  ],
+  "runs": {
+    "0": [
+      {
+        "kib_s": 719.3,
+        "us": 13078606,
+        "sampled": 0,
+        "resume_us": 3841,
+        "parts": {
+          "disc": 3602,
+          "edc": 375,
+          "write": 8336,
+          "read": 0,
+          "sha": 0,
+          "crc": 730,
+          "ckpt": 26
+        }
+      },
+      {
+        "kib_s": 715.7,
+        "us": 13144493,
+        "sampled": 0,
+        "resume_us": 3871,
+        "parts": {
+          "disc": 3624,
+          "edc": 375,
+          "write": 8390,
+          "read": 0,
+          "sha": 0,
+          "crc": 721,
+          "ckpt": 25
+        }
+      }
+    ],
+    "8": [
+      {
+        "kib_s": 581.4,
+        "us": 16179091,
+        "sampled": 16,
+        "resume_us": 3829,
+        "parts": {
+          "disc": 3658,
+          "edc": 375,
+          "write": 8660,
+          "read": 2706,
+          "sha": 0,
+          "crc": 749,
+          "ckpt": 21
+        }
+      },
+      {
+        "kib_s": 593.3,
+        "us": 15855691,
+        "sampled": 16,
+        "resume_us": 3831,
+        "parts": {
+          "disc": 3667,
+          "edc": 374,
+          "write": 8439,
+          "read": 2619,
+          "sha": 0,
+          "crc": 723,
+          "ckpt": 22
+        }
+      }
+    ],
+    "32": [
+      {
+        "kib_s": 678.8,
+        "us": 13859384,
+        "sampled": 4,
+        "resume_us": 3823,
+        "parts": {
+          "disc": 3735,
+          "edc": 377,
+          "write": 8316,
+          "read": 663,
+          "sha": 0,
+          "crc": 737,
+          "ckpt": 21
+        }
+      },
+      {
+        "kib_s": 679.9,
+        "us": 13836194,
+        "sampled": 4,
+        "resume_us": 3812,
+        "parts": {
+          "disc": 3755,
+          "edc": 374,
+          "write": 8261,
+          "read": 674,
+          "sha": 0,
+          "crc": 740,
+          "ckpt": 22
+        }
+      }
+    ],
+    "128": [
+      {
+        "kib_s": 709.4,
+        "us": 13260311,
+        "sampled": 1,
+        "resume_us": 3855,
+        "parts": {
+          "disc": 3639,
+          "edc": 375,
+          "write": 8310,
+          "read": 165,
+          "sha": 0,
+          "crc": 740,
+          "ckpt": 21
+        }
+      },
+      {
+        "kib_s": 707.2,
+        "us": 13302243,
+        "sampled": 1,
+        "resume_us": 3904,
+        "parts": {
+          "disc": 3696,
+          "edc": 377,
+          "write": 8301,
+          "read": 164,
+          "sha": 0,
+          "crc": 733,
+          "ckpt": 21
+        }
+      }
+    ]
+  },
+  "derived": {
+    "cost_per_sampled_chunk_ms": 166.0,
+    "baseline_ms_per_chunk": 102.4,
+    "sampled_chunk_rate_kib_s": 442.8,
+    "projected_time_cost_pct_by_n": {
+      "8": 20.3,
+      "16": 10.1,
+      "32": 5.1,
+      "64": 2.5,
+      "128": 1.3,
+      "256": 0.6
+    },
+    "resume_check_size_us": 3846,
+    "conclusions": [
+      "Re-reading one chunk costs 166.0 ms, the same at every setting ([166.4, 167.1, 164.5] ms), against a baseline of 102.4 ms to capture a chunk. That works out to 442.8 KiB/s for the re-read, below the 639 KiB/s of a plain SD read, because each sample also seeks and CRCs.",
+      "Measured time cost: 22.2% at sample_readback=8, 5.6% at 32, 1.3% at 128. The simple model (cost per sample / (baseline chunk time x N)) reproduces them and projects 2.5% at 64 and 0.6% at 256.",
+      "On the T7 capture (26.7 minutes) that is about 0.3 minutes at N=128 and 0.7 at N=64.",
+      "What it buys: at N=128 it re-reads and compares 0.8% of the chunks. That is a smoke test for a card that is failing systematically, not a verification of the dump; only the PC check (or end_readback=on) covers every byte.",
+      "resume_check=size finished in 3.8 ms against a full prefix re-read, as designed, and as documented it cannot detect a corrupted prefix."
+    ]
+  },
+  "limitations": [
+    "One card, one disc, one console; two runs. Run-to-run spread of the four rates: 0.2-2.0%.",
+    "Inner radius only (FAD 45150). The sampled re-read is an SD-side cost, so it should not depend on radius, but that was not measured."
+  ]
+}

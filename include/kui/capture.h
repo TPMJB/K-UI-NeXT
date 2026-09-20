@@ -12,6 +12,14 @@
 struct kui_capture_track { uint32_t number, control, session, start, end, toc_end; };
 struct kui_capture_plan { struct kui_capture_track tracks[99]; unsigned count; uint64_t bytes; };
 bool kui_plan_tracks(const struct kui_toc sessions[2], struct kui_capture_plan *out);
+/* Bench sanity: is `fad` inside a track of the type the bench is configured to capture?
+ * Returns NULL when the configuration is consistent, else a sentence to log. A bench can
+ * otherwise measure something other than what was asked for and say nothing: capture_fad
+ * defaults to 45150, which is a DATA track on most discs, so `capture_type=audio` there
+ * measures the audio code path on data media (correct timings, wrong question), and a
+ * capture_fad from another disc's layout may not be on this disc at all. Pure; the console
+ * passes the TOC it already read. */
+const char *kui_bench_fad_note(const struct kui_toc sessions[2], uint32_t fad, bool audio);
 enum kui_read_result { KUI_READ_OK, KUI_READ_RETRY, KUI_READ_FATAL };
 enum kui_capture_mode { KUI_CAPTURE_NEW, KUI_CAPTURE_RESUME, KUI_CAPTURE_VERIFY };
 enum kui_capture_result { KUI_CAPTURE_FAILED, KUI_CAPTURE_STOPPED, KUI_CAPTURE_COMPLETE };

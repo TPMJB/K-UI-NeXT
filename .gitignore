@@ -3,3 +3,12 @@ build/
 dist/
 __pycache__/
 *.pyc
+
+# Dumps captured by the tool. They are large (track03.bin alone is over 1 GB; GitHub refuses any file over
+# 100 MB) and must never be committed. A job folder is named like df4db30d38d4d8926-0001; these are also
+# the file names inside it, in case they are copied out one by one. Keep dumps outside the repository.
+*-[0-9][0-9][0-9][0-9]/
+track[0-9][0-9].bin
+track[0-9][0-9].raw
+checkpoint-[ab].bin
+disc.gdi

@@ -67,6 +67,39 @@ int main(void) {
     kui_checkpoint_encode(&c,record);record[80]=1;seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
     kui_checkpoint_encode(&a,record);put32(record+76,1);seal(record);   /* SHA present but flagged CRC-only */
     assert(!kui_checkpoint_decode(record,&plan,a.identity,&b));
-    puts("PASS SHA-256 vectors/chunks, CD EDC, GDI gap/address plan, checkpoint identity/bounds/order, CRC-only flag");
+    /* --- kui_bench_fad_note: is the bench measuring what was asked for? ----------- */
+    {
+        struct kui_toc s2[2];
+        memset(s2,0,sizeof(s2));
+        /* Sword of the Berserk's shape: data, audio, then a high-density data track. */
+        s2[0].count=2;
+        s2[0].tracks[0]=(struct kui_track){1,4,150,1076};
+        s2[0].tracks[1]=(struct kui_track){2,0,1076,1602};
+        s2[1].count=1;
+        s2[1].tracks[0]=(struct kui_track){3,4,45150,549300};
+        assert(!kui_bench_fad_note(s2,45150,false));   /* data track, capture_type=data */
+        assert(!kui_bench_fad_note(s2,63000,false));   /* inside the same data track */
+        assert(!kui_bench_fad_note(s2,1076,true));     /* audio track, capture_type=audio */
+        assert(!kui_bench_fad_note(s2,1601,true));     /* its last sector */
+        /* What happened on 2026-09-20: t5c ships capture_fad=63000 with capture_type=audio,
+         * which on this disc is a data track, so the run measured the audio code path on
+         * data sectors and said nothing about it. */
+        const char *note=kui_bench_fad_note(s2,63000,true);
+        assert(note && strstr(note,"DATA track") && strstr(note,"capture_type=audio"));
+        note=kui_bench_fad_note(s2,1076,false);
+        assert(note && strstr(note,"AUDIO track") && strstr(note,"EDC"));
+        /* start is inclusive, end exclusive; anything outside every track is named. */
+        assert(strstr(kui_bench_fad_note(s2,1602,true),"not inside any track"));
+        assert(strstr(kui_bench_fad_note(s2,149,false),"not inside any track"));
+        assert(strstr(kui_bench_fad_note(s2,549300,false),"not inside any track"));
+        assert(strstr(kui_bench_fad_note(s2,20000,false),"not inside any track"));
+        assert(!kui_bench_fad_note(NULL,45150,false));
+        /* An empty or overstated TOC must not be walked past what it declares. */
+        memset(s2,0,sizeof(s2));
+        assert(strstr(kui_bench_fad_note(s2,45150,false),"not inside any track"));
+        s2[0].count=250;
+        assert(strstr(kui_bench_fad_note(s2,45150,false),"not inside any track"));
+    }
+    puts("PASS SHA-256 vectors/chunks, CD EDC, GDI gap/address plan, checkpoint identity/bounds/order, CRC-only flag, bench fad/type note");
     return 0;
 }

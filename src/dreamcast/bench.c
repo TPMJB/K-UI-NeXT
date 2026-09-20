@@ -116,6 +116,13 @@ enum kui_bench_result kui_bench_start(void) {
     bool disc = kui_disc_prepare(sessions);
     if(disc) kui_disc_timing_phase(NULL, true);   /* single-read capture policy */
     else kui_log("No readable disc; hash and SD benches will still run");
+    /* Say so before a long run measures the wrong thing (see kui_bench_fad_note). */
+    if(disc && (kui_options.sections & KUI_SEC_CAPTURE)) {
+        const char *note = kui_bench_fad_note(sessions,
+            kui_options.capture_fad ? kui_options.capture_fad : kui_options.optical_fad,
+            kui_options.capture_audio);
+        if(note) kui_log("BENCH WARNING: %s", note);
+    }
     if(kui_cancelled()) return KUI_BENCH_STOPPED;
     /* No connect here: kui_bench opens the link itself once per swept
      * transport, so the SD benches and the link always agree. */

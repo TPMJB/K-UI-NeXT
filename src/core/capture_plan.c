@@ -5,6 +5,25 @@ static uint32_t get32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
 static void put32(uint8_t *p,uint32_t n) { for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(n>>(8*i)); }
+const char *kui_bench_fad_note(const struct kui_toc sessions[2], uint32_t fad, bool audio) {
+    if(!sessions) return NULL;
+    for(unsigned area=0;area<2;area++) {
+        unsigned count=sessions[area].count>99?99:sessions[area].count;
+        for(unsigned i=0;i<count;i++) {
+            const struct kui_track *t=&sessions[area].tracks[i];
+            if(t->end<=t->start || fad<t->start || fad>=t->end) continue;
+            bool data=(t->control&4)!=0;
+            if(data==!audio) return NULL;   /* the track is the type the bench asked for */
+            return data
+                ? "capture_fad is inside a DATA track but capture_type=audio: this measures the "
+                  "audio code path (no EDC) on data sectors, not how fast audio tracks read"
+                : "capture_fad is inside an AUDIO track but capture_type=data: every sector will "
+                  "fail the EDC check";
+        }
+    }
+    return "capture_fad is not inside any track on this disc: the capture section will fail";
+}
+
 bool kui_plan_tracks(const struct kui_toc sessions[2], struct kui_capture_plan *out) {
     if(!sessions || !out || !sessions[0].count || !sessions[1].count ||
        sessions[0].count>99 || sessions[1].count>99 ||

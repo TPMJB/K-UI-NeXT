@@ -1,0 +1,406 @@
+K-UI SD runtime bd0a4d90b357
+Log truncated: no
+Report trigger: manual
+Capture result: see operation log
+Running SD runtime build bd0a4d90b357
+Video: 640x480 NTSC interlaced, buffered
+Diagnostic code and fonts are loaded entirely in RAM.
+Replace boot CD with a known-good retail GD-ROM; close lid.
+Diagnostics page: A disc samples; X SD test; Y save log.
+Use a spare test card. No formatting; existing files preserved.
+Capture page: A new dump; X resume latest matching disc; Y verify.
+Left/Right switches capture/diagnostics. B stops and checkpoints.
+New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
+Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KU
+I/).
+Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change th
+em.
+Capture/Resume/Verify auto-save a report after ending. Wait for READY.
+R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
+The screen redraws 2x a second while working, which frees CPU (ui_hz=full: o
+ff).
+mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=capture
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=both,crc32 end_readback=on,off resume_check=full
+OPTIONS sample_readback=0 capture_sectors=1024 capture_type=audio
+OPTIONS capture_fad=63000
+OPTIONS note=T5c capture on audio. card=<model> disc=<title>
+CMD 24 FAILED
+  sense=6/40 size=10 ATA=0
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/1 uihz=2
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=both end=on sample=0 wall=9995 wk=9358 ui=452 oth=185
+ ui_pct=4.5
+BENCH capture uihz=2 hash=both end=on sample=0 sectors=1024 result=ok bytes=
+2408448 us=4220088 kib_s=557.3
+BENCH capture total hash=both end=on sample=0 verify_us=4867250 total_kib_s=
+258.8 sampled=0 verified=1
+BENCH capture parts hash=both end=on sample=0 ms disc=955 edc=0 write=2102 r
+ead=0 sha=958 crc=177 ckpt=20
+BENCH resume uihz=2 hash=both check=full sectors=1024 result=ok bytes=240844
+8 us=4877456 kib_s=482.2
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=both end=off sample=0 wall=5092 wk=4674 ui=259 oth=16
+0 ui_pct=5.0
+BENCH capture uihz=2 hash=both end=off sample=0 sectors=1024 result=ok bytes
+=2408448 us=4254875 kib_s=552.7
+BENCH capture total hash=both end=off sample=0 verify_us=0 total_kib_s=552.7
+ sampled=0 verified=0
+BENCH capture parts hash=both end=off sample=0 ms disc=929 edc=0 write=2107 
+read=0 sha=1002 crc=187 ckpt=23
+BENCH resume uihz=2 hash=both check=full sectors=1024 result=ok bytes=240844
+8 us=4870247 kib_s=482.9
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=crc32 end=on sample=0 wall=7938 wk=7375 ui=360 oth=20
+4 ui_pct=4.5
+BENCH capture uihz=2 hash=crc32 end=on sample=0 sectors=1024 result=ok bytes
+=2408448 us=3214360 kib_s=731.7
+BENCH capture total hash=crc32 end=on sample=0 verify_us=3876712 total_kib_s
+=331.6 sampled=0 verified=1
+BENCH capture parts hash=crc32 end=on sample=0 ms disc=947 edc=0 write=2051 
+read=0 sha=0 crc=189 ckpt=20
+BENCH resume uihz=2 hash=crc32 check=full sectors=1024 result=ok bytes=24084
+48 us=3819432 kib_s=615.7
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=crc32 end=off sample=0 wall=4134 wk=3758 ui=202 oth=1
+74 ui_pct=4.8
+BENCH capture uihz=2 hash=crc32 end=off sample=0 sectors=1024 result=ok byte
+s=2408448 us=3268141 kib_s=719.6
+BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=719.
+6 sampled=0 verified=0
+BENCH capture parts hash=crc32 end=off sample=0 ms disc=973 edc=0 write=2074
+ read=0 sha=0 crc=194 ckpt=21
+BENCH resume uihz=2 hash=crc32 check=full sectors=1024 result=ok bytes=24084
+48 us=3866768 kib_s=608.2
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH complete
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=1486035 requests=24 bytes=56448
+opt mode_us=153 calls=24 failed=0
+opt buffers_us=179627 other_us=405
+opt requests ok=24 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=1268659 max_us=131589
+opt read1 calls=24 bytes=56448
+opt read1 max_fad=63000 max_sectors=1
+opt read1 submit_us=559 submits=24
+opt read1 poll_us=550207 polls=157462
+opt read1 wait_us=62820 waits=585
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=655073
+opt read1 poll_n 157403/34/0/23/2
+opt read1 poll_ms 518/1/0/16/13
+opt read1 ok=24 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=37191 max_us=1612
+opt read2 calls=24 bytes=56448
+opt read2 max_fad=63511 max_sectors=1
+opt read2 submit_us=505 submits=24
+opt read2 poll_us=25892 polls=2515
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=10794
+opt read2 poll_n 2490/1/0/24/0
+opt read2 poll_ms 8/0/0/17/0
+opt read2 ok=24 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=3805801 requests=128 bytes=9633792
+opt mode_us=801 calls=128 failed=0
+opt buffers_us=224424 other_us=1406
+opt requests ok=128 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=3579170 max_us=117696
+opt read1 calls=128 bytes=9633792
+opt read1 max_fad=63000 max_sectors=32
+opt read1 submit_us=2807 submits=128
+opt read1 poll_us=3259118 polls=62811
+opt read1 wait_us=30405 waits=460
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=286840
+opt read1 poll_n 62421/13/0/128/249
+opt read1 poll_ms 216/0/0/93/2948
+opt read1 ok=128 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0001/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=capture
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=both,crc32 end_readback=on,off resume_check=full
+OPTIONS sample_readback=0 capture_sectors=1024 capture_type=audio
+OPTIONS capture_fad=63000
+OPTIONS note=T5c capture on audio. card=<model> disc=<title>
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/1 uihz=2
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=both end=on sample=0 wall=10052 wk=9292 ui=557 oth=20
+4 ui_pct=5.5
+BENCH capture uihz=2 hash=both end=on sample=0 sectors=1024 result=ok bytes=
+2408448 us=4317932 kib_s=544.7
+BENCH capture total hash=both end=on sample=0 verify_us=4876201 total_kib_s=
+255.8 sampled=0 verified=1
+BENCH capture parts hash=both end=on sample=0 ms disc=971 edc=0 write=2127 r
+ead=0 sha=1012 crc=179 ckpt=22
+BENCH resume uihz=2 hash=both check=full sectors=1024 result=ok bytes=240844
+8 us=4841192 kib_s=485.8
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=both end=off sample=0 wall=5154 wk=4694 ui=288 oth=17
+2 ui_pct=5.5
+BENCH capture uihz=2 hash=both end=off sample=0 sectors=1024 result=ok bytes
+=2408448 us=4291663 kib_s=548.0
+BENCH capture total hash=both end=off sample=0 verify_us=0 total_kib_s=548.0
+ sampled=0 verified=0
+BENCH capture parts hash=both end=off sample=0 ms disc=944 edc=0 write=2187 
+read=0 sha=954 crc=177 ckpt=23
+BENCH resume uihz=2 hash=both check=full sectors=1024 result=ok bytes=240844
+8 us=4864848 kib_s=483.4
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=crc32 end=on sample=0 wall=7996 wk=7403 ui=404 oth=19
+0 ui_pct=5.0
+BENCH capture uihz=2 hash=crc32 end=on sample=0 sectors=1024 result=ok bytes
+=2408448 us=3267423 kib_s=719.8
+BENCH capture total hash=crc32 end=on sample=0 verify_us=3858316 total_kib_s
+=330.0 sampled=0 verified=1
+BENCH capture parts hash=crc32 end=on sample=0 ms disc=966 edc=0 write=2086 
+read=0 sha=0 crc=186 ckpt=22
+BENCH resume uihz=2 hash=crc32 check=full sectors=1024 result=ok bytes=24084
+48 us=3842577 kib_s=612.0
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=crc32 end=off sample=0 wall=4101 wk=3743 ui=188 oth=1
+71 ui_pct=4.5
+BENCH capture uihz=2 hash=crc32 end=off sample=0 sectors=1024 result=ok byte
+s=2408448 us=3241545 kib_s=725.5
+BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=725.
+5 sampled=0 verified=0
+BENCH capture parts hash=crc32 end=off sample=0 ms disc=1000 edc=0 write=201
+6 read=0 sha=0 crc=197 ckpt=22
+BENCH resume uihz=2 hash=crc32 check=full sectors=1024 result=ok bytes=24084
+48 us=3846993 kib_s=611.3
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH complete
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=1386616 requests=24 bytes=56448
+opt mode_us=156 calls=24 failed=0
+opt buffers_us=179830 other_us=424
+opt requests ok=24 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=1169518 max_us=70590
+opt read1 calls=24 bytes=56448
+opt read1 max_fad=63000 max_sectors=1
+opt read1 submit_us=504 submits=24
+opt read1 poll_us=485997 polls=141871
+opt read1 wait_us=94811 waits=525
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=588206
+opt read1 poll_n 141821/26/0/24/0
+opt read1 poll_ms 467/1/0/17/0
+opt read1 ok=24 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=36688 max_us=1627
+opt read2 calls=24 bytes=56448
+opt read2 max_fad=64023 max_sectors=1
+opt read2 submit_us=505 submits=24
+opt read2 poll_us=25689 polls=2453
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=10494
+opt read2 poll_n 2427/2/0/24/0
+opt read2 poll_ms 8/0/0/17/0
+opt read2 ok=24 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=3883236 requests=128 bytes=9633792
+opt mode_us=797 calls=128 failed=0
+opt buffers_us=224146 other_us=1415
+opt requests ok=128 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=3656878 max_us=127506
+opt read1 calls=128 bytes=9633792
+opt read1 max_fad=63000 max_sectors=32
+opt read1 submit_us=2797 submits=128
+opt read1 poll_us=3301365 polls=65504
+opt read1 wait_us=51202 waits=472
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=301514
+opt read1 poll_n 65113/15/0/128/248
+opt read1 poll_ms 225/0/0/93/2981
+opt read1 ok=128 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0002/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2457976 available~=14319240
+RAM sampled peak used/reserved=2457976
+Image+BSS=2237956 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14315520; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on

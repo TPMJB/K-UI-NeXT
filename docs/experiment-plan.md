@@ -371,6 +371,23 @@ carries the fix.
 
 **Trip 6a on the default build (2026-09-20; [evidence](evidence/t6a-pio-only-2026-09-20.json)).** DMA and the competing thread were skipped, as designed: they are in the experimental build only. The PIO points show 32 sectors beating 128 by 6% at FAD 45150 (1245 vs 1168 KiB/s), so the capture engine's command size is right. **Trip 1b was rejected** at `bench.cfg line 1: expected key=value` in both runs, so nothing was measured ([record](evidence/t1b-crc16-rejected-2026-09-20.json)); the loader now skips a UTF-8 byte-order mark and says what a bad line starts with.
 
+**Result, 2026-09-20** (two runs; [5b](evidence/t5b-capture-sampling-2026-09-20.json), [5c](evidence/t5c-capture-audio-path-2026-09-20.json)).
+
+**5b, sampled read-back.** Re-reading one 32-sector chunk costs **166.0 ms**, the same at every
+setting, against 102.4 ms to capture one. Measured time cost: 22.2% at
+`sample_readback=8`, 5.6% at 32, 1.3% at 128; the model
+(cost per sample / (chunk time x N)) reproduces those and gives 2.5% at 64 and 0.6% at 256. On a
+26.7-minute capture that is 0.3 minutes at N=128 and 0.7 at N=64. What it buys is small:
+at N=128 it re-reads 0.8% of the chunks, which catches a card that is failing systematically but
+verifies nothing. `resume_check=size` finished in 3.8 ms, and still cannot see a corrupted prefix.
+
+**5c, the audio code path.** At crc32 with no read-back it is +2.5% faster than the data path
+(722.5 against 704.9 KiB/s), matching the 2.8% EDC share of Trip 5a; every parts line shows
+`edc=0`. With SHA-256 on, the difference vanishes (-0.0%, -0.4%). **But FAD 63000 is a DATA
+track on this disc**, so this measured the audio path on data sectors and says nothing about how fast a
+real audio track reads; an audio-heavy disc (MDK2, 29 audio tracks) is still untested. The bench now
+warns when `capture_fad` is not inside a track of the configured `capture_type`.
+
 ### Trip 6: GD-ROM DMA, and what a second thread would see (`t6a-dma-probe.cfg`, ~2 min)
 
 **Experimental, and not in the default build**: it needs `make diagnostic KUI_EXPERIMENTAL=1` (see
@@ -603,6 +620,15 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   path was taken from `tools/` (it looked for `tools/docs/evidence/...`). Not a data problem: reproduced exactly, and
   the real loader and comparison pass on the hashes that were reported. The message now names the absolute path it
   looked for and says relative paths are taken from the current directory; a symbolic link is called a link.
+- **Two runs that measured the wrong thing, and said nothing (2026-09-20).** A Trip 5b run went out with the
+  K-UI boot CD still in the drive: a CD with no high-density area, so the capture section printed one skip line
+  and the run ended `BENCH complete`, which reads like success. The same evening, Trip 5c ran with
+  `capture_type=audio` at `capture_fad=63000`, which on that disc is inside a DATA track, so it measured the
+  audio code path on data sectors (useful, but not the question asked) with nothing in the log to say so. Two
+  fixes: `kui_bench_fad_note` (a pure function in the core, unit tested) warns before a long run when
+  `capture_fad` is not inside a track of the configured type or is off the disc entirely, and a bench that
+  measured nothing now ends `BENCH complete but NOTHING was measured` instead of `BENCH complete`.
+  **Lesson: a measurement that silently answers a different question is worse than one that fails.**
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.

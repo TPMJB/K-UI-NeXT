@@ -156,6 +156,7 @@ def check_capture_nolink(out):
 
 
 def check_capture(out):
+    check_capture_measured_something(out)
     # The bench opens the card itself, on the default transport a real capture uses.
     assert re.search(r"^RECONNECTS 1 LAST sci=0 crc=1$", out, re.M), out
     assert not matching(out, r"Mount failed|not connected")
@@ -189,7 +190,16 @@ def check_capture(out):
 
 
 def check_capture_noop(out):
-    assert "BENCH capture skipped: no readable disc" in out and "BENCH complete" in out
+    # sections=capture with no readable disc: this is the shape of the T5B run of 2026-09-20 that
+    # ended "BENCH complete" having measured nothing at all. It must now say so.
+    assert "BENCH capture skipped: no readable disc" in out
+    assert "BENCH complete but NOTHING was measured" in out
+    assert not matching(out, r"^BENCH capture uihz=")
+
+
+def check_capture_measured_something(out):
+    # The opposite guard: a section that DID measure must not carry the warning.
+    assert "NOTHING was measured" not in out and "BENCH complete" in out
 
 
 def sweep_lines(out):

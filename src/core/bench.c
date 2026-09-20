@@ -31,7 +31,9 @@ static void spin_us(uint64_t us) {
 
 /* One line per measurement, always the same columns, so two reports can be
  * compared side by side. kib_s carries one decimal. */
+static unsigned measurements;   /* so a run that measured nothing cannot report success quietly */
 static void result(const char *name, const char *detail, uint64_t bytes, uint64_t us) {
+    ++measurements;
     uint64_t tenths = us ? bytes * 10000000ull / (us * 1024ull) : 0;
     ops->log("BENCH %s %s bytes=%" PRIu64 " us=%" PRIu64 " kib_s=%" PRIu64 ".%" PRIu64,
         name, detail, bytes, us, tenths / 10, tenths % 10);
@@ -766,6 +768,7 @@ enum kui_bench_result kui_bench(const struct kui_bench_ops *o, const struct kui_
        !opt->sd_if_count || !opt->sd_crc_count || !opt->ui_count)
         return KUI_BENCH_FAILED;
     ops = o;
+    measurements = 0;
     kui_pattern(buffer, 0, sizeof(buffer));
     ops->log("BENCH: isolated measurements; each line is one component alone");
     snprintf(transport, sizeof(transport), "if=? crc=?");
@@ -791,6 +794,12 @@ enum kui_bench_result kui_bench(const struct kui_bench_ops *o, const struct kui_
     }
     if(o->set_ui) o->set_ui(o->ctx, KUI_OPT_UI_FULL);   /* the report save that follows is not a measurement */
     if(rc == KUI_BENCH_STOPPED) ops->log("BENCH stopped; lines already printed are valid");
-    ops->log("BENCH %s", rc == KUI_BENCH_COMPLETE ? "complete" : rc == KUI_BENCH_STOPPED ? "stopped" : "FAILED");
+    /* A run whose every section was skipped used to end with a bare "BENCH complete", which reads
+     * like success: sections=capture with no readable disc printed one skip line and stopped. */
+    if(rc == KUI_BENCH_COMPLETE && !measurements)
+        ops->log("BENCH complete but NOTHING was measured: every selected section was skipped "
+                 "(see the lines above; a capture or sweep section needs a readable disc)");
+    else ops->log("BENCH %s%s", rc == KUI_BENCH_COMPLETE ? "complete" : rc == KUI_BENCH_STOPPED ? "stopped" : "FAILED",
+        rc == KUI_BENCH_COMPLETE ? "" : "");
     return rc;
 }

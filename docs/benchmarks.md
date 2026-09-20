@@ -222,6 +222,11 @@ loop. With no other new keys in `bench.cfg` the bench runs the same sections in
 the same order as before and adds only the `BENCH cpu` and `BENCH lat` lines and
 the CRC16 lines in the hash section, described below.
 
+**Two guards on a mis-aimed run:** before a capture section the bench checks `capture_fad` against the
+disc's TOC and warns (`BENCH WARNING: ...`) if it is not inside a track of the configured `capture_type`,
+or is not on the disc at all; and a run in which every section was skipped ends
+`BENCH complete but NOTHING was measured` rather than `BENCH complete`.
+
 **Saving `bench.cfg`:** plain text, UTF-8 or ANSI, with LF or Windows (CRLF) line endings. A UTF-8 byte-order mark (some editors add one) is skipped; UTF-16 is rejected and named; a bad line is reported with what it starts with, as text and as bytes, and an unknown key is named.
 
 | Key | What it does |
