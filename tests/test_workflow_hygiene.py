@@ -80,5 +80,32 @@ class CompileStepLeavesTheTreeClean(unittest.TestCase):
         self.assertIn("*** [Makefile.dc:35", digest)
 
 
+class ExperimentalBuildIsOptIn(unittest.TestCase):
+    """The DMA probe must never be in an ordinary build, and must be reachable without the
+    "Run workflow" button: that button only exists when the workflow file is on the repository's
+    DEFAULT branch, and this repository's default branch carries no workflows at all."""
+
+    def setUp(self):
+        self.text = WORKFLOW.read_text()
+        self.flag = next(l for l in self.text.splitlines() if "KUI_EXPERIMENTAL:" in l)
+
+    def test_a_branch_name_can_turn_it_on(self):
+        self.assertIn("endsWith(github.ref_name, '-experimental')", self.flag)
+
+    def test_the_manual_button_still_works_where_it_exists(self):
+        self.assertIn("inputs.experimental", self.flag)
+        self.assertIn("experimental:", self.text)      # the workflow_dispatch input is declared
+
+    def test_ordinary_builds_get_nothing(self):
+        # The expression yields '' unless one of the two conditions holds, and the make line
+        # passes exactly that.
+        self.assertRegex(self.flag, r"&& '1' \|\| ''")
+        self.assertIn("make -k diagnostic BUILD_ID=\"${GITHUB_SHA:0:12}\" $KUI_EXPERIMENTAL_FLAG", self.text)
+
+    def test_the_artifacts_are_named_apart(self):
+        for name in ("diagnostic", "sd-update"):
+            self.assertIn(f"name: {name}" + "${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()

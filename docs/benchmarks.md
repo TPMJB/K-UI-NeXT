@@ -229,9 +229,15 @@ CRC16 candidates, and the capture engine at the four settings that matter), and
 setting, plus what the measured-but-unbuilt changes would be worth. Run it before and after a
 change. Lines it marks PROJECTED are arithmetic on measured rates, never an end-to-end run.
 
-**The experimental GD-ROM DMA probe** is not in normal builds. To get one: GitHub → Actions →
-"Diagnostic build" → "Run workflow", tick **experimental**. That build's artifacts are named
-`diagnostic-experimental` and `sd-update-experimental`; every push build is unaffected.
+**The experimental GD-ROM DMA probe** is not in normal builds. To get one, push a branch whose
+name ends in `-experimental`:
+
+    git checkout -b milestone/dma-experimental && git push -u origin milestone/dma-experimental
+
+Its artifacts are named `diagnostic-experimental` and `sd-update-experimental`; every other build
+is unaffected. Delete the branch when the experiment is over. (The workflow also accepts a manual
+run with the box ticked, but GitHub only shows that button when the workflow file exists on the
+repository's DEFAULT branch, which is not the case here.)
 
 **Two guards on a mis-aimed run:** before a capture section the bench checks `capture_fad` against the
 disc's TOC and warns (`BENCH WARNING: ...`) if it is not inside a track of the configured `capture_type`,

@@ -1,0 +1,108 @@
+diff --git a/.github/workflows/diagnostic.yml b/.github/workflows/diagnostic.yml
+index ee2f4a7..ecc11c5 100644
+--- a/.github/workflows/diagnostic.yml
++++ b/.github/workflows/diagnostic.yml
+@@ -14,6 +14,15 @@ on:
+ permissions:
+   contents: read
+ 
++# The EXPERIMENTAL GD-ROM DMA probe (Trip 6a) is never in an ordinary build. Two ways to ask for
++# one, and it is empty for every other build:
++#   - push a branch whose name ends in "-experimental" (e.g. milestone/dma-experimental), or
++#   - run the workflow by hand with the box ticked, which needs the workflow file to exist on the
++#     DEFAULT branch: it does not here, so the branch name is the way that works today.
++# Its artifacts are named diagnostic-experimental and sd-update-experimental.
++env:
++  KUI_EXPERIMENTAL: ${{ (inputs.experimental || endsWith(github.ref_name, '-experimental')) && '1' || '' }}
++
+ concurrency:
+   group: diagnostic-${{ github.ref }}
+   # Let the first expensive compiler build finish and save its cache. New
+@@ -70,9 +79,7 @@ jobs:
+       - name: Compile CD bootstrap and SD runtime
+         shell: bash
+         env:
+-          # Empty on every push and pull request, so ordinary builds are untouched. It is set only
+-          # when the box is ticked on a manual run (Actions -> Diagnostic build -> Run workflow).
+-          KUI_EXPERIMENTAL_FLAG: ${{ inputs.experimental && 'KUI_EXPERIMENTAL=1' || '' }}
++          KUI_EXPERIMENTAL_FLAG: ${{ env.KUI_EXPERIMENTAL != '' && 'KUI_EXPERIMENTAL=1' || '' }}
+         run: |
+           source .deps/kos/environ.sh
+           # -k keeps compiling after a failure, so one run lists every file the pinned compiler
+@@ -101,14 +108,14 @@ jobs:
+       - name: Upload diagnostic test artifact
+         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+         with:
+-          name: diagnostic${{ inputs.experimental && '-experimental' || '' }}
++          name: diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+           path: dist/
+           if-no-files-found: error
+           retention-days: 30
+       - name: Upload small SD update for existing bootstrap discs
+         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+         with:
+-          name: sd-update${{ inputs.experimental && '-experimental' || '' }}
++          name: sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+           path: dist/sd-update/
+           if-no-files-found: error
+           retention-days: 30
+diff --git a/docs/benchmarks.md b/docs/benchmarks.md
+index 11cf9f6..f58d1b7 100644
+--- a/docs/benchmarks.md
++++ b/docs/benchmarks.md
+@@ -229,9 +229,15 @@ CRC16 candidates, and the capture engine at the four settings that matter), and
+ setting, plus what the measured-but-unbuilt changes would be worth. Run it before and after a
+ change. Lines it marks PROJECTED are arithmetic on measured rates, never an end-to-end run.
+ 
+-**The experimental GD-ROM DMA probe** is not in normal builds. To get one: GitHub → Actions →
+-"Diagnostic build" → "Run workflow", tick **experimental**. That build's artifacts are named
+-`diagnostic-experimental` and `sd-update-experimental`; every push build is unaffected.
++**The experimental GD-ROM DMA probe** is not in normal builds. To get one, push a branch whose
++name ends in `-experimental`:
++
++    git checkout -b milestone/dma-experimental && git push -u origin milestone/dma-experimental
++
++Its artifacts are named `diagnostic-experimental` and `sd-update-experimental`; every other build
++is unaffected. Delete the branch when the experiment is over. (The workflow also accepts a manual
++run with the box ticked, but GitHub only shows that button when the workflow file exists on the
++repository's DEFAULT branch, which is not the case here.)
+ 
+ **Two guards on a mis-aimed run:** before a capture section the bench checks `capture_fad` against the
+ disc's TOC and warns (`BENCH WARNING: ...`) if it is not inside a track of the configured `capture_type`,
+diff --git a/tests/test_workflow_hygiene.py b/tests/test_workflow_hygiene.py
+index 3e58acc..bcc987b 100644
+--- a/tests/test_workflow_hygiene.py
++++ b/tests/test_workflow_hygiene.py
+@@ -80,5 +80,32 @@ class CompileStepLeavesTheTreeClean(unittest.TestCase):
+         self.assertIn("*** [Makefile.dc:35", digest)
+ 
+ 
++class ExperimentalBuildIsOptIn(unittest.TestCase):
++    """The DMA probe must never be in an ordinary build, and must be reachable without the
++    "Run workflow" button: that button only exists when the workflow file is on the repository's
++    DEFAULT branch, and this repository's default branch carries no workflows at all."""
++
++    def setUp(self):
++        self.text = WORKFLOW.read_text()
++        self.flag = next(l for l in self.text.splitlines() if "KUI_EXPERIMENTAL:" in l)
++
++    def test_a_branch_name_can_turn_it_on(self):
++        self.assertIn("endsWith(github.ref_name, '-experimental')", self.flag)
++
++    def test_the_manual_button_still_works_where_it_exists(self):
++        self.assertIn("inputs.experimental", self.flag)
++        self.assertIn("experimental:", self.text)      # the workflow_dispatch input is declared
++
++    def test_ordinary_builds_get_nothing(self):
++        # The expression yields '' unless one of the two conditions holds, and the make line
++        # passes exactly that.
++        self.assertRegex(self.flag, r"&& '1' \|\| ''")
++        self.assertIn("make -k diagnostic BUILD_ID=\"${GITHUB_SHA:0:12}\" $KUI_EXPERIMENTAL_FLAG", self.text)
++
++    def test_the_artifacts_are_named_apart(self):
++        for name in ("diagnostic", "sd-update"):
++            self.assertIn(f"name: {name}" + "${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}", self.text)
++
++
+ if __name__ == "__main__":
+     unittest.main()

@@ -14,6 +14,15 @@ on:
 permissions:
   contents: read
 
+# The EXPERIMENTAL GD-ROM DMA probe (Trip 6a) is never in an ordinary build. Two ways to ask for
+# one, and it is empty for every other build:
+#   - push a branch whose name ends in "-experimental" (e.g. milestone/dma-experimental), or
+#   - run the workflow by hand with the box ticked, which needs the workflow file to exist on the
+#     DEFAULT branch: it does not here, so the branch name is the way that works today.
+# Its artifacts are named diagnostic-experimental and sd-update-experimental.
+env:
+  KUI_EXPERIMENTAL: ${{ (inputs.experimental || endsWith(github.ref_name, '-experimental')) && '1' || '' }}
+
 concurrency:
   group: diagnostic-${{ github.ref }}
   # Let the first expensive compiler build finish and save its cache. New
@@ -70,9 +79,7 @@ jobs:
       - name: Compile CD bootstrap and SD runtime
         shell: bash
         env:
-          # Empty on every push and pull request, so ordinary builds are untouched. It is set only
-          # when the box is ticked on a manual run (Actions -> Diagnostic build -> Run workflow).
-          KUI_EXPERIMENTAL_FLAG: ${{ inputs.experimental && 'KUI_EXPERIMENTAL=1' || '' }}
+          KUI_EXPERIMENTAL_FLAG: ${{ env.KUI_EXPERIMENTAL != '' && 'KUI_EXPERIMENTAL=1' || '' }}
         run: |
           source .deps/kos/environ.sh
           # -k keeps compiling after a failure, so one run lists every file the pinned compiler
@@ -101,14 +108,14 @@ jobs:
       - name: Upload diagnostic test artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: diagnostic${{ inputs.experimental && '-experimental' || '' }}
+          name: diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
       - name: Upload small SD update for existing bootstrap discs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: sd-update${{ inputs.experimental && '-experimental' || '' }}
+          name: sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
           path: dist/sd-update/
           if-no-files-found: error
           retention-days: 30
