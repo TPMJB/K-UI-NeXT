@@ -1,0 +1,476 @@
+diff --git a/docs/evidence/t9-pipeline-overlap-2026-09-20.json b/docs/evidence/t9-pipeline-overlap-2026-09-20.json
+new file mode 100644
+index 0000000..461b452
+--- /dev/null
++++ b/docs/evidence/t9-pipeline-overlap-2026-09-20.json
+@@ -0,0 +1,169 @@
++{
++  "received_date": "2026-09-20",
++  "runtime_build": "9256c414c215 (experimental)",
++  "experiment": "Trip 9: a capture's inner loop (read a chunk, write it to the card, CRC32 it) measured three ways on the real drive and card: sequential PIO, sequential DMA, and DMA double-buffered so the drive fills the next chunk while the CPU writes and hashes this one. 4096 sectors at FAD 45150, two runs. No dump written.",
++  "inputs": [
++    {
++      "file": "T9_Diag.txt",
++      "kept_as": "t9-pipeline-overlap-2026-09-20.txt",
++      "bytes": 11956,
++      "sha256": "d46d6316882af1a95f7b1f2c7d2b8d48eb332505ff648ffb573ba8bb21466fd0"
++    }
++  ],
++  "config": {
++    "file": "docs/bench-cfgs/t9-pipeline.cfg",
++    "ui_hz": [
++      2
++    ],
++    "sections": [
++      "pipeline"
++    ],
++    "capture_fad": 45150,
++    "capture_sectors": 4096,
++    "chunk": 32
++  },
++  "hardware": {
++    "disc": "MDK2",
++    "sd": "exFAT, SCIF",
++    "note": "Image+BSS 2545892 -> 2697092 (+151 KB), the two 32-sector pipeline buffers, as designed."
++  },
++  "rows": {
++    "pio-sequential": {
++      "runs": [
++        {
++          "read_ms": 3472,
++          "write_ms": 8272,
++          "crc_ms": 756,
++          "crc32": "66f88083",
++          "bytes": 9633792,
++          "us": 12502128,
++          "kib_s": 752.5,
++          "wall_ms": 12586,
++          "worker_ms": 11825,
++          "ui_ms": 621,
++          "idle_ms": 140
++        },
++        {
++          "read_ms": 3398,
++          "write_ms": 8344,
++          "crc_ms": 745,
++          "crc32": "66f88083",
++          "bytes": 9633792,
++          "us": 12490169,
++          "kib_s": 753.2,
++          "wall_ms": 12588,
++          "worker_ms": 11834,
++          "ui_ms": 598,
++          "idle_ms": 156
++        }
++      ],
++      "mean_kib_s": 752.9,
++      "mean_read_ms": 3435,
++      "mean_write_ms": 8308,
++      "mean_crc_ms": 750,
++      "mean_idle_ms": 148
++    },
++    "dma-sequential": {
++      "runs": [
++        {
++          "read_ms": 2014,
++          "write_ms": 8389,
++          "crc_ms": 711,
++          "crc32": "66f88083",
++          "bytes": 9633792,
++          "us": 11116329,
++          "kib_s": 846.3,
++          "wall_ms": 11128,
++          "worker_ms": 8483,
++          "ui_ms": 644,
++          "idle_ms": 2001
++        },
++        {
++          "read_ms": 2025,
++          "write_ms": 8372,
++          "crc_ms": 716,
++          "crc32": "66f88083",
++          "bytes": 9633792,
++          "us": 11115304,
++          "kib_s": 846.4,
++          "wall_ms": 11126,
++          "worker_ms": 8508,
++          "ui_ms": 571,
++          "idle_ms": 2048
++        }
++      ],
++      "mean_kib_s": 846.3,
++      "mean_read_ms": 2020,
++      "mean_write_ms": 8380,
++      "mean_crc_ms": 714,
++      "mean_idle_ms": 2024
++    },
++    "dma-overlapped": {
++      "runs": [
++        {
++          "read_ms": 148,
++          "write_ms": 8388,
++          "crc_ms": 749,
++          "crc32": "66f88083",
++          "bytes": 9633792,
++          "us": 9309178,
++          "kib_s": 1010.6,
++          "wall_ms": 9329,
++          "worker_ms": 8580,
++          "ui_ms": 491,
++          "idle_ms": 259
++        },
++        {
++          "read_ms": 158,
++          "write_ms": 8406,
++          "crc_ms": 736,
++          "crc32": "66f88083",
++          "bytes": 9633792,
++          "us": 9324329,
++          "kib_s": 1008.9,
++          "wall_ms": 9344,
++          "worker_ms": 8588,
++          "ui_ms": 496,
++          "idle_ms": 260
++        }
++      ],
++      "mean_kib_s": 1009.8,
++      "mean_read_ms": 153,
++      "mean_write_ms": 8397,
++      "mean_crc_ms": 742,
++      "mean_idle_ms": 260
++    }
++  },
++  "correctness": {
++    "crc32_values": [
++      "66f88083"
++    ],
++    "identical": true,
++    "meaning": "All three paths CRC32 the same 9,633,792 bytes. One value across six rows means the overlapped path returned exactly the bytes the sequential paths did."
++  },
++  "derived": {
++    "read_time_hidden_pct": 92.4,
++    "overlapped_wall_vs_floor_pct": 1.9,
++    "gain_vs_pio_pct": 34.1,
++    "gain_vs_sequential_dma_pct": 19.3,
++    "projection": {
++      "t7_today_min": 26.7,
++      "with_overlap_min": 19.8,
++      "with_overlap_and_faster_crcs_min": 17.7,
++      "method": "T7's disc time scaled by the fraction of read time the overlap left behind, the rest unchanged. A projection, not a capture."
++    },
++    "conclusions": [
++      "The overlap works on hardware: 92.4% of the DMA read time disappears behind the SD write (2020 ms to 153 ms), and the overlapped run lands 1.9% above the floor of write+CRC32 alone. There is almost nothing left to recover on the read side.",
++      "Rate: 752.9 KiB/s sequential PIO, 846.3 sequential DMA, 1009.8 overlapped: 34.1% over what the engine does today.",
++      "The bytes are identical: one CRC32 (66f88083) across all six rows.",
++      "The CPU census shows where the gain comes from: sequential DMA leaves the worker idle 2024 ms while the drive works; overlapped leaves only 260 ms, having spent the rest writing.",
++      "Sequential DMA alone is already 12.4% faster than PIO, because a DMA read of buffered data costs less wall time than pulling the same bytes through the CPU.",
++      "Projected onto the real T7 capture: 26.7 minutes becomes about 19.8, or about 17.7 with the measured CRC16 and CRC32 replacements as well."
++    ]
++  },
++  "limitations": [
++    "The pipeline is not the capture engine: it has no EDC check, no checkpoints, no SHA-256, no retry path and no resume. The engine still reads with PIO and is unchanged.",
++    "One drive, one disc, one card, two runs, inner radius only.",
++    "A real overlapped engine cannot overlap the first read or the last write, and must keep checkpointing, cancellation and retries correct at every interleaving."
++  ]
++}
+diff --git a/docs/evidence/t9-pipeline-overlap-2026-09-20.txt b/docs/evidence/t9-pipeline-overlap-2026-09-20.txt
+new file mode 100644
+index 0000000..0ecdbf6
+--- /dev/null
++++ b/docs/evidence/t9-pipeline-overlap-2026-09-20.txt
+@@ -0,0 +1,258 @@
++K-UI SD runtime 9256c414c215
++Log truncated: no
++Report trigger: manual
++Capture result: see operation log
++Running SD runtime build 9256c414c215
++Video: 640x480 NTSC interlaced, buffered
++Diagnostic code and fonts are loaded entirely in RAM.
++Replace boot CD with a known-good retail GD-ROM; close lid.
++Diagnostics page: A disc samples; X SD test; Y save log.
++Use a spare test card. No formatting; existing files preserved.
++Capture page: A new dump; X resume latest matching disc; Y verify.
++Left/Right switches capture/diagnostics. B stops and checkpoints.
++New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
++Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KU
++I/).
++Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change th
++em.
++Capture/Resume/Verify auto-save a report after ending. Wait for READY.
++R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
++The screen redraws 2x a second while working, which frees CPU (ui_hz=full: o
++ff).
++mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=2 sections=pipeline
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=both end_readback=on resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=45150
++OPTIONS note=T9 pipeline overlap. card=<model> disc=<title>
++CMD 24 FAILED
++  sense=6/40 size=10 ATA=0
++LOW TOC first=41010000 last=01020000 end=01003bad
++  T01 ctrl=4 start=150 next=14751
++  T02 ctrl=0 start=14751 next=15277
++HIGH TOC first=41030000 last=411f0000 end=410861b4
++  T03 ctrl=4 start=45150 next=52440
++  T04 ctrl=0 start=52440 next=74365
++  T05 ctrl=0 start=74365 next=94869
++  T06 ctrl=0 start=94869 next=115179
++  T07 ctrl=0 start=115179 next=134728
++  T08 ctrl=0 start=134728 next=154770
++  T09 ctrl=0 start=154770 next=175115
++  T10 ctrl=0 start=175115 next=194021
++  T11 ctrl=0 start=194021 next=213613
++  T12 ctrl=0 start=213613 next=235268
++  T13 ctrl=0 start=235268 next=253844
++  T14 ctrl=0 start=253844 next=278526
++  T15 ctrl=0 start=278526 next=298167
++  T16 ctrl=0 start=298167 next=314259
++  T17 ctrl=0 start=314259 next=331123
++  T18 ctrl=0 start=331123 next=349624
++  T19 ctrl=0 start=349624 next=368357
++  T20 ctrl=0 start=368357 next=373197
++  T21 ctrl=0 start=373197 next=378099
++  T22 ctrl=0 start=378099 next=382778
++  T23 ctrl=0 start=382778 next=387562
++  T24 ctrl=0 start=387562 next=396538
++  T25 ctrl=0 start=396538 next=401038
++  T26 ctrl=0 start=401038 next=402698
++  T27 ctrl=0 start=402698 next=416725
++  T28 ctrl=0 start=416725 next=420202
++  T29 ctrl=0 start=420202 next=425104
++  T30 ctrl=0 start=425104 next=429648
++  T31 ctrl=4 start=429648 next=549300
++BENCH: isolated measurements; each line is one component alone
++BENCH pass 1/1 uihz=2
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH pipeline fad=45150 sectors=4096 chunk=32: a capture's inner loop, read
+++write+crc32
++BENCH pipeline uihz=2 pio-sequential chunk=32 read_ms=3472 write_ms=8272 crc
++_ms=756 crc32=66f88083 bytes=9633792 us=12502128 kib_s=752.5
++BENCH cpu pipeline pio-sequential wall=12586 wk=11825 ui=621 oth=140 ui_pct=
++4.9
++BENCH pipeline uihz=2 dma-sequential chunk=32 read_ms=2014 write_ms=8389 crc
++_ms=711 crc32=66f88083 bytes=9633792 us=11116329 kib_s=846.3
++BENCH cpu pipeline dma-sequential wall=11128 wk=8483 ui=644 oth=2001 ui_pct=
++5.7
++BENCH pipeline uihz=2 dma-overlapped chunk=32 read_ms=148 write_ms=8388 crc_
++ms=749 crc32=66f88083 bytes=9633792 us=9309178 kib_s=1010.6
++BENCH cpu pipeline dma-overlapped wall=9329 wk=8580 ui=491 oth=259 ui_pct=5.
++2
++BENCH complete
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0001/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=2 sections=pipeline
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=both end_readback=on resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=45150
++OPTIONS note=T9 pipeline overlap. card=<model> disc=<title>
++LOW TOC first=41010000 last=01020000 end=01003bad
++  T01 ctrl=4 start=150 next=14751
++  T02 ctrl=0 start=14751 next=15277
++HIGH TOC first=41030000 last=411f0000 end=410861b4
++  T03 ctrl=4 start=45150 next=52440
++  T04 ctrl=0 start=52440 next=74365
++  T05 ctrl=0 start=74365 next=94869
++  T06 ctrl=0 start=94869 next=115179
++  T07 ctrl=0 start=115179 next=134728
++  T08 ctrl=0 start=134728 next=154770
++  T09 ctrl=0 start=154770 next=175115
++  T10 ctrl=0 start=175115 next=194021
++  T11 ctrl=0 start=194021 next=213613
++  T12 ctrl=0 start=213613 next=235268
++  T13 ctrl=0 start=235268 next=253844
++  T14 ctrl=0 start=253844 next=278526
++  T15 ctrl=0 start=278526 next=298167
++  T16 ctrl=0 start=298167 next=314259
++  T17 ctrl=0 start=314259 next=331123
++  T18 ctrl=0 start=331123 next=349624
++  T19 ctrl=0 start=349624 next=368357
++  T20 ctrl=0 start=368357 next=373197
++  T21 ctrl=0 start=373197 next=378099
++  T22 ctrl=0 start=378099 next=382778
++  T23 ctrl=0 start=382778 next=387562
++  T24 ctrl=0 start=387562 next=396538
++  T25 ctrl=0 start=396538 next=401038
++  T26 ctrl=0 start=401038 next=402698
++  T27 ctrl=0 start=402698 next=416725
++  T28 ctrl=0 start=416725 next=420202
++  T29 ctrl=0 start=420202 next=425104
++  T30 ctrl=0 start=425104 next=429648
++  T31 ctrl=4 start=429648 next=549300
++BENCH: isolated measurements; each line is one component alone
++BENCH pass 1/1 uihz=2
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH pipeline fad=45150 sectors=4096 chunk=32: a capture's inner loop, read
+++write+crc32
++BENCH pipeline uihz=2 pio-sequential chunk=32 read_ms=3398 write_ms=8344 crc
++_ms=745 crc32=66f88083 bytes=9633792 us=12490169 kib_s=753.2
++BENCH cpu pipeline pio-sequential wall=12588 wk=11834 ui=598 oth=156 ui_pct=
++4.7
++BENCH pipeline uihz=2 dma-sequential chunk=32 read_ms=2025 write_ms=8372 crc
++_ms=716 crc32=66f88083 bytes=9633792 us=11115304 kib_s=846.4
++BENCH cpu pipeline dma-sequential wall=11126 wk=8508 ui=571 oth=2048 ui_pct=
++5.1
++BENCH pipeline uihz=2 dma-overlapped chunk=32 read_ms=158 write_ms=8406 crc_
++ms=736 crc32=66f88083 bytes=9633792 us=9324329 kib_s=1008.9
++BENCH cpu pipeline dma-overlapped wall=9344 wk=8588 ui=496 oth=260 ui_pct=5.
++3
++BENCH complete
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0002/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2917112 available~=13860104
++RAM sampled peak used/reserved=2917112
++Image+BSS=2697092 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92284
++Heap system bytes=92284 in use bytes=88948 free bytes=3336
++Unclaimed main RAM=13856768; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
+diff --git a/docs/experiment-plan.md b/docs/experiment-plan.md
+index ddd0d79..2ccf290 100644
+--- a/docs/experiment-plan.md
++++ b/docs/experiment-plan.md
+@@ -442,6 +442,32 @@ the transfer. This trip finds out three things at once, on the real drive:
+   iterations/ms, and run 2's UI census differs); the worker-CPU milliseconds are the solid number
+   and the two runs agree on them.
+ 
++### Trip 9: does the overlap actually work? (`t9-pipeline.cfg`, ~3 min, experimental build)
++
++A capture's inner loop - read a chunk, write it to the card, CRC32 it - three ways on the real
++drive and card, writing no dump. **Result, 2026-09-20, two runs**
++([evidence](evidence/t9-pipeline-overlap-2026-09-20.json)):
++
++| row | KiB/s | read ms | write ms | crc ms | worker idle ms |
++|---|---|---|---|---|---|
++| pio-sequential (today's engine) | 752.9 | 3435 | 8308 | 750 | 148 |
++| dma-sequential | 846.3 | 2020 | 8380 | 714 | 2024 |
++| dma-overlapped | **1009.8** | 153 | 8397 | 742 | 260 |
++
++- **92.4% of the read time disappears behind the SD write**, and the overlapped row lands
++  only **1.9% above the floor** of write plus CRC32 alone. There is almost nothing left on the
++  read side to recover.
++- **34.1% faster than what the engine does today**, 19.3% over sequential DMA.
++- **The bytes are identical**: one CRC32 (`66f88083`) across all six rows.
++- The census says where it comes from: sequential DMA leaves the worker idle 2024 ms while
++  the drive works; overlapped leaves 260 ms, having spent the rest writing.
++- Sequential DMA alone is already 12.4% faster than PIO: a DMA read of buffered data costs
++  less wall time than pulling the same bytes through the CPU.
++- **Projected onto the real T7 capture: 26.7 minutes becomes about 19.8**, or about
++  17.7 with the CRC16 and CRC32 replacements too.
++- What this is NOT: the pipeline has no EDC check, no checkpoints, no SHA-256, no retries and no
++  resume. It measures the loop, not the engine.
++
+ **Next, and not yet built: an overlapped capture.** The engine still reads with PIO; nothing in a
+ capture changed. Realising this means double-buffering `kui_capture`: start the DMA read of chunk
+ N+1, write and hash chunk N while it runs, then swap. The risk is not the DMA, which is now

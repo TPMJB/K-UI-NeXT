@@ -442,6 +442,32 @@ the transfer. This trip finds out three things at once, on the real drive:
   iterations/ms, and run 2's UI census differs); the worker-CPU milliseconds are the solid number
   and the two runs agree on them.
 
+### Trip 9: does the overlap actually work? (`t9-pipeline.cfg`, ~3 min, experimental build)
+
+A capture's inner loop - read a chunk, write it to the card, CRC32 it - three ways on the real
+drive and card, writing no dump. **Result, 2026-09-20, two runs**
+([evidence](evidence/t9-pipeline-overlap-2026-09-20.json)):
+
+| row | KiB/s | read ms | write ms | crc ms | worker idle ms |
+|---|---|---|---|---|---|
+| pio-sequential (today's engine) | 752.9 | 3435 | 8308 | 750 | 148 |
+| dma-sequential | 846.3 | 2020 | 8380 | 714 | 2024 |
+| dma-overlapped | **1009.8** | 153 | 8397 | 742 | 260 |
+
+- **92.4% of the read time disappears behind the SD write**, and the overlapped row lands
+  only **1.9% above the floor** of write plus CRC32 alone. There is almost nothing left on the
+  read side to recover.
+- **34.1% faster than what the engine does today**, 19.3% over sequential DMA.
+- **The bytes are identical**: one CRC32 (`66f88083`) across all six rows.
+- The census says where it comes from: sequential DMA leaves the worker idle 2024 ms while
+  the drive works; overlapped leaves 260 ms, having spent the rest writing.
+- Sequential DMA alone is already 12.4% faster than PIO: a DMA read of buffered data costs
+  less wall time than pulling the same bytes through the CPU.
+- **Projected onto the real T7 capture: 26.7 minutes becomes about 19.8**, or about
+  17.7 with the CRC16 and CRC32 replacements too.
+- What this is NOT: the pipeline has no EDC check, no checkpoints, no SHA-256, no retries and no
+  resume. It measures the loop, not the engine.
+
 **Next, and not yet built: an overlapped capture.** The engine still reads with PIO; nothing in a
 capture changed. Realising this means double-buffering `kui_capture`: start the DMA read of chunk
 N+1, write and hash chunk N while it runs, then swap. The risk is not the DMA, which is now
