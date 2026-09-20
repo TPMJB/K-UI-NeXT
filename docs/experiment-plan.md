@@ -541,28 +541,27 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   caller's `FATFS` before it tries, and keeps it after a failure; every caller then
   returns and drops the object. `kui_mount`, the only registration site, now unregisters
   on failure. The `mount-fail` scenario trips AddressSanitizer without it.
-- **KOS's cache helpers and the CI compiler (2026-09-20).** The DMA probe called KOS's
-  `arch_dcache_purge_range`, and the CI's GCC 15.2 rejected it: `asm operand has impossible
-  constraints` at `arch/cache.h:126`. The per-line helper is one inline asm with eight memory
-  operands plus a register, which the allocator could not satisfy once it was inlined into a
-  function with many live values. It compiled on GCC 13.3 and 14.2 at every optimisation level and
-  under artificial register pressure, so nothing available on the PC could see it (those are Ubuntu's
-  `sh4-linux-gnu` cross-compilers, not the CI's bare-metal `sh-elf` 15.2, and they lack `-m4-single`).
-  The probe now uses its own one-register `ocbp`/`ocbi` loops, and `tests/test_asm_audit.py` fails if
-  any inline asm under `src/` has more than three operands or KOS's cache header reaches the console
-  build. **What "compiles clean" means here:** clean on the local cross-compilers. The CI toolchain
-  is the arbiter, so the CI now runs `make -k`: one run lists every file it rejects.
-- **A second failed build, and the response (2026-09-20).** After the cache-helper fix the CI
-  failed again. I could not read that log (GitHub's API refuses anonymous log downloads and was
-  rate-limited from here), and I could not reproduce either failure: GCC 15.2.0, the CI's exact
-  version, with KOS's flags (`-fno-PIC -fno-PIE -fomit-frame-pointer`) compiles every source cleanly on
-  the PC, including the v4 `disc.c` the CI rejected. What differs is the console toolchain itself
-  (`sh-elf`, `-m4-single`, newlib) which cannot be installed here. So the gap between "clean on the PC"
-  and "clean on the CI" is real and will recur. Two structural responses: (1) experimental,
-  never-run-on-hardware code (the DMA probe, the competing thread) is compiled only with
-  `KUI_EXPERIMENTAL=1`, so it cannot break the build the capture engine ships in; (2) the CI now
-  prints its errors in one block at the END of the log (`BUILD FAILED: THE ERRORS, IN ONE PLACE`), so
-  the part that is easy to copy is the part that matters.
+- **The console is not `__SH4__` (2026-09-20; two failed CI builds).** The DMA probe called KOS's
+  `arch_dcache_purge_range` and the CI compiler (GCC 15.2, `sh-elf`, `-m4-single`) rejected it: `cannot find a
+  register in class GENERAL_REGS while reloading asm`, at `arch/cache.h:126`. That helper is one inline asm with
+  eight memory operands plus a register, and the allocator could not satisfy it once inlined into the probe. It
+  compiles on every compiler available on a PC (Ubuntu's `sh4-linux-gnu` GCC 13.3, 14.2 and 15.2.0), so it can
+  only be avoided, never detected here. My first fix (one-register `ocbp`/`ocbi` loops, chosen with
+  `#ifdef __SH4__`) **did nothing on the real build**: GCC defines a different macro for each SH-4 mode,
+  `__SH4__` only for plain `-m4`, and KOS builds with `-m4-single`, which defines `__SH4_SINGLE__`. So the test was
+  false there, the host-test branch was compiled, and KOS's helper came straight back. The CI log showed it in its
+  first line (`from src/dreamcast/disc.c:4`, a host-only include). The same wrong test would also have left the
+  DMA buffer's address unmasked: a hardware bug in code that had never run. Now there is one `KUI_ON_CONSOLE` in
+  `platform.h` (true for every SH-4 macro and for KOS's `_arch_dreamcast`), raw toolchain macros
+  are forbidden anywhere else, and `tests/test_asm_audit.py` runs the preprocessor over `disc.c` under each macro
+  set and requires the console branch for every one; with the bug put back, it fails. The PC compile checks now
+  also run with the CI's macro set (`-U__SH4__ -D__SH4_SINGLE__`). **Lesson: the CI log is the source of truth
+  about the toolchain; an assumption about it is not.** In that failed run every file after `disc.c` compiled
+  clean (`crc16.c`, `options.c`, both `bench.c`), so this was the only defect.
+- **Experimental code is opt-in, and the CI reports its errors at the end of the log.** The DMA probe and the
+  competing thread compile only with `make diagnostic KUI_EXPERIMENTAL=1`, so they cannot break the build the
+  capture engine ships in. The CI runs `make -k` and, after a failure, prints `BUILD FAILED: THE ERRORS, IN ONE
+  PLACE`.
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.

@@ -377,7 +377,8 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
 
 /* The GD-ROM DMA probe is EXPERIMENTAL and opt-in at build time: `make diagnostic
  * KUI_EXPERIMENTAL=1`. It is bench-only hardware probing that has never run on a console and
- * that this project's CI compiler has already rejected once, so it is not compiled into the
+ * that failed to build twice on this project's CI (register allocation in KOS's cache helper, then
+ * my own wrong macro test that let it back in), so it is not compiled into the
  * default build: nothing experimental may be able to break the build the capture engine ships
  * in. The host tests build it (test-disc is compiled with the define). */
 #ifdef KUI_EXPERIMENTAL_DMA
@@ -389,10 +390,10 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
  * a function with many live values, as the probe is. Nothing here needs that generality, and a
  * one-register asm cannot fail that way. Kept out of line so the asm never sees the probe's
  * register pressure at all. The host tests substitute KOS's header with a recording double. */
-#ifndef __SH4__
+#ifndef KUI_ON_CONSOLE
 #include <arch/cache.h>   /* host tests only: a recording double. The console does not use KOS's header here. */
 #endif
-#ifdef __SH4__
+#ifdef KUI_ON_CONSOLE
 __attribute__((noinline)) static void cache_purge(uintptr_t start,size_t bytes) {
     uintptr_t end=start+bytes;
     for(start&=~(uintptr_t)31;start<end;start+=32) __asm__ __volatile__("ocbp @%0"::"r"(start):"memory");
@@ -435,7 +436,7 @@ static _Alignas(32) struct {
 } probe_dma_raw;
 static bool dma_broken;
 static void *dma_address(void *p) {
-#ifdef __SH4__
+#ifdef KUI_ON_CONSOLE
     return (void *)((uintptr_t)p & 0x1fffffffu);   /* the DMA engine addresses physical memory */
 #else
     return p;

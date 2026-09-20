@@ -1,19 +1,25 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Inline asm in this tree must stay simple.
+"""Guards for the two ways low-level code has already broken the console build.
 
-Why this exists: the CI's GCC 15.2 rejected KOS's cache helper arch_dcache_purge_line
-("asm operand has impossible constraints"): one inline asm with EIGHT memory operands plus a
-register, inlined into a function with many live values. The same source compiled on GCC 13
-and 14, so no host build and no available cross-compiler can catch it. The only defence is
-not to write such asm, and to keep KOS's heavy inline helpers out of busy functions.
+1. Inline asm must stay simple. The CI's GCC 15.2 (sh-elf, -m4-single) rejected KOS's cache helper
+   arch_dcache_purge_line ("cannot find a register in class GENERAL_REGS while reloading asm"): one
+   asm with EIGHT memory operands plus a register, inlined into a busy function. It compiled on every
+   compiler available on a PC, so it can only be avoided, not detected: every asm statement under
+   src/ and include/ has at most MAX_OPERANDS operands.
 
-The rules, checked on every `make test`:
-  1. every inline asm statement under src/ and include/ has at most MAX_OPERANDS operands;
-  2. KOS's <arch/cache.h> is included only under `#ifndef __SH4__` (the host tests' double).
-This does not prove a statement compiles on the console toolchain; it stops the known way of
+2. The console is not `__SH4__`. GCC defines a different macro for each SH-4 mode (__SH4__ only for
+   plain -m4; __SH4_SINGLE__ for -m4-single, which is how KOS builds). A test for __SH4__ alone is
+   false on the real build, so the "console" branch was silently skipped, the host-test branch ran,
+   and KOS's cache header came back in (the second CI failure, which my first fix and my first guard
+   test both got backwards). The raw macros may now appear only in platform.h, which turns them into
+   KUI_ON_CONSOLE, and the preprocessor is run over src/dreamcast/disc.c under EACH SH-4 macro set the
+   toolchain can produce: the console branch must be taken for every one of them.
+This does not prove anything compiles on the console toolchain; it stops these two known ways of
 failing there from coming back."""
 import pathlib
 import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -83,6 +89,26 @@ KOS_PURGE_LINE = '''__asm__ __volatile__("ocbp @%8\\n\\t"
              : "r" (ptr)
     );'''
 
+# Every way the toolchain says "this is an SH-4 / the Dreamcast": one macro per mode, plus KOS's own.
+CONSOLE_MACRO_SETS = {
+    "-m4 (plain)":               ["-D__SH4__"],
+    "-m4-single (how KOS builds)": ["-D__SH4_SINGLE__"],
+    "-m4-single-only":           ["-D__SH4_SINGLE_ONLY__"],
+    "-m4-nofpu":                 ["-D__SH4_NOFPU__"],
+    "KOS's -D_arch_dreamcast":   ["-D_arch_dreamcast=1"],
+    "-D__DREAMCAST__":           ["-D__DREAMCAST__"],
+    "all of them":               ["-D__SH4__", "-D__SH4_SINGLE__", "-D_arch_dreamcast=1", "-D__DREAMCAST__"],
+}
+
+
+def preprocess_disc(*macros):
+    cc = shutil.which("cc") or shutil.which("gcc")
+    if not cc or not (ROOT / ".deps/fatfs/source/ff.h").exists():
+        raise unittest.SkipTest("needs a C compiler and FatFs (make test fetches it)")
+    cmd = [cc, "-E", "-P", "-std=c11", "-Iinclude", "-Isrc/dreamcast", "-Itests/stubs", "-I.deps/fatfs/source",
+           "-DKUI_EXPERIMENTAL_DMA=1", *macros, "src/dreamcast/disc.c"]
+    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=True).stdout
+
 
 class AsmAudit(unittest.TestCase):
     def test_the_audit_would_have_caught_the_asm_that_failed(self):
@@ -104,13 +130,30 @@ class AsmAudit(unittest.TestCase):
     def test_tree_has_only_simple_inline_asm(self):
         self.assertEqual(audit(ROOT), [], "inline asm with too many operands (see this file's docstring)")
 
-    def test_kos_cache_header_is_host_only(self):
-        for path in sorted((ROOT / "src").glob("**/*.[ch]")):
-            lines = path.read_text().splitlines()
-            for n, line in enumerate(lines):
-                if re.match(r"\s*#\s*include\s*<arch/cache\.h>", line):
-                    self.assertTrue(any("#ifndef __SH4__" in l for l in lines[max(0, n - 2):n]),
-                                    f"{path.name}:{n + 1} includes KOS's cache header on the console build")
+
+class ConsoleMacro(unittest.TestCase):
+    def test_raw_sh4_macros_appear_only_in_platform_h(self):
+        for path in sorted(list((ROOT / "src").glob("**/*.[ch]")) + list((ROOT / "include").glob("**/*.h"))):
+            if path.name == "platform.h": continue
+            for n, line in enumerate(strip_comments(path.read_text()).splitlines(), 1):
+                self.assertNotRegex(line, r"__SH4|__sh__|_arch_dreamcast|__DREAMCAST__",
+                                    f"{path.name}:{n}: use KUI_ON_CONSOLE, not a raw toolchain macro (see docstring)")
+
+    def test_every_sh4_mode_takes_the_console_branch(self):
+        for name, macros in CONSOLE_MACRO_SETS.items():
+            out = preprocess_disc(*macros)
+            self.assertIn("kui_disc_read_probe_dma", out, name)               # the block really is in the output
+            self.assertIn('"ocbp @%0"', out, f"{name}: the console cache asm is missing")
+            self.assertIn('"ocbi @%0"', out, name)
+            self.assertNotIn("arch_dcache", out, f"{name}: KOS's cache helper (or the host double) got in")
+            self.assertIn("0x1fffffffu", out, f"{name}: the DMA buffer's physical-address mask is missing")
+
+    def test_a_host_build_takes_the_host_branch(self):
+        out = preprocess_disc()
+        self.assertIn("kui_disc_read_probe_dma", out)
+        self.assertIn("arch_dcache_purge_range", out)     # the recording double the disc tests rely on
+        self.assertNotIn("ocbp", out)
+        self.assertNotIn("0x1fffffffu", out)
 
 
 if __name__ == "__main__":

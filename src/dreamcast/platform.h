@@ -4,6 +4,17 @@
 #include "kui/probe.h"
 #include "kui/capture.h"
 #include "kui/bench.h"
+
+/* True when compiling for the Dreamcast's SH-4. GCC defines a DIFFERENT macro for each SH-4 mode:
+ * __SH4__ only for plain -m4, __SH4_SINGLE__ for -m4-single (which is how KOS builds), plus
+ * __SH4_SINGLE_ONLY__ and __SH4_NOFPU__. Testing __SH4__ alone is false on the real build, and the
+ * code silently took the host-test branch there (twice in CI: it pulled KOS's cache header in again
+ * and failed to compile). KOS's own -D_arch_dreamcast=1 is the most direct signal. This is the ONLY
+ * place the raw macros may appear (tests/test_asm_audit.py enforces it). */
+#if defined(_arch_dreamcast) || defined(__DREAMCAST__) || defined(__SH4__) || defined(__SH4_SINGLE__) || \
+    defined(__SH4_SINGLE_ONLY__) || defined(__SH4_NOFPU__)
+#define KUI_ON_CONSOLE 1
+#endif
 void kui_log(const char *format, ...);
 bool kui_cancelled(void);
 /* Transport for the NEXT kui_sd_connect(): use_sci picks KOS SD_IF_SCI

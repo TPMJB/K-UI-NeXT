@@ -274,7 +274,7 @@ value; on `MISMATCH` ignore the timings. This is what decides whether patching K
 **The GD-ROM DMA probe and the competing thread** (`docs/bench-cfgs/t6a-dma-probe.cfg`).
 `sweep_mode=dma` reads raw sectors with the drive's DMA command instead of PIO.
 It is **experimental and bench-only**; the capture engine never uses it. **It is not in the
-default build**: it has never run on a console and the CI compiler rejected it once, so it
+default build**: it has never run on a console and it failed to build twice on the CI, so it
 compiles only with `make diagnostic KUI_EXPERIMENTAL=1` (add `KUI_EXPERIMENTAL=1` to the `make`
 line in `.github/workflows/diagnostic.yml`). Without it the bench prints `BENCH dma skipped: this
 platform has no GD-ROM DMA probe` and `BENCH spin skipped`, and everything else runs as usual.
