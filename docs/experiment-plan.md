@@ -414,6 +414,40 @@ the transfer. This trip finds out three things at once, on the real drive:
 | `dma check ... FAILED` | DMA never completed by polling | Reboot. Next step is an interrupt-driven variant (install KOS's `asic_evt` handler, wait on a semaphore) |
 | `dma check ... MISMATCH` | DMA returns different bytes: a cache, alignment or protocol problem | Do not use DMA; `reported_bytes` in that line is the first clue |
 
+**Result, 2026-09-20** (experimental build `f54c8cc44068`; two runs; [evidence](evidence/t6a-dma-probe-2026-09-20.json)).
+**It works, and it is the outcome the decision table called the best case.**
+
+| chunk | mode | competing thread | rd KiB/s | worker CPU | CPU used |
+|---|---|---|---|---|---|
+| 32 | PIO | no | 1232.2 | 3756 ms | 98.0% |
+| 32 | DMA | no | 1185.5 | 34 ms | 0.9% |
+| 128 | PIO | no | 1156.6 | 3971 ms | 97.6% |
+| 128 | DMA | no | 1158.4 | 18 ms | 0.4% |
+| 128 | PIO | yes | 1032.0 | 1538 ms | 33.3% |
+| 128 | DMA | yes | 1154.4 | 19 ms | 0.5% |
+
+- **The bytes are identical.** Both runs' `dma check` passed with the same CRC32 as PIO, and all 8
+  `BENCH verify` lines matched the PIO reference at both read sizes.
+- **DMA costs the CPU nothing** (0.4-0.9% against PIO's 97.6-98.0%) and is **not slower** at the size a
+  capture uses (1158.4 against 1156.6 KiB/s at chunk 128), even though the probe polls with sleeps and so
+  carries up to a 10 ms tick of completion latency.
+- **A competing thread costs a PIO read 10.8-12.7% but costs a DMA read nothing.** That settles row 4
+  of the table in section 6: a plain thread split with PIO pays for itself, DMA does not.
+- **Projected: 26.7 minutes becomes about 19.4 (27.6% faster), or about 17.3 with the CRC16 and CRC32
+  replacements too.** That is `max(CPU work, disc)` instead of their sum, an ideal bound: real
+  double-buffering cannot overlap the first read or the last write and is not free to switch.
+- Cost of the probe itself: +308 KB of BSS for its static buffer. A production double buffer needs
+  two chunk buffers (147 KB at chunk 32), not that.
+- The `free=` percentages are soft (the spin calibration differed between runs, 724 against 995
+  iterations/ms, and run 2's UI census differs); the worker-CPU milliseconds are the solid number
+  and the two runs agree on them.
+
+**Next, and not yet built: an overlapped capture.** The engine still reads with PIO; nothing in a
+capture changed. Realising this means double-buffering `kui_capture`: start the DMA read of chunk
+N+1, write and hash chunk N while it runs, then swap. The risk is not the DMA, which is now
+measured, but the loop around it: checkpoint ordering, cancellation, the retry path and the guard
+bytes all have to keep working at every interleaving.
+
 Caveats that shape how to read it: the DMA probe **polls** rather than taking the
 interrupt (this runtime never starts KOS's CD-ROM subsystem, so nothing installs
 the handler), so completion is noticed up to one 10 ms tick late, about 8% at chunk
@@ -483,7 +517,7 @@ only if the hypothesis they depend on does.
 | 1 | **UI redraw cap, now the default (2 Hz)** | +43-51% on SD write, measured | Done (Trip 1) | None; `ui_hz=full` restores the old loop. A lighter partial-redraw UI could recover the remaining ~5% |
 | 2 | Capture chunk 128 (SD write +7%, optical unknown) | +3% | Trip 2a | Low; buffers grow to 301 KB and 602 KB |
 | 3 | SHA-256 out of the capture loop | +28-29% **measured** (Trip 5a) | Done as an option (`capture_hash=crc32`); the default is still `both`; Trip 7 decides | Medium; a format change |
-| 4 | Overlap the drive with SD/hash work | **Revised by Trip 5a:** the drive already reads ahead while the SD is written, so waiting is mostly gone; what is left is the ~28.3 ms PIO transfer, which only DMA can overlap (Trip 6a, experimental build): up to ~1.3x | Trip 6a | Medium to high |
+| 4 | Overlap the drive with SD/hash work, via GD-ROM DMA | **27.6% measured-and-projected**: 26.7 min -> 19.4 (17.3 with items 5-6). DMA proven on hardware: same bytes, 0.4% CPU, no cost to the drive | Trip 6a: done | High: double-buffering the capture loop, with checkpoint/cancel/retry correctness at every interleaving |
 | 5 | Aligned, coalesced SD writes | 0-8% | Trip 3 | Low |
 | 6 | Table-driven CRC16 in KOS's `sd.c` | **+5.7% on the capture** (slice2; projected from the measured microbenchmark, Trip 1b) | Trip 1b: done | Low to medium: a link-time `--wrap`, no KOS patch |
 | 7 | Faster SHA-256 in C | +3% | none | Low; compiles to ~69 instructions per round today |
