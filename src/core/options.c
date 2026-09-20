@@ -269,6 +269,21 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
 bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
                        kui_log_fn log) {
     struct kui_options draft = *opt;   /* commit only if every line is valid */
+    /* Editors put invisible bytes at the start of a text file. A UTF-8 byte-order mark is skipped (it
+     * made a valid file fail at "line 1": it is neither blank nor '#', and has no '='). UTF-16 cannot
+     * be read as text at all, so it is named instead of being reported as a syntax error. */
+    const unsigned char *head = (const unsigned char *)text;
+    if(size >= 3 && head[0] == 0xef && head[1] == 0xbb && head[2] == 0xbf) {
+        text += 3; size -= 3;
+        log("bench.cfg starts with a UTF-8 byte-order mark; ignored");
+    } else if(size >= 2 && ((head[0] == 0xff && head[1] == 0xfe) || (head[0] == 0xfe && head[1] == 0xff))) {
+        log("bench.cfg is UTF-16 (starts %02x %02x); save it as plain text (UTF-8 or ANSI)",
+            (unsigned)head[0], (unsigned)head[1]);
+        return false;
+    } else if(memchr(text, 0, size < 16 ? size : 16)) {
+        log("bench.cfg contains NUL bytes, so it is not plain text (UTF-16?); save it as UTF-8 or ANSI");
+        return false;
+    }
     const char *p = text, *end = text + size;
     unsigned line_no = 0;
     while(p < end) {
@@ -279,7 +294,20 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
         p = nl ? nl + 1 : end;
         if(s == e || *s == '#') continue;
         const char *eq = memchr(s, '=', (size_t)(e - s));
-        if(!eq) { log("bench.cfg line %u: expected key=value", line_no); return false; }
+        if(!eq) {
+            /* Say what the line starts with, as text and as bytes: an invisible character is then visible. */
+            static const char hex[] = "0123456789abcdef";
+            char bytes[3 * 6 + 1], shown[6 + 1];
+            size_t n = 0, k = 0;
+            for(const char *q = s; q < e && k < 6; ++q, ++k) {
+                unsigned char c = (unsigned char)*q;
+                bytes[n++] = hex[c >> 4]; bytes[n++] = hex[c & 15]; bytes[n++] = ' ';
+                shown[k] = c >= 32 && c < 127 ? (char)c : '.';
+            }
+            bytes[n ? n - 1 : 0] = 0; shown[k] = 0;
+            log("bench.cfg line %u: expected key=value (starts \"%s\" = %s)", line_no, shown, bytes);
+            return false;
+        }
         const char *key = s, *key_end = trim_end(s, eq);
         const char *val = skip_space(eq + 1, e);
         size_t klen = (size_t)(key_end - key);
@@ -294,7 +322,13 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
         bool is_known = false;
         for(size_t i = 0; i < sizeof(known) / sizeof(known[0]); ++i)
             if(strlen(known[i]) == klen && !memcmp(key, known[i], klen)) is_known = true;
-        if(!is_known) { log("bench.cfg line %u: unknown key ignored", line_no); continue; }
+        if(!is_known) {
+            char name[25];
+            size_t shown = klen < sizeof(name) - 1 ? klen : sizeof(name) - 1;
+            memcpy(name, key, shown); name[shown] = 0;
+            log("bench.cfg line %u: unknown key '%s' ignored", line_no, name);
+            continue;
+        }
         if(!apply(&draft, key, klen, val, e)) {
             log("bench.cfg line %u: bad value; file rejected, defaults kept", line_no);
             return false;

@@ -1,0 +1,94 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "bea895bb93b4",
+  "experiment": "Trip 1b (CRC16 microbenchmark) and an SD write-size sweep, both taken from the default benchmark that the T7 session's R press ran. Config: the T7 file, which has no sections= line, so optical, hash and sd ran with hash_mib=8, chunks 32/128/512, UI at 2 Hz.",
+  "inputs": [
+    {
+      "file": "T7_diag.txt",
+      "kept_as": "t7-real-capture-2026-09-20.txt"
+    }
+  ],
+  "crc16": {
+    "kos": {
+      "cyc_b_wall": 24,
+      "bytes": 8429568,
+      "us": 1014819,
+      "kib_s": 8111.7,
+      "worker_ms": 958,
+      "cpu_cycles_per_byte": 22.7
+    },
+    "table": {
+      "cyc_b_wall": 12,
+      "bytes": 8429568,
+      "us": 511625,
+      "kib_s": 16089.9,
+      "worker_ms": 495,
+      "cpu_cycles_per_byte": 11.7
+    },
+    "slice2": {
+      "cyc_b_wall": 9,
+      "bytes": 8429568,
+      "us": 412334,
+      "kib_s": 19964.3,
+      "worker_ms": 372,
+      "cpu_cycles_per_byte": 8.8
+    },
+    "nibble": {
+      "cyc_b_wall": 25,
+      "bytes": 8429568,
+      "us": 1078910,
+      "kib_s": 7629.9,
+      "worker_ms": 1048,
+      "cpu_cycles_per_byte": 24.9
+    }
+  },
+  "agree": "BENCH hash uihz=2 crc16 agree=OK (4 implementations, identical results)",
+  "sd_kib_s_by_command_size_sectors": {
+    "32": {
+      "write_expand0": 1088.7,
+      "write_expand1": 1110.5,
+      "read_expand0": 631.3,
+      "read_expand1": 631.5
+    },
+    "128": {
+      "write_expand0": 1126.9,
+      "write_expand1": 1125.1,
+      "read_expand0": 639.3,
+      "read_expand1": 642.5
+    },
+    "512": {
+      "write_expand0": 1148.1,
+      "write_expand1": 1148.7,
+      "read_expand0": 648.3,
+      "read_expand1": 640.0
+    }
+  },
+  "derived": {
+    "cpu_cycles_saved_per_byte_vs_kos": {
+      "table": 11.0,
+      "slice2": 13.9,
+      "nibble": -2.2
+    },
+    "projected_effect_on_the_t7_capture": {
+      "table": {
+        "seconds_saved": 69.0,
+        "capture_speedup_pct": 4.5
+      },
+      "slice2": {
+        "seconds_saved": 87.0,
+        "capture_speedup_pct": 5.7
+      }
+    },
+    "ceilings_on_the_t7_capture": {
+      "if_the_whole_disc_transfer_overlapped_with_the_sd_write_seconds": 1166.0,
+      "speedup_pct_upper_bound": 37.6,
+      "with_slice2_as_well_seconds": 1079.0
+    },
+    "conclusions": [
+      "KOS's CRC16 costs 22.7 cycles a byte of CPU here (worker time; the wall-time cyc_b figures of 24/12/9/25 include the UI's 2 Hz share). The table version costs 11.7, slice2 8.8, nibble 24.9 (slower than KOS's, as predicted from instruction counts). All four return identical values.",
+      "Applied to the T7 capture (write phase 63.8% of the time), slice2 would save about 87 s of 1605: a 5.7% faster capture. This is a projection from the microbenchmark, and the gain is on the capture, not the 8% it would be on the SD write alone.",
+      "SD writes get slightly faster with larger commands: 1088.7 KiB/s at 32 sectors, 1126.9 at 128, 1148.1 at 512 (expand off), so a 4x larger write is worth about 3.5% on the write alone; reads 631.3 / 639.3 / 648.3.",
+      "If the entire disc transfer overlapped with the SD write (DMA, Trip 6a, best case) the capture would take about 1166 s instead of 1605: at most 37.6% faster, about 18 minutes with slice2 too. An upper bound, not a prediction."
+    ]
+  }
+}

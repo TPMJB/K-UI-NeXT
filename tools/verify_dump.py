@@ -24,7 +24,13 @@ def require(ok, message):
 
 
 def load_json(path):
-    require(path.is_file() and not path.is_symlink(), f"Missing/unsafe metadata: {path.name}")
+    if path.is_symlink():
+        raise ValueError(f"Unsafe metadata (a symbolic link): {path}")
+    if not path.is_file():
+        # A relative path is taken from the directory the tool is run in. Run from tools/ with
+        # docs/evidence/x.json, this used to say only "Missing/unsafe metadata: x.json".
+        raise ValueError(f"Missing metadata: {path.name}. Looked for {path.resolve()}; a relative "
+                         "path is taken from the directory you ran this in")
     require(path.stat().st_size <= 128 * 1024, "Metadata is too large")
     return json.loads(path.read_text())
 

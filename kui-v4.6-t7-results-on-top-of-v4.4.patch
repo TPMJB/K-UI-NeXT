@@ -1,0 +1,2269 @@
+diff --git a/docs/bench-cfgs/t7-real-capture-fast.cfg b/docs/bench-cfgs/t7-real-capture-fast.cfg
+index 82dafc7..eee8bd7 100644
+--- a/docs/bench-cfgs/t7-real-capture-fast.cfg
++++ b/docs/bench-cfgs/t7-real-capture-fast.cfg
+@@ -1,5 +1,5 @@
+ # TRIP 7 - one REAL, complete capture with the fast settings, then prove it on the PC.
+-# (about 40-60 minutes of capture, plus a few minutes on the PC)
++# (about 27 minutes of capture at the rate Trip 5a measured, plus a few minutes on the PC)
+ #
+ # The bench measures 4096-sector slices of the capture engine. This checks the whole thing:
+ # a full disc, ripped with the settings the bench says are fastest, must come out
+@@ -13,6 +13,9 @@
+ # What to send back: the auto-saved report, the time it took, and the output of
+ #   python3 tools/verify_dump.py <the new folder under KUI/dumps> \
+ #       --reference docs/evidence/sword-of-the-berserk-reference.json
++# Run it from the repository root: a relative path is taken from the directory you run it in, so from
++# inside tools/ write ../docs/evidence/... instead. (Pressing R with this file runs the default
++# benchmark, because it has no sections= line; a capture ignores that.)
+ 
+ ui_hz=2
+ capture_hash=crc32
+diff --git a/docs/benchmarks.md b/docs/benchmarks.md
+index 86680d1..e4973c7 100644
+--- a/docs/benchmarks.md
++++ b/docs/benchmarks.md
+@@ -222,6 +222,8 @@ loop. With no other new keys in `bench.cfg` the bench runs the same sections in
+ the same order as before and adds only the `BENCH cpu` and `BENCH lat` lines and
+ the CRC16 lines in the hash section, described below.
+ 
++**Saving `bench.cfg`:** plain text, UTF-8 or ANSI, with LF or Windows (CRLF) line endings. A UTF-8 byte-order mark (some editors add one) is skipped; UTF-16 is rejected and named; a bad line is reported with what it starts with, as text and as bytes, and an unknown key is named.
++
+ | Key | What it does |
+ |---|---|
+ | `ui_hz=full,8,2,0` | One full pass of the selected sections per value: the UI is capped to that many redraws per second while it measures. **Default 2**; `full` is the old unthrottled loop. Also applies to real captures, resumes and verifies (the first value). |
+diff --git a/docs/evidence/t1b-crc16-and-sd-sizes-from-the-t7-bench-2026-09-20.json b/docs/evidence/t1b-crc16-and-sd-sizes-from-the-t7-bench-2026-09-20.json
+new file mode 100644
+index 0000000..8289ff6
+--- /dev/null
++++ b/docs/evidence/t1b-crc16-and-sd-sizes-from-the-t7-bench-2026-09-20.json
+@@ -0,0 +1,94 @@
++{
++  "received_date": "2026-09-20",
++  "runtime_build": "bea895bb93b4",
++  "experiment": "Trip 1b (CRC16 microbenchmark) and an SD write-size sweep, both taken from the default benchmark that the T7 session's R press ran. Config: the T7 file, which has no sections= line, so optical, hash and sd ran with hash_mib=8, chunks 32/128/512, UI at 2 Hz.",
++  "inputs": [
++    {
++      "file": "T7_diag.txt",
++      "kept_as": "t7-real-capture-2026-09-20.txt"
++    }
++  ],
++  "crc16": {
++    "kos": {
++      "cyc_b_wall": 24,
++      "bytes": 8429568,
++      "us": 1014819,
++      "kib_s": 8111.7,
++      "worker_ms": 958,
++      "cpu_cycles_per_byte": 22.7
++    },
++    "table": {
++      "cyc_b_wall": 12,
++      "bytes": 8429568,
++      "us": 511625,
++      "kib_s": 16089.9,
++      "worker_ms": 495,
++      "cpu_cycles_per_byte": 11.7
++    },
++    "slice2": {
++      "cyc_b_wall": 9,
++      "bytes": 8429568,
++      "us": 412334,
++      "kib_s": 19964.3,
++      "worker_ms": 372,
++      "cpu_cycles_per_byte": 8.8
++    },
++    "nibble": {
++      "cyc_b_wall": 25,
++      "bytes": 8429568,
++      "us": 1078910,
++      "kib_s": 7629.9,
++      "worker_ms": 1048,
++      "cpu_cycles_per_byte": 24.9
++    }
++  },
++  "agree": "BENCH hash uihz=2 crc16 agree=OK (4 implementations, identical results)",
++  "sd_kib_s_by_command_size_sectors": {
++    "32": {
++      "write_expand0": 1088.7,
++      "write_expand1": 1110.5,
++      "read_expand0": 631.3,
++      "read_expand1": 631.5
++    },
++    "128": {
++      "write_expand0": 1126.9,
++      "write_expand1": 1125.1,
++      "read_expand0": 639.3,
++      "read_expand1": 642.5
++    },
++    "512": {
++      "write_expand0": 1148.1,
++      "write_expand1": 1148.7,
++      "read_expand0": 648.3,
++      "read_expand1": 640.0
++    }
++  },
++  "derived": {
++    "cpu_cycles_saved_per_byte_vs_kos": {
++      "table": 11.0,
++      "slice2": 13.9,
++      "nibble": -2.2
++    },
++    "projected_effect_on_the_t7_capture": {
++      "table": {
++        "seconds_saved": 69.0,
++        "capture_speedup_pct": 4.5
++      },
++      "slice2": {
++        "seconds_saved": 87.0,
++        "capture_speedup_pct": 5.7
++      }
++    },
++    "ceilings_on_the_t7_capture": {
++      "if_the_whole_disc_transfer_overlapped_with_the_sd_write_seconds": 1166.0,
++      "speedup_pct_upper_bound": 37.6,
++      "with_slice2_as_well_seconds": 1079.0
++    },
++    "conclusions": [
++      "KOS's CRC16 costs 22.7 cycles a byte of CPU here (worker time; the wall-time cyc_b figures of 24/12/9/25 include the UI's 2 Hz share). The table version costs 11.7, slice2 8.8, nibble 24.9 (slower than KOS's, as predicted from instruction counts). All four return identical values.",
++      "Applied to the T7 capture (write phase 63.8% of the time), slice2 would save about 87 s of 1605: a 5.7% faster capture. This is a projection from the microbenchmark, and the gain is on the capture, not the 8% it would be on the SD write alone.",
++      "SD writes get slightly faster with larger commands: 1088.7 KiB/s at 32 sectors, 1126.9 at 128, 1148.1 at 512 (expand off), so a 4x larger write is worth about 3.5% on the write alone; reads 631.3 / 639.3 / 648.3.",
++      "If the entire disc transfer overlapped with the SD write (DMA, Trip 6a, best case) the capture would take about 1166 s instead of 1605: at most 37.6% faster, about 18 minutes with slice2 too. An upper bound, not a prediction."
++    ]
++  }
++}
+diff --git a/docs/evidence/t1b-crc16-rejected-2026-09-20.json b/docs/evidence/t1b-crc16-rejected-2026-09-20.json
+new file mode 100644
+index 0000000..feb8e2d
+--- /dev/null
++++ b/docs/evidence/t1b-crc16-rejected-2026-09-20.json
+@@ -0,0 +1,16 @@
++{
++  "received_date": "2026-09-20",
++  "runtime_build": "bea895bb93b4",
++  "experiment": "Trip 1b (CRC16 microbenchmark): REJECTED before measuring anything, both runs.",
++  "inputs": [
++    {
++      "file": "T1B_Diag.txt",
++      "kept_as": "t1b-crc16-rejected-2026-09-20.txt",
++      "bytes": 7122,
++      "sha256": "2d5ce7e85423a7fe04fe5adb77616998d6bf22c4b4ce1a81e1615f113e78c7da"
++    }
++  ],
++  "result": "Each run printed 'bench.cfg line 1: expected key=value', 'Bench refused: bench.cfg rejected' and fell back to defaults. Nothing was measured.",
++  "reading": "The parser skips blank lines and lines whose first character is '#'; anything else needs '='. The shipped t1b-crc16.cfg is plain ASCII, LF, and its line 1 is a '#' comment (the same parser accepts it in the host tests), so line 1 of the file on the card began with something else, most likely an invisible byte-order mark added by an editor. Unconfirmed: the bytes were not seen.",
++  "next": "The loader will skip a UTF-8 byte-order mark and name what it found on a bad line (bytes shown in hex, UTF-16 called out)."
++}
+diff --git a/docs/evidence/t1b-crc16-rejected-2026-09-20.txt b/docs/evidence/t1b-crc16-rejected-2026-09-20.txt
+new file mode 100644
+index 0000000..3fc4b0e
+--- /dev/null
++++ b/docs/evidence/t1b-crc16-rejected-2026-09-20.txt
+@@ -0,0 +1,144 @@
++K-UI SD runtime bea895bb93b4
++Log truncated: no
++Report trigger: manual
++Capture result: see operation log
++Running SD runtime build bea895bb93b4
++Video: 640x480 NTSC interlaced, buffered
++Diagnostic code and fonts are loaded entirely in RAM.
++Replace boot CD with a known-good retail GD-ROM; close lid.
++Diagnostics page: A disc samples; X SD test; Y save log.
++Use a spare test card. No formatting; existing files preserved.
++Capture page: A new dump; X resume latest matching disc; Y verify.
++Left/Right switches capture/diagnostics. B stops and checkpoints.
++New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
++Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KU
++I/).
++Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change th
++em.
++Capture/Resume/Verify auto-save a report after ending. Wait for READY.
++R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
++The screen redraws 2x a second while working, which frees CPU (ui_hz=full: o
++ff).
++mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++bench.cfg line 1: expected key=value
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=2 sections=optical,hash,sd
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=both end_readback=on resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=(optical_fad)
++OPTIONS note=(none)
++Bench refused: bench.cfg rejected or SD unavailable; see lines above
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: failed
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0001/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++bench.cfg line 1: expected key=value
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=2 sections=optical,hash,sd
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=both end_readback=on resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=(optical_fad)
++OPTIONS note=(none)
++Bench refused: bench.cfg rejected or SD unavailable; see lines above
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: failed
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0002/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
+diff --git a/docs/evidence/t2d-optical-radius-2026-09-19.json b/docs/evidence/t2d-optical-radius-2026-09-19.json
+index c4ad7bd..0ae7499 100644
+--- a/docs/evidence/t2d-optical-radius-2026-09-19.json
++++ b/docs/evidence/t2d-optical-radius-2026-09-19.json
+@@ -290,6 +290,6 @@
+     ]
+   },
+   "limitations": [
+-    "One card, one disc, one console; two runs. The first run of a session read faster at FAD 45150 than the second in this file, in the T2c file and in Trip 1 (2.7-8% each); cause unknown, so compare runs from the same position in a session."
++    "One card, one disc, one console; two runs. The second run read slower than the first in three sweep files of 32-sector reads at FAD 45150 (Trips 2c -7.6%, 2d -5.6%, 6a -5.8%), but not in Trip 1's optical bench at a quiet UI (1196.4 vs 1196.0 KiB/s) and not in a real capture (Trip 5a). Cause unknown."
+   ]
+ }
+diff --git a/docs/evidence/t5a-capture-matrix-2026-09-20.json b/docs/evidence/t5a-capture-matrix-2026-09-20.json
+new file mode 100644
+index 0000000..e5a973a
+--- /dev/null
++++ b/docs/evidence/t5a-capture-matrix-2026-09-20.json
+@@ -0,0 +1,185 @@
++{
++  "received_date": "2026-09-20",
++  "runtime_build": "bea895bb93b4",
++  "experiment": "Trip 5a (capture matrix): the REAL capture engine on 4096 sectors (9.6 MB) at FAD 45150, hash both/crc32 x end read-back on/off x UI full/2 Hz; two complete runs.",
++  "inputs": [
++    {
++      "file": "T5A_diag.txt",
++      "kept_as": "t5a-capture-matrix-2026-09-20.txt",
++      "bytes": 24542,
++      "sha256": "ba5f03ceb3f16dd903380895aba6b148080bf935445ef6be3c027151a480cbc7"
++    }
++  ],
++  "config": {
++    "file": "docs/bench-cfgs/t5a-capture-matrix.cfg",
++    "ui_hz": [
++      "full",
++      "2"
++    ],
++    "sections": [
++      "capture"
++    ],
++    "capture_hash": [
++      "both",
++      "crc32"
++    ],
++    "end_readback": [
++      "on",
++      "off"
++    ],
++    "resume_check": [
++      "full",
++      "size"
++    ],
++    "capture_sectors": 4096,
++    "capture_fad": 45150
++  },
++  "table": [
++    {
++      "ui": "full",
++      "hash": "both",
++      "end_readback": "on",
++      "capture_kib_s": 399.1,
++      "total_kib_s": 185.1,
++      "ui_pct": 31.7,
++      "predicted_capture": 350,
++      "predicted_total": 176,
++      "capture_vs_prediction_pct": 14.0,
++      "total_vs_prediction_pct": 5.1,
++      "spread_between_runs_pct": 0.1
++    },
++    {
++      "ui": "full",
++      "hash": "both",
++      "end_readback": "off",
++      "capture_kib_s": 399.6,
++      "total_kib_s": 399.6,
++      "ui_pct": 31.2,
++      "predicted_capture": null,
++      "predicted_total": null,
++      "capture_vs_prediction_pct": null,
++      "total_vs_prediction_pct": null,
++      "spread_between_runs_pct": 0.8
++    },
++    {
++      "ui": "full",
++      "hash": "crc32",
++      "end_readback": "on",
++      "capture_kib_s": 515.0,
++      "total_kib_s": 235.7,
++      "ui_pct": 32.2,
++      "predicted_capture": 440,
++      "predicted_total": 222,
++      "capture_vs_prediction_pct": 17.0,
++      "total_vs_prediction_pct": 6.1,
++      "spread_between_runs_pct": 0.5
++    },
++    {
++      "ui": "full",
++      "hash": "crc32",
++      "end_readback": "off",
++      "capture_kib_s": 514.5,
++      "total_kib_s": 514.5,
++      "ui_pct": 32.3,
++      "predicted_capture": null,
++      "predicted_total": null,
++      "capture_vs_prediction_pct": null,
++      "total_vs_prediction_pct": null,
++      "spread_between_runs_pct": 0.4
++    },
++    {
++      "ui": "2",
++      "hash": "both",
++      "end_readback": "on",
++      "capture_kib_s": 551.2,
++      "total_kib_s": 257.9,
++      "ui_pct": 4.7,
++      "predicted_capture": 430,
++      "predicted_total": 228,
++      "capture_vs_prediction_pct": 28.2,
++      "total_vs_prediction_pct": 13.1,
++      "spread_between_runs_pct": 1.0
++    },
++    {
++      "ui": "2",
++      "hash": "both",
++      "end_readback": "off",
++      "capture_kib_s": 552.5,
++      "total_kib_s": 552.5,
++      "ui_pct": 4.5,
++      "predicted_capture": null,
++      "predicted_total": null,
++      "capture_vs_prediction_pct": null,
++      "total_vs_prediction_pct": null,
++      "spread_between_runs_pct": 0.1
++    },
++    {
++      "ui": "2",
++      "hash": "crc32",
++      "end_readback": "on",
++      "capture_kib_s": 717.3,
++      "total_kib_s": 328.8,
++      "ui_pct": 5.2,
++      "predicted_capture": 527,
++      "predicted_total": 283,
++      "capture_vs_prediction_pct": 36.1,
++      "total_vs_prediction_pct": 16.2,
++      "spread_between_runs_pct": 0.1
++    },
++    {
++      "ui": "2",
++      "hash": "crc32",
++      "end_readback": "off",
++      "capture_kib_s": 704.9,
++      "total_kib_s": 704.9,
++      "ui_pct": 5.2,
++      "predicted_capture": null,
++      "predicted_total": null,
++      "capture_vs_prediction_pct": null,
++      "total_vs_prediction_pct": null,
++      "spread_between_runs_pct": 2.6
++    }
++  ],
++  "derived": {
++    "effects": {
++      "sha_cost": [
++        0.28737645439759807,
++        0.2757466063348417
++      ],
++      "ui_gain": [
++        0.38245965219567135,
++        0.3699708454810495
++      ],
++      "per_chunk_ms_best": {
++        "disc": 28.3,
++        "edc": 2.9,
++        "write": 67.0,
++        "sha": 0.0,
++        "crc": 5.8,
++        "ckpt": 0.2
++      },
++      "wall_ms_per_chunk": 104.3,
++      "readback_over_capture": [
++        1.1566928209943612,
++        1.1853958731785537,
++        1.1376123757525152,
++        1.1819773905964612
++      ],
++      "old_total": 185.1,
++      "new_total": 704.9,
++      "resume_full_2hz_crc32": 606.8,
++      "speedup_finished_dump": 3.81
++    },
++    "conclusions": [
++      "Dropping SHA-256 speeds the capture phase by 29% at full UI and 28% at 2 Hz.",
++      "Capping the UI at 2 Hz speeds it by 38% (both) and 37% (crc32); the census UI share was 31.7-32.4% at full and 4.4-5.2% at 2 Hz, as in Trip 1.",
++      "The end read-back costs 114-119% of the capture time again, so a finished dump ran at 185.1 KiB/s under the old defaults and 704.9 KiB/s with crc32, no read-back and 2 Hz: 3.81x.",
++      "The pre-registered predictions were too LOW: capture rates missed by +14% to +36%. Cause visible in the parts lines: the model charged the whole media time to the capture; measured disc time per 32-sector chunk is 28.3 ms at 2 Hz/crc32, only 15% above the 24.7 ms that the fastest command takes in the Trip 6a sweep (min=), which is a command whose data the drive had already buffered. The drive reads ahead while the CPU writes to the SD card, so that overlap is already happening (an inference from these two numbers, not a separate measurement).",
++      "Where a chunk's 104 ms goes at 2 Hz/crc32/no read-back: SD write 67.0 ms, disc 28.3 ms (about 87% of it is what the fastest, already-buffered command takes in the Trip 6a sweep), CRC32 5.8 ms, EDC 2.9 ms. The SD write is 64% of the time."
++    ]
++  },
++  "limitations": [
++    "One card, one disc, one console; two runs; inner radius only (FAD 45150), where the drive is slowest; the outer radius reads faster (Trip 2d), so a whole-disc rate should be a little higher.",
++    "Bench captures publish nothing and are deleted, so they do not exercise the manifest or publish path (Trip 7 does)."
++  ]
++}
+diff --git a/docs/evidence/t5a-capture-matrix-2026-09-20.txt b/docs/evidence/t5a-capture-matrix-2026-09-20.txt
+new file mode 100644
+index 0000000..aebfffc
+--- /dev/null
++++ b/docs/evidence/t5a-capture-matrix-2026-09-20.txt
+@@ -0,0 +1,539 @@
++K-UI SD runtime bea895bb93b4
++Log truncated: no
++Report trigger: manual
++Capture result: see operation log
++Running SD runtime build bea895bb93b4
++Video: 640x480 NTSC interlaced, buffered
++Diagnostic code and fonts are loaded entirely in RAM.
++Replace boot CD with a known-good retail GD-ROM; close lid.
++Diagnostics page: A disc samples; X SD test; Y save log.
++Use a spare test card. No formatting; existing files preserved.
++Capture page: A new dump; X resume latest matching disc; Y verify.
++Left/Right switches capture/diagnostics. B stops and checkpoints.
++New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
++Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KU
++I/).
++Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change th
++em.
++Capture/Resume/Verify auto-save a report after ending. Wait for READY.
++R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
++The screen redraws 2x a second while working, which frees CPU (ui_hz=full: o
++ff).
++mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=full,2 sections=capture
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=both,crc32 end_readback=on,off resume_check=full,size
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=45150
++OPTIONS note=T5a capture matrix. card=<model> disc=<title>
++CMD 24 FAILED
++  sense=6/40 size=10 ATA=0
++LOW TOC first=41010000 last=01020000 end=01000642
++  T01 ctrl=4 start=150 next=1076
++  T02 ctrl=0 start=1076 next=1602
++HIGH TOC first=41030000 last=41030000 end=410861b4
++  T03 ctrl=4 start=45150 next=549300
++BENCH: isolated measurements; each line is one component alone
++BENCH pass 1/2 uihz=full
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=both end=on sample=0 wall=52463 wk=35156 ui=16667 oth
++=640 ui_pct=31.7
++BENCH capture uihz=full hash=both end=on sample=0 sectors=4096 result=ok byt
++es=9633792 us=23575040 kib_s=399.0
++BENCH capture total hash=both end=on sample=0 verify_us=27217355 total_kib_s
++=185.2 sampled=0 verified=1
++BENCH capture parts hash=both end=on sample=0 ms disc=4972 edc=397 write=116
++45 read=0 sha=5457 crc=1057 ckpt=35
++BENCH resume uihz=full hash=both check=full sectors=4096 result=ok bytes=963
++3792 us=26921679 kib_s=349.4
++BENCH resume uihz=full hash=both check=size skipped: a SHA-256 job re-reads 
++to rebuild it
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=both end=off sample=0 wall=24732 wk=16871 ui=7660 oth
++=201 ui_pct=30.9
++BENCH capture uihz=full hash=both end=off sample=0 sectors=4096 result=ok by
++tes=9633792 us=23444045 kib_s=401.2
++BENCH capture total hash=both end=off sample=0 verify_us=0 total_kib_s=401.2
++ sampled=0 verified=0
++BENCH capture parts hash=both end=off sample=0 ms disc=4842 edc=384 write=11
++612 read=0 sha=5407 crc=1161 ckpt=27
++BENCH resume uihz=full hash=both check=full sectors=4096 result=ok bytes=963
++3792 us=27144371 kib_s=346.5
++BENCH resume uihz=full hash=both check=size skipped: a SHA-256 job re-reads 
++to rebuild it
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=crc32 end=on sample=0 wall=41213 wk=27574 ui=13256 ot
++h=383 ui_pct=32.1
++BENCH capture uihz=full hash=crc32 end=on sample=0 sectors=4096 result=ok by
++tes=9633792 us=18223403 kib_s=516.2
++BENCH capture total hash=crc32 end=on sample=0 verify_us=21653668 total_kib_
++s=235.9 sampled=0 verified=1
++BENCH capture parts hash=crc32 end=on sample=0 ms disc=5224 edc=374 write=11
++677 read=0 sha=0 crc=902 ckpt=37
++BENCH resume uihz=full hash=crc32 check=full sectors=4096 result=ok bytes=96
++33792 us=21762333 kib_s=432.3
++BENCH resume uihz=full hash=crc32 check=size sectors=4096 result=ok bytes=96
++33792 us=3853 kib_s=2441733.7
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=crc32 end=off sample=0 wall=19607 wk=13054 ui=6355 ot
++h=198 ui_pct=32.4
++BENCH capture uihz=full hash=crc32 end=off sample=0 sectors=4096 result=ok b
++ytes=9633792 us=18319501 kib_s=513.5
++BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=513.
++5 sampled=0 verified=0
++BENCH capture parts hash=crc32 end=off sample=0 ms disc=5308 edc=387 write=1
++1640 read=0 sha=0 crc=933 ckpt=42
++BENCH resume uihz=full hash=crc32 check=full sectors=4096 result=ok bytes=96
++33792 us=21610626 kib_s=435.3
++BENCH resume uihz=full hash=crc32 check=size sectors=4096 result=ok bytes=96
++33792 us=3910 kib_s=2406138.1
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH pass 2/2 uihz=2
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=both end=on sample=0 wall=37350 wk=35260 ui=1655 oth=
++435 ui_pct=4.4
++BENCH capture uihz=2 hash=both end=on sample=0 sectors=4096 result=ok bytes=
++9633792 us=16980871 kib_s=554.0
++BENCH capture total hash=both end=on sample=0 verify_us=19378106 total_kib_s
++=258.7 sampled=0 verified=1
++BENCH capture parts hash=both end=on sample=0 ms disc=3701 edc=374 write=813
++4 read=0 sha=3995 crc=738 ckpt=29
++BENCH resume uihz=2 hash=both check=full sectors=4096 result=ok bytes=963379
++2 us=19494903 kib_s=482.5
++BENCH resume uihz=2 hash=both check=size skipped: a SHA-256 job re-reads to 
++rebuild it
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=both end=off sample=0 wall=17992 wk=16935 ui=814 oth=
++244 ui_pct=4.5
++BENCH capture uihz=2 hash=both end=off sample=0 sectors=4096 result=ok bytes
++=9633792 us=17018002 kib_s=552.8
++BENCH capture total hash=both end=off sample=0 verify_us=0 total_kib_s=552.8
++ sampled=0 verified=0
++BENCH capture parts hash=both end=off sample=0 ms disc=3816 edc=377 write=80
++92 read=0 sha=3950 crc=748 ckpt=24
++BENCH resume uihz=2 hash=both check=full sectors=4096 result=ok bytes=963379
++2 us=19383560 kib_s=485.3
++BENCH resume uihz=2 hash=both check=size skipped: a SHA-256 job re-reads to 
++rebuild it
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=crc32 end=on sample=0 wall=29631 wk=27722 ui=1518 oth
++=391 ui_pct=5.1
++BENCH capture uihz=2 hash=crc32 end=on sample=0 sectors=4096 result=ok bytes
++=9633792 us=13121355 kib_s=716.9
++BENCH capture total hash=crc32 end=on sample=0 verify_us=15505226 total_kib_
++s=328.6 sampled=0 verified=1
++BENCH capture parts hash=crc32 end=on sample=0 ms disc=3605 edc=375 write=83
++80 read=0 sha=0 crc=728 ckpt=24
++BENCH resume uihz=2 hash=crc32 check=full sectors=4096 result=ok bytes=96337
++92 us=15501215 kib_s=606.9
++BENCH resume uihz=2 hash=crc32 check=size sectors=4096 result=ok bytes=96337
++92 us=3878 kib_s=2425992.7
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=crc32 end=off sample=0 wall=14503 wk=13138 ui=749 oth
++=616 ui_pct=5.1
++BENCH capture uihz=2 hash=crc32 end=off sample=0 sectors=4096 result=ok byte
++s=9633792 us=13523078 kib_s=695.6
++BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=695.
++6 sampled=0 verified=0
++BENCH capture parts hash=crc32 end=off sample=0 ms disc=3594 edc=375 write=8
++778 read=0 sha=0 crc=740 ckpt=26
++BENCH resume uihz=2 hash=crc32 check=full sectors=4096 result=ok bytes=96337
++92 us=15501985 kib_s=606.8
++BENCH resume uihz=2 hash=crc32 check=size sectors=4096 result=ok bytes=96337
++92 us=3877 kib_s=2426618.5
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH complete
++OPTICAL setup: subtimers inside TIMING disc
++opt policy=paired PIO yield_us=2000
++opt wall_us=4537765 requests=60 bytes=141120
++opt mode_us=464 calls=60 failed=0
++opt buffers_us=487581 other_us=1029
++opt requests ok=60 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=3959815 max_us=89283
++opt read1 calls=60 bytes=141120
++opt read1 max_fad=45150 max_sectors=1
++opt read1 submit_us=1274 submits=60
++opt read1 poll_us=1443342 polls=338370
++opt read1 wait_us=713868 waits=1556
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=1801331
++opt read1 poll_n 338216/92/0/60/2
++opt read1 poll_ms 1382/4/0/43/12
++opt read1 ok=60 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=88876 max_us=1648
++opt read2 calls=60 bytes=141120
++opt read2 max_fad=47197 max_sectors=1
++opt read2 submit_us=1270 submits=60
++opt read2 poll_us=62762 polls=4591
++opt read2 wait_us=0 waits=0
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=24844
++opt read2 poll_n 4527/4/0/60/0
++opt read2 poll_ms 18/0/0/43/0
++opt read2 ok=60 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++OPTICAL capture: subtimers inside TIMING disc
++opt policy=single PIO yield_us=2000
++opt wall_us=35061243 requests=1024 bytes=77070336
++opt mode_us=6772 calls=1024 failed=0
++opt buffers_us=1937113 other_us=19616
++opt requests ok=1024 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=33097742 max_us=149126
++opt read1 calls=1024 bytes=77070336
++opt read1 max_fad=45150 max_sectors=32
++opt read1 submit_us=32407 submits=1024
++opt read1 poll_us=29552258 polls=188344
++opt read1 wait_us=2375305 waits=2429
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=1137772
++opt read1 poll_n 186034/70/0/187/2053
++opt read1 poll_ms 792/3/0/141/28615
++opt read1 ok=1024 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=0 max_us=0
++opt read2 calls=0 bytes=0
++opt read2 max_fad=0 max_sectors=0
++opt read2 submit_us=0 submits=0
++opt read2 poll_us=0 polls=0
++opt read2 wait_us=0 waits=0
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=0
++opt read2 ok=0 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0004/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=full,2 sections=capture
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=both,crc32 end_readback=on,off resume_check=full,size
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=45150
++OPTIONS note=T5a capture matrix. card=<model> disc=<title>
++LOW TOC first=41010000 last=01020000 end=01000642
++  T01 ctrl=4 start=150 next=1076
++  T02 ctrl=0 start=1076 next=1602
++HIGH TOC first=41030000 last=41030000 end=410861b4
++  T03 ctrl=4 start=45150 next=549300
++BENCH: isolated measurements; each line is one component alone
++BENCH pass 1/2 uihz=full
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=both end=on sample=0 wall=52161 wk=35219 ui=16580 oth
++=362 ui_pct=31.7
++BENCH capture uihz=full hash=both end=on sample=0 sectors=4096 result=ok byt
++es=9633792 us=23561785 kib_s=399.2
++BENCH capture total hash=both end=on sample=0 verify_us=27305443 total_kib_s
++=184.9 sampled=0 verified=1
++BENCH capture parts hash=both end=on sample=0 ms disc=4896 edc=387 write=116
++95 read=0 sha=5396 crc=1143 ckpt=34
++BENCH resume uihz=full hash=both check=full sectors=4096 result=ok bytes=963
++3792 us=26901460 kib_s=349.7
++BENCH resume uihz=full hash=both check=size skipped: a SHA-256 job re-reads 
++to rebuild it
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=both end=off sample=0 wall=24880 wk=16836 ui=7847 oth
++=198 ui_pct=31.5
++BENCH capture uihz=full hash=both end=off sample=0 sectors=4096 result=ok by
++tes=9633792 us=23631522 kib_s=398.1
++BENCH capture total hash=both end=off sample=0 verify_us=0 total_kib_s=398.1
++ sampled=0 verified=0
++BENCH capture parts hash=both end=off sample=0 ms disc=5093 edc=395 write=11
++662 read=0 sha=5297 crc=1150 ckpt=25
++BENCH resume uihz=full hash=both check=full sectors=4096 result=ok bytes=963
++3792 us=27282564 kib_s=344.8
++BENCH resume uihz=full hash=both check=size skipped: a SHA-256 job re-reads 
++to rebuild it
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=crc32 end=on sample=0 wall=41290 wk=27626 ui=13307 ot
++h=357 ui_pct=32.2
++BENCH capture uihz=full hash=crc32 end=on sample=0 sectors=4096 result=ok by
++tes=9633792 us=18308760 kib_s=513.8
++BENCH capture total hash=crc32 end=on sample=0 verify_us=21651165 total_kib_
++s=235.4 sampled=0 verified=1
++BENCH capture parts hash=crc32 end=on sample=0 ms disc=5179 edc=384 write=11
++775 read=0 sha=0 crc=921 ckpt=40
++BENCH resume uihz=full hash=crc32 check=full sectors=4096 result=ok bytes=96
++33792 us=21540613 kib_s=436.7
++BENCH resume uihz=full hash=crc32 check=size sectors=4096 result=ok bytes=96
++33792 us=3854 kib_s=2441100.1
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=crc32 end=off sample=0 wall=19505 wk=13016 ui=6301 ot
++h=188 ui_pct=32.3
++BENCH capture uihz=full hash=crc32 end=off sample=0 sectors=4096 result=ok b
++ytes=9633792 us=18248405 kib_s=515.5
++BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=515.
++5 sampled=0 verified=0
++BENCH capture parts hash=crc32 end=off sample=0 ms disc=5129 edc=384 write=1
++1769 read=0 sha=0 crc=914 ckpt=42
++BENCH resume uihz=full hash=crc32 check=full sectors=4096 result=ok bytes=96
++33792 us=21599915 kib_s=435.5
++BENCH resume uihz=full hash=crc32 check=size sectors=4096 result=ok bytes=96
++33792 us=3892 kib_s=2417266.1
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH pass 2/2 uihz=2
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=both end=on sample=0 wall=37575 wk=35272 ui=1866 oth=
++438 ui_pct=4.9
++BENCH capture uihz=2 hash=both end=on sample=0 sectors=4096 result=ok bytes=
++9633792 us=17152558 kib_s=548.4
++BENCH capture total hash=both end=on sample=0 verify_us=19451894 total_kib_s
++=257.0 sampled=0 verified=1
++BENCH capture parts hash=both end=on sample=0 ms disc=3614 edc=374 write=845
++5 read=0 sha=3954 crc=720 ckpt=25
++BENCH resume uihz=2 hash=both check=full sectors=4096 result=ok bytes=963379
++2 us=19513887 kib_s=482.1
++BENCH resume uihz=2 hash=both check=size skipped: a SHA-256 job re-reads to 
++rebuild it
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=both end=off sample=0 wall=18050 wk=16967 ui=843 oth=
++240 ui_pct=4.6
++BENCH capture uihz=2 hash=both end=off sample=0 sectors=4096 result=ok bytes
++=9633792 us=17034904 kib_s=552.2
++BENCH capture total hash=both end=off sample=0 verify_us=0 total_kib_s=552.2
++ sampled=0 verified=0
++BENCH capture parts hash=both end=off sample=0 ms disc=3698 edc=382 write=81
++95 read=0 sha=3977 crc=748 ckpt=25
++BENCH resume uihz=2 hash=both check=full sectors=4096 result=ok bytes=963379
++2 us=19460410 kib_s=483.4
++BENCH resume uihz=2 hash=both check=size skipped: a SHA-256 job re-reads to 
++rebuild it
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=crc32 end=on sample=0 wall=29605 wk=27662 ui=1561 oth
++=382 ui_pct=5.2
++BENCH capture uihz=2 hash=crc32 end=on sample=0 sectors=4096 result=ok bytes
++=9633792 us=13107503 kib_s=717.7
++BENCH capture total hash=crc32 end=on sample=0 verify_us=15496687 total_kib_
++s=328.9 sampled=0 verified=1
++BENCH capture parts hash=crc32 end=on sample=0 ms disc=3664 edc=375 write=82
++93 read=0 sha=0 crc=725 ckpt=41
++BENCH resume uihz=2 hash=crc32 check=full sectors=4096 result=ok bytes=96337
++92 us=15504552 kib_s=606.7
++BENCH resume uihz=2 hash=crc32 check=size sectors=4096 result=ok bytes=96337
++92 us=3913 kib_s=2404293.3
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH cpu capture hash=crc32 end=off sample=0 wall=14171 wk=13211 ui=743 oth
++=217 ui_pct=5.2
++BENCH capture uihz=2 hash=crc32 end=off sample=0 sectors=4096 result=ok byte
++s=9633792 us=13174527 kib_s=714.1
++BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=714.
++1 sampled=0 verified=0
++BENCH capture parts hash=crc32 end=off sample=0 ms disc=3640 edc=375 write=8
++374 read=0 sha=0 crc=752 ckpt=24
++BENCH resume uihz=2 hash=crc32 check=full sectors=4096 result=ok bytes=96337
++92 us=15418135 kib_s=610.1
++BENCH resume uihz=2 hash=crc32 check=size sectors=4096 result=ok bytes=96337
++92 us=3856 kib_s=2439834.0
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH complete
++OPTICAL setup: subtimers inside TIMING disc
++opt policy=paired PIO yield_us=2000
++opt wall_us=4508621 requests=60 bytes=141120
++opt mode_us=415 calls=60 failed=0
++opt buffers_us=469177 other_us=1053
++opt requests ok=60 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=3949413 max_us=94478
++opt read1 calls=60 bytes=141120
++opt read1 max_fad=45150 max_sectors=1
++opt read1 submit_us=1273 submits=60
++opt read1 poll_us=1467601 polls=335179
++opt read1 wait_us=705088 waits=1546
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=1775451
++opt read1 poll_n 335015/99/0/60/5
++opt read1 poll_ms 1369/4/0/43/50
++opt read1 ok=60 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=88563 max_us=1633
++opt read2 calls=60 bytes=141120
++opt read2 max_fad=47197 max_sectors=1
++opt read2 submit_us=1268 submits=60
++opt read2 poll_us=62664 polls=4560
++opt read2 wait_us=0 waits=0
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=24631
++opt read2 poll_n 4500/0/0/60/0
++opt read2 poll_ms 18/0/0/43/0
++opt read2 ok=60 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++OPTICAL capture: subtimers inside TIMING disc
++opt policy=single PIO yield_us=2000
++opt wall_us=34912751 requests=1024 bytes=77070336
++opt mode_us=6858 calls=1024 failed=0
++opt buffers_us=1902395 other_us=11902
++opt requests ok=1024 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=32991596 max_us=153226
++opt read1 calls=1024 bytes=77070336
++opt read1 max_fad=45150 max_sectors=32
++opt read1 submit_us=22329 submits=1024
++opt read1 poll_us=29473498 polls=191205
++opt read1 wait_us=2336542 waits=2448
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=1159227
++opt read1 poll_n 188894/61/0/196/2054
++opt read1 poll_ms 805/2/0/147/28518
++opt read1 ok=1024 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=0 max_us=0
++opt read2 calls=0 bytes=0
++opt read2 max_fad=0 max_sectors=0
++opt read2 submit_us=0 submits=0
++opt read2 poll_us=0 polls=0
++opt read2 wait_us=0 waits=0
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=0
++opt read2 ok=0 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0005/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0006/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
+diff --git a/docs/evidence/t6a-pio-only-2026-09-20.json b/docs/evidence/t6a-pio-only-2026-09-20.json
+new file mode 100644
+index 0000000..95f46f6
+--- /dev/null
++++ b/docs/evidence/t6a-pio-only-2026-09-20.json
+@@ -0,0 +1,64 @@
++{
++  "received_date": "2026-09-20",
++  "runtime_build": "bea895bb93b4",
++  "experiment": "Trip 6a on the DEFAULT build: DMA and competing-thread points were skipped (experimental code is opt-in), so this is a PIO-only chunk 32 vs 128 comparison at FAD 45150; two runs.",
++  "inputs": [
++    {
++      "file": "T6A_diag.txt",
++      "kept_as": "t6a-pio-only-2026-09-20.txt",
++      "bytes": 9529,
++      "sha256": "0ab2798dc9368e282c68e160d66c13d370fd2f48daf0501d4c3351653dfa7a31"
++    }
++  ],
++  "points": {
++    "32": [
++      {
++        "run": 1,
++        "rd_kib_s": 1282.3,
++        "min_us": 24783,
++        "max_us": 66526,
++        "us": 3681420
++      },
++      {
++        "run": 2,
++        "rd_kib_s": 1208.0,
++        "min_us": 24548,
++        "max_us": 64323,
++        "us": 3907224
++      }
++    ],
++    "128": [
++      {
++        "run": 1,
++        "rd_kib_s": 1165.5,
++        "min_us": 244589,
++        "max_us": 293731,
++        "us": 4036240
++      },
++      {
++        "run": 2,
++        "rd_kib_s": 1171.1,
++        "min_us": 239775,
++        "max_us": 299497,
++        "us": 4016827
++      }
++    ]
++  },
++  "skipped_lines": [
++    "BENCH spin skipped: no competing-thread support here",
++    "BENCH dma skipped: this platform has no GD-ROM DMA probe"
++  ],
++  "derived": {
++    "mean_rd_kib_s": {
++      "32": 1245.2,
++      "128": 1168.3
++    },
++    "chunk128_vs_chunk32_pct": -6.2,
++    "run2_vs_run1_pct_chunk32": -5.8,
++    "conclusions": [
++      "As designed, the default build skips DMA and the competing thread: ['BENCH spin skipped: no competing-thread support here', 'BENCH dma skipped: this platform has no GD-ROM DMA probe'].",
++      "PIO at FAD 45150: chunk 32 averages 1245.2 KiB/s and chunk 128 1168.3 (-6.2%): 32 sectors is the better command size; the capture engine already uses it.",
++      "Run 2 read -5.8% against run 1 at chunk 32: the same direction as Trips 2c (-7.6%) and 2d (-5.6%), so three of three sweep files. It is not in Trip 1's optical bench at a quiet UI, and in Trip 5a the real capture's disc time differs by only -0.2% (full) and -0.7% (2 Hz) between runs, so it does not appear in a capture."
++    ]
++  }
++}
+diff --git a/docs/evidence/t6a-pio-only-2026-09-20.txt b/docs/evidence/t6a-pio-only-2026-09-20.txt
+new file mode 100644
+index 0000000..9e2634f
+--- /dev/null
++++ b/docs/evidence/t6a-pio-only-2026-09-20.txt
+@@ -0,0 +1,190 @@
++K-UI SD runtime bea895bb93b4
++Log truncated: no
++Report trigger: manual
++Capture result: see operation log
++Running SD runtime build bea895bb93b4
++Video: 640x480 NTSC interlaced, buffered
++Diagnostic code and fonts are loaded entirely in RAM.
++Replace boot CD with a known-good retail GD-ROM; close lid.
++Diagnostics page: A disc samples; X SD test; Y save log.
++Use a spare test card. No formatting; existing files preserved.
++Capture page: A new dump; X resume latest matching disc; Y verify.
++Left/Right switches capture/diagnostics. B stops and checkpoints.
++New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
++Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KU
++I/).
++Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change th
++em.
++Capture/Resume/Verify auto-save a report after ending. Wait for READY.
++R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
++The screen redraws 2x a second while working, which frees CPU (ui_hz=full: o
++ff).
++mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=1 sections=sweep
++OPTIONS sweep_chunks=32,128 sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=45150
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio,dma sweep_spin=off,on
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=both end_readback=on resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=(optical_fad)
++OPTIONS note=T6a DMA probe. card=<model> disc=<title>
++CMD 24 FAILED
++  sense=6/40 size=10 ATA=0
++LOW TOC first=41010000 last=01020000 end=01000642
++  T01 ctrl=4 start=150 next=1076
++  T02 ctrl=0 start=1076 next=1602
++HIGH TOC first=41030000 last=41030000 end=410861b4
++  T03 ctrl=4 start=45150 next=549300
++BENCH: isolated measurements; each line is one component alone
++BENCH pass 1/1 uihz=1
++BENCH poll buckets: call duration <25us / <100us / <400us / <1.6ms / more
++BENCH spin skipped: no competing-thread support here
++BENCH dma skipped: this platform has no GD-ROM DMA probe
++BENCH sweep uihz=1 fad=45150 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1282.3
++ min=24783 max=66526 bytes=4816896 us=3681420 kib_s=1277.7
++BENCH cpu sweep c=32 g=0 s=0 wall=3681 wk=3558 ui=124 oth=0 ui_pct=3.3
++BENCH poll fad=45150 c=32 n=195786/62/0/1900/22
++BENCH poll fad=45150 c=32 ms=959/3/0/1395/125
++BENCH verify fad=45150 chunk=32 sectors=512 crc32=71d42800 ref=71d42800 OK
++BENCH sweep uihz=1 fad=45150 chunk=128 gap=0 svc=0 reads=16 retry=0 rd=1165.
++5 min=244589 max=293731 bytes=4816896 us=4036240 kib_s=1165.4
++BENCH cpu sweep c=128 g=0 s=0 wall=4036 wk=3933 ui=104 oth=0 ui_pct=2.5
++BENCH poll fad=45150 c=128 n=233346/65/0/1984/17
++BENCH poll fad=45150 c=128 ms=1143/3/0/1453/45
++BENCH verify fad=45150 chunk=128 sectors=512 crc32=71d42800 ref=71d42800 OK
++BENCH complete
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0001/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=1 sections=sweep
++OPTIONS sweep_chunks=32,128 sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=45150
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio,dma sweep_spin=off,on
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=both end_readback=on resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=(optical_fad)
++OPTIONS note=T6a DMA probe. card=<model> disc=<title>
++LOW TOC first=41010000 last=01020000 end=01000642
++  T01 ctrl=4 start=150 next=1076
++  T02 ctrl=0 start=1076 next=1602
++HIGH TOC first=41030000 last=41030000 end=410861b4
++  T03 ctrl=4 start=45150 next=549300
++BENCH: isolated measurements; each line is one component alone
++BENCH pass 1/1 uihz=1
++BENCH poll buckets: call duration <25us / <100us / <400us / <1.6ms / more
++BENCH spin skipped: no competing-thread support here
++BENCH dma skipped: this platform has no GD-ROM DMA probe
++BENCH sweep uihz=1 fad=45150 chunk=32 gap=0 svc=0 reads=64 retry=0 rd=1208.0
++ min=24548 max=64323 bytes=4816896 us=3907224 kib_s=1203.9
++BENCH cpu sweep c=32 g=0 s=0 wall=3907 wk=3821 ui=87 oth=0 ui_pct=2.2
++BENCH poll fad=45150 c=32 n=220805/63/0/1942/19
++BENCH poll fad=45150 c=32 ms=1082/3/0/1423/77
++BENCH verify fad=45150 chunk=32 sectors=512 crc32=71d42800 ref=71d42800 OK
++BENCH sweep uihz=1 fad=45150 chunk=128 gap=0 svc=0 reads=16 retry=0 rd=1171.
++1 min=239775 max=299497 bytes=4816896 us=4016827 kib_s=1171.0
++BENCH cpu sweep c=128 g=0 s=0 wall=4016 wk=3943 ui=74 oth=0 ui_pct=1.8
++BENCH poll fad=45150 c=128 n=234144/74/0/2001/11
++BENCH poll fad=45150 c=128 ms=1147/3/0/1464/34
++BENCH verify fad=45150 chunk=128 sectors=512 crc32=71d42800 ref=71d42800 OK
++BENCH complete
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0002/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
+diff --git a/docs/evidence/t7-real-capture-2026-09-20.json b/docs/evidence/t7-real-capture-2026-09-20.json
+new file mode 100644
+index 0000000..ebfcae1
+--- /dev/null
++++ b/docs/evidence/t7-real-capture-2026-09-20.json
+@@ -0,0 +1,150 @@
++{
++  "received_date": "2026-09-20",
++  "runtime_build": "bea895bb93b4",
++  "experiment": "Trip 7: one REAL, complete capture of Sword of the Berserk with the fast settings (ui_hz=2, capture_hash=crc32, end_readback=off), then checked on a PC.",
++  "disc_title": "SWORD OF THE BERSERK GUTS RAGE (identity f4db30d38d4d8926df1cdd72945007948cf363d278614289e783478a380de69c)",
++  "inputs": [
++    {
++      "file": "T7_diag.txt",
++      "kept_as": "t7-real-capture-2026-09-20.txt",
++      "bytes": 23831,
++      "sha256": "4b821aa0cbe50fbe77d44aa933cf759ce62c8d167d90ea96baee32f0f5c8d7c1",
++      "note": "the saved log holds an R-trigger benchmark first (the config has no sections=, so the defaults ran), then the capture; the benchmark half is recorded in t1b-crc16-and-sd-sizes-from-the-t7-bench-2026-09-20.json"
++    }
++  ],
++  "config": {
++    "file": "docs/bench-cfgs/t7-real-capture-fast.cfg",
++    "ui_hz": [
++      2
++    ],
++    "capture_hash": "crc32",
++    "end_readback": "off"
++  },
++  "capture": {
++    "job": "/KUI/dumps/df4db30d38d4d8926-0001",
++    "console_result": "CAPTURED: all 3 tracks; stream CRC32 recorded; saved data NOT re-read",
++    "console_reference_check": "TOSEC: FULL TRACK MATCH (Sword of the Berserk - Guts' Rage v1.000 (2000)(Eidos)(US)[!]); computed from the CRC32 accumulated while reading, not from the saved files",
++    "wall_s": 1604.6,
++    "setup_s": 4.95,
++    "finish_s": 1.28,
++    "bytes": 1188823104,
++    "average_kib_s": 723.5,
++    "ui_pct": 4.9,
++    "parts": {
++      "disc": {
++        "us": 438817602,
++        "pct": 27.3
++      },
++      "edc": {
++        "us": 46387997,
++        "pct": 2.8
++      },
++      "write": {
++        "us": 1024924560,
++        "pct": 63.8
++      },
++      "crc32": {
++        "us": 90370887,
++        "pct": 5.6
++      },
++      "checkpoint": {
++        "us": 3670681,
++        "pct": 0.2
++      }
++    },
++    "tracks": [
++      {
++        "track": "T01",
++        "bytes": 1825152,
++        "wall_s": 4.7,
++        "kib_s": 379.5,
++        "disc_s": 2.85,
++        "write_s": 1.61
++      },
++      {
++        "track": "T02",
++        "bytes": 1237152,
++        "wall_s": 1.88,
++        "kib_s": 641.2,
++        "disc_s": 0.73,
++        "write_s": 1.03
++      },
++      {
++        "track": "T03",
++        "bytes": 1185760800,
++        "wall_s": 1598.05,
++        "kib_s": 724.6,
++        "disc_s": 435.24,
++        "write_s": 1022.29
++      }
++    ],
++    "reads": {
++      "requests": 15797,
++      "retry": 0,
++      "fatal": 0,
++      "mismatch": 0,
++      "guards": 0,
++      "refused": 0
++    }
++  },
++  "pc_verification": {
++    "reported_by": "the user (pasted output; the assistant did not run it)",
++    "command": "python3 verify_dump.py df4db30d38d4d8926-0001/ --reference docs/evidence/sword-of-the-berserk-reference.json   (run from tools/)",
++    "output": [
++      "PASS track01.bin 1825152 bytes CRC32=bcec7767 SHA256=ee221a533016b6bddbc7676f4278fffe446eb05d5dc1932da1a73c6269ef2202 (computed here; not in the manifest)",
++      "PASS track02.raw 1237152 bytes CRC32=0ff934e3 SHA256=8438ed3913c4b9a0f1f3b480a3b9c6e114e9ce30d623f02985d04a1b117502e8 (computed here; not in the manifest)",
++      "PASS track03.bin 1185760800 bytes CRC32=2cfb5dcb SHA256=1f3be789259cdbd82089f23100765a9bb7039e56450d9b0af3a6988d1c1e5713 (computed here; not in the manifest)",
++      "SAVED DATA VERIFIED: sizes, CRC32 and GDI layout agree",
++      "FAIL: Missing/unsafe metadata: sword-of-the-berserk-reference.json"
++    ],
++    "dump_result": "SAVED DATA VERIFIED: sizes, CRC32 and GDI layout agree (every track's saved file matches the CRC32 the console recorded while reading)",
++    "reference_step": "FAILED with 'Missing/unsafe metadata' only because the relative path was taken from tools/ (looked for tools/docs/evidence/...). Not a data problem; reproduced exactly, and the message now names the path it looked for.",
++    "reference_rerun": {
++      "method": "the real load_json and compare_reference, on the hashes above, from the repository root",
++      "result": [
++        true,
++        3
++      ]
++    },
++    "identical_to_the_2026_09_17_capture_made_with_the_old_defaults": [
++      {
++        "file": "track01.bin",
++        "sha256_identical": true,
++        "crc32_identical": true,
++        "bytes_identical": true
++      },
++      {
++        "file": "track02.raw",
++        "sha256_identical": true,
++        "crc32_identical": true,
++        "bytes_identical": true
++      },
++      {
++        "file": "track03.bin",
++        "sha256_identical": true,
++        "crc32_identical": true,
++        "bytes_identical": true
++      }
++    ]
++  },
++  "derived": {
++    "estimated_old_default_minutes": 105.0,
++    "speedup_vs_old_estimate": 3.9,
++    "prediction_from_trip_5a": {
++      "track3_minutes": 27.4,
++      "actual_track3_minutes": 26.6,
++      "error_pct": -2.7
++    },
++    "conclusions": [
++      "The whole disc took 26.7 minutes (1605 s) at an average of 723.5 KiB/s, with 0 retries and 0 failed, mismatched, guarded or refused reads in 15797 requests.",
++      "Trip 5a predicted 27.4 minutes for track 3 from the inner-edge bench; it took 26.6 (-2.7%). The time split matched the bench's: SD write 63.8%, disc 27.3%, CRC32 5.6%, EDC 2.8% (bench: 64 / 27 / 5.8 / 2.9).",
++      "Against the old defaults' rate from Trip 5a this is about 3.9x faster (an estimate of 105 minutes; no old-default run of this disc was timed).",
++      "Two independent checks agree. On the console, the CRC32 accumulated while reading matches the TOSEC catalogue for every track, so the disc was read correctly. On the PC, every saved file matches the CRC32 the console recorded (SAVED DATA VERIFIED) and the SHA-256 values match the reference for tracks 1-2.",
++      "All three tracks are byte-identical (SHA-256, CRC32 and size) to the capture made on 2026-09-17 with SHA-256 and a full read-back: [True, True, True]. That also corroborates that capture's track 3 SHA-256, which had only been computed by the console.",
++      "The console did not re-read the saved tracks; the PC check is what covers the path from memory to the card."
++    ]
++  },
++  "limitations": [
++    "One disc, one card, one console, one capture. The reference step's SHA-256 covers tracks 1-2 only (track 3's reference entry is CRC32 plus size); track 3's SHA-256 equality is against the 2026-09-17 capture."
++  ]
++}
+diff --git a/docs/evidence/t7-real-capture-2026-09-20.txt b/docs/evidence/t7-real-capture-2026-09-20.txt
+new file mode 100644
+index 0000000..916c938
+--- /dev/null
++++ b/docs/evidence/t7-real-capture-2026-09-20.txt
+@@ -0,0 +1,524 @@
++K-UI SD runtime bea895bb93b4
++Log truncated: no
++Report trigger: manual
++Capture result: see operation log
++Running SD runtime build bea895bb93b4
++Video: 640x480 NTSC interlaced, buffered
++Diagnostic code and fonts are loaded entirely in RAM.
++Replace boot CD with a known-good retail GD-ROM; close lid.
++Diagnostics page: A disc samples; X SD test; Y save log.
++Use a spare test card. No formatting; existing files preserved.
++Capture page: A new dump; X resume latest matching disc; Y verify.
++Left/Right switches capture/diagnostics. B stops and checkpoints.
++New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
++Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KU
++I/).
++Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change th
++em.
++Capture/Resume/Verify auto-save a report after ending. Wait for READY.
++R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
++The screen redraws 2x a second while working, which frees CPU (ui_hz=full: o
++ff).
++mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [bench start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=2 sections=optical,hash,sd
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=crc32 end_readback=off resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=(optical_fad)
++OPTIONS note=T7 real capture, fast settings. card=<model> disc=Sword of the 
++CMD 24 FAILED
++  sense=6/40 size=10 ATA=0
++LOW TOC first=41010000 last=01020000 end=01000642
++  T01 ctrl=4 start=150 next=1076
++  T02 ctrl=0 start=1076 next=1602
++HIGH TOC first=41030000 last=41030000 end=410861b4
++  T03 ctrl=4 start=45150 next=549300
++BENCH: isolated measurements; each line is one component alone
++BENCH pass 1/1 uihz=2
++BENCH optical uihz=2 fad=45150 sectors=4096 retries=0 bytes=9633792 us=77409
++69 kib_s=1215.3
++BENCH cpu optical uihz=2 wall=7741 wk=7414 ui=328 oth=0 ui_pct=4.2
++BENCH hash uihz=2 sha256 cyc_b=82 bytes=8429568 us=3487238 kib_s=2360.6
++BENCH cpu sha256 uihz=2 wall=3487 wk=3314 ui=173 oth=0 ui_pct=4.9
++BENCH hash uihz=2 crc32 cyc_b=15 bytes=8429568 us=639433 kib_s=12873.9
++BENCH cpu crc32 uihz=2 wall=639 wk=624 ui=16 oth=0 ui_pct=2.5
++bench hash sha256=03a378ff6bff2a33... crc32=50e9fbe0
++BENCH hash uihz=2 crc16-kos cyc_b=24 bytes=8429568 us=1014819 kib_s=8111.7
++BENCH cpu crc16-kos uihz=2 wall=1014 wk=958 ui=57 oth=0 ui_pct=5.6
++BENCH hash uihz=2 crc16-table cyc_b=12 bytes=8429568 us=511625 kib_s=16089.9
++BENCH cpu crc16-table uihz=2 wall=511 wk=495 ui=16 oth=0 ui_pct=3.1
++BENCH hash uihz=2 crc16-slice2 cyc_b=9 bytes=8429568 us=412334 kib_s=19964.3
++BENCH cpu crc16-slice2 uihz=2 wall=412 wk=372 ui=41 oth=0 ui_pct=9.9
++BENCH hash uihz=2 crc16-nibble cyc_b=25 bytes=8429568 us=1078910 kib_s=7629.
++9
++BENCH cpu crc16-nibble uihz=2 wall=1079 wk=1048 ui=31 oth=0 ui_pct=2.8
++BENCH hash uihz=2 crc16 agree=OK (4 implementations, identical results)
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++BENCH sd transport if=scif crc=on
++BENCH sd write uihz=2 if=scif crc=on chunk=32 expand=0 bytes=8354304 us=7493
++261 kib_s=1088.7
++BENCH cpu sdw chunk=32 e=0 wall=7493 wk=6764 ui=449 oth=280 ui_pct=5.9
++BENCH lat write chunk=32 e=0 n=111 min=61017 p50=63507 p95=101414 max=109990
++ slow=0 slow_ms=0
++BENCH sd sync uihz=2 if=scif crc=on chunk=32 expand=0 us=11094
++BENCH sd read uihz=2 if=scif crc=on chunk=32 expand=0 bytes=8354304 us=12921
++750 kib_s=631.3
++BENCH cpu sdr chunk=32 e=0 wall=12921 wk=12002 ui=793 oth=127 ui_pct=6.1
++BENCH lat read chunk=32 e=0 n=111 min=107409 p50=110666 p95=154079 max=16020
++0 slow=0 slow_ms=0
++BENCH sd expand uihz=2 if=scif crc=on chunk=32 expand=1 us=16945
++BENCH sd write uihz=2 if=scif crc=on chunk=32 expand=1 bytes=8354304 us=7346
++050 kib_s=1110.5
++BENCH cpu sdw chunk=32 e=1 wall=7346 wk=6720 ui=389 oth=237 ui_pct=5.2
++BENCH lat write chunk=32 e=1 n=111 min=60996 p50=62824 p95=92550 max=111892 
++slow=0 slow_ms=0
++BENCH sd sync uihz=2 if=scif crc=on chunk=32 expand=1 us=6017
++BENCH sd read uihz=2 if=scif crc=on chunk=32 expand=1 bytes=8354304 us=12917
++998 kib_s=631.5
++BENCH cpu sdr chunk=32 e=1 wall=12918 wk=12004 ui=776 oth=138 ui_pct=6.0
++BENCH lat read chunk=32 e=1 n=111 min=107085 p50=110779 p95=148502 max=16394
++3 slow=0 slow_ms=0
++BENCH sd write uihz=2 if=scif crc=on chunk=128 expand=0 bytes=8128512 us=704
++3860 kib_s=1126.9
++BENCH cpu sdw chunk=128 e=0 wall=7043 wk=6575 ui=376 oth=93 ui_pct=5.3
++BENCH lat write chunk=128 e=0 n=27 min=242146 p50=247081 p95=293749 max=3728
++49 slow=0 slow_ms=0
++BENCH sd sync uihz=2 if=scif crc=on chunk=128 expand=0 us=12670
++BENCH sd read uihz=2 if=scif crc=on chunk=128 expand=0 bytes=8128512 us=1241
++6454 kib_s=639.3
++BENCH cpu sdr chunk=128 e=0 wall=12416 wk=11628 ui=704 oth=84 ui_pct=5.6
++BENCH lat read chunk=128 e=0 n=27 min=432061 p50=455909 p95=482026 max=48424
++6 slow=0 slow_ms=0
++BENCH sd expand uihz=2 if=scif crc=on chunk=128 expand=1 us=2047
++BENCH sd write uihz=2 if=scif crc=on chunk=128 expand=1 bytes=8128512 us=705
++5138 kib_s=1125.1
++BENCH cpu sdw chunk=128 e=1 wall=7055 wk=6509 ui=438 oth=108 ui_pct=6.2
++BENCH lat write chunk=128 e=1 n=27 min=242658 p50=259846 p95=291801 max=2931
++80 slow=0 slow_ms=0
++BENCH sd sync uihz=2 if=scif crc=on chunk=128 expand=1 us=6261
++BENCH sd read uihz=2 if=scif crc=on chunk=128 expand=1 bytes=8128512 us=1235
++3043 kib_s=642.5
++BENCH cpu sdr chunk=128 e=1 wall=12353 wk=11625 ui=644 oth=84 ui_pct=5.2
++BENCH lat read chunk=128 e=1 n=27 min=432131 p50=452655 p95=475417 max=48066
++1 slow=0 slow_ms=0
++BENCH sd write uihz=2 if=scif crc=on chunk=512 expand=0 bytes=7225344 us=614
++5710 kib_s=1148.1
++BENCH cpu sdw chunk=512 e=0 wall=6145 wk=5772 ui=328 oth=46 ui_pct=5.3
++BENCH lat write chunk=512 e=0 n=6 min=1000298 p50=1023858 p95=1059279 max=10
++59279 slow=0 slow_ms=0
++BENCH sd sync uihz=2 if=scif crc=on chunk=512 expand=0 us=9413
++BENCH sd read uihz=2 if=scif crc=on chunk=512 expand=0 bytes=7225344 us=1088
++3137 kib_s=648.3
++BENCH cpu sdr chunk=512 e=0 wall=10883 wk=10317 ui=519 oth=47 ui_pct=4.7
++BENCH lat read chunk=512 e=0 n=6 min=1791727 p50=1811415 p95=1868894 max=186
++8894 slow=0 slow_ms=0
++BENCH sd expand uihz=2 if=scif crc=on chunk=512 expand=1 us=2044
++BENCH sd write uihz=2 if=scif crc=on chunk=512 expand=1 bytes=7225344 us=614
++2153 kib_s=1148.7
++BENCH cpu sdw chunk=512 e=1 wall=6142 wk=5772 ui=341 oth=29 ui_pct=5.5
++BENCH lat write chunk=512 e=1 n=6 min=1000007 p50=1025530 p95=1058682 max=10
++58682 slow=0 slow_ms=0
++BENCH sd sync uihz=2 if=scif crc=on chunk=512 expand=1 us=5443
++BENCH sd read uihz=2 if=scif crc=on chunk=512 expand=1 bytes=7225344 us=1102
++4634 kib_s=640.0
++BENCH cpu sdr chunk=512 e=1 wall=11024 wk=10327 ui=653 oth=44 ui_pct=5.9
++BENCH lat read chunk=512 e=1 n=6 min=1786137 p50=1848789 p95=1866454 max=186
++6454 slow=0 slow_ms=0
++BENCH complete
++OPTICAL capture: subtimers inside TIMING disc
++opt policy=single PIO yield_us=2000
++opt wall_us=7819124 requests=129 bytes=9709056
++opt mode_us=896 calls=129 failed=0
++opt buffers_us=235532 other_us=1533
++opt requests ok=129 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=7581163 max_us=77415
++opt read1 calls=129 bytes=9709056
++opt read1 max_fad=45150 max_sectors=32
++opt read1 submit_us=2656 submits=129
++opt read1 poll_us=4995150 polls=404386
++opt read1 wait_us=335370 waits=3340
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=2247987
++opt read1 poll_n 400375/122/0/3840/49
++opt read1 poll_ms 1953/6/0/2826/209
++opt read1 ok=129 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=0 max_us=0
++opt read2 calls=0 bytes=0
++opt read2 max_fad=0 max_sectors=0
++opt read2 submit_us=0 submits=0
++opt read2 poll_us=0 polls=0
++opt read2 wait_us=0 waits=0
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=0
++opt read2 ok=0 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++mstats [bench end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Bench result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0001/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [capture/verify start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=2 sections=optical,hash,sd
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=crc32 end_readback=off resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=(optical_fad)
++OPTIONS note=T7 real capture, fast settings. card=<model> disc=Sword of the 
++LOW TOC first=41010000 last=01020000 end=01000642
++  T01 ctrl=4 start=150 next=1076
++  T02 ctrl=0 start=1076 next=1602
++HIGH TOC first=41030000 last=41030000 end=410861b4
++  T03 ctrl=4 start=45150 next=549300
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++NEW CAPTURE: guarded raw reads, data EDC, no zero-fill
++Disc: SWORD OF THE BERSERK GUTS RAGE
++Identity: f4db30d38d4d8926df1cdd72945007948cf363d278614289e783478a380de69c
++Profile: gdi-raw2352-typegap150-v1
++T01 FAD [150,926) data; gap excluded=150
++T02 FAD [1076,1602) audio; gap excluded=0
++T03 FAD [45150,549300) data; gap excluded=0
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Job: /KUI/dumps/df4db30d38d4d8926-0001
++Capturing T01 at FAD=150; B stops safely
++T01 776/776 sectors; checkpoint saved
++Capturing T02 at FAD=1076; B stops safely
++T02 526/526 sectors; checkpoint saved
++Capturing T03 at FAD=45150; B stops safely
++T03 4096/504150 sectors; checkpoint saved
++T03 8192/504150 sectors; checkpoint saved
++T03 12288/504150 sectors; checkpoint saved
++T03 16384/504150 sectors; checkpoint saved
++T03 20480/504150 sectors; checkpoint saved
++T03 24576/504150 sectors; checkpoint saved
++T03 28672/504150 sectors; checkpoint saved
++T03 32768/504150 sectors; checkpoint saved
++T03 36864/504150 sectors; checkpoint saved
++T03 40960/504150 sectors; checkpoint saved
++T03 45056/504150 sectors; checkpoint saved
++T03 49152/504150 sectors; checkpoint saved
++T03 53248/504150 sectors; checkpoint saved
++T03 57344/504150 sectors; checkpoint saved
++T03 61440/504150 sectors; checkpoint saved
++T03 65536/504150 sectors; checkpoint saved
++T03 69632/504150 sectors; checkpoint saved
++T03 73728/504150 sectors; checkpoint saved
++T03 77824/504150 sectors; checkpoint saved
++T03 81920/504150 sectors; checkpoint saved
++T03 86016/504150 sectors; checkpoint saved
++T03 90112/504150 sectors; checkpoint saved
++T03 94208/504150 sectors; checkpoint saved
++T03 98304/504150 sectors; checkpoint saved
++T03 102400/504150 sectors; checkpoint saved
++T03 106496/504150 sectors; checkpoint saved
++T03 110592/504150 sectors; checkpoint saved
++T03 114688/504150 sectors; checkpoint saved
++T03 118784/504150 sectors; checkpoint saved
++T03 122880/504150 sectors; checkpoint saved
++T03 126976/504150 sectors; checkpoint saved
++T03 131072/504150 sectors; checkpoint saved
++T03 135168/504150 sectors; checkpoint saved
++T03 139264/504150 sectors; checkpoint saved
++T03 143360/504150 sectors; checkpoint saved
++T03 147456/504150 sectors; checkpoint saved
++T03 151552/504150 sectors; checkpoint saved
++T03 155648/504150 sectors; checkpoint saved
++T03 159744/504150 sectors; checkpoint saved
++T03 163840/504150 sectors; checkpoint saved
++T03 167936/504150 sectors; checkpoint saved
++T03 172032/504150 sectors; checkpoint saved
++T03 176128/504150 sectors; checkpoint saved
++T03 180224/504150 sectors; checkpoint saved
++T03 184320/504150 sectors; checkpoint saved
++T03 188416/504150 sectors; checkpoint saved
++T03 192512/504150 sectors; checkpoint saved
++T03 196608/504150 sectors; checkpoint saved
++T03 200704/504150 sectors; checkpoint saved
++T03 204800/504150 sectors; checkpoint saved
++T03 208896/504150 sectors; checkpoint saved
++T03 212992/504150 sectors; checkpoint saved
++T03 217088/504150 sectors; checkpoint saved
++T03 221184/504150 sectors; checkpoint saved
++T03 225280/504150 sectors; checkpoint saved
++T03 229376/504150 sectors; checkpoint saved
++T03 233472/504150 sectors; checkpoint saved
++T03 237568/504150 sectors; checkpoint saved
++T03 241664/504150 sectors; checkpoint saved
++T03 245760/504150 sectors; checkpoint saved
++T03 249856/504150 sectors; checkpoint saved
++T03 253952/504150 sectors; checkpoint saved
++T03 258048/504150 sectors; checkpoint saved
++T03 262144/504150 sectors; checkpoint saved
++T03 266240/504150 sectors; checkpoint saved
++T03 270336/504150 sectors; checkpoint saved
++T03 274432/504150 sectors; checkpoint saved
++T03 278528/504150 sectors; checkpoint saved
++T03 282624/504150 sectors; checkpoint saved
++T03 286720/504150 sectors; checkpoint saved
++T03 290816/504150 sectors; checkpoint saved
++T03 294912/504150 sectors; checkpoint saved
++T03 299008/504150 sectors; checkpoint saved
++T03 303104/504150 sectors; checkpoint saved
++T03 307200/504150 sectors; checkpoint saved
++T03 311296/504150 sectors; checkpoint saved
++T03 315392/504150 sectors; checkpoint saved
++T03 319488/504150 sectors; checkpoint saved
++T03 323584/504150 sectors; checkpoint saved
++T03 327680/504150 sectors; checkpoint saved
++T03 331776/504150 sectors; checkpoint saved
++T03 335872/504150 sectors; checkpoint saved
++T03 339968/504150 sectors; checkpoint saved
++T03 344064/504150 sectors; checkpoint saved
++T03 348160/504150 sectors; checkpoint saved
++T03 352256/504150 sectors; checkpoint saved
++T03 356352/504150 sectors; checkpoint saved
++T03 360448/504150 sectors; checkpoint saved
++T03 364544/504150 sectors; checkpoint saved
++T03 368640/504150 sectors; checkpoint saved
++T03 372736/504150 sectors; checkpoint saved
++T03 376832/504150 sectors; checkpoint saved
++T03 380928/504150 sectors; checkpoint saved
++T03 385024/504150 sectors; checkpoint saved
++T03 389120/504150 sectors; checkpoint saved
++T03 393216/504150 sectors; checkpoint saved
++T03 397312/504150 sectors; checkpoint saved
++T03 401408/504150 sectors; checkpoint saved
++T03 405504/504150 sectors; checkpoint saved
++T03 409600/504150 sectors; checkpoint saved
++T03 413696/504150 sectors; checkpoint saved
++T03 417792/504150 sectors; checkpoint saved
++T03 421888/504150 sectors; checkpoint saved
++T03 425984/504150 sectors; checkpoint saved
++T03 430080/504150 sectors; checkpoint saved
++T03 434176/504150 sectors; checkpoint saved
++T03 438272/504150 sectors; checkpoint saved
++T03 442368/504150 sectors; checkpoint saved
++T03 446464/504150 sectors; checkpoint saved
++T03 450560/504150 sectors; checkpoint saved
++T03 454656/504150 sectors; checkpoint saved
++T03 458752/504150 sectors; checkpoint saved
++T03 462848/504150 sectors; checkpoint saved
++T03 466944/504150 sectors; checkpoint saved
++T03 471040/504150 sectors; checkpoint saved
++T03 475136/504150 sectors; checkpoint saved
++T03 479232/504150 sectors; checkpoint saved
++T03 483328/504150 sectors; checkpoint saved
++T03 487424/504150 sectors; checkpoint saved
++T03 491520/504150 sectors; checkpoint saved
++T03 495616/504150 sectors; checkpoint saved
++T03 499712/504150 sectors; checkpoint saved
++T03 503808/504150 sectors; checkpoint saved
++T03 504150/504150 sectors; checkpoint saved
++Capture written. Saved tracks NOT re-read (end read-back off)
++CAPTURED: all 3 tracks; stream CRC32 recorded; saved data NOT re-read
++Reference check (TOSEC): FULL TRACK MATCH
++  Sword of the Berserk - Guts' Rage v1.000 (2000)(Eidos)(US)[!]
++Output: /KUI/dumps/df4db30d38d4d8926-0001/disc.gdi
++TIMING: wall time in microseconds; categories do not overlap
++TIMING setup wall_us=4950541
++disc us=4235083 pct=85.5 bytes=21168 calls=9
++edc us=623 pct=0.0 bytes=14112 calls=6
++checkpoint us=32856 pct=0.6 bytes=4096 calls=1
++other us=681979
++TIMING capture wall_us=1604630422
++disc us=438817602 pct=27.3 bytes=1188823104 calls=15797
++edc us=46387997 pct=2.8 bytes=1187585952 calls=15780
++write us=1024924560 pct=63.8 bytes=1188823104 calls=15797
++crc32 us=90370887 pct=5.6 bytes=1188823104 calls=15797
++checkpoint us=3670681 pct=0.2 bytes=516096 calls=126
++other us=458695
++TIMING finish wall_us=1283540
++other us=1283540
++TRACK TIMING: capture intervals, including checkpoints and close
++TRACK T01 data FAD=[150,926)
++track wall_us=4696564 bytes=1825152
++track disc_us=2850115 write_us=1605083
++track sha256_us=0 crc32_us=144251
++track edc_us=71168 checkpoint_us=21369
++track other_us=4578
++TRACK T02 audio FAD=[1076,1602)
++track wall_us=1884234 bytes=1237152
++track disc_us=731770 write_us=1033041
++track sha256_us=0 crc32_us=90958
++track edc_us=0 checkpoint_us=24116
++track other_us=4349
++TRACK T03 data FAD=[45150,549300)
++track wall_us=1598049574 bytes=1185760800
++track disc_us=435235717 write_us=1022286436
++track sha256_us=0 crc32_us=90135678
++track edc_us=46316829 checkpoint_us=3625196
++track other_us=449718
++BENCH cpu operation (setup+capture+verify) wall=1610866 wk=1516866 ui=80081 
++oth=13919 ui_pct=4.9
++OPTICAL setup: subtimers inside TIMING disc
++opt policy=paired PIO yield_us=2000
++opt wall_us=4235041 requests=9 bytes=21168
++opt mode_us=62 calls=9 failed=0
++opt buffers_us=67259 other_us=153
++opt requests ok=9 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=3119445 max_us=1060818
++opt read1 calls=9 bytes=21168
++opt read1 max_fad=925 max_sectors=1
++opt read1 submit_us=195 submits=9
++opt read1 poll_us=1462368 polls=290348
++opt read1 wait_us=120995 waits=1482
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=1535887
++opt read1 poll_n 290240/98/0/9/1
++opt read1 poll_ms 1441/4/0/6/10
++opt read1 ok=9 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=1048122 max_us=1036351
++opt read2 calls=9 bytes=21168
++opt read2 max_fad=925 max_sectors=1
++opt read2 submit_us=193 submits=9
++opt read2 poll_us=514283 polls=97454
++opt read2 wait_us=23037 waits=496
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=510609
++opt read2 poll_n 97412/30/0/9/3
++opt read2 poll_ms 483/1/0/6/22
++opt read2 ok=9 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++OPTICAL capture: subtimers inside TIMING disc
++opt policy=single PIO yield_us=2000
++opt wall_us=438746971 requests=15797 bytes=1188823104
++opt mode_us=108059 calls=15797 failed=0
++opt buffers_us=28084521 other_us=194156
++opt requests ok=15797 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=410360235 max_us=1134463
++opt read1 calls=15797 bytes=1188823104
++opt read1 max_fad=150 max_sectors=32
++opt read1 submit_us=374941 submits=15797
++opt read1 poll_us=391182251 polls=2186036
++opt read1 wait_us=5634370 waits=33242
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=13168673
++opt read1 poll_n 2152720/1082/0/640/31594
++opt read1 poll_ms 11122/49/0/470/379540
++opt read1 ok=15797 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=0 max_us=0
++opt read2 calls=0 bytes=0
++opt read2 max_fad=0 max_sectors=0
++opt read2 submit_us=0 submits=0
++opt read2 poll_us=0 polls=0
++opt read2 wait_us=0 waits=0
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=0
++opt read2 ok=0 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++mstats [capture/verify end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Capture result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0002/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2457688 available~=14319528
++RAM sampled peak used/reserved=2457688
++Image+BSS=2237668 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92956
++Heap system bytes=92956 in use bytes=88948 free bytes=4008
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
+diff --git a/docs/experiment-plan.md b/docs/experiment-plan.md
+index 76faa43..17095dc 100644
+--- a/docs/experiment-plan.md
++++ b/docs/experiment-plan.md
+@@ -202,6 +202,8 @@ S/288.5: for slice2 (S about 13.2) that is roughly +9% on write and
+ +5% on read. `agree=OK` must appear; on `MISMATCH` ignore the timings. If the
+ measured saving is under a few percent, leave KOS alone.
+ 
++**Result, 2026-09-20** (from the default benchmark the T7 session's R press ran; [evidence](evidence/t1b-crc16-and-sd-sizes-from-the-t7-bench-2026-09-20.json)). CPU cycles a byte: KOS 22.7, table 11.7, slice2 8.8, nibble 24.9 (slower than KOS, as predicted); all four agree. On the T7 capture that projects to: slice2 saves about 87 s of 1605 (**+5.7% capture speed**), the table version about 69 s (+4.5%). The SD-write-only figure above is larger because the write is only 64% of a capture. Worth doing after the bigger levers, and at link time (`-Wl,--wrap=net_crc16ccitt`) rather than by patching KOS.
++
+ ### Trip 2: the drive (`t2a`..`t2e`, ~1 min each)
+ 
+ `sections=sweep` reads sectors with the real PIO command in a bench-only buffer.
+@@ -262,9 +264,7 @@ from the logs.
+   PIO therefore shrinks toward the outer edge**; only DMA (Trip 6) could also hide the
+   transfers. Earlier real captures ran near 373 KiB/s (section 1) against 1250-2000
+   here, so the drive is not the limit at any radius. All verify lines OK.
+-- Observation, cause unknown: the first run of a session read faster at FAD 45150 than
+-  the second in this file, in the 2c file and in Trip 1 (2.7-8%). Compare runs from the
+-  same position in a session and say which one it was in `note=`.
++- Observation, cause unknown: the second run read slower than the first in the three sweep files of 32-sector reads at FAD 45150 (Trips 2c -7.6%, 2d -5.6%, 6a -5.8%), but not in Trip 1's optical bench at a quiet UI (1196.4 vs 1196.0 KiB/s) and not in a real capture (Trip 5a). Compare runs from the same position in a session and say which one it was in `note=`.
+ 
+ The overlap decision, after Trip 2:
+ 
+@@ -349,6 +349,28 @@ report save wrote a byte through a dangling stack pointer. Both are fixed and ea
+ a regression test (section 7). The predictions above stand; rerun 5a on the build that
+ carries the fix.
+ 
++**Result, 2026-09-20** (build `bea895bb93b4`; two runs; [evidence](evidence/t5a-capture-matrix-2026-09-20.json)). KiB/s, mean of the two runs, 4096 sectors at FAD 45150. "Finished dump" is the capture plus the end read-back where there is one.
++
++| UI | hash | read-back | capture | finished dump | predicted capture / total |
++|---|---|---|---|---|---|
++| full | both | on | 399 | 185 | 350 / 176 (+14% / +5%) |
++| full | both | off | 400 | 400 |  |
++| full | crc32 | on | 515 | 236 | 440 / 222 (+17% / +6%) |
++| full | crc32 | off | 514 | 514 |  |
++| 2 | both | on | 551 | 258 | 430 / 228 (+28% / +13%) |
++| 2 | both | off | 552 | 552 |  |
++| 2 | crc32 | on | 717 | 329 | 527 / 283 (+36% / +16%) |
++| 2 | crc32 | off | 705 | 705 |  |
++
++- **The fast settings work, and by more than predicted.** Old defaults (full UI, both hashes, read-back on) finish a dump at 185.1 KiB/s; 2 Hz, CRC32 only, no read-back finish it at 704.9: **3.81x**. SHA-256 costs 28-29% of capture speed, the UI cap gives 37-38%, and the end read-back takes 114-119% of the capture time again.
++- **The predictions above were too low (+14% to +36% on capture speed).** The model charged the whole media time to the capture. The parts lines show otherwise: disc time is 28.3 ms per 32-sector chunk at 2 Hz/CRC32, only ~15% above the 24.7 ms of the fastest command in the Trip 6a sweep, which is a command whose data the drive had already buffered. The drive reads ahead while the CPU writes to the SD card, so most of that overlap is already happening. The UI effect was also larger than modelled (37-38% against the ~23% predicted).
++- **Where a chunk goes** (2 Hz, CRC32, no read-back, 104.3 ms): SD write 67.0 ms (64%), disc 28.3 ms, CRC32 5.8 ms, EDC 2.9 ms. The SD write is the hard floor: the card is driven by bit-banging the serial port's pins at about 143 cycles a byte plus 22 for KOS's CRC16 (Trips 1 and 3b), a peripheral-bus limit that the drive, the hashes and the UI cannot change.
++- **What is left, as arithmetic from those parts (a projection, not a measurement):** DMA that overlaps the 28.3 ms transfer with the SD write (Trip 6a, experimental build), a table CRC16 (KOS's loop is ~13% of the write, ~9 ms; Trip 1b), and 1 Hz instead of 2 Hz (~2.6 ms) could together approach ~67 ms a chunk, roughly 1100 KiB/s: about 1.5x from here, and not more.
++- The full-disc estimate for Trip 7 follows: track 3 is 1,185,760,800 bytes, which at 704.9 KiB/s is about 27 minutes (the outer radius is no slower). The old defaults would have taken about 104 minutes at their inner-radius rate.
++- The resume prefix check with `check=full` re-reads the whole prefix (606.8 KiB/s here); `check=size` takes 4 ms but cannot see a corrupted prefix.
++
++**Trip 6a on the default build (2026-09-20; [evidence](evidence/t6a-pio-only-2026-09-20.json)).** DMA and the competing thread were skipped, as designed: they are in the experimental build only. The PIO points show 32 sectors beating 128 by 6% at FAD 45150 (1245 vs 1168 KiB/s), so the capture engine's command size is right. **Trip 1b was rejected** at `bench.cfg line 1: expected key=value` in both runs, so nothing was measured ([record](evidence/t1b-crc16-rejected-2026-09-20.json)); the loader now skips a UTF-8 byte-order mark and says what a bad line starts with.
++
+ ### Trip 6: GD-ROM DMA, and what a second thread would see (`t6a-dma-probe.cfg`, ~2 min)
+ 
+ **Experimental, and not in the default build**: it needs `make diagnostic KUI_EXPERIMENTAL=1` (see
+@@ -398,8 +420,15 @@ resumed job keeps the hash mode it started with); let it finish. It reports
+ PC: `python3 tools/verify_dump.py <new folder> --reference
+ docs/evidence/sword-of-the-berserk-reference.json`. Pass means three `PASS` lines with
+ CRC32 `bcec7767`, `0ff934e3`, `2cfb5dcb` and no reference mismatch. If the two
+-catalogue files are in `KUI/`, the console report also names the match. Do it after 5a
+-has said which settings are fastest.
++catalogue files are in `KUI/`, the console report also names the match. 5a has now said which settings are fastest (its result above); at its rate track 3 should take roughly 27 minutes, and it changes only how the dump is *checked*: the disc is read exactly as before.
++
++**Result, 2026-09-20** (build `bea895bb93b4`; [evidence](evidence/t7-real-capture-2026-09-20.json)). The whole disc took **26.7 minutes** (1605 s, average 723.5 KiB/s; track 3 alone 724.6 KiB/s) with 0 retries in 15,797 reads. Trip 5a's inner-edge rate predicted 27.4 minutes for track 3 and it took 26.6 (-2.7%), and the time split (SD write 63.8%, disc 27.3%, CRC32 5.6%, EDC 2.8%) matched the bench's. Against the old defaults that is roughly 3.9x (an estimate: about 105 minutes at Trip 5a's old-default rate; no old-default run of this disc was timed).
++
++Verification came in two independent parts:
++- **On the console:** `Reference check (TOSEC): FULL TRACK MATCH`. That compares the CRC32 accumulated *while reading*, so it proves the disc was read correctly; the log also says `saved data NOT re-read`.
++- **On the PC:** `SAVED DATA VERIFIED` (every saved file matches the CRC32 the console recorded), and the reference comparison passes on all three tracks (CRC32 and size everywhere; SHA-256 for tracks 1-2). All three tracks are byte-identical by SHA-256, CRC32 and size to the capture made on 2026-09-17 with SHA-256 and a full read-back, which also corroborates that capture's track 3 SHA-256.
++
++A trap: `verify_dump.py --reference docs/evidence/...` takes the path relative to the directory you run it in. Run it from the repository root, or write `../docs/evidence/...` from `tools/`; the error now says where it looked.
+ 
+ ## 5. Reading the new lines
+ 
+@@ -436,10 +465,10 @@ only if the hypothesis they depend on does.
+ |---|---|---|---|---|
+ | 1 | **UI redraw cap, now the default (2 Hz)** | +43-51% on SD write, measured | Done (Trip 1) | None; `ui_hz=full` restores the old loop. A lighter partial-redraw UI could recover the remaining ~5% |
+ | 2 | Capture chunk 128 (SD write +7%, optical unknown) | +3% | Trip 2a | Low; buffers grow to 301 KB and 602 KB |
+-| 3 | SHA-256 out of the capture loop | +26-28% | Decided (section 6a) | Medium; a format change |
+-| 4 | Overlap the drive with SD/hash work | +20-50% more, ideal | Trips 2 and 6 | Medium to high; Trip 6 is the first evidence, on the drive alone |
++| 3 | SHA-256 out of the capture loop | +28-29% **measured** (Trip 5a) | Done as an option (`capture_hash=crc32`); the default is still `both`; Trip 7 decides | Medium; a format change |
++| 4 | Overlap the drive with SD/hash work | **Revised by Trip 5a:** the drive already reads ahead while the SD is written, so waiting is mostly gone; what is left is the ~28.3 ms PIO transfer, which only DMA can overlap (Trip 6a, experimental build): up to ~1.3x | Trip 6a | Medium to high |
+ | 5 | Aligned, coalesced SD writes | 0-8% | Trip 3 | Low |
+-| 6 | Table-driven CRC16 in KOS's `sd.c` | write time -13.4% at most; predicted about +9% write, +5% read for slice2 (measured 22.2 cycles a byte; Trip 1b measures the candidates first) | Trip 1b | Low; a one-line patch to the pinned KOS, not an override (`net_crc.o` also defines `net_crc32le`/`be`, so overriding one function risks a duplicate-symbol link error) |
++| 6 | Table-driven CRC16 in KOS's `sd.c` | **+5.7% on the capture** (slice2; projected from the measured microbenchmark, Trip 1b) | Trip 1b: done | Low to medium: a link-time `--wrap`, no KOS patch |
+ | 7 | Faster SHA-256 in C | +3% | none | Low; compiles to ~69 instructions per round today |
+ | 8 | Audio: larger commands | ~+20%? | Trip 2e | Low |
+ 
+@@ -569,6 +598,11 @@ the read itself, so a catalogue match (or a second dump) is the check there.
+   text in a scratch git repository (build succeeding and failing) and requires a clean tree afterwards; with the
+   bug put back it reports `?? build.log`. **Lesson: a CI change is code with downstream consumers; read what runs
+   after it.**
++- **`verify_dump.py --reference` and the working directory (2026-09-20).** After a clean `SAVED DATA VERIFIED` the
++  reference step failed with "Missing/unsafe metadata: sword-of-the-berserk-reference.json", because the relative
++  path was taken from `tools/` (it looked for `tools/docs/evidence/...`). Not a data problem: reproduced exactly, and
++  the real loader and comparison pass on the hashes that were reported. The message now names the absolute path it
++  looked for and says relative paths are taken from the current directory; a symbolic link is called a link.
+ - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
+   slack a second thread could reclaim. It was the UI thread running. That is the
+   reason Trip 1 exists.
+diff --git a/src/core/options.c b/src/core/options.c
+index 568e91e..2f1720a 100644
+--- a/src/core/options.c
++++ b/src/core/options.c
+@@ -269,6 +269,21 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
+ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
+                        kui_log_fn log) {
+     struct kui_options draft = *opt;   /* commit only if every line is valid */
++    /* Editors put invisible bytes at the start of a text file. A UTF-8 byte-order mark is skipped (it
++     * made a valid file fail at "line 1": it is neither blank nor '#', and has no '='). UTF-16 cannot
++     * be read as text at all, so it is named instead of being reported as a syntax error. */
++    const unsigned char *head = (const unsigned char *)text;
++    if(size >= 3 && head[0] == 0xef && head[1] == 0xbb && head[2] == 0xbf) {
++        text += 3; size -= 3;
++        log("bench.cfg starts with a UTF-8 byte-order mark; ignored");
++    } else if(size >= 2 && ((head[0] == 0xff && head[1] == 0xfe) || (head[0] == 0xfe && head[1] == 0xff))) {
++        log("bench.cfg is UTF-16 (starts %02x %02x); save it as plain text (UTF-8 or ANSI)",
++            (unsigned)head[0], (unsigned)head[1]);
++        return false;
++    } else if(memchr(text, 0, size < 16 ? size : 16)) {
++        log("bench.cfg contains NUL bytes, so it is not plain text (UTF-16?); save it as UTF-8 or ANSI");
++        return false;
++    }
+     const char *p = text, *end = text + size;
+     unsigned line_no = 0;
+     while(p < end) {
+@@ -279,7 +294,20 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
+         p = nl ? nl + 1 : end;
+         if(s == e || *s == '#') continue;
+         const char *eq = memchr(s, '=', (size_t)(e - s));
+-        if(!eq) { log("bench.cfg line %u: expected key=value", line_no); return false; }
++        if(!eq) {
++            /* Say what the line starts with, as text and as bytes: an invisible character is then visible. */
++            static const char hex[] = "0123456789abcdef";
++            char bytes[3 * 6 + 1], shown[6 + 1];
++            size_t n = 0, k = 0;
++            for(const char *q = s; q < e && k < 6; ++q, ++k) {
++                unsigned char c = (unsigned char)*q;
++                bytes[n++] = hex[c >> 4]; bytes[n++] = hex[c & 15]; bytes[n++] = ' ';
++                shown[k] = c >= 32 && c < 127 ? (char)c : '.';
++            }
++            bytes[n ? n - 1 : 0] = 0; shown[k] = 0;
++            log("bench.cfg line %u: expected key=value (starts \"%s\" = %s)", line_no, shown, bytes);
++            return false;
++        }
+         const char *key = s, *key_end = trim_end(s, eq);
+         const char *val = skip_space(eq + 1, e);
+         size_t klen = (size_t)(key_end - key);
+@@ -294,7 +322,13 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
+         bool is_known = false;
+         for(size_t i = 0; i < sizeof(known) / sizeof(known[0]); ++i)
+             if(strlen(known[i]) == klen && !memcmp(key, known[i], klen)) is_known = true;
+-        if(!is_known) { log("bench.cfg line %u: unknown key ignored", line_no); continue; }
++        if(!is_known) {
++            char name[25];
++            size_t shown = klen < sizeof(name) - 1 ? klen : sizeof(name) - 1;
++            memcpy(name, key, shown); name[shown] = 0;
++            log("bench.cfg line %u: unknown key '%s' ignored", line_no, name);
++            continue;
++        }
+         if(!apply(&draft, key, klen, val, e)) {
+             log("bench.cfg line %u: bad value; file rejected, defaults kept", line_no);
+             return false;
+diff --git a/tests/test_dump_verifier.py b/tests/test_dump_verifier.py
+index 2de5f38..5e4ce03 100644
+--- a/tests/test_dump_verifier.py
++++ b/tests/test_dump_verifier.py
+@@ -89,3 +89,19 @@ class DumpVerifierTests(unittest.TestCase):
+             with self.assertRaises(ValueError):v.verify(self.path)
+         self.m=original;self.write();(self.path/"disc.gdi").write_text("wrong\n")
+         with self.assertRaises(ValueError):v.verify(self.path)
++
++    def test_a_missing_metadata_file_names_the_path_it_looked_for(self):
++        # Run from tools/ with docs/evidence/x.json, the reference was looked for in tools/docs/evidence and
++        # the error named only x.json. It now says where it looked, and calls a symbolic link a link.
++        with tempfile.TemporaryDirectory() as d:
++            missing = Path(d) / "nowhere" / "reference.json"
++            with self.assertRaises(ValueError) as caught:
++                v.load_json(missing)
++            self.assertIn(str(missing.resolve()), str(caught.exception))
++            self.assertIn("relative path is taken from the directory you ran this in", str(caught.exception))
++            target, link = Path(d) / "real.json", Path(d) / "link.json"
++            target.write_text("{}")
++            link.symlink_to(target)
++            with self.assertRaises(ValueError) as caught:
++                v.load_json(link)
++            self.assertIn("symbolic link", str(caught.exception))
+diff --git a/tests/test_options.c b/tests/test_options.c
+index 56ec35b..5b3ad48 100644
+--- a/tests/test_options.c
++++ b/tests/test_options.c
+@@ -258,6 +258,29 @@ int main(int argc, char **argv) {
+     /* Every example config we ship (paths come from the Makefile) must parse
+      * with no complaint, so a later change to a limit cannot silently break a
+      * file a user is told to copy to their card. */
++    /* --- invisible bytes at the start of a file --------------------------------- */
++    {
++        static const char bom[] = "\xef\xbb\xbf# TRIP\nui_hz=4\n";     /* a valid file an editor prefixed */
++        o = d; logged = 0; transcript[0] = 0;
++        assert(kui_options_parse(&o, bom, sizeof(bom) - 1, log_line) && o.ui_hz[0] == 4);
++        assert(strstr(transcript, "UTF-8 byte-order mark; ignored"));
++        static const char utf16[] = "\xff\xfe#\0 \0T\0\n\0";       /* UTF-16LE: unreadable as text */
++        o = d; logged = 0; transcript[0] = 0;
++        assert(!kui_options_parse(&o, utf16, sizeof(utf16) - 1, log_line) && !memcmp(&o, &d, sizeof(o)));
++        assert(strstr(transcript, "UTF-16") && strstr(transcript, "starts ff fe"));
++        static const char utf16_no_mark[] = "#\0 \0T\0R\0I\0P\0\n\0";   /* no mark, but NUL bytes give it away */
++        o = d; logged = 0; transcript[0] = 0;
++        assert(!kui_options_parse(&o, utf16_no_mark, sizeof(utf16_no_mark) - 1, log_line) && !memcmp(&o, &d, sizeof(o)));
++        assert(strstr(transcript, "NUL bytes"));
++        /* A bad line says what it starts with, as text and as bytes. */
++        o = d; logged = 0; transcript[0] = 0;
++        assert(!parse(&o, "# ok\nTRIP 1b\n") && !memcmp(&o, &d, sizeof(o)));
++        assert(strstr(transcript, "line 2: expected key=value") && strstr(transcript, "\"TRIP 1\"") && strstr(transcript, "54 52 49 50 20 31"));
++        /* An unknown key is named. */
++        o = d; logged = 0; transcript[0] = 0;
++        assert(parse(&o, "sweep_dma=on\n") && strstr(transcript, "unknown key 'sweep_dma' ignored"));
++    }
++
+     unsigned shipped = 0;
+     for(int i = 1; i < argc; ++i) {
+         static char text[8192];
+@@ -271,6 +294,25 @@ int main(int argc, char **argv) {
+         assert(logged == 0);
+         ++shipped;
+     }
++    /* Every shipped config, as an editor on another platform might save it: with a UTF-8 byte-order
++     * mark, and with Windows line endings. Each must mean exactly what the plain file means. */
++    for(int i = 1; i < argc; ++i) {
++        static char plain[16384], with_bom[16400], crlf[32800];
++        FILE *file = fopen(argv[i], "rb");
++        assert(file);
++        size_t n = fread(plain, 1, sizeof(plain), file);
++        fclose(file);
++        assert(n > 0 && n < sizeof(plain));
++        memcpy(with_bom, "\xef\xbb\xbf", 3); memcpy(with_bom + 3, plain, n);
++        size_t c = 0;
++        for(size_t k = 0; k < n; ++k) { if(plain[k] == '\n') crlf[c++] = '\r'; crlf[c++] = plain[k]; }
++        struct kui_options a = d, b = d, w = d;
++        assert(kui_options_parse(&a, plain, n, log_line));
++        if(!kui_options_parse(&b, with_bom, n + 3, log_line)) { fprintf(stderr, "%s: rejected with a byte-order mark\n", argv[i]); assert(0); }
++        if(!kui_options_parse(&w, crlf, c, log_line)) { fprintf(stderr, "%s: rejected with CRLF line endings\n", argv[i]); assert(0); }
++        if(memcmp(&a, &b, sizeof(a))) { fprintf(stderr, "%s: a byte-order mark changed its meaning\n", argv[i]); assert(0); }
++        if(memcmp(&a, &w, sizeof(a))) { fprintf(stderr, "%s: CRLF line endings changed its meaning\n", argv[i]); assert(0); }
++    }
+     printf("PASS options: defaults, full file, transport, booleans, unknown keys, rejection, note bounds, experiment keys, %u shipped configs\n", shipped);
+     return 0;
+ }
+diff --git a/tools/verify_dump.py b/tools/verify_dump.py
+index 587c461..294f4cb 100644
+--- a/tools/verify_dump.py
++++ b/tools/verify_dump.py
+@@ -24,7 +24,13 @@ def require(ok, message):
+ 
+ 
+ def load_json(path):
+-    require(path.is_file() and not path.is_symlink(), f"Missing/unsafe metadata: {path.name}")
++    if path.is_symlink():
++        raise ValueError(f"Unsafe metadata (a symbolic link): {path}")
++    if not path.is_file():
++        # A relative path is taken from the directory the tool is run in. Run from tools/ with
++        # docs/evidence/x.json, this used to say only "Missing/unsafe metadata: x.json".
++        raise ValueError(f"Missing metadata: {path.name}. Looked for {path.resolve()}; a relative "
++                         "path is taken from the directory you ran this in")
+     require(path.stat().st_size <= 128 * 1024, "Metadata is too large")
+     return json.loads(path.read_text())
+ 

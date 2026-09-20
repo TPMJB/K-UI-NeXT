@@ -89,3 +89,19 @@ class DumpVerifierTests(unittest.TestCase):
             with self.assertRaises(ValueError):v.verify(self.path)
         self.m=original;self.write();(self.path/"disc.gdi").write_text("wrong\n")
         with self.assertRaises(ValueError):v.verify(self.path)
+
+    def test_a_missing_metadata_file_names_the_path_it_looked_for(self):
+        # Run from tools/ with docs/evidence/x.json, the reference was looked for in tools/docs/evidence and
+        # the error named only x.json. It now says where it looked, and calls a symbolic link a link.
+        with tempfile.TemporaryDirectory() as d:
+            missing = Path(d) / "nowhere" / "reference.json"
+            with self.assertRaises(ValueError) as caught:
+                v.load_json(missing)
+            self.assertIn(str(missing.resolve()), str(caught.exception))
+            self.assertIn("relative path is taken from the directory you ran this in", str(caught.exception))
+            target, link = Path(d) / "real.json", Path(d) / "link.json"
+            target.write_text("{}")
+            link.symlink_to(target)
+            with self.assertRaises(ValueError) as caught:
+                v.load_json(link)
+            self.assertIn("symbolic link", str(caught.exception))

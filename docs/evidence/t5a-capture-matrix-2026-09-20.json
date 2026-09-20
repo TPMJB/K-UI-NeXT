@@ -1,0 +1,185 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "bea895bb93b4",
+  "experiment": "Trip 5a (capture matrix): the REAL capture engine on 4096 sectors (9.6 MB) at FAD 45150, hash both/crc32 x end read-back on/off x UI full/2 Hz; two complete runs.",
+  "inputs": [
+    {
+      "file": "T5A_diag.txt",
+      "kept_as": "t5a-capture-matrix-2026-09-20.txt",
+      "bytes": 24542,
+      "sha256": "ba5f03ceb3f16dd903380895aba6b148080bf935445ef6be3c027151a480cbc7"
+    }
+  ],
+  "config": {
+    "file": "docs/bench-cfgs/t5a-capture-matrix.cfg",
+    "ui_hz": [
+      "full",
+      "2"
+    ],
+    "sections": [
+      "capture"
+    ],
+    "capture_hash": [
+      "both",
+      "crc32"
+    ],
+    "end_readback": [
+      "on",
+      "off"
+    ],
+    "resume_check": [
+      "full",
+      "size"
+    ],
+    "capture_sectors": 4096,
+    "capture_fad": 45150
+  },
+  "table": [
+    {
+      "ui": "full",
+      "hash": "both",
+      "end_readback": "on",
+      "capture_kib_s": 399.1,
+      "total_kib_s": 185.1,
+      "ui_pct": 31.7,
+      "predicted_capture": 350,
+      "predicted_total": 176,
+      "capture_vs_prediction_pct": 14.0,
+      "total_vs_prediction_pct": 5.1,
+      "spread_between_runs_pct": 0.1
+    },
+    {
+      "ui": "full",
+      "hash": "both",
+      "end_readback": "off",
+      "capture_kib_s": 399.6,
+      "total_kib_s": 399.6,
+      "ui_pct": 31.2,
+      "predicted_capture": null,
+      "predicted_total": null,
+      "capture_vs_prediction_pct": null,
+      "total_vs_prediction_pct": null,
+      "spread_between_runs_pct": 0.8
+    },
+    {
+      "ui": "full",
+      "hash": "crc32",
+      "end_readback": "on",
+      "capture_kib_s": 515.0,
+      "total_kib_s": 235.7,
+      "ui_pct": 32.2,
+      "predicted_capture": 440,
+      "predicted_total": 222,
+      "capture_vs_prediction_pct": 17.0,
+      "total_vs_prediction_pct": 6.1,
+      "spread_between_runs_pct": 0.5
+    },
+    {
+      "ui": "full",
+      "hash": "crc32",
+      "end_readback": "off",
+      "capture_kib_s": 514.5,
+      "total_kib_s": 514.5,
+      "ui_pct": 32.3,
+      "predicted_capture": null,
+      "predicted_total": null,
+      "capture_vs_prediction_pct": null,
+      "total_vs_prediction_pct": null,
+      "spread_between_runs_pct": 0.4
+    },
+    {
+      "ui": "2",
+      "hash": "both",
+      "end_readback": "on",
+      "capture_kib_s": 551.2,
+      "total_kib_s": 257.9,
+      "ui_pct": 4.7,
+      "predicted_capture": 430,
+      "predicted_total": 228,
+      "capture_vs_prediction_pct": 28.2,
+      "total_vs_prediction_pct": 13.1,
+      "spread_between_runs_pct": 1.0
+    },
+    {
+      "ui": "2",
+      "hash": "both",
+      "end_readback": "off",
+      "capture_kib_s": 552.5,
+      "total_kib_s": 552.5,
+      "ui_pct": 4.5,
+      "predicted_capture": null,
+      "predicted_total": null,
+      "capture_vs_prediction_pct": null,
+      "total_vs_prediction_pct": null,
+      "spread_between_runs_pct": 0.1
+    },
+    {
+      "ui": "2",
+      "hash": "crc32",
+      "end_readback": "on",
+      "capture_kib_s": 717.3,
+      "total_kib_s": 328.8,
+      "ui_pct": 5.2,
+      "predicted_capture": 527,
+      "predicted_total": 283,
+      "capture_vs_prediction_pct": 36.1,
+      "total_vs_prediction_pct": 16.2,
+      "spread_between_runs_pct": 0.1
+    },
+    {
+      "ui": "2",
+      "hash": "crc32",
+      "end_readback": "off",
+      "capture_kib_s": 704.9,
+      "total_kib_s": 704.9,
+      "ui_pct": 5.2,
+      "predicted_capture": null,
+      "predicted_total": null,
+      "capture_vs_prediction_pct": null,
+      "total_vs_prediction_pct": null,
+      "spread_between_runs_pct": 2.6
+    }
+  ],
+  "derived": {
+    "effects": {
+      "sha_cost": [
+        0.28737645439759807,
+        0.2757466063348417
+      ],
+      "ui_gain": [
+        0.38245965219567135,
+        0.3699708454810495
+      ],
+      "per_chunk_ms_best": {
+        "disc": 28.3,
+        "edc": 2.9,
+        "write": 67.0,
+        "sha": 0.0,
+        "crc": 5.8,
+        "ckpt": 0.2
+      },
+      "wall_ms_per_chunk": 104.3,
+      "readback_over_capture": [
+        1.1566928209943612,
+        1.1853958731785537,
+        1.1376123757525152,
+        1.1819773905964612
+      ],
+      "old_total": 185.1,
+      "new_total": 704.9,
+      "resume_full_2hz_crc32": 606.8,
+      "speedup_finished_dump": 3.81
+    },
+    "conclusions": [
+      "Dropping SHA-256 speeds the capture phase by 29% at full UI and 28% at 2 Hz.",
+      "Capping the UI at 2 Hz speeds it by 38% (both) and 37% (crc32); the census UI share was 31.7-32.4% at full and 4.4-5.2% at 2 Hz, as in Trip 1.",
+      "The end read-back costs 114-119% of the capture time again, so a finished dump ran at 185.1 KiB/s under the old defaults and 704.9 KiB/s with crc32, no read-back and 2 Hz: 3.81x.",
+      "The pre-registered predictions were too LOW: capture rates missed by +14% to +36%. Cause visible in the parts lines: the model charged the whole media time to the capture; measured disc time per 32-sector chunk is 28.3 ms at 2 Hz/crc32, only 15% above the 24.7 ms that the fastest command takes in the Trip 6a sweep (min=), which is a command whose data the drive had already buffered. The drive reads ahead while the CPU writes to the SD card, so that overlap is already happening (an inference from these two numbers, not a separate measurement).",
+      "Where a chunk's 104 ms goes at 2 Hz/crc32/no read-back: SD write 67.0 ms, disc 28.3 ms (about 87% of it is what the fastest, already-buffered command takes in the Trip 6a sweep), CRC32 5.8 ms, EDC 2.9 ms. The SD write is 64% of the time."
+    ]
+  },
+  "limitations": [
+    "One card, one disc, one console; two runs; inner radius only (FAD 45150), where the drive is slowest; the outer radius reads faster (Trip 2d), so a whole-disc rate should be a little higher.",
+    "Bench captures publish nothing and are deleted, so they do not exercise the manifest or publish path (Trip 7 does)."
+  ]
+}

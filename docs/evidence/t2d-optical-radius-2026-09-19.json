@@ -290,6 +290,6 @@
     ]
   },
   "limitations": [
-    "One card, one disc, one console; two runs. The first run of a session read faster at FAD 45150 than the second in this file, in the T2c file and in Trip 1 (2.7-8% each); cause unknown, so compare runs from the same position in a session."
+    "One card, one disc, one console; two runs. The second run read slower than the first in three sweep files of 32-sector reads at FAD 45150 (Trips 2c -7.6%, 2d -5.6%, 6a -5.8%), but not in Trip 1's optical bench at a quiet UI (1196.4 vs 1196.0 KiB/s) and not in a real capture (Trip 5a). Cause unknown."
   ]
 }

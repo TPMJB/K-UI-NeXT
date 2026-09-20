@@ -222,6 +222,8 @@ loop. With no other new keys in `bench.cfg` the bench runs the same sections in
 the same order as before and adds only the `BENCH cpu` and `BENCH lat` lines and
 the CRC16 lines in the hash section, described below.
 
+**Saving `bench.cfg`:** plain text, UTF-8 or ANSI, with LF or Windows (CRLF) line endings. A UTF-8 byte-order mark (some editors add one) is skipped; UTF-16 is rejected and named; a bad line is reported with what it starts with, as text and as bytes, and an unknown key is named.
+
 | Key | What it does |
 |---|---|
 | `ui_hz=full,8,2,0` | One full pass of the selected sections per value: the UI is capped to that many redraws per second while it measures. **Default 2**; `full` is the old unthrottled loop. Also applies to real captures, resumes and verifies (the first value). |

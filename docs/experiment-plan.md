@@ -202,6 +202,8 @@ S/288.5: for slice2 (S about 13.2) that is roughly +9% on write and
 +5% on read. `agree=OK` must appear; on `MISMATCH` ignore the timings. If the
 measured saving is under a few percent, leave KOS alone.
 
+**Result, 2026-09-20** (from the default benchmark the T7 session's R press ran; [evidence](evidence/t1b-crc16-and-sd-sizes-from-the-t7-bench-2026-09-20.json)). CPU cycles a byte: KOS 22.7, table 11.7, slice2 8.8, nibble 24.9 (slower than KOS, as predicted); all four agree. On the T7 capture that projects to: slice2 saves about 87 s of 1605 (**+5.7% capture speed**), the table version about 69 s (+4.5%). The SD-write-only figure above is larger because the write is only 64% of a capture. Worth doing after the bigger levers, and at link time (`-Wl,--wrap=net_crc16ccitt`) rather than by patching KOS.
+
 ### Trip 2: the drive (`t2a`..`t2e`, ~1 min each)
 
 `sections=sweep` reads sectors with the real PIO command in a bench-only buffer.
@@ -262,9 +264,7 @@ from the logs.
   PIO therefore shrinks toward the outer edge**; only DMA (Trip 6) could also hide the
   transfers. Earlier real captures ran near 373 KiB/s (section 1) against 1250-2000
   here, so the drive is not the limit at any radius. All verify lines OK.
-- Observation, cause unknown: the first run of a session read faster at FAD 45150 than
-  the second in this file, in the 2c file and in Trip 1 (2.7-8%). Compare runs from the
-  same position in a session and say which one it was in `note=`.
+- Observation, cause unknown: the second run read slower than the first in the three sweep files of 32-sector reads at FAD 45150 (Trips 2c -7.6%, 2d -5.6%, 6a -5.8%), but not in Trip 1's optical bench at a quiet UI (1196.4 vs 1196.0 KiB/s) and not in a real capture (Trip 5a). Compare runs from the same position in a session and say which one it was in `note=`.
 
 The overlap decision, after Trip 2:
 
@@ -349,6 +349,28 @@ report save wrote a byte through a dangling stack pointer. Both are fixed and ea
 a regression test (section 7). The predictions above stand; rerun 5a on the build that
 carries the fix.
 
+**Result, 2026-09-20** (build `bea895bb93b4`; two runs; [evidence](evidence/t5a-capture-matrix-2026-09-20.json)). KiB/s, mean of the two runs, 4096 sectors at FAD 45150. "Finished dump" is the capture plus the end read-back where there is one.
+
+| UI | hash | read-back | capture | finished dump | predicted capture / total |
+|---|---|---|---|---|---|
+| full | both | on | 399 | 185 | 350 / 176 (+14% / +5%) |
+| full | both | off | 400 | 400 |  |
+| full | crc32 | on | 515 | 236 | 440 / 222 (+17% / +6%) |
+| full | crc32 | off | 514 | 514 |  |
+| 2 | both | on | 551 | 258 | 430 / 228 (+28% / +13%) |
+| 2 | both | off | 552 | 552 |  |
+| 2 | crc32 | on | 717 | 329 | 527 / 283 (+36% / +16%) |
+| 2 | crc32 | off | 705 | 705 |  |
+
+- **The fast settings work, and by more than predicted.** Old defaults (full UI, both hashes, read-back on) finish a dump at 185.1 KiB/s; 2 Hz, CRC32 only, no read-back finish it at 704.9: **3.81x**. SHA-256 costs 28-29% of capture speed, the UI cap gives 37-38%, and the end read-back takes 114-119% of the capture time again.
+- **The predictions above were too low (+14% to +36% on capture speed).** The model charged the whole media time to the capture. The parts lines show otherwise: disc time is 28.3 ms per 32-sector chunk at 2 Hz/CRC32, only ~15% above the 24.7 ms of the fastest command in the Trip 6a sweep, which is a command whose data the drive had already buffered. The drive reads ahead while the CPU writes to the SD card, so most of that overlap is already happening. The UI effect was also larger than modelled (37-38% against the ~23% predicted).
+- **Where a chunk goes** (2 Hz, CRC32, no read-back, 104.3 ms): SD write 67.0 ms (64%), disc 28.3 ms, CRC32 5.8 ms, EDC 2.9 ms. The SD write is the hard floor: the card is driven by bit-banging the serial port's pins at about 143 cycles a byte plus 22 for KOS's CRC16 (Trips 1 and 3b), a peripheral-bus limit that the drive, the hashes and the UI cannot change.
+- **What is left, as arithmetic from those parts (a projection, not a measurement):** DMA that overlaps the 28.3 ms transfer with the SD write (Trip 6a, experimental build), a table CRC16 (KOS's loop is ~13% of the write, ~9 ms; Trip 1b), and 1 Hz instead of 2 Hz (~2.6 ms) could together approach ~67 ms a chunk, roughly 1100 KiB/s: about 1.5x from here, and not more.
+- The full-disc estimate for Trip 7 follows: track 3 is 1,185,760,800 bytes, which at 704.9 KiB/s is about 27 minutes (the outer radius is no slower). The old defaults would have taken about 104 minutes at their inner-radius rate.
+- The resume prefix check with `check=full` re-reads the whole prefix (606.8 KiB/s here); `check=size` takes 4 ms but cannot see a corrupted prefix.
+
+**Trip 6a on the default build (2026-09-20; [evidence](evidence/t6a-pio-only-2026-09-20.json)).** DMA and the competing thread were skipped, as designed: they are in the experimental build only. The PIO points show 32 sectors beating 128 by 6% at FAD 45150 (1245 vs 1168 KiB/s), so the capture engine's command size is right. **Trip 1b was rejected** at `bench.cfg line 1: expected key=value` in both runs, so nothing was measured ([record](evidence/t1b-crc16-rejected-2026-09-20.json)); the loader now skips a UTF-8 byte-order mark and says what a bad line starts with.
+
 ### Trip 6: GD-ROM DMA, and what a second thread would see (`t6a-dma-probe.cfg`, ~2 min)
 
 **Experimental, and not in the default build**: it needs `make diagnostic KUI_EXPERIMENTAL=1` (see
@@ -398,8 +420,15 @@ resumed job keeps the hash mode it started with); let it finish. It reports
 PC: `python3 tools/verify_dump.py <new folder> --reference
 docs/evidence/sword-of-the-berserk-reference.json`. Pass means three `PASS` lines with
 CRC32 `bcec7767`, `0ff934e3`, `2cfb5dcb` and no reference mismatch. If the two
-catalogue files are in `KUI/`, the console report also names the match. Do it after 5a
-has said which settings are fastest.
+catalogue files are in `KUI/`, the console report also names the match. 5a has now said which settings are fastest (its result above); at its rate track 3 should take roughly 27 minutes, and it changes only how the dump is *checked*: the disc is read exactly as before.
+
+**Result, 2026-09-20** (build `bea895bb93b4`; [evidence](evidence/t7-real-capture-2026-09-20.json)). The whole disc took **26.7 minutes** (1605 s, average 723.5 KiB/s; track 3 alone 724.6 KiB/s) with 0 retries in 15,797 reads. Trip 5a's inner-edge rate predicted 27.4 minutes for track 3 and it took 26.6 (-2.7%), and the time split (SD write 63.8%, disc 27.3%, CRC32 5.6%, EDC 2.8%) matched the bench's. Against the old defaults that is roughly 3.9x (an estimate: about 105 minutes at Trip 5a's old-default rate; no old-default run of this disc was timed).
+
+Verification came in two independent parts:
+- **On the console:** `Reference check (TOSEC): FULL TRACK MATCH`. That compares the CRC32 accumulated *while reading*, so it proves the disc was read correctly; the log also says `saved data NOT re-read`.
+- **On the PC:** `SAVED DATA VERIFIED` (every saved file matches the CRC32 the console recorded), and the reference comparison passes on all three tracks (CRC32 and size everywhere; SHA-256 for tracks 1-2). All three tracks are byte-identical by SHA-256, CRC32 and size to the capture made on 2026-09-17 with SHA-256 and a full read-back, which also corroborates that capture's track 3 SHA-256.
+
+A trap: `verify_dump.py --reference docs/evidence/...` takes the path relative to the directory you run it in. Run it from the repository root, or write `../docs/evidence/...` from `tools/`; the error now says where it looked.
 
 ## 5. Reading the new lines
 
@@ -436,10 +465,10 @@ only if the hypothesis they depend on does.
 |---|---|---|---|---|
 | 1 | **UI redraw cap, now the default (2 Hz)** | +43-51% on SD write, measured | Done (Trip 1) | None; `ui_hz=full` restores the old loop. A lighter partial-redraw UI could recover the remaining ~5% |
 | 2 | Capture chunk 128 (SD write +7%, optical unknown) | +3% | Trip 2a | Low; buffers grow to 301 KB and 602 KB |
-| 3 | SHA-256 out of the capture loop | +26-28% | Decided (section 6a) | Medium; a format change |
-| 4 | Overlap the drive with SD/hash work | +20-50% more, ideal | Trips 2 and 6 | Medium to high; Trip 6 is the first evidence, on the drive alone |
+| 3 | SHA-256 out of the capture loop | +28-29% **measured** (Trip 5a) | Done as an option (`capture_hash=crc32`); the default is still `both`; Trip 7 decides | Medium; a format change |
+| 4 | Overlap the drive with SD/hash work | **Revised by Trip 5a:** the drive already reads ahead while the SD is written, so waiting is mostly gone; what is left is the ~28.3 ms PIO transfer, which only DMA can overlap (Trip 6a, experimental build): up to ~1.3x | Trip 6a | Medium to high |
 | 5 | Aligned, coalesced SD writes | 0-8% | Trip 3 | Low |
-| 6 | Table-driven CRC16 in KOS's `sd.c` | write time -13.4% at most; predicted about +9% write, +5% read for slice2 (measured 22.2 cycles a byte; Trip 1b measures the candidates first) | Trip 1b | Low; a one-line patch to the pinned KOS, not an override (`net_crc.o` also defines `net_crc32le`/`be`, so overriding one function risks a duplicate-symbol link error) |
+| 6 | Table-driven CRC16 in KOS's `sd.c` | **+5.7% on the capture** (slice2; projected from the measured microbenchmark, Trip 1b) | Trip 1b: done | Low to medium: a link-time `--wrap`, no KOS patch |
 | 7 | Faster SHA-256 in C | +3% | none | Low; compiles to ~69 instructions per round today |
 | 8 | Audio: larger commands | ~+20%? | Trip 2e | Low |
 
@@ -569,6 +598,11 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   text in a scratch git repository (build succeeding and failing) and requires a clean tree afterwards; with the
   bug put back it reports `?? build.log`. **Lesson: a CI change is code with downstream consumers; read what runs
   after it.**
+- **`verify_dump.py --reference` and the working directory (2026-09-20).** After a clean `SAVED DATA VERIFIED` the
+  reference step failed with "Missing/unsafe metadata: sword-of-the-berserk-reference.json", because the relative
+  path was taken from `tools/` (it looked for `tools/docs/evidence/...`). Not a data problem: reproduced exactly, and
+  the real loader and comparison pass on the hashes that were reported. The message now names the absolute path it
+  looked for and says relative paths are taken from the current directory; a symbolic link is called a link.
 - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
   slack a second thread could reclaim. It was the UI thread running. That is the
   reason Trip 1 exists.

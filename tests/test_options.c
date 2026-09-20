@@ -258,6 +258,29 @@ int main(int argc, char **argv) {
     /* Every example config we ship (paths come from the Makefile) must parse
      * with no complaint, so a later change to a limit cannot silently break a
      * file a user is told to copy to their card. */
+    /* --- invisible bytes at the start of a file --------------------------------- */
+    {
+        static const char bom[] = "\xef\xbb\xbf# TRIP\nui_hz=4\n";     /* a valid file an editor prefixed */
+        o = d; logged = 0; transcript[0] = 0;
+        assert(kui_options_parse(&o, bom, sizeof(bom) - 1, log_line) && o.ui_hz[0] == 4);
+        assert(strstr(transcript, "UTF-8 byte-order mark; ignored"));
+        static const char utf16[] = "\xff\xfe#\0 \0T\0\n\0";       /* UTF-16LE: unreadable as text */
+        o = d; logged = 0; transcript[0] = 0;
+        assert(!kui_options_parse(&o, utf16, sizeof(utf16) - 1, log_line) && !memcmp(&o, &d, sizeof(o)));
+        assert(strstr(transcript, "UTF-16") && strstr(transcript, "starts ff fe"));
+        static const char utf16_no_mark[] = "#\0 \0T\0R\0I\0P\0\n\0";   /* no mark, but NUL bytes give it away */
+        o = d; logged = 0; transcript[0] = 0;
+        assert(!kui_options_parse(&o, utf16_no_mark, sizeof(utf16_no_mark) - 1, log_line) && !memcmp(&o, &d, sizeof(o)));
+        assert(strstr(transcript, "NUL bytes"));
+        /* A bad line says what it starts with, as text and as bytes. */
+        o = d; logged = 0; transcript[0] = 0;
+        assert(!parse(&o, "# ok\nTRIP 1b\n") && !memcmp(&o, &d, sizeof(o)));
+        assert(strstr(transcript, "line 2: expected key=value") && strstr(transcript, "\"TRIP 1\"") && strstr(transcript, "54 52 49 50 20 31"));
+        /* An unknown key is named. */
+        o = d; logged = 0; transcript[0] = 0;
+        assert(parse(&o, "sweep_dma=on\n") && strstr(transcript, "unknown key 'sweep_dma' ignored"));
+    }
+
     unsigned shipped = 0;
     for(int i = 1; i < argc; ++i) {
         static char text[8192];
@@ -270,6 +293,25 @@ int main(int argc, char **argv) {
         if(!kui_options_parse(&o, text, used, log_line)) { fprintf(stderr, "%s: %s\n", argv[i], last); assert(!"shipped config rejected"); }
         assert(logged == 0);
         ++shipped;
+    }
+    /* Every shipped config, as an editor on another platform might save it: with a UTF-8 byte-order
+     * mark, and with Windows line endings. Each must mean exactly what the plain file means. */
+    for(int i = 1; i < argc; ++i) {
+        static char plain[16384], with_bom[16400], crlf[32800];
+        FILE *file = fopen(argv[i], "rb");
+        assert(file);
+        size_t n = fread(plain, 1, sizeof(plain), file);
+        fclose(file);
+        assert(n > 0 && n < sizeof(plain));
+        memcpy(with_bom, "\xef\xbb\xbf", 3); memcpy(with_bom + 3, plain, n);
+        size_t c = 0;
+        for(size_t k = 0; k < n; ++k) { if(plain[k] == '\n') crlf[c++] = '\r'; crlf[c++] = plain[k]; }
+        struct kui_options a = d, b = d, w = d;
+        assert(kui_options_parse(&a, plain, n, log_line));
+        if(!kui_options_parse(&b, with_bom, n + 3, log_line)) { fprintf(stderr, "%s: rejected with a byte-order mark\n", argv[i]); assert(0); }
+        if(!kui_options_parse(&w, crlf, c, log_line)) { fprintf(stderr, "%s: rejected with CRLF line endings\n", argv[i]); assert(0); }
+        if(memcmp(&a, &b, sizeof(a))) { fprintf(stderr, "%s: a byte-order mark changed its meaning\n", argv[i]); assert(0); }
+        if(memcmp(&a, &w, sizeof(a))) { fprintf(stderr, "%s: CRLF line endings changed its meaning\n", argv[i]); assert(0); }
     }
     printf("PASS options: defaults, full file, transport, booleans, unknown keys, rejection, note bounds, experiment keys, %u shipped configs\n", shipped);
     return 0;
