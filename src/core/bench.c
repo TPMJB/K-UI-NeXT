@@ -821,7 +821,8 @@ static enum kui_bench_result bench_capture(const struct kui_options *o) {
     unsigned fad = o->capture_fad ? o->capture_fad : o->optical_fad;
     for(unsigned h = 0; h < o->capture_hash_count; ++h)
     for(unsigned e = 0; e < o->end_readback_count; ++e)
-    for(unsigned s = 0; s < o->sample_readback_count; ++s) {
+    for(unsigned s = 0; s < o->sample_readback_count; ++s)
+    for(unsigned d = 0; d < o->capture_read_count; ++d) {
         struct kui_capture_options co;
         struct kui_capture_stats st;
         char brief[64], detail[112];
@@ -830,8 +831,9 @@ static enum kui_bench_result bench_capture(const struct kui_options *o) {
         co.crc_only = o->capture_crc_only[h];
         co.skip_end_readback = !o->end_readback[e];
         co.sample_every = o->sample_readback[s];
-        snprintf(brief, sizeof(brief), "hash=%s end=%s sample=%u", co.crc_only ? "crc32" : "both",
-            o->end_readback[e] ? "on" : "off", co.sample_every);
+        co.read_dma = o->capture_dma[d];
+        snprintf(brief, sizeof(brief), "hash=%s end=%s sample=%u read=%s", co.crc_only ? "crc32" : "both",
+            o->end_readback[e] ? "on" : "off", co.sample_every, co.read_dma ? "dma" : "pio");
         cpu_begin();
         enum kui_capture_result r = ops->capture_run(ops->ctx, fad, o->capture_sectors,
             o->capture_audio, KUI_CAPTURE_NEW, &co, &st);

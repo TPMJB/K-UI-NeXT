@@ -468,11 +468,15 @@ drive and card, writing no dump. **Result, 2026-09-20, two runs**
 - What this is NOT: the pipeline has no EDC check, no checkpoints, no SHA-256, no retries and no
   resume. It measures the loop, not the engine.
 
-**Next, and not yet built: an overlapped capture.** The engine still reads with PIO; nothing in a
-capture changed. Realising this means double-buffering `kui_capture`: start the DMA read of chunk
-N+1, write and hash chunk N while it runs, then swap. The risk is not the DMA, which is now
-measured, but the loop around it: checkpoint ordering, cancellation, the retry path and the guard
-bytes all have to keep working at every interleaving.
+**Built, 2026-09-20: the overlapped capture engine (`capture_read=dma`, Trip 10).** `kui_capture`
+now double-buffers: the DMA read of chunk N+1 is begun as soon as chunk N is in hand, and runs
+while N is written and hashed. It is opt-in and defaults to PIO, and the console only offers the
+DMA ops in the experimental build. Any chunk it cannot overlap falls back to the ordinary PIO
+read, which keeps the retry and recovery behaviour unchanged. Two bugs the host suite caught
+while building it: a fatal DMA result was falling back to a PIO retry instead of stopping, and
+`sample_readback` compared against `job.data` when the chunk could now be in the second buffer
+(the existing sampled read-back scenario failed, which is what it is for). What is NOT yet
+measured: the engine's real rate on hardware (Trip 10) and a full disc verified on a PC.
 
 Caveats that shape how to read it: the DMA probe **polls** rather than taking the
 interrupt (this runtime never starts KOS's CD-ROM subsystem, so nothing installs

@@ -1,5 +1,17 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
+
+/* The overlapped read exists only in the experimental build; without it the engine sees NULL
+ * and reads with PIO whatever bench.cfg asks for. */
+#ifdef KUI_EXPERIMENTAL_DMA
+static bool capture_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+    return kui_disc_read_begin(ctx,fad,sectors,out);
+}
+static enum kui_read_result capture_read_end(void *ctx) { return kui_disc_read_end(ctx); }
+#define KUI_CAPTURE_DMA_OPS capture_read_begin,capture_read_end
+#else
+#define KUI_CAPTURE_DMA_OPS NULL,NULL
+#endif
 #include <kos/timer.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -21,7 +33,7 @@ enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool
      * the job, and the console closes it when the bench ends. Opening and closing it here left
      * it closed for both of those. */
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,NULL,bench_log,"000000000000",now_us,
-        kui_disc_timing_phase,options,stats};
+        kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,options,stats};
     return kui_capture_bench(&ops,fad,sectors,audio,mode);
 }
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build) {
@@ -38,9 +50,10 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
      * it has always been. A resumed job keeps the hash mode it started with. */
     struct kui_capture_options options={
         .crc_only=kui_options.capture_crc_only[0],.skip_end_readback=!kui_options.end_readback[0],
-        .resume_size_only=kui_options.resume_size[0],.sample_every=kui_options.sample_readback[0]};
+        .resume_size_only=kui_options.resume_size[0],.sample_every=kui_options.sample_readback[0],
+        .read_dma=kui_options.capture_dma[0]};
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,kui_capture_status,
-        kui_log,build,now_us,kui_disc_timing_phase,&options,NULL};
+        kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,NULL};
     /* Whole-operation CPU split: how much of this capture the UI thread took. */
     struct kui_cpu_census cpu_before,cpu_after;
     kui_cpu_census_mark(&cpu_before);

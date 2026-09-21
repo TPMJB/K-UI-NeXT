@@ -161,8 +161,10 @@ def check_capture(out):
     assert re.search(r"^RECONNECTS 1 LAST sci=0 crc=1$", out, re.M), out
     assert not matching(out, r"Mount failed|not connected")
     combos = [(h, e, s) for h in ("both", "crc32") for e in ("on", "off") for s in (0, 3)]
+    # Both read modes run: the overlapped engine must produce the same shape of result.
+    assert len(matching(out, r"^BENCH capture uihz=full .* read=dma sectors=256 result=ok ")) == 8
     for h, e, s in combos:
-        brief = f"hash={h} end={e} sample={s}"
+        brief = f"hash={h} end={e} sample={s} read=pio"
         run_line = matching(out, rf"^BENCH capture uihz=full {brief} sectors=256 result=ok bytes=602112 ")
         assert len(run_line) == 1 and field(run_line[0], "us") > 0, brief
         total = matching(out, rf"^BENCH capture total {brief} ")
@@ -182,7 +184,8 @@ def check_capture(out):
     full = matching(out, r"^BENCH resume uihz=full hash=\w+ check=full sectors=256 result=ok")
     size = matching(out, r"^BENCH resume uihz=full hash=crc32 check=size sectors=256 result=ok")
     skipped = matching(out, r"^BENCH resume uihz=full hash=both check=size skipped")
-    assert (len(full), len(size), len(skipped)) == (8, 4, 4), (len(full), len(size), len(skipped))
+    # Doubled against the pre-DMA suite: every combination now runs with read=pio and read=dma.
+    assert (len(full), len(size), len(skipped)) == (16, 8, 8), (len(full), len(size), len(skipped))
     # Not re-reading the prefix is the whole difference, and it must show.
     crc_full = [field(line, "us") for line in full if "hash=crc32" in line]
     assert max(field(line, "us") for line in size) * 10 < min(crc_full), (crc_full, size)

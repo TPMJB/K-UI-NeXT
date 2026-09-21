@@ -81,6 +81,63 @@ def main():
             baseline = digests(export(image, base / f"{kind}-base"))
             assert len(baseline) == 6
 
+            # --- capture_read=dma: the overlapped engine ------------------------------
+            # The whole point: identical bytes. Everything else about this option is a
+            # performance claim, but correctness is the thing a dump depends on.
+            image = fresh()
+            output = run(image, "new", opts="dma")
+            assert "SAVED DATA VERIFIED: all 6 tracks; CRC32 and SHA-256" in output
+            assert digests(export(image, base / f"{kind}-dma")) == baseline, "DMA changed the bytes"
+            begins, ends, pending = (int(x) for x in re.search(r"^DMA BEGINS (\d+) ENDS (\d+) PENDING (\d+)$", output, re.M).groups())
+            assert begins > 0 and begins == ends and pending == 0, (begins, ends, pending)
+
+            # A drive that refuses to start a DMA: the engine falls back to PIO and still
+            # produces the same dump.
+            image = fresh()
+            output = run(image, "new", "dma-nobegin", opts="dma")
+            assert "SAVED DATA VERIFIED" in output
+            assert digests(export(image, base / f"{kind}-dma-nobegin")) == baseline
+            begins, ends, pending = (int(x) for x in re.search(r"^DMA BEGINS (\d+) ENDS (\d+) PENDING (\d+)$", output, re.M).groups())
+            assert begins == 0 and ends == 0 and pending == 0
+
+            # A DMA that completes with a failure: the chunk is re-read the ordinary way.
+            image = fresh()
+            output = run(image, "new", "dma-endfail", opts="dma")
+            assert "SAVED DATA VERIFIED" in output
+            assert digests(export(image, base / f"{kind}-dma-endfail")) == baseline
+            assert re.search(r"^DMA BEGINS (\d+) ENDS \1 PENDING 0$", output, re.M)
+
+            # A DMA that reports a fatal error ends the capture, and nothing is left in flight.
+            image = fresh()
+            output = run(image, "new", "dma-endfatal", opts="dma", expected=1)
+            assert re.search(r"^DMA BEGINS (\d+) ENDS \1 PENDING 0$", output, re.M)
+
+            # Stopping mid-capture with a read in flight, then resuming with DMA, must still
+            # land on the same bytes: the interleaving a real B press produces.
+            image = fresh()
+            output = run(image, "new", "stop-middle", opts="dma", expected=3)
+            assert "STOPPED" in output and re.search(r"^DMA BEGINS (\d+) ENDS \1 PENDING 0$", output, re.M)
+            output = run(image, "resume", opts="dma")
+            assert "SAVED DATA VERIFIED" in output
+            assert digests(export(image, base / f"{kind}-dma-resume")) == baseline
+
+            # A bad EDC must still be caught when the chunk arrived by DMA, and must still
+            # exhaust the same bounded retries as the PIO path: the overlap must not become a
+            # way to skip the sector check.
+            image = fresh()
+            output = run(image, "new", "edc-fail", opts="dma", expected=1)
+            assert "SAVED DATA VERIFIED" not in output
+            assert "Invalid data-sector layout/EDC at FAD=45250" in output
+            assert "BAD_ATTEMPTS 11" in output, output
+            assert re.search(r"^DMA BEGINS (\d+) ENDS \1 PENDING 0$", output, re.M)
+
+            # A bad sector forces single-sector reads, which cannot be overlapped: the engine
+            # must fall back and still recover.
+            image = fresh()
+            output = run(image, "new", "transient", opts="dma")
+            assert "SAVED DATA VERIFIED" in output
+            assert digests(export(image, base / f"{kind}-dma-transient")) == baseline
+
             # --- crc32: no SHA-256 anywhere, and the data is byte-identical -------------
             image = fresh()
             output = run(image, "new", opts="crc32")

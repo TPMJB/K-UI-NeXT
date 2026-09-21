@@ -51,6 +51,12 @@ struct kui_capture_options {
     /* While capturing, re-read and byte-compare 1 chunk in this many right after
      * it is written; a mismatch stops the capture. 0 = off. */
     unsigned sample_every;
+    /* Read the disc with GD-ROM DMA and start the NEXT chunk's read while this one is written
+     * and hashed. Needs ops->read_begin/read_end; ignored without them. Measured on hardware
+     * (docs/evidence/t9-pipeline-overlap-2026-09-20.json): it hides 92% of the read time.
+     * The bytes are the same either way, and any chunk it cannot overlap - an odd sector count,
+     * or single-sector reads after a bad sector - falls back to the ordinary PIO read. */
+    bool read_dma;
     /* Benchmark run: publish no metadata and skip the reference check. */
     bool bench;
 };
@@ -76,6 +82,10 @@ struct kui_capture_ops {
     uint64_t (*now_us)(void *);
     /* Optional adapter profiling label; never changes the read policy. */
     void (*read_phase)(void *, bool capturing);
+    /* Optional split GD-ROM DMA read (see read_dma). begin returns at once; end must always
+     * follow a true begin, because until it does the firmware owns the buffer. */
+    bool (*read_begin)(void *, uint32_t fad, unsigned sectors, uint8_t *out);
+    enum kui_read_result (*read_end)(void *);
     const struct kui_capture_options *options;   /* NULL = defaults */
     struct kui_capture_stats *stats;             /* NULL = not wanted */
 };

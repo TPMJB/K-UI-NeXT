@@ -170,7 +170,7 @@ static enum kui_capture_result capture_run(void *p, uint32_t fad, unsigned secto
      * the link for the whole section, so it must already be open. */
     assert(t.linked);
     struct kui_capture_ops cops = {NULL, read_valid, cancelled, now_ms, NULL, quiet_log, "0123456789ab",
-                                   now_us, NULL, opt, st};
+                                   now_us, NULL, read_begin, read_end, opt, st};
     return kui_capture_bench(&cops, fad, sectors, audio, mode);
 }
 /* Job directories still on the card: the bench must leave none behind. */
@@ -255,6 +255,8 @@ int main(int argc, char **argv) {
         o.capture_crc_only[0] = false; o.capture_crc_only[1] = true; o.capture_hash_count = 2;
         o.end_readback[0] = true; o.end_readback[1] = false; o.end_readback_count = 2;
         o.sample_readback[0] = 0; o.sample_readback[1] = 3; o.sample_readback_count = 2;
+        /* Both read modes, so the overlapped engine is exercised end to end here too. */
+        o.capture_dma[0] = false; o.capture_dma[1] = true; o.capture_read_count = 2;
         o.resume_size[0] = false; o.resume_size[1] = true; o.resume_check_count = 2;
         if(!strcmp(scenario, "capture-noop")) ops.capture_run = NULL;
         if(!strcmp(scenario, "capture-nolink")) t.reconnect_fail = true;   /* the card will not come back */

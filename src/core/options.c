@@ -33,6 +33,7 @@ void kui_options_default(struct kui_options *out) {
     out->sections = KUI_SEC_OPTICAL | KUI_SEC_HASH | KUI_SEC_SD;
     out->sweep_sectors = 2048;
     out->sweep_verify = true;
+    out->capture_read_count = 1;   /* PIO: the overlapped read is opt-in */
     out->sweep_mode_count = 1;   /* PIO only */
     out->sweep_spin_count = 1;   /* no competing thread */
     /* Capture engine: the engine as it has always been. */
@@ -246,6 +247,7 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
     if(KEY("sd_bytes")) return parse_ulist(v, vend, 4096, (unsigned long)KUI_OPT_CHUNK_MAX * KUI_RAW_BYTES,
         512, KUI_OPT_SDBYTES_MAX, o->sd_bytes, &o->sd_bytes_count);
     if(KEY("capture_hash")) return parse_two_words(v, vend, "both", "crc32", o->capture_crc_only, &o->capture_hash_count);
+    if(KEY("capture_read")) return parse_two_words(v, vend, "pio", "dma", o->capture_dma, &o->capture_read_count);
     if(KEY("end_readback")) return parse_sd_list(v, vend, o->end_readback, &o->end_readback_count, true);
     if(KEY("resume_check")) return parse_two_words(v, vend, "full", "size", o->resume_size, &o->resume_check_count);
     if(KEY("sample_readback")) return parse_ulist(v, vend, 0, 1024, 1, KUI_OPT_CAPTURE_MAX,
@@ -318,7 +320,7 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
             "ui_hz", "sections", "sweep_chunks", "sweep_fads", "sweep_gap_us",
             "sweep_service_us", "sweep_sectors", "sweep_verify", "sd_bytes",
             "sweep_mode", "sweep_spin",
-            "capture_hash", "end_readback", "resume_check", "sample_readback",
+            "capture_hash", "end_readback", "resume_check", "sample_readback", "capture_read",
             "capture_sectors", "capture_fad", "capture_type"};
         bool is_known = false;
         for(size_t i = 0; i < sizeof(known) / sizeof(known[0]); ++i)
@@ -412,7 +414,10 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
     for(unsigned i = 0; i < o->resume_check_count; ++i)
         append_word(checks, sizeof(checks), o->resume_size[i] ? "size" : "full", i == 0);
     list_string(samples, sizeof(samples), o->sample_readback, o->sample_readback_count, "0");
-    log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s", hashes, ends, checks);
+    char reads[16] = "";
+    for(unsigned i = 0; i < o->capture_read_count; ++i)
+        append_word(reads, sizeof(reads), o->capture_dma[i] ? "dma" : "pio", i == 0);
+    log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s capture_read=%s", hashes, ends, checks, reads);
     log("OPTIONS sample_readback=%s capture_sectors=%u capture_type=%s", samples, o->capture_sectors,
         o->capture_audio ? "audio" : "data");
     if(o->capture_fad) log("OPTIONS capture_fad=%u", o->capture_fad);

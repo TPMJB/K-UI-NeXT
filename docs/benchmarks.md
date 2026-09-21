@@ -229,6 +229,15 @@ CRC16 candidates, and the capture engine at the four settings that matter), and
 setting, plus what the measured-but-unbuilt changes would be worth. Run it before and after a
 change. Lines it marks PROJECTED are arithmetic on measured rates, never an end-to-end run.
 
+**`capture_read=pio,dma`** (`docs/bench-cfgs/t10-capture-dma.cfg`) runs the real capture engine
+both ways: reading the disc as it always has, and reading it with GD-ROM DMA while the next
+chunk's read runs during this one's write and hash. Experimental build only; in an ordinary
+build the engine sees no DMA ops and reads with PIO whatever `bench.cfg` says. The engine falls
+back to a PIO read for any chunk it cannot overlap - an odd sector count, or the single-sector
+reads that follow a bad sector - so the bytes are the same either way. The host suite proves
+that against a byte-for-byte reference, including a bad EDC, a stop and resume, a drive that
+refuses to start a DMA, and one whose DMA completes with an error.
+
 **`sections=pipeline`** (`docs/bench-cfgs/t9-pipeline.cfg`) measures a capture's inner loop -
 read a chunk, write it to the card, CRC32 it - three ways on the real hardware: `pio-sequential`
 (what the engine does today), `dma-sequential`, and `dma-overlapped`, which double-buffers so the

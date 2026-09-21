@@ -13,7 +13,12 @@ static struct {
     const struct kui_capture_ops *ops;
     struct kui_checkpoint state;
     struct kui_sha256 hashes[99];
-    uint8_t data[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES], record[KUI_CHECKPOINT_BYTES];
+    /* Two chunk buffers so a DMA read of the next chunk can run while this one is written
+     * (opt->read_dma). 32-byte aligned because the DMA engine requires it; the second costs
+     * 75 KB of BSS and is untouched unless the option is on. */
+    _Alignas(32) uint8_t data[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES];
+    _Alignas(32) uint8_t data_b[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES];
+    uint8_t record[KUI_CHECKPOINT_BYTES];
     char dir[80], path[112], title[129], identity[65], text[32768];
     uint64_t started, committed;
     /* Options for this run (see kui_capture_options). crc_only is the JOB's mode:
@@ -141,24 +146,31 @@ static bool sync_file(FIL *file) {
 
 /* An unsuccessful batch is retried as a single sector at the same FAD.
  * The ten additional attempts are not reset by reducing the request size. */
-static bool read_raw(unsigned i,uint32_t fad,unsigned *count) {
+/* Every data sector's EDC. Shared by the ordinary read and the overlapped one, so both check
+ * exactly the same thing. */
+static bool edc_ok(unsigned i,const uint8_t *data,unsigned count,uint32_t fad) {
+    if(job.plan->tracks[i].control!=4) return true;
+    uint64_t start=kui_timing_begin(&job.timing);
+    bool ok=true;
+    unsigned checked=0;
+    for(unsigned s=0;s<count;s++) {
+        ++checked;
+        if(!kui_sector_edc_valid(data+s*KUI_RAW_BYTES)) {
+            job.ops->log("Invalid data-sector layout/EDC at FAD=%" PRIu32,fad+s);
+            ok=false;break;
+        }
+    }
+    kui_timing_end(&job.timing,KUI_TIME_EDC,start,checked*KUI_RAW_BYTES);
+    return ok;
+}
+static bool read_raw(unsigned i,uint32_t fad,unsigned *count,uint8_t *out) {
     for(unsigned attempt=0;attempt<=KUI_CAPTURE_RETRIES;attempt++) {
         if(cancelled()) return false;
         uint64_t start=kui_timing_begin(&job.timing);
-        enum kui_read_result r=job.ops->read(job.ops->ctx,fad,*count,job.data);
+        enum kui_read_result r=job.ops->read(job.ops->ctx,fad,*count,out);
         kui_timing_end(&job.timing,KUI_TIME_DISC,start,r==KUI_READ_OK?*count*KUI_RAW_BYTES:0);
         if(r==KUI_READ_FATAL) return false;
-        if(r==KUI_READ_OK && job.plan->tracks[i].control==4) {
-            unsigned checked=0;start=kui_timing_begin(&job.timing);
-            for(unsigned s=0;s<*count;s++) {
-                ++checked;
-                if(!kui_sector_edc_valid(job.data+s*KUI_RAW_BYTES)) {
-                    job.ops->log("Invalid data-sector layout/EDC at FAD=%" PRIu32,fad+s);
-                    r=KUI_READ_RETRY;break;
-                }
-            }
-            kui_timing_end(&job.timing,KUI_TIME_EDC,start,checked*KUI_RAW_BYTES);
-        }
+        if(r==KUI_READ_OK && !edc_ok(i,out,*count,fad)) r=KUI_READ_RETRY;
         if(r==KUI_READ_OK) return true;
         if(attempt==KUI_CAPTURE_RETRIES) break;
         if(job.state.retries!=UINT32_MAX) ++job.state.retries;
@@ -186,7 +198,7 @@ static bool identify(void) {
         uint32_t points[3]={t->start,t->start+(t->end-t->start-1)/2,t->end-1};
         for(unsigned k=0;k<3;k++) {
             unsigned one=1;
-            if(!read_raw(i,points[k],&one)) return false;
+            if(!read_raw(i,points[k],&one,job.data)) return false;
             hash_u32(&hash,points[k]);kui_sha256_update(&hash,job.data,KUI_RAW_BYTES);
             if(t->start==45150 && k==0) {
                 int offset=kui_data_offset(job.data);
@@ -363,14 +375,17 @@ static bool check_files(bool exact,enum kui_capture_phase phase) {
  * in memory (in 4 KiB slices, so no second buffer). The chunk-aligned offsets are
  * whole sectors, so FatFs reads them from the card rather than a cache. The file
  * pointer ends where it started: at the end of the chunk. */
-static bool sample_readback(FIL *file,FSIZE_t offset,UINT bytes) {
+/* `data` is the chunk as it was written. It is NOT always job.data: with the overlapped read
+ * the chunks alternate between the two buffers, and comparing against the wrong one reported a
+ * mismatch on every other chunk. */
+static bool sample_readback(FIL *file,FSIZE_t offset,UINT bytes,const uint8_t *data) {
     uint8_t slice[4096];
     uint64_t start=kui_timing_begin(&job.timing);
     bool ok=f_lseek(file,offset)==FR_OK && f_tell(file)==offset;
     UINT at=0;
     while(ok && at<bytes) {
         UINT n=bytes-at>sizeof(slice)?sizeof(slice):bytes-at;
-        ok=exact_read(file,slice,n) && !memcmp(slice,job.data+at,n);at+=n;
+        ok=exact_read(file,slice,n) && !memcmp(slice,data+at,n);at+=n;
     }
     kui_timing_end(&job.timing,KUI_TIME_READ,start,ok?bytes:0);
     if(ok) ++job.sampled;
@@ -397,23 +412,62 @@ static bool capture_tracks(void) {
         uint32_t checkpoint_at=position,recovery_until=position;
         job.ops->log("Capturing T%02u at FAD=%" PRIu32 "; B stops safely",i+1,t->start+position);
         bool storage_failed=!ok;
+        /* Two buffers, so the drive can fill the next chunk while this one is written and
+         * hashed (opt->read_dma). `pending` means a DMA read is in flight into buf[cur^1];
+         * from the moment it is begun the firmware owns that buffer, so EVERY path out of
+         * this loop must end it. Anything the overlap cannot handle - an odd sector count,
+         * the single-sector reads that follow a bad sector, a completion that fails or whose
+         * EDC fails - falls back to the ordinary PIO read for that chunk, which keeps the
+         * retry and recovery behaviour exactly as it was. */
+        uint8_t *buf[2]={job.data,job.data_b};
+        unsigned cur=0;
+        bool pending=false;
+        uint32_t pending_fad=0;unsigned pending_n=0;
+        const bool overlap=job.opt&&job.opt->read_dma&&job.ops->read_begin&&job.ops->read_end;
         while(ok && position<total && !cancelled()) {
             unsigned n=total-position>KUI_CAPTURE_CHUNK?KUI_CAPTURE_CHUNK:total-position;
             if(position<recovery_until) n=1;
             unsigned requested=n;
-            if(!read_raw(i,t->start+position,&n)) {ok=false;break;}
+            uint8_t *data=buf[cur];
+            bool have=false;
+            if(pending) {
+                /* Use it only if it is exactly the chunk now wanted; otherwise finish and drop it. */
+                bool wanted=pending_fad==t->start+position && pending_n==n;
+                uint64_t start=kui_timing_begin(&job.timing);
+                enum kui_read_result r=job.ops->read_end(job.ops->ctx);
+                kui_timing_end(&job.timing,KUI_TIME_DISC,start,
+                    wanted&&r==KUI_READ_OK?(uint64_t)n*KUI_RAW_BYTES:0);
+                pending=false;
+                /* FATAL means do not continue (media changed, cancelled, or the bus is
+                 * poisoned), so it ends the capture rather than falling back: a PIO read
+                 * would fail the same way, and retrying it would only hide the reason.
+                 * RETRY and a failed EDC do fall back, which is the ordinary retry path. */
+                if(r==KUI_READ_FATAL) {ok=false;break;}
+                have=wanted&&r==KUI_READ_OK&&edc_ok(i,data,n,t->start+position);
+            }
+            if(!have&&!read_raw(i,t->start+position,&n,data)) {ok=false;break;}
             if(n<requested) recovery_until=position+requested;
             if(cancelled()) break;
+            /* Start the next chunk's read NOW: it runs while this one is written and hashed. */
+            if(overlap&&!pending) {
+                uint32_t done=position+n,left=total-done;
+                unsigned next=left>KUI_CAPTURE_CHUNK?KUI_CAPTURE_CHUNK:(unsigned)left;
+                if(left&&!(next&1u)&&done>=recovery_until&&
+                   job.ops->read_begin(job.ops->ctx,t->start+done,next,buf[cur^1])) {
+                    pending=true;pending_fad=t->start+done;pending_n=next;
+                }
+            }
             UINT bytes=n*KUI_RAW_BYTES;
             uint64_t start=kui_timing_begin(&job.timing);
-            bool write_ok=exact_write(&file,job.data,bytes);
+            bool write_ok=exact_write(&file,data,bytes);
             kui_timing_end(&job.timing,KUI_TIME_WRITE,start,write_ok?bytes:0);
             if(!write_ok) {ok=false;storage_failed=true;break;}
-            if(!job.crc_only) hash_track(&job.hashes[i],job.data,bytes);
-            job.state.track[i].crc32=crc_track(job.state.track[i].crc32,job.data,bytes);
+            if(!job.crc_only) hash_track(&job.hashes[i],data,bytes);
+            job.state.track[i].crc32=crc_track(job.state.track[i].crc32,data,bytes);
             if(job.sample_every && ++job.chunks%job.sample_every==0 &&
-               !sample_readback(&file,(FSIZE_t)position*KUI_RAW_BYTES,bytes)) {ok=false;storage_failed=true;break;}
+               !sample_readback(&file,(FSIZE_t)position*KUI_RAW_BYTES,bytes,data)) {ok=false;storage_failed=true;break;}
             position+=n;job.state.track[i].sectors=position;
+            cur^=1;   /* next iteration reads from where the prefetch landed */
             progress(KUI_CAPTURING,i,saved_bytes(),job.plan->bytes);
             if(position-checkpoint_at>=KUI_CHECKPOINT_SECTORS || position==total) {
                 if(!save_checkpoint(&file)) {ok=false;storage_failed=true;break;}
@@ -421,6 +475,8 @@ static bool capture_tracks(void) {
                 job.ops->log("T%02u %" PRIu32 "/%" PRIu32 " sectors; checkpoint saved",i+1,position,total);
             }
         }
+        /* A begun read still owns its buffer, whatever went wrong: always end it. */
+        if(pending) job.ops->read_end(job.ops->ctx);
         /* Stop/read errors can still commit the successfully written prefix.
          * Storage failures never advance the committed checkpoint. */
         if(!storage_failed && position!=checkpoint_at && !save_checkpoint(&file)) ok=false;

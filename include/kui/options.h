@@ -69,6 +69,9 @@
  *   capture_hash=both,crc32    both = SHA-256 and CRC32 per track; crc32 = CRC32
  *                              only (a schema 2 manifest; a job keeps the mode
  *                              it started with)
+ *   capture_read=pio,dma       EXPERIMENTAL build only: read the disc with GD-ROM DMA and
+ *                              overlap it with the SD write. Same bytes; falls back to PIO
+ *                              wherever it cannot overlap
  *   end_readback=on,off        re-read every saved byte after capture. off
  *                              applies to crc32 jobs only; Verify always reads
  *   resume_check=full,size     full re-reads the committed bytes on resume;
@@ -130,6 +133,7 @@ struct kui_options {
     /* Capture engine choices; every list always has at least one value. */
     bool capture_crc_only[KUI_OPT_SD_MAX];   unsigned capture_hash_count;
     bool end_readback[KUI_OPT_SD_MAX];       unsigned end_readback_count;
+    bool capture_dma[KUI_OPT_SD_MAX];        unsigned capture_read_count;
     bool resume_size[KUI_OPT_SD_MAX];        unsigned resume_check_count;
     unsigned sample_readback[KUI_OPT_CAPTURE_MAX], sample_readback_count;
     unsigned capture_sectors, capture_fad;   /* capture_fad 0 = optical_fad */
