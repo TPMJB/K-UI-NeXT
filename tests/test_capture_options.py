@@ -90,6 +90,9 @@ def main():
             assert digests(export(image, base / f"{kind}-dma")) == baseline, "DMA changed the bytes"
             begins, ends, pending = (int(x) for x in re.search(r"^DMA BEGINS (\d+) ENDS (\d+) PENDING (\d+)$", output, re.M).groups())
             assert begins > 0 and begins == ends and pending == 0, (begins, ends, pending)
+            dma, pio = (int(x) for x in re.search(r"Disc read: (\d+) chunks by DMA, (\d+) by PIO", output).groups())
+            assert dma > pio > 0, (dma, pio)            # mostly DMA; first chunks and odd tails are PIO
+            assert "WARNING: capture_read=dma" not in output
 
             # A drive that refuses to start a DMA: the engine falls back to PIO and still
             # produces the same dump.
@@ -99,6 +102,9 @@ def main():
             assert digests(export(image, base / f"{kind}-dma-nobegin")) == baseline
             begins, ends, pending = (int(x) for x in re.search(r"^DMA BEGINS (\d+) ENDS (\d+) PENDING (\d+)$", output, re.M).groups())
             assert begins == 0 and ends == 0 and pending == 0
+            # ...and says so, instead of quietly running at PIO speed.
+            assert re.search(r"Disc read: 0 chunks by DMA, \d+ by PIO", output)
+            assert "WARNING: capture_read=dma was asked for, but no chunk was read by DMA" in output
 
             # A DMA that completes with a failure: the chunk is re-read the ordinary way.
             image = fresh()

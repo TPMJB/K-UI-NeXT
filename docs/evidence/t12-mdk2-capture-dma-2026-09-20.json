@@ -1,0 +1,45 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "e643add5850c (experimental build)",
+  "experiment": "Trip 12: a REAL, complete capture of MDK2 (31 tracks, 27 of them audio) with the overlapped DMA engine (ui_hz=2, capture_hash=crc32, end_readback=off, capture_read=dma). The first hardware test of DMA on audio tracks.",
+  "inputs": [
+    {
+      "file": "P12_diag.txt",
+      "kept_as": "t12-mdk2-capture-dma-2026-09-20.txt",
+      "bytes": 25159,
+      "sha256": "30add1c802c543f414dcfce9619e420676293e98ad6c0d488eb809bc8a282e4a"
+    }
+  ],
+  "capture": {
+    "job": "/KUI/dumps/df838eac34967ae16-0002",
+    "wall_s": 1177.9,
+    "bytes": 1220281104,
+    "average_kib_s": 1011.7,
+    "parts_pct": {
+      "disc": 1.3,
+      "edc": 1.1,
+      "write": 88.9,
+      "crc32": 7.9,
+      "checkpoint": 0.2
+    },
+    "image_bss": 2780612,
+    "dma_failures": 0,
+    "console_result": "CAPTURED: all 31 tracks; stream CRC32 recorded; saved data NOT re-read",
+    "console_reference": "Reference check (TOSEC): FULL TRACK MATCH"
+  },
+  "pc_verification": {
+    "result": "SAVED DATA VERIFIED: sizes, CRC32 and GDI layout agree (31/31 PASS); run without --reference",
+    "reference_check_done_afterwards": "The 31 PC-computed sizes and CRC32s were compared with data/known-dumps/tosec.db: 31/31 match 'MDK 2 v1.100 (2000)(Interplay)(US)[!]' (the PAL release matches 2/31). The bundled redump.db stores a single track per MDK2 entry, so it could not be compared."
+  },
+  "derived": {
+    "conclusions": [
+      "DMA works on audio tracks: 27 of the 31 tracks are audio and every one matches TOSEC. Nothing before this had tested DMA on audio on hardware.",
+      "1011.7 KiB/s over the whole 1.22 GB disc, 19.6 minutes. Faster than Sword (985.9 KiB/s) because audio skips the EDC check: EDC is 1.1% of this capture against 4.1% of Sword's.",
+      "Disc time is 1.3% here against 0.5% on Sword: every track's first chunk and odd-length tail are read with PIO by design, and MDK2 has 31 tracks. That fallback path is therefore proven on hardware too.",
+      "With Trip 11 this proves the overlapped DMA engine on two discs, data and audio, 34 tracks, against independent references on the console and the PC. On the strength of it DMA became the default."
+    ]
+  },
+  "limitations": [
+    "One capture of one disc; the per-track rates were not broken out."
+  ]
+}

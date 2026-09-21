@@ -8,17 +8,17 @@
  * This mirrors src/dreamcast/capture.c, which plays the same role for the
  * capture engine. */
 
-/* The DMA probe and its competing thread: filled in only in the opt-in experimental build
- * (make diagnostic KUI_EXPERIMENTAL=1). Otherwise the bench sees NULL and says so. */
-#ifdef KUI_EXPERIMENTAL_DMA
+/* The split DMA read is in every build (the pipeline section uses it). The blocking probe and
+ * its competing thread are research tools and stay in the opt-in experimental build only. */
 static bool read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
     return kui_disc_read_begin(ctx,fad,sectors,out);
 }
 static enum kui_read_result read_end(void *ctx) { return kui_disc_read_end(ctx); }
+#ifdef KUI_EXPERIMENTAL_DMA
 #define KUI_DMA_OPS(disc) ((disc) ? kui_disc_read_probe_dma : NULL), spin, spin_count, sleep_ms, \
                           ((disc) ? read_begin : NULL), ((disc) ? read_end : NULL)
 #else
-#define KUI_DMA_OPS(disc) NULL, NULL, NULL, NULL, NULL, NULL
+#define KUI_DMA_OPS(disc) NULL, NULL, NULL, NULL, ((disc) ? read_begin : NULL), ((disc) ? read_end : NULL)
 #endif
 
 struct kui_options kui_options;   /* last loaded /KUI/bench.cfg; defaults until then */

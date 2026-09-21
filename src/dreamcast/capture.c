@@ -1,17 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
 
-/* The overlapped read exists only in the experimental build; without it the engine sees NULL
- * and reads with PIO whatever bench.cfg asks for. */
-#ifdef KUI_EXPERIMENTAL_DMA
+/* The overlapped GD-ROM DMA read, in every build since it was proven on hardware (Trips 11-12).
+ * Whether a capture uses it is capture_read= (default dma). */
 static bool capture_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
     return kui_disc_read_begin(ctx,fad,sectors,out);
 }
 static enum kui_read_result capture_read_end(void *ctx) { return kui_disc_read_end(ctx); }
 #define KUI_CAPTURE_DMA_OPS capture_read_begin,capture_read_end
-#else
-#define KUI_CAPTURE_DMA_OPS NULL,NULL
-#endif
 #include <kos/timer.h>
 #include <stdarg.h>
 #include <stdio.h>

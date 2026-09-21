@@ -487,6 +487,12 @@ matched every track, which proves the DMA read byte-perfect, and the PC check ma
 on all three tracks, which proves the card wrote it correctly. The result is byte-identical by
 SHA-256 to both earlier captures of the disc. **The SD write is now 87% of a capture.**
 
+**Trip 12, MDK2 (31 tracks, 27 audio), 2026-09-20** ([evidence](evidence/t12-mdk2-capture-dma-2026-09-20.json)):
+19.6 minutes, 1011.7 KiB/s, TOSEC match on all 31 tracks on the console and again on the PC. The
+first hardware test of DMA on audio tracks, and of the PIO fallback at 31 track boundaries.
+**On that evidence DMA is now the default (`capture_read=dma`) and is in every build**; only the
+blocking probe and its competing thread remain experimental.
+
 Caveats that shape how to read it: the DMA probe **polls** rather than taking the
 interrupt (this runtime never starts KOS's CD-ROM subsystem, so nothing installs
 the handler), so completion is noticed up to one 10 ms tick late, about 8% at chunk

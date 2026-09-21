@@ -19,6 +19,7 @@ static struct {
     _Alignas(32) uint8_t data[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES];
     _Alignas(32) uint8_t data_b[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES];
     uint8_t record[KUI_CHECKPOINT_BYTES];
+    unsigned dma_chunks,pio_chunks;   /* how this run read the disc, reported at the end */
     char dir[80], path[112], title[129], identity[65], text[32768];
     uint64_t started, committed;
     /* Options for this run (see kui_capture_options). crc_only is the JOB's mode:
@@ -393,6 +394,7 @@ static bool sample_readback(FIL *file,FSIZE_t offset,UINT bytes,const uint8_t *d
     return ok;
 }
 static bool capture_tracks(void) {
+    job.dma_chunks=job.pio_chunks=0;
     kui_timing_phase(&job.timing,KUI_TIME_CAPTURE);
     if(job.ops->read_phase) job.ops->read_phase(job.ops->ctx,true);
     for(unsigned i=0;i<job.plan->count;i++) {
@@ -446,6 +448,7 @@ static bool capture_tracks(void) {
                 have=wanted&&r==KUI_READ_OK&&edc_ok(i,data,n,t->start+position);
             }
             if(!have&&!read_raw(i,t->start+position,&n,data)) {ok=false;break;}
+            if(have) ++job.dma_chunks; else ++job.pio_chunks;
             if(n<requested) recovery_until=position+requested;
             if(cancelled()) break;
             /* Start the next chunk's read NOW: it runs while this one is written and hashed. */
@@ -500,6 +503,16 @@ static bool matches_file(const char *path,const char *text,size_t bytes) {
         ok=exact_read(&file,job.data,n) && !memcmp(job.data,text+at,n);at+=n;
     }
     if(!close_file(&file)) ok=false;
+    /* A request for DMA that was never honoured used to be silent: the capture just ran at PIO
+     * speed. Every track's first chunk and any odd-length tail are always PIO, so only zero DMA
+     * chunks means something is wrong (a drive that refuses DMA, or DMA switched off after a
+     * failed read). */
+    if(job.opt&&job.opt->read_dma) {
+        job.ops->log("Disc read: %u chunks by DMA, %u by PIO",job.dma_chunks,job.pio_chunks);
+        if(!job.dma_chunks&&job.pio_chunks)
+            job.ops->log("WARNING: capture_read=dma was asked for, but no chunk was read by DMA; "
+                         "this capture ran at PIO speed");
+    }
     return ok;
 }
 /* Publish only verified complete jobs. Existing final metadata must match;

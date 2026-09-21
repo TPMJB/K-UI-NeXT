@@ -229,10 +229,11 @@ CRC16 candidates, and the capture engine at the four settings that matter), and
 setting, plus what the measured-but-unbuilt changes would be worth. Run it before and after a
 change. Lines it marks PROJECTED are arithmetic on measured rates, never an end-to-end run.
 
-**`capture_read=pio,dma`** (`docs/bench-cfgs/t10-capture-dma.cfg`) runs the real capture engine
-both ways: reading the disc as it always has, and reading it with GD-ROM DMA while the next
-chunk's read runs during this one's write and hash. Experimental build only; in an ordinary
-build the engine sees no DMA ops and reads with PIO whatever `bench.cfg` says. The engine falls
+**`capture_read=dma,pio`** (`docs/bench-cfgs/t10-capture-dma.cfg`) runs the real capture engine
+both ways: reading the disc with GD-ROM DMA while the next chunk's read runs during this one's
+write and hash (**the default in every build since 2026-09-20**), and with PIO as it always did.
+At the end of a capture the log says `Disc read: N chunks by DMA, M by PIO`, and warns if DMA
+was asked for and no chunk used it. The engine falls
 back to a PIO read for any chunk it cannot overlap - an odd sector count, or the single-sector
 reads that follow a bad sector - so the bytes are the same either way. The host suite proves
 that against a byte-for-byte reference, including a bad EDC, a stop and resume, a drive that

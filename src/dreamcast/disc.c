@@ -381,8 +381,7 @@ enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors
  * my own wrong macro test that let it back in), so it is not compiled into the
  * default build: nothing experimental may be able to break the build the capture engine ships
  * in. The host tests build it (test-disc is compiled with the define). */
-#ifdef KUI_EXPERIMENTAL_DMA
-/* Data-cache maintenance for the DMA probe: one `ocbp` (write back, then invalidate) or `ocbi`
+/* Data-cache maintenance for GD-ROM DMA (the capture's overlapped read and the bench probe): one `ocbp` (write back, then invalidate) or `ocbi`
  * (invalidate) per 32-byte line, each with a single register operand. KOS's own
  * arch_dcache_purge_range/inval_range were used first and did not compile under the CI's GCC
  * 15.2 ("asm operand has impossible constraints"): their per-line helper is one inline asm with
@@ -431,9 +430,11 @@ static void cache_inval(uintptr_t start,size_t bytes) { arch_dcache_inval_range(
  *    DMA, or dirty lines could later be written back over what the drive wrote.
  * After any failure to complete, DMA stays off until reboot: an unfinished transfer may
  * still own the buffer, and an untested bus state is not one to keep poking. */
+#ifdef KUI_EXPERIMENTAL_DMA   /* the probe's 300 KB buffer exists only in the research build */
 static _Alignas(32) struct {
     uint8_t before[32], data[KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES], after[32];
 } probe_dma_raw;
+#endif
 static bool dma_broken;
 static void *dma_address(void *p) {
 #ifdef KUI_ON_CONSOLE
@@ -447,7 +448,8 @@ static void *dma_address(void *p) {
  * drive fills this one. Measured: a DMA read costs the CPU under 1% (Trip 6a), so the whole
  * disc time can hide behind the SD write. The caller MUST call end after a successful begin:
  * until it does, the firmware owns read_params and the buffer it was given.
- * Bench-only, like the blocking probe; the capture engine does not use it yet. */
+ * The capture engine's overlapped read (capture_read=dma, the default since 2026-09-20): proven
+ * byte-perfect on Sword of the Berserk and MDK2 against TOSEC, docs/evidence/t11-... and t12-... */
 static struct kui_command_async dma_async;
 static uint8_t *dma_target;
 static size_t dma_target_bytes;
@@ -494,6 +496,7 @@ enum kui_read_result kui_disc_read_end(void *ctx) {
     return KUI_READ_OK;
 }
 
+#ifdef KUI_EXPERIMENTAL_DMA
 enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sectors,
         const uint8_t **out,struct kui_probe_stats *stats) {
     (void)ctx;

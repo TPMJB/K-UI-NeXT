@@ -7,11 +7,12 @@ controlled resume** to the independently booting hardware diagnostic. It stays
 in RAM after you swap discs and uses FAT32/exFAT through the standard external
 serial SD adapter. Keep the reusable CD and update `/KUI/runtime.kui`.
 
-**Sword of the Berserk has completed capture and console saved-file verification.**
-Uploaded tracks 1 and 2 independently match their CRC32/SHA-256 records; track 3's
-PC check and an independent reference match remain pending. MDK2 has now resumed
-from a saved checkpoint, checked its prefix, written new audio and stopped safely;
-final verification of a complete resumed hardware dump remains pending.
+**Disc reading is done and verified. For the full state, read
+[docs/HANDOFF-disc-reader.md](docs/HANDOFF-disc-reader.md) first.** A whole GD-ROM now rips in
+about 20 minutes (it was over 100 with the original settings) and has been proven byte-exact
+against the TOSEC catalogue on two discs: Sword of the Berserk (3 tracks) and MDK2 (31 tracks,
+27 of them audio), on the console and again on a PC. MDK2 was also interrupted twice mid-disc and
+resumed to a verified finish.
 The capture engine also passes host-image tests. Earlier SD runtime launch and
 disc/exFAT probes passed on a physical console. The user also
 confirms B selects CD fallback and reports successful cold boots; the boot count
@@ -36,7 +37,8 @@ completion, including separate SHA-256, disc and SD time. See
 capture to **one optical read per block** and services PIO continuously with
 periodic scheduler yields. It removes the duplicate capture read and the sleep
 after every busy firmware status. Transfer-size checks, guards, data-sector EDC,
-bounded retries and final CRC32/SHA-256 saved-file verification remain enabled.
+bounded retries and final CRC32/SHA-256 saved-file verification remain the defaults
+(`capture_hash=both`, `end_readback=on`); every fast, verified rip set them off in `bench.cfg`.
 Identification samples stay paired, so existing v1 jobs retain their identity.
 
 The latest MDK2 audio baseline measured **57.00 KiB/s**. Its two command loops

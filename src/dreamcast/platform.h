@@ -39,12 +39,12 @@ void kui_disc_set_yield_us(unsigned us);
 /* Bench-only optical read for the sweep (see kui/bench.h). */
 enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors,unsigned service_us,
     const uint8_t **data,struct kui_probe_stats *stats);
-#ifdef KUI_EXPERIMENTAL_DMA
 /* Split GD-ROM DMA read: begin returns at once, end waits and must always follow a true begin.
- * `out` must be 32-byte aligned and stay untouched until end returns. */
+ * `out` must be 32-byte aligned and stay untouched until end returns. In every build. */
 bool kui_disc_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
 bool kui_disc_read_pending(void *ctx);
 enum kui_read_result kui_disc_read_end(void *ctx);
+#ifdef KUI_EXPERIMENTAL_DMA
 /* Bench-only GD-ROM DMA read of raw sectors (EXPERIMENTAL, opt-in build; even sector counts only). */
 enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sectors,
     const uint8_t **data,struct kui_probe_stats *stats);

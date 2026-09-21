@@ -33,7 +33,9 @@ void kui_options_default(struct kui_options *out) {
     out->sections = KUI_SEC_OPTICAL | KUI_SEC_HASH | KUI_SEC_SD;
     out->sweep_sectors = 2048;
     out->sweep_verify = true;
-    out->capture_read_count = 1;   /* PIO: the overlapped read is opt-in */
+    /* DMA by default since 2026-09-20: +36% on a whole disc, byte-identical to PIO, proven on
+     * Sword of the Berserk and MDK2 against TOSEC (docs/evidence/t11-..., t12-...). */
+    out->capture_dma[0] = true; out->capture_read_count = 1;
     out->sweep_mode_count = 1;   /* PIO only */
     out->sweep_spin_count = 1;   /* no competing thread */
     /* Capture engine: the engine as it has always been. */

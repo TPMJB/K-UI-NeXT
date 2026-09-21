@@ -69,9 +69,9 @@
  *   capture_hash=both,crc32    both = SHA-256 and CRC32 per track; crc32 = CRC32
  *                              only (a schema 2 manifest; a job keeps the mode
  *                              it started with)
- *   capture_read=pio,dma       EXPERIMENTAL build only: read the disc with GD-ROM DMA and
- *                              overlap it with the SD write. Same bytes; falls back to PIO
- *                              wherever it cannot overlap
+ *   capture_read=dma,pio       DEFAULT dma: read the disc with GD-ROM DMA and overlap it with
+ *                              the SD write (+36% on a whole disc, same bytes). Falls back to
+ *                              PIO for any chunk it cannot overlap. pio = the old engine
  *   end_readback=on,off        re-read every saved byte after capture. off
  *                              applies to crc32 jobs only; Verify always reads
  *   resume_check=full,size     full re-reads the committed bytes on resume;
