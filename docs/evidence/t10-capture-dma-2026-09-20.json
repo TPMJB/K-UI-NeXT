@@ -1,0 +1,72 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "0946e29defd4 (experimental)",
+  "experiment": "Trip 10: the REAL capture engine with capture_read=pio,dma, crc32, no end read-back, 4096 sectors at FAD 45150 on MDK2. Three bench runs in the log: the first had a non-GD disc in the drive and measured nothing (the new guard said so); the other two are the result.",
+  "inputs": [
+    {
+      "file": "t10_Diag.txt",
+      "kept_as": "t10-capture-dma-2026-09-20.txt",
+      "bytes": 31783,
+      "sha256": "c3e0caec2d246401f032a4213be159c9a99b000fa41bc815334876330c689938",
+      "note": "Log truncated: YES (the top, including the build line, was lost; every result line survived)"
+    }
+  ],
+  "rows": {
+    "pio": {
+      "kib_s": [
+        715.0,
+        716.2
+      ],
+      "disc_ms": [
+        3804,
+        3655
+      ],
+      "write_ms": [
+        8208,
+        8342
+      ],
+      "edc_ms": [
+        376,
+        376
+      ],
+      "crc_ms": [
+        735,
+        727
+      ]
+    },
+    "dma": {
+      "kib_s": [
+        967.2,
+        962.6
+      ],
+      "disc_ms": [
+        144,
+        146
+      ],
+      "write_ms": [
+        8380,
+        8475
+      ],
+      "edc_ms": [
+        403,
+        388
+      ],
+      "crc_ms": [
+        744,
+        708
+      ]
+    }
+  },
+  "derived": {
+    "gain_pct": 34.8,
+    "disc_time_hidden_pct": 96.1,
+    "conclusions": [
+      "The real engine gains +34.8% (715.6 to 964.9 KiB/s, two runs within 0.5%), against +34.1% for the bare loop in Trip 9: EDC, checkpoints and planning cost the overlap nothing.",
+      "Disc time fell from 3730 ms to 145 ms: 96.1% of it now hides behind the SD write.",
+      "The first run had a CD with no high-density area in the drive and ended 'BENCH complete but NOTHING was measured': the guard added on 2026-09-20 working on hardware for the first time."
+    ]
+  },
+  "limitations": [
+    "MDK2 at FAD 45150 only; a bench capture publishes nothing, so correctness is proven by Trip 11, not here."
+  ]
+}

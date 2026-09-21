@@ -478,6 +478,15 @@ while building it: a fatal DMA result was falling back to a PIO retry instead of
 (the existing sampled read-back scenario failed, which is what it is for). What is NOT yet
 measured: the engine's real rate on hardware (Trip 10) and a full disc verified on a PC.
 
+**Result: it works, and it is correct.** Trip 10 ([evidence](evidence/t10-capture-dma-2026-09-20.json)) measured the
+real engine at **+34.8%** (715.6 to 964.9 KiB/s on MDK2), matching Trip 9's +34.1% for the bare loop.
+Trip 11 ([evidence](evidence/t11-real-capture-dma-2026-09-20.json)) then ripped all of Sword of the Berserk
+with it: **19.6 minutes against 26.7 with PIO, 985.9 KiB/s, +36.3%**. Disc time fell from 438.8 s to
+5.9 s (98.7% hidden) while every other part stayed within a second. The console's TOSEC check
+matched every track, which proves the DMA read byte-perfect, and the PC check matched the reference
+on all three tracks, which proves the card wrote it correctly. The result is byte-identical by
+SHA-256 to both earlier captures of the disc. **The SD write is now 87% of a capture.**
+
 Caveats that shape how to read it: the DMA probe **polls** rather than taking the
 interrupt (this runtime never starts KOS's CD-ROM subsystem, so nothing installs
 the handler), so completion is noticed up to one 10 ms tick late, about 8% at chunk
