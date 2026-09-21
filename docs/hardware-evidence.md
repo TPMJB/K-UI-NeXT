@@ -376,7 +376,7 @@ controller responsiveness during automatic fallback were not separately reported
 | Missing runtime file | User-reported pass: failed/missing-file explanation shown |
 | Bad payload checksum | User-reported pass: `Runtime Checksum mismatch` shown |
 | Restore good runtime | User-reported pass: normal operation returns after renaming the original file back |
-| Cold boots | User reports they work; count unspecified |
+| Cold boots | Dozens, with no controller problems (user report, 2026-09-20) |
 | Video mode | 640x480 NTSC interlaced, buffered |
 | Disc TOCs | Both density regions parsed; three tracks |
 | Raw disc reads | All nine samples passed repeat and buffer-guard checks |
@@ -419,19 +419,15 @@ These are unconfirmed by the supplied logs and user reports. If they were alread
 record the observed outcome rather than asking for another burn or repeating
 successful work.
 
-1. The other four supplied rejection fixtures (`bad-magic.kui`, `truncated.kui`,
-   `oversized.kui` and `wrong-version.kui`) still lack hardware results. Their
-   host checks pass. Record fallback usability when testing them; missing-file,
-   bad-checksum and restoration checks need not be repeated.
-2. Confirm the cold-boot count and controller response for the planned five-boot
-   check. Existing successful boots count; do not repeat them just for a log.
+**Update 2026-09-20: most of these are now done.**
 
-Follow the [one-disc test guide](sd-bootstrap.md) for the file changes. All
-these checks use the existing bootstrap CD and accessible exFAT card. A second
-known-good retail disc with a different TOC layout would broaden disc coverage.
-FAT32 PC verification can follow when a reader is available.
-
-The capture title is now recorded above. Its region, console revision, video
-cable/display and adapter/card model are not yet recorded. Independent full-dump
-verification and final verification of a complete resumed dump remain hardware
-acceptance checks; MDK2's checkpoint resume through new writes is now recorded.
+- **Done:** all five rejection fixtures fail safely on hardware, each with its own reason and a
+  usable fallback ([evidence](evidence/m12-runtime-rejection-2026-09-20.json)); dozens of cold boots
+  with no controller problems; a second retail disc with a different TOC (MDK2, 31 tracks); full
+  PC/reference verification of complete dumps, including a dump resumed twice
+  ([handoff](HANDOFF-disc-reader.md)).
+- **Hardware recorded:** NTSC console, motherboard reported as "V1A" (most likely VA1), RF video
+  cable, SanDisk 128 GB microSD (Endurance line), exFAT. The SD adapter model is not recorded.
+- **Still open:** FAT32 (runtime loading from a FAT32 card has never been tried, and the FAT32 pass
+  was never PC-verified); the lid opened mid-capture; a scratched disc that needs retries; a card
+  that fills up mid-capture. The last three are covered by host tests only.

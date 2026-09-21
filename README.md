@@ -120,12 +120,12 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 
 | Stage | Status |
 | --- | --- |
-| M1.0: source/build foundation and visible boot diagnostic | Diagnostic runs and display fix confirmed; cold boots reported working, count unspecified |
-| M1.1: raw-disc and FAT32/exFAT capability probes | Nine disc samples and exFAT fixture verified; FAT32 console-reported pass, PC verification pending |
-| M1.2: validated runtime loading from SD | exFAT SD handoff/runtime probes and B-selected fallback confirmed; missing-file/checksum rejection and good-runtime restoration pass by user report; four other malformed fixtures remain untested on hardware |
-| M1.3: full-track GDI capture | Sword of the Berserk completion supported by user report, manifest and valid final checkpoint with zero retries; tracks 1/2 independently checked; full PC/reference verification pending |
-| M1.4: SHA-256 capture verification and controlled stop/resume | Console reread passed by user report and published manifest; MDK2 checkpoint/prefix validation, resumed audio writes and controlled Stop logged in a fresh runtime session; final verification of a complete resumed dump and Sword track 3 PC check pending; fault injection and resume equality pass on host |
-| M1.5: hardware acceptance and minimal UI refinement | Planned |
+| M1.0: source/build foundation and visible boot diagnostic | **Done.** Diagnostic runs and display fix confirmed; dozens of cold boots with no controller problems |
+| M1.1: raw-disc and FAT32/exFAT capability probes | Disc probes (Sword of the Berserk, MDK2) and exFAT fully verified. **Open:** FAT32 console pass reported but never PC-verified, and loading the runtime from a FAT32 card is untested on hardware |
+| M1.2: validated runtime loading from SD | **Done.** exFAT handoff, B-selected fallback, missing-file rejection and good-runtime restoration confirmed; all five malformed fixtures rejected on hardware, each with its own reason, with a usable fallback ([evidence](docs/evidence/m12-runtime-rejection-2026-09-20.json)) |
+| M1.3: full-track GDI capture | **Done.** Sword of the Berserk and MDK2 (31 tracks, 27 audio) captured and verified against TOSEC on the console and on a PC; Sword ripped three ways, identical by SHA-256 ([handoff](docs/HANDOFF-disc-reader.md)) |
+| M1.4: SHA-256 capture verification and controlled stop/resume | **Done.** MDK2 stopped twice mid-disc and resumed to a finish verified on the console and against TOSEC; Sword track 3 PC-verified. **Open:** failure paths only covered on the host: a scratched disc (retries), a full card, the lid opened mid-capture |
+| M1.5: hardware acceptance and minimal UI refinement | Hardware acceptance nearly complete (FAT32 and the failure paths remain); UI refinement planned |
 
 See [the research scope](docs/milestone-1-research.md),
 [the implementation decisions](docs/diagnostic-design.md), and

@@ -85,8 +85,14 @@ For projected whole-disc times from any saved report: `python3 tools/rip_time.py
 3. **Faster CRC32**: a 256-entry table in place of the nibble table, about 3%.
 4. **Failure paths never exercised on hardware.** Every run has had zero read retries. The retry
    path (a scratched disc), a full card, and the lid opened mid-capture are covered by host tests
-   only.
-5. **A game launcher is a different problem.** SD reads over SCIF top out around 730 KiB/s even
+   only. FAT32 is also still open (see the README milestone table).
+5. **Known flaw: a stop turns DMA off until reboot.** Any DMA read that ends early sets
+   `dma_broken` in `src/dreamcast/disc.c`, including an ordinary B stop or a lid-open, because
+   nearly every stop lands while a read is in flight. A resume in the same boot then runs at PIO
+   speed (the bytes are still right, and the log says `DMA stays off until reboot` and warns that
+   no chunk used DMA). Only a timeout or failure on an unchanged disc should do that; a clean,
+   recovered cancel or a disc change should not. Until fixed: power-cycle before resuming.
+6. **A game launcher is a different problem.** SD reads over SCIF top out around 730 KiB/s even
    with the CRC16 work, against 1,250-2,000 KiB/s for the drive, so loading from SD is 2-3x slower
    than disc. Block-compressed images (LZ4, as CSO/ZSO do) might recover much of that; the ratio
    and the SH4 decompression cost are both unmeasured. The real fixes are hardware: the SCI-SPI
