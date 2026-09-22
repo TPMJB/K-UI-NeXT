@@ -432,5 +432,7 @@ successful work.
   ([evidence](evidence/lid-open-omikron-2026-09-20.json)); a disc with physical damage retries a
   fixed 10 times, pins the exact bad sector and stops with the partial job kept
   ([evidence](evidence/scratched-omikron-retry-2026-09-20.json)).
-- **Still open:** FAT32 (runtime loading from a FAT32 card has never been tried, and the FAT32 pass
-  was never PC-verified); a card that fills up mid-capture (host tests only).
+- **Done since:** FAT32 end to end: the runtime loads from a FAT32 card, the storage test passes,
+  and a whole disc rips byte-exact and PC-verified
+  ([evidence](evidence/fat32-sword-dma-2026-09-20.json)).
+- **Still open:** a card that fills up mid-capture (host tests only).

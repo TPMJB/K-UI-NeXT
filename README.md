@@ -121,11 +121,11 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | Stage | Status |
 | --- | --- |
 | M1.0: source/build foundation and visible boot diagnostic | **Done.** Diagnostic runs and display fix confirmed; dozens of cold boots with no controller problems |
-| M1.1: raw-disc and FAT32/exFAT capability probes | Disc probes (Sword of the Berserk, MDK2) and exFAT fully verified. **Open:** FAT32 console pass reported but never PC-verified, and loading the runtime from a FAT32 card is untested on hardware |
+| M1.1: raw-disc and FAT32/exFAT capability probes | **Done.** Disc probes (Sword of the Berserk, MDK2) verified; exFAT and FAT32 both verified end to end. On FAT32 the runtime loads, the storage test passes and a whole disc rips byte-exact, about 2.4% slower than exFAT ([evidence](docs/evidence/fat32-sword-dma-2026-09-20.json)) |
 | M1.2: validated runtime loading from SD | **Done.** exFAT handoff, B-selected fallback, missing-file rejection and good-runtime restoration confirmed; all five malformed fixtures rejected on hardware, each with its own reason, with a usable fallback ([evidence](docs/evidence/m12-runtime-rejection-2026-09-20.json)) |
 | M1.3: full-track GDI capture | **Done.** Sword of the Berserk and MDK2 (31 tracks, 27 audio) captured and verified against TOSEC on the console and on a PC; Sword ripped three ways, identical by SHA-256 ([handoff](docs/HANDOFF-disc-reader.md)) |
-| M1.4: SHA-256 capture verification and controlled stop/resume | **Done.** MDK2 stopped twice mid-disc and resumed to a finish verified on the console and against TOSEC; Sword track 3 PC-verified. The lid opened mid-capture stopped cleanly and resumed to a TOSEC-verified finish on hardware (Omikron). A scratched disc retried a fixed 10 times, named the bad sector and stopped with the partial job kept. **Open:** a card that fills mid-capture, host-tested only |
-| M1.5: hardware acceptance and minimal UI refinement | Hardware acceptance nearly complete (FAT32 and the failure paths remain); UI refinement planned |
+| M1.4: SHA-256 capture verification and controlled stop/resume | **Done.** MDK2 stopped twice mid-disc and resumed to a finish verified on the console and against TOSEC; Sword track 3 PC-verified. The lid opened mid-capture stopped cleanly and resumed to a TOSEC-verified finish on hardware (Omikron). A scratched disc retried a fixed 10 times, named the bad sector and stopped with the partial job kept. A B stop and a lid-open in the same boot both resume on DMA ([evidence](docs/evidence/dma-stop-fix-confirmed-2026-09-20.json)). **Open:** a card that fills mid-capture, host-tested only |
+| M1.5: hardware acceptance and minimal UI refinement | Hardware acceptance complete except a card filling mid-capture (host-tested); UI refinement planned |
 
 See [the research scope](docs/milestone-1-research.md),
 [the implementation decisions](docs/diagnostic-design.md), and

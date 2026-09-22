@@ -13,6 +13,7 @@ A whole GD-ROM rips in **about 20 minutes** and is **byte-exact**:
 |---|---|---|---|---|
 | Sword of the Berserk | 3 (data) | 19.6 min | 985.9 KiB/s | TOSEC on the console; reference file on a PC |
 | MDK2 | 31 (27 audio) | 19.6 min | 1011.7 KiB/s | TOSEC on the console; TOSEC on a PC (31/31) |
+| Sword of the Berserk, on FAT32 | 3 (data) | 20.1 min | 961.8 KiB/s | TOSEC on the console; reference CRC32s on a PC |
 
 Sword of the Berserk has now been ripped three ways (SHA-256 with a full read-back, fast PIO, and
 fast DMA) and all three are identical by SHA-256. MDK2 has also been interrupted twice mid-disc and
@@ -83,15 +84,17 @@ For projected whole-disc times from any saved report: `python3 tools/rip_time.py
    22.7 -> 8.8 CPU cycles a byte, worth about **7% on a capture** and 5% on SD reads.
    `src/core/crc16.c` already has the verified implementation (`kui_crc16_slice2`).
 3. **Faster CRC32**: a 256-entry table in place of the nibble table, about 3%.
-4. **Failure paths on hardware: two of three done.** A lid-open stops cleanly and resumes to a
-   verified finish; a physically damaged disc retries a fixed 10 times, pins the bad sector and
-   stops without zero-filling. A card filling up mid-capture is host-tested only. FAT32 is also
-   still open (see the README milestone table).
+4. **Failure paths on hardware: all but one done.** A B stop and a lid-open both stop cleanly and
+   resume to a verified finish; a physically damaged disc retries a fixed 10 times, pins the bad
+   sector and stops without zero-filling. Only a card filling up mid-capture is host-tested only.
+   FAT32 is done: about 2.4% slower than exFAT, otherwise identical.
 5. **Fixed 2026-09-20: a stop no longer turns DMA off.** A lid-open on Omikron confirmed on
    hardware that any cut-short DMA read switched DMA off until reboot, so a same-boot resume ran
    at PIO speed. Now only a timeout, or three DMA failures in a row on an unchanged disc, does
    that; a stop, a disc change or one damaged sector leaves DMA on. The async read also latches a
-   disc change itself now. Host-tested; the next same-boot resume confirms it on hardware.
+   disc change itself now. **Confirmed on hardware**: a B stop and a lid-open in one boot, both
+   resumed on DMA ([evidence](evidence/dma-stop-fix-confirmed-2026-09-20.json)). One small gap:
+   the `Disc read:` summary prints only when a capture finishes, not on a stop or failure.
 6. **A game launcher is a different problem.** SD reads over SCIF top out around 730 KiB/s even
    with the CRC16 work, against 1,250-2,000 KiB/s for the drive, so loading from SD is 2-3x slower
    than disc. Block-compressed images (LZ4, as CSO/ZSO do) might recover much of that; the ratio
