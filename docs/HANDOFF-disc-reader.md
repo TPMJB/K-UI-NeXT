@@ -83,15 +83,15 @@ For projected whole-disc times from any saved report: `python3 tools/rip_time.py
    22.7 -> 8.8 CPU cycles a byte, worth about **7% on a capture** and 5% on SD reads.
    `src/core/crc16.c` already has the verified implementation (`kui_crc16_slice2`).
 3. **Faster CRC32**: a 256-entry table in place of the nibble table, about 3%.
-4. **Failure paths never exercised on hardware.** Every run has had zero read retries. The retry
-   path (a scratched disc), a full card, and the lid opened mid-capture are covered by host tests
-   only. FAT32 is also still open (see the README milestone table).
-5. **Known flaw: a stop turns DMA off until reboot.** Any DMA read that ends early sets
-   `dma_broken` in `src/dreamcast/disc.c`, including an ordinary B stop or a lid-open, because
-   nearly every stop lands while a read is in flight. A resume in the same boot then runs at PIO
-   speed (the bytes are still right, and the log says `DMA stays off until reboot` and warns that
-   no chunk used DMA). Only a timeout or failure on an unchanged disc should do that; a clean,
-   recovered cancel or a disc change should not. Until fixed: power-cycle before resuming.
+4. **Failure paths on hardware: two of three done.** A lid-open stops cleanly and resumes to a
+   verified finish; a physically damaged disc retries a fixed 10 times, pins the bad sector and
+   stops without zero-filling. A card filling up mid-capture is host-tested only. FAT32 is also
+   still open (see the README milestone table).
+5. **Fixed 2026-09-20: a stop no longer turns DMA off.** A lid-open on Omikron confirmed on
+   hardware that any cut-short DMA read switched DMA off until reboot, so a same-boot resume ran
+   at PIO speed. Now only a timeout, or three DMA failures in a row on an unchanged disc, does
+   that; a stop, a disc change or one damaged sector leaves DMA on. The async read also latches a
+   disc change itself now. Host-tested; the next same-boot resume confirms it on hardware.
 6. **A game launcher is a different problem.** SD reads over SCIF top out around 730 KiB/s even
    with the CRC16 work, against 1,250-2,000 KiB/s for the drive, so loading from SD is 2-3x slower
    than disc. Block-compressed images (LZ4, as CSO/ZSO do) might recover much of that; the ratio

@@ -451,6 +451,7 @@ static void *dma_address(void *p) {
  * The capture engine's overlapped read (capture_read=dma, the default since 2026-09-20): proven
  * byte-perfect on Sword of the Berserk and MDK2 against TOSEC, docs/evidence/t11-... and t12-... */
 static struct kui_command_async dma_async;
+static unsigned dma_failures;   /* consecutive DMA reads that failed on an unchanged disc */
 static uint8_t *dma_target;
 static size_t dma_target_bytes;
 static bool dma_in_flight;
@@ -488,12 +489,24 @@ enum kui_read_result kui_disc_read_end(void *ctx) {
     /* Read what the drive wrote, not whatever the cache kept. */
     cache_inval((uintptr_t)dma_target,dma_target_bytes);
     if(r==KUI_CMD_RECOVERY_FAILED) {poisoned=true;dma_broken=true;return KUI_READ_FATAL;}
-    if(r!=KUI_CMD_OK) {
+    if(r==KUI_CMD_OK) {dma_failures=0;return KUI_READ_OK;}
+    /* The same disc-change latch as command(): the async path skipped it, so a lid-open during
+     * a DMA read was only noticed by the PIO re-read that followed. */
+    if(detail.err1==6||detail.err1==2) media_changed=true;
+    /* Turn DMA off only when DMA itself misbehaved. Until 2026-09-20 any unfinished read did,
+     * so an ordinary B stop or a lid-open (nearly always landing with a read in flight) left
+     * the rest of the boot at PIO speed: seen on hardware, docs/evidence/lid-open-...
+     * A stop and a disc change end with the command recovered, so the buffer is free and DMA
+     * did nothing wrong. */
+    if(r==KUI_CMD_CANCELLED||media_changed||kui_cancelled()) return KUI_READ_FATAL;
+    /* A read error on an unchanged disc is usually the disc (a damaged sector): re-read the
+     * chunk with PIO and its ordinary retries, and keep DMA. A read the drive never completed,
+     * or three failures in a row, is DMA misbehaving: off until reboot. */
+    if(r==KUI_CMD_TIMEOUT||++dma_failures>=3) {
         dma_broken=true;
         kui_log("GD-ROM DMA read did not complete (%s); DMA stays off until reboot",kui_command_name(r));
-        return media_changed||kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;
-    }
-    return KUI_READ_OK;
+    } else kui_log("GD-ROM DMA read failed (%s); re-reading this chunk with PIO",kui_command_name(r));
+    return KUI_READ_RETRY;
 }
 
 #ifdef KUI_EXPERIMENTAL_DMA

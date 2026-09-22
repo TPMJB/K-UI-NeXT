@@ -428,6 +428,9 @@ successful work.
   ([handoff](HANDOFF-disc-reader.md)).
 - **Hardware recorded:** NTSC console, motherboard reported as "V1A" (most likely VA1), RF video
   cable, SanDisk 128 GB microSD (Endurance line), exFAT. The SD adapter model is not recorded.
+- **Done since:** the lid opened mid-capture stops cleanly and resumes to a TOSEC-verified finish
+  ([evidence](evidence/lid-open-omikron-2026-09-20.json)); a disc with physical damage retries a
+  fixed 10 times, pins the exact bad sector and stops with the partial job kept
+  ([evidence](evidence/scratched-omikron-retry-2026-09-20.json)).
 - **Still open:** FAT32 (runtime loading from a FAT32 card has never been tried, and the FAT32 pass
-  was never PC-verified); the lid opened mid-capture; a scratched disc that needs retries; a card
-  that fills up mid-capture. The last three are covered by host tests only.
+  was never PC-verified); a card that fills up mid-capture (host tests only).

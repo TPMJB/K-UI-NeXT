@@ -25,6 +25,10 @@ test: build/test-core build/test-capture-core build/test-timing build/test-disc 
 	./build/test-disc dma-fail
 	./build/test-disc dma-timeout
 	./build/test-disc dma-guard
+	./build/test-disc dma-async-stop
+	./build/test-disc dma-async-change
+	./build/test-disc dma-async-fail
+	./build/test-disc dma-async-timeout
 	python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 deps:

@@ -95,7 +95,58 @@ static void check_refused(uint8_t *out) {
 }
 /* The bench's GD-ROM DMA probe against the fake firmware. Each failure mode that turns DMA off
  * runs as its own process (like abort-fail above): the state it leaves is meant to persist. */
+/* The split DMA read's failure policy. Each mode is its own process, so disc.c's latches start
+ * clean. The bug these pin down was seen on hardware: a lid-open left DMA off for the rest of
+ * the boot, and a same-boot resume ran at PIO speed. */
+static int run_dma_async(const char *mode) {
+    static _Alignas(32) uint8_t buf[32*KUI_RAW_BYTES];
+    reset();
+    if(!strcmp(mode,"dma-async-stop")) {
+        assert(kui_disc_read_begin(NULL,45150,32,buf));
+        fake.stop=true;                                   /* B pressed with a read in flight */
+        assert(kui_disc_read_end(NULL)==KUI_READ_FATAL);
+        fake.stop=false;
+        assert(!strstr(fake.log,"DMA stays off"));
+        assert(kui_disc_read_begin(NULL,45150,32,buf));   /* DMA is still there for the resume */
+        assert(kui_disc_read_end(NULL)==KUI_READ_OK);
+    } else if(!strcmp(mode,"dma-async-change")) {
+        assert(kui_disc_read_begin(NULL,45150,32,buf));
+        fake.changed=true;                                /* the lid opened */
+        assert(kui_disc_read_end(NULL)==KUI_READ_FATAL);
+        assert(!strstr(fake.log,"DMA stays off"));
+    } else if(!strcmp(mode,"dma-async-fail")) {
+        /* One damaged sector: the chunk falls back to PIO and DMA stays on. */
+        assert(kui_disc_read_begin(NULL,45150,32,buf));
+        fake.fail=true;
+        assert(kui_disc_read_end(NULL)==KUI_READ_RETRY);
+        assert(strstr(fake.log,"re-reading this chunk with PIO") && !strstr(fake.log,"DMA stays off"));
+        fake.fail=false;
+        assert(kui_disc_read_begin(NULL,45150,32,buf));
+        assert(kui_disc_read_end(NULL)==KUI_READ_OK);      /* a success clears the count */
+        /* Three failures in a row on an unchanged disc is DMA misbehaving. */
+        for(int k=0;k<3;k++) {
+            fake.fail=false;
+            assert(kui_disc_read_begin(NULL,45150,32,buf));
+            fake.fail=true;
+            assert(kui_disc_read_end(NULL)==KUI_READ_RETRY);
+        }
+        assert(strstr(fake.log,"DMA stays off until reboot"));
+        fake.fail=false;
+        assert(!kui_disc_read_begin(NULL,45150,32,buf));
+    } else {
+        assert(!strcmp(mode,"dma-async-timeout"));        /* the drive never finishes: DMA's fault */
+        assert(kui_disc_read_begin(NULL,45150,32,buf));
+        fake.timeout=true;
+        assert(kui_disc_read_end(NULL)!=KUI_READ_OK);
+        assert(strstr(fake.log,"DMA stays off until reboot"));
+        fake.timeout=false;
+        assert(!kui_disc_read_begin(NULL,45150,32,buf));
+    }
+    printf("PASS dma async: %s\n",mode);
+    return 0;
+}
 static int run_dma(const char *mode) {
+    if(!strncmp(mode,"dma-async",9)) return run_dma_async(mode);
     static uint8_t expected[KUI_OPT_SWEEP_CHUNK_MAX*KUI_RAW_BYTES];
     struct kui_probe_stats st;const uint8_t *data=NULL;
     reset();memset(&st,0,sizeof(st));test_cache_n=0;test_cache_log[0]=0;
