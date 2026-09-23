@@ -11,7 +11,7 @@
 struct kui_options kui_options;
 static struct {
     bool refresh_ok, prepare_ok, plan_ok, connect_ok, stop;
-    bool cancel_in_prepare;
+    bool cancel_in_prepare, quick_resume;
     enum kui_capture_mode mode;
     enum kui_capture_result result;
     struct kui_capture_stats stats;
@@ -106,7 +106,7 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     assert(ops->options && ops->stats);
     assert(ops->options->crc_only==kui_options.capture_crc_only[0]);
     assert(ops->options->skip_end_readback==!kui_options.end_readback[0]);
-    assert(ops->options->resume_size_only==kui_options.resume_size[0]);
+    assert(ops->options->resume_size_only==(fake.quick_resume||kui_options.resume_size[0]));
     assert(ops->options->sample_every==kui_options.sample_readback[0]);
     assert(ops->options->read_dma==kui_options.capture_dma[0]);
     assert(ops->options->output && ops->options->output->game_names);
@@ -173,6 +173,37 @@ int main(void) {
             expect_empty_stats();
         }
     }
+    /* Quick resume overrides only the local options passed to a Resume call.
+     * It does not overwrite configured full resume, hash/readback choices, or
+     * bench lists. Job hash compatibility is checked by the engine, not guessed
+     * from today's preferences (covered by test_capture_options.py). */
+    for(unsigned crc_only=0;crc_only<2;++crc_only) {
+        reset();fake.mode=KUI_CAPTURE_RESUME;fake.quick_resume=true;
+        kui_options.capture_crc_only[0]=crc_only!=0;
+        kui_options.resume_size[0]=false;
+        kui_options.resume_size[1]=true;kui_options.resume_check_count=2;
+        struct kui_options before=kui_options;
+        assert(kui_capture_resume_quick("123456abcdef","/Games")==KUI_CAPTURE_COMPLETE);
+        assert(!strcmp(fake.order,"OTDPSCECLUR") && fake.engine_calls==1 && fake.simulated_writes==1);
+        assert(!memcmp(&before,&kui_options,sizeof(before)));expect_stats();
+        for(unsigned mode=KUI_CAPTURE_NEW;mode<=KUI_CAPTURE_VERIFY;++mode) {
+            fake.order_size=0;fake.order[0]=0;fake.engine_calls=fake.simulated_writes=0;
+            fake.mode=(enum kui_capture_mode)mode;fake.quick_resume=false;
+            run_success();
+            assert(!memcmp(&before,&kui_options,sizeof(before)));
+        }
+    }
+    /* Opting in cannot bypass either fail-closed destination or configuration
+     * validation. A failed quick attempt must not leak its mode to another run. */
+    reset();fake.mode=KUI_CAPTURE_RESUME;fake.quick_resume=true;
+    kui_options.resume_size[0]=false;
+    assert(kui_capture_resume_quick("123456abcdef","/../Games")==KUI_CAPTURE_FAILED);
+    assert(!fake.order[0] && !fake.engine_calls && !fake.simulated_writes);expect_empty_stats();
+    fake.refresh_ok=false;
+    assert(kui_capture_resume_quick("123456abcdef","/Games")==KUI_CAPTURE_FAILED);
+    assert(!strcmp(fake.order,"O") && !fake.engine_calls && !fake.simulated_writes);expect_empty_stats();
+    fake.refresh_ok=true;fake.quick_resume=false;fake.order_size=0;fake.order[0]=0;
+    run_success();assert(!kui_options.resume_size[0]);
     /* Normalize once before options/media access, and retain that stable path
      * throughout the synchronous engine call. */
     reset();strcpy(fake.destination,"/Games/My Discs");
@@ -216,6 +247,6 @@ int main(void) {
         reset();fake.result=(enum kui_capture_result)result;fake.stats.verified=false;
         fake.stats.bytes=321;strcpy(fake.stats.job_dir,"/KUI/dumps/partial");run_success();
     }
-    puts("PASS capture adapter: invalid paths/preferences stop before I/O, named output/reference outcomes forwarded, stale stats cleared");
+    puts("PASS capture adapter: fail-closed inputs, per-action quick resume without persistent changes, named output/reference outcomes, fresh stats");
     return 0;
 }

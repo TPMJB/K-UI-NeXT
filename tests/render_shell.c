@@ -2,7 +2,8 @@
 /* Host preview uses the same embedded artwork/font and renderer as hardware.
  * Modes: home, ripper, confirm, settings, diagnostics, complete, partial,
  * stopped, destination, keyboard, advanced, ripper-settings, video, vmu,
- * memory, network, idle, reset, home-vmu, home-memory, home-network. */
+ * memory, network, idle, reset, home-vmu, home-memory, home-network,
+ * home-music, home-gd, music, gd-play, gd-confirm, quick-resume. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -23,9 +24,24 @@ int main(int argc,char **argv) {
         .memory_valid=true,.memory_used=2800*1024,.memory_physical=16384*1024,
         .memory_peak=2816*1024,.log_lines=logs,.log_count=7,.total_log_lines=174,
         .job_dir="/Games/MDK2 (2)",.disc_title="MDK2",.inserted_title="MDK2",
-        .gdi_name="MDK2.gdi",.music_title="Music: Midnight Terminal"};
+        .gdi_name="MDK2.gdi",.music_title="Neon Circuit",.music_enabled=true,
+        .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
-    if(!strcmp(argv[1],"settings")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=2;}
+    if(!strcmp(argv[1],"home-music")) shell.home_selected=7;
+    else if(!strcmp(argv[1],"home-gd")) shell.home_selected=6;
+    else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm")) {
+        shell.page=KUI_SHELL_GD_PLAY;shell.confirm_gd_boot=!strcmp(argv[1],"gd-confirm");
+    } else if(!strcmp(argv[1],"quick-resume")) {
+        shell.page=KUI_SHELL_ADVANCED;shell.advanced_selected=3;shell.confirm_quick_resume=true;
+    } else if(!strcmp(argv[1],"music")) {
+        shell.page=KUI_SHELL_MUSIC;shell.music_listing.count=8;shell.music_listing.has_more=true;
+        const char *names[]={"Albums","Neon Circuit.wav","Orbital Drift.wav","Midnight Vector.wav",
+            "Chrome Horizon.wav","Menu.wav","Long descriptive music filename that should clip safely.wav","Other.wav"};
+        for(unsigned i=0;i<8;i++) snprintf(shell.music_listing.entries[i].name,
+            sizeof(shell.music_listing.entries[i].name),"%s",names[i]);
+        shell.music_listing.entries[0].directory=true;shell.music_selected=3;
+        strcpy(shell.music_listing.message,"Choose a WAV file to play.");
+    } else if(!strcmp(argv[1],"settings")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=2;}
     else if(!strcmp(argv[1],"ripper-settings")) shell.page=KUI_SHELL_RIPPER_SETTINGS;
     else if(!strcmp(argv[1],"video")) {
         shell.page=KUI_SHELL_SETTINGS;view.video_trial=true;view.video_seconds=7;

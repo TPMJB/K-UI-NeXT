@@ -86,11 +86,19 @@ static const char *state(const struct kui_shell_view *v) {
     if(v->busy) return v->cancel_requested ? "STOP REQUESTED" : "WORKING";
     return "READY";
 }
-static void heading(struct paint *p, const struct kui_shell_view *v) {
+static void heading(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
     art(p,32,20,128,64,kui_art_brand);
-    title(p,184,26,"Katana User Interface");
-    label(p,184,52,MUTED,"by TPMJB   /   SD runtime");
-    words(p,184,74,396,CYAN,state(v),false);
+    words(p,176,26,396,WHITE,"Katana UI",true);
+    words(p,176,52,396,MUTED,"by TPMJB / SD runtime",false);
+    words(p,176,74,396,CYAN,state(v),false);
+    char music[48];
+    const char *prefix=s->page==KUI_SHELL_HOME&&!v->busy?"Y Music":"Music";
+    if(!v->music_enabled) snprintf(music,sizeof(music),"%s off",prefix);
+    else if(v->music_paused) snprintf(music,sizeof(music),"%s paused",prefix);
+    else snprintf(music,sizeof(music),"%s %u%%",prefix,v->music_volume);
+    words(p,412,26,608,v->music_playing?CYAN:MUTED,music,false);
+    words(p,412,48,608,v->music_enabled?WHITE:MUTED,
+        v->music_title&&v->music_title[0]?v->music_title:"No song selected",false);
     char build[40]; snprintf(build,sizeof(build),"Build %.12s",v->build?v->build:"local");
     label(p,416,74,MUTED,build); rule(p,98);
 }
@@ -98,14 +106,17 @@ static void footer(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     rule(p,416);
     const char *controls=v->video_trial ? "A Keep mode   B Revert" : v->busy ? "B Stop safely" :
+        s->confirm_gd_boot ? "A Exit to BIOS   B Cancel" :
+        s->confirm_quick_resume ? "A Quick resume   B Cancel" :
         s->confirm_new ? "A Start capture   B Cancel" :
-        s->page==KUI_SHELL_HOME ? "D-pad Select   A Open" :
+        s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Music volume" :
         s->page==KUI_SHELL_SETTINGS || s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_KEYBOARD ? "A Key   X Backspace   Y Shift   B Cancel" :
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
         s->page==KUI_SHELL_RIPPER ? "B Home   R Folder   START Advanced" :
-        s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   START Page" : "B Home";
+        s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   START Page" :
+        s->page==KUI_SHELL_MUSIC ? "B Parent / Home   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,500,MUTED,controls,false);
     if(!v->video_trial) label(p,512,430,MUTED,"L Memory");
 }
@@ -121,6 +132,10 @@ static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
         }
         box(p,x+24,y+24,80,80,EDGE); box(p,x+30,y+30,68,68,PANEL);
         words(p,x+40,y+54,x+98,WHITE,"RAM",true);
+    } else if(app==7) {
+        box(p,x+36,y+32,8,62,CYAN);box(p,x+88,y+20,8,62,PINK);
+        box(p,x+40,y+28,52,8,CYAN);box(p,x+40,y+20,52,8,PINK);
+        panel(p,x+16,y+84,28,18,CYAN);panel(p,x+68,y+72,28,18,PINK);
     } else {
         box(p,x+28,y+38,72,4,CYAN); box(p,x+62,y+40,4,44,CYAN);
         box(p,x+26,y+40,4,44,CYAN); box(p,x+98,y+40,4,44,CYAN);
@@ -139,6 +154,10 @@ static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned 
             box(p,x+5+i*6,y,2,24,CYAN);box(p,x,y+5+i*6,24,2,CYAN);
         }
         box(p,x+4,y+4,16,16,EDGE);box(p,x+7,y+7,10,10,PANEL);
+    } else if(app==7) {
+        box(p,x+7,y+5,3,15,CYAN);box(p,x+18,y+2,3,15,PINK);
+        box(p,x+8,y+2,13,3,CYAN);
+        box(p,x+2,y+18,8,5,CYAN);box(p,x+13,y+15,8,5,PINK);
     } else {
         box(p,x+11,y+4,2,14,CYAN);box(p,x+3,y+12,18,2,CYAN);
         box(p,x+3,y+12,2,8,CYAN);box(p,x+19,y+12,2,8,CYAN);
@@ -147,38 +166,40 @@ static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned 
     }
 }
 static void home(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
-    static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics"};
-    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics"};
-    static const unsigned icons[]={0,2,2,2,1,2};
-    static const char *details[6][3]={
+    static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics","GD Play","Music Player"};
+    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics","Disc boot","SD audio"};
+    static const unsigned icons[]={0,2,2,2,1,2,0,2};
+    static const char *details[8][3]={
         {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
         {"Browse saves on connected VMUs.","Back up one save or every save", "to the SD card."},
         {"Check available application RAM", "with data patterns and report", "any mismatches found."},
         {"Inspect your network adapter", "and saved configuration.","No network traffic is sent."},
         {"Choose video, memory display", "and background music.", "Save preferences to SD."},
-        {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."}};
-    unsigned selected=s->home_selected<6?s->home_selected:0;
+        {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
+        {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
+        {"Browse WAV music on the card.", "Choose a file to play through", "the Dreamcast audio output."}};
+    unsigned selected=s->home_selected<8?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
-    for(unsigned i=0;i<6;i++) {
-        unsigned y=116+i*44;
+    for(unsigned i=0;i<8;i++) {
+        unsigned y=116+i*34;
         if(selected==i) {
-            panel(p,32,y,208,40,SELECTED);
-            box(p,32,y+5,3,30,PINK);
+            panel(p,32,y,208,32,SELECTED);
+            box(p,32,y+5,3,22,PINK);
         }
-        if(i>=1 && i<=3) small_utility_icon(p,i,44,y+8);
-        else art(p,44,y+8,24,24,kui_art_small_icons[icons[i]]);
-        words(p,80,y+11,230,selected==i?WHITE:MUTED,names[i],false);
+        if((i>=1 && i<=3) || i==7) small_utility_icon(p,i,44,y+4);
+        else art(p,44,y+4,24,24,kui_art_small_icons[icons[i]]);
+        words(p,80,y+8,230,selected==i?WHITE:MUTED,names[i],false);
     }
-    label(p,44,386,MUTED,"6 applications");
+    label(p,44,391,MUTED,"8 applications");
     title(p,264,112,names[selected]);
-    if(selected==0) {
+    if(selected==0 || selected==6) {
         char inserted[160];
         snprintf(inserted,sizeof(inserted),"Inserted: %s",
             v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
         label(p,264,144,CYAN,inserted);
     } else label(p,264,144,CYAN,category[selected]);
     panel(p,264,172,344,140,PANEL);
-    if(selected>=1 && selected<=3) utility_icon(p,selected,372,178);
+    if((selected>=1 && selected<=3) || selected==7) utility_icon(p,selected,372,178);
     else art(p,372,178,128,128,kui_art_icons[icons[selected]]);
     for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,details[selected][i]);
     panel(p,264,382,344,28,CYAN);
@@ -343,8 +364,9 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
         "Example: /Games   New folders are created when used.");
 }
 static void advanced(struct paint *p,const struct kui_shell *s) {
-    static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings"};
-    static const char *details[3][3]={
+    static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings",
+        "Quick resume (sizes only)"};
+    static const char *details[4][3]={
         {"Reread saved tracks and check their recorded hashes.",
          "This checks the card; the stream CRC badge compares",
          "captured tracks with an independent reference."},
@@ -353,15 +375,18 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "Read failures use the reader's bounded retries."},
         {"Choose CRC32 or SHA-256 and optional full readback.",
          "New dumps use your saved choices.",
-         "Existing jobs keep their recorded hash mode."}};
-    unsigned selected=s->advanced_selected<3?s->advanced_selected:0;
+         "Existing jobs keep their recorded hash mode."},
+        {"Check saved file sizes, then continue the dump.",
+         "Previously saved bytes are not reread.",
+         "Same-size corruption is not detected."}};
+    unsigned selected=s->advanced_selected<4?s->advanced_selected:0;
     title(p,40,108,"Advanced disc tools");
     label(p,40,138,MUTED,"Choose an operation for your disc or saved dump.");
-    for(unsigned i=0;i<3;i++) {
-        unsigned y=172+i*44;
-        panel(p,32,y,576,36,selected==i?SELECTED:PANEL);
-        if(selected==i) box(p,32,y+4,3,28,PINK);
-        label(p,48,y+10,selected==i?WHITE:MUTED,names[i]);
+    for(unsigned i=0;i<4;i++) {
+        unsigned y=164+i*37;
+        panel(p,32,y,576,32,selected==i?SELECTED:PANEL);
+        if(selected==i) box(p,32,y+4,3,24,PINK);
+        label(p,48,y+8,selected==i?WHITE:MUTED,names[i]);
     }
     for(unsigned i=0;i<3;i++) label(p,40,326+i*23,MUTED,details[selected][i]);
 }
@@ -496,20 +521,67 @@ static void diagnostics(struct paint *p, const struct kui_shell *s,
         s->scroll?"SCROLLED":"LATEST",v->log_truncated?"  Earlier lines truncated":"");
     label(p,40,392,CYAN,line);
 }
-static void confirmation(struct paint *p) {
+static void confirmation(struct paint *p,bool quick) {
     box(p,32,154,576,254,NAVY);
     box(p,48,160,544,180,EDGE); box(p,52,164,536,172,PANEL);
     box(p,52,164,536,4,PINK);
-    label(p,72,188,WHITE,"START A NEW DUMP?");
-    label(p,72,224,MUTED,"Insert the retail GD-ROM and close the lid.");
-    label(p,72,246,MUTED,"A new folder keeps existing dumps intact.");
-    label(p,72,294,CYAN,"A Start capture"); label(p,368,294,WHITE,"B Cancel");
+    label(p,72,188,WHITE,quick?"QUICK RESUME WITHOUT REREADING?":"START A NEW DUMP?");
+    label(p,72,222,MUTED,quick?"Previously saved bytes will not be reread.":
+        "Insert the retail GD-ROM and close the lid.");
+    label(p,72,244,MUTED,quick?"Same-size damage is not detected by this check.":
+        "A new folder keeps existing dumps intact.");
+    if(quick) label(p,72,266,AMBER,"Use Verify later to check the saved data.");
+    label(p,72,304,CYAN,quick?"A Quick resume":"A Start capture"); label(p,368,304,WHITE,"B Cancel");
+}
+static void gd_play(struct paint *p,const struct kui_shell_view *v) {
+    title(p,40,108,"GD Play");
+    char line[160];snprintf(line,sizeof(line),"Inserted: %s",
+        v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
+    label(p,40,138,CYAN,line);
+    panel(p,32,174,576,224,PANEL);
+    art(p,60,214,128,128,kui_art_icons[0]);
+    label(p,216,198,WHITE,"A Boot via console BIOS");
+    words(p,216,232,592,MUTED,"Exits K-UI and starts the console BIOS.",false);
+    words(p,216,258,592,MUTED,"Region and autostart settings still apply.",false);
+    words(p,216,284,592,MUTED,"Use the BIOS Play option if needed.",false);
+    words(p,216,326,592,MUTED,"The current boot disc can start K-UI again.",false);
+}
+static void gd_boot_confirmation(struct paint *p) {
+    box(p,32,154,576,254,NAVY);
+    panel(p,48,160,544,202,PANEL);box(p,52,164,536,4,PINK);
+    label(p,72,188,WHITE,"EXIT K-UI AND BOOT VIA CONSOLE BIOS?");
+    label(p,72,224,MUTED,"Console region and autostart settings still apply.");
+    label(p,72,248,MUTED,"Select Play in the BIOS if the disc does not start.");
+    label(p,72,282,MUTED,"This closes the current K-UI session.");
+    label(p,72,322,CYAN,"A Exit to BIOS");label(p,368,322,WHITE,"B Cancel");
+}
+static void music_player(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Music Player");
+    char line[160];snprintf(line,sizeof(line),"SD: %s",s->music_path);
+    label(p,40,136,CYAN,line);
+    label(p,40,160,v->busy?MUTED:WHITE,"A Open / play WAV   X Refresh");
+    panel(p,32,190,576,178,PANEL);
+    unsigned count=s->music_listing.count<KUI_MUSIC_PLAYER_ROWS?s->music_listing.count:KUI_MUSIC_PLAYER_ROWS;
+    if(!count) label(p,48,206,MUTED,v->busy?"Opening card...":"No folders or WAV files on this page.");
+    for(unsigned i=0;i<count;i++) {
+        unsigned y=196+i*21;
+        const struct kui_music_player_entry *entry=&s->music_listing.entries[i];
+        if(i==s->music_selected) panel(p,40,y,560,21,SELECTED);
+        label(p,50,y+1,entry->disabled?AMBER:MUTED,entry->directory?"DIR":"WAV");
+        words(p,94,y+1,590,i==s->music_selected?WHITE:MUTED,entry->name,false);
+    }
+    const struct kui_app_status *status=v->app_status;
+    label(p,40,378,status&&status->complete&&!status->passed?AMBER:CYAN,
+        status&&status->message[0]?status->message:s->music_listing.message);
+    snprintf(line,sizeof(line),"PAGE %u%s   WAV files on SD; B stops playback",
+        s->music_page+1,s->music_listing.has_more?" +":"");
+    label(p,40,396,MUTED,line);
 }
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
     struct paint p={frame,text,ctx};
-    heading(&p,v);
+    heading(&p,s,v);
     switch(s->page) {
     case KUI_SHELL_HOME: home(&p,s,v); break;
     case KUI_SHELL_RIPPER: ripper(&p,s,v); break;
@@ -520,10 +592,13 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_KEYBOARD: keyboard(&p,s); break;
     case KUI_SHELL_ADVANCED: advanced(&p,s); break;
     case KUI_SHELL_VMU: vmu_page(&p,s,v); break;
+    case KUI_SHELL_GD_PLAY: gd_play(&p,v); break;
+    case KUI_SHELL_MUSIC: music_player(&p,s,v); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
     }
     footer(&p,s,v);
-    if(s->confirm_new) confirmation(&p);
+    if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s->confirm_quick_resume);
+    if(s->confirm_gd_boot) gd_boot_confirmation(&p);
     if(v->video_trial) video_trial(&p,v);
 }
 

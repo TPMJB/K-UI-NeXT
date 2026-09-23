@@ -24,21 +24,26 @@ separate contribution or commercial-relicensing agreement.
 
 ## M1.5 shell update
 
-The SD runtime opens six apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
-**Network Test**, **Settings** and **Diagnostics**. New captures use a selectable
+The SD runtime opens eight apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
+**Network Test**, **Settings**, **Diagnostics**, **GD Play** and **Music Player**. New captures use a selectable
 parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
 The hardware-proven acquisition engine remains unchanged.
 
 Use the existing bootstrap CD and the `sd-update` artifact. Replace
 `/KUI/runtime.kui`, and copy `KUI/apps/music/` for optional original menu music.
-See [this app acceptance round](docs/apps-test.md) and
+See [the current app acceptance round](docs/apps-round-two.md) and
 [app boundaries and the later executable-loader plan](docs/app-architecture.md).
 These new app paths still need physical-console acceptance.
 
 - Select with D-pad or stick and open with A. B returns home while idle.
+- The original splash and startup cue return in the SD runtime; B skips.
+  Home Y cycles menu volume/off and the top-right header names the current song.
+- GD Play exits through normal KOS shutdown to the stock BIOS. Music Player
+  streams full PCM16 WAV songs from SD; CD audio/compressed codecs remain pending.
 - Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
   R chooses or types a destination; Start opens Advanced and **Capture settings**.
-  During work, B requests Stop. Reports still save automatically. Idle insertion
+  Advanced also offers explicitly confirmed Quick resume (sizes only), preserving
+  full Resume and its saved-byte checks. During work, B requests Stop. Reports still save automatically. Idle insertion
   detection shows the disc title; moving capture/verification phases show an ETA.
 - System Settings: 640x480 TV timing with reversible preview, memory display,
   music enabled and volume. Capture hashes/readback remain inside the ripper.

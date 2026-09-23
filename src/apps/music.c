@@ -55,9 +55,12 @@ void kui_music_pause(void) {
     if(music.status.paused && !music.playback_failed)
         snprintf(music.status.message,sizeof(music.status.message),"Paused during operation");
 }
-void kui_music_shutdown(void) {
+void kui_music_release_audio(void) {
     kui_music_pause();
     if(music.audio_initialized) {snd_stream_shutdown();music.audio_initialized=false;}
+}
+void kui_music_shutdown(void) {
+    kui_music_release_audio();
     free(music.file);music.file=NULL;memset(&music.loop,0,sizeof(music.loop));
     music.playback_failed=false;
     memset(&music.status,0,sizeof(music.status));

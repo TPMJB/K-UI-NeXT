@@ -29,7 +29,9 @@ static void launcher_and_confirmation(void) {
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_MSTATS && s.confirm_new);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NEW_DUMP && !s.confirm_new);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
-    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==5);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==7);
+    press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false);
+    assert(s.home_selected==5);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DIAGNOSTICS);
     press(KUI_SHELL_B,false);
     press(KUI_SHELL_UP,false);
@@ -38,7 +40,7 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_NETWORK;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_MUSIC;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -126,11 +128,12 @@ static void system_transaction_and_video(void) {
 }
 static void app_navigation_and_vmu(void) {
     static const enum kui_shell_page pages[]={KUI_SHELL_RIPPER,KUI_SHELL_VMU,
-        KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,KUI_SHELL_SETTINGS,KUI_SHELL_DIAGNOSTICS};
-    for(unsigned i=0;i<6;i++) {
+        KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,KUI_SHELL_SETTINGS,KUI_SHELL_DIAGNOSTICS,
+        KUI_SHELL_GD_PLAY,KUI_SHELL_MUSIC};
+    for(unsigned i=0;i<8;i++) {
         reset(KUI_SHELL_HOME);s.home_selected=i;
         enum kui_shell_action expected=i==1?KUI_SHELL_VMU_LIST:
-            i==4?KUI_SHELL_LOAD_SYSTEM:KUI_SHELL_NONE;
+            i==4?KUI_SHELL_LOAD_SYSTEM:i==7?KUI_SHELL_MUSIC_LIST:KUI_SHELL_NONE;
         assert(press(KUI_SHELL_A,false)==expected && s.page==pages[i]);
     }
     reset(KUI_SHELL_MEMORY);
@@ -310,6 +313,61 @@ static void advanced_navigation(void) {
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISCARD_SETTINGS && s.page==KUI_SHELL_ADVANCED);
     press(KUI_SHELL_B,false); assert(s.page==KUI_SHELL_RIPPER);
 }
+static void music_and_boot_controls(void) {
+    reset(KUI_SHELL_HOME);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_MUSIC_CYCLE && s.page==KUI_SHELL_HOME);
+    assert(press(KUI_SHELL_Y|KUI_SHELL_A,false)==KUI_SHELL_MUSIC_CYCLE);
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_Y|KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    reset(KUI_SHELL_RIPPER);assert(press(KUI_SHELL_Y,false)==KUI_SHELL_VERIFY);
+    reset(KUI_SHELL_DIAGNOSTICS);assert(press(KUI_SHELL_Y,false)==KUI_SHELL_SAVE_LOG);
+    reset(KUI_SHELL_SETTINGS);assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE);
+    reset(KUI_SHELL_GD_PLAY);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_gd_boot);
+    assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_gd_boot);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_gd_boot);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.confirm_gd_boot);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && !s.confirm_gd_boot);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_BOOT && !s.confirm_gd_boot);
+    reset(KUI_SHELL_ADVANCED);s.advanced_selected=3;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_quick_resume);
+    assert(press(KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_DOWN,false)==KUI_SHELL_NONE);
+    assert(s.confirm_quick_resume && s.advanced_selected==3);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.confirm_quick_resume);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_RESUME_QUICK && s.page==KUI_SHELL_RIPPER);
+    assert(!s.confirm_quick_resume);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_RESUME); /* Default remains thorough. */
+    reset(KUI_SHELL_MUSIC);
+    assert(!strcmp(s.music_path,"/Music"));
+    struct kui_music_player_page page={.count=2,.has_more=true};
+    strcpy(page.root,"/Other");strcpy(page.entries[0].name,"ambient");page.entries[0].directory=true;
+    strcpy(page.entries[1].name,"test.wav");
+    kui_shell_set_music_listing(&s,&page);assert(!s.music_listing.count);
+    strcpy(page.root,"/Music");kui_shell_set_music_listing(&s,&page);
+    assert(s.music_listing.count==2);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_MUSIC_LIST && !strcmp(s.music_path,"/Music/ambient"));
+    assert(!s.music_listing.count && !s.music_page);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_MUSIC_LIST && !strcmp(s.music_path,"/Music"));
+    kui_shell_set_music_listing(&s,&page);s.music_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_MUSIC_PLAY);
+    assert(!strcmp(s.music_selected_path,"/Music/test.wav"));
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_MUSIC_LIST && s.music_page==1);
+    assert(!s.music_listing.count);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_MUSIC_LIST && !s.music_page);
+    kui_shell_set_music_listing(&s,&page);s.music_listing.entries[0].disabled=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.music_listing.message[0]);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_MUSIC_LIST);
+    page.count=UINT_MAX;memset(page.entries[0].name,'A',sizeof(page.entries[0].name));
+    kui_shell_set_music_listing(&s,&page);
+    assert(s.music_listing.count==KUI_MUSIC_PLAYER_ROWS && s.music_listing.entries[0].disabled);
+    assert(!strcmp(s.music_listing.entries[0].name,"[Name too long]"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_MUSIC_LIST && !strcmp(s.music_path,"/"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
+}
 static uint16_t pixels[640*480+2], prepared[640*480+2];
 static char drawn[8192];
 static size_t drawn_size;
@@ -340,7 +398,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_NETWORK;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_MUSIC;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -456,16 +514,48 @@ static void new_pages_rendering(void) {
     assert(strstr(drawn,"Inserted: No disc detected"));
     v.inserted_title="A very long inserted disc title which exceeds the launcher subtitle width";
     render(&v);assert(strstr(drawn,"Inserted:") && strstr(drawn,"..."));
-    for(unsigned i=0;i<6;i++) {
+    for(unsigned i=0;i<8;i++) {
         s.home_selected=i;render(&v);
-        assert(strstr(drawn,"6 applications") && strstr(drawn,"Memory Test"));
+        assert(strstr(drawn,"8 applications") && strstr(drawn,"Memory Test"));
     }
+}
+static void music_and_boot_rendering(void) {
+    struct kui_shell_view v={.music_enabled=true,.music_playing=true,.music_volume=75,
+        .music_title="Neon Circuit",.inserted_title="MDK2"};
+    reset(KUI_SHELL_HOME);render(&v);
+    assert(strstr(drawn,"Y Music 75%") && strstr(drawn,"Neon Circuit"));
+    assert(strstr(drawn,"Y Music volume") && strstr(drawn,"GD Play"));
+    v.music_enabled=false;v.music_playing=false;render(&v);
+    assert(strstr(drawn,"Y Music off"));
+    v.music_enabled=true;v.music_paused=true;v.busy=true;render(&v);
+    assert(strstr(drawn,"Music paused") && !strstr(drawn,"Y Music"));
+    v.busy=false;v.music_paused=false;reset(KUI_SHELL_RIPPER);render(&v);
+    assert(!strstr(drawn,"Y Music") && strstr(drawn,"Music 75%"));
+    reset(KUI_SHELL_ADVANCED);s.advanced_selected=3;render(&v);
+    assert(strstr(drawn,"Quick resume (sizes only)") && strstr(drawn,"Same-size corruption"));
+    s.confirm_quick_resume=true;render(&v);
+    assert(strstr(drawn,"QUICK RESUME WITHOUT REREADING?"));
+    assert(strstr(drawn,"Previously saved bytes will not be reread."));
+    assert(strstr(drawn,"Same-size damage is not detected"));
+    reset(KUI_SHELL_GD_PLAY);render(&v);
+    assert(strstr(drawn,"Inserted: MDK2") && strstr(drawn,"A Boot via console BIOS"));
+    s.confirm_gd_boot=true;render(&v);
+    assert(strstr(drawn,"EXIT K-UI AND BOOT VIA CONSOLE BIOS?"));
+    assert(strstr(drawn,"region and autostart"));
+    reset(KUI_SHELL_MUSIC);
+    strcpy(s.music_listing.entries[0].name,"test.wav");s.music_listing.count=1;
+    strcpy(s.music_listing.entries[1].name,"Albums");s.music_listing.entries[1].directory=true;
+    s.music_listing.count=2;render(&v);
+    assert(strstr(drawn,"Music Player") && strstr(drawn,"SD: /Music"));
+    assert(strstr(drawn,"test.wav") && strstr(drawn,"Albums") && strstr(drawn,"WAV"));
+    assert(strstr(drawn,"B Parent / Home") && !strstr(drawn,"CD playback"));
 }
 int main(void) {
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();
     system_transaction_and_video(); app_navigation_and_vmu(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
+    music_and_boot_controls(); music_and_boot_rendering();
     puts("PASS shell: Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

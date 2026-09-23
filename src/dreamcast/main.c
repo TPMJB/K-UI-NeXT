@@ -9,6 +9,9 @@
 #include "kui/disc_identity.h"
 #include "kui/music.h"
 #include "kui/apps.h"
+#include "kui/music_player.h"
+#include "kui/splash.h"
+#include "kui/gd_play.h"
 #endif
 #include <kos.h>
 #include <dc/minifont.h>
@@ -57,6 +60,15 @@ static struct kui_app_status memory_test_status, network_test_status;
 static struct kui_vmu_view vmu_snapshot;
 static unsigned vmu_generation, vmu_slot_pending, vmu_page_pending, vmu_selected_pending;
 static unsigned active_app;
+static bool splash_active,boot_ready,player_active;
+static struct kui_music_player_page music_listing;
+static struct kui_app_status player_status;
+static unsigned music_listing_generation,music_offset_pending;
+static char music_path_pending[256];
+static bool is_capture_action(unsigned action) {
+    return (action>=4 && action<=6) || action==22;
+}
+
 #define KUI_ROLE "SD runtime"
 #else
 #define KUI_ROLE "CD bootstrap"
@@ -260,6 +272,7 @@ static void app_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);
     if(active_app==19) memory_test_status=*status;
     else if(active_app==20) network_test_status=*status;
+    else if(active_app==24) player_status=*status;
     else vmu_snapshot.status=*status;
     mutex_unlock(&lock);
 }
@@ -330,7 +343,13 @@ static void *worker(void *unused) {
             mutex_unlock(&lock);
             if(idle && !reset) {
                 const struct kui_disc_identity_ops *ops=kui_disc_identity_console_ops();
+                enum kui_disc_identity_state before=disc_identity.state;
+                int before_result=disc_identity.last_status_result;
                 bool identify=kui_disc_identity_poll(&disc_identity,ops,timer_ms_gettime64(),true);
+                if(before!=disc_identity.state || before_result!=disc_identity.last_status_result)
+                    kui_log("Disc insertion: %s; BIOS result=%d status=%d type=%d",
+                        kui_disc_identity_text(disc_identity.state),disc_identity.last_status_result,
+                        disc_identity.last_status,disc_identity.last_disc_type);
                 mutex_lock(&lock);
                 disc_snapshot=disc_identity;
                 if(identify && !pending && !busy && !video_preview) {
@@ -350,7 +369,11 @@ static void *worker(void *unused) {
 #ifdef KUI_SD_RUNTIME
         kui_music_pause();publish_music();
 #endif
-        if(kui_cancelled()) {
+        if(kui_cancelled()
+#ifdef KUI_SD_RUNTIME
+           && action!=27
+#endif
+        ) {
             kui_log("Operation stopped before starting.");
 #ifdef KUI_SD_RUNTIME
             if(action==12) {
@@ -360,7 +383,7 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             mutex_lock(&lock);
-            if(action >= 4 && action <= 6) capture_outcome = KUI_SHELL_OUTCOME_STOPPED;
+            if(is_capture_action(action)) capture_outcome = KUI_SHELL_OUTCOME_STOPPED;
             if(action == 10 || action == 11) {
                 destination_result = 3;
                 snprintf(destination_note, sizeof(destination_note), "Folder operation stopped.");
@@ -370,11 +393,12 @@ static void *worker(void *unused) {
                 system_ok=false;++system_generation;
                 snprintf(system_note,sizeof(system_note),"System settings operation stopped.");
             }
-            if(action>=16 && action<=20) {
+            if((action>=16 && action<=20) || action==23 || action==24) {
                 struct kui_app_status stopped={.stopped=true};
                 snprintf(stopped.message,sizeof(stopped.message),"Operation stopped before starting.");
                 if(action==19) memory_test_status=stopped;
                 else if(action==20) network_test_status=stopped;
+                else if(action==23 || action==24) player_status=stopped;
                 else vmu_snapshot.status=stopped;
             }
             if(action == 8 || action == 9)
@@ -404,6 +428,52 @@ static void *worker(void *unused) {
             }
             if(action==13 || action==14) system_operation(action==14);
             if(action==15) configure_music(true);
+            if(action==21) {
+                static const unsigned levels[]={15,30,50,75,100};
+                mutex_lock(&lock);
+                struct kui_system_settings next=system_current;
+                unsigned level=next.music_enabled?next.music_volume:0;
+                unsigned wanted=0;
+                for(unsigned i=0;i<sizeof(levels)/sizeof(levels[0]);i++)
+                    if(levels[i]>level) {wanted=levels[i];break;}
+                next.music_enabled=wanted!=0;
+                if(wanted) next.music_volume=wanted;
+                system_pending=next;
+                mutex_unlock(&lock);
+                system_operation(true);
+            }
+            if(action==23) {
+                kui_sd_set_params(0,true);
+                struct kui_music_player_page page;
+                bool ok=kui_music_player_list(music_path_pending,music_offset_pending,&page,kui_log,kui_cancelled);
+                mutex_lock(&lock);
+                music_listing=page;++music_listing_generation;
+                snprintf(player_status.message,sizeof(player_status.message),"%s",page.message);
+                player_status.complete=ok;player_status.passed=ok;
+                mutex_unlock(&lock);
+            }
+            if(action==24) {
+                kui_sd_set_params(0,true);
+                struct kui_app_status result;
+                active_app=24;
+                kui_music_player_run(music_path_pending,system_current.music_volume,&result,
+                    kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);player_status=result;mutex_unlock(&lock);
+            }
+            if(action==25) {
+                /* All app I/O is finished; keep the worker parked until main's
+                 * normal KOS shutdown tears down the remaining services. */
+                kui_music_shutdown();publish_music();
+                mutex_lock(&lock);boot_ready=true;mutex_unlock(&lock);
+                for(;;) thd_sleep(1000);
+            }
+            if(action==27) {
+                kui_music_play_boot_chime(kui_cancelled);
+                mutex_lock(&lock);cancel_requested=false;mutex_unlock(&lock);
+                settings_operation(false);
+                system_operation(false);
+                mutex_lock(&lock);splash_active=false;mutex_unlock(&lock);
+            }
             if(action>=16 && action<=20) {
                 active_app=action;
                 if(action<=18) {
@@ -431,14 +501,16 @@ static void *worker(void *unused) {
                 kui_log("Saving diagnostic report automatically; B cancels log save.");
                 save_report("auto bench",outcome,true);
             }
-            if(action >= 4 && action <= 6) {
+            if(is_capture_action(action)) {
                 kui_memory_log("capture/verify start");
-                enum kui_capture_result result=kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID,capture_destination);
+                enum kui_capture_result result=action==22?
+                    kui_capture_resume_quick(KUI_BUILD_ID,capture_destination):
+                    kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID,capture_destination);
                 mutex_lock(&lock);
                 capture_summary = *kui_capture_last_stats();
                 capture_outcome = result == KUI_CAPTURE_COMPLETE ? KUI_SHELL_OUTCOME_COMPLETE :
                     result == KUI_CAPTURE_STOPPED ? KUI_SHELL_OUTCOME_STOPPED : KUI_SHELL_OUTCOME_FAILED;
-                const char *stage=action==6?"Verification":action==5?"Resume":"Capture";
+                const char *stage=action==6?"Verification":(action==5 || action==22)?"Resume":"Capture";
                 snprintf(capture_message,sizeof(capture_message),"%s",
                     result==KUI_CAPTURE_FAILED?(drive_reset_required?
                         "Drive reset required. Reboot, then Resume the partial dump.":
@@ -459,17 +531,20 @@ static void *worker(void *unused) {
                 const char *outcome=result==KUI_CAPTURE_COMPLETE?"complete":result==KUI_CAPTURE_STOPPED?"stopped":"failed";
                 kui_log("Capture result: %s",outcome);
                 kui_log("Saving diagnostic report automatically; B cancels log save.");
-                save_report(action==4?"auto new capture":action==5?"auto resume":"auto verify",outcome,true);
+                save_report(action==4?"auto new capture":action==5?"auto resume":action==22?"auto quick resume":"auto verify",outcome,true);
             }
 #endif
         }
 #ifdef KUI_SD_RUNTIME
-        if(action!=12) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
-        if(action==1 || (action>=4 && action<=7)) kui_disc_identity_invalidate(&disc_identity);
+        if(action!=12 && action!=27) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
+        if(action==1 || (action>=4 && action<=7) || action==22) kui_disc_identity_invalidate(&disc_identity);
 #else
         kui_log("Operation ended. Y saves the current log to SD.");
 #endif
         mutex_lock(&lock);
+#ifdef KUI_SD_RUNTIME
+        player_active=false;
+#endif
         busy = false;
         ui_hz_busy = KUI_OPT_UI_FULL;   /* no operation leaves its cap behind for the next */
         mutex_unlock(&lock);
@@ -539,6 +614,10 @@ static void draw(unsigned scroll,unsigned page) {
 
 #ifdef KUI_SD_RUNTIME
 static void draw_shell(void) {
+    mutex_lock(&lock);bool startup=splash_active;mutex_unlock(&lock);
+    if(startup) {
+        kui_splash_draw(vram_s);vid_waitvbl();vid_flip(-1);return;
+    }
     char visible[KUI_SHELL_LOG_ROWS][LINE_BYTES] = {{0}};
     const char *log_rows[KUI_SHELL_LOG_ROWS];
     char path[KUI_DEST_JOB_CAP], notice[128], title[129], gdi[KUI_DEST_TITLE_CAP+5u];
@@ -570,6 +649,16 @@ static void draw_shell(void) {
         disc_snapshot.title:kui_disc_identity_text(disc_snapshot.state));
     snprintf(music_title,sizeof(music_title),"%s",music_snapshot.title);
     snprintf(music_notice,sizeof(music_notice),"%s",music_snapshot.message);
+    view.music_enabled=music_snapshot.enabled;
+    view.music_playing=music_snapshot.playing;
+    view.music_paused=music_snapshot.paused;
+    view.music_volume=music_snapshot.volume;
+    if(player_active) {
+        const char *name=strrchr(music_path_pending,'/');
+        snprintf(music_title,sizeof(music_title),"%s",name?name+1:music_path_pending);
+        view.music_enabled=true;view.music_playing=true;view.music_paused=false;
+        view.music_volume=system_current.music_volume;
+    }
     view.drive_reset_required=drive_reset_required;
     view.video_trial=video_preview;
     uint64_t now=timer_ms_gettime64();
@@ -577,7 +666,8 @@ static void draw_shell(void) {
     view.phase_elapsed_ms=now>=phase_started_ms?now-phase_started_ms:0;
     view.progress_age_ms=now>=progress_updated_ms?now-progress_updated_ms:0;
     app_status=shell.page==KUI_SHELL_MEMORY?memory_test_status:
-        shell.page==KUI_SHELL_NETWORK?network_test_status:vmu_snapshot.status;
+        shell.page==KUI_SHELL_NETWORK?network_test_status:
+        shell.page==KUI_SHELL_MUSIC?player_status:vmu_snapshot.status;
     view.phase = capture_status.phase; view.track = capture_status.track; view.tracks = capture_status.tracks;
     view.rate_kib = rate_kib; view.retries = capture_status.retries;
     view.done = capture_status.done; view.total = capture_status.total;
@@ -629,6 +719,11 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_VMU_BACKUP_ALL: return 18;
         case KUI_SHELL_MEMORY_TEST: return 19;
         case KUI_SHELL_NETWORK_TEST: return 20;
+        case KUI_SHELL_MUSIC_CYCLE: return 21;
+        case KUI_SHELL_RESUME_QUICK: return 22;
+        case KUI_SHELL_MUSIC_LIST: return 23;
+        case KUI_SHELL_MUSIC_PLAY: return 24;
+        case KUI_SHELL_GD_BOOT: return 25;
         default: return 0;
     }
 }
@@ -692,8 +787,9 @@ int main(void) {
     kui_shell_set_system_preferences(&shell,&system_current);
     kui_destination_default(destination_current);
     snprintf(settings_note,sizeof(settings_note),"Loading preferences from SD...");
-    pending = 8; busy = true;
-    kui_log("K-UI launcher: Disc Ripper, VMU, Memory, Network, Settings and Diagnostics.");
+    pending = 27; busy = true; splash_active=true;
+    kui_log("K-UI launcher: Disc Ripper, VMU, Memory, Network, Settings, Diagnostics, GD Play and Music.");
+    kui_log("B skips the original startup splash/chime. Home Y cycles menu music volume/off.");
     kui_log("Ripper: A new dump (confirm), X resume latest matching disc, Y verify.");
     kui_log("B returns home while idle; during work it stops and checkpoints.");
     kui_log("New dumps use game-named folders in /Games; duplicates get a number.");
@@ -731,7 +827,7 @@ int main(void) {
     bool was_busy = false;
 #ifdef KUI_SD_RUNTIME
     unsigned seen_settings_generation = 0, seen_destination_generation = 0;
-    unsigned seen_system_generation=0,seen_vmu_generation=0;
+    unsigned seen_system_generation=0,seen_vmu_generation=0,seen_music_listing=0;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
 #else
@@ -773,13 +869,19 @@ int main(void) {
         if(seen_vmu_generation!=vmu_generation) {
             kui_shell_set_vmu(&shell,&vmu_snapshot);seen_vmu_generation=vmu_generation;
         }
+        if(seen_music_listing!=music_listing_generation) {
+            kui_shell_set_music_listing(&shell,&music_listing);
+            seen_music_listing=music_listing_generation;
+        }
         if(video_preview && input_at>=video_deadline) {
             video_preview=false;shell.video_trial=false;
             safe_video_boot=video_prior_safe;apply_video(video_prior_mode);
             shell.system_draft.video_mode=system_current.video_mode;
             snprintf(system_note,sizeof(system_note),"Video reverted after 10 seconds.");
         }
-        enum kui_shell_action requested = kui_shell_input(&shell, shell_buttons(pressed), busy);
+        enum kui_shell_action requested=KUI_SHELL_NONE;
+        if(splash_active) {if(pressed&CONT_B) cancel_requested=true;}
+        else requested=kui_shell_input(&shell,shell_buttons(pressed),busy);
         if(requested==KUI_SHELL_PREVIEW_VIDEO && !busy) {
             video_prior_safe=safe_video_boot;video_prior_mode=applied_video;
             safe_video_boot=false;
@@ -798,12 +900,12 @@ int main(void) {
         }
         if(requested == KUI_SHELL_STOP) cancel_requested = true;
         unsigned action = worker_action(requested);
-        if(drive_reset_required && (action==1 || (action>=4 && action<=7))) {
+        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22)) {
             snprintf(capture_message,sizeof(capture_message),
                 "Drive reset required. Reboot, then Resume the partial dump.");
             action=0;
         }
-        if(action >= 4 && action <= 6 && !destination_ready) {
+        if(is_capture_action(action) && !destination_ready) {
             capture_summary = (struct kui_capture_stats){0};
             capture_status = (struct kui_capture_progress){0};
             capture_outcome = KUI_SHELL_OUTCOME_FAILED;
@@ -815,7 +917,7 @@ int main(void) {
                 strcpy(destination_pending, shell.browse_path);
                 destination_offset = shell.browser_page * KUI_DEST_PAGE_SIZE;
             }
-            if(action >= 4 && action <= 6) strcpy(capture_destination, shell.destination);
+            if(is_capture_action(action)) strcpy(capture_destination, shell.destination);
             if(action == 9) settings_pending = shell.draft;
             if(action==14) system_pending=shell.system_draft;
             if(action==13 || action==14) snprintf(system_note,sizeof(system_note),"%s",
@@ -825,6 +927,13 @@ int main(void) {
                 vmu_selected_pending=shell.vmu_selected;
                 vmu_snapshot.status=(struct kui_app_status){0};
             }
+            if(action==23 || action==24) {
+                snprintf(music_path_pending,sizeof(music_path_pending),"%s",
+                    action==23?shell.music_path:shell.music_selected_path);
+                music_offset_pending=shell.music_page*KUI_MUSIC_PLAYER_ROWS;
+                player_active=action==24;
+                player_status=(struct kui_app_status){0};
+            }
             if(action==19) memory_test_status=(struct kui_app_status){0};
             if(action==20) network_test_status=(struct kui_app_status){0};
             if(action == 8 || action == 9)
@@ -832,7 +941,7 @@ int main(void) {
                     "Loading preferences from SD..." : "Saving preferences to SD...");
             pending = action; busy = true; cancel_requested = false; shell.scroll = 0;
             ui_hz_busy = 2;
-            if(action >= 4 && action <= 6) {
+            if(is_capture_action(action)) {
                 capture_status = (struct kui_capture_progress){0};
                 capture_summary = (struct kui_capture_stats){0};
                 capture_outcome = KUI_SHELL_OUTCOME_NONE;
@@ -842,6 +951,8 @@ int main(void) {
         }
         bool is_busy = busy;
         mutex_unlock(&lock);
+        mutex_lock(&lock);bool exiting=boot_ready;mutex_unlock(&lock);
+        if(exiting) kui_gd_play_boot();
         if(requested == KUI_SHELL_MSTATS) { kui_memory_log("L trigger"); shell.scroll = 0; }
         if(timer_ms_gettime64() >= next_memory_sample) {
             memory_valid = kui_memory_snapshot(&memory_status); next_memory_sample = timer_ms_gettime64() + 1000;

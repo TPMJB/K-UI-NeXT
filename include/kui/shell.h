@@ -6,6 +6,7 @@
 #include "kui/known_dumps.h"
 #include "kui/system_settings.h"
 #include "kui/apps.h"
+#include "kui/music_player.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -23,7 +24,8 @@ enum kui_shell_button {
 enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_SETTINGS, KUI_SHELL_DIAGNOSTICS,
     KUI_SHELL_DESTINATION, KUI_SHELL_KEYBOARD, KUI_SHELL_ADVANCED,
-    KUI_SHELL_RIPPER_SETTINGS, KUI_SHELL_VMU, KUI_SHELL_MEMORY, KUI_SHELL_NETWORK };
+    KUI_SHELL_RIPPER_SETTINGS, KUI_SHELL_VMU, KUI_SHELL_MEMORY, KUI_SHELL_NETWORK,
+    KUI_SHELL_GD_PLAY, KUI_SHELL_MUSIC };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -33,20 +35,25 @@ enum kui_shell_action {
     KUI_SHELL_MEMORY_TEST, KUI_SHELL_NETWORK_TEST, KUI_SHELL_VMU_LIST,
     KUI_SHELL_VMU_BACKUP, KUI_SHELL_VMU_BACKUP_ALL, KUI_SHELL_LOAD_SYSTEM,
     KUI_SHELL_SAVE_SYSTEM, KUI_SHELL_DISCARD_SYSTEM, KUI_SHELL_PREVIEW_VIDEO,
-    KUI_SHELL_CONFIRM_VIDEO, KUI_SHELL_CANCEL_VIDEO, KUI_SHELL_MUSIC_NEXT
+    KUI_SHELL_CONFIRM_VIDEO, KUI_SHELL_CANCEL_VIDEO, KUI_SHELL_MUSIC_NEXT,
+    KUI_SHELL_MUSIC_CYCLE, KUI_SHELL_RESUME_QUICK, KUI_SHELL_GD_BOOT,
+    KUI_SHELL_MUSIC_LIST, KUI_SHELL_MUSIC_PLAY
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
 struct kui_shell {
     enum kui_shell_page page;
     unsigned home_selected, setting_selected, scroll;
-    bool confirm_new;
+    bool confirm_new, confirm_quick_resume, confirm_gd_boot;
     struct kui_settings saved, draft;
     struct kui_system_settings system_saved, system_draft;
     unsigned system_selected;
     bool video_trial;
     unsigned vmu_slot, vmu_page, vmu_selected;
     struct kui_vmu_view vmu;
+    char music_path[KUI_DEST_ROOT_CAP], music_selected_path[KUI_DEST_ROOT_CAP];
+    unsigned music_page, music_selected;
+    struct kui_music_player_page music_listing;
     /* Destination is committed only by a successful worker load/save. Browsing
      * and typing are drafts; neither changes where a new capture is written. */
     char destination[KUI_DEST_ROOT_CAP], browse_path[KUI_DEST_ROOT_CAP];
@@ -76,6 +83,10 @@ bool kui_shell_system_dirty(const struct kui_shell *shell);
 /* Main controls video_trial only while its reversible platform preview is
  * active. The reducer returns CONFIRM/CANCEL; it never commits a video mode. */
 void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view);
+/* MUSIC_LIST uses music_path and music_page * ROWS. MUSIC_PLAY uses the
+ * validated music_selected_path. Worker completion never changes directory. */
+void kui_shell_set_music_listing(struct kui_shell *shell,
+    const struct kui_music_player_page *page);
 /* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
  * DEST_SAVE reads browse_path. Main owns the generation check before installing
  * worker results; these functions themselves perform no filesystem I/O. */
@@ -100,6 +111,8 @@ struct kui_shell_view {
     const struct kui_app_status *app_status;
     bool busy, saving, cancel_requested, saved_verified, memory_valid;
     bool log_truncated, reference_checked, video_trial, drive_reset_required;
+    bool music_enabled, music_playing, music_paused;
+    unsigned music_volume;
     unsigned video_seconds;
     struct kui_known_summary reference;
     enum kui_shell_outcome outcome;

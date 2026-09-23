@@ -49,3 +49,38 @@ size_t kui_pcm_loop_fill(struct kui_pcm_loop *loop,void *out,size_t bytes) {
     return bytes;
 }
 unsigned kui_music_aica_volume(unsigned percent) {return (percent>100?100:percent)*255u/100u;}
+
+/* The streaming parser touches only RIFF headers and the first 16 format bytes.
+ * Payload chunks are skipped with bounded, overflow-checked offsets. Limiting
+ * chunk count bounds pathological metadata work before the first audio byte. */
+bool kui_wav_read(kui_wav_read_fn read,void *ctx,uint64_t size,struct kui_wav *out) {
+    if(!out) return false;
+    memset(out,0,sizeof(*out));
+    uint8_t header[16];
+    if(!read || size<12 || size>SIZE_MAX || !read(ctx,0,header,12)) return false;
+    if(memcmp(header,"RIFF",4) || memcmp(header+8,"WAVE",4) ||
+       (uint64_t)le32(header+4)+8!=size) return false;
+    struct kui_wav parsed={0};bool fmt=false,data=false;
+    uint64_t at=12;unsigned chunks=0;
+    while(at<size) {
+        if(++chunks>1024 || size-at<8 || !read(ctx,at,header,8)) return false;
+        uint32_t bytes=le32(header+4);uint64_t body=at+8;
+        if(bytes>size-body) return false;
+        if(!memcmp(header,"fmt ",4)) {
+            if(fmt || bytes<16 || !read(ctx,body,header,16) ||
+               le16(header)!=1 || le16(header+14)!=16) return false;
+            parsed.channels=le16(header+2);parsed.rate=le32(header+4);
+            parsed.frame_bytes=parsed.channels*2u;
+            if((parsed.channels!=1 && parsed.channels!=2) || parsed.rate<8000 || parsed.rate>44100 ||
+               le16(header+12)!=parsed.frame_bytes || le32(header+8)!=parsed.rate*parsed.frame_bytes) return false;
+            fmt=true;
+        } else if(!memcmp(header,"data",4)) {
+            if(data || !bytes) return false;
+            parsed.offset=(size_t)body;parsed.bytes=bytes;data=true;
+        }
+        at=body+bytes;
+        if(bytes&1u) {if(at==size) return false;++at;}
+    }
+    if(!fmt || !data || parsed.bytes%parsed.frame_bytes) return false;
+    *out=parsed;return true;
+}

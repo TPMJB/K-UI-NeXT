@@ -17,6 +17,7 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     kui_shell_set_preferences(s, p ? p : &initial);
     kui_system_settings_default(&s->system_saved);
     s->system_draft=s->system_saved;
+    snprintf(s->music_path,sizeof(s->music_path),"/Music");
     kui_destination_default(s->destination);
     memcpy(s->browse_path,s->destination,sizeof(s->browse_path));
 }
@@ -36,6 +37,27 @@ void kui_shell_set_vmu(struct kui_shell *s,const struct kui_vmu_view *view) {
     if(s->vmu.count>KUI_VMU_ROWS) s->vmu.count=KUI_VMU_ROWS;
     for(unsigned i=0;i<s->vmu.count;i++) s->vmu.entries[i].name[sizeof(s->vmu.entries[i].name)-1]=0;
     if(s->vmu_selected>=s->vmu.count) s->vmu_selected=0;
+}
+void kui_shell_set_music_listing(struct kui_shell *s,const struct kui_music_player_page *page) {
+    if(!s || !page || !memchr(page->root,0,sizeof(page->root)) ||
+       strcmp(page->root,s->music_path)) return;
+    s->music_listing=*page;
+    if(s->music_listing.count>KUI_MUSIC_PLAYER_ROWS) s->music_listing.count=KUI_MUSIC_PLAYER_ROWS;
+    s->music_listing.message[sizeof(s->music_listing.message)-1]=0;
+    for(unsigned i=0;i<s->music_listing.count;i++) {
+        struct kui_music_player_entry *entry=&s->music_listing.entries[i];
+        if(!memchr(entry->name,0,sizeof(entry->name))) {
+            snprintf(entry->name,sizeof(entry->name),"[Name too long]");
+            entry->disabled=true;
+        }
+    }
+    if(s->music_selected>=s->music_listing.count) s->music_selected=0;
+}
+static enum kui_shell_action list_music(struct kui_shell *s,bool first) {
+    if(first) s->music_page=0;
+    s->music_selected=0;
+    memset(&s->music_listing,0,sizeof(s->music_listing));
+    return KUI_SHELL_MUSIC_LIST;
 }
 bool kui_shell_phase_eta(const struct kui_shell_view *v,uint64_t *seconds) {
     if(!v || !seconds || !v->busy || v->saving || v->cancel_requested ||
@@ -177,8 +199,21 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     /* Stop/back wins even over a simultaneous confirmation or launch. */
     if(buttons & KUI_SHELL_B) {
-        if(busy) { s->confirm_new = false; return KUI_SHELL_STOP; }
+        if(busy) {
+            s->confirm_new=false; s->confirm_quick_resume=false; s->confirm_gd_boot=false;
+            return KUI_SHELL_STOP;
+        }
+        if(s->confirm_quick_resume) { s->confirm_quick_resume=false; return KUI_SHELL_NONE; }
+        if(s->confirm_gd_boot) { s->confirm_gd_boot=false; return KUI_SHELL_NONE; }
         if(s->confirm_new) { s->confirm_new = false; return KUI_SHELL_NONE; }
+        if(s->page == KUI_SHELL_MUSIC) {
+            char parent[KUI_DEST_ROOT_CAP];
+            if(kui_destination_parent(parent,s->music_path) && strcmp(parent,s->music_path)) {
+                snprintf(s->music_path,sizeof(s->music_path),"%s",parent);
+                return list_music(s,true);
+            }
+            s->page=KUI_SHELL_HOME; return KUI_SHELL_NONE;
+        }
         if(s->page == KUI_SHELL_KEYBOARD) {
             snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->keyboard_original);
             s->page=KUI_SHELL_DESTINATION; s->destination_notice[0]=0;
@@ -214,6 +249,19 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page == KUI_SHELL_DIAGNOSTICS) scroll(s, buttons);
         return KUI_SHELL_NONE;
     }
+    if(s->confirm_gd_boot) {
+        if(buttons & KUI_SHELL_A) {
+            s->confirm_gd_boot=false; return KUI_SHELL_GD_BOOT;
+        }
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_quick_resume) {
+        if(buttons & KUI_SHELL_A) {
+            s->confirm_quick_resume=false; s->page=KUI_SHELL_RIPPER;
+            return KUI_SHELL_RESUME_QUICK;
+        }
+        return KUI_SHELL_NONE;
+    }
     if(s->confirm_new) {
         if(buttons & KUI_SHELL_A) {
             s->confirm_new = false;
@@ -223,16 +271,19 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     switch(s->page) {
     case KUI_SHELL_HOME:
-        s->home_selected = move_count(s->home_selected, buttons,6);
+        if(buttons & KUI_SHELL_Y) return KUI_SHELL_MUSIC_CYCLE;
+        s->home_selected = move_count(s->home_selected, buttons,8);
         if(buttons & KUI_SHELL_A) {
             static const enum kui_shell_page pages[]={KUI_SHELL_RIPPER,KUI_SHELL_VMU,
-                KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,KUI_SHELL_SETTINGS,KUI_SHELL_DIAGNOSTICS};
+                KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,KUI_SHELL_SETTINGS,KUI_SHELL_DIAGNOSTICS,
+                KUI_SHELL_GD_PLAY,KUI_SHELL_MUSIC};
             s->page=pages[s->home_selected];
             if(s->page == KUI_SHELL_SETTINGS) {
                 s->system_draft=s->system_saved;
                 return KUI_SHELL_LOAD_SYSTEM;
             }
             if(s->page==KUI_SHELL_VMU) return KUI_SHELL_VMU_LIST;
+            if(s->page==KUI_SHELL_MUSIC) return list_music(s,true);
         }
         break;
     case KUI_SHELL_RIPPER:
@@ -247,11 +298,14 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         else if(buttons & KUI_SHELL_START) s->page=KUI_SHELL_ADVANCED;
         break;
     case KUI_SHELL_ADVANCED:
-        s->advanced_selected=move_count(s->advanced_selected,buttons,3);
+        s->advanced_selected=move_count(s->advanced_selected,buttons,4);
         if(buttons & KUI_SHELL_A) {
             if(s->advanced_selected<2) {
                 s->page=KUI_SHELL_RIPPER;
                 return s->advanced_selected?KUI_SHELL_RESUME:KUI_SHELL_VERIFY;
+            }
+            if(s->advanced_selected==3) {
+                s->confirm_quick_resume=true; return KUI_SHELL_NONE;
             }
             s->settings_return=KUI_SHELL_ADVANCED;
             s->draft=s->saved; s->page=KUI_SHELL_RIPPER_SETTINGS;
@@ -326,6 +380,33 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if((buttons&KUI_SHELL_X) && s->system_selected>=2) return KUI_SHELL_MUSIC_NEXT;
         break;
     }
+    case KUI_SHELL_GD_PLAY:
+        if(buttons & KUI_SHELL_A) s->confirm_gd_boot=true;
+        break;
+    case KUI_SHELL_MUSIC:
+        if(buttons & KUI_SHELL_X) return list_music(s,false);
+        if(buttons & KUI_SHELL_A) {
+            if(s->music_selected<s->music_listing.count) {
+                const struct kui_music_player_entry *entry=&s->music_listing.entries[s->music_selected];
+                char child[KUI_DEST_ROOT_CAP];
+                if(!entry->disabled && kui_destination_join(child,s->music_path,entry->name)) {
+                    if(entry->directory) {
+                        snprintf(s->music_path,sizeof(s->music_path),"%s",child);
+                        return list_music(s,true);
+                    }
+                    snprintf(s->music_selected_path,sizeof(s->music_selected_path),"%s",child);
+                    return KUI_SHELL_MUSIC_PLAY;
+                }
+                snprintf(s->music_listing.message,sizeof(s->music_listing.message),
+                    "This path cannot be opened. Choose another item.");
+            }
+        } else if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_LEFT && s->music_page) {
+            --s->music_page; return list_music(s,false);
+        } else if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_RIGHT &&
+                  s->music_listing.has_more && s->music_page<UINT_MAX/KUI_MUSIC_PLAYER_ROWS-1) {
+            ++s->music_page; return list_music(s,false);
+        } else s->music_selected=move_count(s->music_selected,buttons,s->music_listing.count);
+        break;
     case KUI_SHELL_MEMORY:
         if(buttons&KUI_SHELL_A) return KUI_SHELL_MEMORY_TEST;
         break;

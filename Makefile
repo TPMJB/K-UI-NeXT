@@ -9,7 +9,12 @@ CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/captur
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-images deps diagnostic clean
-test: build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+test: build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+	./build/test-wav-stream
+	./build/test-music-player
+	./build/test-startup-sound
+	./build/test-splash
+	./build/test-gd-play
 	./build/test-network-app
 	./build/test-system-settings
 	./build/test-disc-identity
@@ -183,3 +188,28 @@ build/test-network-app: tests/test_network_app.c src/apps/network_test.c src/app
 build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c include/kui/apps.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c tests/test_vmu_app.c -o $@
+
+# Original startup assets are encoded on the host, never decoded during ripping.
+build/splash_pixels.inc build/startup_pcm.inc &: tools/build_splash.py resources/branding/startup.png
+	python3 tools/build_splash.py
+
+build/test-splash: tests/test_splash.c src/apps/splash.c include/kui/splash.h build/splash_pixels.inc
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/splash.c tests/test_splash.c -o $@
+
+build/test-gd-play: tests/test_gd_play.c src/apps/gd_play.c include/kui/gd_play.h tests/gd_play_stubs/arch/arch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/gd_play_stubs src/apps/gd_play.c tests/test_gd_play.c -o $@
+
+
+build/test-wav-stream: tests/test_wav_stream.c src/apps/wav.c include/kui/wav.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/wav.c tests/test_wav_stream.c -o $@
+
+build/test-music-player: tests/test_music_player.c src/apps/music_player.c src/apps/wav.c src/core/destination.c src/core/data.c include/kui/music_player.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/music_player.c src/apps/wav.c src/core/destination.c src/core/data.c tests/test_music_player.c -o $@
+
+build/test-startup-sound: tests/test_startup_sound.c src/apps/startup_sound.c include/kui/music.h build/startup_pcm.inc
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/startup_sound.c tests/test_startup_sound.c -o $@

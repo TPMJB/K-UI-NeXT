@@ -34,6 +34,11 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
  * and game-named output. Invalid paths fail before preference or drive I/O. */
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
     const char *destination);
+/* Explicit one-operation size-only resume. CRC32 jobs continue the checkpoint's
+ * CRC without rereading committed bytes, so same-size corruption is not checked.
+ * SHA-256 jobs still require the engine's full prefix reread. This does not
+ * change persistent settings or the next normal capture/resume/verify action. */
+enum kui_capture_result kui_capture_resume_quick(const char *build,const char *destination);
 /* Read after kui_capture_start returns, on the same I/O worker. Observation
  * only: the existing engine fills its optional statistics structure. */
 const struct kui_capture_stats *kui_capture_last_stats(void);

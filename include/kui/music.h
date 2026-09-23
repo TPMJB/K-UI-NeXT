@@ -30,4 +30,10 @@ void kui_music_pause(void);
 void kui_music_resume(void);
 void kui_music_service(void);
 void kui_music_shutdown(void);
+/* Drain and release the global KOS streamer while retaining menu PCM/config.
+ * A foreground Music app may then own a differently sized stream. */
+void kui_music_release_audio(void);
+/* Worker-only original startup cue, about 4.5 seconds, no SD access. The
+ * callback allows B to skip and retains any cached menu PCM/config. */
+void kui_music_play_boot_chime(kui_cancel_fn cancel);
 #endif

@@ -34,8 +34,8 @@ enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool
         kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,options,stats};
     return kui_capture_bench(&ops,fad,sectors,audio,mode);
 }
-enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
-    const char *destination) {
+static enum kui_capture_result capture_start(enum kui_capture_mode mode,const char *build,
+    const char *destination,bool quick_resume) {
     memset(&last_stats,0,sizeof(last_stats));
     char parent[KUI_DEST_ROOT_CAP];
     if(!kui_destination_normalize(parent,destination)) {
@@ -63,7 +63,8 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
      * it has always been. A resumed job keeps the hash mode it started with. */
     struct kui_capture_options options={
         .crc_only=kui_options.capture_crc_only[0],.skip_end_readback=!kui_options.end_readback[0],
-        .resume_size_only=kui_options.resume_size[0],.sample_every=kui_options.sample_readback[0],
+        .resume_size_only=(quick_resume && mode==KUI_CAPTURE_RESUME)||kui_options.resume_size[0],
+        .sample_every=kui_options.sample_readback[0],
         .read_dma=kui_options.capture_dma[0],.output=&output};
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,kui_capture_status,
         kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,&last_stats};
@@ -76,4 +77,14 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
     kui_sd_disconnect();
     kui_disc_timing_report();
     return result;
+}
+enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
+    const char *destination) {
+    return capture_start(mode,build,destination,false);
+}
+enum kui_capture_result kui_capture_resume_quick(const char *build,const char *destination) {
+    /* This opt-in changes only this call's local options. Checkpoint identity,
+     * size checks and SHA-256 job compatibility stay with the existing engine;
+     * no preferences or bench.cfg values are rewritten. */
+    return capture_start(KUI_CAPTURE_RESUME,build,destination,true);
 }

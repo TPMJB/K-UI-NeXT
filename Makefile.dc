@@ -60,3 +60,9 @@ $(RUNTIME): $(RUNTIME_OBJECTS)
 	python3 tools/record_build.py $@
 
 -include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)
+
+build/splash_pixels.inc build/startup_pcm.inc &: tools/build_splash.py resources/branding/startup.png
+	python3 tools/build_splash.py
+
+build/dc/src/apps/splash.o: build/splash_pixels.inc
+build/dc/src/apps/startup_sound.o: build/startup_pcm.inc
