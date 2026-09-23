@@ -245,9 +245,9 @@ static void publish_music(void) {
 static void configure_music(void) {
     struct kui_system_settings value;
     mutex_lock(&lock);value=system_current;mutex_unlock(&lock);
-    kui_music_set_config(value.music_enabled,value.music_volume);
     struct kui_music_status status;
     kui_music_status_copy(&status);
+    kui_music_set_config(value.music_enabled,value.music_volume);
     if(value.music_enabled && !status.loaded) {
         mutex_lock(&lock);
         if(music_requested<0) {
@@ -256,7 +256,9 @@ static void configure_music(void) {
         }
         mutex_unlock(&lock);
     }
-    if(value.music_enabled && status.loaded) kui_music_resume();
+    /* Loading an unchanged Settings page must respect Music's explicit Stop.
+     * A real off-to-on change resumes the cached selection without card I/O. */
+    if(value.music_enabled && !status.enabled && status.loaded) kui_music_resume();
     publish_music();
 }
 /* Background cache reads still belong to this I/O worker. Yield the card as
@@ -514,6 +516,7 @@ static void *worker(void *unused) {
                 system_ok=true;++system_generation;
                 mutex_unlock(&lock);
                 kui_music_set_config(next.music_enabled,next.music_volume);
+                if(next.music_enabled) kui_music_resume();
                 publish_music();
                 system_operation(true);
                 mutex_lock(&lock);
