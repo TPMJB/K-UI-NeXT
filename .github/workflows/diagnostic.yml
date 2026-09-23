@@ -24,16 +24,22 @@ env:
   KUI_EXPERIMENTAL: ${{ (inputs.experimental || endsWith(github.ref_name, '-experimental')) && '1' || '' }}
 
 concurrency:
-  group: diagnostic-${{ github.ref }}
+  group: diagnostic-${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}
   # Let the first expensive compiler build finish and save its cache. New
   # revisions queue behind it and reuse that cache.
-  cancel-in-progress: false
+  # Shell feature PRs can restore their milestone base branch's compiler cache;
+  # a push on a sibling branch cannot. Supersede a pending push/older UI run.
+  cancel-in-progress: ${{ endsWith(github.head_ref, '-shell') }}
 
 jobs:
   host:
     # Milestone branches already build on push. Avoid compiling the entire
     # toolchain again when the same branch is opened as a draft PR.
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository
+    # *-shell feature branches build through their PR, where GitHub permits
+    # restoring the base branch's caches. Keep ordinary milestone push builds.
+    if: >-
+      (github.event_name != 'push' || !endsWith(github.ref_name, '-shell')) &&
+      (github.event_name != 'pull_request' || endsWith(github.head_ref, '-shell') || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

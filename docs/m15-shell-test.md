@@ -10,6 +10,9 @@ Download `sd-update` from the successful build for `milestone/m15-shell`. With
 the console powered off, retain the previous working runtime on your PC and replace
 only `/KUI/runtime.kui`. Existing catalogues, jobs and `bench.cfg` stay in place.
 The package includes the source commit and checksums. Use the same burned disc.
+Shell branches ending in `-shell` build on their pull request so GitHub can reuse
+the milestone base branch's dependency/toolchain caches. The build ID identifies
+the PR's tested merge commit; `build.json` records that exact source revision.
 
 The final screen should say **K-UI NeXT / SD runtime**, show the new build ID and
 offer **Disc Ripper**, **Settings** and **Diagnostics**. The embedded CD fallback
