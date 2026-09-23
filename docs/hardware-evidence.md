@@ -14,6 +14,33 @@ store-queue screen clear. This is a source-level display correction; its effect
 on physical-console throughput has not been measured. The reader is unchanged.
 
 
+### Completed log received after that observation
+
+The uploaded log identifies
+runtime **24d5cfe735d7** and **The House of the Dead 2**, not the restored-menu
+update. [Sanitized results and input hash](evidence/m15-house-of-the-dead-2-2026-09-23.json).
+The raw log remains in the project conversation and is not published here.
+
+- All three tracks captured; **TOSEC FULL TRACK MATCH** for US v1.001 [12S].
+- **1,188,966,576 bytes in 1273.291252 s: 911.9 KiB/s**, or 21 min 13 s of
+  capture. Including setup/finish: 1278.391955 s (21 min 18 s), 908.3 KiB/s.
+- CRC32, end readback Off, DMA, UI 2 Hz. **15,795 DMA chunks and
+  four PIO chunks**; the duplicate summary lines describe the same counts.
+- UI scheduled time **159.235 s / 1278.394 s**, reported **12.4%**, versus 5.1%
+  in Trip 11, 4.9% in Trip 12 and 4.1% in the accepted FAT32 Sword run. This
+  supports increased UI overhead. It does not isolate the clear's cost or prove
+  the newer runtime's effect. UI time overlaps the stage wall timers.
+- Preferences saved, reloaded and applied in the same session; L mstats,
+  benchmark Stop and capture auto-report save are evidenced. Reboot persistence
+  and restored-layout appearance still need their own observations.
+
+Saved tracks were **not reread**; the reference match uses captured-stream CRCs.
+No PC/saved-file verification was supplied for this job. The initial benchmark's
+unreadable-disc result precedes the successful capture. The current
+next step remains installing **8bae3efe7c2f** on the existing card and checking
+its appearance during ordinary use. No reader changes are called for by this log.
+
+
 These results cover the uploaded logs, storage fixtures and user reports received on
 2026-09-16 and 2026-09-17. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.

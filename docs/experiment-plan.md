@@ -764,3 +764,21 @@ the read itself, so a catalogue match (or a second dump) is the check there.
   "R0.16 w/patch 2", the version `dependencies.json` pins. Byte equality with the
   pinned archive could not be checked (elm-chan.org was unreachable from the test
   environment); CI's `host` job will be the first run on the real archive.
+
+
+## M1.5 UI follow-up — 2026-09-23
+
+A completed owner-supplied House of the Dead 2 capture on the first shell
+(`24d5cfe735d7`) averaged **911.9 KiB/s**, captured all three tracks and matched
+TOSEC using stream CRC32. UI scheduled time was **12.4%**, compared with about
+4–5% in the accepted diagnostic UI runs. DMA remained active (15,795 chunks;
+four PIO chunks), with CRC32, automatic readback Off and UI 2 Hz.
+
+See the [sanitized results and source-log hash](evidence/m15-house-of-the-dead-2-2026-09-23.json).
+The raw log is retained in the project conversation and is not published. This is an
+ordinary completed capture supplied by the owner, not a new optical experiment.
+The restored-menu update (`8bae3efe7c2f`) already restores the earlier optimized
+framebuffer clear. Its hardware effect is unmeasured; the owner has not installed
+it yet. Check the restored menu during normal use, preserve any next completed
+capture log, and keep the accepted disc reader unchanged. Saved-file/PC checking
+of this particular dump remains separate from its captured-stream reference match.
