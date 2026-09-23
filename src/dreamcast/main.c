@@ -667,7 +667,7 @@ static void draw_shell(void) {
     view.music_volume=music_snapshot.volume;
     if(player_active) {
         const char *name=strrchr(music_path_pending,'/');
-        snprintf(music_title,sizeof(music_title),"%s",name?name+1:music_path_pending);
+        snprintf(music_title,sizeof(music_title),"%.39s",name?name+1:music_path_pending);
         view.music_enabled=true;view.music_playing=true;view.music_paused=false;
         view.music_volume=system_current.music_volume;
     }

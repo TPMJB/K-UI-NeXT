@@ -146,7 +146,7 @@ void kui_music_player_run(const char *path,unsigned volume,struct kui_app_status
     p.buffer[1]=aligned_alloc(32,PLAYER_CALLBACK_BYTES);
     if(!p.buffer[0] || !p.buffer[1]) {problem="Not enough RAM for audio buffers";goto done;}
     snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"%u Hz | %s | PCM16",
-        p.wav.rate,p.wav.channels==2?"Stereo":"Mono");
+        (unsigned)p.wav.rate,p.wav.channels==2?"Stereo":"Mono");
     uint64_t seconds=p.wav.bytes/((uint64_t)p.wav.rate*p.wav.frame_bytes);
     snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"Duration %" PRIu64 ":%02" PRIu64 " | streaming from SD",seconds/60,seconds%60);
     snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"Audio CDs and compressed codecs: not available yet");
