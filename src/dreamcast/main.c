@@ -438,9 +438,21 @@ static void *worker(void *unused) {
                     if(levels[i]>level) {wanted=levels[i];break;}
                 next.music_enabled=wanted!=0;
                 if(wanted) next.music_volume=wanted;
-                system_pending=next;
+                /* A volume/off command remains effective even if SD is full
+                 * or unavailable. Persistence is a separate best-effort step. */
+                system_current=next;system_pending=next;
+                system_ok=true;++system_generation;
                 mutex_unlock(&lock);
+                kui_music_set_config(next.music_enabled,next.music_volume);
+                publish_music();
                 system_operation(true);
+                mutex_lock(&lock);
+                if(!system_ok) {
+                    system_ok=true;++system_generation;
+                    snprintf(system_note,sizeof(system_note),
+                        "Music volume applied; preferences not saved to SD.");
+                }
+                mutex_unlock(&lock);
             }
             if(action==23) {
                 kui_sd_set_params(0,true);
@@ -449,7 +461,7 @@ static void *worker(void *unused) {
                 mutex_lock(&lock);
                 music_listing=page;++music_listing_generation;
                 snprintf(player_status.message,sizeof(player_status.message),"%s",page.message);
-                player_status.complete=ok;player_status.passed=ok;
+                player_status.complete=true;player_status.passed=ok;player_status.errors=ok?0u:1u;
                 mutex_unlock(&lock);
             }
             if(action==24) {

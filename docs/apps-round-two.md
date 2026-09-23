@@ -7,8 +7,8 @@ files; new app hardware behavior still needs console acceptance.
 
 ## Controls
 
-- Home Y restores the old volume cycle: Off,15,30,50,75,100%,Off. It saves the
-  system music choice to SD. The top-right header shows volume/paused status
+- Home Y restores the old volume cycle: Off,15,30,50,75,100%,Off. It applies immediately and tries to save the
+  system music choice to SD; Settings reports an unsaved choice if saving fails. The top-right header shows volume/paused status
   and the selected song. Settings X still advances to the next original loop.
   Other apps retain their own Y actions (Verify, backup, save log).
 - Ripper X remains full Resume. Advanced > Quick resume (sizes only) asks for
@@ -49,7 +49,9 @@ files; new app hardware behavior still needs console acceptance.
 6. With a suitable retail game inserted, open GD Play, cancel once, then
    confirm. Expect stock BIOS behavior. Save other test logs before leaving.
 
-The reported ~600KiB/s matches the already measured saved-prefix reread, not a
-new reader benchmark. Ordinary damaged-sector retries exist; extensive old
+If the screen says Checking saved prefix, ~600KiB/s is consistent with the
+already measured saved-prefix reread. If it says Capturing, use the diagnostics
+to distinguish resumed acquisition from SD checking; a prior DMA timeout can
+leave that boot on the slower PIO path. Ordinary damaged-sector retries exist; extensive old
 targeted salvage is still a separate port. Region/BIOS maintenance and size
 comparisons are covered in INDEPENDENT-APP-PARITY.md.
