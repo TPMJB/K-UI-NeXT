@@ -8,8 +8,9 @@ DESTINATION = src/core/destination.c src/core/destination_file.c
 CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
-.PHONY: test test-images deps diagnostic clean
-test: build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+.PHONY: test test-recovery test-images deps diagnostic clean
+test: build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+	./build/test-recovery-checks
 	./build/test-wav-stream
 	./build/test-music-player
 	./build/test-startup-sound
@@ -213,3 +214,16 @@ build/test-music-player: tests/test_music_player.c src/apps/music_player.c src/a
 build/test-startup-sound: tests/test_startup_sound.c src/apps/startup_sound.c include/kui/music.h build/startup_pcm.inc
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/startup_sound.c tests/test_startup_sound.c -o $@
+
+# First recovery port gate: host-only helpers, absent from Makefile.dc.
+build/recovery-vectors.inc: tests/make_recovery_vectors.py
+	@mkdir -p $(@D)
+	python3 $< > $@.tmp
+	mv $@.tmp $@
+
+build/test-recovery-checks: tests/test_recovery_checks.c tests/make_recovery_vectors.py build/recovery-vectors.inc src/core/recovery_crc.c src/core/recovery_sector.c src/core/data.c include/kui/recovery_checks.h include/kui/core.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Ibuild src/core/recovery_crc.c src/core/recovery_sector.c src/core/data.c tests/test_recovery_checks.c -o $@
+
+test-recovery: build/test-recovery-checks
+	./build/test-recovery-checks

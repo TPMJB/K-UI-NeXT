@@ -1,7 +1,11 @@
 # Explicit damaged-disc recovery
 
-Status: planned follow-up. Normal capture continues to stop on exhausted reads;
-it does not write placeholders or silently enable recovery. The current UI work
+Status: backend port started. The [first helper gate](recovery-port.md) now
+contains selectively adapted CRC replacement and Mode 1 address/EDC/PQ checks
+with host tests. They are not linked into the console runtime. The durable
+salvage worker, UI and hardware acceptance remain pending.
+Normal capture continues to stop on exhausted reads; it does not write
+placeholders or silently enable recovery. The current UI work
 adds destination/name selection, readable reference results and access to the
 existing Resume and Verify saved files actions. Those actions are not sector
 repair. A saved-file reread checks the stored bytes; stream CRC/reference matching
@@ -36,6 +40,34 @@ The old pass limit is selectable from 1, 5, 10, 20 and 50. Data validation check
 parity; it is not a general ECC correction algorithm. The separately documented
 Time Stalkers reconstruction addressed one known corruption pattern and is not
 a generic repair feature to expose here.
+
+
+## Requested legacy controls and their exact behavior
+
+| Control | Behavior to preserve | Independent port boundary |
+| --- | --- | --- |
+| Recover damaged disc | Raw BIN and full Mode 1 checks; collect good data first. After a failed batch, try each failed sector twice, record a durable target and write a marked placeholder. Prompt before targeted passes. | Separate salvage job/worker; healthy acquisition stays unchanged. |
+| Advanced CRC (ECC + repair) | P/Q parity adds to sync/address/EDC. A saved-file scan records suspect addresses; explicit repair accepts validated optical rereads. | Separate scan/repair actions, not generic ECC reconstruction or a green result merely because a catalogue matched. |
+| Zero-fill unreadable sectors | OFF by default. The standalone legacy option continued after its configured attempts for recoverable sector errors and recorded holes. FATAL/RESET REQUIRED always stops; it never becomes a placeholder. Recovery mode disabled that independent toggle but still used explicitly unresolved placeholders. | Route any hole-producing operation through the hole-aware salvage format. Do not add zeros to normal capture checkpoints. |
+| Retry / recovery pass limit | Choices 1, 5, 10, 20 and 50. Ordinary legacy retries counted per-sector read attempts; targeted recovery uses the limit as whole forward/backward sweeps over unresolved targets. Its first pass retains the separate two-attempt budget. | A bounded salvage preference; do not silently alter the frozen normal capture's ten-retry policy. |
+| Track format | Raw 2352-byte BIN is the present format. The legacy 2048-byte ISO option predates our authored recovery work and cannot directly match raw-track catalogues. | Future conversion/output work, after recovery correctness; no placeholder format selector now. |
+
+The older Advanced CRC suspect-repair path invalidated the rolling CRC and
+required a full stored-track reread after changes. The newer targeted recovery
+path used the immutable baseline and CRC replacement to avoid that reread.
+They must not be presented as equivalent operations or promised the same speed.
+
+The old standalone zero-fill mode could produce an extraction-complete marker,
+but verification still rejected unresolved holes. The dedicated recovery mode
+withheld completion until both unresolved targets and pending finalization
+were cleared. The independent port uses the stronger explicit incomplete-job
+state for every hole-producing path.
+
+Recovery accounting fixes in
+[fa96afbd](https://github.com/TPMJB/K-UI_DS/commit/fa96afbd6286233f7f61992f7f443063acb4a118)
+are part of the authored behavior to retain: original targets, recovered and
+remaining counts must be reconstructed from saved state, including interrupted
+repairs and zero-remaining jobs whose finalization has not committed.
 
 ## Separate recovery job contract
 
@@ -83,7 +115,10 @@ is added as part of this UI milestone.
 | UI/ownership | Stop works during every stage; entering/leaving Advanced does not start writes; later destination edits cannot retarget an active recovery; no ordinary capture or resume accepts placeholder completion. |
 | Hardware | First exercise a small reproducible damaged region, retain logs/maps/backups, and independently hash the saved result on PC. Use the same bootstrap disc and an SD runtime update. |
 
-The next implementation order is pure CRC replacement and metadata tests,
-then an isolated recovery worker using fault-injected storage/drive adapters,
-then explicit UI wiring and the bounded hardware test. A full damaged-disc rip
-is not the first correctness test.
+The first implementation gate is now the pure helpers and host tests described
+in [recovery-port.md](recovery-port.md). Next are new salvage identity/state
+records and interruption tests, an isolated first-pass/targeted recovery worker,
+FatFs storage adapters and verifier support, then explicit UI wiring and a
+bounded hardware test. A full damaged-disc rip is not the first correctness
+test. No ordinary capture, optical adapter or command-state file changes are
+part of the helper gate.
