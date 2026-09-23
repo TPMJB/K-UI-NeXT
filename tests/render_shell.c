@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Host preview uses the same embedded artwork/font and renderer as hardware.
  * Modes: home, ripper, confirm, settings, diagnostics, complete, partial,
- * stopped, destination, keyboard, advanced. */
+ * stopped, destination, keyboard, advanced, ripper-settings, video, vmu,
+ * memory, network, idle, reset, home-vmu, home-memory, home-network. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -18,10 +19,44 @@ int main(int argc,char **argv) {
     struct kui_shell_view view={.build="a1b2c3d4e5f6",.phase=2,.track=4,.tracks=31,
         .rate_kib=1012,.done=421ull*1048576,.total=1133ull*1048576,
         .committed=421ull*1048576,.elapsed_ms=426000,
+        .phase_elapsed_ms=426000,.progress_age_ms=100,
         .memory_valid=true,.memory_used=2800*1024,.memory_physical=16384*1024,
         .memory_peak=2816*1024,.log_lines=logs,.log_count=7,.total_log_lines=174,
-        .job_dir="/Games/MDK2 (2)",.disc_title="MDK2",.gdi_name="MDK2.gdi"};
-    if(!strcmp(argv[1],"settings")) shell.page=KUI_SHELL_SETTINGS;
+        .job_dir="/Games/MDK2 (2)",.disc_title="MDK2",.inserted_title="MDK2",
+        .gdi_name="MDK2.gdi",.music_title="Music: Midnight Terminal"};
+    struct kui_app_status status={.complete=true,.passed=true};
+    if(!strcmp(argv[1],"settings")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=2;}
+    else if(!strcmp(argv[1],"ripper-settings")) shell.page=KUI_SHELL_RIPPER_SETTINGS;
+    else if(!strcmp(argv[1],"video")) {
+        shell.page=KUI_SHELL_SETTINGS;view.video_trial=true;view.video_seconds=7;
+        shell.system_draft.video_mode=KUI_VIDEO_PAL50;
+    } else if(!strcmp(argv[1],"vmu")) {
+        shell.page=KUI_SHELL_VMU;shell.vmu.count=8;shell.vmu.total=12;
+        shell.vmu.present=true;shell.vmu.free_blocks=62;shell.vmu_selected=2;
+        const char *names[]={"SONIC2__S01","MDK2___SAVE","BIOHAZARD_CV","BERSERK_SYS",
+            "CRAZY_TAXI","SHENMUE_000","SOULCALIBUR","JETSETRADIO"};
+        for(unsigned i=0;i<8;i++) {
+            snprintf(shell.vmu.entries[i].name,16,"%s",names[i]);
+            shell.vmu.entries[i].bytes=16384;
+        }
+        snprintf(shell.vmu.status.message,128,"12 saves found. Select a save to back up.");
+    } else if(!strcmp(argv[1],"memory")) {
+        shell.page=KUI_SHELL_MEMORY;view.app_status=&status;
+        snprintf(status.message,128,"Allocated region passed");
+        status.done=status.total=22ull*1024*1024;status.line_count=6;
+        const char *lines[]={"Owned test region: 4096 KiB","Read coverage: 23068672 bytes; passes 70/70",
+            "Errors: 0; first mismatch stops the test","6 full pattern/address passes",
+            "64 walking-bit passes at 4 KiB block edges","CPU accesses; other RAM and VRAM are not tested"};
+        for(unsigned i=0;i<6;i++) snprintf(status.lines[i],80,"%s",lines[i]);
+    } else if(!strcmp(argv[1],"network")) {
+        shell.page=KUI_SHELL_NETWORK;view.app_status=&status;status.passed=false;
+        snprintf(status.message,128,"No Ethernet adapter detected");status.line_count=4;
+        const char *lines[]={"Broadband and LAN adapters were checked.","No DHCP request or traffic sent.",
+            "No reachable network is asserted.","Connect an adapter and inspect again."};
+        for(unsigned i=0;i<4;i++) snprintf(status.lines[i],80,"%s",lines[i]);
+    } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=1;
+    else if(!strcmp(argv[1],"home-memory")) shell.home_selected=2;
+    else if(!strcmp(argv[1],"home-network")) shell.home_selected=3;
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
     else if(!strcmp(argv[1],"advanced")) shell.page=KUI_SHELL_ADVANCED;
     else if(!strcmp(argv[1],"destination")) {
@@ -42,9 +77,16 @@ int main(int argc,char **argv) {
             view.phase=4; view.outcome=KUI_SHELL_OUTCOME_COMPLETE;
             view.done=view.total; view.committed=view.total;
             view.track=view.tracks; view.rate_kib=0;
+            view.inserted_title="Sword of the Berserk";
             view.reference_checked=true;
             view.reference.result=!strcmp(argv[1],"complete")?
                 KUI_KNOWN_FULL_MATCH:KUI_KNOWN_DATA_MATCH;
+        } else if(!strcmp(argv[1],"idle")) {
+            view.phase=0;view.done=view.total=view.committed=0;view.rate_kib=0;
+            view.track=view.tracks=0;view.elapsed_ms=0;
+        } else if(!strcmp(argv[1],"reset")) {
+            view.outcome=KUI_SHELL_OUTCOME_FAILED;view.drive_reset_required=true;
+            view.message="Capture timed out; drive abort failed. Restart required.";
         } else if(!strcmp(argv[1],"stopped")) view.outcome=KUI_SHELL_OUTCOME_STOPPED;
         else view.busy=true;
     }

@@ -15,8 +15,36 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     memset(s, 0, sizeof(*s));
     const struct kui_settings initial = {true, false, true};
     kui_shell_set_preferences(s, p ? p : &initial);
+    kui_system_settings_default(&s->system_saved);
+    s->system_draft=s->system_saved;
     kui_destination_default(s->destination);
     memcpy(s->browse_path,s->destination,sizeof(s->browse_path));
+}
+void kui_shell_set_system_preferences(struct kui_shell *s,const struct kui_system_settings *p) {
+    if(!s || !p || !kui_system_settings_valid(p)) return;
+    s->system_saved=*p; s->system_draft=*p;
+}
+bool kui_shell_system_dirty(const struct kui_shell *s) {
+    return s && (s->system_saved.video_mode!=s->system_draft.video_mode ||
+        s->system_saved.show_memory!=s->system_draft.show_memory ||
+        s->system_saved.music_enabled!=s->system_draft.music_enabled ||
+        s->system_saved.music_volume!=s->system_draft.music_volume);
+}
+void kui_shell_set_vmu(struct kui_shell *s,const struct kui_vmu_view *view) {
+    if(!s || !view || view->slot!=s->vmu_slot || view->page!=s->vmu_page) return;
+    s->vmu=*view;
+    if(s->vmu.count>KUI_VMU_ROWS) s->vmu.count=KUI_VMU_ROWS;
+    for(unsigned i=0;i<s->vmu.count;i++) s->vmu.entries[i].name[sizeof(s->vmu.entries[i].name)-1]=0;
+    if(s->vmu_selected>=s->vmu.count) s->vmu_selected=0;
+}
+bool kui_shell_phase_eta(const struct kui_shell_view *v,uint64_t *seconds) {
+    if(!v || !seconds || !v->busy || v->saving || v->cancel_requested ||
+       v->phase<1 || v->phase>3 || !v->total || !v->rate_kib ||
+       v->phase_elapsed_ms<2000 || v->progress_age_ms>3000) return false;
+    uint64_t bytes_per_second=(uint64_t)v->rate_kib*1024u;
+    uint64_t remaining=v->done<v->total?v->total-v->done:0;
+    *seconds=remaining/bytes_per_second+(remaining%bytes_per_second!=0);
+    return true;
 }
 void kui_shell_destination_error(struct kui_shell *s, const char *message) {
     if(s) snprintf(s->destination_notice,sizeof(s->destination_notice),"%s",
@@ -121,14 +149,15 @@ static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons
 }
 bool kui_shell_settings_dirty(const struct kui_shell *s) {
     return s && (s->saved.crc_only != s->draft.crc_only ||
-        s->saved.end_readback != s->draft.end_readback ||
-        s->saved.show_memory != s->draft.show_memory);
+        s->saved.end_readback != s->draft.end_readback);
 }
-static unsigned move(unsigned selected, unsigned buttons) {
+static unsigned move_count(unsigned selected, unsigned buttons,unsigned count) {
+    if(!count) return 0;
+    if(selected>=count) selected=0;
     if((buttons & (KUI_SHELL_UP | KUI_SHELL_DOWN)) == KUI_SHELL_UP)
-        return selected ? selected - 1 : 2;
+        return selected ? selected - 1 : count-1;
     if((buttons & (KUI_SHELL_UP | KUI_SHELL_DOWN)) == KUI_SHELL_DOWN)
-        return (selected + 1) % 3;
+        return (selected + 1) % count;
     return selected;
 }
 static void scroll(struct kui_shell *s, unsigned buttons) {
@@ -141,6 +170,11 @@ static void scroll(struct kui_shell *s, unsigned buttons) {
 enum kui_shell_action kui_shell_input(struct kui_shell *s,
         unsigned buttons, bool busy) {
     if(!s) return KUI_SHELL_NONE;
+    if(s->video_trial) {
+        if(buttons&KUI_SHELL_B) return KUI_SHELL_CANCEL_VIDEO;
+        if(buttons&KUI_SHELL_A) return KUI_SHELL_CONFIRM_VIDEO;
+        return KUI_SHELL_NONE;
+    }
     /* Stop/back wins even over a simultaneous confirmation or launch. */
     if(buttons & KUI_SHELL_B) {
         if(busy) { s->confirm_new = false; return KUI_SHELL_STOP; }
@@ -159,10 +193,14 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             return KUI_SHELL_NONE;
         }
-        if(s->page == KUI_SHELL_SETTINGS) {
+        if(s->page == KUI_SHELL_RIPPER_SETTINGS) {
             s->draft = s->saved;
             s->page = s->settings_return;
             return KUI_SHELL_DISCARD_SETTINGS;
+        }
+        if(s->page == KUI_SHELL_SETTINGS) {
+            s->system_draft=s->system_saved; s->page=KUI_SHELL_HOME;
+            return KUI_SHELL_DISCARD_SYSTEM;
         }
         if(s->page == KUI_SHELL_ADVANCED) {
             s->page=KUI_SHELL_RIPPER;
@@ -185,14 +223,16 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     switch(s->page) {
     case KUI_SHELL_HOME:
-        s->home_selected = move(s->home_selected, buttons);
+        s->home_selected = move_count(s->home_selected, buttons,6);
         if(buttons & KUI_SHELL_A) {
-            s->page = (enum kui_shell_page)(s->home_selected + 1);
+            static const enum kui_shell_page pages[]={KUI_SHELL_RIPPER,KUI_SHELL_VMU,
+                KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,KUI_SHELL_SETTINGS,KUI_SHELL_DIAGNOSTICS};
+            s->page=pages[s->home_selected];
             if(s->page == KUI_SHELL_SETTINGS) {
-                s->settings_return=KUI_SHELL_HOME;
-                s->draft = s->saved;
-                return KUI_SHELL_LOAD_SETTINGS;
+                s->system_draft=s->system_saved;
+                return KUI_SHELL_LOAD_SYSTEM;
             }
+            if(s->page==KUI_SHELL_VMU) return KUI_SHELL_VMU_LIST;
         }
         break;
     case KUI_SHELL_RIPPER:
@@ -207,14 +247,14 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         else if(buttons & KUI_SHELL_START) s->page=KUI_SHELL_ADVANCED;
         break;
     case KUI_SHELL_ADVANCED:
-        s->advanced_selected=move(s->advanced_selected,buttons);
+        s->advanced_selected=move_count(s->advanced_selected,buttons,3);
         if(buttons & KUI_SHELL_A) {
             if(s->advanced_selected<2) {
                 s->page=KUI_SHELL_RIPPER;
                 return s->advanced_selected?KUI_SHELL_RESUME:KUI_SHELL_VERIFY;
             }
             s->settings_return=KUI_SHELL_ADVANCED;
-            s->draft=s->saved; s->page=KUI_SHELL_SETTINGS;
+            s->draft=s->saved; s->page=KUI_SHELL_RIPPER_SETTINGS;
             return KUI_SHELL_LOAD_SETTINGS;
         }
         break;
@@ -254,8 +294,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_KEYBOARD:
         return keyboard_input(s,buttons);
-    case KUI_SHELL_SETTINGS:
-        s->setting_selected = move(s->setting_selected, buttons);
+    case KUI_SHELL_RIPPER_SETTINGS:
+        s->setting_selected = move_count(s->setting_selected, buttons,2);
         if((buttons & (KUI_SHELL_LEFT | KUI_SHELL_RIGHT)) == KUI_SHELL_LEFT ||
            (buttons & (KUI_SHELL_LEFT | KUI_SHELL_RIGHT)) == KUI_SHELL_RIGHT) {
             if(s->setting_selected == 0) {
@@ -264,10 +304,56 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             if(s->setting_selected == 1 && s->draft.crc_only)
                 s->draft.end_readback = !s->draft.end_readback;
-            if(s->setting_selected == 2) s->draft.show_memory = !s->draft.show_memory;
         }
         if(buttons & KUI_SHELL_A) return KUI_SHELL_SAVE_SETTINGS;
         break;
+    case KUI_SHELL_SETTINGS: {
+        s->system_selected=move_count(s->system_selected,buttons,4);
+        unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+        if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
+            if(s->system_selected==0) s->system_draft.video_mode=(s->system_draft.video_mode+
+                (horizontal==KUI_SHELL_LEFT?KUI_VIDEO_MODE_COUNT-1:1))%KUI_VIDEO_MODE_COUNT;
+            if(s->system_selected==1) s->system_draft.show_memory=!s->system_draft.show_memory;
+            if(s->system_selected==2) s->system_draft.music_enabled=!s->system_draft.music_enabled;
+            if(s->system_selected==3) {
+                unsigned volume=s->system_draft.music_volume;
+                s->system_draft.music_volume=horizontal==KUI_SHELL_LEFT?
+                    (volume>5?volume-5:0):(volume<95?volume+5:100);
+            }
+        }
+        if(buttons&KUI_SHELL_A) return s->system_draft.video_mode!=s->system_saved.video_mode?
+            KUI_SHELL_PREVIEW_VIDEO:KUI_SHELL_SAVE_SYSTEM;
+        if((buttons&KUI_SHELL_X) && s->system_selected>=2) return KUI_SHELL_MUSIC_NEXT;
+        break;
+    }
+    case KUI_SHELL_MEMORY:
+        if(buttons&KUI_SHELL_A) return KUI_SHELL_MEMORY_TEST;
+        break;
+    case KUI_SHELL_NETWORK:
+        if(buttons&KUI_SHELL_A) return KUI_SHELL_NETWORK_TEST;
+        break;
+    case KUI_SHELL_VMU: {
+        unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+        if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
+            s->vmu_slot=(s->vmu_slot+(horizontal==KUI_SHELL_LEFT?7:1))%8;
+            s->vmu_page=0; s->vmu_selected=0; memset(&s->vmu,0,sizeof(s->vmu));
+            return KUI_SHELL_VMU_LIST;
+        }
+        s->vmu_selected=move_count(s->vmu_selected,buttons,s->vmu.count);
+        if(buttons&KUI_SHELL_A) return KUI_SHELL_VMU_LIST;
+        if((buttons&KUI_SHELL_X) && s->vmu.present && s->vmu.count)
+            return KUI_SHELL_VMU_BACKUP;
+        if((buttons&KUI_SHELL_Y) && s->vmu.present && s->vmu.total)
+            return KUI_SHELL_VMU_BACKUP_ALL;
+        if(buttons&KUI_SHELL_START) {
+            if(s->vmu_page<UINT_MAX/KUI_VMU_ROWS-1 &&
+               (s->vmu_page+1)*KUI_VMU_ROWS<s->vmu.total) ++s->vmu_page;
+            else s->vmu_page=0;
+            s->vmu_selected=0; memset(&s->vmu,0,sizeof(s->vmu));
+            return KUI_SHELL_VMU_LIST;
+        }
+        break;
+    }
     case KUI_SHELL_DIAGNOSTICS:
         scroll(s, buttons);
         if(buttons & KUI_SHELL_A) return KUI_SHELL_DISC_PROBE;

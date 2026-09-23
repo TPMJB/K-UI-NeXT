@@ -1,0 +1,71 @@
+# Original K-UI menu music
+
+These are the five original K-UI compositions made for TPMJB with Codex
+assistance. They use synthesized notes/percussion and no external recordings,
+samples or sound banks. The maintainer authorized their reuse in independent
+K-UI. The original [music permissions and composition record](https://github.com/TPMJB/K-UI_DS/blob/2a5309298dde8fb100da1e2e4e10517695c9780f/applications/launch_app/music/README.md)
+allows use, modification and redistribution of the musical material/recordings
+without additional restrictions or attribution requirements to the extent
+rights exist in that generated material.
+
+`original_generator.py` is an exact copy of the independently authored
+[`utils/generate_menu_music.py`](https://github.com/TPMJB/K-UI_DS/blob/2a5309298dde8fb100da1e2e4e10517695c9780f/utils/generate_menu_music.py)
+at revision `2a5309298dde8fb100da1e2e4e10517695c9780f`. The first soundtrack was
+introduced in [`afa3767a`](https://github.com/TPMJB/K-UI_DS/commit/afa3767ac5a6c8f9e79cf61ca2ba894ee3d6fb23),
+and the playlist expanded in [`7d5b4477`](https://github.com/TPMJB/K-UI_DS/commit/7d5b4477a9d4f8ea406c6ec58d590f6eaafa770a).
+The selected generator code is reused under this project's GPL-3.0-only terms
+at the maintainer's direction. No DreamShell player, module or binary is copied.
+
+[manifest.json](manifest.json) records the exact generator Git blob/SHA-256 and
+each generated WAV's SHA-256, format, length and frame count. The legacy repository
+generates these WAVs at build time rather than storing WAV binaries.
+
+| File | Title | Duration |
+| --- | --- | --- |
+| `menu.wav` | After Hours | 24.0 seconds |
+| `neon-circuit.wav` | Neon Circuit | 19.2 seconds |
+| `orbital-drift.wav` | Orbital Drift | 24.0 seconds |
+| `midnight-vector.wav` | Midnight Vector | 17.45 seconds |
+| `chrome-horizon.wav` | Chrome Horizon | 21.33 seconds |
+
+Reproduce the recordings with Python's standard library:
+
+```sh
+python3 tools/generate_menu_music.py
+```
+
+Generated WAVs are ignored by Git. Packaging writes directly into its staging
+directory with `python3 tools/generate_menu_music.py --directory STAGING/KUI/apps/music`.
+The asset test regenerates all five in a temporary directory and compares them
+with the committed manifest; no pre-existing WAVs are needed.
+
+The five files total 4,674,286 bytes. They are mono PCM16 at 22,050 Hz and retain
+the original arrangements. Only one file is cached at a time; the largest
+supplied file is 1,058,444 bytes. Package the WAVs into `/KUI/apps/music/` on SD.
+They are not embedded in the runtime binary. The separate manifest/generator
+need not be copied onto the card.
+
+## Independent player
+
+The player accepts bounded RIFF WAV files with mono/stereo PCM16 at 8–44.1 kHz,
+at most 2 MiB for the whole file. Load is cancellable between 32-KiB reads and
+releases SD before playback starts. A missing or invalid file produces an
+informative status; idle service does not repeatedly retry SD access.
+Audio initialization, allocation and playback failures also latch until an
+explicit Music setting or track change, avoiding repeated idle-loop retries.
+
+Playback uses cached RAM only and loops the PCM frames. Off retains that cache.
+Every capture, test or other worker action pauses playback and drains its audio
+DMA first; returning idle can resume without card access. The two callback
+buffers total 64 KiB; KOS uses a further 16-KiB separation buffer. Audio RAM is
+separate. A track change discards the previous cache before loading another,
+so memory remains bounded even when the new file is missing or cancelled.
+
+The backend follows the pinned upstream KallistiOS
+[stream implementation](https://github.com/KallistiOS/KallistiOS/blob/fcfa7d869471591ca1c777543261a7bfea7cb726/kernel/arch/dreamcast/sound/snd_stream.c)
+and [public API](https://github.com/KallistiOS/KallistiOS/blob/fcfa7d869471591ca1c777543261a7bfea7cb726/kernel/arch/dreamcast/include/dc/sound/stream.h).
+In that revision callback lengths are bytes despite the header's sample wording;
+stream destruction waits for outstanding DMA. Host tests cover these contracts,
+buffer lifetime, loop boundaries, malformed files, volume and cancellation.
+Actual audio quality, controller responsiveness and pause/resume need the normal
+console application check; no new boot disc is required.

@@ -20,6 +20,8 @@ RUNTIME_OBJECTS += build/dc/src/core/crc16.o
 RUNTIME_OBJECTS += build/dc/src/core/settings.o build/dc/src/core/settings_file.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
 RUNTIME_OBJECTS += build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
+APP_SOURCES := $(wildcard src/apps/*.c)
+RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id

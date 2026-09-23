@@ -22,6 +22,32 @@ resumed to a verified finish.
 For scale: the original settings projected to about 104 minutes for the same Sword disc, so the
 work took it from roughly an hour and three quarters to twenty minutes.
 
+## Current app work and failure report — 2026-09-23
+
+The latest report is an **Omikron new capture on `0599097a8bfb`**, not a
+saved-file verification attempt. Four tracks finished and the final track
+stopped at **99.7855% committed**: a DMA timeout was followed by PIO fallback
+abort-recovery failure and **RESET REQUIRED**. The partial checkpoint was kept;
+no verification or reference result followed. Its committed-data average was
+932.80 KiB/s including the terminal waits. This is not a completed dump or a
+controlled performance comparison. [Sanitized evidence](evidence/m15-omikron-timeout-2026-09-23.json).
+Reboot before resuming that job; the existing failed-recovery latch is retained.
+
+The next M1.5 delivery extends the launcher with idle inserted-disc titles,
+phase ETA and explicit capture/prefix/verification failure messages. Separate
+system preferences cover video timing, memory display and optional menu music;
+Memory Test, VMU listing/SD backup and network-adapter inspection are separate
+app modules. Music plays a bounded RAM cache and pauses for foreground I/O.
+Disc-title identification runs only on the single idle worker, with one attempt
+per observed insertion; an unsuccessful attempt waits for a new insertion or
+explicit foreground optical activity rather than continuously rereading.
+
+**App and system-setting hardware acceptance is pending.** These modules are
+still linked into the SD runtime, not independently loaded executables. The
+raw/DMA reader, command recovery and core capture engine are unchanged in this
+app round. Follow [apps-test.md](apps-test.md) using the existing boot disc;
+ordinary recovery work can cover ETA without another benchmark or full rip.
+
 ## Current UI/destination work — 2026-09-23
 
 The restored-menu runtime `8bae3efe7c2f` has now completed MDK2: **973.96 KiB/s**,
@@ -105,9 +131,11 @@ For projected whole-disc times from any saved report: `python3 tools/rip_time.py
 
 ## Still open, most useful first
 
-1. **M1.5 destination acceptance.** Launcher, persistent preferences, selected destinations and
-   named output are implemented; the new controls and named capture still need hardware acceptance.
-   The default decision above is applied. See [the ripper check](ripper-controls.md).
+1. **M1.5 app/destination acceptance.** Launcher, persistent preferences, selected destinations
+   and named output are implemented; a completed named capture and saved-file PC check remain
+   pending. The next app round adds system settings, idle disc titles, music, Memory Test, VMU
+   backup and network inspection, all awaiting console acceptance. See [the app checks](apps-test.md)
+   and [ripper controls](ripper-controls.md). The default decision above is applied.
 2. **Faster CRC16 in the SD driver** (link-time `--wrap net_crc16ccitt`, no KOS patch): measured at
    22.7 -> 8.8 CPU cycles a byte, worth about **7% on a capture** and 5% on SD reads.
    `src/core/crc16.c` already has the verified implementation (`kui_crc16_slice2`).

@@ -24,21 +24,29 @@ separate contribution or commercial-relicensing agreement.
 
 ## M1.5 shell update
 
-The SD runtime opens a K-UI launcher with **Disc Ripper**, **Settings** and
-**Diagnostics**. New captures now use a selectable parent folder, defaulting to
-`/Games`, with title-based folders and GDI filenames. The accepted acquisition
-code is unchanged; capture-file selection, metadata publication and result
-display are extended. Follow [the ripper controls and acceptance check](docs/ripper-controls.md)
-with the existing bootstrap CD and the `sd-update` artifact. Replace only
-`/KUI/runtime.kui`. Physical acceptance of the new named-output flow is pending.
+The SD runtime opens six apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
+**Network Test**, **Settings** and **Diagnostics**. New captures use a selectable
+parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
+The hardware-proven acquisition engine remains unchanged.
+
+Use the existing bootstrap CD and the `sd-update` artifact. Replace
+`/KUI/runtime.kui`, and copy `KUI/apps/music/` for optional original menu music.
+See [this app acceptance round](docs/apps-test.md) and
+[app boundaries and the later executable-loader plan](docs/app-architecture.md).
+These new app paths still need physical-console acceptance.
 
 - Select with D-pad or stick and open with A. B returns home while idle.
 - Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
-  R chooses or types a destination; Start opens Advanced (Verify, Resume, Settings).
-  During work, B requests Stop. Reports still save automatically.
-- Settings: change capture hashes, automatic readback and the memory display;
-  A saves to the card, B discards unsaved edits. Preferences persist across boots.
-- Diagnostics retains disc/SD probes, log export, mstats and the benchmark tools.
+  R chooses or types a destination; Start opens Advanced and **Capture settings**.
+  During work, B requests Stop. Reports still save automatically. Idle insertion
+  detection shows the disc title; moving capture/verification phases show an ETA.
+- System Settings: 640x480 TV timing with reversible preview, memory display,
+  music enabled and volume. Capture hashes/readback remain inside the ripper.
+- VMU Manager: read saves and make new SD backups with byte/CRC readback. No VMU
+  writes, restore, delete or format. Memory Test checks only its allocated RAM.
+- Network Test reports adapter/configuration evidence; it does not start DHCP or
+  claim Internet reachability. Diagnostics retains disc/SD probes, log export,
+  mstats and benchmarks.
 
 Defaults now select **CRC32, automatic end readback Off, DMA and 2 Hz busy redraws**:
 these are the policy choices used by the accepted fast captures. Explicit
@@ -97,7 +105,7 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | M1.2: validated runtime loading from SD | **Done.** exFAT handoff, B-selected fallback, missing-file rejection and good-runtime restoration confirmed; all five malformed fixtures rejected on hardware, each with its own reason, with a usable fallback ([evidence](docs/evidence/m12-runtime-rejection-2026-09-20.json)) |
 | M1.3: full-track GDI capture | **Done.** Sword of the Berserk and MDK2 (31 tracks, 27 audio) captured and verified against TOSEC on the console and on a PC; Sword ripped three ways, identical by SHA-256 ([handoff](docs/HANDOFF-disc-reader.md)) |
 | M1.4: SHA-256 capture verification and controlled stop/resume | **Done.** MDK2 stopped twice mid-disc and resumed to a finish verified on the console and against TOSEC; Sword track 3 PC-verified. The lid opened mid-capture stopped cleanly and resumed to a TOSEC-verified finish on hardware (Omikron). A scratched disc retried a fixed 10 times, named the bad sector and stopped with the partial job kept. A B stop and a lid-open in the same boot both resume on DMA ([evidence](docs/evidence/dma-stop-fix-confirmed-2026-09-20.json)). **Open:** a card that fills mid-capture, host-tested only |
-| M1.5: hardware acceptance and minimal UI refinement | Launcher, persistent settings, selectable destinations, named GDI output and explicit reference results implemented; new named-output hardware acceptance pending. Full-card failure remains host-tested only |
+| M1.5: hardware acceptance and minimal UI refinement | Launcher, named dumps, insertion title/ETA, system/ripper settings split and initial VMU/Memory/Network/music apps implemented; latest app hardware acceptance pending. Full-card failure remains host-tested only |
 
 See [the research scope](docs/milestone-1-research.md),
 [the implementation decisions](docs/diagnostic-design.md), and
@@ -113,6 +121,6 @@ This is a fresh repository, not a DreamShell fork. Requirements and hardware
 observations can inform new implementations. Do not import upstream-derived DreamShell source or binaries by changing their names.
 Independently authored additions from our earlier fork can be reused after checking
 their origins, dependencies and intended license; see [the reuse inventory](docs/prior-work-reuse.md).
-Original project artwork and music are candidates too; inherited assets keep their own terms.
+Original project artwork and the five original synthesized music loops are reused with recorded provenance; inherited assets keep their own terms.
 Independently licensed upstream KOS contributions remain attributed and usable,
 including contributions by people who also work on other projects.

@@ -1,5 +1,44 @@
 # Hardware evidence
 
+## Omikron final-track timeout and app round — 2026-09-23
+
+Runtime **0599097a8bfb** started a new **Omikron: The Nomad Soul** capture.
+The uploaded report's older free-text experiment note names another game; its
+identified title and operation establish the actual workload. It committed
+**1,201,396,896 of 1,203,979,392 bytes (99.7855%)**, finishing four tracks before
+the final track failed. Capture wall time was **1257.766055 s (20 min 57.8 s)**,
+or **932.80 KiB/s** of committed data including the terminal recovery waits.
+
+A late DMA read timed out, disabling DMA until reboot. The subsequent PIO
+fallback could not finish abort recovery and reported **RESET REQUIRED**. The
+console preserved the partial checkpoint and saved a diagnostic report
+automatically; the submitted file is a later manual report. Its generic
+`CAPTURE/VERIFY FAILED` label does **not** establish a verification failure:
+acquisition had not finished, automatic end readback was off, and neither a
+saved-file verification phase nor a reference result appears. CRC32, DMA,
+UI 2 Hz and full saved-prefix checking for Resume were selected.
+
+UI scheduled time was **107.425 s / 1263.176 s**, reported as **8.5%**. Estimated
+main-RAM use/reservation and its sampled peak stayed at **2,859,544 bytes**.
+This failed, different-disc run is not a controlled UI speed comparison. The
+log does not identify the physical cause of the stall, independently verify
+the saved bytes or provide a final DMA/PIO transfer-count summary.
+
+[Sanitized aggregates and input fingerprint](evidence/m15-omikron-timeout-2026-09-23.json)
+record the original report's size and SHA-256. The raw report, hardware
+identifiers, storage geometry, full disc identity and card paths are not copied
+into this evidence record. Recovery uses the existing reset guard: reboot
+before Resume, preserving the partial job. No reader/recovery policy changed.
+
+The next app build adds idle insertion-title identification, clearer operation
+and reset messages, phase ETA, separate system settings, optional RAM-cached
+menu music, Memory Test, VMU listing/SD backup and network-adapter inspection.
+**All of these new app paths still need physical-console acceptance.** Identity
+polling and identification use the single worker only while idle; music pauses
+before foreground work. The finished acquisition engine remains unchanged.
+Use [the app acceptance guide](apps-test.md) on the same bootstrap CD; no new
+optical benchmark or repeat full rip is required to test the apps.
+
 ## Ripper destinations and reference results — 2026-09-23
 
 The next UI update adds a saved destination (default `/Games`), title-numbered

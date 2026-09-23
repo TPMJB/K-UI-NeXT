@@ -97,39 +97,89 @@ static void heading(struct paint *p, const struct kui_shell_view *v) {
 static void footer(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     rule(p,416);
-    const char *controls=v->busy ? "B Stop safely" :
+    const char *controls=v->video_trial ? "A Keep mode   B Revert" : v->busy ? "B Stop safely" :
         s->confirm_new ? "A Start capture   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open" :
-        s->page==KUI_SHELL_SETTINGS ? "A Save   B Back / discard" :
+        s->page==KUI_SHELL_SETTINGS || s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_KEYBOARD ? "A Key   X Backspace   Y Shift   B Cancel" :
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
-        s->page==KUI_SHELL_RIPPER ? "B Home   R Folder   START Advanced" : "B Home";
-    words(p,40,430,500,MUTED,controls,false); label(p,512,430,MUTED,"L Memory");
+        s->page==KUI_SHELL_RIPPER ? "B Home   R Folder   START Advanced" :
+        s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   START Page" : "B Home";
+    words(p,40,430,500,MUTED,controls,false);
+    if(!v->video_trial) label(p,512,430,MUTED,"L Memory");
 }
-static void home(struct paint *p, const struct kui_shell *s) {
-    static const char *names[]={"Disc Ripper","Settings","Diagnostics"};
-    static const char *category[]={"Disc tools","Preferences","System tools"};
-    static const char *details[3][3]={
-        {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
-        {"Choose capture checks and", "memory display. Save preferences", "to the SD card."},
-        {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."}};
-    unsigned selected=s->home_selected<3?s->home_selected:0;
-    panel(p,32,112,208,296,PANEL);
-    for(unsigned i=0;i<3;i++) {
-        unsigned y=120+i*54;
-        if(selected==i) {
-            panel(p,32,y,208,44,SELECTED);
-            box(p,32,y+5,3,34,PINK);
+static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
+    if(app==1) {
+        panel(p,x+30,y+10,68,108,CYAN); box(p,x+38,y+22,52,38,NAVY);
+        box(p,x+48,y+76,24,7,NAVY); box(p,x+56,y+68,8,24,NAVY);
+        box(p,x+78,y+76,8,8,PINK); box(p,x+80,y+92,8,8,NAVY);
+    } else if(app==2) {
+        for(unsigned i=0;i<5;i++) {
+            box(p,x+20+i*20,y+12,6,104,CYAN);
+            box(p,x+12,y+20+i*20,104,6,CYAN);
         }
-        art(p,44,y+10,24,24,kui_art_small_icons[i]);
-        words(p,80,y+14,230,selected==i?WHITE:MUTED,names[i],false);
+        box(p,x+24,y+24,80,80,EDGE); box(p,x+30,y+30,68,68,PANEL);
+        words(p,x+40,y+54,x+98,WHITE,"RAM",true);
+    } else {
+        box(p,x+28,y+38,72,4,CYAN); box(p,x+62,y+40,4,44,CYAN);
+        box(p,x+26,y+40,4,44,CYAN); box(p,x+98,y+40,4,44,CYAN);
+        panel(p,x+44,y+10,40,30,CYAN);
+        panel(p,x+10,y+82,36,28,CYAN); panel(p,x+46,y+82,36,28,PINK);
+        panel(p,x+82,y+82,36,28,CYAN);
     }
-    label(p,44,382,MUTED,"3 applications");
+}
+static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
+    if(app==1) {
+        panel(p,x+5,y+1,14,22,CYAN);box(p,x+7,y+4,10,8,NAVY);
+        box(p,x+8,y+16,5,2,NAVY);box(p,x+10,y+14,2,6,NAVY);
+        box(p,x+15,y+16,2,2,PINK);
+    } else if(app==2) {
+        for(unsigned i=0;i<3;i++) {
+            box(p,x+5+i*6,y,2,24,CYAN);box(p,x,y+5+i*6,24,2,CYAN);
+        }
+        box(p,x+4,y+4,16,16,EDGE);box(p,x+7,y+7,10,10,PANEL);
+    } else {
+        box(p,x+11,y+4,2,14,CYAN);box(p,x+3,y+12,18,2,CYAN);
+        box(p,x+3,y+12,2,8,CYAN);box(p,x+19,y+12,2,8,CYAN);
+        box(p,x+8,y+1,8,7,CYAN);box(p,x,y+17,8,7,CYAN);
+        box(p,x+8,y+17,8,7,PINK);box(p,x+16,y+17,8,7,CYAN);
+    }
+}
+static void home(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
+    static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics"};
+    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics"};
+    static const unsigned icons[]={0,2,2,2,1,2};
+    static const char *details[6][3]={
+        {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
+        {"Browse saves on connected VMUs.","Back up one save or every save", "to the SD card."},
+        {"Check available application RAM", "with data patterns and report", "any mismatches found."},
+        {"Inspect your network adapter", "and saved configuration.","No network traffic is sent."},
+        {"Choose video, memory display", "and background music.", "Save preferences to SD."},
+        {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."}};
+    unsigned selected=s->home_selected<6?s->home_selected:0;
+    panel(p,32,112,208,296,PANEL);
+    for(unsigned i=0;i<6;i++) {
+        unsigned y=116+i*44;
+        if(selected==i) {
+            panel(p,32,y,208,40,SELECTED);
+            box(p,32,y+5,3,30,PINK);
+        }
+        if(i>=1 && i<=3) small_utility_icon(p,i,44,y+8);
+        else art(p,44,y+8,24,24,kui_art_small_icons[icons[i]]);
+        words(p,80,y+11,230,selected==i?WHITE:MUTED,names[i],false);
+    }
+    label(p,44,386,MUTED,"6 applications");
     title(p,264,112,names[selected]);
-    label(p,264,144,CYAN,category[selected]);
+    if(selected==0) {
+        char inserted[160];
+        snprintf(inserted,sizeof(inserted),"Inserted: %s",
+            v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
+        label(p,264,144,CYAN,inserted);
+    } else label(p,264,144,CYAN,category[selected]);
     panel(p,264,172,344,140,PANEL);
-    art(p,372,178,128,128,kui_art_icons[selected]);
+    if(selected>=1 && selected<=3) utility_icon(p,selected,372,178);
+    else art(p,372,178,128,128,kui_art_icons[icons[selected]]);
     for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,details[selected][i]);
     panel(p,264,382,344,28,CYAN);
     label(p,382,388,NAVY,"A  Open app");
@@ -148,23 +198,32 @@ static void ripper(struct paint *p, const struct kui_shell *s,
     static const char *phases[]={"Identifying disc","Checking saved prefix",
         "Capturing disc","Verifying saved files","Completed"};
     title(p,40,108,"Disc Ripper");
-    label(p,40,136,CYAN,v->disc_title && v->disc_title[0] ? v->disc_title :
-        "Capture retail discs to your SD card.");
+    char title_line[160];
+    snprintf(title_line,sizeof(title_line),"%s: %s",v->busy?"Disc":"Inserted",
+        v->busy?(v->disc_title&&v->disc_title[0]?v->disc_title:"Identifying..."):
+        (v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected"));
+    label(p,40,136,CYAN,title_line);
     char destination[160];
     snprintf(destination,sizeof(destination),"Destination: %s",s->destination);
     label(p,40,158,MUTED,destination);
     panel(p,32,182,576,122,PANEL);
     const char *phase=v->saving ? "Saving diagnostic report" :
         v->cancel_requested && v->busy ? "Stopping safely..." :
+        v->drive_reset_required && !v->busy ? "Drive stopped - restart required" :
         v->outcome==KUI_SHELL_OUTCOME_STOPPED && !v->busy ?
             (v->job_dir && v->job_dir[0]?"Stopped - partial dump kept":"Stopped") :
         v->outcome==KUI_SHELL_OUTCOME_FAILED && !v->busy ? "Operation failed - see diagnostics" :
         v->outcome==KUI_SHELL_OUTCOME_COMPLETE && !v->busy ? "Completed" :
         !v->busy && v->outcome==KUI_SHELL_OUTCOME_NONE ? "Ready for a disc" :
         v->phase<5 ? phases[v->phase] : "Working";
-    label(p,48,192,v->outcome==KUI_SHELL_OUTCOME_FAILED&&!v->busy?AMBER:CYAN,phase);
+    if(v->outcome==KUI_SHELL_OUTCOME_COMPLETE && !v->busy && !v->drive_reset_required &&
+       v->disc_title && v->disc_title[0]) {
+        snprintf(title_line,sizeof(title_line),"Completed: %.128s",v->disc_title);
+        phase=title_line;
+    }
+    label(p,48,192,(v->outcome==KUI_SHELL_OUTCOME_FAILED||v->drive_reset_required)&&!v->busy?AMBER:CYAN,phase);
     char line[73];
-    snprintf(line,sizeof(line),"TRACK %u / %u",v->track,v->tracks);
+    snprintf(line,sizeof(line),"TRACK %u / %u   RETRIES %u",v->track,v->tracks,v->retries);
     label(p,48,214,WHITE,line);
     snprintf(line,sizeof(line),"%u KiB/s",v->rate_kib);
     label(p,440,214,WHITE,line);
@@ -179,11 +238,25 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         (unsigned long)(v->done/1048576),(unsigned long)(v->total/1048576),
         (unsigned long)(v->committed/1048576));
     label(p,48,258,WHITE,line);
-    snprintf(line,sizeof(line),"ELAPSED %lu:%02lu   RETRIES %u",
+    snprintf(line,sizeof(line),"ELAPSED %lu:%02lu",
         (unsigned long)(v->elapsed_ms/60000),
-        (unsigned long)(v->elapsed_ms/1000%60),v->retries);
+        (unsigned long)(v->elapsed_ms/1000%60));
     label(p,48,280,MUTED,line);
-    label(p,40,312,v->busy?MUTED:WHITE,"A New dump   X Resume latest   Y Verify latest");
+    if(v->busy && !v->saving && v->phase>=1 && v->phase<=3) {
+        uint64_t eta;
+        if(kui_shell_phase_eta(v,&eta)) {
+            if(eta>=360000) snprintf(line,sizeof(line),"PHASE ETA >99h");
+            else if(eta>=3600) snprintf(line,sizeof(line),"PHASE ETA %lu:%02lu:%02lu",
+                (unsigned long)(eta/3600),(unsigned long)(eta/60%60),(unsigned long)(eta%60));
+            else snprintf(line,sizeof(line),"PHASE ETA %lu:%02lu",
+                (unsigned long)(eta/60),(unsigned long)(eta%60));
+        } else snprintf(line,sizeof(line),"PHASE ETA %s",v->progress_age_ms>3000 ||
+            v->cancel_requested?"waiting":"calculating");
+        label(p,336,280,MUTED,line);
+    }
+    label(p,40,312,v->drive_reset_required?AMBER:v->busy?MUTED:WHITE,
+        v->drive_reset_required?"Restart the console before another disc operation.":
+        "A New dump   X Resume latest   Y Verify latest");
     if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_COMPLETE) {
         uint16_t color=MUTED;
         const char *result="Reference not checked";
@@ -209,7 +282,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         if(v->gdi_name && v->gdi_name[0]) label(p,40,368,MUTED,v->gdi_name);
         else if(v->job_dir && v->job_dir[0]) label(p,40,368,MUTED,v->job_dir);
     }
-    if(s->saved.show_memory) memory(p,392,v);
+    if(s->system_saved.show_memory) memory(p,392,v);
     else if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_COMPLETE && v->gdi_name)
         label(p,40,392,MUTED,v->gdi_name);
 }
@@ -292,15 +365,14 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
     }
     for(unsigned i=0;i<3;i++) label(p,40,326+i*23,MUTED,details[selected][i]);
 }
-static void settings(struct paint *p, const struct kui_shell *s,
+static void ripper_settings(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
-    title(p,40,108,"Settings");
+    title(p,40,108,"Ripper settings");
     label(p,40,134,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
-    const char *names[]={"Capture hashes","Read back saved files","Show memory usage"};
+    const char *names[]={"Capture hashes","Read back saved files"};
     const char *values[]={s->draft.crc_only?"CRC32":"CRC32 + SHA-256",
-        !s->draft.crc_only?"ON (SHA required)":s->draft.end_readback?"ON":"OFF",
-        s->draft.show_memory?"ON":"OFF"};
-    for(unsigned i=0;i<3;i++) {
+        !s->draft.crc_only?"ON (SHA required)":s->draft.end_readback?"ON":"OFF"};
+    for(unsigned i=0;i<2;i++) {
         unsigned y=174+i*48;
         panel(p,32,y,576,40,i==s->setting_selected?SELECTED:PANEL);
         box(p,32,y,4,40,i==s->setting_selected?CYAN:EDGE);
@@ -314,10 +386,7 @@ static void settings(struct paint *p, const struct kui_shell *s,
     } else if(s->setting_selected==1) {
         first="Full readback checks every saved byte; it takes time.";
         second="With it off, use Verify later or check on a PC.";
-    } else {
-        first="Show main RAM use on the Disc Ripper screen.";
-        second="L always records a detailed memory snapshot.";
-    }
+    } else {first="";second="";}
     label(p,40,330,MUTED,first); label(p,40,350,MUTED,second);
     bool dirty=kui_shell_settings_dirty(s);
     const char *notice=v->settings_notice && v->settings_notice[0]?v->settings_notice:NULL;
@@ -325,6 +394,92 @@ static void settings(struct paint *p, const struct kui_shell *s,
         "Unsaved changes. A saves; B discards.":notice?notice:"Ready to edit. A saves to SD.");
     label(p,40,396,MUTED,dirty && notice?notice:
         "New dumps use these choices. Resume keeps job hash mode.");
+}
+static void system_settings(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"System settings");
+    label(p,40,136,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
+    const char *names[]={"Video mode","Show memory usage","Background music","Music volume"};
+    char volume[16];snprintf(volume,sizeof(volume),"%u%%",s->system_draft.music_volume);
+    const char *values[]={kui_system_video_name(s->system_draft.video_mode),
+        s->system_draft.show_memory?"ON":"OFF",s->system_draft.music_enabled?"ON":"OFF",volume};
+    for(unsigned i=0;i<4;i++) {
+        unsigned y=170+i*40;
+        panel(p,32,y,576,34,i==s->system_selected?SELECTED:PANEL);
+        if(i==s->system_selected) box(p,32,y+3,3,28,PINK);
+        label(p,48,y+9,WHITE,names[i]);
+        words(p,410,y+9,596,i==s->system_selected?CYAN:MUTED,values[i],false);
+    }
+    label(p,40,336,MUTED,s->system_selected==0?"640x480 output. VGA follows the connected cable.":
+        s->system_selected==1?"Main RAM appears on the ripper. L records details.":
+        "Music pauses during disc, card and diagnostic work.");
+    if(s->system_selected>=2) label(p,40,356,CYAN,"X Next song");
+    else label(p,40,356,MUTED,s->system_selected==0?
+        "Changed video modes get a 10-second confirmation.":
+        "System preferences are separate from ripper settings.");
+    label(p,40,376,kui_shell_system_dirty(s)?AMBER:CYAN,kui_shell_system_dirty(s)?
+        "Unsaved changes. A saves; B discards.":v->settings_notice&&v->settings_notice[0]?
+        v->settings_notice:"A saves these preferences to SD.");
+    label(p,40,396,MUTED,v->music_notice&&v->music_notice[0]?v->music_notice:
+        v->music_title&&v->music_title[0]?v->music_title:"Music: no track playing");
+}
+static void app_status(struct paint *p,const struct kui_app_status *status,bool busy,unsigned y) {
+    if(!status) return;
+    uint16_t color=status->complete?(status->passed?CYAN:AMBER):CYAN;
+    if(status->stopped) color=MUTED;
+    label(p,40,y,color,status->message);
+    if(status->total) {
+        box(p,40,y+24,560,8,EDGE);
+        unsigned width=status->done>=status->total?560:
+            (unsigned)((double)status->done/(double)status->total*560);
+        if(width) box(p,40,y+24,width,8,busy?CYAN:color);
+    }
+}
+static void utility_page(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    bool memory_test=s->page==KUI_SHELL_MEMORY;
+    title(p,40,108,memory_test?"Memory Test":"Network Test");
+    label(p,40,138,MUTED,memory_test?"Tests an allocated RAM region using data patterns.":
+        "Inspect the adapter and saved network configuration.");
+    label(p,40,160,v->busy?MUTED:WHITE,memory_test?"A Run memory test":"A Inspect network adapter");
+    const struct kui_app_status *status=v->app_status;
+    panel(p,32,194,576,214,PANEL);
+    app_status(p,status,v->busy,202);
+    if(status) {
+        unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
+        /* Reserve the title/progress rows; show the most recent eight lines. */
+        unsigned first=count>8?count-8:0;
+        for(unsigned i=first;i<count;i++) label(p,40,250+(i-first)*18,MUTED,status->lines[i]);
+    } else label(p,40,210,MUTED,"Ready. Press A to begin.");
+}
+static void vmu_page(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"VMU Manager");
+    char line[100];
+    snprintf(line,sizeof(line),"VMU %c%u   PAGE %u   %u saves   %u free blocks",
+        'A'+s->vmu_slot/2,s->vmu_slot%2+1,s->vmu_page+1,s->vmu.total,s->vmu.free_blocks);
+    label(p,40,138,CYAN,line);
+    label(p,40,160,v->busy?MUTED:WHITE,"A Refresh   X Back up selected   Y Back up all");
+    panel(p,32,190,576,178,PANEL);
+    unsigned count=s->vmu.count<KUI_VMU_ROWS?s->vmu.count:KUI_VMU_ROWS;
+    if(!count) label(p,48,206,MUTED,v->busy?"Reading VMU...":
+        s->vmu.present?"No saves on this page.":"No readable VMU in this slot.");
+    for(unsigned i=0;i<count;i++) {
+        unsigned y=196+i*21;
+        if(i==s->vmu_selected) panel(p,40,y,560,21,SELECTED);
+        label(p,52,y+1,i==s->vmu_selected?WHITE:MUTED,s->vmu.entries[i].name);
+        snprintf(line,sizeof(line),"%lu bytes",(unsigned long)s->vmu.entries[i].bytes);
+        label(p,452,y+1,MUTED,line);
+    }
+    const struct kui_app_status *status=v->app_status?v->app_status:&s->vmu.status;
+    label(p,40,378,status->complete&&!status->passed?AMBER:CYAN,status->message);
+    label(p,40,396,MUTED,"Backups go to SD. Existing saves stay on the VMU.");
+}
+static void video_trial(struct paint *p,const struct kui_shell_view *v) {
+    box(p,32,132,576,284,NAVY);
+    panel(p,48,158,544,214,PANEL);box(p,52,162,536,4,PINK);
+    title(p,72,180,"Keep this video mode?");
+    label(p,72,220,MUTED,"A keeps it and saves preferences. B restores the old mode.");
+    char line[96];snprintf(line,sizeof(line),"Restoring previous mode in %u seconds",v->video_seconds);
+    label(p,72,256,AMBER,line);
+    label(p,72,302,CYAN,"A Keep mode");label(p,384,302,WHITE,"B Revert");
 }
 static void diagnostics(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
@@ -356,16 +511,20 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     struct paint p={frame,text,ctx};
     heading(&p,v);
     switch(s->page) {
-    case KUI_SHELL_HOME: home(&p,s); break;
+    case KUI_SHELL_HOME: home(&p,s,v); break;
     case KUI_SHELL_RIPPER: ripper(&p,s,v); break;
-    case KUI_SHELL_SETTINGS: settings(&p,s,v); break;
+    case KUI_SHELL_SETTINGS: system_settings(&p,s,v); break;
+    case KUI_SHELL_RIPPER_SETTINGS: ripper_settings(&p,s,v); break;
     case KUI_SHELL_DIAGNOSTICS: diagnostics(&p,s,v); break;
     case KUI_SHELL_DESTINATION: destination(&p,s,v); break;
     case KUI_SHELL_KEYBOARD: keyboard(&p,s); break;
     case KUI_SHELL_ADVANCED: advanced(&p,s); break;
+    case KUI_SHELL_VMU: vmu_page(&p,s,v); break;
+    case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
     }
     footer(&p,s,v);
     if(s->confirm_new) confirmation(&p);
+    if(v->video_trial) video_trial(&p,v);
 }
 
 void kui_shell_draw(uint16_t *frame, const struct kui_shell *s,

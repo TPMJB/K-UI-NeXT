@@ -4,6 +4,8 @@
 #include "kui/settings.h"
 #include "kui/destination.h"
 #include "kui/known_dumps.h"
+#include "kui/system_settings.h"
+#include "kui/apps.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -20,13 +22,18 @@ enum kui_shell_button {
 };
 enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_SETTINGS, KUI_SHELL_DIAGNOSTICS,
-    KUI_SHELL_DESTINATION, KUI_SHELL_KEYBOARD, KUI_SHELL_ADVANCED };
+    KUI_SHELL_DESTINATION, KUI_SHELL_KEYBOARD, KUI_SHELL_ADVANCED,
+    KUI_SHELL_RIPPER_SETTINGS, KUI_SHELL_VMU, KUI_SHELL_MEMORY, KUI_SHELL_NETWORK };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
     KUI_SHELL_NEW_DUMP, KUI_SHELL_RESUME, KUI_SHELL_VERIFY,
     KUI_SHELL_BENCH, KUI_SHELL_LOAD_SETTINGS, KUI_SHELL_SAVE_SETTINGS,
-    KUI_SHELL_DISCARD_SETTINGS, KUI_SHELL_DEST_LIST, KUI_SHELL_DEST_SAVE
+    KUI_SHELL_DISCARD_SETTINGS, KUI_SHELL_DEST_LIST, KUI_SHELL_DEST_SAVE,
+    KUI_SHELL_MEMORY_TEST, KUI_SHELL_NETWORK_TEST, KUI_SHELL_VMU_LIST,
+    KUI_SHELL_VMU_BACKUP, KUI_SHELL_VMU_BACKUP_ALL, KUI_SHELL_LOAD_SYSTEM,
+    KUI_SHELL_SAVE_SYSTEM, KUI_SHELL_DISCARD_SYSTEM, KUI_SHELL_PREVIEW_VIDEO,
+    KUI_SHELL_CONFIRM_VIDEO, KUI_SHELL_CANCEL_VIDEO, KUI_SHELL_MUSIC_NEXT
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -35,6 +42,11 @@ struct kui_shell {
     unsigned home_selected, setting_selected, scroll;
     bool confirm_new;
     struct kui_settings saved, draft;
+    struct kui_system_settings system_saved, system_draft;
+    unsigned system_selected;
+    bool video_trial;
+    unsigned vmu_slot, vmu_page, vmu_selected;
+    struct kui_vmu_view vmu;
     /* Destination is committed only by a successful worker load/save. Browsing
      * and typing are drafts; neither changes where a new capture is written. */
     char destination[KUI_DEST_ROOT_CAP], browse_path[KUI_DEST_ROOT_CAP];
@@ -58,6 +70,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *shell,
 void kui_shell_set_preferences(struct kui_shell *shell,
     const struct kui_settings *settings);
 bool kui_shell_settings_dirty(const struct kui_shell *shell);
+void kui_shell_set_system_preferences(struct kui_shell *shell,
+    const struct kui_system_settings *settings);
+bool kui_shell_system_dirty(const struct kui_shell *shell);
+/* Main controls video_trial only while its reversible platform preview is
+ * active. The reducer returns CONFIRM/CANCEL; it never commits a video mode. */
+void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view);
 /* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
  * DEST_SAVE reads browse_path. Main owns the generation check before installing
  * worker results; these functions themselves perform no filesystem I/O. */
@@ -77,17 +95,24 @@ const char *kui_shell_key_label(unsigned key, bool uppercase);
  * completed, never an assertion that saved bytes were verified. */
 struct kui_shell_view {
     const char *build, *job_dir, *message, *settings_notice;
-    const char *disc_title, *gdi_name;
+    const char *disc_title, *inserted_title, *gdi_name;
+    const char *music_title, *music_notice;
+    const struct kui_app_status *app_status;
     bool busy, saving, cancel_requested, saved_verified, memory_valid;
-    bool log_truncated, reference_checked;
+    bool log_truncated, reference_checked, video_trial, drive_reset_required;
+    unsigned video_seconds;
     struct kui_known_summary reference;
     enum kui_shell_outcome outcome;
     unsigned phase, track, tracks, rate_kib, retries;
     uint64_t done, total, committed, elapsed_ms;
+    uint64_t phase_elapsed_ms, progress_age_ms;
     uint32_t memory_used, memory_physical, memory_peak;
     const char *const *log_lines;
     unsigned log_count, total_log_lines;
 };
+/* Estimate only the current moving phase after a 2s warmup; do not imply the
+ * later verification duration. A stalled (>3s old) rate is not an estimate. */
+bool kui_shell_phase_eta(const struct kui_shell_view *view, uint64_t *seconds);
 /* The renderer draws its embedded font and original artwork directly. Text is
  * clipped to safe margins. An optional observer receives rendered labels for
  * accessibility/host checks; it must not draw a second font over them. No flip,

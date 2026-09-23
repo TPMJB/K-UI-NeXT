@@ -61,6 +61,9 @@ def main():
     sd = dist / "sd/KUI"
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "runtime.kui").write_bytes(package)
+    run("python3", "tools/generate_menu_music.py", "--directory", str(sd / "apps/music"))
+    shutil.copyfile(ROOT / "resources/music/README.md", dist / "MUSIC.md")
+    shutil.copyfile(ROOT / "resources/music/manifest.json", dist / "music-manifest.json")
     # Reference catalogues for the end-of-capture check (optional on the card).
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(ROOT / "data/known-dumps" / name, sd / name)
@@ -74,6 +77,8 @@ def main():
     (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
+    (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
+    (dist / "APP-ARCHITECTURE.md").write_text(guide("app-architecture.md"))
     (dist / "PRIOR-WORK-REUSE.md").write_text(guide("prior-work-reuse.md"))
     (dist / "RIPPER-CONTROLS.md").write_text(guide("ripper-controls.md"))
     (dist / "SALVAGE-PLAN.md").write_text(guide("salvage-plan.md"))
@@ -118,9 +123,10 @@ def main():
     update = dist / "sd-update"
     (update / "KUI").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
+    shutil.copytree(sd / "apps", update / "KUI/apps", dirs_exist_ok=True)
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     (update / "SOURCE.txt").write_text(
@@ -130,7 +136,8 @@ def main():
         "FatFs and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
         "Install KUI/runtime.kui on the SD card. Keep your existing boot CD.\n"
-        "Start with RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
+        "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
+        "Start with APPS-TEST.md for this app round and RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
         "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
         "works as before and reports that nothing was compared. Attribution and licence\n"
