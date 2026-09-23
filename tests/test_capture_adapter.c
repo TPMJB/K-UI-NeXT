@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Exercise the real console capture adapter with no optical or filesystem I/O.
- * A rejected preference load must never reach the drive or capture engine;
+ * A rejected destination/preference load must never reach the drive or engine;
  * outcome details must come from this operation, not an earlier successful one. */
 #include "platform.h"
 #include <assert.h>
@@ -16,7 +16,7 @@ static struct {
     enum kui_capture_result result;
     struct kui_capture_stats stats;
     unsigned engine_calls, simulated_writes;
-    char order[32], log[512];
+    char order[32], log[512], destination[KUI_DEST_ROOT_CAP];
     size_t order_size, log_size;
 } fake;
 
@@ -38,7 +38,12 @@ static void reset(void) {
     kui_options.capture_dma[0]=true;
     fake.stats.bytes=12345678;fake.stats.sampled=9;
     fake.stats.verified=true;fake.stats.crc_only=true;
-    strcpy(fake.stats.job_dir,"/KUI/dumps/d123456789abcdef0-0007");
+    strcpy(fake.destination,"/Games");
+    strcpy(fake.stats.job_dir,"0:/Games/MDK2 (7)");
+    strcpy(fake.stats.disc_title,"MDK2");strcpy(fake.stats.gdi_name,"MDK2.gdi");
+    fake.stats.reference_checked=true;fake.stats.reference.result=KUI_KNOWN_FULL_MATCH;
+    strcpy(fake.stats.reference.catalog,"TOSEC");
+    strcpy(fake.stats.reference.name,"MDK2 (USA)");
     for(unsigned i=0;i<KUI_TIME_PHASES;++i) fake.stats.phase_us[i]=1000+i;
     for(unsigned i=0;i<KUI_TIME_BUCKETS;++i) fake.stats.capture_bucket_us[i]=2000+i;
 }
@@ -104,6 +109,8 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     assert(ops->options->resume_size_only==kui_options.resume_size[0]);
     assert(ops->options->sample_every==kui_options.sample_readback[0]);
     assert(ops->options->read_dma==kui_options.capture_dma[0]);
+    assert(ops->options->output && ops->options->output->game_names);
+    assert(!strcmp(ops->options->output->parent,fake.destination));
     assert(!ops->options->bench);
     *ops->stats=fake.stats;
     if(mode!=KUI_CAPTURE_VERIFY) ++fake.simulated_writes;
@@ -124,17 +131,24 @@ static void expect_stats(void) {
     assert(got->bytes==fake.stats.bytes && got->sampled==fake.stats.sampled);
     assert(got->verified==fake.stats.verified && got->crc_only==fake.stats.crc_only);
     assert(!strcmp(got->job_dir,fake.stats.job_dir));
+    assert(!strcmp(got->disc_title,fake.stats.disc_title));
+    assert(!strcmp(got->gdi_name,fake.stats.gdi_name));
+    assert(got->reference_checked==fake.stats.reference_checked);
+    assert(got->reference.result==fake.stats.reference.result);
+    assert(!strcmp(got->reference.catalog,fake.stats.reference.catalog));
+    assert(!strcmp(got->reference.name,fake.stats.reference.name));
     for(unsigned i=0;i<KUI_TIME_PHASES;++i) assert(got->phase_us[i]==fake.stats.phase_us[i]);
     for(unsigned i=0;i<KUI_TIME_BUCKETS;++i)
         assert(got->capture_bucket_us[i]==fake.stats.capture_bucket_us[i]);
 }
-static void run_success(void) {
-    assert(kui_capture_start(fake.mode,"123456abcdef")==fake.result);
+static void run_destination(const char *destination) {
+    assert(kui_capture_start(fake.mode,"123456abcdef",destination)==fake.result);
     assert(!strcmp(fake.order,"OTDPSCECLUR"));
     assert(fake.engine_calls==1);
     assert(fake.simulated_writes==(fake.mode!=KUI_CAPTURE_VERIFY?1u:0u));
     expect_stats();
 }
+static void run_success(void) {run_destination("/Games");}
 int main(void) {
     expect_empty_stats();
     /* Completion is not necessarily read-back verification. Preserve exactly
@@ -152,12 +166,39 @@ int main(void) {
             reset();run_success();reset();fake.mode=(enum kui_capture_mode)mode;
             fake.refresh_ok=false;fake.stop=stopped!=0;
             enum kui_capture_result want=stopped?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
-            assert(kui_capture_start(fake.mode,"123456abcdef")==want);
+            assert(kui_capture_start(fake.mode,"123456abcdef","/Games")==want);
             assert(!strcmp(fake.order,"O"));
             assert(fake.engine_calls==0 && fake.simulated_writes==0);
             assert(strstr(fake.log,"Capture refused") && strstr(fake.log,"no dump writes"));
             expect_empty_stats();
         }
+    }
+    /* Normalize once before options/media access, and retain that stable path
+     * throughout the synchronous engine call. */
+    reset();strcpy(fake.destination,"/Games/My Discs");
+    run_destination("//Games/./My Discs//");
+    const char *invalid[]={NULL,"","Games","0:/Games","/../Games","/Games/..",
+        "/Games/Bad\"Name","/Games/Bad?Name","/Games/NUL","/Games/trailing."};
+    for(unsigned i=0;i<sizeof(invalid)/sizeof(invalid[0]);++i) {
+        for(unsigned stopped=0;stopped<2;++stopped) {
+            reset();run_success();reset();fake.stop=stopped!=0;
+            enum kui_capture_result want=stopped?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+            assert(kui_capture_start(fake.mode,"123456abcdef",invalid[i])==want);
+            assert(!fake.order[0] && !fake.engine_calls && !fake.simulated_writes);
+            assert(strstr(fake.log,"invalid or too-long destination") && strstr(fake.log,"no dump writes"));
+            expect_empty_stats();
+        }
+    }
+    reset();run_success();reset();
+    char too_long[KUI_DEST_ROOT_CAP+1];memset(too_long,'x',sizeof(too_long)-1);
+    too_long[0]='/';too_long[sizeof(too_long)-1]=0;
+    assert(kui_capture_start(fake.mode,"123456abcdef",too_long)==KUI_CAPTURE_FAILED);
+    assert(!fake.order[0] && !fake.engine_calls && !fake.simulated_writes);expect_empty_stats();
+    /* A catalog result is an observation, not an adapter-generated success.
+     * Missing, inconclusive and unchecked outcomes preserve their own grade. */
+    for(int grade=KUI_KNOWN_ERROR;grade<=KUI_KNOWN_FULL_MATCH;++grade) {
+        reset();fake.stats.reference.result=(enum kui_known_result)grade;
+        fake.stats.reference_checked=grade!=KUI_KNOWN_CANCELLED;run_success();
     }
     for(unsigned failure=0;failure<4;++failure) {
         reset();run_success();reset();
@@ -165,7 +206,7 @@ int main(void) {
         if(failure==1) fake.cancel_in_prepare=true;
         if(failure==2) fake.plan_ok=false;
         if(failure==3) fake.connect_ok=false;
-        assert(kui_capture_start(fake.mode,"123456abcdef")==
+        assert(kui_capture_start(fake.mode,"123456abcdef","/Games")==
             (failure==1?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED));
         assert(!strcmp(fake.order,failure<2?"OTD":failure==2?"OTDP":"OTDPS"));
         assert(fake.engine_calls==0 && fake.simulated_writes==0);expect_empty_stats();
@@ -175,6 +216,6 @@ int main(void) {
         reset();fake.result=(enum kui_capture_result)result;fake.stats.verified=false;
         fake.stats.bytes=321;strcpy(fake.stats.job_dir,"/KUI/dumps/partial");run_success();
     }
-    puts("PASS capture adapter: rejected preferences stop before I/O, options/outcomes forwarded, stale stats cleared");
+    puts("PASS capture adapter: invalid paths/preferences stop before I/O, named output/reference outcomes forwarded, stale stats cleared");
     return 0;
 }

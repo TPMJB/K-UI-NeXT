@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
 #include <limits.h>
+#include <stdio.h>
 #include <string.h>
 
 void kui_shell_set_preferences(struct kui_shell *s, const struct kui_settings *p) {
@@ -14,6 +15,109 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     memset(s, 0, sizeof(*s));
     const struct kui_settings initial = {true, false, true};
     kui_shell_set_preferences(s, p ? p : &initial);
+    kui_destination_default(s->destination);
+    memcpy(s->browse_path,s->destination,sizeof(s->browse_path));
+}
+void kui_shell_destination_error(struct kui_shell *s, const char *message) {
+    if(s) snprintf(s->destination_notice,sizeof(s->destination_notice),"%s",
+        message ? message : "Could not open this folder.");
+}
+void kui_shell_set_destination(struct kui_shell *s, const char *path) {
+    char normalized[KUI_DEST_ROOT_CAP];
+    if(!s || !kui_destination_normalize(normalized,path)) return;
+    snprintf(s->destination,sizeof(s->destination),"%s",normalized);
+    snprintf(s->browse_path,sizeof(s->browse_path),"%s",normalized);
+    s->destination_notice[0]=0;
+    if(s->page==KUI_SHELL_DESTINATION || s->page==KUI_SHELL_KEYBOARD)
+        s->page=KUI_SHELL_RIPPER;
+}
+void kui_shell_set_listing(struct kui_shell *s, const struct kui_destination_page *page) {
+    if(!s || !page) return;
+    s->listing=*page;
+    if(s->listing.count>KUI_DEST_PAGE_SIZE) s->listing.count=KUI_DEST_PAGE_SIZE;
+    for(unsigned i=0;i<s->listing.count;i++) {
+        struct kui_destination_entry *entry=&s->listing.entries[i];
+        if(!memchr(entry->name,0,sizeof(entry->name))) {
+            snprintf(entry->name,sizeof(entry->name),"[Name too long]");
+            entry->disabled=true;
+        }
+    }
+    s->browser_selected=0;
+    s->destination_notice[0]=0;
+}
+static enum kui_shell_action list_destination(struct kui_shell *s, bool first_page) {
+    if(first_page) s->browser_page=0;
+    s->browser_selected=0;
+    memset(&s->listing,0,sizeof(s->listing));
+    s->destination_notice[0]=0;
+    return KUI_SHELL_DEST_LIST;
+}
+static enum kui_shell_action save_destination(struct kui_shell *s, const char *path) {
+    char normalized[KUI_DEST_ROOT_CAP];
+    if(!kui_destination_normalize(normalized,path)) {
+        kui_shell_destination_error(s,"Use an absolute folder path without '..' or reserved names.");
+        return KUI_SHELL_NONE;
+    }
+    snprintf(s->browse_path,sizeof(s->browse_path),"%s",normalized);
+    s->destination_notice[0]=0;
+    return KUI_SHELL_DEST_SAVE;
+}
+static const char keyboard_keys[]="qwertyuiopasdfghjkl/zxcvbnm-_.0123456789";
+const char *kui_shell_key_label(unsigned key, bool uppercase) {
+    static char character[2];
+    if(key>=KUI_SHELL_KEY_COUNT) return "";
+    if(key==40) return "SPACE";
+    if(key==41) return "BACK";
+    if(key==42) return "DONE";
+    char c=keyboard_keys[key];
+    character[0]=uppercase && c>='a' && c<='z' ? (char)(c-'a'+'A') : c;
+    character[1]=0;
+    return character;
+}
+static void keyboard_backspace(struct kui_shell *s) {
+    size_t n=strlen(s->keyboard);
+    if(!n) return;
+    /* A folder already on the card may contain UTF-8 even though this small
+     * keyboard enters ASCII. Backspace removes a whole encoded character. */
+    --n;
+    while(n && ((unsigned char)s->keyboard[n]&0xc0u)==0x80u) --n;
+    s->keyboard[n]=0;
+    s->destination_notice[0]=0;
+}
+static unsigned keyboard_move(unsigned key,unsigned buttons) {
+    if(key>=KUI_SHELL_KEY_COUNT) key=0;
+    unsigned row=key<40?key/10:4, col=key<40?key%10:key-40;
+    unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+    unsigned vertical=buttons&(KUI_SHELL_UP|KUI_SHELL_DOWN);
+    unsigned count=row==4?3:10;
+    if(horizontal==KUI_SHELL_LEFT) col=col?col-1:count-1;
+    else if(horizontal==KUI_SHELL_RIGHT) col=(col+1)%count;
+    if(vertical==KUI_SHELL_UP || vertical==KUI_SHELL_DOWN) {
+        unsigned old_row=row;
+        row=vertical==KUI_SHELL_UP?(row?row-1:4):(row+1)%5;
+        if(old_row==4) col=col==0?1:col==1?4:8;
+        if(row==4) col=col<3?0:col<7?1:2;
+    }
+    return row==4?40+col:row*10+col;
+}
+static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons) {
+    s->keyboard_selected=keyboard_move(s->keyboard_selected,buttons);
+    if(buttons&KUI_SHELL_X) keyboard_backspace(s);
+    else if(buttons&KUI_SHELL_Y) s->keyboard_upper=!s->keyboard_upper;
+    else if(buttons&KUI_SHELL_START) return save_destination(s,s->keyboard);
+    else if(buttons&KUI_SHELL_A) {
+        if(s->keyboard_selected==42) return save_destination(s,s->keyboard);
+        if(s->keyboard_selected==41) keyboard_backspace(s);
+        else {
+            size_t n=strlen(s->keyboard);
+            if(n+1<sizeof(s->keyboard)) {
+                s->keyboard[n]=s->keyboard_selected==40?' ':
+                    *kui_shell_key_label(s->keyboard_selected,s->keyboard_upper);
+                s->keyboard[n+1]=0; s->destination_notice[0]=0;
+            } else kui_shell_destination_error(s,"This folder path is too long.");
+        }
+    }
+    return KUI_SHELL_NONE;
 }
 bool kui_shell_settings_dirty(const struct kui_shell *s) {
     return s && (s->saved.crc_only != s->draft.crc_only ||
@@ -41,10 +145,28 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     if(buttons & KUI_SHELL_B) {
         if(busy) { s->confirm_new = false; return KUI_SHELL_STOP; }
         if(s->confirm_new) { s->confirm_new = false; return KUI_SHELL_NONE; }
+        if(s->page == KUI_SHELL_KEYBOARD) {
+            snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->keyboard_original);
+            s->page=KUI_SHELL_DESTINATION; s->destination_notice[0]=0;
+            return KUI_SHELL_NONE;
+        }
+        if(s->page == KUI_SHELL_DESTINATION) {
+            char parent[KUI_DEST_ROOT_CAP];
+            if(kui_destination_parent(parent,s->browse_path) &&
+               strcmp(parent,s->browse_path)) {
+                snprintf(s->browse_path,sizeof(s->browse_path),"%s",parent);
+                return list_destination(s,true);
+            }
+            return KUI_SHELL_NONE;
+        }
         if(s->page == KUI_SHELL_SETTINGS) {
             s->draft = s->saved;
-            s->page = KUI_SHELL_HOME;
+            s->page = s->settings_return;
             return KUI_SHELL_DISCARD_SETTINGS;
+        }
+        if(s->page == KUI_SHELL_ADVANCED) {
+            s->page=KUI_SHELL_RIPPER;
+            return KUI_SHELL_NONE;
         }
         s->page = KUI_SHELL_HOME;
         return KUI_SHELL_NONE;
@@ -67,6 +189,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) {
             s->page = (enum kui_shell_page)(s->home_selected + 1);
             if(s->page == KUI_SHELL_SETTINGS) {
+                s->settings_return=KUI_SHELL_HOME;
                 s->draft = s->saved;
                 return KUI_SHELL_LOAD_SETTINGS;
             }
@@ -76,7 +199,61 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) s->confirm_new = true;
         else if(buttons & KUI_SHELL_X) return KUI_SHELL_RESUME;
         else if(buttons & KUI_SHELL_Y) return KUI_SHELL_VERIFY;
+        else if(buttons & KUI_SHELL_R) {
+            s->page=KUI_SHELL_DESTINATION;
+            snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
+            return list_destination(s,true);
+        }
+        else if(buttons & KUI_SHELL_START) s->page=KUI_SHELL_ADVANCED;
         break;
+    case KUI_SHELL_ADVANCED:
+        s->advanced_selected=move(s->advanced_selected,buttons);
+        if(buttons & KUI_SHELL_A) {
+            if(s->advanced_selected<2) {
+                s->page=KUI_SHELL_RIPPER;
+                return s->advanced_selected?KUI_SHELL_RESUME:KUI_SHELL_VERIFY;
+            }
+            s->settings_return=KUI_SHELL_ADVANCED;
+            s->draft=s->saved; s->page=KUI_SHELL_SETTINGS;
+            return KUI_SHELL_LOAD_SETTINGS;
+        }
+        break;
+    case KUI_SHELL_DESTINATION:
+        if(buttons & KUI_SHELL_START) {
+            s->page=KUI_SHELL_RIPPER;
+            snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
+            s->destination_notice[0]=0;
+        } else if(buttons & KUI_SHELL_X) {
+            snprintf(s->keyboard,sizeof(s->keyboard),"%s",s->browse_path);
+            snprintf(s->keyboard_original,sizeof(s->keyboard_original),"%s",s->browse_path);
+            s->keyboard_selected=0; s->keyboard_upper=false;
+            s->destination_notice[0]=0; s->page=KUI_SHELL_KEYBOARD;
+        } else if(buttons & KUI_SHELL_Y) return save_destination(s,s->browse_path);
+        else if(buttons & KUI_SHELL_A) {
+            if(s->browser_selected<s->listing.count) {
+                const struct kui_destination_entry *entry=&s->listing.entries[s->browser_selected];
+                char child[KUI_DEST_ROOT_CAP];
+                if(!entry->disabled && kui_destination_join(child,s->browse_path,entry->name)) {
+                    snprintf(s->browse_path,sizeof(s->browse_path),"%s",child);
+                    return list_destination(s,true);
+                }
+                kui_shell_destination_error(s,"This folder cannot be selected. Choose another folder.");
+            }
+        } else if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_LEFT && s->browser_page) {
+            --s->browser_page; return list_destination(s,false);
+        } else if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_RIGHT &&
+                  s->listing.has_more && s->browser_page<UINT_MAX/KUI_DEST_PAGE_SIZE-1) {
+            ++s->browser_page; return list_destination(s,false);
+        } else if(s->listing.count) {
+            unsigned vertical=buttons&(KUI_SHELL_UP|KUI_SHELL_DOWN);
+            if(vertical==KUI_SHELL_UP) s->browser_selected=s->browser_selected?
+                s->browser_selected-1:s->listing.count-1;
+            else if(vertical==KUI_SHELL_DOWN)
+                s->browser_selected=(s->browser_selected+1)%s->listing.count;
+        }
+        break;
+    case KUI_SHELL_KEYBOARD:
+        return keyboard_input(s,buttons);
     case KUI_SHELL_SETTINGS:
         s->setting_selected = move(s->setting_selected, buttons);
         if((buttons & (KUI_SHELL_LEFT | KUI_SHELL_RIGHT)) == KUI_SHELL_LEFT ||

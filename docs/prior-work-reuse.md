@@ -17,14 +17,17 @@ The exact PNG/SVG inputs, source revision, byte hashes and origins are recorded 
 [the artwork inventory](../resources/branding/README.md). Their RGB565 conversion
 is generated for the independent renderer. No legacy application, XML, reader,
 event framework or inherited DreamShell background is imported. The finished
-independent reader already provides its required verification behavior and
-remains unchanged. The remaining candidates below concern future catalog,
-explicit salvage and other UI work.
+independent reader already provides its required verification behavior.
+Browser/editor work can reuse the independently authored logic identified below
+without importing the legacy application framework. Explicit salvage is a
+separate follow-up described in [the salvage plan](salvage-plan.md).
 
 ## Candidates
 
 | Prior work | Introduction and boundary | Potential use |
 | --- | --- | --- |
+| `applications/gd_ripper/modules/folders.h` | Added as a separate file in [`3a5d0cd5`](https://github.com/TPMJB/K-UI_DS/commit/3a5d0cd50ad84bde7efe74aba88e2ad04d6ccfe3). Fixed-memory, sorted directory pagination; legacy filesystem calls and mount names form the adapter boundary. | Adapt the original bounded picker to FatFs and the existing single storage worker. |
+| QWERTY editor portions of `modules/vkb/vkb.c` | `3a5d0cd5` substantially rewrote an inherited keyboard file; the source distinguishes original SWAT keyboard code from TPMJB's QWERTY editor/input isolation. | Reuse selected authored layout/edit/navigation logic and behavior in a pure shell editor; do not import the legacy module, SDL widgets or event hooks. |
 | `utils/verify_gd_dump.py` and tests | Added in [`6328009e`](https://github.com/TPMJB/K-UI_DS/commit/6328009e3fb86f71782748e4b7b4b8588409d828). Python standard library only; its completion adapter understands legacy `rip.state` and `rip.complete`. | Extract DAT parsing, track matching and independent-dump comparison with a K-UI metadata adapter. |
 | `utils/make_gd_redump_db.py` and tests | Added in [`fb65759d`](https://github.com/TPMJB/K-UI_DS/commit/fb65759deadfd4034157f64c723b6da28a95961e). Imports the verifier's DAT types/parser. | Share a small catalog parser and converter without importing legacy completion semantics. |
 | `applications/gd_ripper/modules/verify.c/.h` | Added in `fb65759d`. Current code depends on `ds.h`, filesystem/logging APIs, zlib, legacy state files and other ripper helpers. | Extract the catalog matcher and result classification after separating those dependencies. |

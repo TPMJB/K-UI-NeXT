@@ -26,14 +26,21 @@ static void words(struct paint *p, unsigned x, unsigned y,
     if(right>608) right=608;
     if(right<=x) return;
     char clipped[160];
-    size_t n=0;
-    while(n+1<sizeof(clipped) && value[n] && value[n]!='\n' && value[n]!='\r') {
-        unsigned char c=(unsigned char)value[n];
-        clipped[n]=(c>=32 && c<=126)?(char)c:' ';
-        ++n;
+    size_t n=0,read=0;
+    while(n+1<sizeof(clipped) && value[read] && value[read]!='\n' && value[read]!='\r') {
+        unsigned char c=(unsigned char)value[read++];
+        clipped[n++]=(c>=32 && c<=126)?(char)c:'?';
+        /* The embedded font is ASCII. A UTF-8 folder remains intact in the
+         * model; show one replacement glyph, not a misleading blank per byte. */
+        if(c>=0xc2 && c<=0xf4) {
+            unsigned extra=c<0xe0?1:c<0xf0?2:3;
+            while(extra && ((unsigned char)value[read]&0xc0u)==0x80u) {
+                ++read; --extra;
+            }
+        }
     }
     clipped[n]='\0';
-    bool truncated=value[n] && value[n]!='\n' && value[n]!='\r';
+    bool truncated=value[read] && value[read]!='\n' && value[read]!='\r';
     while(n && kui_shell_font_width(clipped,large)>right-x) {
         clipped[--n]='\0'; truncated=true;
     }
@@ -93,8 +100,12 @@ static void footer(struct paint *p, const struct kui_shell *s,
     const char *controls=v->busy ? "B Stop safely" :
         s->confirm_new ? "A Start capture   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open" :
-        s->page==KUI_SHELL_SETTINGS ? "A Save   B Back / discard" : "B Home";
-    label(p,40,430,MUTED,controls); label(p,512,430,MUTED,"L Memory");
+        s->page==KUI_SHELL_SETTINGS ? "A Save   B Back / discard" :
+        s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
+        s->page==KUI_SHELL_KEYBOARD ? "A Key   X Backspace   Y Shift   B Cancel" :
+        s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
+        s->page==KUI_SHELL_RIPPER ? "B Home   R Folder   START Advanced" : "B Home";
+    words(p,40,430,500,MUTED,controls,false); label(p,512,430,MUTED,"L Memory");
 }
 static void home(struct paint *p, const struct kui_shell *s) {
     static const char *names[]={"Disc Ripper","Settings","Diagnostics"};
@@ -137,8 +148,12 @@ static void ripper(struct paint *p, const struct kui_shell *s,
     static const char *phases[]={"Identifying disc","Checking saved prefix",
         "Capturing disc","Verifying saved files","Completed"};
     title(p,40,108,"Disc Ripper");
-    label(p,40,134,MUTED,"Capture retail discs to your SD card.");
-    panel(p,32,166,576,134,PANEL);
+    label(p,40,136,CYAN,v->disc_title && v->disc_title[0] ? v->disc_title :
+        "Capture retail discs to your SD card.");
+    char destination[160];
+    snprintf(destination,sizeof(destination),"Destination: %s",s->destination);
+    label(p,40,158,MUTED,destination);
+    panel(p,32,182,576,122,PANEL);
     const char *phase=v->saving ? "Saving diagnostic report" :
         v->cancel_requested && v->busy ? "Stopping safely..." :
         v->outcome==KUI_SHELL_OUTCOME_STOPPED && !v->busy ?
@@ -147,19 +162,19 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         v->outcome==KUI_SHELL_OUTCOME_COMPLETE && !v->busy ? "Completed" :
         !v->busy && v->outcome==KUI_SHELL_OUTCOME_NONE ? "Ready for a disc" :
         v->phase<5 ? phases[v->phase] : "Working";
-    label(p,48,178,v->outcome==KUI_SHELL_OUTCOME_FAILED&&!v->busy?AMBER:CYAN,phase);
+    label(p,48,192,v->outcome==KUI_SHELL_OUTCOME_FAILED&&!v->busy?AMBER:CYAN,phase);
     char line[73];
     snprintf(line,sizeof(line),"TRACK %u / %u",v->track,v->tracks);
-    label(p,48,204,WHITE,line);
+    label(p,48,214,WHITE,line);
     snprintf(line,sizeof(line),"%u KiB/s",v->rate_kib);
-    label(p,440,204,WHITE,line);
-    box(p,48,234,544,12,EDGE);
+    label(p,440,214,WHITE,line);
+    box(p,48,238,544,12,EDGE);
     /* Clamp malformed snapshots without overflowing done*width. Progress values
      * are bytes, and whole-MiB scaling is too coarse for small audio tracks. */
     unsigned width=0;
     if(v->total) width=v->done>=v->total?544u:
         (unsigned)((double)v->done/(double)v->total*544.0);
-    if(width) box(p,48,234,width,12,CYAN);
+    if(width) box(p,48,238,width,12,CYAN);
     snprintf(line,sizeof(line),"%lu / %lu MiB   SAVED %lu MiB",
         (unsigned long)(v->done/1048576),(unsigned long)(v->total/1048576),
         (unsigned long)(v->committed/1048576));
@@ -168,14 +183,114 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         (unsigned long)(v->elapsed_ms/60000),
         (unsigned long)(v->elapsed_ms/1000%60),v->retries);
     label(p,48,280,MUTED,line);
-    label(p,40,316,v->busy?MUTED:WHITE,"A New dump   X Resume latest   Y Verify latest");
-    if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_COMPLETE)
-        label(p,40,342,v->saved_verified?GREEN:CYAN,
-            v->saved_verified?"Saved bytes reread and verified.":"Capture complete. Saved bytes not fully reread.");
-    else label(p,40,342,MUTED,v->message && v->message[0]?v->message:
-        "A new dump always uses a separate folder.");
-    if(v->job_dir && v->job_dir[0]) label(p,40,366,MUTED,v->job_dir);
+    label(p,40,312,v->busy?MUTED:WHITE,"A New dump   X Resume latest   Y Verify latest");
+    if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_COMPLETE) {
+        uint16_t color=MUTED;
+        const char *result="Reference not checked";
+        if(v->reference_checked) switch(v->reference.result) {
+        case KUI_KNOWN_FULL_MATCH: color=GREEN; result="FULL TRACK MATCH"; break;
+        case KUI_KNOWN_DATA_MATCH: color=AMBER; result="Data tracks match; audio not confirmed"; break;
+        case KUI_KNOWN_IDENTIFIED: color=AMBER; result="Listed data matches; incomplete reference"; break;
+        case KUI_KNOWN_PARTIAL: color=AMBER; result="Partial match; not a full reference match"; break;
+        case KUI_KNOWN_NO_DATABASE: result="No reference database on SD"; break;
+        case KUI_KNOWN_NO_MATCH: result="No reference match; inconclusive"; break;
+        case KUI_KNOWN_CANCELLED: result="Reference check cancelled"; break;
+        case KUI_KNOWN_ERROR: result="Reference check unavailable"; break;
+        default: break;
+        }
+        panel(p,32,336,576,28,PANEL); box(p,32,341,3,18,color);
+        char badge[128]; snprintf(badge,sizeof(badge),"STREAM CRC: %s",result);
+        label(p,44,342,color,badge);
+        label(p,40,368,v->saved_verified?CYAN:MUTED,v->saved_verified?
+            "Saved bytes reread and verified.":"Saved bytes not fully reread. Verify later if needed.");
+    } else {
+        label(p,40,342,MUTED,v->message && v->message[0]?v->message:
+            "A new dump always uses a separate folder.");
+        if(v->gdi_name && v->gdi_name[0]) label(p,40,368,MUTED,v->gdi_name);
+        else if(v->job_dir && v->job_dir[0]) label(p,40,368,MUTED,v->job_dir);
+    }
     if(s->saved.show_memory) memory(p,392,v);
+    else if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_COMPLETE && v->gdi_name)
+        label(p,40,392,MUTED,v->gdi_name);
+}
+static void destination(struct paint *p,const struct kui_shell *s,
+        const struct kui_shell_view *v) {
+    title(p,40,108,"Choose destination");
+    words(p,40,138,478,CYAN,s->browse_path,false);
+    char page[32]; snprintf(page,sizeof(page),"PAGE %u%s",s->browser_page+1,
+        s->listing.has_more?" +":"");
+    label(p,492,138,MUTED,page);
+    panel(p,32,166,576,204,PANEL);
+    unsigned count=s->listing.count<KUI_DEST_PAGE_SIZE?s->listing.count:KUI_DEST_PAGE_SIZE;
+    if(!count) label(p,48,188,MUTED,v->busy?"Loading folders...":
+        "No subfolders. Y selects the current folder.");
+    for(unsigned i=0;i<count;i++) {
+        const struct kui_destination_entry *entry=&s->listing.entries[i];
+        unsigned y=174+i*23;
+        if(i==s->browser_selected) {
+            panel(p,40,y,560,23,SELECTED);
+            box(p,40,y+4,3,15,PINK);
+        }
+        label(p,52,y+2,entry->disabled?AMBER:i==s->browser_selected?WHITE:MUTED,
+            entry->name);
+    }
+    label(p,40,376,v->busy?MUTED:WHITE,"A Open folder   Y Use folder   X Type path");
+    label(p,40,396,s->destination_notice[0]?AMBER:MUTED,
+        s->destination_notice[0]?s->destination_notice:
+        "The selected destination is saved to SD.");
+}
+static void keyboard(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Type destination");
+    label(p,40,136,MUTED,"Folder path on SD; START or DONE saves your choice.");
+    panel(p,32,160,576,32,PANEL);
+    char input[KUI_DEST_ROOT_CAP+8];
+    const char *start=s->keyboard;
+    bool clipped=false;
+    while(*start && kui_shell_font_width(start,false)>510) {
+        ++start;
+        while(((unsigned char)*start&0xc0u)==0x80u) ++start;
+        clipped=true;
+    }
+    snprintf(input,sizeof(input),"%s%s_",clipped?"...":"",start);
+    label(p,44,167,WHITE,input);
+    for(unsigned key=0;key<KUI_SHELL_KEY_COUNT;key++) {
+        unsigned x,y,w;
+        if(key<40) { x=40+(key%10)*56; y=204+(key/10)*34; w=52; }
+        else { x=40+(key-40)*188; y=340; w=180; }
+        bool selected=s->keyboard_selected==key;
+        panel(p,x,y,w,28,selected?SELECTED:PANEL);
+        const char *name=kui_shell_key_label(key,s->keyboard_upper);
+        unsigned width=kui_shell_font_width(name,false);
+        words(p,x+(w-width)/2,y+5,x+w-4,selected?WHITE:MUTED,name,false);
+        if(selected) box(p,x+6,y+25,w-12,2,PINK);
+    }
+    label(p,40,378,CYAN,s->keyboard_upper?"Y Shift: UPPERCASE":"Y Shift: lowercase");
+    label(p,40,398,s->destination_notice[0]?AMBER:MUTED,
+        s->destination_notice[0]?s->destination_notice:
+        "Example: /Games   New folders are created when used.");
+}
+static void advanced(struct paint *p,const struct kui_shell *s) {
+    static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings"};
+    static const char *details[3][3]={
+        {"Reread saved tracks and check their recorded hashes.",
+         "This checks the card; the stream CRC badge compares",
+         "captured tracks with an independent reference."},
+        {"Resume the latest job matching the inserted disc.",
+         "Checks the checkpoint before capture continues.",
+         "Read failures use the reader's bounded retries."},
+        {"Choose CRC32 or SHA-256 and optional full readback.",
+         "New dumps use your saved choices.",
+         "Existing jobs keep their recorded hash mode."}};
+    unsigned selected=s->advanced_selected<3?s->advanced_selected:0;
+    title(p,40,108,"Advanced disc tools");
+    label(p,40,138,MUTED,"Choose an operation for your disc or saved dump.");
+    for(unsigned i=0;i<3;i++) {
+        unsigned y=172+i*44;
+        panel(p,32,y,576,36,selected==i?SELECTED:PANEL);
+        if(selected==i) box(p,32,y+4,3,28,PINK);
+        label(p,48,y+10,selected==i?WHITE:MUTED,names[i]);
+    }
+    for(unsigned i=0;i<3;i++) label(p,40,326+i*23,MUTED,details[selected][i]);
 }
 static void settings(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
@@ -245,6 +360,9 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_RIPPER: ripper(&p,s,v); break;
     case KUI_SHELL_SETTINGS: settings(&p,s,v); break;
     case KUI_SHELL_DIAGNOSTICS: diagnostics(&p,s,v); break;
+    case KUI_SHELL_DESTINATION: destination(&p,s,v); break;
+    case KUI_SHELL_KEYBOARD: keyboard(&p,s); break;
+    case KUI_SHELL_ADVANCED: advanced(&p,s); break;
     }
     footer(&p,s,v);
     if(s->confirm_new) confirmation(&p);

@@ -1,5 +1,45 @@
 # Hardware evidence
 
+## Ripper destinations and reference results — 2026-09-23
+
+The next UI update adds a saved destination (default `/Games`), title-numbered
+job folders, named GDI descriptors, Advanced actions and a structured stream-CRC
+badge. Only a full catalogue match is green; partial/reference-unavailable
+results and saved-file readback remain separate. See [ripper controls](ripper-controls.md).
+
+Both baseline suites passed on clean `54711b931554` before the limited
+`capture.c` destination/metadata/result changes; the protected source hashes
+matched before and after that baseline. Acquisition, DMA, command and retry
+behavior remain unchanged. New host tests pass on FAT32 and exFAT for naming,
+collisions, full-identity resume selection, legacy fallback, path bounds,
+publication failure/recovery and structured reference results.
+
+**Pending on hardware:** destination selection/persistence, one ordinary named
+capture with its catalogue result, and complete saved-file checking on a PC.
+The same bootstrap CD is used. No new optical benchmark or measured speed claim
+is part of this change. A dedicated salvage workflow remains planned.
+
+## Completed MDK2 on the restored menu — 2026-09-23
+
+The owner's initial impression that speed was restored is now accompanied by a
+completed log for runtime **8bae3efe7c2f**. Its [sanitized evidence](evidence/m15-mdk2-2026-09-23.json)
+records **all 31 tracks captured and TOSEC FULL TRACK MATCH** using stream CRC32.
+Capture took **1223.545181 s (20 min 23.5 s)** at **973.96 KiB/s**. CRC32,
+automatic end readback Off, DMA and UI 2 Hz were active; no capture retry messages
+appear. Saved bytes were not reread, and this job has no supplied PC verification.
+
+The accepted same-disc Trip 12 averaged 1011.67 KiB/s. This run is **3.73% slower**,
+adding 45.61 s of capture time. UI scheduled time is reported as **8.3%**, versus
+4.9% in Trip 12. Its extra 45.032 s of UI scheduled time nearly matches the
+extra 45.936 s of whole-operation wall time, supporting remaining UI overhead.
+These overlapping timers cannot be added to the write/hash wall times. The
+earlier first-shell 12.4% figure used another game, so that comparison does not
+isolate the display-clear change.
+
+This completed ordinary capture supports the restored-menu runtime. It does not
+establish the later destination-browser package's hardware acceptance and does
+not call for changing or rebenchmarking the accepted reader.
+
 ## M1.5 first UI report — 2026-09-23
 
 The owner reports that the shell seems functional during an ongoing game rip,
@@ -37,8 +77,9 @@ The raw log remains in the project conversation and is not published here.
 Saved tracks were **not reread**; the reference match uses captured-stream CRCs.
 No PC/saved-file verification was supplied for this job. The initial benchmark's
 unreadable-disc result precedes the successful capture. The current
-next step remains installing **8bae3efe7c2f** on the existing card and checking
-its appearance during ordinary use. No reader changes are called for by this log.
+next step at that point was installing **8bae3efe7c2f** on the existing card and
+checking its appearance during ordinary use. Current pending named-output checks
+are recorded above. No reader changes are called for by this log.
 
 
 These results cover the uploaded logs, storage fixtures and user reports received on

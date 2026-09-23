@@ -22,6 +22,31 @@ resumed to a verified finish.
 For scale: the original settings projected to about 104 minutes for the same Sword disc, so the
 work took it from roughly an hour and three quarters to twenty minutes.
 
+## Current UI/destination work — 2026-09-23
+
+The restored-menu runtime `8bae3efe7c2f` has now completed MDK2: **973.96 KiB/s**,
+20 min 23.5 s of capture, all 31 tracks and TOSEC FULL TRACK MATCH. This is 3.73%
+below the accepted Trip 12 capture rate. Its 8.3% UI scheduled share supports
+remaining display overhead; saved-file/PC checking was not supplied for this job.
+See [the measured evidence](evidence/m15-mdk2-2026-09-23.json). This result belongs
+to the restored-menu runtime, before the new destination controls below.
+
+New captures select a saved parent (default `/Games`) and use title-based output:
+`/Games/MDK2/MDK2.gdi`, then `/Games/MDK2 (2)/MDK2.gdi`, without overwriting existing
+files. Resume/Verify choose the greatest numbered folder with a valid checkpoint
+matching the inserted disc's full identity, with legacy `/KUI/dumps` fallback.
+Advanced contains Verify, Resume and Settings. Only a full independent catalogue
+match gives the stream CRC badge a green result; saved-file readback is separate.
+Controls and the pending console check are in [ripper-controls.md](ripper-controls.md).
+
+The acquisition code remains frozen for this delivery. Both baseline test suites
+passed on clean `54711b931554` before minimal `capture.c` changes for destination
+selection, named metadata and result observation. The raw/DMA reader, command
+state machine, acquisition loop, retry policy and checkpoint encoding are
+unchanged. New destination/metadata tests pass on FAT32 and exFAT; **the named
+capture, catalogue display and PC saved-file check still need hardware acceptance**.
+A dedicated salvage workflow is planned separately, not included in Advanced yet.
+
 ## What made it fast (in order of effect)
 
 1. **End read-back off** (`end_readback=off`): re-reading every saved byte doubled the total time.
@@ -80,8 +105,9 @@ For projected whole-disc times from any saved report: `python3 tools/rip_time.py
 
 ## Still open, most useful first
 
-1. **M1.5 shell acceptance.** Launcher, persistent preferences and clearer results are implemented;
-   physical UI acceptance is pending. The default decision above is applied. See [the short UI check](m15-shell-test.md).
+1. **M1.5 destination acceptance.** Launcher, persistent preferences, selected destinations and
+   named output are implemented; the new controls and named capture still need hardware acceptance.
+   The default decision above is applied. See [the ripper check](ripper-controls.md).
 2. **Faster CRC16 in the SD driver** (link-time `--wrap net_crc16ccitt`, no KOS patch): measured at
    22.7 -> 8.8 CPU cycles a byte, worth about **7% on a capture** and 5% on SD reads.
    `src/core/crc16.c` already has the verified implementation (`kui_crc16_slice2`).

@@ -1,5 +1,10 @@
 # Experiment plan: where the capture time goes, and what to change
 
+This is the historical experiment notebook. Later trips and corrections are
+recorded below; consult [the reader handoff](HANDOFF-disc-reader.md) for accepted
+hardware results and defaults. The current destination/UI work does not reopen
+the acquisition experiments.
+
 The goal is to decide what to build next for capture speed *before* building it.
 This document says what is known, what is only a hypothesis, which bench run
 settles each open question, and what each outcome means for the work. The
@@ -777,8 +782,35 @@ four PIO chunks), with CRC32, automatic readback Off and UI 2 Hz.
 See the [sanitized results and source-log hash](evidence/m15-house-of-the-dead-2-2026-09-23.json).
 The raw log is retained in the project conversation and is not published. This is an
 ordinary completed capture supplied by the owner, not a new optical experiment.
-The restored-menu update (`8bae3efe7c2f`) already restores the earlier optimized
-framebuffer clear. Its hardware effect is unmeasured; the owner has not installed
-it yet. Check the restored menu during normal use, preserve any next completed
-capture log, and keep the accepted disc reader unchanged. Saved-file/PC checking
-of this particular dump remains separate from its captured-stream reference match.
+At the time of that log, the restored-menu update (`8bae3efe7c2f`) and its optimized
+framebuffer clear still awaited a console run. The subsequent completed MDK2
+report now supplies that observation: **973.96 KiB/s**, all 31 tracks captured,
+TOSEC FULL TRACK MATCH, CRC32, end readback Off and DMA. This is 3.73% below the
+accepted same-disc Trip 12 rate, or 45.61 s more capture time. UI scheduled time
+is 8.3%, compared with Trip 12's 4.9%; its additional 45.032 s nearly matches the
+additional 45.936 s of operation wall time, supporting remaining UI overhead.
+See [the sanitized MDK2 evidence](evidence/m15-mdk2-2026-09-23.json). UI time
+overlaps stage timers, and the earlier 12.4% first-shell figure used another game.
+Neither comparison isolates a single drawing cost. This ordinary completed rip
+does not reopen reader experiments. Saved-file/PC checking of these particular
+jobs remains separate from their captured-stream reference matches.
+
+## Ripper controls and destinations — 2026-09-23
+
+The next implementation selects an SD parent folder (default `/Games`), creates
+title-numbered jobs with named GDI descriptors, and displays structured reference
+results. Advanced groups Verify, Resume and Settings; a dedicated salvage flow
+remains planned. See [ripper controls](ripper-controls.md).
+
+This change does not alter the accepted acquisition strategy or start a new
+optical experiment. Baseline `make test` and `make test-images` passed on clean
+`54711b931554` before `capture.c` received limited destination, metadata and
+result hooks. The raw/DMA reader, command state machine, retry policy and
+checkpoint encoding remain unchanged. New FAT32/exFAT image cases pass for named
+output, identity-based selection, collisions, invalid paths, metadata publication
+failure/recovery and reference grades.
+
+Hardware acceptance remains **one ordinary named capture**, its catalogue result
+and PC saved-file verification, plus destination persistence and controls. The
+same bootstrap disc is used. No speed improvement is attributed to this metadata
+and UI work without corresponding hardware evidence.

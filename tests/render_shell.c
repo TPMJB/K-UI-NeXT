@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Host preview uses the same embedded artwork/font and renderer as hardware.
- * Modes: home, ripper, confirm, settings, diagnostics, complete, stopped. */
+ * Modes: home, ripper, confirm, settings, diagnostics, complete, partial,
+ * stopped, destination, keyboard, advanced. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -19,15 +20,31 @@ int main(int argc,char **argv) {
         .committed=421ull*1048576,.elapsed_ms=426000,
         .memory_valid=true,.memory_used=2800*1024,.memory_physical=16384*1024,
         .memory_peak=2816*1024,.log_lines=logs,.log_count=7,.total_log_lines=174,
-        .job_dir="/KUI/dumps/df838eac34967ae16-0002"};
+        .job_dir="/Games/MDK2 (2)",.disc_title="MDK2",.gdi_name="MDK2.gdi"};
     if(!strcmp(argv[1],"settings")) shell.page=KUI_SHELL_SETTINGS;
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
+    else if(!strcmp(argv[1],"advanced")) shell.page=KUI_SHELL_ADVANCED;
+    else if(!strcmp(argv[1],"destination")) {
+        shell.page=KUI_SHELL_DESTINATION;
+        const char *folders[]={"Action","Adventure","Driving","Fighting","Imports",
+            "Puzzle","Role-playing","Sports"};
+        shell.listing.count=8; shell.listing.has_more=true; shell.browser_selected=3;
+        for(unsigned i=0;i<8;i++) snprintf(shell.listing.entries[i].name,
+            sizeof(shell.listing.entries[i].name),"%s",folders[i]);
+    } else if(!strcmp(argv[1],"keyboard")) {
+        shell.page=KUI_SHELL_KEYBOARD; shell.keyboard_selected=42;
+        snprintf(shell.keyboard,sizeof(shell.keyboard),"/Games/Fighting");
+    }
     else if(strcmp(argv[1],"home")) {
         shell.page=KUI_SHELL_RIPPER;
         if(!strcmp(argv[1],"confirm")) shell.confirm_new=true;
-        else if(!strcmp(argv[1],"complete")) {
+        else if(!strcmp(argv[1],"complete") || !strcmp(argv[1],"partial")) {
             view.phase=4; view.outcome=KUI_SHELL_OUTCOME_COMPLETE;
             view.done=view.total; view.committed=view.total;
+            view.track=view.tracks; view.rate_kib=0;
+            view.reference_checked=true;
+            view.reference.result=!strcmp(argv[1],"complete")?
+                KUI_KNOWN_FULL_MATCH:KUI_KNOWN_DATA_MATCH;
         } else if(!strcmp(argv[1],"stopped")) view.outcome=KUI_SHELL_OUTCOME_STOPPED;
         else view.busy=true;
     }

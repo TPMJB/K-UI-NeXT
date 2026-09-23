@@ -162,3 +162,13 @@ including the 4 MiB boundary, malformed headers, corruption, missing/truncated
 files, read errors and cancellation. Image hashes confirm loading does not
 write to the card. Host checks cannot establish physical execution handoff;
 that is the first console acceptance test above.
+
+
+### Ripper destination update
+
+The current shell runtime includes a destination browser, onscreen keyboard,
+`/Games` default and numbered game folders. Replace only `/KUI/runtime.kui` from
+its `sd-update` artifact, retaining the working bootstrap CD. See
+[ripper-controls.md](ripper-controls.md) for controls and the focused acceptance
+check. Destination preferences are saved separately; installing a runtime does
+not replace them or rename old dumps.

@@ -30,7 +30,10 @@ void kui_drive_init_bus(void);
 void kui_bootstrap_load(kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
-enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build);
+/* Normal capture uses a normalized card-root destination (for example /Games)
+ * and game-named output. Invalid paths fail before preference or drive I/O. */
+enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
+    const char *destination);
 /* Read after kui_capture_start returns, on the same I/O worker. Observation
  * only: the existing engine fills its optional statistics structure. */
 const struct kui_capture_stats *kui_capture_last_stats(void);

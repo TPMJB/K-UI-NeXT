@@ -4,16 +4,18 @@ HOST_FLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
 SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
 INCLUDES = -Iinclude -I.deps/fatfs/source
 CORE = src/core/command.c src/core/data.c src/core/diskio.c
-CAPTURE = src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c
+DESTINATION = src/core/destination.c src/core/destination_file.c
+CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-images deps diagnostic clean
-test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter
+test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-core
 	./build/test-options docs/bench.cfg.example docs/bench-cfgs/*.cfg
 	./build/test-ui-rate
 	./build/test-known-dumps
 	./build/test-crc16
+	./build/test-destination
 	./build/test-settings
 	./build/test-shell
 	./build/test-shell-font
@@ -58,21 +60,21 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+build/test-shell: src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
+build/render-shell: src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/destination.c src/core/data.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c tests/render_shell.c -o $@
 
-build/test-capture-adapter: tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
+build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/dreamcast/capture.c tests/test_capture_adapter.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/data.c -Itests/stubs -Isrc/dreamcast src/dreamcast/capture.c tests/test_capture_adapter.c -o $@
 
 build/test-known-dumps: tests/test_known_dumps.c src/core/known_dumps.c include/kui/known_dumps.h $(CORE) $(FATFS)
 	@mkdir -p $(@D)
@@ -114,7 +116,7 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+test-images: build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
 	python3 tests/test_images.py
 	python3 tests/test_runtime_images.py
 	python3 tests/test_capture_images.py
@@ -123,9 +125,20 @@ test-images: build/storage-image build/runtime-image build/capture-image build/r
 	python3 tests/test_known_images.py
 	python3 tests/test_capture_options.py
 	python3 tests/test_settings_images.py
+	python3 tests/test_destination_images.py
+	python3 tests/test_named_capture_images.py
 
 diagnostic:
 	$(MAKE) -f Makefile.dc
 
 clean:
 	rm -rf build dist
+
+
+build/test-destination: tests/test_destination.c src/core/destination.c src/core/data.c include/kui/destination.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/data.c tests/test_destination.c -o $@
+
+build/destination-image: tests/destination_image.c $(CORE) $(DESTINATION) $(FATFS) src/core/storage_probe.c include/kui/destination.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(DESTINATION) $(FATFS) src/core/storage_probe.c tests/destination_image.c -o $@

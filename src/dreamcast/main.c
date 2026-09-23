@@ -26,6 +26,11 @@ static struct kui_shell shell;
 static struct kui_settings settings_current, settings_pending;
 static unsigned settings_generation;
 static char settings_note[96];
+static char destination_current[KUI_DEST_ROOT_CAP], destination_pending[KUI_DEST_ROOT_CAP];
+static char capture_destination[KUI_DEST_ROOT_CAP], destination_note[128];
+static bool destination_ready;
+static unsigned destination_generation, destination_result, destination_offset;
+static struct kui_destination_page destination_listing;
 static struct kui_capture_stats capture_summary;
 static enum kui_shell_outcome capture_outcome;
 #define KUI_ROLE "SD runtime"
@@ -142,25 +147,74 @@ static void settings_operation(bool save) {
     struct kui_settings value;
     mutex_lock(&lock); value = settings_pending; mutex_unlock(&lock);
     if(!save) kui_settings_default(&value);
-    bool ok = false;
+    bool ok = false, destination_ok = false;
+    char root[KUI_DEST_ROOT_CAP];
+    kui_destination_default(root);
     kui_sd_set_params(0, true);
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs, kui_log)) {
             ok = !kui_cancelled() && (save ? kui_settings_save(&value, kui_log)
                                         : kui_settings_load(&value, kui_log));
+            if(!save) destination_ok = !kui_cancelled() && kui_destination_load(root, kui_log);
             f_mount(NULL, "0:", 0);
         }
         kui_sd_disconnect();
     }
     mutex_lock(&lock);
     if(ok) { settings_current = value; ++settings_generation; }
+    if(!save) {
+        destination_ready = destination_ok;
+        if(destination_ok) strcpy(destination_current, root);
+        destination_result = destination_ok ? 1 : 3;
+        snprintf(destination_note, sizeof(destination_note), "%s",
+            destination_ok ? "" : "Destination unavailable. Browse and save a folder to retry.");
+        ++destination_generation;
+    }
     snprintf(settings_note, sizeof(settings_note), "%s", ok ?
         (save ? "Preferences saved to SD." : "Preferences loaded; bench.cfg may override capture.") :
         (save ? "Save not confirmed; reopen Settings to check the card." :
                 "Could not load preferences. See Diagnostics."));
     mutex_unlock(&lock);
     kui_log("Settings %s: %s", save ? "save" : "load", ok ? "complete" : "failed or stopped");
+}
+/* Folder browsing and preference writes share the single storage owner. A
+ * typed missing directory is allowed; only New dump creates its parents. */
+static void destination_operation(bool save) {
+    char root[KUI_DEST_ROOT_CAP]; unsigned offset;
+    mutex_lock(&lock);
+    strcpy(root, destination_pending); offset = destination_offset;
+    mutex_unlock(&lock);
+    struct kui_destination_page listing = {0};
+    bool ok = false;
+    kui_sd_set_params(0, true);
+    if(kui_sd_connect()) {
+        FATFS fs;
+        if(kui_mount(&fs, kui_log)) {
+            if(!kui_cancelled()) {
+                if(save) {
+                    char path[KUI_DEST_PATH_CAP]; FILINFO info;
+                    snprintf(path, sizeof(path), "0:%s", root);
+                    FRESULT r = f_stat(path, &info);
+                    bool usable = !strcmp(root, "/") || r == FR_NO_FILE || r == FR_NO_PATH ||
+                        (r == FR_OK && (info.fattrib & AM_DIR));
+                    if(usable) ok = kui_destination_save(root, kui_log);
+                    else kui_log("Destination is not an accessible folder: FatFs=%u", (unsigned)r);
+                } else ok = kui_destination_list(root, offset, &listing, kui_log);
+            }
+            f_mount(NULL, "0:", 0);
+        }
+        kui_sd_disconnect();
+    }
+    mutex_lock(&lock);
+    if(ok && save) { strcpy(destination_current, root); destination_ready = true; }
+    destination_listing = listing;
+    destination_result = ok ? (save ? 1 : 2) : 3;
+    snprintf(destination_note, sizeof(destination_note), "%s", ok ? "" :
+        (save ? "Save not confirmed. Retry or reload Settings to check." :
+                "Cannot list folder. B: parent; X: type; Y: use a new folder."));
+    ++destination_generation;
+    mutex_unlock(&lock);
 }
 #endif
 
@@ -177,6 +231,11 @@ static void *worker(void *unused) {
 #ifdef KUI_SD_RUNTIME
             mutex_lock(&lock);
             if(action >= 4 && action <= 6) capture_outcome = KUI_SHELL_OUTCOME_STOPPED;
+            if(action == 10 || action == 11) {
+                destination_result = 3;
+                snprintf(destination_note, sizeof(destination_note), "Folder operation stopped.");
+                ++destination_generation;
+            }
             if(action == 8 || action == 9)
                 snprintf(settings_note, sizeof(settings_note), "Settings operation stopped before starting.");
             mutex_unlock(&lock);
@@ -191,6 +250,7 @@ static void *worker(void *unused) {
             if(action == 3) save_report("manual","see operation log",false);
 #ifdef KUI_SD_RUNTIME
             if(action == 8 || action == 9) settings_operation(action == 9);
+            if(action == 10 || action == 11) destination_operation(action == 11);
             if(action == 7) {
                 kui_memory_log("bench start");
                 enum kui_bench_result result=kui_bench_start();
@@ -203,7 +263,7 @@ static void *worker(void *unused) {
             }
             if(action >= 4 && action <= 6) {
                 kui_memory_log("capture/verify start");
-                enum kui_capture_result result=kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID);
+                enum kui_capture_result result=kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID,capture_destination);
                 mutex_lock(&lock);
                 capture_summary = *kui_capture_last_stats();
                 capture_outcome = result == KUI_CAPTURE_COMPLETE ? KUI_SHELL_OUTCOME_COMPLETE :
@@ -295,9 +355,9 @@ static void draw(unsigned scroll,unsigned page) {
 static void draw_shell(void) {
     char visible[KUI_SHELL_LOG_ROWS][LINE_BYTES] = {{0}};
     const char *log_rows[KUI_SHELL_LOG_ROWS];
-    char path[80], notice[96];
+    char path[KUI_DEST_JOB_CAP], notice[96], title[129], gdi[KUI_DEST_TITLE_CAP+5u];
     struct kui_shell_view view = {.build = KUI_BUILD_ID, .job_dir = path,
-        .settings_notice = notice, .message = "", .log_lines = log_rows};
+        .disc_title = title, .gdi_name = gdi, .settings_notice = notice, .message = shell.destination_notice, .log_lines = log_rows};
     mutex_lock(&lock);
     unsigned max_scroll = line_count > KUI_SHELL_LOG_ROWS ? line_count - KUI_SHELL_LOG_ROWS : 0;
     if(shell.scroll > max_scroll) shell.scroll = max_scroll;
@@ -311,6 +371,10 @@ static void draw_shell(void) {
     view.busy = busy; view.saving = saving_report; view.cancel_requested = cancel_requested;
     view.outcome = capture_outcome; view.saved_verified = capture_summary.verified;
     snprintf(path, sizeof(path), "%s", capture_summary.job_dir);
+    snprintf(title, sizeof(title), "%s", capture_summary.disc_title);
+    snprintf(gdi, sizeof(gdi), "%s", capture_summary.gdi_name);
+    view.reference_checked = capture_summary.reference_checked;
+    view.reference = capture_summary.reference;
     snprintf(notice, sizeof(notice), "%s", settings_note);
     view.phase = capture_status.phase; view.track = capture_status.track; view.tracks = capture_status.tracks;
     view.rate_kib = rate_kib; view.retries = capture_status.retries;
@@ -353,6 +417,8 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_BENCH: return 7;
         case KUI_SHELL_LOAD_SETTINGS: return 8;
         case KUI_SHELL_SAVE_SETTINGS: return 9;
+        case KUI_SHELL_DEST_LIST: return 10;
+        case KUI_SHELL_DEST_SAVE: return 11;
         default: return 0;
     }
 }
@@ -410,12 +476,14 @@ int main(void) {
     kui_settings_default(&settings_current);
     settings_pending = settings_current;
     kui_shell_init(&shell, &settings_current);
+    kui_destination_default(destination_current);
     snprintf(settings_note,sizeof(settings_note),"Loading preferences from SD...");
     pending = 8; busy = true;
     kui_log("K-UI launcher: choose Disc Ripper, Settings or Diagnostics with D-pad and A.");
     kui_log("Ripper: A new dump (confirm), X resume latest matching disc, Y verify.");
     kui_log("B returns home while idle; during work it stops and checkpoints.");
-    kui_log("New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.");
+    kui_log("New dumps use game-named folders in /Games; duplicates get a number.");
+    kui_log("Ripper: R trigger browses the destination; Start opens Advanced.");
     kui_log("Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KUI/).");
     kui_log("Capture defaults: CRC32, no automatic readback. Y Verify rereads saved files.");
     kui_log("Saved preferences apply first; explicit /KUI/bench.cfg keys override them.");
@@ -446,7 +514,7 @@ int main(void) {
     uint64_t last_draw = 0;
     bool was_busy = false;
 #ifdef KUI_SD_RUNTIME
-    unsigned seen_settings_generation = 0;
+    unsigned seen_settings_generation = 0, seen_destination_generation = 0;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
 #else
@@ -469,10 +537,28 @@ int main(void) {
             kui_shell_set_preferences(&shell, &settings_current);
             seen_settings_generation = settings_generation;
         }
+        if(seen_destination_generation != destination_generation) {
+            if(destination_result == 1) kui_shell_set_destination(&shell, destination_current);
+            else if(destination_result == 2) kui_shell_set_listing(&shell, &destination_listing);
+            else kui_shell_destination_error(&shell, destination_note);
+            seen_destination_generation = destination_generation;
+        }
         enum kui_shell_action requested = kui_shell_input(&shell, shell_buttons(pressed), busy);
         if(requested == KUI_SHELL_STOP) cancel_requested = true;
         unsigned action = worker_action(requested);
+        if(action >= 4 && action <= 6 && !destination_ready) {
+            capture_summary = (struct kui_capture_stats){0};
+            capture_status = (struct kui_capture_progress){0};
+            capture_outcome = KUI_SHELL_OUTCOME_FAILED;
+            kui_shell_destination_error(&shell, "Destination unavailable. R: browse and save a folder.");
+            action = 0;
+        }
         if(action && !busy) {
+            if(action == 10 || action == 11) {
+                strcpy(destination_pending, shell.browse_path);
+                destination_offset = shell.browser_page * KUI_DEST_PAGE_SIZE;
+            }
+            if(action >= 4 && action <= 6) strcpy(capture_destination, shell.destination);
             if(action == 9) settings_pending = shell.draft;
             if(action == 8 || action == 9)
                 snprintf(settings_note, sizeof(settings_note), "%s", action == 8 ?

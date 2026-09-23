@@ -34,8 +34,17 @@ enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool
         kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,options,stats};
     return kui_capture_bench(&ops,fad,sectors,audio,mode);
 }
-enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build) {
+enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
+    const char *destination) {
     memset(&last_stats,0,sizeof(last_stats));
+    char parent[KUI_DEST_ROOT_CAP];
+    if(!kui_destination_normalize(parent,destination)) {
+        kui_log("Capture refused: invalid or too-long destination; no dump writes");
+        return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+    }
+    /* These local values live through the synchronous capture call; the engine
+     * never borrows the UI's mutable destination buffer. */
+    const struct kui_capture_output output={parent,true};
     struct kui_toc sessions[2];struct kui_capture_plan plan;
     /* Missing configuration is valid; unreadable/rejected configuration must
      * not silently weaken a user's requested verification policy. */
@@ -55,7 +64,7 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
     struct kui_capture_options options={
         .crc_only=kui_options.capture_crc_only[0],.skip_end_readback=!kui_options.end_readback[0],
         .resume_size_only=kui_options.resume_size[0],.sample_every=kui_options.sample_readback[0],
-        .read_dma=kui_options.capture_dma[0]};
+        .read_dma=kui_options.capture_dma[0],.output=&output};
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,kui_capture_status,
         kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,&last_stats};
     /* Whole-operation CPU split: how much of this capture the UI thread took. */

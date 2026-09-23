@@ -2,6 +2,8 @@
 #ifndef KUI_SHELL_H
 #define KUI_SHELL_H
 #include "kui/settings.h"
+#include "kui/destination.h"
+#include "kui/known_dumps.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -17,13 +19,14 @@ enum kui_shell_button {
     KUI_SHELL_R = 1u << 10
 };
 enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
-    KUI_SHELL_SETTINGS, KUI_SHELL_DIAGNOSTICS };
+    KUI_SHELL_SETTINGS, KUI_SHELL_DIAGNOSTICS,
+    KUI_SHELL_DESTINATION, KUI_SHELL_KEYBOARD, KUI_SHELL_ADVANCED };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
     KUI_SHELL_NEW_DUMP, KUI_SHELL_RESUME, KUI_SHELL_VERIFY,
     KUI_SHELL_BENCH, KUI_SHELL_LOAD_SETTINGS, KUI_SHELL_SAVE_SETTINGS,
-    KUI_SHELL_DISCARD_SETTINGS
+    KUI_SHELL_DISCARD_SETTINGS, KUI_SHELL_DEST_LIST, KUI_SHELL_DEST_SAVE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -32,6 +35,16 @@ struct kui_shell {
     unsigned home_selected, setting_selected, scroll;
     bool confirm_new;
     struct kui_settings saved, draft;
+    /* Destination is committed only by a successful worker load/save. Browsing
+     * and typing are drafts; neither changes where a new capture is written. */
+    char destination[KUI_DEST_ROOT_CAP], browse_path[KUI_DEST_ROOT_CAP];
+    char keyboard[KUI_DEST_ROOT_CAP], keyboard_original[KUI_DEST_ROOT_CAP];
+    char destination_notice[128];
+    struct kui_destination_page listing;
+    unsigned browser_selected, browser_page, keyboard_selected;
+    unsigned advanced_selected;
+    enum kui_shell_page settings_return;
+    bool keyboard_upper;
 };
 void kui_shell_init(struct kui_shell *shell, const struct kui_settings *settings);
 /* Main owns the reducer. Pass new button edges; a held B must also be included
@@ -45,6 +58,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *shell,
 void kui_shell_set_preferences(struct kui_shell *shell,
     const struct kui_settings *settings);
 bool kui_shell_settings_dirty(const struct kui_shell *shell);
+/* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
+ * DEST_SAVE reads browse_path. Main owns the generation check before installing
+ * worker results; these functions themselves perform no filesystem I/O. */
+void kui_shell_set_destination(struct kui_shell *shell, const char *path);
+void kui_shell_set_listing(struct kui_shell *shell,
+    const struct kui_destination_page *page);
+void kui_shell_destination_error(struct kui_shell *shell, const char *message);
+/* Keyboard has four QWERTY/digit rows of ten keys, then SPACE/BACK/DONE.
+ * Only directions may be repeated; A and the other action buttons are edges. */
+#define KUI_SHELL_KEY_COUNT 43u
+const char *kui_shell_key_label(unsigned key, bool uppercase);
 
 /* Main copies shared worker state while locked, then draws outside the lock.
  * Pointer fields remain valid for this draw. log_lines contains up to LOG_ROWS
@@ -53,8 +77,10 @@ bool kui_shell_settings_dirty(const struct kui_shell *shell);
  * completed, never an assertion that saved bytes were verified. */
 struct kui_shell_view {
     const char *build, *job_dir, *message, *settings_notice;
+    const char *disc_title, *gdi_name;
     bool busy, saving, cancel_requested, saved_verified, memory_valid;
-    bool log_truncated;
+    bool log_truncated, reference_checked;
+    struct kui_known_summary reference;
     enum kui_shell_outcome outcome;
     unsigned phase, track, tracks, rate_kib, retries;
     uint64_t done, total, committed, elapsed_ms;

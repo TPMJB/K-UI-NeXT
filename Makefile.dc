@@ -14,6 +14,7 @@ RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/
 RUNTIME_OBJECTS += build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 RUNTIME_OBJECTS += build/dc/src/core/timing.o
+RUNTIME_OBJECTS += build/dc/src/core/destination.o build/dc/src/core/destination_file.o
 RUNTIME_OBJECTS += build/dc/src/core/known_dumps.o
 RUNTIME_OBJECTS += build/dc/src/core/crc16.o
 RUNTIME_OBJECTS += build/dc/src/core/settings.o build/dc/src/core/settings_file.o
