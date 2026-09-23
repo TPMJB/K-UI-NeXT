@@ -4649,10 +4649,12 @@ static int get_seek_page_info(stb_vorbis *f, ProbedPage *z)
    z->page_start = stb_vorbis_get_file_offset(f);
 
    // parse the header
-   getn(f, header, 27);
+   if (!getn(f, header, 27))
+      return 0;
    if (header[0] != 'O' || header[1] != 'g' || header[2] != 'g' || header[3] != 'S')
       return 0;
-   getn(f, lacing, header[26]);
+   if (!getn(f, lacing, header[26]))
+      return 0;
 
    // determine the length of the payload
    len = 0;
@@ -4663,7 +4665,7 @@ static int get_seek_page_info(stb_vorbis *f, ProbedPage *z)
    z->page_end = z->page_start + 27 + header[26] + len;
 
    // read the last-decoded sample out of the data
-   z->last_decoded_sample = header[6] + (header[7] << 8) + (header[8] << 16) + (header[9] << 24);
+   z->last_decoded_sample = header[6] + (header[7] << 8) + (header[8] << 16) + ((uint32)header[9] << 24);
 
    // restore file state to where we were
    set_file_offset(f, z->page_start);

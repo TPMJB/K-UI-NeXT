@@ -488,7 +488,7 @@ static bool restore_write(struct session *s,const struct snapshot *original,stru
         unsigned block=added.filetype==0xcc?i:root.blk_cnt-1-i;
         if(fat[block]==0xfffc) selected[found++]=(uint16_t)block;
     }
-    if(found!=added.filesize) {fail(s,"VMU free-block count changed");goto done;}
+    if(!found || found!=added.filesize) {fail(s,"VMU free-block count changed");goto done;}
     added.firstblk=selected[0];
     for(unsigned i=0;i<found;i++) {
         if(cancelled(s) || !same_device(s)) goto done;

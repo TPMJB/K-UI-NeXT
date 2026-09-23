@@ -9,7 +9,7 @@ CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/captur
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-recovery test-images deps diagnostic clean
-test: build/test-recovery-manifest build/scan-fixtures/.stamp
+test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-cd-audio
 	./build/test-cd-audio guard
@@ -17,6 +17,7 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-network-connect
 	./build/test-menu-sound
 	./build/test-music-ogg
+	./build/test-music-ogg-seek
 	./build/test-capture-display
 	./build/test-viewport
 	./build/test-clock
@@ -285,6 +286,10 @@ build/test-viewport: tests/test_viewport.c src/core/viewport.c include/kui/viewp
 build/test-music-ogg: tests/test_music_ogg.c src/apps/music_ogg.c include/kui/music_ogg.h third_party/stb/stb_vorbis.c tests/fixtures/music_vorbis.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/music_ogg.c tests/test_music_ogg.c -lm -o $@
+
+build/test-music-ogg-seek: tests/test_music_ogg_seek.c src/apps/music_ogg.c include/kui/music_ogg.h third_party/stb/stb_vorbis.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast tests/test_music_ogg_seek.c -lm -o $@
 
 build/test-menu-sound: tests/test_menu_sound.c src/apps/menu_sound.c include/kui/menu_sound.h $(wildcard tests/menu_sound_stubs/dc/sound/*.h)
 	@mkdir -p $(@D)

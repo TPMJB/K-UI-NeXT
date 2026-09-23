@@ -16,7 +16,8 @@ static void unlock_codec(void) {}
 #endif
 #include <limits.h>
 #include <string.h>
-/* Upstream is preserved byte-for-byte. The wrapper restricts it to memory-only
+/* Upstream has two short-read guards and an unsigned granule-byte fix recorded
+ * in third_party/stb/README.md. The wrapper restricts it to memory-only
  * pull decoding, two channels, and a fixed allocation arena. */
 #define STB_VORBIS_NO_STDIO
 #define STB_VORBIS_NO_PUSHDATA_API

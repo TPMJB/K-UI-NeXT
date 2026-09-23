@@ -460,7 +460,7 @@ static bool finish(struct salvage *s) {
     size_t used=(size_t)snprintf(text,32768,"%u\n",s->plan->count);
     for(unsigned i=0;i<s->plan->count;++i) {
         const struct kui_capture_track *t=&s->plan->tracks[i];
-        int n=snprintf(text+used,32768-used,"%u %" PRIu32 " %u 2352 track%02u.%s 0\n",i+1,t->start-150,t->control,i+1,t->control==4?"bin":"raw");
+        int n=snprintf(text+used,32768-used,"%u %" PRIu32 " %u 2352 track%02u.%s 0\n",i+1,t->start-150,(unsigned)t->control,i+1,t->control==4?"bin":"raw");
         if(n<0 || (size_t)n>=32768-used) {free(text);return fail(s,"Final descriptor exceeds its bound");}used+=(size_t)n;
     }
     bool ok=publish_text(s,"salvage.gdi",text,(unsigned)used);
@@ -517,7 +517,7 @@ done:
     status->complete=ok && !s->failed && s->completed;
     if(status->result==KUI_SALVAGE_STOPPED)snprintf(status->message,sizeof(status->message),"Stopped; committed good data and repair candidates retained");
     else if(status->result==KUI_SALVAGE_RESOLVED)snprintf(status->message,sizeof(status->message),"All targets resolved; PC saved-file verification is still required");
-    else if(status->result==KUI_SALVAGE_UNRESOLVED)snprintf(status->message,sizeof(status->message),"%u unresolved sectors; choose Recover for targeted passes",status->remaining);
+    else if(status->result==KUI_SALVAGE_UNRESOLVED)snprintf(status->message,sizeof(status->message),"%" PRIu32 " unresolved sectors; choose Recover for targeted passes",status->remaining);
     ops->log("Salvage: %s; targets=%u recovered=%u remaining=%u",status->message,status->targets,status->recovered,status->remaining);
     update(s,true);enum kui_salvage_result result=status->result;free(s);return result;
 }

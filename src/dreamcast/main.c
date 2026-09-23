@@ -785,11 +785,12 @@ static void *worker(void *unused) {
                 system_operation(false);
                 if(system_current.startup_chime && !startup_sound_cancelled())
                     kui_music_play_boot_chime(startup_sound_cancelled);
-                if(!kui_menu_sound_init()) kui_log("Menu sounds unavailable; other audio remains usable.");
                 mutex_lock(&lock);
+                bool menu_sound_ok=kui_menu_sound_init();
                 kui_menu_sound_config(system_current.menu_sounds,system_current.music_volume);
                 splash_active=false;startup_finished=true;
                 mutex_unlock(&lock);
+                if(!menu_sound_ok) kui_log("Menu sounds unavailable; other audio remains usable.");
             }
             if(action>=49 && action<=53) {
                 if(action==50 || action==52) {
