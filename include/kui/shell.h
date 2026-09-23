@@ -37,7 +37,8 @@ enum kui_shell_action {
     KUI_SHELL_SAVE_SYSTEM, KUI_SHELL_DISCARD_SYSTEM, KUI_SHELL_PREVIEW_VIDEO,
     KUI_SHELL_CONFIRM_VIDEO, KUI_SHELL_CANCEL_VIDEO, KUI_SHELL_MUSIC_NEXT,
     KUI_SHELL_MUSIC_CYCLE, KUI_SHELL_RESUME_QUICK, KUI_SHELL_GD_BOOT,
-    KUI_SHELL_MUSIC_LIST, KUI_SHELL_MUSIC_PLAY
+    KUI_SHELL_MUSIC_LIST, KUI_SHELL_MUSIC_PLAY,
+    KUI_SHELL_MUSIC_PREVIOUS, KUI_SHELL_MUSIC_STOP
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -68,8 +69,10 @@ struct kui_shell {
 void kui_shell_init(struct kui_shell *shell, const struct kui_settings *settings);
 /* Main owns the reducer. Pass new button edges; a held B must also be included
  * when another edge arrives, so Stop/cancel retains priority over a new action.
- * Busy includes queued work and settings I/O. It locks launch/navigation but
- * permits Stop, memory snapshots and scrolling the diagnostics already open. */
+ * Busy includes queued work and settings I/O, not background audio playback.
+ * It locks launch/navigation but permits Stop, song requests on Home/Ripper,
+ * memory snapshots and scrolling the diagnostics already open. Song requests
+ * do not grant the renderer/reducer access to the filesystem. */
 enum kui_shell_action kui_shell_input(struct kui_shell *shell,
     unsigned pressed, bool busy);
 /* Install only a successfully loaded/saved settings snapshot. A failed save
@@ -111,7 +114,8 @@ struct kui_shell_view {
     const struct kui_app_status *app_status;
     bool busy, saving, cancel_requested, saved_verified, memory_valid;
     bool log_truncated, reference_checked, video_trial, drive_reset_required;
-    bool music_enabled, music_playing, music_paused;
+    bool dma_degraded;
+    bool music_enabled, music_playing, music_paused, music_change_pending;
     unsigned music_volume;
     unsigned video_seconds;
     struct kui_known_summary reference;

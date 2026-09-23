@@ -10,14 +10,14 @@ Use the existing bootstrap disc and update the SD runtime as described in
 | Screen | Controls |
 | --- | --- |
 | Launcher | D-pad or stick selects; A opens Disc Ripper, Settings or Diagnostics |
-| Disc Ripper | A opens New confirmation; release and press A again to begin. X resumes; Y verifies saved files. R opens the destination browser; Start opens Advanced. B returns home while idle |
+| Disc Ripper | A opens New confirmation; release and press A again to begin. X resumes; Y verifies saved files. L/R select bundled songs; Start opens Advanced (including Destination folder). B returns home while idle |
 | Destination browser | Up/Down selects; A opens a subfolder; B goes to its parent. Left/Right changes the listing page. Y saves the current folder as the destination. X opens path entry. Start cancels browsing and returns to the ripper |
 | Path entry | Directions select a key; A enters it. X deletes one character; Y changes letter case. Start or the DONE key saves the path. B cancels typing and returns to the browser |
-| Advanced | Up/Down selects Verify saved files, Resume interrupted dump or Capture settings; A opens it; B returns to the ripper |
+| Advanced | Up/Down selects Verify, Full Resume, Capture settings, Quick Resume or Destination folder; A opens it; B returns to the ripper |
 | Settings | Up/Down selects; Left/Right changes; A saves. B discards unsaved edits and returns to the screen that opened Settings |
 | Diagnostics | A runs disc samples; X runs the SD test; Y saves the log. Up/Down scrolls; Start shows the latest lines. R retains the configured benchmark entry |
 | Active operation | B requests Stop. Wait for the operation and automatic report save to finish before starting another action |
-| Any screen | L records an mstats snapshot, available in Diagnostics |
+| Diagnostics | L records an mstats snapshot in the log |
 
 Holding a direction repeats navigation. Action buttons require a new press, so
 holding A does not pass through New confirmation. B takes priority over a
@@ -25,7 +25,7 @@ simultaneous launch or confirmation.
 
 ## Choose a destination
 
-Press R from the idle ripper. Browse existing folders, then press Y to use the
+Open Start → Destination folder from the idle ripper. Browse existing folders, then press Y to use the
 current folder. To choose a folder that does not exist yet, press X and enter an
 absolute card path, such as `/Games/Imports`; Start or DONE saves that choice.
 The small on-screen keyboard enters ASCII characters. Existing UTF-8 folder

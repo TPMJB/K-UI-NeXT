@@ -3,7 +3,8 @@
  * Modes: home, ripper, confirm, settings, diagnostics, complete, partial,
  * stopped, destination, keyboard, advanced, ripper-settings, video, vmu,
  * memory, network, idle, reset, home-vmu, home-memory, home-network,
- * home-music, home-gd, music, gd-play, gd-confirm, quick-resume. */
+ * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
+ * music-queued, advanced-destination. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -74,7 +75,10 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"home-memory")) shell.home_selected=2;
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=3;
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
-    else if(!strcmp(argv[1],"advanced")) shell.page=KUI_SHELL_ADVANCED;
+    else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination")) {
+        shell.page=KUI_SHELL_ADVANCED;
+        if(!strcmp(argv[1],"advanced-destination")) shell.advanced_selected=4;
+    }
     else if(!strcmp(argv[1],"destination")) {
         shell.page=KUI_SHELL_DESTINATION;
         const char *folders[]={"Action","Adventure","Driving","Fighting","Imports",
@@ -100,6 +104,10 @@ int main(int argc,char **argv) {
         } else if(!strcmp(argv[1],"idle")) {
             view.phase=0;view.done=view.total=view.committed=0;view.rate_kib=0;
             view.track=view.tracks=0;view.elapsed_ms=0;
+        } else if(!strcmp(argv[1],"dma-fallback")) {
+            view.busy=true;view.dma_degraded=true;view.rate_kib=690;
+        } else if(!strcmp(argv[1],"music-queued")) {
+            view.busy=true;view.music_change_pending=true;
         } else if(!strcmp(argv[1],"reset")) {
             view.outcome=KUI_SHELL_OUTCOME_FAILED;view.drive_reset_required=true;
             view.message="Capture timed out; drive abort failed. Restart required.";

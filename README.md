@@ -31,17 +31,18 @@ The hardware-proven acquisition engine remains unchanged.
 
 Use the existing bootstrap CD and the `sd-update` artifact. Replace
 `/KUI/runtime.kui`, and copy `KUI/apps/music/` for optional original menu music.
-See [the current app acceptance round](docs/apps-round-two.md) and
+See [the current app acceptance round](docs/apps-round-three.md) and
 [app boundaries and the later executable-loader plan](docs/app-architecture.md).
 These new app paths still need physical-console acceptance.
 
 - Select with D-pad or stick and open with A. B returns home while idle.
-- The original splash and startup cue return in the SD runtime; B skips.
-  Home Y cycles menu volume/off and the top-right header names the current song.
+- The original splash is capped at three seconds; B skips the shortened startup cue.
+  Home Y cycles volume/off; L/R on Home and Ripper select songs. The header names the current song.
 - GD Play exits through normal KOS shutdown to the stock BIOS. Music Player
-  streams full PCM16 WAV songs from SD; CD audio/compressed codecs remain pending.
+  caches PCM16 WAV songs up to 6 MiB for background playback across apps.
+  The update includes an original one-minute sample; CD audio/compressed codecs remain pending.
 - Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
-  R chooses or types a destination; Start opens Advanced and **Capture settings**.
+  Start opens Advanced, **Destination folder** and **Capture settings**.
   Advanced also offers explicitly confirmed Quick resume (sizes only), preserving
   full Resume and its saved-byte checks. During work, B requests Stop. Reports still save automatically. Idle insertion
   detection shows the disc title; moving capture/verification phases show an ETA.
@@ -51,7 +52,11 @@ These new app paths still need physical-console acceptance.
   writes, restore, delete or format. Memory Test checks only its allocated RAM.
 - Network Test reports adapter/configuration evidence; it does not start DHCP or
   claim Internet reachability. Diagnostics retains disc/SD probes, log export,
-  mstats and benchmarks.
+  mstats and benchmarks. RAM remains visible in the ripper.
+- Music keeps playing from RAM during menu actions and capture; uncached song
+  changes wait until the storage worker is idle. Console continuity still needs checking.
+- Repeated drive failures can retain PIO until reboot. The ripper now keeps that
+  warning visible; the accepted DMA stop/lid policy is unchanged.
 
 Defaults now select **CRC32, automatic end readback Off, DMA and 2 Hz busy redraws**:
 these are the policy choices used by the accepted fast captures. Explicit

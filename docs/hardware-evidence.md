@@ -1,5 +1,48 @@
 # Hardware evidence
 
+## Dead or Alive 2 resume and app checks — 2026-09-23
+
+Runtime **1d48aaf1412e** completed the remaining **387,858,912 bytes** of a
+Dead or Alive 2 capture in **548.953593 s**, averaging **689.98 KiB/s** for that
+resumed segment. **All three tracks matched TOSEC**. The log confirms the
+reported slowdown: despite `capture_read=dma`, that segment used **zero DMA
+chunks and 5,154 PIO chunks**. Its duplicate summary repeats the same counts.
+This was an ordinary recovery run supplied by the owner, not a new benchmark.
+
+The preceding failed capture visibly exhausted **10/10 retries** at its final
+unreadable sector; the saved job reported 34 cumulative retries. The submitted
+report is **truncated**, beginning partway through those errors. It does not
+retain the event that disabled DMA, so it cannot distinguish the existing
+timeout/repeated-DMA-failure latch from another cause. The earlier capture's
+PIO subtimer covers only its PIO requests, not every captured byte. The accepted
+B-stop/lid-open DMA fix remains separately established by
+[the September 20 evidence](evidence/dma-stop-fix-confirmed-2026-09-20.json).
+
+**Quick Resume's size check took 0.375164 s** before acquisition resumed.
+The preceding full Resume was stopped during its saved-prefix reread; this
+does not change either mode's intended behavior. Automatic end readback was
+off, and a later Verify was cancelled during disc identification before any
+saved-file verification. The TOSEC result therefore applies to checkpoint plus
+captured-stream CRCs; **this submission does not verify the final saved files**.
+
+Normal estimated main-RAM use/reservation was **5,048,856 bytes (4.815 MiB)**,
+with a sampled peak of **5,058,616 bytes** before Memory Test. That app then
+passed **70/70 passes over its allocated 4 MiB**, with zero errors. Its allocation
+accounts for the later **9,243,168-byte** sampled peak; that peak must not be
+attributed to ripping or music. Separate video/audio RAM is excluded. This log
+does not measure the CPU or throughput cost of music.
+
+Disc insertion identified Dead or Alive 2, then Omikron, and later reported an
+empty drive. System preferences saved and reloaded within the session; cold-boot
+persistence was not established here. L did emit an mstats log entry. Network
+inspection correctly reported no supported Ethernet adapter; no connection test
+was performed.
+
+[Sanitized aggregates and input fingerprint](evidence/m15-doa2-resume-2026-09-23.json)
+retain the exact timing and scope without publishing the raw report or private
+device/storage details. Follow [the next app acceptance round](apps-round-three.md)
+on the existing boot disc. The reader is not being rebenchmarked.
+
 ## Omikron final-track timeout and app round — 2026-09-23
 
 Runtime **0599097a8bfb** started a new **Omikron: The Nomad Soul** capture.

@@ -14,9 +14,9 @@ struct kui_music_player_page {
  * .wav files only; offset counts entries, not pages. Paths use '/Music/song.wav'. */
 bool kui_music_player_list(const char *root,unsigned offset,
     struct kui_music_player_page *out,kui_log_fn log,kui_cancel_fn cancel);
-/* Full-length PCM16 WAV playback, mono/stereo 8–44.1 kHz. The worker owns SD
- * until EOF or B; audio DMA is drained before unmount/disconnect. Does not read
- * the optical drive, decode compressed formats, or write to the card. */
+/* Preload a PCM16 WAV (mono/stereo 8–44.1 kHz, <=6 MiB) into the shared
+ * background player, then return. SD is released before playback starts; failed
+ * or cancelled replacement keeps the previously selected song. */
 void kui_music_player_run(const char *path,unsigned volume,struct kui_app_status *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 #endif

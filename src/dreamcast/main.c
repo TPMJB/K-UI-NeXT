@@ -45,7 +45,7 @@ static struct kui_destination_page destination_listing;
 static struct kui_capture_stats capture_summary;
 static enum kui_shell_outcome capture_outcome;
 static char capture_message[128];
-static bool drive_reset_required;
+static bool drive_reset_required, dma_degraded;
 static struct kui_system_settings system_current, system_pending;
 static unsigned system_generation;
 static bool system_ok, system_loaded;
@@ -60,7 +60,10 @@ static struct kui_app_status memory_test_status, network_test_status;
 static struct kui_vmu_view vmu_snapshot;
 static unsigned vmu_generation, vmu_slot_pending, vmu_page_pending, vmu_selected_pending;
 static unsigned active_app;
-static bool splash_active,boot_ready,player_active;
+static bool splash_active,boot_ready;
+static uint64_t splash_deadline;
+static int music_requested=-1;
+static unsigned music_request_generation,music_cache_attempted;
 static struct kui_music_player_page music_listing;
 static struct kui_app_status player_status;
 static unsigned music_listing_generation,music_offset_pending;
@@ -132,6 +135,7 @@ void kui_log(const char *format, ...) {
     va_start(args, format); vsnprintf(text, sizeof(text), format, args); va_end(args);
     mutex_lock(&lock);
 #ifdef KUI_SD_RUNTIME
+    if(strstr(text,"DMA stays off until reboot")) dma_degraded=true;
     /* Presentation latch only. The drive adapter owns the actual poisoned
      * state; no UI action clears it or retries an aborted command. */
     if((!strncmp(text,"CMD ",4) && strstr(text," ABORT FAILED: RESET REQUIRED")) ||
@@ -176,6 +180,11 @@ static void save_report(const char *trigger,const char *outcome,bool automatic) 
         size_t used=(size_t)snprintf(report,sizeof(report),
             "K-UI " KUI_ROLE " %s\nLog truncated: %s\nReport trigger: %s\nCapture result: %s\n",
             KUI_BUILD_ID,log_truncated?"YES":"no",trigger,outcome);
+#ifdef KUI_SD_RUNTIME
+        used+=(size_t)snprintf(report+used,sizeof(report)-used,
+            "DMA failure latch: %s\n",dma_degraded?
+            "SET; PIO remains usable; reboot to restore DMA":"not observed this boot");
+#endif
         for(unsigned i=0;i<line_count;i++)
             used+=(size_t)snprintf(report+used,sizeof(report)-used,"%s\n",lines[i]);
         mutex_unlock(&lock);
@@ -229,16 +238,82 @@ static void settings_operation(bool save) {
 }
 /* Independent system preferences: capture choices stay in the ripper record. */
 static void publish_music(void) {
-    mutex_lock(&lock); music_snapshot=*kui_music_status(); mutex_unlock(&lock);
+    struct kui_music_status status;
+    kui_music_status_copy(&status);
+    mutex_lock(&lock); music_snapshot=status; mutex_unlock(&lock);
 }
-static void configure_music(bool next) {
+static void configure_music(void) {
     struct kui_system_settings value;
     mutex_lock(&lock);value=system_current;mutex_unlock(&lock);
     kui_music_set_config(value.music_enabled,value.music_volume);
-    if(value.music_enabled && (next || !kui_music_status()->loaded)) {
-        unsigned track=next?(kui_music_status()->current_index+1)%KUI_MUSIC_TRACKS:
-            (unsigned)(timer_ms_gettime64()%KUI_MUSIC_TRACKS);
-        kui_music_load(track,kui_cancelled);
+    struct kui_music_status status;
+    kui_music_status_copy(&status);
+    if(value.music_enabled && !status.loaded) {
+        mutex_lock(&lock);
+        if(music_requested<0) {
+            music_requested=(int)(timer_ms_gettime64()%KUI_MUSIC_TRACKS);
+            ++music_request_generation;
+        }
+        mutex_unlock(&lock);
+    }
+    if(value.music_enabled && status.loaded) kui_music_resume();
+    publish_music();
+}
+/* Background cache reads still belong to this I/O worker. Yield the card as
+ * soon as a foreground action arrives; audio itself only reads cached RAM. */
+static bool music_preload_cancelled(void) {
+    mutex_lock(&lock);
+    bool stop=busy || pending || video_preview || cancel_requested;
+    mutex_unlock(&lock);
+    return stop;
+}
+static void music_idle_work(void) {
+    if(music_preload_cancelled()) return;
+    struct kui_music_status status;
+    kui_music_status_copy(&status);
+    mutex_lock(&lock);
+    int wanted=music_requested;
+    unsigned generation=music_request_generation;
+    mutex_unlock(&lock);
+    if(wanted>=0) {
+        bool ok=kui_music_cache_menu((unsigned)wanted,music_preload_cancelled);
+        if(!music_preload_cancelled()) {
+            mutex_lock(&lock);
+            bool current=generation==music_request_generation;
+            /* The audio lock never logs or takes this publication lock.
+             * Keep selection atomic with its generation check so an older
+             * preload cannot overwrite a newer trigger selection. */
+            if(current) {
+                if(ok) kui_music_select_cached((unsigned)wanted);
+                music_requested=-1;
+            }
+            mutex_unlock(&lock);
+        }
+    } else if(status.enabled) {
+        for(unsigned index=0;index<KUI_MUSIC_TRACKS;index++) {
+            unsigned bit=1u<<index;
+            if((status.cached_mask|music_cache_attempted)&bit) continue;
+            bool ok=kui_music_cache_menu(index,music_preload_cancelled);
+            if(ok || !music_preload_cancelled()) music_cache_attempted|=bit;
+            break;
+        }
+    }
+    publish_music();
+}
+/* Trigger controls never touch the card. An uncached selection waits for idle
+ * storage ownership; newer trigger presses replace that pending request. */
+static void music_step(int direction) {
+    mutex_lock(&lock);
+    unsigned index=music_requested>=0?(unsigned)music_requested:music_snapshot.current_index;
+    if(index>=KUI_MUSIC_TRACKS) index=direction<0?0:KUI_MUSIC_TRACKS-1;
+    unsigned wanted=(index+KUI_MUSIC_TRACKS+(direction<0?-1:1))%KUI_MUSIC_TRACKS;
+    music_requested=(int)wanted;
+    unsigned generation=++music_request_generation;
+    mutex_unlock(&lock);
+    if(kui_music_select_cached(wanted)) {
+        mutex_lock(&lock);
+        if(generation==music_request_generation) music_requested=-1;
+        mutex_unlock(&lock);
     }
     publish_music();
 }
@@ -265,7 +340,7 @@ static void system_operation(bool save) {
         (save?"System preferences saved.":"System preferences loaded."):
         "System settings not confirmed. See Diagnostics.");
     mutex_unlock(&lock);
-    if(ok) configure_music(false);
+    if(ok) configure_music();
     kui_log("System settings %s: %s",save?"save":"load",ok?"complete":"failed or stopped");
 }
 static void app_progress(const struct kui_app_status *status) {
@@ -358,17 +433,13 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(!action) {
-                if(idle) {kui_music_resume();kui_music_service();publish_music();}
-                else {kui_music_pause();publish_music();}
+                if(idle) music_idle_work();
                 thd_sleep(16);continue;
             }
 #else
             thd_sleep(16);continue;
 #endif
         }
-#ifdef KUI_SD_RUNTIME
-        kui_music_pause();publish_music();
-#endif
         if(kui_cancelled()
 #ifdef KUI_SD_RUNTIME
            && action!=27
@@ -427,7 +498,6 @@ static void *worker(void *unused) {
                     kui_log("Inserted disc: %s",disc_identity.title);
             }
             if(action==13 || action==14) system_operation(action==14);
-            if(action==15) configure_music(true);
             if(action==21) {
                 static const unsigned levels[]={15,30,50,75,100};
                 mutex_lock(&lock);
@@ -470,7 +540,15 @@ static void *worker(void *unused) {
                 active_app=24;
                 kui_music_player_run(music_path_pending,system_current.music_volume,&result,
                     kui_log,kui_cancelled,app_progress);
-                mutex_lock(&lock);player_status=result;mutex_unlock(&lock);
+                mutex_lock(&lock);
+                player_status=result;
+                if(result.passed) {
+                    system_current.music_enabled=true;system_pending=system_current;
+                    system_ok=true;++system_generation;
+                    music_requested=-1;++music_request_generation;
+                }
+                mutex_unlock(&lock);
+                publish_music();
             }
             if(action==25) {
                 /* All app I/O is finished; keep the worker parked until main's
@@ -554,10 +632,8 @@ static void *worker(void *unused) {
         kui_log("Operation ended. Y saves the current log to SD.");
 #endif
         mutex_lock(&lock);
-#ifdef KUI_SD_RUNTIME
-        player_active=false;
-#endif
         busy = false;
+        cancel_requested = false;
         ui_hz_busy = KUI_OPT_UI_FULL;   /* no operation leaves its cap behind for the next */
         mutex_unlock(&lock);
     }
@@ -665,13 +741,9 @@ static void draw_shell(void) {
     view.music_playing=music_snapshot.playing;
     view.music_paused=music_snapshot.paused;
     view.music_volume=music_snapshot.volume;
-    if(player_active) {
-        const char *name=strrchr(music_path_pending,'/');
-        snprintf(music_title,sizeof(music_title),"%.39s",name?name+1:music_path_pending);
-        view.music_enabled=true;view.music_playing=true;view.music_paused=false;
-        view.music_volume=system_current.music_volume;
-    }
+    view.music_change_pending=music_requested>=0;
     view.drive_reset_required=drive_reset_required;
+    view.dma_degraded=dma_degraded;
     view.video_trial=video_preview;
     uint64_t now=timer_ms_gettime64();
     view.video_seconds=video_preview && video_deadline>now?(unsigned)((video_deadline-now+999)/1000):0;
@@ -725,7 +797,6 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_DEST_SAVE: return 11;
         case KUI_SHELL_LOAD_SYSTEM: return 13;
         case KUI_SHELL_SAVE_SYSTEM: return 14;
-        case KUI_SHELL_MUSIC_NEXT: return 15;
         case KUI_SHELL_VMU_LIST: return 16;
         case KUI_SHELL_VMU_BACKUP: return 17;
         case KUI_SHELL_VMU_BACKUP_ALL: return 18;
@@ -800,12 +871,13 @@ int main(void) {
     kui_destination_default(destination_current);
     snprintf(settings_note,sizeof(settings_note),"Loading preferences from SD...");
     pending = 27; busy = true; splash_active=true;
+    splash_deadline=timer_ms_gettime64()+3000;
     kui_log("K-UI launcher: Disc Ripper, VMU, Memory, Network, Settings, Diagnostics, GD Play and Music.");
     kui_log("B skips the original startup splash/chime. Home Y cycles menu music volume/off.");
     kui_log("Ripper: A new dump (confirm), X resume latest matching disc, Y verify.");
     kui_log("B returns home while idle; during work it stops and checkpoints.");
     kui_log("New dumps use game-named folders in /Games; duplicates get a number.");
-    kui_log("Ripper: R trigger browses destination; Start opens Advanced and ripper settings.");
+    kui_log("Home/Ripper L/R: previous/next song. Ripper Start: Advanced, destination and settings.");
     kui_log("Inserted GD-ROM titles appear while idle; no idle polling during operations.");
     kui_log("System Settings: video, memory display and menu music. Hold Y on runtime start for safe video.");
     kui_log("Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KUI/).");
@@ -857,7 +929,9 @@ int main(void) {
         else if(held && input_at >= repeat_at) { pressed |= held; repeat_at = input_at + 140; }
         /* Preserve Stop/cancel priority even if B was held before an A edge. */
         if(pressed && (buttons & CONT_B)) pressed |= CONT_B;
+        publish_music();
         mutex_lock(&lock);
+        if(splash_active && input_at>=splash_deadline) {splash_active=false;last_draw=0;}
         if(seen_settings_generation != settings_generation) {
             kui_shell_set_preferences(&shell, &settings_current);
             seen_settings_generation = settings_generation;
@@ -892,7 +966,7 @@ int main(void) {
             snprintf(system_note,sizeof(system_note),"Video reverted after 10 seconds.");
         }
         enum kui_shell_action requested=KUI_SHELL_NONE;
-        if(splash_active) {if(pressed&CONT_B) cancel_requested=true;}
+        if(splash_active) {if(pressed&CONT_B) {cancel_requested=true;splash_active=false;last_draw=0;}}
         else requested=kui_shell_input(&shell,shell_buttons(pressed),busy);
         if(requested==KUI_SHELL_PREVIEW_VIDEO && !busy) {
             video_prior_safe=safe_video_boot;video_prior_mode=applied_video;
@@ -921,7 +995,7 @@ int main(void) {
             capture_summary = (struct kui_capture_stats){0};
             capture_status = (struct kui_capture_progress){0};
             capture_outcome = KUI_SHELL_OUTCOME_FAILED;
-            kui_shell_destination_error(&shell, "Destination unavailable. R: browse and save a folder.");
+            kui_shell_destination_error(&shell, "Destination unavailable. Start > Destination to choose a folder.");
             action = 0;
         }
         if(action && !busy) {
@@ -943,7 +1017,6 @@ int main(void) {
                 snprintf(music_path_pending,sizeof(music_path_pending),"%s",
                     action==23?shell.music_path:shell.music_selected_path);
                 music_offset_pending=shell.music_page*KUI_MUSIC_PLAYER_ROWS;
-                player_active=action==24;
                 player_status=(struct kui_app_status){0};
             }
             if(action==19) memory_test_status=(struct kui_app_status){0};
@@ -963,6 +1036,12 @@ int main(void) {
         }
         bool is_busy = busy;
         mutex_unlock(&lock);
+        if(requested==KUI_SHELL_MUSIC_NEXT) music_step(1);
+        if(requested==KUI_SHELL_MUSIC_PREVIOUS) music_step(-1);
+        if(requested==KUI_SHELL_MUSIC_STOP) {
+            mutex_lock(&lock);music_requested=-1;++music_request_generation;mutex_unlock(&lock);
+            kui_music_pause();publish_music();
+        }
         mutex_lock(&lock);bool exiting=boot_ready;mutex_unlock(&lock);
         if(exiting) kui_gd_play_boot();
         if(requested == KUI_SHELL_MSTATS) { kui_memory_log("L trigger"); shell.scroll = 0; }

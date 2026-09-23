@@ -9,7 +9,7 @@ static struct {
     uint64_t ms,next_fill;size_t seen,previous_size;
     unsigned release,init,shutdown,destroy,starts,volume,callbacks;
     bool active,queued,cancel,init_error,alloc_error,poll_error;
-    uint64_t cancel_ms;unsigned cancel_callbacks;
+    uint64_t cancel_ms;unsigned cancel_callbacks,setup_delay_ms;
     snd_stream_callback_t callback;
     void *previous;uint8_t previous_copy[32768];
 } fake;
@@ -18,7 +18,10 @@ static bool cancel(void) {return fake.cancel || (fake.cancel_ms && fake.ms>=fake
 void kui_music_release_audio(void) {assert(!fake.active);++fake.release;}
 uint64_t timer_ms_gettime64(void) {return fake.ms;}
 void thd_sleep(unsigned ms) {fake.ms+=ms;}
-int snd_stream_init_ex(int channels,size_t size) {assert(channels==1 && size==16384);++fake.init;return fake.init_error?-1:0;}
+int snd_stream_init_ex(int channels,size_t size) {
+    assert(channels==1 && size==16384);++fake.init;fake.ms+=fake.setup_delay_ms;
+    return fake.init_error?-1:0;
+}
 void snd_stream_shutdown(void) {assert(!fake.active);++fake.shutdown;}
 snd_stream_hnd_t snd_stream_alloc(snd_stream_callback_t cb,int size) {
     assert(size==16384);fake.callback=cb;return fake.alloc_error?SND_STREAM_INVALID:0;
@@ -29,7 +32,7 @@ void snd_stream_queue_disable(snd_stream_hnd_t hnd) {assert(hnd==0);fake.queued=
 void snd_stream_queue_go(snd_stream_hnd_t hnd) {assert(hnd==0 && fake.queued);fake.active=true;}
 static bool fill(void) {
     int got=0;++fake.callbacks;void *data=fake.callback(0,8192,&got);
-    if(!data) {assert(cancel() && got==0);return false;}
+    if(!data) {assert((cancel() || fake.ms>=2700) && got==0);return false;}
     assert(got==8192 && !((uintptr_t)data&31));
     if(fake.previous) {assert(data!=fake.previous);assert(!memcmp(fake.previous,fake.previous_copy,fake.previous_size));}
     size_t count=sizeof(kui_startup_pcm)-fake.seen;if(count>8192) count=8192;
@@ -48,7 +51,7 @@ int snd_stream_poll(snd_stream_hnd_t hnd) {
 }
 int main(void) {
     kui_music_play_boot_chime(cancel);
-    assert(fake.seen==sizeof(kui_startup_pcm) && fake.ms>=4400 && fake.ms<4600);
+    assert(fake.seen==sizeof(kui_startup_pcm) && fake.ms>=2650 && fake.ms<=2700);
     assert(fake.release==1 && fake.init==1 && fake.destroy==1 && fake.shutdown==1 && fake.volume==128 && !fake.active);
     for(unsigned fault=0;fault<6;fault++) {
         memset(&fake,0,sizeof(fake));
@@ -64,5 +67,15 @@ int main(void) {
         else assert(fake.shutdown==1);
         if(fault==5) assert(fake.volume==0 && fake.destroy==1);
     }
-    puts("PASS startup sound: original PCM, exact tail, DMA buffer lifetime, B skip and audio cleanup");return 0;
+    /* Audio setup is charged to the same deadline. It must not add another
+     * whole cue after slow initialization, including cancellation at prefill. */
+    for(unsigned delay=2400;delay<=3200;delay+=800) {
+        memset(&fake,0,sizeof(fake));fake.setup_delay_ms=delay;
+        kui_music_play_boot_chime(cancel);
+        assert(fake.ms==(delay>2700?delay:2700));
+        assert(fake.seen<sizeof(kui_startup_pcm) && fake.destroy==1 && fake.shutdown==1);
+        assert(!fake.active && !fake.queued);
+        if(delay>2700) assert(!fake.seen && fake.volume==0);
+    }
+    puts("PASS startup sound: 2.7-second budget including setup, exact tail, DMA buffer lifetime, B skip and cleanup");return 0;
 }

@@ -10,6 +10,8 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 PNG_BLOB = "33b49462795c7db399c1a5e9af7b9b96b1378140"
+STARTUP_RATE = 44100
+STARTUP_FRAMES = STARTUP_RATE * 265 // 100
 
 def decode_png(data):
     if data[:8] != b"\x89PNG\r\n\x1a\n":
@@ -80,17 +82,18 @@ def decode_png(data):
     return pixels
 
 def startup_samples():
-    # Same original notes/envelope as K-UI_DS utils/build_boot_assets.py.
-    # The original was dual-mono: preserve one channel, not a new composition.
-    rate=44100
+    # Original notes/timbre from K-UI_DS utils/build_boot_assets.py. Shorten only
+    # the quiet decay and remove the original 1.6-second silent tail, leaving
+    # room inside the shell's three-second startup budget.
+    rate=STARTUP_RATE
     notes=((0.08,440.0,0.22),(0.30,554.365,0.23),(0.52,659.255,0.26))
-    for n in range(196608):
+    for n in range(STARTUP_FRAMES):
         t=n/rate
         value=0.0
         for start,freq,level in notes:
             age=t-start
-            if 0<=age<2.3:
-                env=min(age/0.025,1.0)*math.exp(-2.5*age)*min((2.3-age)/0.2,1.0)
+            if 0<=age<2.1:
+                env=min(age/0.025,1.0)*math.exp(-2.5*age)*min((2.1-age)/0.2,1.0)
                 value+=level*env*(math.sin(2*math.pi*freq*age)+0.12*math.sin(4*math.pi*freq*age))
         yield round(max(-1.0,min(1.0,value))*26000)
 
@@ -113,6 +116,6 @@ def main():
         raise SystemExit("Startup artwork differs from recorded original")
     array_file(args.directory/"splash_pixels.inc","kui_splash_pixels","uint16_t",decode_png(data))
     array_file(args.directory/"startup_pcm.inc","kui_startup_pcm","int16_t",startup_samples(),
-        "#define KUI_STARTUP_RATE 44100u\n#define KUI_STARTUP_COUNT 196608u\n")
+        f"#define KUI_STARTUP_RATE {STARTUP_RATE}u\n#define KUI_STARTUP_COUNT {STARTUP_FRAMES}u\n")
 if __name__=="__main__":
     main()

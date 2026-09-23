@@ -9,7 +9,8 @@ CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/captur
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-recovery test-images deps diagnostic clean
-test: build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+test: build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+	./build/test-music-thread
 	./build/test-recovery-checks
 	./build/test-wav-stream
 	./build/test-music-player
@@ -177,6 +178,10 @@ build/test-wav: tests/test_wav.c src/apps/wav.c include/kui/wav.h
 build/test-music: tests/test_music.c src/apps/music.c src/apps/wav.c include/kui/music.h include/kui/wav.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/music.c src/apps/wav.c tests/test_music.c -o $@
+
+build/test-music-thread: tests/test_music.c src/apps/music.c src/apps/wav.c include/kui/music.h include/kui/wav.h tests/stubs/kos/mutex.h tests/stubs/kos/thread.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_ON_CONSOLE=1 -Itests/stubs -Isrc/dreamcast src/apps/music.c src/apps/wav.c tests/test_music.c -o $@
 
 build/test-memory-app: tests/test_memory_app.c src/apps/memory_pattern.c include/kui/memory_test.h
 	@mkdir -p $(@D)

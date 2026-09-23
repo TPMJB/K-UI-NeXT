@@ -14,6 +14,13 @@ static void reset(enum kui_shell_page page) {
 static enum kui_shell_action press(unsigned buttons, bool busy) {
     return kui_shell_input(&s,buttons,busy);
 }
+static void open_destination(void) {
+    assert(s.page==KUI_SHELL_RIPPER);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    s.advanced_selected=4;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST);
+    assert(s.page==KUI_SHELL_DESTINATION);
+}
 static void launcher_and_confirmation(void) {
     reset(KUI_SHELL_HOME);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE);
@@ -26,7 +33,7 @@ static void launcher_and_confirmation(void) {
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE);
     assert(!s.confirm_new && s.page==KUI_SHELL_RIPPER);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_new);
-    assert(press(KUI_SHELL_L,false)==KUI_SHELL_MSTATS && s.confirm_new);
+    assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.confirm_new);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NEW_DUMP && !s.confirm_new);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
     assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==7);
@@ -44,7 +51,8 @@ static void operation_lock_and_stop(void) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
-        assert(press(KUI_SHELL_L,true)==KUI_SHELL_MSTATS);
+        assert(press(KUI_SHELL_L,true)==(page==KUI_SHELL_HOME||page==KUI_SHELL_RIPPER?
+            KUI_SHELL_MUSIC_PREVIOUS:KUI_SHELL_MSTATS));
         assert(s.page==page);
     }
     reset(KUI_SHELL_RIPPER); s.confirm_new=true;
@@ -52,7 +60,7 @@ static void operation_lock_and_stop(void) {
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && !s.confirm_new);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_RESUME);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_VERIFY);
-    assert(press(KUI_SHELL_R,false)==KUI_SHELL_DEST_LIST);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_MUSIC_NEXT);
 }
 static void settings_transaction(void) {
     reset(KUI_SHELL_RIPPER_SETTINGS);
@@ -189,6 +197,7 @@ static void phase_eta(void) {
 }
 static void diagnostics(void) {
     reset(KUI_SHELL_DIAGNOSTICS);
+    assert(press(KUI_SHELL_L,false)==KUI_SHELL_MSTATS);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_PROBE);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_STORAGE_PROBE);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_SAVE_LOG);
@@ -207,7 +216,7 @@ static void diagnostics(void) {
 static void destination_transaction(void) {
     reset(KUI_SHELL_RIPPER);
     assert(!strcmp(s.destination,"/Games"));
-    assert(press(KUI_SHELL_R,false)==KUI_SHELL_DEST_LIST);
+    open_destination();
     assert(s.page==KUI_SHELL_DESTINATION && !strcmp(s.browse_path,"/Games"));
     struct kui_destination_page page={.count=3,.has_more=true};
     strcpy(page.entries[0].name,"Adventure");
@@ -236,7 +245,7 @@ static void destination_transaction(void) {
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION);
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_RIPPER);
     assert(!strcmp(s.browse_path,"/Games"));
-    press(KUI_SHELL_R,false);
+    open_destination();
     strcpy(s.browse_path,"/Other");
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_DEST_SAVE);
     kui_shell_set_destination(&s,s.browse_path);
@@ -252,7 +261,7 @@ static void destination_transaction(void) {
     assert(!strcmp(s.listing.entries[0].name,"[Name too long]"));
 }
 static void keyboard_transaction(void) {
-    reset(KUI_SHELL_RIPPER); press(KUI_SHELL_R,false);
+    reset(KUI_SHELL_RIPPER); open_destination();
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD);
     assert(!strcmp(s.keyboard,"/Games"));
     press(KUI_SHELL_A,false); assert(!strcmp(s.keyboard,"/Gamesq"));
@@ -287,7 +296,7 @@ static void keyboard_transaction(void) {
     kui_shell_set_destination(&s,s.browse_path);
     assert(!strcmp(s.destination,"/Games/New Folder") && s.page==KUI_SHELL_RIPPER);
     /* Repeated directions remain inside the grid, including the three-key row. */
-    press(KUI_SHELL_R,false); press(KUI_SHELL_X,false);
+    open_destination(); press(KUI_SHELL_X,false);
     for(unsigned key=0;key<KUI_SHELL_KEY_COUNT;key++) {
         const unsigned directions[]={KUI_SHELL_UP,KUI_SHELL_DOWN,KUI_SHELL_LEFT,KUI_SHELL_RIGHT};
         for(unsigned d=0;d<4;d++) {
@@ -312,8 +321,20 @@ static void advanced_navigation(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_LOAD_SETTINGS && s.page==KUI_SHELL_RIPPER_SETTINGS);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISCARD_SETTINGS && s.page==KUI_SHELL_ADVANCED);
     press(KUI_SHELL_B,false); assert(s.page==KUI_SHELL_RIPPER);
+    press(KUI_SHELL_START,false);s.advanced_selected=0;
+    press(KUI_SHELL_UP,false);assert(s.advanced_selected==4);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.page==KUI_SHELL_DESTINATION);
 }
 static void music_and_boot_controls(void) {
+    const enum kui_shell_page song_pages[]={KUI_SHELL_HOME,KUI_SHELL_RIPPER};
+    for(unsigned i=0;i<2;i++) for(unsigned busy=0;busy<2;busy++) {
+        reset(song_pages[i]);
+        assert(press(KUI_SHELL_L,busy)==KUI_SHELL_MUSIC_PREVIOUS);
+        assert(press(KUI_SHELL_R,busy)==KUI_SHELL_MUSIC_NEXT);
+        assert(press(KUI_SHELL_L|KUI_SHELL_R,busy)==KUI_SHELL_NONE);
+        assert(s.page==song_pages[i] && !s.confirm_new);
+        assert(press(KUI_SHELL_B|KUI_SHELL_R,busy)==(busy?KUI_SHELL_STOP:KUI_SHELL_NONE));
+    }
     reset(KUI_SHELL_HOME);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_MUSIC_CYCLE && s.page==KUI_SHELL_HOME);
     assert(press(KUI_SHELL_Y|KUI_SHELL_A,false)==KUI_SHELL_MUSIC_CYCLE);
@@ -354,6 +375,9 @@ static void music_and_boot_controls(void) {
     kui_shell_set_music_listing(&s,&page);s.music_selected=1;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_MUSIC_PLAY);
     assert(!strcmp(s.music_selected_path,"/Music/test.wav"));
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
+    s.page=KUI_SHELL_MUSIC;
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_MUSIC_STOP && s.page==KUI_SHELL_MUSIC);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_MUSIC_LIST && s.music_page==1);
     assert(!s.music_listing.count);
@@ -470,13 +494,17 @@ static void new_pages_rendering(void) {
     assert(strstr(drawn,"Completed: MDK2") && strstr(drawn,"FULL TRACK MATCH"));
     assert(strstr(drawn,"RAM 1 / 16384 KiB"));
     s.system_saved.show_memory=false;s.saved.show_memory=true;render(&v);
-    assert(!strstr(drawn,"RAM 1 /")); /* Legacy ripper field no longer controls RAM. */
+    assert(strstr(drawn,"RAM 1 /")); /* Ripper RAM is always shown. */
     v.outcome=KUI_SHELL_OUTCOME_FAILED;v.phase=2;v.drive_reset_required=true;
     v.message="Capture DMA timed out; abort failed. Restart required.";
     render(&v);
     assert(strstr(drawn,"Drive stopped - restart required") && strstr(drawn,"Capture DMA timed out"));
     assert(!strstr(drawn,"Verifying") && !strstr(drawn,"FULL TRACK MATCH"));
     v.drive_reset_required=false;v.busy=true;v.total=10*1024;v.done=1024;
+    v.dma_degraded=true;render(&v);
+    assert(strstr(drawn,"Drive errors: PIO active. Reboot to restore DMA."));
+    assert(strstr(drawn,"RAM 1 /") && strstr(drawn,"L/R Songs"));
+    v.dma_degraded=false;
     v.rate_kib=1;v.phase_elapsed_ms=2000;render(&v);
     assert(strstr(drawn,"Disc: MDK2") && strstr(drawn,"PHASE ETA 0:09"));
     v.progress_age_ms=3001;render(&v);assert(strstr(drawn,"PHASE ETA waiting"));
@@ -516,23 +544,32 @@ static void new_pages_rendering(void) {
     render(&v);assert(strstr(drawn,"Inserted:") && strstr(drawn,"..."));
     for(unsigned i=0;i<8;i++) {
         s.home_selected=i;render(&v);
-        assert(strstr(drawn,"8 applications") && strstr(drawn,"Memory Test"));
+        assert(strstr(drawn,"RAM 1 / 16384 KiB") && strstr(drawn,"Memory Test"));
     }
+    s.system_saved.show_memory=false;render(&v);
+    assert(strstr(drawn,"8 applications") && !strstr(drawn,"RAM 1 /"));
 }
 static void music_and_boot_rendering(void) {
     struct kui_shell_view v={.music_enabled=true,.music_playing=true,.music_volume=75,
         .music_title="Neon Circuit",.inserted_title="MDK2"};
     reset(KUI_SHELL_HOME);render(&v);
     assert(strstr(drawn,"Y Music 75%") && strstr(drawn,"Neon Circuit"));
-    assert(strstr(drawn,"Y Music volume") && strstr(drawn,"GD Play"));
+    assert(strstr(drawn,"Y Volume") && strstr(drawn,"L/R Songs") && strstr(drawn,"GD Play"));
     v.music_enabled=false;v.music_playing=false;render(&v);
     assert(strstr(drawn,"Y Music off"));
     v.music_enabled=true;v.music_paused=true;v.busy=true;render(&v);
     assert(strstr(drawn,"Music paused") && !strstr(drawn,"Y Music"));
     v.busy=false;v.music_paused=false;reset(KUI_SHELL_RIPPER);render(&v);
     assert(!strstr(drawn,"Y Music") && strstr(drawn,"Music 75%"));
+    assert(strstr(drawn,"START Advanced") && !strstr(drawn,"L Memory"));
+    v.music_change_pending=true;render(&v);
+    assert(strstr(drawn,"Music change queued") && strstr(drawn,"Neon Circuit"));
+    v.music_change_pending=false;
     reset(KUI_SHELL_ADVANCED);s.advanced_selected=3;render(&v);
     assert(strstr(drawn,"Quick resume (sizes only)") && strstr(drawn,"Same-size corruption"));
+    s.advanced_selected=4;render(&v);
+    assert(strstr(drawn,"Destination folder") && strstr(drawn,"enter a destination path"));
+    s.advanced_selected=3;
     s.confirm_quick_resume=true;render(&v);
     assert(strstr(drawn,"QUICK RESUME WITHOUT REREADING?"));
     assert(strstr(drawn,"Previously saved bytes will not be reread."));
@@ -548,7 +585,8 @@ static void music_and_boot_rendering(void) {
     s.music_listing.count=2;render(&v);
     assert(strstr(drawn,"Music Player") && strstr(drawn,"SD: /Music"));
     assert(strstr(drawn,"test.wav") && strstr(drawn,"Albums") && strstr(drawn,"WAV"));
-    assert(strstr(drawn,"B Parent / Home") && !strstr(drawn,"CD playback"));
+    assert(strstr(drawn,"B Parent") && strstr(drawn,"START Home") && !strstr(drawn,"CD playback"));
+    assert(strstr(drawn,"Y Stop music") && strstr(drawn,"keeps playing when you leave"));
 }
 int main(void) {
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();

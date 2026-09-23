@@ -17,9 +17,12 @@ No new boot disc is needed for this round.
 | Music | `src/apps/music.c`, `wav.c` | five original loops in `/KUI/apps/music/` |
 
 A single worker owns app hardware and SD operations. UI input queues work; it
-does not mount storage. Music preloads one bounded WAV file, releases the card,
-and plays from RAM. Before any worker operation its stream is stopped and
-outstanding audio DMA is drained. Idle playback resumes from cached data.
+does not mount storage. Music preloads bounded WAV files, releases the card,
+and plays from RAM through a separate audio service thread. Menu actions and
+capture do not stop playback. Cached song switches need no card access; an
+uncached request waits for the I/O worker to become idle. Stream teardown drains
+audio DMA before cached bytes are replaced or playback exits. See
+[the current acceptance round](apps-round-three.md).
 
 System settings contain video timing, memory display and music options. Ripper
 hash/readback settings live under Ripper > Advanced > Capture settings. Existing

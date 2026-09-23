@@ -93,7 +93,8 @@ static void heading(struct paint *p, const struct kui_shell *s,const struct kui_
     words(p,176,74,396,CYAN,state(v),false);
     char music[48];
     const char *prefix=s->page==KUI_SHELL_HOME&&!v->busy?"Y Music":"Music";
-    if(!v->music_enabled) snprintf(music,sizeof(music),"%s off",prefix);
+    if(v->music_change_pending) snprintf(music,sizeof(music),"Music change queued");
+    else if(!v->music_enabled) snprintf(music,sizeof(music),"%s off",prefix);
     else if(v->music_paused) snprintf(music,sizeof(music),"%s paused",prefix);
     else snprintf(music,sizeof(music),"%s %u%%",prefix,v->music_volume);
     words(p,412,26,608,v->music_playing?CYAN:MUTED,music,false);
@@ -105,20 +106,23 @@ static void heading(struct paint *p, const struct kui_shell *s,const struct kui_
 static void footer(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     rule(p,416);
-    const char *controls=v->video_trial ? "A Keep mode   B Revert" : v->busy ? "B Stop safely" :
+    bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
+    const char *controls=v->video_trial ? "A Keep mode   B Revert" :
+        v->busy ? (song_page?"B Stop safely   L/R Songs":"B Stop safely") :
         s->confirm_gd_boot ? "A Exit to BIOS   B Cancel" :
         s->confirm_quick_resume ? "A Quick resume   B Cancel" :
         s->confirm_new ? "A Start capture   B Cancel" :
-        s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Music volume" :
+        s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_SETTINGS || s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_KEYBOARD ? "A Key   X Backspace   Y Shift   B Cancel" :
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
-        s->page==KUI_SHELL_RIPPER ? "B Home   R Folder   START Advanced" :
+        s->page==KUI_SHELL_RIPPER ? "B Home   START Advanced   L/R Songs" :
         s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   START Page" :
-        s->page==KUI_SHELL_MUSIC ? "B Parent / Home   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,500,MUTED,controls,false);
-    if(!v->video_trial) label(p,512,430,MUTED,"L Memory");
+        s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   LEFT/RIGHT Page" : "B Home";
+    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC?608:500,MUTED,controls,false);
+    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC)
+        label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
     if(app==1) {
@@ -177,7 +181,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         {"Choose video, memory display", "and background music.", "Save preferences to SD."},
         {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
         {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
-        {"Browse WAV music on the card.", "Choose a file to play through", "the Dreamcast audio output."}};
+        {"Browse WAV music on the card.", "Choose background music, then", "continue using your other apps."}};
     unsigned selected=s->home_selected<8?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
     for(unsigned i=0;i<8;i++) {
@@ -190,7 +194,11 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         else art(p,44,y+4,24,24,kui_art_small_icons[icons[i]]);
         words(p,80,y+8,230,selected==i?WHITE:MUTED,names[i],false);
     }
-    label(p,44,391,MUTED,"8 applications");
+    if(s->system_saved.show_memory && v->memory_valid) {
+        char ram[48];snprintf(ram,sizeof(ram),"RAM %lu / %lu KiB",
+            (unsigned long)(v->memory_used/1024),(unsigned long)(v->memory_physical/1024));
+        words(p,44,391,230,MUTED,ram,false);
+    } else words(p,44,391,230,MUTED,"8 applications",false);
     title(p,264,112,names[selected]);
     if(selected==0 || selected==6) {
         char inserted[160];
@@ -211,7 +219,7 @@ static void memory(struct paint *p, unsigned y, const struct kui_shell_view *v) 
         snprintf(text,sizeof(text),"RAM %lu / %lu KiB   PEAK %lu KiB",
             (unsigned long)(v->memory_used/1024),(unsigned long)(v->memory_physical/1024),
             (unsigned long)(v->memory_peak/1024));
-    else snprintf(text,sizeof(text),"RAM snapshot unavailable. L retries.");
+    else snprintf(text,sizeof(text),"RAM snapshot unavailable.");
     label(p,40,y,MUTED,text);
 }
 static void ripper(struct paint *p, const struct kui_shell *s,
@@ -275,8 +283,9 @@ static void ripper(struct paint *p, const struct kui_shell *s,
             v->cancel_requested?"waiting":"calculating");
         label(p,336,280,MUTED,line);
     }
-    label(p,40,312,v->drive_reset_required?AMBER:v->busy?MUTED:WHITE,
+    label(p,40,312,v->drive_reset_required||v->dma_degraded?AMBER:v->busy?MUTED:WHITE,
         v->drive_reset_required?"Restart the console before another disc operation.":
+        v->dma_degraded?"Drive errors: PIO active. Reboot to restore DMA.":
         "A New dump   X Resume latest   Y Verify latest");
     if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_COMPLETE) {
         uint16_t color=MUTED;
@@ -303,9 +312,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         if(v->gdi_name && v->gdi_name[0]) label(p,40,368,MUTED,v->gdi_name);
         else if(v->job_dir && v->job_dir[0]) label(p,40,368,MUTED,v->job_dir);
     }
-    if(s->system_saved.show_memory) memory(p,392,v);
-    else if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_COMPLETE && v->gdi_name)
-        label(p,40,392,MUTED,v->gdi_name);
+    memory(p,392,v);
 }
 static void destination(struct paint *p,const struct kui_shell *s,
         const struct kui_shell_view *v) {
@@ -365,8 +372,8 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
 }
 static void advanced(struct paint *p,const struct kui_shell *s) {
     static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings",
-        "Quick resume (sizes only)"};
-    static const char *details[4][3]={
+        "Quick resume (sizes only)","Destination folder"};
+    static const char *details[5][3]={
         {"Reread saved tracks and check their recorded hashes.",
          "This checks the card; the stream CRC badge compares",
          "captured tracks with an independent reference."},
@@ -378,17 +385,20 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "Existing jobs keep their recorded hash mode."},
         {"Check saved file sizes, then continue the dump.",
          "Previously saved bytes are not reread.",
-         "Same-size corruption is not detected."}};
-    unsigned selected=s->advanced_selected<4?s->advanced_selected:0;
+         "Same-size corruption is not detected."},
+        {"Browse folders on SD or enter a destination path.",
+         "A new dump uses a game-named folder there.",
+         "Existing dumps are kept; new names get a number."}};
+    unsigned selected=s->advanced_selected<5?s->advanced_selected:0;
     title(p,40,108,"Advanced disc tools");
     label(p,40,138,MUTED,"Choose an operation for your disc or saved dump.");
-    for(unsigned i=0;i<4;i++) {
-        unsigned y=164+i*37;
-        panel(p,32,y,576,32,selected==i?SELECTED:PANEL);
-        if(selected==i) box(p,32,y+4,3,24,PINK);
-        label(p,48,y+8,selected==i?WHITE:MUTED,names[i]);
+    for(unsigned i=0;i<5;i++) {
+        unsigned y=162+i*32;
+        panel(p,32,y,576,28,selected==i?SELECTED:PANEL);
+        if(selected==i) box(p,32,y+4,3,20,PINK);
+        label(p,48,y+6,selected==i?WHITE:MUTED,names[i]);
     }
-    for(unsigned i=0;i<3;i++) label(p,40,326+i*23,MUTED,details[selected][i]);
+    for(unsigned i=0;i<3;i++) label(p,40,340+i*23,MUTED,details[selected][i]);
 }
 static void ripper_settings(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
@@ -423,7 +433,7 @@ static void ripper_settings(struct paint *p, const struct kui_shell *s,
 static void system_settings(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"System settings");
     label(p,40,136,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
-    const char *names[]={"Video mode","Show memory usage","Background music","Music volume"};
+    const char *names[]={"Video mode","Home memory display","Background music","Music volume"};
     char volume[16];snprintf(volume,sizeof(volume),"%u%%",s->system_draft.music_volume);
     const char *values[]={kui_system_video_name(s->system_draft.video_mode),
         s->system_draft.show_memory?"ON":"OFF",s->system_draft.music_enabled?"ON":"OFF",volume};
@@ -435,8 +445,8 @@ static void system_settings(struct paint *p,const struct kui_shell *s,const stru
         words(p,410,y+9,596,i==s->system_selected?CYAN:MUTED,values[i],false);
     }
     label(p,40,336,MUTED,s->system_selected==0?"640x480 output. VGA follows the connected cable.":
-        s->system_selected==1?"Main RAM appears on the ripper. L records details.":
-        "Music pauses during disc, card and diagnostic work.");
+        s->system_selected==1?"Ripper RAM and peak usage are always displayed.":
+        "Cached music continues while you use other apps.");
     if(s->system_selected>=2) label(p,40,356,CYAN,"X Next song");
     else label(p,40,356,MUTED,s->system_selected==0?
         "Changed video modes get a 10-second confirmation.":
@@ -559,7 +569,7 @@ static void music_player(struct paint *p,const struct kui_shell *s,const struct 
     title(p,40,108,"Music Player");
     char line[160];snprintf(line,sizeof(line),"SD: %s",s->music_path);
     label(p,40,136,CYAN,line);
-    label(p,40,160,v->busy?MUTED:WHITE,"A Open / play WAV   X Refresh");
+    label(p,40,160,v->busy?MUTED:WHITE,"A Open / play WAV   X Refresh   Y Stop music");
     panel(p,32,190,576,178,PANEL);
     unsigned count=s->music_listing.count<KUI_MUSIC_PLAYER_ROWS?s->music_listing.count:KUI_MUSIC_PLAYER_ROWS;
     if(!count) label(p,48,206,MUTED,v->busy?"Opening card...":"No folders or WAV files on this page.");
@@ -573,7 +583,7 @@ static void music_player(struct paint *p,const struct kui_shell *s,const struct 
     const struct kui_app_status *status=v->app_status;
     label(p,40,378,status&&status->complete&&!status->passed?AMBER:CYAN,
         status&&status->message[0]?status->message:s->music_listing.message);
-    snprintf(line,sizeof(line),"PAGE %u%s   WAV files on SD; B stops playback",
+    snprintf(line,sizeof(line),"PAGE %u%s   Music keeps playing when you leave",
         s->music_page+1,s->music_listing.has_more?" +":"");
     label(p,40,396,MUTED,line);
 }

@@ -244,7 +244,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         s->page = KUI_SHELL_HOME;
         return KUI_SHELL_NONE;
     }
-    if(buttons & KUI_SHELL_L) return KUI_SHELL_MSTATS;
+    /* Music is independent of foreground I/O. Main queues a request when the
+     * worker cannot load a different song yet. B and modal confirmations keep
+     * priority, and simultaneous triggers do not choose an arbitrary song. */
+    bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
+    bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot;
+    if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
+        unsigned triggers=buttons & (KUI_SHELL_L|KUI_SHELL_R);
+        if(triggers==KUI_SHELL_L) return KUI_SHELL_MUSIC_PREVIOUS;
+        if(triggers==KUI_SHELL_R) return KUI_SHELL_MUSIC_NEXT;
+    }
+    if(!song_page && (buttons & KUI_SHELL_L)) return KUI_SHELL_MSTATS;
     if(busy) {
         if(s->page == KUI_SHELL_DIAGNOSTICS) scroll(s, buttons);
         return KUI_SHELL_NONE;
@@ -290,15 +300,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) s->confirm_new = true;
         else if(buttons & KUI_SHELL_X) return KUI_SHELL_RESUME;
         else if(buttons & KUI_SHELL_Y) return KUI_SHELL_VERIFY;
-        else if(buttons & KUI_SHELL_R) {
-            s->page=KUI_SHELL_DESTINATION;
-            snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
-            return list_destination(s,true);
-        }
         else if(buttons & KUI_SHELL_START) s->page=KUI_SHELL_ADVANCED;
         break;
     case KUI_SHELL_ADVANCED:
-        s->advanced_selected=move_count(s->advanced_selected,buttons,4);
+        s->advanced_selected=move_count(s->advanced_selected,buttons,5);
         if(buttons & KUI_SHELL_A) {
             if(s->advanced_selected<2) {
                 s->page=KUI_SHELL_RIPPER;
@@ -306,6 +311,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             if(s->advanced_selected==3) {
                 s->confirm_quick_resume=true; return KUI_SHELL_NONE;
+            }
+            if(s->advanced_selected==4) {
+                s->page=KUI_SHELL_DESTINATION;
+                snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
+                return list_destination(s,true);
             }
             s->settings_return=KUI_SHELL_ADVANCED;
             s->draft=s->saved; s->page=KUI_SHELL_RIPPER_SETTINGS;
@@ -384,6 +394,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) s->confirm_gd_boot=true;
         break;
     case KUI_SHELL_MUSIC:
+        if(buttons & KUI_SHELL_START) { s->page=KUI_SHELL_HOME; break; }
+        if(buttons & KUI_SHELL_Y) return KUI_SHELL_MUSIC_STOP;
         if(buttons & KUI_SHELL_X) return list_music(s,false);
         if(buttons & KUI_SHELL_A) {
             if(s->music_selected<s->music_listing.count) {

@@ -65,9 +65,11 @@ and shows a reboot-required message when the drive reports that state.
    DHCP or send a reachability probe; do not treat adapter detection as a link
    or Internet pass. Modem dial-up is not implemented.
 8. **Music:** enable/save, adjust volume/save and use X on a music setting to
-   choose the next loop. Confirm it stops before a test/SD operation and resumes
-   afterward without crackles or app stalls. Try music off as well. One file is
-   retained in RAM while off/paused; this is visible in memory statistics.
+   choose the next loop. Current builds keep cached music playing during tests
+   and menu actions. L/R also select songs on Home and Ripper; uncached selections
+   wait for idle storage. Try music off/on and the supplied longer WAV. Cache RAM
+   remains allocated while paused/off. Follow [round three](apps-round-three.md)
+   for the updated controls and continuity checks.
 
 Save Diagnostics with Y after any failed app operation, and report the app,
 build ID and which step failed. Hardware settings, audio quality, VMU hardware

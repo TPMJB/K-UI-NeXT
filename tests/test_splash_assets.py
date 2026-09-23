@@ -20,12 +20,16 @@ class StartupAssets(unittest.TestCase):
         bad=bytearray(data);bad[len(bad)//2]^=1
         with self.assertRaises(ValueError):module.decode_png(bad)
         with self.assertRaises(ValueError):module.decode_png(data[:32])
-    def test_original_chime(self):
+    def test_shortened_original_chime(self):
         samples=list(module.startup_samples())
-        self.assertEqual(len(samples),196608)
+        self.assertEqual(len(samples),116865)
+        self.assertLessEqual(len(samples)/44100,2.65)
         self.assertEqual(samples[0],0)
         self.assertEqual(samples[-1],0)
         self.assertLessEqual(max(map(abs,samples)),26000)
         self.assertTrue(any(samples[10000:20000]))
+        # Fade reaches silence before the deadline, without the old long tail.
+        self.assertTrue(any(samples[2*44100:]))
+        self.assertFalse(any(samples[round(2.62*44100):]))
 if __name__=="__main__":
     unittest.main()
