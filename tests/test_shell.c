@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
+#include "kui/shell_font.h"
 #include <assert.h>
 #include <limits.h>
 #include <stdio.h>
@@ -99,12 +100,13 @@ static void diagnostics(void) {
         assert(s.scroll==0);
     }
 }
-static uint16_t pixels[640*480+2];
+static uint16_t pixels[640*480+2], prepared[640*480+2];
 static char drawn[8192];
 static size_t drawn_size;
-static void observe(void *ctx,unsigned x,unsigned y,uint16_t color,const char *value) {
+static void observe(void *ctx,unsigned x,unsigned y,uint16_t color,const char *value,bool large) {
     (void)ctx; (void)color;
-    assert(x>=32 && x+strlen(value)*8<=608 && y>=32 && y+16<=448);
+    assert(x>=32 && x+kui_shell_font_width(value,large)<=608 && y>=24 &&
+        y+(large?KUI_SHELL_FONT_LARGE_HEIGHT:KUI_SHELL_FONT_SMALL_HEIGHT)<=448);
     for(size_t i=0;value[i];i++) assert(value[i]>=32 && value[i]<=126);
     size_t n=strlen(value);
     assert(drawn_size+n+2<sizeof(drawn));
@@ -116,6 +118,11 @@ static void render(struct kui_shell_view *v) {
     drawn_size=0; drawn[0]=0;
     kui_shell_draw(pixels+1,&s,v,observe,NULL);
     assert(pixels[0]==0x1234 && pixels[640*480+1]==0xabcd);
+    prepared[0]=0x1234; prepared[640*480+1]=0xabcd;
+    for(unsigned i=1;i<=640*480;i++) prepared[i]=0x0864;
+    kui_shell_draw_content(prepared+1,&s,v,NULL,NULL);
+    assert(memcmp(pixels,prepared,sizeof(pixels))==0);
+
 }
 static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};

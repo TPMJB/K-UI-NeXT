@@ -1,28 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Optional host preview using the exact pinned KOS minifont. Example:
- * cc -Iinclude -I.deps/fatfs/source -I.deps/kos/kernel/arch/dreamcast/util \
- *   tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c -o build/render-shell
- * build/render-shell home build/home.ppm
- * Modes: home, ripper, confirm, settings, diagnostics, complete, stopped.
- * minifont.h remains part of the KOS dependency; no font is copied into K-UI. */
+/* Host preview uses the same embedded artwork/font and renderer as hardware.
+ * Modes: home, ripper, confirm, settings, diagnostics, complete, stopped. */
 #include "kui/shell.h"
-#include "minifont.h"
 #include <stdio.h>
 #include <string.h>
 
 static uint16_t frame[640*480];
-static void text(void *ctx,unsigned x,unsigned y,uint16_t color,const char *s) {
-    (void)ctx;
-    for(;*s;s++,x+=8) {
-        unsigned c=(unsigned char)*s;
-        if(c<33 || c>126) continue;
-        for(unsigned row=0;row<16;row++) for(unsigned col=0;col<8;col++)
-            if(minifont_data[(c-33)*16+row] & (1u<<(7-col)))
-                frame[(y+row)*640+x+col]=color;
-    }
-}
 int main(int argc,char **argv) {
-    if(argc!=3 || minifont_size!=1504) return 2;
+    if(argc!=3) return 2;
     struct kui_settings preferences={true,false,true};
     struct kui_shell shell; kui_shell_init(&shell,&preferences);
     const char *logs[]={"SD exFAT, 249997312 sectors, cluster=131072 bytes",
@@ -46,7 +31,7 @@ int main(int argc,char **argv) {
         } else if(!strcmp(argv[1],"stopped")) view.outcome=KUI_SHELL_OUTCOME_STOPPED;
         else view.busy=true;
     }
-    kui_shell_draw(frame,&shell,&view,text,NULL);
+    kui_shell_draw(frame,&shell,&view,NULL,NULL);
     FILE *out=fopen(argv[2],"wb"); if(!out) return 1;
     if(fprintf(out,"P6\n640 480\n255\n")<0) return 1;
     for(unsigned i=0;i<640*480;i++) {

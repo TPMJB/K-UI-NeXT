@@ -292,12 +292,6 @@ static void draw(unsigned scroll,unsigned page) {
 #endif
 
 #ifdef KUI_SD_RUNTIME
-static void shell_text(void *ctx, unsigned x, unsigned y, uint16_t color, const char *text) {
-    uint16_t *frame = ctx;
-    minifont_set_color(((color >> 11) & 31u) * 255u / 31u,
-        ((color >> 5) & 63u) * 255u / 63u, (color & 31u) * 255u / 31u);
-    minifont_draw_str(frame + y * 640 + x, 640, text);
-}
 static void draw_shell(void) {
     char visible[KUI_SHELL_LOG_ROWS][LINE_BYTES] = {{0}};
     const char *log_rows[KUI_SHELL_LOG_ROWS];
@@ -325,7 +319,12 @@ static void draw_shell(void) {
     mutex_unlock(&lock);
     view.memory_valid = memory_valid; view.memory_used = memory_status.used;
     view.memory_physical = memory_status.physical; view.memory_peak = memory_status.sampled_peak;
-    kui_shell_draw(vram_s, &shell, &view, shell_text, vram_s);
+    /* The pinned KOS RGB565 clear uses SH-4 store queues instead of a pixel
+     * loop. DM_MULTIBUFFER/vid_flip leave vram_s on the next, offscreen buffer;
+     * publish only after the complete frame has been drawn. RGB565 = 0x0864,
+     * matching the portable renderer's background. */
+    vid_clear(8, 15, 35);
+    kui_shell_draw_content(vram_s, &shell, &view, NULL, NULL);
     vid_waitvbl(); vid_flip(-1);
 }
 static unsigned shell_buttons(unsigned buttons) {

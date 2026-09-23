@@ -8,7 +8,7 @@ CAPTURE = src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/kn
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-images deps diagnostic clean
-test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-capture-adapter
+test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter
 	./build/test-core
 	./build/test-options docs/bench.cfg.example docs/bench-cfgs/*.cfg
 	./build/test-ui-rate
@@ -16,6 +16,7 @@ test: build/test-core build/test-capture-core build/test-timing build/test-disc 
 	./build/test-crc16
 	./build/test-settings
 	./build/test-shell
+	./build/test-shell-font
 	./build/test-capture-adapter
 	./build/test-capture-core
 	./build/test-timing
@@ -57,9 +58,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+build/test-shell: tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/shell.c src/dreamcast/shell_draw.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+
+build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
+
+build/render-shell: tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)

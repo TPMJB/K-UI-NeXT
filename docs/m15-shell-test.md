@@ -15,7 +15,8 @@ the milestone base branch's dependency/toolchain caches. The build ID identifies
 the PR's tested merge commit; `build.json` records that exact source revision.
 
 The final screen should say **K-UI NeXT / SD runtime**, show the new build ID and
-offer **Disc Ripper**, **Settings** and **Diagnostics**. The embedded CD fallback
+offer **Disc Ripper**, **Settings** and **Diagnostics** in the original K-UI
+split-pane layout, with the visor badge and selected app preview. The embedded CD fallback
 keeps its original diagnostic interface.
 
 ## Controls
@@ -91,5 +92,15 @@ checkpoint format, reference matcher or DMA code is replaced.
 
 The UI performs no filesystem or drive work. Settings, reports, probes and captures
 all run on the existing single I/O worker. Frame drawing remains buffered, with
-the existing busy redraw policy. Original prior-project additions are inventoried
+the existing busy redraw policy. The original badge, icon artwork, split-pane layout and palette are restored.
+The renderer embeds the artwork and a separately licensed DejaVu font atlas; it
+performs no per-frame file reads, decoding or allocation. The console uses the
+same KOS store-queue clear as the accepted diagnostic screen, retaining the busy
+redraw cap and buffered drawing. Remaining prior-project additions are inventoried
 in [prior-work-reuse.md](prior-work-reuse.md) for selective reuse in later apps.
+
+[Host-rendered launcher preview](screenshots/m15-launcher.png) uses the exact
+RGB565 renderer with sample build/status values; it is not a console photograph.
+Rebuild previews with `make build/render-shell`, then
+`build/render-shell home build/home.ppm`. The normal build consumes checked-in
+asset/font data; optional regeneration tools and source notices are in `resources/`.

@@ -1,12 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
+#include "kui/shell_font.h"
+#include "shell_art.inc"
 #include <stdio.h>
 #include <string.h>
 
-/* Flat fills and short lines suit RGB565 and interlaced/RF output. No gradients,
- * fine scanlines, animated backgrounds or allocations compete with the worker. */
-enum { NAVY=0x0843, PANEL=0x10c6, SELECTED=0x114a, EDGE=0x21cf,
-    WHITE=0xef7d, MUTED=0x9d37, CYAN=0x2e9b, PINK=0xf297,
+/* Original K-UI palette and split-pane launcher, drawn independently of the
+ * legacy UI framework. Artwork and font masks are embedded: no device I/O,
+ * decoding or allocation while the capture worker is active. */
+enum { NAVY=0x0864, PANEL=0x10c6, SELECTED=0x494b, EDGE=0x318a,
+    WHITE=0xf7bf, MUTED=0xadd9, CYAN=0x675e, PINK=0xf3fb,
     GREEN=0x8ef6, AMBER=0xfda9 };
 struct paint { uint16_t *fb; kui_shell_text_fn text; void *ctx; };
 static void box(struct paint *p, unsigned x, unsigned y,
@@ -17,35 +20,59 @@ static void box(struct paint *p, unsigned x, unsigned y,
     for(unsigned row=y; row<y+h; ++row)
         for(unsigned col=x; col<x+w; ++col) p->fb[row*640+col] = color;
 }
-static void label(struct paint *p, unsigned x, unsigned y,
-        uint16_t color, const char *value) {
-    if(!p->text || !value || x<32 || x>=608 || y<32 || y>432) return;
-    char clipped[73];
-    unsigned limit=(608-x)/8, n=0;
-    if(limit>72) limit=72;
-    while(n<limit && value[n] && value[n]!='\n' && value[n]!='\r') {
+static void words(struct paint *p, unsigned x, unsigned y,
+        unsigned right, uint16_t color, const char *value, bool large) {
+    if(!value || x<32 || x>=608 || y<24 || y>(large?424u:432u)) return;
+    if(right>608) right=608;
+    if(right<=x) return;
+    char clipped[160];
+    size_t n=0;
+    while(n+1<sizeof(clipped) && value[n] && value[n]!='\n' && value[n]!='\r') {
         unsigned char c=(unsigned char)value[n];
-        clipped[n]=(c>=32 && c<=126) ? (char)c : ' ';
+        clipped[n]=(c>=32 && c<=126)?(char)c:' ';
         ++n;
     }
-    if(n>=3 && value[n] && value[n]!='\n' && value[n]!='\r')
-        clipped[n-3]=clipped[n-2]=clipped[n-1]='.';
     clipped[n]='\0';
-    p->text(p->ctx,x,y,color,clipped);
+    bool truncated=value[n] && value[n]!='\n' && value[n]!='\r';
+    while(n && kui_shell_font_width(clipped,large)>right-x) {
+        clipped[--n]='\0'; truncated=true;
+    }
+    if(truncated) {
+        while(n && (n+4>sizeof(clipped) ||
+                kui_shell_font_width(clipped,large)+kui_shell_font_width("...",large)>right-x))
+            clipped[--n]='\0';
+        if(n+4<=sizeof(clipped) && kui_shell_font_width("...",large)<=right-x)
+            memcpy(clipped+n,"...",4);
+    }
+    kui_shell_font_draw(p->fb,(int)x,(int)y,color,clipped,large);
+    if(p->text) p->text(p->ctx,x,y,color,clipped,large);
+}
+static void label(struct paint *p, unsigned x, unsigned y,
+        uint16_t color, const char *value) {
+    words(p,x,y,608,color,value,false);
+}
+static void title(struct paint *p, unsigned x, unsigned y, const char *value) {
+    words(p,x,y,608,WHITE,value,true);
 }
 static void rule(struct paint *p, unsigned y) {
-    box(p,32,y,576,2,EDGE); box(p,32,y,64,2,CYAN);
-    box(p,560,y,48,2,PINK);
+    box(p,32,y,576,2,EDGE);
 }
-static void logo(struct paint *p) {
-    /* Original five-column letterforms, large enough to survive RF. */
-    static const unsigned char letters[4][7] = {
-        {17,18,20,24,20,18,17}, {0,0,0,31,0,0,0},
-        {17,17,17,17,17,17,14}, {31,4,4,4,4,4,31}
-    };
-    for(unsigned c=0;c<4;c++) for(unsigned y=0;y<7;y++)
-        for(unsigned x=0;x<5;x++) if(letters[c][y] & (1u<<(4-x)))
-            box(p,40+c*24+x*4,36+y*4,4,4,c==1?PINK:CYAN);
+static void panel(struct paint *p, unsigned x, unsigned y,
+        unsigned w, unsigned h, uint16_t color) {
+    /* Six-pixel corners remain legible on the console's interlaced output. */
+    box(p,x+4,y,w-8,1,color); box(p,x+2,y+1,w-4,2,color);
+    box(p,x+1,y+3,w-2,2,color); box(p,x,y+5,w,h-10,color);
+    box(p,x+1,y+h-5,w-2,2,color); box(p,x+2,y+h-3,w-4,2,color);
+    box(p,x+4,y+h-1,w-8,1,color);
+}
+static void art(struct paint *p, unsigned x, unsigned y,
+        unsigned w, unsigned h, const uint16_t *pixels) {
+    if(x>=640 || y>=480) return;
+    unsigned rows=h<480-y?h:480-y, cols=w<640-x?w:640-x;
+    for(unsigned row=0;row<rows;row++) for(unsigned col=0;col<cols;col++) {
+        uint16_t color=pixels[row*w+col];
+        if(color!=KUI_ART_TRANSPARENT) p->fb[(y+row)*640+x+col]=color;
+    }
 }
 static const char *state(const struct kui_shell_view *v) {
     if(v->saving) return v->cancel_requested ? "CANCELLING SAVE" : "SAVING REPORT";
@@ -53,56 +80,48 @@ static const char *state(const struct kui_shell_view *v) {
     return "READY";
 }
 static void heading(struct paint *p, const struct kui_shell_view *v) {
-    logo(p); label(p,152,42,WHITE,"NeXT | SD runtime");
-    label(p,152,60,MUTED,"Katana User Interface");
-    label(p,400,38,CYAN,state(v));
-    char build[40]; snprintf(build,sizeof(build),"BUILD %.12s",v->build?v->build:"local");
-    label(p,400,60,MUTED,build); rule(p,88);
+    art(p,32,20,128,64,kui_art_brand);
+    title(p,184,26,"Katana User Interface");
+    label(p,184,52,MUTED,"by TPMJB   /   SD runtime");
+    words(p,184,74,396,CYAN,state(v),false);
+    char build[40]; snprintf(build,sizeof(build),"Build %.12s",v->build?v->build:"local");
+    label(p,416,74,MUTED,build); rule(p,98);
 }
 static void footer(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     rule(p,416);
     const char *controls=v->busy ? "B Stop safely" :
         s->confirm_new ? "A Start capture   B Cancel" :
-        s->page==KUI_SHELL_HOME ? "UP/DOWN Choose   A Open" :
+        s->page==KUI_SHELL_HOME ? "D-pad Select   A Open" :
         s->page==KUI_SHELL_SETTINGS ? "A Save   B Back / discard" : "B Home";
-    label(p,40,430,WHITE,controls); label(p,456,430,MUTED,"L Memory");
-}
-static void icon(struct paint *p, unsigned kind, unsigned y, uint16_t color) {
-    unsigned x=64;
-    if(kind==0) {
-        for(int dy=-14;dy<=14;dy++) for(int dx=-14;dx<=14;dx++) {
-            int distance=dx*dx+dy*dy;
-            if((distance>=100 && distance<=196) || distance<=9)
-                box(p,(unsigned)((int)x+dx),(unsigned)((int)y+dy),1,1,color);
-        }
-    } else if(kind==1) {
-        for(unsigned row=0;row<3;row++) {
-            box(p,x-14,y-12+row*12,28,2,color);
-            box(p,x-8+(row%2)*12,y-15+row*12,6,8,color);
-        }
-    } else {
-        box(p,x-14,y-14,28,28,color); box(p,x-11,y-11,22,22,PANEL);
-        box(p,x-8,y-6,4,3,color); box(p,x-5,y-3,4,3,color);
-        box(p,x-8,y,4,3,color); box(p,x+2,y+5,7,2,color);
-    }
+    label(p,40,430,MUTED,controls); label(p,512,430,MUTED,"L Memory");
 }
 static void home(struct paint *p, const struct kui_shell *s) {
-    static const char *names[]={"DISC RIPPER","SETTINGS","DIAGNOSTICS"};
-    static const char *details[]={"Capture, resume and verify a disc.",
-        "Choose capture checks and memory display.","Disc and SD tests, reports and log viewer."};
-    label(p,40,112,WHITE,"YOUR DREAMCAST. YOUR TOOLS.");
-    label(p,40,134,MUTED,"Select a tool to begin.");
+    static const char *names[]={"Disc Ripper","Settings","Diagnostics"};
+    static const char *category[]={"Disc tools","Preferences","System tools"};
+    static const char *details[3][3]={
+        {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
+        {"Choose capture checks and", "memory display. Save preferences", "to the SD card."},
+        {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."}};
+    unsigned selected=s->home_selected<3?s->home_selected:0;
+    panel(p,32,112,208,296,PANEL);
     for(unsigned i=0;i<3;i++) {
-        unsigned y=164+i*78;
-        bool selected=s->home_selected==i;
-        box(p,32,y,576,66,selected?SELECTED:PANEL);
-        box(p,32,y,4,66,selected?CYAN:EDGE);
-        icon(p,i,y+33,selected?CYAN:MUTED);
-        label(p,96,y+10,selected?WHITE:MUTED,names[i]);
-        label(p,96,y+36,MUTED,details[i]);
-        label(p,576,y+10,selected?PINK:MUTED,selected?">":" ");
+        unsigned y=120+i*54;
+        if(selected==i) {
+            panel(p,32,y,208,44,SELECTED);
+            box(p,32,y+5,3,34,PINK);
+        }
+        art(p,44,y+10,24,24,kui_art_small_icons[i]);
+        words(p,80,y+14,230,selected==i?WHITE:MUTED,names[i],false);
     }
+    label(p,44,382,MUTED,"3 applications");
+    title(p,264,112,names[selected]);
+    label(p,264,144,CYAN,category[selected]);
+    panel(p,264,172,344,140,PANEL);
+    art(p,372,178,128,128,kui_art_icons[selected]);
+    for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,details[selected][i]);
+    panel(p,264,382,344,28,CYAN);
+    label(p,382,388,NAVY,"A  Open app");
 }
 static void memory(struct paint *p, unsigned y, const struct kui_shell_view *v) {
     char text[73];
@@ -117,9 +136,9 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     static const char *phases[]={"Identifying disc","Checking saved prefix",
         "Capturing disc","Verifying saved files","Completed"};
-    label(p,40,110,WHITE,"DISC RIPPER");
+    title(p,40,108,"Disc Ripper");
     label(p,40,134,MUTED,"Capture retail discs to your SD card.");
-    box(p,32,166,576,134,PANEL);
+    panel(p,32,166,576,134,PANEL);
     const char *phase=v->saving ? "Saving diagnostic report" :
         v->cancel_requested && v->busy ? "Stopping safely..." :
         v->outcome==KUI_SHELL_OUTCOME_STOPPED && !v->busy ?
@@ -160,7 +179,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
 }
 static void settings(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
-    label(p,40,110,WHITE,"SETTINGS");
+    title(p,40,108,"Settings");
     label(p,40,134,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
     const char *names[]={"Capture hashes","Read back saved files","Show memory usage"};
     const char *values[]={s->draft.crc_only?"CRC32":"CRC32 + SHA-256",
@@ -168,7 +187,7 @@ static void settings(struct paint *p, const struct kui_shell *s,
         s->draft.show_memory?"ON":"OFF"};
     for(unsigned i=0;i<3;i++) {
         unsigned y=174+i*48;
-        box(p,32,y,576,40,i==s->setting_selected?SELECTED:PANEL);
+        panel(p,32,y,576,40,i==s->setting_selected?SELECTED:PANEL);
         box(p,32,y,4,40,i==s->setting_selected?CYAN:EDGE);
         label(p,48,y+12,WHITE,names[i]);
         label(p,416,y+12,i==s->setting_selected?CYAN:MUTED,values[i]);
@@ -194,10 +213,10 @@ static void settings(struct paint *p, const struct kui_shell *s,
 }
 static void diagnostics(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
-    label(p,40,110,WHITE,"DIAGNOSTICS");
+    title(p,40,108,"Diagnostics");
     label(p,40,138,v->busy?MUTED:WHITE,"A Disc probe   X SD test   Y Save log");
     label(p,40,160,MUTED,"R Benchmarks   UP/DOWN Scroll   START Latest");
-    box(p,32,190,576,190,PANEL);
+    panel(p,32,190,576,190,PANEL);
     unsigned count=v->log_count<KUI_SHELL_LOG_ROWS?v->log_count:KUI_SHELL_LOG_ROWS;
     if(!count) label(p,40,204,MUTED,"Diagnostic messages appear here.");
     else for(unsigned i=0;i<count;i++)
@@ -216,11 +235,10 @@ static void confirmation(struct paint *p) {
     label(p,72,246,MUTED,"A new folder keeps existing dumps intact.");
     label(p,72,294,CYAN,"A Start capture"); label(p,368,294,WHITE,"B Cancel");
 }
-void kui_shell_draw(uint16_t *frame, const struct kui_shell *s,
+void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
     struct paint p={frame,text,ctx};
-    box(&p,0,0,640,480,NAVY);
     heading(&p,v);
     switch(s->page) {
     case KUI_SHELL_HOME: home(&p,s); break;
@@ -230,4 +248,12 @@ void kui_shell_draw(uint16_t *frame, const struct kui_shell *s,
     }
     footer(&p,s,v);
     if(s->confirm_new) confirmation(&p);
+}
+
+void kui_shell_draw(uint16_t *frame, const struct kui_shell *s,
+        const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
+    if(!frame || !s || !v) return;
+    struct paint p={frame,text,ctx};
+    box(&p,0,0,640,480,NAVY);
+    kui_shell_draw_content(frame,s,v,text,ctx);
 }

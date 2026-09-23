@@ -1,5 +1,19 @@
 # Hardware evidence
 
+## M1.5 first UI report — 2026-09-23
+
+The owner reports that the shell seems functional during an ongoing game rip,
+with a highest observed speed of about **933 KiB/s**, and requests restoration of
+the original K-UI menu design. [Recorded observation](evidence/m15-shell-first-ui-report-2026-09-23.json).
+No completed-rip average, build identifier, effective options or new verification
+log accompanied this message. It does not replace the accepted reader results or
+establish a performance regression. The remaining UI checks are still pending.
+
+The follow-up UI update restores the original assets/layout and the earlier KOS
+store-queue screen clear. This is a source-level display correction; its effect
+on physical-console throughput has not been measured. The reader is unchanged.
+
+
 These results cover the uploaded logs, storage fixtures and user reports received on
 2026-09-16 and 2026-09-17. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.

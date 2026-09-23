@@ -12,9 +12,14 @@ Introduction commits below show separate files added by TPMJB. That history is
 useful provenance evidence; a future extraction must also identify the selected
 code or asset, its dependencies, and the applicable K-UI license/attribution.
 
-**M1.5 imports no legacy files.** The finished independent reader already provides
-its required verification behavior and remains unchanged. These candidates are
-for future catalog support, explicit salvage tools and UI assets.
+**M1.5 selectively reuses the original K-UI launcher badge and three app icons.**
+The exact PNG/SVG inputs, source revision, byte hashes and origins are recorded in
+[the artwork inventory](../resources/branding/README.md). Their RGB565 conversion
+is generated for the independent renderer. No legacy application, XML, reader,
+event framework or inherited DreamShell background is imported. The finished
+independent reader already provides its required verification behavior and
+remains unchanged. The remaining candidates below concern future catalog,
+explicit salvage and other UI work.
 
 ## Candidates
 

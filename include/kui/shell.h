@@ -62,11 +62,17 @@ struct kui_shell_view {
     const char *const *log_lines;
     unsigned log_count, total_log_lines;
 };
-/* Text is clipped to RF-safe margins and uses the existing 8x16 console font.
- * Main's callback sets minifont's RGB color and draws into the same framebuffer.
- * The renderer only draws: it never flips, waits, reads devices or allocates. */
+/* The renderer draws its embedded font and original artwork directly. Text is
+ * clipped to safe margins. An optional observer receives rendered labels for
+ * accessibility/host checks; it must not draw a second font over them. No flip,
+ * wait, device access or allocation occurs here. */
 typedef void (*kui_shell_text_fn)(void *ctx, unsigned x, unsigned y,
-    uint16_t rgb565, const char *text);
+    uint16_t rgb565, const char *text, bool large);
 void kui_shell_draw(uint16_t *frame, const struct kui_shell *shell,
+    const struct kui_shell_view *view, kui_shell_text_fn text, void *ctx);
+/* Console path: the caller first clears its offscreen framebuffer to RGB565
+ * 0x0864 with KOS vid_clear(8,15,35). Keeping that optimized store-queue clear
+ * outside the portable renderer avoids 307,200 ordinary CPU pixel stores. */
+void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *shell,
     const struct kui_shell_view *view, kui_shell_text_fn text, void *ctx);
 #endif
