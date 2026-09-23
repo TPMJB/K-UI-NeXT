@@ -139,6 +139,6 @@ build/test-destination: tests/test_destination.c src/core/destination.c src/core
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/data.c tests/test_destination.c -o $@
 
-build/destination-image: tests/destination_image.c $(CORE) $(DESTINATION) $(FATFS) src/core/storage_probe.c include/kui/destination.h
+build/destination-image: tests/destination_image.c $(CORE) $(DESTINATION) $(FATFS) src/core/storage_probe.c src/core/settings.c include/kui/destination.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(DESTINATION) $(FATFS) src/core/storage_probe.c tests/destination_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(DESTINATION) $(FATFS) src/core/storage_probe.c src/core/settings.c tests/destination_image.c -o $@
