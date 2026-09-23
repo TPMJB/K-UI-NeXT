@@ -30,7 +30,40 @@ int main(int argc,char **argv) {
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
     view.music_cache_bytes=4674286;
-    if(!strcmp(argv[1],"clock") || !strcmp(argv[1],"clock-confirm")) {
+    if(!strcmp(argv[1],"audio-cd")) {
+        shell.page=KUI_SHELL_CD_AUDIO;shell.cd_audio.loaded=true;shell.cd_audio.count=12;
+        shell.cd_audio.playing=true;shell.cd_audio.current=3;shell.cd_selected=2;
+        view.music_title="Audio CD track 3";
+        for(unsigned i=0;i<12;i++) {shell.cd_audio.tracks[i].number=i+1;shell.cd_audio.tracks[i].seconds=181+i*2;}
+        strcpy(shell.cd_audio.message,"Playing track 3 from audio CD.");
+    } else if(!strcmp(argv[1],"vmu-actions") || !strcmp(argv[1],"vmu-delete") || !strcmp(argv[1],"vmu-copy")) {
+        shell.page=KUI_SHELL_VMU_ACTIONS;shell.vmu.present=true;shell.vmu.count=1;
+        strcpy(shell.vmu.entries[0].name,"MDK2_SAVE");shell.vmu.entries[0].bytes=4096;
+        shell.vmu_copy_slot=1;shell.confirm_vmu_delete=!strcmp(argv[1],"vmu-delete");
+        shell.confirm_vmu_copy=!strcmp(argv[1],"vmu-copy");
+    } else if(!strcmp(argv[1],"safe-area")) {
+        shell.page=KUI_SHELL_SETTINGS;shell.system_selected=8;shell.system_draft.screen_inset=1;
+    } else if(!strcmp(argv[1],"system-tools") || !strcmp(argv[1],"restart")) {
+        shell.page=KUI_SHELL_SYSTEM_TOOLS;shell.confirm_restart=!strcmp(argv[1],"restart");
+        view.app_status=&status;strcpy(status.message,"Settings flash backup verified on SD.");
+        status.line_count=1;strcpy(status.lines[0],"/KUI/backups/system/flash-0001.bin");
+    } else if(!strcmp(argv[1],"salvage") || !strcmp(argv[1],"salvage-confirm") || !strcmp(argv[1],"salvage-working")) {
+        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=3;shell.salvage_zero_fill=true;
+        shell.confirm_salvage=!strcmp(argv[1],"salvage-confirm");
+        view.app_status=&status;status.passed=false;strcpy(status.message,"Incomplete: 3 unresolved sectors remain.");
+        if(!strcmp(argv[1],"salvage-working")) {
+            view.busy=true;status.complete=false;status.line_count=6;status.done=5;status.total=12;
+            strcpy(status.message,"Retrying unresolved sectors");
+            const char *lines[]={"Track 3/31  FAD 45150  attempts 3","Targets 12  recovered 5  remaining 7",
+                "Recovery pass 2/5  First pass: complete","/KUI/salvage/job-0001",
+                "Unresolved zeros are NOT a verified game dump.","Separate recovery job; normal captures unchanged."};
+            for(unsigned i=0;i<6;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",lines[i]);
+        }
+    } else if(!strcmp(argv[1],"retry")) {
+        shell.page=KUI_SHELL_RIPPER;view.busy=true;view.retries=11;view.retry_attempt=3;view.retry_limit=10;view.retry_fad=45150;
+    } else if(!strcmp(argv[1],"music-clear")) {
+        shell.page=KUI_SHELL_MUSIC;shell.confirm_music_clear=true;
+    } else if(!strcmp(argv[1],"clock") || !strcmp(argv[1],"clock-confirm")) {
         shell.page=KUI_SHELL_CLOCK;
         const struct kui_datetime d={2026,9,23,20,15,31};kui_shell_set_clock(&shell,&d,NULL);
         shell.clock_selected=2;shell.confirm_clock=!strcmp(argv[1],"clock-confirm");
@@ -65,11 +98,11 @@ int main(int argc,char **argv) {
     } else if(!strcmp(argv[1],"music")) {
         shell.page=KUI_SHELL_MUSIC;shell.music_listing.count=8;shell.music_listing.has_more=true;
         const char *names[]={"Albums","Neon Circuit.wav","Orbital Drift.wav","Midnight Vector.wav",
-            "Chrome Horizon.wav","Menu.wav","Long descriptive music filename that should clip safely.wav","Other.wav"};
+            "Chrome Horizon.wav","Menu.wav","Long descriptive music filename that should clip safely.wav","Harbor Lights.ogg"};
         for(unsigned i=0;i<8;i++) snprintf(shell.music_listing.entries[i].name,
             sizeof(shell.music_listing.entries[i].name),"%s",names[i]);
         shell.music_listing.entries[0].directory=true;shell.music_selected=3;
-        strcpy(shell.music_listing.message,"Choose a WAV file to play.");
+        strcpy(shell.music_listing.message,"Choose a WAV or Ogg file to play.");
     } else if(!strcmp(argv[1],"settings")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=2;}
     else if(!strcmp(argv[1],"ripper-settings")) shell.page=KUI_SHELL_RIPPER_SETTINGS;
     else if(!strcmp(argv[1],"video")) {

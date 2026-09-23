@@ -10,7 +10,15 @@ FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-recovery test-images deps diagnostic clean
 test: build/test-recovery-manifest build/scan-fixtures/.stamp
-test: build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+	./build/test-cd-audio
+	./build/test-cd-audio guard
+	./build/test-network-probe
+	./build/test-network-connect
+	./build/test-menu-sound
+	./build/test-music-ogg
+	./build/test-capture-display
+	./build/test-viewport
 	./build/test-clock
 	./build/test-clock-platform
 	./build/test-recovery-manifest build/scan-fixtures/clean/manifest.json
@@ -149,7 +157,9 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+test-images: build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+	python3 tests/test_salvage_images.py
+	python3 tests/test_maintenance_images.py
 	python3 tests/test_recovery_scan_images.py
 	python3 tests/test_clock_images.py
 	python3 tests/test_vmu_images.py
@@ -206,13 +216,13 @@ build/test-wav: tests/test_wav.c src/apps/wav.c include/kui/wav.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/wav.c tests/test_wav.c -o $@
 
-build/test-music: tests/test_music.c src/apps/music.c src/apps/wav.c include/kui/music.h include/kui/wav.h
+build/test-music: tests/test_music.c src/apps/music.c src/apps/wav.c src/apps/music_ogg.c include/kui/music.h include/kui/wav.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_MUSIC_ALLOC_TEST=1 -Itests/stubs -Isrc/dreamcast src/apps/music.c src/apps/wav.c tests/test_music.c -Wl,--wrap=malloc,--wrap=free -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_MUSIC_ALLOC_TEST=1 -Itests/stubs -Isrc/dreamcast src/apps/music.c src/apps/wav.c src/apps/music_ogg.c tests/test_music.c -Wl,--wrap=malloc,--wrap=free -lm -o $@
 
-build/test-music-thread: tests/test_music.c src/apps/music.c src/apps/wav.c include/kui/music.h include/kui/wav.h tests/stubs/kos/mutex.h tests/stubs/kos/thread.h
+build/test-music-thread: tests/test_music.c src/apps/music.c src/apps/wav.c src/apps/music_ogg.c include/kui/music.h include/kui/wav.h tests/stubs/kos/mutex.h tests/stubs/kos/thread.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_MUSIC_ALLOC_TEST=1 -DKUI_ON_CONSOLE=1 -Itests/stubs -Isrc/dreamcast src/apps/music.c src/apps/wav.c tests/test_music.c -Wl,--wrap=malloc,--wrap=free -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_MUSIC_ALLOC_TEST=1 -DKUI_ON_CONSOLE=1 -Itests/stubs -Isrc/dreamcast src/apps/music.c src/apps/wav.c src/apps/music_ogg.c tests/test_music.c -Wl,--wrap=malloc,--wrap=free -lm -o $@
 
 build/test-memory-app: tests/test_memory_app.c src/apps/memory_pattern.c include/kui/memory_test.h
 	@mkdir -p $(@D)
@@ -263,3 +273,39 @@ build/test-recovery-checks: tests/test_recovery_checks.c tests/make_recovery_vec
 
 test-recovery: build/test-recovery-checks
 	./build/test-recovery-checks
+
+build/test-capture-display: tests/test_capture_display.c src/core/capture_display.c include/kui/capture_display.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/capture_display.c tests/test_capture_display.c -o $@
+
+build/test-viewport: tests/test_viewport.c src/core/viewport.c include/kui/viewport.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/viewport.c tests/test_viewport.c -o $@
+
+build/test-music-ogg: tests/test_music_ogg.c src/apps/music_ogg.c include/kui/music_ogg.h third_party/stb/stb_vorbis.c tests/fixtures/music_vorbis.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/music_ogg.c tests/test_music_ogg.c -lm -o $@
+
+build/test-menu-sound: tests/test_menu_sound.c src/apps/menu_sound.c include/kui/menu_sound.h $(wildcard tests/menu_sound_stubs/dc/sound/*.h)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/menu_sound_stubs src/apps/menu_sound.c tests/test_menu_sound.c -o $@
+
+build/test-network-probe: tests/test_network_probe.c src/apps/network_probe.c include/kui/network_probe.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/network_probe.c tests/test_network_probe.c -o $@
+
+build/test-network-connect: tests/test_network_connect.c src/apps/network_probe.c src/apps/network_connect.c include/kui/network_probe.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/apps_stubs src/apps/network_probe.c src/apps/network_connect.c tests/test_network_connect.c -o $@
+
+build/maintenance-image: tests/maintenance_image.c $(CORE) $(FATFS) src/core/storage_probe.c src/apps/maintenance.c include/kui/maintenance.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/apps/maintenance.c tests/maintenance_image.c -o $@
+
+build/salvage-image: tests/salvage_image.c $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_image.c -Wl,--wrap=f_write,--wrap=f_sync,--wrap=f_read,--wrap=f_rename -o $@
+
+build/test-cd-audio: tests/test_cd_audio.c src/apps/cd_audio.c src/core/command.c src/core/data.c include/kui/cd_audio.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/cdda_stubs -Itests/stubs -Isrc/dreamcast src/apps/cd_audio.c src/core/command.c src/core/data.c tests/test_cd_audio.c -o $@

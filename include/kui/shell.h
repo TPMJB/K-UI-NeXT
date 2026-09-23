@@ -8,6 +8,7 @@
 #include "kui/apps.h"
 #include "kui/music_player.h"
 #include "kui/clock.h"
+#include "kui/cd_audio.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -27,7 +28,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_DESTINATION, KUI_SHELL_KEYBOARD, KUI_SHELL_ADVANCED,
     KUI_SHELL_RIPPER_SETTINGS, KUI_SHELL_VMU, KUI_SHELL_MEMORY, KUI_SHELL_NETWORK,
     KUI_SHELL_GD_PLAY, KUI_SHELL_MUSIC, KUI_SHELL_CLOCK,
-    KUI_SHELL_VMU_RESTORE, KUI_SHELL_CRC_SCAN };
+    KUI_SHELL_VMU_RESTORE, KUI_SHELL_CRC_SCAN, KUI_SHELL_VMU_ACTIONS, KUI_SHELL_SYSTEM_TOOLS, KUI_SHELL_SALVAGE, KUI_SHELL_CD_AUDIO };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -42,7 +43,13 @@ enum kui_shell_action {
     KUI_SHELL_MUSIC_LIST, KUI_SHELL_MUSIC_PLAY,
     KUI_SHELL_MUSIC_PREVIOUS, KUI_SHELL_MUSIC_STOP,
     KUI_SHELL_CLOCK_READ, KUI_SHELL_CLOCK_WRITE, KUI_SHELL_VMU_BACKUPS_LIST,
-    KUI_SHELL_VMU_RESTORE_PREVIEW, KUI_SHELL_VMU_RESTORE_COMMIT, KUI_SHELL_ADVANCED_CRC
+    KUI_SHELL_VMU_RESTORE_PREVIEW, KUI_SHELL_VMU_RESTORE_COMMIT, KUI_SHELL_ADVANCED_CRC,
+    KUI_SHELL_VMU_DELETE_PREVIEW, KUI_SHELL_VMU_DELETE_COMMIT,
+    KUI_SHELL_VMU_COPY_PREVIEW, KUI_SHELL_VMU_COPY_COMMIT, KUI_SHELL_MUSIC_CLEAR_CACHE,
+    KUI_SHELL_NETWORK_CONNECT, KUI_SHELL_SYSTEM_INSPECT, KUI_SHELL_FLASH_BACKUP,
+    KUI_SHELL_BIOS_BACKUP, KUI_SHELL_RESTART,
+    KUI_SHELL_SALVAGE_NEW, KUI_SHELL_SALVAGE_RESUME, KUI_SHELL_SALVAGE_RECOVER,
+    KUI_SHELL_CD_LIST, KUI_SHELL_CD_PLAY, KUI_SHELL_CD_PAUSE, KUI_SHELL_CD_RESUME, KUI_SHELL_CD_STOP
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -54,6 +61,11 @@ struct kui_shell {
     struct kui_system_settings system_saved, system_draft;
     unsigned system_selected;
     bool video_trial, confirm_defaults, confirm_clock, confirm_vmu_restore;
+    bool confirm_vmu_delete, confirm_vmu_copy, confirm_music_clear, confirm_restart;
+    unsigned tools_selected;
+    bool confirm_salvage, salvage_zero_fill;
+    unsigned salvage_selected, salvage_passes;
+    unsigned vmu_action_selected, vmu_copy_slot;
     bool clock_valid;
     unsigned clock_selected;
     struct kui_datetime clock_draft;
@@ -67,6 +79,8 @@ struct kui_shell {
     char music_path[KUI_DEST_ROOT_CAP], music_selected_path[KUI_DEST_ROOT_CAP];
     unsigned music_page, music_selected;
     struct kui_music_player_page music_listing;
+    struct kui_cd_audio_status cd_audio;
+    unsigned cd_selected;
     /* Destination is committed only by a successful worker load/save. Browsing
      * and typing are drafts; neither changes where a new capture is written. */
     char destination[KUI_DEST_ROOT_CAP], browse_path[KUI_DEST_ROOT_CAP];
@@ -103,9 +117,12 @@ void kui_shell_set_vmu_backups(struct kui_shell *shell, const struct kui_vmu_bac
 void kui_shell_set_vmu_restore_preview(struct kui_shell *shell, const struct kui_vmu_view *view);
 /* A successful clock read or write replaces the editable snapshot. Failure
  * preserves a valid draft or seeds an editable 1980-01-01 with an error notice. */
+void kui_shell_set_vmu_delete_preview(struct kui_shell *shell, const struct kui_vmu_view *view);
+void kui_shell_set_vmu_copy_preview(struct kui_shell *shell, const struct kui_vmu_view *view);
 void kui_shell_set_clock(struct kui_shell *shell, const struct kui_datetime *value, const char *notice);
 /* MUSIC_LIST uses music_path and music_page * ROWS. MUSIC_PLAY uses the
  * validated music_selected_path. Worker completion never changes directory. */
+void kui_shell_set_cd_audio(struct kui_shell *shell, const struct kui_cd_audio_status *status);
 void kui_shell_set_music_listing(struct kui_shell *shell,
     const struct kui_music_player_page *page);
 /* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
@@ -140,6 +157,8 @@ struct kui_shell_view {
     struct kui_known_summary reference;
     enum kui_shell_outcome outcome;
     unsigned phase, track, tracks, rate_kib, retries;
+    unsigned retry_attempt, retry_limit;
+    uint32_t retry_fad;
     uint64_t done, total, committed, elapsed_ms;
     uint64_t phase_elapsed_ms, progress_age_ms;
     uint32_t memory_used, memory_physical, memory_peak;
@@ -148,6 +167,8 @@ struct kui_shell_view {
 };
 /* Estimate only the current moving phase after a 2s warmup; do not imply the
  * later verification duration. A stalled (>3s old) rate is not an estimate. */
+/* Tenths of a percent, clamped; zero for an unknown total. */
+unsigned kui_shell_progress_tenths(uint64_t done, uint64_t total);
 bool kui_shell_phase_eta(const struct kui_shell_view *view, uint64_t *seconds);
 /* The renderer draws its embedded font and original artwork directly. Text is
  * clipped to safe margins. An optional observer receives rendered labels for

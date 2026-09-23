@@ -16,7 +16,7 @@ static struct {
     struct kui_scan_status *status;
 } test;
 static FATFS fs;
-static const char *const files[]={"manifest.json","disc.gdi","checkpoint-a.bin","checkpoint-b.bin","track01.bin","track02.raw","track03.bin"};
+static const char *files[]={"manifest.json","disc.gdi","checkpoint-a.bin","checkpoint-b.bin","track01.bin","track02.raw","track03.bin"};
 static const char *folder="0:/Games/SCAN TEST";
 static bool fault(const char *s) {return test.scanning && !strcmp(test.fault,s);}
 static void log_line(const char *format,...) {va_list args;va_start(args,format);vprintf(format,args);va_end(args);puts("");}
@@ -102,33 +102,80 @@ static void seed(const char *host) {
     if(!strcmp(test.fault,"truncated")) {
         char path[KUI_DEST_PATH_CAP];uint8_t data[32768];file_path(path,"track03.bin");size_t n=load(path,data,sizeof(data));write_file(path,data,(UINT)n-1);
     }
+    if(!strncmp(test.fault,"imported",8) || !strcmp(test.fault,"no-metadata") || !strcmp(test.fault,"multiple-gdi")) {
+        char path[KUI_DEST_PATH_CAP];file_path(path,"manifest.json");assert(f_unlink(path)==FR_OK);
+    }
+    if(!strcmp(test.fault,"no-checkpoints")) {
+        char path[KUI_DEST_PATH_CAP];file_path(path,"checkpoint-a.bin");assert(f_unlink(path)==FR_OK);
+        file_path(path,"checkpoint-b.bin");assert(f_unlink(path)==FR_OK);
+    }
+    if(!strcmp(test.fault,"named") || !strcmp(test.fault,"named-sha")) {
+        char path[KUI_DEST_PATH_CAP],new_path[KUI_DEST_PATH_CAP],data[32768];file_path(path,"manifest.json");
+        size_t n=load(path,data,sizeof(data));assert(n+80<sizeof(data));
+        const char *addition="\"gdi_file\":\"A Named Game.gdi\",";
+        memmove(data+1+strlen(addition),data+1,n-1);memcpy(data+1,addition,strlen(addition));
+        write_file(path,data,(UINT)(n+strlen(addition)));
+        file_path(path,"disc.gdi");file_path(new_path,"A Named Game.gdi");assert(f_rename(path,new_path)==FR_OK);files[1]="A Named Game.gdi";
+    }
+    if(!strcmp(test.fault,"no-metadata") || !strcmp(test.fault,"missing-gdi")) {
+        char path[KUI_DEST_PATH_CAP];file_path(path,"disc.gdi");assert(f_unlink(path)==FR_OK);
+    }
+    if(!strcmp(test.fault,"multiple-gdi")) {
+        char path[KUI_DEST_PATH_CAP];file_path(path,"extra.gdi");write_file(path,"1\n",2);
+    }
+    if(!strcmp(test.fault,"imported-overlap")) {
+        char path[KUI_DEST_PATH_CAP];file_path(path,"disc.gdi");
+        const char *gdi="3\n1 0 4 2352 track01.bin 0\n2 4 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n";
+        write_file(path,gdi,(UINT)strlen(gdi));
+    }
+    if(!strcmp(test.fault,"imported-quotes")) {
+        char path[KUI_DEST_PATH_CAP],new_path[KUI_DEST_PATH_CAP];file_path(path,"track02.raw");file_path(new_path,"Audio Track.raw");
+        assert(f_rename(path,new_path)==FR_OK);files[5]="Audio Track.raw";file_path(path,"disc.gdi");
+        const char *gdi="3\r\n1 0 4 2352 track01.bin 0\r\n2 155 0 2352 \"Audio Track.raw\" 0\r\n3 45000 4 2352 track03.bin 0\r\n";
+        write_file(path,gdi,(UINT)strlen(gdi));
+    }
     char path[KUI_DEST_PATH_CAP];file_path(path,"track01.bin");FIL file;assert(f_open(&file,path,FA_READ)==FR_OK);
     test.first_track=(uint32_t)(fs.database+(LBA_t)(file.obj.sclust-2)*fs.csize);assert(f_close(&file)==FR_OK);
 }
 static void originals(uint32_t hashes[7],size_t sizes[7]) {
-    for(unsigned i=0;i<7;++i) {char path[KUI_DEST_PATH_CAP];uint8_t data[32768];file_path(path,files[i]);sizes[i]=load(path,data,sizeof(data));hashes[i]=kui_crc32(0,data,sizes[i]);}
+    for(unsigned i=0;i<7;++i) {
+        char path[KUI_DEST_PATH_CAP];uint8_t data[32768];file_path(path,files[i]);FILINFO info;FRESULT r=f_stat(path,&info);
+        if(r==FR_NO_FILE) {sizes[i]=SIZE_MAX;hashes[i]=0;continue;}
+        assert(r==FR_OK);sizes[i]=load(path,data,sizeof(data));hashes[i]=kui_crc32(0,data,sizes[i]);
+    }
 }
 int main(int argc,char **argv) {
     if(argc!=4) return 2;
     struct stat st;if(lstat(argv[1],&st) || !S_ISREG(st.st_mode) || st.st_size%512) return 2;
     test.image=fopen(argv[1],"r+b");assert(test.image);test.blocks=(uint64_t)st.st_size/512;test.fault=argv[3];
+    char long_folder[130];
+    if(!strcmp(test.fault,"long-folder")) {
+        memcpy(long_folder,"0:/Games/",9);memset(long_folder+9,'a',120);long_folder[129]=0;folder=long_folder;
+    }
     kui_media_set(&media);assert(kui_mount(&fs,log_line));seed(argv[2]);
     uint32_t before[7],after[7];size_t before_size[7],after_size[7];originals(before,before_size);
     assert(f_mount(NULL,"0:",0)==FR_OK);unsigned writes=test.writes;
     struct kui_scan_status status;test.status=&status;test.scanning=true;
     const struct kui_scan_ops ops={NULL,cancel,now_ms,progress,log_line};
-    enum kui_scan_result result=kui_recovery_scan(folder,&ops,&status);
+    enum kui_scan_result result=kui_recovery_scan(!strcmp(test.fault,"parent")?"0:/Games":folder,&ops,&status);
     test.scanning=false;test.cancelled=false;
-    bool good=!strcmp(test.fault,"clean") || !strcmp(test.fault,"one-checkpoint") || !strcmp(test.fault,"repeat") || !strcmp(test.fault,"sha");
-    bool issues=!strcmp(test.fault,"damaged") || !strcmp(test.fault,"unsupported");
+    bool good=!strcmp(test.fault,"clean") || !strcmp(test.fault,"one-checkpoint") || !strcmp(test.fault,"repeat") || !strcmp(test.fault,"sha") ||
+        !strcmp(test.fault,"no-checkpoints") || !strcmp(test.fault,"named") || !strcmp(test.fault,"named-sha") || !strcmp(test.fault,"long-folder");
+    bool structural=!strcmp(test.fault,"imported") || !strcmp(test.fault,"imported-quotes");
+    bool issues=!strcmp(test.fault,"damaged") || !strcmp(test.fault,"unsupported") || !strcmp(test.fault,"imported-damaged");
     bool stopped=!strcmp(test.fault,"cancel-before") || !strcmp(test.fault,"cancel-scan");
-    assert(result==(good?KUI_SCAN_CLEAN:issues?KUI_SCAN_ISSUES:stopped?KUI_SCAN_STOPPED:KUI_SCAN_FAILED));
-    assert(status.complete==(good || issues));
-    if(good || issues) {
+    assert(result==(good?KUI_SCAN_CLEAN:structural?KUI_SCAN_STRUCTURAL:issues?KUI_SCAN_ISSUES:stopped?KUI_SCAN_STOPPED:KUI_SCAN_FAILED));
+    assert(status.complete==(good || structural || issues));
+    if(good || issues || structural) {
         assert(status.done==14u*KUI_RAW_BYTES && status.total==status.done);
         assert(status.data_sectors==10 && status.audio_sectors==4);
         assert(strstr(status.report,".txt"));
     }
+    if(structural || !strcmp(test.fault,"imported-damaged")) assert(!status.reference_hashes && !status.checkpoint_checked && !status.crc_mismatches);
+    if(!strcmp(test.fault,"no-checkpoints")) assert(status.reference_hashes && !status.checkpoint_checked);
+    if(!strcmp(test.fault,"missing-gdi")) assert(strstr(status.message,"disc.gdi"));
+    if(!strcmp(test.fault,"parent") || !strcmp(test.fault,"no-metadata")) assert(strstr(status.message,"actual game folder"));
+    if(!strcmp(test.fault,"imported-damaged")) assert(status.bad_sectors==2);
     if(!strcmp(test.fault,"damaged")) assert(status.bad_sectors==2 && !status.unsupported_sectors && status.crc_mismatches==3);
     if(!strcmp(test.fault,"unsupported")) assert(!status.bad_sectors && status.unsupported_sectors==1 && status.crc_mismatches==1);
     if(!strcmp(test.fault,"cancel-before")) assert(test.writes==writes && !status.report[0]);
@@ -137,6 +184,11 @@ int main(int argc,char **argv) {
     if(status.report[0]) {
         FILINFO info;assert(f_stat(status.report,&info)==FR_OK);
         if(!status.complete) assert(strstr(status.report,".part"));
+        if(structural || !strcmp(test.fault,"imported-damaged")) {
+            uint8_t data[32768];size_t size=load(status.report,data,sizeof(data));
+            assert(contains(data,size,"NO expected hash") && contains(data,size,"Audio: UNVERIFIED"));
+            assert(!contains(data,size,"MATCH") && !contains(data,size,"COMPLETE CLEAN"));
+        }
     }
     if(!strcmp(test.fault,"repeat")) {
         char first[KUI_DEST_PATH_CAP];snprintf(first,sizeof(first),"%s",status.report);uint8_t data[32768];size_t bytes=load(first,data,sizeof(data));uint32_t crc=kui_crc32(0,data,bytes);

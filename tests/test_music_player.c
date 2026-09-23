@@ -14,7 +14,8 @@ static bool cancel(void) {return fake.cancel;}
 static void log_line(const char *fmt,...) {(void)fmt;}
 static void progress(const struct kui_app_status *s) {assert(s->done<=s->total);++fake.progress;}
 bool kui_music_load_path(const char *path,const char *title,kui_cancel_fn cancelled) {
-    assert(!strcmp(path,"/Music/test.wav") && !strcmp(title,"test.wav") && cancelled==cancel);++fake.loads;
+    assert(((!strcmp(path,"/Music/test.wav") && !strcmp(title,"test.wav")) ||
+        (!strcmp(path,"/Music/test.ogg") && !strcmp(title,"test.ogg"))) && cancelled==cancel);++fake.loads;
     if(fake.load_error) {strcpy(fake.status.message,"Track read failed; previous song retained");return false;}
     fake.status.loaded=true;fake.status.pcm_bytes=3u*1024u*1024u;fake.status.sample_rate=22050;return true;
 }
@@ -35,6 +36,7 @@ FRESULT f_readdir(DIR *dir,FILINFO *info) {
     if(at==0) {strcpy(info->fname,"Albums");info->fattrib=AM_DIR;}
     else if(at==1) strcpy(info->fname,"ignore.mp3");
     else if(at==2) {strcpy(info->fname,"hidden.wav");info->fattrib=AM_HID;}
+    else if(at==13) strcpy(info->fname,"compressed.OGG");
     else if(at<13) snprintf(info->fname,sizeof(info->fname),"song%02u.%s",at-3u,at&1u?"WAV":"wav");
     return FR_OK;
 }
@@ -47,6 +49,9 @@ int main(void) {
     assert(!fake.connects && strstr(out.message,"Background song selected"));
     /* Return completed to the shell while music remains playing: navigation
      * no longer waits for EOF or requires a Stop action. */
+    kui_music_player_run("/Music/test.ogg",30,&out,log_line,cancel,progress);
+    assert(out.passed && fake.loads==2 && fake.volume==30);
+    fake.volume=75;
     fake.load_error=true;
     kui_music_player_run("/Music/test.wav",20,&out,log_line,cancel,progress);
     assert(out.complete && !out.passed && out.errors==1 && fake.status.playing && fake.volume==75);
@@ -66,7 +71,7 @@ int main(void) {
     assert(!strcmp(page.entries[1].name,"song00.WAV") && !page.entries[1].directory);
     assert(fake.disconnects==1 && fake.dircloses==1 && fake.status.playing);
     assert(kui_music_player_list("/Music",8,&page,log_line,cancel));
-    assert(page.count==3 && !page.has_more && !strcmp(page.entries[0].name,"song07.wav"));
+    assert(page.count==4 && !page.has_more && !strcmp(page.entries[0].name,"song07.wav"));
     unsigned connects=fake.connects;fake.cancel=true;
     assert(!kui_music_player_list("/Music",0,&page,log_line,cancel) && fake.connects==connects);
     puts("PASS Music browser: bounded background selection returns, old song retained on fault/cancel, read-only paging never pauses audio");return 0;

@@ -33,9 +33,13 @@ Regenerate the exact PCM WAV with Python's standard library:
 python3 tools/generate_music_demo.py --directory build/music-demo
 ```
 
-An optional `--ogg` flag uses a locally installed `ffmpeg`/libvorbis to produce
-an Ogg Vorbis copy for PC listening and file-size comparison. Ogg is not included
-in the SD package, and this console player does not currently decode it. Ogg
-reduces the stored recording's size; decoding to a complete PCM cache uses the
-same RAM as the WAV. Bounded decoded buffers could reduce RAM use, with ongoing
-decoding work and a different playback implementation.
+The `--ogg` flag uses a locally installed `ffmpeg`/libvorbis to produce an Ogg
+Vorbis copy. The Music app now accepts both formats. Ogg keeps the compressed
+file in RAM and decodes small output blocks during playback; it does not expand
+the whole song into a PCM cache or read SD while playing.
+
+For the next hardware check, compare `harbor-lights.wav` and
+`harbor-lights.ogg` at the same volume, then switch away and back using the Home
+or Ripper triggers. The selected custom song participates in that cycle while
+cached. Verify looping and menu navigation before using Ogg during a rip; codec
+CPU cost and audio stability on the console remain unmeasured.

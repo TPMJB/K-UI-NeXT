@@ -24,6 +24,16 @@ RESTORES = ("restore-ok", "restore-game", "restore-page", "restore-existing", "r
             "restore-duplicate", "restore-existing-tail", "restore-truncated", "restore-dir-existing-corrupt")
 
 
+MANAGED = ("delete-ok", "delete-preview-only", "delete-restore", "delete-unlisted", "delete-invalid-row", "delete-unpreviewed",
+           "delete-orphan", "delete-duplicate", "delete-nameless", "delete-nul-first", "delete-invalid-protection", "delete-changed-card", "delete-changed-payload", "delete-device-change",
+           "delete-sd-write-fail", "delete-sd-sync-fail", "delete-readback-fail", "delete-readback-corrupt", "delete-cancel-backup",
+           "delete-dir-fail", "delete-dir-corrupt", "delete-fat-fail", "delete-fat-corrupt", "delete-stop-commit", "delete-remove",
+           "copy-ok", "copy-preview-only", "copy-unpreviewed", "copy-existing", "copy-orphan", "copy-same-slot",
+           "copy-changed-source", "copy-changed-payload", "copy-changed-destination", "copy-removed-destination",
+           "copy-sd-write-fail", "copy-sd-sync-fail", "copy-readback-fail", "copy-readback-corrupt", "copy-cancel",
+           "copy-write-fail", "copy-data-corrupt", "copy-dir-fail", "copy-dir-corrupt", "copy-fat-fail", "copy-fat-corrupt", "copy-final-corrupt")
+
+
 def digest(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").digest()
@@ -40,13 +50,13 @@ def main():
             run(BINARY, str(seed), "seed")
             original = digest(seed)
             checker = "fsck.fat" if kind == "fat32" else "fsck.exfat"
-            for case in READ_ONLY + BACKUPS + RESTORES:
+            for case in READ_ONLY + BACKUPS + RESTORES + MANAGED:
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(seed, image)
                 assert f"PASS VMU {case}" in run(BINARY, str(image), case)
                 if case in READ_ONLY:
                     assert digest(image) == original, f"{case} unexpectedly wrote to the SD card"
-                if case not in ("write-fail", "sync-fail", "restore-sd-write-fail", "restore-sd-sync-fail"):
+                if case not in ("write-fail", "sync-fail") and not case.endswith(("sd-write-fail", "sd-sync-fail")):
                     run(checker, "-n", str(image))
                 print(f"PASS {kind} VMU: {case}", flush=True)
 

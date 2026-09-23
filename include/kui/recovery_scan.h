@@ -3,13 +3,15 @@
 #define KUI_RECOVERY_SCAN_H
 #include "kui/capture.h"
 
-/* Advanced CRC reads existing completed K-UI jobs. It never modifies track
+/* Advanced CRC reads completed K-UI jobs or raw-2352 GDI folders.
+ * Structural-only GDI scans never claim expected-hash/audio verification. It never modifies track
  * data, checkpoints, GDI or manifest; the only output is a unique report under
  * /KUI/recovery. This is diagnosis, not optical recovery or ECC reconstruction. */
-enum kui_scan_result { KUI_SCAN_FAILED, KUI_SCAN_STOPPED, KUI_SCAN_CLEAN, KUI_SCAN_ISSUES };
+enum kui_scan_result { KUI_SCAN_FAILED, KUI_SCAN_STOPPED, KUI_SCAN_CLEAN, KUI_SCAN_ISSUES, KUI_SCAN_STRUCTURAL };
 struct kui_scan_status {
     enum kui_scan_result result;
     bool complete;
+    bool reference_hashes, checkpoint_checked;
     unsigned track, tracks;
     uint64_t done, total, elapsed_ms;
     uint32_t data_sectors, audio_sectors, bad_sectors, unsupported_sectors;
@@ -44,4 +46,12 @@ struct kui_scan_manifest {
 };
 bool kui_recovery_manifest_parse(const void *data,size_t size,
     struct kui_scan_manifest *out);
+/* Imported GDI: bounded consecutive tracks, raw 2352 only, zero file offsets,
+ * safe single-component names. Track end/size is filled from file lengths by
+ * the storage scanner; there is no expected hash or optical identity. */
+struct kui_scan_gdi {
+    struct kui_capture_plan plan;
+    char files[99][KUI_DEST_NAME_CAP];
+};
+bool kui_recovery_gdi_parse(const void *data,size_t size,struct kui_scan_gdi *out);
 #endif

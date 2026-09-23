@@ -133,7 +133,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, default=ROOT / "build/music-demo")
     parser.add_argument("--ogg", action="store_true",
-                        help="also make an optional PC-listening Ogg with ffmpeg; not a console format")
+                        help="also make an Ogg Vorbis copy for the RAM-decoding console player with ffmpeg")
     args = parser.parse_args()
     path = write_demo(args.directory)
     if args.ogg:

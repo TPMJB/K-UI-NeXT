@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/music.h"
 #include "kui/wav.h"
+#include "kui/music_ogg.h"
+#include "fixtures/music_vorbis.h"
 #include "platform.h"
 #include <dc/sound/stream.h>
 #ifdef KUI_ON_CONSOLE
@@ -38,7 +40,7 @@ void __wrap_free(void *pointer) {
 }
 #endif
 static struct {
-    uint8_t header[44];size_t size,pos;
+    uint8_t header[44];const uint8_t *ogg_file;size_t size,pos;
     unsigned connects,disconnects,opens,reads,closes,unmounts,init,shutdown,alloc,destroy,polls,starts;
     bool cancel,missing,short_read,close_error,unmount_error,init_error,alloc_error,poll_error,queued,active;
     unsigned cancel_after_reads,volume;size_t advertised_size;
@@ -60,7 +62,7 @@ void thd_sleep(unsigned ms) {assert(ms==8);}
 static void put16(uint8_t *p,unsigned n) {p[0]=(uint8_t)n;p[1]=(uint8_t)(n>>8);}
 static void put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(n>>(8*i));}
 static void source(unsigned channels,size_t pcm) {
-    fake.size=pcm+44u;fake.pos=0;memset(fake.header,0,sizeof(fake.header));
+    fake.ogg_file=NULL;fake.size=pcm+44u;fake.pos=0;memset(fake.header,0,sizeof(fake.header));
     memcpy(fake.header,"RIFF",4);put32(fake.header+4,(uint32_t)fake.size-8);memcpy(fake.header+8,"WAVEfmt ",8);
     put32(fake.header+16,16);put16(fake.header+20,1);put16(fake.header+22,channels);put32(fake.header+24,22050);
     put32(fake.header+28,22050*2*channels);put16(fake.header+32,2*channels);put16(fake.header+34,16);
@@ -107,15 +109,15 @@ void kui_sd_disconnect(void) {++fake.disconnects;}
 bool kui_mount(FATFS *fs,kui_log_fn log) {(void)fs;(void)log;return true;}
 FRESULT f_mount(FATFS *fs,const TCHAR *path,BYTE opt) {assert(!fs && !strcmp(path,"0:") && !opt);++fake.unmounts;return fake.unmount_error?FR_DISK_ERR:FR_OK;}
 FRESULT f_open(FIL *file,const TCHAR *path,BYTE mode) {
-    assert(mode==FA_READ && (!strncmp(path,"0:/KUI/apps/music/",18) || !strcmp(path,"0:/Music/test.wav")));++fake.opens;
+    assert(mode==FA_READ && (!strncmp(path,"0:/KUI/apps/music/",18) || !strcmp(path,"0:/Music/test.wav") || !strcmp(path,"0:/Music/test.ogg")));++fake.opens;
     if(fake.missing) return FR_NO_FILE;
     memset(file,0,sizeof(*file));file->obj.objsize=fake.advertised_size?fake.advertised_size:fake.size;fake.pos=0;return FR_OK;
 }
 FRESULT f_read(FIL *file,void *out,UINT requested,UINT *got) {
     (void)file;assert(requested<=32768 && requested<=fake.size-fake.pos);++fake.reads;
-    allocations_match();assert(state().loading_bytes==fake.size);
+    allocations_match();assert(state().loading_bytes==(fake.ogg_file?fake.size+15u+KUI_OGG_WORKSPACE_BYTES:fake.size));
     *got=fake.short_read?requested-1:requested;
-    uint8_t *p=out;for(UINT i=0;i<*got;i++) {size_t at=fake.pos+i;p[i]=at<44u?fake.header[at]:(uint8_t)at;}
+    uint8_t *p=out;for(UINT i=0;i<*got;i++) {size_t at=fake.pos+i;p[i]=fake.ogg_file?fake.ogg_file[at]:at<44u?fake.header[at]:(uint8_t)at;}
     fake.pos+=*got;
     /* Model the independently scheduled RAM-only audio poll during card I/O. */
     if(fake.active) kui_music_service();
@@ -144,6 +146,36 @@ void snd_stream_start(snd_stream_hnd_t hnd,uint32_t rate,int stereo) {
 }
 void snd_stream_volume(snd_stream_hnd_t hnd,int volume) {assert(hnd==0 && volume>=0 && volume<=255);fake.volume=(unsigned)volume;}
 int snd_stream_poll(snd_stream_hnd_t hnd) {assert(hnd==0 && fake.active);++fake.polls;if(fake.poll_error) return -1;fill(131072);return 0;}
+static void compressed_music(void) {
+    (void)ogg_stereo;
+    reset(1);kui_music_init(log_line);kui_music_set_config(true,20);
+    assert(kui_music_load(0,cancel));
+    fake.ogg_file=ogg_mono;fake.size=sizeof(ogg_mono);
+    assert(kui_music_load_path("/Music/test.ogg","Compressed song",cancel));
+    allocations_match();assert(state().compressed && state().decoder_bytes==KUI_OGG_WORKSPACE_BYTES);
+    assert(state().playing && state().current_index==KUI_MUSIC_CUSTOM_INDEX);
+    unsigned reads=fake.reads,connects=fake.connects,allocations=state().file_allocations;
+    for(unsigned i=0;i<30u;i++) kui_music_service();
+    unsigned wanted=99;assert(kui_music_step_cached(1,&wanted) && wanted==0);
+    assert(!state().compressed && kui_music_step_cached(-1,&wanted) && wanted==KUI_MUSIC_CUSTOM_INDEX);
+    assert(state().compressed);
+    for(unsigned i=0;i<30u;i++) kui_music_service();
+    assert(fake.reads==reads && fake.connects==connects && state().file_allocations==allocations);
+    /* A second compressed load is staged while the first decoder is polling.
+     * Its arena is part of the same tracked allocation, with no hidden heap. */
+    for(unsigned i=0;i<20u;i++) {
+        assert(kui_music_load_path("/Music/test.ogg","Replacement Ogg",cancel));allocations_match();
+        fake.cancel_after_reads=fake.reads+1;
+        assert(!kui_music_load_path("/Music/test.ogg","Cancelled Ogg",cancel));
+        fake.cancel_after_reads=0;allocations_match();assert(state().playing && state().compressed);
+    }
+    reads=fake.reads;connects=fake.connects;kui_music_clear_cache();allocations_match();
+    assert(!state().loaded && !state().playing && !state().cache_bytes && !state().cached_mask &&
+           !state().compressed && !state().decoder_bytes && state().enabled && state().volume==20);
+    assert(fake.reads==reads && fake.connects==connects && state().file_allocations==state().file_frees);
+    assert(kui_music_next_index(0,-1)==4 && kui_music_next_index(4,1)==0);
+    kui_music_shutdown();
+}
 static void cache_churn(void) {
     /* Reproduce the shipped five-song working set, then cycle it repeatedly.
      * Selecting cached music must not allocate file memory or touch storage. */
@@ -307,7 +339,7 @@ int main(void) {
     assert(kui_music_load(0,cancel));assert(!state().playing && strstr(state().message,"Audio service unavailable"));
     assert(!fake.init && !thread_live);kui_music_shutdown();thread_fail=false;
 #endif
-    cache_churn();
+    cache_churn();compressed_music();
     replacement_interleave();
     puts("PASS background music: independent polling, no playback I/O, preserved replacements, 1000 cached switches, 300 replacements/failures, exact 8MiB staging budget, allocation cleanup, replacement/resume interleaving");return 0;
 }

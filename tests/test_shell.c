@@ -47,7 +47,7 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_CRC_SCAN;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_CD_AUDIO;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -226,9 +226,11 @@ static void restore_and_scan_controls(void) {
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_slot==7);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_RESTORE_PREVIEW);
     assert(!strcmp(s.restore_path,backups.entries[0].path) && !s.confirm_vmu_restore);
-    struct kui_vmu_view preview={.slot=0,.restore_ready=true};
+    struct kui_vmu_view preview={.slot=0,.restore_ready=true,.count=1};
+    strcpy(preview.entries[0].name,"CHECKED_SAVE");preview.entries[0].bytes=8192;
     kui_shell_set_vmu_restore_preview(&s,&preview);assert(!s.confirm_vmu_restore); /* Wrong card. */
     preview.slot=7;kui_shell_set_vmu_restore_preview(&s,&preview);assert(s.confirm_vmu_restore);
+    assert(!strcmp(s.restore_name,"CHECKED_SAVE") && s.restore_bytes==8192);
     assert(press(KUI_SHELL_RIGHT|KUI_SHELL_START,false)==KUI_SHELL_NONE && s.vmu_slot==7);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_vmu_restore);
     kui_shell_set_vmu_restore_preview(&s,&preview);
@@ -403,6 +405,7 @@ static void advanced_navigation(void) {
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISCARD_SETTINGS && s.page==KUI_SHELL_ADVANCED);
     press(KUI_SHELL_B,false); assert(s.page==KUI_SHELL_RIPPER);
     press(KUI_SHELL_START,false);s.advanced_selected=0;
+    press(KUI_SHELL_UP,false);assert(s.advanced_selected==6);
     press(KUI_SHELL_UP,false);assert(s.advanced_selected==5);
     press(KUI_SHELL_UP,false);assert(s.advanced_selected==4);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.page==KUI_SHELL_DESTINATION);
@@ -466,7 +469,7 @@ static void music_and_boot_controls(void) {
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_MUSIC_LIST && !s.music_page);
     kui_shell_set_music_listing(&s,&page);s.music_listing.entries[0].disabled=true;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.music_listing.message[0]);
-    assert(press(KUI_SHELL_X,false)==KUI_SHELL_MUSIC_LIST);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_MUSIC_LIST);
     page.count=UINT_MAX;memset(page.entries[0].name,'A',sizeof(page.entries[0].name));
     kui_shell_set_music_listing(&s,&page);
     assert(s.music_listing.count==KUI_MUSIC_PLAYER_ROWS && s.music_listing.entries[0].disabled);
@@ -504,7 +507,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_CRC_SCAN;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_CD_AUDIO;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -609,14 +612,14 @@ static void new_pages_rendering(void) {
     assert(strstr(drawn,"Memory Test") && strstr(drawn,"Allocated region passed"));
     assert(!strstr(drawn,"Line 3:") && strstr(drawn,"Line 4:") && strstr(drawn,"Line 11:"));
     s.page=KUI_SHELL_NETWORK;render(&v);
-    assert(strstr(drawn,"Network Test") && strstr(drawn,"Inspect network adapter"));
+    assert(strstr(drawn,"Network Test") && strstr(drawn,"Inspect adapter"));
     reset(KUI_SHELL_VMU);s.vmu.present=true;s.vmu.total=8;s.vmu.count=8;
     for(unsigned i=0;i<8;i++) {
         snprintf(s.vmu.entries[i].name,16,"SAVE_%02u",i);s.vmu.entries[i].bytes=32768;
     }
     s.vmu_slot=7;s.vmu_selected=7;render(&v);
     assert(strstr(drawn,"VMU D2") && strstr(drawn,"SAVE_07") && strstr(drawn,"32768 bytes"));
-    assert(strstr(drawn,"LEFT/RIGHT VMU") && strstr(drawn,"Backups go to SD"));
+    assert(strstr(drawn,"LEFT/RIGHT VMU") && strstr(drawn,"L Copy / delete selected"));
     reset(KUI_SHELL_HOME);v.app_status=NULL;
     render(&v);
     assert(strstr(drawn,"Inserted: Sword of the Berserk"));
@@ -668,7 +671,7 @@ static void music_and_boot_rendering(void) {
     assert(strstr(drawn,"Music Player") && strstr(drawn,"SD: /Music"));
     assert(strstr(drawn,"test.wav") && strstr(drawn,"Albums") && strstr(drawn,"WAV"));
     assert(strstr(drawn,"B Parent") && strstr(drawn,"START Home") && !strstr(drawn,"CD playback"));
-    assert(strstr(drawn,"Y Stop music") && strstr(drawn,"Cached 0.0 MiB / 8 MiB"));
+    assert(strstr(drawn,"Y Stop") && strstr(drawn,"Cached 0.0 MiB / 8 MiB"));
 }
 static void round_four_rendering(void) {
     struct kui_shell_view v={.music_cache_bytes=4674286};
@@ -691,12 +694,133 @@ static void round_four_rendering(void) {
     assert(strstr(drawn,"Mode1 EDC/parity") && strstr(drawn,"no disc reads") && strstr(drawn,"/Games/MDK2"));
     reset(KUI_SHELL_MUSIC);render(&v);assert(strstr(drawn,"Cached 4.4 MiB / 8 MiB"));
 }
+static void round_five_controls(void) {
+    reset(KUI_SHELL_VMU);
+    assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU);
+    s.vmu.present=true;s.vmu.count=1;s.vmu.total=1;
+    strcpy(s.vmu.entries[0].name,"TEST_SAVE");s.vmu.entries[0].bytes=4096;
+    assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
+    assert(s.vmu_copy_slot==1 && !s.confirm_vmu_delete);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_DELETE_PREVIEW);
+    struct kui_vmu_view preview={.slot=1,.delete_ready=true,.count=1};
+    strcpy(preview.entries[0].name,"ACTUAL_SAVE");preview.entries[0].bytes=8192;
+    kui_shell_set_vmu_delete_preview(&s,&preview);assert(!s.confirm_vmu_delete);
+    preview.slot=0;kui_shell_set_vmu_delete_preview(&s,&preview);assert(s.confirm_vmu_delete);
+    assert(!strcmp(s.vmu.entries[0].name,"ACTUAL_SAVE") && s.vmu.entries[0].bytes==8192);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_vmu_delete);
+    kui_shell_set_vmu_delete_preview(&s,&preview);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_DELETE_COMMIT && !s.confirm_vmu_delete);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.vmu_action_selected==1);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==7);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_PREVIEW);
+    preview.copy_ready=true;preview.slot=0;kui_shell_set_vmu_copy_preview(&s,&preview);assert(!s.confirm_vmu_copy);
+    strcpy(preview.entries[0].name,"LATEST_SAVE");
+    preview.slot=1;kui_shell_set_vmu_copy_preview(&s,&preview);assert(s.confirm_vmu_copy);
+    assert(!strcmp(s.vmu.entries[0].name,"LATEST_SAVE"));
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_COMMIT && !s.confirm_vmu_copy);
+    preview.copy_ready=false;preview.status.complete=true;
+    kui_shell_set_vmu_copy_preview(&s,&preview);assert(!s.vmu.count && !s.confirm_vmu_copy);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_VMU_LIST && s.page==KUI_SHELL_VMU);
+    reset(KUI_SHELL_MUSIC);
+    assert(press(KUI_SHELL_X,true)==KUI_SHELL_NONE && !s.confirm_music_clear);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.confirm_music_clear);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_music_clear);
+    press(KUI_SHELL_X,false);assert(press(KUI_SHELL_A,false)==KUI_SHELL_MUSIC_CLEAR_CACHE);
+    assert(!s.confirm_music_clear && press(KUI_SHELL_R,false)==KUI_SHELL_MUSIC_LIST);
+    reset(KUI_SHELL_SETTINGS);s.system_selected=8;
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.system_draft.screen_inset==2);
+    assert(kui_shell_system_dirty(&s) && s.system_saved.screen_inset==0);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_SYSTEM);
+    press(KUI_SHELL_DOWN,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SYSTEM_INSPECT && s.page==KUI_SHELL_SYSTEM_TOOLS);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_FLASH_BACKUP);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_BIOS_BACKUP);
+    press(KUI_SHELL_UP,false);assert(s.tools_selected==3);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_restart);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_restart);
+    press(KUI_SHELL_A,false);assert(press(KUI_SHELL_A,false)==KUI_SHELL_RESTART);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SETTINGS);
+    reset(KUI_SHELL_SETTINGS);s.system_selected=10;
+    assert(!s.system_saved.menu_sounds && !s.system_draft.menu_sounds);
+    press(KUI_SHELL_RIGHT,false);assert(s.system_draft.menu_sounds && kui_shell_system_dirty(&s));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_SYSTEM);
+    reset(KUI_SHELL_MUSIC);assert(press(KUI_SHELL_L,false)==KUI_SHELL_CD_LIST && s.page==KUI_SHELL_CD_AUDIO);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    struct kui_cd_audio_status cd={.loaded=true,.count=2};cd.tracks[0].number=2;cd.tracks[1].number=4;
+    kui_shell_set_cd_audio(&s,&cd);press(KUI_SHELL_DOWN,false);assert(s.cd_selected==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_CD_PLAY);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE);
+    cd.playing=true;kui_shell_set_cd_audio(&s,&cd);assert(press(KUI_SHELL_Y,false)==KUI_SHELL_CD_PAUSE);
+    cd.playing=false;cd.paused=true;kui_shell_set_cd_audio(&s,&cd);assert(press(KUI_SHELL_Y,false)==KUI_SHELL_CD_RESUME);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_CD_STOP);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_CD_LIST);
+    cd.count=0;kui_shell_set_cd_audio(&s,&cd);assert(s.cd_selected==0);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_MUSIC);
+    reset(KUI_SHELL_NETWORK);assert(press(KUI_SHELL_X,false)==KUI_SHELL_NETWORK_CONNECT);
+    reset(KUI_SHELL_ADVANCED);s.advanced_selected=6;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
+    assert(!s.salvage_zero_fill && s.salvage_passes==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_salvage);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage);
+    s.salvage_selected=3;press(KUI_SHELL_RIGHT,false);assert(s.salvage_zero_fill);
+    press(KUI_SHELL_DOWN,false);press(KUI_SHELL_LEFT,false);assert(s.salvage_passes==50);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==1);
+    s.salvage_selected=0;press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_NEW && !s.confirm_salvage);
+    s.salvage_selected=1;assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
+    s.salvage_selected=2;assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RECOVER);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
+    assert(kui_shell_progress_tenths(1,0)==0);
+    assert(kui_shell_progress_tenths(1,3)==333);
+    assert(kui_shell_progress_tenths(99,100)==990);
+    assert(kui_shell_progress_tenths(UINT64_MAX-1,UINT64_MAX)==999);
+    assert(kui_shell_progress_tenths(UINT64_MAX,UINT64_MAX)==1000);
+    assert(kui_shell_progress_tenths(100,99)==1000);
+}
+static void round_five_rendering(void) {
+    struct kui_shell_view v={.busy=true,.inserted_title="Dead or Alive 2",.done=7,.total=10,
+        .retries=11,.retry_attempt=3,.retry_limit=10,.retry_fad=45150};
+    reset(KUI_SHELL_RIPPER);render(&v);
+    assert(strstr(drawn,"Disc: Dead or Alive 2") && !strstr(drawn,"Identifying..."));
+    assert(strstr(drawn,"70.0%") && strstr(drawn,"TOTAL RETRIES 11"));
+    assert(strstr(drawn,"Read retry 3/10 at FAD 45150"));
+    v.busy=false;reset(KUI_SHELL_VMU_ACTIONS);s.vmu.present=true;s.vmu.count=1;s.vmu_copy_slot=1;
+    strcpy(s.vmu.entries[0].name,"TEST_SAVE");render(&v);
+    assert(strstr(drawn,"Source VMU A1: TEST_SAVE") && strstr(drawn,"Copy to VMU A2"));
+    s.confirm_vmu_delete=true;render(&v);assert(strstr(drawn,"DELETE THIS SAVE") && strstr(drawn,"verified SD backup"));
+    s.confirm_vmu_delete=false;s.confirm_vmu_copy=true;render(&v);assert(strstr(drawn,"COPY THIS SAVE") && strstr(drawn,"Destination VMU A2"));
+    reset(KUI_SHELL_MUSIC);s.confirm_music_clear=true;render(&v);
+    assert(strstr(drawn,"CLEAR CACHED MUSIC?") && strstr(drawn,"files remain"));
+    reset(KUI_SHELL_SETTINGS);s.system_selected=8;render(&v);
+    assert(strstr(drawn,"Safe area") && strstr(drawn,"System tools"));
+    reset(KUI_SHELL_SYSTEM_TOOLS);render(&v);assert(strstr(drawn,"Inspect system hardware") && strstr(drawn,"Back up visible BIOS bank"));
+    s.confirm_restart=true;render(&v);assert(strstr(drawn,"RESTART THE CONSOLE?"));
+    reset(KUI_SHELL_CD_AUDIO);s.cd_audio.loaded=true;s.cd_audio.count=2;
+    s.cd_audio.tracks[0].number=2;s.cd_audio.tracks[0].seconds=185;
+    s.cd_audio.tracks[1].number=4;s.cd_audio.tracks[1].seconds=61;
+    s.cd_audio.playing=true;s.cd_audio.current=4;render(&v);
+    assert(strstr(drawn,"Audio CD player") && strstr(drawn,"Track 04  <") && strstr(drawn,"3:05"));
+    reset(KUI_SHELL_SALVAGE);render(&v);assert(strstr(drawn,"Zero-fill unreadable sectors") && strstr(drawn,"OFF"));
+    s.confirm_salvage=true;render(&v);assert(strstr(drawn,"Zero-fill OFF") && strstr(drawn,"Placeholders are not repaired"));
+    s.salvage_zero_fill=true;render(&v);assert(strstr(drawn,"Zero-fill ON"));
+    s.confirm_salvage=false;v.busy=true;
+    struct kui_app_status state={.line_count=3,.total=10,.done=5};
+    strcpy(state.message,"Retrying unresolved sectors");
+    strcpy(state.lines[0],"Track 3/31  FAD 45150  attempts 3");
+    strcpy(state.lines[1],"Targets 12  recovered 5  remaining 7");
+    strcpy(state.lines[2],"Recovery pass 2/5  First pass: complete");
+    v.app_status=&state;render(&v);
+    assert(strstr(drawn,"remaining 7") && strstr(drawn,"pass 2/5") && !strstr(drawn,"New salvage job"));
+}
 int main(void) {
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();
     system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
-    music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering();
+    music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
     puts("PASS shell: Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

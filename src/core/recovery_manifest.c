@@ -180,3 +180,70 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
     }
     return high;
 }
+
+/* Deliberately separate from the JSON parser: GDI is a line-oriented format.
+ * Imported names may be quoted, but are never permitted to escape the folder. */
+struct gdi_line {const uint8_t *at,*end;};
+static void gdi_space(struct gdi_line *p) {
+    while(p->at<p->end && (*p->at==' ' || *p->at=='\t')) ++p->at;
+}
+static bool gdi_number(struct gdi_line *p,uint32_t *out) {
+    gdi_space(p);if(p->at==p->end || *p->at<'0' || *p->at>'9') return false;
+    uint32_t value=0;
+    do {
+        unsigned digit=*p->at++-'0';if(value>(UINT32_MAX-digit)/10) return false;
+        value=value*10+digit;
+    } while(p->at<p->end && *p->at>='0' && *p->at<='9');
+    if(p->at<p->end && *p->at!=' ' && *p->at!='\t') return false;
+    *out=value;return true;
+}
+static bool gdi_filename(struct gdi_line *p,char out[KUI_DEST_NAME_CAP]) {
+    gdi_space(p);if(p->at==p->end) return false;
+    bool quoted=*p->at=='"';if(quoted) ++p->at;
+    size_t length=0;
+    while(p->at<p->end) {
+        unsigned ch=*p->at;
+        if((quoted && ch=='"') || (!quoted && (ch==' ' || ch=='\t'))) break;
+        if(ch<32 || ch>126 || strchr("\\/:*?\"<>|",(int)ch) || length+1>=KUI_DEST_NAME_CAP) return false;
+        out[length++]=(char)ch;++p->at;
+    }
+    if(quoted && (p->at==p->end || *p->at++!='"')) return false;
+    if(p->at<p->end && *p->at!=' ' && *p->at!='\t') return false;
+    if(!length || out[0]=='.' || out[length-1]=='.' || out[length-1]==' ') return false;
+    out[length]=0;return true;
+}
+static bool same_name(const char *a,const char *b) {
+    while(*a && *b) {
+        unsigned x=(unsigned char)*a++,y=(unsigned char)*b++;
+        if(x>='A' && x<='Z') x+='a'-'A';
+        if(y>='A' && y<='Z') y+='a'-'A';
+        if(x!=y) return false;
+    }
+    return *a==*b;
+}
+bool kui_recovery_gdi_parse(const void *data,size_t size,struct kui_scan_gdi *out) {
+    if(!data || !size || size>KUI_SCAN_MANIFEST_LIMIT || !out) return false;
+    memset(out,0,sizeof(*out));
+    const uint8_t *at=data,*end=at+size;unsigned line=0;uint32_t count=0;
+    while(at<end) {
+        const uint8_t *next=at;while(next<end && *next!='\n') ++next;
+        struct gdi_line p={at,next};if(p.end>p.at && p.end[-1]=='\r') --p.end;
+        if(!line) {
+            if(!gdi_number(&p,&count) || !count || count>99) return false;
+            out->plan.count=count;
+        } else {
+            if(line>count) return false;
+            uint32_t number,lba,control,bytes,offset;
+            if(!gdi_number(&p,&number) || number!=line || !gdi_number(&p,&lba) ||
+               lba>KUI_RECOVERY_FAD_MAX-150u || !gdi_number(&p,&control) ||
+               (control!=0 && control!=4) || !gdi_number(&p,&bytes) || bytes!=KUI_RAW_BYTES ||
+               !gdi_filename(&p,out->files[line-1]) || !gdi_number(&p,&offset) || offset) return false;
+            if(line>1 && lba+150<=out->plan.tracks[line-2].start) return false;
+            for(unsigned i=0;i+1<line;++i) if(same_name(out->files[i],out->files[line-1])) return false;
+            out->plan.tracks[line-1]=(struct kui_capture_track){number,control,lba>=45000?1u:0u,lba+150,0,0};
+        }
+        gdi_space(&p);if(p.at!=p.end) return false;
+        ++line;at=next==end?end:next+1;
+    }
+    return line==count+1;
+}

@@ -1,5 +1,12 @@
 # Explicit damaged-disc recovery
 
+**2026-09-23 implementation update:** the independent first-pass/repair worker,
+FatFs durable journal, explicit UI actions and PC verifier are now implemented.
+See [salvage-worker.md](salvage-worker.md) for the shipped behavior, bounded
+limits, host fault tests and pending hardware acceptance. The earlier design
+and provenance below remain the rationale; they are not a statement that the
+worker is still missing. Normal capture and its accepted reader remain unchanged.
+
 Status: backend port started. The [first helper gate](recovery-port.md) now
 contains selectively adapted CRC replacement and Mode 1 address/EDC/PQ checks
 with host tests. The Mode 1 checks now power a separate

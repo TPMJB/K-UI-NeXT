@@ -3,7 +3,7 @@
 """Generate tiny synthetic Advanced CRC jobs, never retail/game data.
 
 Usage: make_scan_fixtures.py OUTDIR
-Copy OUTDIR/clean and OUTDIR/damaged under /KUI/tests/scan on the card.
+Copy the generated test folders under /KUI/tests/scan on the card.
 The Mode 1 oracle uses independent polynomial parity generation from the
 host recovery checks. Generated dump-shaped folders must stay outside Git.
 """
@@ -85,11 +85,17 @@ def main():
     args = parser.parse_args()
     make_fixture(args.outdir / "clean")
     make_fixture(args.outdir / "damaged", damaged=True)
+    imported = args.outdir / "gdi-only"
+    make_fixture(imported)
+    for name in ("manifest.json", "checkpoint-a.bin", "checkpoint-b.bin"):
+        (imported / name).unlink()
     (args.outdir / "README.txt").write_text(
         "K-UI Advanced CRC synthetic test jobs. These are not games.\n"
         "Ripper > Advanced > Advanced CRC scan > choose one test folder.\n"
         "clean: CLEAN, 10 data sectors, 4 audio sectors, 0 suspect, 0 CRC mismatches.\n"
         "damaged: ISSUES, 2 suspect data sectors, 0 unsupported, 3 CRC mismatches.\n"
+        "gdi-only: STRUCTURAL ONLY; 10 data + 4 audio sectors; NO expected hashes.\n"
+        "A clean GDI-only structure check does not verify the audio bytes.\n"
         "Expected suspect FADs: 150 (P/Q only), 45152 (EDC/PQ).\n"
         "The altered audio track is detected by its CRC; audio has no Mode 1 parity.\n"
         "Reports: /KUI/recovery/scan-XXXX.txt; incomplete reports use .part.\n"

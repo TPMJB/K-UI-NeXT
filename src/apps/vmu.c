@@ -49,6 +49,12 @@ static struct {
     unsigned slot;
     bool valid;
 } restore_preview;
+static struct {
+    maple_device_t *source_device,*destination_device;
+    uint32_t source_fingerprint,destination_fingerprint,payload_crc;
+    unsigned source_slot,destination_slot,page,selected;
+    bool valid,copy;
+} managed_preview;
 
 static uint16_t le16(const uint8_t *p) {return (uint16_t)(p[0]|((unsigned)p[1]<<8));}
 static uint32_t le32(const uint8_t *p) {return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);}
@@ -174,7 +180,7 @@ static bool check_snapshot(struct session *s,const struct snapshot *original,str
     if(check->fingerprint!=original->fingerprint || memcmp(check->root,original->root,BLOCK_BYTES) ||
        memcmp(check->fat,original->fat,BLOCK_BYTES) ||
        memcmp(check->directory,original->directory,original->directory_blocks*BLOCK_BYTES))
-        return fail(s,"VMU contents changed; backup stopped, refresh the list");
+        return fail(s,"VMU contents changed; operation stopped, refresh the list");
     return true;
 }
 static bool read_save(struct session *s,const struct snapshot *snap,const uint8_t *entry,uint8_t *data) {
@@ -368,9 +374,7 @@ static bool load_metadata(struct session *s,const char *path,uint8_t entry[32],u
        (entry[1]!=0 && entry[1]!=0xff) || !blocks || blocks>255 || header>=blocks ||
        entry[28] || le32(proof+8)!=blocks*BLOCK_BYTES)
         return fail(s,"Backup metadata or its CRC is invalid");
-    bool name=false;
-    for(unsigned i=0;i<12;i++) if(entry[i+4]) name=true;
-    if(!name) return fail(s,"Backup has no VMU filename");
+    if(!entry[4]) return fail(s,"Backup has no VMU filename");
     return true;
 }
 void kui_vmu_backups_run(unsigned page,struct kui_vmu_backup_view *out,
@@ -592,4 +596,212 @@ done:
     if(connected) kui_sd_disconnect();
     out->status.complete=ok;out->status.passed=ok;
     if(progress) progress(&out->status);
+}
+
+/* A managed deletion/copy must not make damaged metadata harder to diagnose.
+ * read_snapshot has already checked chain ranges, lengths and shared blocks. */
+static bool healthy_metadata(struct session *s,const struct snapshot *snap) {
+    unsigned owned=0,allocated=0;
+    for(unsigned i=0;i<snap->user_blocks;i++) if(le16(snap->fat+i*2)!=0xfffc) ++allocated;
+    for(unsigned i=0;i<snap->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[i]*32;
+        owned+=le16(entry+24);
+        for(unsigned j=0;j<i;j++)
+            if(!strncmp((const char *)entry+4,(const char *)snap->directory+snap->entries[j]*32+4,12))
+                return fail(s,"VMU has duplicate save names; no managed write is allowed");
+    }
+    return owned==allocated || fail(s,"VMU has unowned allocated blocks; no managed write is allowed");
+}
+static bool publish_save(struct session *s,const char *folder,const uint8_t entry[32],
+                         const uint8_t *data,unsigned index) {
+    char base[32],path[KUI_DEST_PATH_CAP];filename(base,entry,index);
+    uint32_t length=(uint32_t)le16(entry+24)*BLOCK_BYTES;
+    snprintf(path,sizeof(path),"%s/%s.dir",folder,base);
+    if(!save_file(s,path,entry,32)) return false;
+    snprintf(path,sizeof(path),"%s/%s.vms",folder,base);
+    if(!save_file(s,path,data,length)) return false;
+    if(strlen(path)>=sizeof(s->out->backup_path)) return fail(s,"Managed backup path is too long");
+    char backup[KUI_VMU_BACKUP_PATH_CAP];strcpy(backup,path);
+    uint8_t proof[32]={0};memcpy(proof,"KUIVMU1",7);
+    put32(proof+8,length);put32(proof+12,kui_crc32(0,entry,32));
+    put32(proof+16,kui_crc32(0,data,length));put32(proof+28,kui_crc32(0,proof,28));
+    snprintf(path,sizeof(path),"%s/%s.crc",folder,base);
+    if(!save_file(s,path,proof,sizeof(proof))) return false;
+    strcpy(s->out->backup_path,backup);return true;
+}
+/* Remove the directory entry before freeing the chain. A failed/torn FAT write
+ * then cannot cause a live entry to point at blocks marked free. A failed
+ * directory write may affect neighboring entries: never retry it or report
+ * success. Both exact metadata and restorable payload are already saved on SD. */
+static bool delete_write(struct session *s,const struct snapshot *original,
+                         struct snapshot *check,unsigned entry_index) {
+    vmu_root_t root;uint16_t fat[256];uint8_t bytes[BLOCK_BYTES];
+    vmu_dir_t *dir=malloc(original->directory_blocks*BLOCK_BYTES);
+    if(!dir) return fail(s,"Not enough RAM for VMU delete metadata");
+    memcpy(&root,original->root,sizeof(root));memcpy(fat,original->fat,sizeof(fat));
+    memcpy(dir,original->directory,original->directory_blocks*BLOCK_BYTES);
+    bool ok=false,locked=false,metadata_started=false;kui_cancel_fn old_cancel=s->cancel;
+    if(vmufs_mutex_lock()!=0) {fail(s,"Cannot lock VMU deletion");goto done;}
+    locked=true;
+    if(!read_snapshot(s,check) || check->fingerprint!=original->fingerprint ||
+       memcmp(check->root,original->root,BLOCK_BYTES) || memcmp(check->fat,original->fat,BLOCK_BYTES) ||
+       memcmp(check->directory,original->directory,original->directory_blocks*BLOCK_BYTES)) {
+        if(!s->out->status.errors && !s->out->status.stopped) fail(s,"VMU changed before deletion; preview again");
+        goto done;
+    }
+    unsigned at=dir[entry_index].firstblk,blocks=dir[entry_index].filesize;
+    for(unsigned i=0;i<blocks;i++) {unsigned next=fat[at];fat[at]=0xfffc;at=next;}
+    memset(&dir[entry_index],0,sizeof(dir[entry_index]));dir[entry_index].dirty=1;
+    if(cancelled(s) || !same_device(s)) goto done;
+    status(s,"Deleting backed-up save; keep the VMU connected...");
+    s->cancel=NULL;metadata_started=true;
+    if(vmufs_dir_write(s->device,&root,dir)!=0 || !same_device(s)) {
+        fail(s,"VMU delete directory commit failed; card is unverified, retain the SD backup");goto done;
+    }
+    /* Inspect every directory block before releasing any old allocation. */
+    for(unsigned i=0;i<root.dir_size;i++)
+        if(!read_block(s,root.dir_loc-i,bytes) || memcmp(bytes,dir+i*16,BLOCK_BYTES)) {
+            fail(s,"VMU delete directory readback differs; blocks were not released");goto done;
+        }
+    if(vmufs_fat_write(s->device,&root,fat)!=0 || !same_device(s)) {
+        fail(s,"VMU delete FAT commit failed; card is unverified, retain the SD backup");goto done;
+    }
+    if(!read_snapshot(s,check) || memcmp(check->root,original->root,BLOCK_BYTES) ||
+       memcmp(check->fat,fat,BLOCK_BYTES) || memcmp(check->directory,dir,original->directory_blocks*BLOCK_BYTES)) {
+        fail(s,"VMU delete metadata readback differs; card is unverified");goto done;
+    }
+    s->out->status.done=s->out->status.total;ok=true;
+done:
+    s->cancel=old_cancel;
+    if(locked && vmufs_mutex_unlock()!=0) {fail(s,"Cannot unlock VMU deletion");ok=false;}
+    if(metadata_started && !ok) s->log("VMU DELETE UNVERIFIED: metadata commit began; retain backup and inspect card; do not automatically retry");
+    free(dir);return ok;
+}
+static void managed_run(bool copy,unsigned source_slot,unsigned page,unsigned selected,unsigned destination_slot,
+                        bool commit,struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(!out) return;
+    memset(out,0,sizeof(*out));out->slot=copy?destination_slot:source_slot;
+    struct session source={out,log?log:quiet_log,cancel,progress,NULL,source_slot/2,source_slot%2+1};
+    struct session target={out,log?log:quiet_log,cancel,progress,NULL,destination_slot/2,destination_slot%2+1};
+    struct snapshot *snap=NULL,*check=NULL,*destination=NULL;uint8_t *data=NULL;
+    bool connected=false,mounted=false,ok=false;FATFS fs;
+    if(!commit) managed_preview.valid=false;
+    if(source_slot>=8 || destination_slot>=8 || (copy && source_slot==destination_slot)) {
+        fail(&source,"Choose valid, different VMU source and destination slots");goto done;
+    }
+    if(commit && (!managed_preview.valid || managed_preview.copy!=copy ||
+       managed_preview.source_slot!=source_slot || managed_preview.destination_slot!=destination_slot ||
+       managed_preview.page!=page || managed_preview.selected!=selected)) {
+        fail(&source,"Preview the selected save and destination before confirming");goto done;
+    }
+    if(cancelled(&source)) goto done;
+    source.device=maple_enum_dev((int)source.port,(int)source.unit);
+    if(!source.device || !source.device->valid || !(source.device->info.functions&MAPLE_FUNC_MEMCARD)) {
+        fail(&source,"No VMU in the selected source slot");goto done;
+    }
+    if(!listed[source_slot].valid || listed[source_slot].device!=source.device) {
+        fail(&source,"Refresh the source VMU list before selecting this save");goto done;
+    }
+    snap=malloc(sizeof(*snap));check=malloc(sizeof(*check));
+    if(!snap || !check) {fail(&source,"Not enough RAM for VMU managed operation");goto done;}
+    if(!locked_snapshot(&source,snap) || !healthy_metadata(&source,snap)) goto done;
+    if(snap->fingerprint!=listed[source_slot].fingerprint) {
+        listed[source_slot].valid=false;fail(&source,"Source VMU changed since listing; refresh the list");goto done;
+    }
+    if(page>UINT32_MAX/KUI_VMU_ROWS || selected>=KUI_VMU_ROWS ||
+       (uint64_t)page*KUI_VMU_ROWS+selected>=snap->count) {
+        fail(&source,"Selected VMU save is no longer available");goto done;
+    }
+    unsigned index=page*KUI_VMU_ROWS+selected,entry_index=snap->entries[index];
+    const uint8_t *entry=snap->directory+entry_index*32;
+    if(!entry[4] || (entry[1]!=0 && entry[1]!=0xff)) {
+        fail(&source,"Save metadata cannot be restored by K-UI; managed operation refused");goto done;
+    }
+    size_t length=(size_t)le16(entry+24)*BLOCK_BYTES;
+    data=malloc(length);if(!data) {fail(&source,"Not enough RAM for VMU save verification");goto done;}
+    if(!read_save(&source,snap,entry,data) || !check_snapshot(&source,snap,check)) goto done;
+    uint32_t crc=kui_crc32(0,data,length);
+    if(copy) {
+        target.device=maple_enum_dev((int)target.port,(int)target.unit);
+        if(!target.device || target.device==source.device || !target.device->valid || !(target.device->info.functions&MAPLE_FUNC_MEMCARD)) {
+            fail(&target,"No different VMU in the selected destination slot");goto done;
+        }
+        destination=malloc(sizeof(*destination));
+        if(!destination) {fail(&target,"Not enough RAM for destination VMU metadata");goto done;}
+        if(!locked_snapshot(&target,destination) || !fits_destination(&target,destination,entry)) goto done;
+    }
+    out->present=true;out->count=1;out->total=copy?destination->count:snap->count;
+    out->free_blocks=copy?destination->free_blocks:snap->free_blocks;
+    display_name(out->entries[0].name,entry);out->entries[0].bytes=(uint32_t)length;out->status.total=length;
+    if(!commit) {
+        managed_preview.source_device=source.device;managed_preview.destination_device=copy?target.device:source.device;
+        managed_preview.source_fingerprint=snap->fingerprint;
+        managed_preview.destination_fingerprint=copy?destination->fingerprint:snap->fingerprint;
+        managed_preview.payload_crc=crc;managed_preview.source_slot=source_slot;managed_preview.destination_slot=destination_slot;
+        managed_preview.page=page;managed_preview.selected=selected;managed_preview.copy=copy;managed_preview.valid=true;
+        out->copy_ready=copy;out->delete_ready=!copy;
+        if(copy) status(&source,"Copy %s: %u blocks, %c%u to %c%u? Source stays.",out->entries[0].name,(unsigned)(length/BLOCK_BYTES),
+            'A'+source.port,source.unit,'A'+target.port,target.unit);
+        else status(&source,"Back up then delete %s: %u blocks on %c%u?",out->entries[0].name,(unsigned)(length/BLOCK_BYTES),'A'+source.port,source.unit);
+        ok=true;goto done;
+    }
+    bool matches=managed_preview.source_device==source.device && managed_preview.source_fingerprint==snap->fingerprint &&
+        managed_preview.payload_crc==crc && (!copy || (managed_preview.destination_device==target.device &&
+        managed_preview.destination_fingerprint==destination->fingerprint));
+    managed_preview.valid=false;
+    if(!matches) {fail(&source,"VMU or save bytes changed since preview; preview again");goto done;}
+    kui_sd_set_params(0,true);
+    if(!kui_sd_connect()) {fail(&source,"Cannot connect SD; VMU managed writes require a verified backup");goto done;}
+    connected=true;
+    if(!kui_mount(&fs,source.log)) {fail(&source,"Cannot mount SD for VMU safety backup");goto done;}
+    mounted=true;
+    char folder[KUI_DEST_JOB_CAP],metadata[KUI_DEST_PATH_CAP];
+    if(!new_folder(&source,folder) || !publish_save(&source,folder,entry,data,index)) goto done;
+    /* Also pass the published record through the normal restore parser. A
+     * backup that the restore workflow cannot open must never permit delete. */
+    uint8_t backup_entry[32],backup_proof[32];
+    if(!load_metadata(&source,out->backup_path,backup_entry,backup_proof) ||
+       memcmp(backup_entry,entry,32) || le32(backup_proof+16)!=crc) {
+        if(!out->status.errors && !out->status.stopped) fail(&source,"Published backup is not restorable; VMU unchanged");
+        goto done;
+    }
+    snprintf(metadata,sizeof(metadata),"%s/before-%s.bin",folder,copy?"copy-source":"delete");
+    if(!save_file(&source,metadata,(const uint8_t *)snap,2*BLOCK_BYTES+snap->directory_blocks*BLOCK_BYTES)) goto done;
+    if(!check_snapshot(&source,snap,check)) goto done;
+    source.log("VMU %s backup=%s source=%c%u name=%s bytes=%u CRC32=%08" PRIx32,
+        copy?"copy":"delete",out->backup_path+2,'A'+source.port,source.unit,out->entries[0].name,(unsigned)length,crc);
+    if(copy) {
+        snprintf(metadata,sizeof(metadata),"%s/before-copy-destination.bin",folder);
+        if(!save_file(&target,metadata,(const uint8_t *)destination,2*BLOCK_BYTES+destination->directory_blocks*BLOCK_BYTES)) goto done;
+        listed[destination_slot].valid=false;
+        if(!restore_write(&target,destination,check,entry,data)) goto done;
+        out->free_blocks=check->free_blocks;
+        status(&source,"Copied %s to %c%u; every byte verified",out->entries[0].name,'A'+target.port,target.unit);
+        source.log("VMU copy verified destination=%c%u; source and SD backup retained",'A'+target.port,target.unit);
+    } else {
+        listed[source_slot].valid=false;
+        if(!delete_write(&source,snap,check,entry_index)) goto done;
+        out->free_blocks=check->free_blocks;
+        status(&source,"Deleted %s from %c%u; verified SD backup retained",out->entries[0].name,'A'+source.port,source.unit);
+        source.log("VMU delete verified: %u blocks freed, restore source=%s",(unsigned)(length/BLOCK_BYTES),out->backup_path+2);
+    }
+    ok=true;
+done:
+    if(!ok) managed_preview.valid=false;
+    free(data);free(snap);free(check);free(destination);
+    if(mounted && f_mount(NULL,"0:",0)!=FR_OK) {
+        fail(&source,"Cannot unmount SD backup filesystem");ok=false;managed_preview.valid=false;
+    }
+    if(connected) kui_sd_disconnect();
+    if(!ok) out->copy_ready=out->delete_ready=false;
+    out->status.complete=ok;out->status.passed=ok;
+    if(progress) progress(&out->status);
+}
+void kui_vmu_delete_run(unsigned slot,unsigned page,unsigned selected,bool commit,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    managed_run(false,slot,page,selected,slot,commit,out,log,cancel,progress);
+}
+void kui_vmu_copy_run(unsigned source_slot,unsigned page,unsigned selected,unsigned destination_slot,bool commit,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    managed_run(true,source_slot,page,selected,destination_slot,commit,out,log,cancel,progress);
 }

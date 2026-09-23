@@ -115,20 +115,29 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_clock ? "A Set clock   B Cancel" :
         s->confirm_defaults ? "A Use defaults   B Cancel" :
         s->confirm_vmu_restore ? "A Restore save   B Cancel" :
+        s->confirm_vmu_delete ? "A Delete after backup   B Cancel" :
+        s->confirm_vmu_copy ? "A Copy save   B Cancel" :
+        s->confirm_music_clear ? "A Clear music cache   B Cancel" :
+        s->confirm_restart ? "A Restart console   B Cancel" :
+        s->confirm_salvage ? "A Start salvage   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
         s->page==KUI_SHELL_CLOCK ? "A Set clock   X Reload   B Settings" :
         s->page==KUI_SHELL_CRC_SCAN ? "A Scan again   B Advanced" :
+        s->page==KUI_SHELL_VMU_ACTIONS ? "A Review   B VMU   LEFT/RIGHT Copy target" :
+        s->page==KUI_SHELL_SALVAGE ? "A Start / Open   B Advanced" :
+        s->page==KUI_SHELL_SYSTEM_TOOLS ? "D-pad Select   A Open   B Settings" :
         s->page==KUI_SHELL_VMU_RESTORE ? "B VMU   LEFT/RIGHT Target   START Page" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_KEYBOARD ? "A Key   X Backspace   Y Shift   B Cancel" :
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
         s->page==KUI_SHELL_RIPPER ? "B Home   START Advanced   L/R Songs" :
-        s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   START Page" :
-        s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_VMU_RESTORE?608:500,MUTED,controls,false);
-    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE)
+        s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   L Actions" :
+        s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
+        s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
+    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
+    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU)
         label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
@@ -178,17 +187,17 @@ static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned 
 }
 static void home(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
     static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics","GD Play","Music Player"};
-    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics","Disc boot","SD audio"};
+    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics","Disc boot","Music"};
     static const unsigned icons[]={0,2,2,2,1,2,0,2};
     static const char *details[8][3]={
         {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
-        {"Browse saves on connected VMUs.","Back up saves to SD and restore", "checked backups to a free name."},
+        {"Browse, copy or delete saves.","Back up to SD, then restore", "checked backups to a free name."},
         {"Check available application RAM", "with data patterns and report", "any mismatches found."},
-        {"Inspect your network adapter", "and saved configuration.","No network traffic is sent."},
+        {"Inspect your network adapter", "or connect and test a network.","View results and save a log."},
         {"Choose video, memory display", "and background music.", "Save preferences to SD."},
         {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
         {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
-        {"Browse WAV music on the card.", "Choose background music, then", "continue using your other apps."}};
+        {"Play WAV or Ogg music from SD.", "Listen to audio CD tracks", "or keep music in the background."}};
     unsigned selected=s->home_selected<8?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
     for(unsigned i=0;i<8;i++) {
@@ -236,7 +245,8 @@ static void ripper(struct paint *p, const struct kui_shell *s,
     title(p,40,108,"Disc Ripper");
     char title_line[160];
     snprintf(title_line,sizeof(title_line),"%s: %s",v->busy?"Disc":"Inserted",
-        v->busy?(v->disc_title&&v->disc_title[0]?v->disc_title:"Identifying..."):
+        v->busy?(v->disc_title&&v->disc_title[0]?v->disc_title:
+            v->inserted_title&&v->inserted_title[0]?v->inserted_title:"Identifying..."):
         (v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected"));
     label(p,40,136,CYAN,title_line);
     char destination[160];
@@ -258,8 +268,8 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         phase=title_line;
     }
     label(p,48,192,(v->outcome==KUI_SHELL_OUTCOME_FAILED||v->drive_reset_required)&&!v->busy?AMBER:CYAN,phase);
-    char line[73];
-    snprintf(line,sizeof(line),"TRACK %u / %u   RETRIES %u",v->track,v->tracks,v->retries);
+    char line[112];
+    snprintf(line,sizeof(line),"TRACK %u / %u   TOTAL RETRIES %u",v->track,v->tracks,v->retries);
     label(p,48,214,WHITE,line);
     snprintf(line,sizeof(line),"%u KiB/s",v->rate_kib);
     label(p,440,214,WHITE,line);
@@ -270,7 +280,8 @@ static void ripper(struct paint *p, const struct kui_shell *s,
     if(v->total) width=v->done>=v->total?544u:
         (unsigned)((double)v->done/(double)v->total*544.0);
     if(width) box(p,48,238,width,12,CYAN);
-    snprintf(line,sizeof(line),"%lu / %lu MiB   SAVED %lu MiB",
+    unsigned percent=kui_shell_progress_tenths(v->done,v->total);
+    snprintf(line,sizeof(line),"%u.%u%%   %lu / %lu MiB   SAVED %lu MiB",percent/10,percent%10,
         (unsigned long)(v->done/1048576),(unsigned long)(v->total/1048576),
         (unsigned long)(v->committed/1048576));
     label(p,48,258,WHITE,line);
@@ -290,7 +301,10 @@ static void ripper(struct paint *p, const struct kui_shell *s,
             v->cancel_requested?"waiting":"calculating");
         label(p,336,280,MUTED,line);
     }
-    label(p,40,312,v->drive_reset_required||v->dma_degraded?AMBER:v->busy?MUTED:WHITE,
+    if(v->retry_attempt) {
+        snprintf(line,sizeof(line),"Read retry %u/%u at FAD %lu",v->retry_attempt,v->retry_limit,(unsigned long)v->retry_fad);
+        label(p,40,312,AMBER,line);
+    } else label(p,40,312,v->drive_reset_required||v->dma_degraded?AMBER:v->busy?MUTED:WHITE,
         v->drive_reset_required?"Restart the console before another disc operation.":
         v->dma_degraded?"Drive errors: PIO active. Reboot to restore DMA.":
         "A New dump   X Resume latest   Y Verify latest");
@@ -347,7 +361,7 @@ static void destination(struct paint *p,const struct kui_shell *s,
         "A Open folder   Y Scan this folder":"A Open folder   Y Use folder   X Type path");
     label(p,40,396,s->destination_notice[0]?AMBER:MUTED,
         s->destination_notice[0]?s->destination_notice:
-        s->browse_for_scan?"Choose a completed dump with its checkpoint files.":
+        s->browse_for_scan?"Choose the game folder containing its .gdi file.":
         "The selected destination is saved to SD.");
 }
 static void keyboard(struct paint *p,const struct kui_shell *s) {
@@ -382,8 +396,8 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
 }
 static void advanced(struct paint *p,const struct kui_shell *s) {
     static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings",
-        "Quick resume (sizes only)","Destination folder","Advanced CRC scan"};
-    static const char *details[6][3]={
+        "Quick resume (sizes only)","Destination folder","Advanced CRC scan","Damaged disc salvage"};
+    static const char *details[7][3]={
         {"Reread saved tracks and check their recorded hashes.",
          "This checks the card; the stream CRC badge compares",
          "captured tracks with an independent reference."},
@@ -401,13 +415,16 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "Existing dumps are kept; new names get a number."},
         {"Scan a saved dump: track hashes and Mode1 sector checks.",
          "Writes a report. No disc reads or track modifications.",
-         "Audio gets track hashes, not data-sector parity checks."}};
-    unsigned selected=s->advanced_selected<6?s->advanced_selected:0;
+         "Audio needs recorded hashes to be verified."},
+        {"Read damaged media into a separate salvage job.",
+         "Unreadable sectors can be recorded as unresolved holes.",
+         "Explicit retry passes revisit only the missing sectors."}};
+    unsigned selected=s->advanced_selected<7?s->advanced_selected:0;
     title(p,40,108,"Advanced disc tools");
     label(p,40,138,MUTED,"Choose an operation for your disc or saved dump.");
-    for(unsigned i=0;i<6;i++) {
-        unsigned y=158+i*28;
-        panel(p,32,y,576,25,selected==i?SELECTED:PANEL);
+    for(unsigned i=0;i<7;i++) {
+        unsigned y=156+i*25;
+        panel(p,32,y,576,23,selected==i?SELECTED:PANEL);
         if(selected==i) box(p,32,y+4,3,17,PINK);
         label(p,48,y+4,selected==i?WHITE:MUTED,names[i]);
     }
@@ -447,14 +464,16 @@ static void system_settings(struct paint *p,const struct kui_shell *s,const stru
     title(p,40,108,"System settings");
     label(p,40,136,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
     const char *names[]={"Video mode","Home memory display","Background music","Music volume",
-        "Startup chime","Start in","Console clock","Restore defaults"};
+        "Startup chime","Start in","Console clock","Restore defaults","Safe area","System tools","Menu sounds"};
     char volume[16];snprintf(volume,sizeof(volume),"%u%%",s->system_draft.music_volume);
     const char *values[]={kui_system_video_name(s->system_draft.video_mode),
         s->system_draft.show_memory?"ON":"OFF",s->system_draft.music_enabled?"ON":"OFF",volume,
         s->system_draft.startup_chime?"ON":"OFF",kui_system_startup_name(s->system_draft.startup_app),
-        "A Edit local time","A Review"};
-    for(unsigned i=0;i<8;i++) {
-        unsigned y=158+i*25;
+        "A Edit local time","A Review",s->system_draft.screen_inset==2?"32 px sides":
+        s->system_draft.screen_inset==1?"16 px sides":"Full width","A Open",s->system_draft.menu_sounds?"ON":"OFF"};
+    unsigned first=s->system_selected>=8?s->system_selected-6:0;
+    for(unsigned i=first;i<first+8 && i<11;i++) {
+        unsigned y=158+(i-first)*25;
         panel(p,32,y,576,23,i==s->system_selected?SELECTED:PANEL);
         if(i==s->system_selected) box(p,32,y+3,3,17,PINK);
         label(p,48,y+3,WHITE,names[i]);
@@ -466,11 +485,14 @@ static void system_settings(struct paint *p,const struct kui_shell *s,const stru
         s->system_selected==4?"Play the short K-UI sound when the next session starts.":
         s->system_selected==5?"Open this app after the splash; no operation starts.":
         s->system_selected==6?"Read or set the console's local date and time.":
-        "Resets the draft. Save to apply; B keeps your saved settings.";
+        s->system_selected==7?"Resets the draft. Save to apply; B keeps your saved settings.":
+        s->system_selected==8?"Inset the display for TVs that crop the picture at its sides.":
+        s->system_selected==9?"Inspect hardware, save verified backups, or restart K-UI.":
+        "Play a short sound for menu movement and selection.";
     label(p,40,366,MUTED,detail);
     label(p,40,390,kui_shell_system_dirty(s)?AMBER:CYAN,kui_shell_system_dirty(s)?
         "Unsaved changes. A saves; B discards.":v->settings_notice&&v->settings_notice[0]?
-        v->settings_notice:"A saves preferences; clock and defaults open separately.");
+        v->settings_notice:"A saves preferences; clock, defaults and tools open separately.");
 }
 static void clock_page(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Console clock");
@@ -505,8 +527,8 @@ static void utility_page(struct paint *p,const struct kui_shell *s,const struct 
     bool memory_test=s->page==KUI_SHELL_MEMORY;
     title(p,40,108,memory_test?"Memory Test":"Network Test");
     label(p,40,138,MUTED,memory_test?"Tests an allocated RAM region using data patterns.":
-        "Inspect the adapter and saved network configuration.");
-    label(p,40,160,v->busy?MUTED:WHITE,memory_test?"A Run memory test":"A Inspect network adapter");
+        "Inspect the adapter, then test its network connection.");
+    label(p,40,160,v->busy?MUTED:WHITE,memory_test?"A Run memory test":"A Inspect adapter   X Connect / test network");
     const struct kui_app_status *status=v->app_status;
     panel(p,32,194,576,214,PANEL);
     app_status(p,status,v->busy,202);
@@ -537,7 +559,69 @@ static void vmu_page(struct paint *p,const struct kui_shell *s,const struct kui_
     }
     const struct kui_app_status *status=v->app_status?v->app_status:&s->vmu.status;
     label(p,40,378,status->complete&&!status->passed?AMBER:CYAN,status->message);
-    label(p,40,396,MUTED,"Backups go to SD. R Browse backups to restore a save.");
+    label(p,40,396,MUTED,"R SD backups   L Copy / delete selected   START Page");
+}
+static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"VMU save actions");
+    const struct kui_vmu_entry *entry=s->vmu_selected<s->vmu.count?&s->vmu.entries[s->vmu_selected]:NULL;
+    char line[120];snprintf(line,sizeof(line),"Source VMU %c%u: %s",'A'+s->vmu_slot/2,
+        s->vmu_slot%2+1,entry?entry->name:"No selected save");
+    label(p,40,138,CYAN,line);
+    for(unsigned i=0;i<2;i++) {
+        unsigned y=184+i*48;panel(p,32,y,576,40,i==s->vmu_action_selected?SELECTED:PANEL);
+        if(i) snprintf(line,sizeof(line),"Copy to VMU %c%u",'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
+        else snprintf(line,sizeof(line),"Delete selected save");
+        label(p,48,y+10,i==s->vmu_action_selected?WHITE:MUTED,line);
+    }
+    label(p,40,300,MUTED,"Both actions create and verify an SD backup first.");
+    label(p,40,326,MUTED,"A checks the selected save and reviews before any write.");
+    label(p,40,352,MUTED,"Copy never overwrites a save already on the destination.");
+    const struct kui_app_status *status=v->app_status?v->app_status:&s->vmu.status;
+    label(p,40,386,status->complete&&!status->passed?AMBER:CYAN,status->message);
+}
+static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Damaged disc salvage");
+    label(p,40,138,MUTED,"Separate recovery jobs; normal captures remain untouched.");
+    const struct kui_app_status *status=v->app_status;
+    if(v->busy && status && status->line_count) {
+        panel(p,32,160,576,240,PANEL);
+        app_status(p,status,true,170);
+        unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
+        for(unsigned i=0;i<count && i<6;i++) label(p,40,224+i*27,MUTED,status->lines[i]);
+        return;
+    }
+    const char *names[]={"New salvage job","Resume latest salvage","Retry unresolved sectors","Zero-fill unreadable sectors","Retry pass limit"};
+    for(unsigned i=0;i<5;i++) {
+        unsigned y=160+i*30;panel(p,32,y,576,27,i==s->salvage_selected?SELECTED:PANEL);
+        label(p,48,y+5,i==s->salvage_selected?WHITE:MUTED,names[i]);
+        if(i>=3) {
+            char value[16];
+            if(i==3) snprintf(value,sizeof(value),"%s",s->salvage_zero_fill?"ON":"OFF");
+            else snprintf(value,sizeof(value),"%u",s->salvage_passes);
+            label(p,508,y+5,i==3&&s->salvage_zero_fill?AMBER:CYAN,value);
+        }
+    }
+    label(p,40,322,MUTED,status && status->line_count>1?status->lines[1]:
+        "LEFT/RIGHT changes zero-fill and retry limit.");
+    label(p,40,344,AMBER,status && status->line_count>2?status->lines[2]:
+        "Unresolved holes are never reported as verified recovery.");
+    app_status(p,v->app_status,v->busy,372);
+}
+static void system_tools(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"System tools");
+    label(p,40,138,MUTED,"Read console hardware or save a verified backup to SD.");
+    const char *names[]={"Inspect system hardware","Back up settings flash","Back up visible BIOS bank","Restart console"};
+    for(unsigned i=0;i<4;i++) {
+        unsigned y=164+i*34;panel(p,32,y,576,30,i==s->tools_selected?SELECTED:PANEL);
+        label(p,48,y+6,i==s->tools_selected?WHITE:MUTED,names[i]);
+    }
+    label(p,40,306,MUTED,"X Settings-flash backup   Y BIOS backup");
+    const struct kui_app_status *status=v->app_status;
+    app_status(p,status,v->busy,330);
+    if(status && status->line_count) {
+        unsigned n=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
+        for(unsigned i=n>2?n-2:0;i<n;i++) label(p,40,374+(i-(n>2?n-2:0))*18,MUTED,status->lines[i]);
+    }
 }
 static void vmu_restore(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"Restore VMU backup");
@@ -562,7 +646,7 @@ static void vmu_restore(struct paint *p,const struct kui_shell *s,const struct k
 static void crc_scan(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"Advanced CRC scan");
     words(p,40,138,608,CYAN,s->browse_path,false);
-    label(p,40,160,MUTED,"Saved track hashes and Mode1 EDC/parity; no disc reads.");
+    label(p,40,160,MUTED,"Mode1 EDC/parity + recorded CRCs when available; no disc reads.");
     panel(p,32,190,576,214,PANEL);
     const struct kui_app_status *status=v->app_status;
     app_status(p,status,v->busy,200);
@@ -570,11 +654,46 @@ static void crc_scan(struct paint *p,const struct kui_shell *s,const struct kui_
         unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
         unsigned first=count>7?count-7:0;
         for(unsigned i=first;i<count;i++) label(p,40,250+(i-first)*20,MUTED,status->lines[i]);
-    } else label(p,40,204,MUTED,"Ready to scan the selected completed dump.");
+    } else label(p,40,204,MUTED,"Ready to scan this dump; missing hashes are not a match.");
 }
 static void app_confirmation(struct paint *p,const struct kui_shell *s) {
     box(p,32,154,576,262,NAVY);panel(p,48,160,544,228,PANEL);box(p,52,164,536,4,PINK);
-    if(s->confirm_defaults) {
+    if(s->confirm_salvage) {
+        label(p,72,188,WHITE,"START A DAMAGED-DISC SALVAGE JOB?");
+        label(p,72,222,MUTED,"Writes a separate job under /KUI/salvage.");
+        label(p,72,248,s->salvage_zero_fill?AMBER:CYAN,s->salvage_zero_fill?
+            "Zero-fill ON: unreadable sectors become tracked holes.":
+            "Zero-fill OFF: stop before saving unreadable data.");
+        label(p,72,276,MUTED,"Placeholders are not repaired or verified sectors.");
+        label(p,72,302,MUTED,"Normal dumps and their checkpoints stay intact.");
+        label(p,72,334,CYAN,"A Start salvage");
+    } else if(s->confirm_music_clear) {
+        label(p,72,188,WHITE,"CLEAR CACHED MUSIC?");
+        label(p,72,226,MUTED,"Playback stops and loaded audio is released from RAM.");
+        label(p,72,252,MUTED,"Your music files remain on the SD card.");
+        label(p,72,278,MUTED,"Choosing a song loads it again when storage is free.");
+        label(p,72,334,CYAN,"A Clear cache");
+    } else if(s->confirm_restart) {
+        label(p,72,188,WHITE,"RESTART THE CONSOLE?");
+        label(p,72,226,MUTED,"Closes K-UI and returns to the console BIOS.");
+        label(p,72,252,MUTED,"Save any preference changes before restarting.");
+        label(p,72,278,MUTED,"The inserted boot disc can start K-UI again.");
+        label(p,72,334,CYAN,"A Restart");
+    } else if(s->confirm_vmu_delete || s->confirm_vmu_copy) {
+        bool copy=s->confirm_vmu_copy;
+        const struct kui_vmu_entry *e=s->vmu_selected<s->vmu.count?&s->vmu.entries[s->vmu_selected]:NULL;
+        label(p,72,188,WHITE,copy?"COPY THIS SAVE TO ANOTHER VMU?":"DELETE THIS SAVE FROM THE VMU?");
+        char line[112];snprintf(line,sizeof(line),"%s from VMU %c%u",e?e->name:"Selected save",
+            'A'+s->vmu_slot/2,s->vmu_slot%2+1);label(p,72,222,CYAN,line);
+        if(copy) snprintf(line,sizeof(line),"Destination VMU %c%u; existing names are refused.",
+            'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
+        else snprintf(line,sizeof(line),"The selected VMU entry will be removed after backup.");
+        label(p,72,248,MUTED,line);
+        label(p,72,276,MUTED,"A verified SD backup is required before any write.");
+        label(p,72,302,MUTED,copy?"Keep both VMUs connected until the result appears.":
+            "Keep the VMU connected until the result appears.");
+        label(p,72,334,CYAN,copy?"A Copy save":"A Delete save");
+    } else if(s->confirm_defaults) {
         label(p,72,188,WHITE,"USE DEFAULT SYSTEM PREFERENCES?");
         label(p,72,222,MUTED,"This replaces your draft with the default values.");
         label(p,72,248,MUTED,"Press A Save afterwards to apply and store them.");
@@ -622,7 +741,7 @@ static void diagnostics(struct paint *p, const struct kui_shell *s,
     if(!count) label(p,40,204,MUTED,"Diagnostic messages appear here.");
     else for(unsigned i=0;i<count;i++)
         label(p,40,200+i*17,MUTED,v->log_lines?v->log_lines[i]:NULL);
-    char line[73];
+    char line[112];
     snprintf(line,sizeof(line),"%u lines  %s%s",v->total_log_lines,
         s->scroll?"SCROLLED":"LATEST",v->log_truncated?"  Earlier lines truncated":"");
     label(p,40,392,CYAN,line);
@@ -661,19 +780,41 @@ static void gd_boot_confirmation(struct paint *p) {
     label(p,72,282,MUTED,"This closes the current K-UI session.");
     label(p,72,322,CYAN,"A Exit to BIOS");label(p,368,322,WHITE,"B Cancel");
 }
+static void cd_audio(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Audio CD player");
+    const struct kui_cd_audio_status *cd=&s->cd_audio;
+    char line[112];snprintf(line,sizeof(line),"%u audio tracks   %s",cd->count,
+        cd->paused?"PAUSED":cd->playing?"PLAYING":"STOPPED");
+    label(p,40,136,CYAN,line);
+    label(p,40,160,v->busy?MUTED:WHITE,"A Play track   Y Pause / resume   X Stop");
+    panel(p,32,190,576,178,PANEL);
+    unsigned count=cd->count<99?cd->count:99,first=s->cd_selected/8*8;
+    if(!count) label(p,48,206,MUTED,v->busy?"Reading audio CD...":"Insert an audio CD, then press R Refresh.");
+    for(unsigned i=first;i<count && i<first+8;i++) {
+        unsigned y=196+(i-first)*21;
+        if(i==s->cd_selected) panel(p,40,y,560,21,SELECTED);
+        snprintf(line,sizeof(line),"Track %02u%s",cd->tracks[i].number,
+            cd->current==cd->tracks[i].number && (cd->playing||cd->paused)?"  <":"");
+        label(p,52,y+1,i==s->cd_selected?WHITE:MUTED,line);
+        snprintf(line,sizeof(line),"%u:%02u",cd->tracks[i].seconds/60,cd->tracks[i].seconds%60);
+        label(p,500,y+1,MUTED,line);
+    }
+    label(p,40,378,cd->poisoned?AMBER:CYAN,cd->message);
+    label(p,40,396,MUTED,"CD playback stops before a rip or another disc operation.");
+}
 static void music_player(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"Music Player");
     char line[160];snprintf(line,sizeof(line),"SD: %s",s->music_path);
     label(p,40,136,CYAN,line);
-    label(p,40,160,v->busy?MUTED:WHITE,"A Open / play WAV   X Refresh   Y Stop music");
+    label(p,40,160,v->busy?MUTED:WHITE,"A Play WAV / Ogg   X Clear cache   Y Stop   R Refresh");
     panel(p,32,190,576,178,PANEL);
     unsigned count=s->music_listing.count<KUI_MUSIC_PLAYER_ROWS?s->music_listing.count:KUI_MUSIC_PLAYER_ROWS;
-    if(!count) label(p,48,206,MUTED,v->busy?"Opening card...":"No folders or WAV files on this page.");
+    if(!count) label(p,48,206,MUTED,v->busy?"Opening card...":"No folders, WAV or Ogg files on this page.");
     for(unsigned i=0;i<count;i++) {
         unsigned y=196+i*21;
         const struct kui_music_player_entry *entry=&s->music_listing.entries[i];
         if(i==s->music_selected) panel(p,40,y,560,21,SELECTED);
-        label(p,50,y+1,entry->disabled?AMBER:MUTED,entry->directory?"DIR":"WAV");
+        label(p,50,y+1,entry->disabled?AMBER:MUTED,entry->directory?"DIR":strstr(entry->name,".ogg")||strstr(entry->name,".OGG")?"OGG":"WAV");
         words(p,94,y+1,590,i==s->music_selected?WHITE:MUTED,entry->name,false);
     }
     const struct kui_app_status *status=v->app_status;
@@ -700,17 +841,22 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_KEYBOARD: keyboard(&p,s); break;
     case KUI_SHELL_ADVANCED: advanced(&p,s); break;
     case KUI_SHELL_VMU: vmu_page(&p,s,v); break;
+    case KUI_SHELL_VMU_ACTIONS: vmu_actions(&p,s,v); break;
+    case KUI_SHELL_SALVAGE: salvage(&p,s,v); break;
+    case KUI_SHELL_SYSTEM_TOOLS: system_tools(&p,s,v); break;
     case KUI_SHELL_VMU_RESTORE: vmu_restore(&p,s,v); break;
     case KUI_SHELL_CLOCK: clock_page(&p,s); break;
     case KUI_SHELL_CRC_SCAN: crc_scan(&p,s,v); break;
     case KUI_SHELL_GD_PLAY: gd_play(&p,v); break;
+    case KUI_SHELL_CD_AUDIO: cd_audio(&p,s,v); break;
     case KUI_SHELL_MUSIC: music_player(&p,s,v); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
     }
     footer(&p,s,v);
     if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s->confirm_quick_resume);
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
-    if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore) app_confirmation(&p,s);
+    if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
+       s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);
 }
 

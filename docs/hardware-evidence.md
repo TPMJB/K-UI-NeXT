@@ -1,5 +1,48 @@
 # Hardware evidence
 
+## Current app evidence: Dead or Alive 2, cache and Advanced CRC — 2026-09-23
+
+Runtime **6f1be4cf53c3** completed Dead or Alive 2 after one failed capture and
+a stopped Quick Resume. The final Quick Resume ended with **TOSEC FULL TRACK
+MATCH across all three tracks** and used **5,286 DMA chunks and two PIO chunks**.
+The two size-only resume checks took **0.419433 s** and **0.397359 s**. These are
+observations from the owner's ordinary recovery session, not new reader tests.
+Saved bytes were not reread, and no track files were supplied for a PC check.
+
+Retries were working: the first capture made one retry at FAD 380094 and all
+**10/10 retries at FAD 380111**, then stopped with **11 cumulative retries**.
+The stopped resume added two more, making 13. The reported screen value of 1
+was a presentation issue; it is not evidence that the engine made only one
+attempt. The logs identify the inserted title before/after work, but do not
+record the exact title drawn while capturing.
+
+The damaged Advanced CRC fixture passed its acceptance criterion: **two suspect
+data sectors** (FAD 150: P/Q, FAD 45152: EDC/PQ) and **three CRC mismatches**, with
+10 data and four audio sectors read. The clean fixture is not present in this
+submission. Two existing-folder attempts failed before scanning. Their old
+error omitted the selected folder, filename and FatFs code, so these logs do
+not establish which metadata was missing or whether the selected folder was
+its parent. The next app update adds specific errors and imported-GDI support.
+
+Music counters remain at **6,473,566 cached bytes**, zero loading bytes,
+**12 allocations / seven frees**, and cached mask **0x3d** across the scan and
+capture/resume reports. That mask includes the retained custom song. Peak file
+allocation was **8,061,166 bytes**, below the **8,388,608-byte** cache budget.
+Main-RAM use/reservation stayed at **10,745,736 bytes** after caching, with a
+sampled peak of **12,333,336 bytes**. These snapshots support bounded retained
+cache rather than continuing growth in this run; they do not prove every music
+path leak-free. The owner reports the custom song played but was omitted by
+trigger cycling; source inspection confirms the old five-bundled-song cycle.
+
+Five diagnostic files are overlapping snapshots of **one session**, two of them
+truncated. Their filename timestamps do not establish operation order.
+[Sanitized source fingerprints and exact observations](evidence/m15-doa2-app-round-four-2026-09-23.json)
+record the scope and limits. The RTC log uses September 23; actual file-date
+artifacts and VMU write acceptance were not supplied. Follow
+[the next app acceptance guide](apps-round-five.md) on the existing boot disc.
+The remaining sections below retain historical runtime-specific findings;
+statements about what was then pending should not supersede this entry.
+
 ## Omikron DMA stop/resume and music — 2026-09-23
 
 Runtime **69dc33c0ff87** completed all five Omikron tracks after two stops and

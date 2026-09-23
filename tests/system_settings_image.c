@@ -23,9 +23,9 @@ static FATFS fs;
 static const char *slots[] = {KUI_SYSTEM_SETTINGS_PATH_A, KUI_SYSTEM_SETTINGS_PATH_B};
 static const char *kept[] = {"0:/KUI/settings-a.bin", "0:/KUI/settings-b.bin"};
 static const char sentinel[] = "Existing ripper settings must remain unchanged.\n";
-static const struct kui_system_settings previous = {KUI_VIDEO_NTSC60, false, true, 40, false, KUI_STARTUP_VMU};
-static const struct kui_system_settings changed = {KUI_VIDEO_AUTO, true, false, 75, true, KUI_STARTUP_HOME};
-static const struct kui_system_settings third = {KUI_VIDEO_PAL50, false, true, 100, true, KUI_STARTUP_MUSIC};
+static const struct kui_system_settings previous = {KUI_VIDEO_NTSC60, false, true, 40, false, KUI_STARTUP_VMU, true, 1};
+static const struct kui_system_settings changed = {KUI_VIDEO_AUTO, true, false, 75, true, KUI_STARTUP_HOME, false, 0};
+static const struct kui_system_settings third = {KUI_VIDEO_PAL50, false, true, 100, true, KUI_STARTUP_MUSIC, true, 2};
 
 static bool fault(const char *name) { return test.fault && !strcmp(test.fault, name); }
 static void log_line(const char *format, ...) {
@@ -84,6 +84,8 @@ static void equals(const struct kui_system_settings *actual, const struct kui_sy
     assert(actual->show_memory == expected->show_memory);
     assert(actual->startup_chime == expected->startup_chime);
     assert(actual->startup_app == expected->startup_app);
+    assert(actual->screen_inset == expected->screen_inset);
+    assert(actual->menu_sounds == expected->menu_sounds);
 }
 static void check_file(const char *path, const void *expected, size_t size) {
     FIL file; UINT got; uint8_t data[128];
@@ -117,10 +119,11 @@ static void damage_newest(const char *kind) {
     if(!strcmp(kind, "corrupt")) record[24] ^= 1;
     else if(!strcmp(kind, "truncated")) size = KUI_SYSTEM_SETTINGS_RECORD_SIZE - 1;
     else if(!strcmp(kind, "oversize")) size = KUI_SYSTEM_SETTINGS_RECORD_SIZE + 1;
-    else if(!strcmp(kind, "version")) { put32(record + 8, 3); put32(record + 36, kui_crc32(0, record, 36)); }
-    else if(!strcmp(kind, "flags")) { record[25] = 8; put32(record + 36, kui_crc32(0, record, 36)); }
+    else if(!strcmp(kind, "version")) { put32(record + 8, 4); put32(record + 36, kui_crc32(0, record, 36)); }
+    else if(!strcmp(kind, "flags")) { record[25] = 16; put32(record + 36, kui_crc32(0, record, 36)); }
     else if(!strcmp(kind, "startup-app")) { record[27] = KUI_STARTUP_APP_COUNT; put32(record + 36, kui_crc32(0, record, 36)); }
-    else if(!strcmp(kind, "reserved")) { record[28] = 1; put32(record + 36, kui_crc32(0, record, 36)); }
+    else if(!strcmp(kind, "safe-area")) { record[28] = 3; put32(record + 36, kui_crc32(0, record, 36)); }
+    else if(!strcmp(kind, "reserved")) { record[29] = 1; put32(record + 36, kui_crc32(0, record, 36)); }
     else assert(false);
     write_file(slots[1], record, size);
 }
@@ -149,15 +152,16 @@ int main(int argc, char **argv) {
         remount(); check_loaded(&changed); check_slot(0, &previous, 1); check_slot(1, &changed, 2);
         assert(kui_system_settings_save(&third, log_line));
         remount(); check_loaded(&third); check_slot(0, &third, 3); check_slot(1, &changed, 2);
-    } else if(!strcmp(name, "v1-migrate") || !strcmp(name, "v1-fallback")) {
+    } else if(!strcmp(name, "v1-migrate") || !strcmp(name, "v1-fallback") || !strcmp(name,"v2-migrate")) {
         uint8_t legacy[KUI_SYSTEM_SETTINGS_RECORD_SIZE];
         assert(kui_system_settings_encode(legacy,&previous,1));
-        put32(legacy+8,1);legacy[25]&=3u;legacy[27]=0;
+        bool v2=!strcmp(name,"v2-migrate");
+        put32(legacy+8,v2?2:1);legacy[25]&=7u;if(!v2) {legacy[25]&=3u;legacy[27]=0;}legacy[28]=0;
         put32(legacy+36,kui_crc32(0,legacy,36));write_file(slots[0],legacy,sizeof(legacy));
         if(!strcmp(name,"v1-fallback")) damage_newest("version");
         remount();unsigned before=test.writes;
         struct kui_system_settings migrated=previous;
-        migrated.startup_chime=true;migrated.startup_app=KUI_STARTUP_HOME;
+        if(!v2) {migrated.startup_chime=true;migrated.startup_app=KUI_STARTUP_HOME;}migrated.screen_inset=0;migrated.menu_sounds=false;
         check_loaded(&migrated);assert(test.writes==before);
         check_file(slots[0],legacy,sizeof(legacy));
         assert(kui_system_settings_save(&third,log_line));

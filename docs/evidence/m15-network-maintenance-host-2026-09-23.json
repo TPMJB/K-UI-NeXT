@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "date": "2026-09-23",
+  "scope": "Host validation only; Dreamcast network and system backup acceptance pending",
+  "protected_reader_changes": false,
+  "network": {
+    "protocol_test": "tests/test_network_probe.c",
+    "lifecycle_test": "tests/test_network_connect.c",
+    "inspection_regression_test": "tests/test_network_app.c",
+    "result": "pass",
+    "sanitizers": ["address", "undefined"],
+    "leak_detection": "disabled for local ptrace environment; CI uses normal settings",
+    "checked": [
+      "DHCP offer, ACK and NAK; transaction and MAC matching",
+      "All shorter packet lengths rejected before a complete offer is accepted",
+      "Invalid IPv4 and nonzero UDP checksums rejected",
+      "Malformed DHCP lengths, invalid static masks and gateways",
+      "ARP address conflict and gateway response",
+      "ICMP echo checksum, payload and transaction matching",
+      "Protocol deadlines and user cancellation",
+      "Refusal to take over a running interface",
+      "Prior input callback and saved IP configuration retained",
+      "Owned and borrowed driver cleanup; inactive interface redetection",
+      "32-byte TX alignment required; direct RX polling forbidden"
+    ]
+  },
+  "maintenance": {
+    "test": "tests/test_maintenance_images.py",
+    "filesystems": ["fat32", "exfat"],
+    "cases_per_filesystem": 16,
+    "cases_total": 32,
+    "result": "pass",
+    "sanitizers": ["address", "undefined"],
+    "cases": ["inspect", "good", "bios", "bad-layout", "identity-fail", "identity-change", "source-fail", "source-change", "verify-source-change", "write-fail", "sync-fail", "readback-fail", "readback-corrupt", "cancel-before", "cancel-writing", "cancel-verifying"],
+    "source": "Synthetic read-only console memory callbacks; real FatFs and disposable image block I/O",
+    "write_free_cases": ["inspect", "bad-layout", "identity-fail", "cancel-before"],
+    "prior_backups": "Second successful backup uses a new directory and preserves first backup",
+    "failed_publication": "No image.bin for failed or stopped data acquisition/verification",
+    "hardware_writes": "No console erase/program APIs exist in this implementation"
+  },
+  "remaining": [
+    "BBA/LAN hardware acceptance",
+    "Read-only flash and visible BIOS backup hardware acceptance",
+    "Persistent network service, static configuration UI, DNS/Internet tests and clock sync",
+    "Exact programmable flash hardware profile before any region/BIOS writes"
+  ]
+}

@@ -11,10 +11,10 @@ struct kui_music_player_page {
     char root[KUI_DEST_ROOT_CAP],message[128];
 };
 /* Single-worker, read-only SD operations. Listing includes subdirectories and
- * .wav files only; offset counts entries, not pages. Paths use '/Music/song.wav'. */
+ * .wav and .ogg files; offset counts entries, not pages. Paths use '/Music/song.wav'. */
 bool kui_music_player_list(const char *root,unsigned offset,
     struct kui_music_player_page *out,kui_log_fn log,kui_cancel_fn cancel);
-/* Preload a PCM16 WAV (mono/stereo 8–44.1 kHz, <=6 MiB) into the shared
+/* Preload a PCM16 WAV or Ogg Vorbis file (mono/stereo 8–44.1 kHz, <=6 MiB) into the shared
  * background player, then return. SD is released before playback starts; failed
  * or cancelled replacement keeps the previously selected song. */
 void kui_music_player_run(const char *path,unsigned volume,struct kui_app_status *out,

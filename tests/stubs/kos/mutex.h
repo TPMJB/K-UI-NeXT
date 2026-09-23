@@ -5,12 +5,12 @@
 typedef struct {unsigned locked;} mutex_t;
 #define MUTEX_INITIALIZER {0}
 static inline int mutex_lock(mutex_t *mutex) {assert(!mutex->locked);mutex->locked=1;return 0;}
-#ifdef KUI_MUSIC_ALLOC_TEST
+#if defined(KUI_MUSIC_ALLOC_TEST) && !defined(KUI_AUDIO_CODEC_LOCK)
 void kui_music_test_unlock_hook(void);
 #endif
 static inline int mutex_unlock(mutex_t *mutex) {
     assert(mutex->locked);mutex->locked=0;
-#ifdef KUI_MUSIC_ALLOC_TEST
+#if defined(KUI_MUSIC_ALLOC_TEST) && !defined(KUI_AUDIO_CODEC_LOCK)
     kui_music_test_unlock_hook();
 #endif
     return 0;

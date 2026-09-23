@@ -13,16 +13,19 @@ No new boot disc is needed for this round.
 | Disc Ripper | existing capture adapter and frozen reader | chosen destination, default `/Games`; existing ripper preference records |
 | Memory Test | `src/apps/memory_test.c`, `memory_pattern.c` | none |
 | VMU Manager | `src/apps/vmu.c` | new verified backup folders in `/KUI/backups/vmu/` |
-| Network inspection | `src/apps/network_test.c`, `network_status.c` | none |
-| Music | `src/apps/music.c`, `wav.c` | five original loops in `/KUI/apps/music/` |
+| Network inspection/connection test | `src/apps/network_test.c`, `network_status.c`, `network_probe.c`, `network_connect.c` | none; temporary session |
+| Music | `src/apps/music.c`, `wav.c`, `music_ogg.c`, `cd_audio.c` | original loops in `/KUI/apps/music/`, selected WAV/Ogg files |
+| Advanced CRC / Salvage | `src/core/recovery_scan.c`, `salvage.c` | read-only existing dumps; isolated `/KUI/salvage/` jobs |
+| System backups | `src/apps/maintenance*.c` | `/KUI/backups/system/`; no console flash writes |
+| Menu feedback | `src/apps/menu_sound.c` | synthesized samples held in sound RAM |
 
 A single worker owns app hardware and SD operations. UI input queues work; it
-does not mount storage. Music preloads bounded WAV files, releases the card,
+does not mount storage. Music preloads bounded WAV/Ogg files, releases the card,
 and plays from RAM through a separate audio service thread. Menu actions and
 capture do not stop playback. Cached song switches need no card access; an
 uncached request waits for the I/O worker to become idle. Stream teardown drains
 audio DMA before cached bytes are replaced or playback exits. See
-[the current acceptance round](apps-round-three.md).
+[the current acceptance round](apps-round-five.md).
 
 System settings contain video timing, memory display and music options. Ripper
 hash/readback settings live under Ripper > Advanced > Capture settings. Existing
@@ -30,9 +33,15 @@ hash/readback settings live under Ripper > Advanced > Capture settings. Existing
 not alter them. New settings use alternating CRC-protected records with exact
 readback; only successful saves become active UI preferences.
 
+Audio-CD commands share the worker and must stop before an optical or SD-song
+handoff. Playback can continue while browsing menus; idle disc identification is
+excluded while the CD player owns the drive. Failed stop refuses the handoff;
+explicit System Tools Restart remains available after a failed abort.
+
 The canvas remains 640x480. Video choices select default cable timing, NTSC60 or
 PAL50 on TV; VGA always uses its supported progressive timing. This is the first
-system video control, not arbitrary resolution scaling. Changes preview for ten
+system video control, not arbitrary resolution scaling. A horizontal 0/16/32-pixel safe-area inset
+compresses the existing canvas without changing the video timing. Changes preview for ten
 seconds and roll back without confirmation. Holding Y when the SD runtime starts
 bypasses a saved video choice without rewriting it; preview cancellation also
 restores that safe override.

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/music.h"
 #include "kui/wav.h"
+#include "kui/music_ogg.h"
 #include "platform.h"
 #include <dc/sound/stream.h>
 #ifdef KUI_ON_CONSOLE
@@ -20,7 +21,7 @@ static const char *const titles[KUI_MUSIC_TRACKS]={
     "After Hours","Neon Circuit","Orbital Drift","Midnight Vector","Chrome Horizon"};
 static const char *const files[KUI_MUSIC_TRACKS]={
     "menu.wav","neon-circuit.wav","orbital-drift.wav","midnight-vector.wav","chrome-horizon.wav"};
-struct cached_track {uint8_t *file;size_t size;struct kui_wav wav;char title[40];};
+struct cached_track {uint8_t *file;size_t size;struct kui_wav wav;struct kui_ogg ogg;char title[40];};
 static struct {
     struct kui_music_status status;
     kui_log_fn log;
@@ -50,7 +51,7 @@ static void report(const char *text) {
     lock_audio();notice_locked(text);kui_log_fn log=music.log;unlock_audio();
     if(log) log("Music: %s",text);
 }
-const char *kui_music_track_name(unsigned index) {return index<KUI_MUSIC_TRACKS?titles[index]:"Selected WAV";}
+const char *kui_music_track_name(unsigned index) {return index<KUI_MUSIC_TRACKS?titles[index]:"Selected song";}
 const char *kui_music_track_file(unsigned index) {return index<KUI_MUSIC_TRACKS?files[index]:NULL;}
 void kui_music_status_copy(struct kui_music_status *out) {
     if(!out) return;
@@ -77,7 +78,9 @@ static void *stream_data(snd_stream_hnd_t hnd,int requested,int *received) {
      * Its arguments are bytes, including both channels, in the pinned KOS. */
     if(requested<=0 || (unsigned)requested>MUSIC_CALLBACK_BYTES || !music.status.loaded) return NULL;
     uint8_t *out=callback_data[music.next_buffer];music.next_buffer^=1u;
-    size_t count=kui_pcm_loop_fill(&music.loop,out,(size_t)requested);
+    struct cached_track *track=&music.tracks[music.status.current_index];
+    size_t count=track->ogg.decoder?kui_ogg_fill(&track->ogg,out,(size_t)requested):
+        kui_pcm_loop_fill(&music.loop,out,(size_t)requested);
     if(!count) return NULL;
     *received=(int)count;return out;
 }
@@ -145,7 +148,7 @@ void kui_music_shutdown(void) {
     if(thread) thd_join(thread,NULL);
 #endif
     kui_music_release_audio();lock_audio();
-    for(unsigned i=0;i<MUSIC_SLOTS;i++) {free(music.tracks[i].file);memset(&music.tracks[i],0,sizeof(music.tracks[i]));}
+    for(unsigned i=0;i<MUSIC_SLOTS;i++) {kui_ogg_close(&music.tracks[i].ogg);free(music.tracks[i].file);memset(&music.tracks[i],0,sizeof(music.tracks[i]));}
     memset(&music.loop,0,sizeof(music.loop));music.playback_failed=false;
     memset(&music.status,0,sizeof(music.status));notice_locked("Music off");
 #ifdef KUI_ON_CONSOLE
@@ -184,26 +187,33 @@ static bool reserve_locked(size_t size) {
      * Unselected slots can be reclaimed, including a previous custom song. */
     for(unsigned i=0;i<MUSIC_SLOTS && size>KUI_MUSIC_CACHE_MAX-music.status.cache_bytes;i++) {
         if(music.status.loaded && music.status.current_index==i) continue;
-        release_file_locked(music.tracks[i].file);memset(&music.tracks[i],0,sizeof(music.tracks[i]));cache_status_locked();
+        kui_ogg_close(&music.tracks[i].ogg);release_file_locked(music.tracks[i].file);memset(&music.tracks[i],0,sizeof(music.tracks[i]));cache_status_locked();
     }
     return size<=KUI_MUSIC_CACHE_MAX-music.status.cache_bytes;
 }
 static bool stopped(kui_cancel_fn cancel) {return cancel && cancel();}
 static bool select_locked(unsigned index);
+static bool is_ogg_path(const char *path) {
+    size_t n=strlen(path);return n>=4u && path[n-4]=='.' &&
+        (path[n-3]=='o'||path[n-3]=='O') && (path[n-2]=='g'||path[n-2]=='G') &&
+        (path[n-1]=='g'||path[n-1]=='G');
+}
 static bool cache_path(unsigned index,const char *path,const char *title,size_t limit,kui_cancel_fn cancel) {
     if(stopped(cancel)) {report("Load cancelled; previous song retained");return false;}
     if(!kui_sd_connect()) {report("SD card unavailable; previous song retained");return false;}
     FATFS fs;FIL file;bool opened=false,ok=false;
     const char *problem="Cannot mount SD card; previous song retained";
-    uint8_t *loaded=NULL;size_t size=0;struct kui_wav wav;
+    uint8_t *loaded=NULL;size_t size=0,file_size=0;struct kui_wav wav={0};struct kui_ogg ogg={0};
+    bool compressed=is_ogg_path(path);
     if(!kui_mount(&fs,music.log)) goto out;
     if(stopped(cancel)) {problem="Load cancelled; previous song retained";goto out;}
     FRESULT r=f_open(&file,path,FA_READ);
     if(r!=FR_OK) {problem=r==FR_NO_FILE || r==FR_NO_PATH?"Track file missing; previous song retained":"Cannot open track";goto out;}
     opened=true;
     FSIZE_t length=f_size(&file);
-    if(length<44 || length>limit) {problem=index==KUI_MUSIC_CUSTOM_INDEX?"WAV is larger than the 6 MiB background limit":"Bundled WAV is larger than 2 MiB";goto out;}
-    size=(size_t)length;
+    if(length<44 || length>limit) {problem=index==KUI_MUSIC_CUSTOM_INDEX?"Song file must be 44 bytes to 6 MiB":"Bundled WAV is larger than 2 MiB";goto out;}
+    file_size=(size_t)length;
+    size=compressed?file_size+15u+KUI_OGG_WORKSPACE_BYTES:file_size;
     lock_audio();bool room=reserve_locked(size);
     if(room) {
         loaded=malloc(size);
@@ -218,22 +228,32 @@ static bool cache_path(unsigned index,const char *path,const char *title,size_t 
     if(!loaded) {problem="Not enough RAM; previous song retained";goto out;}
     /* No audio mutex here: the independent service continues the previous PCM
      * throughout SD reads. The temporary allocation was included in reserve. */
-    for(size_t at=0;at<size;) {
+    for(size_t at=0;at<file_size;) {
         if(stopped(cancel)) {problem="Load cancelled; previous song retained";goto out;}
-        UINT requested=(UINT)(size-at);if(requested>32768u) requested=32768u;
+        UINT requested=(UINT)(file_size-at);if(requested>32768u) requested=32768u;
         UINT got=0;r=f_read(&file,loaded+at,requested,&got);
         if(r!=FR_OK || got!=requested) {problem="Track read failed; previous song retained";goto out;}
         at+=got;
     }
     if(stopped(cancel)) {problem="Load cancelled; previous song retained";goto out;}
-    if(!kui_wav_parse(loaded,size,&wav)) {problem="Unsupported WAV: use mono/stereo PCM16, 8-44.1 kHz";goto out;}
+    if(compressed) {
+        void *arena=(void *)(((uintptr_t)(loaded+file_size)+15u)&~(uintptr_t)15u);
+        if(!kui_ogg_open(&ogg,loaded,file_size,arena,KUI_OGG_WORKSPACE_BYTES,cancel)) {
+            problem=stopped(cancel)?"Load cancelled; previous song retained":
+                "Invalid/unsupported Ogg: mono/stereo Vorbis, 8-44.1 kHz, bounded decoder";goto out;
+        }
+        wav=(struct kui_wav){.bytes=(size_t)ogg.frames*ogg.channels*2u,.rate=ogg.rate,
+            .channels=ogg.channels,.frame_bytes=ogg.channels*2u};
+    } else if(!kui_wav_parse(loaded,file_size,&wav)) {
+        problem="Unsupported WAV: use mono/stereo PCM16, 8-44.1 kHz";goto out;
+    }
     ok=true;
 out:
     if(opened && f_close(&file)!=FR_OK) {ok=false;problem="Cannot close track; previous song retained";}
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="Cannot release SD filesystem; previous song retained";}
     kui_sd_disconnect();
     if(!ok) {
-        lock_audio();release_file_locked(loaded);music.status.loading_bytes=0;unlock_audio();
+        kui_ogg_close(&ogg);lock_audio();release_file_locked(loaded);music.status.loading_bytes=0;unlock_audio();
         report(problem);return false;
     }
     lock_audio();
@@ -241,8 +261,8 @@ out:
      * allocation, after the replacement has been fully validated and closed. */
     bool selected=music.status.loaded && music.status.current_index==index;
     if(selected) pause_locked();
-    release_file_locked(music.tracks[index].file);
-    music.tracks[index]=(struct cached_track){.file=loaded,.size=size,.wav=wav};
+    kui_ogg_close(&music.tracks[index].ogg);release_file_locked(music.tracks[index].file);
+    music.tracks[index]=(struct cached_track){.file=loaded,.size=size,.wav=wav,.ogg=ogg};
     snprintf(music.tracks[index].title,sizeof(music.tracks[index].title),"%s",title);
     music.status.loading_bytes=0;cache_status_locked();
     /* Custom loads also select their new PCM in this same transaction. Leaving
@@ -268,18 +288,38 @@ static bool select_locked(unsigned index) {
     (void)kui_pcm_loop_init(&music.loop,track->file+track->wav.offset,track->wav.bytes,track->wav.frame_bytes);
     music.playback_failed=false;music.status.loaded=true;music.status.current_index=index;
     music.status.sample_rate=track->wav.rate;music.status.pcm_bytes=(uint32_t)track->wav.bytes;
+    music.status.compressed=track->ogg.decoder!=NULL;
+    music.status.decoder_bytes=music.status.compressed?KUI_OGG_WORKSPACE_BYTES:0;
     snprintf(music.status.title,sizeof(music.status.title),"%s",track->title);
     music.status.paused=music.status.enabled;notice_locked("Track cached in RAM");resume_locked();return true;
 }
 bool kui_music_select_cached(unsigned index) {
     lock_audio();bool ok=select_locked(index);unlock_audio();return ok;
 }
+static unsigned next_index_locked(unsigned current,int direction) {
+    unsigned count=music.tracks[KUI_MUSIC_CUSTOM_INDEX].file?MUSIC_SLOTS:KUI_MUSIC_TRACKS;
+    if(current>=count) current=direction<0?0:count-1u;
+    return direction<0?(current+count-1u)%count:(current+1u)%count;
+}
+unsigned kui_music_next_index(unsigned current,int direction) {
+    lock_audio();unsigned index=next_index_locked(current,direction);unlock_audio();return index;
+}
 bool kui_music_step_cached(int direction,unsigned *wanted) {
-    lock_audio();unsigned current=music.status.current_index;
-    unsigned index=current<KUI_MUSIC_TRACKS?(current+KUI_MUSIC_TRACKS+(direction<0?-1:1))%KUI_MUSIC_TRACKS:
-        (direction<0?KUI_MUSIC_TRACKS-1u:0u);
+    lock_audio();unsigned index=next_index_locked(music.status.current_index,direction);
     if(wanted) *wanted=index;
     bool ok=select_locked(index);unlock_audio();return ok;
+}
+void kui_music_clear_cache(void) {
+    lock_audio();pause_locked();
+    for(unsigned i=0;i<MUSIC_SLOTS;i++) {
+        kui_ogg_close(&music.tracks[i].ogg);release_file_locked(music.tracks[i].file);
+        memset(&music.tracks[i],0,sizeof(music.tracks[i]));
+    }
+    memset(&music.loop,0,sizeof(music.loop));cache_status_locked();music.playback_failed=false;
+    music.status.loaded=false;music.status.paused=false;music.status.compressed=false;
+    music.status.current_index=0;music.status.sample_rate=0;music.status.pcm_bytes=0;
+    music.status.decoder_bytes=0;music.status.title[0]=0;notice_locked("Music stopped; song cache released");
+    unlock_audio();
 }
 bool kui_music_load(unsigned index,kui_cancel_fn cancel) {
     return kui_music_cache_menu(index,cancel) && kui_music_select_cached(index);
@@ -296,7 +336,7 @@ static bool same_card_path(const char *a,const char *b) {
     return !*a && !*b;
 }
 bool kui_music_load_path(const char *path,const char *title,kui_cancel_fn cancel) {
-    if(!path || path[0]!='/' || strlen(path)>127u || !title) {report("Invalid WAV path");return false;}
+    if(!path || path[0]!='/' || strlen(path)>127u || !title) {report("Invalid song path");return false;}
     if(stopped(cancel)) {report("Load cancelled; previous song retained");return false;}
     for(unsigned i=0;i<KUI_MUSIC_TRACKS;i++) {
         char bundled[96];snprintf(bundled,sizeof(bundled),"/KUI/apps/music/%s",files[i]);

@@ -7,10 +7,12 @@
 #include <string.h>
 
 static bool cancelled(kui_cancel_fn cancel) {return cancel && cancel();}
-static bool wav_name(const char *name) {
+static bool audio_name(const char *name) {
     size_t n=strlen(name);if(n<4 || name[n-4]!='.') return false;
-    return (name[n-3]=='w'||name[n-3]=='W') && (name[n-2]=='a'||name[n-2]=='A') &&
-        (name[n-1]=='v'||name[n-1]=='V');
+    return ((name[n-3]=='w'||name[n-3]=='W') && (name[n-2]=='a'||name[n-2]=='A') &&
+        (name[n-1]=='v'||name[n-1]=='V')) ||
+        ((name[n-3]=='o'||name[n-3]=='O') && (name[n-2]=='g'||name[n-2]=='G') &&
+        (name[n-1]=='g'||name[n-1]=='G'));
 }
 bool kui_music_player_list(const char *root,unsigned offset,struct kui_music_player_page *out,
     kui_log_fn log,kui_cancel_fn cancel) {
@@ -37,7 +39,7 @@ bool kui_music_player_list(const char *root,unsigned offset,struct kui_music_pla
         if(!strcmp(info.fname,".") || !strcmp(info.fname,"..") ||
            (info.fattrib&(AM_HID|AM_SYS))) continue;
         bool directory=(info.fattrib&AM_DIR)!=0;
-        if(!directory && !wav_name(info.fname)) continue;
+        if(!directory && !audio_name(info.fname)) continue;
         if(offset) {--offset;continue;}
         if(out->count==KUI_MUSIC_PLAYER_ROWS) {out->has_more=true;break;}
         struct kui_music_player_entry *entry=&out->entries[out->count++];
@@ -55,7 +57,7 @@ done:
     if(opened && f_closedir(&dir)!=FR_OK) {ok=false;problem="Cannot close music folder";}
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="Cannot release SD filesystem";}
     kui_sd_disconnect();
-    snprintf(out->message,sizeof(out->message),"%s",ok?"PCM16 WAV, mono/stereo, 8-44.1 kHz; background limit 6 MiB":problem);
+    snprintf(out->message,sizeof(out->message),"%s",ok?"WAV / Ogg Vorbis; mono/stereo 8-44.1 kHz; file limit 6 MiB":problem);
     if(!ok) {out->count=0;out->has_more=false;if(log) log("Music browser: %s",problem);}
     return ok;
 }
@@ -65,8 +67,8 @@ void kui_music_player_run(const char *path,unsigned volume,struct kui_app_status
     memset(out,0,sizeof(*out));
     char normalized[KUI_DEST_ROOT_CAP];
     bool ok=false;
-    const char *problem="Invalid WAV path";
-    if(!kui_destination_normalize(normalized,path) || !wav_name(normalized)) goto done;
+    const char *problem="Invalid WAV/Ogg path";
+    if(!kui_destination_normalize(normalized,path) || !audio_name(normalized)) goto done;
     const char *name=strrchr(normalized,'/');name=name?name+1:normalized;
     snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"%.79s",name);
     snprintf(out->message,sizeof(out->message),"Loading song into RAM; B cancels");
@@ -84,9 +86,9 @@ void kui_music_player_run(const char *path,unsigned volume,struct kui_app_status
             ok=false;snprintf(out->message,sizeof(out->message),"%s",status.message);
             goto done;
         }
-        snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"%u Hz | PCM16 | cached in RAM",(unsigned)status.sample_rate);
+        snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"%u Hz | %s | cached in RAM",(unsigned)status.sample_rate,status.compressed?"Ogg Vorbis":"PCM16");
         snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"Playback continues in other apps, including the ripper.");
-        snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"Home Y changes volume/off. Triggers select bundled songs.");
+        snprintf(out->lines[out->line_count++],KUI_APP_LINE_CAP,"Home Y changes volume/off. Triggers include your selected song.");
         problem="Background song selected; continue browsing or press Start for Home";
     } else {
         struct kui_music_status status;kui_music_status_copy(&status);

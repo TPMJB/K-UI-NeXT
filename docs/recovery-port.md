@@ -1,5 +1,12 @@
 # Recovery port: first backend gate
 
+**2026-09-23 implementation update:** the independent first-pass/repair worker,
+FatFs durable journal, explicit UI actions and PC verifier are now implemented.
+See [salvage-worker.md](salvage-worker.md) for the shipped behavior, bounded
+limits, host fault tests and pending hardware acceptance. The earlier design
+and provenance below remain the rationale; they are not a statement that the
+worker is still missing. Normal capture and its accepted reader remain unchanged.
+
 Status: the checksum/sector helpers and their host tests are implemented.
 The Mode 1 checker now powers the explicit [Advanced CRC saved-file scan](advanced-crc-scan.md),
 which checks an existing completed job and writes a separate suspect-sector report.

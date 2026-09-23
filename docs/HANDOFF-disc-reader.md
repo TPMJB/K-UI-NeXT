@@ -22,7 +22,23 @@ resumed to a verified finish.
 For scale: the original settings projected to about 104 minutes for the same Sword disc, so the
 work took it from roughly an hour and three quarters to twenty minutes.
 
-## Current app work and failure report — 2026-09-23
+## Latest app work — 2026-09-23
+
+The latest supplied app evidence is runtime **6f1be4cf53c3**, documented in
+[hardware-evidence.md](hardware-evidence.md) and
+[its sanitized record](evidence/m15-doa2-app-round-four-2026-09-23.json).
+Dead or Alive 2 completed with TOSEC FULL TRACK MATCH after bounded retries and
+Quick Resume; its final segment retained DMA. The damaged Advanced CRC fixture
+correctly reported two suspect data sectors and three CRC mismatches. Music
+cache counters stayed stable during these app/capture snapshots. Existing-dump
+scan selection, custom-song cycling, title/progress display and VMU management
+are the current app fixes; the [round-five guide](apps-round-five.md) tracks
+implementation and hardware acceptance. The accepted disc reader remains frozen.
+
+The app/failure sections below describe **earlier runtime snapshots** and their
+then-current pending work; they are retained as history, not the latest status.
+
+## Historical app work and failure report — 2026-09-23
 
 The latest report is an **Omikron new capture on `0599097a8bfb`**, not a
 saved-file verification attempt. Four tracks finished and the final track

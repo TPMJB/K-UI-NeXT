@@ -21,6 +21,7 @@ RUNTIME_OBJECTS += build/dc/src/core/crc16.o
 RUNTIME_OBJECTS += build/dc/src/core/settings.o build/dc/src/core/settings_file.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
 RUNTIME_OBJECTS += build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
+RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewport.o build/dc/src/core/salvage.o build/dc/src/core/recovery_crc.o
 APP_SOURCES := $(wildcard src/apps/*.c)
 RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
@@ -57,7 +58,7 @@ $(TARGET): $(OBJECTS) $(LOADER_OBJECTS)
 	kos-cc -o $@ $(OBJECTS) $(LOADER_OBJECTS) -Wl,-Map,build/kui-diagnostic.map
 	python3 tools/record_build.py $@
 $(RUNTIME): $(RUNTIME_OBJECTS)
-	kos-cc -o $@ $(RUNTIME_OBJECTS) -Wl,-Map,build/kui-runtime.map
+	kos-cc -o $@ $(RUNTIME_OBJECTS) -lm -Wl,-Map,build/kui-runtime.map
 	python3 tools/record_build.py $@
 
 -include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)

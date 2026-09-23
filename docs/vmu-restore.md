@@ -3,8 +3,8 @@
 VMU Manager now browses its SD backups and restores a selected save into free
 space on a selected VMU. Restore always previews the source name, block count,
 and destination slot before a separate confirmation. An existing filename is
-refused. This workflow does not overwrite, delete, format, or automatically
-repair a VMU.
+refused. Restore does not overwrite, format, or automatically repair a VMU. The separate
+managed delete/copy actions below require their own preview and confirmation.
 
 A new backup consists of three files:
 
@@ -52,8 +52,44 @@ device checks cannot authenticate a replacement VMU during one physical block
 transaction, and the Maple API cannot distinguish every identical replacement.
 
 Multi-bank third-party cards must expose a consistent normal VMU filesystem;
-never switch banks during an operation. Direct VMU-to-VMU copy, deletion,
-overwriting and formatting remain future work.
+never switch banks during an operation. Overwriting and formatting are not
+implemented. The managed copy/delete actions do not silently replace saves or
+repair a damaged card.
+
+## Managed delete and VMU-to-VMU copy
+
+VMU Manager's Actions page offers **Back up + delete** and **Copy to VMU** for
+its selected save. Opening an action first reads a preview; a separate
+confirmation starts it. Preview itself performs no SD or VMU writes. The exact
+source slot, listed row, device, root/FAT/directory fingerprint and complete
+source payload CRC32 are pinned. Copy also pins the destination device and
+metadata. Any change requires a fresh preview. Both operations refuse duplicate
+names or unowned allocated blocks in the source; copy applies the existing
+restore destination checks and never overwrites an existing name.
+
+Delete requires an SD card. Before changing the VMU, it creates and rereads a
+new `.vms`, `.dir`, and `.crc` backup plus `before-delete.bin`, an exact snapshot
+of the source root/FAT/directory. The backup remains selectable in Restore.
+The directory entry is removed and the entire directory reread before freeing
+only that save's allocation chain. Final root/FAT/directory readback must match
+exactly. This sequence prefers leaked blocks after an interrupted deletion over
+a live save pointing into newly free blocks, but it cannot make physical flash
+metadata updates power-loss atomic. A failed or uncertain write stops without
+retry or automatic rollback. The source's old payload blocks are not securely
+erased; the operation removes the save from the filesystem.
+
+Copy creates the same verified SD save backup, with `before-copy-source.bin`
+and `before-copy-destination.bin`, then uses the normal restore transaction on
+the destination's free blocks. It verifies every payload byte before and after
+metadata publication. The source is read-only and its SD backup is retained.
+A source/destination change, missing card, source checksum change or failed SD
+backup prevents VMU writes. Stop is honored during reading, backup and free-block
+writing; it is deferred through the short metadata commit and final readback.
+
+The UI does not expose a bulk erase or format operation. To test restore with
+one VMU, choose a disposable save, confirm Back up + delete, then restore the
+new verified backup into the now-free name. A second VMU supports copy testing
+without removing the source.
 
 ## Acceptance check
 
@@ -71,13 +107,24 @@ restore to an empty destination without deleting any source save.
    again; the new `.vms` bytes must equal the source backup.
 4. Try restoring the same source to the same destination again. It must refuse
    the existing name without any VMU write.
-5. Save the diagnostic report with source/destination slot and save name.
+5. With a disposable save selected, open Actions and preview Back up + delete.
+   Cancel once; the save must remain. Preview again, confirm, and check that it
+   disappears only after the verified backup is reported. Restore from that
+   backup and compare its bytes through another backup or the BIOS/game.
+6. With two VMUs, preview Copy to VMU and confirm the source/destination slots.
+   Check the copied save and unchanged source. Repeat to the same destination:
+   the existing name must be refused without writing.
+7. Save the diagnostic report with source/destination slot and save name.
 
 Host tests cover FAT32/exFAT backup publication, source damage/truncation,
 preview invalidation, existing-name aliases, damaged destination allocation,
 insufficient capacity, cancellation/removal, failed payload/metadata writes,
-failed readback and failed SD metadata backup. These are transport simulations;
-**physical VMU restore acceptance remains pending**. No hardware unplug test is
+failed readback and failed SD metadata backup. Managed-action tests additionally
+exercise delete/copy preview pinning, changed source bytes and cards, orphaned
+blocks, duplicate names, SD backup failures, metadata tearing/readback failures,
+Stop during commit, missing destination and a complete delete/restore round trip.
+These are transport simulations; **physical VMU restore/copy/delete acceptance
+remains pending**. No hardware unplug test is
 needed for this first acceptance pass.
 
 ## Source/API provenance

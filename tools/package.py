@@ -18,7 +18,7 @@ def run(*args):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
+    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     return text
 
@@ -62,7 +62,7 @@ def main():
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "runtime.kui").write_bytes(package)
     run("python3", "tools/generate_menu_music.py", "--directory", str(sd / "apps/music"))
-    run("python3", "tools/generate_music_demo.py", "--directory", str(dist / "sd/Music"))
+    run("python3", "tools/generate_music_demo.py", "--directory", str(dist / "sd/Music"), "--ogg")
     run("python3", "tools/make_scan_fixtures.py", str(sd / "tests/scan"))
     shutil.copyfile(ROOT / "resources/music/README.md", dist / "MUSIC.md")
     shutil.copyfile(ROOT / "resources/music/demo.md", dist / "MUSIC-DEMO.md")
@@ -81,7 +81,7 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
-    for name in ("apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -91,6 +91,7 @@ def main():
     (dist / "SALVAGE-PLAN.md").write_text(guide("salvage-plan.md"))
     shutil.copyfile(ROOT / "tools/verify_probe.py", dist / "verify_probe.py")
     shutil.copyfile(ROOT / "tools/verify_dump.py", dist / "verify_dump.py")
+    shutil.copyfile(ROOT / "tools/verify_salvage.py", dist / "verify_salvage.py")
     for src, name in (("capture-test.md", "CAPTURE-TEST.md"), ("capture-format.md", "CAPTURE-FORMAT.md"), ("memory-stats.md", "MEMORY-STATS.md"), ("optical-test.md", "OPTICAL-TEST.md"), ("performance-test-plan.md", "PERFORMANCE-TEST-PLAN.md")):
         (dist / name).write_text(guide(src))
     shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
@@ -136,7 +137,7 @@ def main():
     shutil.copyfile(dist / "MUSIC-DEMO.md", update / "MUSIC-DEMO.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     (update / "SOURCE.txt").write_text(

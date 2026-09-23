@@ -6,6 +6,31 @@
 #include <string.h>
 static char source[KUI_SCAN_MANIFEST_LIMIT+1u],changed[KUI_SCAN_MANIFEST_LIMIT+1u];
 static struct kui_scan_manifest parsed;
+static struct kui_scan_gdi gdi;
+static void gdi_cases(void) {
+    const char *valid="3\r\n1 0 4 2352 \"Track One.bin\" 0\r\n2 155 0 2352 track02.raw 0\r\n3 45000 4 2352 track03.bin 0\r\n";
+    assert(kui_recovery_gdi_parse(valid,strlen(valid),&gdi));
+    assert(gdi.plan.count==3 && gdi.plan.tracks[2].start==45150 && !strcmp(gdi.files[0],"Track One.bin"));
+    assert(!kui_recovery_gdi_parse(NULL,10,&gdi));
+    assert(!kui_recovery_gdi_parse(valid,strlen(valid),NULL));
+    assert(!kui_recovery_gdi_parse(valid,KUI_SCAN_MANIFEST_LIMIT+1,&gdi));
+    const char *bad[]={"0\n","100\n","1\n", "1\n1 0 4 2352 ../track.bin 0\n",
+        "1\n1 0 4 2352 /track.bin 0\n", "1\n1 0 4 2352 track.bin 1\n",
+        "1\n1 0 4 2048 track.bin 0\n", "1\n2 0 4 2352 track.bin 0\n",
+        "1\n1 0 5 2352 track.bin 0\n", "1\n1 0 4 2352 \"track.bin 0\n",
+        "1\n1 0 4 2352 \"track.bin\"garbage 0\n", "1\n1 0 4 2352 \"track.bin \" 0\n",
+        "1\n1 42949672960 4 2352 track.bin 0\n", "1\n1 719999 4 2352 track.bin 0\n",
+        "1\n1 0 4 2352 track.bin 0 trailing\n", "1\n1 0 4 2352 track.bin 0\n\n",
+        "2\n1 0 4 2352 track.bin 0\n2 45000 4 2352 TRACK.BIN 0\n",
+        "2\n1 45000 4 2352 track.bin 0\n2 0 4 2352 second.bin 0\n"};
+    for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);++i) assert(!kui_recovery_gdi_parse(bad[i],strlen(bad[i]),&gdi));
+    size_t bytes=strlen(valid);
+    for(size_t i=0;i<bytes;++i) {
+        char broken[256];memcpy(broken,valid,bytes);broken[i]=0;
+        assert(!kui_recovery_gdi_parse(broken,bytes,&gdi));
+    }
+    puts("PASS imported GDI quotes, CRLF, bounds, path escape, aliases, offsets and format rejection");
+}
 static void reject(const char *from,const char *to) {
     const char *at=strstr(source,from);assert(at);
     size_t prefix=(size_t)(at-source),suffix=strlen(at+strlen(from));
@@ -15,6 +40,7 @@ static void reject(const char *from,const char *to) {
     assert(!kui_recovery_manifest_parse(changed,strlen(changed),&parsed));
 }
 int main(int argc,char **argv) {
+    gdi_cases();
     assert(argc==2);FILE *file=fopen(argv[1],"rb");assert(file);
     size_t size=fread(source,1,sizeof(source)-1,file);assert(!ferror(file) && !fclose(file));
     assert(kui_recovery_manifest_parse(source,size,&parsed));

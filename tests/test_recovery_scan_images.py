@@ -23,7 +23,10 @@ def main():
         cases = ("clean", "damaged", "sha", "repeat", "unsupported", "bad-manifest",
                  "one-checkpoint", "both-checkpoints", "conflict", "gdi-trailing", "truncated",
                  "cancel-before", "cancel-scan", "read-fail", "read-fail-cancel", "write-fail",
-                 "sync-fail", "final-sync-fail", "close-fail", "rename-fail")
+                 "sync-fail", "final-sync-fail", "close-fail", "rename-fail",
+                 "named", "named-sha", "long-folder", "no-checkpoints", "missing-gdi", "parent",
+                 "no-metadata", "multiple-gdi", "imported", "imported-quotes",
+                 "imported-damaged", "imported-overlap")
         for kind in ("fat32", "exfat"):
             seed = base / f"{kind}-seed.img"
             with seed.open("wb") as stream:
@@ -32,7 +35,8 @@ def main():
             for case in cases:
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(seed, image)
-                fixture = base / (case if case in ("damaged", "sha") else "clean")
+                fixture = base / ("damaged" if case in ("damaged", "imported-damaged") else
+                                  "sha" if case in ("sha", "named-sha") else "clean")
                 output = run(BINARY, str(image), str(fixture), case)
                 assert f"PASS Advanced CRC {case}; original files unchanged" in output
                 if case not in ("write-fail", "sync-fail", "final-sync-fail"):

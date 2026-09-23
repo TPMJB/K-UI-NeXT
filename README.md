@@ -31,7 +31,7 @@ The hardware-proven acquisition engine remains unchanged.
 
 Use the existing bootstrap CD and the `sd-update` artifact. Replace
 `/KUI/runtime.kui`, and copy `KUI/apps/music/` for optional original menu music.
-See [the current app acceptance round](docs/apps-round-four.md) and
+See [the current app acceptance round](docs/apps-round-five.md) and
 [app boundaries and the later executable-loader plan](docs/app-architecture.md).
 These new app paths still need physical-console acceptance.
 
@@ -39,23 +39,28 @@ These new app paths still need physical-console acceptance.
 - The original splash is capped at three seconds; B skips the shortened startup cue.
   Home Y cycles volume/off; L/R on Home and Ripper select songs. The header names the current song.
 - GD Play exits through normal KOS shutdown to the stock BIOS. Music Player
-  caches PCM16 WAV songs up to 6 MiB for background playback across apps.
-  The update includes an original one-minute sample; CD audio/compressed codecs remain pending.
+  caches PCM16 WAV or Ogg Vorbis songs up to 6 MiB for background playback across apps.
+  The update includes an original one-minute WAV/Ogg sample, custom-song cycling,
+  explicit cache clearing and a separate audio-CD player.
 - Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
   Start opens Advanced, **Destination folder** and **Capture settings**.
   Advanced also offers explicitly confirmed Quick resume (sizes only), preserving
   full Resume and its saved-byte checks. During work, B requests Stop. Reports still save automatically. Idle insertion
-  detection shows the disc title; moving capture/verification phases show an ETA.
+  detection shows the disc title; moving capture/verification phases show percentage and ETA.
+  Current retry attempts and the cumulative job total are labelled separately.
 - System Settings: 640x480 TV timing with reversible preview, memory display,
-  music enabled and volume, startup chime/app, local clock and restore-defaults.
+  music enabled and volume, startup chime/app, local clock, TV safe area, menu sounds
+  and restore-defaults. System Tools adds inventory, verified flash/visible BIOS backups and Restart.
   Capture hashes/readback remain inside the ripper. New file dates follow the RTC.
 - VMU Manager: read saves, make verified SD backups, and preview/confirm restore
-  into a free filename with readback. No overwrite, delete or format. Memory Test
-  checks only its allocated RAM.
+  into a free filename with readback. Managed copy/delete require confirmation and
+  a verified restorable SD backup. No overwrite or format. Memory Test checks only its allocated RAM.
 - Ripper Advanced CRC scans completed saved jobs and reports hash/Mode 1 sector
-  errors separately. It does not repair sectors or change normal disc capture.
-- Network Test reports adapter/configuration evidence; it does not start DHCP or
-  claim Internet reachability. Diagnostics retains disc/SD probes, log export,
+  errors separately. GDI-only folders get explicitly unverified structural scans.
+  Separate Salvage jobs add durable bad-sector queues, optional zero filling and
+  bounded repair passes; unresolved holes never receive a complete-dump claim.
+- Network Test includes a temporary DHCP/address-conflict/gateway-ping test; it
+  does not claim Internet reachability or change saved network settings. Diagnostics retains disc/SD probes, log export,
   mstats and benchmarks. RAM remains visible in the ripper.
 - Music keeps playing from RAM during menu actions and capture; uncached song
   changes wait until the storage worker is idle. Console continuity still needs checking.
@@ -88,7 +93,7 @@ On Ubuntu 24.04 / a compatible Linux or WSL installation:
 sudo apt-get install build-essential git curl wget patch python3 bison flex \
   texinfo gettext libgmp-dev libmpfr-dev libmpc-dev libisl-dev \
   meson ninja-build pkg-config libisofs-dev libpng-dev libjpeg-dev \
-  dosfstools exfatprogs mtools
+  dosfstools exfatprogs mtools ffmpeg
 python3 tools/fetch_deps.py --fatfs-only
 make test test-images
 bash tools/setup_kos.sh
@@ -119,7 +124,7 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | M1.2: validated runtime loading from SD | **Done.** exFAT handoff, B-selected fallback, missing-file rejection and good-runtime restoration confirmed; all five malformed fixtures rejected on hardware, each with its own reason, with a usable fallback ([evidence](docs/evidence/m12-runtime-rejection-2026-09-20.json)) |
 | M1.3: full-track GDI capture | **Done.** Sword of the Berserk and MDK2 (31 tracks, 27 audio) captured and verified against TOSEC on the console and on a PC; Sword ripped three ways, identical by SHA-256 ([handoff](docs/HANDOFF-disc-reader.md)) |
 | M1.4: SHA-256 capture verification and controlled stop/resume | **Done.** MDK2 stopped twice mid-disc and resumed to a finish verified on the console and against TOSEC; Sword track 3 PC-verified. The lid opened mid-capture stopped cleanly and resumed to a TOSEC-verified finish on hardware (Omikron). A scratched disc retried a fixed 10 times, named the bad sector and stopped with the partial job kept. A B stop and a lid-open in the same boot both resume on DMA ([evidence](docs/evidence/dma-stop-fix-confirmed-2026-09-20.json)). **Open:** a card that fills mid-capture, host-tested only |
-| M1.5: hardware acceptance and minimal UI refinement | Launcher, named dumps, insertion title/ETA, system/ripper settings split and initial VMU/Memory/Network/music apps implemented; latest app hardware acceptance pending. Full-card failure remains host-tested only |
+| M1.5: hardware acceptance and minimal UI refinement | Launcher and non-Games app round five implemented: named dumps, salvage, VMU copy/delete/restore, Ogg/CD audio, settings/tools and network diagnostics; latest app hardware acceptance pending. Full-card failure remains host-tested only |
 
 See [the research scope](docs/milestone-1-research.md),
 [the implementation decisions](docs/diagnostic-design.md), and
