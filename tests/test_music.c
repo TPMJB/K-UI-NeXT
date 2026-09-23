@@ -7,8 +7,36 @@
 #include <kos/thread.h>
 #endif
 #include <assert.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef KUI_MUSIC_ALLOC_TEST
+/* The linker wraps the real allocation calls in the player. This independent
+ * ledger catches retained allocations even if status accounting is wrong. */
+static struct {
+    struct {void *pointer;size_t bytes;} live[16];
+    size_t bytes,peak;
+    unsigned allocations,frees;
+    bool fail_next;
+} heap;
+void *__real_malloc(size_t bytes);
+void __real_free(void *pointer);
+void *__wrap_malloc(size_t bytes) {
+    if(heap.fail_next) {heap.fail_next=false;return NULL;}
+    void *pointer=__real_malloc(bytes);
+    if(!pointer) return NULL;
+    unsigned i=0;while(i<16u && heap.live[i].pointer) ++i;assert(i<16u);
+    heap.live[i].pointer=pointer;heap.live[i].bytes=bytes;
+    heap.bytes+=bytes;++heap.allocations;if(heap.bytes>heap.peak) heap.peak=heap.bytes;
+    assert(heap.bytes<=KUI_MUSIC_CACHE_MAX);return pointer;
+}
+void __wrap_free(void *pointer) {
+    if(!pointer) return;
+    unsigned i=0;while(i<16u && heap.live[i].pointer!=pointer) ++i;assert(i<16u);
+    assert(heap.bytes>=heap.live[i].bytes);heap.bytes-=heap.live[i].bytes;++heap.frees;
+    memset(&heap.live[i],0,sizeof(heap.live[i]));__real_free(pointer);
+}
+#endif
 static struct {
     uint8_t header[44];size_t size,pos;
     unsigned connects,disconnects,opens,reads,closes,unmounts,init,shutdown,alloc,destroy,polls,starts;
@@ -16,6 +44,7 @@ static struct {
     unsigned cancel_after_reads,volume;size_t advertised_size;
     snd_stream_callback_t callback;
     void *previous;uint8_t previous_copy[131072];size_t previous_size;
+    unsigned log_lines;char last_log[256];
 } fake;
 #ifdef KUI_ON_CONSOLE
 static kthread_t fake_thread;
@@ -37,10 +66,42 @@ static void source(unsigned channels,size_t pcm) {
     put32(fake.header+28,22050*2*channels);put16(fake.header+32,2*channels);put16(fake.header+34,16);
     memcpy(fake.header+36,"data",4);put32(fake.header+40,(uint32_t)pcm);
 }
-static void reset(unsigned channels) {memset(&fake,0,sizeof(fake));source(channels,70000u);}
+static void reset(unsigned channels) {
+#ifdef KUI_MUSIC_ALLOC_TEST
+    assert(!heap.bytes && heap.allocations==heap.frees);
+    memset(&heap,0,sizeof(heap));
+#endif
+    memset(&fake,0,sizeof(fake));source(channels,70000u);
+}
 static struct kui_music_status state(void) {struct kui_music_status out;kui_music_status_copy(&out);return out;}
+#if defined(KUI_ON_CONSOLE) && defined(KUI_MUSIC_ALLOC_TEST)
+static bool interleave_resume,inside_unlock_hook;
+static unsigned resume_interleavings;
+void kui_music_test_unlock_hook(void) {
+    if(!interleave_resume || inside_unlock_hook) return;
+    inside_unlock_hook=true;++resume_interleavings;
+    /* Model a control thread resuming at every possible mutex-release boundary.
+     * The public resume locks again; guard only this deterministic test hook. */
+    kui_music_resume();
+    inside_unlock_hook=false;
+}
+#endif
+static void allocations_match(void) {
+    struct kui_music_status s=state();
+    assert(s.cache_bytes+s.loading_bytes<=KUI_MUSIC_CACHE_MAX);
+    assert(s.peak_file_bytes<=KUI_MUSIC_CACHE_MAX);
+#ifdef KUI_MUSIC_ALLOC_TEST
+    assert(heap.bytes==s.cache_bytes+s.loading_bytes);
+    assert(heap.peak==s.peak_file_bytes);
+    assert(heap.allocations==s.file_allocations && heap.frees==s.file_frees);
+#endif
+}
 static bool cancel(void) {return fake.cancel || (fake.cancel_after_reads && fake.reads>=fake.cancel_after_reads);}
-static void log_line(const char *fmt,...) {(void)fmt;}
+static void log_line(const char *fmt,...) {
+    /* A logger may snapshot status: logging under audio_lock would deadlock. */
+    (void)state();++fake.log_lines;
+    va_list ap;va_start(ap,fmt);vsnprintf(fake.last_log,sizeof(fake.last_log),fmt,ap);va_end(ap);
+}
 bool kui_sd_connect(void) {++fake.connects;return true;}
 void kui_sd_disconnect(void) {++fake.disconnects;}
 bool kui_mount(FATFS *fs,kui_log_fn log) {(void)fs;(void)log;return true;}
@@ -52,6 +113,7 @@ FRESULT f_open(FIL *file,const TCHAR *path,BYTE mode) {
 }
 FRESULT f_read(FIL *file,void *out,UINT requested,UINT *got) {
     (void)file;assert(requested<=32768 && requested<=fake.size-fake.pos);++fake.reads;
+    allocations_match();assert(state().loading_bytes==fake.size);
     *got=fake.short_read?requested-1:requested;
     uint8_t *p=out;for(UINT i=0;i<*got;i++) {size_t at=fake.pos+i;p[i]=at<44u?fake.header[at]:(uint8_t)at;}
     fake.pos+=*got;
@@ -82,6 +144,88 @@ void snd_stream_start(snd_stream_hnd_t hnd,uint32_t rate,int stereo) {
 }
 void snd_stream_volume(snd_stream_hnd_t hnd,int volume) {assert(hnd==0 && volume>=0 && volume<=255);fake.volume=(unsigned)volume;}
 int snd_stream_poll(snd_stream_hnd_t hnd) {assert(hnd==0 && fake.active);++fake.polls;if(fake.poll_error) return -1;fill(131072);return 0;}
+static void cache_churn(void) {
+    /* Reproduce the shipped five-song working set, then cycle it repeatedly.
+     * Selecting cached music must not allocate file memory or touch storage. */
+    static const size_t sizes[KUI_MUSIC_TRACKS]={1058444,846764,1058444,769790,940844};
+    reset(1);kui_music_init(log_line);kui_music_set_config(true,15);
+    for(unsigned i=0;i<KUI_MUSIC_TRACKS;i++) {
+        source(1,sizes[i]-44u);assert(kui_music_load(i,cancel));allocations_match();
+    }
+    assert(state().cache_bytes==4674286u);
+    unsigned allocated=state().file_allocations,reads=fake.reads,connects=fake.connects;
+    assert(kui_music_load_path("/KUI/apps/music/menu.wav","Manual first song",cancel));
+    assert(state().current_index==0 && !strcmp(state().title,"After Hours"));
+    assert(kui_music_load_path("/kui/APPS/MUSIC/NEON-CIRCUIT.WAV","Manual second song",cancel));
+    assert(state().current_index==1 && state().cached_mask==31u);
+    assert(state().file_allocations==allocated && state().cache_bytes==4674286u);
+    fake.cancel=true;
+    assert(!kui_music_load_path("/KUI/apps/music/menu.wav","Cancelled selection",cancel));
+    fake.cancel=false;assert(state().current_index==1);
+    for(unsigned i=0;i<1000u;i++) {
+        assert(kui_music_select_cached(i%KUI_MUSIC_TRACKS));allocations_match();
+        assert(state().cache_bytes==4674286u && state().file_allocations==allocated);
+    }
+    assert(fake.reads==reads && fake.connects==connects);
+    /* Each manual selection replaces the custom slot. Failed or cancelled
+     * staging must release the temporary bytes and preserve the current song. */
+    for(unsigned i=0;i<300u;i++) {
+        source(1,65536u+(i%7u)*2048u);
+        assert(kui_music_load_path("/Music/test.wav","Repeated choice",cancel));
+        allocations_match();assert(state().cache_bytes==4674286u+fake.size);
+        if(i%3u==0) fake.short_read=true;
+        else if(i%3u==1) fake.cancel_after_reads=fake.reads+1u;
+        else fake.close_error=true;
+        assert(!kui_music_load_path("/Music/test.wav","Failed replacement",cancel));
+        fake.short_read=false;fake.cancel_after_reads=0;fake.close_error=false;
+        allocations_match();assert(state().loading_bytes==0);
+        assert(!strcmp(state().title,"Repeated choice") && state().playing);
+        assert(kui_music_select_cached(i%KUI_MUSIC_TRACKS));
+    }
+    unsigned lines=fake.log_lines;kui_music_log_stats("stress check");
+    assert(fake.log_lines==lines+2u && strstr(fake.last_log,"Stop/mute retains cache"));
+    kui_music_shutdown();
+#ifdef KUI_MUSIC_ALLOC_TEST
+    assert(heap.bytes==0 && heap.allocations==heap.frees);
+#endif
+    /* Large replacements exercise eviction and the exact staging-inclusive
+     * limit, not just small files that would fit even with a leaked old slot. */
+    reset(1);kui_music_init(log_line);kui_music_set_config(true,15);
+    source(1,4u*1024u*1024u-44u);
+    assert(kui_music_load_path("/Music/test.wav","Large first",cancel));
+    for(unsigned i=0;i<16u;i++) {
+        assert(kui_music_load_path("/Music/test.wav","Large replacement",cancel));
+        allocations_match();assert(state().cache_bytes==4u*1024u*1024u);
+        assert(state().peak_file_bytes==KUI_MUSIC_CACHE_MAX);
+    }
+    source(1,KUI_MUSIC_CUSTOM_MAX-44u);allocated=state().file_allocations;
+    assert(!kui_music_load_path("/Music/test.wav","Over budget",cancel));
+    allocations_match();assert(state().file_allocations==allocated && state().playing);
+#ifdef KUI_MUSIC_ALLOC_TEST
+    source(1,65536u);heap.fail_next=true;
+    assert(!kui_music_load_path("/Music/test.wav","Allocation failure",cancel));
+    assert(!heap.fail_next);allocations_match();
+    assert(state().file_allocations==allocated && state().playing);
+#endif
+    kui_music_shutdown();
+#ifdef KUI_MUSIC_ALLOC_TEST
+    assert(heap.bytes==0 && heap.allocations==heap.frees);
+#endif
+}
+static void replacement_interleave(void) {
+#if defined(KUI_ON_CONSOLE) && defined(KUI_MUSIC_ALLOC_TEST)
+    reset(1);kui_music_init(log_line);kui_music_set_config(true,15);
+    assert(kui_music_load_path("/Music/test.wav","First custom song",cancel));
+    interleave_resume=true;
+    for(unsigned i=0;i<16u;i++) {
+        source(1,70000u+i*2048u);
+        assert(kui_music_load_path("/Music/test.wav","Replacement song",cancel));
+        allocations_match();assert(state().playing && state().pcm_bytes==fake.size-44u);
+    }
+    interleave_resume=false;assert(resume_interleavings>16u);
+    kui_music_shutdown();assert(heap.bytes==0 && heap.allocations==heap.frees);
+#endif
+}
 int main(void) {
     for(unsigned channels=1;channels<=2;channels++) {
         reset(channels);kui_music_init(log_line);assert(!fake.connects && !fake.init);
@@ -163,5 +307,7 @@ int main(void) {
     assert(kui_music_load(0,cancel));assert(!state().playing && strstr(state().message,"Audio service unavailable"));
     assert(!fake.init && !thread_live);kui_music_shutdown();thread_fail=false;
 #endif
-    puts("PASS background music: independent polling, no playback I/O, preserved replacements, cache-only switching, 8MiB staging budget, cleanup");return 0;
+    cache_churn();
+    replacement_interleave();
+    puts("PASS background music: independent polling, no playback I/O, preserved replacements, 1000 cached switches, 300 replacements/failures, exact 8MiB staging budget, allocation cleanup, replacement/resume interleaving");return 0;
 }

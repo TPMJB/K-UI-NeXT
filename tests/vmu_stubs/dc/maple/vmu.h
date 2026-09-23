@@ -3,4 +3,5 @@
 #define KUI_TEST_VMU_BLOCK_H
 #include <dc/maple.h>
 int vmu_block_read(maple_device_t *device,uint16_t block,uint8_t *buffer);
+int vmu_block_write(maple_device_t *device,uint16_t block,const uint8_t *buffer);
 #endif

@@ -48,6 +48,8 @@ bool kui_system_settings_load(struct kui_system_settings *out,bool legacy_show_m
     if(chosen>=0) {
         *out=slots[chosen].settings;
         if(log) log("Loaded %s sequence=%" PRIu64,paths[chosen]+2,slots[chosen].sequence);
+        if(log && slots[chosen].record[8]==1)
+            log("Legacy system preferences retained; startup chime on / Home until changed");
     } else if(!slots[0].exists && !slots[1].exists) {
         out->show_memory=legacy_show_memory;
         if(log) log("No system settings yet; retaining legacy memory-display choice");

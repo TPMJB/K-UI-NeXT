@@ -2,6 +2,7 @@
 #include "platform.h"
 #include "kui/ui_rate.h"
 #include "kui/report.h"
+#include "kui/clock_platform.h"
 #ifdef KUI_SD_RUNTIME
 #include "kui/shell.h"
 #include "kui/settings.h"
@@ -12,6 +13,7 @@
 #include "kui/music_player.h"
 #include "kui/splash.h"
 #include "kui/gd_play.h"
+#include "kui/recovery_scan.h"
 #endif
 #include <kos.h>
 #include <dc/minifont.h>
@@ -59,8 +61,17 @@ static struct kui_music_status music_snapshot;
 static struct kui_app_status memory_test_status, network_test_status;
 static struct kui_vmu_view vmu_snapshot;
 static unsigned vmu_generation, vmu_slot_pending, vmu_page_pending, vmu_selected_pending;
+static struct kui_vmu_backup_view vmu_backups;
+static unsigned vmu_backups_generation,vmu_backup_page_pending,vmu_restore_generation;
+static char vmu_restore_path_pending[KUI_VMU_BACKUP_PATH_CAP];
+static struct kui_datetime clock_pending,clock_snapshot;
+static bool clock_valid;
+static unsigned clock_generation;
+static char clock_note[128];
+static struct kui_app_status scan_status;
+static char scan_path_pending[KUI_DEST_JOB_CAP];
 static unsigned active_app;
-static bool splash_active,boot_ready;
+static bool splash_active,boot_ready,startup_skip,startup_finished;
 static uint64_t splash_deadline;
 static int music_requested=-1;
 static unsigned music_request_generation,music_cache_attempted;
@@ -173,12 +184,13 @@ static void save_report(const char *trigger,const char *outcome,bool automatic) 
     mutex_unlock(&lock);
 #ifdef KUI_SD_RUNTIME
     kui_memory_log("save log");
+    kui_music_log_stats("save log");
 #endif
     char path[96]={0};enum kui_report_result result=KUI_REPORT_FAILED;
     if(kui_sd_connect()) {
         mutex_lock(&lock);
         size_t used=(size_t)snprintf(report,sizeof(report),
-            "K-UI " KUI_ROLE " %s\nLog truncated: %s\nReport trigger: %s\nCapture result: %s\n",
+            "K-UI " KUI_ROLE " %s\nLog truncated: %s\nReport trigger: %s\nOperation result: %s\n",
             KUI_BUILD_ID,log_truncated?"YES":"no",trigger,outcome);
 #ifdef KUI_SD_RUNTIME
         used+=(size_t)snprintf(report+used,sizeof(report)-used,
@@ -350,8 +362,71 @@ static void app_progress(const struct kui_app_status *status) {
     if(active_app==19) memory_test_status=*status;
     else if(active_app==20) network_test_status=*status;
     else if(active_app==24) player_status=*status;
+    else if(active_app==31) vmu_backups.status=*status;
     else vmu_snapshot.status=*status;
     mutex_unlock(&lock);
+}
+static bool startup_sound_cancelled(void) {
+    mutex_lock(&lock);
+    bool stop=startup_skip || cancel_requested || timer_ms_gettime64()>=splash_deadline;
+    mutex_unlock(&lock);
+    return stop;
+}
+static void clock_operation(bool write) {
+    bool written=!write || kui_clock_set_local(&clock_pending);
+    struct kui_datetime now={0};
+    bool valid=kui_clock_now(&now);
+    mutex_lock(&lock);
+    clock_valid=valid;clock_snapshot=now;++clock_generation;
+    snprintf(clock_note,sizeof(clock_note),"%s",!written?
+        "Clock write not confirmed. Check the displayed time before retrying.":
+        !valid?"Clock unavailable. Set a valid local date and time.":
+        write?"Console clock updated and read back.":"Local console time; no timezone conversion.");
+    mutex_unlock(&lock);
+    if(write) kui_log("Clock edit: %s",written?"RTC and system time confirmed":"not confirmed");
+    if(valid) kui_log("Clock now: %04u-%02u-%02u %02u:%02u:%02u local",
+        (unsigned)now.year,(unsigned)now.month,(unsigned)now.day,
+        (unsigned)now.hour,(unsigned)now.minute,(unsigned)now.second);
+}
+static bool scan_cancel(void *ctx) { (void)ctx;return kui_cancelled(); }
+static uint64_t scan_now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
+static void scan_progress(void *ctx,const struct kui_scan_status *status) {
+    (void)ctx;
+    struct kui_app_status view={.done=status->done,.total=status->total,
+        .errors=status->bad_sectors+status->crc_mismatches+status->sha_mismatches,
+        .complete=status->complete,.passed=status->result==KUI_SCAN_CLEAN && status->complete,
+        .stopped=status->result==KUI_SCAN_STOPPED,.line_count=5};
+    snprintf(view.message,sizeof(view.message),"%s",status->message);
+    snprintf(view.lines[0],KUI_APP_LINE_CAP,"Track %u / %u",status->track,status->tracks);
+    snprintf(view.lines[1],KUI_APP_LINE_CAP,"Data sectors %lu  Audio sectors %lu",
+        (unsigned long)status->data_sectors,(unsigned long)status->audio_sectors);
+    snprintf(view.lines[2],KUI_APP_LINE_CAP,"Bad sectors %lu  Unsupported %lu",
+        (unsigned long)status->bad_sectors,(unsigned long)status->unsupported_sectors);
+    snprintf(view.lines[3],KUI_APP_LINE_CAP,"CRC mismatches %lu  SHA mismatches %lu",
+        (unsigned long)status->crc_mismatches,(unsigned long)status->sha_mismatches);
+    snprintf(view.lines[4],KUI_APP_LINE_CAP,"Track files are read-only; findings saved separately.");
+    mutex_lock(&lock);scan_status=view;mutex_unlock(&lock);
+}
+static void scan_operation(void) {
+    struct kui_scan_status result={.result=KUI_SCAN_FAILED};
+    snprintf(result.message,sizeof(result.message),"Could not connect SD for Advanced CRC scan.");
+    const struct kui_scan_ops ops={.cancelled=scan_cancel,.now_ms=scan_now,
+        .progress=scan_progress,.log=kui_log};
+    kui_sd_set_params(0,true);
+    if(kui_sd_connect()) {
+        kui_recovery_scan(scan_path_pending,&ops,&result);
+        kui_sd_disconnect();
+    }
+    scan_progress(NULL,&result);
+    mutex_lock(&lock);
+    scan_status.complete=true;
+    if(result.result==KUI_SCAN_FAILED && !scan_status.errors) scan_status.errors=1;
+    mutex_unlock(&lock);
+    kui_ui_set_hz(KUI_OPT_UI_FULL);
+    const char *outcome=result.result==KUI_SCAN_CLEAN?"clean":
+        result.result==KUI_SCAN_ISSUES?"issues found":result.result==KUI_SCAN_STOPPED?"stopped":"failed";
+    kui_log("Advanced CRC scan: %s",outcome);
+    save_report("auto Advanced CRC",outcome,true);
 }
 /* Video is changed only by main, while no foreground I/O runs. The canvas
  * remains 640x480. VGA always receives its native 60 Hz progressive timing. */
@@ -474,6 +549,17 @@ static void *worker(void *unused) {
                 else if(action==23 || action==24) player_status=stopped;
                 else vmu_snapshot.status=stopped;
             }
+            if(action>=30 && action<=33) {
+                struct kui_app_status stopped={.stopped=true};
+                snprintf(stopped.message,sizeof(stopped.message),"Operation stopped before starting.");
+                if(action==30) scan_status=stopped;
+                else if(action==31) {vmu_backups.status=stopped;++vmu_backups_generation;}
+                else {vmu_snapshot.status=stopped;vmu_snapshot.restore_ready=false;++vmu_restore_generation;}
+            }
+            if(action==34 || action==35) {
+                clock_valid=false;++clock_generation;
+                snprintf(clock_note,sizeof(clock_note),"Clock operation stopped before starting.");
+            }
             if(action == 8 || action == 9)
                 snprintf(settings_note, sizeof(settings_note), "Settings operation stopped before starting.");
             mutex_unlock(&lock);
@@ -561,12 +647,35 @@ static void *worker(void *unused) {
                 for(;;) thd_sleep(1000);
             }
             if(action==27) {
-                kui_music_play_boot_chime(kui_cancelled);
-                mutex_lock(&lock);cancel_requested=false;mutex_unlock(&lock);
                 settings_operation(false);
                 system_operation(false);
-                mutex_lock(&lock);splash_active=false;mutex_unlock(&lock);
+                if(system_current.startup_chime && !startup_sound_cancelled())
+                    kui_music_play_boot_chime(startup_sound_cancelled);
+                mutex_lock(&lock);
+                splash_active=false;startup_finished=true;
+                mutex_unlock(&lock);
             }
+            if(action==30) scan_operation();
+            if(action==31) {
+                struct kui_vmu_backup_view result;
+                active_app=31;kui_sd_set_params(0,true);
+                kui_vmu_backups_run(vmu_backup_page_pending,&result,kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);vmu_backups=result;++vmu_backups_generation;mutex_unlock(&lock);
+            }
+            if(action==32 || action==33) {
+                struct kui_vmu_view result;
+                active_app=action;kui_sd_set_params(0,true);
+                kui_vmu_restore_run(vmu_restore_path_pending,vmu_slot_pending,action==33,
+                    &result,kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);vmu_snapshot=result;++vmu_restore_generation;mutex_unlock(&lock);
+                if(action==33) {
+                    kui_log("VMU restore result: %s",result.status.message);
+                    kui_ui_set_hz(KUI_OPT_UI_FULL);
+                    save_report("auto VMU restore",result.status.passed?"verified":
+                        result.status.stopped?"stopped":"not verified",true);
+                }
+            }
+            if(action==34 || action==35) clock_operation(action==35);
             if(action>=16 && action<=20) {
                 active_app=action;
                 if(action<=18) {
@@ -745,6 +854,9 @@ static void draw_shell(void) {
     view.music_paused=music_snapshot.paused;
     view.music_volume=music_snapshot.volume;
     view.music_change_pending=music_requested>=0;
+    view.music_cache_bytes=music_snapshot.cache_bytes;
+    view.music_loading_bytes=music_snapshot.loading_bytes;
+    view.music_peak_file_bytes=music_snapshot.peak_file_bytes;
     view.drive_reset_required=drive_reset_required;
     view.dma_degraded=dma_degraded;
     view.video_trial=video_preview;
@@ -754,7 +866,9 @@ static void draw_shell(void) {
     view.progress_age_ms=now>=progress_updated_ms?now-progress_updated_ms:0;
     app_status=shell.page==KUI_SHELL_MEMORY?memory_test_status:
         shell.page==KUI_SHELL_NETWORK?network_test_status:
-        shell.page==KUI_SHELL_MUSIC?player_status:vmu_snapshot.status;
+        shell.page==KUI_SHELL_MUSIC?player_status:
+        shell.page==KUI_SHELL_CRC_SCAN?scan_status:
+        shell.page==KUI_SHELL_VMU_RESTORE && active_app==31?vmu_backups.status:vmu_snapshot.status;
     view.phase = capture_status.phase; view.track = capture_status.track; view.tracks = capture_status.tracks;
     view.rate_kib = rate_kib; view.retries = capture_status.retries;
     view.done = capture_status.done; view.total = capture_status.total;
@@ -810,6 +924,12 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_MUSIC_LIST: return 23;
         case KUI_SHELL_MUSIC_PLAY: return 24;
         case KUI_SHELL_GD_BOOT: return 25;
+        case KUI_SHELL_ADVANCED_CRC: return 30;
+        case KUI_SHELL_VMU_BACKUPS_LIST: return 31;
+        case KUI_SHELL_VMU_RESTORE_PREVIEW: return 32;
+        case KUI_SHELL_VMU_RESTORE_COMMIT: return 33;
+        case KUI_SHELL_CLOCK_READ: return 34;
+        case KUI_SHELL_CLOCK_WRITE: return 35;
         default: return 0;
     }
 }
@@ -842,6 +962,7 @@ int main(void) {
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
     kui_log("Running " KUI_ROLE " build " KUI_BUILD_ID);
+    kui_clock_start(kui_log);
     kui_log("Video: %ux%u %s %s, buffered",
         (unsigned)vid_mode->width, (unsigned)vid_mode->height,
         vid_mode->cable_type == CT_VGA ? "VGA" :
@@ -915,6 +1036,8 @@ int main(void) {
 #ifdef KUI_SD_RUNTIME
     unsigned seen_settings_generation = 0, seen_destination_generation = 0;
     unsigned seen_system_generation=0,seen_vmu_generation=0,seen_music_listing=0;
+    unsigned seen_clock_generation=0,seen_vmu_backups=0,seen_vmu_restore=0;
+    bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
 #else
@@ -962,6 +1085,39 @@ int main(void) {
             kui_shell_set_music_listing(&shell,&music_listing);
             seen_music_listing=music_listing_generation;
         }
+        if(seen_clock_generation!=clock_generation) {
+            kui_shell_set_clock(&shell,clock_valid?&clock_snapshot:NULL,clock_note);
+            seen_clock_generation=clock_generation;
+        }
+        if(seen_vmu_backups!=vmu_backups_generation) {
+            kui_shell_set_vmu_backups(&shell,&vmu_backups);
+            seen_vmu_backups=vmu_backups_generation;
+        }
+        if(seen_vmu_restore!=vmu_restore_generation) {
+            kui_shell_set_vmu_restore_preview(&shell,&vmu_snapshot);
+            seen_vmu_restore=vmu_restore_generation;
+        }
+        if(startup_finished && !busy && !startup_routed) {
+            startup_routed=true;
+            switch(system_current.startup_app) {
+                case KUI_STARTUP_RIPPER: shell.page=KUI_SHELL_RIPPER;break;
+                case KUI_STARTUP_VMU: shell.page=KUI_SHELL_VMU;break;
+                case KUI_STARTUP_MUSIC: shell.page=KUI_SHELL_MUSIC;break;
+                case KUI_STARTUP_DIAGNOSTICS: shell.page=KUI_SHELL_DIAGNOSTICS;break;
+                default: shell.page=KUI_SHELL_HOME;break;
+            }
+            /* Populate read-only lists through the storage worker. A save,
+             * rip or VMU write always needs an explicit controller action. */
+            if(shell.page==KUI_SHELL_VMU) {
+                vmu_slot_pending=shell.vmu_slot;vmu_page_pending=shell.vmu_page;
+                vmu_selected_pending=shell.vmu_selected;pending=16;
+            } else if(shell.page==KUI_SHELL_MUSIC) {
+                snprintf(music_path_pending,sizeof(music_path_pending),"%s",shell.music_path);
+                music_offset_pending=0;pending=23;
+            }
+            if(pending) {busy=true;cancel_requested=false;ui_hz_busy=2;}
+            last_draw=0;
+        }
         if(video_preview && input_at>=video_deadline) {
             video_preview=false;shell.video_trial=false;
             safe_video_boot=video_prior_safe;apply_video(video_prior_mode);
@@ -969,7 +1125,7 @@ int main(void) {
             snprintf(system_note,sizeof(system_note),"Video reverted after 10 seconds.");
         }
         enum kui_shell_action requested=KUI_SHELL_NONE;
-        if(splash_active) {if(pressed&CONT_B) {cancel_requested=true;splash_active=false;last_draw=0;}}
+        if(splash_active) {if(pressed&CONT_B) {startup_skip=true;splash_active=false;last_draw=0;}}
         else requested=kui_shell_input(&shell,shell_buttons(pressed),busy);
         if(requested==KUI_SHELL_PREVIEW_VIDEO && !busy) {
             video_prior_safe=safe_video_boot;video_prior_mode=applied_video;
@@ -1016,6 +1172,20 @@ int main(void) {
                 vmu_selected_pending=shell.vmu_selected;
                 vmu_snapshot.status=(struct kui_app_status){0};
             }
+            if(action==30) {
+                snprintf(scan_path_pending,sizeof(scan_path_pending),"%s",shell.browse_path);
+                scan_status=(struct kui_app_status){0};
+            }
+            if(action==31) {
+                vmu_backup_page_pending=shell.backup_page;
+                vmu_backups.status=(struct kui_app_status){0};
+            }
+            if(action==32 || action==33) {
+                vmu_slot_pending=shell.vmu_slot;
+                snprintf(vmu_restore_path_pending,sizeof(vmu_restore_path_pending),"%s",shell.restore_path);
+                vmu_snapshot.status=(struct kui_app_status){0};
+            }
+            if(action==35) clock_pending=shell.clock_draft;
             if(action==23 || action==24) {
                 snprintf(music_path_pending,sizeof(music_path_pending),"%s",
                     action==23?shell.music_path:shell.music_selected_path);
@@ -1047,7 +1217,9 @@ int main(void) {
         }
         mutex_lock(&lock);bool exiting=boot_ready;mutex_unlock(&lock);
         if(exiting) kui_gd_play_boot();
-        if(requested == KUI_SHELL_MSTATS) { kui_memory_log("L trigger"); shell.scroll = 0; }
+        if(requested == KUI_SHELL_MSTATS) {
+            kui_memory_log("L trigger");kui_music_log_stats("L trigger");shell.scroll=0;
+        }
         if(timer_ms_gettime64() >= next_memory_sample) {
             memory_valid = kui_memory_snapshot(&memory_status); next_memory_sample = timer_ms_gettime64() + 1000;
         }

@@ -29,7 +29,9 @@ bool kui_shell_system_dirty(const struct kui_shell *s) {
     return s && (s->system_saved.video_mode!=s->system_draft.video_mode ||
         s->system_saved.show_memory!=s->system_draft.show_memory ||
         s->system_saved.music_enabled!=s->system_draft.music_enabled ||
-        s->system_saved.music_volume!=s->system_draft.music_volume);
+        s->system_saved.music_volume!=s->system_draft.music_volume ||
+        s->system_saved.startup_chime!=s->system_draft.startup_chime ||
+        s->system_saved.startup_app!=s->system_draft.startup_app);
 }
 void kui_shell_set_vmu(struct kui_shell *s,const struct kui_vmu_view *view) {
     if(!s || !view || view->slot!=s->vmu_slot || view->page!=s->vmu_page) return;
@@ -37,6 +39,44 @@ void kui_shell_set_vmu(struct kui_shell *s,const struct kui_vmu_view *view) {
     if(s->vmu.count>KUI_VMU_ROWS) s->vmu.count=KUI_VMU_ROWS;
     for(unsigned i=0;i<s->vmu.count;i++) s->vmu.entries[i].name[sizeof(s->vmu.entries[i].name)-1]=0;
     if(s->vmu_selected>=s->vmu.count) s->vmu_selected=0;
+}
+void kui_shell_set_vmu_backups(struct kui_shell *s,const struct kui_vmu_backup_view *view) {
+    if(!s || !view || s->page!=KUI_SHELL_VMU_RESTORE || view->page!=s->backup_page) return;
+    s->backups=*view;
+    s->backups.status.message[sizeof(s->backups.status.message)-1]=0;
+    if(s->backups.count>KUI_VMU_ROWS) s->backups.count=KUI_VMU_ROWS;
+    for(unsigned i=0;i<s->backups.count;i++) {
+        struct kui_vmu_backup_entry *e=&s->backups.entries[i];
+        e->name[sizeof(e->name)-1]=0;e->folder[sizeof(e->folder)-1]=0;
+        /* An unterminated path is unusable, never silently truncated. */
+        if(!memchr(e->path,0,sizeof(e->path))) e->path[0]=0;
+    }
+    if(s->backup_selected>=s->backups.count) s->backup_selected=0;
+}
+void kui_shell_set_vmu_restore_preview(struct kui_shell *s,const struct kui_vmu_view *view) {
+    if(!s || !view || s->page!=KUI_SHELL_VMU_RESTORE || view->slot!=s->vmu_slot) return;
+    s->backups.status=view->status;
+    s->backups.status.message[sizeof(s->backups.status.message)-1]=0;
+    s->confirm_vmu_restore=view->restore_ready && s->restore_path[0];
+}
+void kui_shell_set_clock(struct kui_shell *s,const struct kui_datetime *value,const char *notice) {
+    if(!s) return;
+    bool read_valid=value && kui_datetime_valid(value);
+    if(read_valid) s->clock_draft=*value;
+    else if(!kui_datetime_valid(&s->clock_draft))
+        s->clock_draft=(struct kui_datetime){1980,1,1,0,0,0};
+    /* A dead/reset RTC must still be repairable. The explicit read-error
+     * notice distinguishes this editable fallback from an observed time. */
+    s->clock_valid=true;
+    s->confirm_clock=false;
+    snprintf(s->clock_notice,sizeof(s->clock_notice),"%s",notice?notice:
+        read_valid?"":"Clock unavailable. Edit the fallback date before applying.");
+}
+static enum kui_shell_action list_backups(struct kui_shell *s,bool first) {
+    if(first) s->backup_page=0;
+    s->backup_selected=0;s->restore_path[0]=0;s->confirm_vmu_restore=false;
+    memset(&s->backups,0,sizeof(s->backups));
+    return KUI_SHELL_VMU_BACKUPS_LIST;
 }
 void kui_shell_set_music_listing(struct kui_shell *s,const struct kui_music_player_page *page) {
     if(!s || !page || !memchr(page->root,0,sizeof(page->root)) ||
@@ -189,6 +229,29 @@ static void scroll(struct kui_shell *s, unsigned buttons) {
     } else if((buttons & (KUI_SHELL_UP | KUI_SHELL_DOWN)) == KUI_SHELL_DOWN)
         s->scroll = s->scroll > 3 ? s->scroll - 3 : 0;
 }
+static void edit_clock(struct kui_shell *s,unsigned buttons) {
+    if(!s->clock_valid) return;
+    s->clock_selected=move_count(s->clock_selected,buttons,6);
+    unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+    if(horizontal!=KUI_SHELL_LEFT && horizontal!=KUI_SHELL_RIGHT) return;
+    struct kui_datetime *d=&s->clock_draft;
+    unsigned values[]={d->year,d->month,d->day,d->hour,d->minute,d->second};
+    static const unsigned low[]={1980,1,1,0,0,0}, high[]={2085,12,31,23,59,59};
+    unsigned at=s->clock_selected, v=values[at], maximum=high[at];
+    if(at==2) {
+        struct kui_datetime last=*d;last.day=31;
+        while(last.day>1 && !kui_datetime_valid(&last)) --last.day;
+        maximum=last.day;
+    }
+    if(horizontal==KUI_SHELL_LEFT) v=v<=low[at]?maximum:v-1;
+    else v=v>=maximum?low[at]:v+1;
+    values[at]=v;
+    d->year=(uint16_t)values[0];d->month=(uint8_t)values[1];d->day=(uint8_t)values[2];
+    d->hour=(uint8_t)values[3];d->minute=(uint8_t)values[4];d->second=(uint8_t)values[5];
+    /* Month/year changes retain the nearest valid day (e.g. Feb 29 -> Feb 28). */
+    while(d->day>1 && !kui_datetime_valid(d)) --d->day;
+    s->clock_notice[0]=0;
+}
 enum kui_shell_action kui_shell_input(struct kui_shell *s,
         unsigned buttons, bool busy) {
     if(!s) return KUI_SHELL_NONE;
@@ -201,8 +264,15 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     if(buttons & KUI_SHELL_B) {
         if(busy) {
             s->confirm_new=false; s->confirm_quick_resume=false; s->confirm_gd_boot=false;
+            s->confirm_clock=false;s->confirm_defaults=false;s->confirm_vmu_restore=false;
             return KUI_SHELL_STOP;
         }
+        if(s->confirm_clock) {s->confirm_clock=false;return KUI_SHELL_NONE;}
+        if(s->confirm_defaults) {s->confirm_defaults=false;return KUI_SHELL_NONE;}
+        if(s->confirm_vmu_restore) {s->confirm_vmu_restore=false;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_CLOCK) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_CRC_SCAN) {s->page=KUI_SHELL_ADVANCED;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_VMU_RESTORE) {s->page=KUI_SHELL_VMU;return KUI_SHELL_NONE;}
         if(s->confirm_quick_resume) { s->confirm_quick_resume=false; return KUI_SHELL_NONE; }
         if(s->confirm_gd_boot) { s->confirm_gd_boot=false; return KUI_SHELL_NONE; }
         if(s->confirm_new) { s->confirm_new = false; return KUI_SHELL_NONE; }
@@ -248,7 +318,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
      * worker cannot load a different song yet. B and modal confirmations keep
      * priority, and simultaneous triggers do not choose an arbitrary song. */
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
-    bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot;
+    bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
+        s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
         unsigned triggers=buttons & (KUI_SHELL_L|KUI_SHELL_R);
         if(triggers==KUI_SHELL_L) return KUI_SHELL_MUSIC_PREVIOUS;
@@ -257,6 +328,21 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     if(!song_page && (buttons & KUI_SHELL_L)) return KUI_SHELL_MSTATS;
     if(busy) {
         if(s->page == KUI_SHELL_DIAGNOSTICS) scroll(s, buttons);
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_clock) {
+        if(buttons&KUI_SHELL_A) {s->confirm_clock=false;return KUI_SHELL_CLOCK_WRITE;}
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_defaults) {
+        if(buttons&KUI_SHELL_A) {
+            s->confirm_defaults=false;kui_system_settings_default(&s->system_draft);
+            s->system_selected=0;
+        }
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_vmu_restore) {
+        if(buttons&KUI_SHELL_A) {s->confirm_vmu_restore=false;return KUI_SHELL_VMU_RESTORE_COMMIT;}
         return KUI_SHELL_NONE;
     }
     if(s->confirm_gd_boot) {
@@ -303,7 +389,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         else if(buttons & KUI_SHELL_START) s->page=KUI_SHELL_ADVANCED;
         break;
     case KUI_SHELL_ADVANCED:
-        s->advanced_selected=move_count(s->advanced_selected,buttons,5);
+        s->advanced_selected=move_count(s->advanced_selected,buttons,6);
         if(buttons & KUI_SHELL_A) {
             if(s->advanced_selected<2) {
                 s->page=KUI_SHELL_RIPPER;
@@ -312,7 +398,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->advanced_selected==3) {
                 s->confirm_quick_resume=true; return KUI_SHELL_NONE;
             }
-            if(s->advanced_selected==4) {
+            if(s->advanced_selected==4 || s->advanced_selected==5) {
+                s->browse_for_scan=s->advanced_selected==5;
                 s->page=KUI_SHELL_DESTINATION;
                 snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
                 return list_destination(s,true);
@@ -324,15 +411,18 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_DESTINATION:
         if(buttons & KUI_SHELL_START) {
-            s->page=KUI_SHELL_RIPPER;
+            s->page=s->browse_for_scan?KUI_SHELL_ADVANCED:KUI_SHELL_RIPPER;
             snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
             s->destination_notice[0]=0;
-        } else if(buttons & KUI_SHELL_X) {
+        } else if((buttons & KUI_SHELL_X) && !s->browse_for_scan) {
             snprintf(s->keyboard,sizeof(s->keyboard),"%s",s->browse_path);
             snprintf(s->keyboard_original,sizeof(s->keyboard_original),"%s",s->browse_path);
             s->keyboard_selected=0; s->keyboard_upper=false;
             s->destination_notice[0]=0; s->page=KUI_SHELL_KEYBOARD;
-        } else if(buttons & KUI_SHELL_Y) return save_destination(s,s->browse_path);
+        } else if(buttons & KUI_SHELL_Y) {
+            if(s->browse_for_scan) {s->page=KUI_SHELL_CRC_SCAN;return KUI_SHELL_ADVANCED_CRC;}
+            return save_destination(s,s->browse_path);
+        }
         else if(buttons & KUI_SHELL_A) {
             if(s->browser_selected<s->listing.count) {
                 const struct kui_destination_entry *entry=&s->listing.entries[s->browser_selected];
@@ -372,7 +462,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) return KUI_SHELL_SAVE_SETTINGS;
         break;
     case KUI_SHELL_SETTINGS: {
-        s->system_selected=move_count(s->system_selected,buttons,4);
+        s->system_selected=move_count(s->system_selected,buttons,8);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
             if(s->system_selected==0) s->system_draft.video_mode=(s->system_draft.video_mode+
@@ -385,9 +475,54 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                     (volume>5?volume-5:0):(volume<95?volume+5:100);
             }
         }
+        if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
+            if(s->system_selected==4) s->system_draft.startup_chime=!s->system_draft.startup_chime;
+            if(s->system_selected==5) s->system_draft.startup_app=(s->system_draft.startup_app+
+                (horizontal==KUI_SHELL_LEFT?KUI_STARTUP_APP_COUNT-1:1))%KUI_STARTUP_APP_COUNT;
+        }
+        if((buttons&KUI_SHELL_A) && s->system_selected==6) {
+            s->page=KUI_SHELL_CLOCK;s->clock_valid=false;s->clock_selected=0;
+            snprintf(s->clock_notice,sizeof(s->clock_notice),"Reading console clock...");
+            return KUI_SHELL_CLOCK_READ;
+        }
+        if((buttons&KUI_SHELL_A) && s->system_selected==7) {
+            s->confirm_defaults=true;return KUI_SHELL_NONE;
+        }
         if(buttons&KUI_SHELL_A) return s->system_draft.video_mode!=s->system_saved.video_mode?
             KUI_SHELL_PREVIEW_VIDEO:KUI_SHELL_SAVE_SYSTEM;
-        if((buttons&KUI_SHELL_X) && s->system_selected>=2) return KUI_SHELL_MUSIC_NEXT;
+        if((buttons&KUI_SHELL_X) && s->system_selected>=2 && s->system_selected<=3) return KUI_SHELL_MUSIC_NEXT;
+        break;
+    }
+    case KUI_SHELL_CLOCK:
+        edit_clock(s,buttons);
+        if(buttons&KUI_SHELL_X) {s->clock_valid=false;return KUI_SHELL_CLOCK_READ;}
+        if((buttons&KUI_SHELL_A) && s->clock_valid) s->confirm_clock=true;
+        break;
+    case KUI_SHELL_CRC_SCAN:
+        if(buttons&KUI_SHELL_A) return KUI_SHELL_ADVANCED_CRC;
+        break;
+    case KUI_SHELL_VMU_RESTORE: {
+        unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+        if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
+            s->vmu_slot=(s->vmu_slot+(horizontal==KUI_SHELL_LEFT?7:1))%8;
+            s->restore_path[0]=0;
+        }
+        s->backup_selected=move_count(s->backup_selected,buttons,s->backups.count);
+        if(buttons&KUI_SHELL_X) return list_backups(s,false);
+        if(buttons&KUI_SHELL_START) {
+            if(s->backup_page<UINT_MAX/KUI_VMU_ROWS-1 &&
+               (s->backup_page+1)*KUI_VMU_ROWS<s->backups.total) ++s->backup_page;
+            else s->backup_page=0;
+            return list_backups(s,false);
+        }
+        if((buttons&KUI_SHELL_A) && s->backup_selected<s->backups.count) {
+            const struct kui_vmu_backup_entry *e=&s->backups.entries[s->backup_selected];
+            if(e->path[0]) {
+                snprintf(s->restore_path,sizeof(s->restore_path),"%s",e->path);
+                snprintf(s->restore_name,sizeof(s->restore_name),"%s",e->name);
+                s->restore_bytes=e->bytes;return KUI_SHELL_VMU_RESTORE_PREVIEW;
+            }
+        }
         break;
     }
     case KUI_SHELL_GD_PLAY:
@@ -426,6 +561,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_A) return KUI_SHELL_NETWORK_TEST;
         break;
     case KUI_SHELL_VMU: {
+        if(buttons&KUI_SHELL_R) {s->page=KUI_SHELL_VMU_RESTORE;return list_backups(s,true);}
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
             s->vmu_slot=(s->vmu_slot+(horizontal==KUI_SHELL_LEFT?7:1))%8;

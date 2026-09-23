@@ -1,10 +1,13 @@
 # Recovery port: first backend gate
 
 Status: the checksum/sector helpers and their host tests are implemented.
-They are **not linked into the Dreamcast runtime**, exposed in the UI, or a
-finished recovery feature. This gate changes neither healthy acquisition nor
-the current hash/EDC fast path. Automated pass/fail comes from the associated
-CI run; hardware recovery acceptance is a later gate.
+The Mode 1 checker now powers the explicit [Advanced CRC saved-file scan](advanced-crc-scan.md),
+which checks an existing completed job and writes a separate suspect-sector report.
+This is diagnosis, not optical recovery, zero-fill, or sector reconstruction.
+The CRC replacement helper remains a tested backend for the future salvage worker.
+Healthy acquisition and its current hash/EDC fast path are unchanged.
+Automated pass/fail comes from the associated CI run; console scan acceptance
+and hardware recovery acceptance remain separate later gates.
 
 ## Selected original code and provenance
 
@@ -90,8 +93,9 @@ or a complete damage-recovery app.
 
 ## Next dependencies
 
-Follow [salvage-plan.md](salvage-plan.md). The next independently testable gate
-is the salvage state/record codec and interruption model, then the separate
+Follow [salvage-plan.md](salvage-plan.md). The read-only saved-file scanner is now implemented separately, including
+FAT32/exFAT fault injection and small synthetic console fixtures. The next
+salvage gate is the state/record codec and interruption model, then the separate
 first-pass and recovery worker, FatFs adapters, verifier integration and UI.
 
 The legacy targeted worker requires full-sized raw tracks and an immutable

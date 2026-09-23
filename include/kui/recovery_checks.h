@@ -38,7 +38,8 @@ uint32_t kui_recovery_crc_replace(uint32_t whole,uint32_t before,uint32_t after,
  *
  * These backend helpers lazily initialize bounded tables. Like the current
  * drive/storage APIs they are for one serialized worker, not concurrent calls.
- * They are currently host-only and are not linked into the console runtime. */
+ * The saved-file Advanced CRC app uses sector checks explicitly; healthy
+ * acquisition still uses its existing fast checks and does not call these. */
 unsigned kui_recovery_sector_check(const void *raw,size_t size,uint32_t fad);
 
 #endif

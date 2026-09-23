@@ -23,9 +23,9 @@ static FATFS fs;
 static const char *slots[] = {KUI_SYSTEM_SETTINGS_PATH_A, KUI_SYSTEM_SETTINGS_PATH_B};
 static const char *kept[] = {"0:/KUI/settings-a.bin", "0:/KUI/settings-b.bin"};
 static const char sentinel[] = "Existing ripper settings must remain unchanged.\n";
-static const struct kui_system_settings previous = {KUI_VIDEO_NTSC60, false, true, 40};
-static const struct kui_system_settings changed = {KUI_VIDEO_AUTO, true, false, 75};
-static const struct kui_system_settings third = {KUI_VIDEO_PAL50, false, true, 100};
+static const struct kui_system_settings previous = {KUI_VIDEO_NTSC60, false, true, 40, false, KUI_STARTUP_VMU};
+static const struct kui_system_settings changed = {KUI_VIDEO_AUTO, true, false, 75, true, KUI_STARTUP_HOME};
+static const struct kui_system_settings third = {KUI_VIDEO_PAL50, false, true, 100, true, KUI_STARTUP_MUSIC};
 
 static bool fault(const char *name) { return test.fault && !strcmp(test.fault, name); }
 static void log_line(const char *format, ...) {
@@ -82,6 +82,8 @@ static void equals(const struct kui_system_settings *actual, const struct kui_sy
     assert(actual->music_enabled == expected->music_enabled);
     assert(actual->music_volume == expected->music_volume);
     assert(actual->show_memory == expected->show_memory);
+    assert(actual->startup_chime == expected->startup_chime);
+    assert(actual->startup_app == expected->startup_app);
 }
 static void check_file(const char *path, const void *expected, size_t size) {
     FIL file; UINT got; uint8_t data[128];
@@ -115,8 +117,10 @@ static void damage_newest(const char *kind) {
     if(!strcmp(kind, "corrupt")) record[24] ^= 1;
     else if(!strcmp(kind, "truncated")) size = KUI_SYSTEM_SETTINGS_RECORD_SIZE - 1;
     else if(!strcmp(kind, "oversize")) size = KUI_SYSTEM_SETTINGS_RECORD_SIZE + 1;
-    else if(!strcmp(kind, "version")) { put32(record + 8, 2); put32(record + 36, kui_crc32(0, record, 36)); }
-    else if(!strcmp(kind, "flags")) { record[25] = 4; put32(record + 36, kui_crc32(0, record, 36)); }
+    else if(!strcmp(kind, "version")) { put32(record + 8, 3); put32(record + 36, kui_crc32(0, record, 36)); }
+    else if(!strcmp(kind, "flags")) { record[25] = 8; put32(record + 36, kui_crc32(0, record, 36)); }
+    else if(!strcmp(kind, "startup-app")) { record[27] = KUI_STARTUP_APP_COUNT; put32(record + 36, kui_crc32(0, record, 36)); }
+    else if(!strcmp(kind, "reserved")) { record[28] = 1; put32(record + 36, kui_crc32(0, record, 36)); }
     else assert(false);
     write_file(slots[1], record, size);
 }
@@ -145,6 +149,20 @@ int main(int argc, char **argv) {
         remount(); check_loaded(&changed); check_slot(0, &previous, 1); check_slot(1, &changed, 2);
         assert(kui_system_settings_save(&third, log_line));
         remount(); check_loaded(&third); check_slot(0, &third, 3); check_slot(1, &changed, 2);
+    } else if(!strcmp(name, "v1-migrate") || !strcmp(name, "v1-fallback")) {
+        uint8_t legacy[KUI_SYSTEM_SETTINGS_RECORD_SIZE];
+        assert(kui_system_settings_encode(legacy,&previous,1));
+        put32(legacy+8,1);legacy[25]&=3u;legacy[27]=0;
+        put32(legacy+36,kui_crc32(0,legacy,36));write_file(slots[0],legacy,sizeof(legacy));
+        if(!strcmp(name,"v1-fallback")) damage_newest("version");
+        remount();unsigned before=test.writes;
+        struct kui_system_settings migrated=previous;
+        migrated.startup_chime=true;migrated.startup_app=KUI_STARTUP_HOME;
+        check_loaded(&migrated);assert(test.writes==before);
+        check_file(slots[0],legacy,sizeof(legacy));
+        assert(kui_system_settings_save(&third,log_line));
+        remount();check_loaded(&third);check_slot(1,&third,2);
+        check_file(slots[0],legacy,sizeof(legacy));
     } else if(!strcmp(name, "both-invalid")) {
         uint8_t bad[KUI_SYSTEM_SETTINGS_RECORD_SIZE] = {0}; write_file(slots[0], bad, sizeof(bad)); write_file(slots[1], bad, sizeof(bad));
         remount(); check_loaded(&changed);
@@ -157,6 +175,8 @@ int main(int argc, char **argv) {
         invalid.video_mode=KUI_VIDEO_MODE_COUNT;
         assert(!kui_system_settings_save(&invalid,log_line));
         invalid=previous;invalid.music_volume=101;
+        assert(!kui_system_settings_save(&invalid,log_line));
+        invalid=previous;invalid.startup_app=KUI_STARTUP_APP_COUNT;
         assert(!kui_system_settings_save(&invalid,log_line));
         assert(!kui_system_settings_save(NULL,log_line));assert(test.writes==before);
         remount();check_loaded(&previous);check_slot(0,&previous,1);
@@ -200,8 +220,8 @@ int main(int argc, char **argv) {
         struct kui_system_settings actual;
         assert(kui_system_settings_load(&actual, true, log_line));
         if(!strcmp(name, "write-fail")) equals(&actual, &previous);
-        assert((actual.video_mode == previous.video_mode && actual.music_enabled == previous.music_enabled && actual.music_volume == previous.music_volume && actual.show_memory == previous.show_memory) ||
-               (actual.video_mode == changed.video_mode && actual.music_enabled == changed.music_enabled && actual.music_volume == changed.music_volume && actual.show_memory == changed.show_memory));
+        if(actual.video_mode==previous.video_mode) equals(&actual,&previous);
+        else equals(&actual,&changed);
     } else {
         assert(kui_system_settings_save(&changed, log_line)); check_slot(1, &changed, 2);
         damage_newest(name); remount(); check_loaded(&previous); check_slot(0, &previous, 1);

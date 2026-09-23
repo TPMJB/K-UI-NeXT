@@ -69,6 +69,21 @@ unconditionally pause music. Selecting a song in Music Player returns control
 to the shell after preload, so B/Start can leave the browser without stopping
 playback. Music Player Y stops music; Ripper Y remains Verify.
 
+The five cached menu files retain **4,674,286 bytes (4.46 MiB)**. A custom song
+adds its own retained file until replaced or evicted; both are separate from
+the runtime image, stacks and audio buffers. A rise while the playlist fills
+can therefore be expected. It is not enough by itself to establish a leak.
+Selecting one of the five bundled files manually now shares its existing menu
+cache slot, including an ASCII case variation of its path, instead of creating
+a second custom copy of the same file.
+
+The music RAM report separates ready cache, in-flight loading bytes, peak
+combined file allocations and cumulative allocation/free counts. Stop/mute
+retain cached tracks for instant selection. The peak is historical and will
+not fall when a replacement releases memory. Main RAM accounting already
+counts heap free space as available; the heap's reserved arena size alone is
+not a live-use measurement.
+
 Home and Ripper L/R select the previous/next bundled song. Cached selections can
 change during capture without touching SD. An uncached choice displays a queued
 change and loads when the storage worker becomes idle; capture retains storage
@@ -93,6 +108,20 @@ and [public API](https://github.com/KallistiOS/KallistiOS/blob/fcfa7d869471591ca
 In that revision callback lengths are bytes despite the header's sample wording;
 stream destruction waits for outstanding DMA. Host tests cover these contracts,
 buffer lifetime, cache bounds, malformed files, volume and cancellation.
+The [cache audit](../../docs/evidence/m15-music-cache-host-2026-09-23.json)
+additionally checks actual wrapped allocation/free calls through 1,000 cached
+switches, 300 custom replacements plus 300 failed replacements, and sixteen
+swaps reaching the exact 8 MiB staging limit. All file allocations are released
+on shutdown in both host paths. These tests do not prove the absence of a leak
+elsewhere in the console's audio stack; a report from the owner's ongoing run
+is still needed to compare its live cache and heap values.
+The audit also reproduced a separate use-after-free race: a Resume control
+could run between releasing the previous custom song and selecting its
+replacement. Custom replacement now publishes the new file and playable loop
+under one audio lock. A deterministic control call at every mutex-release
+boundary reproduced the failure under ASan before this fix and passes afterward
+through sixteen custom replacements. That finding does not explain a rise in
+retained cache size by itself.
 Actual audio continuity during navigation/capture and controller responsiveness
 still need the focused console checks in
 [apps-round-three.md](../../docs/apps-round-three.md). Available RAM alone does

@@ -31,7 +31,7 @@ The hardware-proven acquisition engine remains unchanged.
 
 Use the existing bootstrap CD and the `sd-update` artifact. Replace
 `/KUI/runtime.kui`, and copy `KUI/apps/music/` for optional original menu music.
-See [the current app acceptance round](docs/apps-round-three.md) and
+See [the current app acceptance round](docs/apps-round-four.md) and
 [app boundaries and the later executable-loader plan](docs/app-architecture.md).
 These new app paths still need physical-console acceptance.
 
@@ -47,9 +47,13 @@ These new app paths still need physical-console acceptance.
   full Resume and its saved-byte checks. During work, B requests Stop. Reports still save automatically. Idle insertion
   detection shows the disc title; moving capture/verification phases show an ETA.
 - System Settings: 640x480 TV timing with reversible preview, memory display,
-  music enabled and volume. Capture hashes/readback remain inside the ripper.
-- VMU Manager: read saves and make new SD backups with byte/CRC readback. No VMU
-  writes, restore, delete or format. Memory Test checks only its allocated RAM.
+  music enabled and volume, startup chime/app, local clock and restore-defaults.
+  Capture hashes/readback remain inside the ripper. New file dates follow the RTC.
+- VMU Manager: read saves, make verified SD backups, and preview/confirm restore
+  into a free filename with readback. No overwrite, delete or format. Memory Test
+  checks only its allocated RAM.
+- Ripper Advanced CRC scans completed saved jobs and reports hash/Mode 1 sector
+  errors separately. It does not repair sectors or change normal disc capture.
 - Network Test reports adapter/configuration evidence; it does not start DHCP or
   claim Internet reachability. Diagnostics retains disc/SD probes, log export,
   mstats and benchmarks. RAM remains visible in the ripper.

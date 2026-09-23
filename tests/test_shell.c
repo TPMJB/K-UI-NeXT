@@ -47,7 +47,7 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_MUSIC;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_CRC_SCAN;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -130,7 +130,7 @@ static void system_transaction_and_video(void) {
     draft=s.system_saved;draft.music_volume=101;
     kui_shell_set_system_preferences(&s,&draft);
     assert(s.system_saved.music_volume==75);
-    press(KUI_SHELL_DOWN,false);assert(s.system_selected==0);
+    press(KUI_SHELL_DOWN,false);assert(s.system_selected==4);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE);
     assert(s.saved.crc_only==defaults.crc_only && s.saved.end_readback==defaults.end_readback);
 }
@@ -171,6 +171,87 @@ static void app_navigation_and_vmu(void) {
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_VMU_LIST && s.vmu_slot==1);
     kui_shell_set_vmu(&s,&view);assert(!s.vmu.count); /* Stale previous VMU. */
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_LIST);
+}
+static void clock_and_defaults(void) {
+    reset(KUI_SHELL_SETTINGS);s.system_selected=4;
+    assert(s.system_saved.startup_chime);
+    press(KUI_SHELL_RIGHT,false);assert(!s.system_draft.startup_chime && kui_shell_system_dirty(&s));
+    press(KUI_SHELL_DOWN,false);press(KUI_SHELL_LEFT,false);
+    assert(s.system_draft.startup_app==KUI_STARTUP_DIAGNOSTICS);
+    press(KUI_SHELL_RIGHT,false);assert(s.system_draft.startup_app==KUI_STARTUP_HOME);
+    struct kui_system_settings previous=s.system_draft;
+    kui_shell_set_system_preferences(&s,&previous);assert(!s.system_saved.startup_chime);
+    s.system_selected=7;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_defaults);
+    assert(press(KUI_SHELL_DOWN|KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.system_selected==7);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_defaults);
+    assert(!s.system_draft.startup_chime);
+    press(KUI_SHELL_A,false);press(KUI_SHELL_A,false);
+    assert(s.system_draft.startup_chime && s.system_selected==0);
+    /* Resetting a draft does not commit it or modify independently saved ripper settings. */
+    assert(!s.system_saved.startup_chime && s.saved.crc_only && kui_shell_system_dirty(&s));
+    s.system_selected=6;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_CLOCK_READ && s.page==KUI_SHELL_CLOCK);
+    assert(!s.clock_valid && press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.confirm_clock);
+    kui_shell_set_clock(&s,NULL,NULL);
+    assert(s.clock_valid && s.clock_draft.year==1980 && strstr(s.clock_notice,"fallback"));
+    const struct kui_datetime leap={2024,2,29,23,59,59};kui_shell_set_clock(&s,&leap,NULL);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE);
+    assert(s.clock_draft.year==2025 && s.clock_draft.day==28); /* Clamp leap-day on year edit. */
+    s.clock_selected=2;press(KUI_SHELL_RIGHT,false);assert(s.clock_draft.day==1);
+    press(KUI_SHELL_LEFT,false);assert(s.clock_draft.day==28); /* Feb wraps at its real end. */
+    s.clock_selected=1;press(KUI_SHELL_RIGHT,false);assert(s.clock_draft.month==3);
+    s.clock_selected=2;press(KUI_SHELL_LEFT,false);assert(s.clock_draft.day==27);
+    s.clock_selected=5;press(KUI_SHELL_RIGHT,false);assert(s.clock_draft.second==0);
+    press(KUI_SHELL_LEFT,false);assert(s.clock_draft.second==59);
+    struct kui_datetime draft=s.clock_draft;
+    kui_shell_set_clock(&s,NULL,"Clock write failed. Edit or retry.");
+    assert(s.clock_valid && !memcmp(&draft,&s.clock_draft,sizeof(draft)));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_clock);
+    assert(press(KUI_SHELL_RIGHT|KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.clock_selected==5);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_clock);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.confirm_clock);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && !s.confirm_clock);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_CLOCK_WRITE && !s.confirm_clock);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SETTINGS);
+}
+static void restore_and_scan_controls(void) {
+    reset(KUI_SHELL_VMU);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_VMU_BACKUPS_LIST && s.page==KUI_SHELL_VMU_RESTORE);
+    struct kui_vmu_backup_view backups={.page=0,.count=2,.total=10};
+    strcpy(backups.entries[0].name,"MDK2_SAVE");strcpy(backups.entries[0].folder,"v0001");
+    strcpy(backups.entries[0].path,"/KUI/backups/vmu/v0001/MDK2_SAVE.vms");backups.entries[0].bytes=4096;
+    kui_shell_set_vmu_backups(&s,&backups);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_slot==7);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_RESTORE_PREVIEW);
+    assert(!strcmp(s.restore_path,backups.entries[0].path) && !s.confirm_vmu_restore);
+    struct kui_vmu_view preview={.slot=0,.restore_ready=true};
+    kui_shell_set_vmu_restore_preview(&s,&preview);assert(!s.confirm_vmu_restore); /* Wrong card. */
+    preview.slot=7;kui_shell_set_vmu_restore_preview(&s,&preview);assert(s.confirm_vmu_restore);
+    assert(press(KUI_SHELL_RIGHT|KUI_SHELL_START,false)==KUI_SHELL_NONE && s.vmu_slot==7);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_vmu_restore);
+    kui_shell_set_vmu_restore_preview(&s,&preview);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_RESTORE_COMMIT && !s.confirm_vmu_restore);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_VMU_BACKUPS_LIST && s.backup_page==1);
+    kui_shell_set_vmu_backups(&s,&backups);assert(!s.backups.count); /* Stale page. */
+    backups.page=1;backups.count=1;memset(backups.entries[0].path,'x',sizeof(backups.entries[0].path));
+    kui_shell_set_vmu_backups(&s,&backups);
+    assert(!s.backups.entries[0].path[0] && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU);
+    reset(KUI_SHELL_ADVANCED);s.advanced_selected=5;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.page==KUI_SHELL_DESTINATION && s.browse_for_scan);
+    strcpy(s.browse_path,"/Games/MDK2");
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_ADVANCED_CRC && s.page==KUI_SHELL_CRC_SCAN);
+    assert(!strcmp(s.destination,"/Games") && !strcmp(s.browse_path,"/Games/MDK2"));
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_ADVANCED_CRC);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
+    press(KUI_SHELL_A,false);assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
+    s.advanced_selected=4;press(KUI_SHELL_A,false);
+    assert(!s.browse_for_scan && press(KUI_SHELL_Y,false)==KUI_SHELL_DEST_SAVE);
 }
 static void phase_eta(void) {
     struct kui_shell_view v={.busy=true,.phase=2,.phase_elapsed_ms=2000,
@@ -322,6 +403,7 @@ static void advanced_navigation(void) {
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISCARD_SETTINGS && s.page==KUI_SHELL_ADVANCED);
     press(KUI_SHELL_B,false); assert(s.page==KUI_SHELL_RIPPER);
     press(KUI_SHELL_START,false);s.advanced_selected=0;
+    press(KUI_SHELL_UP,false);assert(s.advanced_selected==5);
     press(KUI_SHELL_UP,false);assert(s.advanced_selected==4);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.page==KUI_SHELL_DESTINATION);
 }
@@ -422,7 +504,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_MUSIC;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_CRC_SCAN;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -586,14 +668,35 @@ static void music_and_boot_rendering(void) {
     assert(strstr(drawn,"Music Player") && strstr(drawn,"SD: /Music"));
     assert(strstr(drawn,"test.wav") && strstr(drawn,"Albums") && strstr(drawn,"WAV"));
     assert(strstr(drawn,"B Parent") && strstr(drawn,"START Home") && !strstr(drawn,"CD playback"));
-    assert(strstr(drawn,"Y Stop music") && strstr(drawn,"keeps playing when you leave"));
+    assert(strstr(drawn,"Y Stop music") && strstr(drawn,"Cached 0.0 MiB / 8 MiB"));
+}
+static void round_four_rendering(void) {
+    struct kui_shell_view v={.music_cache_bytes=4674286};
+    reset(KUI_SHELL_SETTINGS);render(&v);
+    assert(strstr(drawn,"Startup chime") && strstr(drawn,"Start in") && strstr(drawn,"Console clock"));
+    s.confirm_defaults=true;render(&v);assert(strstr(drawn,"USE DEFAULT SYSTEM") && strstr(drawn,"draft"));
+    reset(KUI_SHELL_CLOCK);const struct kui_datetime d={2026,9,23,20,15,31};
+    kui_shell_set_clock(&s,&d,NULL);render(&v);
+    assert(strstr(drawn,"2026") && strstr(drawn,"Existing dates stay intact"));
+    s.confirm_clock=true;render(&v);assert(strstr(drawn,"2026-09-23  20:15:31") && strstr(drawn,"SET THE CONSOLE CLOCK?"));
+    reset(KUI_SHELL_VMU_RESTORE);s.vmu_slot=5;s.backups.count=1;
+    strcpy(s.backups.entries[0].name,"MDK2_SAVE");strcpy(s.backups.entries[0].folder,"v0001");render(&v);
+    assert(strstr(drawn,"Target VMU C2") && strstr(drawn,"Existing names are refused"));
+    s.confirm_vmu_restore=true;strcpy(s.restore_name,"MDK2_SAVE");s.restore_bytes=4096;render(&v);
+    assert(strstr(drawn,"WRITE THIS SAVE TO THE VMU?") && strstr(drawn,"4096 bytes / 8 blocks"));
+    assert(strstr(drawn,"never overwritten"));
+    reset(KUI_SHELL_DESTINATION);s.browse_for_scan=true;render(&v);
+    assert(strstr(drawn,"Choose dump to scan") && strstr(drawn,"Y Scan this folder") && !strstr(drawn,"X Type path"));
+    reset(KUI_SHELL_CRC_SCAN);strcpy(s.browse_path,"/Games/MDK2");render(&v);
+    assert(strstr(drawn,"Mode1 EDC/parity") && strstr(drawn,"no disc reads") && strstr(drawn,"/Games/MDK2"));
+    reset(KUI_SHELL_MUSIC);render(&v);assert(strstr(drawn,"Cached 4.4 MiB / 8 MiB"));
 }
 int main(void) {
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();
-    system_transaction_and_video(); app_navigation_and_vmu(); phase_eta();
+    system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
-    music_and_boot_controls(); music_and_boot_rendering();
+    music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering();
     puts("PASS shell: Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

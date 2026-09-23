@@ -18,7 +18,7 @@ def run(*args):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three"):
+    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     return text
 
@@ -63,6 +63,7 @@ def main():
     (sd / "runtime.kui").write_bytes(package)
     run("python3", "tools/generate_menu_music.py", "--directory", str(sd / "apps/music"))
     run("python3", "tools/generate_music_demo.py", "--directory", str(dist / "sd/Music"))
+    run("python3", "tools/make_scan_fixtures.py", str(sd / "tests/scan"))
     shutil.copyfile(ROOT / "resources/music/README.md", dist / "MUSIC.md")
     shutil.copyfile(ROOT / "resources/music/demo.md", dist / "MUSIC-DEMO.md")
     shutil.copyfile(ROOT / "resources/music/manifest.json", dist / "music-manifest.json")
@@ -80,7 +81,7 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
-    for name in ("apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -130,11 +131,12 @@ def main():
     (update / "KUI").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
     shutil.copytree(sd / "apps", update / "KUI/apps", dirs_exist_ok=True)
+    shutil.copytree(sd / "tests/scan", update / "KUI/tests/scan", dirs_exist_ok=True)
     shutil.copytree(dist / "sd/Music", update / "Music", dirs_exist_ok=True)
     shutil.copyfile(dist / "MUSIC-DEMO.md", update / "MUSIC-DEMO.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     (update / "SOURCE.txt").write_text(
@@ -147,7 +149,7 @@ def main():
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "Copy Music/ for the supplied one-minute Harbor Lights WAV, then select it in Music.\n"
         "See MUSIC-DEMO.md for its format, playback check and composition provenance.\n"
-        "Start with APPS-ROUND-THREE.md for the new controls. See APPS-TEST.md for this app round and RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
+        "Start with APPS-ROUND-FOUR.md for the new controls. See APPS-TEST.md for this app round and RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
         "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
         "works as before and reports that nothing was compared. Attribution and licence\n"

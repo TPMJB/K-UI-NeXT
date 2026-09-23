@@ -112,16 +112,23 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_gd_boot ? "A Exit to BIOS   B Cancel" :
         s->confirm_quick_resume ? "A Quick resume   B Cancel" :
         s->confirm_new ? "A Start capture   B Cancel" :
+        s->confirm_clock ? "A Set clock   B Cancel" :
+        s->confirm_defaults ? "A Use defaults   B Cancel" :
+        s->confirm_vmu_restore ? "A Restore save   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
-        s->page==KUI_SHELL_SETTINGS || s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
+        s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
+        s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
+        s->page==KUI_SHELL_CLOCK ? "A Set clock   X Reload   B Settings" :
+        s->page==KUI_SHELL_CRC_SCAN ? "A Scan again   B Advanced" :
+        s->page==KUI_SHELL_VMU_RESTORE ? "B VMU   LEFT/RIGHT Target   START Page" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_KEYBOARD ? "A Key   X Backspace   Y Shift   B Cancel" :
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
         s->page==KUI_SHELL_RIPPER ? "B Home   START Advanced   L/R Songs" :
         s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   START Page" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC?608:500,MUTED,controls,false);
-    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC)
+    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_VMU_RESTORE?608:500,MUTED,controls,false);
+    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE)
         label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
@@ -175,7 +182,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
     static const unsigned icons[]={0,2,2,2,1,2,0,2};
     static const char *details[8][3]={
         {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
-        {"Browse saves on connected VMUs.","Back up one save or every save", "to the SD card."},
+        {"Browse saves on connected VMUs.","Back up saves to SD and restore", "checked backups to a free name."},
         {"Check available application RAM", "with data patterns and report", "any mismatches found."},
         {"Inspect your network adapter", "and saved configuration.","No network traffic is sent."},
         {"Choose video, memory display", "and background music.", "Save preferences to SD."},
@@ -316,7 +323,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
 }
 static void destination(struct paint *p,const struct kui_shell *s,
         const struct kui_shell_view *v) {
-    title(p,40,108,"Choose destination");
+    title(p,40,108,s->browse_for_scan?"Choose dump to scan":"Choose destination");
     words(p,40,138,478,CYAN,s->browse_path,false);
     char page[32]; snprintf(page,sizeof(page),"PAGE %u%s",s->browser_page+1,
         s->listing.has_more?" +":"");
@@ -324,6 +331,7 @@ static void destination(struct paint *p,const struct kui_shell *s,
     panel(p,32,166,576,204,PANEL);
     unsigned count=s->listing.count<KUI_DEST_PAGE_SIZE?s->listing.count:KUI_DEST_PAGE_SIZE;
     if(!count) label(p,48,188,MUTED,v->busy?"Loading folders...":
+        s->browse_for_scan?"No subfolders. Y scans this dump folder.":
         "No subfolders. Y selects the current folder.");
     for(unsigned i=0;i<count;i++) {
         const struct kui_destination_entry *entry=&s->listing.entries[i];
@@ -335,9 +343,11 @@ static void destination(struct paint *p,const struct kui_shell *s,
         label(p,52,y+2,entry->disabled?AMBER:i==s->browser_selected?WHITE:MUTED,
             entry->name);
     }
-    label(p,40,376,v->busy?MUTED:WHITE,"A Open folder   Y Use folder   X Type path");
+    label(p,40,376,v->busy?MUTED:WHITE,s->browse_for_scan?
+        "A Open folder   Y Scan this folder":"A Open folder   Y Use folder   X Type path");
     label(p,40,396,s->destination_notice[0]?AMBER:MUTED,
         s->destination_notice[0]?s->destination_notice:
+        s->browse_for_scan?"Choose a completed dump with its checkpoint files.":
         "The selected destination is saved to SD.");
 }
 static void keyboard(struct paint *p,const struct kui_shell *s) {
@@ -372,8 +382,8 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
 }
 static void advanced(struct paint *p,const struct kui_shell *s) {
     static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings",
-        "Quick resume (sizes only)","Destination folder"};
-    static const char *details[5][3]={
+        "Quick resume (sizes only)","Destination folder","Advanced CRC scan"};
+    static const char *details[6][3]={
         {"Reread saved tracks and check their recorded hashes.",
          "This checks the card; the stream CRC badge compares",
          "captured tracks with an independent reference."},
@@ -388,15 +398,18 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "Same-size corruption is not detected."},
         {"Browse folders on SD or enter a destination path.",
          "A new dump uses a game-named folder there.",
-         "Existing dumps are kept; new names get a number."}};
-    unsigned selected=s->advanced_selected<5?s->advanced_selected:0;
+         "Existing dumps are kept; new names get a number."},
+        {"Scan a saved dump: track hashes and Mode1 sector checks.",
+         "Writes a report. No disc reads or track modifications.",
+         "Audio gets track hashes, not data-sector parity checks."}};
+    unsigned selected=s->advanced_selected<6?s->advanced_selected:0;
     title(p,40,108,"Advanced disc tools");
     label(p,40,138,MUTED,"Choose an operation for your disc or saved dump.");
-    for(unsigned i=0;i<5;i++) {
-        unsigned y=162+i*32;
-        panel(p,32,y,576,28,selected==i?SELECTED:PANEL);
-        if(selected==i) box(p,32,y+4,3,20,PINK);
-        label(p,48,y+6,selected==i?WHITE:MUTED,names[i]);
+    for(unsigned i=0;i<6;i++) {
+        unsigned y=158+i*28;
+        panel(p,32,y,576,25,selected==i?SELECTED:PANEL);
+        if(selected==i) box(p,32,y+4,3,17,PINK);
+        label(p,48,y+4,selected==i?WHITE:MUTED,names[i]);
     }
     for(unsigned i=0;i<3;i++) label(p,40,340+i*23,MUTED,details[selected][i]);
 }
@@ -433,29 +446,48 @@ static void ripper_settings(struct paint *p, const struct kui_shell *s,
 static void system_settings(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"System settings");
     label(p,40,136,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
-    const char *names[]={"Video mode","Home memory display","Background music","Music volume"};
+    const char *names[]={"Video mode","Home memory display","Background music","Music volume",
+        "Startup chime","Start in","Console clock","Restore defaults"};
     char volume[16];snprintf(volume,sizeof(volume),"%u%%",s->system_draft.music_volume);
     const char *values[]={kui_system_video_name(s->system_draft.video_mode),
-        s->system_draft.show_memory?"ON":"OFF",s->system_draft.music_enabled?"ON":"OFF",volume};
-    for(unsigned i=0;i<4;i++) {
-        unsigned y=170+i*40;
-        panel(p,32,y,576,34,i==s->system_selected?SELECTED:PANEL);
-        if(i==s->system_selected) box(p,32,y+3,3,28,PINK);
-        label(p,48,y+9,WHITE,names[i]);
-        words(p,410,y+9,596,i==s->system_selected?CYAN:MUTED,values[i],false);
+        s->system_draft.show_memory?"ON":"OFF",s->system_draft.music_enabled?"ON":"OFF",volume,
+        s->system_draft.startup_chime?"ON":"OFF",kui_system_startup_name(s->system_draft.startup_app),
+        "A Edit local time","A Review"};
+    for(unsigned i=0;i<8;i++) {
+        unsigned y=158+i*25;
+        panel(p,32,y,576,23,i==s->system_selected?SELECTED:PANEL);
+        if(i==s->system_selected) box(p,32,y+3,3,17,PINK);
+        label(p,48,y+3,WHITE,names[i]);
+        words(p,400,y+3,596,i==s->system_selected?CYAN:MUTED,values[i],false);
     }
-    label(p,40,336,MUTED,s->system_selected==0?"640x480 output. VGA follows the connected cable.":
+    const char *detail=s->system_selected==0?"640x480 output. VGA follows the connected cable.":
         s->system_selected==1?"Ripper RAM and peak usage are always displayed.":
-        "Cached music continues while you use other apps.");
-    if(s->system_selected>=2) label(p,40,356,CYAN,"X Next song");
-    else label(p,40,356,MUTED,s->system_selected==0?
-        "Changed video modes get a 10-second confirmation.":
-        "System preferences are separate from ripper settings.");
-    label(p,40,376,kui_shell_system_dirty(s)?AMBER:CYAN,kui_shell_system_dirty(s)?
+        s->system_selected<=3?"X Next song. Music continues when you leave this page.":
+        s->system_selected==4?"Play the short K-UI sound when the next session starts.":
+        s->system_selected==5?"Open this app after the splash; no operation starts.":
+        s->system_selected==6?"Read or set the console's local date and time.":
+        "Resets the draft. Save to apply; B keeps your saved settings.";
+    label(p,40,366,MUTED,detail);
+    label(p,40,390,kui_shell_system_dirty(s)?AMBER:CYAN,kui_shell_system_dirty(s)?
         "Unsaved changes. A saves; B discards.":v->settings_notice&&v->settings_notice[0]?
-        v->settings_notice:"A saves these preferences to SD.");
-    label(p,40,396,MUTED,v->music_notice&&v->music_notice[0]?v->music_notice:
-        v->music_title&&v->music_title[0]?v->music_title:"Music: no track playing");
+        v->settings_notice:"A saves preferences; clock and defaults open separately.");
+}
+static void clock_page(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Console clock");
+    label(p,40,136,MUTED,"UP/DOWN Choose field   LEFT/RIGHT Change");
+    const char *names[]={"Year","Month","Day","Hour","Minute","Second"};
+    const struct kui_datetime *d=&s->clock_draft;
+    unsigned values[]={d->year,d->month,d->day,d->hour,d->minute,d->second};
+    for(unsigned i=0;i<6;i++) {
+        unsigned y=162+i*31;
+        panel(p,32,y,576,27,i==s->clock_selected?SELECTED:PANEL);
+        label(p,48,y+5,WHITE,names[i]);
+        char number[16];snprintf(number,sizeof(number),s->clock_valid?"%02u":"--",values[i]);
+        words(p,472,y+5,596,i==s->clock_selected?CYAN:MUTED,number,false);
+    }
+    label(p,40,366,s->clock_valid?MUTED:AMBER,s->clock_notice[0]?s->clock_notice:
+        "Local wall time. A reviews before changing the hardware clock.");
+    label(p,40,390,MUTED,"Future files use the console clock. Existing dates stay intact.");
 }
 static void app_status(struct paint *p,const struct kui_app_status *status,bool busy,unsigned y) {
     if(!status) return;
@@ -505,7 +537,71 @@ static void vmu_page(struct paint *p,const struct kui_shell *s,const struct kui_
     }
     const struct kui_app_status *status=v->app_status?v->app_status:&s->vmu.status;
     label(p,40,378,status->complete&&!status->passed?AMBER:CYAN,status->message);
-    label(p,40,396,MUTED,"Backups go to SD. Existing saves stay on the VMU.");
+    label(p,40,396,MUTED,"Backups go to SD. R Browse backups to restore a save.");
+}
+static void vmu_restore(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Restore VMU backup");
+    char line[112];snprintf(line,sizeof(line),"Target VMU %c%u   PAGE %u   %u backups",
+        'A'+s->vmu_slot/2,s->vmu_slot%2+1,s->backup_page+1,s->backups.total);
+    label(p,40,138,CYAN,line);
+    label(p,40,160,v->busy?MUTED:WHITE,"A Check selected backup   X Refresh");
+    panel(p,32,190,576,178,PANEL);
+    unsigned count=s->backups.count<KUI_VMU_ROWS?s->backups.count:KUI_VMU_ROWS;
+    if(!count) label(p,48,206,MUTED,v->busy?"Reading backups...":"No compatible backups on this page.");
+    for(unsigned i=0;i<count;i++) {
+        unsigned y=196+i*21;
+        const struct kui_vmu_backup_entry *e=&s->backups.entries[i];
+        if(i==s->backup_selected) panel(p,40,y,560,21,SELECTED);
+        words(p,52,y+1,340,i==s->backup_selected?WHITE:MUTED,e->name,false);
+        words(p,352,y+1,590,MUTED,e->folder,false);
+    }
+    const struct kui_app_status *status=v->app_status?v->app_status:&s->backups.status;
+    label(p,40,378,status->complete&&!status->passed?AMBER:CYAN,status->message);
+    label(p,40,396,MUTED,"Adds a new save only. Existing names are refused.");
+}
+static void crc_scan(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Advanced CRC scan");
+    words(p,40,138,608,CYAN,s->browse_path,false);
+    label(p,40,160,MUTED,"Saved track hashes and Mode1 EDC/parity; no disc reads.");
+    panel(p,32,190,576,214,PANEL);
+    const struct kui_app_status *status=v->app_status;
+    app_status(p,status,v->busy,200);
+    if(status) {
+        unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
+        unsigned first=count>7?count-7:0;
+        for(unsigned i=first;i<count;i++) label(p,40,250+(i-first)*20,MUTED,status->lines[i]);
+    } else label(p,40,204,MUTED,"Ready to scan the selected completed dump.");
+}
+static void app_confirmation(struct paint *p,const struct kui_shell *s) {
+    box(p,32,154,576,262,NAVY);panel(p,48,160,544,228,PANEL);box(p,52,164,536,4,PINK);
+    if(s->confirm_defaults) {
+        label(p,72,188,WHITE,"USE DEFAULT SYSTEM PREFERENCES?");
+        label(p,72,222,MUTED,"This replaces your draft with the default values.");
+        label(p,72,248,MUTED,"Press A Save afterwards to apply and store them.");
+        label(p,72,274,MUTED,"The console clock and ripper settings stay intact.");
+        label(p,72,334,CYAN,"A Use defaults");
+    } else if(s->confirm_clock) {
+        const struct kui_datetime *d=&s->clock_draft;
+        char line[100];snprintf(line,sizeof(line),"%04u-%02u-%02u  %02u:%02u:%02u",
+            d->year,d->month,d->day,d->hour,d->minute,d->second);
+        label(p,72,188,WHITE,"SET THE CONSOLE CLOCK?");
+        label(p,72,222,CYAN,line);
+        label(p,72,258,MUTED,"This writes the console's local hardware clock.");
+        label(p,72,284,MUTED,"Previously created file dates are unchanged.");
+        label(p,72,334,CYAN,"A Set clock");
+    } else {
+        char line[100];snprintf(line,sizeof(line),"Restore %s to VMU %c%u?",s->restore_name,
+            'A'+s->vmu_slot/2,s->vmu_slot%2+1);
+        label(p,72,188,WHITE,"WRITE THIS SAVE TO THE VMU?");
+        words(p,72,220,568,CYAN,line,false);
+        snprintf(line,sizeof(line),"%lu bytes / %lu blocks checked from SD",
+            (unsigned long)s->restore_bytes,(unsigned long)(((uint64_t)s->restore_bytes+511u)/512u));
+        label(p,72,248,MUTED,line);
+        label(p,72,276,MUTED,"Keep the VMU inserted until verification finishes.");
+        label(p,72,302,MUTED,"Existing saves are never overwritten.");
+        label(p,72,346,CYAN,"A Restore save");
+    }
+    label(p,384,s->confirm_vmu_restore?346:334,WHITE,"B Cancel");
 }
 static void video_trial(struct paint *p,const struct kui_shell_view *v) {
     box(p,32,132,576,284,NAVY);
@@ -532,7 +628,7 @@ static void diagnostics(struct paint *p, const struct kui_shell *s,
     label(p,40,392,CYAN,line);
 }
 static void confirmation(struct paint *p,bool quick) {
-    box(p,32,154,576,254,NAVY);
+    box(p,32,154,576,262,NAVY);
     box(p,48,160,544,180,EDGE); box(p,52,164,536,172,PANEL);
     box(p,52,164,536,4,PINK);
     label(p,72,188,WHITE,quick?"QUICK RESUME WITHOUT REREADING?":"START A NEW DUMP?");
@@ -557,7 +653,7 @@ static void gd_play(struct paint *p,const struct kui_shell_view *v) {
     words(p,216,326,592,MUTED,"The current boot disc can start K-UI again.",false);
 }
 static void gd_boot_confirmation(struct paint *p) {
-    box(p,32,154,576,254,NAVY);
+    box(p,32,154,576,262,NAVY);
     panel(p,48,160,544,202,PANEL);box(p,52,164,536,4,PINK);
     label(p,72,188,WHITE,"EXIT K-UI AND BOOT VIA CONSOLE BIOS?");
     label(p,72,224,MUTED,"Console region and autostart settings still apply.");
@@ -583,8 +679,10 @@ static void music_player(struct paint *p,const struct kui_shell *s,const struct 
     const struct kui_app_status *status=v->app_status;
     label(p,40,378,status&&status->complete&&!status->passed?AMBER:CYAN,
         status&&status->message[0]?status->message:s->music_listing.message);
-    snprintf(line,sizeof(line),"PAGE %u%s   Music keeps playing when you leave",
-        s->music_page+1,s->music_listing.has_more?" +":"");
+    snprintf(line,sizeof(line),"PAGE %u%s   Cached %lu.%lu MiB / 8 MiB",
+        s->music_page+1,s->music_listing.has_more?" +":"",
+        (unsigned long)(v->music_cache_bytes/1048576u),
+        (unsigned long)((v->music_cache_bytes%1048576u)*10u/1048576u));
     label(p,40,396,MUTED,line);
 }
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
@@ -602,6 +700,9 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_KEYBOARD: keyboard(&p,s); break;
     case KUI_SHELL_ADVANCED: advanced(&p,s); break;
     case KUI_SHELL_VMU: vmu_page(&p,s,v); break;
+    case KUI_SHELL_VMU_RESTORE: vmu_restore(&p,s,v); break;
+    case KUI_SHELL_CLOCK: clock_page(&p,s); break;
+    case KUI_SHELL_CRC_SCAN: crc_scan(&p,s,v); break;
     case KUI_SHELL_GD_PLAY: gd_play(&p,v); break;
     case KUI_SHELL_MUSIC: music_player(&p,s,v); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
@@ -609,6 +710,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     footer(&p,s,v);
     if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s->confirm_quick_resume);
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
+    if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);
 }
 

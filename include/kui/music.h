@@ -11,6 +11,9 @@ struct kui_music_status {
     bool enabled,loaded,playing,paused;
     unsigned volume,current_index,cached_mask;
     uint32_t sample_rate,pcm_bytes,cache_bytes;
+    /* File allocations only: ready cache plus an in-flight replacement.
+     * Fixed callback buffers, thread stack and KOS streamer are separate. */
+    uint32_t loading_bytes,peak_file_bytes,file_allocations,file_frees;
     char title[40],message[128];
 };
 /* One audio thread polls RAM-only callbacks. Public controls/status copies
@@ -20,6 +23,9 @@ void kui_music_init(kui_log_fn log);
 const char *kui_music_track_name(unsigned index);
 const char *kui_music_track_file(unsigned index);
 void kui_music_status_copy(struct kui_music_status *out);
+/* Snapshot under the audio mutex, then emit through the app logger after
+ * releasing it. Safe while loading/capturing; performs no storage I/O. */
+void kui_music_log_stats(const char *reason);
 /* Compatibility snapshot for single-threaded host clients; console/UI callers
  * should use status_copy, not retain a pointer across controls. */
 const struct kui_music_status *kui_music_status(void);
@@ -30,7 +36,9 @@ void kui_music_set_config(bool enabled,unsigned volume_percent);
 bool kui_music_cache_menu(unsigned index,kui_cancel_fn cancel);
 bool kui_music_load(unsigned index,kui_cancel_fn cancel);
 /* Normalize/validate the caller's card path before passing it here. PCM16 WAV,
- * up to 6 MiB including headers. All I/O finishes before selecting the cache. */
+ * up to 6 MiB including headers. All I/O finishes before selecting the cache.
+ * Selecting a bundled file by path reuses its menu slot instead of duplicating
+ * it as a custom song; the five known paths are ASCII case-insensitive. */
 bool kui_music_load_path(const char *path,const char *title,kui_cancel_fn cancel);
 /* No card I/O, safe while capture owns SD. Returns false if track isn't cached.
  * step_cached traverses the five bundled songs; the custom song is selected by

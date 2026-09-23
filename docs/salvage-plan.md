@@ -2,8 +2,10 @@
 
 Status: backend port started. The [first helper gate](recovery-port.md) now
 contains selectively adapted CRC replacement and Mode 1 address/EDC/PQ checks
-with host tests. They are not linked into the console runtime. The durable
-salvage worker, UI and hardware acceptance remain pending.
+with host tests. The Mode 1 checks now power a separate
+[Advanced CRC saved-file scan](advanced-crc-scan.md) exposed in the app. It diagnoses
+completed saved jobs without optical reads or patching their files. The durable
+hole-aware salvage worker, repair UI and hardware acceptance remain pending.
 Normal capture continues to stop on exhausted reads; it does not write
 placeholders or silently enable recovery. The current UI work
 adds destination/name selection, readable reference results and access to the

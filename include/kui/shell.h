@@ -7,6 +7,7 @@
 #include "kui/system_settings.h"
 #include "kui/apps.h"
 #include "kui/music_player.h"
+#include "kui/clock.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -25,7 +26,8 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_SETTINGS, KUI_SHELL_DIAGNOSTICS,
     KUI_SHELL_DESTINATION, KUI_SHELL_KEYBOARD, KUI_SHELL_ADVANCED,
     KUI_SHELL_RIPPER_SETTINGS, KUI_SHELL_VMU, KUI_SHELL_MEMORY, KUI_SHELL_NETWORK,
-    KUI_SHELL_GD_PLAY, KUI_SHELL_MUSIC };
+    KUI_SHELL_GD_PLAY, KUI_SHELL_MUSIC, KUI_SHELL_CLOCK,
+    KUI_SHELL_VMU_RESTORE, KUI_SHELL_CRC_SCAN };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -38,7 +40,9 @@ enum kui_shell_action {
     KUI_SHELL_CONFIRM_VIDEO, KUI_SHELL_CANCEL_VIDEO, KUI_SHELL_MUSIC_NEXT,
     KUI_SHELL_MUSIC_CYCLE, KUI_SHELL_RESUME_QUICK, KUI_SHELL_GD_BOOT,
     KUI_SHELL_MUSIC_LIST, KUI_SHELL_MUSIC_PLAY,
-    KUI_SHELL_MUSIC_PREVIOUS, KUI_SHELL_MUSIC_STOP
+    KUI_SHELL_MUSIC_PREVIOUS, KUI_SHELL_MUSIC_STOP,
+    KUI_SHELL_CLOCK_READ, KUI_SHELL_CLOCK_WRITE, KUI_SHELL_VMU_BACKUPS_LIST,
+    KUI_SHELL_VMU_RESTORE_PREVIEW, KUI_SHELL_VMU_RESTORE_COMMIT, KUI_SHELL_ADVANCED_CRC
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -49,9 +53,17 @@ struct kui_shell {
     struct kui_settings saved, draft;
     struct kui_system_settings system_saved, system_draft;
     unsigned system_selected;
-    bool video_trial;
+    bool video_trial, confirm_defaults, confirm_clock, confirm_vmu_restore;
+    bool clock_valid;
+    unsigned clock_selected;
+    struct kui_datetime clock_draft;
+    char clock_notice[128];
     unsigned vmu_slot, vmu_page, vmu_selected;
     struct kui_vmu_view vmu;
+    struct kui_vmu_backup_view backups;
+    unsigned backup_page, backup_selected;
+    char restore_path[KUI_VMU_BACKUP_PATH_CAP], restore_name[16];
+    uint32_t restore_bytes;
     char music_path[KUI_DEST_ROOT_CAP], music_selected_path[KUI_DEST_ROOT_CAP];
     unsigned music_page, music_selected;
     struct kui_music_player_page music_listing;
@@ -64,7 +76,7 @@ struct kui_shell {
     unsigned browser_selected, browser_page, keyboard_selected;
     unsigned advanced_selected;
     enum kui_shell_page settings_return;
-    bool keyboard_upper;
+    bool keyboard_upper, browse_for_scan;
 };
 void kui_shell_init(struct kui_shell *shell, const struct kui_settings *settings);
 /* Main owns the reducer. Pass new button edges; a held B must also be included
@@ -86,6 +98,12 @@ bool kui_shell_system_dirty(const struct kui_shell *shell);
 /* Main controls video_trial only while its reversible platform preview is
  * active. The reducer returns CONFIRM/CANCEL; it never commits a video mode. */
 void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view);
+/* Worker publications are ignored unless their page/slot still matches. */
+void kui_shell_set_vmu_backups(struct kui_shell *shell, const struct kui_vmu_backup_view *view);
+void kui_shell_set_vmu_restore_preview(struct kui_shell *shell, const struct kui_vmu_view *view);
+/* A successful clock read or write replaces the editable snapshot. Failure
+ * preserves a valid draft or seeds an editable 1980-01-01 with an error notice. */
+void kui_shell_set_clock(struct kui_shell *shell, const struct kui_datetime *value, const char *notice);
 /* MUSIC_LIST uses music_path and music_page * ROWS. MUSIC_PLAY uses the
  * validated music_selected_path. Worker completion never changes directory. */
 void kui_shell_set_music_listing(struct kui_shell *shell,
@@ -117,6 +135,7 @@ struct kui_shell_view {
     bool dma_degraded;
     bool music_enabled, music_playing, music_paused, music_change_pending;
     unsigned music_volume;
+    uint32_t music_cache_bytes, music_loading_bytes, music_peak_file_bytes;
     unsigned video_seconds;
     struct kui_known_summary reference;
     enum kui_shell_outcome outcome;

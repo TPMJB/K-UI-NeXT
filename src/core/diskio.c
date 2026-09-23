@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/media.h"
+#include "kui/clock.h"
 #include "ff.h"
 #include "diskio.h"
 #include <string.h>
@@ -9,6 +10,8 @@ static struct kui_volume volume;
 static DSTATUS state = STA_NOINIT;
 static bool attempted;
 static const char *problem;
+
+DWORD get_fattime(void) { return (DWORD)kui_clock_fattime(); }
 
 void kui_media_set(const struct kui_media_ops *ops) {
     media = ops ? *ops : (struct kui_media_ops){0};

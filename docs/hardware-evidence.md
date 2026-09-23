@@ -1,5 +1,36 @@
 # Hardware evidence
 
+## Omikron DMA stop/resume and music — 2026-09-23
+
+Runtime **69dc33c0ff87** completed all five Omikron tracks after two stops and
+Quick Resumes, ending in **TOSEC FULL TRACK MATCH**. The final resumed segment
+used **1,796 DMA chunks and one PIO chunk**. Its two size-only prefix checks took
+**0.483950 s** and **0.414696 s**. The three capture phases together averaged
+**940.79 KiB/s**, excluding setup, pauses, resume checks and final publication.
+Saved files and older prefixes were **not reread**. The rip log is truncated;
+stopped phases do not contain their own DMA/PIO summary. Their PIO subtimers
+must not be mistaken for evidence that all their reads used PIO.
+
+All ten RAM snapshots in the rip report stayed at **9,671,936 bytes (9.224 MiB)**.
+A separate, untruncated music report went from **4,162,232** to **11,548,184 bytes
+(11.013 MiB)** after background-song selection. These reports are not proven to
+be one continuous boot, so they do not establish RAM falling from 11 to 9 MiB.
+The older runtime lacks cache counters. Cache filling is consistent with these
+observations; the logs alone neither prove a leak nor rule one out. The owner
+reports that the supplied music-folder demo played. Audio continuity and
+performance cost were not measured.
+
+[Sanitized evidence and input fingerprints](evidence/m15-omikron-music-resume-2026-09-23.json)
+retain the exact phase and memory observations. Source inspection separately
+found fixed FatFs dates and duplicate caching when a bundled song was selected
+manually. The next SD update addresses both. Host testing also reproduced and
+fixed a song-replacement/Resume lifetime race; that is not evidence that the
+owner's RAM observation had that cause. [Music host evidence](evidence/m15-music-cache-host-2026-09-23.json)
+records allocation tests and their limits. RTC dates, Advanced CRC scans, VMU
+restore and expanded Settings remain pending console acceptance. Use
+[the focused app tests](apps-round-four.md); no new optical benchmark or burn is
+required.
+
 ## Dead or Alive 2 resume and app checks — 2026-09-23
 
 Runtime **1d48aaf1412e** completed the remaining **387,858,912 bytes** of a
@@ -40,7 +71,7 @@ was performed.
 
 [Sanitized aggregates and input fingerprint](evidence/m15-doa2-resume-2026-09-23.json)
 retain the exact timing and scope without publishing the raw report or private
-device/storage details. Follow [the next app acceptance round](apps-round-three.md)
+device/storage details. Follow [the next app acceptance round](apps-round-four.md)
 on the existing boot disc. The reader is not being rebenchmarked.
 
 ## Omikron final-track timeout and app round — 2026-09-23

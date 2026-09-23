@@ -9,11 +9,21 @@ enum kui_video_mode {
     KUI_VIDEO_PAL50,
     KUI_VIDEO_MODE_COUNT
 };
+enum kui_startup_app {
+    KUI_STARTUP_HOME,
+    KUI_STARTUP_RIPPER,
+    KUI_STARTUP_VMU,
+    KUI_STARTUP_MUSIC,
+    KUI_STARTUP_DIAGNOSTICS,
+    KUI_STARTUP_APP_COUNT
+};
 struct kui_system_settings {
     unsigned video_mode;
     bool show_memory;
     bool music_enabled;
     unsigned music_volume;
+    bool startup_chime;
+    unsigned startup_app;
 };
 #define KUI_SYSTEM_SETTINGS_RECORD_SIZE 40u
 #define KUI_SYSTEM_SETTINGS_PATH_A "0:/KUI/apps/system/settings-a.bin"
@@ -22,8 +32,13 @@ struct kui_system_settings {
 void kui_system_settings_default(struct kui_system_settings *out);
 bool kui_system_settings_valid(const struct kui_system_settings *settings);
 const char *kui_system_video_name(unsigned mode);
-/* Fixed little-endian version 1. Reserved bits/bytes must be zero. The CRC
- * covers all preceding bytes; sequence zero and wrapping are forbidden. */
+const char *kui_system_startup_name(unsigned app);
+/* Fixed little-endian version 2, still 40 bytes. Version 1 is read without
+ * rewriting it; its four preferences are retained and new fields default to
+ * startup chime on / Home. Unknown flags and reserved bytes are rejected for
+ * both versions. The CRC covers all preceding bytes; sequence zero and
+ * wrapping are forbidden. The saved startup app selects a screen only, never
+ * an automatic hardware operation. RTC edits belong to the clock adapter. */
 bool kui_system_settings_encode(uint8_t out[KUI_SYSTEM_SETTINGS_RECORD_SIZE],
                                 const struct kui_system_settings *settings,uint64_t sequence);
 bool kui_system_settings_decode(struct kui_system_settings *settings,uint64_t *sequence,

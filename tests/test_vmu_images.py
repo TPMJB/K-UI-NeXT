@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Real FatFs backups with read-only VMU transport and injected block faults."""
+"""Real FatFs backups/restores with simulated VMU commit and block faults."""
 from pathlib import Path
 import hashlib
 import shutil
@@ -14,6 +14,14 @@ READ_ONLY = ("missing", "empty", "list", "slot-d2", "invalid-slot", "cycle", "ra
              "device-change", "cancel-start", "cancel-read", "stale-list", "unlisted", "invalid-row", "invalid-page", "connect-fail")
 BACKUPS = ("backup-selected", "selected-page", "backup-all", "unsafe-name", "game-save", "contents-change", "write-fail",
            "sync-fail", "readback-fail", "readback-corrupt", "cancel-write")
+
+RESTORES = ("restore-ok", "restore-game", "restore-page", "restore-existing", "restore-capacity", "restore-corrupt",
+            "restore-bad-proof", "restore-bad-dir", "restore-legacy", "restore-invalid-path", "restore-unpreviewed",
+            "restore-changed-card", "restore-changed-source", "restore-device-change", "restore-write-fail",
+            "restore-data-corrupt", "restore-fat-fail", "restore-fat-corrupt", "restore-dir-fail",
+            "restore-dir-corrupt", "restore-final-corrupt", "restore-cancel", "restore-stop-commit", "restore-remove",
+            "restore-sd-write-fail", "restore-sd-sync-fail", "restore-orphan", "restore-orphan-link",
+            "restore-duplicate", "restore-existing-tail", "restore-truncated", "restore-dir-existing-corrupt")
 
 
 def digest(path):
@@ -32,13 +40,13 @@ def main():
             run(BINARY, str(seed), "seed")
             original = digest(seed)
             checker = "fsck.fat" if kind == "fat32" else "fsck.exfat"
-            for case in READ_ONLY + BACKUPS:
+            for case in READ_ONLY + BACKUPS + RESTORES:
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(seed, image)
                 assert f"PASS VMU {case}" in run(BINARY, str(image), case)
                 if case in READ_ONLY:
                     assert digest(image) == original, f"{case} unexpectedly wrote to the SD card"
-                if case not in ("write-fail", "sync-fail"):
+                if case not in ("write-fail", "sync-fail", "restore-sd-write-fail", "restore-sd-sync-fail"):
                     run(checker, "-n", str(image))
                 print(f"PASS {kind} VMU: {case}", flush=True)
 

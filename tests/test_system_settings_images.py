@@ -30,7 +30,7 @@ def main():
             run(BINARY, str(seed), "seed")
             checker = "fsck.fat" if kind == "fat32" else "fsck.exfat"
             run(checker, "-n", str(seed))
-            for case in ("alternate", "corrupt", "truncated", "oversize", "version", "flags",
+            for case in ("alternate", "v1-migrate", "v1-fallback", "corrupt", "truncated", "oversize", "version", "flags", "startup-app", "reserved",
                          "both-invalid", "invalid-save", "parent-is-file", "overflow", "read-fail", "save-read-fail", "write-fail", "sync-fail",
                          "readback-fail", "readback-corrupt", "readback-substitute"):
                 image = base / f"{kind}-{case}.img"
