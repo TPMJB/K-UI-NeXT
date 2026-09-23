@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
+#include "kui/settings.h"
 #include <kos/thread.h>
 #include <kos/timer.h>
 
@@ -95,7 +96,17 @@ bool kui_options_refresh(void) {
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs, kui_log)) {
-            ok = kui_options_load(&kui_options, "0:/KUI/bench.cfg", kui_log);
+            struct kui_settings settings;
+            ok = kui_settings_load(&settings, kui_log);
+            if(ok) {
+                kui_options.capture_crc_only[0] = settings.crc_only;
+                kui_options.end_readback[0] = settings.end_readback;
+                kui_log("Settings: capture_hash=%s end_readback=%s memory=%s",
+                    settings.crc_only ? "crc32" : "both", settings.end_readback ? "on" : "off",
+                    settings.show_memory ? "on" : "off");
+                kui_log("Option precedence: defaults, saved settings, explicit bench.cfg keys");
+                ok = kui_options_overlay(&kui_options, "0:/KUI/bench.cfg", kui_log);
+            }
             f_mount(NULL, "0:", 0);
         }
         kui_sd_disconnect();
@@ -106,8 +117,8 @@ bool kui_options_refresh(void) {
      * per pass. Defaults to 2 (see kui_options_default for the measurements behind
      * that); 'ui_hz=full' restores the unthrottled loop. */
     kui_ui_set_hz(kui_options.ui_hz[0]);
-    /* A rejected file left kui_options at defaults, so this is always a
-     * transport the parser actually approved. */
+    /* A rejected overlay leaves defaults plus saved settings intact; all
+     * accepted transport settings still came through the parser. */
     return ok;
 }
 

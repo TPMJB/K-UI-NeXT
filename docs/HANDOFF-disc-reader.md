@@ -32,18 +32,19 @@ work took it from roughly an hour and three quarters to twenty minutes.
    +36% on a whole disc. Proven on data and audio tracks.
 4. **UI capped at 2 redraws a second** (`ui_hz=2`): the unthrottled UI took about a third of the CPU.
 
-## Defaults today, and one decision left open
+## Defaults today
 
 | Setting | Default | The fast, verified rips used |
 |---|---|---|
 | `ui_hz` | 2 | 2 |
 | `capture_read` | **dma** (since 2026-09-20) | dma |
-| `capture_hash` | both (SHA-256 + CRC32) | crc32 |
-| `end_readback` | on | off |
+| `capture_hash` | **crc32** (M1.5 shell) | crc32 |
+| `end_readback` | **off** (M1.5 shell) | off |
 
-**Open decision:** make `capture_hash=crc32` and `end_readback=off` the defaults. Every verified fast
-rip used them. With the old values a rip is correct but roughly twice as slow. Until then, put this
-in `/KUI/bench.cfg` (plain text, UTF-8 or ANSI):
+**M1.5 default decision:** the shell now selects `capture_hash=crc32` and `end_readback=off`.
+Every verified fast rip used them; no reader code changed for this decision. Saved preferences
+can change these choices, and explicit `bench.cfg` keys override preferences. Y Verify still
+rereads saved bytes. The equivalent `/KUI/bench.cfg` is (plain text, UTF-8 or ANSI):
 
 ```
 ui_hz=2
@@ -79,7 +80,8 @@ For projected whole-disc times from any saved report: `python3 tools/rip_time.py
 
 ## Still open, most useful first
 
-1. **The default decision above.** One line in `src/core/options.c`.
+1. **M1.5 shell acceptance.** Launcher, persistent preferences and clearer results are implemented;
+   physical UI acceptance is pending. The default decision above is applied. See [the short UI check](m15-shell-test.md).
 2. **Faster CRC16 in the SD driver** (link-time `--wrap net_crc16ccitt`, no KOS patch): measured at
    22.7 -> 8.8 CPU cycles a byte, worth about **7% on a capture** and 5% on SD reads.
    `src/core/crc16.c` already has the verified implementation (`kui_crc16_slice2`).

@@ -22,69 +22,32 @@ good runtime have now passed by user report; see the
 New project code uses GPLv3; dependencies retain their own licenses. There is no
 separate contribution or commercial-relicensing agreement.
 
-## Try the diagnostic
+## M1.5 shell update
 
-For a console with the working bootstrap CD, download **sd-update** and follow
-[the combined capture/resume test](docs/capture-test.md). A new burn is unnecessary.
-The runtime opens on the capture page: A creates a new dump, X resumes the newest
-matching job, Y verifies it, and B stops. Left/Right switches to diagnostics.
-The **left trigger runs mstats** at any time, including during capture; a live
-RAM estimate and sampled peak appear on the capture page. See
-[memory counter definitions](docs/memory-stats.md) for comparisons with other software.
-Capture, resume and verification also log elapsed-time breakdowns on Stop or
-completion, including separate SHA-256, disc and SD time. See
-[the short optical speed test](docs/optical-test.md). The current update changes
-capture to **one optical read per block** and services PIO continuously with
-periodic scheduler yields. It removes the duplicate capture read and the sleep
-after every busy firmware status. Transfer-size checks, guards, data-sector EDC,
-bounded retries and final CRC32/SHA-256 saved-file verification remain the defaults
-(`capture_hash=both`, `end_readback=on`); every fast, verified rip set them off in `bench.cfg`.
-Identification samples stay paired, so existing v1 jobs retain their identity.
+The SD runtime now opens a K-UI launcher with **Disc Ripper**, **Settings** and
+**Diagnostics**. The accepted disc reader is unchanged. This shell is built and
+host-tested separately from its still-pending physical display/input acceptance;
+follow [the short M1.5 check](docs/m15-shell-test.md) with the existing bootstrap
+CD and the `sd-update` artifact. Replace only `/KUI/runtime.kui`.
 
-The latest MDK2 audio baseline measured **57.00 KiB/s**. Its two command loops
-spent about 258 of 306 capture seconds in scheduler waits; each nominal 1 ms
-sleep averaged about 8 ms. These counters motivate the change, but do not prove
-all waiting is removable or establish the new build's console throughput.
-See [the evidence](docs/hardware-evidence.md) and
-[the performance/resume plan](docs/performance-test-plan.md).
-Reports save automatically after Capture, Resume or Verify ends. Wait for
-**Report saved** and **READY**; diagnostics Y can retry a failed save.
-Existing dump/checkpoint formats are retained. The full saved-prefix pass on
-resume remains for now; a faster versioned resume format is separate work.
-Read [the capture format](docs/capture-format.md) for gap/audio conventions and
-the distinction between saved-data verification and an independent reference match.
+- Select with D-pad or stick and open with A. B returns home while idle.
+- Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
+  During work, B requests Stop. Reports still save automatically.
+- Settings: change capture hashes, automatic readback and the memory display;
+  A saves to the card, B discards unsaved edits. Preferences persist across boots.
+- Diagnostics retains disc/SD probes, log export, mstats and the benchmark tools.
 
-Use the `diagnostic` artifact from a successful **Diagnostic build** workflow run.
-It includes `kui-diagnostic.cdi`, `sd/KUI/runtime.kui`, loader rejection fixtures,
-hardware instructions, a PC verifier, build identifiers, checksums and
-source/license records. These are test artifacts, not published releases.
+Defaults now select **CRC32, automatic end readback Off, DMA and 2 Hz busy redraws**:
+these are the policy choices used by the accepted fast captures. Explicit
+`bench.cfg` keys override saved preferences, and the log prints the effective
+options. Resume keeps the existing job's hash mode. **Y Verify always rereads saved
+files**. Capture completion, saved-file verification and an independent catalogue
+match remain distinct outcomes; see [the capture format](docs/capture-format.md).
 
-Read [the SD bootstrap instructions](docs/sd-bootstrap.md) before the next burn.
-The aim is to reuse one bootstrap disc and update only `KUI/runtime.kui` on SD
-for ordinary application changes. Hold B during startup to use the embedded
-diagnostics; missing/invalid runtime files also fall back. The old diagnostic
-disc cannot load an SD runtime. Keep it as a working fallback.
-
-Use a spare FAT32 or exFAT card for initial testing. Bundle boot, loader-error,
-disc, storage and display checks into the same session using the same burned CD.
-See [the hardware test instructions](docs/hardware-test.md) for the probes.
-
-| Controller | Action on diagnostics page |
-| --- | --- |
-| A | Read both TOCs and selected raw samples from the inserted retail GD-ROM |
-| X | Write a new SD fixture; close/remount/reopen and verify every byte |
-| Y | Save the current diagnostic log into a fresh SD directory |
-| B | Request Stop; an active operation finishes or follows its bounded abort path |
-| D-pad Up / Down | Scroll the diagnostic log |
-| Start | Return to the latest log lines |
-| Left / Right or stick | Switch capture/diagnostics pages while idle |
-| Left trigger | mstats snapshot, including during an active operation |
-
-The screen explicitly identifies incomplete operations. A sample pass is evidence
-about those reads, not full-disc accuracy. Probes use `/KUI/probes/`; captures use
-new directories under `/KUI/dumps/`. Resume validates disc identity and all saved
-prefixes before appending. GPT, multiple-partition cards, FAT12/16 and the internal
-SCI adapter are unsupported. There is no formatting or zero-fill command.
+The reusable CD's built-in diagnostics remain available by holding B during
+startup. Missing or invalid runtime packages fall back automatically. Keep using
+the working CD; this UI update needs no new burn. See [SD bootstrap](docs/sd-bootstrap.md)
+and [hardware evidence](docs/hardware-evidence.md) for the established boot checks.
 
 ## Build and test
 
@@ -125,7 +88,7 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | M1.2: validated runtime loading from SD | **Done.** exFAT handoff, B-selected fallback, missing-file rejection and good-runtime restoration confirmed; all five malformed fixtures rejected on hardware, each with its own reason, with a usable fallback ([evidence](docs/evidence/m12-runtime-rejection-2026-09-20.json)) |
 | M1.3: full-track GDI capture | **Done.** Sword of the Berserk and MDK2 (31 tracks, 27 audio) captured and verified against TOSEC on the console and on a PC; Sword ripped three ways, identical by SHA-256 ([handoff](docs/HANDOFF-disc-reader.md)) |
 | M1.4: SHA-256 capture verification and controlled stop/resume | **Done.** MDK2 stopped twice mid-disc and resumed to a finish verified on the console and against TOSEC; Sword track 3 PC-verified. The lid opened mid-capture stopped cleanly and resumed to a TOSEC-verified finish on hardware (Omikron). A scratched disc retried a fixed 10 times, named the bad sector and stopped with the partial job kept. A B stop and a lid-open in the same boot both resume on DMA ([evidence](docs/evidence/dma-stop-fix-confirmed-2026-09-20.json)). **Open:** a card that fills mid-capture, host-tested only |
-| M1.5: hardware acceptance and minimal UI refinement | Hardware acceptance complete except a card filling mid-capture (host-tested); UI refinement planned |
+| M1.5: hardware acceptance and minimal UI refinement | Launcher, persistent settings and ripper results implemented; shell hardware acceptance pending. Full-card failure remains host-tested only |
 
 See [the research scope](docs/milestone-1-research.md),
 [the implementation decisions](docs/diagnostic-design.md), and
@@ -138,7 +101,9 @@ use the applicable existing file license. Contributors retain their copyrights;
 there is no separate CLA or grant of proprietary relicensing rights.
 
 This is a fresh repository, not a DreamShell fork. Requirements and hardware
-observations can inform new implementations. Do not import DreamShell source,
-binaries, artwork, build environments or a modified file by changing its name.
+observations can inform new implementations. Do not import upstream-derived DreamShell source or binaries by changing their names.
+Independently authored additions from our earlier fork can be reused after checking
+their origins, dependencies and intended license; see [the reuse inventory](docs/prior-work-reuse.md).
+Original project artwork and music are candidates too; inherited assets keep their own terms.
 Independently licensed upstream KOS contributions remain attributed and usable,
 including contributions by people who also work on other projects.

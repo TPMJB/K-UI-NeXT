@@ -2,6 +2,10 @@
 #include "platform.h"
 #include "kui/ui_rate.h"
 #include "kui/report.h"
+#ifdef KUI_SD_RUNTIME
+#include "kui/shell.h"
+#include "kui/settings.h"
+#endif
 #include <kos.h>
 #include <dc/minifont.h>
 #include <stdarg.h>
@@ -18,6 +22,12 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #define KUI_BUTTON_BENCH (1u<<29)
 static struct kui_memory_stats memory_status;
 static bool memory_valid;
+static struct kui_shell shell;
+static struct kui_settings settings_current, settings_pending;
+static unsigned settings_generation;
+static char settings_note[96];
+static struct kui_capture_stats capture_summary;
+static enum kui_shell_outcome capture_outcome;
 #define KUI_ROLE "SD runtime"
 #else
 #define KUI_ROLE "CD bootstrap"
@@ -125,6 +135,35 @@ static void save_report(const char *trigger,const char *outcome,bool automatic) 
     }
     mutex_lock(&lock);saving_report=false;mutex_unlock(&lock);
 }
+#ifdef KUI_SD_RUNTIME
+/* Settings share the same single I/O owner as capture and reports. No menu
+ * callback mounts the card or competes with an active rip. */
+static void settings_operation(bool save) {
+    struct kui_settings value;
+    mutex_lock(&lock); value = settings_pending; mutex_unlock(&lock);
+    if(!save) kui_settings_default(&value);
+    bool ok = false;
+    kui_sd_set_params(0, true);
+    if(kui_sd_connect()) {
+        FATFS fs;
+        if(kui_mount(&fs, kui_log)) {
+            ok = !kui_cancelled() && (save ? kui_settings_save(&value, kui_log)
+                                        : kui_settings_load(&value, kui_log));
+            f_mount(NULL, "0:", 0);
+        }
+        kui_sd_disconnect();
+    }
+    mutex_lock(&lock);
+    if(ok) { settings_current = value; ++settings_generation; }
+    snprintf(settings_note, sizeof(settings_note), "%s", ok ?
+        (save ? "Preferences saved to SD." : "Preferences loaded; bench.cfg may override capture.") :
+        (save ? "Save not confirmed; reopen Settings to check the card." :
+                "Could not load preferences. See Diagnostics."));
+    mutex_unlock(&lock);
+    kui_log("Settings %s: %s", save ? "save" : "load", ok ? "complete" : "failed or stopped");
+}
+#endif
+
 static void *worker(void *unused) {
     (void)unused;
     for(;;) {
@@ -133,7 +172,16 @@ static void *worker(void *unused) {
         pending = 0;
         mutex_unlock(&lock);
         if(!action) { thd_sleep(16); continue; }
-        if(kui_cancelled()) kui_log("Operation stopped before starting.");
+        if(kui_cancelled()) {
+            kui_log("Operation stopped before starting.");
+#ifdef KUI_SD_RUNTIME
+            mutex_lock(&lock);
+            if(action >= 4 && action <= 6) capture_outcome = KUI_SHELL_OUTCOME_STOPPED;
+            if(action == 8 || action == 9)
+                snprintf(settings_note, sizeof(settings_note), "Settings operation stopped before starting.");
+            mutex_unlock(&lock);
+#endif
+        }
         else {
             if(action == 1) kui_disc_probe();
             if(action == 2 && kui_sd_connect()) {
@@ -142,6 +190,7 @@ static void *worker(void *unused) {
             }
             if(action == 3) save_report("manual","see operation log",false);
 #ifdef KUI_SD_RUNTIME
+            if(action == 8 || action == 9) settings_operation(action == 9);
             if(action == 7) {
                 kui_memory_log("bench start");
                 enum kui_bench_result result=kui_bench_start();
@@ -155,6 +204,11 @@ static void *worker(void *unused) {
             if(action >= 4 && action <= 6) {
                 kui_memory_log("capture/verify start");
                 enum kui_capture_result result=kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID);
+                mutex_lock(&lock);
+                capture_summary = *kui_capture_last_stats();
+                capture_outcome = result == KUI_CAPTURE_COMPLETE ? KUI_SHELL_OUTCOME_COMPLETE :
+                    result == KUI_CAPTURE_STOPPED ? KUI_SHELL_OUTCOME_STOPPED : KUI_SHELL_OUTCOME_FAILED;
+                mutex_unlock(&lock);
                 kui_ui_set_hz(KUI_OPT_UI_FULL);   /* the cap is for the capture, not the report save */
                 kui_memory_log("capture/verify end");
                 const char *outcome=result==KUI_CAPTURE_COMPLETE?"complete":result==KUI_CAPTURE_STOPPED?"stopped":"failed";
@@ -177,6 +231,7 @@ static void *worker(void *unused) {
     return NULL;
 }
 
+#ifndef KUI_SD_RUNTIME
 static void draw(unsigned scroll,unsigned page) {
     char visible[VISIBLE_LINES][LINE_BYTES] = {{0}};
     char status[LINE_BYTES];
@@ -234,6 +289,75 @@ static void draw(unsigned scroll,unsigned page) {
     vid_waitvbl();
     vid_flip(-1);
 }
+#endif
+
+#ifdef KUI_SD_RUNTIME
+static void shell_text(void *ctx, unsigned x, unsigned y, uint16_t color, const char *text) {
+    uint16_t *frame = ctx;
+    minifont_set_color(((color >> 11) & 31u) * 255u / 31u,
+        ((color >> 5) & 63u) * 255u / 63u, (color & 31u) * 255u / 31u);
+    minifont_draw_str(frame + y * 640 + x, 640, text);
+}
+static void draw_shell(void) {
+    char visible[KUI_SHELL_LOG_ROWS][LINE_BYTES] = {{0}};
+    const char *log_rows[KUI_SHELL_LOG_ROWS];
+    char path[80], notice[96];
+    struct kui_shell_view view = {.build = KUI_BUILD_ID, .job_dir = path,
+        .settings_notice = notice, .message = "", .log_lines = log_rows};
+    mutex_lock(&lock);
+    unsigned max_scroll = line_count > KUI_SHELL_LOG_ROWS ? line_count - KUI_SHELL_LOG_ROWS : 0;
+    if(shell.scroll > max_scroll) shell.scroll = max_scroll;
+    unsigned end = line_count - shell.scroll;
+    unsigned first = end > KUI_SHELL_LOG_ROWS ? end - KUI_SHELL_LOG_ROWS : 0;
+    for(unsigned i = first; i < end; ++i) {
+        strcpy(visible[i - first], lines[i]); log_rows[i - first] = visible[i - first];
+    }
+    view.log_count = end - first; view.total_log_lines = line_count;
+    view.log_truncated = log_truncated;
+    view.busy = busy; view.saving = saving_report; view.cancel_requested = cancel_requested;
+    view.outcome = capture_outcome; view.saved_verified = capture_summary.verified;
+    snprintf(path, sizeof(path), "%s", capture_summary.job_dir);
+    snprintf(notice, sizeof(notice), "%s", settings_note);
+    view.phase = capture_status.phase; view.track = capture_status.track; view.tracks = capture_status.tracks;
+    view.rate_kib = rate_kib; view.retries = capture_status.retries;
+    view.done = capture_status.done; view.total = capture_status.total;
+    view.committed = capture_status.committed; view.elapsed_ms = capture_status.elapsed_ms;
+    mutex_unlock(&lock);
+    view.memory_valid = memory_valid; view.memory_used = memory_status.used;
+    view.memory_physical = memory_status.physical; view.memory_peak = memory_status.sampled_peak;
+    kui_shell_draw(vram_s, &shell, &view, shell_text, vram_s);
+    vid_waitvbl(); vid_flip(-1);
+}
+static unsigned shell_buttons(unsigned buttons) {
+    unsigned mapped = 0;
+    if(buttons & CONT_DPAD_UP) mapped |= KUI_SHELL_UP;
+    if(buttons & CONT_DPAD_DOWN) mapped |= KUI_SHELL_DOWN;
+    if(buttons & CONT_DPAD_LEFT) mapped |= KUI_SHELL_LEFT;
+    if(buttons & CONT_DPAD_RIGHT) mapped |= KUI_SHELL_RIGHT;
+    if(buttons & CONT_A) mapped |= KUI_SHELL_A;
+    if(buttons & CONT_B) mapped |= KUI_SHELL_B;
+    if(buttons & CONT_X) mapped |= KUI_SHELL_X;
+    if(buttons & CONT_Y) mapped |= KUI_SHELL_Y;
+    if(buttons & CONT_START) mapped |= KUI_SHELL_START;
+    if(buttons & KUI_BUTTON_MSTATS) mapped |= KUI_SHELL_L;
+    if(buttons & KUI_BUTTON_BENCH) mapped |= KUI_SHELL_R;
+    return mapped;
+}
+static unsigned worker_action(enum kui_shell_action action) {
+    switch(action) {
+        case KUI_SHELL_DISC_PROBE: return 1;
+        case KUI_SHELL_STORAGE_PROBE: return 2;
+        case KUI_SHELL_SAVE_LOG: return 3;
+        case KUI_SHELL_NEW_DUMP: return 4;
+        case KUI_SHELL_RESUME: return 5;
+        case KUI_SHELL_VERIFY: return 6;
+        case KUI_SHELL_BENCH: return 7;
+        case KUI_SHELL_LOAD_SETTINGS: return 8;
+        case KUI_SHELL_SAVE_SETTINGS: return 9;
+        default: return 0;
+    }
+}
+#endif
 
 static unsigned controller_buttons(void) {
     maple_device_t *controller = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
@@ -284,13 +408,20 @@ int main(void) {
     kui_log("Diagnostics page: A disc samples; X SD test; Y save log.");
     kui_log("Use a spare test card. No formatting; existing files preserved.");
 #ifdef KUI_SD_RUNTIME
-    kui_log("Capture page: A new dump; X resume latest matching disc; Y verify.");
-    kui_log("Left/Right switches capture/diagnostics. B stops and checkpoints.");
+    kui_settings_default(&settings_current);
+    settings_pending = settings_current;
+    kui_shell_init(&shell, &settings_current);
+    snprintf(settings_note,sizeof(settings_note),"Loading preferences from SD...");
+    pending = 8; busy = true;
+    kui_log("K-UI launcher: choose Disc Ripper, Settings or Diagnostics with D-pad and A.");
+    kui_log("Ripper: A new dump (confirm), X resume latest matching disc, Y verify.");
+    kui_log("B returns home while idle; during work it stops and checkpoints.");
     kui_log("New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.");
     kui_log("Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KUI/).");
-    kui_log("Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change them.");
+    kui_log("Capture defaults: CRC32, no automatic readback. Y Verify rereads saved files.");
+    kui_log("Saved preferences apply first; explicit /KUI/bench.cfg keys override them.");
     kui_log("Capture/Resume/Verify auto-save a report after ending. Wait for READY.");
-    kui_log("R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).");
+    kui_log("Diagnostics R trigger: isolated benchmarks from /KUI/bench.cfg.");
     kui_log("The screen redraws 2x a second while working, which frees CPU (ui_hz=full: off).");
 #else
     kui_log("Full capture is available in the updated SD runtime.");
@@ -298,52 +429,84 @@ int main(void) {
     kthread_attr_t attrs = {.stack_size = 64 * 1024, .label = "kui-io"};
     if(!thd_create_ex(&attrs, worker, NULL)) {
         kui_log("Unable to start I/O worker; reset console");
-        for(;;) { draw(0,0); thd_sleep(100); }
+        for(;;) {
+#ifdef KUI_SD_RUNTIME
+            draw_shell();
+#else
+            draw(0,0);
+#endif
+            thd_sleep(100);
+        }
     }
 #ifdef KUI_SD_RUNTIME
     kui_memory_log("runtime ready");
     memory_valid=kui_memory_snapshot(&memory_status);
     uint64_t next_memory_sample=timer_ms_gettime64()+1000;
 #endif
-    unsigned previous = 0, scroll = 0;
+    unsigned previous = 0;
     uint64_t last_draw = 0;
     bool was_busy = false;
-    unsigned page=0;
 #ifdef KUI_SD_RUNTIME
-    page=1;
+    unsigned seen_settings_generation = 0;
+    unsigned held_navigation = 0;
+    uint64_t repeat_at = 0;
+#else
+    unsigned scroll = 0;
 #endif
     for(;;) {
         unsigned buttons = controller_buttons();
         unsigned pressed = buttons & ~previous;
         previous = buttons;
+#ifdef KUI_SD_RUNTIME
+        const unsigned navigation = CONT_DPAD_UP | CONT_DPAD_DOWN | CONT_DPAD_LEFT | CONT_DPAD_RIGHT;
+        unsigned held = buttons & navigation;
+        uint64_t input_at = timer_ms_gettime64();
+        if(held != held_navigation) { held_navigation = held; repeat_at = input_at + 400; }
+        else if(held && input_at >= repeat_at) { pressed |= held; repeat_at = input_at + 140; }
+        /* Preserve Stop/cancel priority even if B was held before an A edge. */
+        if(pressed && (buttons & CONT_B)) pressed |= CONT_B;
+        mutex_lock(&lock);
+        if(seen_settings_generation != settings_generation) {
+            kui_shell_set_preferences(&shell, &settings_current);
+            seen_settings_generation = settings_generation;
+        }
+        enum kui_shell_action requested = kui_shell_input(&shell, shell_buttons(pressed), busy);
+        if(requested == KUI_SHELL_STOP) cancel_requested = true;
+        unsigned action = worker_action(requested);
+        if(action && !busy) {
+            if(action == 9) settings_pending = shell.draft;
+            if(action == 8 || action == 9)
+                snprintf(settings_note, sizeof(settings_note), "%s", action == 8 ?
+                    "Loading preferences from SD..." : "Saving preferences to SD...");
+            pending = action; busy = true; cancel_requested = false; shell.scroll = 0;
+            ui_hz_busy = 2;
+            if(action >= 4 && action <= 6) {
+                capture_status = (struct kui_capture_progress){0};
+                capture_summary = (struct kui_capture_stats){0};
+                capture_outcome = KUI_SHELL_OUTCOME_NONE;
+                rate_at = rate_bytes = 0; rate_kib = 0;
+            }
+        }
+        bool is_busy = busy;
+        mutex_unlock(&lock);
+        if(requested == KUI_SHELL_MSTATS) { kui_memory_log("L trigger"); shell.scroll = 0; }
+        if(timer_ms_gettime64() >= next_memory_sample) {
+            memory_valid = kui_memory_snapshot(&memory_status); next_memory_sample = timer_ms_gettime64() + 1000;
+        }
+#else
         mutex_lock(&lock);
         if(pressed & CONT_B) cancel_requested = true;
         if(!busy && !(buttons & CONT_B)) {
-#ifdef KUI_SD_RUNTIME
-            if(pressed & (CONT_DPAD_LEFT|CONT_DPAD_RIGHT)) {page^=1;scroll=0;}
-#endif
             unsigned action = pressed & CONT_A ? 1 : pressed & CONT_X ? 2 : pressed & CONT_Y ? 3 : 0;
-            if(action) action+=page?3:0;
-#ifdef KUI_SD_RUNTIME
-            if(pressed & KUI_BUTTON_BENCH) action=7;
-#endif
             if(action) {
                 pending = action; busy = true; cancel_requested = false; scroll = 0;
-#ifdef KUI_SD_RUNTIME
-                if(page) {capture_status=(struct kui_capture_progress){0};rate_at=rate_bytes=0;rate_kib=0;}
-#endif
             }
         }
-        if((pressed & CONT_DPAD_UP) && scroll + (page?15:VISIBLE_LINES) < line_count) ++scroll;
+        if((pressed & CONT_DPAD_UP) && scroll + VISIBLE_LINES < line_count) ++scroll;
         if((pressed & CONT_DPAD_DOWN) && scroll) --scroll;
         if(pressed & CONT_START) scroll = 0;
         bool is_busy = busy;
         mutex_unlock(&lock);
-#ifdef KUI_SD_RUNTIME
-        if(pressed & KUI_BUTTON_MSTATS) {kui_memory_log("L trigger");scroll=0;}
-        if(timer_ms_gettime64()>=next_memory_sample) {
-            memory_valid=kui_memory_snapshot(&memory_status);next_memory_sample=timer_ms_gettime64()+1000;
-        }
 #endif
         /* Idle: always redraw, as before. Busy: at most ui_hz_busy redraws per
          * second, plus one at each start and end so the screen is never stale
@@ -356,7 +519,14 @@ int main(void) {
         uint64_t t = timer_ms_gettime64();
         bool due = kui_ui_redraw_due(is_busy, was_busy, hz, t, last_draw);
         was_busy = is_busy;
-        if(due) {draw(scroll,page);last_draw = t;}
+        if(due) {
+#ifdef KUI_SD_RUNTIME
+            draw_shell();
+#else
+            draw(scroll,0);
+#endif
+            last_draw = t;
+        }
         thd_sleep(33);
     }
 }

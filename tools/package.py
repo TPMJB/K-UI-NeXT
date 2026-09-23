@@ -18,7 +18,7 @@ def run(*args):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan"):
+    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     return text
 
@@ -73,6 +73,8 @@ def main():
     (dist / "HARDWARE-TEST.md").write_text(guide("hardware-test.md"))
     (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
+    (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
+    (dist / "PRIOR-WORK-REUSE.md").write_text(guide("prior-work-reuse.md"))
     shutil.copyfile(ROOT / "tools/verify_probe.py", dist / "verify_probe.py")
     shutil.copyfile(ROOT / "tools/verify_dump.py", dist / "verify_dump.py")
     for src, name in (("capture-test.md", "CAPTURE-TEST.md"), ("capture-format.md", "CAPTURE-FORMAT.md"), ("memory-stats.md", "MEMORY-STATS.md"), ("optical-test.md", "OPTICAL-TEST.md"), ("performance-test-plan.md", "PERFORMANCE-TEST-PLAN.md")):
@@ -116,7 +118,7 @@ def main():
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     (update / "SOURCE.txt").write_text(
@@ -126,6 +128,7 @@ def main():
         "FatFs and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
         "Install KUI/runtime.kui on the SD card. Keep your existing boot CD.\n"
+        "Start with M15-SHELL-TEST.md for this launcher/settings update.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
         "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
         "works as before and reports that nothing was compared. Attribution and licence\n"

@@ -8,12 +8,15 @@ CAPTURE = src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/kn
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-images deps diagnostic clean
-test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16
+test: build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-capture-adapter
 	./build/test-core
 	./build/test-options docs/bench.cfg.example docs/bench-cfgs/*.cfg
 	./build/test-ui-rate
 	./build/test-known-dumps
 	./build/test-crc16
+	./build/test-settings
+	./build/test-shell
+	./build/test-capture-adapter
 	./build/test-capture-core
 	./build/test-timing
 	./build/test-disc
@@ -49,6 +52,18 @@ build/test-options: tests/test_options.c src/core/options.c include/kui/options.
 build/test-ui-rate: tests/test_ui_rate.c include/kui/ui_rate.h include/kui/options.h .deps/fatfs/source/ff.h
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_ui_rate.c -o $@
+
+build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c include/kui/settings.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
+
+build/test-shell: tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/shell.c src/dreamcast/shell_draw.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+
+build/test-capture-adapter: tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/dreamcast/capture.c tests/test_capture_adapter.c -o $@
 
 build/test-known-dumps: tests/test_known_dumps.c src/core/known_dumps.c include/kui/known_dumps.h $(CORE) $(FATFS)
 	@mkdir -p $(@D)
@@ -86,7 +101,11 @@ build/report-image: tests/report_image.c $(CORE) src/core/storage_probe.c src/co
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) src/core/storage_probe.c src/core/report.c $(FATFS) tests/report_image.c -o $@
 
-test-images: build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image
+build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c include/kui/settings.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
+
+test-images: build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
 	python3 tests/test_images.py
 	python3 tests/test_runtime_images.py
 	python3 tests/test_capture_images.py
@@ -94,6 +113,7 @@ test-images: build/storage-image build/runtime-image build/capture-image build/r
 	python3 tests/test_bench_images.py
 	python3 tests/test_known_images.py
 	python3 tests/test_capture_options.py
+	python3 tests/test_settings_images.py
 
 diagnostic:
 	$(MAKE) -f Makefile.dc

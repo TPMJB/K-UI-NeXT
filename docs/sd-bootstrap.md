@@ -1,5 +1,12 @@
 # Reuse one boot disc for SD updates
 
+**Current update:** the M1.5 SD runtime opens a launcher with Disc Ripper,
+Settings and Diagnostics. See [the shell test](m15-shell-test.md) for its controls.
+Its package contract is unchanged; keep using your accepted bootstrap CD. The
+historical M1.2 session below records how that loader was introduced. All five
+rejection fixtures, normal cold boots and FAT32/exFAT loading have since passed;
+the current acceptance record is [the handoff](HANDOFF-disc-reader.md).
+
 The M1.2 test package contains a CD bootstrap with the existing diagnostics and
 a separate diagnostic runtime loaded from SD. Both are independent KOS programs.
 The earlier `cf8210bc5442` CD has no SD loader; it cannot gain that ability just

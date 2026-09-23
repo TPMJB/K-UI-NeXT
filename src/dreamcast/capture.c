@@ -12,6 +12,8 @@ static enum kui_read_result capture_read_end(void *ctx) { return kui_disc_read_e
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+static struct kui_capture_stats last_stats;
+const struct kui_capture_stats *kui_capture_last_stats(void) { return &last_stats; }
 static bool cancelled(void *ctx) { (void)ctx;return kui_cancelled(); }
 static uint64_t now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static uint64_t now_us(void *ctx) { (void)ctx;return timer_us_gettime64(); }
@@ -33,8 +35,14 @@ enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool
     return kui_capture_bench(&ops,fad,sectors,audio,mode);
 }
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build) {
+    memset(&last_stats,0,sizeof(last_stats));
     struct kui_toc sessions[2];struct kui_capture_plan plan;
-    kui_options_refresh();   /* logs the options in effect; a bad file keeps defaults */
+    /* Missing configuration is valid; unreadable/rejected configuration must
+     * not silently weaken a user's requested verification policy. */
+    if(!kui_options_refresh()) {
+        kui_log("Capture refused: preferences or bench.cfg could not be loaded; no dump writes");
+        return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+    }
     kui_disc_timing_reset();
     if(!kui_disc_prepare(sessions) || kui_cancelled())
         return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
@@ -49,7 +57,7 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
         .resume_size_only=kui_options.resume_size[0],.sample_every=kui_options.sample_readback[0],
         .read_dma=kui_options.capture_dma[0]};
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,kui_capture_status,
-        kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,NULL};
+        kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,&last_stats};
     /* Whole-operation CPU split: how much of this capture the UI thread took. */
     struct kui_cpu_census cpu_before,cpu_after;
     kui_cpu_census_mark(&cpu_before);
