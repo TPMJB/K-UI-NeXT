@@ -12,6 +12,8 @@
 #include "kui/apps.h"
 #include "kui/music_player.h"
 #include "kui/games.h"
+#include "kui/games_probe.h"
+#include <arch/exec.h>
 #include "kui/splash.h"
 #include "kui/gd_play.h"
 #include "kui/recovery_scan.h"
@@ -89,6 +91,9 @@ static bool salvage_zero_pending;
 static char scan_path_pending[KUI_DEST_JOB_CAP];
 static unsigned active_app;
 static bool splash_active,boot_ready,startup_skip,startup_finished;
+static bool probe_launch_ready,probe_launch_failed;
+static struct kui_runtime_image probe_image;
+static struct kui_app_status probe_status;
 static uint64_t splash_deadline;
 static int music_requested=-1;
 static unsigned music_request_generation,music_cache_attempted;
@@ -578,7 +583,7 @@ static void publish_cd_audio(void) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || (action>=46 && action<=48);
 }
 #endif
 static void *worker(void *unused) {
@@ -635,6 +640,7 @@ static void *worker(void *unused) {
             if(is_capture_action(action)) {capture_outcome=KUI_SHELL_OUTCOME_FAILED;observing_capture=false;}
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
+            if(action==56) probe_launch_failed=true;
             mutex_unlock(&lock);action=0;
         } else if(action && needs_cd_handoff(action)) publish_cd_audio();
 #endif
@@ -808,6 +814,36 @@ static void *worker(void *unused) {
                 struct kui_games_detail detail;
                 kui_games_inspect(games_path_pending,&detail,kui_log,kui_cancelled);
                 mutex_lock(&lock);games_detail=detail;++games_detail_generation;mutex_unlock(&lock);
+            }
+            if(action==56) {
+                kui_sd_set_params(0,true);
+                bool prepared=kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
+                if(prepared && kui_cancelled()) {kui_runtime_free(&probe_image);prepared=false;}
+                if(prepared) {
+                    /* No more filesystem work may run once main owns this
+                     * image. arch_exec performs the final KOS teardown. */
+                    mutex_lock(&lock);kui_menu_sound_shutdown();mutex_unlock(&lock);
+                    kui_music_shutdown();publish_music();
+                    mutex_lock(&lock);probe_launch_ready=true;mutex_unlock(&lock);
+                    for(;;) {
+                        thd_sleep(16);
+                        mutex_lock(&lock);bool waiting=probe_launch_ready;mutex_unlock(&lock);
+                        if(!waiting) break; /* main rejected the staging range */
+                    }
+                    /* A last-moment B or staging guard can return here. The
+                     * shutdown joined the audio thread, so recreate services
+                     * before making the menu usable again. */
+                    kui_music_init(kui_log);
+                    kui_music_set_config(system_current.music_enabled,system_current.music_volume);
+                    mutex_lock(&lock);
+                    music_cache_attempted=0;
+                    (void)kui_menu_sound_init();
+                    kui_menu_sound_config(system_current.menu_sounds,system_current.music_volume);
+                    mutex_unlock(&lock);
+                    publish_music();
+                } else {
+                    mutex_lock(&lock);probe_launch_failed=true;mutex_unlock(&lock);
+                }
             }
             if(action==25 || action==44) {
                 /* Restart must remain usable after an optical recovery failure. */
@@ -1126,6 +1162,7 @@ static void draw_shell(void) {
     view.phase_elapsed_ms=now>=phase_started_ms?now-phase_started_ms:0;
     view.progress_age_ms=now>=progress_updated_ms?now-progress_updated_ms:0;
     app_status=shell.page==KUI_SHELL_MEMORY?memory_test_status:
+        shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM?probe_status:
         shell.page==KUI_SHELL_NETWORK?network_test_status:
         shell.page==KUI_SHELL_MUSIC?player_status:
         shell.page==KUI_SHELL_CRC_SCAN?scan_status:
@@ -1217,6 +1254,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_CD_STOP: return 53;
         case KUI_SHELL_GAMES_LIST: return 54;
         case KUI_SHELL_GAMES_INSPECT: return 55;
+        case KUI_SHELL_GAMES_PROBE: return 56;
         default: return 0;
     }
 }
@@ -1542,6 +1580,11 @@ int main(void) {
                     action==54?shell.games_path:shell.games_selected_path);
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
             }
+            if(action==56) {
+                probe_status=(struct kui_app_status){0};
+                snprintf(probe_status.message,sizeof(probe_status.message),"Preparing resident probe and SD map...");
+                probe_launch_failed=false;
+            }
             if(action==19) memory_test_status=(struct kui_app_status){0};
             if(action==20 || action==45) network_test_status=(struct kui_app_status){0};
             if(action == 8 || action == 9)
@@ -1570,6 +1613,28 @@ int main(void) {
         }
         mutex_lock(&lock);bool exiting=boot_ready;mutex_unlock(&lock);
         if(exiting) kui_gd_play_boot();
+        mutex_lock(&lock);
+        bool launch_probe=probe_launch_ready,probe_failed=probe_launch_failed;
+        probe_launch_failed=false;
+        mutex_unlock(&lock);
+        if(probe_failed) {shell.page=KUI_SHELL_DIAGNOSTICS;shell.scroll=0;}
+        if(launch_probe) {
+            uintptr_t stack;
+            __asm__ __volatile__("mov r15,%0" : "=r"(stack));
+            uintptr_t source=(uintptr_t)probe_image.data;
+            size_t length=probe_image.info.payload_bytes;
+            /* arch_exec copies forward to low RAM and executes its trampoline
+             * on main's stack. High resident relocation occurs only afterwards. */
+            bool safe=source>=KUI_RUNTIME_ADDRESS && source<0x8d000000u && !(source&3u) &&
+                length && !(length&3u) && length<=0x102000u &&
+                length<=0x8d000000u-source && stack>0x8c200000u &&
+                source+length<=stack-65536u;
+            if(safe && !kui_cancelled()) arch_exec(probe_image.data,(uint32_t)length);
+            kui_runtime_free(&probe_image);
+            kui_log("Loader probe handoff refused: %s",safe?"cancelled":"unsafe staging range");
+            mutex_lock(&lock);probe_launch_ready=false;mutex_unlock(&lock);
+            shell.page=KUI_SHELL_DIAGNOSTICS;shell.scroll=0;
+        }
         if(requested == KUI_SHELL_MSTATS) {
             kui_memory_log("L trigger");kui_music_log_stats("L trigger");shell.scroll=0;
         }

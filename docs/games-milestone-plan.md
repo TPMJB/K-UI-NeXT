@@ -6,13 +6,15 @@ plan, not a claim that K-UI currently runs retail games from images.
 **Implementation update:** the first G1/G2 increment now provides the portable
 GDI/boot-metadata services and a read-only Games browser in the SD runtime.
 Host validation and the focused console checklist are documented in
-[games-test.md](games-test.md). This inspection preview precedes G3; the resident
-read proof and retail loading are still unimplemented.
+[games-test.md](games-test.md). The first G3 resident read probe is now implemented;
+its console acceptance is pending. Follow [the probe guide](games-loader-probe.md).
+Retail loading is still unimplemented.
 
 Runtime `57d53841c1ea` has now passed repeated ARMADA metadata inspection on
 the console, with a stopped earlier inspection followed by successful use.
 [Hardware evidence](evidence/games-armada-inspection-2026-09-24.json) accepts
-that demonstrated path. G3 remains the next development gate.
+that demonstrated path. G3's actual post-shutdown SD reads remain the next
+hardware gate; no repeat image inspection is needed.
 
 ## First goal
 
@@ -22,8 +24,8 @@ relinquished the machine. Then use the same path to attempt one owned retail
 game. A library listing or a jump to a game's boot executable alone does not
 meet this goal: later disc requests must also work.
 
-The first implementation task is a portable, read-only GDI image service with
-host tests. The first console deliverable is the post-handoff read proof below.
+The portable, read-only GDI image service and bounded metadata reader are in
+place. The next console deliverable is the post-handoff read proof below.
 The existing bootstrap CD remains the entry point; deliver updates on SD.
 
 ## What we can reuse
@@ -37,8 +39,8 @@ The existing bootstrap CD remains the entry point; deliver updates on SD.
 | Runtime package validation and shutdown model | Useful validation/lifecycle patterns; current bootstrap `arch_exec` path is not a retail loader |
 | Physical CD player and GD Play | Keep as separate working features; neither supplies image-backed game-time CDDA or disc requests |
 
-Current code has no retail resident loader, image ISO9660 traversal, Games
-catalogue or IDE/CF adapter. The default branch remains an empty initial commit;
+Current code has bounded image ISO9660 traversal and a Games browser. It has no
+retail resident loader or IDE/CF adapter. The default branch remains an empty initial commit;
 work from the current app branch based on `milestone/experiments`.
 
 ## Stages and acceptance

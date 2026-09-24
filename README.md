@@ -139,8 +139,10 @@ Audio-CD playback is now accepted by owner report. The Games foundation adds
 `/Games` browsing, Advanced > Browse SD folders and bounded GDI/boot metadata
 inspection. It accepts GDI-only folders without a manifest and does not scan
 whole tracks. See [the Games hardware guide](docs/games-test.md).
-The independent resident loader and post-handoff test program come next; retail
-game launching is not implemented yet. See [the staged Games plan](docs/games-milestone-plan.md).
+The separate resident SD service and original post-handoff test program are now
+implemented, with console acceptance pending. Copy `KUI/apps/games/` together
+with the runtime update and follow [the probe guide](docs/games-loader-probe.md).
+Retail game launching is not implemented yet. See [the staged Games plan](docs/games-milestone-plan.md).
 The accepted reader stays frozen; the existing boot disc remains in use.
 
 ## License and contribution policy

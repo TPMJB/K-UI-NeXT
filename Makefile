@@ -4,17 +4,20 @@ HOST_FLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
 SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
 INCLUDES = -Iinclude -I.deps/fatfs/source
 CORE = src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c
+LOADER_PROBE = src/core/loader_probe.c
 DESTINATION = src/core/destination.c src/core/destination_file.c
 CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-recovery test-images deps diagnostic clean
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek
-test: build/test-game-image build/test-game-metadata
+test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-cd-audio
 	./build/test-game-image
 	./build/test-game-metadata
+	./build/test-loader-probe build/loader-probe.dat
+	./build/test-loader-sd
 	./build/test-cd-audio guard
 	./build/test-network-probe
 	./build/test-network-connect
@@ -68,6 +71,21 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 
 deps:
 	python3 tools/fetch_deps.py
+
+build/test-loader-probe: tests/test_loader_probe.c $(LOADER_PROBE) src/loader/client.c include/kui/loader_probe.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(LOADER_PROBE) src/loader/client.c tests/test_loader_probe.c -o $@
+
+build/loader-probe.dat: tools/make_loader_probe.py
+	python3 tools/make_loader_probe.py $@
+
+build/test-loader-sd: tests/test_loader_sd.c src/loader/sd_reader.c src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Isrc/loader src/loader/sd_reader.c tests/test_loader_sd.c -o $@
+
+build/loader-probe-image: tests/loader_probe_image.c src/apps/games_probe.c $(LOADER_PROBE) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c $(CORE) $(FATFS) include/kui/games_probe.h include/kui/loader_probe.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/loader_probe_image.c src/apps/games_probe.c $(LOADER_PROBE) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c $(CORE) $(FATFS) -Wl,--wrap=f_open -Wl,--wrap=f_read -Wl,--wrap=f_lseek -Wl,--wrap=f_close -Wl,--wrap=f_mount -Wl,--wrap=f_write -Wl,--wrap=f_mkdir -Wl,--wrap=f_unlink -Wl,--wrap=f_rename -o $@
 
 build/test-core: tests/test_core.c $(CORE) include/kui/core.h include/kui/media.h config/ffconf.h .deps/fatfs/source/ff.h
 	@mkdir -p build
@@ -161,7 +179,8 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/games-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+test-images: build/loader-probe-image build/games-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+	python3 tests/test_loader_probe_images.py
 	python3 tests/test_games_images.py
 	python3 tests/test_salvage_images.py
 	python3 tests/test_maintenance_images.py

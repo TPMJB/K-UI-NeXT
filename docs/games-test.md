@@ -14,6 +14,10 @@ The exact browsing route and other unlogged controls are not inferred. See
 
 ## Install
 
+For the current next test, follow **[Resident loader probe](games-loader-probe.md)**.
+It adds `KUI/apps/games/` to the SD update. The browsing checklist below is
+retained for G1/G2; accepted ARMADA inspection does not need repeating.
+
 Finish any active operation, shut down, and replace `/KUI/runtime.kui` with the
 new `sd-update` copy. Keep the current boot disc, games, settings and backups.
 No new game files, full rip, verification scan or benchmark is needed.

@@ -47,12 +47,13 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_GAMES_ADVANCED;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_GAMES_PROBE_CONFIRM;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
         assert(press(KUI_SHELL_L,true)==(page==KUI_SHELL_HOME||page==KUI_SHELL_RIPPER?
-            KUI_SHELL_MUSIC_PREVIOUS:KUI_SHELL_MSTATS));
+            KUI_SHELL_MUSIC_PREVIOUS:page==KUI_SHELL_GAMES_PROBE_CONFIRM?
+            KUI_SHELL_NONE:KUI_SHELL_MSTATS));
         assert(s.page==page);
     }
     reset(KUI_SHELL_RIPPER); s.confirm_new=true;
@@ -525,6 +526,24 @@ static void games_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
 
+    /* A separate confirmation is required before leaving the launcher.
+     * The probe never launches through a selected retail game's detail page. */
+    reset(KUI_SHELL_GAMES_ADVANCED);
+    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==2);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_L|KUI_SHELL_R|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
+    assert(s.games_advanced_selected==2);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_PROBE);
+    assert(s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
+    press(KUI_SHELL_B,false);press(KUI_SHELL_DOWN,false);
+    assert(s.games_advanced_selected==0);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
+
     /* A long complete file path is not truncated to the folder path capacity. */
     reset(KUI_SHELL_GAMES);page.count=1;page.entries[0].directory=false;
     strcpy(page.entries[0].name,"A long game title.gdi");
@@ -584,7 +603,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_GAMES_ADVANCED;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_GAMES_PROBE_CONFIRM;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -917,7 +936,17 @@ static void games_rendering(void) {
     assert(strstr(drawn,"Could not inspect image") && strstr(drawn,"Track file missing"));
     s.games_detail.stopped=true;render(&view);assert(strstr(drawn,"Inspection stopped"));
     reset(KUI_SHELL_GAMES_ADVANCED);render(&view);
-    assert(strstr(drawn,"Game library") && strstr(drawn,"Browse SD folders") && strstr(drawn,"IDE / CF sources are not available"));
+    assert(strstr(drawn,"Game library") && strstr(drawn,"Browse SD folders") && strstr(drawn,"Resident loader probe"));
+    assert(strstr(drawn,"IDE / CF sources are not available") && strstr(drawn,"Retail game launching is not available"));
+    reset(KUI_SHELL_GAMES_PROBE_CONFIRM);render(&view);
+    assert(strstr(drawn,"A Start probe") && strstr(drawn,"B Advanced"));
+    assert(strstr(drawn,"Exits this menu") && strstr(drawn,"test data after shutdown"));
+    assert(strstr(drawn,"does not launch a retail game") && strstr(drawn,"Photograph the final result"));
+    assert(strstr(drawn,"Power cycle to return") && !strstr(drawn,"L Memory"));
+    struct kui_app_status status={0};view.app_status=&status;view.busy=true;
+    strcpy(status.message,"Validating the probe package");render(&view);
+    assert(strstr(drawn,"Preparing the handoff") && strstr(drawn,status.message) && strstr(drawn,"B Stop safely"));
+    assert(!strstr(drawn,"A Start probe"));
 }
 int main(void) {
     games_controls(); games_rendering();

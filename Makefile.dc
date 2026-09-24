@@ -18,6 +18,7 @@ RUNTIME_OBJECTS += build/dc/src/core/destination.o build/dc/src/core/destination
 RUNTIME_OBJECTS += build/dc/src/core/known_dumps.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
+RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
 RUNTIME_OBJECTS += build/dc/src/core/crc16.o
 RUNTIME_OBJECTS += build/dc/src/core/settings.o build/dc/src/core/settings_file.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
@@ -28,7 +29,7 @@ RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id
-all: $(TARGET) $(RUNTIME)
+all: $(TARGET) $(RUNTIME) build/loader/entry.elf
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -69,3 +70,38 @@ build/splash_pixels.inc build/startup_pcm.inc &: tools/build_splash.py resources
 
 build/dc/src/apps/splash.o: build/splash_pixels.inc
 build/dc/src/apps/startup_sound.o: build/startup_pcm.inc
+
+# G3 contains no KOS/newlib runtime. The entry image packs a high resident
+# service and a separately linked low client; arch_exec removes KOS first.
+PROBE_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror -m4-single -ml -ffreestanding \
+    -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections \
+    -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
+PROBE_LINK := -m4-single -ml -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+PROBE_COMMON := build/loader/src/core/loader_probe.o build/loader/src/loader/minic.o
+PROBE_CLIENT := build/loader/src/loader/client_start.o build/loader/src/loader/client.o build/loader/src/loader/minic.o
+PROBE_RESIDENT := build/loader/src/loader/resident_start.o build/loader/src/loader/main.o \
+    build/loader/src/loader/display.o build/loader/src/loader/sd_reader.o \
+    build/loader/src/dreamcast/shell_font.o $(PROBE_COMMON)
+
+build/loader/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(PROBE_FLAGS) -MMD -MP -c $< -o $@
+build/loader/%.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(PROBE_FLAGS) -MMD -MP -c $< -o $@
+build/loader/src/loader/display.o: force-build-id
+build/loader/client.elf: $(PROBE_CLIENT) src/loader/client.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/client.ld -Wl,-Map,build/loader/client.map -o $@ $(PROBE_CLIENT) -lgcc
+build/loader/client.bin: build/loader/client.elf
+	sh-elf-objcopy -O binary $< $@
+build/loader/src/loader/resident_start.o: build/loader/client.bin
+build/loader/resident.elf: $(PROBE_RESIDENT) src/loader/resident.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/resident.ld -Wl,-Map,build/loader/resident.map -o $@ $(PROBE_RESIDENT) -lgcc
+build/loader/resident.bin: build/loader/resident.elf
+	sh-elf-objcopy -O binary $< $@
+build/loader/src/loader/entry.o: build/loader/resident.bin
+build/loader/entry.elf: build/loader/src/loader/entry.o src/loader/entry.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/entry.ld -Wl,-Map,build/loader/entry.map -o $@ $<
+	python3 tools/record_build.py $@
+
+-include $(PROBE_CLIENT:.o=.d) $(PROBE_RESIDENT:.o=.d) build/loader/src/loader/entry.d

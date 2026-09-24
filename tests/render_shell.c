@@ -6,7 +6,8 @@
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
  * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder, home-games,
- * games, games-detail, games-error, games-advanced. */
+ * games, games-detail, games-error, games-advanced, games-probe,
+ * games-probe-loading. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -47,7 +48,15 @@ int main(int argc,char **argv) {
         d->boot_bytes=123456;d->boot_lba=45166;
         strcpy(d->title,"Dead or Alive 2");strcpy(d->product,"T-3601N");strcpy(d->region,"JUE");
         strcpy(d->boot_file,"1ST_READ.BIN");strcpy(d->message,"Track file missing: track03.bin");
-    } else if(!strcmp(argv[1],"games-advanced")) shell.page=KUI_SHELL_GAMES_ADVANCED;
+    } else if(!strcmp(argv[1],"games-advanced")) {
+        shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=2;
+    } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {
+        shell.page=KUI_SHELL_GAMES_PROBE_CONFIRM;
+        if(!strcmp(argv[1],"games-probe-loading")) {
+            view.busy=true;view.app_status=&status;status.complete=false;
+            strcpy(status.message,"Validating the probe package");
+        }
+    }
     else if(!strcmp(argv[1],"audio-cd")) {
         shell.page=KUI_SHELL_CD_AUDIO;shell.cd_audio.loaded=true;shell.cd_audio.count=12;
         shell.cd_audio.playing=true;shell.cd_audio.current=3;shell.cd_selected=2;

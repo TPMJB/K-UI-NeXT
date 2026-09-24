@@ -137,10 +137,11 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES ? "B Parent / Home   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_GAMES_DETAIL ? "X Inspect again   B Games" :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
+        s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
-    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU)
+    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM)
         label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
@@ -887,15 +888,29 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
 static void games_advanced(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Advanced");
     label(p,40,142,CYAN,"Source: SD card");
-    const char *names[]={"Game library","Browse SD folders"};
-    const char *details[]={"Open /Games","Find a GDI image elsewhere on the card"};
-    for(unsigned i=0;i<2;i++) {
-        unsigned y=182+i*68;
-        panel(p,32,y,576,60,s->games_advanced_selected==i?SELECTED:PANEL);
-        label(p,48,y+9,WHITE,names[i]);label(p,48,y+33,MUTED,details[i]);
+    const char *names[]={"Game library","Browse SD folders","Resident loader probe"};
+    const char *details[]={"Open /Games","Find a GDI image elsewhere on the card",
+        "Test SD reads after leaving the launcher"};
+    for(unsigned i=0;i<3;i++) {
+        unsigned y=172+i*62;
+        panel(p,32,y,576,54,s->games_advanced_selected==i?SELECTED:PANEL);
+        label(p,48,y+7,WHITE,names[i]);label(p,48,y+29,MUTED,details[i]);
     }
-    label(p,40,337,MUTED,"IDE / CF sources are not available yet.");
-    label(p,40,365,MUTED,"GDI image inspection is available; game launching is not.");
+    label(p,40,365,MUTED,"IDE / CF sources are not available yet.");
+    label(p,40,389,MUTED,"Retail game launching is not available yet.");
+}
+static void games_probe_confirmation(struct paint *p,const struct kui_shell_view *v) {
+    title(p,40,108,"Games / Resident loader probe");
+    panel(p,32,152,576,250,PANEL);
+    label(p,48,168,CYAN,v->busy?"Preparing the handoff...":"Run our test program?");
+    label(p,48,204,WHITE,"Exits this menu and starts our test program.");
+    label(p,48,230,WHITE,"Reads original SD test data after shutdown.");
+    label(p,48,256,MUTED,"This does not launch a retail game.");
+    label(p,48,294,WHITE,"Keep the SD card inserted throughout the test.");
+    label(p,48,320,WHITE,"Photograph the final result, then power cycle.");
+    if(v->busy && v->app_status && v->app_status->message[0])
+        label(p,48,364,CYAN,v->app_status->message);
+    else label(p,48,364,AMBER,"Power cycle to return to the launcher.");
 }
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
@@ -924,6 +939,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_GAMES: games(&p,s,v); break;
     case KUI_SHELL_GAMES_DETAIL: game_detail(&p,s,v); break;
     case KUI_SHELL_GAMES_ADVANCED: games_advanced(&p,s); break;
+    case KUI_SHELL_GAMES_PROBE_CONFIRM: games_probe_confirmation(&p,v); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
     }
     footer(&p,s,v);
