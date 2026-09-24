@@ -5,22 +5,35 @@ endif
 
 TARGET := build/kui-diagnostic.elf
 RUNTIME := build/kui-runtime.elf
-SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/storage_probe.c \
+SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
            src/core/report.c \
-           src/dreamcast/main.c src/dreamcast/disc.c src/dreamcast/drive_bus.c src/dreamcast/sd.c
+           src/dreamcast/main.c src/dreamcast/clock.c src/dreamcast/disc.c src/dreamcast/drive_bus.c src/dreamcast/sd.c
 OBJECTS := $(patsubst %.c,build/dc/%.o,$(SOURCES)) build/dc/ff.o build/dc/ffunicode.o
 LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/dreamcast/bootstrap.o
+# The CD recovery menu uses the same benchmark runner as SD Diagnostics.
+BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o \
+    build/dc/src/core/timing.o build/dc/src/core/destination.o build/dc/src/core/destination_file.o \
+    build/dc/src/core/known_dumps.o build/dc/src/core/crc16.o \
+    build/dc/src/core/settings.o build/dc/src/core/settings_file.o \
+    build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
+LOADER_OBJECTS += $(BENCH_OBJECTS)
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/dc/main-runtime.o
-RUNTIME_OBJECTS += build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o build/dc/src/dreamcast/capture.o
+RUNTIME_OBJECTS += $(BENCH_OBJECTS)
+RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
-RUNTIME_OBJECTS += build/dc/src/core/timing.o
-RUNTIME_OBJECTS += build/dc/src/core/known_dumps.o
-RUNTIME_OBJECTS += build/dc/src/core/crc16.o
-RUNTIME_OBJECTS += build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
+RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
+RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
+RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
+RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
+RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
+RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
+RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewport.o build/dc/src/core/salvage.o build/dc/src/core/recovery_crc.o
+APP_SOURCES := $(wildcard src/apps/*.c)
+RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id
-all: $(TARGET) $(RUNTIME)
+all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -51,7 +64,137 @@ $(TARGET): $(OBJECTS) $(LOADER_OBJECTS)
 	kos-cc -o $@ $(OBJECTS) $(LOADER_OBJECTS) -Wl,-Map,build/kui-diagnostic.map
 	python3 tools/record_build.py $@
 $(RUNTIME): $(RUNTIME_OBJECTS)
-	kos-cc -o $@ $(RUNTIME_OBJECTS) -Wl,-Map,build/kui-runtime.map
+	kos-cc -o $@ $(RUNTIME_OBJECTS) -lm -Wl,-Map,build/kui-runtime.map
 	python3 tools/record_build.py $@
 
 -include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)
+
+build/splash_pixels.inc build/startup_pcm.inc &: tools/build_splash.py resources/branding/startup.png
+	python3 tools/build_splash.py
+
+build/dc/src/apps/splash.o: build/splash_pixels.inc
+build/dc/src/apps/startup_sound.o: build/startup_pcm.inc
+
+# G3 contains no KOS/newlib runtime. The entry image packs a high resident
+# service and a separately linked low client; arch_exec removes KOS first.
+PROBE_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror -m4-single -ml -ffreestanding \
+    -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections \
+    -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
+PROBE_LINK := -m4-single -ml -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+PROBE_COMMON := build/loader/src/core/loader_probe.o build/loader/src/loader/minic.o
+PROBE_CLIENT := build/loader/src/loader/client_start.o build/loader/src/loader/client.o build/loader/src/loader/minic.o
+PROBE_RESIDENT := build/loader/src/loader/resident_start.o build/loader/src/loader/main.o \
+    build/loader/src/loader/display.o build/loader/src/loader/sd_reader.o \
+    build/loader/src/dreamcast/shell_font.o $(PROBE_COMMON)
+
+build/loader/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(PROBE_FLAGS) -MMD -MP -c $< -o $@
+build/loader/%.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(PROBE_FLAGS) -MMD -MP -c $< -o $@
+build/loader/src/loader/display.o: force-build-id
+build/loader/client.elf: $(PROBE_CLIENT) src/loader/client.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/client.ld -Wl,-Map,build/loader/client.map -o $@ $(PROBE_CLIENT) -lgcc
+build/loader/client.bin: build/loader/client.elf
+	sh-elf-objcopy -O binary $< $@
+build/loader/src/loader/resident_start.o: build/loader/client.bin
+build/loader/resident.elf: $(PROBE_RESIDENT) src/loader/resident.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/resident.ld -Wl,-Map,build/loader/resident.map -o $@ $(PROBE_RESIDENT) -lgcc
+build/loader/resident.bin: build/loader/resident.elf
+	sh-elf-objcopy -O binary $< $@
+build/loader/src/loader/entry.o: build/loader/resident.bin
+build/loader/entry.elf: build/loader/src/loader/entry.o src/loader/entry.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/entry.ld -Wl,-Map,build/loader/entry.map -o $@ $<
+	python3 tools/record_build.py $@
+
+-include $(PROBE_CLIENT:.o=.d) $(PROBE_RESIDENT:.o=.d) build/loader/src/loader/entry.d
+
+# Selected-GDI BIOS request proof: separate payloads preserve the accepted G3
+# fixture probe. The resident hooks the real GD vector; neither binary links KOS.
+IMAGE_CLIENT := build/loader/src/loader/image_client_start.o build/loader/src/loader/image_client.o \
+    build/loader/src/loader/image_client_call.o build/loader/src/loader/minic.o
+IMAGE_RESIDENT := build/loader/src/loader/image_resident_start.o build/loader/src/loader/image_main.o \
+    build/loader/src/loader/image_display.o build/loader/src/loader/gd_hook.o \
+    build/loader/src/loader/sd_reader.o build/loader/src/dreamcast/shell_font.o \
+    build/loader/src/core/resident_image.o build/loader/src/core/gd_service.o build/loader/src/loader/minic.o
+build/loader/src/loader/image_display.o: force-build-id
+build/loader/image_client.elf: $(IMAGE_CLIENT) src/loader/image_client.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/image_client.ld -Wl,-Map,build/loader/image_client.map -o $@ $(IMAGE_CLIENT) -lgcc
+build/loader/image_client.bin: build/loader/image_client.elf
+	sh-elf-objcopy -O binary $< $@
+build/loader/src/loader/image_resident_start.o: build/loader/image_client.bin
+build/loader/image_resident.elf: $(IMAGE_RESIDENT) src/loader/image_resident.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/image_resident.ld -Wl,-Map,build/loader/image_resident.map -o $@ $(IMAGE_RESIDENT) -lgcc
+build/loader/image_resident.bin: build/loader/image_resident.elf
+	sh-elf-objcopy -O binary $< $@
+build/loader/src/loader/image_entry.o: build/loader/image_resident.bin
+build/loader/image_entry.elf: build/loader/src/loader/image_entry.o src/loader/image_entry.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/image_entry.ld -Wl,-Map,build/loader/image_entry.map -o $@ $<
+	python3 tools/record_build.py $@
+-include $(IMAGE_CLIENT:.o=.d) $(IMAGE_RESIDENT:.o=.d) build/loader/src/loader/image_entry.d
+
+# First native-GD retail experiment. Every object is independently compiled
+# without floating-point instructions; the low resident must preserve whatever
+# FPU register bank/precision mode the game has selected. No KOS/newlib startup
+# or runtime is linked into these images. The accepted probes keep their flags.
+RETAIL_CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(RETAIL_CPU) -DKUI_RETAIL_FAST_IO=1 -ffreestanding \
+    -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections -fno-jump-tables \
+    -fstack-usage -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
+RETAIL_LINK := $(RETAIL_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/retail_sd.o \
+    build/retail/src/loader/minic.o build/retail/src/core/retail_image.o \
+    build/retail/src/loader/retail_display.o
+RETAIL_RESIDENT := build/retail/src/loader/retail_resident_asm.o \
+    build/retail/src/loader/retail_resident.o build/retail/src/core/retail_gd.o $(RETAIL_COMMON)
+RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
+    build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
+RETAIL_BENCH_STAGE := build/retail/src/loader/retail_stage_asm.o \
+    build/retail-bench/retail_stage.o build/retail/src/loader/retail_sd_bench.o $(RETAIL_COMMON)
+
+build/retail/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+build/retail/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+build/retail/src/loader/retail_display.o: force-build-id
+build/retail/resident.elf: $(RETAIL_RESIDENT) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident.map -o $@ $(RETAIL_RESIDENT) -lgcc
+build/retail/resident.bin: build/retail/resident.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail/src/loader/retail_stage_asm.o: build/retail/resident.bin
+build/retail/stage.elf: $(RETAIL_STAGE) src/loader/retail_stage.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,build/retail/stage.map -o $@ $(RETAIL_STAGE) -lgcc
+build/retail/stage.bin: build/retail/stage.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail/src/loader/retail_entry_asm.o: build/retail/stage.bin
+build/retail/entry.elf: build/retail/src/loader/retail_entry_asm.o src/loader/retail_entry.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail/entry.map -o $@ $<
+	python3 tools/check_retail_instructions.py
+	python3 tools/check_retail_loader_layout.py
+	python3 tools/record_build.py $@
+
+# The separate SD benchmark runs in the high stage. Share the exact ordinary
+# resident and its assembly wrapper; the normal retail entry remains a game
+# launcher. Top-level variant objects cannot be overwritten by the report copy.
+build/retail-bench/retail_stage.o: src/loader/retail_stage.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_SD_BENCH=1 -MMD -MP -c $< -o $@
+build/retail-bench/stage.elf: $(RETAIL_BENCH_STAGE) src/loader/retail_stage.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,build/retail-bench/stage.map -o $@ $(RETAIL_BENCH_STAGE) -lgcc
+build/retail-bench/stage.bin: build/retail-bench/stage.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail-bench/retail_entry_asm.o: src/loader/retail_entry.S build/retail-bench/stage.bin
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_STAGE_BIN='"build/retail-bench/stage.bin"' -MMD -MP -c $< -o $@
+build/retail-bench/entry.elf: build/retail-bench/retail_entry_asm.o src/loader/retail_entry.ld build/retail/entry.elf
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail-bench/entry.map -o $@ $<
+	cp build/retail/resident.elf build/retail/resident.bin build/retail/resident.map build/retail-bench/
+	cp -r build/retail/src build/retail-bench/
+	python3 tools/check_retail_instructions.py build/retail-bench
+	python3 tools/check_retail_loader_layout.py build/retail-bench
+	python3 tools/record_build.py $@
+
+-include $(RETAIL_RESIDENT:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
+-include $(RETAIL_BENCH_STAGE:.o=.d) build/retail-bench/retail_entry_asm.d

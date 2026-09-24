@@ -1,0 +1,140 @@
+{
+  "received_date": "2026-09-23",
+  "runtime_build": "1d48aaf1412e",
+  "privacy": "Sanitized aggregates only. Raw console text, hardware identifiers, storage geometry, unique disc identities and card paths are excluded.",
+  "input": {
+    "filename": "diagnostics(20260923-203025).txt",
+    "bytes": 32905,
+    "sha256": "a651bf78a77c1f9842ca476090846308d3a2f96d1d942da9fa3251780fe3fbbb",
+    "log_truncated": true,
+    "report_trigger": "manual"
+  },
+  "disc_title": "DEAD OR ALIVE 2",
+  "effective_capture_options": {
+    "capture_hash": "crc32",
+    "end_readback": "off",
+    "capture_read": "dma",
+    "configured_resume_check": "full",
+    "ui_hz": 2,
+    "sample_readback": 0,
+    "sd_crc": "on"
+  },
+  "earlier_failed_resume": {
+    "result": "Recoverable sector retries exhausted; partial checkpoint preserved",
+    "committed_bytes": 833438256,
+    "reported_cumulative_job_retries": 34,
+    "terminal_sector_retry_limit": 10,
+    "terminal_sector_retries_observed": 10,
+    "capture_bytes": 664458816,
+    "capture_wall_us": 699795122,
+    "pio_instrumentation": {
+      "requests": 148,
+      "bytes": 630336,
+      "successful": 113,
+      "retry_results": 35,
+      "fatal_results": 0,
+      "timeouts": 0,
+      "abort_failures": 0
+    },
+    "dma_pio_final_summary_available": false,
+    "limit": "This truncated report begins during sector retries. Its PIO subtimer covers only PIO requests, not every byte captured; it cannot establish that this earlier capture was PIO-only. The initial cause and timing of the later DMA-disabled state are absent."
+  },
+  "full_resume_attempt": {
+    "checkpoint_committed_bytes": 833438256,
+    "result": "User stopped during saved-prefix check before capture",
+    "resume_wall_us": 3384559,
+    "saved_bytes_read": 2032128,
+    "read_us": 3174455,
+    "crc32_us": 160004,
+    "other_us": 50100,
+    "full_prefix_check_completed": false
+  },
+  "quick_resume_completion": {
+    "policy": "Explicit invocation-local size-only check; configured full policy unchanged",
+    "checkpoint_committed_bytes": 833438256,
+    "resume_wall_us": 375164,
+    "capture_bytes": 387858912,
+    "capture_wall_us": 548953593,
+    "capture_seconds": 548.953593,
+    "average_new_capture_kib_s": 689.9826753661489,
+    "tracks_total": 3,
+    "tracks_completed": 3,
+    "completed_disc_bytes": 1221297168,
+    "dma_chunks": 0,
+    "pio_chunks": 5154,
+    "summary_printed_twice": true,
+    "new_capture_pio_retry_results": 0,
+    "new_capture_pio_timeouts": 0,
+    "new_capture_pio_abort_failures": 0,
+    "setup_us": 3230898,
+    "finish_us": 1377359,
+    "capture_bucket_us": {
+      "disc": 157009068,
+      "edc": 15241032,
+      "write": 343654650,
+      "crc32": 30430769,
+      "checkpoint": 2231142,
+      "other": 386932
+    },
+    "cpu_census_ms": {
+      "wall": 553989,
+      "worker": 499377,
+      "ui": 46201,
+      "other": 8411
+    },
+    "ui_pct_reported": 8.3,
+    "console_result": "CAPTURED: all 3 tracks; stream CRC32 recorded; saved data NOT re-read",
+    "console_reference": "TOSEC FULL TRACK MATCH",
+    "matched_catalogue_title": "Dead or Alive 2 v1.100 (2000)(Tecmo)(US)[!]"
+  },
+  "verification_scope": {
+    "automatic_saved_readback": false,
+    "quick_resume_reread_existing_prefix": false,
+    "later_verify_result": "Cancelled during disc identification; saved-file verification did not begin",
+    "later_verify_identity_cancelled_commands": 1,
+    "later_verify_identity_timeouts": 0,
+    "later_verify_identity_abort_failures": 0,
+    "completed_saved_file_verification_supplied": false,
+    "pc_verification_supplied": false,
+    "interpretation": "The catalogue agrees with checkpoint CRCs plus newly captured stream CRCs. It does not establish that the existing prefix or final saved track files were reread in this session."
+  },
+  "memory": {
+    "main_ram_total_bytes": 16777216,
+    "normal_used_reserved_estimate_bytes": 5048856,
+    "normal_available_estimate_bytes": 11728360,
+    "pre_memory_test_sampled_peak_bytes": 5058616,
+    "image_and_bss_bytes": 3870268,
+    "heap_in_use_bytes": 1047516,
+    "post_memory_test_sampled_peak_bytes": 9243168,
+    "memory_test": {
+      "allocated_bytes": 4194304,
+      "read_coverage_bytes": 4194304,
+      "passes_completed": 70,
+      "passes_planned": 70,
+      "errors": 0,
+      "console_result": "PASSED"
+    },
+    "limits": "Estimated main-RAM accounting excludes separate video and audio RAM. The later peak includes the 4 MiB allocated memory test. It is not a music/ripping peak or an apples-to-apples DreamShell comparison."
+  },
+  "other_app_evidence": {
+    "inserted_disc_titles": [
+      "DEAD OR ALIVE 2",
+      "OMIKRON THE NOMAD SOUL"
+    ],
+    "lid_open_and_empty_disc_transitions_reported": true,
+    "system_preferences_saved_and_reloaded_in_session": true,
+    "system_preferences_cold_boot_persistence_established": false,
+    "left_trigger_mstats_logged": true,
+    "network_inspection": "No BBA or LAN adapter detected; no DHCP or Internet reachability test",
+    "music_continuity_or_throughput_measured": false
+  },
+  "limits": [
+    "The source report is truncated, so the exact event disabling DMA is missing. A firmware/media/hardware root cause or a new stop-to-PIO regression cannot be inferred solely from this log.",
+    "The completed resumed segment is demonstrably PIO-only despite capture_read=dma. The duplicate summary repeats the same counts and must not be added.",
+    "The free-text experiment note names MDK2; disc identification and the final catalogue result identify Dead or Alive 2.",
+    "This is an owner-supplied ordinary recovery run, not a new optical benchmark or a controlled music-on/music-off comparison.",
+    "Quick Resume and full Resume select saved-prefix checking policy; this record does not demonstrate that choosing Quick Resume itself disables DMA.",
+    "A full reference CRC match is distinct from saved-file readback after a size-only resume.",
+    "The accepted GD-ROM reader evidence remains valid. No redesign or repeated benchmark is called for by this evidence record."
+  ]
+}

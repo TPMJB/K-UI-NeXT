@@ -35,12 +35,12 @@
 #define FF_USE_TRIM 0
 #define FF_FS_TINY 0
 #define FF_FS_EXFAT 1
-/* The diagnostic uses a declared fixed timestamp, not an unvalidated RTC. */
-#define FF_FS_NORTC 1
-#define FF_NORTC_MON 9
-#define FF_NORTC_MDAY 16
-#define FF_NORTC_YEAR 2026
-#define FF_FS_CRTIME 0
+/* get_fattime uses validated console local time; invalid RTC dates are reported. */
+#define FF_FS_NORTC 0
+#define FF_NORTC_MON 1
+#define FF_NORTC_MDAY 1
+#define FF_NORTC_YEAR 1980
+#define FF_FS_CRTIME 1
 #define FF_FS_NOFSINFO 0
 #define FF_FS_LOCK 0
 #define FF_FS_REENTRANT 0

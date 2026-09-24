@@ -1,0 +1,30 @@
+name: Publish release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Explicit promotion only. The exact commit must already have a successful
+    # native PR build; reuse its artifacts rather than compile a second time.
+    if: >-
+      contains(github.event.head_commit.message, 'Release: v1.5.0')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Publish verified binaries and corresponding source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/publish_release.py

@@ -38,9 +38,9 @@ int main(int argc, char **argv) {
     assert(d.sweep_chunk_count == 0 && d.sweep_fad_count == 0);
     assert(d.sweep_gap_count == 0 && d.sweep_service_count == 0);
     assert(d.sweep_sectors == 2048 && d.sweep_verify && d.sd_bytes_count == 0);
-    /* The capture engine defaults to what it has always done. */
-    assert(d.capture_hash_count == 1 && !d.capture_crc_only[0]);
-    assert(d.end_readback_count == 1 && d.end_readback[0]);
+    /* Defaults match the fast captures verified against reference dumps. */
+    assert(d.capture_hash_count == 1 && d.capture_crc_only[0]);
+    assert(d.end_readback_count == 1 && !d.end_readback[0]);
     assert(d.resume_check_count == 1 && !d.resume_size[0]);
     assert(d.sample_readback_count == 1 && d.sample_readback[0] == 0);
     assert(d.capture_sectors == 4096 && d.capture_fad == 0 && !d.capture_audio);
@@ -226,7 +226,7 @@ int main(int argc, char **argv) {
     assert(strstr(transcript, "OPTIONS sample_readback=0,32 capture_sectors=2048 capture_type=audio"));
     assert(strstr(transcript, "OPTIONS capture_fad=300000"));
     logged = 0; transcript[0] = 0; kui_options_log(&d, log_line);
-    assert(strstr(transcript, "OPTIONS capture_hash=both end_readback=on resume_check=full"));
+    assert(strstr(transcript, "OPTIONS capture_hash=crc32 end_readback=off resume_check=full"));
     assert(strstr(transcript, "OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data"));
     assert(strstr(transcript, "OPTIONS capture_fad=(optical_fad)"));
 

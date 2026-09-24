@@ -1,0 +1,39 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#ifndef KUI_LOADER_LAYOUT_H
+#define KUI_LOADER_LAYOUT_H
+
+/* The outer .kui envelope describes only the temporary packed payload. This
+ * inner header describes the fixed, bounded G3 relocation contract. These are
+ * probe addresses, not a claim that this map accommodates retail games. */
+#define KUI_LOADER_PACKAGE_HEADER_OFFSET 0x100
+#define KUI_LOADER_PACKAGE_HEADER_BYTES 64
+#define KUI_LOADER_PACKAGE_VERSION 1
+#define KUI_LOADER_MANIFEST_OFFSET 0x1000
+#define KUI_LOADER_MANIFEST_BYTES 1600
+#define KUI_LOADER_RESIDENT_BLOB_OFFSET 0x2000
+#define KUI_LOADER_RESIDENT_ADDRESS 0x8ce00000
+#define KUI_LOADER_RESIDENT_MAX_BYTES 0x100000
+#define KUI_LOADER_RESIDENT_MEMORY_END 0x8cfe0000
+#define KUI_LOADER_RESIDENT_STACK 0x8cff0000
+#define KUI_LOADER_CLIENT_ADDRESS 0x8c010000
+#define KUI_LOADER_CLIENT_MAX_BYTES 0x100000
+#define KUI_LOADER_CLIENT_STACK 0x8cd00000
+#define KUI_LOADER_PACKAGE_MAGIC "KUILDR01"
+
+/* Header LE u32 offsets; bytes 0..7 hold KUI_LOADER_PACKAGE_MAGIC. */
+#define KUI_LH_VERSION 8
+#define KUI_LH_BYTES 12
+#define KUI_LH_MANIFEST_OFFSET 16
+#define KUI_LH_MANIFEST_BYTES 20
+#define KUI_LH_RESIDENT_ADDRESS 24
+#define KUI_LH_RESIDENT_BYTES 28
+#define KUI_LH_RESIDENT_ENTRY 32
+#define KUI_LH_CLIENT_ADDRESS 36
+#define KUI_LH_CLIENT_STACK 40
+#define KUI_LH_RESIDENT_STACK 44
+#define KUI_LH_RESIDENT_BLOB_OFFSET 48
+#define KUI_LH_CLIENT_MAX_BYTES 52
+#define KUI_LH_FLAGS 56
+#define KUI_LH_RESERVED 60
+
+#endif

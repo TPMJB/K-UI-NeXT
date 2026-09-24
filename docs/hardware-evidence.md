@@ -1,5 +1,347 @@
 # Hardware evidence
 
+## Selected-image GD request test: hardware pending — 2026-09-24
+
+The next Games increment implements selected-GDI allocation mapping and a
+bounded request service through the actual GD BIOS vector. Its own standalone
+client compares post-shutdown physical SD reads with small pre-handoff CRC
+references. **No console result for this increment has been supplied.** Follow
+[the selected-image guide](games-image-probe.md) using the existing Dead or Alive
+2 dump; no full rip, full verification or reader benchmark is requested.
+
+This does not start the retail executable, provide hardware SD DMA or establish
+throughput. The accepted original-fixture result below remains valid within its
+recorded scope; it is not evidence for the new selected-image/vector path.
+
+## Games resident handoff: original fixture passed — 2026-09-24
+
+The owner's console photograph identifies build **7a8493ae825e**, shows all
+ten probe checks passing and reports **84 post-handoff SD blocks read**. The
+separately linked client checked actual SD bytes after KOS shutdown and erasure
+of retired launcher RAM. This accepts the G3 resident storage/handoff foundation
+for the original fixture and K-UI probe ABI v1. See [the evidence](evidence/games-resident-probe-hardware-2026-09-24.json)
+and [photograph transcription](evidence/games-resident-probe-hardware-2026-09-24.txt).
+
+The photograph does not identify the filesystem, establish throughput or retail
+GD BIOS compatibility, or demonstrate CDDA playback. Selected-game track mapping
+and the bounded vector request path are now implemented but pending their own
+hardware check as noted above. Retail boot remains subsequent work, with Dead or
+Alive 2 the first intended target. No repeat of this original probe, ARMADA
+inspection, full rip or reader benchmark is requested.
+
+## Games image inspection: ARMADA — 2026-09-24
+
+Runtime **57d53841c1ea** successfully inspected the saved ARMADA GDI three times
+on exFAT. Each reports five tracks (three data, two audio), 1,187,764,704 stored
+bytes, and `0WINCEOS.BIN` at LBA 548388 with length 1,253,376 bytes. Each inspection
+read 7,199 metadata bytes. Bust-A-Move 4 was stopped after 3,143 bytes; subsequent
+ARMADA inspections succeeded. It is a cancelled attempt, not a parsing failure.
+An earlier `CMD 19 FAILED` belongs to inserted-disc identification before Games.
+
+This accepts the demonstrated image-inspection path, not executable loading,
+retail compatibility, full verification or performance. The log does not identify
+every browser navigation action. See [the evidence](evidence/games-armada-inspection-2026-09-24.json)
+and [console excerpt](evidence/games-armada-inspection-2026-09-24.txt).
+The subsequent resident read proof passed as recorded above; no repeat ARMADA
+inspection or rip is requested.
+
+## Audio-CD follow-up accepted by owner — 2026-09-24
+
+The owner confirms **audio CD worked** and wants to proceed to Games. Record
+playback as passed by owner report; no repeat playback test is requested.
+The message supplies no new log, build ID, album or individual control results,
+so it does not establish every mixed-CD/transport path. The offered update was
+packaged runtime `9c282c90c2f8`; that context does not identify the tested binary.
+See [the confirmation record](evidence/m15-audio-cd-owner-confirmation-2026-09-24.json).
+The older logged status observations below are retained as history.
+
+## Current app acceptance: scans, music cache and VMU — 2026-09-24
+
+Runtime **cc2320bb6d3a** has now passed all three tiny Advanced CRC fixture
+expectations: clean hashes/Mode 1 checks pass; the damaged fixture reports two
+suspect data sectors and three CRC mismatches; the GDI-only fixture explicitly
+reports structural checks only. The existing **ARMADA** folder also scanned to
+completion. Its five saved-track CRC32s were recorded, and Mode 1 structure
+passed, but no K-UI manifest was present, so this runtime had no expected hashes
+to compare. The amber result is not a failed scan or a full reference match.
+The separately supplied completed report records **1,187,764,704 bytes**, with
+**220,386 data sectors**, **284,616 audio sectors**, and zero bad/unsupported
+sectors. A subsequent read-only comparison found **all five recorded CRC32s,
+including both audio tracks, match TOSEC's Armada v1.000 US entry**. Total bytes
+and data/audio sector totals match too. That comparison was performed from the
+console report, not by independently reading the uploaded track files, and was
+not part of the runtime's amber result. The report omits individual track sizes
+and elapsed time. It does not require another whole-game PC read to compare the
+already-recorded CRCs.
+
+**Clear cache released all nine music file allocations**: nine allocations,
+nine frees, zero cached/loading bytes and mask zero. Eight subsequent memory
+snapshots retained **189,876 bytes of heap in use** and the same main-RAM
+used/reserved estimate of **4,447,688 bytes**. Retained free allocator pages are
+not live song allocations. This confirms cache clearing in this session; the
+report does not identify selected filenames or prove every playback path
+leak-free or glitch-free.
+
+**VMU backup → delete → restore passed by owner report using THPS2**: the game
+acted as if no save existed after deletion and loaded it again after restore.
+The log contains no detailed VMU operation audit, so this is game-tested owner
+acceptance of one save, not independently checked metadata or two-VMU Copy.
+
+The owner heard the second audio CD play. The log records a 13-track audio-only
+TOC and Play success on tracks 1–3, but tracks 1 and 2 are followed by
+`Drive not ready` reports; CD status/control acceptance remains incomplete.
+The earlier refused disc has 16 audio tracks plus a data track, consistent with
+this build's mixed-disc refusal. The log does not identify its album or prove a
+physical fault.
+
+**Network testing is deferred until suitable hardware is available. Salvage
+(item 8) is deferred by the owner to a future version.** Neither is marked
+passed. Settings/tools were not established by this submission. The
+[sanitized evidence](evidence/m15-app-round-five-2026-09-24.json) records the
+upload's fingerprint, exact source-line ranges and these limits. The upload
+contains 570 physical lines and says `Log truncated: no`; the requested larger
+log buffer is a usability improvement, not a repair for truncation in this file.
+Use the remaining checks in [the app guide](apps-round-five.md); no accepted
+reader test needs repeating.
+
+## Earlier app evidence: Dead or Alive 2, cache and Advanced CRC — 2026-09-23
+
+Runtime **6f1be4cf53c3** completed Dead or Alive 2 after one failed capture and
+a stopped Quick Resume. The final Quick Resume ended with **TOSEC FULL TRACK
+MATCH across all three tracks** and used **5,286 DMA chunks and two PIO chunks**.
+The two size-only resume checks took **0.419433 s** and **0.397359 s**. These are
+observations from the owner's ordinary recovery session, not new reader tests.
+Saved bytes were not reread, and no track files were supplied for a PC check.
+
+Retries were working: the first capture made one retry at FAD 380094 and all
+**10/10 retries at FAD 380111**, then stopped with **11 cumulative retries**.
+The stopped resume added two more, making 13. The reported screen value of 1
+was a presentation issue; it is not evidence that the engine made only one
+attempt. The logs identify the inserted title before/after work, but do not
+record the exact title drawn while capturing.
+
+The damaged Advanced CRC fixture passed its acceptance criterion: **two suspect
+data sectors** (FAD 150: P/Q, FAD 45152: EDC/PQ) and **three CRC mismatches**, with
+10 data and four audio sectors read. The clean fixture is not present in this
+submission. Two existing-folder attempts failed before scanning. Their old
+error omitted the selected folder, filename and FatFs code, so these logs do
+not establish which metadata was missing or whether the selected folder was
+its parent. The next app update adds specific errors and imported-GDI support.
+
+Music counters remain at **6,473,566 cached bytes**, zero loading bytes,
+**12 allocations / seven frees**, and cached mask **0x3d** across the scan and
+capture/resume reports. That mask includes the retained custom song. Peak file
+allocation was **8,061,166 bytes**, below the **8,388,608-byte** cache budget.
+Main-RAM use/reservation stayed at **10,745,736 bytes** after caching, with a
+sampled peak of **12,333,336 bytes**. These snapshots support bounded retained
+cache rather than continuing growth in this run; they do not prove every music
+path leak-free. The owner reports the custom song played but was omitted by
+trigger cycling; source inspection confirms the old five-bundled-song cycle.
+
+Five diagnostic files are overlapping snapshots of **one session**, two of them
+truncated. Their filename timestamps do not establish operation order.
+[Sanitized source fingerprints and exact observations](evidence/m15-doa2-app-round-four-2026-09-23.json)
+record the scope and limits. The RTC log uses September 23; actual file-date
+artifacts and VMU write acceptance were not supplied. Follow
+[the next app acceptance guide](apps-round-five.md) on the existing boot disc.
+The remaining sections below retain historical runtime-specific findings;
+statements about what was then pending should not supersede this entry.
+
+## Omikron DMA stop/resume and music — 2026-09-23
+
+Runtime **69dc33c0ff87** completed all five Omikron tracks after two stops and
+Quick Resumes, ending in **TOSEC FULL TRACK MATCH**. The final resumed segment
+used **1,796 DMA chunks and one PIO chunk**. Its two size-only prefix checks took
+**0.483950 s** and **0.414696 s**. The three capture phases together averaged
+**940.79 KiB/s**, excluding setup, pauses, resume checks and final publication.
+Saved files and older prefixes were **not reread**. The rip log is truncated;
+stopped phases do not contain their own DMA/PIO summary. Their PIO subtimers
+must not be mistaken for evidence that all their reads used PIO.
+
+All ten RAM snapshots in the rip report stayed at **9,671,936 bytes (9.224 MiB)**.
+A separate, untruncated music report went from **4,162,232** to **11,548,184 bytes
+(11.013 MiB)** after background-song selection. These reports are not proven to
+be one continuous boot, so they do not establish RAM falling from 11 to 9 MiB.
+The older runtime lacks cache counters. Cache filling is consistent with these
+observations; the logs alone neither prove a leak nor rule one out. The owner
+reports that the supplied music-folder demo played. Audio continuity and
+performance cost were not measured.
+
+[Sanitized evidence and input fingerprints](evidence/m15-omikron-music-resume-2026-09-23.json)
+retain the exact phase and memory observations. Source inspection separately
+found fixed FatFs dates and duplicate caching when a bundled song was selected
+manually. The next SD update addresses both. Host testing also reproduced and
+fixed a song-replacement/Resume lifetime race; that is not evidence that the
+owner's RAM observation had that cause. [Music host evidence](evidence/m15-music-cache-host-2026-09-23.json)
+records allocation tests and their limits. RTC dates, Advanced CRC scans, VMU
+restore and expanded Settings remain pending console acceptance. Use
+[the focused app tests](apps-round-four.md); no new optical benchmark or burn is
+required.
+
+## Dead or Alive 2 resume and app checks — 2026-09-23
+
+Runtime **1d48aaf1412e** completed the remaining **387,858,912 bytes** of a
+Dead or Alive 2 capture in **548.953593 s**, averaging **689.98 KiB/s** for that
+resumed segment. **All three tracks matched TOSEC**. The log confirms the
+reported slowdown: despite `capture_read=dma`, that segment used **zero DMA
+chunks and 5,154 PIO chunks**. Its duplicate summary repeats the same counts.
+This was an ordinary recovery run supplied by the owner, not a new benchmark.
+
+The preceding failed capture visibly exhausted **10/10 retries** at its final
+unreadable sector; the saved job reported 34 cumulative retries. The submitted
+report is **truncated**, beginning partway through those errors. It does not
+retain the event that disabled DMA, so it cannot distinguish the existing
+timeout/repeated-DMA-failure latch from another cause. The earlier capture's
+PIO subtimer covers only its PIO requests, not every captured byte. The accepted
+B-stop/lid-open DMA fix remains separately established by
+[the September 20 evidence](evidence/dma-stop-fix-confirmed-2026-09-20.json).
+
+**Quick Resume's size check took 0.375164 s** before acquisition resumed.
+The preceding full Resume was stopped during its saved-prefix reread; this
+does not change either mode's intended behavior. Automatic end readback was
+off, and a later Verify was cancelled during disc identification before any
+saved-file verification. The TOSEC result therefore applies to checkpoint plus
+captured-stream CRCs; **this submission does not verify the final saved files**.
+
+Normal estimated main-RAM use/reservation was **5,048,856 bytes (4.815 MiB)**,
+with a sampled peak of **5,058,616 bytes** before Memory Test. That app then
+passed **70/70 passes over its allocated 4 MiB**, with zero errors. Its allocation
+accounts for the later **9,243,168-byte** sampled peak; that peak must not be
+attributed to ripping or music. Separate video/audio RAM is excluded. This log
+does not measure the CPU or throughput cost of music.
+
+Disc insertion identified Dead or Alive 2, then Omikron, and later reported an
+empty drive. System preferences saved and reloaded within the session; cold-boot
+persistence was not established here. L did emit an mstats log entry. Network
+inspection correctly reported no supported Ethernet adapter; no connection test
+was performed.
+
+[Sanitized aggregates and input fingerprint](evidence/m15-doa2-resume-2026-09-23.json)
+retain the exact timing and scope without publishing the raw report or private
+device/storage details. Follow [the next app acceptance round](apps-round-four.md)
+on the existing boot disc. The reader is not being rebenchmarked.
+
+## Omikron final-track timeout and app round — 2026-09-23
+
+Runtime **0599097a8bfb** started a new **Omikron: The Nomad Soul** capture.
+The uploaded report's older free-text experiment note names another game; its
+identified title and operation establish the actual workload. It committed
+**1,201,396,896 of 1,203,979,392 bytes (99.7855%)**, finishing four tracks before
+the final track failed. Capture wall time was **1257.766055 s (20 min 57.8 s)**,
+or **932.80 KiB/s** of committed data including the terminal recovery waits.
+
+A late DMA read timed out, disabling DMA until reboot. The subsequent PIO
+fallback could not finish abort recovery and reported **RESET REQUIRED**. The
+console preserved the partial checkpoint and saved a diagnostic report
+automatically; the submitted file is a later manual report. Its generic
+`CAPTURE/VERIFY FAILED` label does **not** establish a verification failure:
+acquisition had not finished, automatic end readback was off, and neither a
+saved-file verification phase nor a reference result appears. CRC32, DMA,
+UI 2 Hz and full saved-prefix checking for Resume were selected.
+
+UI scheduled time was **107.425 s / 1263.176 s**, reported as **8.5%**. Estimated
+main-RAM use/reservation and its sampled peak stayed at **2,859,544 bytes**.
+This failed, different-disc run is not a controlled UI speed comparison. The
+log does not identify the physical cause of the stall, independently verify
+the saved bytes or provide a final DMA/PIO transfer-count summary.
+
+[Sanitized aggregates and input fingerprint](evidence/m15-omikron-timeout-2026-09-23.json)
+record the original report's size and SHA-256. The raw report, hardware
+identifiers, storage geometry, full disc identity and card paths are not copied
+into this evidence record. Recovery uses the existing reset guard: reboot
+before Resume, preserving the partial job. No reader/recovery policy changed.
+
+The next app build adds idle insertion-title identification, clearer operation
+and reset messages, phase ETA, separate system settings, optional RAM-cached
+menu music, Memory Test, VMU listing/SD backup and network-adapter inspection.
+**All of these new app paths still need physical-console acceptance.** Identity
+polling and identification use the single worker only while idle; music pauses
+before foreground work. The finished acquisition engine remains unchanged.
+Use [the app acceptance guide](apps-test.md) on the same bootstrap CD; no new
+optical benchmark or repeat full rip is required to test the apps.
+
+## Ripper destinations and reference results — 2026-09-23
+
+The next UI update adds a saved destination (default `/Games`), title-numbered
+job folders, named GDI descriptors, Advanced actions and a structured stream-CRC
+badge. Only a full catalogue match is green; partial/reference-unavailable
+results and saved-file readback remain separate. See [ripper controls](ripper-controls.md).
+
+Both baseline suites passed on clean `54711b931554` before the limited
+`capture.c` destination/metadata/result changes; the protected source hashes
+matched before and after that baseline. Acquisition, DMA, command and retry
+behavior remain unchanged. New host tests pass on FAT32 and exFAT for naming,
+collisions, full-identity resume selection, legacy fallback, path bounds,
+publication failure/recovery and structured reference results.
+
+**Pending on hardware:** destination selection/persistence, one ordinary named
+capture with its catalogue result, and complete saved-file checking on a PC.
+The same bootstrap CD is used. No new optical benchmark or measured speed claim
+is part of this change. A dedicated salvage workflow remains planned.
+
+## Completed MDK2 on the restored menu — 2026-09-23
+
+The owner's initial impression that speed was restored is now accompanied by a
+completed log for runtime **8bae3efe7c2f**. Its [sanitized evidence](evidence/m15-mdk2-2026-09-23.json)
+records **all 31 tracks captured and TOSEC FULL TRACK MATCH** using stream CRC32.
+Capture took **1223.545181 s (20 min 23.5 s)** at **973.96 KiB/s**. CRC32,
+automatic end readback Off, DMA and UI 2 Hz were active; no capture retry messages
+appear. Saved bytes were not reread, and this job has no supplied PC verification.
+
+The accepted same-disc Trip 12 averaged 1011.67 KiB/s. This run is **3.73% slower**,
+adding 45.61 s of capture time. UI scheduled time is reported as **8.3%**, versus
+4.9% in Trip 12. Its extra 45.032 s of UI scheduled time nearly matches the
+extra 45.936 s of whole-operation wall time, supporting remaining UI overhead.
+These overlapping timers cannot be added to the write/hash wall times. The
+earlier first-shell 12.4% figure used another game, so that comparison does not
+isolate the display-clear change.
+
+This completed ordinary capture supports the restored-menu runtime. It does not
+establish the later destination-browser package's hardware acceptance and does
+not call for changing or rebenchmarking the accepted reader.
+
+## M1.5 first UI report — 2026-09-23
+
+The owner reports that the shell seems functional during an ongoing game rip,
+with a highest observed speed of about **933 KiB/s**, and requests restoration of
+the original K-UI menu design. [Recorded observation](evidence/m15-shell-first-ui-report-2026-09-23.json).
+No completed-rip average, build identifier, effective options or new verification
+log accompanied this message. It does not replace the accepted reader results or
+establish a performance regression. The remaining UI checks are still pending.
+
+The follow-up UI update restores the original assets/layout and the earlier KOS
+store-queue screen clear. This is a source-level display correction; its effect
+on physical-console throughput has not been measured. The reader is unchanged.
+
+
+### Completed log received after that observation
+
+The uploaded log identifies
+runtime **24d5cfe735d7** and **The House of the Dead 2**, not the restored-menu
+update. [Sanitized results and input hash](evidence/m15-house-of-the-dead-2-2026-09-23.json).
+The raw log remains in the project conversation and is not published here.
+
+- All three tracks captured; **TOSEC FULL TRACK MATCH** for US v1.001 [12S].
+- **1,188,966,576 bytes in 1273.291252 s: 911.9 KiB/s**, or 21 min 13 s of
+  capture. Including setup/finish: 1278.391955 s (21 min 18 s), 908.3 KiB/s.
+- CRC32, end readback Off, DMA, UI 2 Hz. **15,795 DMA chunks and
+  four PIO chunks**; the duplicate summary lines describe the same counts.
+- UI scheduled time **159.235 s / 1278.394 s**, reported **12.4%**, versus 5.1%
+  in Trip 11, 4.9% in Trip 12 and 4.1% in the accepted FAT32 Sword run. This
+  supports increased UI overhead. It does not isolate the clear's cost or prove
+  the newer runtime's effect. UI time overlaps the stage wall timers.
+- Preferences saved, reloaded and applied in the same session; L mstats,
+  benchmark Stop and capture auto-report save are evidenced. Reboot persistence
+  and restored-layout appearance still need their own observations.
+
+Saved tracks were **not reread**; the reference match uses captured-stream CRCs.
+No PC/saved-file verification was supplied for this job. The initial benchmark's
+unreadable-disc result precedes the successful capture. The current
+next step at that point was installing **8bae3efe7c2f** on the existing card and
+checking its appearance during ordinary use. Current pending named-output checks
+are recorded above. No reader changes are called for by this log.
+
+
 These results cover the uploaded logs, storage fixtures and user reports received on
 2026-09-16 and 2026-09-17. They establish the specific checks below on the user's console;
 they do not complete the full dumping milestone.
