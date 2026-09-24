@@ -18,6 +18,7 @@ struct mock {
     unsigned frame_length, head, tail, fault;
     uint8_t frame[6], queue[520];
     uint32_t now, last_read_address;
+    const uint8_t *payload;
 };
 
 static unsigned checks;
@@ -39,10 +40,12 @@ static uint8_t reference_crc7(const uint8_t *bytes, unsigned count) {
 static uint16_t reference_crc16(const uint8_t *bytes, unsigned count) {
     uint16_t crc = 0;
     for(unsigned i = 0; i < count; ++i) {
-        /* Byte-fold form, independent of the resident bit-by-bit loop. */
-        uint16_t x = (uint16_t)((crc >> 8) ^ bytes[i]);
-        x ^= x >> 4;
-        crc = (uint16_t)((crc << 8) ^ (x << 12) ^ (x << 5) ^ x);
+        /* Serial polynomial division, independent of the retail byte fold. */
+        for(int bit = 7; bit >= 0; --bit) {
+            unsigned feedback = ((crc >> 15) ^ (bytes[i] >> bit)) & 1u;
+            crc = (uint16_t)(crc << 1);
+            if(feedback) crc ^= 0x1021u;
+        }
     }
     return crc;
 }
@@ -161,7 +164,7 @@ static void decode(struct mock *m) {
             }
             uint8_t data[512];
             for(unsigned i = 0; i < sizeof(data); ++i)
-                data[i] = pattern(argument, i);
+                data[i] = m->payload ? m->payload[i] : pattern(argument, i);
             block(m, data, sizeof(data), m->fault == FAULT_READ_CRC);
             break;
         }
@@ -271,12 +274,37 @@ static void read_failure(unsigned fault, enum kui_loader_sd_result expected) {
     kui_loader_sd_shutdown(&card);
 }
 
+static void data_crc_vectors(void) {
+    struct mock m = {.version2 = true, .high_capacity = true};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+    uint8_t expected[512], actual[512];
+    static const uint16_t crc[] = {0x0000, 0x7fa1, 0x31c3};
+    m.payload = expected;
+    for(unsigned i = 0; i < 3; ++i) {
+        memset(expected, i == 1 ? 0xff : 0, sizeof(expected));
+        /* Leading zero bytes preserve the zero seed, so this final vector
+         * retains the standard CRC-16/XMODEM check value for "123456789". */
+        if(i == 2) memcpy(expected + 503, "123456789", 9);
+        CHECK(reference_crc16(expected, sizeof(expected)) == crc[i]);
+        m.fault = FAULT_NONE;
+        CHECK(kui_loader_sd_read(&card, 10, 1, actual) == KUI_LOADER_SD_OK);
+        CHECK(!memcmp(actual, expected, sizeof(actual)) && !m.selected);
+        m.fault = FAULT_READ_CRC;
+        CHECK(kui_loader_sd_read(&card, 10, 1, actual) == KUI_LOADER_SD_CRC);
+        CHECK(!m.selected);
+    }
+    kui_loader_sd_shutdown(&card);
+}
+
 int main(void) {
     static const uint8_t text[] = "123456789";
     CHECK(reference_crc16(text, 9) == 0x31c3);
     normal(true, true);
     normal(true, false);
     normal(false, false);
+    data_crc_vectors();
     init_failure(FAULT_NO_RESPONSE, KUI_LOADER_SD_TIMEOUT, true);
     init_failure(FAULT_RESET, KUI_LOADER_SD_COMMAND, true);
     init_failure(FAULT_ECHO, KUI_LOADER_SD_UNSUPPORTED, true);

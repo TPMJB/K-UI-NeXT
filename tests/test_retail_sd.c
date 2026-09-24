@@ -136,12 +136,27 @@ static void init_and_bit_edges(void) {
         assert(fake.writes[start + bit * 2 + 1].value == (0xb2u | tx));
     }
 
-    fake.samples = fake.delays = 0;
-    fake.incoming = 0x81;
-    fake.sampling = true;
-    assert(card.bus.transfer(card.bus.ctx, 0xff, false) == 0x81);
-    fake.sampling = false;
-    assert(fake.delays == 0 && fake.samples == 8);
+    /* Receive-only fast path: every possible incoming byte must retain the
+     * same sixteen pin writes, eight high-edge samples and work accounting.
+     * Also check the generic command path without slow initialization delays. */
+    for(unsigned value = 0; value < 257; ++value) {
+        fake.count = fake.samples = fake.delays = 0;
+        fake.incoming = (uint8_t)value;
+        uint8_t outgoing = value == 256 ? 0xa5 : 0xff;
+        before = card.bus.ticks(card.bus.ctx);
+        fake.sampling = true;
+        assert(card.bus.transfer(card.bus.ctx, outgoing, false) == fake.incoming);
+        fake.sampling = false;
+        assert(fake.delays == 0 && fake.samples == 8 && fake.count == 16);
+        assert(card.bus.ticks(card.bus.ctx) - before == 125);
+        for(unsigned bit = 0; bit < 8; ++bit) {
+            uint16_t tx = (outgoing >> (7u - bit)) & 1u;
+            assert(fake.writes[bit * 2].address == PTR);
+            assert(fake.writes[bit * 2].value == (0xa2u | tx));
+            assert(fake.writes[bit * 2 + 1].address == PTR);
+            assert(fake.writes[bit * 2 + 1].value == (0xb2u | tx));
+        }
+    }
     kui_retail_sd_release();
     restored();
     assert(card.ready && card.blocks == UINT64_C(0x1000000));

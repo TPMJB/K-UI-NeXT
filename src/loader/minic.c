@@ -12,6 +12,19 @@ void *memset(void *out, int value, size_t bytes) {
 void *memcpy(void *out, const void *in, size_t bytes) {
     uint8_t *p = out;
     const uint8_t *q = in;
+#ifdef KUI_RETAIL_FAST_IO
+    /* SH-4 requires aligned word accesses. Only the retail build uses this
+     * path; keep byte tails and every unaligned combination exact. may_alias
+     * allows copying arbitrary object representations under GCC's alias rules.
+     * Integer stores also preserve the caller's FPU and store-queue state. */
+    typedef uint32_t copy_word __attribute__((__may_alias__));
+    if(!(((uintptr_t)p | (uintptr_t)q) & 3u)) {
+        while(bytes >= 4) {
+            *(copy_word *)p = *(const copy_word *)q;
+            p += 4; q += 4; bytes -= 4;
+        }
+    }
+#endif
     while(bytes--) *p++ = *q++;
     return out;
 }

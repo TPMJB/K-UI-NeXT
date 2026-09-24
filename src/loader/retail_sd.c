@@ -133,6 +133,19 @@ static uint8_t bus_transfer(void *context, uint8_t data, bool slow) {
         return 0xff;
     uint16_t pins = port.pins & (uint16_t)~(PIN_CTSDT | PIN_SPB2DT);
     uint8_t received = 0;
+    /* Payload/token/CRC reads transmit all ones. Keep MOSI high and compute
+     * both edge values once, without transmit shifts or slow-mode branches
+     * inside the receive loop. Edge order, number of MMIO accesses and byte
+     * work accounting match the generic path. Initialization stays slow. */
+    if(!slow && data == 0xff) {
+        uint16_t low = pins | PIN_SPB2DT, high = low | PIN_CTSDT;
+        for(unsigned bit_index = 0; bit_index < 8; ++bit_index) {
+            write16(SC_PTR, low);
+            write16(SC_PTR, high);
+            received = (uint8_t)((received << 1) | (read16(SC_PTR) & PIN_SPB2DT));
+        }
+        return received;
+    }
     for(unsigned bit_index = 0; bit_index < 8; ++bit_index) {
         uint16_t bit = (data >> (7u - bit_index)) & 1u;
         /* Tx is established before the CTS rising clock edge, matching the

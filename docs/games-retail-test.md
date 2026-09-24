@@ -9,7 +9,38 @@ DOA2 gameplay. Loading seemed slower than DreamShell, gameplay lag was tolerable
 and FMVs were estimated around 0.5 fps. Save/load through the physical VMU and
 repeated loading transitions remain unconfirmed. See
 [evidence and performance findings](evidence/games-doa2-gameplay-2026-09-24.md).
-Keep this build as the working baseline; no new build accompanies that record.
+Keep this build as the working baseline.
+
+## First SD performance comparison
+
+The next build changes only CPU work in the existing synchronous read path:
+
+- Dedicated receive-only SPI loop for normal-speed `0xff` transfers, with
+  precomputed pin values and no transmit shifts or slow-delay branch per bit.
+- Algebraic CRC16 byte update instead of eight polynomial iterations; card
+  data CRC verification remains enabled, including rejection of corrupt data.
+- Aligned 32-bit integer copies with byte fallback/tails, without borrowing
+  game FPU or store-queue state.
+
+There is no compression, asynchronous DMA, prefetch, change to the eight-sector
+execution chunk, or removal of the existing diagnostic pauses. The shared
+CRC/copy changes are enabled only for retail stage/resident builds, leaving
+the accepted standalone probes on their original implementation.
+
+Focused validation is `ASAN_OPTIONS=detect_leaks=0 make test-retail-fast-io`:
+SD pin edges/work accounting, protocol/CRC fixtures (including corrupt data),
+and copy alignment/tails/canaries. These passed locally with address/undefined
+behavior sanitizers. Native size, stack and instruction checks still run as
+part of the console build. Speed and tighter SPI timing require hardware
+confirmation; this is a candidate, not a measured improvement.
+
+Use the same card, dump, boot CD and game settings as `7fd48f11be02`. One normal
+launch is enough for this comparison: note the time from confirming launch to
+the title/menu, watch the same opening FMV, then time the same fight load and
+check controls/audio during play. A short phone video can capture these in one
+run. Report an SD/CRC diagnostic if one appears; retain the baseline SD update
+for restoring the previous working version. No rerip or accepted-probe rerun
+is needed.
 
 The first retail build `d19f1e0ebaf3` reached the independent loading screen
 after an approximately four-minute wait, flashed more text, then returned to

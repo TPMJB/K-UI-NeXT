@@ -59,10 +59,19 @@ static uint8_t command_crc(const uint8_t *packet) {
 }
 
 static uint16_t data_crc(uint16_t crc, uint8_t data) {
+#ifdef KUI_RETAIL_FAST_IO
+    /* Fold the eight polynomial steps for x^16+x^12+x^5+1 into one byte
+     * update. This algebraic identity needs neither a lookup table nor a
+     * per-bit branch; the final cast is reduction modulo 2^16. */
+    uint32_t x = (crc >> 8) ^ data;
+    x ^= x >> 4;
+    return (uint16_t)((crc << 8) ^ (x << 12) ^ (x << 5) ^ x);
+#else
     crc ^= (uint16_t)data << 8;
     for(unsigned bit = 0; bit < 8; ++bit)
         crc = (uint16_t)((crc << 1) ^ ((crc & 0x8000u) ? 0x1021u : 0));
     return crc;
+#endif
 }
 
 static enum kui_loader_sd_result command(struct kui_loader_sd *card,

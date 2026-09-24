@@ -97,6 +97,25 @@ build/test-retail-sd: tests/test_retail_sd.c src/loader/retail_sd.c src/loader/r
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_RETAIL_SD_TEST -Isrc/loader src/loader/retail_sd.c tests/test_retail_sd.c -o $@
 
+.PHONY: test-retail-fast-io
+test-retail-fast-io: build/test-retail-sd build/test-loader-sd-fast build/test-retail-minic
+	./build/test-retail-sd
+	./build/test-loader-sd-fast
+	./build/test-retail-minic
+
+build/test-loader-sd-fast: tests/test_loader_sd.c src/loader/sd_reader.c src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_RETAIL_FAST_IO=1 -Isrc/loader src/loader/sd_reader.c tests/test_loader_sd.c -o $@
+
+build/retail-minic-test.o: src/loader/minic.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-builtin -DKUI_RETAIL_FAST_IO=1 \
+		-Dmemcpy=kui_test_memcpy -Dmemset=kui_test_memset -Dmemmove=kui_test_memmove \
+		-Dmemcmp=kui_test_memcmp -Dstrlen=kui_test_strlen -c $< -o $@
+
+build/test-retail-minic: tests/test_retail_minic.c build/retail-minic-test.o
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $^ -o $@
+
 build/test-retail-image: tests/test_retail_image.c src/core/retail_image.c include/kui/retail_image.h include/kui/game_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_image.c tests/test_retail_image.c -o $@
