@@ -82,6 +82,7 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     case KUI_RETAIL_GD_GETTOC: case KUI_GD_GETTOC2: nparams = 2; break;
     case KUI_RETAIL_GD_REQ_MODE: case KUI_RETAIL_GD_SEEK: nparams = 1; break;
     case KUI_RETAIL_GD_GET_VERS: nparams = 1; break;
+    case KUI_RETAIL_GD_GETSCD: nparams = 3; break;
     case KUI_GD_COMMAND_INIT: case KUI_GD_NOP: case KUI_GD_STOP: break;
     default: return 0;
     }
@@ -105,6 +106,13 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
             if(s->ops.check(s->ops.context, lba + done, n, s->sector_bytes)) return 0;
             done += n;
         }
+    } else if(cmd == KUI_RETAIL_GD_GETSCD) {
+        s->diag.last_lba = p[0]; /* Format, not a read LBA. */
+        s->diag.last_count = p[1]; s->diag.last_destination = p[2];
+        if(p[0] > 2 || !p[1]) return 0;
+        bytes = p[0] == 0 ? 100 : p[0] == 1 ? 14 : 24;
+        if(bytes > p[1]) bytes = p[1];
+        destination = p[2];
     } else if(cmd == KUI_RETAIL_GD_GETTOC || cmd == KUI_GD_GETTOC2) {
         uint32_t first, last;
         if(area_bounds(s, p[0], &first, &last)) return 0;
@@ -123,7 +131,9 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         if(i == s->track_count) return 0;
     }
     if(bytes && cmd != KUI_GD_PIOREAD && cmd != KUI_GD_DMAREAD &&
-       !guest(s, destination, bytes, cmd == KUI_RETAIL_GD_GET_VERS ? 1 : 4, 1)) return 0;
+       !guest(s, destination, bytes,
+              cmd == KUI_RETAIL_GD_GET_VERS || cmd == KUI_RETAIL_GD_GETSCD ? 1 : 4,
+              cmd == KUI_RETAIL_GD_GETSCD ? KUI_RETAIL_MAP_VALIDATE : 1)) return 0;
     s->token = s->token >= 0x7fffffffu ? 1 : s->token + 1;
     s->command = cmd; s->lba = lba; s->count = p[1];
     s->destination = destination; s->area = p[0]; s->request_bytes = bytes;
@@ -146,6 +156,54 @@ static void toc(struct kui_retail_gd *s, uint8_t *out) {
     put32(out + 396, f->control << 28 | 0x01000000u | f->number << 16);
     put32(out + 400, l->control << 28 | 0x01000000u | l->number << 16);
     put32(out + 404, l->control << 28 | 0x01000000u | (l->end_lba + 150u));
+}
+static uint8_t bcd(uint32_t n) { return (uint8_t)((n / 10u) * 16u + n % 10u); }
+static void msf(uint8_t *out, uint32_t frames) {
+    out[2] = bcd(frames % 75u); frames /= 75u;
+    out[1] = bcd(frames % 60u); out[0] = bcd(frames / 60u);
+}
+static void subcode(const struct kui_retail_gd *s, uint8_t *out) {
+    /* GETSCD wire layout cross-checked against KOS syscalls.h and Flycast
+     * gd_get_subcode/GDCC_HLE_GETSCD; independent implementation. GDI stores
+     * no subchannels: synthesize only ordinary index-1 Q and unavailable MCN.
+     * Raw Q uses BCD MSF + complemented CCITT CRC; formatted Q uses binary
+     * track/index and 24-bit sector counts. Never read SD or claim CDDA play. */
+    uint8_t data[100] = {0};
+    data[1] = 0x15; /* Audio status unavailable. */
+    data[3] = s->area == 0 ? 100 : s->area == 1 ? 14 : 24;
+    if(s->area == 2) {
+        data[4] = 2;
+        memset(data + 9, '0', 13); /* Catalog validity flag remains clear. */
+    } else {
+        uint32_t i = 0;
+        while(i + 1 < s->track_count && s->tracks[i + 1].start_lba <= s->position_lba) ++i;
+        const struct kui_gd_track *t = s->tracks + i;
+        uint32_t elapsed = s->position_lba - t->start_lba;
+        uint32_t fad = s->position_lba + 150u;
+        data[4] = (uint8_t)(t->control << 4 | 1u);
+        data[5] = (uint8_t)t->number; data[6] = 1;
+        if(s->area == 1) {
+            for(unsigned n = 0; n < 3; ++n) {
+                data[9 - n] = (uint8_t)(elapsed >> (n * 8));
+                data[13 - n] = (uint8_t)(fad >> (n * 8));
+            }
+        } else {
+            data[5] = bcd(t->number);
+            msf(data + 7, elapsed); msf(data + 11, fad);
+            uint16_t crc = 0;
+            for(unsigned n = 4; n < 14; ++n) {
+                crc ^= (uint16_t)data[n] << 8;
+                for(unsigned bit = 0; bit < 8; ++bit)
+                    crc = (uint16_t)((crc << 1) ^ (crc & 0x8000u ? 0x1021u : 0));
+            }
+            crc = (uint16_t)~crc;
+            data[14] = (uint8_t)(crc >> 8); data[15] = (uint8_t)crc;
+            /* Expand backwards so the packed Q bytes can share this buffer. */
+            for(unsigned bit = 96; bit-- > 0;)
+                data[4 + bit] = (uint8_t)(((data[4 + bit / 8] >> (7 - bit % 8)) & 1u) << 6);
+        }
+    }
+    memcpy(out, data, s->request_bytes);
 }
 static int32_t execute(struct kui_retail_gd *s) {
     ++s->diag.exec_calls;
@@ -184,10 +242,12 @@ static int32_t execute(struct kui_retail_gd *s) {
         }
     } else if(s->request_bytes) {
         uint8_t *out = guest(s, s->destination, s->request_bytes,
-                            s->command == KUI_RETAIL_GD_GET_VERS ? 1 : 4, 1);
+                            s->command == KUI_RETAIL_GD_GET_VERS ||
+                            s->command == KUI_RETAIL_GD_GETSCD ? 1 : 4, 1);
         if(!out) s->error = KUI_GD_ERROR_MEMORY;
         else {
-            if(s->command == KUI_RETAIL_GD_REQ_MODE)
+            if(s->command == KUI_RETAIL_GD_GETSCD) subcode(s, out);
+            else if(s->command == KUI_RETAIL_GD_REQ_MODE)
                 for(unsigned i = 0; i < 4; ++i) put32(out + i * 4u, s->mode[i]);
             else if(s->command == KUI_RETAIL_GD_GET_VERS)
                 memcpy(out, "GDC Version 1.10 1999-03-31\002", 28);

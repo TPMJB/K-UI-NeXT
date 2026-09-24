@@ -23,7 +23,7 @@ extern void kui_retail_gd_10f0_hook(void);
  * entries. Assembly publishes this only after acquiring the resident lock. */
 volatile uint32_t kui_retail_hook_source;
 static struct {
-    uint32_t calls[4], misc_calls, r4, r6, r7;
+    uint32_t r7;
     int32_t result;
 } routing;
 static enum kui_loader_sd_result card_result;
@@ -112,12 +112,9 @@ static void install_hook(void) {
     __asm__ __volatile__("" : : : "memory");
 }
 static void report_routing(void) {
-    retail_display_hex("BC CALLS",routing.calls[0]);
-    retail_display_hex("C0 CALLS",routing.calls[1]);
-    retail_display_hex("DIRECT 1000 CALLS",routing.calls[2]);
-    retail_display_hex("DIRECT 10F0 CALLS",routing.calls[3]);
+    /* Keep the useful last fault; retire startup route counters to leave
+     * room for GETSCD without moving resident/stack bounds or the SD reader. */
     retail_display_hex("HOOK GUARD FAULT",kui_retail_hook_fault);
-    retail_display_hex("LAST ROUTE R6",routing.r6);
     retail_display_hex("LAST ROUTE R7",routing.r7);
     retail_display_hex("LAST ROUTE RESULT",(uint32_t)routing.result);
 }
@@ -128,8 +125,8 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_line(reason);
     retail_display_hex("GD function", function);
     retail_display_hex("Command", service.diag.last_command);
-    retail_display_hex("LBA", service.diag.last_lba);
-    retail_display_hex("Sectors", service.diag.last_count);
+    retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Format" : "LBA", service.diag.last_lba);
+    retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Bytes" : "Sectors", service.diag.last_count);
     retail_display_hex("Destination", service.diag.last_destination);
     retail_display_hex("SD result", (uint32_t)card_result);
     retail_display_hex("SD blocks read", image.blocks_read);
@@ -206,10 +203,8 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * Font/flash/system BIOS vectors are independent and unchanged. */
     uint32_t source=kui_retail_hook_source;
     if(source>3) return -1;
-    ++routing.calls[source];
-    routing.r4=r4; routing.r6=r6; routing.r7=r7; routing.result=0;
+    routing.r7=r7; routing.result=0;
     if(source!=1 && r6==UINT32_MAX) {
-        ++routing.misc_calls;
         return 0;
     }
     uint32_t pending = service.pending;

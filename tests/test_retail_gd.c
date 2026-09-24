@@ -237,6 +237,57 @@ static void version_query(void) {
     CHECK(get(STATUS + 4) == KUI_GD_ERROR_MEMORY);
     CHECK(ctx.reads == 0 && ctx.checks == 0);
 }
+static void subcode_query(void) {
+    /* Expected raw Q generated independently from the 45035-LBA position:
+     * track 3, relative 00:00:35, absolute 10:02:35; CRC-CCITT complemented.
+     * Formatted Q uses binary FAD 45185 = 0x00b081, not BCD MSF. */
+    static const uint8_t raw[100] = { 0x0,0x15,0x0,0x64,0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x40,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40,0x40,0x0,0x40,0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40,0x0,0x0,0x0,0x40,0x40,0x0,0x40,0x0,0x40,0x40,0x40,0x40,0x0,0x0,0x40,0x0,0x0,0x0,0x40,0x40,0x40,0x40,0x0,0x0,0x40 };
+    static const uint8_t formatted[14] = {0,0x15,0,14,0x41,3,1,0,0,35,0,0,0xb0,0x81};
+    reset(); read_params(45035, 1, OUTPUT);
+    CHECK(call(KUI_GD_REQUEST,KUI_GD_PIOREAD,PARAM)>0);
+    CHECK(call(KUI_GD_EXEC,0,0)==0);
+    CHECK(call(KUI_GD_CHECK,service.token,STATUS)==KUI_GD_COMPLETED);
+    uint32_t reads=ctx.reads, checks=ctx.checks;
+    for(unsigned format=0;format<3;format++) {
+        uint32_t length=format==0?100:format==1?14:24;
+        for(unsigned short_read=0;short_read<2;short_read++) {
+            uint32_t bytes=short_read?5:length;
+            uint32_t dest=short_read?END-bytes:OUTPUT+1;
+            memset(ram+dest-BEGIN,0xa5,bytes+(short_read?0:1));
+            put(PARAM,format);put(PARAM+4,bytes);put(PARAM+8,dest&0x1fffffffu);
+            int32_t token=call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM);
+            CHECK(token>0 && ram[dest-BEGIN]==0xa5);
+            CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_PROCESSING);
+            CHECK(call(KUI_GD_EXEC,0,0)==0);
+            CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_COMPLETED);
+            CHECK(get(STATUS+8)==bytes && get(STATUS+12)==0);
+            if(format<2) CHECK(!memcmp(ram+dest-BEGIN,format?formatted:raw,bytes));
+            else {
+                CHECK(ram[dest-BEGIN+3]==24 && ram[dest-BEGIN+4]==2);
+                if(!short_read) CHECK(ram[dest-BEGIN+8]==0 && !memcmp(ram+dest-BEGIN+9,"0000000000000",13));
+            }
+            CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_NOT_FOUND);
+            if(!short_read) CHECK(ram[dest-BEGIN+bytes]==0xa5);
+        }
+    }
+    put(PARAM,1);put(PARAM+4,14);put(PARAM+8,END-13);
+    CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM)==0);
+    put(PARAM+8,OUTPUT);put(PARAM,3);
+    CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM)==0);
+    CHECK(service.diag.last_lba==3 && service.diag.last_count==14 && service.diag.last_destination==OUTPUT);
+    put(PARAM,1);put(PARAM+4,0);
+    CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM)==0);
+    put(PARAM+4,UINT32_MAX);memset(ram+OUTPUT-BEGIN,0xa5,32);
+    int32_t token=call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM);
+    CHECK(token>0);CHECK(call(KUI_GD_EXEC,0,0)==0);
+    CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_COMPLETED && get(STATUS+8)==14);
+    CHECK(ram[OUTPUT-BEGIN+14]==0xa5);
+    token=call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM);CHECK(token>0);
+    ctx.deny=OUTPUT;CHECK(call(KUI_GD_EXEC,0,0)==0);
+    CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_FAILED);
+    CHECK(get(STATUS+4)==KUI_GD_ERROR_MEMORY);ctx.deny=0;
+    CHECK(ctx.reads==reads && ctx.checks==checks);
+}
 static void bounds_and_modes(void) {
     reset(); mode(2048, 0); mode(2048, 1024); mode(2352, 0);
     read_params(16, 2, OUTPUT);
@@ -277,7 +328,7 @@ static void bounds_and_modes(void) {
     CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
 }
 int main(void) {
-    large_reads(); cancel_failures(); metadata(); version_query(); bounds_and_modes();
+    large_reads(); cancel_failures(); metadata(); version_query(); subcode_query(); bounds_and_modes();
     printf("retail GD service: %u checks passed\n", assertions);
     return 0;
 }

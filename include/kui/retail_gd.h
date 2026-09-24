@@ -17,6 +17,7 @@ enum kui_retail_map_access {
 enum kui_retail_gd_command {
     KUI_RETAIL_GD_GETTOC = 18, KUI_RETAIL_GD_SEEK = 27,
     KUI_RETAIL_GD_REQ_MODE = 30, KUI_RETAIL_GD_SET_MODE = 31,
+    KUI_RETAIL_GD_GETSCD = 34,
     KUI_RETAIL_GD_REQ_STAT = 36, KUI_RETAIL_GD_GET_VERS = 40
 };
 
@@ -60,6 +61,10 @@ int kui_retail_gd_init(struct kui_retail_gd *, const struct kui_gd_track *,
  * GET_VERS writes the 28-byte driver compatibility response at params[0],
  * with a trailing state byte (not a C-string terminator). It performs no I/O
  * and reports zero disc-transfer bytes, following the BIOS command contract.
+ * GETSCD params are {format, capacity, destination}. Formats 0/1 synthesize
+ * standard index-1 Q position from the GDI track map and last completed read;
+ * format 2 reports an unavailable catalog. No captured subchannels or audio
+ * playback are implied. Unsupported formats and zero capacities are rejected.
  */
 int32_t kui_retail_gd_dispatch(struct kui_retail_gd *, uint32_t r4,
     uint32_t r5, uint32_t r6, uint32_t r7);
