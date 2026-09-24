@@ -97,9 +97,11 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         lba = p[0] - 150;
         if(p[1] > 719850u - lba || p[1] > UINT32_MAX / s->sector_bytes) return 0;
         bytes = p[1] * s->sector_bytes; destination = p[2];
-        if(!guest(s, destination, bytes, cmd == KUI_GD_DMAREAD ? 32 : 2, 1)) return 0;
+        if(!guest(s, destination, bytes, cmd == KUI_GD_DMAREAD ? 32 : 2,
+                  KUI_RETAIL_MAP_VALIDATE)) return 0;
         for(uint32_t done = 0; done < p[1];) {
-            uint32_t n = step_count(p[1] - done);
+            uint32_t n = p[1] - done;
+            if(n > KUI_RETAIL_GD_CHECK_SECTORS) n = KUI_RETAIL_GD_CHECK_SECTORS;
             if(s->ops.check(s->ops.context, lba + done, n, s->sector_bytes)) return 0;
             done += n;
         }

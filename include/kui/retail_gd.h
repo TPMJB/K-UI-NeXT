@@ -7,7 +7,13 @@
 /* This opt-in service is independent of the accepted own-client probe. The
  * native entry must serialize dispatch BEFORE switching to its private stack,
  * preserve the caller's interrupt state, and make P1/P2 data coherent. */
-#define KUI_RETAIL_GD_STEP_SECTORS 8u
+#define KUI_RETAIL_GD_STEP_SECTORS 2u
+#define KUI_RETAIL_GD_CHECK_SECTORS 8u
+enum kui_retail_map_access {
+    /* ops.map writing=0/1 retains read/write access. Validation only checks
+     * bounds and ownership; its non-null result must never be dereferenced. */
+    KUI_RETAIL_MAP_VALIDATE = 2
+};
 enum kui_retail_gd_command {
     KUI_RETAIL_GD_GETTOC = 18, KUI_RETAIL_GD_SEEK = 27,
     KUI_RETAIL_GD_REQ_MODE = 30, KUI_RETAIL_GD_SET_MODE = 31,
@@ -33,8 +39,11 @@ struct kui_retail_gd {
 };
 
 /* Tracks are referenced, not copied, and must stay resident and immutable.
- * ops.map receives checked P1 addresses. ops.check is called in <=8-sector
- * chunks with no I/O; ops.read in <=8-sector chunks only from EXEC.
+ * ops.map receives checked P1 addresses. Full read destinations are mapped
+ * with KUI_RETAIL_MAP_VALIDATE during REQUEST, without cache maintenance or
+ * memory access; EXEC maps each output chunk for writing before use.
+ * ops.check is called in <=8-sector chunks with no I/O; ops.read in <=2-sector
+ * chunks only from EXEC.
  * All destination bytes must fit [guest_begin,guest_end). */
 int kui_retail_gd_init(struct kui_retail_gd *, const struct kui_gd_track *,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,

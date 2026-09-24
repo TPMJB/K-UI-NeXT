@@ -42,13 +42,15 @@ static void purge(uint32_t address, uint32_t bytes) {
 }
 static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
                           int writing) {
-    (void)unused; (void)writing;
+    (void)unused;
     if(address < KUI_RETAIL_IP_ADDRESS || address >= KUI_RETAIL_RAM_END ||
        !bytes || bytes > KUI_RETAIL_RAM_END - address) return NULL;
     uint32_t end = address + bytes;
     if(address < KUI_RETAIL_HOOK_STACK && end > KUI_RETAIL_RESIDENT_ADDRESS)
         return NULL;
-    purge(address, bytes);
+    /* Submission checks the entire destination without touching its cache.
+     * EXEC purges only the chunk it is about to copy through P2. */
+    if(writing != KUI_RETAIL_MAP_VALIDATE) purge(address, bytes);
     return (uint8_t *)(uintptr_t)((address & 0x1fffffffu) | 0xa0000000u);
 }
 static int read_block(void *unused, uint32_t lba, uint8_t output[512]) {
@@ -155,8 +157,11 @@ int kui_retail_resident_init(const uint8_t wire[KUI_RETAIL_MAP_BYTES],
     card_result = kui_retail_sd_init(&card);
     if(card_result != KUI_LOADER_SD_OK || card.blocks < manifest.card_sectors)
         return KUI_RETAIL_RESIDENT_SD;
-    if(kui_retail_image_init(&image, &manifest, read_block, NULL) != KUI_GAME_OK)
-        return KUI_RETAIL_RESIDENT_MAP;
+    /* _start has cleared all resident BSS, including image/cache/counters.
+     * decode above already validated this immutable manifest. Bind it here
+     * without retaining the duplicate image-init validation in low RAM. */
+    image.manifest = &manifest;
+    image.read_block = read_block;
     for(uint32_t i = 0; i < manifest.track_count; ++i) {
         const struct kui_retail_track *t = &manifest.tracks[i];
         tracks[i] = (struct kui_gd_track){t->number, t->control, t->start_lba, t->end_lba};

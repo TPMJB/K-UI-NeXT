@@ -84,12 +84,15 @@ test and the selected-image GD-vector read test are accepted. G4 status:
 3. **First gameplay confirmed:** build `7fd48f11be02` reaches DOA2 gameplay
    through the independent reader. Bootstrap2 entry, stack placement and the
    required version-query command now pass that title's startup path.
-4. **Still open:** loading/streaming performance, repeated loading transitions
-   and physical VMU save/load. The owner reports tolerable gameplay lag but
-   approximately 0.5 fps FMVs and slower loading than DreamShell. These estimates
-   do not establish measured throughput. G4 remains partial.
+4. **First SD optimization confirmed:** `3ebbf8f9846b` starts the game in about
+   15 seconds, then takes about 10 seconds until Start works, versus roughly
+   three minutes previously on that initial screen. Gameplay has minimal lag.
+   Stage-start loads, FMVs and speech still suffer. These are owner estimates;
+   measured throughput and physical VMU save/load remain open. G4 is partial.
+   Next is a two-sector EXEC latency comparison with persistent block caching.
 
-See [the hardware baseline and performance comparison](evidence/games-doa2-gameplay-2026-09-24.md).
+See [the first gameplay baseline](evidence/games-doa2-gameplay-2026-09-24.md) and
+[the improved baseline and latency comparison](evidence/games-doa2-fast-io-2026-09-24.md).
 
 ### Current implementation and next performance work
 

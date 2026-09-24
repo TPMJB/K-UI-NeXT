@@ -60,6 +60,7 @@ jobs:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
               exact = {'Makefile', 'Makefile.dc', '.github/workflows/diagnostic.yml',
                        'tests/test_loader_sd.c', 'tests/test_retail_sd.c', 'tests/test_retail_minic.c',
+                       'src/core/retail_image.c', 'include/kui/retail_image.h', 'tests/test_retail_image.c',
                        'tools/check_retail_instructions.py', 'tests/test_retail_instructions.py',
                        'include/kui/retail_loader_layout.h', 'src/apps/games_retail.c',
                        'tools/retail_package.py', 'tests/test_retail_package.py',

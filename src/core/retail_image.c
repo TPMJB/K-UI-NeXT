@@ -264,7 +264,6 @@ enum kui_game_result kui_retail_image_read(struct kui_retail_image *image,
     if(r != KUI_GAME_OK) return r;
     uint32_t sector_bytes = format == KUI_GAME_SECTOR_RAW ? KUI_GAME_RAW_BYTES : KUI_GAME_DATA_BYTES;
     if(capacity < (size_t)sector_bytes * count) return KUI_GAME_RANGE;
-    image->cache_valid = 0;
     uint8_t *destination = out;
     uint32_t track_index = 0;
     for(uint32_t i = 0; i < count; ++i) {

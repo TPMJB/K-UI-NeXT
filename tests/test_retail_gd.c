@@ -13,6 +13,7 @@ static uint8_t ram[END - BEGIN];
 static struct kui_retail_gd service;
 static struct {
     uint32_t reads, sectors, max_count, deny, fail_at, checks, reenter;
+    uint32_t maps[3], validate_address, validate_bytes, max_checked, last_count;
 } ctx;
 static const struct kui_gd_track tracks[] = {
     {1,4,0,8}, {2,0,16,24}, {3,4,45000,60000}
@@ -28,13 +29,23 @@ static uint32_t get(uint32_t a) {
     return n;
 }
 static uint8_t *map(void *unused, uint32_t a, uint32_t bytes, int writing) {
-    (void)unused; (void)writing;
+    (void)unused;
     CHECK(a >= BEGIN && a < END && bytes <= END - a);
-    return a == ctx.deny ? NULL : ram + a - BEGIN;
+    CHECK(writing >= 0 && writing <= KUI_RETAIL_MAP_VALIDATE);
+    ++ctx.maps[writing];
+    if(a == ctx.deny) return NULL;
+    if(writing == KUI_RETAIL_MAP_VALIDATE) {
+        ctx.validate_address = a; ctx.validate_bytes = bytes;
+        /* Non-null validation success deliberately supplies no accessible
+         * output memory: the service must obtain a write mapping at EXEC. */
+        return ram + sizeof(ram);
+    }
+    return ram + a - BEGIN;
 }
 static int check(void *unused, uint32_t lba, uint32_t count, uint32_t bytes) {
     (void)unused; ++ctx.checks;
-    CHECK(count > 0 && count <= KUI_RETAIL_GD_STEP_SECTORS);
+    if(count > ctx.max_checked) ctx.max_checked = count;
+    CHECK(count > 0 && count <= KUI_RETAIL_GD_CHECK_SECTORS);
     for(uint32_t n = 0; n < count; ++n) {
         unsigned i;
         for(i = 0; i < 3; ++i)
@@ -48,6 +59,7 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
                         uint32_t bytes, void *output) {
     (void)unused; ++ctx.reads;
     if(count > ctx.max_count) ctx.max_count = count;
+    ctx.last_count = count;
     CHECK(count > 0 && count <= KUI_RETAIL_GD_STEP_SECTORS);
     if(ctx.reenter) {
         CHECK(kui_retail_gd_dispatch(&service, KUI_GD_NOP, 0, 0, KUI_GD_REQUEST) == 0);
@@ -83,25 +95,34 @@ static void large_reads(void) {
     const uint32_t aliases[] = {0,0x80000000u,0xa0000000u};
     for(unsigned a = 0; a < 3; ++a) {
         read_params(45000, 129, (OUTPUT & 0x1fffffffu) | aliases[a]);
+        uint32_t read_maps = ctx.maps[0], write_maps = ctx.maps[1];
+        uint32_t validations = ctx.maps[KUI_RETAIL_MAP_VALIDATE], checks = ctx.checks;
         int32_t token = call(KUI_GD_REQUEST, a ? KUI_GD_DMAREAD : KUI_GD_PIOREAD,
                             (PARAM & 0x1fffffffu) | aliases[a]);
         CHECK(token > 0);
+        CHECK(ctx.maps[0] == read_maps + 1 && ctx.maps[1] == write_maps);
+        CHECK(ctx.maps[KUI_RETAIL_MAP_VALIDATE] == validations + 1);
+        CHECK(ctx.validate_address == OUTPUT && ctx.validate_bytes == 129 * 2048);
+        CHECK(ctx.checks == checks + 17 && ctx.max_checked == 8);
         uint32_t before = ctx.reads;
         CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
         CHECK(ctx.reads == before && get(STATUS + 8) == 0);
         CHECK(call(KUI_GD_REQUEST, KUI_GD_NOP, 0) == 0);
         for(uint32_t done = 0; done < 129;) {
             CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
-            done += 129 - done < 8 ? 129 - done : 8;
+            uint32_t step = 129 - done < 2 ? 129 - done : 2;
+            CHECK(ctx.last_count == step);
+            done += step;
             CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) ==
                   (done == 129 ? KUI_GD_COMPLETED : KUI_GD_PROCESSING));
             CHECK(get(STATUS + 8) == done * 2048);
             CHECK(get(STATUS + 12) == (done == 129 ? 0u : 4u));
         }
-        CHECK(ctx.reads == before + 17 && ctx.max_count == 8);
+        CHECK(ctx.reads == before + 65 && ctx.max_count == 2 && ctx.last_count == 1);
         CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
         CHECK(get(STATUS + 8) == 0);
-        CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.reads == before + 17);
+        CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.reads == before + 65);
+        CHECK(ram[OUTPUT - BEGIN + 129 * 2048] == 0xa5);
         for(unsigned n = 0; n < 129; ++n)
             for(unsigned i = 0; i < 2048; i += 127)
                 CHECK(ram[OUTPUT - BEGIN + n * 2048 + i] == pattern(45000 + n, i));
@@ -111,25 +132,26 @@ static void large_reads(void) {
     uint32_t count = (END - OUTPUT) / 2048;
     read_params(45000, count, OUTPUT);
     CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) > 0);
-    CHECK(service.request_bytes == count * 2048 && ctx.reads == 51);
+    CHECK(service.request_bytes == count * 2048 && ctx.reads == 195);
     CHECK(call(KUI_GD_ABORT, service.token, 0) == 0);
 }
 static void cancel_failures(void) {
     reset(); read_params(45000, 20, OUTPUT);
     int32_t token = call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM);
     CHECK(token > 0); ctx.reenter = 1;
-    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.sectors == 8);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.sectors == 2);
     CHECK(call(KUI_GD_ABORT, (uint32_t)token, 0) == 0);
     CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
-    CHECK(get(STATUS + 4) == KUI_GD_ERROR_CANCELLED && get(STATUS + 8) == 8 * 2048);
-    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.sectors == 8);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_CANCELLED && get(STATUS + 8) == 2 * 2048);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.sectors == 2);
+    CHECK(ram[OUTPUT - BEGIN + 2 * 2048] == 0xa5);
     CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
     ctx.reenter = 0; ctx.fail_at = 3;
     token = call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM);
     CHECK(token > 0); CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
     CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
-    CHECK(get(STATUS + 4) == KUI_GD_ERROR_IO && get(STATUS + 8) == 8 * 2048);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_IO && get(STATUS + 8) == 2 * 2048);
     ctx.fail_at = 0;
     token = call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM);
     CHECK(token > 0); ctx.deny = OUTPUT;

@@ -39,7 +39,9 @@ enum kui_game_result kui_retail_manifest_decode(
 uint32_t kui_retail_crc32(uint32_t previous, const void *, size_t);
 
 /* Supplies exactly one physical 512-byte SD block, returning zero on success.
- * A resident reader must not depend on filesystem/old-launcher callbacks. */
+ * A resident reader must not depend on filesystem/old-launcher callbacks.
+ * The same card and its file bytes must remain unchanged for the active image;
+ * hot replacement or modification requires a new validated map and init. */
 typedef int (*kui_retail_read_block)(void *, uint32_t, uint8_t[512]);
 struct kui_retail_image {
     const struct kui_retail_manifest *manifest;
@@ -55,8 +57,11 @@ enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *,
 /* Preflight range/type/capacity before any IO or output changes. Count <=64.
  * MODE1 checks a 16-byte sync/mode header and copies only 2048 user bytes;
  * RAW copies 2352 bytes from either data or audio tracks. Later IO/mode errors
- * may leave partial output. Cache is invalidated for every read command.
- * Manifest must remain immutable and valid until the reader is discarded.
+ * may leave partial output. The one-block cache survives read calls so chunks
+ * can share a physical block. Init clears it; a failed physical read invalidates
+ * it before the callback can supply partial or poisoned bytes. Rejected ranges
+ * do not disturb cached data. Manifest and card data must remain immutable
+ * and valid until the reader is discarded.
  * Output must not alias the reader or its manifest. */
 enum kui_game_result kui_retail_image_read(struct kui_retail_image *,
     uint32_t lba, uint32_t count, enum kui_game_sector_format, void *, size_t);

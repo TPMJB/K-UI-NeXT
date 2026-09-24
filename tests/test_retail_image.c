@@ -202,7 +202,7 @@ static void reader_tests(bool fragmented) {
     CHECK(image.blocks_read == calls);
     unsigned before = calls;
     compare(45071, 1, KUI_GAME_SECTOR_RAW);
-    CHECK(calls > before); /* A new command must reach the SD card again. */
+    CHECK(calls > before); /* A last-block cache cannot satisfy a whole sector. */
     before = calls;
     compare(1, 1, KUI_GAME_SECTOR_MODE1);
     CHECK(calls == before + 5); /* Header+payload share the one-block cache. */
@@ -238,6 +238,9 @@ static void reader_tests(bool fragmented) {
     static const uint32_t corrupt[] = {0, 1, 5, 10, 11, 15};
     for(unsigned i = 0; i < sizeof(corrupt) / sizeof(corrupt[0]); ++i) {
         card[physical * 512u + corrupt[i]] ^= 1;
+        /* Mutating the fixture starts a new immutable media session. */
+        CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+        CHECK(!image.cache_valid);
         memset(output, 0x77, sizeof(output));
         CHECK(kui_retail_image_read(&image, 0, 1, KUI_GAME_SECTOR_MODE1, output, sizeof(output)) == KUI_GAME_MODE);
         CHECK(output[0] == 0x77 && output[2047] == 0x77);
@@ -248,6 +251,29 @@ static void reader_tests(bool fragmented) {
     CHECK(image.manifest == NULL && image.read_block == NULL);
     CHECK(kui_retail_image_read(&image, 0, 1, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_INVALID);
     CHECK(kui_retail_image_init(NULL, &manifest, read_block, card) == KUI_GAME_INVALID);
+}
+static void sequential_cache_tests(bool fragmented) {
+    static const uint32_t chunks[] = {1, 2, 8};
+    static const enum kui_game_sector_format formats[] = {
+        KUI_GAME_SECTOR_MODE1, KUI_GAME_SECTOR_RAW
+    };
+    for(unsigned format = 0; format < sizeof(formats) / sizeof(formats[0]); ++format) {
+        for(unsigned chunk = 0; chunk < sizeof(chunks) / sizeof(chunks[0]); ++chunk) {
+            fixture(fragmented);
+            CHECK(!image.cache_valid && !image.blocks_read && !calls);
+            for(uint32_t done = 0; done < 32; done += chunks[chunk])
+                compare(45000 + done, chunks[chunk], formats[format]);
+            /* 32 raw sectors occupy exactly 147 physical blocks. All formats
+             * and chunk sizes must reach each block once, including when the
+             * extents are fragmented. compare checks every returned payload
+             * byte and the destination canary after each separate read call. */
+            CHECK(calls == 147 && image.blocks_read == 147);
+            CHECK(image.cache_valid);
+            /* New initialization discards the prior session's cached block. */
+            CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+            CHECK(!image.cache_valid && !image.blocks_read);
+        }
+    }
 }
 static void maximum_map_tests(void) {
     fixture(false);
@@ -295,6 +321,7 @@ static void maximum_map_tests(void) {
 }
 int main(void) {
     wire_tests(); invalid_map_tests(); reader_tests(false); reader_tests(true);
+    sequential_cache_tests(false); sequential_cache_tests(true);
     maximum_map_tests();
     printf("retail image: %u checks passed (canonical wire, fragmented bounds, one-block reads, IO)\n", checks);
     return 0;

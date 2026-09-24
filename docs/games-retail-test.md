@@ -1,19 +1,36 @@
-# DOA2 launch — first gameplay baseline
+# DOA2 launch — SD latency comparison
 
 The selected-image GD probe has already passed on hardware: build
 `c4cfd4585ec5`, DEAD OR ALIVE 2, all 11 checks, 93 physical SD blocks after
 launcher shutdown. Do not repeat that probe for this test.
 
-**Gameplay confirmed by owner report:** build `7fd48f11be02` reaches actual
-DOA2 gameplay. Loading seemed slower than DreamShell, gameplay lag was tolerable,
-and FMVs were estimated around 0.5 fps. Save/load through the physical VMU and
-repeated loading transitions remain unconfirmed. See
-[evidence and performance findings](evidence/games-doa2-gameplay-2026-09-24.md).
-Keep this build as the working baseline.
+**Current working baseline:** build `3ebbf8f9846b` is substantially better by
+owner report: about 15 seconds to game startup, then about 10 seconds before
+Start works on the initial screen (previously roughly three minutes).
+Gameplay has minimal lag. Stage-start loads, FMVs and speech during loading
+still suffer. These are approximate owner timings, not measured throughput.
+Save/load through the physical VMU and broader compatibility remain open.
+See [the hardware result and next change](evidence/games-doa2-fast-io-2026-09-24.md).
+Keep this package as the working baseline.
 
-## First SD performance comparison
+## Current SD latency comparison
 
-The next build changes only CPU work in the existing synchronous read path:
+The candidate reduces each EXEC call from eight to two game sectors, retaining
+the existing physical-block cache across calls and avoiding the redundant
+whole-destination cache purge at request submission. Per-chunk cache coherence,
+CRC checking and the caller's interrupt-state restoration remain in place.
+No extra buffer, compression, asynchronous DMA or prefetch is introduced.
+
+Use the same card, dump and boot CD. Compare the opening movie and the same
+stage introduction with character speech, then play a fight. Report whether
+speech improves, whether loading gets longer, and whether gameplay stays smooth.
+The smaller chunk is a latency experiment: infrequent game polling could reduce
+throughput. Retain `3ebbf8f9846b` for rollback. One comparison run is sufficient;
+no rerip or accepted-probe repeat is needed.
+
+## Previous SD performance change (now tested on hardware)
+
+Build `3ebbf8f9846b` changed CPU work in the existing synchronous read path:
 
 - Dedicated receive-only SPI loop for normal-speed `0xff` transfers, with
   precomputed pin values and no transmit shifts or slow-delay branch per bit.
@@ -22,8 +39,8 @@ The next build changes only CPU work in the existing synchronous read path:
 - Aligned 32-bit integer copies with byte fallback/tails, without borrowing
   game FPU or store-queue state.
 
-There is no compression, asynchronous DMA, prefetch, change to the eight-sector
-execution chunk, or removal of the existing diagnostic pauses. The shared
+That build retained eight-sector execution chunks and the diagnostic pauses,
+without adding compression, asynchronous DMA or prefetch. The shared
 CRC/copy changes are enabled only for retail stage/resident builds, leaving
 the accepted standalone probes on their original implementation.
 
@@ -31,16 +48,11 @@ Focused validation is `ASAN_OPTIONS=detect_leaks=0 make test-retail-fast-io`:
 SD pin edges/work accounting, protocol/CRC fixtures (including corrupt data),
 and copy alignment/tails/canaries. These passed locally with address/undefined
 behavior sanitizers. Native size, stack and instruction checks still run as
-part of the console build. Speed and tighter SPI timing require hardware
-confirmation; this is a candidate, not a measured improvement.
+part of the console build. The owner subsequently confirmed the improvement
+reported above.
 
-Use the same card, dump, boot CD and game settings as `7fd48f11be02`. One normal
-launch is enough for this comparison: note the time from confirming launch to
-the title/menu, watch the same opening FMV, then time the same fight load and
-check controls/audio during play. A short phone video can capture these in one
-run. Report an SD/CRC diagnostic if one appears; retain the baseline SD update
-for restoring the previous working version. No rerip or accepted-probe rerun
-is needed.
+The preceding first-gameplay baseline was `7fd48f11be02`; its original evidence
+is retained in [the first gameplay record](evidence/games-doa2-gameplay-2026-09-24.md).
 
 The first retail build `d19f1e0ebaf3` reached the independent loading screen
 after an approximately four-minute wait, flashed more text, then returned to
