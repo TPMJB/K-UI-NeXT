@@ -177,6 +177,44 @@ static void metadata(void) {
     CHECK(call(KUI_GD_RESET, 0, 0) == 0);
     CHECK(call(KUI_GD_DRIVE, STATUS, 0) == 0 && get(STATUS) == 1);
 }
+static void version_query(void) {
+    static const uint8_t expected[28] = "GDC Version 1.10 1999-03-31\002";
+    const uint32_t destinations[] = {OUTPUT + 1, (OUTPUT + 1) & 0x1fffffffu,
+                                    (OUTPUT + 1) | 0x20000000u, END - 28};
+    reset();
+    for(unsigned i = 0; i < sizeof(destinations) / sizeof(*destinations); ++i) {
+        uint32_t dst = (destinations[i] & 0x00ffffffu) | 0x8c000000u;
+        memset(ram + dst - BEGIN, 0xa5, 28);
+        /* A single parameter word suffices, even at the end of guest RAM. */
+        uint32_t params = i == 1 ? END - 4 : PARAM;
+        put(params, destinations[i]);
+        int32_t token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_GET_VERS, params);
+        CHECK(token > 0 && ram[dst - BEGIN] == 0xa5);
+        CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
+        CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+        CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+        CHECK(get(STATUS) == 0 && get(STATUS + 8) == 0 && get(STATUS + 12) == 0);
+        CHECK(memcmp(ram + dst - BEGIN, expected, 28) == 0);
+        CHECK(ram[dst - BEGIN - 1] == 0xa5);
+        if(dst + 28 < END) CHECK(ram[dst - BEGIN + 28] == 0xa5);
+        CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
+    }
+    const uint32_t bad[] = {0, BEGIN - 1, END - 27, END, 0xa05f0000u};
+    for(unsigned i = 0; i < sizeof(bad) / sizeof(*bad); ++i) {
+        put(PARAM, bad[i]);
+        CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_GET_VERS, PARAM) == 0);
+    }
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_GET_VERS, PARAM + 1) == 0);
+    put(PARAM, OUTPUT); ctx.deny = OUTPUT;
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_GET_VERS, PARAM) == 0);
+    ctx.deny = 0;
+    int32_t token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_GET_VERS, PARAM);
+    CHECK(token > 0); ctx.deny = OUTPUT;
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_MEMORY);
+    CHECK(ctx.reads == 0 && ctx.checks == 0);
+}
 static void bounds_and_modes(void) {
     reset(); mode(2048, 0); mode(2048, 1024); mode(2352, 0);
     read_params(16, 2, OUTPUT);
@@ -217,7 +255,7 @@ static void bounds_and_modes(void) {
     CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
 }
 int main(void) {
-    large_reads(); cancel_failures(); metadata(); bounds_and_modes();
+    large_reads(); cancel_failures(); metadata(); version_query(); bounds_and_modes();
     printf("retail GD service: %u checks passed\n", assertions);
     return 0;
 }

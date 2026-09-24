@@ -6,7 +6,11 @@
  * independently documented by inolen/redream ffb7302245ff40515cb9f0f0b0e233a4b39342d3,
  * src/guest/bios/syscalls.c (GPL-3.0; interface reference only, no emulator
  * implementation copied). That reference also documents type0 automatic
- * sector selection. Our backend deliberately supports only Mode1 user data.
+ * sector selection. GET_VERS's 28-byte response and trailing state byte are
+ * cross-checked against that reference and DreamShell ISO Loader syscalls.c
+ * get_ver_str (GPL-3.0, Copyright 2009-2023 SWAT). This is a virtual driver
+ * compatibility response, not a version query to the physical optical drive.
+ * Our backend deliberately supports only Mode1 user data.
  */
 #include "kui/retail_gd.h"
 #include <stddef.h>
@@ -77,6 +81,7 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     case KUI_RETAIL_GD_SET_MODE: case KUI_RETAIL_GD_REQ_STAT: nparams = 4; break;
     case KUI_RETAIL_GD_GETTOC: case KUI_GD_GETTOC2: nparams = 2; break;
     case KUI_RETAIL_GD_REQ_MODE: case KUI_RETAIL_GD_SEEK: nparams = 1; break;
+    case KUI_RETAIL_GD_GET_VERS: nparams = 1; break;
     case KUI_GD_COMMAND_INIT: case KUI_GD_NOP: case KUI_GD_STOP: break;
     default: return 0;
     }
@@ -102,8 +107,8 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         uint32_t first, last;
         if(area_bounds(s, p[0], &first, &last)) return 0;
         bytes = KUI_GD_TOC_BYTES; destination = p[1];
-    } else if(cmd == KUI_RETAIL_GD_REQ_MODE) {
-        bytes = 16; destination = p[0];
+    } else if(cmd == KUI_RETAIL_GD_REQ_MODE || cmd == KUI_RETAIL_GD_GET_VERS) {
+        bytes = cmd == KUI_RETAIL_GD_GET_VERS ? 28 : 16; destination = p[0];
     } else if(cmd == KUI_RETAIL_GD_REQ_STAT) {
         for(unsigned i = 0; i < 4; ++i)
             if(!guest(s, p[i], 4, 4, 1)) return 0;
@@ -116,7 +121,7 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         if(i == s->track_count) return 0;
     }
     if(bytes && cmd != KUI_GD_PIOREAD && cmd != KUI_GD_DMAREAD &&
-       !guest(s, destination, bytes, 4, 1)) return 0;
+       !guest(s, destination, bytes, cmd == KUI_RETAIL_GD_GET_VERS ? 1 : 4, 1)) return 0;
     s->token = s->token >= 0x7fffffffu ? 1 : s->token + 1;
     s->command = cmd; s->lba = lba; s->count = p[1];
     s->destination = destination; s->area = p[0]; s->request_bytes = bytes;
@@ -176,13 +181,16 @@ static int32_t execute(struct kui_retail_gd *s) {
             put32(out[3], 1); s->completed_bytes = 16;
         }
     } else if(s->request_bytes) {
-        uint8_t *out = guest(s, s->destination, s->request_bytes, 4, 1);
+        uint8_t *out = guest(s, s->destination, s->request_bytes,
+                            s->command == KUI_RETAIL_GD_GET_VERS ? 1 : 4, 1);
         if(!out) s->error = KUI_GD_ERROR_MEMORY;
         else {
             if(s->command == KUI_RETAIL_GD_REQ_MODE)
                 for(unsigned i = 0; i < 4; ++i) put32(out + i * 4u, s->mode[i]);
+            else if(s->command == KUI_RETAIL_GD_GET_VERS)
+                memcpy(out, "GDC Version 1.10 1999-03-31\002", 28);
             else toc(s, out);
-            s->completed_bytes = s->request_bytes;
+            s->completed_bytes = s->command == KUI_RETAIL_GD_GET_VERS ? 0 : s->request_bytes;
         }
     } else if(s->command == KUI_RETAIL_GD_SET_MODE) memcpy(s->mode, s->outputs, sizeof(s->mode));
     else if(s->command == KUI_RETAIL_GD_SEEK) { s->position_lba = s->lba; s->drive_status = 1; }

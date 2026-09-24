@@ -61,7 +61,8 @@ jobs:
               exact = {'Makefile.dc', '.github/workflows/diagnostic.yml',
                        'tools/check_retail_instructions.py', 'tests/test_retail_instructions.py',
                        'include/kui/retail_loader_layout.h', 'src/apps/games_retail.c',
-                       'tools/retail_package.py', 'tests/test_retail_package.py'}
+                       'tools/retail_package.py', 'tests/test_retail_package.py',
+                       'src/core/retail_gd.c', 'include/kui/retail_gd.h', 'tests/test_retail_gd.c'}
               if not paths or any(p not in exact and not p.startswith(('src/loader/', 'docs/')) for p in paths):
                   raise SystemExit('Console-only request includes changes outside the focused retail correction scope')
               print('Console build requested: skipping the broad repeat suite; focused retail checks are recorded with the correction.')

@@ -1,4 +1,4 @@
-# DOA2 launch experiment — startup stack collision correction
+# DOA2 launch experiment — driver version query
 
 The selected-image GD probe has already passed on hardware: build
 `c4cfd4585ec5`, DEAD OR ALIVE 2, all 11 checks, 93 physical SD blocks after
@@ -19,6 +19,12 @@ startup files: DOA2 `T3601N`, `V1.100`, region `U`. Its startup fills
 hook rejected calls before the C counters could increment. This correction
 moves the entire reader stack below that range and reports the guard on a
 menu return. See `evidence/games-retail-startup-return-2026-09-24.md`.
+
+Build `289e10a1ab20` passed that startup guard and reached the reader, stopping
+on unsupported command `0x28` (GET_VERS). The current correction implements
+its bounded 28-byte compatibility response. DOA2's next visible startup step
+is a one-sector ISO volume-descriptor read through the existing read commands.
+Evidence: `evidence/games-retail-version-query-2026-09-24.md`.
 
 ## Install and test
 
