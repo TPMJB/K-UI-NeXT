@@ -81,7 +81,7 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
-    for name in ("apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -137,7 +137,7 @@ def main():
     shutil.copyfile(dist / "MUSIC-DEMO.md", update / "MUSIC-DEMO.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     (update / "SOURCE.txt").write_text(
@@ -150,7 +150,8 @@ def main():
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "Copy Music/ for the supplied one-minute Harbor Lights WAV/Ogg, then select it in Music.\n"
         "See MUSIC-DEMO.md for its format, playback check and composition provenance.\n"
-        "Start with APPS-ROUND-FIVE.md for the new controls and current acceptance checks. See RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
+        "Start with GAMES-TEST.md for GDI browsing/inspection; game launching is not implemented yet.\n"
+        "APPS-ROUND-FIVE.md covers the other apps. See RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
         "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
         "works as before and reports that nothing was compared. Attribution and licence\n"

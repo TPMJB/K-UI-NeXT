@@ -24,8 +24,8 @@ separate contribution or commercial-relicensing agreement.
 
 ## M1.5 shell update
 
-The SD runtime opens eight apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
-**Network Test**, **Settings**, **Diagnostics**, **GD Play** and **Music Player**. New captures use a selectable
+The SD runtime opens nine apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
+**Network Test**, **Settings**, **Diagnostics**, **GD Play**, **Music Player** and **Games**. New captures use a selectable
 parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
 The hardware-proven acquisition engine remains unchanged.
 
@@ -135,11 +135,12 @@ See [the research scope](docs/milestone-1-research.md),
 
 ## Next: Games
 
-Audio-CD playback is now accepted by owner report. The next major development
-is one Games library with Advanced > Browse and an independent image loader.
-Start with our raw GDI dumps and a small test program proving SD-backed disc
-requests after launcher handoff, then attempt one owned retail title. No retail
-image-loading compatibility is claimed yet. See [the staged Games plan](docs/games-milestone-plan.md).
+Audio-CD playback is now accepted by owner report. The Games foundation adds
+`/Games` browsing, Advanced > Browse SD folders and bounded GDI/boot metadata
+inspection. It accepts GDI-only folders without a manifest and does not scan
+whole tracks. See [the Games hardware guide](docs/games-test.md).
+The independent resident loader and post-handoff test program come next; retail
+game launching is not implemented yet. See [the staged Games plan](docs/games-milestone-plan.md).
 The accepted reader stays frozen; the existing boot disc remains in use.
 
 ## License and contribution policy

@@ -134,6 +134,9 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
         s->page==KUI_SHELL_RIPPER ? "B Home   START Advanced   L/R Songs" :
         s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   L Actions" :
+        s->page==KUI_SHELL_GAMES ? "B Parent / Home   LEFT/RIGHT Page" :
+        s->page==KUI_SHELL_GAMES_DETAIL ? "X Inspect again   B Games" :
+        s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
@@ -152,6 +155,11 @@ static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
         }
         box(p,x+24,y+24,80,80,EDGE); box(p,x+30,y+30,68,68,PANEL);
         words(p,x+40,y+54,x+98,WHITE,"RAM",true);
+    } else if(app==8) {
+        panel(p,x+12,y+38,104,60,CYAN);panel(p,x+20,y+46,88,44,PANEL);
+        box(p,x+30,y+61,30,8,CYAN);box(p,x+41,y+50,8,30,CYAN);
+        box(p,x+80,y+53,10,10,PINK);box(p,x+94,y+68,10,10,PINK);
+        box(p,x+61,y+65,8,4,WHITE);
     } else if(app==7) {
         box(p,x+36,y+32,8,62,CYAN);box(p,x+88,y+20,8,62,PINK);
         box(p,x+40,y+28,52,8,CYAN);box(p,x+40,y+20,52,8,PINK);
@@ -174,6 +182,9 @@ static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned 
             box(p,x+5+i*6,y,2,24,CYAN);box(p,x,y+5+i*6,24,2,CYAN);
         }
         box(p,x+4,y+4,16,16,EDGE);box(p,x+7,y+7,10,10,PANEL);
+    } else if(app==8) {
+        panel(p,x,y+6,24,16,CYAN);box(p,x+3,y+12,9,3,NAVY);
+        box(p,x+6,y+9,3,9,NAVY);box(p,x+16,y+9,3,3,PINK);box(p,x+19,y+14,3,3,PINK);
     } else if(app==7) {
         box(p,x+7,y+5,3,15,CYAN);box(p,x+18,y+2,3,15,PINK);
         box(p,x+8,y+2,13,3,CYAN);
@@ -186,10 +197,10 @@ static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned 
     }
 }
 static void home(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
-    static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics","GD Play","Music Player"};
-    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics","Disc boot","Music"};
-    static const unsigned icons[]={0,2,2,2,1,2,0,2};
-    static const char *details[8][3]={
+    static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics","GD Play","Music Player","Games"};
+    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics","Disc boot","Music","SD game library"};
+    static const unsigned icons[]={0,2,2,2,1,2,0,2,2};
+    static const char *details[9][3]={
         {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
         {"Browse, copy or delete saves.","Back up to SD, then restore", "checked backups to a free name."},
         {"Check available application RAM", "with data patterns and report", "any mismatches found."},
@@ -197,24 +208,25 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         {"Choose video, memory display", "and background music.", "Save preferences to SD."},
         {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
         {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
-        {"Play WAV or Ogg music from SD.", "Listen to audio CD tracks", "or keep music in the background."}};
-    unsigned selected=s->home_selected<8?s->home_selected:0;
+        {"Play WAV or Ogg music from SD.", "Listen to audio CD tracks", "or keep music in the background."},
+        {"Browse GDI images on your SD", "and inspect their boot metadata.", "Game launching is not ready yet."}};
+    unsigned selected=s->home_selected<9?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
-    for(unsigned i=0;i<8;i++) {
-        unsigned y=116+i*34;
+    for(unsigned i=0;i<9;i++) {
+        unsigned y=116+i*30;
         if(selected==i) {
-            panel(p,32,y,208,32,SELECTED);
-            box(p,32,y+5,3,22,PINK);
+            panel(p,32,y,208,28,SELECTED);
+            box(p,32,y+5,3,18,PINK);
         }
-        if((i>=1 && i<=3) || i==7) small_utility_icon(p,i,44,y+4);
-        else art(p,44,y+4,24,24,kui_art_small_icons[icons[i]]);
-        words(p,80,y+8,230,selected==i?WHITE:MUTED,names[i],false);
+        if((i>=1 && i<=3) || i>=7) small_utility_icon(p,i,44,y+2);
+        else art(p,44,y+2,24,24,kui_art_small_icons[icons[i]]);
+        words(p,80,y+6,230,selected==i?WHITE:MUTED,names[i],false);
     }
     if(s->system_saved.show_memory && v->memory_valid) {
         char ram[48];snprintf(ram,sizeof(ram),"RAM %lu / %lu KiB",
             (unsigned long)(v->memory_used/1024),(unsigned long)(v->memory_physical/1024));
         words(p,44,391,230,MUTED,ram,false);
-    } else words(p,44,391,230,MUTED,"8 applications",false);
+    } else words(p,44,391,230,MUTED,"9 applications",false);
     title(p,264,112,names[selected]);
     if(selected==0 || selected==6) {
         char inserted[160];
@@ -223,7 +235,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         label(p,264,144,CYAN,inserted);
     } else label(p,264,144,CYAN,category[selected]);
     panel(p,264,172,344,140,PANEL);
-    if((selected>=1 && selected<=3) || selected==7) utility_icon(p,selected,372,178);
+    if((selected>=1 && selected<=3) || selected>=7) utility_icon(p,selected,372,178);
     else art(p,372,178,128,128,kui_art_icons[icons[selected]]);
     for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,details[selected][i]);
     panel(p,264,382,344,28,CYAN);
@@ -826,6 +838,65 @@ static void music_player(struct paint *p,const struct kui_shell *s,const struct 
         (unsigned long)((v->music_cache_bytes%1048576u)*10u/1048576u));
     label(p,40,396,MUTED,line);
 }
+static void games(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Games");
+    char line[180];snprintf(line,sizeof(line),"SD: %s",s->games_path);
+    label(p,40,140,CYAN,line);
+    label(p,40,163,MUTED,"A Open / inspect   X Refresh   START Advanced");
+    unsigned count=s->games_listing.count<KUI_GAMES_ROWS?s->games_listing.count:KUI_GAMES_ROWS;
+    for(unsigned i=0;i<count;i++) {
+        const struct kui_games_entry *e=&s->games_listing.entries[i];
+        unsigned y=186+i*23;
+        if(i==s->games_selected) panel(p,32,y-3,576,23,SELECTED);
+        words(p,44,y,542,e->disabled?AMBER:i==s->games_selected?WHITE:MUTED,e->name,false);
+        words(p,554,y,602,MUTED,e->directory?"DIR":"GDI",false);
+    }
+    if(!count && !v->busy) label(p,40,210,MUTED,"No selectable GDI images or folders in this view.");
+    label(p,40,380,v->busy?CYAN:AMBER,s->games_listing.message);
+    snprintf(line,sizeof(line),"PAGE %u%s   Metadata inspection; game launch is not available.",
+        s->games_page+1,s->games_listing.has_more?" +":"");
+    label(p,40,398,MUTED,line);
+}
+static void game_detail(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_games_detail *d=&s->games_detail;
+    title(p,40,108,"Games / Image details");
+    label(p,40,140,d->valid?CYAN:AMBER,d->valid?(d->title[0]?d->title:"Untitled image"):
+        v->busy?"Inspecting image...":d->stopped?"Inspection stopped":"Could not inspect image");
+    words(p,40,164,608,MUTED,s->games_selected_path,false);
+    panel(p,32,190,576,214,PANEL);
+    if(d->valid) {
+        char line[160];snprintf(line,sizeof(line),"Product: %s   Region: %s",d->product,d->region);
+        label(p,44,202,WHITE,line);
+        snprintf(line,sizeof(line),"Boot file: %s   %lu bytes",d->boot_file,(unsigned long)d->boot_bytes);
+        label(p,44,228,WHITE,line);
+        snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: %u",d->tracks,d->data_tracks,d->audio_tracks);
+        label(p,44,254,WHITE,line);
+        snprintf(line,sizeof(line),"Image size: %llu bytes",(unsigned long long)d->bytes);
+        label(p,44,280,WHITE,line);
+        snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
+        label(p,44,306,MUTED,line);
+        label(p,44,337,CYAN,"Image inspected; launching not available yet");
+        label(p,44,365,MUTED,"Metadata checks do not verify every saved sector.");
+    } else {
+        label(p,44,210,v->busy?CYAN:AMBER,d->message);
+        label(p,44,252,MUTED,v->busy?"Reading bounded image metadata from SD.":
+            "Check the image files, then press X to inspect again.");
+        label(p,44,284,MUTED,"B returns to your Games list.");
+    }
+}
+static void games_advanced(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Games / Advanced");
+    label(p,40,142,CYAN,"Source: SD card");
+    const char *names[]={"Game library","Browse SD folders"};
+    const char *details[]={"Open /Games","Find a GDI image elsewhere on the card"};
+    for(unsigned i=0;i<2;i++) {
+        unsigned y=182+i*68;
+        panel(p,32,y,576,60,s->games_advanced_selected==i?SELECTED:PANEL);
+        label(p,48,y+9,WHITE,names[i]);label(p,48,y+33,MUTED,details[i]);
+    }
+    label(p,40,337,MUTED,"IDE / CF sources are not available yet.");
+    label(p,40,365,MUTED,"GDI image inspection is available; game launching is not.");
+}
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
@@ -850,6 +921,9 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_GD_PLAY: gd_play(&p,v); break;
     case KUI_SHELL_CD_AUDIO: cd_audio(&p,s,v); break;
     case KUI_SHELL_MUSIC: music_player(&p,s,v); break;
+    case KUI_SHELL_GAMES: games(&p,s,v); break;
+    case KUI_SHELL_GAMES_DETAIL: game_detail(&p,s,v); break;
+    case KUI_SHELL_GAMES_ADVANCED: games_advanced(&p,s); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
     }
     footer(&p,s,v);

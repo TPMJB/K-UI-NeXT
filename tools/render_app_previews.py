@@ -14,7 +14,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output",type=Path,required=True)
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
-    for mode in ("home","home-music","music","gd-play","gd-confirm","quick-resume","settings","clock","clock-confirm","defaults","vmu","vmu-restore","vmu-restore-confirm","scan-folder","crc-scan","retry","vmu-actions","vmu-delete","vmu-copy","music-clear","safe-area","system-tools","restart","salvage","salvage-confirm","salvage-working","audio-cd"):
+    for mode in ("home","home-games","games","games-detail","games-error","games-advanced","home-music","music","gd-play","gd-confirm","quick-resume","settings","clock","clock-confirm","defaults","vmu","vmu-restore","vmu-restore-confirm","scan-folder","crc-scan","retry","vmu-actions","vmu-delete","vmu-copy","music-clear","safe-area","system-tools","restart","salvage","salvage-confirm","salvage-working","audio-cd"):
         path=args.output/(mode+".ppm")
         subprocess.run(["build/render-shell",mode,str(path)],check=True)
         data=path.read_bytes()

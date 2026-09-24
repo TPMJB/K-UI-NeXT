@@ -18,6 +18,7 @@ No new boot disc is needed for this round.
 | Advanced CRC / Salvage | `src/core/recovery_scan.c`, `salvage.c` | read-only existing dumps; isolated `/KUI/salvage/` jobs |
 | System backups | `src/apps/maintenance*.c` | `/KUI/backups/system/`; no console flash writes |
 | Menu feedback | `src/apps/menu_sound.c` | synthesized samples held in sound RAM |
+| Games foundation | `src/apps/games.c`, `src/core/game_image.c`, `game_metadata.c` | read-only `/Games` or selected SD GDI; metadata inspection only |
 
 A single worker owns app hardware and SD operations. UI input queues work; it
 does not mount storage. Music preloads bounded WAV/Ogg files, releases the card,
@@ -47,6 +48,11 @@ bypasses a saved video choice without rewriting it; preview cancellation also
 restores that safe override.
 
 ## Separate executable apps: next architecture step
+
+The [Games foundation](games-test.md) remains statically linked for GDI browsing
+and inspection. Its planned resident loader has a separate lifetime and memory
+contract; see [the staged plan](games-milestone-plan.md). No game launch or
+executable package interface is implemented by the browsing update.
 
 Independent app executables should come after these app lifecycles are proven.
 They need a versioned launch/return contract, bounded image validation and memory

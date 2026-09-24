@@ -36,8 +36,8 @@ static void launcher_and_confirmation(void) {
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.confirm_new);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NEW_DUMP && !s.confirm_new);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
-    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==7);
-    press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==8);
+    press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false);
     assert(s.home_selected==5);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DIAGNOSTICS);
     press(KUI_SHELL_B,false);
@@ -47,7 +47,7 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_CD_AUDIO;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_GAMES_ADVANCED;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -477,6 +477,83 @@ static void music_and_boot_controls(void) {
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_MUSIC_LIST && !strcmp(s.music_path,"/"));
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
 }
+static void games_controls(void) {
+    reset(KUI_SHELL_HOME);s.home_selected=8;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
+    assert(s.page==KUI_SHELL_GAMES && !strcmp(s.games_path,"/Games"));
+    struct kui_games_page page={.count=2,.has_more=true};
+    strcpy(page.root,"/Other");strcpy(page.entries[0].name,"Fighting");
+    strcpy(page.entries[0].path,"/Games/Fighting");page.entries[0].directory=true;
+    strcpy(page.entries[1].name,"Dead or Alive 2");
+    strcpy(page.entries[1].path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
+    kui_shell_set_games_listing(&s,&page);assert(!s.games_listing.count);
+    strcpy(page.root,"/Games");kui_shell_set_games_listing(&s,&page);
+    assert(s.games_listing.count==2 && !s.games_listing.entries[0].disabled);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
+    assert(!strcmp(s.games_path,"/Games/Fighting") && !s.games_listing.count);
+    kui_shell_set_games_listing(&s,&page);assert(!s.games_listing.count);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
+    kui_shell_set_games_listing(&s,&page);press(KUI_SHELL_DOWN,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(!strcmp(s.games_selected_path,page.entries[1].path));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* Never pretend to launch. */
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GAMES_DETAIL);
+    struct kui_games_detail detail={.valid=true,.tracks=3};
+    strcpy(detail.path,"/Games/Other.gdi");strcpy(detail.title,"Other image");
+    kui_shell_set_games_detail(&s,&detail);assert(!s.games_detail.valid);
+    strcpy(detail.path,s.games_selected_path);strcpy(detail.title,"Dead or Alive 2");
+    kui_shell_set_games_detail(&s,&detail);assert(s.games_detail.valid && s.games_detail.tracks==3);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_INSPECT && !s.games_detail.valid);
+    strcpy(detail.message,"Track file missing");detail.valid=false;
+    kui_shell_set_games_detail(&s,&detail);assert(!strcmp(s.games_detail.message,"Track file missing"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES);
+    assert(s.games_selected==1 && s.games_listing.count==2);
+    detail.valid=true;kui_shell_set_games_detail(&s,&detail);assert(!s.games_detail.valid);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_page==1);
+    assert(!s.games_listing.count && !s.games_selected);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LIST && !s.games_page);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_LIST);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
+    kui_shell_set_games_listing(&s,&page);assert(!s.games_listing.count);
+    press(KUI_SHELL_DOWN,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
+    press(KUI_SHELL_A,false);assert(!strcmp(s.games_path,"/Games"));
+    press(KUI_SHELL_START,false);press(KUI_SHELL_B,false);
+    assert(s.page==KUI_SHELL_GAMES && !strcmp(s.games_path,"/Games"));
+    press(KUI_SHELL_START,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
+
+    /* A long complete file path is not truncated to the folder path capacity. */
+    reset(KUI_SHELL_GAMES);page.count=1;page.entries[0].directory=false;
+    strcpy(page.entries[0].name,"A long game title.gdi");
+    memset(page.entries[0].path,0,sizeof(page.entries[0].path));
+    strcpy(page.entries[0].path,"/Games/");memset(page.entries[0].path+7,'A',100);
+    page.entries[0].path[107]='/';memset(page.entries[0].path+108,'B',80);
+    strcpy(page.entries[0].path+188,".gdi");
+    kui_shell_set_games_listing(&s,&page);
+    assert(!s.games_listing.entries[0].disabled);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && strlen(s.games_selected_path)==192);
+    assert(!strcmp(s.games_selected_path,page.entries[0].path));
+    press(KUI_SHELL_B,false);
+    const char *bad[]={"/Games/../outside.gdi","/Games2/title.gdi","/Games//title.gdi",
+        "0:/Games/title.gdi","/Games/./title.gdi","/Games/title\\file.gdi"};
+    for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);i++) {
+        snprintf(page.entries[0].path,sizeof(page.entries[0].path),"%s",bad[i]);
+        kui_shell_set_games_listing(&s,&page);
+        assert(s.games_listing.entries[0].disabled && !s.games_listing.entries[0].path[0]);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.games_listing.message[0]);
+    }
+    memset(page.entries[0].path,'x',sizeof(page.entries[0].path));
+    memset(page.entries[0].name,'x',sizeof(page.entries[0].name));page.count=UINT_MAX;
+    memset(page.message,'x',sizeof(page.message));kui_shell_set_games_listing(&s,&page);
+    assert(s.games_listing.count==KUI_GAMES_ROWS && s.games_listing.entries[0].disabled);
+    assert(!strcmp(s.games_listing.entries[0].name,"[Name too long]"));
+    assert(!s.games_listing.message[sizeof(s.games_listing.message)-1]);
+    s.games_page=UINT_MAX/KUI_GAMES_ROWS;s.games_listing.has_more=true;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE);
+}
 static uint16_t pixels[640*480+2], prepared[640*480+2];
 static char drawn[8192];
 static size_t drawn_size;
@@ -507,7 +584,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_CD_AUDIO;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_GAMES_ADVANCED;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -632,7 +709,7 @@ static void new_pages_rendering(void) {
         assert(strstr(drawn,"RAM 1 / 16384 KiB") && strstr(drawn,"Memory Test"));
     }
     s.system_saved.show_memory=false;render(&v);
-    assert(strstr(drawn,"8 applications") && !strstr(drawn,"RAM 1 /"));
+    assert(strstr(drawn,"9 applications") && !strstr(drawn,"RAM 1 /"));
 }
 static void music_and_boot_rendering(void) {
     struct kui_shell_view v={.music_enabled=true,.music_playing=true,.music_volume=75,
@@ -815,12 +892,40 @@ static void round_five_rendering(void) {
     v.app_status=&state;render(&v);
     assert(strstr(drawn,"remaining 7") && strstr(drawn,"pass 2/5") && !strstr(drawn,"New salvage job"));
 }
+static void games_rendering(void) {
+    struct kui_shell_view view={0};
+    reset(KUI_SHELL_HOME);s.home_selected=8;render(&view);
+    assert(strstr(drawn,"Games") && strstr(drawn,"9 applications") && strstr(drawn,"Game launching is not ready yet"));
+    reset(KUI_SHELL_GAMES);s.games_listing.count=8;s.games_listing.has_more=true;s.games_selected=7;
+    for(unsigned i=0;i<8;i++) {
+        snprintf(s.games_listing.entries[i].name,sizeof(s.games_listing.entries[i].name),"Game %u with a long but bounded name",i+1);
+        s.games_listing.entries[i].directory=i==0;
+    }
+    strcpy(s.games_listing.message,"Choose a GDI image to inspect.");render(&view);
+    assert(strstr(drawn,"Game 8") && strstr(drawn,"GDI") && strstr(drawn,"DIR"));
+    assert(strstr(drawn,"PAGE 1 +") && strstr(drawn,"START Advanced") && !strstr(drawn,"A Launch"));
+    view.busy=true;render(&view);assert(strstr(drawn,"B Stop safely"));view.busy=false;
+    reset(KUI_SHELL_GAMES_DETAIL);strcpy(s.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
+    s.games_detail.valid=true;s.games_detail.tracks=3;s.games_detail.data_tracks=2;s.games_detail.audio_tracks=1;
+    s.games_detail.bytes=1185765648;s.games_detail.boot_bytes=123456;s.games_detail.boot_lba=45166;
+    strcpy(s.games_detail.title,"Dead or Alive 2");strcpy(s.games_detail.product,"T-3601N");
+    strcpy(s.games_detail.region,"JUE");strcpy(s.games_detail.boot_file,"1ST_READ.BIN");render(&view);
+    assert(strstr(drawn,"Dead or Alive 2") && strstr(drawn,"T-3601N") && strstr(drawn,"1ST_READ.BIN"));
+    assert(strstr(drawn,"Tracks: 3") && strstr(drawn,"1185765648 bytes"));
+    assert(strstr(drawn,"Image inspected; launching not available yet") && !strstr(drawn,"A Launch"));
+    s.games_detail.valid=false;strcpy(s.games_detail.message,"Track file missing");render(&view);
+    assert(strstr(drawn,"Could not inspect image") && strstr(drawn,"Track file missing"));
+    s.games_detail.stopped=true;render(&view);assert(strstr(drawn,"Inspection stopped"));
+    reset(KUI_SHELL_GAMES_ADVANCED);render(&view);
+    assert(strstr(drawn,"Game library") && strstr(drawn,"Browse SD folders") && strstr(drawn,"IDE / CF sources are not available"));
+}
 int main(void) {
+    games_controls(); games_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();
     system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
     music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
-    puts("PASS shell: Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
+    puts("PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

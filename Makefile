@@ -10,8 +10,11 @@ FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-recovery test-images deps diagnostic clean
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek
+test: build/test-game-image build/test-game-metadata
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-cd-audio
+	./build/test-game-image
+	./build/test-game-metadata
 	./build/test-cd-audio guard
 	./build/test-network-probe
 	./build/test-network-connect
@@ -158,7 +161,8 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+test-images: build/games-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+	python3 tests/test_games_images.py
 	python3 tests/test_salvage_images.py
 	python3 tests/test_maintenance_images.py
 	python3 tests/test_recovery_scan_images.py
@@ -314,3 +318,18 @@ build/salvage-image: tests/salvage_image.c $(CORE) $(FATFS) src/core/salvage.c s
 build/test-cd-audio: tests/test_cd_audio.c src/apps/cd_audio.c src/core/command.c src/core/data.c include/kui/cd_audio.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/cdda_stubs -Itests/stubs -Isrc/dreamcast src/apps/cd_audio.c src/core/command.c src/core/data.c tests/test_cd_audio.c -o $@
+
+# Games uses a read-only image backend separate from the accepted optical reader.
+build/test-game-image: tests/test_game_image.c src/core/game_image.c include/kui/game_image.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_image.c tests/test_game_image.c -o $@
+
+build/test-game-metadata: tests/test_game_metadata.c src/core/game_metadata.c include/kui/game_metadata.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_metadata.c tests/test_game_metadata.c -o $@
+
+GAMES = src/apps/games.c src/core/game_image.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c
+GAMES_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_lseek,--wrap=f_close,--wrap=f_write,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename,--wrap=f_opendir,--wrap=f_readdir,--wrap=f_closedir
+build/games-image: tests/games_image.c $(GAMES) $(CORE) $(FATFS) include/kui/games.h include/kui/game_image.h include/kui/game_metadata.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES) $(CORE) $(FATFS) tests/games_image.c $(GAMES_WRAP) -o $@

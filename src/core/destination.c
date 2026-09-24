@@ -46,6 +46,10 @@ static bool component(const char *name,size_t size) {
     return true;
 }
 void kui_destination_default(char out[KUI_DEST_ROOT_CAP]) {if(out) strcpy(out,"/Games");}
+bool kui_destination_name_valid(const char *name) {
+    size_t n=bounded_length(name,KUI_DEST_NAME_CAP);
+    return name && n<KUI_DEST_NAME_CAP && component(name,n);
+}
 bool kui_destination_normalize(char out[KUI_DEST_ROOT_CAP],const char *path) {
     if(!out) return false;
     char result[KUI_DEST_ROOT_CAP];size_t used=1;

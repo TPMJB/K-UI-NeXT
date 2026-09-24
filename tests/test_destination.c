@@ -19,6 +19,14 @@ static void rejects_record(const void *record,size_t size) {
     assert(!kui_destination_decode(out,&sequence,record,size));assert(!strcmp(out,"unchanged") && sequence==17);
 }
 int main(void) {
+    char max_name[KUI_DEST_NAME_CAP+1];memset(max_name,'A',sizeof(max_name));
+    max_name[KUI_DEST_NAME_CAP-1]=0;assert(kui_destination_name_valid(max_name));
+    max_name[KUI_DEST_NAME_CAP-1]='A';max_name[KUI_DEST_NAME_CAP]=0;
+    assert(!kui_destination_name_valid(max_name));
+    assert(kui_destination_name_valid("日本語 track.bin"));
+    assert(!kui_destination_name_valid(NULL) && !kui_destination_name_valid("") &&
+           !kui_destination_name_valid("../track.bin") && !kui_destination_name_valid("NUL.bin") &&
+           !kui_destination_name_valid("track.bin ") && !kui_destination_name_valid("bad\xe2\x82"));
     char root[KUI_DEST_ROOT_CAP],name[KUI_DEST_NAME_CAP],job[KUI_DEST_JOB_CAP];
     kui_destination_default(root);assert(!strcmp(root,"/Games"));
     normalized("/","/");normalized("////","/");normalized("//Games///MDK2/./","/Games/MDK2");

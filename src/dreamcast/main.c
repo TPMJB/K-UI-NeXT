@@ -11,6 +11,7 @@
 #include "kui/music.h"
 #include "kui/apps.h"
 #include "kui/music_player.h"
+#include "kui/games.h"
 #include "kui/splash.h"
 #include "kui/gd_play.h"
 #include "kui/recovery_scan.h"
@@ -95,6 +96,11 @@ static struct kui_music_player_page music_listing;
 static struct kui_app_status player_status;
 static unsigned music_listing_generation,music_offset_pending;
 static char music_path_pending[256];
+static struct kui_games_page games_listing;
+static struct kui_games_detail games_detail;
+static unsigned games_listing_generation,games_detail_generation;
+static unsigned games_offset_pending,games_result_offset;
+static char games_path_pending[KUI_GAMES_FILE_CAP];
 static bool is_capture_action(unsigned action) {
     return (action>=4 && action<=6) || action==22;
 }
@@ -679,6 +685,19 @@ static void *worker(void *unused) {
                 snprintf(cd_audio_snapshot.message,sizeof(cd_audio_snapshot.message),"Audio CD operation stopped before starting.");
                 ++cd_audio_generation;
             }
+            if(action==54) {
+                memset(&games_listing,0,sizeof(games_listing));
+                snprintf(games_listing.root,sizeof(games_listing.root),"%.*s",
+                    (int)sizeof(games_listing.root)-1,games_path_pending);
+                snprintf(games_listing.message,sizeof(games_listing.message),"Games browse stopped before starting");
+                games_result_offset=games_offset_pending;++games_listing_generation;
+            }
+            if(action==55) {
+                memset(&games_detail,0,sizeof(games_detail));games_detail.stopped=true;
+                strcpy(games_detail.path,games_path_pending);
+                snprintf(games_detail.message,sizeof(games_detail.message),"Games inspection stopped before starting");
+                ++games_detail_generation;
+            }
             if(action>=41 && action<=43) {
                 maintenance_status=(struct kui_app_status){.stopped=true};
                 snprintf(maintenance_status.message,sizeof(maintenance_status.message),"System operation stopped before starting.");
@@ -776,6 +795,19 @@ static void *worker(void *unused) {
                 }
                 mutex_unlock(&lock);
                 publish_music();
+            }
+            if(action==54) {
+                kui_sd_set_params(0,true);
+                struct kui_games_page page;
+                kui_games_list(games_path_pending,games_offset_pending,&page,kui_log,kui_cancelled);
+                mutex_lock(&lock);games_listing=page;games_result_offset=games_offset_pending;
+                ++games_listing_generation;mutex_unlock(&lock);
+            }
+            if(action==55) {
+                kui_sd_set_params(0,true);
+                struct kui_games_detail detail;
+                kui_games_inspect(games_path_pending,&detail,kui_log,kui_cancelled);
+                mutex_lock(&lock);games_detail=detail;++games_detail_generation;mutex_unlock(&lock);
             }
             if(action==25 || action==44) {
                 /* Restart must remain usable after an optical recovery failure. */
@@ -1183,6 +1215,8 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_CD_PAUSE: return 51;
         case KUI_SHELL_CD_RESUME: return 52;
         case KUI_SHELL_CD_STOP: return 53;
+        case KUI_SHELL_GAMES_LIST: return 54;
+        case KUI_SHELL_GAMES_INSPECT: return 55;
         default: return 0;
     }
 }
@@ -1291,6 +1325,7 @@ int main(void) {
     unsigned seen_system_generation=0,seen_vmu_generation=0,seen_music_listing=0;
     unsigned seen_clock_generation=0,seen_vmu_backups=0,seen_vmu_restore=0;
     unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0;
+    unsigned seen_games_listing=0,seen_games_detail=0;
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
@@ -1339,6 +1374,15 @@ int main(void) {
         if(seen_music_listing!=music_listing_generation) {
             kui_shell_set_music_listing(&shell,&music_listing);
             seen_music_listing=music_listing_generation;
+        }
+        if(seen_games_listing!=games_listing_generation) {
+            if(shell.games_page*KUI_GAMES_ROWS==games_result_offset)
+                kui_shell_set_games_listing(&shell,&games_listing);
+            seen_games_listing=games_listing_generation;
+        }
+        if(seen_games_detail!=games_detail_generation) {
+            kui_shell_set_games_detail(&shell,&games_detail);
+            seen_games_detail=games_detail_generation;
         }
         if(seen_clock_generation!=clock_generation) {
             kui_shell_set_clock(&shell,clock_valid?&clock_snapshot:NULL,clock_note);
@@ -1492,6 +1536,11 @@ int main(void) {
                     action==23?shell.music_path:shell.music_selected_path);
                 music_offset_pending=shell.music_page*KUI_MUSIC_PLAYER_ROWS;
                 player_status=(struct kui_app_status){0};
+            }
+            if(action==54 || action==55) {
+                snprintf(games_path_pending,sizeof(games_path_pending),"%s",
+                    action==54?shell.games_path:shell.games_selected_path);
+                games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
             }
             if(action==19) memory_test_status=(struct kui_app_status){0};
             if(action==20 || action==45) network_test_status=(struct kui_app_status){0};

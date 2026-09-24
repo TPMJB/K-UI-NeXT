@@ -5,7 +5,8 @@
  * memory, network, idle, reset, home-vmu, home-memory, home-network,
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
- * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder. */
+ * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder, home-games,
+ * games, games-detail, games-error, games-advanced. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -30,7 +31,24 @@ int main(int argc,char **argv) {
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
     view.music_cache_bytes=4674286;
-    if(!strcmp(argv[1],"audio-cd")) {
+    if(!strcmp(argv[1],"home-games")) shell.home_selected=8;
+    else if(!strcmp(argv[1],"games")) {
+        shell.page=KUI_SHELL_GAMES;shell.games_listing.count=8;shell.games_listing.has_more=true;
+        const char *names[]={"Fighting","Dead or Alive 2","Resident Evil - Code Veronica","MDK2",
+            "Armada","Grandia II","Sword of the Berserk","A very long game name that clips safely at the right margin"};
+        for(unsigned i=0;i<8;i++) snprintf(shell.games_listing.entries[i].name,sizeof(shell.games_listing.entries[i].name),"%s",names[i]);
+        shell.games_listing.entries[0].directory=true;shell.games_selected=1;
+        strcpy(shell.games_listing.message,"Choose a GDI image to inspect.");
+    } else if(!strcmp(argv[1],"games-detail") || !strcmp(argv[1],"games-error")) {
+        shell.page=KUI_SHELL_GAMES_DETAIL;
+        strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
+        struct kui_games_detail *d=&shell.games_detail;
+        d->valid=strcmp(argv[1],"games-error")!=0;d->bytes=1185765648;d->tracks=3;d->data_tracks=2;d->audio_tracks=1;
+        d->boot_bytes=123456;d->boot_lba=45166;
+        strcpy(d->title,"Dead or Alive 2");strcpy(d->product,"T-3601N");strcpy(d->region,"JUE");
+        strcpy(d->boot_file,"1ST_READ.BIN");strcpy(d->message,"Track file missing: track03.bin");
+    } else if(!strcmp(argv[1],"games-advanced")) shell.page=KUI_SHELL_GAMES_ADVANCED;
+    else if(!strcmp(argv[1],"audio-cd")) {
         shell.page=KUI_SHELL_CD_AUDIO;shell.cd_audio.loaded=true;shell.cd_audio.count=12;
         shell.cd_audio.playing=true;shell.cd_audio.current=3;shell.cd_selected=2;
         view.music_title="Audio CD track 3";

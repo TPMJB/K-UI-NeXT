@@ -17,6 +17,7 @@ RUNTIME_OBJECTS += build/dc/src/core/timing.o
 RUNTIME_OBJECTS += build/dc/src/core/destination.o build/dc/src/core/destination_file.o
 RUNTIME_OBJECTS += build/dc/src/core/known_dumps.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
+RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/crc16.o
 RUNTIME_OBJECTS += build/dc/src/core/settings.o build/dc/src/core/settings_file.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o

@@ -3,6 +3,12 @@
 Planning baseline: 2026-09-24, app source `bc5c8133bf76`. This is a development
 plan, not a claim that K-UI currently runs retail games from images.
 
+**Implementation update:** the first G1/G2 increment now provides the portable
+GDI/boot-metadata services and a read-only Games browser in the SD runtime.
+Host validation and the focused console checklist are documented in
+[games-test.md](games-test.md). This inspection preview precedes G3; the resident
+read proof and retail loading are still unimplemented.
+
 ## First goal
 
 Select a GDI from one Games app, launch a small independently authored test

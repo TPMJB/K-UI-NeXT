@@ -9,6 +9,7 @@
 #include "kui/music_player.h"
 #include "kui/clock.h"
 #include "kui/cd_audio.h"
+#include "kui/games.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -28,7 +29,8 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_DESTINATION, KUI_SHELL_KEYBOARD, KUI_SHELL_ADVANCED,
     KUI_SHELL_RIPPER_SETTINGS, KUI_SHELL_VMU, KUI_SHELL_MEMORY, KUI_SHELL_NETWORK,
     KUI_SHELL_GD_PLAY, KUI_SHELL_MUSIC, KUI_SHELL_CLOCK,
-    KUI_SHELL_VMU_RESTORE, KUI_SHELL_CRC_SCAN, KUI_SHELL_VMU_ACTIONS, KUI_SHELL_SYSTEM_TOOLS, KUI_SHELL_SALVAGE, KUI_SHELL_CD_AUDIO };
+    KUI_SHELL_VMU_RESTORE, KUI_SHELL_CRC_SCAN, KUI_SHELL_VMU_ACTIONS, KUI_SHELL_SYSTEM_TOOLS, KUI_SHELL_SALVAGE, KUI_SHELL_CD_AUDIO,
+    KUI_SHELL_GAMES, KUI_SHELL_GAMES_DETAIL, KUI_SHELL_GAMES_ADVANCED };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -49,7 +51,8 @@ enum kui_shell_action {
     KUI_SHELL_NETWORK_CONNECT, KUI_SHELL_SYSTEM_INSPECT, KUI_SHELL_FLASH_BACKUP,
     KUI_SHELL_BIOS_BACKUP, KUI_SHELL_RESTART,
     KUI_SHELL_SALVAGE_NEW, KUI_SHELL_SALVAGE_RESUME, KUI_SHELL_SALVAGE_RECOVER,
-    KUI_SHELL_CD_LIST, KUI_SHELL_CD_PLAY, KUI_SHELL_CD_PAUSE, KUI_SHELL_CD_RESUME, KUI_SHELL_CD_STOP
+    KUI_SHELL_CD_LIST, KUI_SHELL_CD_PLAY, KUI_SHELL_CD_PAUSE, KUI_SHELL_CD_RESUME, KUI_SHELL_CD_STOP,
+    KUI_SHELL_GAMES_LIST, KUI_SHELL_GAMES_INSPECT
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -81,6 +84,10 @@ struct kui_shell {
     struct kui_music_player_page music_listing;
     struct kui_cd_audio_status cd_audio;
     unsigned cd_selected;
+    char games_path[KUI_DEST_ROOT_CAP], games_selected_path[KUI_GAMES_FILE_CAP];
+    unsigned games_page, games_selected, games_advanced_selected;
+    struct kui_games_page games_listing;
+    struct kui_games_detail games_detail;
     /* Destination is committed only by a successful worker load/save. Browsing
      * and typing are drafts; neither changes where a new capture is written. */
     char destination[KUI_DEST_ROOT_CAP], browse_path[KUI_DEST_ROOT_CAP];
@@ -125,6 +132,11 @@ void kui_shell_set_clock(struct kui_shell *shell, const struct kui_datetime *val
 void kui_shell_set_cd_audio(struct kui_shell *shell, const struct kui_cd_audio_status *status);
 void kui_shell_set_music_listing(struct kui_shell *shell,
     const struct kui_music_player_page *page);
+/* Games results must still match their active page and requested root/path.
+ * Main also checks worker generation to reject stale same-folder pagination.
+ * LIST uses games_path + games_page * ROWS; INSPECT uses games_selected_path. */
+void kui_shell_set_games_listing(struct kui_shell *shell, const struct kui_games_page *page);
+void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);
 /* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
  * DEST_SAVE reads browse_path. Main owns the generation check before installing
  * worker results; these functions themselves perform no filesystem I/O. */

@@ -21,6 +21,9 @@ void kui_destination_default(char out[KUI_DEST_ROOT_CAP]);
 bool kui_destination_normalize(char out[KUI_DEST_ROOT_CAP],const char *path);
 bool kui_destination_parent(char out[KUI_DEST_ROOT_CAP],const char *path);
 bool kui_destination_join(char out[KUI_DEST_ROOT_CAP],const char *parent,const char *name);
+/* Validate one FAT-safe component independently of a directory-path limit.
+ * Allows up to NAME_CAP-1 UTF-8 bytes; no slash, dot aliases or reserved name. */
+bool kui_destination_name_valid(const char *name);
 /* Titles replace unsafe bytes with '_', collapse whitespace, trim leading/trailing
  * dots/spaces, preserve whole UTF-8 characters and use DreamcastDisc if empty
  * or reserved. Folder helpers require an already sanitized title. Numbered
