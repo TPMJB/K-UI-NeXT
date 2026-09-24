@@ -11,6 +11,7 @@ from runtime_package import envelope, flatten_elf, rejection_cases, verify
 from loader_package import inspect_probe
 from image_probe_package import inspect_image_probe
 from retail_package import inspect_retail
+from boot_badge import BADGE, inspect_badge, verify_cdi_badge
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,9 +63,13 @@ def main():
     binary = ROOT / "build/kui-diagnostic.bin"
     data = binary.read_bytes()
     binary.write_bytes(data + b"\0" * (-len(data) % 2048))
+    badge = BADGE.read_bytes()
+    inspect_badge(badge)
     run(str(mkdcdisc / "builddir/mkdcdisc"), "-b", str(binary),
         "-n", "K-UI NeXT Bootstrap", "-a", "K-UI Team", "-r", "20260916",
-        "-m", "-N", "--allow-overwrite", "-o", "dist/kui-diagnostic.cdi")
+        "-i", str(BADGE), "-N", "--allow-overwrite", "-o", "dist/kui-diagnostic.cdi")
+    cdi = dist / "kui-diagnostic.cdi"
+    badge_info = verify_cdi_badge(cdi.read_bytes(), badge)
     for name in ("kui-diagnostic.elf", "kui-diagnostic.bin", "kui-diagnostic.map"):
         shutil.copyfile(ROOT / "build" / name, dist / name)
     for name in ("kui-runtime.elf", "kui-runtime.map"):
@@ -236,6 +241,42 @@ def main():
         if path.is_file() and path.name != "SHA256SUMS":
             bench_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(benchmark)}")
     (benchmark / "SHA256SUMS").write_text("\n".join(bench_hashes) + "\n")
+    # A boot-disc refresh is separate from SD/runtime updates and the large
+    # source/diagnostic download. It contains only the CDI and its records.
+    boot = dist / "bootstrap-cd"
+    if boot.exists():
+        shutil.rmtree(boot)
+    boot.mkdir()
+    shutil.copyfile(cdi, boot / "kui-bootstrap.cdi")
+    (boot / "BOOTLOADER-REFRESH.md").write_text(guide("bootloader-refresh.md"))
+    shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.png", boot / "boot-disc-badge.png")
+    shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.md", boot / "BADGE-PROVENANCE.md")
+    for name in ("LICENSE", "THIRD_PARTY.md"):
+        shutil.copyfile(dist / name, boot / name)
+    shutil.copytree(dist / "LICENSES", boot / "LICENSES")
+    boot_record = {"kind": "bootstrap-cd", "commit": commit,
+                   "compiler": compiler, "dependencies": lock,
+                   "bootstrap": {
+                       "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
+                       "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                       "cdi_sha256": hashlib.sha256(cdi.read_bytes()).hexdigest(),
+                       "cdi_bytes": cdi.stat().st_size, "badge": badge_info},
+                   "hardware_tested": False}
+    (boot / "build.json").write_text(json.dumps(boot_record, indent=2) + "\n")
+    (boot / "SOURCE.txt").write_text(
+        f"K-UI NeXT source commit: {commit}\n"
+        f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
+        "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
+        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "original notices are also included in build.json and LICENSES/.\n\n"
+        "This package refreshes only the boot CD. Burn kui-bootstrap.cdi as a disc image.\n"
+        "Keep the existing SD card and its KUI/runtime.kui and Games payloads unchanged.\n"
+        "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
+    boot_hashes = []
+    for path in sorted(boot.rglob("*")):
+        if path.is_file() and path.name != "SHA256SUMS":
+            boot_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(boot)}")
+    (boot / "SHA256SUMS").write_text("\n".join(boot_hashes) + "\n")
     hashes = []
     for path in sorted(dist.rglob("*")):
         if path.is_file() and path != dist / "SHA256SUMS":

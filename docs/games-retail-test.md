@@ -1,26 +1,25 @@
 # DOA2 launch — SD latency comparison
 
-**Current test: bounded CMD18 gameplay.** The separate transport comparison
-[passed on hardware](evidence/games-cmd18-comparison-2026-09-24.md), reaching
-486–490 KiB/s on larger CMD18 reads versus 395 KiB/s with CMD17. Its stationary
-results screen was the intended end of the diagnostic.
+**Current playable baseline: `ed31d522c847`.** The owner reports the integrated
+CMD18 build substantially better and really playable. Character selection to
+the first stage took about 32 seconds; slowdown remained during the first
+roughly eight seconds of battle and ten seconds of an FMV.
 
-Install the ordinary `sd-update` package on the same SD card, replacing the
-benchmark's runtime and `KUI/apps/games/retail-boot.kui`. Keep the same boot CD
-and dump. Select DOA2, press Y then A; this package launches the game.
-Play the same character/stage introduction and one fight. Report launch time,
-the black screen before the stage movie, speech/movie behavior and lag during
-the first seconds of battle. One comparison is enough; do not repeat the
-standalone storage or selected-image probes. Use the pinned ZIP for rollback.
+The exact package is pinned at `baseline/doa2-cmd18-ed31d522c847`; source,
+archive hash and both transport/gameplay observations are in the
+[CMD18 evidence record](evidence/games-cmd18-comparison-2026-09-24.md).
+Keep these SD files installed. Games optimization is paused while the
+[boot CD is refreshed](bootloader-refresh.md); no further comparison is
+requested now. The following implementation notes describe this tested build.
 
-The candidate uses bounded 8–10 physical-block CMD18 streams and CMD17 for
+The tested build uses bounded 8–10 physical-block CMD18 streams and CMD17 for
 shorter tails. The two-game-sector EXEC limit is unchanged. Every image read
 closes its stream before restoring the pins and returning to the game. It also
 removes the resident's duplicate manifest decode and card initialization by
 copying the stage's validated state and rebinding all callbacks locally.
 The historical gameplay timings below describe the preserved working build.
 
-**Pinned working build: `6c02bd8b22f4`.** The owner reports fluid audio and
+**Earlier pinned working build: `6c02bd8b22f4`.** The owner reports fluid audio and
 playable results, with delayed textures, stage loads and brief early-battle lag
 still present. Exact rollback branch, archive checksum and timing intervals are
 in [the pinned baseline record](evidence/games-doa2-pinned-baseline-2026-09-24.md).

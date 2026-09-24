@@ -22,7 +22,7 @@ packaged PR merge: `93b1e6022592935ba180f581c96009fba3a4f567`;
 CI run `36039191044`, SD benchmark artifact `10825791514`.
 ZIP SHA256: `f3d16cff42eb54d7cc2a3d2aa34a0181047545b6c149d80acd1c92dd6bfc4f20`.
 
-## Gameplay integration candidate
+## Gameplay integration — owner confirmed
 
 Use CMD18 only when the current request and physical extent provide at least
 eight blocks, and read at most ten blocks per stream. Retain the existing
@@ -39,12 +39,24 @@ and adopts the idle card state in the resident instead of repeating decode
 and SD initialization there. Adoption replaces every bus callback with the
 resident's own code; no temporary-stage pointers survive. The removed cold
 code makes room for streaming without enlarging the reserved resident area.
-Stage loading uses the same bounded transport, but gameplay improvement is
-unmeasured until the owner runs this candidate.
+Stage loading uses the same bounded transport. The owner has now run the
+integrated build and reports it substantially better and really playable.
 
-Keep `baseline/doa2-sd-6c02bd8b22f4` and its archived ZIP unchanged. The next
-hardware request is one normal DOA2 launch through the same stage introduction
-and fight, reporting launch/loading time, speech/FMVs and early-battle lag.
+Owner observations: about 32 seconds from character selection to the first
+stage; slower character motion during the first approximately eight seconds
+of a fight; slowdown during the first approximately ten seconds of an FMV.
+These are approximate owner observations, not instrumented frame timings.
+
+Pin: `baseline/doa2-cmd18-ed31d522c847`, exact packaged merge
+`ed31d522c8475b88bd40afa366fe3f7bdf143985`, source
+`750982e55efbec666922cbf52e6a8a8d5ce72557`.
+CI run `36041393177`, SD update artifact `10826433905`.
+ZIP bytes: `8134517`; SHA256:
+`a3c64bd3a6d70cc0369a32aaa04f563af9bea72ab8603e20307d3c5cb5b18bc4`.
+The baseline ZIP has been copied without alteration and its hash checked.
+Keep `baseline/doa2-sd-6c02bd8b22f4` and its archived ZIP unchanged too.
+Games work is paused at the owner's request while the boot CD is refreshed;
+no repeated gameplay or transport test is requested.
 
 Focused local validation: `ASAN_OPTIONS=detect_leaks=0 make test-retail-streams`
 passed for protocol stream lifecycle/error cleanup, resident-local SD state

@@ -10,21 +10,23 @@ SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c
            src/dreamcast/main.c src/dreamcast/clock.c src/dreamcast/disc.c src/dreamcast/drive_bus.c src/dreamcast/sd.c
 OBJECTS := $(patsubst %.c,build/dc/%.o,$(SOURCES)) build/dc/ff.o build/dc/ffunicode.o
 LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/dreamcast/bootstrap.o
+# The CD recovery menu uses the same benchmark runner as SD Diagnostics.
+BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o \
+    build/dc/src/core/timing.o build/dc/src/core/destination.o build/dc/src/core/destination_file.o \
+    build/dc/src/core/known_dumps.o build/dc/src/core/crc16.o \
+    build/dc/src/core/settings.o build/dc/src/core/settings_file.o \
+    build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
+LOADER_OBJECTS += $(BENCH_OBJECTS)
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/dc/main-runtime.o
-RUNTIME_OBJECTS += build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o build/dc/src/dreamcast/capture.o
+RUNTIME_OBJECTS += $(BENCH_OBJECTS)
+RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
-RUNTIME_OBJECTS += build/dc/src/core/timing.o
-RUNTIME_OBJECTS += build/dc/src/core/destination.o build/dc/src/core/destination_file.o
-RUNTIME_OBJECTS += build/dc/src/core/known_dumps.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
 RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
-RUNTIME_OBJECTS += build/dc/src/core/crc16.o
-RUNTIME_OBJECTS += build/dc/src/core/settings.o build/dc/src/core/settings_file.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
-RUNTIME_OBJECTS += build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
 RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewport.o build/dc/src/core/salvage.o build/dc/src/core/recovery_crc.o
 APP_SOURCES := $(wildcard src/apps/*.c)
 RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))

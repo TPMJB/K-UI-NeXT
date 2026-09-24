@@ -43,9 +43,9 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #ifndef KUI_BUILD_ID
 #define KUI_BUILD_ID "local-unversioned"
 #endif
+#define KUI_BUTTON_BENCH (1u<<29)
 #ifdef KUI_SD_RUNTIME
 #define KUI_BUTTON_MSTATS (1u<<30)
-#define KUI_BUTTON_BENCH (1u<<29)
 static struct kui_memory_stats memory_status;
 static bool memory_valid;
 static struct kui_shell shell;
@@ -742,6 +742,20 @@ static void *worker(void *unused) {
                 kui_sd_disconnect();
             }
             if(action == 3) save_report("manual","see operation log",false);
+            if(action == 7) {
+#ifdef KUI_SD_RUNTIME
+                kui_memory_log("bench start");
+#endif
+                enum kui_bench_result result=kui_bench_start();
+                kui_ui_set_hz(KUI_OPT_UI_FULL);   /* the cap is for the measurement, not the report save */
+#ifdef KUI_SD_RUNTIME
+                kui_memory_log("bench end");
+#endif
+                const char *outcome=result==KUI_BENCH_COMPLETE?"complete":result==KUI_BENCH_STOPPED?"stopped":"failed";
+                kui_log("Bench result: %s",outcome);
+                kui_log("Saving diagnostic report automatically; B cancels log save.");
+                save_report("auto bench",outcome,true);
+            }
 #ifdef KUI_SD_RUNTIME
             if(action == 8 || action == 9) {
                 settings_operation(action == 9);
@@ -991,16 +1005,6 @@ static void *worker(void *unused) {
                 }
             }
             if(action == 10 || action == 11) destination_operation(action == 11);
-            if(action == 7) {
-                kui_memory_log("bench start");
-                enum kui_bench_result result=kui_bench_start();
-                kui_ui_set_hz(KUI_OPT_UI_FULL);   /* the cap is for the measurement, not the report save */
-                kui_memory_log("bench end");
-                const char *outcome=result==KUI_BENCH_COMPLETE?"complete":result==KUI_BENCH_STOPPED?"stopped":"failed";
-                kui_log("Bench result: %s",outcome);
-                kui_log("Saving diagnostic report automatically; B cancels log save.");
-                save_report("auto bench",outcome,true);
-            }
             if(is_capture_action(action)) {
                 kui_memory_log("capture/verify start");
                 enum kui_capture_result result=action==22?
@@ -1052,7 +1056,7 @@ static void *worker(void *unused) {
 }
 
 #ifndef KUI_SD_RUNTIME
-static void draw(unsigned scroll,unsigned page) {
+static void draw(unsigned scroll) {
     char visible[VISIBLE_LINES][LINE_BYTES] = {{0}};
     char status[LINE_BYTES];
     mutex_lock(&lock);
@@ -1072,36 +1076,13 @@ static void draw(unsigned scroll,unsigned page) {
     minifont_draw_str(vram_s + 20 * 640 + 16, 640, "K-UI NeXT | " KUI_ROLE);
     minifont_set_color(220, 230, 235);
     minifont_draw_str(vram_s + 44 * 640 + 16, 640, "Build " KUI_BUILD_ID);
-#ifdef KUI_SD_RUNTIME
-    minifont_draw_str(vram_s + 44*640+360,640,"L: mstats   R: bench");
-#endif
-    minifont_draw_str(vram_s + 68 * 640 + 16, 640,page?
-        "A New dump   X Resume latest   Y Verify latest":
+    minifont_draw_str(vram_s + 44*640+440,640,"R: Bench");
+    minifont_draw_str(vram_s + 68 * 640 + 16, 640,
         "A Disc probe   X Write/read SD test   Y Save log");
     minifont_draw_str(vram_s + 88 * 640 + 16, 640,
-        "B Stop   Left/Right page   Up/Down scroll   Start latest");
+        "B Stop   Up/Down scroll   Start latest");
     minifont_draw_str(vram_s + 116 * 640 + 16, 640, status);
     unsigned top=144,shown=VISIBLE_LINES;
-#ifdef KUI_SD_RUNTIME
-    if(page) {
-        static const char *phases[]={"Identifying disc","Checking saved prefix","Capturing","Verifying saved files","Verified"};
-        struct kui_capture_progress p;unsigned rate;
-        mutex_lock(&lock);p=capture_status;rate=rate_kib;mutex_unlock(&lock);
-        char line[77];
-        snprintf(line,sizeof(line),"%s  Track %u/%u  Retry %lu",phases[p.phase],p.track,p.tracks,(unsigned long)p.retries);
-        minifont_draw_str(vram_s + 140*640+16,640,line);
-        snprintf(line,sizeof(line),"%lu / %lu MiB  %u KiB/s  Saved %lu MiB",
-            (unsigned long)(p.done/(1024*1024)),(unsigned long)(p.total/(1024*1024)),rate,
-            (unsigned long)(p.committed/(1024*1024)));
-        minifont_draw_str(vram_s + 160*640+16,640,line);
-        if(memory_valid) snprintf(line,sizeof(line),"RAM ~%lu/%lu KiB  sampled peak ~%lu KiB",
-            (unsigned long)(memory_status.used/1024),(unsigned long)(memory_status.physical/1024),
-            (unsigned long)(memory_status.sampled_peak/1024));
-        else snprintf(line,sizeof(line),"RAM snapshot unavailable; L trigger retries");
-        minifont_draw_str(vram_s+180*640+16,640,line);
-        top=208;shown=15;
-    }
-#endif
     unsigned first_visible=actual>shown?actual-shown:0;
     for(unsigned i = 0; i < shown && i+first_visible<actual; ++i)
         minifont_draw_str(vram_s + (top + i * 16) * 640 + 16, 640, visible[i+first_visible]);
@@ -1285,15 +1266,18 @@ static unsigned controller_buttons(void) {
     if(state->joyy>48) buttons|=CONT_DPAD_DOWN;
 #ifdef KUI_SD_RUNTIME
     if(state->ltrig>128) buttons|=KUI_BUTTON_MSTATS;
-    if(state->rtrig>128) buttons|=KUI_BUTTON_BENCH;
 #endif
+    if(state->rtrig>128) buttons|=KUI_BUTTON_BENCH;
     return buttons;
 }
 
 #ifndef KUI_SD_RUNTIME
 static bool boot_cancelled(void) {
-    draw(0,0);
-    return (controller_buttons() & CONT_B) != 0;
+    /* Once observed, B keeps this boot on CD even if released during SD cleanup. */
+    static bool fallback;
+    fallback = fallback || (controller_buttons() & CONT_B) != 0;
+    draw(0);
+    return fallback;
 }
 #endif
 
@@ -1350,6 +1334,8 @@ int main(void) {
     kui_log("Diagnostics R trigger: isolated benchmarks from /KUI/bench.cfg.");
     kui_log("The screen redraws 2x a second while working, which frees CPU (ui_hz=full: off).");
 #else
+    kui_log("R trigger: benchmarks from /KUI/bench.cfg; B stops safely.");
+    kui_log("Bench SD sections write temporary test files; results auto-save to SD.");
     kui_log("Full capture is available in the updated SD runtime.");
 #endif
     kthread_attr_t attrs = {.stack_size = 64 * 1024, .label = "kui-io"};
@@ -1359,7 +1345,7 @@ int main(void) {
 #ifdef KUI_SD_RUNTIME
             draw_shell();
 #else
-            draw(0,0);
+            draw(0);
 #endif
             thd_sleep(100);
         }
@@ -1663,7 +1649,8 @@ int main(void) {
         mutex_lock(&lock);
         if(pressed & CONT_B) cancel_requested = true;
         if(!busy && !(buttons & CONT_B)) {
-            unsigned action = pressed & CONT_A ? 1 : pressed & CONT_X ? 2 : pressed & CONT_Y ? 3 : 0;
+            unsigned action = pressed & CONT_A ? 1 : pressed & CONT_X ? 2 : pressed & CONT_Y ? 3 :
+                pressed & KUI_BUTTON_BENCH ? 7 : 0;
             if(action) {
                 pending = action; busy = true; cancel_requested = false; scroll = 0;
             }
@@ -1689,7 +1676,7 @@ int main(void) {
 #ifdef KUI_SD_RUNTIME
             draw_shell();
 #else
-            draw(scroll,0);
+            draw(scroll);
 #endif
             last_draw = t;
         }

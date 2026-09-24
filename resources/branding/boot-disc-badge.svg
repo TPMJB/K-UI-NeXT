@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="90" viewBox="0 0 320 90">
+<title>K-UI by TPMJB — github.com/TPMJB</title>
+<desc>Native-size vector boot badge: neon visor profile and large, readable lettering.</desc>
+<rect width="320" height="90" fill="#c0c0c0"/>
+<rect x="2" y="2" width="316" height="86" fill="#080f23"/>
+<g fill="none" stroke="#5ce8f0" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M15 48 C12 27 24 13 44 12 C57 5 69 13 68 25 M17 29 C28 16 43 15 54 19 M16 39 C26 29 32 27 40 25 M16 51 C18 41 24 35 31 32"/>
+  <path d="M46 28 C53 24 68 25 75 30 L79 43 C70 40 60 41 53 40 Z"/>
+  <path d="M76 45 L79 50 L74 53 L76 57 L73 59 L75 63 C76 67 72 70 66 69 L49 65 C40 63 35 55 33 49"/>
+  <path d="M37 43 C28 37 24 45 28 52 C31 56 36 55 37 51 M29 56 C32 67 26 77 17 81 M59 70 C50 78 53 82 68 84 M18 52 C17 61 19 66 22 70"/>
+</g>
+<path d="M41 32 L47 30 M42 36 L48 34" stroke="#ef64d7" stroke-width="2"/>
+<g fill="#f4f7ff">
+  <path d="M98 14 H111 V31 L131 14 H149 L124 36 L151 58 H132 L111 41 V58 H98 Z"/>
+  <path d="M155 33 H179 V41 H155 Z"/>
+  <path d="M187 14 H201 V43 Q201 47 206 47 H230 Q235 47 235 43 V14 H249 V44 Q249 58 233 58 H203 Q187 58 187 44 Z"/>
+  <path d="M258 14 H272 V58 H258 Z"/>
+</g>
+<text x="98" y="78" font-family="DejaVu Sans Mono, monospace" font-weight="bold" font-size="17" fill="#5ce8f0">github.com/TPMJB</text>
+</svg>

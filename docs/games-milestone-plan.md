@@ -1,7 +1,7 @@
 # Games: independent image loading
 
 Planning baseline: 2026-09-24, app source `bc5c8133bf76`. This is a development
-plan, not a claim that K-UI currently runs retail games from images.
+plan. See the current hardware status below.
 
 **Implementation update:** the first G1/G2 increment now provides the portable
 GDI/boot-metadata services and a read-only Games browser in the SD runtime.
@@ -18,8 +18,10 @@ all 11 checks passed and 93 post-handoff SD blocks read.
 [Evidence](evidence/games-selected-image-hardware-2026-09-24.json) and
 [accepted test guide](games-image-probe.md). No repeat is requested.
 That accepted probe does not execute a retail boot file or provide hardware SD DMA.
-The separate first retail experiment is now implemented; its console test is
-pending. See [the DOA2 launch guide](games-retail-test.md).
+The independent DOA2 retail path now runs on hardware. CMD18 build
+`ed31d522c847` is pinned as really playable by owner report, with stage-load
+and early-fight/FMV slowdowns still present. Games work is paused while the
+boot CD is refreshed. See [the DOA2 status](games-retail-test.md).
 
 Runtime `57d53841c1ea` has now passed repeated ARMADA metadata inspection on
 the console, with a stopped earlier inspection followed by successful use.
@@ -39,7 +41,7 @@ The portable, read-only GDI image service and bounded metadata reader are in
 place, and the original-fixture post-handoff read proof passed. Selected game
 tracks are connected to a limited GD-vector request service, and the selected
 DOA2 read path has passed on hardware. A separate experimental retail boot path
-is implemented, with boot state and compatibility awaiting the console test.
+has launched DOA2 on hardware; broader game compatibility remains open.
 The accepted read probes do not establish those capabilities.
 The existing bootstrap CD remains the entry point; deliver updates on SD.
 
