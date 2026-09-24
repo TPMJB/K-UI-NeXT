@@ -82,3 +82,22 @@ void retail_display_hex(const char *label,uint32_t value) {
     for(unsigned i=0;i<8;i++) out[n++]="0123456789ABCDEF"[(value>>(28-4*i))&15];
     out[n]=0; retail_display_line(out);
 }
+void retail_display_progress(uint32_t done,uint32_t total) {
+    /* Fixed bottom bar, independent of scrolling diagnostic rows. */
+    if(!total || done>total) return;
+    uint32_t filled=(uint32_t)((uint64_t)done*600u/total);
+    volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)0xa5000000u;
+    for(unsigned y=464;y<472;y++)
+        for(unsigned x=0;x<600;x++) frame[y*640+20+x]=x<filled?0x07e0:0x2104;
+}
+void retail_display_pause(void) {
+    /* Keep handoff text visible for about 3 seconds at 50/60 Hz without
+     * borrowing any TMU channel. A stopped scan generator cannot hang us. */
+    volatile uint32_t *scan=(volatile uint32_t *)(uintptr_t)0xa05f810cu;
+    uint32_t before=*scan&0x3ffu, frames=0;
+    for(uint32_t budget=0;budget<30000000u && frames<180u;budget++) {
+        uint32_t now=*scan&0x3ffu;
+        if(now<before) ++frames;
+        before=now;
+    }
+}

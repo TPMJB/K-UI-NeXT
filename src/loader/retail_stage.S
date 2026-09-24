@@ -7,6 +7,27 @@
     .align 2
     .global _start
 _start:
+/* arch_exec leaves both caches off. Enable them from P2 before the serial
+ * byte loop and CRC work, then execute C through its cached P1 address. */
+    mov.l .Lcache_setup,r0
+    jmp @r0
+    nop
+.Lcache_setup_p2:
+    mov.l .Lstart_ccr,r0
+    mov.l .Lstart_cache,r1
+    mov.l r1,@r0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    mov.l .Lcached_start,r0
+    jmp @r0
+    nop
+.Lcached:
     mov.l .Lbss,r0
     mov.l .Lend,r1
     mov #0,r2
@@ -28,18 +49,131 @@ _start:
 .Lbss: .long __retail_stage_bss_begin
 .Lend: .long __retail_stage_bss_end
 .Lmain: .long C(kui_retail_stage_main)
+.Lcache_setup: .long .Lcache_setup_p2+0x20000000
+.Lcached_start: .long .Lcached
+.Lstart_ccr: .long 0xff00001c
+.Lstart_cache: .long 0x00000909
 
     .text
     .align 2
     .global C(kui_retail_bootstrap_enter)
 C(kui_retail_bootstrap_enter):
+/* Owner bootstrap 2 is the normal ISO-loader entry. Prime the retail CPU
+ * state explicitly; none of the departed KOS register state is an ABI.
+ * Register profile informed by DreamShell ISO Loader startup.s (GPL-3.0),
+ * Copyright (C) 2009-2016, 2025-2026 SWAT, based on Lawrence Sebald's
+ * Sylverant PSO Patcher. This implements that CPU interface in our stage.
+ * This one-time FPSCR initialization is the only permitted FP-state write;
+ * the trampoline, relay and resident still preserve the game's FPU state. */
+    mov.l .Lboot_p2,r0
+    jmp @r0
+    nop
+.Lboot_uncached:
+    mov.l .Lbootram,r0
+    mov.l .Lbootramend,r1
+.Lboot_purge:
+    ocbp @r0
+    add #32,r0
+    cmp/hs r1,r0
+    bf .Lboot_purge
+    mov.l .Lbootccr,r0
+    mov.l .Lbootcache,r1
+    mov.l r1,@r0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    mov.l .Lbootsr,r0
+    ldc r0,ssr
+    ldc r0,sr
+    mov.l .Lbootgbr,r0
+    ldc r0,gbr
     mov.l .Lbootstack,r15
-    mov.l .Lboot1,r0
+    ldc r15,vbr
+    mov.l .Lbootfpscr,r0
+    .global __retail_boot_fpscr_init
+__retail_boot_fpscr_init:
+    lds r0,fpscr
+    mov.l .Lboot2,r14
+    ldc r14,spc
+    mov.l .Lboot_return,r0
+    lds r0,pr
+    mov #0,r0
+    mov #0,r1
+    mov #0,r2
+    mov #0,r3
+    mov #0,r4
+    mov #0,r5
+    mov #0,r6
+    mov #0,r7
+    mov #0,r8
+    mov #0,r9
+    mov #0,r10
+    mov #0,r11
+    mov #0,r12
+    mov #0,r13
+    clrmac
+    clrt
+    jmp @r14
+    mov #0,r14
+.Lboot_returned:
+    mov.l .Lhighstack,r15
+    mov.l .Lreturn_handler,r0
     jmp @r0
     nop
     .align 2
+.Lboot_p2: .long .Lboot_uncached+0x20000000
+.Lbootram: .long 0x8c000000
+.Lbootramend: .long KUI_RETAIL_RAM_END
+.Lbootccr: .long 0xff00001c
+.Lbootcache: .long 0x00000909
+.Lbootsr: .long 0x700000f0
+.Lbootgbr: .long 0x8c000000
+.Lbootfpscr: .long 0x00040001
 .Lbootstack: .long KUI_RETAIL_BOOT_VBR
-.Lboot1: .long KUI_RETAIL_BOOT1_ADDRESS+0x20000000
+.Lboot2: .long KUI_RETAIL_BOOT2_ADDRESS+0x20000000
+.Lboot_return: .long .Lboot_returned
+.Lreturn_handler: .long C(kui_retail_boot_returned)
+
+/* Publish newly copied code before calling the resident. The temporary stage
+ * has no cache-as-RAM usage; all RAM dirty lines are written back first. */
+    .align 2
+    .global C(kui_retail_stage_sync)
+C(kui_retail_stage_sync):
+    mov.l .Lsync_p2,r0
+    jmp @r0
+    nop
+.Lsync_uncached:
+    mov.l .Lsync_begin,r0
+    mov.l .Lsync_end,r1
+.Lsync_loop:
+    ocbp @r0
+    add #32,r0
+    cmp/hs r1,r0
+    bf .Lsync_loop
+    mov.l .Lsync_ccr,r0
+    mov.l .Lsync_cache,r1
+    mov.l r1,@r0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    rts
+    nop
+    .align 2
+.Lsync_p2: .long .Lsync_uncached+0x20000000
+.Lsync_begin: .long 0x8c000000
+.Lsync_end: .long KUI_RETAIL_RAM_END
+.Lsync_ccr: .long 0xff00001c
+.Lsync_cache: .long 0x00000909
 
 /* This template runs at the owner's executable entry. Save every integer
  * register used by C, preserving the owner's bootstrap result. The entire

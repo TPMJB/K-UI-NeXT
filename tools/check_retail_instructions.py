@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Reject FPU use in the linked retail code, including libgcc helpers.
+"""Reject FPU use except the one-time bootstrap FPSCR setup.
 
 The pinned Dreamcast compiler excludes the -m4-nofpu target. Instead reserve
 the exposed FPU registers and use integer division, as documented in
@@ -23,7 +23,11 @@ def main():
              str(directory / (name + '.elf'))], text=True)
         (directory / (name + '.dis')).write_text(disassembly)
         decoded = []
+        fpscr_init = None
         for line in disassembly.splitlines():
+            symbol = re.match(r'^([0-9a-f]+) <__retail_boot_fpscr_init>:$', line)
+            if symbol:
+                fpscr_init = int(symbol.group(1), 16)
             found = re.match(r'^\s*([0-9a-f]+):\s+([0-9a-f]{2})\s+([0-9a-f]{2})\s+(\S+)(?:\s+(.*))?$', line)
             if not found:
                 continue
@@ -43,7 +47,8 @@ def main():
             elif opcode & 0xf000 == 0x9000 and mnemonic == 'mov.w':
                 literals.add(address + 4 + (opcode & 255) * 2)
         seen = 0
-        for address, _, mnemonic, operands, line in decoded:
+        setup_seen = 0
+        for address, opcode, mnemonic, operands, line in decoded:
             if address in literals:
                 continue
             if mnemonic.startswith('.'):
@@ -51,12 +56,22 @@ def main():
             operands = operands.split('!', 1)[0].split(';', 1)[0]
             if mnemonic.startswith('f') or re.search(
                     r'\b(?:fpul|fpscr|(?:fr|dr|xd|xf)\d+)\b', operands):
-                raise SystemExit(f'FPU use in {name}: {line.strip()}')
+                # Named, exact LDS r0,FPSCR instruction in the high boot
+                # setup only. The game-state relay and resident get no waiver.
+                if (name == 'stage' and address == fpscr_init and
+                        opcode == 0x406a and mnemonic == 'lds' and
+                        operands.strip().replace(' ', '') == 'r0,fpscr'):
+                    setup_seen += 1
+                else:
+                    raise SystemExit(f'FPU use in {name}: {line.strip()}')
             seen += 1
+        if name == 'stage' and setup_seen != 1:
+            raise SystemExit('Missing unique bootstrap FPSCR setup')
         if not seen:
             raise SystemExit(f'No decoded instructions in {name}')
         instructions += seen
-    print(f'PASS retail linked instruction audit: {instructions} instructions, no FPU use')
+    print(f'PASS retail linked instruction audit: {instructions} instructions; '
+          'one bootstrap FPSCR setup, no relay/resident FPU use')
 
 
 if __name__ == '__main__':

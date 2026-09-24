@@ -13,7 +13,9 @@ static struct kui_retail_gd service;
 static struct kui_loader_sd card;
 static struct kui_gd_track tracks[KUI_RETAIL_IMAGE_TRACKS];
 static struct retail_display_state display;
-static uint32_t firmware_vector, fault_reported;
+static uint32_t firmware_vector;
+uint32_t kui_retail_original_menu;
+extern void kui_retail_menu_hook(void);
 static enum kui_loader_sd_result card_result;
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
@@ -71,11 +73,11 @@ static void install_hook(void) {
     volatile uint32_t *vector = (volatile uint32_t *)(uintptr_t)
         ((KUI_GD_VECTOR_ADDRESS & 0x1fffffffu) | 0xa0000000u);
     *vector = (uint32_t)(uintptr_t)kui_retail_resident_hook;
+    purge(0x8c0000e0u, sizeof(uint32_t));
+    *(volatile uint32_t *)(uintptr_t)0xac0000e0u=(uint32_t)(uintptr_t)kui_retail_menu_hook;
     __asm__ __volatile__("" : : : "memory");
 }
 static void report_fault(const char *reason, uint32_t function) {
-    if(fault_reported) return;
-    fault_reported = 1;
     retail_display_restore(&display);
     retail_display_line("K-UI GAME READER");
     retail_display_line(manifest.title);
@@ -87,7 +89,23 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_hex("Destination", service.diag.last_destination);
     retail_display_hex("SD result", (uint32_t)card_result);
     retail_display_hex("SD blocks read", image.blocks_read);
-    retail_display_line("Photograph this screen if the game stops.");
+    retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
+    retail_display_line("POWER OFF AND ON TO RETURN");
+    for(;;) __asm__ volatile("nop");
+}
+void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
+    retail_display_restore(&display);
+    retail_display_line("GAME REQUESTED BIOS MENU RETURN");
+    retail_display_hex("MENU COMMAND",command);
+    retail_display_hex("CALLER PR",caller);
+    retail_display_hex("CALLER STACK",stack);
+    retail_display_hex("LAST GD FUNCTION",service.diag.last_function);
+    retail_display_hex("LAST GD COMMAND",service.diag.last_command);
+    retail_display_hex("LAST GD LBA",service.diag.last_lba);
+    retail_display_hex("SD BLOCKS READ",image.blocks_read);
+    retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
+    retail_display_line("POWER OFF AND ON TO RETURN");
+    for(;;) __asm__ volatile("nop");
 }
 int kui_retail_resident_init(const uint8_t wire[KUI_RETAIL_MAP_BYTES],
     uint32_t original_gd_vector, const struct retail_display_state *saved_display) {
@@ -116,6 +134,7 @@ int kui_retail_resident_init(const uint8_t wire[KUI_RETAIL_MAP_BYTES],
     volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
     for(unsigned i = 0; i < 4; ++i) guard[i] = 0x4b554947u;
     firmware_vector = original_gd_vector;
+    kui_retail_original_menu=*(volatile uint32_t *)(uintptr_t)0x8c0000e0u;
     /* The game's first instructions may reinitialize caches. Do not leave
      * newly decoded manifest/card/guard state only in dirty cache lines. */
     purge((uint32_t)(uintptr_t)__retail_resident_bss_begin,

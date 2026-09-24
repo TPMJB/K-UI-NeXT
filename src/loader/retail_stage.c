@@ -12,11 +12,12 @@ extern const uint8_t __retail_resident_blob_end[] __asm__("__retail_resident_blo
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
+extern void kui_retail_stage_sync(void);
 
 /* High storage is temporary: no pointer to it survives the final handoff.
  * Firmware low32KiB and the owner's IP metadata/TOC stay in place throughout.
- * Bootstrap1 and2 run at their original addresses before the lower IP region
- * is retired for the small resident. No copyrighted bootstrap is bundled. */
+ * Bootstrap2 runs at its original address with the independent reader already
+ * installed in the unused lower IP region. No proprietary bootstrap is bundled. */
 static uint8_t wire_copy[KUI_RETAIL_MAP_BYTES];
 static uint8_t original_entry[KUI_RETAIL_TRAMPOLINE_BYTES];
 static struct kui_retail_manifest manifest;
@@ -65,6 +66,28 @@ static void read_sectors(uint32_t lba,uint32_t count,void *out) {
         stopped("IMAGE READ FAILED",(uint32_t)result);
     }
 }
+void kui_retail_boot_returned(void) {
+    retail_display_restore(&display);
+    stopped("OWNER BOOTSTRAP RETURNED",KUI_RETAIL_BOOT2_ADDRESS);
+}
+
+static void install_resident(void) {
+    size_t bytes=(size_t)(__retail_resident_blob_end-__retail_resident_blob_start);
+    if(!bytes || bytes>KUI_RETAIL_RESIDENT_LIMIT-KUI_RETAIL_RESIDENT_ADDRESS)
+        stopped("RESIDENT BOUNDS FAILED",(uint32_t)bytes);
+    uint32_t firmware=*(volatile uint32_t *)(uintptr_t)0x8c0000bcu;
+    uintptr_t canonical=(firmware&0x1fffffffu)|0x80000000u;
+    if((firmware&1u) || canonical<0x8c000100u || canonical>=KUI_RETAIL_IP_ADDRESS)
+        stopped("UNSUPPORTED FIRMWARE GD VECTOR",firmware);
+    memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,
+           __retail_resident_blob_start,bytes);
+    kui_retail_stage_sync();
+    typedef int (*resident_init_fn)(const uint8_t *,uint32_t,
+                                    const struct retail_display_state *);
+    resident_init_fn init=(resident_init_fn)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
+    int initialized=init(wire_copy,firmware,&display);
+    if(initialized) stopped("RETAIL RESIDENT INIT FAILED",(uint32_t)initialized);
+}
 void kui_retail_stage_main(const uint8_t *wire) {
     retail_display_capture(&display);
     retail_display_restore(&display);
@@ -103,6 +126,7 @@ void kui_retail_stage_main(const uint8_t *wire) {
         if(count>32) count=32;
         read_sectors(manifest.boot_lba+done,count,boot+(size_t)done*2048);
         done+=count;
+        retail_display_progress(done,sectors);
     }
     crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
     if(crc!=manifest.boot_crc32) stopped("EXECUTABLE CHECKSUM CHANGED",crc);
@@ -113,19 +137,26 @@ void kui_retail_stage_main(const uint8_t *wire) {
     retail_display_line("IP AND EXECUTABLE CHECKSUMS PASSED");
     retail_display_hex("BOOT BYTES",manifest.boot_bytes);
     retail_display_hex("SD BLOCKS READ",image.blocks_read);
-    retail_display_line("ENTERING OWNER BOOTSTRAPS");
+    /* DreamShell's native Katana path clears this IP bootstrap flag before
+     * entering bootstrap2, including its truncated-IP mode. Only this RAM
+     * copy changes; the original IP checksum was checked above. */
+    ip[0xfcu]&=(uint8_t)~0x20u;
+    install_resident();
+    retail_display_line("READER INSTALLED BEFORE BOOTSTRAP 2");
+    retail_display_line("ENTERING OWNER BOOTSTRAP 2");
+    retail_display_pause();
     kui_retail_bootstrap_enter();
 }
 
 /* Called from P2 assembly with IRQs masked and caches clean/disabled. The
  * supported initial stack/VBR follow the conventional native GD bootstrap
- * layout; reject an incompatible entry before replacing any bootstrap code.
+ * layout; reject an incompatible entry before restoring executable entry.
  * General registers, SR, VBR, GBR, PR, MAC and cache configuration are restored
  * by assembly; fixed FPU registers, integer division and the linked machine-
  * code audit keep every floating-point register unchanged. */
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_restore(&display);
-    retail_display_line("OWNER BOOTSTRAPS REACHED GAME ENTRY");
+    retail_display_line("BOOTSTRAP 2 REACHED GAME ENTRY");
     uintptr_t address=(uintptr_t)frame;
     address=(address&0x1fffffffu)|0x80000000u;
     if((address&3u) || address<KUI_RETAIL_BOOT2_ADDRESS ||
@@ -140,22 +171,13 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     memcpy(boot,original_entry,sizeof(original_entry));
     uint32_t crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
     if(crc!=manifest.boot_crc32) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
-    size_t resident_bytes=(size_t)(__retail_resident_blob_end-__retail_resident_blob_start);
-    if(!resident_bytes || resident_bytes>KUI_RETAIL_RESIDENT_LIMIT-KUI_RETAIL_RESIDENT_ADDRESS)
-        stopped("RESIDENT BOUNDS FAILED",(uint32_t)resident_bytes);
-    uint32_t firmware=*(volatile uint32_t *)(uintptr_t)0x8c0000bcu;
-    uintptr_t canonical=(firmware&0x1fffffffu)|0x80000000u;
-    if((firmware&1u) || canonical<0x8c000100u || canonical>=KUI_RETAIL_IP_ADDRESS)
-        stopped("UNSUPPORTED FIRMWARE GD VECTOR",firmware);
-    memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,
-           __retail_resident_blob_start,resident_bytes);
-    typedef int (*resident_init_fn)(const uint8_t *,uint32_t,
-                                    const struct retail_display_state *);
-    resident_init_fn init=(resident_init_fn)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
-    int initialized=init(wire_copy,firmware,&display);
-    if(initialized) stopped("RETAIL RESIDENT INIT FAILED",(uint32_t)initialized);
-    retail_display_line("RESIDENT INSTALLED - ORIGINAL ENTRY RESTORED");
+    const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
+    size_t bytes=(size_t)(__retail_resident_blob_end-__retail_resident_blob_start);
+    if(memcmp(resident,__retail_resident_blob_start,bytes))
+        stopped("BOOTSTRAP ALTERED RESIDENT",0);
+    retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
     retail_display_line("ENTERING DEAD OR ALIVE 2");
     retail_display_line("IF IT STOPS PHOTOGRAPH THE LAST SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
+    retail_display_pause();
 }

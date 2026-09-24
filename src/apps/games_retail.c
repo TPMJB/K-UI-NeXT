@@ -11,7 +11,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct files {char root[KUI_DEST_ROOT_CAP];kui_cancel_fn cancel;};
+struct files {
+    char root[KUI_DEST_ROOT_CAP], open_name[KUI_GAME_NAME_CAP];
+    kui_cancel_fn cancel;
+    FIL reader;
+    bool reader_open;
+};
+static bool close_reader(struct files *f) {
+    if(!f->reader_open) return true;
+    f->reader_open=false;
+    return f_close(&f->reader)==FR_OK;
+}
 static bool stopped(const struct files *f) {return f->cancel && f->cancel();}
 static bool join(const struct files *f,const char *name,char out[KUI_GAMES_FILE_CAP+3]) {
     if(!kui_destination_name_valid(name)) return false;
@@ -43,15 +53,22 @@ static enum kui_game_result stat_file(void *ctx,const char *name,uint64_t *bytes
 }
 static enum kui_game_result read_file(void *ctx,const char *name,uint64_t offset,
     void *out,size_t bytes) {
-    struct files *f=ctx;char path[KUI_GAMES_FILE_CAP+3];FIL file;
+    struct files *f=ctx;char path[KUI_GAMES_FILE_CAP+3];
     if(stopped(f)) return KUI_GAME_CANCELLED;
     if(!join(f,name,path) || bytes>UINT_MAX || (uint64_t)(FSIZE_t)offset!=offset) return KUI_GAME_INVALID;
-    if(f_open(&file,path,FA_READ)!=FR_OK) return KUI_GAME_IO;
-    bool ok=offset<=f_size(&file) && bytes<=f_size(&file)-offset;
+    /* Keep the current track open while hashing. Reopening for every 2352
+     * bytes made FatFs walk its allocation chain from the start each time. */
+    if(f->reader_open && strcmp(f->open_name,name) && !close_reader(f)) return KUI_GAME_IO;
+    if(!f->reader_open) {
+        if(f_open(&f->reader,path,FA_READ)!=FR_OK) return KUI_GAME_IO;
+        f->reader_open=true;
+        snprintf(f->open_name,sizeof(f->open_name),"%s",name);
+    }
+    FIL *file=&f->reader;
+    bool ok=offset<=f_size(file) && bytes<=f_size(file)-offset;
     UINT got=0;
-    if(ok) ok=f_lseek(&file,(FSIZE_t)offset)==FR_OK && f_tell(&file)==offset;
-    if(ok) ok=f_read(&file,out,(UINT)bytes,&got)==FR_OK && got==bytes;
-    if(f_close(&file)!=FR_OK) ok=false;
+    if(ok && f_tell(file)!=offset) ok=f_lseek(file,(FSIZE_t)offset)==FR_OK && f_tell(file)==offset;
+    if(ok) ok=f_read(file,out,(UINT)bytes,&got)==FR_OK && got==bytes;
     return stopped(f)?KUI_GAME_CANCELLED:ok?KUI_GAME_OK:KUI_GAME_IO;
 }
 static enum kui_game_metadata_io_result metadata_read(void *ctx,uint32_t lba,uint8_t out[2048]) {
@@ -210,6 +227,7 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,log,true);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+    if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
     const struct kui_volume volume=*kui_media_volume();
     if(!volume.count || (uint64_t)volume.start+volume.count>UINT32_MAX) {problem="invalid partition bounds";goto done;}
     map->partition_start=volume.start;map->partition_end=(uint64_t)volume.start+volume.count;
@@ -227,6 +245,7 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
         map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes,map->boot_crc32);
     ok=true;
 done:
+    if(!close_reader(&files)) {ok=false;problem="cannot close image reader";}
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="cannot release filesystem";}
     kui_sd_disconnect();free(gdi);free(image);free(map);
     if(stopped(&files)) {ok=false;problem="cancelled before retail handoff";}

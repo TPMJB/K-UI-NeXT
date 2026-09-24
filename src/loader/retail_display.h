@@ -7,4 +7,6 @@ void retail_display_capture(struct retail_display_state *);
 void retail_display_restore(const struct retail_display_state *);
 void retail_display_line(const char *);
 void retail_display_hex(const char *, uint32_t);
+void retail_display_progress(uint32_t, uint32_t);
+void retail_display_pause(void);
 #endif

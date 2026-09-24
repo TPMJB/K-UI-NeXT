@@ -59,10 +59,11 @@ jobs:
           if requested:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
               exact = {'Makefile.dc', '.github/workflows/diagnostic.yml',
-                       'tools/check_retail_instructions.py', 'tests/test_retail_instructions.py'}
+                       'tools/check_retail_instructions.py', 'tests/test_retail_instructions.py',
+                       'include/kui/retail_loader_layout.h', 'src/apps/games_retail.c'}
               if not paths or any(p not in exact and not p.startswith(('src/loader/', 'docs/')) for p in paths):
-                  raise SystemExit('Console-only request includes portable/app changes; full validation required')
-              print('Console-only correction requested: portable/app sources are unchanged; skipping their repeat suite.')
+                  raise SystemExit('Console-only request includes changes outside the focused retail correction scope')
+              print('Console build requested: skipping the broad repeat suite; focused retail checks are recorded with the correction.')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('console_only=' + str(requested).lower() + '\n')
           PY

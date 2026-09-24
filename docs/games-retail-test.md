@@ -1,11 +1,13 @@
-# First DOA2 launch experiment
+# DOA2 launch experiment — bootstrap 2 correction
 
 The selected-image GD probe has already passed on hardware: build
 `c4cfd4585ec5`, DEAD OR ALIVE 2, all 11 checks, 93 physical SD blocks after
 launcher shutdown. Do not repeat that probe for this test.
 
-This update adds the first **experimental retail launch**, not a claim of
-working DOA2 gameplay. It only offers launch for the native GD-ROM
+The first retail build `d19f1e0ebaf3` reached the independent loading screen
+after an approximately four-minute wait, flashed more text, then returned to
+the stock Dreamcast menu. This correction remains an **experimental retail
+launch**, not a claim of working DOA2 gameplay. It only offers launch for the native GD-ROM
 `DEAD OR ALIVE 2` / `1ST_READ.BIN` profile. A different region or revision
 may still need work. The product number in a synthetic test fixture is not
 used as a hardware identification or compatibility claim.
@@ -18,22 +20,34 @@ used as a hardware identification or compatibility claim.
 3. Press **Y — Launch (experimental)**. On its confirmation screen press
    **A — Launch**. The existing **A — Test image reads** action on image
    details is the previously accepted probe, not this launch.
-4. Photograph the last visible screen, including its build ID and any error
-   details. If the game starts, report the furthest point reached: title,
+4. The loading screen now has a progress bar. Handoff screens pause for
+   approximately three seconds. Photograph the last screen, including its
+   build ID and error details. Unsupported reader operations and a standard
+   BIOS-menu return request now stop on a diagnostic screen. If the game starts, report the furthest point reached: title,
    menu, or an actual fight, and whether controller input works.
 5. Power off/on to return to K-UI. No hot return is provided.
 
 Preparation reads the IP and boot executable to record their checksums;
 the independent loader checks those bytes again after K-UI shuts down.
+Preparation keeps the track file open across sequential reads; it previously
+reopened and retraversed its allocation chain for each sector. The detached
+stage now enables CPU caches before SD transfers and CRC work. Neither change
+is a measured hardware speed claim; the new console run establishes timing.
 This is not a new disc capture or full-image verification. The loader never
 writes the SD card or modifies the stored game files.
 
 ## What the experiment does
 
 The temporary stage loads the owner's complete 32 KiB IP and native linear
-boot executable. It runs the owner's bootstraps at their original addresses.
+boot executable. After checking both CRCs it clears the native Katana IP
+flag at offset `0xfc`, bit `0x20`, matching the observed DreamShell setup,
+and installs the resident before entering the owner's bootstrap 2 at
+`0xac00e000`. It explicitly sets SP/VBR `0x8c00f400`, GBR `0x8c000000`,
+SR/SSR `0x700000f0`, FPSCR `0x00040001` and CCR `0x00000909`. The precise
+meaning of the IP flag is not established by the inspected source.
 A temporary 128-byte executable-entry trampoline captures the resulting
-integer CPU state, then restores the original entry bytes before the first
+integer CPU state, confirms the resident code remains intact, then restores
+the original entry bytes before the first
 original game instruction. The loader does not bundle proprietary bootstrap
 code or apply compatibility patches to the executable.
 
@@ -52,8 +66,10 @@ K-UI's shutdown; subsequent game-time reads preserve serial controls and
 refuse to take over active serial I/O. Requests complete through explicit polling in bounded chunks;
 command 17 still copies through the CPU. Hardware DMA interrupts, streaming,
 image CDDA, Windows CE, IDE/CF, and broad game compatibility are not implemented.
-The first game call requiring an unsupported operation may therefore stop
-progress. A diagnostic records the request and SD state when possible.
+The first game call requiring an unsupported operation therefore stops on
+a diagnostic with the request and SD state. The standard BIOS-menu vector
+is intercepted for return command 1 to retain the caller address and last GD
+request. A direct jump to ROM or a hardware reset can still bypass that trap.
 
 ## Independent interface references
 
@@ -67,7 +83,11 @@ progress. A diagnostic records the request and SD state when possible.
 - GD status/mode interface details are additionally cross-checked against
   the independently developed redream source pinned in `retail_gd.c`.
 
-No DreamShell ISO-loader implementation was read, imported, or translated
-for this experiment. The accepted optical capture/drive/command files remain
+The first build was implemented without reading the DreamShell ISO loader.
+After the failed hardware attempt, the user explicitly requested comparison
+with their existing DreamShell tree. Its bootstrap entry, CPU setup, cache
+setup, syscall ordering and Katana IP flag were inspected for this correction.
+See `evidence/games-retail-boot2-correction-2026-09-24.md` for exact source
+files and hashes. The independent image reader and GD service remain in use. The accepted optical capture/drive/command files remain
 unchanged. Host tests and binary layout checks cannot establish retail game
 compatibility; this console run is the next evidence needed.

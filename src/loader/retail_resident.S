@@ -4,7 +4,7 @@
 #define JOIN(a,b) JOIN_INNER(a,b)
 #define C_SYMBOL(name) JOIN(__USER_LABEL_PREFIX__,name)
 
-/* Called by the high relay after it replaces the retired lower IP bootstrap.
+/* Called by the high stage before entering the owner's upper IP bootstrap.
  * Do not switch stacks here: decoding/init use the temporary high stack. */
     .section .entry,"ax"
     .align 2
@@ -121,3 +121,33 @@ C_SYMBOL(kui_retail_resident_hook):
 .Lguard: .long KUI_RETAIL_HOOK_STACK_BOTTOM
 .Lguard_value: .long 0x4b554947
 .Ldispatch: .long C_SYMBOL(kui_retail_resident_dispatch)
+
+/* The experiment has no hot return. Preserve evidence when code calls the
+ * standard menu vector with command 1; other menu functions still forward to
+ * firmware. Use our private stack even if the caller was in a dying game. */
+    .align 2
+    .global C_SYMBOL(kui_retail_menu_hook)
+C_SYMBOL(kui_retail_menu_hook):
+    mov r4,r0
+    cmp/eq #1,r0
+    bt .Lmenu_stop
+    mov.l .Lmenu_original,r0
+    mov.l @r0,r0
+    jmp @r0
+    nop
+.Lmenu_stop:
+    stc sr,r0
+    mov.l .Lmenu_mask,r1
+    or r1,r0
+    ldc r0,sr
+    sts pr,r5
+    mov r15,r6
+    mov.l .Lmenu_stack,r15
+    mov.l .Lmenu_report,r0
+    jmp @r0
+    nop
+    .align 2
+.Lmenu_original: .long C_SYMBOL(kui_retail_original_menu)
+.Lmenu_mask: .long 0x100000f0
+.Lmenu_stack: .long KUI_RETAIL_HOOK_STACK-16
+.Lmenu_report: .long C_SYMBOL(kui_retail_menu_return)
