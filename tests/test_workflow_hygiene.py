@@ -100,10 +100,10 @@ class ExperimentalBuildIsOptIn(unittest.TestCase):
         # The expression yields '' unless one of the two conditions holds, and the make line
         # passes exactly that.
         self.assertRegex(self.flag, r"&& '1' \|\| ''")
-        self.assertIn("make -k diagnostic BUILD_ID=\"${GITHUB_SHA:0:12}\" $KUI_EXPERIMENTAL_FLAG", self.text)
+        self.assertIn("make -k diagnostic BUILD_ID=\"$(git rev-parse --short=12 HEAD)\" $KUI_EXPERIMENTAL_FLAG", self.text)
 
     def test_the_artifacts_are_named_apart(self):
-        for name in ("diagnostic", "sd-update", "sd-benchmark", "bootstrap-cd", "release-candidate"):
+        for name in ("diagnostic", "sd-update", "sd-benchmark", "bootstrap-cd", "release"):
             self.assertIn("name: ${{ steps.package.outputs.artifact_prefix }}-" + name +
                           "${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}", self.text)
 

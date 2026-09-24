@@ -26,7 +26,21 @@ destination, SD result and last route details; GETSCD labels its format/capacity
 correctly. Resident addresses, guarded stack bounds, CMD18 reads and the
 accepted optical capture code remain unchanged.
 
-## One console check
+## Console result — 2026-09-24
+
+After installing the GETSCD update, the owner reported that Evolution 2
+worked, but was "horribly slow." This confirms that the reported command
+rejection no longer prevents the tested image from booting. Full gameplay,
+game completion and VMU save/load were not established by that report.
+The successful build is recorded in
+[workflow run 36057635443](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36057635443),
+from source commit `420569e541014a7ed0be619967f6321886914353`.
+
+This fix is included in the final [1.5 release](release-v1.5-notes.md).
+Further game compatibility testing continues independently; speed
+optimization is deferred beyond 1.5.
+
+## Original console check
 
 Merge the new package's `KUI` folder onto the card, replacing matching supplied
 files while preserving games and settings. Keep the current boot CD. Launch

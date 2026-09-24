@@ -2,13 +2,14 @@
 
 An independent Dreamcast environment built directly on upstream KallistiOS.
 
-**Release candidate 1 (`1.5.0-rc1`).** A crimson Dáinsleif startup, the original
-Sega-screen K-UI badge, CD recovery benchmarks, and broader native-GD Games
-launching are packaged for console testing. Read the
-[RC installation and compatibility guide](docs/release-v1.5-rc1.md) and
-[release notes](docs/release-v1.5-rc1-notes.md). The candidate has no title
-allowlist; it does not claim every Dreamcast game works. DOA2 is the only title
-confirmed on hardware so far. Existing boot CDs and FAT32/exFAT cards remain
+**Version 1.5.0 is released.** Download the
+[1.5.0 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.5.0), then read
+[the installation guide](docs/release-v1.5.md) and
+[release notes](docs/release-v1.5-notes.md). Dáinsleif adds a crimson startup
+splash and native-GD Games launching without a title allowlist. DOA2 has
+confirmed playable gameplay; Evolution 2 now boots after the GETSCD fix but
+is severely slow. Compatibility remains title-dependent, and speed
+optimization is deferred. Existing boot CDs and FAT32/exFAT cards remain
 usable; no reformat is needed.
 
 The current SD runtime adds **raw-track GDI capture, saved-file verification and
@@ -31,26 +32,28 @@ good runtime have now passed by user report; see the
 New project code uses GPLv3; dependencies retain their own licenses. There is no
 separate contribution or commercial-relicensing agreement.
 
-## M1.5 shell update
+## The 1.5 shell
 
 The SD runtime opens nine apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
 **Network Test**, **Settings**, **Diagnostics**, **GD Play**, **Music Player** and **Games**. New captures use a selectable
 parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
 The hardware-proven acquisition engine remains unchanged.
 
-Use the existing bootstrap CD and the `sd-update` artifact. Replace
-`/KUI/runtime.kui`, and copy `KUI/apps/music/` for optional original menu music.
+Use the existing bootstrap CD and merge the release package's `KUI` folder
+onto the SD card as described in the [installation guide](docs/release-v1.5.md).
+Update the runtime and Games payload together; optional original menu music
+is included.
 See [the current app acceptance round](docs/apps-round-five.md) and
 [app boundaries and the later executable-loader plan](docs/app-architecture.md).
 These new app paths still need physical-console acceptance.
 
 - Select with D-pad or stick and open with A. B returns home while idle.
-- The original splash is capped at three seconds; B skips the shortened startup cue.
+- The startup splash is capped at three seconds; B skips the shortened startup cue.
   Home Y cycles volume/off; L/R on Home and Ripper select songs. The header names the current song.
 - GD Play exits through normal KOS shutdown to the stock BIOS. Music Player
   caches PCM16 WAV or Ogg Vorbis songs up to 6 MiB for background playback across apps.
-  The update includes an original one-minute WAV/Ogg sample, custom-song cycling,
-  explicit cache clearing and a separate audio-CD player.
+  The developer `sd-update` includes an original one-minute WAV/Ogg sample.
+  Music Player supports custom-song cycling, explicit cache clearing and a separate audio-CD player.
 - Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
   Start opens Advanced, **Destination folder** and **Capture settings**.
   Advanced also offers explicitly confirmed Quick resume (sizes only), preserving
@@ -142,7 +145,7 @@ See [the research scope](docs/milestone-1-research.md),
 [the implementation decisions](docs/diagnostic-design.md), and
 [dependency provenance](THIRD_PARTY.md).
 
-## Next: Games
+## Games
 
 Audio-CD playback is now accepted by owner report. The Games foundation adds
 `/Games` browsing, Advanced > Browse SD folders and bounded GDI/boot metadata
@@ -159,10 +162,12 @@ substantially better and really playable results, with roughly 32 seconds to
 the first stage after character selection and slowdown at the start of fights
 and FMVs. [Exact package and observations](docs/evidence/games-cmd18-comparison-2026-09-24.md).
 The earlier `baseline/doa2-sd-6c02bd8b22f4` is preserved too.
-V1.5 RC1 removes title/boot-filename allowlists while retaining native boot,
-format, memory, allocation and checksum checks. The accepted resident and SD
-transport are unchanged. Broader compatibility and physical VMU save/load
-remain console test items.
+V1.5 removes title/boot-filename allowlists while retaining native boot,
+format, memory, allocation and checksum checks. It adds bounded GETSCD
+responses: the owner confirms Evolution 2 now boots, with severe slowdown
+([compatibility evidence](docs/evolution2-getscd-test.md)). The accepted SD
+transport is unchanged. Broader compatibility and physical VMU save/load
+remain console test items; speed optimization is deferred.
 See [the gameplay evidence and performance findings](docs/evidence/games-doa2-gameplay-2026-09-24.md),
 [retail launch guide](docs/games-retail-test.md) and
 [staged Games plan](docs/games-milestone-plan.md).

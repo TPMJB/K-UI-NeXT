@@ -218,7 +218,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
         {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
         {"Play WAV or Ogg music from SD.", "Listen to audio CD tracks", "or keep music in the background."},
-        {"Launch native GD images from SD.", "Browse your game library.", "V1.5 RC: compatibility varies."}};
+        {"Launch native GD images from SD.", "Browse your game library.", "V1.5: compatibility varies."}};
     unsigned selected=s->home_selected<9?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
     for(unsigned i=0;i<9;i++) {
@@ -888,11 +888,11 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
             label(p,44,337,CYAN,"A Launch game   Y Advanced read test");
             label(p,44,365,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
                 "CD audio is unavailable; this game may not run.":
-                "V1.5 RC: game compatibility varies.");
+                "V1.5: game compatibility varies.");
         } else {
             label(p,44,337,AMBER,d->windows_ce?"Windows CE games are not supported.":
                 !d->native_gd?"This image has no supported native GD boot header.":
-                d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 16 tracks in this RC.":
+                d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 16 tracks in V1.5.":
                 "This image exceeds the current launch limits.");
             label(p,44,365,MUTED,"Y Advanced read test   X Inspect again");
         }
@@ -965,7 +965,7 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         s->games_detail.title[0]?s->games_detail.title:"Launch selected game?");
     label(p,48,218,AMBER,s->games_detail.high_density_audio?
         "CD audio is unavailable; this game may not run.":
-        "V1.5 RC: game compatibility varies.");
+        "V1.5: game compatibility varies.");
     label(p,48,244,WHITE,"SD access remains read-only.");
     label(p,48,270,WHITE,"The launcher closes before the game starts.");
     label(p,48,302,WHITE,"Keep the SD card inserted while playing.");

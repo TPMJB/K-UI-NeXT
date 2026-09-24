@@ -38,14 +38,16 @@ jobs:
     # *-shell feature branches build through their PR, where GitHub permits
     # restoring the base branch's caches. Keep ordinary milestone push builds.
     if: >-
+      ${{ !(github.event_name == 'push' && github.ref_name == 'main' && contains(github.event.head_commit.message, 'Release: v1.5.0')) &&
       (github.event_name != 'push' || !endsWith(github.ref_name, '-shell')) &&
-      (github.event_name != 'pull_request' || endsWith(github.head_ref, '-shell') || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository)
+      (github.event_name != 'pull_request' || endsWith(github.head_ref, '-shell') || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 3
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Select requested validation scope
         id: scope
         env:
@@ -78,10 +80,11 @@ jobs:
                   raise SystemExit('Bootstrap-only request includes changes outside the CD recovery scope')
               requested = True
               print('Bootstrap refresh: native build and embedded badge check; no broad repeat suite.')
-          candidate = 'Validation: rc-only' in message.splitlines()
+          candidate = any(scope in message.splitlines() for scope in ('Validation: rc-only', 'Validation: release-only'))
           if candidate:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
-              exact = {'Makefile', '.github/workflows/diagnostic.yml', 'README.md',
+              exact = {'Makefile', '.github/workflows/diagnostic.yml', '.github/workflows/release.yml', 'README.md',
+                       'tools/publish_release.py',
                        'include/kui/version.h', 'include/kui/game_metadata.h', 'include/kui/games.h',
                        'include/kui/games_retail.h', 'include/kui/retail_loader_layout.h',
                        'src/apps/games.c', 'src/apps/games_retail.c', 'src/core/game_metadata.c', 'src/core/shell.c',
@@ -95,7 +98,7 @@ jobs:
               if not paths or any(p not in exact and not p.startswith(('resources/branding/startup', 'docs/')) for p in paths):
                   raise SystemExit('RC-only request includes changes outside Games eligibility, branding and packaging')
               requested = True
-              print('V1.5 RC: focused Games/metadata/splash/package checks recorded locally; native build, layout and packaging checks run here.')
+              print('V1.5 release: focused checks recorded locally; native build, layout and packaging checks run here.')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('console_only=' + str(requested).lower() + '\n')
           PY
@@ -121,6 +124,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Build the exact source commit that will be promoted to main.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install build prerequisites
         run: |
           sudo apt-get update
@@ -158,7 +164,7 @@ jobs:
           # both refuse a dirty tree, and an untracked build.log counts. That broke packaging once.
           LOG="${RUNNER_TEMP:-/tmp}/kui-build.log"
           echo "experimental GD-ROM DMA probe: ${KUI_EXPERIMENTAL_FLAG:-off}"
-          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" $KUI_EXPERIMENTAL_FLAG 2>&1 | tee "$LOG"
+          make -k diagnostic BUILD_ID="$(git rev-parse --short=12 HEAD)" $KUI_EXPERIMENTAL_FLAG 2>&1 | tee "$LOG"
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             echo
@@ -201,7 +207,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.package.outputs.artifact_prefix }}-diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
-          path: dist/
+          path: |
+            dist/
+            !dist/release-assets/**
           if-no-files-found: error
           retention-days: 30
       - name: Upload small SD update for existing bootstrap discs
@@ -225,10 +233,18 @@ jobs:
           path: dist/bootstrap-cd/
           if-no-files-found: error
           retention-days: 30
-      - name: Upload V1.5 release candidate
+      - name: Upload V1.5 release
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-release-candidate${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
-          path: dist/release-candidate/
+          name: ${{ steps.package.outputs.artifact_prefix }}-release${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload permanent release assets for promotion
+        if: env.KUI_EXPERIMENTAL == ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ steps.package.outputs.artifact_prefix }}-release-assets
+          path: dist/release-assets/
           if-no-files-found: error
           retention-days: 30
