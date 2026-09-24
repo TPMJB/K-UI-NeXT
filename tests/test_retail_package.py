@@ -12,6 +12,7 @@ import retail_package as layout
 from check_retail_loader_layout import check_directory, check_stack_usage
 from image_probe_package import inspect_image_probe
 from loader_package import inspect_probe
+from package import release_metadata
 from runtime_package import envelope
 from test_image_loader_layout import executable
 
@@ -54,7 +55,7 @@ class RetailPackage(unittest.TestCase):
                 self.assertEqual(result["stage_bytes"], size)
                 self.assertEqual(result["resident_address"], "0x8c008300")
                 self.assertEqual(result["resident_limit"], "0x8c00bb00")
-                self.assertIn("hardware untested", result["abi"])
+                self.assertIn("title compatibility requires console testing", result["abi"])
 
     def test_every_inner_header_byte_is_checked(self):
         clean = self.payload()
@@ -96,6 +97,32 @@ class RetailPackage(unittest.TestCase):
         for inspect in (inspect_probe, inspect_image_probe):
             with self.assertRaises(ValueError):
                 inspect(package)
+
+
+class ReleaseMetadata(unittest.TestCase):
+    def test_canonical_names_preserve_accent_and_match_artifact_version(self):
+        release = release_metadata()
+        self.assertEqual(release["version"], "1.5.0-rc1")
+        self.assertIn("Dáinsleif", release["name"])
+        self.assertTrue(release["short_name"].isascii())
+        self.assertEqual(release["artifact_prefix"], "kui-1.5.0-rc1-dainsleif")
+
+    def test_missing_duplicate_control_character_and_unsafe_artifact_names_reject(self):
+        source = (ROOT / "include/kui/version.h").read_text(encoding="utf-8")
+        invalid = (
+            (source.replace('#define KUI_VERSION "1.5.0-rc1"', ''), "Missing"),
+            (source + '\n#define KUI_VERSION "1.5.0-rc1"\n', "repeated"),
+            (source.replace('"1.5.0-rc1"', '"1.5.0-rc1\\n"'), "Invalid"),
+            (source.replace('"kui-1.5.0-rc1-dainsleif"', '"../escape"'), "artifact prefix"),
+            (source.replace('"kui-1.5.0-rc1-dainsleif"', '"kui-1.4.0-dainsleif"'), "canonical version"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            header = Path(tmp) / "version.h"
+            for text, error in invalid:
+                with self.subTest(error=error):
+                    header.write_text(text, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, error):
+                        release_metadata(header)
 
 
 class ResidentStackReports(unittest.TestCase):

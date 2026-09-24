@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
+#include "kui/version.h"
 #include "kui/shell_font.h"
+#include "kui/retail_image.h"
 #include "shell_art.inc"
 #include <stdio.h>
 #include <string.h>
@@ -88,7 +90,7 @@ static const char *state(const struct kui_shell_view *v) {
 }
 static void heading(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
     art(p,32,20,128,64,kui_art_brand);
-    words(p,176,26,396,WHITE,"Katana UI",true);
+    words(p,176,26,396,WHITE,KUI_RELEASE_SHORT,true);
     words(p,176,52,396,MUTED,"by TPMJB / SD runtime",false);
     words(p,176,74,396,CYAN,state(v),false);
     char music[48];
@@ -135,8 +137,9 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_RIPPER ? "B Home   START Advanced   L/R Songs" :
         s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   L Actions" :
         s->page==KUI_SHELL_GAMES ? "B Parent / Home   LEFT/RIGHT Page" :
-        s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_image_ready(s)?
-            "A Test image reads   X Inspect   B Games":"X Inspect again   B Games") :
+        s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_retail_ready(s)?
+            "A Launch   X Inspect   B Games":kui_shell_games_image_ready(s)?
+            "Y Read test   X Inspect   B Games":"X Inspect again   B Games") :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
@@ -215,7 +218,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
         {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
         {"Play WAV or Ogg music from SD.", "Listen to audio CD tracks", "or keep music in the background."},
-        {"Browse GDI images on your SD", "and inspect their boot metadata.", "Experimental DOA2 launch available."}};
+        {"Launch native GD images from SD.", "Browse your game library.", "V1.5 RC: compatibility varies."}};
     unsigned selected=s->home_selected<9?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
     for(unsigned i=0;i<9;i++) {
@@ -859,7 +862,7 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
     }
     if(!count && !v->busy) label(p,40,210,MUTED,"No selectable GDI images or folders in this view.");
     label(p,40,380,v->busy?CYAN:AMBER,s->games_listing.message);
-    snprintf(line,sizeof(line),"PAGE %u%s   Inspect images; experimental launch for DOA2.",
+    snprintf(line,sizeof(line),"PAGE %u%s   Choose an image, then A to launch.",
         s->games_page+1,s->games_listing.has_more?" +":"");
     label(p,40,398,MUTED,line);
 }
@@ -881,13 +884,19 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         label(p,44,280,WHITE,line);
         snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
         label(p,44,306,MUTED,line);
-        label(p,44,337,CYAN,kui_shell_games_image_ready(s)?
-            "A Test image reads after leaving the menu":
-            "Inspect this image again before testing reads.");
         if(kui_shell_games_retail_ready(s)) {
-            label(p,44,365,AMBER,"Y Launch (experimental)");
-            label(p,44,386,MUTED,"Game compatibility is unproven.");
-        } else label(p,44,365,MUTED,"Metadata checks do not verify every saved sector.");
+            label(p,44,337,CYAN,"A Launch game   Y Advanced read test");
+            label(p,44,365,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
+                "CD audio is unavailable; this game may not run.":
+                "V1.5 RC: game compatibility varies.");
+        } else {
+            label(p,44,337,AMBER,d->windows_ce?"Windows CE games are not supported.":
+                !d->native_gd?"This image has no supported native GD boot header.":
+                d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 16 tracks in this RC.":
+                "This image exceeds the current launch limits.");
+            label(p,44,365,MUTED,"Y Advanced read test   X Inspect again");
+        }
+        label(p,44,386,MUTED,"Metadata checks do not verify every saved sector.");
     } else {
         label(p,44,210,v->busy?CYAN:AMBER,d->message);
         label(p,44,252,MUTED,v->busy?"Reading bounded image metadata from SD.":
@@ -907,7 +916,7 @@ static void games_advanced(struct paint *p,const struct kui_shell *s) {
         label(p,48,y+7,WHITE,names[i]);label(p,48,y+29,MUTED,details[i]);
     }
     label(p,40,365,MUTED,"IDE / CF sources are not available yet.");
-    label(p,40,389,MUTED,"DOA2: Y on image details for experimental launch.");
+    label(p,40,389,MUTED,"A on image details opens the game launch screen.");
 }
 static void games_probe_confirmation(struct paint *p,const struct kui_shell_view *v) {
     title(p,40,108,"Games / Resident loader probe");
@@ -944,19 +953,22 @@ static void games_image_probe_confirmation(struct paint *p,const struct kui_shel
 }
 static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         const struct kui_shell_view *v) {
-    title(p,40,108,"Games / Experimental DOA2 launch");
+    title(p,40,108,"Games / Launch game");
     words(p,40,140,608,CYAN,s->games_selected_path,false);
     panel(p,32,168,576,234,PANEL);
     if(!kui_shell_games_retail_ready(s)) {
-        label(p,48,186,AMBER,"This image is not ready for the DOA2 launch test.");
+        label(p,48,186,AMBER,"This image is not ready for native GD launch.");
         label(p,48,220,WHITE,"Press B, then X to inspect the image again.");
         return;
     }
-    label(p,48,186,CYAN,v->busy?"Preparing the launch...":"Launch DEAD OR ALIVE 2?");
-    label(p,48,218,AMBER,"Experimental: game compatibility is unproven.");
+    label(p,48,186,CYAN,v->busy?"Preparing the launch...":
+        s->games_detail.title[0]?s->games_detail.title:"Launch selected game?");
+    label(p,48,218,AMBER,s->games_detail.high_density_audio?
+        "CD audio is unavailable; this game may not run.":
+        "V1.5 RC: game compatibility varies.");
     label(p,48,244,WHITE,"SD access remains read-only.");
     label(p,48,270,WHITE,"The launcher closes before the game starts.");
-    label(p,48,302,WHITE,"Keep the SD card inserted throughout the test.");
+    label(p,48,302,WHITE,"Keep the SD card inserted while playing.");
     label(p,48,328,WHITE,"Photograph any error or the last screen shown.");
     label(p,48,354,AMBER,"Power cycle to return to the launcher.");
     if(v->busy && v->app_status && v->app_status->message[0])

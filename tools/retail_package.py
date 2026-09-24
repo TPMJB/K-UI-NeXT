@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Validate the first retail-launch envelope and its temporary-stage contract."""
+"""Validate the native-GD retail-launch envelope and temporary-stage contract."""
 import struct
 
 from runtime_package import verify
@@ -62,5 +62,5 @@ def inspect_retail(package):
         "resident_address": f"0x{RESIDENT_ADDRESS:08x}",
         "resident_limit": f"0x{RESIDENT_LIMIT:08x}",
         "manifest_bytes": MAP_BYTES,
-        "abi": "First native-GD retail launch experiment; hardware untested",
+        "abi": "Native GD-ROM GDI launch; title compatibility requires console testing",
     }

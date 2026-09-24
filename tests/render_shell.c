@@ -47,7 +47,7 @@ int main(int argc,char **argv) {
         struct kui_games_detail *d=&shell.games_detail;
         strcpy(d->path,shell.games_selected_path);
         d->valid=strcmp(argv[1],"games-error")!=0;d->bytes=1185765648;d->tracks=3;d->data_tracks=2;d->audio_tracks=1;
-        d->boot_bytes=123456;d->boot_lba=45166;
+        d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->product,"T-3601N");strcpy(d->region,"JUE");
         strcpy(d->boot_file,"1ST_READ.BIN");strcpy(d->message,"Track file missing: track03.bin");
     } else if(!strcmp(argv[1],"games-advanced")) {
@@ -74,12 +74,12 @@ int main(int argc,char **argv) {
         struct kui_games_detail *d=&shell.games_detail;
         strcpy(d->path,shell.games_selected_path);d->valid=true;d->tracks=3;
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->boot_file,"1ST_READ.BIN");
-        d->boot_bytes=123456;d->boot_lba=45166;
+        d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
         if(!strcmp(argv[1],"games-retail-loading")) {
             view.busy=true;view.app_status=&status;status.complete=false;
-            strcpy(status.message,"Preparing experimental DOA2 launch...");
+            strcpy(status.message,"Preparing selected game launch...");
         }
-        if(!strcmp(argv[1],"games-retail-invalid")) strcpy(d->title,"ARMADA");
+        if(!strcmp(argv[1],"games-retail-invalid")) { d->native_gd=false; d->windows_ce=true; }
     }
     else if(!strcmp(argv[1],"audio-cd")) {
         shell.page=KUI_SHELL_CD_AUDIO;shell.cd_audio.loaded=true;shell.cd_audio.count=12;

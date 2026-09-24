@@ -41,7 +41,9 @@ static void setup(uint32_t base) {
     uint8_t *ip = fixture.sectors[0], *pvd = fixture.sectors[16];
     memset(ip, ' ', 256);
     memcpy(ip, "SEGA SEGAKATANA ", 16);
+    memcpy(ip + 37, "GD-ROM", 6);
     memcpy(ip + 48, "JUE", 3);
+    memcpy(ip + 56, "0000000", 7);
     memcpy(ip + 64, "T-12345", 7);
     memcpy(ip + 74, "V1.000", 6);
     memcpy(ip + 96, "1ST_READ.BIN", 12);
@@ -92,6 +94,7 @@ static uint8_t *boot(void) {return fixture.sectors[ROOT] + 68;}
 int main(void) {
     setup(45000); expect(KUI_GAME_METADATA_OK);
     assert(meta.ip_valid && meta.boot_valid);
+    assert(meta.native_gd && !meta.windows_ce);
     assert(!strcmp(meta.title, "K-UI SYNTHETIC TEST"));
     assert(!strcmp(meta.product, "T-12345"));
     assert(!strcmp(meta.version, "V1.000"));
@@ -105,6 +108,16 @@ int main(void) {
     assert(meta.boot_lba == 21);
     setup(45000); dual32(pvd() + 80, SECTORS); expect(KUI_GAME_METADATA_OK);
     assert(meta.volume_blocks == SECTORS && meta.boot_lba == 45021);
+    setup(45000); memcpy(fixture.sectors[0] + 56, "0aBcDe0", 7);
+    expect(KUI_GAME_METADATA_OK); assert(meta.native_gd && !meta.windows_ce);
+    setup(45000); fixture.sectors[0][62] = '1';
+    expect(KUI_GAME_METADATA_OK); assert(!meta.native_gd && meta.windows_ce);
+    setup(45000); fixture.sectors[0][60] = 'G';
+    expect(KUI_GAME_METADATA_OK); assert(!meta.native_gd && !meta.windows_ce);
+    setup(45000); fixture.sectors[0][63] = '1';
+    expect(KUI_GAME_METADATA_OK); assert(!meta.native_gd && !meta.windows_ce);
+    setup(45000); fixture.sectors[0][37] = 'C';
+    expect(KUI_GAME_METADATA_OK); assert(!meta.native_gd && !meta.windows_ce);
 
     setup(45000); memset(fixture.sectors[0], 0, 16);
     expect(KUI_GAME_METADATA_IP_HEADER); assert(!meta.ip_valid && fixture.reads == 1);

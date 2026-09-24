@@ -49,6 +49,22 @@ static bool root_filename(const char *name) {
     }
     return true;
 }
+static void boot_profile(const uint8_t *ip, struct kui_game_metadata *out) {
+    /* IP.BIN peripheral field: seven hexadecimal digits at 0x38; bit zero
+     * selects Windows CE. Raw GD executable bytes need no MIL-CD transform. */
+    if(memcmp(ip + 37, "GD-ROM", 6) || ip[63] != ' ') return;
+    uint32_t flags = 0;
+    for(unsigned i = 56; i < 63; ++i) {
+        unsigned digit = ip[i];
+        if(digit >= '0' && digit <= '9') digit -= '0';
+        else if(digit >= 'A' && digit <= 'F') digit = digit - 'A' + 10u;
+        else if(digit >= 'a' && digit <= 'f') digit = digit - 'a' + 10u;
+        else return;
+        flags = (flags << 4) | digit;
+    }
+    out->windows_ce = (flags & 1u) != 0;
+    out->native_gd = !out->windows_ce;
+}
 static unsigned fold(unsigned c) {
     return c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c;
 }
@@ -150,6 +166,7 @@ enum kui_game_metadata_status kui_game_metadata_read(
     field(out->region, data + 48, 8);
     field(out->bootfile, data + 96, 16);
     out->ip_valid = true;
+    boot_profile(data, out);
     if(!root_filename(out->bootfile)) return KUI_GAME_METADATA_UNSUPPORTED;
 
     bool primary = false;
@@ -184,7 +201,7 @@ enum kui_game_metadata_status kui_game_metadata_read(
 }
 const char *kui_game_metadata_status_text(enum kui_game_metadata_status status) {
     switch(status) {
-    case KUI_GAME_METADATA_OK: return "Boot metadata found; game launching is not implemented";
+    case KUI_GAME_METADATA_OK: return "Boot metadata found";
     case KUI_GAME_METADATA_ARGUMENT: return "Invalid metadata request";
     case KUI_GAME_METADATA_IO: return "Image metadata could not be read";
     case KUI_GAME_METADATA_CANCELLED: return "Image inspection cancelled";

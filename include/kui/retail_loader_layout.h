@@ -2,7 +2,7 @@
 #ifndef KUI_RETAIL_LOADER_LAYOUT_H
 #define KUI_RETAIL_LOADER_LAYOUT_H
 
-/* First native-GD launch experiment. A temporary high stage loads the owner's
+/* Native-GD launch layout. A temporary high stage loads the owner's
  * IP and executable. The resident replaces the unused lower IP area before
  * entering owner bootstrap2 with explicitly initialized retail CPU state.
  * Firmware, IP metadata/TOC, upper bootstrap/VBR/stack and all normal game RAM
@@ -23,6 +23,8 @@
 #define KUI_RETAIL_BOOT2_ADDRESS 0x8c00e000
 #define KUI_RETAIL_BOOT_VBR 0x8c00f400
 #define KUI_RETAIL_EXEC_ADDRESS 0x8c010000
+/* Includes room for rounding the final sector without reaching the temporary
+ * stage at 0x8ce00000. This bounds memory use, not a particular title's size. */
 #define KUI_RETAIL_EXEC_MAX_BYTES 0xc00000
 #define KUI_RETAIL_TRAMPOLINE_BYTES 128
 #define KUI_RETAIL_RESIDENT_ADDRESS 0x8c008300

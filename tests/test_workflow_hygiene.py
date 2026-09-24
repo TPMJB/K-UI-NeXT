@@ -103,8 +103,9 @@ class ExperimentalBuildIsOptIn(unittest.TestCase):
         self.assertIn("make -k diagnostic BUILD_ID=\"${GITHUB_SHA:0:12}\" $KUI_EXPERIMENTAL_FLAG", self.text)
 
     def test_the_artifacts_are_named_apart(self):
-        for name in ("diagnostic", "sd-update"):
-            self.assertIn(f"name: {name}" + "${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}", self.text)
+        for name in ("diagnostic", "sd-update", "sd-benchmark", "bootstrap-cd", "release-candidate"):
+            self.assertIn("name: ${{ steps.package.outputs.artifact_prefix }}-" + name +
+                          "${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}", self.text)
 
 
 if __name__ == "__main__":

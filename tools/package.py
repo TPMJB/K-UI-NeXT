@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from runtime_package import envelope, flatten_elf, rejection_cases, verify
@@ -20,10 +21,37 @@ def run(*args):
     subprocess.run(args, cwd=ROOT, check=True)
 
 
+def release_metadata(path=ROOT / "include/kui/version.h"):
+    """Read the canonical string macros without evaluating C or Python code."""
+    names = {"KUI_VERSION": "version", "KUI_RELEASE_NAME": "name",
+             "KUI_RELEASE_SHORT": "short_name", "KUI_ARTIFACT_PREFIX": "artifact_prefix"}
+    release = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        fields = line.split(None, 2)
+        if len(fields) != 3 or fields[0] != "#define" or fields[1] not in names:
+            continue
+        key = names[fields[1]]
+        value = json.loads(fields[2])
+        if key in release or not isinstance(value, str) or not value or any(ord(c) < 32 for c in value):
+            raise ValueError("Invalid or repeated release string in version.h")
+        release[key] = value
+    if set(release) != set(names.values()):
+        raise ValueError("Missing canonical release strings in version.h")
+    if not release["version"].isascii() or not release["short_name"].isascii():
+        raise ValueError("Release version and console name must be ASCII")
+    if not re.fullmatch(r"kui-[a-z0-9][a-z0-9.-]*", release["artifact_prefix"]):
+        raise ValueError("Release artifact prefix must use lowercase ASCII letters, digits, dots and hyphens")
+    if not release["artifact_prefix"].startswith("kui-" + release["version"] + "-"):
+        raise ValueError("Release artifact prefix must include the canonical version")
+    return release
+
+
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
+    text = text.replace("(release-v1.5-rc1.md)", "(START-HERE.md)")
+    text = text.replace("(release-v1.5-rc1-notes.md)", "(RELEASE-NOTES.md)")
     return text
 
 
@@ -37,6 +65,7 @@ def main():
     if not elf.is_file():
         raise SystemExit("Build the Dreamcast diagnostic first")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    release = release_metadata()
     runtime = ROOT / "build/kui-runtime.elf"
     probe = ROOT / "build/loader/entry.elf"
     image_probe = ROOT / "build/loader/image_entry.elf"
@@ -124,6 +153,8 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
+    (dist / "START-HERE.md").write_text(guide("release-v1.5-rc1.md"), encoding="utf-8")
+    (dist / "RELEASE-NOTES.md").write_text(guide("release-v1.5-rc1-notes.md"), encoding="utf-8")
     for name in ("games-sd-benchmark", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
@@ -164,13 +195,13 @@ def main():
         for path in chain.glob(pattern):
             shutil.copyfile(path, source / path.name)
     compiler = subprocess.check_output(["sh-elf-gcc", "--version"], text=True).splitlines()[0]
-    record = {"commit": commit, "compiler": compiler, "dependencies": lock,
+    record = {"commit": commit, "release": release, "compiler": compiler, "dependencies": lock,
               "runtime": verify(package), "loader_probe": probe_info,
               "image_probe": image_probe_info,
               "retail_boot": retail_info,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
-    (dist / "build.json").write_text(json.dumps(record, indent=2) + "\n")
+    (dist / "build.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Existing boot discs need only the small runtime update. Full source and
     # dependency archives remain available in this run's diagnostic artifact.
     update = dist / "sd-update"
@@ -187,6 +218,8 @@ def main():
     for name in ("GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
+    for name in ("START-HERE.md", "RELEASE-NOTES.md"):
+        shutil.copyfile(dist / name, update / name)
     (update / "SOURCE.txt").write_text(
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
@@ -197,11 +230,14 @@ def main():
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "Copy Music/ for the supplied one-minute Harbor Lights WAV/Ogg, then select it in Music.\n"
         "See MUSIC-DEMO.md for its format, playback check and composition provenance.\n"
-        "Copy KUI/apps/games/retail-boot.kui as well as runtime.kui for the first retail attempt.\n"
-        "Next test: GAMES-RETAIL-TEST.md. Games > inspect existing DOA2 GDI > Y Launch (experimental).\n"
-        "Confirm with A Launch. The existing CD and game dump remain usable.\n"
-        "The two accepted resident read probes remain available; no repeat is requested.\n"
-        "Record the last screen/game behavior, then power cycle. Gameplay is not yet accepted.\n"
+        "Copy KUI/apps/games along with runtime.kui for the release-candidate Games app.\n"
+        "START-HERE.md and RELEASE-NOTES.md describe installation and compatibility limits.\n"
+        "Games: A inspects a GDI; A on its detail opens confirmation; A confirms launch.\n"
+        "Update both KUI/runtime.kui and KUI/apps/games/retail-boot.kui from this package.\n"
+        "Only DOA2 has confirmed gameplay on the CMD18 baseline; this RC needs console acceptance.\n"
+        "Next check: one other owned native GD title through normal gameplay and VMU save/load if supported.\n"
+        "Games reads SD only; games may write VMU saves. Power cycle to return.\n"
+        "Keep existing preferences and dumps. No repeated read probe or benchmark is requested.\n"
         "APPS-ROUND-FIVE.md covers the other apps. See RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
         "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
@@ -221,7 +257,7 @@ def main():
     (benchmark / "KUI/runtime.kui").write_bytes(package)
     (benchmark / "KUI/apps/games/retail-boot.kui").write_bytes(bench_package)
     bench_record = {**record, "kind": "sd-benchmark", "retail_boot": bench_info}
-    (benchmark / "build.json").write_text(json.dumps(bench_record, indent=2) + "\n")
+    (benchmark / "build.json").write_text(json.dumps(bench_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     for name in ("GAMES-SD-BENCHMARK.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, benchmark / name)
     shutil.copytree(dist / "LICENSES", benchmark / "LICENSES")
@@ -254,7 +290,7 @@ def main():
     for name in ("LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, boot / name)
     shutil.copytree(dist / "LICENSES", boot / "LICENSES")
-    boot_record = {"kind": "bootstrap-cd", "commit": commit,
+    boot_record = {"kind": "bootstrap-cd", "commit": commit, "release": release,
                    "compiler": compiler, "dependencies": lock,
                    "bootstrap": {
                        "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
@@ -262,7 +298,7 @@ def main():
                        "cdi_sha256": hashlib.sha256(cdi.read_bytes()).hexdigest(),
                        "cdi_bytes": cdi.stat().st_size, "badge": badge_info},
                    "hardware_tested": False}
-    (boot / "build.json").write_text(json.dumps(boot_record, indent=2) + "\n")
+    (boot / "build.json").write_text(json.dumps(boot_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (boot / "SOURCE.txt").write_text(
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
@@ -277,6 +313,56 @@ def main():
         if path.is_file() and path.name != "SHA256SUMS":
             boot_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(boot)}")
     (boot / "SHA256SUMS").write_text("\n".join(boot_hashes) + "\n")
+    # Ship only the normal application payloads. This fresh directory cannot
+    # retain scan fixtures, demo music, or preferences from an earlier package.
+    candidate = dist / "release-candidate"
+    if candidate.exists():
+        shutil.rmtree(candidate)
+    candidate_sd = candidate / "KUI"
+    (candidate_sd / "apps").mkdir(parents=True)
+    shutil.copyfile(sd / "runtime.kui", candidate_sd / "runtime.kui")
+    music_manifest = json.loads((ROOT / "resources/music/manifest.json").read_text())
+    candidate_apps = {
+        "music": [track["file"] for track in music_manifest["tracks"]],
+        "games": ("probe.kui", "image-probe.kui", "retail-boot.kui", "probe.dat"),
+    }
+    for app, files in candidate_apps.items():
+        (candidate_sd / "apps" / app).mkdir()
+        for name in files:
+            shutil.copyfile(sd / "apps" / app / name, candidate_sd / "apps" / app / name)
+    for name in ("redump.db", "tosec.db"):
+        shutil.copyfile(sd / name, candidate_sd / name)
+    (candidate / "boot-cd").mkdir()
+    shutil.copyfile(cdi, candidate / "boot-cd/kui-v1.5-rc1.cdi")
+    splash = ROOT / "resources/branding/startup.png"
+    shutil.copyfile(splash, candidate / "splash-preview.png")
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "LICENSE", "THIRD_PARTY.md"):
+        shutil.copyfile(dist / name, candidate / name)
+    shutil.copytree(dist / "LICENSES", candidate / "LICENSES")
+    candidate_record = {**record, "kind": "release-candidate",
+                        "bootstrap": boot_record["bootstrap"],
+                        "splash": {"sha256": hashlib.sha256(splash.read_bytes()).hexdigest(),
+                                   "preview": "splash-preview.png"}}
+    (candidate / "build.json").write_text(
+        json.dumps(candidate_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    (candidate / "SOURCE.txt").write_text(
+        f"{release['name']} ({release['version']}) — release candidate, not a final release\n"
+        f"K-UI NeXT source commit: {commit}\n"
+        f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
+        "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
+        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "original notices are also included in build.json and LICENSES/.\n"
+        "Original badge and splash provenance are in resources/branding/ in that source.\n\n"
+        "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
+        "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
+        "Your current working boot CD can load this runtime; the CDI in boot-cd/ is optional.\n"
+        "The normal retail game reader is installed; no SD benchmark payload is included.\n",
+        encoding="utf-8")
+    candidate_hashes = []
+    for path in sorted(candidate.rglob("*")):
+        if path.is_file() and path.name != "SHA256SUMS":
+            candidate_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(candidate)}")
+    (candidate / "SHA256SUMS").write_text("\n".join(candidate_hashes) + "\n")
     hashes = []
     for path in sorted(dist.rglob("*")):
         if path.is_file() and path != dist / "SHA256SUMS":

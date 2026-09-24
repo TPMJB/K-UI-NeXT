@@ -25,9 +25,12 @@ static struct {
 static FATFS fs;
 static const char *const selected = "/Games/Reader Test/disc.gdi";
 static const char *const package = "0:/KUI/apps/games/retail-boot.kui";
-static const char *const names[] = {"track01.bin", "music track02.raw", "track03.bin"};
-static const uint32_t starts[] = {0, 4, 45000};
-static const uint32_t counts[] = {4, 4, 64};
+static const char *const names[] = {"track01.bin", "music track02.raw", "track03.bin", "music track04.raw"};
+static const uint32_t starts[] = {0, 4, 45000, 45064};
+static const uint32_t counts[] = {4, 4, 64, 4};
+static unsigned track_count(void) {
+    return !strcmp(test.fault, "track-limit") ? 17u : !strcmp(test.fault, "cdda-warning") ? 4u : 3u;
+}
 static bool fault(const char *name) { return test.active && !strcmp(test.fault, name); }
 static void log_line(const char *format, ...) {
     va_list args; va_start(args, format); vprintf(format, args); va_end(args); puts("");
@@ -169,12 +172,14 @@ static void seed(const char *directory) {
     write_file(package, data, size); free(data);
     data = host_file(directory, "disc.gdi", &size);
     write_file("0:/Games/Reader Test/disc.gdi", data, size); free(data);
-    for(unsigned i = 0; i < 3; ++i) {
+    for(unsigned i = 0; i < track_count(); ++i) {
         if(i == 1 && !strcmp(test.fault, "missing-track")) continue;
-        char path[256]; snprintf(path, sizeof(path), "0:/Games/Reader Test/%s", names[i]);
-        data = host_file(directory, names[i], &size);
+        char path[256], generated[32];
+        snprintf(generated, sizeof(generated), "track%02u.raw", i + 1);
+        const char *name = i < 4 ? names[i] : generated;
+        snprintf(path, sizeof(path), "0:/Games/Reader Test/%s", name);
+        data = host_file(directory, name, &size);
         if(i == 2 && !strcmp(test.fault, "bad-ip")) data[16] ^= 1;
-        if(i == 2 && !strcmp(test.fault, "bad-title")) data[16 + 128] = 'X';
         if(i == 2 && !strcmp(test.fault, "bad-bootfile")) data[16 + 96] = 'X';
         if(i == 2 && !strcmp(test.fault, "bad-media")) data[16 + 37] = 'C';
         if(i == 2 && !strcmp(test.fault, "windows-ce")) data[16 + 62] = '1';
@@ -218,24 +223,26 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(map->card_sectors <= test.blocks && map->partition_end <= map->card_sectors);
     assert(map->partition_start == 0 || map->partition_start == 2048);
     assert(map->partition_end - map->partition_start == 96u * 1024u * 1024u / 512u);
-    assert(map->track_count == 3 && map->extent_count >= 3);
+    assert(map->track_count == track_count() && map->extent_count >= track_count());
     assert(map->session_lba == 45000 && map->boot_lba == 45021 && map->boot_bytes == (!strcmp(test.fault, "boot-tail") ? 3001u : 4096u));
-    assert(!strcmp(map->title, "DEAD OR ALIVE 2") && !strcmp(map->bootfile, "1ST_READ.BIN"));
+    assert(!strcmp(map->title, !strcmp(test.fault, "other-title") ? "Independent Native Game" :
+        !strcmp(test.fault, "blank-title") ? "Untitled game" : "DEAD OR ALIVE 2"));
+    assert(!strcmp(map->bootfile, !strcmp(test.fault, "alternate-bootfile") ? "ALT_BOOT.BIN" : "1ST_READ.BIN"));
     if(!strcmp(test.fault, "fragmented")) assert(map->tracks[2].extent_count > 1);
     size_t size; uint8_t *gdi = host_file(directory, "disc.gdi", &size);
     assert(map->gdi_crc32 == kui_crc32(0, gdi, size)); free(gdi);
     struct kui_retail_image reader;
     assert(kui_retail_image_init(&reader, map, detached_block, NULL) == KUI_GAME_OK);
-    uint8_t *expected[3]; size_t sizes[3];
+    uint8_t *expected[4]; size_t sizes[4];
     uint8_t *actual = malloc(KUI_GAME_RAW_BYTES * 64u); assert(actual);
-    for(unsigned i = 0; i < 3; ++i) {
+    for(unsigned i = 0; i < track_count(); ++i) {
         expected[i] = host_file(directory, names[i], &sizes[i]);
         assert(sizes[i] == (size_t)counts[i] * KUI_GAME_RAW_BYTES);
         assert(map->tracks[i].number == i + 1 && map->tracks[i].start_lba == starts[i]);
         assert(map->tracks[i].end_lba == starts[i] + counts[i]);
         assert(kui_retail_image_read(&reader, starts[i], counts[i], KUI_GAME_SECTOR_RAW,
             actual, sizes[i]) == KUI_GAME_OK && !memcmp(actual, expected[i], sizes[i]));
-        if(i != 1) {
+        if(i == 0 || i == 2) {
             assert(kui_retail_image_read(&reader, starts[i], counts[i], KUI_GAME_SECTOR_MODE1,
                 actual, (size_t)counts[i] * 2048u) == KUI_GAME_OK);
             for(uint32_t n = 0; n < counts[i]; ++n)
@@ -272,14 +279,17 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(kui_retail_image_read(&reader, 7, 2, KUI_GAME_SECTOR_RAW, actual, 4704) == KUI_GAME_GAP);
     assert(kui_retail_image_read(&reader, 4, 1, KUI_GAME_SECTOR_MODE1, actual, 2048) == KUI_GAME_AUDIO);
     assert(test.physical_reads == reads && reads > 0);
-    for(unsigned i = 0; i < 3; ++i) free(expected[i]);
+    for(unsigned i = 0; i < track_count(); ++i) free(expected[i]);
     free(actual); free(map);
     printf("Detached selected-image read PASS: all raw tracks, cooked data, full IP and exact boot CRCs; %u SD blocks\n", reads);
 }
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
     bool result = kui_games_retail_prepare(selected, &image, log_line, cancel);
-    bool valid = !strcmp(test.fault, "valid") || !strcmp(test.fault, "fragmented") || !strcmp(test.fault, "boot-tail");
+    bool valid = !strcmp(test.fault, "valid") || !strcmp(test.fault, "fragmented") ||
+        !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "other-title") ||
+        !strcmp(test.fault, "alternate-bootfile") || !strcmp(test.fault, "cdda-warning") ||
+        !strcmp(test.fault, "blank-title");
     assert(result == valid);
     if(valid) check_mapping(directory, &image);
     else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);

@@ -34,6 +34,10 @@ struct kui_game_metadata {
     /* IP fields remain available if subsequent filesystem inspection fails.
      * Neither flag asserts retail compatibility or verifies all file bytes. */
     bool ip_valid, boot_valid;
+    /* A valid GD-ROM media field and seven hexadecimal peripheral digits
+     * identify native versus Windows CE boot. Both false means unsupported
+     * media or malformed flags; metadata inspection can still succeed. */
+    bool native_gd, windows_ce;
     char title[129], product[11], version[7], region[9], bootfile[17];
     /* volume_blocks is the recorded volume size, NOT an absolute end LBA.
      * Multisession writers may exclude the session lead-in from that count. */

@@ -82,22 +82,6 @@ static bool metadata_range(void *ctx,uint32_t lba,uint32_t count) {
 static uint32_t le32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
-static bool native_ip(const uint8_t ip[2048]) {
-    /* IP.BIN interface: mc.pp.se/dc/ip0000.bin.html. The seven hexadecimal
-     * peripheral digits at 0x38 encode 28 flags; bit zero selects Windows CE.
-     * The raw GD path preserves executable bytes, with no MIL-CD transform. */
-    if(memcmp(ip+37,"GD-ROM",6) || ip[63]!=' ') return false;
-    uint32_t flags=0;
-    for(unsigned i=56;i<63;i++) {
-        unsigned digit=ip[i];
-        if(digit>='0' && digit<='9') digit-='0';
-        else if(digit>='A' && digit<='F') digit=digit-'A'+10u;
-        else if(digit>='a' && digit<='f') digit=digit-'a'+10u;
-        else return false;
-        flags=(flags<<4)|digit;
-    }
-    return !(flags&1u);
-}
 static bool layout(const struct kui_runtime_image *image) {
     const uint32_t begin=KUI_RETAIL_STAGE_BLOB_OFFSET,max=KUI_RETAIL_STAGE_MAX_BYTES;
     if(!image->data || image->info.payload_bytes<begin+4 || image->info.payload_bytes>begin+max ||
@@ -191,8 +175,12 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
     if(read_file(&files,name,0,gdi,(size_t)size)!=KUI_GAME_OK) {problem="cannot read GDI";goto done;}
     struct kui_game_file_ops file_ops={&files,stat_file,read_file};
     enum kui_game_result r=kui_game_image_open(gdi,(size_t)size,&file_ops,image);
-    if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
-    if(image->count>KUI_RETAIL_IMAGE_TRACKS) {problem="experimental retail map supports at most 16 tracks";goto done;}
+    if(r!=KUI_GAME_OK) {
+        problem=r==KUI_GAME_UNSUPPORTED?
+            "raw 2352-byte GDI tracks with zero file offsets required":kui_game_result_name(r);
+        goto done;
+    }
+    if(image->count>KUI_RETAIL_IMAGE_TRACKS) {problem="launch map supports at most 16 tracks";goto done;}
     map->track_count=image->count;map->gdi_crc32=kui_retail_crc32(0,gdi,(size_t)size);
     for(unsigned i=0;i<image->count;i++) if(image->tracks[i].control==4 && image->tracks[i].start_lba>=45000) {
         map->session_lba=image->tracks[i].start_lba;break;
@@ -201,28 +189,31 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
     struct kui_game_metadata metadata;struct kui_game_metadata_ops metadata_ops={image,metadata_read,metadata_range};
     enum kui_game_metadata_status ms=kui_game_metadata_read(&metadata_ops,map->session_lba,&metadata);
     if(ms!=KUI_GAME_METADATA_OK) {problem=kui_game_metadata_status_text(ms);goto done;}
-    /* This is a narrowly selected experiment, not a known-binary compatibility
-     * whitelist. Actual product/version/region and CRCs remain visible in the
-     * log. Native GD executable bytes are copied verbatim, never descrambled. */
-    if(strcmp(metadata.title,"DEAD OR ALIVE 2") || strcmp(metadata.bootfile,"1ST_READ.BIN")) {
-        problem="first retail attempt supports DEAD OR ALIVE 2 with 1ST_READ.BIN only";goto done;
-    }
+    /* The owner's IP/ISO metadata selects the executable. Titles and boot
+     * filenames are not compatibility gates; native GD bytes stay verbatim. */
+    if(metadata.windows_ce) {problem="Windows CE game launching is not supported";goto done;}
+    if(!metadata.native_gd) {problem="native GD-ROM with valid IP peripheral flags required";goto done;}
     if(metadata.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
         metadata.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
         metadata.boot_bytes>KUI_RETAIL_IMAGE_BOOT_MAX) {
-        problem="boot executable is outside the safe experimental size range";goto done;
+        problem="boot executable must be 128 bytes to 12 MiB";goto done;
     }
-    uint8_t ip[2048];
-    r=kui_game_image_read(image,map->session_lba,1,KUI_GAME_SECTOR_MODE1,ip,sizeof(ip));
-    if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
-    if(!native_ip(ip)) {problem="native GD-ROM with valid non-Windows-CE IP flags required";goto done;}
+    if(metadata.boot_lba<map->session_lba+16u ||
+        kui_game_image_check(image,map->session_lba,16,KUI_GAME_SECTOR_MODE1)!=KUI_GAME_OK) {
+        problem="boot executable and full IP must be in high-density data tracks";goto done;
+    }
     map->boot_lba=metadata.boot_lba;map->boot_bytes=metadata.boot_bytes;
-    snprintf(map->title,sizeof(map->title),"%.127s",metadata.title);
+    snprintf(map->title,sizeof(map->title),"%.127s",metadata.title[0]?metadata.title:"Untitled game");
     snprintf(map->product,sizeof(map->product),"%s",metadata.product);
     snprintf(map->region,sizeof(map->region),"%s",metadata.region);
     snprintf(map->bootfile,sizeof(map->bootfile),"%s",metadata.bootfile);
     log("Retail boot: %.100s; product=%s version=%s region=%s",map->title,metadata.product,
         metadata.version,metadata.region);
+    for(unsigned i=0;i<image->count;i++)
+        if(image->tracks[i].control==0 && image->tracks[i].start_lba>=45000) {
+            log("Retail warning: CD audio playback is unsupported; music may be absent or the game may stop on an audio command");
+            break;
+        }
     r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32,log,false);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,log,true);

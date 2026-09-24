@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Encode TPMJB's original splash and synthesize the original startup notes."""
+"""Encode the Dáinsleif splash and synthesize the original startup notes."""
 # SPDX-License-Identifier: GPL-3.0-only
 import argparse
 import hashlib
@@ -9,7 +9,7 @@ import struct
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
-PNG_BLOB = "33b49462795c7db399c1a5e9af7b9b96b1378140"
+PNG_BLOB = "b08c8ee03362b6775403e1bd50f8609f1c522f40"
 STARTUP_RATE = 44100
 STARTUP_FRAMES = STARTUP_RATE * 265 // 100
 
@@ -101,7 +101,7 @@ def array_file(path,name,kind,values,prefix=""):
     path.parent.mkdir(parents=True,exist_ok=True)
     items=list(values)
     with path.open("w") as out:
-        out.write("/* Generated from original K-UI assets; do not edit. */\n"+prefix)
+        out.write("/* Generated from pinned K-UI assets; do not edit. */\n"+prefix)
         out.write(f"static const {kind} {name}[{len(items)}] = {{\n")
         for at in range(0,len(items),16):
             out.write(",".join(str(v) for v in items[at:at+16])+",\n")
@@ -113,7 +113,7 @@ def main():
     args=parser.parse_args()
     data=(ROOT/"resources/branding/startup.png").read_bytes()
     if hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()!=PNG_BLOB:
-        raise SystemExit("Startup artwork differs from recorded original")
+        raise SystemExit("Startup artwork differs from the pinned Dainsleif asset")
     array_file(args.directory/"splash_pixels.inc","kui_splash_pixels","uint16_t",decode_png(data))
     array_file(args.directory/"startup_pcm.inc","kui_startup_pcm","int16_t",startup_samples(),
         f"#define KUI_STARTUP_RATE {STARTUP_RATE}u\n#define KUI_STARTUP_COUNT {STARTUP_FRAMES}u\n")

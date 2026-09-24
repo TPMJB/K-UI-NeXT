@@ -19,7 +19,7 @@ permissions:
 #   - push a branch whose name ends in "-experimental" (e.g. milestone/dma-experimental), or
 #   - run the workflow by hand with the box ticked, which needs the workflow file to exist on the
 #     DEFAULT branch: it does not here, so the branch name is the way that works today.
-# Its artifacts are named diagnostic-experimental and sd-update-experimental.
+# Its versioned artifacts carry an explicit -experimental suffix.
 env:
   KUI_EXPERIMENTAL: ${{ (inputs.experimental || endsWith(github.ref_name, '-experimental')) && '1' || '' }}
 
@@ -78,6 +78,24 @@ jobs:
                   raise SystemExit('Bootstrap-only request includes changes outside the CD recovery scope')
               requested = True
               print('Bootstrap refresh: native build and embedded badge check; no broad repeat suite.')
+          candidate = 'Validation: rc-only' in message.splitlines()
+          if candidate:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
+              exact = {'Makefile', '.github/workflows/diagnostic.yml', 'README.md',
+                       'include/kui/version.h', 'include/kui/game_metadata.h', 'include/kui/games.h',
+                       'include/kui/games_retail.h', 'include/kui/retail_loader_layout.h',
+                       'src/apps/games.c', 'src/apps/games_retail.c', 'src/core/game_metadata.c', 'src/core/shell.c',
+                       'src/dreamcast/main.c', 'src/dreamcast/shell_draw.c',
+                       'src/loader/retail_stage.c', 'src/loader/retail_display.c',
+                       'tests/games_retail.c', 'tests/render_shell.c', 'tests/test_game_metadata.c',
+                       'tests/test_games_retail.py', 'tests/test_shell.c', 'tests/test_splash_assets.py',
+                       'tests/test_retail_package.py', 'tests/test_workflow_hygiene.py',
+                       'tools/build_splash.py', 'tools/render_app_previews.py',
+                       'tools/package.py', 'tools/retail_package.py'}
+              if not paths or any(p not in exact and not p.startswith(('resources/branding/startup', 'docs/')) for p in paths):
+                  raise SystemExit('RC-only request includes changes outside Games eligibility, branding and packaging')
+              requested = True
+              print('V1.5 RC: focused Games/metadata/splash/package checks recorded locally; native build, layout and packaging checks run here.')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('console_only=' + str(requested).lower() + '\n')
           PY
@@ -167,35 +185,50 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Package reusable CDI, SD runtime, loader tests and source records
+        id: package
         shell: bash
         run: |
           source .deps/kos/environ.sh
           python3 tools/package.py
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, 'tools')
+          from package import release_metadata
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('artifact_prefix=' + release_metadata()['artifact_prefix'] + '\n')
+          PY
       - name: Upload diagnostic test artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
       - name: Upload small SD update for existing bootstrap discs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
           path: dist/sd-update/
           if-no-files-found: error
           retention-days: 30
       - name: Upload separate read-only SD benchmark
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: sd-benchmark${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-sd-benchmark${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
           path: dist/sd-benchmark/
           if-no-files-found: error
           retention-days: 30
       - name: Upload small boot CD refresh
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: bootstrap-cd${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-bootstrap-cd${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
           path: dist/bootstrap-cd/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload V1.5 release candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ steps.package.outputs.artifact_prefix }}-release-candidate${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+          path: dist/release-candidate/
           if-no-files-found: error
           retention-days: 30

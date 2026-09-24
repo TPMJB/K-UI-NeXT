@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
+#include "kui/version.h"
 #include "kui/ui_rate.h"
 #include "kui/report.h"
 #include "kui/clock_platform.h"
@@ -222,7 +223,7 @@ static void save_report(const char *trigger,const char *outcome,bool automatic) 
     if(kui_sd_connect()) {
         mutex_lock(&lock);
         size_t used=(size_t)snprintf(report,sizeof(report),
-            "K-UI " KUI_ROLE " %s\nLog truncated: %s\nReport trigger: %s\nOperation result: %s\n",
+            KUI_RELEASE_SHORT " " KUI_ROLE " %s\nLog truncated: %s\nReport trigger: %s\nOperation result: %s\n",
             KUI_BUILD_ID,log_truncated?"YES":"no",trigger,outcome);
 #ifdef KUI_SD_RUNTIME
         used+=(size_t)snprintf(report+used,sizeof(report)-used,
@@ -1073,7 +1074,7 @@ static void draw(unsigned scroll) {
      * frame. Clearing the displayed frame exposes blank/partial redraws. */
     vid_clear(8, 16, 24);
     minifont_set_color(100, 220, 220);
-    minifont_draw_str(vram_s + 20 * 640 + 16, 640, "K-UI NeXT | " KUI_ROLE);
+    minifont_draw_str(vram_s + 20 * 640 + 16, 640, KUI_RELEASE_SHORT " | " KUI_ROLE);
     minifont_set_color(220, 230, 235);
     minifont_draw_str(vram_s + 44 * 640 + 16, 640, "Build " KUI_BUILD_ID);
     minifont_draw_str(vram_s + 44*640+440,640,"R: Bench");
@@ -1284,7 +1285,7 @@ static bool boot_cancelled(void) {
 int main(void) {
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
-    kui_log("Running " KUI_ROLE " build " KUI_BUILD_ID);
+    kui_log("Running " KUI_RELEASE_SHORT " " KUI_ROLE " build " KUI_BUILD_ID);
     kui_clock_start(kui_log);
     kui_log("Video: %ux%u %s %s, buffered",
         (unsigned)vid_mode->width, (unsigned)vid_mode->height,
@@ -1583,7 +1584,7 @@ int main(void) {
             if(action==56 || action==57 || action==58) {
                 probe_status=(struct kui_app_status){0};
                 snprintf(probe_status.message,sizeof(probe_status.message),"%s",action==58?
-                    "Preparing experimental DOA2 launch...":action==57?
+                    "Preparing selected game launch...":action==57?
                     "Mapping selected image and reading reference samples...":
                     "Preparing resident probe and SD map...");
                 probe_launch_failed=false;

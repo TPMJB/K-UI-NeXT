@@ -1,0 +1,11 @@
+Use case: style-transfer.
+Asset type: finished 4:3 Dreamcast startup splash, an edit of the attached existing K-UI startup image, intended to remain crisp when displayed at 640×480 on a television.
+Primary request: Update the existing K-UI splash for version 1.5 named "Dáinsleif". Preserve its distinctive illustrated woman wearing a large futuristic visor on the left, flowing hair in neon outlines, prominent chrome K-UI typography on the right, and subtle perspective grid. Make the same cyberpunk / 1980s retrofuturistic brand feel predominantly crimson and red neon, with restrained cyan highlights.
+Composition: Exactly 4:3 aspect ratio. Preserve the broad left-portrait/right-wordmark composition. Use strong, clean, confident shapes, polished chrome lettering, dark charcoal/navy background, rich scarlet/crimson edge light, subtle red horizon glow. All essential art and lettering must stay within television-safe margins of at least 7% on all sides. Keep the lower 15% mostly dark, like the original.
+Text, rendered accurately and legibly on the right:
+Line 1: K-UI V1.5
+Line 2: "Dáinsleif"
+Line 3, smaller: (Katana User Interface)
+Line 4, smaller: by TPMJB
+The spelling of Dáinsleif is D-á-i-n-s-l-e-i-f, with an acute accent over the first a, and no extra letters. Keep K-UI large and V1.5 readable, subordinate on the same line. The quoted release name is a prominent, beautiful second line, fitting cleanly under the title. Typography should feel crafted, futuristic and chrome with red accents; excellent contrast at low display resolution.
+Constraints: This is the established K-UI brand character, not a new character design. Keep the woman's face silhouette and visor recognizable. No swords, additional people, unrelated objects, logos, slogans, loading bars or UI controls. No Sega logo. Do not add RC or any extra version words. Opaque background.

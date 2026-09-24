@@ -198,8 +198,8 @@ bool kui_shell_games_retail_ready(const struct kui_shell *s) {
     return kui_shell_games_image_ready(s) &&
         memchr(s->games_detail.title,0,sizeof(s->games_detail.title)) &&
         memchr(s->games_detail.boot_file,0,sizeof(s->games_detail.boot_file)) &&
-        !strcmp(s->games_detail.title,"DEAD OR ALIVE 2") &&
-        !strcmp(s->games_detail.boot_file,"1ST_READ.BIN") &&
+        s->games_detail.native_gd && !s->games_detail.windows_ce &&
+        s->games_detail.boot_file[0] &&
         s->games_detail.tracks && s->games_detail.tracks<=KUI_RETAIL_IMAGE_TRACKS &&
         s->games_detail.boot_lba>=45000 && s->games_detail.boot_bytes>=128 &&
         s->games_detail.boot_bytes<=KUI_RETAIL_IMAGE_BOOT_MAX;
@@ -600,10 +600,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_GAMES_DETAIL:
         if((buttons&KUI_SHELL_X) && games_path_safe(s->games_selected_path,sizeof(s->games_selected_path)))
             return inspect_game(s);
-        if((buttons&KUI_SHELL_A) && kui_shell_games_image_ready(s))
-            s->page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
-        else if((buttons&KUI_SHELL_Y) && kui_shell_games_retail_ready(s))
+        if((buttons&KUI_SHELL_A) && kui_shell_games_retail_ready(s))
             s->page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
+        else if((buttons&KUI_SHELL_Y) && kui_shell_games_image_ready(s))
+            s->page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
         break;
     case KUI_SHELL_GAMES_ADVANCED:
         s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,3);

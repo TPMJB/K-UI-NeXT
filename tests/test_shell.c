@@ -506,12 +506,13 @@ static void games_controls(void) {
     strcpy(detail.path,s.games_selected_path);strcpy(detail.title,"Dead or Alive 2");
     kui_shell_set_games_detail(&s,&detail);assert(s.games_detail.valid && s.games_detail.tracks==3);
     assert(kui_shell_games_image_ready(&s));
-    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_L|KUI_SHELL_R|KUI_SHELL_START,false)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
     assert(kui_shell_games_image_ready(&s));
-    press(KUI_SHELL_A,false);
+    press(KUI_SHELL_Y,false);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
@@ -938,17 +939,17 @@ static void round_five_rendering(void) {
 static void games_retail_controls(void) {
     reset(KUI_SHELL_GAMES_DETAIL);
     strcpy(s.games_selected_path,"/Games/DOA2/DOA2.gdi");
-    struct kui_games_detail detail={.valid=true,.tracks=3,.boot_bytes=123456,.boot_lba=45166};
+    struct kui_games_detail detail={.valid=true,.native_gd=true,.tracks=3,.boot_bytes=123456,.boot_lba=45166};
     strcpy(detail.path,s.games_selected_path);
     strcpy(detail.title,"DEAD OR ALIVE 2");strcpy(detail.boot_file,"1ST_READ.BIN");
     kui_shell_set_games_detail(&s,&detail);
     assert(kui_shell_games_retail_ready(&s));
-    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     assert(press(KUI_SHELL_Y|KUI_SHELL_X|KUI_SHELL_START|KUI_SHELL_L,false)==KUI_SHELL_NONE);
     assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-    press(KUI_SHELL_Y,false);
+    press(KUI_SHELL_A,false);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
     assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
@@ -964,11 +965,14 @@ static void games_retail_controls(void) {
     s.games_detail=detail;memset(s.games_detail.boot_file,'X',sizeof(s.games_detail.boot_file));
     assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;strcpy(s.games_detail.title,"Dead or Alive 2");
-    assert(!kui_shell_games_retail_ready(&s));
-    s.games_detail=detail;strcpy(s.games_detail.title,"DEAD OR ALIVE 2 LIMITED EDITION");
-    assert(!kui_shell_games_retail_ready(&s));
+    assert(kui_shell_games_retail_ready(&s));
+    s.games_detail=detail;strcpy(s.games_detail.title,"ARMADA");
+    assert(kui_shell_games_retail_ready(&s));
     s.games_detail=detail;strcpy(s.games_detail.boot_file,"OTHER.BIN");
-    assert(!kui_shell_games_retail_ready(&s));
+    assert(kui_shell_games_retail_ready(&s));
+    s.games_detail=detail;s.games_detail.windows_ce=true;assert(!kui_shell_games_retail_ready(&s));
+    s.games_detail=detail;s.games_detail.native_gd=false;assert(!kui_shell_games_retail_ready(&s));
+    s.games_detail=detail;s.games_detail.high_density_audio=true;assert(kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.boot_bytes=0;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.boot_bytes=12u*1024u*1024u+1;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.boot_lba=44999;assert(!kui_shell_games_retail_ready(&s));
@@ -976,21 +980,23 @@ static void games_retail_controls(void) {
     s.games_detail=detail;s.games_detail.tracks=0;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;press(KUI_SHELL_B,false);
     strcpy(s.games_detail.title,"ARMADA");
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL);
+    press(KUI_SHELL_B,false);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
     press(KUI_SHELL_B,false);s.games_detail=detail;
-    /* Existing A action wins when test and launch buttons arrive together. */
-    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    /* A is the primary launch action; inspection still takes priority. */
+    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     press(KUI_SHELL_B,false);
-    assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_GAMES_INSPECT && !s.games_detail.valid);
+    assert(press(KUI_SHELL_X|KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && !s.games_detail.valid);
     assert(!kui_shell_games_retail_ready(&s));
     assert(!kui_shell_games_retail_ready(NULL));
 }
 static void games_rendering(void) {
     struct kui_shell_view view={0};
     reset(KUI_SHELL_HOME);s.home_selected=8;render(&view);
-    assert(strstr(drawn,"Games") && strstr(drawn,"9 applications") && strstr(drawn,"Experimental DOA2 launch available"));
+    assert(strstr(drawn,"Games") && strstr(drawn,"9 applications") && strstr(drawn,"V1.5 RC: compatibility varies"));
     reset(KUI_SHELL_GAMES);s.games_listing.count=8;s.games_listing.has_more=true;s.games_selected=7;
     for(unsigned i=0;i<8;i++) {
         snprintf(s.games_listing.entries[i].name,sizeof(s.games_listing.entries[i].name),"Game %u with a long but bounded name",i+1);
@@ -1002,25 +1008,28 @@ static void games_rendering(void) {
     view.busy=true;render(&view);assert(strstr(drawn,"B Stop safely"));view.busy=false;
     reset(KUI_SHELL_GAMES_DETAIL);strcpy(s.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
     strcpy(s.games_detail.path,s.games_selected_path);
-    s.games_detail.valid=true;s.games_detail.tracks=3;s.games_detail.data_tracks=2;s.games_detail.audio_tracks=1;
+    s.games_detail.valid=true;s.games_detail.native_gd=true;s.games_detail.tracks=3;s.games_detail.data_tracks=2;s.games_detail.audio_tracks=1;
     s.games_detail.bytes=1185765648;s.games_detail.boot_bytes=123456;s.games_detail.boot_lba=45166;
     strcpy(s.games_detail.title,"Dead or Alive 2");strcpy(s.games_detail.product,"T-3601N");
     strcpy(s.games_detail.region,"JUE");strcpy(s.games_detail.boot_file,"1ST_READ.BIN");render(&view);
     assert(strstr(drawn,"Dead or Alive 2") && strstr(drawn,"T-3601N") && strstr(drawn,"1ST_READ.BIN"));
     assert(strstr(drawn,"Tracks: 3") && strstr(drawn,"1185765648 bytes"));
-    assert(strstr(drawn,"A Test image reads") && strstr(drawn,"X Inspect") && !strstr(drawn,"A Launch"));
-    assert(!strstr(drawn,"Y Launch"));
+    assert(strstr(drawn,"A Launch") && strstr(drawn,"X Inspect") && strstr(drawn,"Y Advanced read test"));
     strcpy(s.games_detail.title,"DEAD OR ALIVE 2");render(&view);
-    assert(strstr(drawn,"Y Launch (experimental)") && strstr(drawn,"compatibility is unproven"));
+    assert(strstr(drawn,"A Launch") && strstr(drawn,"compatibility varies"));
     strcpy(s.games_detail.title,"ARMADA");render(&view);
-    assert(!strstr(drawn,"Y Launch"));
+    assert(strstr(drawn,"A Launch"));
+    s.games_detail.high_density_audio=true;render(&view);assert(strstr(drawn,"CD audio is unavailable"));
+    s.games_detail.high_density_audio=false;s.games_detail.windows_ce=true;render(&view);
+    assert(strstr(drawn,"Windows CE games are not supported") && !strstr(drawn,"A Launch"));
+    s.games_detail.windows_ce=false;
     s.games_detail.valid=false;strcpy(s.games_detail.message,"Track file missing");render(&view);
     assert(strstr(drawn,"Could not inspect image") && strstr(drawn,"Track file missing"));
-    assert(!strstr(drawn,"A Test image reads"));
+    assert(!strstr(drawn,"A Launch"));
     s.games_detail.stopped=true;render(&view);assert(strstr(drawn,"Inspection stopped"));
     reset(KUI_SHELL_GAMES_ADVANCED);render(&view);
     assert(strstr(drawn,"Game library") && strstr(drawn,"Browse SD folders") && strstr(drawn,"Resident loader probe"));
-    assert(strstr(drawn,"IDE / CF sources are not available") && strstr(drawn,"experimental launch"));
+    assert(strstr(drawn,"IDE / CF sources are not available") && strstr(drawn,"opens the game launch screen"));
     reset(KUI_SHELL_GAMES_PROBE_CONFIRM);render(&view);
     assert(strstr(drawn,"A Start probe") && strstr(drawn,"B Advanced"));
     assert(strstr(drawn,"Exits this menu") && strstr(drawn,"test data after shutdown"));
@@ -1045,20 +1054,23 @@ static void games_rendering(void) {
     assert(strstr(drawn,"Image details changed") && !strstr(drawn,"A Start test"));
     reset(KUI_SHELL_GAMES_RETAIL_CONFIRM);
     strcpy(s.games_selected_path,"/Games/DOA2/DOA2.gdi");
-    strcpy(s.games_detail.path,s.games_selected_path);s.games_detail.valid=true;
+    strcpy(s.games_detail.path,s.games_selected_path);s.games_detail.valid=true;s.games_detail.native_gd=true;
     strcpy(s.games_detail.title,"DEAD OR ALIVE 2");strcpy(s.games_detail.boot_file,"1ST_READ.BIN");
     s.games_detail.tracks=3;s.games_detail.boot_lba=45166;s.games_detail.boot_bytes=123456;
     render(&view);
-    assert(strstr(drawn,"Experimental DOA2 launch") && strstr(drawn,"A Launch") && strstr(drawn,"B Image details"));
-    assert(strstr(drawn,"compatibility is unproven") && strstr(drawn,"SD access remains read-only"));
+    assert(strstr(drawn,"Launch game") && strstr(drawn,"A Launch") && strstr(drawn,"B Image details"));
+    assert(strstr(drawn,"compatibility varies") && strstr(drawn,"SD access remains read-only"));
     assert(strstr(drawn,"Power cycle to return") && !strstr(drawn,"L Memory"));
-    view.busy=true;strcpy(status.message,"Preparing experimental DOA2 launch...");render(&view);
+    view.busy=true;strcpy(status.message,"Preparing selected game launch...");render(&view);
     assert(strstr(drawn,"Preparing the launch") && strstr(drawn,"B Stop safely") && !strstr(drawn,"A Launch"));
     view.busy=false;strcpy(s.games_detail.title,"ARMADA");render(&view);
-    assert(strstr(drawn,"not ready for the DOA2 launch") && !strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"ARMADA") && strstr(drawn,"A Launch"));
+    s.games_detail.native_gd=false;render(&view);
+    assert(strstr(drawn,"not ready for native GD launch") && !strstr(drawn,"A Launch"));
 }
-int main(void) {
+int main(int argc,char **argv) {
     games_controls(); games_retail_controls(); games_rendering();
+    if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();
     system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();

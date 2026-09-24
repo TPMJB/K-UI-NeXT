@@ -70,9 +70,9 @@ void retail_display_restore(const struct retail_display_state *s) {
     volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)0xa5000000u;
     for(unsigned i=0;i<640u*480u;i++) frame[i]=0x0864;
     row=20;
-    retail_display_line("K-UI EXPERIMENTAL RETAIL LAUNCH");
+    retail_display_line("K-UI V1.5 RC1 GAME LAUNCH");
     retail_display_line("BUILD " KUI_BUILD_ID);
-    retail_display_line("DEAD OR ALIVE 2");
+    retail_display_line("NATIVE GD IMAGE");
     row=108;
 }
 void retail_display_hex(const char *label,uint32_t value) {

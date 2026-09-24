@@ -10,12 +10,11 @@ module=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class StartupAssets(unittest.TestCase):
-    def test_original_asset_and_bounds(self):
+    def test_dainsleif_asset_and_bounds(self):
         data=(ROOT/"resources/branding/startup.png").read_bytes()
         self.assertEqual(hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest(),module.PNG_BLOB)
         pixels=module.decode_png(data)
         self.assertEqual(len(pixels),640*480)
-        self.assertEqual(pixels[0],0x0864)
         self.assertTrue(all(0<=v<=65535 for v in pixels))
         bad=bytearray(data);bad[len(bad)//2]^=1
         with self.assertRaises(ValueError):module.decode_png(bad)

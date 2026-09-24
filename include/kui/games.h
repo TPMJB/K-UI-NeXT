@@ -26,6 +26,9 @@ struct kui_games_detail {
     uint32_t boot_bytes, boot_lba;
     unsigned tracks, audio_tracks, data_tracks;
     bool valid, stopped;
+    /* Inspection is useful even when this loader cannot boot the image.
+     * CDDA is advisory: data reads may work but audio-play commands do not. */
+    bool native_gd, windows_ce, high_density_audio;
 };
 /* One worker owns read-only SD access; offset counts entries, not pages.
  * Listing never creates /Games and never scans/hashes complete track files. */

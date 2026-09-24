@@ -105,12 +105,10 @@ void kui_retail_stage_main(const uint8_t *wire) {
     memcpy(wire_copy,wire,sizeof(wire_copy));
     enum kui_game_result result=kui_retail_manifest_decode(wire_copy,&manifest);
     if(result!=KUI_GAME_OK) stopped("INVALID RETAIL MAP",(uint32_t)result);
-    if(memcmp(manifest.title,"DEAD OR ALIVE 2",sizeof("DEAD OR ALIVE 2")) ||
-       memcmp(manifest.bootfile,"1ST_READ.BIN",sizeof("1ST_READ.BIN")) ||
-       manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
+    if(manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
        manifest.session_lba<45000)
-        stopped("UNSUPPORTED RETAIL PROFILE",manifest.boot_bytes);
+        stopped("UNSUPPORTED BOOT LAYOUT",manifest.boot_bytes);
     retire_launcher_serial();
     last_card_result=kui_retail_sd_init(&card);
     if(last_card_result!=KUI_LOADER_SD_OK) {
@@ -190,7 +188,8 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     if(memcmp(resident,__retail_resident_blob_start,bytes))
         stopped("BOOTSTRAP ALTERED RESIDENT",0);
     retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
-    retail_display_line("ENTERING DEAD OR ALIVE 2");
+    retail_display_line("ENTERING GAME");
+    retail_display_line(manifest.title);
     retail_display_line("IF IT STOPS PHOTOGRAPH THE LAST SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
     retail_display_pause();

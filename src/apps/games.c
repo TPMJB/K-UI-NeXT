@@ -2,6 +2,8 @@
 #include "kui/games.h"
 #include "kui/game_image.h"
 #include "kui/game_metadata.h"
+#include "kui/retail_image.h"
+#include "kui/retail_loader_layout.h"
 #include "platform.h"
 #include <limits.h>
 #include <stdio.h>
@@ -104,7 +106,7 @@ done:
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="Cannot release SD filesystem";}
     kui_sd_disconnect();
     snprintf(out->message,sizeof(out->message),"%s",ok?
-        "Select a GDI to inspect. Game launching is not available yet.":problem);
+        "Select a GDI to inspect and launch.":problem);
     if(!ok) {out->count=0;out->has_more=false;if(log) log("Games browse: %s",problem);}
     return ok;
 }
@@ -198,7 +200,11 @@ bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn 
     if(result!=KUI_GAME_OK) {problem=kui_game_result_name(result);goto done;}
     struct kui_game_file_ops ops={&files,image_stat,image_read};
     result=kui_game_image_open(gdi,(size_t)size,&ops,image);
-    if(result!=KUI_GAME_OK) {problem=kui_game_result_name(result);goto done;}
+    if(result!=KUI_GAME_OK) {
+        problem=result==KUI_GAME_UNSUPPORTED?
+            "Raw 2352-byte GDI tracks with zero file offsets required":kui_game_result_name(result);
+        goto done;
+    }
     uint32_t session=0;
     out->tracks=image->count;
     for(unsigned i=0;i<image->count;i++) {
@@ -207,7 +213,10 @@ bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn 
         if(t->control==4) {
             ++out->data_tracks;
             if(!session && t->start_lba>=45000u) session=t->start_lba;
-        } else ++out->audio_tracks;
+        } else {
+            ++out->audio_tracks;
+            if(t->start_lba>=45000u) out->high_density_audio=true;
+        }
     }
     if(!session) {problem="No high-density data track; raw GD-ROM GDI required";goto done;}
     struct metadata_reader reader={image,&files};
@@ -219,13 +228,26 @@ bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn 
         snprintf(out->product,sizeof(out->product),"%s",metadata.product);
         snprintf(out->region,sizeof(out->region),"%s",metadata.region);
         snprintf(out->boot_file,sizeof(out->boot_file),"%s",metadata.bootfile);
+        out->native_gd=metadata.native_gd;
+        out->windows_ce=metadata.windows_ce;
     }
     if(status!=KUI_GAME_METADATA_OK) {
         problem=status==KUI_GAME_METADATA_IO?kui_game_result_name(files.last):kui_game_metadata_status_text(status);
         goto done;
     }
     out->boot_bytes=metadata.boot_bytes;out->boot_lba=metadata.boot_lba;
-    out->valid=true;problem="Image inspected; game launching is not available yet";
+    if(metadata.boot_lba<session+16u ||
+        kui_game_image_check(image,session,16,KUI_GAME_SECTOR_MODE1)!=KUI_GAME_OK) {
+        problem="Boot executable and full IP must be in high-density data tracks";goto done;
+    }
+    out->valid=true;
+    problem=out->windows_ce?"Image inspected; Windows CE launching is not supported":
+        !out->native_gd?"Image inspected; native GD-ROM with valid IP flags required":
+        out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 16 tracks":
+        out->boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES || out->boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES?
+            "Image inspected; boot executable must be 128 bytes to 12 MiB":
+        out->high_density_audio?"Image inspected; CD audio unsupported, audio requests may stop the game":
+        "Image inspected; native game launch available, compatibility varies";
 done:
     if(stopped(cancel)) {out->valid=false;out->stopped=true;problem="Games inspection stopped";}
     if(f_mount(NULL,"0:",0)!=FR_OK) {out->valid=false;problem="Cannot release SD filesystem";}
