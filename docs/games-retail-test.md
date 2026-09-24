@@ -1,13 +1,20 @@
-# DOA2 launch experiment — driver version query
+# DOA2 launch — first gameplay baseline
 
 The selected-image GD probe has already passed on hardware: build
 `c4cfd4585ec5`, DEAD OR ALIVE 2, all 11 checks, 93 physical SD blocks after
 launcher shutdown. Do not repeat that probe for this test.
 
+**Gameplay confirmed by owner report:** build `7fd48f11be02` reaches actual
+DOA2 gameplay. Loading seemed slower than DreamShell, gameplay lag was tolerable,
+and FMVs were estimated around 0.5 fps. Save/load through the physical VMU and
+repeated loading transitions remain unconfirmed. See
+[evidence and performance findings](evidence/games-doa2-gameplay-2026-09-24.md).
+Keep this build as the working baseline; no new build accompanies that record.
+
 The first retail build `d19f1e0ebaf3` reached the independent loading screen
 after an approximately four-minute wait, flashed more text, then returned to
 the stock Dreamcast menu. This correction remains an **experimental retail
-launch**, not a claim of working DOA2 gameplay. It only offers launch for the native GD-ROM
+launch** with the limited hardware result above. It only offers launch for the native GD-ROM
 `DEAD OR ALIVE 2` / `1ST_READ.BIN` profile. A different region or revision
 may still need work. The product number in a synthetic test fixture is not
 used as a hardware identification or compatibility claim.

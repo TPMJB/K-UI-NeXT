@@ -81,21 +81,24 @@ test and the selected-image GD-vector read test are accepted. G4 status:
    lifecycle exercised by our own executable through the actual vector. Probe
    ABI v1 is separate. The new command-17 path still uses CPU-driven serial SD;
    retail interrupts/callbacks and streamed reads remain unimplemented.
-3. **Implemented, hardware pending:** a temporary high stage loads the owner's
-   IP/executable, runs the original bootstraps, then installs the reader in
-   retired lower IP RAM and restores the original entry/CPU state. The low
-   reservation remains a title-bootstrap assumption to test on the console.
-4. Attempt Dead or Alive 2, then record loading transitions, gameplay and
-   physical VMU save/load. A title screen alone does not meet G4.
+3. **First gameplay confirmed:** build `7fd48f11be02` reaches DOA2 gameplay
+   through the independent reader. Bootstrap2 entry, stack placement and the
+   required version-query command now pass that title's startup path.
+4. **Still open:** loading/streaming performance, repeated loading transitions
+   and physical VMU save/load. The owner reports tolerable gameplay lag but
+   approximately 0.5 fps FMVs and slower loading than DreamShell. These estimates
+   do not establish measured throughput. G4 remains partial.
 
-### Next implementation: first DOA2 launch
+See [the hardware baseline and performance comparison](evidence/games-doa2-gameplay-2026-09-24.md).
+
+### Current implementation and next performance work
 
 The selected-image photograph closes the read-path hardware gate. The first
 DOA2 launch path is now implemented. Do not repeat either accepted read probe.
 
 - Launcher preparation validates the native GD profile, reads IP/boot CRCs,
   and produces a bounded read-only allocation map before filesystem teardown.
-- The temporary high stage runs the owner's original bootstraps. Its entry
+- The temporary high stage installs the resident before the owner's Bootstrap2. Its entry
   trampoline restores the original executable bytes before game execution.
 - The compact resident occupies lower retired IP RAM, with a guarded private
   stack. Firmware, metadata/TOC and conventional upper bootstrap/VBR remain.
@@ -107,8 +110,9 @@ DOA2 launch path is now implemented. Do not repeat either accepted read probe.
 
 [The next test](games-retail-test.md) is **Y — Launch (experimental)** on the
 same DOA2 image, followed by **A — Launch**. Record the last diagnostic screen
-or furthest game progress. Successful build/host checks do not establish
-DOA2 gameplay, loading-transition or physical VMU compatibility.
+or furthest game progress. The owner has confirmed gameplay on the baseline above; loading-transition
+and physical VMU acceptance remain separate. Preserve that baseline while
+optimizing the SD receive/burst path and reviewing interrupt hold times.
 
 Do not spend this stage on cover art, large compatibility menus or broad
 format support. Dead or Alive 2 is the first retail candidate because
