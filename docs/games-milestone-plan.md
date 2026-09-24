@@ -89,7 +89,10 @@ test and the selected-image GD-vector read test are accepted. G4 status:
    three minutes previously on that initial screen. Gameplay has minimal lag.
    Stage-start loads, FMVs and speech still suffer. These are owner estimates;
    measured throughput and physical VMU save/load remain open. G4 is partial.
-   Next is a two-sector EXEC latency comparison with persistent block caching.
+5. **Playable rollback point pinned:** `6c02bd8b22f4` has fluid audio by owner
+   report, with stage loading, delayed textures and brief early-battle lag
+   remaining. Preserve `baseline/doa2-sd-6c02bd8b22f4` and its exact SD ZIP.
+   [Timings and next transport decision](evidence/games-doa2-pinned-baseline-2026-09-24.md).
 
 See [the first gameplay baseline](evidence/games-doa2-gameplay-2026-09-24.md) and
 [the improved baseline and latency comparison](evidence/games-doa2-fast-io-2026-09-24.md).

@@ -1,10 +1,17 @@
 # DOA2 launch — SD latency comparison
 
+**Pinned working build: `6c02bd8b22f4`.** The owner reports fluid audio and
+playable results, with delayed textures, stage loads and brief early-battle lag
+still present. Exact rollback branch, archive checksum and timing intervals are
+in [the pinned baseline record](evidence/games-doa2-pinned-baseline-2026-09-24.md).
+Keep this build unchanged for future comparisons. The candidate discussion
+below records how this now-tested build differed from its predecessor.
+
 The selected-image GD probe has already passed on hardware: build
 `c4cfd4585ec5`, DEAD OR ALIVE 2, all 11 checks, 93 physical SD blocks after
 launcher shutdown. Do not repeat that probe for this test.
 
-**Current working baseline:** build `3ebbf8f9846b` is substantially better by
+**Previous working baseline:** build `3ebbf8f9846b` was substantially better by
 owner report: about 15 seconds to game startup, then about 10 seconds before
 Start works on the initial screen (previously roughly three minutes).
 Gameplay has minimal lag. Stage-start loads, FMVs and speech during loading
@@ -13,7 +20,7 @@ Save/load through the physical VMU and broader compatibility remain open.
 See [the hardware result and next change](evidence/games-doa2-fast-io-2026-09-24.md).
 Keep this package as the working baseline.
 
-## Current SD latency comparison
+## Tested SD latency change
 
 The candidate reduces each EXEC call from eight to two game sectors, retaining
 the existing physical-block cache across calls and avoiding the redundant

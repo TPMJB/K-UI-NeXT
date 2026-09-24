@@ -144,10 +144,13 @@ on hardware: build `7a8493ae825e`, ten checks, 84 SD blocks read after launcher
 shutdown. [Evidence](docs/evidence/games-resident-probe-hardware-2026-09-24.json).
 The selected-image GD-vector probe also passed on hardware: build
 `c4cfd4585ec5`, all eleven checks and 93 post-shutdown SD blocks.
-The independent retail loader now reaches actual **DOA2 gameplay** in build
-`7fd48f11be02`. The owner reports tolerable gameplay lag, slower loading than
-DreamShell and very slow FMVs (about 0.5 fps, an estimate). Physical VMU
-save/load, repeated transitions and broader compatibility remain open.
+The independent retail loader now has a **pinned playable DOA2 baseline**:
+`6c02bd8b22f4`, branch `baseline/doa2-sd-6c02bd8b22f4`. The owner reports fluid
+audio, a responsive start screen, and tolerable play, with long stage loads,
+delayed background textures and brief early-battle lag still present.
+Preserve [this exact rollback point and its timings](docs/evidence/games-doa2-pinned-baseline-2026-09-24.md)
+before future performance changes. Physical VMU save/load and broader
+compatibility remain open.
 See [the gameplay evidence and performance findings](docs/evidence/games-doa2-gameplay-2026-09-24.md),
 [retail launch guide](docs/games-retail-test.md) and
 [staged Games plan](docs/games-milestone-plan.md).
