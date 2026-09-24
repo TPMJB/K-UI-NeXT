@@ -9,6 +9,11 @@ Host validation and the focused console checklist are documented in
 [games-test.md](games-test.md). This inspection preview precedes G3; the resident
 read proof and retail loading are still unimplemented.
 
+Runtime `57d53841c1ea` has now passed repeated ARMADA metadata inspection on
+the console, with a stopped earlier inspection followed by successful use.
+[Hardware evidence](evidence/games-armada-inspection-2026-09-24.json) accepts
+that demonstrated path. G3 remains the next development gate.
+
 ## First goal
 
 Select a GDI from one Games app, launch a small independently authored test

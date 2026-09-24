@@ -1,5 +1,20 @@
 # Hardware evidence
 
+## Games image inspection: ARMADA — 2026-09-24
+
+Runtime **57d53841c1ea** successfully inspected the saved ARMADA GDI three times
+on exFAT. Each reports five tracks (three data, two audio), 1,187,764,704 stored
+bytes, and `0WINCEOS.BIN` at LBA 548388 with length 1,253,376 bytes. Each inspection
+read 7,199 metadata bytes. Bust-A-Move 4 was stopped after 3,143 bytes; subsequent
+ARMADA inspections succeeded. It is a cancelled attempt, not a parsing failure.
+An earlier `CMD 19 FAILED` belongs to inserted-disc identification before Games.
+
+This accepts the demonstrated image-inspection path, not executable loading,
+retail compatibility, full verification or performance. The log does not identify
+every browser navigation action. See [the evidence](evidence/games-armada-inspection-2026-09-24.json)
+and [console excerpt](evidence/games-armada-inspection-2026-09-24.txt).
+Next is the resident read proof; no repeat ARMADA inspection or rip is requested.
+
 ## Audio-CD follow-up accepted by owner — 2026-09-24
 
 The owner confirms **audio CD worked** and wants to proceed to Games. Record

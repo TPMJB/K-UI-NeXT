@@ -5,6 +5,13 @@ It adds a ninth launcher app in the existing K-UI style. It does not launch
 retail games yet; the next architectural gate is the resident read service and
 our own post-handoff test program. The normal optical reader is unchanged.
 
+**Hardware update — 2026-09-24:** runtime `57d53841c1ea` inspected ARMADA three
+times with identical five-track/boot metadata, reading 7,199 bytes each time.
+A stopped Bust-A-Move 4 inspection was followed by successful ARMADA operations.
+That accepts the demonstrated exFAT inspection path; no repeat is requested.
+The exact browsing route and other unlogged controls are not inferred. See
+[the evidence](evidence/games-armada-inspection-2026-09-24.json).
+
 ## Install
 
 Finish any active operation, shut down, and replace `/KUI/runtime.kui` with the
@@ -63,8 +70,8 @@ and `games-advanced` previews are included in the full diagnostic artifact.
 
 Host validation passed 659 image checks, 73 metadata scenarios and 52 real
 FAT32/exFAT cases. Each filesystem case preserved the entire card image by
-SHA-256 comparison. These are host results; Games console acceptance remains
-pending. See [the validation record](evidence/games-foundation-host-2026-09-24.json).
+SHA-256 comparison. These are host results; console acceptance is limited to
+the logged ARMADA inspections above. See [the validation record](evidence/games-foundation-host-2026-09-24.json).
 
 ## Implementation boundary
 
