@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "date": "2026-09-24",
+  "kind": "Owner-reported audio-CD playback acceptance",
+  "source": "Owner follow-up in the project conversation; no new log attached",
+  "statement": "Alright, I can confirm that audio CD worked.",
+  "acceptance": "Audio-CD playback passed by owner report; proceed to Games planning without requesting another playback test.",
+  "runtime": null,
+  "context": {
+    "latest_offered_source": "bc5c8133bf763c98c13e575bce7f0dac04ae4f94",
+    "latest_offered_packaged_runtime": "9c282c90c2f8d3c20653d8f00b3984291caa2319",
+    "build_run": 35943379444,
+    "qualification": "The owner did not repeat the tested build ID; offered-build context is not independent identification of the tested binary."
+  },
+  "not_individually_established": [
+    "Album, TOC and whether this was the earlier mixed/enhanced CD",
+    "Every pause, resume, stop, track-change, volume and cross-app transport path",
+    "Image-backed CDDA during retail game execution"
+  ],
+  "reader_changed_or_remeasured": false
+}

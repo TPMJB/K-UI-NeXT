@@ -7,6 +7,13 @@ and command state machine are unchanged. No new reader benchmark is requested.
 
 ## Acceptance update — 2026-09-24
 
+**Latest follow-up:** the owner confirms audio-CD playback worked and requests
+Games next. Playback is accepted by owner report; no repeat is requested.
+No build ID, mixed-disc identity or per-control results accompany that message.
+See [the confirmation](evidence/m15-audio-cd-owner-confirmation-2026-09-24.json)
+and [the Games plan](games-milestone-plan.md). The earlier log findings below
+describe the preceding runtime.
+
 Runtime `cc2320bb6d3a` passed the clean, damaged and GDI-only tiny-scan
 expectations. The existing ARMADA dump also completed its saved-file scan, with
 Mode 1 structure passing and five recorded track CRC32s. It has no K-UI manifest,
@@ -93,13 +100,11 @@ parity or game-image compatibility.
 5. **Settings/tools:** enable menu sounds, choose a safe-area inset, save and
    reboot. Try inventory and each backup; the app reads the console and writes
    only new SD files. These backups do not enable flash programming.
-6. **Audio CD — partial acceptance:** the second disc played. Follow up the
-   reported not-ready behavior after the player fix. Music L opens the CD player.
-   Insert a normal audio CD, R refresh,
-   A play, Y pause/resume, X stop. Verify routing/volume and menu navigation before
-   trying another optical operation. The follow-up update also lets the earlier
-   mixed/enhanced CD select its audio tracks; data tracks stay unavailable and
-   data-only CDs/GD-ROMs are refused. See
+6. **Audio CD — playback accepted by owner follow-up:** no repeat requested.
+   Individual transport/mixed-disc cases remain unitemized rather than assumed
+   passed. Music L opens the CD player; R refresh, A play, Y pause/resume, X stop.
+   The update also permits audio tracks on mixed/enhanced CDs while keeping data
+   tracks unavailable and refusing data-only CDs/GD-ROMs. See
    [music details](music-round-five.md).
 7. **Network — deferred until hardware is available:** Network X runs the
    temporary local
@@ -135,5 +140,5 @@ widescreen layout support. VMU formatting/overwriting and separate executable
 app loading are not implemented. These are explicit remaining parity items,
 not hidden enabled controls.
 
-Next comes the unified Games app and independent loading machinery. Redesign the
+Next comes the [unified Games app and independent loading machinery](games-milestone-plan.md). Redesign the
 boot disc after the applications, retaining the working SD-update/fallback path.

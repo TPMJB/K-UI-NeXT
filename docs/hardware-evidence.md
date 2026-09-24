@@ -1,5 +1,15 @@
 # Hardware evidence
 
+## Audio-CD follow-up accepted by owner — 2026-09-24
+
+The owner confirms **audio CD worked** and wants to proceed to Games. Record
+playback as passed by owner report; no repeat playback test is requested.
+The message supplies no new log, build ID, album or individual control results,
+so it does not establish every mixed-CD/transport path. The offered update was
+packaged runtime `9c282c90c2f8`; that context does not identify the tested binary.
+See [the confirmation record](evidence/m15-audio-cd-owner-confirmation-2026-09-24.json).
+The older logged status observations below are retained as history.
+
 ## Current app acceptance: scans, music cache and VMU — 2026-09-24
 
 Runtime **cc2320bb6d3a** has now passed all three tiny Advanced CRC fixture

@@ -29,8 +29,11 @@ completed a saved-file scan of Armada with no bad/unsupported sectors. All five
 reported CRCs and the aggregate data/audio lengths match the bundled TOSEC
 Armada US entry. Music Clear cache freed all nine file allocations. The owner
 confirmed a THPS2 save was absent after VMU deletion and usable after restore.
-Pure audio-CD playback worked; mixed-CD filtering and track-change readiness
-are app follow-ups. Network hardware testing is blocked by adapter availability,
+After the CD follow-up update was offered, the owner confirmed audio-CD playback
+worked and requested Games planning. No new log/build ID or individual transport
+results were supplied; see [the confirmation](evidence/m15-audio-cd-owner-confirmation-2026-09-24.json).
+The next development scope is [Games and independent image loading](games-milestone-plan.md).
+Network hardware testing is blocked by adapter availability,
 and the owner has deferred salvage to a future version. See
 [the current app evidence](evidence/m15-app-round-five-2026-09-24.json) and
 [focused app guide](apps-round-five.md). No reader benchmark is reopened.
