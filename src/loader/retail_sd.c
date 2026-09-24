@@ -166,6 +166,21 @@ static uint32_t bus_ticks(void *context) {
     return port.work;
 }
 
+enum kui_loader_sd_result kui_retail_sd_adopt(struct kui_loader_sd *card,
+    const struct kui_loader_sd *prepared) {
+    if(!card || !prepared || card == prepared)
+        return KUI_LOADER_SD_ARGUMENT;
+    if(port.acquired || !prepared->ready || prepared->slow || !prepared->blocks)
+        return KUI_LOADER_SD_NOT_READY;
+    *card = (struct kui_loader_sd){
+        .bus = {NULL, bus_begin, bus_end, bus_select, bus_transfer, bus_ticks},
+        .blocks = prepared->blocks, .high_capacity = prepared->high_capacity,
+        .ready = true, .slow = false,
+        .last_command = prepared->last_command, .last_response = prepared->last_response
+    };
+    return KUI_LOADER_SD_OK;
+}
+
 enum kui_loader_sd_result kui_retail_sd_init(struct kui_loader_sd *card) {
     if(!card)
         return KUI_LOADER_SD_ARGUMENT;
@@ -194,4 +209,27 @@ enum kui_loader_sd_result kui_retail_sd_acquire(void) {
 }
 void kui_retail_sd_release(void) {}
 
+enum kui_loader_sd_result kui_retail_sd_adopt(struct kui_loader_sd *card,
+    const struct kui_loader_sd *prepared) {
+    (void)card; (void)prepared;
+    return KUI_LOADER_SD_UNSUPPORTED;
+}
+
 #endif
+
+enum kui_loader_sd_result kui_retail_sd_read_run(struct kui_loader_sd *card,
+    struct kui_loader_sd_stream *stream, uint32_t lba, uint32_t available,
+    uint8_t out[512]) {
+    if(!card || !stream || !out || !available) return KUI_LOADER_SD_ARGUMENT;
+    if(stream->active && (stream->next_lba != lba || available < stream->remaining)) {
+        enum kui_loader_sd_result r = kui_loader_sd_stream_stop(card, stream);
+        if(r != KUI_LOADER_SD_OK) return r;
+    }
+    if(!stream->active) {
+        if(available < 8) return kui_loader_sd_read(card, lba, 1, out);
+        uint32_t count = available > 10 ? 10 : available;
+        enum kui_loader_sd_result r = kui_loader_sd_stream_start(card, stream, lba, count);
+        if(r != KUI_LOADER_SD_OK) return r;
+    }
+    return kui_loader_sd_stream_next(card, stream, out);
+}

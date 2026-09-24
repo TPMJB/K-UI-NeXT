@@ -477,6 +477,116 @@ static void multi_total_budget(bool frozen) {
     kui_loader_sd_shutdown(&card);
 }
 
+static void stream_lifecycle(bool high_capacity) {
+    struct mock m = {.version2 = true, .high_capacity = high_capacity};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    struct kui_loader_sd_stream stream = {0};
+    uint8_t data[512];
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 37, 10) == KUI_LOADER_SD_OK);
+    CHECK(stream.active && stream.remaining == 10 && stream.next_lba == 37);
+    CHECK(m.selected && m.streaming && !m.stream_blocks && !m.stops);
+    unsigned packets = m.packets, bytes = m.fast_bytes;
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 50, 8) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(m.packets == packets && m.fast_bytes == bytes && stream.remaining == 10);
+    for(unsigned i = 0; i < 10; ++i) {
+        CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_OK);
+        CHECK(stream.next_lba == 38 + i && stream.remaining == 9 - i);
+        CHECK(stream.active == (i != 9) && m.selected == stream.active);
+        CHECK(m.stops == (i == 9 ? 1u : 0u));
+        for(unsigned j = 0; j < sizeof(data); ++j)
+            CHECK(data[j] == pattern(high_capacity ? 37 + i : (37 + i) * 512, j));
+    }
+    packets = m.packets; bytes = m.fast_bytes;
+    CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_stop(&card, &stream) == KUI_LOADER_SD_OK);
+    CHECK(m.packets == packets && m.fast_bytes == bytes);
+    /* Early stop before any data and after two blocks, then a different LBA. */
+    for(unsigned consumed = 0; consumed <= 2; consumed += 2) {
+        CHECK(kui_loader_sd_stream_start(&card, &stream, 80, 8) == KUI_LOADER_SD_OK);
+        for(unsigned i = 0; i < consumed; ++i)
+            CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_OK);
+        CHECK(stream.remaining == 8 - consumed && stream.next_lba == 80 + consumed);
+        CHECK(kui_loader_sd_stream_stop(&card, &stream) == KUI_LOADER_SD_OK);
+        CHECK(!stream.active && !stream.remaining && stream.next_lba == 80 + consumed);
+        CHECK(card.ready && !m.selected && !m.streaming && !m.stop_busy);
+    }
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 100, 1) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_OK);
+    CHECK(!stream.active && stream.next_lba == 101 && !stream.remaining);
+    CHECK(!m.active_deselects && !m.undrained_stops);
+    kui_loader_sd_shutdown(&card);
+}
+
+static void stream_arguments(void) {
+    struct mock m = {.version2 = true, .high_capacity = true};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    struct kui_loader_sd_stream stream = {0};
+    uint8_t data[512];
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+    unsigned packets = m.packets, bytes = m.fast_bytes;
+    CHECK(kui_loader_sd_stream_start(NULL, &stream, 0, 1) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_start(&card, NULL, 0, 1) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 0, 0) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 0, 129) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 8191, 2) == KUI_LOADER_SD_RANGE);
+    CHECK(kui_loader_sd_stream_start(&card, &stream, UINT32_MAX, 2) == KUI_LOADER_SD_RANGE);
+    CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_next(NULL, &stream, data) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_next(&card, NULL, data) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_stop(&card, &stream) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_stop(NULL, &stream) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_stream_stop(&card, NULL) == KUI_LOADER_SD_ARGUMENT);
+    card.ready = false;
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 0, 1) == KUI_LOADER_SD_NOT_READY);
+    card.ready = true;
+    CHECK(!stream.active && !m.selected && m.packets == packets && m.fast_bytes == bytes);
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 10, 8) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_next(&card, &stream, NULL) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(!stream.active && !stream.remaining && !m.selected && m.stops == 1);
+    CHECK(card.ready && card.last_command == 18 && !m.active_deselects);
+    kui_loader_sd_shutdown(&card);
+}
+
+static void stream_errors(void) {
+    struct mock m = {.version2 = true, .high_capacity = true};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    struct kui_loader_sd_stream stream = {0};
+    uint8_t data[512];
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+    m.fault = FAULT_READ_CRC; m.read_fault_block = 1;
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 20, 8) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_CRC);
+    CHECK(!stream.active && !stream.remaining && stream.next_lba == 21);
+    CHECK(card.ready && card.last_command == 18 && !m.selected && m.stops == 1);
+    m.fault = FAULT_MULTI_NO_RESPONSE;
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 30, 8) == KUI_LOADER_SD_TIMEOUT);
+    CHECK(!stream.active && !stream.remaining && !m.selected && m.stops == 2);
+    CHECK(card.ready && card.last_command == 18 && card.last_response == 0xff);
+    m.fault = FAULT_NONE;
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 40, 8) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_OK);
+    m.now += 25000000u; /* Whole-stream timeout also spans separate next calls. */
+    CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_TIMEOUT);
+    CHECK(!stream.active && !stream.remaining && stream.next_lba == 41);
+    CHECK(card.ready && !m.selected && m.stops == 3 && m.stream_blocks == 1);
+    CHECK(!m.active_deselects && !m.undrained_stops);
+    m.stop_fault = FAULT_STOP_COMMAND;
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 50, 8) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_stop(&card, &stream) == KUI_LOADER_SD_COMMAND);
+    CHECK(!stream.active && !stream.remaining && !card.ready && !m.selected);
+    CHECK(card.last_command == 12 && m.stops == 4);
+    unsigned packets = m.packets;
+    CHECK(kui_loader_sd_stream_stop(&card, &stream) == KUI_LOADER_SD_OK);
+    CHECK(kui_loader_sd_stream_start(&card, &stream, 0, 1) == KUI_LOADER_SD_NOT_READY);
+    CHECK(m.packets == packets);
+}
+
 int main(void) {
     static const uint8_t text[] = "123456789";
     CHECK(reference_crc16(text, 9) == 0x31c3);
@@ -490,6 +600,10 @@ int main(void) {
     multi_limits();
     multi_total_budget(false);
     multi_total_budget(true);
+    stream_lifecycle(true);
+    stream_lifecycle(false);
+    stream_arguments();
+    stream_errors();
     multi_failure(FAULT_READ_COMMAND, FAULT_NONE, KUI_LOADER_SD_COMMAND, true);
     multi_failure(FAULT_MULTI_NO_RESPONSE, FAULT_NONE, KUI_LOADER_SD_TIMEOUT, true);
     multi_failure(FAULT_READ_TOKEN, FAULT_NONE, KUI_LOADER_SD_TOKEN, true);

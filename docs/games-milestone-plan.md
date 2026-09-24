@@ -197,8 +197,10 @@ hung for more than two minutes on a still frame when starting a fight. This
 is owner experience, not a controlled benchmark or a general parity claim.
 Keep `baseline/doa2-sd-6c02bd8b22f4` unchanged for comparison.
 
-Run the separate [CMD17/CMD18 diagnostic](games-sd-benchmark.md) once, then
-decide from throughput and longest-call results whether integration pays off.
+The separate [CMD17/CMD18 diagnostic](games-sd-benchmark.md) passed on hardware:
+larger CMD18 reads reached 486–490 KiB/s versus 395 KiB/s. Integrate bounded
+streams within the current two-sector EXEC interval, then compare one fight
+with the pinned build before adopting it as a new gameplay baseline.
 Optional 2048-byte launch copies follow only if worthwhile; compression,
 asynchronous DMA and serial-register microbenchmarks are not this milestone.
 Prioritize broader native GD-ROM eligibility and one additional owned title

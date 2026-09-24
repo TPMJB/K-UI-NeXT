@@ -228,7 +228,8 @@ enum kui_game_result kui_retail_image_init(struct kui_retail_image *image,
     return KUI_GAME_OK;
 }
 static enum kui_game_result file_read(struct kui_retail_image *image,
-    const struct kui_retail_track *track, uint32_t offset, uint8_t *out, uint32_t bytes) {
+    const struct kui_retail_track *track, uint32_t offset, uint8_t *out,
+    uint32_t bytes, uint32_t limit) {
     const struct kui_retail_manifest *m = image->manifest;
     uint32_t file_bytes = (track->end_lba - track->start_lba) * KUI_GAME_RAW_BYTES;
     if(offset > file_bytes || bytes > file_bytes - offset) return KUI_GAME_RANGE;
@@ -249,7 +250,17 @@ static enum kui_game_result file_read(struct kui_retail_image *image,
         uint32_t card_lba = e->card_lba + file_block - e->file_block;
         if(!image->cache_valid || image->cached_lba != card_lba) {
             image->cache_valid = 0;
-            if(image->read_block(image->context, card_lba, image->block)) return KUI_GAME_IO;
+            int failed;
+            if(image->read_run) {
+                if(file_block >= limit) return KUI_GAME_RANGE;
+                uint32_t available = limit - file_block;
+                uint32_t extent_left = e->blocks - (file_block - e->file_block);
+                if(available > extent_left) available = extent_left;
+                failed = image->read_run(image->context, card_lba, available, image->block);
+            } else {
+                failed = image->read_block(image->context, card_lba, image->block);
+            }
+            if(failed) return KUI_GAME_IO;
             ++image->blocks_read; image->cached_lba = card_lba; image->cache_valid = 1;
         }
         memcpy(out, image->block + inside, take);
@@ -271,15 +282,21 @@ enum kui_game_result kui_retail_image_read(struct kui_retail_image *image,
         while(image->manifest->tracks[track_index].end_lba <= current) ++track_index;
         const struct kui_retail_track *t = &image->manifest->tracks[track_index];
         uint32_t offset = (current - t->start_lba) * KUI_GAME_RAW_BYTES;
+        uint32_t end = lba + count;
+        if(end > t->end_lba) end = t->end_lba;
+        uint32_t last_byte = (end - t->start_lba) * KUI_GAME_RAW_BYTES;
+        if(format == KUI_GAME_SECTOR_MODE1)
+            last_byte -= KUI_GAME_RAW_BYTES - 16u - KUI_GAME_DATA_BYTES;
+        uint32_t limit = (last_byte + 511u) / 512u;
         if(format == KUI_GAME_SECTOR_MODE1) {
             uint8_t header[16];
-            r = file_read(image, t, offset, header, sizeof(header));
+            r = file_read(image, t, offset, header, sizeof(header), limit);
             if(r != KUI_GAME_OK) return r;
             if(header[0] || header[11] || header[15] != 1) return KUI_GAME_MODE;
             for(unsigned j = 1; j < 11; ++j) if(header[j] != 255) return KUI_GAME_MODE;
             offset += sizeof(header);
         }
-        r = file_read(image, t, offset, destination, sector_bytes);
+        r = file_read(image, t, offset, destination, sector_bytes, limit);
         if(r != KUI_GAME_OK) return r;
         destination += sector_bytes;
     }

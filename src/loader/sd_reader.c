@@ -318,27 +318,23 @@ enum kui_loader_sd_result kui_loader_sd_read(
  * These are work bounds, not a claim about elapsed time on every bus. Cleanup
  * gets a fresh budget so an exhausted read can still stop the card. */
 #define SD_MULTI_TRANSFER_BUDGET 1000000u
-struct multi_budget {
-    uint32_t start, span;
-    unsigned remaining;
-};
 
 static bool multi_active(struct kui_loader_sd *card,
-                         const struct multi_budget *budget) {
-    return budget->remaining && !expired(card, budget->start, budget->span);
+                         const struct kui_loader_sd_stream *stream) {
+    return stream->budget && !expired(card, stream->start, stream->span);
 }
 
 static uint8_t multi_transfer(struct kui_loader_sd *card,
-                              struct multi_budget *budget, uint8_t data) {
-    --budget->remaining;
+                              struct kui_loader_sd_stream *stream, uint8_t data) {
+    --stream->budget;
     return transfer(card, data);
 }
 
 static enum kui_loader_sd_result multi_ready(struct kui_loader_sd *card,
-                                             struct multi_budget *budget) {
+                                             struct kui_loader_sd_stream *stream) {
     uint32_t start = ticks(card);
-    while(multi_active(card, budget) && !expired(card, start, SD_READY_TICKS)) {
-        if(multi_transfer(card, budget, 0xff) == 0xff)
+    while(multi_active(card, stream) && !expired(card, start, SD_READY_TICKS)) {
+        if(multi_transfer(card, stream, 0xff) == 0xff)
             return KUI_LOADER_SD_OK;
     }
     return KUI_LOADER_SD_TIMEOUT;
@@ -347,7 +343,7 @@ static enum kui_loader_sd_result multi_ready(struct kui_loader_sd *card,
 /* Caller establishes readiness for CMD18. CMD12 must instead be sent directly
  * into the read stream, without consuming data while waiting for 0xff first. */
 static enum kui_loader_sd_result multi_command(struct kui_loader_sd *card,
-    struct multi_budget *budget, uint8_t cmd, uint32_t argument, uint8_t *response) {
+    struct kui_loader_sd_stream *stream, uint8_t cmd, uint32_t argument, uint8_t *response) {
     card->last_command = cmd;
     card->last_response = 0xff;
     uint8_t packet[6] = {
@@ -357,11 +353,11 @@ static enum kui_loader_sd_result multi_command(struct kui_loader_sd *card,
     };
     packet[5] = command_crc(packet);
     for(unsigned i = 0; i < sizeof(packet); ++i)
-        (void)multi_transfer(card, budget, packet[i]);
+        (void)multi_transfer(card, stream, packet[i]);
     if(cmd == 12)
-        (void)multi_transfer(card, budget, 0xff); /* SPI CMD12 stuff byte. */
-    for(unsigned i = 0; i < 20 && multi_active(card, budget); ++i) {
-        uint8_t value = multi_transfer(card, budget, 0xff);
+        (void)multi_transfer(card, stream, 0xff); /* SPI CMD12 stuff byte. */
+    for(unsigned i = 0; i < 20 && multi_active(card, stream); ++i) {
+        uint8_t value = multi_transfer(card, stream, 0xff);
         if((value & 0x80u) == 0) {
             card->last_response = *response = value;
             return KUI_LOADER_SD_OK;
@@ -371,21 +367,21 @@ static enum kui_loader_sd_result multi_command(struct kui_loader_sd *card,
 }
 
 static enum kui_loader_sd_result multi_data(struct kui_loader_sd *card,
-    struct multi_budget *budget, uint8_t output[512]) {
+    struct kui_loader_sd_stream *stream, uint8_t output[512]) {
     uint32_t start = ticks(card);
     uint8_t token = 0xff;
-    while(multi_active(card, budget) && !expired(card, start, SD_READY_TICKS)) {
-        token = multi_transfer(card, budget, 0xff);
+    while(multi_active(card, stream) && !expired(card, start, SD_READY_TICKS)) {
+        token = multi_transfer(card, stream, 0xff);
         if(token != 0xff) break;
     }
     if(token == 0xff) return KUI_LOADER_SD_TIMEOUT;
     if(token != 0xfe) return KUI_LOADER_SD_TOKEN;
-    if(budget->remaining < 514 || !multi_active(card, budget))
+    if(stream->budget < 514 || !multi_active(card, stream))
         return KUI_LOADER_SD_TIMEOUT;
     uint16_t crc = 0;
     /* Charge the fixed block once; keep its byte loop equivalent to CMD17.
      * Complete one bounded block before checking elapsed time again. */
-    budget->remaining -= 514;
+    stream->budget -= 514;
     for(unsigned i = 0; i < 512; ++i) {
         output[i] = transfer(card, 0xff);
         crc = data_crc(crc, output[i]);
@@ -393,47 +389,31 @@ static enum kui_loader_sd_result multi_data(struct kui_loader_sd *card,
     uint16_t expected = (uint16_t)transfer(card, 0xff) << 8;
     expected |= transfer(card, 0xff);
     if(crc != expected) return KUI_LOADER_SD_CRC;
-    return multi_active(card, budget) ? KUI_LOADER_SD_OK : KUI_LOADER_SD_TIMEOUT;
+    return multi_active(card, stream) ? KUI_LOADER_SD_OK : KUI_LOADER_SD_TIMEOUT;
 }
 
-static enum kui_loader_sd_result multi_stop(struct kui_loader_sd *card) {
-    struct multi_budget budget = {ticks(card), SD_READY_TICKS, SD_MULTI_TRANSFER_BUDGET};
+static enum kui_loader_sd_result multi_stop(struct kui_loader_sd *card,
+                                           struct kui_loader_sd_stream *stream) {
+    /* The finished stream no longer needs its read budget. Reuse the state
+     * for cleanup instead of placing another stream on the resident stack. */
+    stream->start = ticks(card);
+    stream->span = SD_READY_TICKS;
+    stream->budget = SD_MULTI_TRANSFER_BUDGET;
     uint8_t response = 0xff;
-    enum kui_loader_sd_result result = multi_command(card, &budget, 12, 0, &response);
+    enum kui_loader_sd_result result = multi_command(card, stream, 12, 0, &response);
     if(result != KUI_LOADER_SD_OK) return result;
     /* Drain the R1b busy interval even when R1 reports an error; only an
      * accepted stop followed by idle proves the stream is safe to reuse. */
-    result = multi_ready(card, &budget);
+    result = multi_ready(card, stream);
     return response ? KUI_LOADER_SD_COMMAND : result;
 }
 
-enum kui_loader_sd_result kui_loader_sd_read_multi(
-    struct kui_loader_sd *card, uint32_t lba, uint32_t count, void *out) {
-    if(!card || !out || !count || count > KUI_LOADER_SD_MAX_READ_BLOCKS)
-        return KUI_LOADER_SD_ARGUMENT;
-    if(!card->ready) return KUI_LOADER_SD_NOT_READY;
-    if((uint64_t)lba + count > card->blocks ||
-       (!card->high_capacity && (uint64_t)lba + count > (UINT64_C(1) << 23)))
-        return KUI_LOADER_SD_RANGE;
-    struct multi_budget budget = {ticks(card), SD_READ_TICKS, SD_MULTI_TRANSFER_BUDGET};
-    card->last_command = 18;
-    card->last_response = 0xff;
-    card->bus.select(card->bus.ctx, true);
-    enum kui_loader_sd_result result = multi_ready(card, &budget);
-    if(result != KUI_LOADER_SD_OK || budget.remaining < 6 || !multi_active(card, &budget)) {
-        card->ready = false; /* No command sent, but idle is not established. */
-        release(card);
-        return KUI_LOADER_SD_TIMEOUT;
-    }
-    uint8_t response = 0xff;
-    result = multi_command(card, &budget, 18, card->high_capacity ? lba : lba << 9, &response);
-    if(result == KUI_LOADER_SD_OK && response) result = KUI_LOADER_SD_COMMAND;
-    for(uint32_t i = 0; i < count && result == KUI_LOADER_SD_OK; ++i)
-        result = multi_data(card, &budget, (uint8_t *)out + (size_t)i * 512);
+static enum kui_loader_sd_result stream_finish(struct kui_loader_sd *card,
+    struct kui_loader_sd_stream *stream, enum kui_loader_sd_result result) {
     uint8_t failed_command = card->last_command, failed_response = card->last_response;
-    /* A missing/rejected CMD18 response cannot justify silently deselecting:
-     * attempt a complete stop before releasing the bus on every issued read. */
-    enum kui_loader_sd_result stopped = multi_stop(card);
+    enum kui_loader_sd_result stopped = multi_stop(card, stream);
+    stream->active = false;
+    stream->remaining = 0;
     if(stopped != KUI_LOADER_SD_OK) card->ready = false;
     if(result != KUI_LOADER_SD_OK) {
         card->last_command = failed_command;
@@ -442,6 +422,67 @@ enum kui_loader_sd_result kui_loader_sd_read_multi(
         result = stopped;
     }
     release(card);
+    return result;
+}
+
+enum kui_loader_sd_result kui_loader_sd_stream_start(
+    struct kui_loader_sd *card, struct kui_loader_sd_stream *stream,
+    uint32_t lba, uint32_t count) {
+    if(!card || !stream || !count || count > KUI_LOADER_SD_MAX_READ_BLOCKS || stream->active)
+        return KUI_LOADER_SD_ARGUMENT;
+    if(!card->ready) return KUI_LOADER_SD_NOT_READY;
+    if((uint64_t)lba + count > card->blocks ||
+       (!card->high_capacity && (uint64_t)lba + count > (UINT64_C(1) << 23)))
+        return KUI_LOADER_SD_RANGE;
+    stream->start = ticks(card);
+    stream->span = SD_READ_TICKS;
+    stream->budget = SD_MULTI_TRANSFER_BUDGET;
+    stream->remaining = count;
+    stream->next_lba = lba;
+    card->last_command = 18;
+    card->last_response = 0xff;
+    card->bus.select(card->bus.ctx, true);
+    enum kui_loader_sd_result result = multi_ready(card, stream);
+    if(result != KUI_LOADER_SD_OK || stream->budget < 6 || !multi_active(card, stream)) {
+        card->ready = false; /* No command sent, but idle is not established. */
+        stream->remaining = 0;
+        release(card);
+        return KUI_LOADER_SD_TIMEOUT;
+    }
+    stream->active = true;
+    uint8_t response = 0xff;
+    result = multi_command(card, stream, 18, card->high_capacity ? lba : lba << 9, &response);
+    if(result == KUI_LOADER_SD_OK && response) result = KUI_LOADER_SD_COMMAND;
+    /* A missing/rejected CMD18 response cannot justify silently deselecting:
+     * attempt a complete stop before releasing the bus on every issued read. */
+    return result == KUI_LOADER_SD_OK ? result : stream_finish(card, stream, result);
+}
+
+enum kui_loader_sd_result kui_loader_sd_stream_next(
+    struct kui_loader_sd *card, struct kui_loader_sd_stream *stream, void *out) {
+    if(!card || !stream || !stream->active) return KUI_LOADER_SD_ARGUMENT;
+    enum kui_loader_sd_result result = !out || !stream->remaining ? KUI_LOADER_SD_ARGUMENT :
+        !card->ready ? KUI_LOADER_SD_NOT_READY : multi_data(card, stream, out);
+    if(result == KUI_LOADER_SD_OK) {
+        ++stream->next_lba;
+        if(--stream->remaining) return result;
+    }
+    return stream_finish(card, stream, result);
+}
+
+enum kui_loader_sd_result kui_loader_sd_stream_stop(
+    struct kui_loader_sd *card, struct kui_loader_sd_stream *stream) {
+    if(!card || !stream) return KUI_LOADER_SD_ARGUMENT;
+    return stream->active ? stream_finish(card, stream, KUI_LOADER_SD_OK) : KUI_LOADER_SD_OK;
+}
+
+enum kui_loader_sd_result kui_loader_sd_read_multi(
+    struct kui_loader_sd *card, uint32_t lba, uint32_t count, void *out) {
+    if(!out) return KUI_LOADER_SD_ARGUMENT;
+    struct kui_loader_sd_stream stream = {0};
+    enum kui_loader_sd_result result = kui_loader_sd_stream_start(card, &stream, lba, count);
+    for(uint32_t i = 0; i < count && result == KUI_LOADER_SD_OK; ++i)
+        result = kui_loader_sd_stream_next(card, &stream, (uint8_t *)out + (size_t)i * 512);
     return result;
 }
 

@@ -11,6 +11,7 @@ static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
 static struct kui_retail_gd service;
 static struct kui_loader_sd card;
+static struct kui_loader_sd_stream stream;
 static struct kui_gd_track tracks[KUI_RETAIL_IMAGE_TRACKS];
 static struct retail_display_state display;
 uint32_t kui_retail_original_menu;
@@ -58,6 +59,11 @@ static int read_block(void *unused, uint32_t lba, uint8_t output[512]) {
     card_result = kui_loader_sd_read(&card, lba, 1, output);
     return card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
+static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t output[512]) {
+    (void)unused;
+    card_result = kui_retail_sd_read_run(&card, &stream, lba, available, output);
+    return card_result == KUI_LOADER_SD_OK ? 0 : -1;
+}
 static enum kui_game_sector_format sector_format(uint32_t bytes) {
     return bytes == 2352 ? KUI_GAME_SECTOR_RAW : KUI_GAME_SECTOR_MODE1;
 }
@@ -74,8 +80,11 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     if(card_result != KUI_LOADER_SD_OK) return -1;
     enum kui_game_result result = kui_retail_image_read(&image, lba, count,
         sector_format(bytes), out, (size_t)count * bytes);
+    enum kui_loader_sd_result stopped = kui_loader_sd_stream_stop(&card, &stream);
+    if(card_result == KUI_LOADER_SD_OK) card_result = stopped;
+    if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
     kui_retail_sd_release();
-    return result == KUI_GAME_OK ? 0 : -1;
+    return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
 static void redirect_entry(uint32_t address,void (*target)(void)) {
     /* Aligned SH-4 tail jump: MOV.L @(1,PC),R0; JMP @R0; NOP; NOP;
@@ -143,25 +152,30 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_line("POWER OFF AND ON TO RETURN");
     for(;;) __asm__ volatile("nop");
 }
-int kui_retail_resident_init(const uint8_t wire[KUI_RETAIL_MAP_BYTES],
-    uint32_t original_gd_vector, const struct retail_display_state *saved_display) {
+int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
+    const struct kui_loader_sd *prepared_card, uint32_t original_gd_vector,
+    const struct retail_display_state *saved_display) {
     uint32_t area = original_gd_vector & 0xff000000u;
     uint32_t p1 = (original_gd_vector & 0x00ffffffu) | 0x8c000000u;
-    if(!wire || !saved_display || (original_gd_vector & 1u) ||
+    if(!prepared || !prepared_card || !saved_display || (original_gd_vector & 1u) ||
        (area != 0x8c000000u && area != 0xac000000u && area != 0x0c000000u) ||
        p1 < 0x8c000100u || p1 >= KUI_RETAIL_IP_ADDRESS)
         return KUI_RETAIL_RESIDENT_ARGUMENT;
     display = *saved_display;
-    if(kui_retail_manifest_decode(wire, &manifest) != KUI_GAME_OK)
+    if(!prepared->track_count || prepared->track_count > KUI_RETAIL_IMAGE_TRACKS ||
+       !prepared->extent_count || prepared->extent_count > KUI_RETAIL_IMAGE_EXTENTS)
         return KUI_RETAIL_RESIDENT_MAP;
-    card_result = kui_retail_sd_init(&card);
+    /* The high stage already decoded/validated this map and CRC-checked the
+     * owner IP/executable. Copy it and rebind initialized card state to local
+     * callbacks. No second SD reset or manifest parser remains in low RAM. */
+    manifest = *prepared;
+    card_result = kui_retail_sd_adopt(&card, prepared_card);
     if(card_result != KUI_LOADER_SD_OK || card.blocks < manifest.card_sectors)
         return KUI_RETAIL_RESIDENT_SD;
-    /* _start has cleared all resident BSS, including image/cache/counters.
-     * decode above already validated this immutable manifest. Bind it here
-     * without retaining the duplicate image-init validation in low RAM. */
+    /* _start cleared all resident BSS, including image/cache/stream/counters. */
     image.manifest = &manifest;
     image.read_block = read_block;
+    image.read_run = read_run;
     for(uint32_t i = 0; i < manifest.track_count; ++i) {
         const struct kui_retail_track *t = &manifest.tracks[i];
         tracks[i] = (struct kui_gd_track){t->number, t->control, t->start_lba, t->end_lba};

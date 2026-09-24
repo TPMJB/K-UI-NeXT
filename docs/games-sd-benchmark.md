@@ -1,5 +1,10 @@
 # CMD17 versus CMD18 — one console comparison
 
+**Completed:** build `93b1e6022592` passed on the owner's console. See the
+[measurements](evidence/games-cmd18-comparison-2026-09-24.md). The current
+gameplay candidate is covered by [the retail test guide](games-retail-test.md);
+the instructions below retain the original standalone diagnostic procedure.
+
 The playable DOA2 baseline remains pinned at `6c02bd8b22f4`, on branch
 `baseline/doa2-sd-6c02bd8b22f4`. This package runs a separate read-only storage
 diagnostic; it stops at its results screen instead of starting the game.
@@ -49,10 +54,10 @@ ready poll, consumes its SPI stuff byte, checks R1 and waits for busy release.
 Uncertain cleanup invalidates the card until reinitialization. Both native
 builds retain the existing memory, stack and linked-instruction checks.
 
-The normal `sd-update` artifact remains on the existing CMD17 game path. The
-new function and diagnostic buffers are not part of its low resident. This
-comparison does not enable long game-time reads or leave a stream open across
-interrupts; those require separate ownership and scheduling work.
+The normal `sd-update` artifact paired with the tested `93b1e6022592` comparison
+remained on the CMD17 game path. Later gameplay candidates are documented
+separately; the diagnostic buffers remain outside the low resident. This
+comparison does not leave a stream open across interrupts.
 
 ## Decision after this result
 

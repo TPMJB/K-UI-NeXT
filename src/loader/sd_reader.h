@@ -51,6 +51,27 @@ enum kui_loader_sd_result kui_loader_sd_init_bus(
     struct kui_loader_sd *card, const struct kui_loader_sd_bus *bus);
 enum kui_loader_sd_result kui_loader_sd_read(
     struct kui_loader_sd *card, uint32_t lba, uint32_t count, void *out);
+/* Zero before first use. Callers may inspect remaining/next_lba/active, but
+ * must not change a live stream. The other fields are protocol work state.
+ * Serialize all access to the card; keep the same card and bus lease until
+ * inactive. Do not issue CMD17/other commands or release the bus while active. */
+struct kui_loader_sd_stream {
+    uint32_t start, span, budget, remaining, next_lba;
+    bool active;
+};
+/* Validate the complete range, then issue CMD18 without reading its first
+ * block. Starting an already-active stream is rejected without disturbing it.
+ * next reads exactly 512 bytes and auto-stops on the final block or any error.
+ * stop also supports early termination and is a no-op on an inactive stream.
+ * Every issued CMD18 gets CMD12+deselect, even after an uncertain response.
+ * Cleanup failure clears card.ready; reinitialize before using that card. */
+enum kui_loader_sd_result kui_loader_sd_stream_start(
+    struct kui_loader_sd *card, struct kui_loader_sd_stream *stream,
+    uint32_t lba, uint32_t count);
+enum kui_loader_sd_result kui_loader_sd_stream_next(
+    struct kui_loader_sd *card, struct kui_loader_sd_stream *stream, void *out);
+enum kui_loader_sd_result kui_loader_sd_stream_stop(
+    struct kui_loader_sd *card, struct kui_loader_sd_stream *stream);
 /* Separate CMD18 comparison path; the existing read API remains CMD17-only.
  * Each block is CRC checked. Every issued CMD18 is stopped with CMD12 before
  * deselection, including failed/uncertain responses. If stop/idle cannot be

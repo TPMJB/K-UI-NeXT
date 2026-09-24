@@ -112,6 +112,12 @@ test-retail-sd-bench: build/test-loader-sd-fast build/test-retail-sd-bench
 	./build/test-loader-sd-fast
 	./build/test-retail-sd-bench
 
+.PHONY: test-retail-streams
+test-retail-streams: build/test-loader-sd-fast build/test-retail-sd build/test-retail-image
+	./build/test-loader-sd-fast
+	./build/test-retail-sd
+	./build/test-retail-image
+
 build/test-retail-sd-bench: tests/test_retail_sd_bench.c src/loader/retail_sd_bench.c src/loader/retail_sd_bench.h src/core/retail_image.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/loader/retail_sd_bench.c src/core/retail_image.c tests/test_retail_sd_bench.c -o $@

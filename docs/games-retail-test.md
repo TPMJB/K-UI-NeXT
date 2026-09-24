@@ -1,8 +1,24 @@
 # DOA2 launch — SD latency comparison
 
-**Next test:** the separate [CMD17/CMD18 comparison package](games-sd-benchmark.md).
-Use that guide for the current diagnostic; the gameplay timings below describe
-the preserved working build.
+**Current test: bounded CMD18 gameplay.** The separate transport comparison
+[passed on hardware](evidence/games-cmd18-comparison-2026-09-24.md), reaching
+486–490 KiB/s on larger CMD18 reads versus 395 KiB/s with CMD17. Its stationary
+results screen was the intended end of the diagnostic.
+
+Install the ordinary `sd-update` package on the same SD card, replacing the
+benchmark's runtime and `KUI/apps/games/retail-boot.kui`. Keep the same boot CD
+and dump. Select DOA2, press Y then A; this package launches the game.
+Play the same character/stage introduction and one fight. Report launch time,
+the black screen before the stage movie, speech/movie behavior and lag during
+the first seconds of battle. One comparison is enough; do not repeat the
+standalone storage or selected-image probes. Use the pinned ZIP for rollback.
+
+The candidate uses bounded 8–10 physical-block CMD18 streams and CMD17 for
+shorter tails. The two-game-sector EXEC limit is unchanged. Every image read
+closes its stream before restoring the pins and returning to the game. It also
+removes the resident's duplicate manifest decode and card initialization by
+copying the stage's validated state and rebinding all callbacks locally.
+The historical gameplay timings below describe the preserved working build.
 
 **Pinned working build: `6c02bd8b22f4`.** The owner reports fluid audio and
 playable results, with delayed textures, stage loads and brief early-battle lag

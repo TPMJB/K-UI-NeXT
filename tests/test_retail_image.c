@@ -11,6 +11,8 @@ static struct kui_retail_image image;
 static uint8_t card[2048u * 512u], wire[KUI_RETAIL_IMAGE_WIRE_BYTES];
 static uint8_t clean_wire[KUI_RETAIL_IMAGE_WIRE_BYTES], output[64u * 2352u + 1];
 static uint32_t calls, fail_call;
+static uint32_t edge_source, run_calls;
+static struct { uint32_t lba, available; } run_trace[512];
 static unsigned checks;
 #define CHECK(test) do { ++checks; assert(test); } while(0)
 
@@ -34,8 +36,27 @@ static int read_block(void *context, uint32_t lba, uint8_t out[512]) {
     CHECK(allocated);
     ++calls;
     if(fail_call && calls == fail_call) { memset(out, 0xdd, 512); return -1; }
+    if(lba == UINT32_MAX) { CHECK(edge_source != 0); lba = edge_source; }
+    CHECK(lba < 2048);
     memcpy(out, card + lba * 512u, 512);
     return 0;
+}
+static int read_run(void *context, uint32_t lba, uint32_t available, uint8_t out[512]) {
+    CHECK(available != 0 && run_calls < sizeof(run_trace) / sizeof(run_trace[0]));
+    CHECK((uint64_t)lba + available <= manifest.card_sectors);
+    CHECK(lba >= manifest.partition_start && (uint64_t)lba + available <= manifest.partition_end);
+    bool bounded = false;
+    for(uint32_t i = 0; i < manifest.extent_count; ++i) {
+        const struct kui_retail_extent *e = &manifest.extents[i];
+        if(lba >= e->card_lba && lba - e->card_lba < e->blocks) {
+            CHECK(available <= e->blocks - (lba - e->card_lba));
+            bounded = true;
+        }
+    }
+    CHECK(bounded);
+    run_trace[run_calls].lba = lba;
+    run_trace[run_calls++].available = available;
+    return read_block(context, lba, out);
 }
 static void fixture(bool fragmented) {
     memset(&manifest, 0, sizeof(manifest));
@@ -71,7 +92,7 @@ static void fixture(bool fragmented) {
         }
     }
     CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_OK);
-    calls = fail_call = 0;
+    calls = fail_call = edge_source = run_calls = 0;
     CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
 }
 static void put32(uint8_t *p, uint32_t value) {
@@ -259,21 +280,136 @@ static void sequential_cache_tests(bool fragmented) {
     };
     for(unsigned format = 0; format < sizeof(formats) / sizeof(formats[0]); ++format) {
         for(unsigned chunk = 0; chunk < sizeof(chunks) / sizeof(chunks[0]); ++chunk) {
-            fixture(fragmented);
-            CHECK(!image.cache_valid && !image.blocks_read && !calls);
-            for(uint32_t done = 0; done < 32; done += chunks[chunk])
-                compare(45000 + done, chunks[chunk], formats[format]);
-            /* 32 raw sectors occupy exactly 147 physical blocks. All formats
-             * and chunk sizes must reach each block once, including when the
-             * extents are fragmented. compare checks every returned payload
-             * byte and the destination canary after each separate read call. */
-            CHECK(calls == 147 && image.blocks_read == 147);
-            CHECK(image.cache_valid);
-            /* New initialization discards the prior session's cached block. */
-            CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
-            CHECK(!image.cache_valid && !image.blocks_read);
+            for(unsigned streaming = 0; streaming < 2; ++streaming) {
+                fixture(fragmented);
+                CHECK(!image.cache_valid && !image.blocks_read && !calls);
+                if(streaming) image.read_run = read_run;
+                for(uint32_t done = 0; done < 32; done += chunks[chunk])
+                    compare(45000 + done, chunks[chunk], formats[format]);
+                /* 32 raw sectors occupy exactly 147 physical blocks. All formats
+                 * and chunk sizes must reach each block once, including when the
+                 * extents are fragmented. compare checks every returned payload
+                 * byte and the destination canary after each separate read call. */
+                CHECK(calls == 147 && image.blocks_read == 147);
+                CHECK(run_calls == (streaming ? 147u : 0u));
+                CHECK(image.cache_valid);
+                /* New initialization discards the prior session's cached block. */
+                CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+                CHECK(!image.cache_valid && !image.blocks_read && !image.read_run);
+            }
         }
     }
+}
+static void run_span(uint32_t at, uint32_t physical, uint32_t blocks) {
+    CHECK(at + blocks <= run_calls);
+    for(uint32_t i = 0; i < blocks; ++i) {
+        CHECK(run_trace[at + i].lba == physical + i);
+        CHECK(run_trace[at + i].available == blocks - i);
+    }
+}
+static void run_span_tests(void) {
+    fixture(false); image.read_run = read_run;
+    uint32_t physical = manifest.extents[manifest.tracks[2].first_extent].card_lba;
+    compare(45000, 2, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 9); run_span(0, physical, 9);
+    /* Request scope includes the second sector, never its parity-only tail. */
+    run_calls = 0;
+    compare(45001, 1, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 5); run_span(0, physical + 4, 5);
+    run_calls = 0;
+    compare(45001, 1, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 6); run_span(0, physical + 4, 6);
+    /* Its last block is reused by the next RAW request without a callback. */
+    run_calls = 0;
+    compare(45002, 2, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 9); run_span(0, physical + 10, 9);
+    run_calls = 0;
+    compare(45000, 8, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 37); run_span(0, physical, 37);
+    /* Separate tracks bound runs even when their physical blocks are adjacent.
+     * MODE1 also omits a final parity-only block in the first track. */
+    run_calls = 0;
+    compare(45069, 3, KUI_GAME_SECTOR_MODE1);
+    uint32_t following = manifest.extents[manifest.tracks[3].first_extent].card_lba;
+    CHECK(run_calls == 14);
+    run_span(0, physical + 316, 5); run_span(5, following, 9);
+    run_calls = 0;
+    compare(45069, 3, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 16);
+    run_span(0, physical + 316, 6); run_span(6, following, 10);
+
+    fixture(true); image.read_run = read_run;
+    uint32_t first = manifest.tracks[2].first_extent;
+    compare(45000, 2, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 10);
+    for(uint32_t i = 0; i < 3; ++i)
+        run_span(i * 3, manifest.extents[first + i].card_lba, 3);
+    run_span(9, manifest.extents[first + 3].card_lba, 1);
+
+    /* A declared extent boundary still ends a run without a physical gap. */
+    fixture(false);
+    first = manifest.tracks[2].first_extent;
+    struct kui_retail_extent original = manifest.extents[first];
+    memmove(&manifest.extents[first + 2], &manifest.extents[first + 1],
+        (manifest.extent_count - first - 1) * sizeof(manifest.extents[0]));
+    manifest.extents[first].blocks = 4;
+    manifest.extents[first + 1] = (struct kui_retail_extent){
+        4, original.card_lba + 4, original.blocks - 4};
+    ++manifest.extent_count; ++manifest.tracks[2].extent_count;
+    ++manifest.tracks[3].first_extent;
+    CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+    image.read_run = read_run;
+    compare(45000, 2, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 9);
+    run_span(0, original.card_lba, 4); run_span(4, original.card_lba + 4, 5);
+
+    /* A partial final file block at UINT32_MAX cannot advertise a wrapped run. */
+    fixture(true);
+    struct kui_retail_extent *last = &manifest.extents[manifest.extent_count - 1];
+    CHECK(last->blocks == 1);
+    edge_source = last->card_lba;
+    last->card_lba = UINT32_MAX;
+    manifest.card_sectors = manifest.partition_end = UINT64_C(0x100000000);
+    CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+    image.read_run = read_run;
+    compare(45071, 1, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 6);
+    CHECK(run_trace[5].lba == UINT32_MAX && run_trace[5].available == 1);
+}
+static void run_failure_tests(void) {
+    fixture(false); image.read_run = read_run;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, 45000, 2, KUI_GAME_SECTOR_MODE1,
+        output, 4095) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read(&image, 2, 2, KUI_GAME_SECTOR_MODE1,
+        output, sizeof(output)) == KUI_GAME_AUDIO);
+    CHECK(run_calls == 0 && calls == 0);
+    fail_call = 3;
+    CHECK(kui_retail_image_read(&image, 45000, 2, KUI_GAME_SECTOR_MODE1,
+        output, sizeof(output)) == KUI_GAME_IO);
+    CHECK(run_calls == 3 && calls == 3 && !image.cache_valid);
+    CHECK(run_trace[0].available == 9 && run_trace[2].available == 7);
+    fail_call = 0; run_calls = 0;
+    compare(45000, 2, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 9 && image.cache_valid);
+    uint32_t cached = image.cached_lba;
+    run_calls = 0;
+    CHECK(kui_retail_image_read(&image, 45071, 2, KUI_GAME_SECTOR_RAW,
+        output, sizeof(output)) == KUI_GAME_RANGE);
+    CHECK(!run_calls && image.cache_valid && image.cached_lba == cached);
+
+    fixture(false);
+    uint32_t physical = manifest.extents[manifest.tracks[2].first_extent].card_lba;
+    card[physical * 512u + 15] = 2;
+    CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+    image.read_run = read_run;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, 45000, 2, KUI_GAME_SECTOR_MODE1,
+        output, sizeof(output)) == KUI_GAME_MODE);
+    /* A mode error can return early with unused advertised blocks. The caller
+     * must stop its transport; the image layer must consume no further blocks. */
+    CHECK(run_calls == 1 && calls == 1 && run_trace[0].available == 9);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
 }
 static void maximum_map_tests(void) {
     fixture(false);
@@ -322,7 +458,8 @@ static void maximum_map_tests(void) {
 int main(void) {
     wire_tests(); invalid_map_tests(); reader_tests(false); reader_tests(true);
     sequential_cache_tests(false); sequential_cache_tests(true);
+    run_span_tests(); run_failure_tests();
     maximum_map_tests();
-    printf("retail image: %u checks passed (canonical wire, fragmented bounds, one-block reads, IO)\n", checks);
+    printf("retail image: %u checks passed (canonical wire, fragmented bounds, cached runs, IO)\n", checks);
     return 0;
 }

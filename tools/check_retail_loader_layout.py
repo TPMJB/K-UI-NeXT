@@ -28,6 +28,7 @@ INIT_ONLY = {
     "kui_retail_resident_init", "kui_retail_manifest_decode",
     "kui_retail_image_init", "kui_retail_gd_init", "kui_retail_sd_init",
     "kui_loader_sd_init_bus", "capacity",
+    "kui_retail_sd_adopt",  # Called only by resident_init on the high stage stack.
 }
 ASSEMBLY_STACK_BYTES = 256
 STACK_GUARD_BYTES = 16

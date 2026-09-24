@@ -43,9 +43,23 @@ uint32_t kui_retail_crc32(uint32_t previous, const void *, size_t);
  * The same card and its file bytes must remain unchanged for the active image;
  * hot replacement or modification requires a new validated map and init. */
 typedef int (*kui_retail_read_block)(void *, uint32_t, uint8_t[512]);
+/* Optional streaming transport, replacing read_block on cache misses while
+ * still supplying exactly one block per call. Cache hits call neither one.
+ * available includes this block and ends at the current validated request's
+ * last payload block or this track extent's end, whichever comes first. It is
+ * not permission to prefetch: later calls consume further blocks as needed.
+ * A final partial file block may include allocation padding; only declared
+ * file bytes are copied to image output. The decoded/validated manifest and
+ * card data must remain immutable. The transport bounds each stream, stops
+ * before crossing an extent boundary/discontinuity, and reports failures.
+ * The caller must close any remaining stream on EVERY image_read return,
+ * including mode/range/IO errors, before releasing the physical bus. */
+typedef int (*kui_retail_read_run)(void *, uint32_t lba, uint32_t available,
+                                  uint8_t[512]);
 struct kui_retail_image {
     const struct kui_retail_manifest *manifest;
     kui_retail_read_block read_block;
+    kui_retail_read_run read_run; /* Optional; init clears it. read_block required. */
     void *context;
     uint32_t blocks_read, cached_lba, cache_valid;
     uint8_t block[512];

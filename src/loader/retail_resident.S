@@ -5,7 +5,8 @@
 #define C_SYMBOL(name) JOIN(__USER_LABEL_PREFIX__,name)
 
 /* Called by the high stage before entering the owner's upper IP bootstrap.
- * Do not switch stacks here: decoding/init use the temporary high stack. */
+ * Do not switch stacks here: state adoption/init use the temporary high stack.
+ * R4..R7 hold all four C arguments and remain intact across BSS clearing. */
     .section .entry,"ax"
     .align 2
     .global _start

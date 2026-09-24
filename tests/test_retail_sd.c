@@ -17,6 +17,37 @@ static struct {
     bool sampling;
     enum kui_loader_sd_result init_result;
 } fake;
+static unsigned run_starts, run_stops, run_singles, run_blocks;
+static bool fail_stop;
+
+/* Protocol byte framing lives in test_loader_sd; these stubs check how the
+ * retail image callback selects and bounds that already-tested protocol. */
+enum kui_loader_sd_result kui_loader_sd_read(struct kui_loader_sd *card,
+    uint32_t lba, uint32_t count, void *out) {
+    assert(card->ready && count == 1);
+    ++run_singles; memset(out, (int)(lba & 255), 512);
+    return KUI_LOADER_SD_OK;
+}
+enum kui_loader_sd_result kui_loader_sd_stream_start(struct kui_loader_sd *card,
+    struct kui_loader_sd_stream *stream, uint32_t lba, uint32_t count) {
+    assert(card->ready && !stream->active && count >= 8 && count <= 10);
+    ++run_starts; stream->active = true; stream->next_lba = lba; stream->remaining = count;
+    return KUI_LOADER_SD_OK;
+}
+enum kui_loader_sd_result kui_loader_sd_stream_next(struct kui_loader_sd *card,
+    struct kui_loader_sd_stream *stream, void *out) {
+    assert(card->ready && stream->active && stream->remaining);
+    ++run_blocks; memset(out, (int)(stream->next_lba++ & 255), 512);
+    if(!--stream->remaining) stream->active = false;
+    return KUI_LOADER_SD_OK;
+}
+enum kui_loader_sd_result kui_loader_sd_stream_stop(struct kui_loader_sd *card,
+    struct kui_loader_sd_stream *stream) {
+    if(!stream->active) return KUI_LOADER_SD_OK;
+    ++run_stops; stream->active = false; stream->remaining = 0;
+    if(fail_stop) { card->ready = false; return KUI_LOADER_SD_TIMEOUT; }
+    return KUI_LOADER_SD_OK;
+}
 
 /* Any access outside this exact four-register set fails. In particular these
  * tests prohibit writes to TMU, SCFSR/SCLSR and FIFO data/reset interfaces. */
@@ -198,10 +229,66 @@ static void init_errors_release_once(void) {
     assert(fake.count == 0);
 }
 
+static void adopt_local_callbacks(void) {
+    reset();
+    struct kui_loader_sd source = {0}, adopted = {0}, local = {0};
+    assert(kui_retail_sd_init(&local) == KUI_LOADER_SD_OK);
+    source = local;
+    /* Source callbacks point at temporary stage code. Even NULL/foreign bus
+     * pointers must be replaced, never retained or invoked during adoption. */
+    memset(&source.bus, 0, sizeof(source.bus));
+    source.bus.ctx = &source;
+    unsigned writes = fake.count, inits = fake.init_calls;
+    assert(kui_retail_sd_adopt(&adopted, &source) == KUI_LOADER_SD_OK);
+    assert(fake.count == writes && fake.init_calls == inits);
+    assert(adopted.bus.ctx == NULL && adopted.bus.begin == local.bus.begin);
+    assert(adopted.bus.end == local.bus.end && adopted.bus.select == local.bus.select);
+    assert(adopted.bus.transfer == local.bus.transfer && adopted.bus.ticks == local.bus.ticks);
+    assert(adopted.ready && !adopted.slow && adopted.blocks == source.blocks);
+    assert(adopted.high_capacity == source.high_capacity);
+    memset(&source, 0, sizeof(source)); /* Discard the entire high-stage state. */
+    assert(kui_retail_sd_acquire() == KUI_LOADER_SD_OK);
+    assert(kui_retail_sd_adopt(&source, &adopted) == KUI_LOADER_SD_NOT_READY);
+    adopted.bus.select(adopted.bus.ctx, true);
+    assert(fake.ptr == 0xa2u);
+    kui_retail_sd_release(); restored();
+    assert(kui_retail_sd_adopt(&source, &source) == KUI_LOADER_SD_ARGUMENT);
+    assert(kui_retail_sd_adopt(NULL, &adopted) == KUI_LOADER_SD_ARGUMENT);
+    adopted.slow = true;
+    assert(kui_retail_sd_adopt(&source, &adopted) == KUI_LOADER_SD_NOT_READY);
+}
+
+static void bounded_run_selection(void) {
+    struct kui_loader_sd card = {.ready = true};
+    struct kui_loader_sd_stream stream = {0};
+    uint8_t out[512];
+    for(uint32_t i = 0; i < 10; ++i) {
+        assert(kui_retail_sd_read_run(&card, &stream, 100 + i, 40 - i, out) == KUI_LOADER_SD_OK);
+        assert(out[0] == 100 + i);
+    }
+    assert(!stream.active && run_starts == 1 && run_blocks == 10 && !run_singles);
+    assert(kui_retail_sd_read_run(&card, &stream, 110, 7, out) == KUI_LOADER_SD_OK);
+    assert(run_singles == 1);
+    assert(kui_retail_sd_read_run(&card, &stream, 200, 8, out) == KUI_LOADER_SD_OK);
+    assert(stream.remaining == 7 && stream.next_lba == 201);
+    /* A new extent/request must never continue a prior stream blindly. */
+    assert(kui_retail_sd_read_run(&card, &stream, 201, 2, out) == KUI_LOADER_SD_OK);
+    assert(!stream.active && run_stops == 1 && run_singles == 2);
+    assert(kui_retail_sd_read_run(&card, &stream, 300, 10, out) == KUI_LOADER_SD_OK);
+    assert(kui_retail_sd_read_run(&card, &stream, 900, 2, out) == KUI_LOADER_SD_OK);
+    assert(!stream.active && run_stops == 2 && run_singles == 3);
+    assert(kui_retail_sd_read_run(&card, &stream, 1000, 10, out) == KUI_LOADER_SD_OK);
+    fail_stop = true;
+    assert(kui_retail_sd_read_run(&card, &stream, 2000, 2, out) == KUI_LOADER_SD_TIMEOUT);
+    assert(!stream.active && !card.ready && run_stops == 3 && run_singles == 3);
+}
+
 int main(void) {
     blocked_serial_is_untouched();
     init_and_bit_edges();
     init_errors_release_once();
-    puts("retail SD ownership, restoration, bit edges and work budgets passed");
+    adopt_local_callbacks();
+    bounded_run_selection();
+    puts("retail SD ownership, local adoption, bounded runs and bit edges passed");
     return 0;
 }

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
 #include "kui/retail_image.h"
+#include "kui/retail_resident.h"
 #include "retail_sd.h"
 #include "retail_display.h"
 #ifdef KUI_RETAIL_SD_BENCH
@@ -26,6 +27,7 @@ static uint8_t original_entry[KUI_RETAIL_TRAMPOLINE_BYTES];
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
 static struct kui_loader_sd card;
+static struct kui_loader_sd_stream stream;
 static struct retail_display_state display;
 static enum kui_loader_sd_result last_card_result;
 
@@ -54,14 +56,21 @@ static int physical_read(void *context,uint32_t lba,uint8_t out[512]) {
     last_card_result=kui_loader_sd_read(context,lba,1,out);
     return last_card_result==KUI_LOADER_SD_OK?0:-1;
 }
+static int physical_run(void *context,uint32_t lba,uint32_t available,uint8_t out[512]) {
+    last_card_result=kui_retail_sd_read_run(context,&stream,lba,available,out);
+    return last_card_result==KUI_LOADER_SD_OK?0:-1;
+}
 static void read_sectors(uint32_t lba,uint32_t count,void *out) {
     last_card_result=kui_retail_sd_acquire();
     if(last_card_result!=KUI_LOADER_SD_OK)
         stopped("SERIAL SD PINS NOT AVAILABLE",(uint32_t)last_card_result);
     enum kui_game_result result=kui_retail_image_read(&image,lba,count,
         KUI_GAME_SECTOR_MODE1,out,(size_t)count*KUI_GAME_DATA_BYTES);
+    enum kui_loader_sd_result stop_result=kui_loader_sd_stream_stop(&card,&stream);
+    if(last_card_result==KUI_LOADER_SD_OK) last_card_result=stop_result;
+    if(stop_result!=KUI_LOADER_SD_OK) image.cache_valid=0;
     kui_retail_sd_release();
-    if(result!=KUI_GAME_OK) {
+    if(result!=KUI_GAME_OK || last_card_result!=KUI_LOADER_SD_OK) {
         retail_display_hex("IMAGE LBA",lba);
         retail_display_hex("SD RESULT",(uint32_t)last_card_result);
         retail_display_hex("SD COMMAND",card.last_command);
@@ -85,10 +94,8 @@ static void install_resident(void) {
     memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,
            __retail_resident_blob_start,bytes);
     kui_retail_stage_sync();
-    typedef int (*resident_init_fn)(const uint8_t *,uint32_t,
-                                    const struct retail_display_state *);
-    resident_init_fn init=(resident_init_fn)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
-    int initialized=init(wire_copy,firmware,&display);
+    kui_retail_resident_entry init=(kui_retail_resident_entry)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
+    int initialized=init(&manifest,&card,firmware,&display);
     if(initialized) stopped("RETAIL RESIDENT INIT FAILED",(uint32_t)initialized);
 }
 void kui_retail_stage_main(const uint8_t *wire) {
@@ -120,6 +127,7 @@ void kui_retail_stage_main(const uint8_t *wire) {
 #endif
     result=kui_retail_image_init(&image,&manifest,physical_read,&card);
     if(result!=KUI_GAME_OK) stopped("IMAGE READER INIT FAILED",(uint32_t)result);
+    image.read_run=physical_run;
     retail_display_line("LOADING OWNER IP AND EXECUTABLE");
     uint8_t *ip=(uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS;
     read_sectors(manifest.session_lba,16,ip);
