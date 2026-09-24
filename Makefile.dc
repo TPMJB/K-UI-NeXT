@@ -20,6 +20,7 @@ RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recov
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
 RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
+RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
 RUNTIME_OBJECTS += build/dc/src/core/crc16.o
 RUNTIME_OBJECTS += build/dc/src/core/settings.o build/dc/src/core/settings_file.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
@@ -30,7 +31,7 @@ RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id
-all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf
+all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -130,3 +131,43 @@ build/loader/image_entry.elf: build/loader/src/loader/image_entry.o src/loader/i
 	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/image_entry.ld -Wl,-Map,build/loader/image_entry.map -o $@ $<
 	python3 tools/record_build.py $@
 -include $(IMAGE_CLIENT:.o=.d) $(IMAGE_RESIDENT:.o=.d) build/loader/src/loader/image_entry.d
+
+# First native-GD retail experiment. Every object is independently compiled
+# without floating-point instructions; the low resident must preserve whatever
+# FPU register bank/precision mode the game has selected. No KOS/newlib startup
+# or runtime is linked into these images. The accepted probes keep their flags.
+RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror -m4-nofpu -ml -ffreestanding \
+    -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections \
+    -fstack-usage -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
+RETAIL_LINK := -m4-nofpu -ml -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/retail_sd.o \
+    build/retail/src/loader/minic.o build/retail/src/core/retail_image.o \
+    build/retail/src/loader/retail_display.o
+RETAIL_RESIDENT := build/retail/src/loader/retail_resident_asm.o \
+    build/retail/src/loader/retail_resident.o build/retail/src/core/retail_gd.o $(RETAIL_COMMON)
+RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
+    build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
+
+build/retail/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+build/retail/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+build/retail/src/loader/retail_display.o: force-build-id
+build/retail/resident.elf: $(RETAIL_RESIDENT) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident.map -o $@ $(RETAIL_RESIDENT) -lgcc
+build/retail/resident.bin: build/retail/resident.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail/src/loader/retail_stage_asm.o: build/retail/resident.bin
+build/retail/stage.elf: $(RETAIL_STAGE) src/loader/retail_stage.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,build/retail/stage.map -o $@ $(RETAIL_STAGE) -lgcc
+build/retail/stage.bin: build/retail/stage.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail/src/loader/retail_entry_asm.o: build/retail/stage.bin
+build/retail/entry.elf: build/retail/src/loader/retail_entry_asm.o src/loader/retail_entry.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail/entry.map -o $@ $<
+	python3 tools/check_retail_loader_layout.py
+	python3 tools/record_build.py $@
+
+-include $(RETAIL_RESIDENT:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d

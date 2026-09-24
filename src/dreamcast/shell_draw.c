@@ -141,10 +141,12 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
             "A Start test   B Image details":"B Image details") :
+        s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM ? (kui_shell_games_retail_ready(s)?
+            "A Launch   B Image details":"B Image details") :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
-    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM)
+    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM)
         label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
@@ -213,7 +215,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
         {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
         {"Play WAV or Ogg music from SD.", "Listen to audio CD tracks", "or keep music in the background."},
-        {"Browse GDI images on your SD", "and inspect their boot metadata.", "Game launching is not ready yet."}};
+        {"Browse GDI images on your SD", "and inspect their boot metadata.", "Experimental DOA2 launch available."}};
     unsigned selected=s->home_selected<9?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
     for(unsigned i=0;i<9;i++) {
@@ -857,7 +859,7 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
     }
     if(!count && !v->busy) label(p,40,210,MUTED,"No selectable GDI images or folders in this view.");
     label(p,40,380,v->busy?CYAN:AMBER,s->games_listing.message);
-    snprintf(line,sizeof(line),"PAGE %u%s   Metadata inspection; game launch is not available.",
+    snprintf(line,sizeof(line),"PAGE %u%s   Inspect images; experimental launch for DOA2.",
         s->games_page+1,s->games_listing.has_more?" +":"");
     label(p,40,398,MUTED,line);
 }
@@ -882,7 +884,10 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         label(p,44,337,CYAN,kui_shell_games_image_ready(s)?
             "A Test image reads after leaving the menu":
             "Inspect this image again before testing reads.");
-        label(p,44,365,MUTED,"Metadata checks do not verify every saved sector.");
+        if(kui_shell_games_retail_ready(s)) {
+            label(p,44,365,AMBER,"Y Launch (experimental)");
+            label(p,44,386,MUTED,"Game compatibility is unproven.");
+        } else label(p,44,365,MUTED,"Metadata checks do not verify every saved sector.");
     } else {
         label(p,44,210,v->busy?CYAN:AMBER,d->message);
         label(p,44,252,MUTED,v->busy?"Reading bounded image metadata from SD.":
@@ -902,7 +907,7 @@ static void games_advanced(struct paint *p,const struct kui_shell *s) {
         label(p,48,y+7,WHITE,names[i]);label(p,48,y+29,MUTED,details[i]);
     }
     label(p,40,365,MUTED,"IDE / CF sources are not available yet.");
-    label(p,40,389,MUTED,"Retail game launching is not available yet.");
+    label(p,40,389,MUTED,"DOA2: Y on image details for experimental launch.");
 }
 static void games_probe_confirmation(struct paint *p,const struct kui_shell_view *v) {
     title(p,40,108,"Games / Resident loader probe");
@@ -937,6 +942,26 @@ static void games_image_probe_confirmation(struct paint *p,const struct kui_shel
     if(v->busy && v->app_status && v->app_status->message[0])
         label(p,48,380,CYAN,v->app_status->message);
 }
+static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
+        const struct kui_shell_view *v) {
+    title(p,40,108,"Games / Experimental DOA2 launch");
+    words(p,40,140,608,CYAN,s->games_selected_path,false);
+    panel(p,32,168,576,234,PANEL);
+    if(!kui_shell_games_retail_ready(s)) {
+        label(p,48,186,AMBER,"This image is not ready for the DOA2 launch test.");
+        label(p,48,220,WHITE,"Press B, then X to inspect the image again.");
+        return;
+    }
+    label(p,48,186,CYAN,v->busy?"Preparing the launch...":"Launch DEAD OR ALIVE 2?");
+    label(p,48,218,AMBER,"Experimental: game compatibility is unproven.");
+    label(p,48,244,WHITE,"SD access remains read-only.");
+    label(p,48,270,WHITE,"The launcher closes before the game starts.");
+    label(p,48,302,WHITE,"Keep the SD card inserted throughout the test.");
+    label(p,48,328,WHITE,"Photograph any error or the last screen shown.");
+    label(p,48,354,AMBER,"Power cycle to return to the launcher.");
+    if(v->busy && v->app_status && v->app_status->message[0])
+        label(p,48,380,CYAN,v->app_status->message);
+}
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
@@ -966,6 +991,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_GAMES_ADVANCED: games_advanced(&p,s); break;
     case KUI_SHELL_GAMES_PROBE_CONFIRM: games_probe_confirmation(&p,v); break;
     case KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM: games_image_probe_confirmation(&p,s,v); break;
+    case KUI_SHELL_GAMES_RETAIL_CONFIRM: games_retail_confirmation(&p,s,v); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
     }
     footer(&p,s,v);

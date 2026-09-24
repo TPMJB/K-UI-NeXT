@@ -14,6 +14,7 @@
 #include "kui/games.h"
 #include "kui/games_probe.h"
 #include "kui/games_image_probe.h"
+#include "kui/games_retail.h"
 #include "kui/image_loader_layout.h"
 #include <arch/exec.h>
 #include "kui/splash.h"
@@ -585,7 +586,7 @@ static void publish_cd_audio(void) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || (action>=46 && action<=48);
 }
 #endif
 static void *worker(void *unused) {
@@ -642,7 +643,7 @@ static void *worker(void *unused) {
             if(is_capture_action(action)) {capture_outcome=KUI_SHELL_OUTCOME_FAILED;observing_capture=false;}
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
-            if(action==56 || action==57) probe_launch_failed=true;
+            if(action==56 || action==57 || action==58) probe_launch_failed=true;
             mutex_unlock(&lock);action=0;
         } else if(action && needs_cd_handoff(action)) publish_cd_audio();
 #endif
@@ -706,9 +707,9 @@ static void *worker(void *unused) {
                 snprintf(games_detail.message,sizeof(games_detail.message),"Games inspection stopped before starting");
                 ++games_detail_generation;
             }
-            if(action==56 || action==57) {
+            if(action==56 || action==57 || action==58) {
                 probe_status=(struct kui_app_status){.stopped=true};
-                snprintf(probe_status.message,sizeof(probe_status.message),"Probe stopped before starting.");
+                snprintf(probe_status.message,sizeof(probe_status.message),"Games handoff stopped before starting.");
                 probe_launch_failed=true;
             }
             if(action>=41 && action<=43) {
@@ -822,9 +823,10 @@ static void *worker(void *unused) {
                 kui_games_inspect(games_path_pending,&detail,kui_log,kui_cancelled);
                 mutex_lock(&lock);games_detail=detail;++games_detail_generation;mutex_unlock(&lock);
             }
-            if(action==56 || action==57) {
+            if(action==56 || action==57 || action==58) {
                 kui_sd_set_params(0,true);
-                bool prepared=action==57?
+                bool prepared=action==58?
+                    kui_games_retail_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
                     kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
                 if(prepared && kui_cancelled()) {kui_runtime_free(&probe_image);prepared=false;}
@@ -1171,7 +1173,8 @@ static void draw_shell(void) {
     view.phase_elapsed_ms=now>=phase_started_ms?now-phase_started_ms:0;
     view.progress_age_ms=now>=progress_updated_ms?now-progress_updated_ms:0;
     app_status=shell.page==KUI_SHELL_MEMORY?memory_test_status:
-        (shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM || shell.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM)?probe_status:
+        (shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM || shell.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+         shell.page==KUI_SHELL_GAMES_RETAIL_CONFIRM)?probe_status:
         shell.page==KUI_SHELL_NETWORK?network_test_status:
         shell.page==KUI_SHELL_MUSIC?player_status:
         shell.page==KUI_SHELL_CRC_SCAN?scan_status:
@@ -1265,6 +1268,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_GAMES_INSPECT: return 55;
         case KUI_SHELL_GAMES_PROBE: return 56;
         case KUI_SHELL_GAMES_IMAGE_PROBE: return 57;
+        case KUI_SHELL_GAMES_RETAIL: return 58;
         default: return 0;
     }
 }
@@ -1585,14 +1589,15 @@ int main(void) {
                 music_offset_pending=shell.music_page*KUI_MUSIC_PLAYER_ROWS;
                 player_status=(struct kui_app_status){0};
             }
-            if(action==54 || action==55 || action==57) {
+            if(action==54 || action==55 || action==57 || action==58) {
                 snprintf(games_path_pending,sizeof(games_path_pending),"%s",
                     action==54?shell.games_path:shell.games_selected_path);
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
             }
-            if(action==56 || action==57) {
+            if(action==56 || action==57 || action==58) {
                 probe_status=(struct kui_app_status){0};
-                snprintf(probe_status.message,sizeof(probe_status.message),"%s",action==57?
+                snprintf(probe_status.message,sizeof(probe_status.message),"%s",action==58?
+                    "Preparing experimental DOA2 launch...":action==57?
                     "Mapping selected image and reading reference samples...":
                     "Preparing resident probe and SD map...");
                 probe_launch_failed=false;
@@ -1644,7 +1649,7 @@ int main(void) {
                 source+length<=stack-65536u;
             if(safe && !kui_cancelled()) arch_exec(probe_image.data,(uint32_t)length);
             kui_runtime_free(&probe_image);
-            kui_log("Loader probe handoff refused: %s",safe?"cancelled":"unsafe staging range");
+            kui_log("Games handoff refused: %s",safe?"cancelled":"unsafe staging range");
             mutex_lock(&lock);probe_launch_ready=false;mutex_unlock(&lock);
             shell.page=KUI_SHELL_DIAGNOSTICS;shell.scroll=0;
         }

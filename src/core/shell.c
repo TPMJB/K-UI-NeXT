@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
+#include "kui/retail_image.h"
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
@@ -192,6 +193,16 @@ bool kui_shell_games_image_ready(const struct kui_shell *s) {
         games_path_safe(s->games_selected_path,sizeof(s->games_selected_path)) &&
         memchr(s->games_detail.path,0,sizeof(s->games_detail.path)) &&
         !strcmp(s->games_detail.path,s->games_selected_path);
+}
+bool kui_shell_games_retail_ready(const struct kui_shell *s) {
+    return kui_shell_games_image_ready(s) &&
+        memchr(s->games_detail.title,0,sizeof(s->games_detail.title)) &&
+        memchr(s->games_detail.boot_file,0,sizeof(s->games_detail.boot_file)) &&
+        !strcmp(s->games_detail.title,"DEAD OR ALIVE 2") &&
+        !strcmp(s->games_detail.boot_file,"1ST_READ.BIN") &&
+        s->games_detail.tracks && s->games_detail.tracks<=KUI_RETAIL_IMAGE_TRACKS &&
+        s->games_detail.boot_lba>=45000 && s->games_detail.boot_bytes>=128 &&
+        s->games_detail.boot_bytes<=KUI_RETAIL_IMAGE_BOOT_MAX;
 }
 static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     if(first) s->games_page=0;
@@ -403,7 +414,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->confirm_quick_resume) { s->confirm_quick_resume=false; return KUI_SHELL_NONE; }
         if(s->confirm_gd_boot) { s->confirm_gd_boot=false; return KUI_SHELL_NONE; }
         if(s->confirm_new) { s->confirm_new = false; return KUI_SHELL_NONE; }
-        if(s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM) {
+        if(s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM) {
             s->page=KUI_SHELL_GAMES_DETAIL;return KUI_SHELL_NONE;
         }
         if(s->page==KUI_SHELL_GAMES_PROBE_CONFIRM) {
@@ -466,7 +477,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
         s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
-        s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
+        s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
         unsigned triggers=buttons & (KUI_SHELL_L|KUI_SHELL_R);
         if(triggers==KUI_SHELL_L) return KUI_SHELL_MUSIC_PREVIOUS;
@@ -590,6 +602,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             return inspect_game(s);
         if((buttons&KUI_SHELL_A) && kui_shell_games_image_ready(s))
             s->page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
+        else if((buttons&KUI_SHELL_Y) && kui_shell_games_retail_ready(s))
+            s->page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
         break;
     case KUI_SHELL_GAMES_ADVANCED:
         s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,3);
@@ -607,6 +621,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM:
         if((buttons&KUI_SHELL_A) && kui_shell_games_image_ready(s))
             return KUI_SHELL_GAMES_IMAGE_PROBE;
+        break;
+    case KUI_SHELL_GAMES_RETAIL_CONFIRM:
+        if((buttons&KUI_SHELL_A) && kui_shell_games_retail_ready(s))
+            return KUI_SHELL_GAMES_RETAIL;
         break;
     case KUI_SHELL_RIPPER:
         if(buttons & KUI_SHELL_A) s->confirm_new = true;
