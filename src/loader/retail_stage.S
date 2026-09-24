@@ -301,7 +301,9 @@ C(kui_retail_game_resume):
 .Lramend: .long KUI_RETAIL_RAM_END
 .Loff: .long 0x00000808
 .Lrelaymain: .long C(kui_retail_stage_relay)
-.Lgame: .long KUI_RETAIL_EXEC_ADDRESS
+/* Owner bootstrap2 calls the uncached executable alias. Resume that same
+ * alias while the original entry performs its own cache setup. */
+.Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
     .section .resident_blob,"a"
     .align 2
     .global __retail_resident_blob_start,__retail_resident_blob_end

@@ -1,4 +1,4 @@
-# DOA2 launch experiment — GD startup routing correction
+# DOA2 launch experiment — startup stack collision correction
 
 The selected-image GD probe has already passed on hardware: build
 `c4cfd4585ec5`, DEAD OR ALIVE 2, all 11 checks, 93 physical SD blocks after
@@ -12,11 +12,13 @@ launch**, not a claim of working DOA2 gameplay. It only offers launch for the na
 may still need work. The product number in a synthetic test fixture is not
 used as a hardware identification or compatibility claim.
 
-The next build `255e63f79d8d` caught that menu return from executable address
-`0x8c012450`, with zero recorded GD commands or resident SD reads. The current
-correction handles the second GD vector and direct firmware entry points,
-and acknowledges setup calls without loading a physical GD driver over the
-image reader. Those setup calls previously were not included in diagnostics.
+Builds `255e63f79d8d` and `f26d1a883109` returned to the menu from
+`0x8c012450` with zero recorded GD calls. The owner then supplied the exact
+startup files: DOA2 `T3601N`, `V1.100`, region `U`. Its startup fills
+`0x8c00c000..0x8c00f3ff`, overwriting our old reader-stack guard. The assembly
+hook rejected calls before the C counters could increment. This correction
+moves the entire reader stack below that range and reports the guard on a
+menu return. See `evidence/games-retail-startup-return-2026-09-24.md`.
 
 ## Install and test
 
@@ -53,12 +55,14 @@ SR/SSR `0x700000f0`, FPSCR `0x00040001` and CCR `0x00000909`. The precise
 meaning of the IP flag is not established by the inspected source.
 A temporary 128-byte executable-entry trampoline captures the resulting
 integer CPU state, confirms the resident code remains intact, then restores
-the original entry bytes before the first
-original game instruction. The loader does not bundle proprietary bootstrap
+the original entry bytes and resumes the owner's `0xac010000` uncached alias
+before the first original game instruction. The loader does not bundle proprietary bootstrap
 code or apply compatibility patches to the executable.
 
-The final reader occupies `0x8c008300..0x8c00d000`, with a guarded 4 KiB stack
-through `0x8c00e000`. Firmware low RAM, IP metadata/TOC, the upper bootstrap
+The final reader must fit below `0x8c00bb00`, starting at `0x8c008300`.
+Its guarded 1,280-byte stack occupies `0x8c00bb00..0x8c00c000`; the native
+build rejects code/BSS overlap or a conservative stack bound over 1,232 bytes.
+The owner executable's startup stack fill begins at `0x8c00c000`. Firmware low RAM, IP metadata/TOC, the upper bootstrap
 and conventional VBR/stack, and executable RAM beginning at `0x8c010000`
 are kept outside that reservation. The temporary high stage is no longer
 needed once the game starts. A different stack/VBR arrangement is rejected.
@@ -82,7 +86,8 @@ direct firmware RAM entries (`0x8c001000`, `0x8c0010f0`). BC miscellaneous
 setup/registration calls return zero while retaining the independent reader;
 C0 ignores incoming R6 and dispatches by R7. Original GD forwarding is removed
 to avoid recursion through those patched entries. A menu-return screen reports
-counts for all four routes and miscellaneous setup calls. Exact evidence and
+counts for all four routes, the hook guard fault flag and current guard word.
+A healthy guard is `4B554947` and its fault flag is zero. Exact evidence and
 ABI comparison: `evidence/games-retail-gd-routing-2026-09-24.md`.
 
 ## Independent interface references

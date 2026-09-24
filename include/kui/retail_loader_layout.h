@@ -26,9 +26,12 @@
 #define KUI_RETAIL_EXEC_MAX_BYTES 0xc00000
 #define KUI_RETAIL_TRAMPOLINE_BYTES 128
 #define KUI_RETAIL_RESIDENT_ADDRESS 0x8c008300
-#define KUI_RETAIL_RESIDENT_LIMIT 0x8c00d000
-#define KUI_RETAIL_HOOK_STACK_BOTTOM 0x8c00d000
-#define KUI_RETAIL_HOOK_STACK 0x8c00e000
+/* DOA2 T3601N V1.100 fills C000..F3FF with its startup stack marker.
+ * Both resident state and the guarded service stack must stay below C000.
+ * The native build checks the linked end and conservative .su stack sum. */
+#define KUI_RETAIL_RESIDENT_LIMIT 0x8c00bb00
+#define KUI_RETAIL_HOOK_STACK_BOTTOM 0x8c00bb00
+#define KUI_RETAIL_HOOK_STACK 0x8c00c000
 #define KUI_RETAIL_RAM_END 0x8d000000
 
 #endif

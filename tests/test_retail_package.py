@@ -53,7 +53,7 @@ class RetailPackage(unittest.TestCase):
                 result = layout.inspect_retail(self.packaged(self.payload(size)))
                 self.assertEqual(result["stage_bytes"], size)
                 self.assertEqual(result["resident_address"], "0x8c008300")
-                self.assertEqual(result["resident_limit"], "0x8c00d000")
+                self.assertEqual(result["resident_limit"], "0x8c00bb00")
                 self.assertIn("hardware untested", result["abi"])
 
     def test_every_inner_header_byte_is_checked(self):
@@ -114,7 +114,7 @@ class ResidentStackReports(unittest.TestCase):
             symbols = self.report(tmp, [("kui_retail_resident_init", 6000, "static")])
             result = check_stack_usage(tmp, symbols)
             self.assertEqual(result["conservative_bytes"], 4 * 64 + 256)
-            self.assertEqual(result["available_bytes"], 4096 - 16 - 32)
+            self.assertEqual(result["available_bytes"], 1280 - 16 - 32)
 
     def test_oversized_dynamic_and_missing_reports_reject(self):
         with tempfile.TemporaryDirectory() as tmp:

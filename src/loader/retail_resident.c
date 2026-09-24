@@ -105,7 +105,7 @@ static void report_routing(void) {
     retail_display_hex("C0 CALLS",routing.calls[1]);
     retail_display_hex("DIRECT 1000 CALLS",routing.calls[2]);
     retail_display_hex("DIRECT 10F0 CALLS",routing.calls[3]);
-    retail_display_hex("MISC SETUP CALLS",routing.misc_calls);
+    retail_display_hex("HOOK GUARD FAULT",kui_retail_hook_fault);
     retail_display_hex("LAST ROUTE R6",routing.r6);
     retail_display_hex("LAST ROUTE R7",routing.r7);
     retail_display_hex("LAST ROUTE RESULT",(uint32_t)routing.result);
@@ -134,7 +134,8 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("CALLER STACK",stack);
     report_routing();
     retail_display_hex("LAST GD COMMAND",service.diag.last_command);
-    retail_display_hex("LAST GD LBA",service.diag.last_lba);
+    retail_display_hex("HOOK GUARD WORD",
+        *(volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM);
     retail_display_hex("SD BLOCKS READ",image.blocks_read);
     retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
