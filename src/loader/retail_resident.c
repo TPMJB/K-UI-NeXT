@@ -13,9 +13,18 @@ static struct kui_retail_gd service;
 static struct kui_loader_sd card;
 static struct kui_gd_track tracks[KUI_RETAIL_IMAGE_TRACKS];
 static struct retail_display_state display;
-static uint32_t firmware_vector;
 uint32_t kui_retail_original_menu;
 extern void kui_retail_menu_hook(void);
+extern void kui_retail_gd_c0_hook(void);
+extern void kui_retail_gd_1000_hook(void);
+extern void kui_retail_gd_10f0_hook(void);
+/* Source: 0=BC supervisor vector, 1=C0 raw GD vector, 2/3=direct firmware
+ * entries. Assembly publishes this only after acquiring the resident lock. */
+volatile uint32_t kui_retail_hook_source;
+static struct {
+    uint32_t calls[4], misc_calls, r4, r6, r7;
+    int32_t result;
+} routing;
 static enum kui_loader_sd_result card_result;
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
@@ -66,6 +75,16 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     kui_retail_sd_release();
     return result == KUI_GAME_OK ? 0 : -1;
 }
+static void redirect_entry(uint32_t address,void (*target)(void)) {
+    /* Aligned SH-4 tail jump: MOV.L @(1,PC),R0; JMP @R0; NOP; NOP;
+     * target. All addresses are fixed firmware RAM entries, not game code.
+     * Stage bootstrap_enter publishes the writes and invalidates I-cache
+     * before first use. This helper is called only during resident init. */
+    purge(address,12);
+    volatile uint16_t *code=(volatile uint16_t *)(uintptr_t)(address|0x20000000u);
+    code[0]=0xd001u; code[1]=0x402bu; code[2]=0x0009u; code[3]=0x0009u;
+    *(volatile uint32_t *)(code+4)=(uint32_t)(uintptr_t)target;
+}
 static void install_hook(void) {
     /* Publish adjacent firmware vector writes before touching the shared
      * cache line, then install through P2 with no stale P1 alias left over. */
@@ -73,9 +92,23 @@ static void install_hook(void) {
     volatile uint32_t *vector = (volatile uint32_t *)(uintptr_t)
         ((KUI_GD_VECTOR_ADDRESS & 0x1fffffffu) | 0xa0000000u);
     *vector = (uint32_t)(uintptr_t)kui_retail_resident_hook;
+    purge(0x8c0000c0u, sizeof(uint32_t));
+    *(volatile uint32_t *)(uintptr_t)0xac0000c0u=(uint32_t)(uintptr_t)kui_retail_gd_c0_hook;
+    redirect_entry(0x8c001000u,kui_retail_gd_1000_hook);
+    redirect_entry(0x8c0010f0u,kui_retail_gd_10f0_hook);
     purge(0x8c0000e0u, sizeof(uint32_t));
     *(volatile uint32_t *)(uintptr_t)0xac0000e0u=(uint32_t)(uintptr_t)kui_retail_menu_hook;
     __asm__ __volatile__("" : : : "memory");
+}
+static void report_routing(void) {
+    retail_display_hex("BC CALLS",routing.calls[0]);
+    retail_display_hex("C0 CALLS",routing.calls[1]);
+    retail_display_hex("DIRECT 1000 CALLS",routing.calls[2]);
+    retail_display_hex("DIRECT 10F0 CALLS",routing.calls[3]);
+    retail_display_hex("MISC SETUP CALLS",routing.misc_calls);
+    retail_display_hex("LAST ROUTE R6",routing.r6);
+    retail_display_hex("LAST ROUTE R7",routing.r7);
+    retail_display_hex("LAST ROUTE RESULT",(uint32_t)routing.result);
 }
 static void report_fault(const char *reason, uint32_t function) {
     retail_display_restore(&display);
@@ -94,12 +127,12 @@ static void report_fault(const char *reason, uint32_t function) {
     for(;;) __asm__ volatile("nop");
 }
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
+    (void)command; /* Assembly reaches this only for menu return command 1. */
     retail_display_restore(&display);
     retail_display_line("GAME REQUESTED BIOS MENU RETURN");
-    retail_display_hex("MENU COMMAND",command);
     retail_display_hex("CALLER PR",caller);
     retail_display_hex("CALLER STACK",stack);
-    retail_display_hex("LAST GD FUNCTION",service.diag.last_function);
+    report_routing();
     retail_display_hex("LAST GD COMMAND",service.diag.last_command);
     retail_display_hex("LAST GD LBA",service.diag.last_lba);
     retail_display_hex("SD BLOCKS READ",image.blocks_read);
@@ -133,7 +166,6 @@ int kui_retail_resident_init(const uint8_t wire[KUI_RETAIL_MAP_BYTES],
         return KUI_RETAIL_RESIDENT_SERVICE;
     volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
     for(unsigned i = 0; i < 4; ++i) guard[i] = 0x4b554947u;
-    firmware_vector = original_gd_vector;
     kui_retail_original_menu=*(volatile uint32_t *)(uintptr_t)0x8c0000e0u;
     /* The game's first instructions may reinitialize caches. Do not leave
      * newly decoded manifest/card/guard state only in dirty cache lines. */
@@ -146,21 +178,23 @@ int kui_retail_resident_init(const uint8_t wire[KUI_RETAIL_MAP_BYTES],
 int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
                                     uint32_t r6, uint32_t r7) {
     /* All paths arrive with the resident entry lock held and interrupts
-     * masked. Firmware still owns its low region and all non-GD handlers. */
-    if(r6 != 0) {
-        int32_t (*firmware)(uint32_t,uint32_t,uint32_t,uint32_t) =
-            (int32_t (*)(uint32_t,uint32_t,uint32_t,uint32_t))(uintptr_t)firmware_vector;
-        if(r6 == UINT32_MAX && r7 == 0) {
-            int32_t result = firmware(r4, r5, r6, r7);
-            install_hook();
-            return result;
-        }
-        if((r6 == UINT32_MAX && r7 == 1 && r4 >= 1 && r4 <= 7) ||
-           (r6 >= 1 && r6 <= 7)) return firmware(r4, r5, r6, r7);
-        return -1;
+     * masked. Interface behavior cross-checked against DreamShell ISO Loader
+     * gdc_syscall.s (GPL-3.0, Copyright 2009-2023 SWAT): C0 ignores R6;
+     * BC and both direct firmware entries acknowledge R6=-1 setup calls.
+     * Do not load/register the physical GD driver over the image service.
+     * No original GD forwarding remains: those entries now lead back here.
+     * Font/flash/system BIOS vectors are independent and unchanged. */
+    uint32_t source=kui_retail_hook_source;
+    if(source>3) return -1;
+    ++routing.calls[source];
+    routing.r4=r4; routing.r6=r6; routing.r7=r7; routing.result=0;
+    if(source!=1 && r6==UINT32_MAX) {
+        ++routing.misc_calls;
+        return 0;
     }
     uint32_t pending = service.pending;
     int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
+    routing.result=result;
     if(r7 == KUI_GD_EXEC && service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", r7);
     else if(r7 == KUI_GD_REQUEST && !pending && result == 0)

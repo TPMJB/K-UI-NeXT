@@ -1,4 +1,4 @@
-# DOA2 launch experiment — bootstrap 2 correction
+# DOA2 launch experiment — GD startup routing correction
 
 The selected-image GD probe has already passed on hardware: build
 `c4cfd4585ec5`, DEAD OR ALIVE 2, all 11 checks, 93 physical SD blocks after
@@ -11,6 +11,12 @@ launch**, not a claim of working DOA2 gameplay. It only offers launch for the na
 `DEAD OR ALIVE 2` / `1ST_READ.BIN` profile. A different region or revision
 may still need work. The product number in a synthetic test fixture is not
 used as a hardware identification or compatibility claim.
+
+The next build `255e63f79d8d` caught that menu return from executable address
+`0x8c012450`, with zero recorded GD commands or resident SD reads. The current
+correction handles the second GD vector and direct firmware entry points,
+and acknowledges setup calls without loading a physical GD driver over the
+image reader. Those setup calls previously were not included in diagnostics.
 
 ## Install and test
 
@@ -70,6 +76,14 @@ The first game call requiring an unsupported operation therefore stops on
 a diagnostic with the request and SD state. The standard BIOS-menu vector
 is intercepted for return command 1 to retain the caller address and last GD
 request. A direct jump to ROM or a hardware reset can still bypass that trap.
+
+GD routing covers the BC supervisor vector, the C0 raw GD vector and both
+direct firmware RAM entries (`0x8c001000`, `0x8c0010f0`). BC miscellaneous
+setup/registration calls return zero while retaining the independent reader;
+C0 ignores incoming R6 and dispatches by R7. Original GD forwarding is removed
+to avoid recursion through those patched entries. A menu-return screen reports
+counts for all four routes and miscellaneous setup calls. Exact evidence and
+ABI comparison: `evidence/games-retail-gd-routing-2026-09-24.md`.
 
 ## Independent interface references
 

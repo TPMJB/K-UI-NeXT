@@ -38,11 +38,28 @@ _start:
     .align 2
     .global C_SYMBOL(kui_retail_resident_hook)
 C_SYMBOL(kui_retail_resident_hook):
-    stc sr,r0
-    mov.l r0,@-r15
-    mov.l .Lirq_mask,r1
-    or r1,r0
-    ldc r0,sr
+    mov #0,r0
+    bra .Lgd_common
+    nop
+    .global C_SYMBOL(kui_retail_gd_c0_hook)
+C_SYMBOL(kui_retail_gd_c0_hook):
+    mov #1,r0
+    bra .Lgd_common
+    nop
+    .global C_SYMBOL(kui_retail_gd_1000_hook)
+C_SYMBOL(kui_retail_gd_1000_hook):
+    mov #2,r0
+    bra .Lgd_common
+    nop
+    .global C_SYMBOL(kui_retail_gd_10f0_hook)
+C_SYMBOL(kui_retail_gd_10f0_hook):
+    mov #3,r0
+.Lgd_common:
+    stc sr,r1
+    mov.l r1,@-r15
+    mov.l .Lirq_mask,r2
+    or r2,r1
+    ldc r1,sr
     sts.l pr,@-r15
     mov.l r8,@-r15
     mov.l r9,@-r15
@@ -51,6 +68,7 @@ C_SYMBOL(kui_retail_resident_hook):
     mov.l r12,@-r15
     mov.l r13,@-r15
     mov.l r14,@-r15
+    mov r0,r9
     mov r15,r8
     mov.l .Lactive,r0
     mov.l @r0,r1
@@ -63,6 +81,8 @@ C_SYMBOL(kui_retail_resident_hook):
     bf .Lguard_fault
     mov #1,r1
     mov.l r1,@r0
+    mov.l .Lsource,r0
+    mov.l r9,@r0
     mov.l .Lprivate_stack,r15
     mov.l .Ldispatch,r0
     jsr @r0
@@ -121,6 +141,7 @@ C_SYMBOL(kui_retail_resident_hook):
 .Lguard: .long KUI_RETAIL_HOOK_STACK_BOTTOM
 .Lguard_value: .long 0x4b554947
 .Ldispatch: .long C_SYMBOL(kui_retail_resident_dispatch)
+.Lsource: .long C_SYMBOL(kui_retail_hook_source)
 
 /* The experiment has no hot return. Preserve evidence when code calls the
  * standard menu vector with command 1; other menu functions still forward to
