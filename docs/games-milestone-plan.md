@@ -6,15 +6,17 @@ plan, not a claim that K-UI currently runs retail games from images.
 **Implementation update:** the first G1/G2 increment now provides the portable
 GDI/boot-metadata services and a read-only Games browser in the SD runtime.
 Host validation and the focused console checklist are documented in
-[games-test.md](games-test.md). The first G3 resident read probe is now implemented;
-its console acceptance is pending. Follow [the probe guide](games-loader-probe.md).
-Retail loading is still unimplemented.
+[games-test.md](games-test.md). The first G3 resident read probe has passed on
+the console: build `7a8493ae825e`, ten checks passed, 84 post-handoff SD blocks.
+This accepts the original-fixture storage/handoff foundation through K-UI probe
+ABI v1. [Evidence](evidence/games-resident-probe-hardware-2026-09-24.json).
+Selected retail-image mapping and retail GD BIOS/boot support remain unimplemented.
 
 Runtime `57d53841c1ea` has now passed repeated ARMADA metadata inspection on
 the console, with a stopped earlier inspection followed by successful use.
 [Hardware evidence](evidence/games-armada-inspection-2026-09-24.json) accepts
-that demonstrated path. G3's actual post-shutdown SD reads remain the next
-hardware gate; no repeat image inspection is needed.
+that demonstrated path. G3's original-fixture post-shutdown reads are now
+accepted separately. No repeat of either successful test is needed.
 
 ## First goal
 
@@ -25,7 +27,9 @@ game. A library listing or a jump to a game's boot executable alone does not
 meet this goal: later disc requests must also work.
 
 The portable, read-only GDI image service and bounded metadata reader are in
-place. The next console deliverable is the post-handoff read proof below.
+place, and the original-fixture post-handoff read proof passed. The next work
+connects selected game tracks to the resident service and supplies the retail
+request/boot interface; the fixed synthetic probe alone does not provide either.
 The existing bootstrap CD remains the entry point; deliver updates on SD.
 
 ## What we can reuse
@@ -53,9 +57,22 @@ work from the current app branch based on `milestone/experiments`.
 | G4: first retail title | First narrowly scoped compatibility profile | Reaches gameplay, crosses loading transitions and loads/saves through the physical VMU; a title screen alone is insufficient |
 | G5: compatibility | Additional titles and required command/audio/SDK behavior | Each title gets a reproducible test record with device, build, settings, working behavior and limitations |
 
-G1 and the thin G2 screen can proceed together. G3 is the architectural gate;
-finish it before investing in cover art, large compatibility menus or broad
-format support. Dead or Alive 2 is a reasonable first retail candidate because
+G1 and the thin G2 screen are implemented, and the original G3 handoff/storage
+test is accepted. Before the G4 retail attempt:
+
+1. Build bounded, validated resident maps for a selected GDI's actual track
+   files, including fragmented files, track boundaries and LBA/FAD conversion.
+2. Add the independently sourced GD BIOS request/response interface and test
+   its calling convention, statuses, buffer bounds and command lifecycle using
+   our own executable. Probe ABI v1 is not this retail interface.
+3. Establish a retail-safe memory layout and boot/cache/interrupt state; the
+   probe's cache-off high-RAM layout is only a correctness test. Load and hand
+   off the selected boot executable while keeping storage available afterward.
+4. Attempt Dead or Alive 2, then record loading transitions, gameplay and
+   physical VMU save/load. A title screen alone does not meet G4.
+
+Do not spend this stage on cover art, large compatibility menus or broad
+format support. Dead or Alive 2 is the first retail candidate because
 the owner has used it over serial SD in DreamShell. That experience is not proof
 of compatibility with our new loader. Resident Evil Code: Veronica is another
 later candidate from the owner's collection.

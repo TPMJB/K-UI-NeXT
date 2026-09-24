@@ -1,9 +1,11 @@
 # Resident loader probe
 
-This is the next Games hardware test. The existing Games browser has already
-passed its recorded ARMADA inspection. **No new rip or full verification is
-needed.** This build runs an original test program after shutting down K-UI.
-It does not launch a retail game yet.
+**Hardware accepted — 2026-09-24:** the owner's photograph of build
+`7a8493ae825e` shows all ten checks passing and **84 post-handoff SD blocks read**.
+The original-fixture resident storage/handoff foundation is proven on this
+console. [Evidence and scope](evidence/games-resident-probe-hardware-2026-09-24.json).
+No repeat run, new rip or full verification is requested. The instructions below
+are retained for reproduction. Retail game launching remains subsequent work.
 
 ## Install and run
 
@@ -69,4 +71,6 @@ Host tests cover corrupt packages/manifests, fragmented and out-of-range maps,
 SD protocol errors/CRC/timeouts, byte mismatches, cancellation and lifecycle
 rules. Real FAT32/exFAT tests compare raw mapped reads after unmount and verify
 whole-card SHA-256 remains unchanged. Only the console test can establish the
-actual SH-4 handoff and post-shutdown pin behavior; that acceptance is pending.
+actual SH-4 handoff and post-shutdown pin behavior; the supplied photograph now
+accepts that path on the owner's console. It does not identify the filesystem
+or demonstrate both filesystem types or fragmentation on hardware.

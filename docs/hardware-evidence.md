@@ -1,5 +1,20 @@
 # Hardware evidence
 
+## Games resident handoff: original fixture passed — 2026-09-24
+
+The owner's console photograph identifies build **7a8493ae825e**, shows all
+ten probe checks passing and reports **84 post-handoff SD blocks read**. The
+separately linked client checked actual SD bytes after KOS shutdown and erasure
+of retired launcher RAM. This accepts the G3 resident storage/handoff foundation
+for the original fixture and K-UI probe ABI v1. See [the evidence](evidence/games-resident-probe-hardware-2026-09-24.json)
+and [photograph transcription](evidence/games-resident-probe-hardware-2026-09-24.txt).
+
+The photograph does not identify the filesystem, establish throughput or retail
+GD BIOS compatibility, or demonstrate CDDA playback. Selected-game track mapping
+and retail boot/request support remain to be implemented. The next target is
+Dead or Alive 2 after those pieces pass their focused checks. No repeat of this
+probe, ARMADA inspection, full rip or reader benchmark is requested.
+
 ## Games image inspection: ARMADA — 2026-09-24
 
 Runtime **57d53841c1ea** successfully inspected the saved ARMADA GDI three times
@@ -13,7 +28,8 @@ This accepts the demonstrated image-inspection path, not executable loading,
 retail compatibility, full verification or performance. The log does not identify
 every browser navigation action. See [the evidence](evidence/games-armada-inspection-2026-09-24.json)
 and [console excerpt](evidence/games-armada-inspection-2026-09-24.txt).
-Next is the resident read proof; no repeat ARMADA inspection or rip is requested.
+The subsequent resident read proof passed as recorded above; no repeat ARMADA
+inspection or rip is requested.
 
 ## Audio-CD follow-up accepted by owner — 2026-09-24
 
