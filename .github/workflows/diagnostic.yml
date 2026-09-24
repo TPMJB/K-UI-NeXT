@@ -24,30 +24,67 @@ env:
   KUI_EXPERIMENTAL: ${{ (inputs.experimental || endsWith(github.ref_name, '-experimental')) && '1' || '' }}
 
 concurrency:
-  group: diagnostic-${{ github.ref }}
+  group: diagnostic-${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}
   # Let the first expensive compiler build finish and save its cache. New
   # revisions queue behind it and reuse that cache.
-  cancel-in-progress: false
+  # Shell feature PRs can restore their milestone base branch's compiler cache;
+  # a push on a sibling branch cannot. Supersede a pending push/older UI run.
+  cancel-in-progress: ${{ endsWith(github.head_ref, '-shell') }}
 
 jobs:
   host:
     # Milestone branches already build on push. Avoid compiling the entire
     # toolchain again when the same branch is opened as a draft PR.
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository
+    # *-shell feature branches build through their PR, where GitHub permits
+    # restoring the base branch's caches. Keep ordinary milestone push builds.
+    if: >-
+      (github.event_name != 'push' || !endsWith(github.ref_name, '-shell')) &&
+      (github.event_name != 'pull_request' || endsWith(github.head_ref, '-shell') || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 3
+      - name: Select requested validation scope
+        id: scope
+        env:
+          KUI_VALIDATION_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          head = os.environ['KUI_VALIDATION_HEAD']
+          message = subprocess.check_output(['git', 'show', '-s', '--format=%B', head], text=True)
+          requested = 'Validation: console-only' in message.splitlines()
+          if requested:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
+              exact = {'Makefile', 'Makefile.dc', '.github/workflows/diagnostic.yml',
+                       'tests/test_loader_sd.c', 'tests/test_retail_sd.c', 'tests/test_retail_sd_bench.c', 'tests/test_retail_minic.c',
+                       'src/core/retail_image.c', 'include/kui/retail_image.h', 'tests/test_retail_image.c',
+                       'tools/check_retail_instructions.py', 'tools/check_retail_loader_layout.py', 'tests/test_retail_instructions.py',
+                       'include/kui/retail_loader_layout.h', 'include/kui/retail_resident.h', 'src/apps/games_retail.c',
+                       'tools/retail_package.py', 'tools/package.py', 'tests/test_retail_package.py',
+                       'src/core/retail_gd.c', 'include/kui/retail_gd.h', 'tests/test_retail_gd.c'}
+              if not paths or any(p not in exact and not p.startswith(('src/loader/', 'docs/')) for p in paths):
+                  raise SystemExit('Console-only request includes changes outside the focused retail correction scope')
+              print('Console build requested: skipping the broad repeat suite; focused retail checks are recorded with the correction.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('console_only=' + str(requested).lower() + '\n')
+          PY
       - name: Install filesystem test utilities
+        if: steps.scope.outputs.console_only != 'true'
         run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools
       - name: Restore pinned FatFs downloads
+        if: steps.scope.outputs.console_only != 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .deps/downloads
           key: fatfs-downloads-v1-${{ hashFiles('dependencies.json') }}
       - name: Fetch verified FatFs sources
+        if: steps.scope.outputs.console_only != 'true'
         run: python3 tools/fetch_deps.py --fatfs-only
       - name: Run portable and real filesystem checks
+        if: steps.scope.outputs.console_only != 'true'
         run: make test test-images
 
   dreamcast:
@@ -61,7 +98,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git curl wget patch python3 \
             bison flex texinfo gettext libgmp-dev libmpfr-dev libmpc-dev libisl-dev \
-            meson ninja-build pkg-config libisofs-dev libpng-dev libjpeg-dev
+            meson ninja-build pkg-config libisofs-dev libpng-dev libjpeg-dev ffmpeg
       - name: Restore pinned FatFs downloads
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -74,6 +111,8 @@ jobs:
             .deps/sh-elf
             .deps/kos/utils/kos-chain/*.tar.*
           key: sh-elf-ubuntu24-v1-${{ hashFiles('dependencies.json', 'tools/setup_kos.sh') }}
+          # A new application-only dependency must not rebuild the unchanged compiler.
+          restore-keys: sh-elf-ubuntu24-v1-
       - name: Build pinned toolchain and KOS
         run: bash tools/setup_kos.sh
       - name: Compile CD bootstrap and SD runtime
@@ -100,6 +139,23 @@ jobs:
             echo "======================================================================"
           fi
           exit "$status"
+      - name: Retain native build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-build-diagnostics
+          path: |
+            build/retail/*.elf
+            build/retail/*.map
+            build/retail/*.dis
+            build/retail/**/*.su
+            build/retail-bench/*.elf
+            build/retail-bench/*.map
+            build/retail-bench/*.dis
+            build/retail-bench/*.su
+            build/retail-bench/**/*.su
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Package reusable CDI, SD runtime, loader tests and source records
         shell: bash
         run: |
@@ -117,5 +173,12 @@ jobs:
         with:
           name: sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
           path: dist/sd-update/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload separate read-only SD benchmark
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sd-benchmark${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+          path: dist/sd-benchmark/
           if-no-files-found: error
           retention-days: 30

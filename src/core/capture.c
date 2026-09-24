@@ -20,7 +20,10 @@ static struct {
     _Alignas(32) uint8_t data_b[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES];
     uint8_t record[KUI_CHECKPOINT_BYTES];
     unsigned dma_chunks,pio_chunks;   /* how this run read the disc, reported at the end */
-    char dir[80], path[112], title[129], identity[65], text[32768];
+    char dir[KUI_DEST_JOB_CAP], path[KUI_DEST_PATH_CAP], title[129], identity[65], text[32768];
+    char gdi_name[KUI_DEST_TITLE_CAP+5u];
+    bool named_output,reference_checked;
+    struct kui_known_summary reference;
     uint64_t started, committed;
     /* Options for this run (see kui_capture_options). crc_only is the JOB's mode:
      * chosen for a new job, adopted from the checkpoint on resume. */
@@ -226,7 +229,7 @@ static bool identify(void) {
     }
     return !cancelled();
 }
-static bool choose_dir(enum kui_capture_mode mode) {
+static bool choose_legacy_dir(enum kui_capture_mode mode) {
     DIR dir;FILINFO info;unsigned latest=0;
     char prefix[20];snprintf(prefix,sizeof(prefix),"d%.16s-",job.identity);
     FRESULT r=f_opendir(&dir,"0:/KUI/dumps");
@@ -259,6 +262,90 @@ static bool choose_dir(enum kui_capture_mode mode) {
         job.ops->log("Cannot create a new job; existing files preserved");return false;
     }
     job.ops->log("Job: %s",job.dir+2);return true;
+}
+/* Discovery reads only checkpoint records. It does not trust a game title to
+ * identify media, change the stored state or touch any track file. A second
+ * load through load_checkpoint retains its existing conflict/prefix checks. */
+static bool candidate_matches(const char *directory,bool *matches) {
+    *matches=false;
+    struct kui_checkpoint candidate;
+    for(unsigned i=0;i<2;i++) {
+        char path[KUI_DEST_PATH_CAP];
+        snprintf(path,sizeof(path),"%s/checkpoint-%c.bin",directory,i?'b':'a');
+        FIL file;FRESULT r=f_open(&file,path,FA_READ);
+        if(r==FR_NO_FILE) continue;
+        if(r!=FR_OK) {job.ops->log("Job checkpoint scan failed: FatFs=%u",(unsigned)r);return false;}
+        bool sized=f_size(&file)==sizeof(job.record);
+        bool good=!sized || exact_read(&file,job.record,sizeof(job.record));
+        if(!close_file(&file)) good=false;
+        if(!good) return false;
+        if(sized && kui_checkpoint_decode(job.record,job.plan,job.state.identity,&candidate)) *matches=true;
+        if(cancelled()) return false;
+    }
+    return true;
+}
+static bool choose_named_dir(enum kui_capture_mode mode) {
+    char root[KUI_DEST_ROOT_CAP],title[KUI_DEST_TITLE_CAP],folder[KUI_DEST_NAME_CAP];
+    char qualified[KUI_DEST_ROOT_CAP+2u],best[KUI_DEST_JOB_CAP]={0};
+    if(!kui_destination_normalize(root,job.opt->output->parent)) {
+        job.ops->log("Invalid or too-long destination; existing files preserved");return false;
+    }
+    kui_destination_title(title,job.title);
+    snprintf(qualified,sizeof(qualified),"0:%s",root);
+    DIR directory;FILINFO info;unsigned highest=0,matching=0;
+    FRESULT r=f_opendir(&directory,qualified);
+    if(r==FR_OK) {
+        bool ok=true;
+        for(;;) {
+            r=f_readdir(&directory,&info);
+            if(r!=FR_OK || !info.fname[0] || cancelled()) break;
+            unsigned index;
+            if(!kui_destination_folder_index(info.fname,title,&index)) continue;
+            /* Files also occupy names on FAT, even though only directories can
+             * contain resumable jobs. A different release can share a title. */
+            if(index>highest) highest=index;
+            if(mode==KUI_CAPTURE_NEW || !(info.fattrib&AM_DIR) || index<=matching) continue;
+            char candidate[KUI_DEST_JOB_CAP];bool match;
+            if(!kui_destination_job_path(candidate,root,info.fname) ||
+               !candidate_matches(candidate,&match)) {ok=false;break;}
+            if(match) {matching=index;snprintf(best,sizeof(best),"%s",candidate);}
+        }
+        FRESULT closed=f_closedir(&directory);
+        if(!ok || r!=FR_OK || closed!=FR_OK || cancelled()) return false;
+    } else if(r!=FR_NO_PATH && r!=FR_NO_FILE) {
+        job.ops->log("Destination scan failed: FatFs=%u",(unsigned)r);return false;
+    }
+    if(mode!=KUI_CAPTURE_NEW) {
+        if(!matching) {
+            job.ops->log("No matching named job in %s; checking legacy jobs",root);
+            return choose_legacy_dir(mode);
+        }
+        snprintf(job.dir,sizeof(job.dir),"%s",best);
+    } else {
+        if(highest>=KUI_DEST_INDEX_MAX ||
+           !kui_destination_folder_name(folder,title,highest+1u) ||
+           !kui_destination_job_path(job.dir,root,folder)) {
+            job.ops->log("Cannot allocate another game folder; existing files preserved");return false;
+        }
+        if(!kui_destination_mkdirs(root,job.ops->log)) {job.dir[0]=0;return false;}
+        if(cancelled()) {job.dir[0]=0;return false;}
+        r=f_mkdir(job.dir);
+        if(r!=FR_OK) {
+            job.dir[0]=0;
+            job.ops->log("Cannot create a new game folder: FatFs=%u; existing files preserved",(unsigned)r);
+            return false;
+        }
+    }
+    job.named_output=true;
+    snprintf(job.gdi_name,sizeof(job.gdi_name),"%s.gdi",title);
+    job.ops->log("Job: %s",job.dir+2);return true;
+}
+static bool choose_dir(enum kui_capture_mode mode) {
+    snprintf(job.gdi_name,sizeof(job.gdi_name),"disc.gdi");
+    /* Bench output remains byte-for-byte compatible with the accepted harness,
+     * even if the caller carried normal application output preferences. */
+    return !job.bench && job.opt->output && job.opt->output->game_names?
+        choose_named_dir(mode):choose_legacy_dir(mode);
 }
 static bool save_checkpoint_inner(FIL *track) {
     if(track && !sync_file(track)) return false;
@@ -518,7 +605,7 @@ static bool matches_file(const char *path,const char *text,size_t bytes) {
 /* Publish only verified complete jobs. Existing final metadata must match;
  * an interrupted temporary file can be regenerated from validated state. */
 static bool publish(const char *name,size_t size,bool create) {
-    char final[112],temp[116];
+    char final[KUI_DEST_PATH_CAP],temp[KUI_DEST_PATH_CAP+4u];
     snprintf(final,sizeof(final),"%s/%s",job.dir,name);
     FILINFO info;FRESULT r=f_stat(final,&info);
     if(r==FR_OK) {
@@ -543,8 +630,11 @@ static bool final_metadata(bool create) {
         if(!kui_fad_to_lba(t->start,&lba) || !append(&used,"%u %" PRIu32 " %" PRIu32 " 2352 track%02u.%s 0\n",
             i+1,lba,t->control,i+1,t->control==4?"bin":"raw")) return false;
     }
-    if(!publish("disc.gdi",used,create)) return false;
+    if(!publish(job.gdi_name,used,create)) return false;
     used=0;
+    char descriptor[128]={0};
+    if(job.named_output)
+        snprintf(descriptor,sizeof(descriptor),"  \"gdi_file\":\"%s\",\n",job.gdi_name);
     /* Schema 1 (SHA-256 jobs) promises a passed console read-back, so it is only
      * written after one. Schema 2 (CRC-only jobs) states facts about the content
      * and makes no verification claim: how a run verified belongs in its report,
@@ -553,9 +643,9 @@ static bool final_metadata(bool create) {
     if(job.crc_only) {
         if(!append(&used,"{\n  \"schema\":2,\"complete\":true,\"hashes\":[\"crc32\"],\n"
             "  \"profile\":\"%s\",\"identity\":\"%s\",\n  \"capture_build\":\"%s\",\n"
-            "  \"title\":\"%s\",\"sector_bytes\":2352,\n"
+            "  \"title\":\"%s\",\"sector_bytes\":2352,\n%s"
             "  \"audio\":\"raw drive bytes; no offset/subchannel correction\",\n  \"tracks\":[\n",
-            KUI_CAPTURE_PROFILE,job.identity,job.state.build,job.title)) return false;
+            KUI_CAPTURE_PROFILE,job.identity,job.state.build,job.title,descriptor)) return false;
         for(unsigned i=0;i<job.plan->count;i++) {
             const struct kui_capture_track *t=&job.plan->tracks[i];
             if(!append(&used,"    {\"number\":%u,\"session\":%" PRIu32 ",\"control\":%" PRIu32
@@ -571,9 +661,9 @@ static bool final_metadata(bool create) {
     }
     if(!append(&used,"{\n  \"schema\":1,\"complete\":true,\"saved_data_verified\":true,\n"
         "  \"profile\":\"%s\",\"identity\":\"%s\",\n  \"capture_build\":\"%s\",\n"
-        "  \"title\":\"%s\",\"sector_bytes\":2352,\"reference\":\"not compared\",\n"
+        "  \"title\":\"%s\",\"sector_bytes\":2352,\"reference\":\"not compared\",\n%s"
         "  \"audio\":\"raw drive bytes; no offset/subchannel correction\",\n  \"tracks\":[\n",
-        KUI_CAPTURE_PROFILE,job.identity,job.state.build,job.title)) return false;
+        KUI_CAPTURE_PROFILE,job.identity,job.state.build,job.title,descriptor)) return false;
     for(unsigned i=0;i<job.plan->count;i++) {
         const struct kui_capture_track *t=&job.plan->tracks[i];char sha[65];
         kui_hex(job.state.track[i].sha256,32,sha);
@@ -616,6 +706,9 @@ static void publish_stats(void) {
     for(unsigned b=0;b<KUI_TIME_BUCKETS;b++) out->capture_bucket_us[b]=job.timing.samples[KUI_TIME_CAPTURE][b].us;
     out->bytes=saved_bytes();out->sampled=job.sampled;out->verified=job.verified;out->crc_only=job.crc_only;
     snprintf(out->job_dir,sizeof(out->job_dir),"%s",job.dir);
+    snprintf(out->disc_title,sizeof(out->disc_title),"%s",job.title);
+    snprintf(out->gdi_name,sizeof(out->gdi_name),"%s",job.gdi_name);
+    out->reference_checked=job.reference_checked;out->reference=job.reference;
 }
 /* Compare the finished capture with the Redump and TOSEC catalogues on the card,
  * if it has them. Nothing here reads the saved tracks: it uses the sizes and
@@ -633,6 +726,7 @@ static void report_known_dump(void) {
         t[i]=(struct kui_known_track){i+1,job.plan->tracks[i].control==4,
             (uint64_t)job.state.track[i].sectors*KUI_RAW_BYTES,job.state.track[i].crc32};
     kui_known_check("0:/KUI/redump.db","0:/KUI/tosec.db",t,job.plan->count,&s,known_cancelled,NULL);
+    job.reference_checked=true;job.reference=s;
     switch(s.result) {
     case KUI_KNOWN_NO_DATABASE:
         job.ops->log("No independent reference compared: KUI/redump.db and KUI/tosec.db not on card");
@@ -724,7 +818,7 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
                 plan->count,job.sampled,job.sample_every);
         else ops->log("CAPTURED: all %u tracks; stream CRC32 recorded; saved data NOT re-read",plan->count);
         report_known_dump();
-        ops->log("Output: %s/disc.gdi",job.dir+2);
+        ops->log("Output: %s/%s",job.dir+2,job.gdi_name);
     }
 out:
     if(result!=KUI_CAPTURE_COMPLETE) {

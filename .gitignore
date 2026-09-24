@@ -12,3 +12,4 @@ track[0-9][0-9].bin
 track[0-9][0-9].raw
 checkpoint-[ab].bin
 disc.gdi
+resources/music/*.wav

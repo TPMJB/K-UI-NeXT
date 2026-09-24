@@ -64,7 +64,8 @@
  * Capture engine choices. Each is a real option of the capture engine, so a
  * REAL capture uses the FIRST value of each list, and the bench's `capture`
  * section (sections=...,capture) runs the engine at every combination. The
- * defaults are the engine as it has always been.
+ * defaults use DMA, CRC32 only and no automatic end readback. Persistent
+ * settings are applied first; explicit bench.cfg keys override them.
  *
  *   capture_hash=both,crc32    both = SHA-256 and CRC32 per track; crc32 = CRC32
  *                              only (a schema 2 manifest; a job keeps the mode
@@ -153,5 +154,10 @@ void kui_options_log(const struct kui_options *opt, kui_log_fn log);
 /* Read path on a mounted FatFs volume, then parse (options_file.c).
  * Missing file: defaults and true. Unreadable or malformed: defaults, false. */
 bool kui_options_load(struct kui_options *opt, const char *path, kui_log_fn log);
+
+/* Apply only keys explicitly present in the mounted file. Missing file keeps
+ * *opt and succeeds; unreadable/malformed input leaves *opt unchanged and
+ * returns false. This lets saved settings precede optional bench overrides. */
+bool kui_options_overlay(struct kui_options *opt, const char *path, kui_log_fn log);
 
 #endif

@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "date": "2026-09-24",
+  "kind": "Games G1/G2 host validation; no hardware compatibility or performance claims",
+  "source_baseline": "bb761fb3f6aaebc718e27a1fa80cc80202b69c37",
+  "scope": [
+    "Raw2352 GDI track mapping and bounded sector reads",
+    "IP.BIN and ISO9660 boot metadata",
+    "Read-only FAT32/exFAT Games browser and inspection",
+    "Existing-style UI and worker integration"
+  ],
+  "portable_image": {
+    "checks": 659,
+    "test": "tests/test_game_image.c",
+    "sanitizers": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ],
+    "result": "passed"
+  },
+  "boot_metadata": {
+    "scenarios": 73,
+    "additional": "invalid arguments and status-table checks",
+    "test": "tests/test_game_metadata.c",
+    "result": "passed",
+    "multisession": "Both absolute and session-relative volume counts accepted; directory/file extents remain absolute and bounded by GDI data tracks."
+  },
+  "filesystem": {
+    "cases_per_filesystem": 26,
+    "filesystems": [
+      "FAT32",
+      "exFAT"
+    ],
+    "total_cases": 52,
+    "test": "tests/test_games_images.py",
+    "harness": "tests/games_image.c",
+    "fixture": "tests/games_fixture.py",
+    "result": "passed",
+    "checks": [
+      "SHA256 of entire card image identical before and after every operation",
+      "No active-operation file writes/creates/deletes/renames",
+      "File and directory handles closed before disconnect",
+      "Filesystem checks pass",
+      "Cancellation before connect and during reads/listing",
+      "Injected mount, open, read, seek and close failures",
+      "Missing/truncated tracks, invalid metadata, ambiguous folders and pagination"
+    ],
+    "fixture_provenance": "Original generated test bytes; no retail game content or K-UI dump manifest",
+    "attribute_coverage": "AM_HID/AM_SYS are injected by the directory wrapper because production FatFs disables chmod; dot-prefixed folders are real filesystem entries."
+  },
+  "ui": {
+    "test": "tests/test_shell.c",
+    "result": "passed",
+    "checks": [
+      "Ninth home app preserves existing app indices",
+      "Full selected GDI path beyond folder-path limit",
+      "Stale publication guards",
+      "Busy Stop and navigation lock",
+      "Directory and pagination boundaries",
+      "Bounded production rendering"
+    ],
+    "previews": [
+      "home-games",
+      "games",
+      "games-detail",
+      "games-error",
+      "games-advanced"
+    ]
+  },
+  "local_environment": "ASAN_OPTIONS=detect_leaks=0 because local ptrace prevents LeakSanitizer; ASan and UBSan remain enabled. CI uses the normal suite.",
+  "frozen_reader_sha256": {
+    "src/core/capture.c": "74bc14786561bc5b4f0a1936711235f1cba8cb66027c49a0d9761e74e746815b",
+    "src/dreamcast/disc.c": "b365e0529cfd60d26ed7bae392305ec2d235ca5760415ee4d6d3efa2b396f5c4",
+    "src/core/command.c": "1261a6a77ea69d7afcf1189650200d17ce35192c216638117c1ff88215740afd"
+  },
+  "hardware_acceptance": "Pending Games browsing and metadata inspection on the console; current audio-CD acceptance remains separate.",
+  "not_implemented": [
+    "Resident game-time read service",
+    "Retail image execution or compatibility",
+    "IDE/CF Games backend",
+    "ISO/CDI/compressed formats",
+    "Image-backed game-time CDDA"
+  ]
+}

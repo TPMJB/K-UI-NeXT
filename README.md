@@ -22,69 +22,71 @@ good runtime have now passed by user report; see the
 New project code uses GPLv3; dependencies retain their own licenses. There is no
 separate contribution or commercial-relicensing agreement.
 
-## Try the diagnostic
+## M1.5 shell update
 
-For a console with the working bootstrap CD, download **sd-update** and follow
-[the combined capture/resume test](docs/capture-test.md). A new burn is unnecessary.
-The runtime opens on the capture page: A creates a new dump, X resumes the newest
-matching job, Y verifies it, and B stops. Left/Right switches to diagnostics.
-The **left trigger runs mstats** at any time, including during capture; a live
-RAM estimate and sampled peak appear on the capture page. See
-[memory counter definitions](docs/memory-stats.md) for comparisons with other software.
-Capture, resume and verification also log elapsed-time breakdowns on Stop or
-completion, including separate SHA-256, disc and SD time. See
-[the short optical speed test](docs/optical-test.md). The current update changes
-capture to **one optical read per block** and services PIO continuously with
-periodic scheduler yields. It removes the duplicate capture read and the sleep
-after every busy firmware status. Transfer-size checks, guards, data-sector EDC,
-bounded retries and final CRC32/SHA-256 saved-file verification remain the defaults
-(`capture_hash=both`, `end_readback=on`); every fast, verified rip set them off in `bench.cfg`.
-Identification samples stay paired, so existing v1 jobs retain their identity.
+The SD runtime opens nine apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
+**Network Test**, **Settings**, **Diagnostics**, **GD Play**, **Music Player** and **Games**. New captures use a selectable
+parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
+The hardware-proven acquisition engine remains unchanged.
 
-The latest MDK2 audio baseline measured **57.00 KiB/s**. Its two command loops
-spent about 258 of 306 capture seconds in scheduler waits; each nominal 1 ms
-sleep averaged about 8 ms. These counters motivate the change, but do not prove
-all waiting is removable or establish the new build's console throughput.
-See [the evidence](docs/hardware-evidence.md) and
-[the performance/resume plan](docs/performance-test-plan.md).
-Reports save automatically after Capture, Resume or Verify ends. Wait for
-**Report saved** and **READY**; diagnostics Y can retry a failed save.
-Existing dump/checkpoint formats are retained. The full saved-prefix pass on
-resume remains for now; a faster versioned resume format is separate work.
-Read [the capture format](docs/capture-format.md) for gap/audio conventions and
-the distinction between saved-data verification and an independent reference match.
+Use the existing bootstrap CD and the `sd-update` artifact. Replace
+`/KUI/runtime.kui`, and copy `KUI/apps/music/` for optional original menu music.
+See [the current app acceptance round](docs/apps-round-five.md) and
+[app boundaries and the later executable-loader plan](docs/app-architecture.md).
+These new app paths still need physical-console acceptance.
 
-Use the `diagnostic` artifact from a successful **Diagnostic build** workflow run.
-It includes `kui-diagnostic.cdi`, `sd/KUI/runtime.kui`, loader rejection fixtures,
-hardware instructions, a PC verifier, build identifiers, checksums and
-source/license records. These are test artifacts, not published releases.
+- Select with D-pad or stick and open with A. B returns home while idle.
+- The original splash is capped at three seconds; B skips the shortened startup cue.
+  Home Y cycles volume/off; L/R on Home and Ripper select songs. The header names the current song.
+- GD Play exits through normal KOS shutdown to the stock BIOS. Music Player
+  caches PCM16 WAV or Ogg Vorbis songs up to 6 MiB for background playback across apps.
+  The update includes an original one-minute WAV/Ogg sample, custom-song cycling,
+  explicit cache clearing and a separate audio-CD player.
+- Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
+  Start opens Advanced, **Destination folder** and **Capture settings**.
+  Advanced also offers explicitly confirmed Quick resume (sizes only), preserving
+  full Resume and its saved-byte checks. During work, B requests Stop. Reports still save automatically. Idle insertion
+  detection shows the disc title; moving capture/verification phases show percentage and ETA.
+  Current retry attempts and the cumulative job total are labelled separately.
+- System Settings: 640x480 TV timing with reversible preview, memory display,
+  music enabled and volume, startup chime/app, local clock, TV safe area, menu sounds
+  and restore-defaults. System Tools adds inventory, verified flash/visible BIOS backups and Restart.
+  Capture hashes/readback remain inside the ripper. New file dates follow the RTC.
+- VMU Manager: read saves, make verified SD backups, and preview/confirm restore
+  into a free filename with readback. Managed copy/delete require confirmation and
+  a verified restorable SD backup. No overwrite or format. Memory Test checks only its allocated RAM.
+- Ripper Advanced CRC scans completed saved jobs and reports hash/Mode 1 sector
+  errors separately. Already-read track sizes and CRCs are compared with the
+  Redump/TOSEC catalogues, including GDI-only folders without a manifest. Only a
+  full reference match establishes all-track agreement; unavailable/partial
+  references retain the limited structural result.
+  Separate Salvage jobs add durable bad-sector queues, optional zero filling and
+  bounded repair passes; unresolved holes never receive a complete-dump claim.
+- Network Test includes a temporary DHCP/address-conflict/gateway-ping test; it
+  does not claim Internet reachability or change saved network settings. Diagnostics retains disc/SD probes, log export,
+  mstats and benchmarks. RAM remains visible in the ripper.
+- Music keeps playing from RAM during menu actions and capture; uncached song
+  changes wait until the storage worker is idle. Console continuity still needs checking.
+- Repeated drive failures can retain PIO until reboot. The ripper now keeps that
+  warning visible; the accepted DMA stop/lid policy is unchanged.
 
-Read [the SD bootstrap instructions](docs/sd-bootstrap.md) before the next burn.
-The aim is to reuse one bootstrap disc and update only `KUI/runtime.kui` on SD
-for ordinary application changes. Hold B during startup to use the embedded
-diagnostics; missing/invalid runtime files also fall back. The old diagnostic
-disc cannot load an SD runtime. Keep it as a working fallback.
+Defaults now select **CRC32, automatic end readback Off, DMA and 2 Hz busy redraws**:
+these are the policy choices used by the accepted fast captures. Explicit
+`bench.cfg` keys override saved preferences, and the log prints the effective
+options. Resume keeps the existing job's hash mode. **Y Verify always rereads saved
+files**. Only an independent **FULL TRACK MATCH** gives the stream CRC badge a
+green result; partial matches and saved-file verification remain separate.
 
-Use a spare FAT32 or exFAT card for initial testing. Bundle boot, loader-error,
-disc, storage and display checks into the same session using the same burned CD.
-See [the hardware test instructions](docs/hardware-test.md) for the probes.
+A title such as MDK2 produces `/Games/MDK2/MDK2.gdi`; another New uses
+`/Games/MDK2 (2)/MDK2.gdi` without overwriting the first. Resume/Verify select the
+greatest numbered matching-disc checkpoint in the chosen parent, with legacy
+`/KUI/dumps` fallback. Existing jobs keep their format. See
+[ripper controls](docs/ripper-controls.md) and [the capture format](docs/capture-format.md).
 
-| Controller | Action on diagnostics page |
-| --- | --- |
-| A | Read both TOCs and selected raw samples from the inserted retail GD-ROM |
-| X | Write a new SD fixture; close/remount/reopen and verify every byte |
-| Y | Save the current diagnostic log into a fresh SD directory |
-| B | Request Stop; an active operation finishes or follows its bounded abort path |
-| D-pad Up / Down | Scroll the diagnostic log |
-| Start | Return to the latest log lines |
-| Left / Right or stick | Switch capture/diagnostics pages while idle |
-| Left trigger | mstats snapshot, including during an active operation |
-
-The screen explicitly identifies incomplete operations. A sample pass is evidence
-about those reads, not full-disc accuracy. Probes use `/KUI/probes/`; captures use
-new directories under `/KUI/dumps/`. Resume validates disc identity and all saved
-prefixes before appending. GPT, multiple-partition cards, FAT12/16 and the internal
-SCI adapter are unsupported. There is no formatting or zero-fill command.
+The reusable CD's built-in diagnostics remain available by holding B during
+startup. Missing or invalid runtime packages fall back automatically. Keep using
+the working CD; this UI update needs no new burn. See [SD bootstrap](docs/sd-bootstrap.md)
+and [hardware evidence](docs/hardware-evidence.md) for the established boot checks.
 
 ## Build and test
 
@@ -94,7 +96,7 @@ On Ubuntu 24.04 / a compatible Linux or WSL installation:
 sudo apt-get install build-essential git curl wget patch python3 bison flex \
   texinfo gettext libgmp-dev libmpfr-dev libmpc-dev libisl-dev \
   meson ninja-build pkg-config libisofs-dev libpng-dev libjpeg-dev \
-  dosfstools exfatprogs mtools
+  dosfstools exfatprogs mtools ffmpeg
 python3 tools/fetch_deps.py --fatfs-only
 make test test-images
 bash tools/setup_kos.sh
@@ -125,11 +127,34 @@ capture every supported retail GD-ROM track, and verify and resume saved dumps.
 | M1.2: validated runtime loading from SD | **Done.** exFAT handoff, B-selected fallback, missing-file rejection and good-runtime restoration confirmed; all five malformed fixtures rejected on hardware, each with its own reason, with a usable fallback ([evidence](docs/evidence/m12-runtime-rejection-2026-09-20.json)) |
 | M1.3: full-track GDI capture | **Done.** Sword of the Berserk and MDK2 (31 tracks, 27 audio) captured and verified against TOSEC on the console and on a PC; Sword ripped three ways, identical by SHA-256 ([handoff](docs/HANDOFF-disc-reader.md)) |
 | M1.4: SHA-256 capture verification and controlled stop/resume | **Done.** MDK2 stopped twice mid-disc and resumed to a finish verified on the console and against TOSEC; Sword track 3 PC-verified. The lid opened mid-capture stopped cleanly and resumed to a TOSEC-verified finish on hardware (Omikron). A scratched disc retried a fixed 10 times, named the bad sector and stopped with the partial job kept. A B stop and a lid-open in the same boot both resume on DMA ([evidence](docs/evidence/dma-stop-fix-confirmed-2026-09-20.json)). **Open:** a card that fills mid-capture, host-tested only |
-| M1.5: hardware acceptance and minimal UI refinement | Hardware acceptance complete except a card filling mid-capture (host-tested); UI refinement planned |
+| M1.5: hardware acceptance and minimal UI refinement | Launcher and non-Games app round five implemented: named dumps, salvage, VMU copy/delete/restore, Ogg/CD audio, settings/tools and network diagnostics; latest app hardware acceptance pending. Full-card failure remains host-tested only |
 
 See [the research scope](docs/milestone-1-research.md),
 [the implementation decisions](docs/diagnostic-design.md), and
 [dependency provenance](THIRD_PARTY.md).
+
+## Next: Games
+
+Audio-CD playback is now accepted by owner report. The Games foundation adds
+`/Games` browsing, Advanced > Browse SD folders and bounded GDI/boot metadata
+inspection. It accepts GDI-only folders without a manifest and does not scan
+whole tracks. See [the Games hardware guide](docs/games-test.md).
+The separate resident SD service and original post-handoff test program passed
+on hardware: build `7a8493ae825e`, ten checks, 84 SD blocks read after launcher
+shutdown. [Evidence](docs/evidence/games-resident-probe-hardware-2026-09-24.json).
+The selected-image GD-vector probe also passed on hardware: build
+`c4cfd4585ec5`, all eleven checks and 93 post-shutdown SD blocks.
+The independent retail loader now has a **pinned playable DOA2 baseline**:
+`6c02bd8b22f4`, branch `baseline/doa2-sd-6c02bd8b22f4`. The owner reports fluid
+audio, a responsive start screen, and tolerable play, with long stage loads,
+delayed background textures and brief early-battle lag still present.
+Preserve [this exact rollback point and its timings](docs/evidence/games-doa2-pinned-baseline-2026-09-24.md)
+before future performance changes. Physical VMU save/load and broader
+compatibility remain open.
+See [the gameplay evidence and performance findings](docs/evidence/games-doa2-gameplay-2026-09-24.md),
+[retail launch guide](docs/games-retail-test.md) and
+[staged Games plan](docs/games-milestone-plan.md).
+The accepted reader stays frozen; the existing boot disc remains in use.
 
 ## License and contribution policy
 
@@ -138,7 +163,9 @@ use the applicable existing file license. Contributors retain their copyrights;
 there is no separate CLA or grant of proprietary relicensing rights.
 
 This is a fresh repository, not a DreamShell fork. Requirements and hardware
-observations can inform new implementations. Do not import DreamShell source,
-binaries, artwork, build environments or a modified file by changing its name.
+observations can inform new implementations. Do not import upstream-derived DreamShell source or binaries by changing their names.
+Independently authored additions from our earlier fork can be reused after checking
+their origins, dependencies and intended license; see [the reuse inventory](docs/prior-work-reuse.md).
+Original project artwork and the five original synthesized music loops are reused with recorded provenance; inherited assets keep their own terms.
 Independently licensed upstream KOS contributions remain attributed and usable,
 including contributions by people who also work on other projects.

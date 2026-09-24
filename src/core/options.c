@@ -38,9 +38,10 @@ void kui_options_default(struct kui_options *out) {
     out->capture_dma[0] = true; out->capture_read_count = 1;
     out->sweep_mode_count = 1;   /* PIO only */
     out->sweep_spin_count = 1;   /* no competing thread */
-    /* Capture engine: the engine as it has always been. */
-    out->capture_hash_count = 1;      /* both */
-    out->end_readback[0] = true; out->end_readback_count = 1;
+    /* Fast capture defaults proven against reference dumps on hardware.
+     * Settings may override these; explicit bench.cfg keys take precedence. */
+    out->capture_crc_only[0] = true; out->capture_hash_count = 1;
+    out->end_readback[0] = false; out->end_readback_count = 1;
     out->resume_check_count = 1;      /* full */
     out->sample_readback_count = 1;   /* 0: off */
     out->capture_sectors = 4096;

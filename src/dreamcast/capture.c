@@ -12,11 +12,13 @@ static enum kui_read_result capture_read_end(void *ctx) { return kui_disc_read_e
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+static struct kui_capture_stats last_stats;
+const struct kui_capture_stats *kui_capture_last_stats(void) { return &last_stats; }
 static bool cancelled(void *ctx) { (void)ctx;return kui_cancelled(); }
 static uint64_t now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static uint64_t now_us(void *ctx) { (void)ctx;return timer_us_gettime64(); }
 /* The bench runs the engine dozens of times; its per-run chatter would flood the
- * 768-line report, so only problems get through. */
+ * bounded diagnostic report, so only problems get through. */
 static void bench_log(const char *format,...) {
     char line[128];va_list args;va_start(args,format);vsnprintf(line,sizeof(line),format,args);va_end(args);
     if(strstr(line,"fail")||strstr(line,"FAIL")||strstr(line,"mismatch")||strstr(line,"Insufficient")||
@@ -32,9 +34,24 @@ enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool
         kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,options,stats};
     return kui_capture_bench(&ops,fad,sectors,audio,mode);
 }
-enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build) {
+static enum kui_capture_result capture_start(enum kui_capture_mode mode,const char *build,
+    const char *destination,bool quick_resume) {
+    memset(&last_stats,0,sizeof(last_stats));
+    char parent[KUI_DEST_ROOT_CAP];
+    if(!kui_destination_normalize(parent,destination)) {
+        kui_log("Capture refused: invalid or too-long destination; no dump writes");
+        return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+    }
+    /* These local values live through the synchronous capture call; the engine
+     * never borrows the UI's mutable destination buffer. */
+    const struct kui_capture_output output={parent,true};
     struct kui_toc sessions[2];struct kui_capture_plan plan;
-    kui_options_refresh();   /* logs the options in effect; a bad file keeps defaults */
+    /* Missing configuration is valid; unreadable/rejected configuration must
+     * not silently weaken a user's requested verification policy. */
+    if(!kui_options_refresh()) {
+        kui_log("Capture refused: preferences or bench.cfg could not be loaded; no dump writes");
+        return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+    }
     kui_disc_timing_reset();
     if(!kui_disc_prepare(sessions) || kui_cancelled())
         return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
@@ -46,10 +63,11 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
      * it has always been. A resumed job keeps the hash mode it started with. */
     struct kui_capture_options options={
         .crc_only=kui_options.capture_crc_only[0],.skip_end_readback=!kui_options.end_readback[0],
-        .resume_size_only=kui_options.resume_size[0],.sample_every=kui_options.sample_readback[0],
-        .read_dma=kui_options.capture_dma[0]};
+        .resume_size_only=(quick_resume && mode==KUI_CAPTURE_RESUME)||kui_options.resume_size[0],
+        .sample_every=kui_options.sample_readback[0],
+        .read_dma=kui_options.capture_dma[0],.output=&output};
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,kui_capture_status,
-        kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,NULL};
+        kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,&last_stats};
     /* Whole-operation CPU split: how much of this capture the UI thread took. */
     struct kui_cpu_census cpu_before,cpu_after;
     kui_cpu_census_mark(&cpu_before);
@@ -59,4 +77,14 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
     kui_sd_disconnect();
     kui_disc_timing_report();
     return result;
+}
+enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
+    const char *destination) {
+    return capture_start(mode,build,destination,false);
+}
+enum kui_capture_result kui_capture_resume_quick(const char *build,const char *destination) {
+    /* This opt-in changes only this call's local options. Checkpoint identity,
+     * size checks and SHA-256 job compatibility stay with the existing engine;
+     * no preferences or bench.cfg values are rewritten. */
+    return capture_start(KUI_CAPTURE_RESUME,build,destination,true);
 }
