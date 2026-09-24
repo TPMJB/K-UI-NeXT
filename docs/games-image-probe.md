@@ -1,12 +1,16 @@
 # Selected-image GD request probe
 
-This is the next focused Games hardware test. The original resident probe has
+This focused Games hardware test has passed. The original resident probe also
 already passed: build `7a8493ae825e`, ten checks and 84 SD blocks after launcher
 shutdown. [That acceptance remains unchanged](evidence/games-resident-probe-hardware-2026-09-24.json).
-The selected-image test described here is implemented; **its hardware result is
-pending**. It does not start the selected retail game.
+The owner's photograph shows **DEAD OR ALIVE 2**, build **`c4cfd4585ec5`**,
+all **11 checks passing** and **93 post-handoff SD blocks read**.
+[Hardware evidence and scope](evidence/games-selected-image-hardware-2026-09-24.json).
+This accepts the tested selected-image resident-read path; it does not start the
+retail game. **No repeat test is requested.** Keep the current runtime and boot CD
+while retail executable loading, memory ownership and boot state are implemented.
 
-**Ready for this test:** [download sd-update, 7.73 MiB](https://github.com/TPMJB/K-UI-NeXT/actions/runs/35993291859/artifacts/10805331976).
+**Accepted test build:** [download sd-update, 7.73 MiB](https://github.com/TPMJB/K-UI-NeXT/actions/runs/35993291859/artifacts/10805331976).
 The runtime and selected-image payload both show build **`c4cfd4585ec5`**.
 [Build 35993291859](https://github.com/TPMJB/K-UI-NeXT/actions/runs/35993291859)
 passed the full host/filesystem suite, SH-4 compilation, both independent-loader
@@ -14,7 +18,7 @@ layout checks and packaging. The downloaded ZIP, all file checksums and both
 payload envelopes also validate. Source `07b3a8a7497c` has the same tree as the
 packaged PR merge build. [Build evidence](evidence/games-selected-image-ci-2026-09-24.json).
 
-## Install and run
+## Reproduction steps (already passed; no repeat requested)
 
 1. Finish any active operation and switch the Dreamcast off.
 2. From the new `sd-update` package, replace **`/KUI/runtime.kui`** and copy
@@ -72,11 +76,11 @@ All image preparation and resident SD access are read-only. The backend has no
 SD write command. An explicit Diagnostics log save is a separate write before
 handoff, if needed after a preparation failure.
 
-## What a pass would establish
+## What this pass establishes
 
-A hardware pass would connect three pieces: the selected GDI's filesystem map,
+This hardware pass connects three pieces for the tested DOA2 image: its filesystem map,
 post-shutdown physical SD reads, and the implemented subset of the retail GD
-request calling convention. The sampled bytes would match those read through
+request calling convention. The sampled bytes match those read through
 the launcher's filesystem before handoff. These are consistency checks, not
 TOSEC/Redump comparisons or full-image verification.
 
@@ -90,7 +94,7 @@ throughput or game-performance claim.
 The selected boot executable is identified but **not executed**. Retail boot
 state, interrupt/callback behavior, streamed reads, image-backed CDDA, Windows CE
 and game compatibility remain subsequent work. Dead or Alive 2 remains the
-first intended retail launch target after these foundations pass. The accepted
+first intended retail launch target now that these read foundations have passed. The accepted
 optical capture engine remains unchanged.
 
 ## Implementation boundary

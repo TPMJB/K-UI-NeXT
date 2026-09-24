@@ -4,8 +4,12 @@ This implements a small independently authored request service for the next
 Games probe. It is not a complete retail loader. The accepted original fixture
 probe used K-UI's private ABI; this probe instead calls the actual Dreamcast
 GD vector with an original executable and reads the selected image afterward.
-Host tests establish the portable contract. A console result is still needed
-for the new native hook, selected-image mapping and register/stack handoff.
+Host tests establish the portable contract. The owner's DOA2 console result
+now accepts the tested native hook, selected-image mapping and register/stack
+handoff: build `c4cfd4585ec5`, 11 checks passed, 93 physical SD blocks after
+launcher shutdown. [Hardware evidence](evidence/games-selected-image-hardware-2026-09-24.json).
+Retail execution, cache/interrupt behavior and arbitrary game requests remain
+outside that acceptance.
 
 ## Primary sources
 
@@ -138,5 +142,6 @@ read-after-cancel, token reset/wrap/staleness, raw audio and Mode 1 constraints,
 all three main-RAM aliases, firmware/resident/address-boundary rejection,
 alignment, zero/oversized/overflowed requests, unmapped output after submission,
 backend I/O failure, unsupported commands/functions and callback reentrancy.
-The original native client must separately prove this interface on hardware;
-portable tests do not establish retail-game compatibility.
+The original native client has separately passed the selected DOA2 image test
+on hardware. Neither that bounded pass nor portable tests establish retail-game
+compatibility.
