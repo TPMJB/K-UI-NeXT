@@ -19,7 +19,7 @@ MR_OFFSET = 0x3820
 MR_LIMIT = 8192
 BOOT_BYTES = 32768
 DATA_BYTES = 2048
-BOOT_SIGNATURE = b"SEGA SEGAKATANA SEGA ENTERPRISES "
+BOOT_SIGNATURE = b"SEGA SEGAKATANA SEGA ENTERPRISES"
 
 
 def inspect_badge(data):
@@ -89,7 +89,7 @@ def verify_cdi_badge(data, badge):
                 raise ValueError("Invalid CDI bootstrap or boot filename")
             candidates.append((start, stride, bootstrap))
     if len(candidates) != 1:
-        raise ValueError("CDI must contain one recognizable ISO9660 bootstrap")
+        raise ValueError(f"CDI must contain one recognizable ISO9660 bootstrap; found {len(candidates)}")
     start, stride, bootstrap = candidates[0]
     if bootstrap[MR_OFFSET:MR_OFFSET + len(badge)] != badge:
         raise ValueError("CDI does not contain the original K-UI boot badge")

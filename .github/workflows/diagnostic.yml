@@ -72,7 +72,7 @@ jobs:
           if bootstrap:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
               exact = {'Makefile.dc', '.github/workflows/diagnostic.yml', 'tools/package.py',
-                       'tools/boot_badge.py', 'src/dreamcast/main.c', 'src/dreamcast/bench.c',
+                       'tools/boot_badge.py', 'tests/test_boot_badge.py', 'src/dreamcast/main.c', 'src/dreamcast/bench.c',
                        'src/dreamcast/capture.c'}
               if not paths or any(p not in exact and not p.startswith(('resources/branding/boot-disc-badge.', 'docs/')) for p in paths):
                   raise SystemExit('Bootstrap-only request includes changes outside the CD recovery scope')
