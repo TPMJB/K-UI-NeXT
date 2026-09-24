@@ -51,6 +51,14 @@ enum kui_loader_sd_result kui_loader_sd_init_bus(
     struct kui_loader_sd *card, const struct kui_loader_sd_bus *bus);
 enum kui_loader_sd_result kui_loader_sd_read(
     struct kui_loader_sd *card, uint32_t lba, uint32_t count, void *out);
+/* Separate CMD18 comparison path; the existing read API remains CMD17-only.
+ * Each block is CRC checked. Every issued CMD18 is stopped with CMD12 before
+ * deselection, including failed/uncertain responses. If stop/idle cannot be
+ * confirmed, ready becomes false and initialization is required before reuse.
+ * On error, output may contain completed blocks and the failing block; callers
+ * must not treat any part of the requested read as successful. */
+enum kui_loader_sd_result kui_loader_sd_read_multi(
+    struct kui_loader_sd *card, uint32_t lba, uint32_t count, void *out);
 void kui_loader_sd_shutdown(struct kui_loader_sd *card);
 const char *kui_loader_sd_result_name(enum kui_loader_sd_result result);
 

@@ -31,7 +31,7 @@ RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id
-all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf
+all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -148,6 +148,8 @@ RETAIL_RESIDENT := build/retail/src/loader/retail_resident_asm.o \
     build/retail/src/loader/retail_resident.o build/retail/src/core/retail_gd.o $(RETAIL_COMMON)
 RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
     build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
+RETAIL_BENCH_STAGE := build/retail/src/loader/retail_stage_asm.o \
+    build/retail-bench/retail_stage.o build/retail/src/loader/retail_sd_bench.o $(RETAIL_COMMON)
 
 build/retail/%.o: %.c
 	@mkdir -p $(@D)
@@ -172,4 +174,25 @@ build/retail/entry.elf: build/retail/src/loader/retail_entry_asm.o src/loader/re
 	python3 tools/check_retail_loader_layout.py
 	python3 tools/record_build.py $@
 
+# The separate SD benchmark runs in the high stage. Share the exact ordinary
+# resident and its assembly wrapper; the normal retail entry remains a game
+# launcher. Top-level variant objects cannot be overwritten by the report copy.
+build/retail-bench/retail_stage.o: src/loader/retail_stage.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_SD_BENCH=1 -MMD -MP -c $< -o $@
+build/retail-bench/stage.elf: $(RETAIL_BENCH_STAGE) src/loader/retail_stage.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,build/retail-bench/stage.map -o $@ $(RETAIL_BENCH_STAGE) -lgcc
+build/retail-bench/stage.bin: build/retail-bench/stage.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail-bench/retail_entry_asm.o: src/loader/retail_entry.S build/retail-bench/stage.bin
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_STAGE_BIN='"build/retail-bench/stage.bin"' -MMD -MP -c $< -o $@
+build/retail-bench/entry.elf: build/retail-bench/retail_entry_asm.o src/loader/retail_entry.ld build/retail/entry.elf
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail-bench/entry.map -o $@ $<
+	cp build/retail/resident.elf build/retail/resident.bin build/retail/resident.map build/retail-bench/
+	cp -r build/retail/src build/retail-bench/
+	python3 tools/check_retail_instructions.py build/retail-bench
+	python3 tools/check_retail_loader_layout.py build/retail-bench
+	python3 tools/record_build.py $@
+
 -include $(RETAIL_RESIDENT:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
+-include $(RETAIL_BENCH_STAGE:.o=.d) build/retail-bench/retail_entry_asm.d

@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
+#ifndef KUI_RETAIL_STAGE_BIN
+#define KUI_RETAIL_STAGE_BIN "build/retail/stage.bin"
+#endif
     .section .entry,"ax"
     .align 2
     .global _start
@@ -52,6 +55,6 @@ __retail_map:
     .align 2
     .global __retail_stage_blob_start,__retail_stage_blob_end
 __retail_stage_blob_start:
-    .incbin "build/retail/stage.bin"
+    .incbin KUI_RETAIL_STAGE_BIN
     .align 2
 __retail_stage_blob_end:

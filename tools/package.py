@@ -40,14 +40,18 @@ def main():
     probe = ROOT / "build/loader/entry.elf"
     image_probe = ROOT / "build/loader/image_entry.elf"
     retail = ROOT / "build/retail/entry.elf"
+    retail_bench = ROOT / "build/retail-bench/entry.elf"
     run("python3", "tools/check_loader_layout.py")
     run("python3", "tools/check_image_loader_layout.py")
     run("python3", "tools/check_retail_loader_layout.py")
-    for image in (elf, runtime, probe, image_probe, retail):
+    run("python3", "tools/check_retail_instructions.py")
+    run("python3", "tools/check_retail_loader_layout.py", "build/retail-bench")
+    run("python3", "tools/check_retail_instructions.py", "build/retail-bench")
+    for image in (elf, runtime, probe, image_probe, retail, retail_bench):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
-            raise SystemExit("Rebuild both programs from the current clean commit before packaging")
+            raise SystemExit("Rebuild all programs from the current clean commit before packaging")
     mkdcdisc = ROOT / ".deps/mkdcdisc"
     if not (mkdcdisc / "builddir/build.ninja").exists():
         run("meson", "setup", str(mkdcdisc / "builddir"), str(mkdcdisc), "-Dpng=disabled")
@@ -84,11 +88,16 @@ def main():
     retail_package = envelope(retail_payload, retail_memory, commit[:12])
     retail_info = inspect_retail(retail_package)
     (games / "retail-boot.kui").write_bytes(retail_package)
+    bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
+    bench_package = envelope(bench_payload, bench_memory, commit[:12])
+    bench_info = inspect_retail(bench_package)
     run("python3", "tools/make_loader_probe.py", str(games / "probe.dat"))
     # Keep link maps and exact standalone ELFs in the full diagnostic download.
     shutil.copytree(ROOT / "build/loader", dist / "loader-build",
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     shutil.copytree(ROOT / "build/retail", dist / "retail-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    shutil.copytree(ROOT / "build/retail-bench", dist / "retail-bench-build",
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     run("python3", "tools/generate_menu_music.py", "--directory", str(sd / "apps/music"))
     run("python3", "tools/generate_music_demo.py", "--directory", str(dist / "sd/Music"), "--ogg")
@@ -110,7 +119,7 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
-    for name in ("games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("games-sd-benchmark", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -198,6 +207,35 @@ def main():
         if path.is_file() and path.name != "SHA256SUMS":
             update_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(update)}")
     (update / "SHA256SUMS").write_text("\n".join(update_hashes) + "\n")
+    # This small package temporarily replaces only the retail launch payload.
+    # Keep the ordinary SD update intact so it restores normal game launching.
+    benchmark = dist / "sd-benchmark"
+    if benchmark.exists():
+        shutil.rmtree(benchmark)
+    (benchmark / "KUI/apps/games").mkdir(parents=True)
+    (benchmark / "KUI/runtime.kui").write_bytes(package)
+    (benchmark / "KUI/apps/games/retail-boot.kui").write_bytes(bench_package)
+    bench_record = {**record, "kind": "sd-benchmark", "retail_boot": bench_info}
+    (benchmark / "build.json").write_text(json.dumps(bench_record, indent=2) + "\n")
+    for name in ("GAMES-SD-BENCHMARK.md", "LICENSE", "THIRD_PARTY.md"):
+        shutil.copyfile(dist / name, benchmark / name)
+    shutil.copytree(dist / "LICENSES", benchmark / "LICENSES")
+    (benchmark / "SOURCE.txt").write_text(
+        f"K-UI NeXT source commit: {commit}\n"
+        f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
+        "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
+        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "original notices are also included in build.json and LICENSES/.\n"
+        "The benchmark ELF, link maps, disassembly and stack reports are under retail-bench-build/.\n\n"
+        "Copy this package's KUI/runtime.kui and KUI/apps/games/retail-boot.kui to the SD card.\n"
+        "Keep your existing boot CD. Follow GAMES-SD-BENCHMARK.md for the read-only SD test.\n"
+        "This payload displays benchmark results instead of starting the selected game.\n"
+        "Restore those two files from this run's sd-update artifact for ordinary game launching.\n")
+    bench_hashes = []
+    for path in sorted(benchmark.rglob("*")):
+        if path.is_file() and path.name != "SHA256SUMS":
+            bench_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(benchmark)}")
+    (benchmark / "SHA256SUMS").write_text("\n".join(bench_hashes) + "\n")
     hashes = []
     for path in sorted(dist.rglob("*")):
         if path.is_file() and path != dist / "SHA256SUMS":

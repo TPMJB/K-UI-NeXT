@@ -3,6 +3,9 @@
 #include "kui/retail_image.h"
 #include "retail_sd.h"
 #include "retail_display.h"
+#ifdef KUI_RETAIL_SD_BENCH
+#include "retail_sd_bench.h"
+#endif
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -112,6 +115,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
      * physical card size. Trailing unpartitioned sectors are legitimate. */
     if(card.blocks<manifest.card_sectors)
         stopped("SD CARD TOO SMALL FOR IMAGE MAP",(uint32_t)card.blocks);
+#ifdef KUI_RETAIL_SD_BENCH
+    kui_retail_sd_benchmark(&card,&manifest,&display);
+#endif
     result=kui_retail_image_init(&image,&manifest,physical_read,&card);
     if(result!=KUI_GAME_OK) stopped("IMAGE READER INIT FAILED",(uint32_t)result);
     retail_display_line("LOADING OWNER IP AND EXECUTABLE");

@@ -59,11 +59,11 @@ jobs:
           if requested:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
               exact = {'Makefile', 'Makefile.dc', '.github/workflows/diagnostic.yml',
-                       'tests/test_loader_sd.c', 'tests/test_retail_sd.c', 'tests/test_retail_minic.c',
+                       'tests/test_loader_sd.c', 'tests/test_retail_sd.c', 'tests/test_retail_sd_bench.c', 'tests/test_retail_minic.c',
                        'src/core/retail_image.c', 'include/kui/retail_image.h', 'tests/test_retail_image.c',
                        'tools/check_retail_instructions.py', 'tests/test_retail_instructions.py',
                        'include/kui/retail_loader_layout.h', 'src/apps/games_retail.c',
-                       'tools/retail_package.py', 'tests/test_retail_package.py',
+                       'tools/retail_package.py', 'tools/package.py', 'tests/test_retail_package.py',
                        'src/core/retail_gd.c', 'include/kui/retail_gd.h', 'tests/test_retail_gd.c'}
               if not paths or any(p not in exact and not p.startswith(('src/loader/', 'docs/')) for p in paths):
                   raise SystemExit('Console-only request includes changes outside the focused retail correction scope')
@@ -149,6 +149,11 @@ jobs:
             build/retail/*.map
             build/retail/*.dis
             build/retail/**/*.su
+            build/retail-bench/*.elf
+            build/retail-bench/*.map
+            build/retail-bench/*.dis
+            build/retail-bench/*.su
+            build/retail-bench/**/*.su
           if-no-files-found: ignore
           retention-days: 7
       - name: Package reusable CDI, SD runtime, loader tests and source records
@@ -168,5 +173,12 @@ jobs:
         with:
           name: sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
           path: dist/sd-update/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload separate read-only SD benchmark
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sd-benchmark${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
+          path: dist/sd-benchmark/
           if-no-files-found: error
           retention-days: 30

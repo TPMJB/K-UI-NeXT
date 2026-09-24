@@ -107,6 +107,15 @@ build/test-loader-sd-fast: tests/test_loader_sd.c src/loader/sd_reader.c src/loa
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_RETAIL_FAST_IO=1 -Isrc/loader src/loader/sd_reader.c tests/test_loader_sd.c -o $@
 
+.PHONY: test-retail-sd-bench
+test-retail-sd-bench: build/test-loader-sd-fast build/test-retail-sd-bench
+	./build/test-loader-sd-fast
+	./build/test-retail-sd-bench
+
+build/test-retail-sd-bench: tests/test_retail_sd_bench.c src/loader/retail_sd_bench.c src/loader/retail_sd_bench.h src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/loader/retail_sd_bench.c src/core/retail_image.c tests/test_retail_sd_bench.c -o $@
+
 build/retail-minic-test.o: src/loader/minic.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-builtin -DKUI_RETAIL_FAST_IO=1 \

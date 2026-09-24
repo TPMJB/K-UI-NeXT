@@ -9,7 +9,9 @@ enum fault {
     FAULT_POWER, FAULT_CMD55, FAULT_CMD41, FAULT_INIT_TIMEOUT, FAULT_CMD16,
     FAULT_CMD59, FAULT_CSD_COMMAND, FAULT_CSD_TOKEN, FAULT_CSD_CRC,
     FAULT_CSD_VERSION, FAULT_CSD_SIZE, FAULT_READ_COMMAND, FAULT_READ_TOKEN,
-    FAULT_READ_TIMEOUT, FAULT_READ_CRC, FAULT_BUSY, FAULT_STOPPED_TIMER
+    FAULT_READ_TIMEOUT, FAULT_READ_CRC, FAULT_BUSY, FAULT_STOPPED_TIMER,
+    FAULT_MULTI_NO_RESPONSE, FAULT_STOP_RESPONSE, FAULT_STOP_COMMAND,
+    FAULT_STOP_BUSY
 };
 
 struct mock {
@@ -19,6 +21,10 @@ struct mock {
     uint8_t frame[6], queue[520];
     uint32_t now, last_read_address;
     const uint8_t *payload;
+    bool streaming, stopping, stop_busy, frozen_timer;
+    unsigned multi_commands, stream_blocks, stops, active_deselects, undrained_stops;
+    unsigned stop_fault, read_fault_block, tick_step, token_delay, token_delay_reload;
+    uint32_t next_address;
 };
 
 static unsigned checks;
@@ -69,6 +75,28 @@ static void block(struct mock *m, const uint8_t *data, unsigned count, bool corr
         crc ^= 1u;
     push(m, (uint8_t)(crc >> 8));
     push(m, (uint8_t)crc);
+}
+
+static void stream_block(struct mock *m) {
+    m->head = m->tail = 0;
+    bool fault_here = m->stream_blocks == m->read_fault_block;
+    if(fault_here && (m->fault == FAULT_READ_TIMEOUT || m->fault == FAULT_STOPPED_TIMER))
+        return;
+    if(m->token_delay) {
+        --m->token_delay;
+        return;
+    }
+    ++m->stream_blocks;
+    if(fault_here && m->fault == FAULT_READ_TOKEN) {
+        push(m, 0x08);
+        return;
+    }
+    uint8_t data[512];
+    for(unsigned i = 0; i < sizeof(data); ++i)
+        data[i] = m->payload ? m->payload[i] : pattern(m->next_address, i);
+    block(m, data, sizeof(data), fault_here && m->fault == FAULT_READ_CRC);
+    m->next_address += m->high_capacity ? 1u : 512u;
+    m->token_delay = m->token_delay_reload;
 }
 
 static void decode(struct mock *m) {
@@ -168,6 +196,29 @@ static void decode(struct mock *m) {
             block(m, data, sizeof(data), m->fault == FAULT_READ_CRC);
             break;
         }
+        case 18:
+            CHECK(m->initialized && m->crc_enabled && !m->streaming);
+            ++m->multi_commands;
+            m->stream_blocks = 0;
+            m->next_address = m->last_read_address = argument;
+            m->streaming = true;
+            m->stopping = m->stop_busy = false;
+            if(m->fault != FAULT_MULTI_NO_RESPONSE)
+                push(m, m->fault == FAULT_READ_COMMAND ? 4 : 0);
+            break;
+        case 12:
+            CHECK(argument == 0 && m->streaming);
+            ++m->stops;
+            m->stopping = true;
+            push(m, 0x04); /* Arbitrary stuff byte is not an R1 response. */
+            if(m->stop_fault == FAULT_STOP_RESPONSE)
+                break;
+            push(m, m->stop_fault == FAULT_STOP_COMMAND ? 4 : 0);
+            push(m, 0); push(m, 0); /* R1b busy must be drained. */
+            m->stop_busy = m->stop_fault == FAULT_STOP_BUSY;
+            if(!m->stop_busy) push(m, 0xff);
+            if(m->stop_fault != FAULT_STOP_COMMAND) m->streaming = false;
+            break;
         default:
             CHECK(!"unexpected or destructive command");
     }
@@ -185,21 +236,28 @@ static void select_card(void *ctx, bool selected) {
     struct mock *m = ctx;
     m->selected = selected;
     if(!selected) {
+        if(m->streaming) ++m->active_deselects;
+        if(m->stopping && m->head < m->tail) ++m->undrained_stops;
         m->head = m->tail = m->frame_length = 0;
     }
 }
 static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
     struct mock *m = ctx;
-    if(m->fault != FAULT_STOPPED_TIMER)
-        m->now += slow ? 400u : 20u;
+    if(m->fault != FAULT_STOPPED_TIMER && !m->frozen_timer)
+        m->now += m->tick_step ? m->tick_step : (slow ? 400u : 20u);
     if(slow) ++m->slow_bytes;
     else ++m->fast_bytes;
     if(!m->selected)
         return 0xff;
-    if(m->head < m->tail)
-        return m->queue[m->head++];
     if(m->fault == FAULT_BUSY)
         return 0;
+    /* A CMD12 packet can arrive while MISO is still streaming. Parse MOSI
+     * independently, and do not manufacture the next block during a command. */
+    if(m->head == m->tail && m->streaming && !m->stopping &&
+       m->fault != FAULT_MULTI_NO_RESPONSE && !m->frame_length && data == 0xff)
+        stream_block(m);
+    uint8_t received = m->head < m->tail ? m->queue[m->head++] :
+                       (m->stop_busy ? 0 : 0xff);
     if(m->frame_length || ((data & 0xc0) == 0x40)) {
         m->frame[m->frame_length++] = data;
         if(m->frame_length == 6) {
@@ -207,7 +265,7 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
             decode(m);
         }
     }
-    return 0xff;
+    return received;
 }
 static uint32_t ticks(void *ctx) {
     return ((struct mock *)ctx)->now;
@@ -298,6 +356,127 @@ static void data_crc_vectors(void) {
     kui_loader_sd_shutdown(&card);
 }
 
+static void multi_normal(bool version2, bool high_capacity) {
+    struct mock m = {.version2 = version2, .high_capacity = high_capacity,
+                     .now = UINT32_MAX - 1000u};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+    uint8_t single[8 * 512], multiple[8 * 512];
+    const unsigned counts[] = {2, 8};
+    for(unsigned i = 0; i < 2; ++i) {
+        unsigned count = counts[i], commands = m.packets, stops = m.stops;
+        CHECK(kui_loader_sd_read(&card, 37, count, single) == KUI_LOADER_SD_OK);
+        CHECK(m.packets == commands + count);
+        CHECK(kui_loader_sd_read_multi(&card, 37, count, multiple) == KUI_LOADER_SD_OK);
+        CHECK(m.packets == commands + count + 2 && m.stops == stops + 1);
+        CHECK(m.stream_blocks == count && m.multi_commands == i + 1);
+        CHECK(m.last_read_address == (high_capacity ? 37u : 37u * 512u));
+        CHECK(!memcmp(single, multiple, count * 512u));
+        CHECK(card.ready && !m.selected && !m.streaming && !m.stop_busy);
+        CHECK(!m.active_deselects && !m.undrained_stops);
+    }
+    unsigned packets = m.packets;
+    CHECK(kui_loader_sd_read_multi(&card, (uint32_t)card.blocks - 1u, 2, multiple) == KUI_LOADER_SD_RANGE);
+    CHECK(kui_loader_sd_read_multi(&card, UINT32_MAX, 2, multiple) == KUI_LOADER_SD_RANGE);
+    CHECK(kui_loader_sd_read_multi(&card, 0, 0, multiple) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_read_multi(&card, 0, 129, multiple) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_read_multi(&card, 0, 1, NULL) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(kui_loader_sd_read_multi(NULL, 0, 1, multiple) == KUI_LOADER_SD_ARGUMENT);
+    CHECK(m.packets == packets);
+    CHECK(kui_loader_sd_read_multi(&card, (uint32_t)card.blocks - 1u, 1, multiple) == KUI_LOADER_SD_OK);
+    kui_loader_sd_shutdown(&card);
+    CHECK(kui_loader_sd_read_multi(&card, 0, 1, multiple) == KUI_LOADER_SD_NOT_READY);
+    CHECK(!m.selected && m.end == 1);
+}
+
+static void multi_failure(unsigned fault, unsigned stop_fault,
+                           enum kui_loader_sd_result expected, bool ready) {
+    struct mock m = {.version2 = true, .high_capacity = true};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+    m.fault = fault;
+    m.stop_fault = stop_fault;
+    m.read_fault_block = 1; /* Exercise cleanup after a complete first block. */
+    uint8_t data[3 * 512];
+    memset(data, 0xa5, sizeof(data));
+    CHECK(kui_loader_sd_read_multi(&card, 10, 3, data) == expected);
+    CHECK(card.ready == ready && !m.selected);
+    CHECK(m.stops == (fault == FAULT_BUSY ? 0u : 1u));
+    CHECK(!m.undrained_stops);
+    if(fault != FAULT_NONE) {
+        CHECK(card.last_command == 18); /* Cleanup must not hide read failure. */
+        for(unsigned i = 2 * 512; i < sizeof(data); ++i)
+            CHECK(data[i] == 0xa5);
+    } else {
+        CHECK(card.last_command == 12);
+    }
+    if(fault == FAULT_READ_CRC || fault == FAULT_READ_TOKEN ||
+       fault == FAULT_READ_TIMEOUT || fault == FAULT_STOPPED_TIMER) {
+        for(unsigned i = 0; i < 512; ++i) CHECK(data[i] == pattern(10, i));
+    }
+    if(ready) {
+        CHECK(!m.streaming && !m.active_deselects && !m.stop_busy);
+        m.fault = FAULT_NONE;
+        CHECK(kui_loader_sd_read_multi(&card, 20, 2, data) == KUI_LOADER_SD_OK);
+        CHECK(kui_loader_sd_read(&card, 20, 2, data) == KUI_LOADER_SD_OK);
+        kui_loader_sd_shutdown(&card);
+    } else {
+        unsigned packets = m.packets;
+        CHECK(kui_loader_sd_read_multi(&card, 0, 1, data) == KUI_LOADER_SD_NOT_READY);
+        CHECK(kui_loader_sd_read(&card, 0, 1, data) == KUI_LOADER_SD_NOT_READY);
+        CHECK(m.packets == packets);
+    }
+}
+
+static void multi_limits(void) {
+    struct mock m = {.version2 = true, .high_capacity = true};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+    static uint8_t data[128 * 512];
+    CHECK(kui_loader_sd_read_multi(&card, 8192 - 128, 128, data) == KUI_LOADER_SD_OK);
+    CHECK(m.stream_blocks == 128 && card.ready);
+    for(unsigned i = 0; i < sizeof(data); ++i)
+        CHECK(data[i] == pattern(8192 - 128 + i / 512, i % 512));
+    card.blocks = UINT64_C(1) << 32;
+    CHECK(kui_loader_sd_read_multi(&card, UINT32_MAX, 1, data) == KUI_LOADER_SD_OK);
+    CHECK(m.last_read_address == UINT32_MAX);
+    card.high_capacity = m.high_capacity = false;
+    CHECK(kui_loader_sd_read_multi(&card, (1u << 23) - 1, 1, data) == KUI_LOADER_SD_OK);
+    CHECK(m.last_read_address == 0xfffffe00u);
+    unsigned packets = m.packets;
+    CHECK(kui_loader_sd_read_multi(&card, (1u << 23) - 1, 2, data) == KUI_LOADER_SD_RANGE);
+    CHECK(m.packets == packets);
+    kui_loader_sd_shutdown(&card);
+}
+
+static void multi_total_budget(bool frozen) {
+    struct mock m = {.version2 = true, .high_capacity = true};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+    if(frozen) {
+        m.frozen_timer = true;
+        m.token_delay = m.token_delay_reload = 500000;
+    } else {
+        m.tick_step = 5000; /* Individual blocks fit; the whole read does not. */
+    }
+    uint8_t data[16 * 512];
+    unsigned bytes = m.fast_bytes;
+    CHECK(kui_loader_sd_read_multi(&card, 10, 16, data) == KUI_LOADER_SD_TIMEOUT);
+    CHECK(card.ready && !m.selected && !m.streaming && m.stops == 1);
+    CHECK(!m.active_deselects && !m.undrained_stops && card.last_command == 18);
+    if(frozen) {
+        CHECK(m.stream_blocks == 1);
+        CHECK(m.fast_bytes - bytes >= 1000000 && m.fast_bytes - bytes < 1000040);
+    } else {
+        CHECK(m.stream_blocks > 1 && m.stream_blocks < 16);
+    }
+    kui_loader_sd_shutdown(&card);
+}
+
 int main(void) {
     static const uint8_t text[] = "123456789";
     CHECK(reference_crc16(text, 9) == 0x31c3);
@@ -305,6 +484,23 @@ int main(void) {
     normal(true, false);
     normal(false, false);
     data_crc_vectors();
+    multi_normal(true, true);
+    multi_normal(true, false);
+    multi_normal(false, false);
+    multi_limits();
+    multi_total_budget(false);
+    multi_total_budget(true);
+    multi_failure(FAULT_READ_COMMAND, FAULT_NONE, KUI_LOADER_SD_COMMAND, true);
+    multi_failure(FAULT_MULTI_NO_RESPONSE, FAULT_NONE, KUI_LOADER_SD_TIMEOUT, true);
+    multi_failure(FAULT_READ_TOKEN, FAULT_NONE, KUI_LOADER_SD_TOKEN, true);
+    multi_failure(FAULT_READ_CRC, FAULT_NONE, KUI_LOADER_SD_CRC, true);
+    multi_failure(FAULT_READ_TIMEOUT, FAULT_NONE, KUI_LOADER_SD_TIMEOUT, true);
+    multi_failure(FAULT_STOPPED_TIMER, FAULT_NONE, KUI_LOADER_SD_TIMEOUT, true);
+    multi_failure(FAULT_BUSY, FAULT_NONE, KUI_LOADER_SD_TIMEOUT, false);
+    multi_failure(FAULT_NONE, FAULT_STOP_RESPONSE, KUI_LOADER_SD_TIMEOUT, false);
+    multi_failure(FAULT_NONE, FAULT_STOP_COMMAND, KUI_LOADER_SD_COMMAND, false);
+    multi_failure(FAULT_NONE, FAULT_STOP_BUSY, KUI_LOADER_SD_TIMEOUT, false);
+    multi_failure(FAULT_READ_CRC, FAULT_STOP_COMMAND, KUI_LOADER_SD_CRC, false);
     init_failure(FAULT_NO_RESPONSE, KUI_LOADER_SD_TIMEOUT, true);
     init_failure(FAULT_RESET, KUI_LOADER_SD_COMMAND, true);
     init_failure(FAULT_ECHO, KUI_LOADER_SD_UNSUPPORTED, true);

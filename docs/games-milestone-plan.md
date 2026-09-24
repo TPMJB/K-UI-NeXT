@@ -189,6 +189,24 @@ has one active volume; do not add concurrent mounts by reusing its globals.
 
 ## Sources and checkpoints
 
+### After the playable DOA2 checkpoint
+
+The owner now reports that K-UI is better than DreamShell in some DOA2 areas
+and worse in others; their latest DreamShell attempt had garbled audio and
+hung for more than two minutes on a still frame when starting a fight. This
+is owner experience, not a controlled benchmark or a general parity claim.
+Keep `baseline/doa2-sd-6c02bd8b22f4` unchanged for comparison.
+
+Run the separate [CMD17/CMD18 diagnostic](games-sd-benchmark.md) once, then
+decide from throughput and longest-call results whether integration pays off.
+Optional 2048-byte launch copies follow only if worthwhile; compression,
+asynchronous DMA and serial-register microbenchmarks are not this milestone.
+Prioritize broader native GD-ROM eligibility and one additional owned title
+after the storage comparison. The present DOA2-only shell/preparation/stage
+gates and DOA2-proven startup memory layout must be addressed together; merely
+removing the title check would not establish compatibility. ARMADA's inspected
+`0WINCEOS.BIN` profile is WinCE and is outside this native milestone.
+
 Repo audit: `src/core/recovery_manifest.c`, `src/core/data.c`,
 `src/core/destination_file.c`, `src/core/diskio.c`,
 `src/dreamcast/bootstrap.c`, `src/apps/gd_play.c`,

@@ -1,5 +1,9 @@
 # DOA2 launch — SD latency comparison
 
+**Next test:** the separate [CMD17/CMD18 comparison package](games-sd-benchmark.md).
+Use that guide for the current diagnostic; the gameplay timings below describe
+the preserved working build.
+
 **Pinned working build: `6c02bd8b22f4`.** The owner reports fluid audio and
 playable results, with delayed textures, stage loads and brief early-battle lag
 still present. Exact rollback branch, archive checksum and timing intervals are
