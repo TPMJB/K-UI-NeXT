@@ -138,7 +138,7 @@ build/loader/image_entry.elf: build/loader/src/loader/image_entry.o src/loader/i
 # or runtime is linked into these images. The accepted probes keep their flags.
 RETAIL_CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
 RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(RETAIL_CPU) -ffreestanding \
-    -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections \
+    -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections -fno-jump-tables \
     -fstack-usage -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
 RETAIL_LINK := $(RETAIL_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
 RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/retail_sd.o \
