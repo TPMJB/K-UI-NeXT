@@ -56,7 +56,10 @@ These new app paths still need physical-console acceptance.
   into a free filename with readback. Managed copy/delete require confirmation and
   a verified restorable SD backup. No overwrite or format. Memory Test checks only its allocated RAM.
 - Ripper Advanced CRC scans completed saved jobs and reports hash/Mode 1 sector
-  errors separately. GDI-only folders get explicitly unverified structural scans.
+  errors separately. Already-read track sizes and CRCs are compared with the
+  Redump/TOSEC catalogues, including GDI-only folders without a manifest. Only a
+  full reference match establishes all-track agreement; unavailable/partial
+  references retain the limited structural result.
   Separate Salvage jobs add durable bad-sector queues, optional zero filling and
   bounded repair passes; unresolved holes never receive a complete-dump claim.
 - Network Test includes a temporary DHCP/address-conflict/gateway-ping test; it

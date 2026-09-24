@@ -13,6 +13,7 @@ struct scan {
     struct kui_scan_manifest manifest;
     struct kui_scan_gdi gdi;
     struct kui_checkpoint checkpoint;
+    struct kui_known_track known[99];
     uint8_t record[KUI_CHECKPOINT_BYTES];
     uint8_t data[SCAN_CHUNK_SECTORS*KUI_RAW_BYTES];
     char text[KUI_SCAN_MANIFEST_LIMIT+1u];
@@ -155,7 +156,7 @@ static bool load_imported(struct scan *s) {
         track->end=track->toc_end=track->start+(uint32_t)sectors;
         s->manifest.plan.bytes+=info.fsize;
     }
-    s->ops->log("Advanced CRC: no manifest; STRUCTURAL ONLY, no expected hashes; audio is unverified");
+    s->ops->log("Advanced CRC: no manifest; checking structure, then catalogue CRCs including audio");
     return true;
 }
 static bool load_metadata(struct scan *s) {
@@ -216,12 +217,12 @@ static bool new_report(struct scan *s) {
         bool written=line(s,"Original tracks, checkpoints, manifest and GDI are read-only.\n"
             "Data: %s plus Mode 1 sync/address/EDC/reserved/P/Q.\n"
             "Audio: %s; no parity or optical reread.\n"
-            "No independent catalogue comparison or sector repair is performed.\n"
+            "Independent catalogue comparison follows the scan using the same CRCs; no sector repair.\n"
             "Flags: 0x01 sync, 0x02 address, 0x04 EDC, 0x08 P/Q, 0x10 unsupported mode, 0x20 input, 0x40 reserved.\n"
             "At most %u suspect-sector lines; totals still include every sector.\n"
             "Only .txt plus COMPLETE is finished; .part is always incomplete.\n",
-            s->status->reference_hashes?(s->manifest.crc_only?"saved CRC32":"saved CRC32/SHA-256"):"CRC32 recorded, NO expected hash",
-            s->status->reference_hashes?"saved hash only":"UNVERIFIED; CRC recorded only",SCAN_REPORT_BAD_LIMIT);
+            s->status->reference_hashes?(s->manifest.crc_only?"saved CRC32":"saved CRC32/SHA-256"):"CRC32 recorded, NO manifest hash",
+            s->status->reference_hashes?"saved hash only":"NO manifest hash; catalogue comparison pending",SCAN_REPORT_BAD_LIMIT);
         if(!written) return false;
         if(!line(s,"Metadata: %s; checkpoint: %s.\n",
             s->status->reference_hashes?"completed K-UI manifest":"STRUCTURAL ONLY, GDI file lengths",
@@ -277,14 +278,17 @@ static bool scan_track(struct scan *s,unsigned index) {
     }
     if(f_close(&file)!=FR_OK) {fail(s,"Track close failed; scan is incomplete");ok=false;}
     if(!ok) return false;
+    s->known[index]=(struct kui_known_track){index+1,t->control==4,wanted,crc};
+    if(!line(s,"TRACK %02u bytes=%" PRIu64 " start_fad=%" PRIu32 " end_fad=%" PRIu32 " type=%s\n",
+        index+1,wanted,t->start,t->end,t->control==4?"data":"audio")) return false;
     if(s->status->reference_hashes) {
         bool crc_match=crc==s->manifest.track[index].crc32;
         if(!crc_match) ++s->status->crc_mismatches;
         if(!line(s,"TRACK %02u CRC32 actual=%08" PRIx32 " expected=%08" PRIx32 " %s\n",index+1,crc,s->manifest.track[index].crc32,crc_match?"MATCH":"MISMATCH")) return false;
         s->ops->log("Advanced CRC T%02u CRC32=%08" PRIx32 " %s",index+1,crc,crc_match?"MATCH":"MISMATCH");
     } else {
-        if(!line(s,"TRACK %02u CRC32 actual=%08" PRIx32 " NO EXPECTED HASH; file=%s\n",index+1,crc,name)) return false;
-        s->ops->log("Advanced CRC T%02u CRC32=%08" PRIx32 " recorded only; no expected hash",index+1,crc);
+        if(!line(s,"TRACK %02u CRC32 actual=%08" PRIx32 " NO MANIFEST HASH; file=%s\n",index+1,crc,name)) return false;
+        s->ops->log("Advanced CRC T%02u CRC32=%08" PRIx32 " recorded; no manifest hash",index+1,crc);
     }
     if(!s->manifest.crc_only) {
         uint8_t digest[32];char text[65];kui_sha256_digest(&sha,digest);kui_hex(digest,32,text);
@@ -294,6 +298,21 @@ static bool scan_track(struct scan *s,unsigned index) {
     }
     if(f_sync(&s->report)!=FR_OK) return fail(s,"Report sync failed; scan result is incomplete");
     return true;
+}
+static bool check_catalogue(struct scan *s) {
+    if(cancelled(s)) return false;
+    snprintf(s->status->message,sizeof(s->status->message),"Comparing recorded CRCs with Redump / TOSEC");
+    update(s,true);
+    kui_known_check("0:/KUI/redump.db","0:/KUI/tosec.db",s->known,s->manifest.plan.count,
+        &s->status->catalogue,s->ops->cancelled,s->ops->ctx);
+    if(s->status->catalogue.result==KUI_KNOWN_CANCELLED || cancelled(s)) return false;
+    s->status->catalogue_checked=true;
+    const struct kui_known_summary *known=&s->status->catalogue;
+    s->ops->log("Advanced CRC catalogue: %s: %s",known->catalog,kui_known_text(known->result));
+    if(known->name[0]) s->ops->log("Advanced CRC reference: %s",known->name);
+    return line(s,"CATALOGUE %s: %s; name=%s\n"
+        "Reference comparison uses every recorded track number, length and CRC32; no second track read.\n",
+        known->catalog,kui_known_text(known->result),known->name[0]?known->name:"none");
 }
 enum kui_scan_result kui_recovery_scan(const char *directory,const struct kui_scan_ops *ops,struct kui_scan_status *out) {
     if(!out) return KUI_SCAN_FAILED;
@@ -317,14 +336,14 @@ enum kui_scan_result kui_recovery_scan(const char *directory,const struct kui_sc
     if(!load_metadata(s) || cancelled(s) || !new_report(s)) goto done;
     ops->log("Advanced CRC: saved files in %s; no optical rereads or repairs",normalized);
     for(unsigned i=0;i<s->manifest.plan.count;++i) if(!scan_track(s,i)) goto done;
-    if(cancelled(s)) goto done;
+    if(!check_catalogue(s)) goto done;
     out->result=(out->bad_sectors || out->unsupported_sectors || out->crc_mismatches || out->sha_mismatches)?KUI_SCAN_ISSUES:
-        out->reference_hashes?KUI_SCAN_CLEAN:KUI_SCAN_STRUCTURAL;
+        (out->reference_hashes || out->catalogue.result==KUI_KNOWN_FULL_MATCH)?KUI_SCAN_CLEAN:KUI_SCAN_STRUCTURAL;
     if(!line(s,"SUMMARY data=%" PRIu32 " audio=%" PRIu32 " bad=%" PRIu32 " unsupported=%" PRIu32
         " crc_mismatches=%" PRIu32 " sha_mismatches=%" PRIu32 " bytes=%" PRIu64 "\n"
         "COMPLETE %s\n",out->data_sectors,out->audio_sectors,out->bad_sectors,out->unsupported_sectors,
         out->crc_mismatches,out->sha_mismatches,out->done,out->result==KUI_SCAN_CLEAN?"CLEAN":
-        out->result==KUI_SCAN_STRUCTURAL?"STRUCTURAL ONLY; NO EXPECTED HASHES; AUDIO UNVERIFIED":"ISSUES")) goto done;
+        out->result==KUI_SCAN_STRUCTURAL?"STRUCTURAL ONLY; NO FULL REFERENCE MATCH; AUDIO UNVERIFIED":"ISSUES")) goto done;
     if(f_sync(&s->report)!=FR_OK) {fail(s,"Report sync failed; scan result is incomplete");goto done;}
     finished=true;
 done:
@@ -348,10 +367,15 @@ done:
     if(mounted && f_mount(NULL,"0:",0)!=FR_OK) {fail(s,"Card unmount failed; scan result is incomplete");finished=false;out->result=KUI_SCAN_FAILED;}
     if(s->failed) {finished=false;out->result=KUI_SCAN_FAILED;}
     out->complete=finished;
-    if(finished) snprintf(out->message,sizeof(out->message),"%s",out->result==KUI_SCAN_CLEAN?
-        "Saved hashes and Mode 1 checks passed; audio hash only":out->result==KUI_SCAN_STRUCTURAL?
-        (out->data_sectors?"Mode 1 structure passed; no expected hashes; audio unverified":
-        "CRC values recorded only; no expected hashes; audio unverified"):"Scan finished with issues; see the sector report");
+    if(finished) {
+        if(out->result==KUI_SCAN_CLEAN && out->catalogue.result==KUI_KNOWN_FULL_MATCH)
+            snprintf(out->message,sizeof(out->message),"%s full track match, including audio%s",out->catalogue.catalog,
+                out->data_sectors?"; Mode 1 checks passed":"");
+        else snprintf(out->message,sizeof(out->message),"%s",out->result==KUI_SCAN_CLEAN?
+            "Saved hashes and Mode 1 checks passed; audio hash only":out->result==KUI_SCAN_STRUCTURAL?
+            (out->data_sectors?"Mode 1 structure passed; no full catalogue match; audio unverified":
+            "CRCs recorded; no full catalogue match; audio unverified"):"Scan finished with issues; see the sector report");
+    }
     update(s,true);
     ops->log("Advanced CRC: %s",out->message);
     if(out->report[0]) ops->log("Advanced CRC report: %s",out->report+2);

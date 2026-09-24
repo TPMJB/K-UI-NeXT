@@ -1,6 +1,55 @@
 # Hardware evidence
 
-## Current app evidence: Dead or Alive 2, cache and Advanced CRC — 2026-09-23
+## Current app acceptance: scans, music cache and VMU — 2026-09-24
+
+Runtime **cc2320bb6d3a** has now passed all three tiny Advanced CRC fixture
+expectations: clean hashes/Mode 1 checks pass; the damaged fixture reports two
+suspect data sectors and three CRC mismatches; the GDI-only fixture explicitly
+reports structural checks only. The existing **ARMADA** folder also scanned to
+completion. Its five saved-track CRC32s were recorded, and Mode 1 structure
+passed, but no K-UI manifest was present, so this runtime had no expected hashes
+to compare. The amber result is not a failed scan or a full reference match.
+The separately supplied completed report records **1,187,764,704 bytes**, with
+**220,386 data sectors**, **284,616 audio sectors**, and zero bad/unsupported
+sectors. A subsequent read-only comparison found **all five recorded CRC32s,
+including both audio tracks, match TOSEC's Armada v1.000 US entry**. Total bytes
+and data/audio sector totals match too. That comparison was performed from the
+console report, not by independently reading the uploaded track files, and was
+not part of the runtime's amber result. The report omits individual track sizes
+and elapsed time. It does not require another whole-game PC read to compare the
+already-recorded CRCs.
+
+**Clear cache released all nine music file allocations**: nine allocations,
+nine frees, zero cached/loading bytes and mask zero. Eight subsequent memory
+snapshots retained **189,876 bytes of heap in use** and the same main-RAM
+used/reserved estimate of **4,447,688 bytes**. Retained free allocator pages are
+not live song allocations. This confirms cache clearing in this session; the
+report does not identify selected filenames or prove every playback path
+leak-free or glitch-free.
+
+**VMU backup → delete → restore passed by owner report using THPS2**: the game
+acted as if no save existed after deletion and loaded it again after restore.
+The log contains no detailed VMU operation audit, so this is game-tested owner
+acceptance of one save, not independently checked metadata or two-VMU Copy.
+
+The owner heard the second audio CD play. The log records a 13-track audio-only
+TOC and Play success on tracks 1–3, but tracks 1 and 2 are followed by
+`Drive not ready` reports; CD status/control acceptance remains incomplete.
+The earlier refused disc has 16 audio tracks plus a data track, consistent with
+this build's mixed-disc refusal. The log does not identify its album or prove a
+physical fault.
+
+**Network testing is deferred until suitable hardware is available. Salvage
+(item 8) is deferred by the owner to a future version.** Neither is marked
+passed. Settings/tools were not established by this submission. The
+[sanitized evidence](evidence/m15-app-round-five-2026-09-24.json) records the
+upload's fingerprint, exact source-line ranges and these limits. The upload
+contains 570 physical lines and says `Log truncated: no`; the requested larger
+log buffer is a usability improvement, not a repair for truncation in this file.
+Use the remaining checks in [the app guide](apps-round-five.md); no accepted
+reader test needs repeating.
+
+## Earlier app evidence: Dead or Alive 2, cache and Advanced CRC — 2026-09-23
 
 Runtime **6f1be4cf53c3** completed Dead or Alive 2 after one failed capture and
 a stopped Quick Resume. The final Quick Resume ended with **TOSEC FULL TRACK

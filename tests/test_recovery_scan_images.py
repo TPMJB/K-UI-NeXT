@@ -26,7 +26,12 @@ def main():
                  "sync-fail", "final-sync-fail", "close-fail", "rename-fail",
                  "named", "named-sha", "long-folder", "no-checkpoints", "missing-gdi", "parent",
                  "no-metadata", "multiple-gdi", "imported", "imported-quotes",
-                 "imported-damaged", "imported-overlap")
+                 "imported-damaged", "imported-overlap", "catalogue-full",
+                 "imported-catalogue-full", "imported-catalogue-audio-mismatch",
+                 "imported-catalogue-size-mismatch", "imported-catalogue-partial",
+                 "imported-catalogue-unrelated", "imported-catalogue-invalid",
+                 "imported-catalogue-cancel", "imported-catalogue-bad-sector",
+                 "catalogue-manifest-mismatch")
         for kind in ("fat32", "exfat"):
             seed = base / f"{kind}-seed.img"
             with seed.open("wb") as stream:

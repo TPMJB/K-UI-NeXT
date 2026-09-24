@@ -6,11 +6,17 @@ With a supported manifest it checks every saved track against its recorded CRC32
 SHA-enabled jobs. Each data sector receives Mode 1 sync, expected FAD, EDC,
 reserved-byte and P/Q parity checks. Audio has no Mode 1 parity; its saved hash
 is checked instead. Unsupported sector modes remain an issue, not a pass.
+After that same read, the scanner compares every track's measured length and
+CRC32 with `/KUI/redump.db` and `/KUI/tosec.db`. This reads only the small
+catalogues; it does not read the track files again. A full independent catalogue
+match includes the audio tracks and can verify a legacy GDI folder without a
+K-UI manifest.
 
 It does not reread the disc, repair sectors, create zero placeholders, alter
-normal capture retries, or modify the accepted reader. It does not perform a
-catalogue lookup. A clean saved-file scan and an independent TOSEC/Redump match
-are different evidence. P/Q validation is not general ECC reconstruction.
+normal capture retries, or modify the accepted reader. Saved-manifest comparison
+and independent TOSEC/Redump comparison are reported separately. Neither can hide
+a detected data-sector problem or saved-hash mismatch. P/Q validation is not
+general ECC reconstruction.
 
 ## Use
 
@@ -29,7 +35,14 @@ Two clearly separated modes are supported:
 | Files in the selected folder | What the result establishes |
 | --- | --- |
 | Completed K-UI schema 1/2 manifest + matching GDI + tracks | Saved CRC32 (and older SHA-256) comparison plus data-sector checks. Present checkpoints must validate and agree. If both checkpoints were removed, the report explicitly says manifest-only. |
-| Exactly one GDI + raw 2352-byte tracks, no manifest | Structural scan; records CRC32 but has no expected hashes. Data sectors receive Mode 1 checks. Audio remains unverified. A clean structure result is **STRUCTURAL ONLY**, never a verified hash match. |
+| Exactly one GDI + raw 2352-byte tracks, no manifest | Mode 1 checks plus a catalogue lookup using measured lengths and CRC32. A clean scan with **FULL TRACK MATCH** is clean, including audio CRC verification. Any partial, data-only, missing or unavailable catalogue result remains **STRUCTURAL ONLY**; audio is not fully verified. |
+
+The independent reference result includes its catalogue and title. Missing
+databases, catalogue errors and no matching entry are distinct results; none
+means the disc is automatically bad. A track-boundary convention or a revision
+absent from the database can prevent a match. Existing completed manifests can
+still pass their saved-hash checks without a catalogue, as before. Cancellation
+during catalogue comparison leaves an incomplete report, never a clean result.
 
 The manifest parser refuses
 unknown/duplicate fields, inconsistent track geometry, invalid byte counts,
@@ -60,7 +73,8 @@ its final rename has succeeded. A `.part` file is always incomplete, even if
 it contains a COMPLETE line from an interrupted finalization. A `.txt` file
 also needs the final COMPLETE line to represent a finished result.
 
-A report lists per-track saved hashes, suspect data-sector FADs and flags,
+A report lists per-track saved hashes, measured sizes, FAD bounds and track types,
+the independent catalogue result, suspect data-sector FADs and flags,
 unsupported sectors, audio/data counts and final mismatch counts. At most
 4,096 individual suspect lines are written; summary counts still include all
 sectors. The bounded report is diagnostic evidence, **not a durable complete
@@ -82,20 +96,29 @@ All three folders are small; no full-disc scan or new burn is needed to test the
 | --- | --- |
 | `clean` | CLEAN; 10 data + 4 audio sectors; no suspect sectors or hash mismatches. |
 | `damaged` | ISSUES; 2 suspect data sectors, 0 unsupported sectors, 3 CRC mismatches. |
-| `gdi-only` | STRUCTURAL ONLY; 10 data + 4 audio sectors, no suspect data sectors. CRC values are recorded without comparison; audio remains unverified. |
+| `gdi-only` | STRUCTURAL ONLY; 10 data + 4 audio sectors, no suspect data sectors. The synthetic tracks have no catalogue entry, so audio remains unverified. |
+
+The catalogue integration has FAT32/exFAT host coverage for a full match including
+audio, audio/length mismatches, partial and absent entries, malformed catalogues,
+cancellation, and references which match tracks with structural or saved-manifest
+problems. A file-read counter proves catalogue lookup adds no second track read.
+Hardware acceptance of the new lookup remains pending.
 
 The damaged fixture changes P/Q at FAD 150, data payload at FAD 45152, and one
 byte of the audio track. Audio damage appears as a track CRC mismatch; there
 is no false audio-sector parity claim. The reports should name those two data
 FADs. Run the clean fixture twice to confirm it produces two separate reports.
 Stop during a longer scan when convenient; it must leave `.part` and preserve
-all original files. The damaged fixture is now confirmed on hardware in runtime
-`6f1be4cf53c3`: two suspect data sectors and three CRC mismatches, exactly as
-expected. The clean fixture, new compatibility modes, and updated error messages
-still need hardware acceptance. Two older existing-folder attempts failed before
-scanning metadata; the old log omitted the selected path and missing filename,
-so it does not establish whether the folder selection or missing metadata caused
-them. [Latest reported evidence](evidence/m15-doa2-app-round-four-2026-09-23.json).
+all original files. Runtime `cc2320bb6d3a` passed the clean fixture, correctly
+rejected the damaged fixture (two suspect sectors and three CRC mismatches),
+and completed the GDI-only fixture plus the user's ARMADA folder. The older
+runtime reported the latter two as structural-only because it did not yet use
+the bundled independent catalogues. ARMADA's five reported CRCs and aggregate
+data/audio lengths match the bundled TOSEC entry for
+`Armada v1.000 (1999)(Metro3D)(US)[!]`. The full per-track size check is part of
+the newly added automatic lookup, and the older report did not record each
+size separately. This finding does not require another full scan to explain
+the old result. [Hardware evidence](evidence/m15-app-round-five-2026-09-24.json).
 
 To regenerate the fixtures from source:
 
@@ -123,6 +146,6 @@ fault + Stop, report write/sync/final-sync/close/rename failures. Every case
 compares the original files before and after. These tests establish app and
 storage behavior; they are not new optical-reader benchmarks.
 
-The hole-aware first pass, durable unresolved map, immutable baseline,
-per-patch backups/readback and bounded targeted recovery passes remain the next
-salvage implementation stage in [salvage-plan.md](salvage-plan.md).
+Catalogue integration adds ten cases per filesystem, for 84 passing image
+cases total. The optional separate salvage worker is documented in
+[salvage-worker.md](salvage-worker.md); the owner has deferred its console tests.

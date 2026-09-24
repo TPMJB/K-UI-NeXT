@@ -79,13 +79,16 @@ int main(int argc,char **argv) {
         strcpy(shell.backups.status.message,"Select a backup, then choose the target VMU.");
         shell.confirm_vmu_restore=!strcmp(argv[1],"vmu-restore-confirm");
     } else if(!strcmp(argv[1],"crc-scan")) {
-        shell.page=KUI_SHELL_CRC_SCAN;strcpy(shell.browse_path,"/Games/MDK2");
-        view.app_status=&status;status.done=status.total=1188880384;status.line_count=4;
-        strcpy(status.message,"Saved CRC + Mode1 checks passed");
-        strcpy(status.lines[0],"Track hashes: 31 / 31 matched");
-        strcpy(status.lines[1],"Bad data sectors: 0; unsupported sectors: 0");
-        strcpy(status.lines[2],"Audio has track hashes, not Mode1 parity checks.");
-        strcpy(status.lines[3],"Report saved. Track files were not modified.");
+        shell.page=KUI_SHELL_CRC_SCAN;strcpy(shell.browse_path,"/Games/ARMADA");
+        view.app_status=&status;status.done=status.total=1187764704;status.line_count=7;
+        strcpy(status.message,"Mode 1 checks passed; full catalogue match includes audio");
+        strcpy(status.lines[0],"Track 5 / 5");
+        strcpy(status.lines[1],"Data sectors 220386  Audio sectors 284616");
+        strcpy(status.lines[2],"Bad sectors 0  Unsupported 0");
+        strcpy(status.lines[3],"CRC mismatches 0  SHA mismatches 0");
+        strcpy(status.lines[4],"TOSEC: FULL TRACK MATCH");
+        strcpy(status.lines[5],"Armada v1.000 (1999)(Metro3D)(US)[!]");
+        strcpy(status.lines[6],"No manifest; only FULL TRACK MATCH checks all audio too.");
     } else if(!strcmp(argv[1],"scan-folder")) {
         shell.page=KUI_SHELL_DESTINATION;shell.browse_for_scan=true;
         strcpy(shell.browse_path,"/Games/MDK2");

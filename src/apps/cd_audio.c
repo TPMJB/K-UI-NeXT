@@ -48,28 +48,46 @@ static bool command(int code,void *params,uint32_t timeout) {
     snprintf(audio.status.message,sizeof(audio.status.message),"Audio CD: %s",kui_command_name(result));
     return false;
 }
-static bool pure_audio_present(void) {
-    cd_check_drive_status_t drive;
-    memset(&drive,0,sizeof(drive));
-    if(syscall_gdrom_check_drive(&drive)<0) {message("Cannot read drive status");return false;}
-    if(drive.status==CD_STATUS_OPEN || drive.status==CD_STATUS_NO_DISC) {
+static bool cd_present(cd_check_drive_status_t *drive) {
+    memset(drive,0,sizeof(*drive));
+    if(syscall_gdrom_check_drive(drive)<0) {message("Cannot read drive status");return false;}
+    if(drive->status==CD_STATUS_OPEN || drive->status==CD_STATUS_NO_DISC) {
         audio.status.loaded=false;audio.status.playing=false;audio.status.paused=false;
         audio.may_play=false;message("Insert an audio CD and Refresh");return false;
     }
-    if(drive.status==CD_STATUS_FATAL || drive.disc_type==CD_FAIL) {
+    if(drive->status==CD_STATUS_FATAL || drive->disc_type==CD_FAIL) {
         audio.status.poisoned=true;message("Drive reports a fatal error; RESET REQUIRED");
         if(audio.log) audio.log("CMD %d ABORT FAILED: RESET REQUIRED (fatal drive status)",CD_CMD_INIT);
         return false;
     }
-    if(drive.disc_type!=CD_CDDA) {
+    if(drive->disc_type!=CD_CDDA && drive->disc_type!=CD_CDROM && drive->disc_type!=CD_CDROM_XA) {
         audio.status.loaded=false;audio.status.playing=false;audio.status.paused=false;audio.may_play=false;
-        message("Audio CDs only; GD-ROM and data/mixed CDs are not played");return false;
-    }
-    if(drive.status!=CD_STATUS_PAUSED && drive.status!=CD_STATUS_STANDBY &&
-       drive.status!=CD_STATUS_PLAYING && drive.status!=CD_STATUS_RETRY) {
-        message("Drive not ready; wait, then Refresh");return false;
+        message("Insert an audio or enhanced CD; GD-ROM is not played here");return false;
     }
     return true;
+}
+static bool wait_ready(void) {
+    /* STOP/INIT can acknowledge before the drive leaves BUSY. Observe the
+     * transition briefly; never retry the command or issue it while busy. */
+    uint64_t deadline=timer_ms_gettime64()+2000;
+    for(;;) {
+        if(cancelled(NULL)) {message("Audio CD operation cancelled");return false;}
+        cd_check_drive_status_t drive;
+        syscall_gdrom_exec_server();
+        if(!cd_present(&drive)) return false;
+        if(drive.status==CD_STATUS_PAUSED || drive.status==CD_STATUS_STANDBY ||
+           drive.status==CD_STATUS_PLAYING || drive.status==CD_STATUS_RETRY) return true;
+        if(drive.status!=CD_STATUS_BUSY && drive.status!=CD_STATUS_SEEKING &&
+           drive.status!=CD_STATUS_SCANNING) {
+            snprintf(audio.status.message,sizeof(audio.status.message),
+                "Audio CD drive status %d; Refresh before playing",(int)drive.status);return false;
+        }
+        if(timer_ms_gettime64()>=deadline) {
+            snprintf(audio.status.message,sizeof(audio.status.message),
+                "Audio CD drive still busy (status %d); wait, then Refresh",(int)drive.status);return false;
+        }
+        wait_worker(NULL);
+    }
 }
 static bool stop_drive(void) {
     if(audio.status.poisoned) {message("RESET REQUIRED: CD audio command recovery failed");return false;}
@@ -92,21 +110,27 @@ void kui_cd_audio_set_volume(unsigned percent) {
 void kui_cd_audio_poll(struct kui_cd_audio_status *out,kui_log_fn log) {
     if(audio.may_play && !audio.status.poisoned) {
         audio.log=log;
-        if(pure_audio_present()) {
-            cd_check_drive_status_t drive;
-            if(syscall_gdrom_check_drive(&drive)>=0 && audio.status.playing &&
-               (drive.status==CD_STATUS_PAUSED || drive.status==CD_STATUS_STANDBY)) {
-                audio.status.playing=false;audio.status.paused=false;audio.may_play=false;
-                message("Audio CD track finished");
-            }
+        cd_check_drive_status_t drive;
+        /* A BUSY/SEEKING sample during playback is not a new command failure.
+         * Use one status snapshot, preserving drive ownership until stopped. */
+        if(cd_present(&drive) && audio.status.playing &&
+           (drive.status==CD_STATUS_PAUSED || drive.status==CD_STATUS_STANDBY)) {
+            audio.status.playing=false;audio.status.paused=false;audio.may_play=false;
+            message("Audio CD track finished");
         }
     }
     if(out) *out=audio.status;
 }
 static bool read_toc(void) {
-    if(!pure_audio_present()) return false;
-    if(!audio.bus_initialized) {kui_drive_init_bus();audio.bus_initialized=true;}
-    if(!command(CD_CMD_INIT,NULL,12000) || !pure_audio_present()) return false;
+    if(!audio.bus_initialized) {
+        /* A status query is safe before initialization, but servicing the
+         * firmware command queue requires its initialized workspace first. */
+        cd_check_drive_status_t drive;
+        if(!cd_present(&drive)) return false;
+        kui_drive_init_bus();audio.bus_initialized=true;
+    }
+    if(!wait_ready()) return false;
+    if(!command(CD_CMD_INIT,NULL,12000) || !wait_ready()) return false;
     memset(&audio.toc,0xa5,sizeof(audio.toc));
     audio.toc_params=(cd_cmd_toc_params_t){CD_AREA_LOW,&audio.toc.data};
     if(!command(CD_CMD_GETTOC2,&audio.toc_params,5000)) return false;
@@ -121,7 +145,6 @@ static bool read_toc(void) {
     if(!kui_parse_toc(audio.toc.data.entry,audio.toc.data.first,audio.toc.data.last,
                      audio.toc.data.leadout_sector,&parsed)) {message("Invalid audio CD track table");return false;}
     for(unsigned i=0;i<parsed.count;i++) {
-        if(parsed.tracks[i].control&4u) {message("Mixed/data CD rejected; no audio command sent");return false;}
         if(parsed.tracks[i].end<=parsed.tracks[i].start) {message("Invalid audio CD track length");return false;}
     }
     return true;
@@ -133,14 +156,24 @@ static bool list_tracks(void) {
     struct kui_toc parsed;
     if(!kui_parse_toc(audio.toc.data.entry,audio.toc.data.first,audio.toc.data.last,
                      audio.toc.data.leadout_sector,&parsed)) return false;
-    audio.listed=audio.toc.data;audio.status.count=parsed.count;
-    audio.status.first=parsed.tracks[0].number;audio.status.last=parsed.tracks[parsed.count-1u].number;
-    for(unsigned i=0;i<parsed.count;i++) audio.status.tracks[i]=(struct kui_cd_audio_track){
-        parsed.tracks[i].number,(parsed.tracks[i].end-parsed.tracks[i].start)/75u};
+    audio.listed=audio.toc.data;
+    for(unsigned i=0;i<parsed.count;i++) {
+        if(parsed.tracks[i].control&4u) continue;
+        audio.status.tracks[audio.status.count++]=(struct kui_cd_audio_track){
+            parsed.tracks[i].number,(parsed.tracks[i].end-parsed.tracks[i].start)/75u};
+    }
+    if(audio.log) audio.log("Audio CD TOC: %u audio tracks; %u data tracks skipped",
+        audio.status.count,parsed.count-audio.status.count);
+    if(!audio.status.count) {message("No audio tracks on this CD; data tracks are never played");return false;}
+    audio.status.first=audio.status.tracks[0].number;
+    audio.status.last=audio.status.tracks[audio.status.count-1u].number;
     audio.status.current=0;audio.status.loaded=true;message("Choose an audio track; playback uses the drive directly");return true;
 }
 static bool play_track(unsigned track) {
-    if(!audio.status.loaded || track<audio.status.first || track>audio.status.last) {
+    bool selected_audio=false;
+    for(unsigned i=0;i<audio.status.count;i++)
+        if(audio.status.tracks[i].number==track) selected_audio=true;
+    if(!audio.status.loaded || !selected_audio) {
         message("Refresh the audio CD before choosing a track");return false;
     }
     if(!stop_drive() || !read_toc()) return false;
@@ -171,9 +204,9 @@ void kui_cd_audio_run(enum kui_cd_audio_action action,unsigned track,
     else if(action==KUI_CD_AUDIO_PLAY) ok=play_track(track);
     else if(action==KUI_CD_AUDIO_STOP) ok=stop_drive();
     else if(action==KUI_CD_AUDIO_PAUSE && audio.status.playing) {
-        if(pure_audio_present() && command(CD_CMD_PAUSE,NULL,3000)) {audio.status.playing=false;audio.status.paused=true;message("Audio CD paused");ok=true;}
+        if(wait_ready() && command(CD_CMD_PAUSE,NULL,3000)) {audio.status.playing=false;audio.status.paused=true;message("Audio CD paused");ok=true;}
     } else if(action==KUI_CD_AUDIO_RESUME && audio.status.paused) {
-        if(pure_audio_present() && command(CD_CMD_RELEASE,NULL,3000)) {audio.status.playing=true;audio.status.paused=false;message("Audio CD resumed");ok=true;}
+        if(wait_ready() && command(CD_CMD_RELEASE,NULL,3000)) {audio.status.playing=true;audio.status.paused=false;message("Audio CD resumed");ok=true;}
     } else message("Refresh or select an audio CD track first");
     if(log) log("Audio CD %s: %s",ok?"OK":"stopped/failed",audio.status.message);
     if(out) *out=audio.status;

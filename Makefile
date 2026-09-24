@@ -180,10 +180,10 @@ build/clock-image: tests/clock_image.c $(CORE) $(FATFS) include/kui/clock.h conf
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) tests/clock_image.c -o $@
 
-RECOVERY_SCAN = src/core/storage_probe.c src/core/destination.c src/core/hash.c src/core/capture_plan.c src/core/recovery_manifest.c src/core/recovery_scan.c src/core/recovery_sector.c
+RECOVERY_SCAN = src/core/storage_probe.c src/core/destination.c src/core/hash.c src/core/capture_plan.c src/core/recovery_manifest.c src/core/recovery_scan.c src/core/recovery_sector.c src/core/known_dumps.c
 build/recovery-scan-image: tests/recovery_scan_image.c $(CORE) $(FATFS) $(RECOVERY_SCAN) include/kui/recovery_scan.h include/kui/recovery_checks.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) $(RECOVERY_SCAN) tests/recovery_scan_image.c -Wl,--wrap=f_rename -Wl,--wrap=f_close -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) $(RECOVERY_SCAN) tests/recovery_scan_image.c -Wl,--wrap=f_rename -Wl,--wrap=f_close -Wl,--wrap=f_read -o $@
 
 diagnostic:
 	$(MAKE) -f Makefile.dc

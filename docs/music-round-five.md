@@ -45,7 +45,28 @@ cost of ongoing CPU decoding, and its effect on capture speed is not yet measure
 Music → **L: Audio CD** opens an audio-track list. **A** plays the selected track,
 **Y** pauses/resumes, **X** stops, **R** refreshes, **B** returns to the SD browser,
 and **Start** returns Home. The drive plays the audio directly; SD is not used.
-Only pure audio CDs are accepted. Mixed/data CDs and GD-ROMs are refused.
+Ordinary audio CDs and audio tracks on enhanced/mixed CDs are accepted. The
+list omits every TOC entry with the data bit set; the original audio track
+numbers are retained, even when there are gaps. A requested track must appear
+in that audio-only list and the complete TOC must still match before PLAY.
+Data-only discs, data-track selections and GD-ROMs are refused.
+
+The September 24 hardware log explains the first rejected album: its TOC has
+16 audio tracks and a seventeenth data track, and firmware identifies it as
+CD-ROM XA. The initial player deliberately accepted only pure audio CDs. The
+second album has 13 audio tracks and successfully played tracks 1, 2 and 3.
+These observations establish playback on that second disc; they do not yet
+prove the new enhanced-CD filtering on hardware.
+
+The same log records two `Drive not ready` failures between selected tracks,
+followed by BUSY-to-STANDBY transitions. The adapter previously checked once
+immediately after STOP and INIT. It now waits up to two seconds for each
+readiness transition, with cancellation, before submitting the next command.
+Commands are not retried. Host tests reproduce delayed readiness after STOP
+and INIT, a permanently busy drive and cancellation before INIT. Idle playback
+polling uses one status snapshot and keeps a transient BUSY/SEEKING observation
+from replacing the playing message. The log does not expose the exact failed
+UI action, so the hardware cause remains a supported inference to confirm.
 
 The adapter runs exclusively on the existing optical worker. It uses documented
 firmware commands with the existing portable deadline/abort loop, static command
@@ -67,9 +88,12 @@ The implementation was checked against upstream KOS at
 wrapper is called. Command deadlines bound the polling loop; they cannot preempt
 a firmware syscall that itself stops returning.
 
-Host firmware tests cover pure/mixed media, a changed TOC, nonzero successful
+Host firmware tests cover pure/enhanced media, data-only rejection, hidden data
+tracks, a changed TOC, bounded busy transitions, nonzero successful
 status returns, selected-track commands, pause/resume, track completion, held-B
 Stop, stop failure, guarded buffers and a failed abort retaining static firmware
-storage. These checks do not prove physical audio routing. Hardware acceptance
-needs an ordinary audio CD: list it, play one track, pause/resume, change tracks,
-stop, then return to the SD song. No rip or new boot disc is needed for this test.
+storage. Physical audio playback was reported with the second album above.
+The focused remaining check is the previously rejected enhanced CD: confirm
+that only tracks 1–16 appear, play one, pause/resume, then change tracks without
+needing Refresh. Stop and return to the SD song. No rip or new boot disc is
+needed for this test.

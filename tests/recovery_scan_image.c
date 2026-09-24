@@ -12,6 +12,7 @@
 static struct {
     FILE *image;uint64_t blocks;const char *fault;bool scanning,injected,cancelled;
     bool report_seen,complete_seen;uint32_t first_track;
+    DWORD track_clusters[3];uint64_t track_read_bytes;unsigned catalogue_cancel_checks;
     unsigned writes;uint64_t now;
     struct kui_scan_status *status;
 } test;
@@ -43,6 +44,13 @@ static int sync_image(void *ctx) {
     if((fault("sync-fail") && test.report_seen) || (fault("final-sync-fail") && test.complete_seen)) {test.injected=true;return -1;}
     return fflush(test.image) || fsync(fileno(test.image))?-1:0;
 }
+FRESULT __real_f_read(FIL *file,void *buffer,UINT bytes,UINT *read);
+FRESULT __wrap_f_read(FIL *file,void *buffer,UINT bytes,UINT *read) {
+    FRESULT result=__real_f_read(file,buffer,bytes,read);
+    if(test.scanning) for(unsigned i=0;i<3;++i)
+        if(file->obj.sclust==test.track_clusters[i]) test.track_read_bytes+=*read;
+    return result;
+}
 static const struct kui_media_ops media={NULL,blocks,read_image,write_image,sync_image};
 FRESULT __real_f_rename(const TCHAR *old_path,const TCHAR *new_path);
 FRESULT __wrap_f_rename(const TCHAR *old_path,const TCHAR *new_path) {
@@ -57,6 +65,8 @@ FRESULT __wrap_f_close(FIL *file) {
 }
 static bool cancel(void *ctx) {
     (void)ctx;
+    if(fault("imported-catalogue-cancel") && strstr(test.status->message,"Comparing recorded") &&
+        ++test.catalogue_cancel_checks>=2) return true;
     return test.cancelled || fault("cancel-before") ||
         (fault("cancel-scan") && test.status->done>=2*KUI_RAW_BYTES);
 }
@@ -77,6 +87,28 @@ static size_t load(const char *path,void *data,size_t cap) {
 static void mutate(const char *name,size_t offset,uint8_t value) {
     char path[KUI_DEST_PATH_CAP];uint8_t data[32768];file_path(path,name);
     size_t size=load(path,data,sizeof(data));assert(offset<size);data[offset]^=value;write_file(path,data,(UINT)size);
+}
+static void seed_catalogue(void) {
+    if(!strstr(test.fault,"catalogue")) return;
+    if(!strcmp(test.fault,"imported-catalogue-bad-sector")) mutate("track01.bin",2076,1);
+    if(!strcmp(test.fault,"catalogue-manifest-mismatch")) mutate("track02.raw",0,1);
+    assert(f_mkdir("0:/KUI")==FR_OK);
+    char db[16384];size_t used=(size_t)snprintf(db,sizeof(db),"DREAMSHELL_REDUMP_CRC_V1\n");
+    if(!strcmp(test.fault,"imported-catalogue-cancel"))
+        for(unsigned i=0;i<600;++i) {memcpy(db+used,"# test\n",7);used+=7;}
+    used+=(size_t)snprintf(db+used,sizeof(db)-used,"G\t3\tSynthetic independent reference\n");
+    for(unsigned i=0;i<3;++i) {
+        char path[KUI_DEST_PATH_CAP];uint8_t data[32768];file_path(path,files[4+i]);
+        size_t bytes=load(path,data,sizeof(data));uint32_t crc=kui_crc32(0,data,bytes);
+        if((!strcmp(test.fault,"imported-catalogue-audio-mismatch") && i==1) ||
+           (!strcmp(test.fault,"imported-catalogue-partial") && i==2) ||
+           !strcmp(test.fault,"imported-catalogue-unrelated")) crc^=1;
+        if(!strcmp(test.fault,"imported-catalogue-size-mismatch") && i==1) bytes+=KUI_RAW_BYTES;
+        used+=(size_t)snprintf(db+used,sizeof(db)-used,"T\t%u\t%zu\t%08x\n",i+1,bytes,(unsigned)crc);
+    }
+    memcpy(db+used,"E\n",2);used+=2;
+    if(!strcmp(test.fault,"imported-catalogue-invalid")) db[0]='X';
+    assert(used<sizeof(db));write_file("0:/KUI/tosec.db",db,(UINT)used);
 }
 static void seed(const char *host) {
     assert(f_mkdir("0:/Games")==FR_OK);assert(f_mkdir(folder)==FR_OK);
@@ -134,8 +166,13 @@ static void seed(const char *host) {
         const char *gdi="3\r\n1 0 4 2352 track01.bin 0\r\n2 155 0 2352 \"Audio Track.raw\" 0\r\n3 45000 4 2352 track03.bin 0\r\n";
         write_file(path,gdi,(UINT)strlen(gdi));
     }
-    char path[KUI_DEST_PATH_CAP];file_path(path,"track01.bin");FIL file;assert(f_open(&file,path,FA_READ)==FR_OK);
-    test.first_track=(uint32_t)(fs.database+(LBA_t)(file.obj.sclust-2)*fs.csize);assert(f_close(&file)==FR_OK);
+    seed_catalogue();
+    for(unsigned i=0;i<3;++i) {
+        char path[KUI_DEST_PATH_CAP];file_path(path,files[4+i]);FIL file;assert(f_open(&file,path,FA_READ)==FR_OK);
+        test.track_clusters[i]=file.obj.sclust;
+        if(!i) test.first_track=(uint32_t)(fs.database+(LBA_t)(file.obj.sclust-2)*fs.csize);
+        assert(f_close(&file)==FR_OK);
+    }
 }
 static void originals(uint32_t hashes[7],size_t sizes[7]) {
     for(unsigned i=0;i<7;++i) {
@@ -160,16 +197,23 @@ int main(int argc,char **argv) {
     enum kui_scan_result result=kui_recovery_scan(!strcmp(test.fault,"parent")?"0:/Games":folder,&ops,&status);
     test.scanning=false;test.cancelled=false;
     bool good=!strcmp(test.fault,"clean") || !strcmp(test.fault,"one-checkpoint") || !strcmp(test.fault,"repeat") || !strcmp(test.fault,"sha") ||
-        !strcmp(test.fault,"no-checkpoints") || !strcmp(test.fault,"named") || !strcmp(test.fault,"named-sha") || !strcmp(test.fault,"long-folder");
-    bool structural=!strcmp(test.fault,"imported") || !strcmp(test.fault,"imported-quotes");
-    bool issues=!strcmp(test.fault,"damaged") || !strcmp(test.fault,"unsupported") || !strcmp(test.fault,"imported-damaged");
-    bool stopped=!strcmp(test.fault,"cancel-before") || !strcmp(test.fault,"cancel-scan");
+        !strcmp(test.fault,"no-checkpoints") || !strcmp(test.fault,"named") || !strcmp(test.fault,"named-sha") || !strcmp(test.fault,"long-folder") ||
+        !strcmp(test.fault,"catalogue-full") || !strcmp(test.fault,"imported-catalogue-full");
+    bool structural=!strcmp(test.fault,"imported") || !strcmp(test.fault,"imported-quotes") ||
+        !strcmp(test.fault,"imported-catalogue-audio-mismatch") || !strcmp(test.fault,"imported-catalogue-size-mismatch") ||
+        !strcmp(test.fault,"imported-catalogue-partial") || !strcmp(test.fault,"imported-catalogue-unrelated") ||
+        !strcmp(test.fault,"imported-catalogue-invalid");
+    bool issues=!strcmp(test.fault,"damaged") || !strcmp(test.fault,"unsupported") || !strcmp(test.fault,"imported-damaged") ||
+        !strcmp(test.fault,"imported-catalogue-bad-sector") || !strcmp(test.fault,"catalogue-manifest-mismatch");
+    bool stopped=!strcmp(test.fault,"cancel-before") || !strcmp(test.fault,"cancel-scan") || !strcmp(test.fault,"imported-catalogue-cancel");
     assert(result==(good?KUI_SCAN_CLEAN:structural?KUI_SCAN_STRUCTURAL:issues?KUI_SCAN_ISSUES:stopped?KUI_SCAN_STOPPED:KUI_SCAN_FAILED));
     assert(status.complete==(good || structural || issues));
     if(good || issues || structural) {
         assert(status.done==14u*KUI_RAW_BYTES && status.total==status.done);
         assert(status.data_sectors==10 && status.audio_sectors==4);
         assert(strstr(status.report,".txt"));
+        assert(test.track_read_bytes==14u*KUI_RAW_BYTES); /* Catalogue comparison never rereads source tracks. */
+        assert(status.catalogue_checked);
     }
     if(structural || !strcmp(test.fault,"imported-damaged")) assert(!status.reference_hashes && !status.checkpoint_checked && !status.crc_mismatches);
     if(!strcmp(test.fault,"no-checkpoints")) assert(status.reference_hashes && !status.checkpoint_checked);
@@ -178,6 +222,20 @@ int main(int argc,char **argv) {
     if(!strcmp(test.fault,"imported-damaged")) assert(status.bad_sectors==2);
     if(!strcmp(test.fault,"damaged")) assert(status.bad_sectors==2 && !status.unsupported_sectors && status.crc_mismatches==3);
     if(!strcmp(test.fault,"unsupported")) assert(!status.bad_sectors && status.unsupported_sectors==1 && status.crc_mismatches==1);
+    if(strstr(test.fault,"catalogue")) {
+        enum kui_known_result known=KUI_KNOWN_FULL_MATCH;
+        if(strstr(test.fault,"audio-mismatch") || strstr(test.fault,"size-mismatch")) known=KUI_KNOWN_DATA_MATCH;
+        else if(strstr(test.fault,"partial")) known=KUI_KNOWN_PARTIAL;
+        else if(strstr(test.fault,"unrelated")) known=KUI_KNOWN_NO_MATCH;
+        else if(strstr(test.fault,"invalid")) known=KUI_KNOWN_ERROR;
+        else if(strstr(test.fault,"cancel")) known=KUI_KNOWN_CANCELLED;
+        assert(status.catalogue.result==known);
+        if(known==KUI_KNOWN_FULL_MATCH) assert(!strcmp(status.catalogue.catalog,"TOSEC"));
+        if(!strcmp(test.fault,"imported-catalogue-full"))
+            assert(!status.reference_hashes && strstr(status.message,"including audio"));
+        if(!strcmp(test.fault,"imported-catalogue-bad-sector")) assert(status.bad_sectors==1);
+        if(!strcmp(test.fault,"catalogue-manifest-mismatch")) assert(status.crc_mismatches==1);
+    }
     if(!strcmp(test.fault,"cancel-before")) assert(test.writes==writes && !status.report[0]);
     if(strstr(test.fault,"fail")) assert(test.injected);
     remount();originals(after,after_size);assert(!memcmp(before,after,sizeof(before)) && !memcmp(before_size,after_size,sizeof(before_size)));
@@ -186,8 +244,8 @@ int main(int argc,char **argv) {
         if(!status.complete) assert(strstr(status.report,".part"));
         if(structural || !strcmp(test.fault,"imported-damaged")) {
             uint8_t data[32768];size_t size=load(status.report,data,sizeof(data));
-            assert(contains(data,size,"NO expected hash") && contains(data,size,"Audio: UNVERIFIED"));
-            assert(!contains(data,size,"MATCH") && !contains(data,size,"COMPLETE CLEAN"));
+            assert(contains(data,size,"NO manifest hash") && contains(data,size,"Audio: NO manifest hash"));
+            assert(!contains(data,size,"COMPLETE CLEAN"));
         }
     }
     if(!strcmp(test.fault,"repeat")) {

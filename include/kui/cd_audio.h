@@ -13,7 +13,8 @@ struct kui_cd_audio_status {
 };
 /* All calls belong to the single optical/I/O worker. PLAY takes the actual CD
  * track number, not a zero-based menu index. UI copies the published snapshot.
- * Pure audio CDs only; GD-ROM and mixed/data CDs are deliberately refused. */
+ * Audio entries on ordinary/enhanced CDs only; data tracks and GD-ROMs are
+ * deliberately refused. The listed track numbers may contain gaps. */
 void kui_cd_audio_run(enum kui_cd_audio_action action,unsigned track,
     struct kui_cd_audio_status *out,kui_log_fn log,kui_cancel_fn cancel);
 /* Stop before any foreground optical operation, including GD Play. A failed

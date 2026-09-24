@@ -104,7 +104,7 @@ static bool is_capture_action(unsigned action) {
 #define KUI_ROLE "CD bootstrap"
 #endif
 
-#define LOG_LINES 768
+#define LOG_LINES 1500
 #define LINE_BYTES 77
 #define VISIBLE_LINES 19
 static mutex_t lock = MUTEX_INITIALIZER;
@@ -412,7 +412,7 @@ static uint64_t scan_now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static void scan_progress(void *ctx,const struct kui_scan_status *status) {
     (void)ctx;
     struct kui_app_status view={.done=status->done,.total=status->total,
-        .errors=status->bad_sectors+status->crc_mismatches+status->sha_mismatches,
+        .errors=status->bad_sectors+status->unsupported_sectors+status->crc_mismatches+status->sha_mismatches,
         .complete=status->complete,.passed=status->result==KUI_SCAN_CLEAN && status->complete,
         .stopped=status->result==KUI_SCAN_STOPPED,.line_count=5};
     snprintf(view.message,sizeof(view.message),"%s",status->message);
@@ -426,6 +426,16 @@ static void scan_progress(void *ctx,const struct kui_scan_status *status) {
     snprintf(view.lines[4],KUI_APP_LINE_CAP,"%s",status->reference_hashes?
         "Recorded hashes checked; track files are read-only.":
         "Structural scan only; no expected hashes/audio verification.");
+    if(status->catalogue_checked) {
+        view.line_count=7;
+        snprintf(view.lines[4],KUI_APP_LINE_CAP,"%.16s: %.59s",
+            status->catalogue.catalog,kui_known_text(status->catalogue.result));
+        snprintf(view.lines[5],KUI_APP_LINE_CAP,"%.79s",status->catalogue.name[0]?
+            status->catalogue.name:"No matching reference title identified.");
+        snprintf(view.lines[6],KUI_APP_LINE_CAP,"%s",status->reference_hashes?
+            "Manifest hashes checked too; original files are read-only.":
+            "No manifest; only FULL TRACK MATCH checks all audio too.");
+    }
     mutex_lock(&lock);scan_status=view;mutex_unlock(&lock);
 }
 static void scan_operation(void) {

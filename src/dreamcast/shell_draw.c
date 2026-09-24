@@ -646,7 +646,7 @@ static void vmu_restore(struct paint *p,const struct kui_shell *s,const struct k
 static void crc_scan(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"Advanced CRC scan");
     words(p,40,138,608,CYAN,s->browse_path,false);
-    label(p,40,160,MUTED,"Mode1 EDC/parity + recorded CRCs when available; no disc reads.");
+    label(p,40,160,MUTED,"Mode1 EDC/parity + saved hashes + catalogue; no disc reads.");
     panel(p,32,190,576,214,PANEL);
     const struct kui_app_status *status=v->app_status;
     app_status(p,status,v->busy,200);

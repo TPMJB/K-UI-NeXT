@@ -22,7 +22,20 @@ resumed to a verified finish.
 For scale: the original settings projected to about 104 minutes for the same Sword disc, so the
 work took it from roughly an hour and three quarters to twenty minutes.
 
-## Latest app work — 2026-09-23
+## Latest app work — 2026-09-24
+
+Runtime **cc2320bb6d3a** passed the three small Advanced CRC fixtures and
+completed a saved-file scan of Armada with no bad/unsupported sectors. All five
+reported CRCs and the aggregate data/audio lengths match the bundled TOSEC
+Armada US entry. Music Clear cache freed all nine file allocations. The owner
+confirmed a THPS2 save was absent after VMU deletion and usable after restore.
+Pure audio-CD playback worked; mixed-CD filtering and track-change readiness
+are app follow-ups. Network hardware testing is blocked by adapter availability,
+and the owner has deferred salvage to a future version. See
+[the current app evidence](evidence/m15-app-round-five-2026-09-24.json) and
+[focused app guide](apps-round-five.md). No reader benchmark is reopened.
+
+## Prior app work — 2026-09-23
 
 The latest supplied app evidence is runtime **6f1be4cf53c3**, documented in
 [hardware-evidence.md](hardware-evidence.md) and

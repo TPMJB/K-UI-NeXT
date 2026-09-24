@@ -18,7 +18,7 @@ static bool cancelled(void *ctx) { (void)ctx;return kui_cancelled(); }
 static uint64_t now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static uint64_t now_us(void *ctx) { (void)ctx;return timer_us_gettime64(); }
 /* The bench runs the engine dozens of times; its per-run chatter would flood the
- * 768-line report, so only problems get through. */
+ * bounded diagnostic report, so only problems get through. */
 static void bench_log(const char *format,...) {
     char line[128];va_list args;va_start(args,format);vsnprintf(line,sizeof(line),format,args);va_end(args);
     if(strstr(line,"fail")||strstr(line,"FAIL")||strstr(line,"mismatch")||strstr(line,"Insufficient")||

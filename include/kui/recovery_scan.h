@@ -2,9 +2,11 @@
 #ifndef KUI_RECOVERY_SCAN_H
 #define KUI_RECOVERY_SCAN_H
 #include "kui/capture.h"
+#include "kui/known_dumps.h"
 
 /* Advanced CRC reads completed K-UI jobs or raw-2352 GDI folders.
- * Structural-only GDI scans never claim expected-hash/audio verification. It never modifies track
+ * GDI-only scans compare recorded CRCs with independent catalogues when present;
+ * a clean scan plus full track match can verify audio hashes too. It never modifies track
  * data, checkpoints, GDI or manifest; the only output is a unique report under
  * /KUI/recovery. This is diagnosis, not optical recovery or ECC reconstruction. */
 enum kui_scan_result { KUI_SCAN_FAILED, KUI_SCAN_STOPPED, KUI_SCAN_CLEAN, KUI_SCAN_ISSUES, KUI_SCAN_STRUCTURAL };
@@ -12,6 +14,8 @@ struct kui_scan_status {
     enum kui_scan_result result;
     bool complete;
     bool reference_hashes, checkpoint_checked;
+    bool catalogue_checked;
+    struct kui_known_summary catalogue; /* Independent; reference_hashes remains manifest-only. */
     unsigned track, tracks;
     uint64_t done, total, elapsed_ms;
     uint32_t data_sectors, audio_sectors, bad_sectors, unsupported_sectors;
