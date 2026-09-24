@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "date": "2026-09-23",
+  "kind": "host app acceptance; no hardware reader measurements",
+  "feature": "Advanced CRC saved-file scan",
+  "host_results": {
+    "parser": "passed with AddressSanitizer and UndefinedBehaviorSanitizer",
+    "filesystem_cases": 40,
+    "filesystems": [
+      "FAT32",
+      "exFAT"
+    ],
+    "checks": [
+      "clean CRC and older CRC/SHA jobs",
+      "data/parity/audio corrupt fixture",
+      "unique reports preserve prior output",
+      "unsupported Mode 2 remains issue",
+      "malformed manifest/GDI and checkpoint conflict rejection",
+      "single valid checkpoint fallback",
+      "truncated saved track rejection",
+      "before-start and during-scan cancellation",
+      "read failures with and without simultaneous cancellation",
+      "report write, sync, final sync, close and rename failures",
+      "original track and metadata byte hashes unchanged in every case"
+    ]
+  },
+  "synthetic_fixture_expectations": {
+    "clean": {
+      "result": "CLEAN",
+      "data_sectors": 10,
+      "audio_sectors": 4,
+      "bad_sectors": 0,
+      "crc_mismatches": 0
+    },
+    "damaged": {
+      "result": "ISSUES",
+      "data_sectors": 10,
+      "audio_sectors": 4,
+      "bad_sectors": 2,
+      "unsupported_sectors": 0,
+      "crc_mismatches": 3,
+      "suspect_data_fads": [
+        150,
+        45152
+      ]
+    }
+  },
+  "constraints": [
+    "Local LeakSanitizer disabled because executor ptrace restrictions; ASan/UBSan enabled",
+    "Console app and storage acceptance pending",
+    "No optical read calls or frozen reader edits",
+    "No claim of optical recovery or general ECC reconstruction"
+  ],
+  "sources_sha256": {
+    "include/kui/recovery_scan.h": "275d997c2ad2248e70fd749348da6a0fb6d50cbab8bcf97fd15302399791ef87",
+    "src/core/recovery_manifest.c": "c4e8bf7998453509e406575ae8cf26a1ef89664fa9302b101bfb8fc6342cf6ef",
+    "src/core/recovery_scan.c": "f297150b58d4ea29cdd6571406dbe443f3b9564359ff8bdeb9ffd9141a472020",
+    "src/core/recovery_sector.c": "c7df1d9f9124e870ee75b844d073874529e01218d2f979ee35f2425ce3806260",
+    "tests/test_recovery_manifest.c": "59c8594e746b96a822ede13efae87b979dbfb805f8d57c4b6dfa361f0f56f6a4",
+    "tests/recovery_scan_image.c": "a993e44b7190176b6643914916cf903e3d63197cf1b184137f402260c8ef6ea7",
+    "tests/test_recovery_scan_images.py": "eded3a396e6d64901dd46563d11a9016135c70ea12682346b979333196fe0168",
+    "tools/make_scan_fixtures.py": "9af5469567c5e04d1d81f192d8c4e5656ea9483d8caf3b5094b2ec9c74cf38bd"
+  }
+}

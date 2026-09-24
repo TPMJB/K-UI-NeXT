@@ -2,6 +2,8 @@
 #ifndef KUI_CAPTURE_H
 #define KUI_CAPTURE_H
 #include "kui/hash.h"
+#include "kui/destination.h"
+#include "kui/known_dumps.h"
 #include "kui/probe.h"
 #include "kui/timing.h"
 #define KUI_CAPTURE_PROFILE "gdi-raw2352-typegap150-v1"
@@ -30,6 +32,12 @@ struct kui_capture_progress {
     uint32_t fad, retries;
     uint64_t done, total, committed, elapsed_ms;
 };
+/* Optional output presentation for normal captures. A NULL output (or false
+ * game_names) retains the legacy /KUI/dumps layout and disc.gdi exactly.
+ * parent is a bounded card-root path such as /Games; the caller retains it for
+ * the run. Existing matching named jobs are resumed in place, with legacy
+ * jobs still discoverable when this parent has no matching checkpoint. */
+struct kui_capture_output { const char *parent; bool game_names; };
 /* Runtime choices for the capture engine. All-zero, or no options at all, is the
  * engine exactly as it has always been: SHA-256 and CRC32 per track, every saved
  * byte re-read after capture, a full prefix check on resume, no sampling. They
@@ -59,8 +67,9 @@ struct kui_capture_options {
     bool read_dma;
     /* Benchmark run: publish no metadata and skip the reference check. */
     bool bench;
+    const struct kui_capture_output *output;
 };
-/* What a run did, for the benchmark. Optional; filled when the run ends. */
+/* What a run did, for the benchmark and application. Optional; filled at end. */
 struct kui_capture_stats {
     uint64_t phase_us[KUI_TIME_PHASES];             /* wall time per phase */
     uint64_t capture_bucket_us[KUI_TIME_BUCKETS];   /* the capture phase by stage */
@@ -68,7 +77,11 @@ struct kui_capture_stats {
     uint32_t sampled;       /* chunks re-read and compared while capturing */
     bool verified;          /* every saved byte was re-read and matched this run */
     bool crc_only;          /* the job's hash mode */
-    char job_dir[80];       /* where the job lives, so a benchmark can delete it */
+    char job_dir[KUI_DEST_JOB_CAP]; /* also used by a benchmark to delete its job */
+    char disc_title[129];
+    char gdi_name[KUI_DEST_TITLE_CAP+5u];
+    bool reference_checked; /* distinguishes no lookup yet from CANCELLED=0 */
+    struct kui_known_summary reference;
 };
 struct kui_capture_ops {
     void *ctx;

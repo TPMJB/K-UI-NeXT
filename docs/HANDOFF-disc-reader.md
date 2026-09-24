@@ -22,6 +22,101 @@ resumed to a verified finish.
 For scale: the original settings projected to about 104 minutes for the same Sword disc, so the
 work took it from roughly an hour and three quarters to twenty minutes.
 
+## Latest app work — 2026-09-24
+
+Games has since passed repeated ARMADA metadata inspection and its first
+resident storage/handoff test. The owner's photograph of `7a8493ae825e` shows
+ten PASS checks and 84 SD blocks read after launcher shutdown/retired RAM erasure.
+This proves the original-fixture K-UI probe ABI path.
+[Hardware evidence](evidence/games-resident-probe-hardware-2026-09-24.json).
+The next increment implements selected-GDI resident mapping and a limited GD
+request service through the actual BIOS vector; its separate client performs
+sample CRC checks after shutdown. That increment is **pending hardware
+acceptance** via [the selected-image guide](games-image-probe.md). It does not
+start a retail game or provide hardware SD DMA. No repeat of the accepted
+synthetic probe or optical reader test is requested; see [the Games plan](games-milestone-plan.md).
+
+Runtime **cc2320bb6d3a** passed the three small Advanced CRC fixtures and
+completed a saved-file scan of Armada with no bad/unsupported sectors. All five
+reported CRCs and the aggregate data/audio lengths match the bundled TOSEC
+Armada US entry. Music Clear cache freed all nine file allocations. The owner
+confirmed a THPS2 save was absent after VMU deletion and usable after restore.
+After the CD follow-up update was offered, the owner confirmed audio-CD playback
+worked and requested Games planning. No new log/build ID or individual transport
+results were supplied; see [the confirmation](evidence/m15-audio-cd-owner-confirmation-2026-09-24.json).
+The next development scope is [Games and independent image loading](games-milestone-plan.md).
+Network hardware testing is blocked by adapter availability,
+and the owner has deferred salvage to a future version. See
+[the current app evidence](evidence/m15-app-round-five-2026-09-24.json) and
+[focused app guide](apps-round-five.md). No reader benchmark is reopened.
+
+## Prior app work — 2026-09-23
+
+The latest supplied app evidence is runtime **6f1be4cf53c3**, documented in
+[hardware-evidence.md](hardware-evidence.md) and
+[its sanitized record](evidence/m15-doa2-app-round-four-2026-09-23.json).
+Dead or Alive 2 completed with TOSEC FULL TRACK MATCH after bounded retries and
+Quick Resume; its final segment retained DMA. The damaged Advanced CRC fixture
+correctly reported two suspect data sectors and three CRC mismatches. Music
+cache counters stayed stable during these app/capture snapshots. Existing-dump
+scan selection, custom-song cycling, title/progress display and VMU management
+are the current app fixes; the [round-five guide](apps-round-five.md) tracks
+implementation and hardware acceptance. The accepted disc reader remains frozen.
+
+The app/failure sections below describe **earlier runtime snapshots** and their
+then-current pending work; they are retained as history, not the latest status.
+
+## Historical app work and failure report — 2026-09-23
+
+The latest report is an **Omikron new capture on `0599097a8bfb`**, not a
+saved-file verification attempt. Four tracks finished and the final track
+stopped at **99.7855% committed**: a DMA timeout was followed by PIO fallback
+abort-recovery failure and **RESET REQUIRED**. The partial checkpoint was kept;
+no verification or reference result followed. Its committed-data average was
+932.80 KiB/s including the terminal waits. This is not a completed dump or a
+controlled performance comparison. [Sanitized evidence](evidence/m15-omikron-timeout-2026-09-23.json).
+Reboot before resuming that job; the existing failed-recovery latch is retained.
+
+The next M1.5 delivery extends the launcher with idle inserted-disc titles,
+phase ETA and explicit capture/prefix/verification failure messages. Separate
+system preferences cover video timing, memory display and optional menu music;
+Memory Test, VMU listing/SD backup and network-adapter inspection are separate
+app modules. Music plays a bounded RAM cache and pauses for foreground I/O.
+Disc-title identification runs only on the single idle worker, with one attempt
+per observed insertion; an unsuccessful attempt waits for a new insertion or
+explicit foreground optical activity rather than continuously rereading.
+
+**App and system-setting hardware acceptance is pending.** These modules are
+still linked into the SD runtime, not independently loaded executables. The
+raw/DMA reader, command recovery and core capture engine are unchanged in this
+app round. Follow [apps-test.md](apps-test.md) using the existing boot disc;
+ordinary recovery work can cover ETA without another benchmark or full rip.
+
+## Current UI/destination work — 2026-09-23
+
+The restored-menu runtime `8bae3efe7c2f` has now completed MDK2: **973.96 KiB/s**,
+20 min 23.5 s of capture, all 31 tracks and TOSEC FULL TRACK MATCH. This is 3.73%
+below the accepted Trip 12 capture rate. Its 8.3% UI scheduled share supports
+remaining display overhead; saved-file/PC checking was not supplied for this job.
+See [the measured evidence](evidence/m15-mdk2-2026-09-23.json). This result belongs
+to the restored-menu runtime, before the new destination controls below.
+
+New captures select a saved parent (default `/Games`) and use title-based output:
+`/Games/MDK2/MDK2.gdi`, then `/Games/MDK2 (2)/MDK2.gdi`, without overwriting existing
+files. Resume/Verify choose the greatest numbered folder with a valid checkpoint
+matching the inserted disc's full identity, with legacy `/KUI/dumps` fallback.
+Advanced contains Verify, Resume and Settings. Only a full independent catalogue
+match gives the stream CRC badge a green result; saved-file readback is separate.
+Controls and the pending console check are in [ripper-controls.md](ripper-controls.md).
+
+The acquisition code remains frozen for this delivery. Both baseline test suites
+passed on clean `54711b931554` before minimal `capture.c` changes for destination
+selection, named metadata and result observation. The raw/DMA reader, command
+state machine, acquisition loop, retry policy and checkpoint encoding are
+unchanged. New destination/metadata tests pass on FAT32 and exFAT; **the named
+capture, catalogue display and PC saved-file check still need hardware acceptance**.
+A dedicated salvage workflow is planned separately, not included in Advanced yet.
+
 ## What made it fast (in order of effect)
 
 1. **End read-back off** (`end_readback=off`): re-reading every saved byte doubled the total time.
@@ -32,18 +127,19 @@ work took it from roughly an hour and three quarters to twenty minutes.
    +36% on a whole disc. Proven on data and audio tracks.
 4. **UI capped at 2 redraws a second** (`ui_hz=2`): the unthrottled UI took about a third of the CPU.
 
-## Defaults today, and one decision left open
+## Defaults today
 
 | Setting | Default | The fast, verified rips used |
 |---|---|---|
 | `ui_hz` | 2 | 2 |
 | `capture_read` | **dma** (since 2026-09-20) | dma |
-| `capture_hash` | both (SHA-256 + CRC32) | crc32 |
-| `end_readback` | on | off |
+| `capture_hash` | **crc32** (M1.5 shell) | crc32 |
+| `end_readback` | **off** (M1.5 shell) | off |
 
-**Open decision:** make `capture_hash=crc32` and `end_readback=off` the defaults. Every verified fast
-rip used them. With the old values a rip is correct but roughly twice as slow. Until then, put this
-in `/KUI/bench.cfg` (plain text, UTF-8 or ANSI):
+**M1.5 default decision:** the shell now selects `capture_hash=crc32` and `end_readback=off`.
+Every verified fast rip used them; no reader code changed for this decision. Saved preferences
+can change these choices, and explicit `bench.cfg` keys override preferences. Y Verify still
+rereads saved bytes. The equivalent `/KUI/bench.cfg` is (plain text, UTF-8 or ANSI):
 
 ```
 ui_hz=2
@@ -79,7 +175,11 @@ For projected whole-disc times from any saved report: `python3 tools/rip_time.py
 
 ## Still open, most useful first
 
-1. **The default decision above.** One line in `src/core/options.c`.
+1. **M1.5 app/destination acceptance.** Launcher, persistent preferences, selected destinations
+   and named output are implemented; a completed named capture and saved-file PC check remain
+   pending. The next app round adds system settings, idle disc titles, music, Memory Test, VMU
+   backup and network inspection, all awaiting console acceptance. See [the app checks](apps-test.md)
+   and [ripper controls](ripper-controls.md). The default decision above is applied.
 2. **Faster CRC16 in the SD driver** (link-time `--wrap net_crc16ccitt`, no KOS patch): measured at
    22.7 -> 8.8 CPU cycles a byte, worth about **7% on a capture** and 5% on SD reads.
    `src/core/crc16.c` already has the verified implementation (`kui_crc16_slice2`).

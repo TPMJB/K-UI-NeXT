@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "date": "2026-09-23",
+  "feature": "Advanced CRC completed-job and imported GDI scan compatibility",
+  "kind": "Host application/filesystem acceptance; not optical reader testing",
+  "result": "PASS",
+  "filesystem_cases": 64,
+  "filesystems": [
+    "FAT32",
+    "exFAT"
+  ],
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "leak_sanitizer": "disabled locally because executor ptrace restrictions",
+  "coverage": [
+    "Existing 40 clean/damaged/cancellation/storage failure cases retained",
+    "Named GDI schema1 SHA and schema2 CRC manifests",
+    "Both checkpoints absent: completed manifest hashes still verified",
+    "Present invalid/conflicting checkpoints still rejected",
+    "Exact missing descriptor filename in error",
+    "Games parent and no-metadata folder give actionable selection error",
+    "127-byte longest browser path and report header",
+    "GDI-only clean structure returns STRUCTURAL, never CLEAN",
+    "Quoted imported filenames and CRLF",
+    "GDI-only data damage reports issues; no invented CRC mismatch",
+    "Multiple descriptors, overlapping tracks, unsafe names, aliases, offsets and cooked sectors rejected",
+    "Original track and metadata hashes/sizes unchanged"
+  ],
+  "hardware_status": "Only prior damaged fixture accepted on console; new compatibility modes await console test",
+  "sources_sha256": {
+    "include/kui/recovery_scan.h": "356daee8b21b0d0c6a609db641aa79cb4bb29c463f3bb75d0f81714b00fcb325",
+    "src/core/recovery_manifest.c": "e17f682016e4ac9b860f457297613b5d55417afcc1070f78dc345fde0de75e75",
+    "src/core/recovery_scan.c": "2e9f13e1b517de88f214d3e4b3867a0f813fe22045e9cbcf0fa3ce997b310bbe",
+    "tests/test_recovery_manifest.c": "272dc4a3bed1386c85f8c677630dec63f9667926a0fe8cf3b95d619503d099ab",
+    "tests/recovery_scan_image.c": "fae7de6ccce63e9d3f844d1437c255e8e8f1883d4db813bcf88a96aa565431f7",
+    "tests/test_recovery_scan_images.py": "62899b9c314f180500a3182e54a069aef4518d9a95ef5bb70f1e0c6048ac0b09",
+    "tools/make_scan_fixtures.py": "666096f80c72da7f260a44f1b56ad19c2981740ce6aa82764deb44441d094d48"
+  }
+}

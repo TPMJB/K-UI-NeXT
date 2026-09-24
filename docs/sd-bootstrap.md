@@ -1,5 +1,12 @@
 # Reuse one boot disc for SD updates
 
+**Current update:** the M1.5 SD runtime opens a launcher with Disc Ripper,
+Settings and Diagnostics. See [the shell test](m15-shell-test.md) for its controls.
+Its package contract is unchanged; keep using your accepted bootstrap CD. The
+historical M1.2 session below records how that loader was introduced. All five
+rejection fixtures, normal cold boots and FAT32/exFAT loading have since passed;
+the current acceptance record is [the handoff](HANDOFF-disc-reader.md).
+
 The M1.2 test package contains a CD bootstrap with the existing diagnostics and
 a separate diagnostic runtime loaded from SD. Both are independent KOS programs.
 The earlier `cf8210bc5442` CD has no SD loader; it cannot gain that ability just
@@ -155,3 +162,13 @@ including the 4 MiB boundary, malformed headers, corruption, missing/truncated
 files, read errors and cancellation. Image hashes confirm loading does not
 write to the card. Host checks cannot establish physical execution handoff;
 that is the first console acceptance test above.
+
+
+### Ripper destination update
+
+The current shell runtime includes a destination browser, onscreen keyboard,
+`/Games` default and numbered game folders. Replace only `/KUI/runtime.kui` from
+its `sd-update` artifact, retaining the working bootstrap CD. See
+[ripper-controls.md](ripper-controls.md) for controls and the focused acceptance
+check. Destination preferences are saved separately; installing a runtime does
+not replace them or rename old dumps.

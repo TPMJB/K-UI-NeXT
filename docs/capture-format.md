@@ -162,3 +162,17 @@ CRC32 and SHA-256 are new project implementations of published algorithms;
 SHA-256 follows [FIPS 180-4](https://doi.org/10.6028/NIST.FIPS.180-4). The CD EDC
 uses reflected polynomial `0xd8018001`, zero initial state and no complement.
 No new linked library or copied DreamShell code is introduced.
+
+
+## Named output metadata extension
+
+The shell now selects a destination (default `/Games`) and creates a sanitized
+IP.BIN title folder before the first checkpoint: `Title`, `Title (2)`, etc.
+The GDI is `Title.gdi` in each folder. Named manifests add the optional
+`gdi_file` string to schema 1/2; the updated PC verifier validates this as a
+single filename and opens it explicitly. Manifests without that key retain
+`disc.gdi`. Checkpoint bytes, track filenames and capture hashes are unchanged.
+Resume/Verify discover the highest numbered folder in the selected parent whose
+checkpoint matches the complete disc identity and track plan, falling back to
+legacy `/KUI/dumps` jobs if no named match exists. See
+[ripper-controls.md](ripper-controls.md).

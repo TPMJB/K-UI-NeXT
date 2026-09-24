@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-23",
+  "kind": "owner_observation",
+  "source": "Owner message in project conversation",
+  "report": "Ripping a game now; faster than before, not as fast as prior Claude testing; max around 933 KiB/s. Menu seems functional but looks worse than original K-UI design.",
+  "reported_peak_kib_s": 933,
+  "game": null,
+  "filesystem": null,
+  "build_id": null,
+  "effective_options": null,
+  "rip_in_progress": true,
+  "complete_rip_average_kib_s": null,
+  "reference_verification": null,
+  "ui_feedback": "Restore the owner-authored prior menu design.",
+  "interpretation": "A reported peak from an ongoing, otherwise unspecified rip is not a comparable whole-disc benchmark. No change to accepted reader evidence or performance conclusion."
+}

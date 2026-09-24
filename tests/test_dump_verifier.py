@@ -90,6 +90,42 @@ class DumpVerifierTests(unittest.TestCase):
         self.m=original;self.write();(self.path/"disc.gdi").write_text("wrong\n")
         with self.assertRaises(ValueError):v.verify(self.path)
 
+    def test_named_gdi_and_legacy_compatibility(self):
+        for schema in (1, 2):
+            with self.subTest(schema=schema):
+                if schema == 2:
+                    self.m = self.crc_only()
+                self.m["gdi_file"] = "MDK2.gdi"
+                self.write()
+                legacy = self.path / "disc.gdi"
+                named = self.path / "MDK2.gdi"
+                if legacy.exists():
+                    legacy.rename(named)
+                self.assertEqual(len(v.verify(self.path)), 2)
+                # The explicit name wins; a stale second descriptor cannot mask
+                # corruption of the actual game descriptor.
+                legacy.write_bytes(named.read_bytes())
+                named.write_text("wrong\n")
+                with self.assertRaisesRegex(ValueError, "GDI descriptor"):
+                    v.verify(self.path)
+                named.write_bytes(legacy.read_bytes())
+                legacy.unlink()
+
+    def test_named_gdi_rejects_unsafe_names_and_links(self):
+        for name in ("../disc.gdi", "/disc.gdi", "C:disc.gdi", "a\\disc.gdi",
+                     "a\n.gdi", ".gdi", ".hidden.gdi", "x.gdi.", "x.gdi ",
+                     "x" * 100 + ".gdi", "x.bin", None, 42):
+            with self.subTest(name=name):
+                self.m["gdi_file"] = name
+                self.write()
+                with self.assertRaisesRegex(ValueError, "Unsafe GDI filename"):
+                    v.verify(self.path)
+        self.m["gdi_file"] = "alias.gdi"
+        self.write()
+        (self.path / "alias.gdi").symlink_to(self.path / "disc.gdi")
+        with self.assertRaisesRegex(ValueError, "Missing/unsafe GDI"):
+            v.verify(self.path)
+
     def test_a_missing_metadata_file_names_the_path_it_looked_for(self):
         # Run from tools/ with docs/evidence/x.json, the reference was looked for in tools/docs/evidence and
         # the error named only x.json. It now says where it looked, and calls a symbolic link a link.

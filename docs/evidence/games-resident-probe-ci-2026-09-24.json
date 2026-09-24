@@ -1,0 +1,39 @@
+{
+  "date": "2026-09-24",
+  "source_commit": "aaa73e9d246f27c2c3dea995d984e3088b794e8b",
+  "packaged_commit": "7a8493ae825e381e0eeef205f3f7a4a6bcf75778",
+  "source_tree": "ad2ec15a441a6e42985f27e1185d77e93025c6d4",
+  "run_id": 35950687212,
+  "host": {
+    "job_id": 107478363200,
+    "result": "success"
+  },
+  "dreamcast": {
+    "job_id": 107480496118,
+    "result": "success",
+    "layout": {
+      "client": {
+        "memory_end": "0x8c012c50",
+        "payload_bytes": 1928,
+        "unresolved_symbols": 0
+      },
+      "entry": {
+        "memory_end": "0x8c017d38",
+        "payload_bytes": 32056,
+        "unresolved_symbols": 0
+      },
+      "resident": {
+        "memory_end": "0x8ce074e8",
+        "payload_bytes": 23864,
+        "unresolved_symbols": 0
+      }
+    }
+  },
+  "sd_update": {
+    "artifact_id": 10787859487,
+    "bytes": 8075008,
+    "sha256": "9f3c95fdd2968e8df468f0deeda54c47685ca74be645b6ac4e19c226da72abed"
+  },
+  "hardware_tested": false,
+  "remaining_gate": "Console post-shutdown SD read proof; photograph final result and power cycle. Retail loading remains unimplemented."
+}

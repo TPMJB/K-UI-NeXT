@@ -8,6 +8,9 @@ from pathlib import Path
 import shutil
 import subprocess
 from runtime_package import envelope, flatten_elf, rejection_cases, verify
+from loader_package import inspect_probe
+from image_probe_package import inspect_image_probe
+from retail_package import inspect_retail
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +21,7 @@ def run(*args):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan"):
+    for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     return text
 
@@ -34,7 +37,13 @@ def main():
         raise SystemExit("Build the Dreamcast diagnostic first")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     runtime = ROOT / "build/kui-runtime.elf"
-    for image in (elf, runtime):
+    probe = ROOT / "build/loader/entry.elf"
+    image_probe = ROOT / "build/loader/image_entry.elf"
+    retail = ROOT / "build/retail/entry.elf"
+    run("python3", "tools/check_loader_layout.py")
+    run("python3", "tools/check_image_loader_layout.py")
+    run("python3", "tools/check_retail_loader_layout.py")
+    for image in (elf, runtime, probe, image_probe, retail):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
@@ -61,6 +70,32 @@ def main():
     sd = dist / "sd/KUI"
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "runtime.kui").write_bytes(package)
+    games = sd / "apps/games"
+    games.mkdir(parents=True, exist_ok=True)
+    probe_payload, probe_memory = flatten_elf(probe.read_bytes())
+    probe_package = envelope(probe_payload, probe_memory, commit[:12])
+    probe_info = inspect_probe(probe_package)
+    (games / "probe.kui").write_bytes(probe_package)
+    image_payload, image_memory = flatten_elf(image_probe.read_bytes())
+    image_package = envelope(image_payload, image_memory, commit[:12])
+    image_probe_info = inspect_image_probe(image_package)
+    (games / "image-probe.kui").write_bytes(image_package)
+    retail_payload, retail_memory = flatten_elf(retail.read_bytes())
+    retail_package = envelope(retail_payload, retail_memory, commit[:12])
+    retail_info = inspect_retail(retail_package)
+    (games / "retail-boot.kui").write_bytes(retail_package)
+    run("python3", "tools/make_loader_probe.py", str(games / "probe.dat"))
+    # Keep link maps and exact standalone ELFs in the full diagnostic download.
+    shutil.copytree(ROOT / "build/loader", dist / "loader-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    shutil.copytree(ROOT / "build/retail", dist / "retail-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    run("python3", "tools/generate_menu_music.py", "--directory", str(sd / "apps/music"))
+    run("python3", "tools/generate_music_demo.py", "--directory", str(dist / "sd/Music"), "--ogg")
+    run("python3", "tools/make_scan_fixtures.py", str(sd / "tests/scan"))
+    shutil.copyfile(ROOT / "resources/music/README.md", dist / "MUSIC.md")
+    shutil.copyfile(ROOT / "resources/music/demo.md", dist / "MUSIC-DEMO.md")
+    shutil.copyfile(ROOT / "resources/music/manifest.json", dist / "music-manifest.json")
     # Reference catalogues for the end-of-capture check (optional on the card).
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(ROOT / "data/known-dumps" / name, sd / name)
@@ -73,8 +108,19 @@ def main():
     (dist / "HARDWARE-TEST.md").write_text(guide("hardware-test.md"))
     (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
+    (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
+    (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
+    for name in ("games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+        (dist / (name.upper()+".md")).write_text(guide(name+".md"))
+    run("make", "build/render-shell")
+    run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
+    (dist / "APP-ARCHITECTURE.md").write_text(guide("app-architecture.md"))
+    (dist / "PRIOR-WORK-REUSE.md").write_text(guide("prior-work-reuse.md"))
+    (dist / "RIPPER-CONTROLS.md").write_text(guide("ripper-controls.md"))
+    (dist / "SALVAGE-PLAN.md").write_text(guide("salvage-plan.md"))
     shutil.copyfile(ROOT / "tools/verify_probe.py", dist / "verify_probe.py")
     shutil.copyfile(ROOT / "tools/verify_dump.py", dist / "verify_dump.py")
+    shutil.copyfile(ROOT / "tools/verify_salvage.py", dist / "verify_salvage.py")
     for src, name in (("capture-test.md", "CAPTURE-TEST.md"), ("capture-format.md", "CAPTURE-FORMAT.md"), ("memory-stats.md", "MEMORY-STATS.md"), ("optical-test.md", "OPTICAL-TEST.md"), ("performance-test-plan.md", "PERFORMANCE-TEST-PLAN.md")):
         (dist / name).write_text(guide(src))
     shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
@@ -105,7 +151,9 @@ def main():
             shutil.copyfile(path, source / path.name)
     compiler = subprocess.check_output(["sh-elf-gcc", "--version"], text=True).splitlines()[0]
     record = {"commit": commit, "compiler": compiler, "dependencies": lock,
-              "runtime": verify(package),
+              "runtime": verify(package), "loader_probe": probe_info,
+              "image_probe": image_probe_info,
+              "retail_boot": retail_info,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
     (dist / "build.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -114,9 +162,15 @@ def main():
     update = dist / "sd-update"
     (update / "KUI").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
+    shutil.copytree(sd / "apps", update / "KUI/apps", dirs_exist_ok=True)
+    shutil.copytree(sd / "tests/scan", update / "KUI/tests/scan", dirs_exist_ok=True)
+    shutil.copytree(dist / "sd/Music", update / "Music", dirs_exist_ok=True)
+    shutil.copyfile(dist / "MUSIC-DEMO.md", update / "MUSIC-DEMO.md")
+    shutil.copyfile(dist / "GAMES-LOADER-PROBE.md", update / "GAMES-LOADER-PROBE.md")
+    shutil.copyfile(dist / "GAMES-RETAIL-TEST.md", update / "GAMES-RETAIL-TEST.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     (update / "SOURCE.txt").write_text(
@@ -126,6 +180,15 @@ def main():
         "FatFs and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
         "Install KUI/runtime.kui on the SD card. Keep your existing boot CD.\n"
+        "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
+        "Copy Music/ for the supplied one-minute Harbor Lights WAV/Ogg, then select it in Music.\n"
+        "See MUSIC-DEMO.md for its format, playback check and composition provenance.\n"
+        "Copy KUI/apps/games/retail-boot.kui as well as runtime.kui for the first retail attempt.\n"
+        "Next test: GAMES-RETAIL-TEST.md. Games > inspect existing DOA2 GDI > Y Launch (experimental).\n"
+        "Confirm with A Launch. The existing CD and game dump remain usable.\n"
+        "The two accepted resident read probes remain available; no repeat is requested.\n"
+        "Record the last screen/game behavior, then power cycle. Gameplay is not yet accepted.\n"
+        "APPS-ROUND-FIVE.md covers the other apps. See RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
         "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
         "works as before and reports that nothing was compared. Attribution and licence\n"

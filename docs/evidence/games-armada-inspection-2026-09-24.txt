@@ -1,0 +1,34 @@
+Games inspection excerpt; source fingerprint and physical line ranges in companion JSON.
+
+Original lines 1-2:
+K-UI SD runtime 57d53841c1ea
+Log truncated: no
+
+Original lines 100-102:
+Games inspect: /Games/BUST_A_MOVE_4/BUST_A_MOVE_4.gdi
+Games result: Games inspection stopped
+Games metadata bytes read=3143; no complete-file verification or launch
+
+Original lines 107-112:
+Games inspect: /Games/ARMADA/ARMADA.gdi
+Games result: Image inspected; game launching is not available yet
+Games title: ARMADA; product=T40301N 00 region=U
+Games tracks=5 data=3 audio=2 bytes=1187764704
+Games boot: 0WINCEOS.BIN LBA=548388 bytes=1253376
+Games metadata bytes read=7199; no complete-file verification or launch
+
+Original lines 125-130:
+Games inspect: /Games/ARMADA/ARMADA.gdi
+Games result: Image inspected; game launching is not available yet
+Games title: ARMADA; product=T40301N 00 region=U
+Games tracks=5 data=3 audio=2 bytes=1187764704
+Games boot: 0WINCEOS.BIN LBA=548388 bytes=1253376
+Games metadata bytes read=7199; no complete-file verification or launch
+
+Original lines 135-140:
+Games inspect: /Games/ARMADA/ARMADA.gdi
+Games result: Image inspected; game launching is not available yet
+Games title: ARMADA; product=T40301N 00 region=U
+Games tracks=5 data=3 audio=2 bytes=1187764704
+Games boot: 0WINCEOS.BIN LBA=548388 bytes=1253376
+Games metadata bytes read=7199; no complete-file verification or launch

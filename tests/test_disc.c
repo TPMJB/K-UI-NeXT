@@ -142,6 +142,18 @@ static int run_dma_async(const char *mode) {
         fake.timeout=false;
         assert(!kui_disc_read_begin(NULL,45150,32,buf));
     }
+    if(!strcmp(mode,"dma-async-fail") || !strcmp(mode,"dma-async-timeout")) {
+        /* A same-boot Resume resets profiling, then can read successfully by
+         * PIO. Neither event certifies the failed DMA path or rearms it. This
+         * is distinct from B/door interruptions, which keep DMA available. */
+        kui_disc_timing_reset();capture_phase();
+        unsigned reads=fake.reads;
+        assert(kui_disc_read_raw(NULL,45150,32,buf)==KUI_READ_OK);
+        assert(fake.reads==reads+1 && fake.command==CD_CMD_PIOREAD);
+        reads=fake.reads;
+        assert(!kui_disc_read_begin(NULL,45182,32,buf));
+        assert(fake.reads==reads);
+    }
     printf("PASS dma async: %s\n",mode);
     return 0;
 }

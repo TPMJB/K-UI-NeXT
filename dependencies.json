@@ -8,9 +8,35 @@
     "commit": "4d74e40dd2122e14389a305ed1d86dd024201389"
   },
   "fatfs": [
-    {"url": "https://elm-chan.org/fsw/ff/arc/ff16.zip", "sha256": "99f7dc1f7e095356e4a9e3dbe29959090d8b948afe2bbc5441e52fdf4b85449e"},
-    {"url": "https://elm-chan.org/fsw/ff/patch/ff16p1.diff", "sha256": "7996ddc3135f3d534a8153f7d75d587030e5c8551b003c3b7ee823ffb7fc64bf"},
-    {"url": "https://elm-chan.org/fsw/ff/patch/ff16p2.diff", "sha256": "5cd39f1fc299f0f1dec9fa1ce544dc0bc048b2f6eb3b8161476ed20f9cf1e290"}
+    {
+      "url": "https://elm-chan.org/fsw/ff/arc/ff16.zip",
+      "sha256": "99f7dc1f7e095356e4a9e3dbe29959090d8b948afe2bbc5441e52fdf4b85449e"
+    },
+    {
+      "url": "https://elm-chan.org/fsw/ff/patch/ff16p1.diff",
+      "sha256": "7996ddc3135f3d534a8153f7d75d587030e5c8551b003c3b7ee823ffb7fc64bf"
+    },
+    {
+      "url": "https://elm-chan.org/fsw/ff/patch/ff16p2.diff",
+      "sha256": "5cd39f1fc299f0f1dec9fa1ce544dc0bc048b2f6eb3b8161476ed20f9cf1e290"
+    }
   ],
-  "toolchain": {"profile": "stable", "gcc": "15.2.0", "binutils": "2.45.1", "newlib": "4.6.0.20260123"}
+  "toolchain": {
+    "profile": "stable",
+    "gcc": "15.2.0",
+    "binutils": "2.45.1",
+    "newlib": "4.6.0.20260123"
+  },
+  "stb_vorbis": {
+    "url": "https://github.com/nothings/stb",
+    "commit": "2c980bb59875b0d32144a71867fbdebb2f77cd20",
+    "path": "stb_vorbis.c",
+    "sha256": "7162e378e5dc6b18bf26fe4e6e383c48f4a1b6a1ab0a015853ad6cb6e321b300",
+    "license": "MIT (selected upstream alternative A)",
+    "upstream_sha256": "4c7cb2ff1f7011e9d67950446b7eb9ca044f2e464d76bfbb0b84dd2e23e65636",
+    "adaptations": [
+      "get_seek_page_info rejects short header/lacing reads before inspecting them",
+      "get_seek_page_info assembles the top granule byte as unsigned uint32"
+    ]
+  }
 }

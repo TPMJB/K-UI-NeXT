@@ -1,0 +1,59 @@
+{
+  "source_repository": "TPMJB/K-UI_DS",
+  "source_commit": "2a5309298dde8fb100da1e2e4e10517695c9780f",
+  "source_path": "utils/generate_menu_music.py",
+  "source_git_blob": "b5af128b434afbade5652cbb3796bbd3c3ac7623",
+  "source_sha256": "836f391c2724264885ae364f4c9675474dbb51edeabe9df29d7778cce7786df8",
+  "tracks": [
+    {
+      "file": "menu.wav",
+      "title": "After Hours",
+      "bytes": 1058444,
+      "sha256": "53f00251ef9fc9c87e3a5cd2c05f08254a299ce5b2a1b0dda0a7ef31eb92c25f",
+      "channels": 1,
+      "sample_bits": 16,
+      "sample_rate": 22050,
+      "frames": 529200
+    },
+    {
+      "file": "neon-circuit.wav",
+      "title": "Neon Circuit",
+      "bytes": 846764,
+      "sha256": "6c5d75ee1720b13a2660a8f1e8df780bb2074db0db99913d9f9474654ab90f94",
+      "channels": 1,
+      "sample_bits": 16,
+      "sample_rate": 22050,
+      "frames": 423360
+    },
+    {
+      "file": "orbital-drift.wav",
+      "title": "Orbital Drift",
+      "bytes": 1058444,
+      "sha256": "5aff5c8e7d1ed3a4c8fc02b673005d33bbd99134e825e53a701ad08a39227110",
+      "channels": 1,
+      "sample_bits": 16,
+      "sample_rate": 22050,
+      "frames": 529200
+    },
+    {
+      "file": "midnight-vector.wav",
+      "title": "Midnight Vector",
+      "bytes": 769790,
+      "sha256": "529b771532cb6a47574ea1aba8a47039ad9c7f77ae3e35c251ab05e7e1d305ef",
+      "channels": 1,
+      "sample_bits": 16,
+      "sample_rate": 22050,
+      "frames": 384873
+    },
+    {
+      "file": "chrome-horizon.wav",
+      "title": "Chrome Horizon",
+      "bytes": 940844,
+      "sha256": "d8cce8e5f501b39ec1f9106cad5ed4dabce2ebbd5ddc7759cef4512e77e75199",
+      "channels": 1,
+      "sample_bits": 16,
+      "sample_rate": 22050,
+      "frames": 470400
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "received_date": "2026-09-23",
+  "runtime_build": "24d5cfe735d7",
+  "source": {
+    "kind": "User-supplied diagnostic log; raw content retained in the project conversation, not published",
+    "sha256": "cd6591824fb22d55bcbe5081bdd7d1254c1ef9e54347dedfdf7d211eb7416e26"
+  },
+  "context": "First M1.5 shell. Owner explicitly has not installed restored-menu runtime 8bae3efe7c2f.",
+  "disc": "The House of the Dead 2, US v1.001 [12S]",
+  "capture": {
+    "bytes": 1188966576,
+    "wall_us": 1273291252,
+    "average_kib_s": 911.8889099812963,
+    "elapsed_seconds": 1273.291252,
+    "setup_us": 3810095,
+    "finish_us": 1290608,
+    "setup_capture_finish_us": 1278391955,
+    "whole_operation_average_kib_s": 908.2505309375167,
+    "dma_chunks": 15795,
+    "pio_chunks": 4,
+    "console_result": "CAPTURED: all 3 tracks; stream CRC32 recorded; saved data NOT re-read",
+    "console_reference": "Reference check (TOSEC): FULL TRACK MATCH",
+    "capture_retry_messages": 0
+  },
+  "policy": {
+    "capture_hash": "crc32",
+    "end_readback": "off",
+    "capture_read": "dma",
+    "ui_hz": 2
+  },
+  "ui_census": {
+    "wall_ms": 1278394,
+    "ui_ms": 159235,
+    "ui_pct_reported": 12.4,
+    "meaning": "Scheduled time of the whole main/UI thread divided by capture-operation wall time. Overlaps per-stage wall timers. The interval encloses core setup/capture/finish and excludes outer disc preparation, settings refresh and report saving."
+  },
+  "checks": {
+    "same_session_settings_save_reload": "passed",
+    "manual_memory_snapshot": "recorded",
+    "capture_automatic_report_save": "passed"
+  },
+  "comparison": {
+    "earlier_sources": [
+      "t11-real-capture-dma-2026-09-20.txt",
+      "t12-mdk2-capture-dma-2026-09-20.txt",
+      "fat32-sword-dma-2026-09-20.txt"
+    ],
+    "earlier_ui_pct": [
+      5.1,
+      4.9,
+      4.1
+    ],
+    "interpretation": "Measured UI share is higher than earlier accepted runs. This supports the display-overhead diagnosis and the optimized-clear correction already shipped in 8bae3efe7c2f. It does not quantify how much of the difference comes from the clear alone, or establish that the pending update recovers it."
+  },
+  "limitations": [
+    "Reference result uses captured-stream CRC32. Saved files were not reread and no PC verification was supplied.",
+    "Different games/layouts from earlier performance references; no controlled same-disc UI comparison.",
+    "The duplicate DMA/PIO summary reports the same operation, not two sets of reads.",
+    "Earlier benchmark setup failures are separate from the later complete capture.",
+    "Restored-menu build 8bae3efe7c2f has not been tested in this report; no reader modification is indicated."
+  ]
+}

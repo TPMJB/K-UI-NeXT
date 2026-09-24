@@ -99,7 +99,15 @@ def verify(directory):
     require(tracks[0]["session"] == 0 and tracks[0]["start_fad"] == 150, "Invalid low-density start")
     high = next((t for t in tracks if t["session"] == 1), None)
     require(high is not None and high["start_fad"] == 45150 and high["control"] == 4, "Invalid high-density start")
-    descriptor = directory / "disc.gdi"
+    # Older jobs have no explicit descriptor field. Named jobs retain the same
+    # track paths and GDI contents; only the descriptor's safe basename changes.
+    gdi_name = m.get("gdi_file", "disc.gdi")
+    require(isinstance(gdi_name, str) and 4 < len(gdi_name.encode("utf-8")) <= 100
+            and gdi_name.lower().endswith(".gdi")
+            and not any(ord(c) < 32 or ord(c) == 127 or c in '/\\:*?"<>|' for c in gdi_name)
+            and gdi_name not in (".", "..") and not gdi_name.startswith(".")
+            and not gdi_name.endswith((" ", ".")), "Unsafe GDI filename")
+    descriptor = directory / gdi_name
     require(descriptor.is_file() and not descriptor.is_symlink() and descriptor.stat().st_size <= 8192, "Missing/unsafe GDI")
     require(descriptor.read_text().splitlines() == lines, "GDI descriptor differs from manifest")
     return results
