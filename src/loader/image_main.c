@@ -78,7 +78,7 @@ static void erase_retired_runtime(void) {
     erase_range((uintptr_t)__bss_end, KUI_IMAGE_RESIDENT_MEMORY_END);
     erase_range(KUI_IMAGE_RESIDENT_STACK, 0x8d000000u);
 }
-static void sd_failure(void) {
+static void display_sd_failure(void) {
     kui_loader_display_line(kui_loader_sd_result_name(last_sd_result));
     kui_loader_display_number("Last command: ", card.last_command);
     kui_loader_display_number("Last response: ", card.last_response);
@@ -127,7 +127,7 @@ void kui_image_resident_main(const uint8_t wire[KUI_IMAGE_MANIFEST_BYTES]) {
     last_sd_result = kui_loader_sd_init(&card);
     if(last_sd_result != KUI_LOADER_SD_OK) {
         kui_loader_display_result("SD initialization", 0, (uint32_t)last_sd_result);
-        sd_failure();
+        display_sd_failure();
         kui_loader_display_summary(1, 0);
         return;
     }
@@ -170,7 +170,7 @@ void kui_image_resident_main(const uint8_t wire[KUI_IMAGE_MANIFEST_BYTES]) {
         kui_loader_display_result("Actual post-handoff SD reads", 0, 0);
         failures++;
     }
-    if(last_sd_result != KUI_LOADER_SD_OK) sd_failure();
+    if(last_sd_result != KUI_LOADER_SD_OK) display_sd_failure();
     kui_loader_sd_shutdown(&card);
     kui_loader_display_summary(failures, image.blocks_read);
 }
