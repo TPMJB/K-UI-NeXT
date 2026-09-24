@@ -30,10 +30,10 @@
       "Client rejects bad CRC, status, transfer length, TOC, stuck pending and false physical read success"
     ],
     "full_portable_suite": "passed; added package/layout focused tests recorded by CI",
-    "full_filesystem_suite": "running locally; final result to be recorded with CI"
+    "full_filesystem_suite": "passed in CI runs 35992293803 and 35993291859; see games-selected-image-ci-2026-09-24.json"
   },
   "limits": [
-    "Native SH-4 linking/package checks pending CI at implementation commit",
+    "Native SH-4 linking/package checks passed in CI run 35993291859 after renaming a local error-display helper that collided with the forbidden runtime-driver prefix",
     "Selected-image hardware test pending",
     "No retail executable launched",
     "No hardware DMA, streaming or performance claim",

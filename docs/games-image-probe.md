@@ -6,6 +6,14 @@ shutdown. [That acceptance remains unchanged](evidence/games-resident-probe-hard
 The selected-image test described here is implemented; **its hardware result is
 pending**. It does not start the selected retail game.
 
+**Ready for this test:** [download sd-update, 7.73 MiB](https://github.com/TPMJB/K-UI-NeXT/actions/runs/35993291859/artifacts/10805331976).
+The runtime and selected-image payload both show build **`c4cfd4585ec5`**.
+[Build 35993291859](https://github.com/TPMJB/K-UI-NeXT/actions/runs/35993291859)
+passed the full host/filesystem suite, SH-4 compilation, both independent-loader
+layout checks and packaging. The downloaded ZIP, all file checksums and both
+payload envelopes also validate. Source `07b3a8a7497c` has the same tree as the
+packaged PR merge build. [Build evidence](evidence/games-selected-image-ci-2026-09-24.json).
+
 ## Install and run
 
 1. Finish any active operation and switch the Dreamcast off.
