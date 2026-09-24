@@ -17,7 +17,9 @@ increment has **passed on hardware** with DEAD OR ALIVE 2: build `c4cfd4585ec5`,
 all 11 checks passed and 93 post-handoff SD blocks read.
 [Evidence](evidence/games-selected-image-hardware-2026-09-24.json) and
 [accepted test guide](games-image-probe.md). No repeat is requested.
-It does not execute a retail boot file or provide hardware SD DMA.
+That accepted probe does not execute a retail boot file or provide hardware SD DMA.
+The separate first retail experiment is now implemented; its console test is
+pending. See [the DOA2 launch guide](games-retail-test.md).
 
 Runtime `57d53841c1ea` has now passed repeated ARMADA metadata inspection on
 the console, with a stopped earlier inspection followed by successful use.
@@ -36,8 +38,9 @@ meet this goal: later disc requests must also work.
 The portable, read-only GDI image service and bounded metadata reader are in
 place, and the original-fixture post-handoff read proof passed. Selected game
 tracks are connected to a limited GD-vector request service, and the selected
-DOA2 read path has passed on hardware. Retail boot state and compatibility remain later work; the fixed
-synthetic probe's acceptance alone does not establish those capabilities.
+DOA2 read path has passed on hardware. A separate experimental retail boot path
+is implemented, with boot state and compatibility awaiting the console test.
+The accepted read probes do not establish those capabilities.
 The existing bootstrap CD remains the entry point; deliver updates on SD.
 
 ## What we can reuse
@@ -52,8 +55,8 @@ The existing bootstrap CD remains the entry point; deliver updates on SD.
 | Physical CD player and GD Play | Keep as separate working features; neither supplies image-backed game-time CDDA or disc requests |
 
 Current code has bounded image ISO9660 traversal, a Games browser and separate
-original-fixture and selected-image resident test payloads. It has no retail
-executable launch path or IDE/CF adapter. The default branch remains an empty initial commit;
+original-fixture and selected-image resident test payloads, plus an experimental
+DOA2 executable launch path. There is no IDE/CF adapter. The default branch remains an empty initial commit;
 work from the current app branch based on `milestone/experiments`.
 
 ## Stages and acceptance
@@ -67,7 +70,7 @@ work from the current app branch based on `milestone/experiments`.
 | G5: compatibility | Additional titles and required command/audio/SDK behavior | Each title gets a reproducible test record with device, build, settings, working behavior and limitations |
 
 G1 and the thin G2 screen are implemented. Both the original G3 handoff/storage
-test and the selected-image GD-vector read test are accepted. Before the G4 retail attempt:
+test and the selected-image GD-vector read test are accepted. G4 status:
 
 1. **Accepted for the tested DOA2 image:** bounded, validated resident maps for
    the selected GDI's actual track files. Fragmentation and both filesystem
@@ -78,38 +81,34 @@ test and the selected-image GD-vector read test are accepted. Before the G4 reta
    lifecycle exercised by our own executable through the actual vector. Probe
    ABI v1 is separate. The new command-17 path still uses CPU-driven serial SD;
    retail interrupts/callbacks and streamed reads remain unimplemented.
-3. Establish a retail-safe memory layout and boot/cache/interrupt state; the
-   probe's cache-off high-RAM layout is only a correctness test. Load and hand
-   off the selected boot executable while keeping storage available afterward.
+3. **Implemented, hardware pending:** a temporary high stage loads the owner's
+   IP/executable, runs the original bootstraps, then installs the reader in
+   retired lower IP RAM and restores the original entry/CPU state. The low
+   reservation remains a title-bootstrap assumption to test on the console.
 4. Attempt Dead or Alive 2, then record loading transitions, gameplay and
    physical VMU save/load. A title screen alone does not meet G4.
 
 ### Next implementation: first DOA2 launch
 
-The selected-image photograph closes the read-path hardware gate. Continue
-with retail boot work; do not request another synthetic or selected-image probe.
-The present source still needs these concrete changes:
+The selected-image photograph closes the read-path hardware gate. The first
+DOA2 launch path is now implemented. Do not repeat either accepted read probe.
 
-- Load the identified boot executable, establish its independently documented
-  boot/IP state and transfer execution. `image_main.c` currently installs only
-  our own client; the boot extent is sampled, not executed. Keep the resident
-  SD service available instead of shutting it down after the client returns.
-- Establish a title-safe resident memory layout. The probe places its resident
-  at `0x8ce00000` and its stacks in high RAM. Our client obeys that reservation;
-  no equivalent ownership agreement with DOA2's startup, heap or stack has been
-  established. Executable-size bounds alone do not protect the service.
-- Establish retail CPU, cache and interrupt state, including executable-cache
-  coherency and disc-output P1/P2 aliases. `image_entry.S` deliberately leaves
-  caches off and interrupts masked for the accepted correctness test.
-- Protect GD-hook entry before enabling interrupts. `gd_hook.S` switches to
-  one fixed stack before the C reentrancy guard; a nested entry must not reuse
-  an active stack frame.
-- Resolve persistent TMU1/SCIF ownership and implement the GD/MISC and request
-  completion behavior required by the first title. Command-17 sample CRCs do
-  not prove DMA completion interrupts, callbacks or streamed reads.
+- Launcher preparation validates the native GD profile, reads IP/boot CRCs,
+  and produces a bounded read-only allocation map before filesystem teardown.
+- The temporary high stage runs the owner's original bootstraps. Its entry
+  trampoline restores the original executable bytes before game execution.
+- The compact resident occupies lower retired IP RAM, with a guarded private
+  stack. Firmware, metadata/TOC and conventional upper bootstrap/VBR remain.
+- Hook entry masks interrupts before switching stacks; guest buffers use
+  coherent cached/uncached aliases. The resident uses no floating-point code.
+- Serial ownership is scoped to each request with no game timer borrowed.
+  Polling, status/mode and MISC vector behavior are implemented. Command17
+  uses CPU copies; DMA interrupts, streaming and CDDA remain unsupported.
 
-Use independently licensed interface sources and original/synthetic host
-fixtures. This checklist does not establish any DOA2 gameplay compatibility.
+[The next test](games-retail-test.md) is **Y — Launch (experimental)** on the
+same DOA2 image, followed by **A — Launch**. Record the last diagnostic screen
+or furthest game progress. Successful build/host checks do not establish
+DOA2 gameplay, loading-transition or physical VMU compatibility.
 
 Do not spend this stage on cover art, large compatibility menus or broad
 format support. Dead or Alive 2 is the first retail candidate because

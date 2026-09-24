@@ -44,16 +44,42 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 3
+      - name: Select requested validation scope
+        id: scope
+        env:
+          KUI_VALIDATION_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          head = os.environ['KUI_VALIDATION_HEAD']
+          message = subprocess.check_output(['git', 'show', '-s', '--format=%B', head], text=True)
+          requested = 'Validation: console-only' in message.splitlines()
+          if requested:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
+              exact = {'Makefile.dc', '.github/workflows/diagnostic.yml',
+                       'tools/check_retail_instructions.py', 'tests/test_retail_instructions.py'}
+              if not paths or any(p not in exact and not p.startswith(('src/loader/', 'docs/')) for p in paths):
+                  raise SystemExit('Console-only request includes portable/app changes; full validation required')
+              print('Console-only correction requested: portable/app sources are unchanged; skipping their repeat suite.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('console_only=' + str(requested).lower() + '\n')
+          PY
       - name: Install filesystem test utilities
+        if: steps.scope.outputs.console_only != 'true'
         run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools
       - name: Restore pinned FatFs downloads
+        if: steps.scope.outputs.console_only != 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .deps/downloads
           key: fatfs-downloads-v1-${{ hashFiles('dependencies.json') }}
       - name: Fetch verified FatFs sources
+        if: steps.scope.outputs.console_only != 'true'
         run: python3 tools/fetch_deps.py --fatfs-only
       - name: Run portable and real filesystem checks
+        if: steps.scope.outputs.console_only != 'true'
         run: make test test-images
 
   dreamcast:

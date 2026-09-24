@@ -19,8 +19,9 @@ volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
 extern uint8_t __retail_resident_bss_end[] __asm__("__retail_resident_bss_end");
 
-/* GCC -m4-nofpu ensures the resident cannot disturb the game's FPSCR/FPU
- * register state. Every native address is checked before its P2 conversion.
+/* Fixed FPU registers, integer-only division and a linked machine-code audit
+ * prevent the resident from touching the game's FPSCR/FPU register state.
+ * Every native address is checked before its P2 conversion.
  * OCBP writes any dirty P1 line back and invalidates it: the P2 copy then
  * observes request parameters and leaves no stale cached destination alias. */
 static void purge(uint32_t address, uint32_t bytes) {

@@ -47,7 +47,9 @@ memory-reservation guarantee.
 
 GD reads use the independent, read-only serial-SD backend with finite work
 budgets and scoped ownership of the serial pins. The backend does not borrow
-a game timer. Requests complete through explicit polling in bounded chunks;
+a game timer. The temporary stage first retires the UART/FIFO state left by
+K-UI's shutdown; subsequent game-time reads preserve serial controls and
+refuse to take over active serial I/O. Requests complete through explicit polling in bounded chunks;
 command 17 still copies through the CPU. Hardware DMA interrupts, streaming,
 image CDDA, Windows CE, IDE/CF, and broad game compatibility are not implemented.
 The first game call requiring an unsupported operation may therefore stop

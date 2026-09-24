@@ -136,10 +136,11 @@ build/loader/image_entry.elf: build/loader/src/loader/image_entry.o src/loader/i
 # without floating-point instructions; the low resident must preserve whatever
 # FPU register bank/precision mode the game has selected. No KOS/newlib startup
 # or runtime is linked into these images. The accepted probes keep their flags.
-RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror -m4-nofpu -ml -ffreestanding \
+RETAIL_CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,xd0-xd14,fpul-fpscr
+RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(RETAIL_CPU) -ffreestanding \
     -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections \
     -fstack-usage -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
-RETAIL_LINK := -m4-nofpu -ml -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+RETAIL_LINK := $(RETAIL_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
 RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/retail_sd.o \
     build/retail/src/loader/minic.o build/retail/src/core/retail_image.o \
     build/retail/src/loader/retail_display.o
@@ -167,6 +168,7 @@ build/retail/stage.bin: build/retail/stage.elf
 build/retail/src/loader/retail_entry_asm.o: build/retail/stage.bin
 build/retail/entry.elf: build/retail/src/loader/retail_entry_asm.o src/loader/retail_entry.ld
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail/entry.map -o $@ $<
+	python3 tools/check_retail_instructions.py
 	python3 tools/check_retail_loader_layout.py
 	python3 tools/record_build.py $@
 

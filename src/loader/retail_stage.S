@@ -43,7 +43,8 @@ C(kui_retail_bootstrap_enter):
 
 /* This template runs at the owner's executable entry. Save every integer
  * register used by C, preserving the owner's bootstrap result. The entire
- * freestanding experiment is built -m4-nofpu, so FP state is never touched.
+ * freestanding experiment reserves FPU registers and uses integer division;
+ * a linked machine-code audit rejects instructions that touch FP state.
  * The preserved frame is 21 words: MACL,MACH,GBR,VBR,SR,PR,r14..r0. */
     .section .trampoline,"ax"
     .align 2

@@ -25,6 +25,18 @@ static struct kui_loader_sd card;
 static struct retail_display_state display;
 static enum kui_loader_sd_result last_card_result;
 
+static void retire_launcher_serial(void) {
+    /* KOS scif_spi_shutdown() calls scif_init(), leaving TE/RE enabled; its
+     * arch_shutdown does not turn them off. We are now the sole owner, with
+     * KOS stopped and interrupts masked. Retire that launcher-only UART/FIFO
+     * state once, using the pinned KOS SCIF-SPI initialization sequence.
+     * This function is absent from the resident: game-time acquisition must
+     * continue to reject active serial IO and preserve the game's controls. */
+    *(volatile uint16_t *)(uintptr_t)0xffe80008u=0;
+    *(volatile uint16_t *)(uintptr_t)0xffe80018u=6;
+    *(volatile uint16_t *)(uintptr_t)0xffe80018u=0;
+}
+
 static void stopped(const char *message,uint32_t detail) __attribute__((noreturn));
 static void stopped(const char *message,uint32_t detail) {
     retail_display_line(message);
@@ -66,6 +78,7 @@ void kui_retail_stage_main(const uint8_t *wire) {
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
        manifest.session_lba<45000)
         stopped("UNSUPPORTED RETAIL PROFILE",manifest.boot_bytes);
+    retire_launcher_serial();
     last_card_result=kui_retail_sd_init(&card);
     if(last_card_result!=KUI_LOADER_SD_OK) {
         retail_display_hex("SD COMMAND",card.last_command);
@@ -108,7 +121,8 @@ void kui_retail_stage_main(const uint8_t *wire) {
  * supported initial stack/VBR follow the conventional native GD bootstrap
  * layout; reject an incompatible entry before replacing any bootstrap code.
  * General registers, SR, VBR, GBR, PR, MAC and cache configuration are restored
- * by assembly; -m4-nofpu leaves every floating-point register unchanged. */
+ * by assembly; fixed FPU registers, integer division and the linked machine-
+ * code audit keep every floating-point register unchanged. */
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_restore(&display);
     retail_display_line("OWNER BOOTSTRAPS REACHED GAME ENTRY");
