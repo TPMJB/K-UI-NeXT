@@ -135,13 +135,16 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_RIPPER ? "B Home   START Advanced   L/R Songs" :
         s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   L Actions" :
         s->page==KUI_SHELL_GAMES ? "B Parent / Home   LEFT/RIGHT Page" :
-        s->page==KUI_SHELL_GAMES_DETAIL ? "X Inspect again   B Games" :
+        s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_image_ready(s)?
+            "A Test image reads   X Inspect   B Games":"X Inspect again   B Games") :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
+        s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
+            "A Start test   B Image details":"B Image details") :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
-    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM)
+    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM)
         label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
@@ -876,7 +879,9 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         label(p,44,280,WHITE,line);
         snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
         label(p,44,306,MUTED,line);
-        label(p,44,337,CYAN,"Image inspected; launching not available yet");
+        label(p,44,337,CYAN,kui_shell_games_image_ready(s)?
+            "A Test image reads after leaving the menu":
+            "Inspect this image again before testing reads.");
         label(p,44,365,MUTED,"Metadata checks do not verify every saved sector.");
     } else {
         label(p,44,210,v->busy?CYAN:AMBER,d->message);
@@ -912,6 +917,26 @@ static void games_probe_confirmation(struct paint *p,const struct kui_shell_view
         label(p,48,364,CYAN,v->app_status->message);
     else label(p,48,364,AMBER,"Power cycle to return to the launcher.");
 }
+static void games_image_probe_confirmation(struct paint *p,const struct kui_shell *s,
+        const struct kui_shell_view *v) {
+    title(p,40,108,"Games / Test image reads");
+    words(p,40,140,608,CYAN,s->games_selected_path,false);
+    panel(p,32,168,576,234,PANEL);
+    if(!kui_shell_games_image_ready(s)) {
+        label(p,48,186,AMBER,"Image details changed; inspect the image again.");
+        label(p,48,220,WHITE,"Press B, then X to inspect before testing.");
+        return;
+    }
+    label(p,48,186,CYAN,v->busy?"Preparing the handoff...":"Run the selected-image test?");
+    label(p,48,218,WHITE,"Exits this menu and reads samples from this GDI.");
+    label(p,48,244,WHITE,"Tests the GD requests used by retail games.");
+    label(p,48,270,MUTED,"The game itself will not start.");
+    label(p,48,302,WHITE,"Keep the SD card inserted throughout the test.");
+    label(p,48,328,WHITE,"Photograph the final result, then power cycle.");
+    label(p,48,354,MUTED,"Sample checks are not a full image verification.");
+    if(v->busy && v->app_status && v->app_status->message[0])
+        label(p,48,380,CYAN,v->app_status->message);
+}
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
@@ -940,6 +965,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_GAMES_DETAIL: game_detail(&p,s,v); break;
     case KUI_SHELL_GAMES_ADVANCED: games_advanced(&p,s); break;
     case KUI_SHELL_GAMES_PROBE_CONFIRM: games_probe_confirmation(&p,v); break;
+    case KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM: games_image_probe_confirmation(&p,s,v); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
     }
     footer(&p,s,v);

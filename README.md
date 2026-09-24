@@ -142,8 +142,13 @@ whole tracks. See [the Games hardware guide](docs/games-test.md).
 The separate resident SD service and original post-handoff test program passed
 on hardware: build `7a8493ae825e`, ten checks, 84 SD blocks read after launcher
 shutdown. [Evidence](docs/evidence/games-resident-probe-hardware-2026-09-24.json).
-The next work is selected-GDI resident mapping and retail request/boot support.
-Retail game launching is not implemented yet. See [the staged Games plan](docs/games-milestone-plan.md).
+The next increment implements selected-GDI resident mapping and a bounded GD
+request service through the actual BIOS vector. Its own client compares sampled
+post-shutdown SD reads against pre-handoff CRC references. **Hardware acceptance
+is pending:** follow [the selected-image test guide](docs/games-image-probe.md)
+using an existing Dead or Alive 2 dump. This does not start the retail game or
+provide hardware SD DMA. Retail boot and compatibility remain subsequent work;
+see [the staged Games plan](docs/games-milestone-plan.md).
 The accepted reader stays frozen; the existing boot disc remains in use.
 
 ## License and contribution policy

@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-24",
+  "scope": "Selected-GDI resident map and GD BIOS vector subset; original client, no retail execution",
+  "host": {
+    "sanitizers": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ],
+    "local_leak_sanitizer": "disabled under ptrace; CI retains normal configuration",
+    "resident_map_assertions": 726929,
+    "gd_service_assertions": 6950,
+    "image_client_injected_faults": 12,
+    "fatfs_selected_image_cases": 36,
+    "filesystems": [
+      "FAT32",
+      "exFAT"
+    ],
+    "layouts": [
+      "MBR",
+      "superfloppy"
+    ],
+    "whole_card_sha256_unchanged": true,
+    "coverage": [
+      "Contiguous and fragmented tracks",
+      "Independent raw-track and cooked-sector byte comparison after filesystem disconnect",
+      "Sample CRCs, audio, adjacent track boundary and partial 512-byte tail",
+      "Malformed package/metadata, changed file length, out-of-bounds and overlapping extents",
+      "Read/seek/close/unmount failures, cancellation before and during mapping",
+      "Actual GD request lifecycle, TOCs, FAD conversion, alias normalization, guest memory bounds, rejected commands, cancellation without I/O",
+      "Client rejects bad CRC, status, transfer length, TOC, stuck pending and false physical read success"
+    ],
+    "full_portable_suite": "passed; added package/layout focused tests recorded by CI",
+    "full_filesystem_suite": "running locally; final result to be recorded with CI"
+  },
+  "limits": [
+    "Native SH-4 linking/package checks pending CI at implementation commit",
+    "Selected-image hardware test pending",
+    "No retail executable launched",
+    "No hardware DMA, streaming or performance claim",
+    "Sample consistency is not full-image or catalogue verification"
+  ],
+  "unchanged_optical_reader_sha256": {
+    "src/core/capture.c": "74bc14786561bc5b4f0a1936711235f1cba8cb66027c49a0d9761e74e746815b",
+    "src/dreamcast/disc.c": "b365e0529cfd60d26ed7bae392305ec2d235ca5760415ee4d6d3efa2b396f5c4",
+    "src/core/command.c": "1261a6a77ea69d7afcf1189650200d17ce35192c216638117c1ff88215740afd"
+  }
+}

@@ -187,6 +187,12 @@ void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detai
     s->games_detail.boot_file[sizeof(s->games_detail.boot_file)-1]=0;
     s->games_detail.message[sizeof(s->games_detail.message)-1]=0;
 }
+bool kui_shell_games_image_ready(const struct kui_shell *s) {
+    return s && s->games_detail.valid &&
+        games_path_safe(s->games_selected_path,sizeof(s->games_selected_path)) &&
+        memchr(s->games_detail.path,0,sizeof(s->games_detail.path)) &&
+        !strcmp(s->games_detail.path,s->games_selected_path);
+}
 static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     if(first) s->games_page=0;
     s->games_selected=0;
@@ -397,6 +403,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->confirm_quick_resume) { s->confirm_quick_resume=false; return KUI_SHELL_NONE; }
         if(s->confirm_gd_boot) { s->confirm_gd_boot=false; return KUI_SHELL_NONE; }
         if(s->confirm_new) { s->confirm_new = false; return KUI_SHELL_NONE; }
+        if(s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM) {
+            s->page=KUI_SHELL_GAMES_DETAIL;return KUI_SHELL_NONE;
+        }
         if(s->page==KUI_SHELL_GAMES_PROBE_CONFIRM) {
             s->page=KUI_SHELL_GAMES_ADVANCED;return KUI_SHELL_NONE;
         }
@@ -457,7 +466,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
         s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
-        s->page==KUI_SHELL_GAMES_PROBE_CONFIRM;
+        s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
         unsigned triggers=buttons & (KUI_SHELL_L|KUI_SHELL_R);
         if(triggers==KUI_SHELL_L) return KUI_SHELL_MUSIC_PREVIOUS;
@@ -579,6 +588,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_GAMES_DETAIL:
         if((buttons&KUI_SHELL_X) && games_path_safe(s->games_selected_path,sizeof(s->games_selected_path)))
             return inspect_game(s);
+        if((buttons&KUI_SHELL_A) && kui_shell_games_image_ready(s))
+            s->page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
         break;
     case KUI_SHELL_GAMES_ADVANCED:
         s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,3);
@@ -592,6 +603,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_GAMES_PROBE_CONFIRM:
         if(buttons&KUI_SHELL_A) return KUI_SHELL_GAMES_PROBE;
+        break;
+    case KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM:
+        if((buttons&KUI_SHELL_A) && kui_shell_games_image_ready(s))
+            return KUI_SHELL_GAMES_IMAGE_PROBE;
         break;
     case KUI_SHELL_RIPPER:
         if(buttons & KUI_SHELL_A) s->confirm_new = true;

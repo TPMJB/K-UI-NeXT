@@ -19,6 +19,7 @@ RUNTIME_OBJECTS += build/dc/src/core/known_dumps.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
+RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/crc16.o
 RUNTIME_OBJECTS += build/dc/src/core/settings.o build/dc/src/core/settings_file.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
@@ -29,7 +30,7 @@ RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id
-all: $(TARGET) $(RUNTIME) build/loader/entry.elf
+all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -105,3 +106,27 @@ build/loader/entry.elf: build/loader/src/loader/entry.o src/loader/entry.ld
 	python3 tools/record_build.py $@
 
 -include $(PROBE_CLIENT:.o=.d) $(PROBE_RESIDENT:.o=.d) build/loader/src/loader/entry.d
+
+# Selected-GDI BIOS request proof: separate payloads preserve the accepted G3
+# fixture probe. The resident hooks the real GD vector; neither binary links KOS.
+IMAGE_CLIENT := build/loader/src/loader/image_client_start.o build/loader/src/loader/image_client.o \
+    build/loader/src/loader/image_client_call.o build/loader/src/loader/minic.o
+IMAGE_RESIDENT := build/loader/src/loader/image_resident_start.o build/loader/src/loader/image_main.o \
+    build/loader/src/loader/image_display.o build/loader/src/loader/gd_hook.o \
+    build/loader/src/loader/sd_reader.o build/loader/src/dreamcast/shell_font.o \
+    build/loader/src/core/resident_image.o build/loader/src/core/gd_service.o build/loader/src/loader/minic.o
+build/loader/src/loader/image_display.o: force-build-id
+build/loader/image_client.elf: $(IMAGE_CLIENT) src/loader/image_client.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/image_client.ld -Wl,-Map,build/loader/image_client.map -o $@ $(IMAGE_CLIENT) -lgcc
+build/loader/image_client.bin: build/loader/image_client.elf
+	sh-elf-objcopy -O binary $< $@
+build/loader/src/loader/image_resident_start.o: build/loader/image_client.bin
+build/loader/image_resident.elf: $(IMAGE_RESIDENT) src/loader/image_resident.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/image_resident.ld -Wl,-Map,build/loader/image_resident.map -o $@ $(IMAGE_RESIDENT) -lgcc
+build/loader/image_resident.bin: build/loader/image_resident.elf
+	sh-elf-objcopy -O binary $< $@
+build/loader/src/loader/image_entry.o: build/loader/image_resident.bin
+build/loader/image_entry.elf: build/loader/src/loader/image_entry.o src/loader/image_entry.ld
+	sh-elf-gcc $(PROBE_LINK) -Tsrc/loader/image_entry.ld -Wl,-Map,build/loader/image_entry.map -o $@ $<
+	python3 tools/record_build.py $@
+-include $(IMAGE_CLIENT:.o=.d) $(IMAGE_RESIDENT:.o=.d) build/loader/src/loader/image_entry.d

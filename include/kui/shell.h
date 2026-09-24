@@ -31,7 +31,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GD_PLAY, KUI_SHELL_MUSIC, KUI_SHELL_CLOCK,
     KUI_SHELL_VMU_RESTORE, KUI_SHELL_CRC_SCAN, KUI_SHELL_VMU_ACTIONS, KUI_SHELL_SYSTEM_TOOLS, KUI_SHELL_SALVAGE, KUI_SHELL_CD_AUDIO,
     KUI_SHELL_GAMES, KUI_SHELL_GAMES_DETAIL, KUI_SHELL_GAMES_ADVANCED,
-    KUI_SHELL_GAMES_PROBE_CONFIRM };
+    KUI_SHELL_GAMES_PROBE_CONFIRM, KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -53,7 +53,8 @@ enum kui_shell_action {
     KUI_SHELL_BIOS_BACKUP, KUI_SHELL_RESTART,
     KUI_SHELL_SALVAGE_NEW, KUI_SHELL_SALVAGE_RESUME, KUI_SHELL_SALVAGE_RECOVER,
     KUI_SHELL_CD_LIST, KUI_SHELL_CD_PLAY, KUI_SHELL_CD_PAUSE, KUI_SHELL_CD_RESUME, KUI_SHELL_CD_STOP,
-    KUI_SHELL_GAMES_LIST, KUI_SHELL_GAMES_INSPECT, KUI_SHELL_GAMES_PROBE
+    KUI_SHELL_GAMES_LIST, KUI_SHELL_GAMES_INSPECT, KUI_SHELL_GAMES_PROBE,
+    KUI_SHELL_GAMES_IMAGE_PROBE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -138,6 +139,7 @@ void kui_shell_set_music_listing(struct kui_shell *shell,
  * LIST uses games_path + games_page * ROWS; INSPECT uses games_selected_path. */
 void kui_shell_set_games_listing(struct kui_shell *shell, const struct kui_games_page *page);
 void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);
+bool kui_shell_games_image_ready(const struct kui_shell *shell);
 /* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
  * DEST_SAVE reads browse_path. Main owns the generation check before installing
  * worker results; these functions themselves perform no filesystem I/O. */

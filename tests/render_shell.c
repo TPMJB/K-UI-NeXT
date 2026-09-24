@@ -7,7 +7,7 @@
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
  * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder, home-games,
  * games, games-detail, games-error, games-advanced, games-probe,
- * games-probe-loading. */
+ * games-probe-loading, games-image-probe, games-image-probe-loading. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -44,6 +44,7 @@ int main(int argc,char **argv) {
         shell.page=KUI_SHELL_GAMES_DETAIL;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
+        strcpy(d->path,shell.games_selected_path);
         d->valid=strcmp(argv[1],"games-error")!=0;d->bytes=1185765648;d->tracks=3;d->data_tracks=2;d->audio_tracks=1;
         d->boot_bytes=123456;d->boot_lba=45166;
         strcpy(d->title,"Dead or Alive 2");strcpy(d->product,"T-3601N");strcpy(d->region,"JUE");
@@ -55,6 +56,14 @@ int main(int argc,char **argv) {
         if(!strcmp(argv[1],"games-probe-loading")) {
             view.busy=true;view.app_status=&status;status.complete=false;
             strcpy(status.message,"Validating the probe package");
+        }
+    } else if(!strcmp(argv[1],"games-image-probe") || !strcmp(argv[1],"games-image-probe-loading")) {
+        shell.page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
+        strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
+        strcpy(shell.games_detail.path,shell.games_selected_path);shell.games_detail.valid=true;
+        if(!strcmp(argv[1],"games-image-probe-loading")) {
+            view.busy=true;view.app_status=&status;status.complete=false;
+            strcpy(status.message,"Mapping selected image files");
         }
     }
     else if(!strcmp(argv[1],"audio-cd")) {

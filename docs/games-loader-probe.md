@@ -5,7 +5,9 @@
 The original-fixture resident storage/handoff foundation is proven on this
 console. [Evidence and scope](evidence/games-resident-probe-hardware-2026-09-24.json).
 No repeat run, new rip or full verification is requested. The instructions below
-are retained for reproduction. Retail game launching remains subsequent work.
+are retained for reproduction. The current next check is the separate
+[selected-image GD request probe](games-image-probe.md); its hardware result is
+pending. Retail game launching remains subsequent work.
 
 ## Install and run
 
@@ -59,8 +61,10 @@ checks its capacity and reads blocks with CRC16 and bounded command waits.
 
 The request interface is **K-UI probe ABI v1**, not a retail GD BIOS replacement.
 An on-console PASS establishes the independent storage/handoff foundation.
-Retail BIOS request translation, game boot state, memory reservations, CDDA
-and game-specific compatibility remain subsequent work. First retail target
+The subsequent selected-image probe implements a bounded BIOS-vector request
+subset and allocation maps, pending its own hardware acceptance. Game boot
+state, retail memory reservations, interrupt/callback behavior, CDDA and
+game-specific compatibility remain subsequent work. The first retail target
 remains the owner's Dead or Alive 2 image after those pieces are implemented.
 
 The SD protocol/SCIF implementation derives from pinned permissively licensed

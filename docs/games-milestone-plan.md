@@ -10,7 +10,11 @@ Host validation and the focused console checklist are documented in
 the console: build `7a8493ae825e`, ten checks passed, 84 post-handoff SD blocks.
 This accepts the original-fixture storage/handoff foundation through K-UI probe
 ABI v1. [Evidence](evidence/games-resident-probe-hardware-2026-09-24.json).
-Selected retail-image mapping and retail GD BIOS/boot support remain unimplemented.
+The next increment implements selected-image allocation mapping and a bounded
+request service reached through the actual GD BIOS vector. Its own test client
+compares sampled post-shutdown SD reads with pre-handoff CRC references. This
+increment is **pending hardware acceptance**; use [the selected-image guide](games-image-probe.md).
+It does not execute a retail boot file or provide hardware SD DMA.
 
 Runtime `57d53841c1ea` has now passed repeated ARMADA metadata inspection on
 the console, with a stopped earlier inspection followed by successful use.
@@ -27,9 +31,10 @@ game. A library listing or a jump to a game's boot executable alone does not
 meet this goal: later disc requests must also work.
 
 The portable, read-only GDI image service and bounded metadata reader are in
-place, and the original-fixture post-handoff read proof passed. The next work
-connects selected game tracks to the resident service and supplies the retail
-request/boot interface; the fixed synthetic probe alone does not provide either.
+place, and the original-fixture post-handoff read proof passed. Selected game
+tracks are now connected to a limited GD-vector request service for the next
+hardware test. Retail boot state and compatibility remain later work; the fixed
+synthetic probe's acceptance alone does not establish those capabilities.
 The existing bootstrap CD remains the entry point; deliver updates on SD.
 
 ## What we can reuse
@@ -43,8 +48,9 @@ The existing bootstrap CD remains the entry point; deliver updates on SD.
 | Runtime package validation and shutdown model | Useful validation/lifecycle patterns; current bootstrap `arch_exec` path is not a retail loader |
 | Physical CD player and GD Play | Keep as separate working features; neither supplies image-backed game-time CDDA or disc requests |
 
-Current code has bounded image ISO9660 traversal and a Games browser. It has no
-retail resident loader or IDE/CF adapter. The default branch remains an empty initial commit;
+Current code has bounded image ISO9660 traversal, a Games browser and separate
+original-fixture and selected-image resident test payloads. It has no retail
+executable launch path or IDE/CF adapter. The default branch remains an empty initial commit;
 work from the current app branch based on `milestone/experiments`.
 
 ## Stages and acceptance
@@ -60,11 +66,14 @@ work from the current app branch based on `milestone/experiments`.
 G1 and the thin G2 screen are implemented, and the original G3 handoff/storage
 test is accepted. Before the G4 retail attempt:
 
-1. Build bounded, validated resident maps for a selected GDI's actual track
-   files, including fragmented files, track boundaries and LBA/FAD conversion.
-2. Add the independently sourced GD BIOS request/response interface and test
-   its calling convention, statuses, buffer bounds and command lifecycle using
-   our own executable. Probe ABI v1 is not this retail interface.
+1. **Implemented; hardware pending:** bounded, validated resident maps for a
+   selected GDI's actual track files, including fragmentation, track boundaries
+   and LBA/FAD conversion. The selected-image test uses an existing dump.
+2. **Implemented subset; hardware pending:** the independently sourced GD BIOS
+   request/response calling convention, statuses, buffer bounds and command
+   lifecycle exercised by our own executable through the actual vector. Probe
+   ABI v1 is separate. The new command-17 path still uses CPU-driven serial SD;
+   retail interrupts/callbacks and streamed reads remain unimplemented.
 3. Establish a retail-safe memory layout and boot/cache/interrupt state; the
    probe's cache-off high-RAM layout is only a correctness test. Load and hand
    off the selected boot executable while keeping storage available afterward.
@@ -90,24 +99,26 @@ Opening the library reads only bounded metadata and validates required files;
 it does not run Advanced CRC or reread whole dumps. A dump's existing verification
 record can be shown with its provenance; it is not a fresh integrity check.
 
-Proposed new boundaries are `src/apps/games*` for the app, a portable image module
-under `src/core/`, and a separately linked `src/loader/` payload. Its SD package
-belongs under `/KUI/apps/games/`. Define the package and launch-request versions
-before using them; this is not the implementation of a general app plugin ABI.
+The boundaries are `src/apps/games*` for the app, portable image and GD service
+modules under `src/core/`, and separately linked `src/loader/` payloads. Their SD
+packages live under `/KUI/apps/games/`. The selected-image package uses a
+CRC-protected, pointer-free 64 KiB manifest with at most 99 tracks, 4,096 file
+extents and 16 reference samples. These are versioned probe contracts, not a
+general app plugin ABI or a finished retail loader interface.
 
 Before handoff, stop music and CD playback, park/join workers, finish storage
 operations and explicitly transfer device ownership. Validate payload sizes,
 destinations and resident memory regions before overwriting any shell memory.
-The resident code needs its own bounded stack/buffers and a storage path that
-does not call freed shell/KOS state. Decide what SD/FatFs subset survives, or
-what minimal replacement is required, before implementing the trampoline.
+The resident test code owns bounded stacks/buffers and uses its independent
+read-only SCIF backend. No FatFs or KOS state survives into the resident reader;
+the validated allocation map connects selected-image reads to physical blocks.
 
 Document the supported BIOS/GD request surface and retail boot state from
 independently licensed sources. The proof program must exercise TOC/status,
 read submission and completion, sequential and random reads, track boundaries,
-and unsupported/cancel/error behavior. It must check returned bytes against
-known data after the main runtime is gone. Host tests prove arithmetic and
-state handling; only the console test proves this handoff. Initially rebooting
+and unsupported/cancel/error behavior. It checks returned bytes against
+pre-handoff sample CRCs after the main runtime is gone. Host tests prove arithmetic
+and state handling; only the console test proves this new vector handoff. Initially rebooting
 to return to K-UI is acceptable; in-game return is separate compatibility work.
 
 Design a read-only storage backend boundary for SD and later IDE/CF. Upstream

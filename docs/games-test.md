@@ -2,8 +2,9 @@
 
 This is the G1/G2 foundation for the [Games plan](games-milestone-plan.md).
 It adds a ninth launcher app in the existing K-UI style. It does not launch
-retail games yet; the next architectural gate is the resident read service and
-our own post-handoff test program. The normal optical reader is unchanged.
+retail games yet. The original-fixture resident proof has since passed, and the
+selected-image/vector test is the current pending gate. The normal optical
+reader is unchanged.
 
 **Hardware update — 2026-09-24:** runtime `57d53841c1ea` inspected ARMADA three
 times with identical five-track/boot metadata, reading 7,199 bytes each time.
@@ -14,8 +15,8 @@ The exact browsing route and other unlogged controls are not inferred. See
 
 ## Install
 
-For the current next test, follow **[Resident loader probe](games-loader-probe.md)**.
-It adds `KUI/apps/games/` to the SD update. The browsing checklist below is
+For the current next test, follow **[Selected-image GD request probe](games-image-probe.md)**.
+It adds `KUI/apps/games/image-probe.kui` to the SD update. The browsing checklist below is
 retained for G1/G2; accepted ARMADA inspection does not need repeating.
 
 Finish any active operation, shut down, and replace `/KUI/runtime.kui` with the
@@ -29,7 +30,8 @@ No new game files, full rip, verification scan or benchmark is needed.
 | Home | Select Games and press A |
 | Games | Up/down select, A open/inspect, left/right page, X refresh, Start Advanced |
 | Advanced | Choose Game library (`/Games`) or Browse SD folders (`/`) with A; B returns |
-| Image details | X inspect again; B returns to the list |
+| Image details | A Test image reads after valid inspection; X inspect again; B returns to the list |
+| Image test confirmation | A starts the handoff; B returns to details |
 | During I/O | B requests Stop; navigation resumes when work ends |
 
 The library includes immediate folders and `.gdi` files. A folder containing
@@ -85,7 +87,7 @@ callbacks; `game_metadata.c` parses IP.BIN and bounded ISO9660 boot metadata.
 All files close and the volume unmounts before returning to the UI. Existing
 RAM music can keep playing; no optical command is issued by Games inspection.
 
-The current app remains linked into `runtime.kui`. The independent resident
-loader will be a separate component; no `/KUI/apps/games/` executable package
-or game-time compatibility is claimed by this update. IDE/CF sources remain
-unavailable until a backend is implemented and tested.
+The browser remains linked into `runtime.kui`. Resident test executables now
+live separately under `/KUI/apps/games/`: the original synthetic `probe.kui` and
+the selected-image `image-probe.kui`. These test payloads do not launch retail
+games. IDE/CF sources remain unavailable until a backend is implemented and tested.

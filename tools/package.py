@@ -9,6 +9,7 @@ import shutil
 import subprocess
 from runtime_package import envelope, flatten_elf, rejection_cases, verify
 from loader_package import inspect_probe
+from image_probe_package import inspect_image_probe
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,8 +37,10 @@ def main():
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     runtime = ROOT / "build/kui-runtime.elf"
     probe = ROOT / "build/loader/entry.elf"
+    image_probe = ROOT / "build/loader/image_entry.elf"
     run("python3", "tools/check_loader_layout.py")
-    for image in (elf, runtime, probe):
+    run("python3", "tools/check_image_loader_layout.py")
+    for image in (elf, runtime, probe, image_probe):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
@@ -70,6 +73,10 @@ def main():
     probe_package = envelope(probe_payload, probe_memory, commit[:12])
     probe_info = inspect_probe(probe_package)
     (games / "probe.kui").write_bytes(probe_package)
+    image_payload, image_memory = flatten_elf(image_probe.read_bytes())
+    image_package = envelope(image_payload, image_memory, commit[:12])
+    image_probe_info = inspect_image_probe(image_package)
+    (games / "image-probe.kui").write_bytes(image_package)
     run("python3", "tools/make_loader_probe.py", str(games / "probe.dat"))
     # Keep link maps and exact standalone ELFs in the full diagnostic download.
     shutil.copytree(ROOT / "build/loader", dist / "loader-build",
@@ -94,7 +101,7 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
-    for name in ("games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -136,6 +143,7 @@ def main():
     compiler = subprocess.check_output(["sh-elf-gcc", "--version"], text=True).splitlines()[0]
     record = {"commit": commit, "compiler": compiler, "dependencies": lock,
               "runtime": verify(package), "loader_probe": probe_info,
+              "image_probe": image_probe_info,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
     (dist / "build.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -151,7 +159,7 @@ def main():
     shutil.copyfile(dist / "GAMES-LOADER-PROBE.md", update / "GAMES-LOADER-PROBE.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     (update / "SOURCE.txt").write_text(
@@ -165,7 +173,8 @@ def main():
         "Copy Music/ for the supplied one-minute Harbor Lights WAV/Ogg, then select it in Music.\n"
         "See MUSIC-DEMO.md for its format, playback check and composition provenance.\n"
         "Copy KUI/apps/games as well as runtime.kui for the resident loader probe.\n"
-        "Start with GAMES-LOADER-PROBE.md. Games > START Advanced > Resident loader probe.\n"
+        "Next test: GAMES-IMAGE-PROBE.md. Games > select existing GDI > A Test image reads.\n"
+        "The accepted synthetic probe remains in Games > START Advanced. No need to repeat it.\n"
         "Photograph its PASS/failure screen, then power cycle. No retail game launch yet.\n"
         "APPS-ROUND-FIVE.md covers the other apps. See RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"

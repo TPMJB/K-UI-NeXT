@@ -47,12 +47,13 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_GAMES_PROBE_CONFIRM;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
         assert(press(KUI_SHELL_L,true)==(page==KUI_SHELL_HOME||page==KUI_SHELL_RIPPER?
-            KUI_SHELL_MUSIC_PREVIOUS:page==KUI_SHELL_GAMES_PROBE_CONFIRM?
+            KUI_SHELL_MUSIC_PREVIOUS:(page==KUI_SHELL_GAMES_PROBE_CONFIRM ||
+            page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM)?
             KUI_SHELL_NONE:KUI_SHELL_MSTATS));
         assert(s.page==page);
     }
@@ -497,13 +498,37 @@ static void games_controls(void) {
     kui_shell_set_games_listing(&s,&page);press(KUI_SHELL_DOWN,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && s.page==KUI_SHELL_GAMES_DETAIL);
     assert(!strcmp(s.games_selected_path,page.entries[1].path));
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* Never pretend to launch. */
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* Uninspected images cannot start a test. */
     assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GAMES_DETAIL);
     struct kui_games_detail detail={.valid=true,.tracks=3};
     strcpy(detail.path,"/Games/Other.gdi");strcpy(detail.title,"Other image");
     kui_shell_set_games_detail(&s,&detail);assert(!s.games_detail.valid);
     strcpy(detail.path,s.games_selected_path);strcpy(detail.title,"Dead or Alive 2");
     kui_shell_set_games_detail(&s,&detail);assert(s.games_detail.valid && s.games_detail.tracks==3);
+    assert(kui_shell_games_image_ready(&s));
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_L|KUI_SHELL_R|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(kui_shell_games_image_ready(&s));
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
+    /* The confirmation must not hand off stale, malformed, or missing details. */
+    strcpy(s.games_detail.path,"/Games/Other.gdi");
+    assert(!kui_shell_games_image_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    memset(s.games_detail.path,'x',sizeof(s.games_detail.path));
+    assert(!kui_shell_games_image_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    strcpy(s.games_detail.path,s.games_selected_path);s.games_detail.valid=false;
+    assert(!kui_shell_games_image_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    s.games_detail.valid=true;strcpy(s.games_selected_path,"/Games/../invalid.gdi");
+    strcpy(s.games_detail.path,s.games_selected_path);
+    assert(!kui_shell_games_image_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    strcpy(s.games_selected_path,detail.path);strcpy(s.games_detail.path,detail.path);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_GAMES_INSPECT && !s.games_detail.valid);
+    kui_shell_set_games_detail(&s,&detail);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_INSPECT && !s.games_detail.valid);
     strcpy(detail.message,"Track file missing");detail.valid=false;
     kui_shell_set_games_detail(&s,&detail);assert(!strcmp(s.games_detail.message,"Track file missing"));
@@ -526,8 +551,7 @@ static void games_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
 
-    /* A separate confirmation is required before leaving the launcher.
-     * The probe never launches through a selected retail game's detail page. */
+    /* The accepted synthetic probe remains available independently of a game. */
     reset(KUI_SHELL_GAMES_ADVANCED);
     press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==2);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
@@ -603,7 +627,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_GAMES_PROBE_CONFIRM;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -925,15 +949,17 @@ static void games_rendering(void) {
     assert(strstr(drawn,"PAGE 1 +") && strstr(drawn,"START Advanced") && !strstr(drawn,"A Launch"));
     view.busy=true;render(&view);assert(strstr(drawn,"B Stop safely"));view.busy=false;
     reset(KUI_SHELL_GAMES_DETAIL);strcpy(s.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
+    strcpy(s.games_detail.path,s.games_selected_path);
     s.games_detail.valid=true;s.games_detail.tracks=3;s.games_detail.data_tracks=2;s.games_detail.audio_tracks=1;
     s.games_detail.bytes=1185765648;s.games_detail.boot_bytes=123456;s.games_detail.boot_lba=45166;
     strcpy(s.games_detail.title,"Dead or Alive 2");strcpy(s.games_detail.product,"T-3601N");
     strcpy(s.games_detail.region,"JUE");strcpy(s.games_detail.boot_file,"1ST_READ.BIN");render(&view);
     assert(strstr(drawn,"Dead or Alive 2") && strstr(drawn,"T-3601N") && strstr(drawn,"1ST_READ.BIN"));
     assert(strstr(drawn,"Tracks: 3") && strstr(drawn,"1185765648 bytes"));
-    assert(strstr(drawn,"Image inspected; launching not available yet") && !strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"A Test image reads") && strstr(drawn,"X Inspect") && !strstr(drawn,"A Launch"));
     s.games_detail.valid=false;strcpy(s.games_detail.message,"Track file missing");render(&view);
     assert(strstr(drawn,"Could not inspect image") && strstr(drawn,"Track file missing"));
+    assert(!strstr(drawn,"A Test image reads"));
     s.games_detail.stopped=true;render(&view);assert(strstr(drawn,"Inspection stopped"));
     reset(KUI_SHELL_GAMES_ADVANCED);render(&view);
     assert(strstr(drawn,"Game library") && strstr(drawn,"Browse SD folders") && strstr(drawn,"Resident loader probe"));
@@ -947,6 +973,19 @@ static void games_rendering(void) {
     strcpy(status.message,"Validating the probe package");render(&view);
     assert(strstr(drawn,"Preparing the handoff") && strstr(drawn,status.message) && strstr(drawn,"B Stop safely"));
     assert(!strstr(drawn,"A Start probe"));
+    view.busy=false;reset(KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    strcpy(s.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
+    strcpy(s.games_detail.path,s.games_selected_path);s.games_detail.valid=true;
+    render(&view);
+    assert(strstr(drawn,s.games_selected_path) && strstr(drawn,"A Start test") && strstr(drawn,"B Image details"));
+    assert(strstr(drawn,"reads samples from this GDI") && strstr(drawn,"GD requests used by retail games"));
+    assert(strstr(drawn,"game itself will not start") && strstr(drawn,"not a full image verification"));
+    assert(strstr(drawn,"Photograph the final result, then power cycle") && !strstr(drawn,"L Memory"));
+    view.busy=true;strcpy(status.message,"Mapping selected image files");render(&view);
+    assert(strstr(drawn,"Preparing the handoff") && strstr(drawn,status.message) && strstr(drawn,"B Stop safely"));
+    assert(!strstr(drawn,"A Start test"));view.busy=false;
+    strcpy(s.games_detail.path,"/Games/Other.gdi");render(&view);
+    assert(strstr(drawn,"Image details changed") && !strstr(drawn,"A Start test"));
 }
 int main(void) {
     games_controls(); games_rendering();

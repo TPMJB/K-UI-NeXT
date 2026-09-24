@@ -1,5 +1,18 @@
 # Hardware evidence
 
+## Selected-image GD request test: hardware pending — 2026-09-24
+
+The next Games increment implements selected-GDI allocation mapping and a
+bounded request service through the actual GD BIOS vector. Its own standalone
+client compares post-shutdown physical SD reads with small pre-handoff CRC
+references. **No console result for this increment has been supplied.** Follow
+[the selected-image guide](games-image-probe.md) using the existing Dead or Alive
+2 dump; no full rip, full verification or reader benchmark is requested.
+
+This does not start the retail executable, provide hardware SD DMA or establish
+throughput. The accepted original-fixture result below remains valid within its
+recorded scope; it is not evidence for the new selected-image/vector path.
+
 ## Games resident handoff: original fixture passed — 2026-09-24
 
 The owner's console photograph identifies build **7a8493ae825e**, shows all
@@ -11,9 +24,10 @@ and [photograph transcription](evidence/games-resident-probe-hardware-2026-09-24
 
 The photograph does not identify the filesystem, establish throughput or retail
 GD BIOS compatibility, or demonstrate CDDA playback. Selected-game track mapping
-and retail boot/request support remain to be implemented. The next target is
-Dead or Alive 2 after those pieces pass their focused checks. No repeat of this
-probe, ARMADA inspection, full rip or reader benchmark is requested.
+and the bounded vector request path are now implemented but pending their own
+hardware check as noted above. Retail boot remains subsequent work, with Dead or
+Alive 2 the first intended target. No repeat of this original probe, ARMADA
+inspection, full rip or reader benchmark is requested.
 
 ## Games image inspection: ARMADA — 2026-09-24
 

@@ -27,9 +27,14 @@ work took it from roughly an hour and three quarters to twenty minutes.
 Games has since passed repeated ARMADA metadata inspection and its first
 resident storage/handoff test. The owner's photograph of `7a8493ae825e` shows
 ten PASS checks and 84 SD blocks read after launcher shutdown/retired RAM erasure.
-This proves the original-fixture K-UI probe ABI path; retail GD BIOS support and
-selected-game loading remain next. [Hardware evidence](evidence/games-resident-probe-hardware-2026-09-24.json).
-No repeat probe or optical reader test is requested; see [the Games plan](games-milestone-plan.md).
+This proves the original-fixture K-UI probe ABI path.
+[Hardware evidence](evidence/games-resident-probe-hardware-2026-09-24.json).
+The next increment implements selected-GDI resident mapping and a limited GD
+request service through the actual BIOS vector; its separate client performs
+sample CRC checks after shutdown. That increment is **pending hardware
+acceptance** via [the selected-image guide](games-image-probe.md). It does not
+start a retail game or provide hardware SD DMA. No repeat of the accepted
+synthetic probe or optical reader test is requested; see [the Games plan](games-milestone-plan.md).
 
 Runtime **cc2320bb6d3a** passed the three small Advanced CRC fixtures and
 completed a saved-file scan of Armada with no bad/unsupported sectors. All five

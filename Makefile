@@ -5,6 +5,8 @@ SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
 INCLUDES = -Iinclude -I.deps/fatfs/source
 CORE = src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c
 LOADER_PROBE = src/core/loader_probe.c
+RESIDENT_IMAGE = src/core/resident_image.c
+GD_SERVICE = src/core/gd_service.c
 DESTINATION = src/core/destination.c src/core/destination_file.c
 CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
@@ -12,12 +14,16 @@ FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 .PHONY: test test-recovery test-images deps diagnostic clean
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
+test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-cd-audio
 	./build/test-game-image
 	./build/test-game-metadata
 	./build/test-loader-probe build/loader-probe.dat
 	./build/test-loader-sd
+	./build/test-resident-image
+	./build/test-gd-service
+	./build/test-image-client
 	./build/test-cd-audio guard
 	./build/test-network-probe
 	./build/test-network-connect
@@ -86,6 +92,24 @@ build/test-loader-sd: tests/test_loader_sd.c src/loader/sd_reader.c src/loader/s
 build/loader-probe-image: tests/loader_probe_image.c src/apps/games_probe.c $(LOADER_PROBE) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c $(CORE) $(FATFS) include/kui/games_probe.h include/kui/loader_probe.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/loader_probe_image.c src/apps/games_probe.c $(LOADER_PROBE) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c $(CORE) $(FATFS) -Wl,--wrap=f_open -Wl,--wrap=f_read -Wl,--wrap=f_lseek -Wl,--wrap=f_close -Wl,--wrap=f_mount -Wl,--wrap=f_write -Wl,--wrap=f_mkdir -Wl,--wrap=f_unlink -Wl,--wrap=f_rename -o $@
+
+build/test-resident-image: tests/test_resident_image.c $(RESIDENT_IMAGE) include/kui/resident_image.h include/kui/game_image.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(RESIDENT_IMAGE) tests/test_resident_image.c -o $@
+
+build/test-gd-service: tests/test_gd_service.c $(GD_SERVICE) include/kui/gd_service.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(GD_SERVICE) tests/test_gd_service.c -o $@
+
+build/test-image-client: tests/test_image_client.c src/loader/image_client.c $(GD_SERVICE) include/kui/image_client.h include/kui/gd_service.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/loader/image_client.c $(GD_SERVICE) tests/test_image_client.c -o $@
+
+GAMES_IMAGE_PROBE = src/apps/games_image_probe.c $(RESIDENT_IMAGE) src/core/game_image.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+GAMES_IMAGE_PROBE_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_lseek,--wrap=f_close,--wrap=f_mount,--wrap=f_write,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename
+build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) include/kui/games_image_probe.h include/kui/resident_image.h include/kui/game_image.h include/kui/game_metadata.h include/kui/image_loader_layout.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
 build/test-core: tests/test_core.c $(CORE) include/kui/core.h include/kui/media.h config/ffconf.h .deps/fatfs/source/ff.h
 	@mkdir -p build
@@ -179,7 +203,8 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/loader-probe-image build/games-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+test-images: build/games-image-probe build/loader-probe-image build/games-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+	python3 tests/test_games_image_probe.py
 	python3 tests/test_loader_probe_images.py
 	python3 tests/test_games_images.py
 	python3 tests/test_salvage_images.py
