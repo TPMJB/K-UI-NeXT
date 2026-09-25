@@ -52,6 +52,7 @@ def guide(source):
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     text = text.replace("(release-v1.5.md)", "(START-HERE.md)")
+    text = text.replace("(../resources/music/README.md)", "(MUSIC.md)")
     text = text.replace("(release-v1.5-notes.md)", "(RELEASE-NOTES.md)")
     return text
 
@@ -134,7 +135,16 @@ def main():
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     shutil.copytree(ROOT / "build/retail-bench", dist / "retail-bench-build",
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
-    run("python3", "tools/generate_menu_music.py", "--directory", str(sd / "apps/music"))
+    # Menu music ships as the committed Ogg encodings recorded in the manifest.
+    # A fresh folder cannot carry WAVs from an earlier local package.
+    music_manifest = json.loads((ROOT / "resources/music/manifest.json").read_text())
+    shutil.rmtree(sd / "apps/music", ignore_errors=True)
+    (sd / "apps/music").mkdir(parents=True)
+    for track in music_manifest["tracks"]:
+        data = (ROOT / "resources/music" / track["ogg"]["file"]).read_bytes()
+        if hashlib.sha256(data).hexdigest() != track["ogg"]["sha256"]:
+            raise SystemExit(f"resources/music/{track['ogg']['file']} differs from its manifest record")
+        (sd / "apps/music" / track["ogg"]["file"]).write_bytes(data)
     run("python3", "tools/generate_music_demo.py", "--directory", str(dist / "sd/Music"), "--ogg")
     run("python3", "tools/make_scan_fixtures.py", str(sd / "tests/scan"))
     shutil.copyfile(ROOT / "resources/music/README.md", dist / "MUSIC.md")
@@ -229,6 +239,7 @@ def main():
         "original notices are also included in build.json and LICENSES/.\n\n"
         "Install KUI/runtime.kui on the SD card. Keep your existing boot CD.\n"
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
+        "The menu songs are now Ogg Vorbis; older menu WAVs there are only a fallback.\n"
         "Copy Music/ for the supplied one-minute Harbor Lights WAV/Ogg, then select it in Music.\n"
         "See MUSIC-DEMO.md for its format, playback check and composition provenance.\n"
         "Copy KUI/apps/games along with runtime.kui for the Games app.\n"
@@ -322,9 +333,8 @@ def main():
     bundle_sd = bundle / "KUI"
     (bundle_sd / "apps").mkdir(parents=True)
     shutil.copyfile(sd / "runtime.kui", bundle_sd / "runtime.kui")
-    music_manifest = json.loads((ROOT / "resources/music/manifest.json").read_text())
     bundle_apps = {
-        "music": [track["file"] for track in music_manifest["tracks"]],
+        "music": [track["ogg"]["file"] for track in music_manifest["tracks"]],
         "games": ("probe.kui", "image-probe.kui", "retail-boot.kui", "probe.dat"),
     }
     for app, files in bundle_apps.items():

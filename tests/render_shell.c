@@ -32,7 +32,7 @@ int main(int argc,char **argv) {
         .gdi_name="MDK2.gdi",.music_title="Neon Circuit",.music_enabled=true,
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
-    view.music_cache_bytes=4674286;
+    view.music_cache_bytes=913765;
     if(!strcmp(argv[1],"home-games")) shell.home_selected=8;
     else if(!strcmp(argv[1],"games")) {
         shell.page=KUI_SHELL_GAMES;shell.games_listing.count=8;shell.games_listing.has_more=true;

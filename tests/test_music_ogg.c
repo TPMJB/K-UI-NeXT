@@ -67,13 +67,25 @@ int main(void) {
     assert(broken[payload]==1 && !memcmp(broken+payload+1,"vorbis",6));
     broken[payload+11]=3;recheck(broken,sizeof(ogg_stereo));
     assert(!kui_ogg_open(&ogg,broken,sizeof(ogg_stereo),arena,sizeof(arena),NULL));
+    assert(!kui_ogg_reopen(&ogg,broken,sizeof(ogg_stereo),arena,sizeof(arena)));
     memcpy(broken,ogg_stereo,sizeof(ogg_stereo));put32(broken+payload+12,96000);recheck(broken,sizeof(ogg_stereo));
     assert(!kui_ogg_open(&ogg,broken,sizeof(ogg_stereo),arena,sizeof(arena),NULL));
+    assert(!kui_ogg_reopen(&ogg,broken,sizeof(ogg_stereo),arena,sizeof(arena)));
+    /* Reopening already-validated bytes skips only the whole-file page scan:
+     * it restarts identically, and arena and format checks still apply. */
+    assert(kui_ogg_open(&ogg,ogg_mono,sizeof(ogg_mono),arena,sizeof(arena),NULL));
+    assert(kui_ogg_fill(&ogg,pcm,8192)==8192);kui_ogg_close(&ogg);
+    assert(kui_ogg_reopen(&ogg,ogg_mono,sizeof(ogg_mono),arena,sizeof(arena)));
+    assert(ogg.rate==22050u && ogg.channels==1u && ogg.frames==11025u);
+    assert(kui_ogg_fill(&ogg,second,8192)==8192 && !memcmp(pcm,second,8192));kui_ogg_close(&ogg);
+    assert(!kui_ogg_reopen(&ogg,ogg_mono,sizeof(ogg_mono),arena+1,sizeof(arena)-1));
+    assert(!kui_ogg_reopen(&ogg,ogg_mono,sizeof(ogg_mono),arena,1024));
+    assert(!kui_ogg_reopen(&ogg,NULL,sizeof(ogg_mono),arena,sizeof(arena)) && !ogg.decoder);
     memcpy(broken,ogg_stereo,sizeof(ogg_stereo));broken[payload+1]='x';recheck(broken,sizeof(ogg_stereo));
     assert(!kui_ogg_open(&ogg,broken,sizeof(ogg_stereo),arena,sizeof(arena),NULL));
     memcpy(broken,ogg_stereo,sizeof(ogg_stereo));size_t page=next_page(broken,0);
     put32(broken+page+14,read32(broken+page+14)+1u);recheck(broken,sizeof(ogg_stereo));
     assert(!kui_ogg_open(&ogg,broken,sizeof(ogg_stereo),arena,sizeof(arena),NULL));
-    puts("PASS Ogg: mono/stereo decode, exact loop, bounded arena, cancellation, truncation, bad CRC/headers/serial/trailing data");
+    puts("PASS Ogg: mono/stereo decode, exact loop, bounded arena, cancellation, truncation, bad CRC/headers/serial/trailing data, identical reopen");
     return 0;
 }

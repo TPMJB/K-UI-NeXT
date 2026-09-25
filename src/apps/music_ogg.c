@@ -67,12 +67,12 @@ void kui_ogg_close(struct kui_ogg *ogg) {
     if(ogg->decoder) stb_vorbis_close(ogg->decoder);
     memset(ogg,0,sizeof(*ogg));
 }
-bool kui_ogg_open(struct kui_ogg *out,const uint8_t *file,size_t bytes,
-    void *workspace,size_t workspace_bytes,bool (*cancel)(void)) {
+static bool open_decoder(struct kui_ogg *out,const uint8_t *file,size_t bytes,
+    void *workspace,size_t workspace_bytes,bool check_pages,bool (*cancel)(void)) {
     if(!out) return false;
     memset(out,0,sizeof(*out));
     if(!file || !workspace || bytes>INT_MAX || workspace_bytes<KUI_OGG_WORKSPACE_BYTES ||
-       ((uintptr_t)workspace&15u) || !pages_valid(file,bytes,cancel)) return false;
+       ((uintptr_t)workspace&15u) || (check_pages && !pages_valid(file,bytes,cancel))) return false;
     stb_vorbis_alloc arena={(char *)workspace,KUI_OGG_WORKSPACE_BYTES};int error=0;
     lock_codec();stb_vorbis *v=stb_vorbis_open_memory(file,(int)bytes,&error,&arena);
     if(!v) {unlock_codec();return false;}
@@ -86,6 +86,14 @@ bool kui_ogg_open(struct kui_ogg *out,const uint8_t *file,size_t bytes,
     }
     out->decoder=v;out->rate=info.sample_rate;out->channels=(unsigned)info.channels;out->frames=frames;
     unlock_codec();return true;
+}
+bool kui_ogg_open(struct kui_ogg *out,const uint8_t *file,size_t bytes,
+    void *workspace,size_t workspace_bytes,bool (*cancel)(void)) {
+    return open_decoder(out,file,bytes,workspace,workspace_bytes,true,cancel);
+}
+bool kui_ogg_reopen(struct kui_ogg *out,const uint8_t *file,size_t bytes,
+    void *workspace,size_t workspace_bytes) {
+    return open_decoder(out,file,bytes,workspace,workspace_bytes,false,NULL);
 }
 size_t kui_ogg_fill(struct kui_ogg *ogg,void *pcm,size_t bytes) {
     if(!ogg || !ogg->decoder || ogg->failed || !pcm || !bytes || bytes>131072u ||

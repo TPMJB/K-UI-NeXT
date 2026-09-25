@@ -13,7 +13,12 @@
       "channels": 1,
       "sample_bits": 16,
       "sample_rate": 22050,
-      "frames": 529200
+      "frames": 529200,
+      "ogg": {
+        "file": "menu.ogg",
+        "bytes": 74210,
+        "sha256": "8881a515fafc4629836f3a08b2dd6e818aa277497e49dff7532780b11e8bbb1e"
+      }
     },
     {
       "file": "neon-circuit.wav",
@@ -23,7 +28,12 @@
       "channels": 1,
       "sample_bits": 16,
       "sample_rate": 22050,
-      "frames": 423360
+      "frames": 423360,
+      "ogg": {
+        "file": "neon-circuit.ogg",
+        "bytes": 111339,
+        "sha256": "1add1faf4c0429a466dddc12a7bfd370f3d70ca7ac7b126ba6897890bde245f2"
+      }
     },
     {
       "file": "orbital-drift.wav",
@@ -33,7 +43,12 @@
       "channels": 1,
       "sample_bits": 16,
       "sample_rate": 22050,
-      "frames": 529200
+      "frames": 529200,
+      "ogg": {
+        "file": "orbital-drift.ogg",
+        "bytes": 114755,
+        "sha256": "8f084f3dcb872510efb54cde7209bf37ec0e2b6215dc3664af5825574fca108b"
+      }
     },
     {
       "file": "midnight-vector.wav",
@@ -43,7 +58,12 @@
       "channels": 1,
       "sample_bits": 16,
       "sample_rate": 22050,
-      "frames": 384873
+      "frames": 384873,
+      "ogg": {
+        "file": "midnight-vector.ogg",
+        "bytes": 107836,
+        "sha256": "b7eb0e0786a53d341fae43ade067b016cf5e242becbc039c62d7d50b9d83b588"
+      }
     },
     {
       "file": "chrome-horizon.wav",
@@ -53,7 +73,18 @@
       "channels": 1,
       "sample_bits": 16,
       "sample_rate": 22050,
-      "frames": 470400
+      "frames": 470400,
+      "ogg": {
+        "file": "chrome-horizon.ogg",
+        "bytes": 112394,
+        "sha256": "c3edb577fd01d948a6a5974a9f129f61daf58610c2fdfdd9cbda51b27e356abf"
+      }
     }
-  ]
+  ],
+  "ogg_encoding": {
+    "tool": "tools/generate_menu_music.py --ogg",
+    "encoder": "FFmpeg 6.1.1 (Ubuntu 24.04 package 7:6.1.1-3ubuntu5) with libvorbis 1.3.7",
+    "options": "-map_metadata -1 -fflags +bitexact -flags:a +bitexact -c:a libvorbis -q:a 5",
+    "note": "The card receives these committed Oggs. Each decodes to the recorded WAV's exact frame count."
+  }
 }

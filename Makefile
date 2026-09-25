@@ -12,7 +12,7 @@ CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/captur
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 .PHONY: test test-recovery test-images deps diagnostic clean
-test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek
+test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-sd
@@ -394,6 +394,11 @@ build/test-music-ogg: tests/test_music_ogg.c src/apps/music_ogg.c include/kui/mu
 build/test-music-ogg-seek: tests/test_music_ogg_seek.c src/apps/music_ogg.c include/kui/music_ogg.h third_party/stb/stb_vorbis.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast tests/test_music_ogg_seek.c -lm -o $@
+
+# Run by tests/test_music_assets.py against the committed menu Oggs.
+build/music-asset-check: tests/music_asset_check.c src/apps/music_ogg.c src/apps/wav.c include/kui/music_ogg.h include/kui/wav.h third_party/stb/stb_vorbis.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/music_ogg.c src/apps/wav.c tests/music_asset_check.c -lm -o $@
 
 build/test-menu-sound: tests/test_menu_sound.c src/apps/menu_sound.c include/kui/menu_sound.h $(wildcard tests/menu_sound_stubs/dc/sound/*.h)
 	@mkdir -p $(@D)

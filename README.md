@@ -54,6 +54,9 @@ These new app paths still need physical-console acceptance.
   caches PCM16 WAV or Ogg Vorbis songs up to 6 MiB for background playback across apps.
   The developer `sd-update` includes an original one-minute WAV/Ogg sample.
   Music Player supports custom-song cycling, explicit cache clearing and a separate audio-CD player.
+  Since 1.5 the five menu songs ship as Ogg Vorbis and share one decoder, so the
+  cached playlist uses 0.87 MiB of RAM instead of 4.46 MiB; cards with only the
+  1.5 WAVs still play them ([details](docs/music-round-five.md#bundled-menu-songs-as-ogg)).
 - Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
   Start opens Advanced, **Destination folder** and **Capture settings**.
   Advanced also offers explicitly confirmed Quick resume (sizes only), preserving

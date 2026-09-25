@@ -12,6 +12,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+/* The player's one shared decoder allocation, including alignment slack. */
+#define ARENA_BYTES (KUI_OGG_WORKSPACE_BYTES+15u)
 #ifdef KUI_MUSIC_ALLOC_TEST
 /* The linker wraps the real allocation calls in the player. This independent
  * ledger catches retained allocations even if status accounting is wrong. */
@@ -19,12 +21,12 @@ static struct {
     struct {void *pointer;size_t bytes;} live[16];
     size_t bytes,peak;
     unsigned allocations,frees;
-    bool fail_next;
+    unsigned fail_at; /* 1 fails the next allocation, 2 the one after, ... */
 } heap;
 void *__real_malloc(size_t bytes);
 void __real_free(void *pointer);
 void *__wrap_malloc(size_t bytes) {
-    if(heap.fail_next) {heap.fail_next=false;return NULL;}
+    if(heap.fail_at && !--heap.fail_at) return NULL;
     void *pointer=__real_malloc(bytes);
     if(!pointer) return NULL;
     unsigned i=0;while(i<16u && heap.live[i].pointer) ++i;assert(i<16u);
@@ -41,6 +43,9 @@ void __wrap_free(void *pointer) {
 #endif
 static struct {
     uint8_t header[44];const uint8_t *ogg_file;size_t size,pos;
+    /* Bundled folder contents: packages now ship the Oggs; a 1.5 card holds
+     * only the WAVs. open_* describe the file currently being read. */
+    bool bundled_ogg,bundled_wav;const uint8_t *open_ogg;size_t open_size;
     unsigned connects,disconnects,opens,reads,closes,unmounts,init,shutdown,alloc,destroy,polls,starts;
     bool cancel,missing,short_read,close_error,unmount_error,init_error,alloc_error,poll_error,queued,active;
     unsigned cancel_after_reads,volume;size_t advertised_size;
@@ -73,7 +78,9 @@ static void reset(unsigned channels) {
     assert(!heap.bytes && heap.allocations==heap.frees);
     memset(&heap,0,sizeof(heap));
 #endif
-    memset(&fake,0,sizeof(fake));source(channels,70000u);
+    /* Default to a 1.5 card, so the PCM cases below also cover the fallback
+     * from each missing bundled Ogg to its original WAV. */
+    memset(&fake,0,sizeof(fake));fake.bundled_wav=true;source(channels,70000u);
 }
 static struct kui_music_status state(void) {struct kui_music_status out;kui_music_status_copy(&out);return out;}
 #if defined(KUI_ON_CONSOLE) && defined(KUI_MUSIC_ALLOC_TEST)
@@ -109,15 +116,20 @@ void kui_sd_disconnect(void) {++fake.disconnects;}
 bool kui_mount(FATFS *fs,kui_log_fn log) {(void)fs;(void)log;return true;}
 FRESULT f_mount(FATFS *fs,const TCHAR *path,BYTE opt) {assert(!fs && !strcmp(path,"0:") && !opt);++fake.unmounts;return fake.unmount_error?FR_DISK_ERR:FR_OK;}
 FRESULT f_open(FIL *file,const TCHAR *path,BYTE mode) {
-    assert(mode==FA_READ && (!strncmp(path,"0:/KUI/apps/music/",18) || !strcmp(path,"0:/Music/test.wav") || !strcmp(path,"0:/Music/test.ogg")));++fake.opens;
-    if(fake.missing) return FR_NO_FILE;
-    memset(file,0,sizeof(*file));file->obj.objsize=fake.advertised_size?fake.advertised_size:fake.size;fake.pos=0;return FR_OK;
+    bool bundled=!strncmp(path,"0:/KUI/apps/music/",18),ogg=strlen(path)>4u && !strcmp(path+strlen(path)-4u,".ogg");
+    assert(mode==FA_READ && (bundled || !strcmp(path,"0:/Music/test.wav") || !strcmp(path,"0:/Music/test.ogg")));++fake.opens;
+    if(fake.missing || (bundled && !(ogg?fake.bundled_ogg:fake.bundled_wav))) return FR_NO_FILE;
+    /* Every bundled Ogg is the mono fixture; other files follow source(). */
+    fake.open_ogg=bundled?(ogg?ogg_mono:NULL):fake.ogg_file;
+    fake.open_size=bundled && ogg?sizeof(ogg_mono):fake.size;
+    memset(file,0,sizeof(*file));file->obj.objsize=fake.advertised_size?fake.advertised_size:fake.open_size;fake.pos=0;return FR_OK;
 }
 FRESULT f_read(FIL *file,void *out,UINT requested,UINT *got) {
-    (void)file;assert(requested<=32768 && requested<=fake.size-fake.pos);++fake.reads;
-    allocations_match();assert(state().loading_bytes==(fake.ogg_file?fake.size+15u+KUI_OGG_WORKSPACE_BYTES:fake.size));
+    (void)file;assert(requested<=32768 && requested<=fake.open_size-fake.pos);++fake.reads;
+    /* An Ogg is read with its staging arena already reserved and allocated. */
+    allocations_match();assert(state().loading_bytes==fake.open_size+(fake.open_ogg?ARENA_BYTES:0u));
     *got=fake.short_read?requested-1:requested;
-    uint8_t *p=out;for(UINT i=0;i<*got;i++) {size_t at=fake.pos+i;p[i]=fake.ogg_file?fake.ogg_file[at]:at<44u?fake.header[at]:(uint8_t)at;}
+    uint8_t *p=out;for(UINT i=0;i<*got;i++) {size_t at=fake.pos+i;p[i]=fake.open_ogg?fake.open_ogg[at]:at<44u?fake.header[at]:(uint8_t)at;}
     fake.pos+=*got;
     /* Model the independently scheduled RAM-only audio poll during card I/O. */
     if(fake.active) kui_music_service();
@@ -146,23 +158,41 @@ void snd_stream_start(snd_stream_hnd_t hnd,uint32_t rate,int stereo) {
 }
 void snd_stream_volume(snd_stream_hnd_t hnd,int volume) {assert(hnd==0 && volume>=0 && volume<=255);fake.volume=(unsigned)volume;}
 int snd_stream_poll(snd_stream_hnd_t hnd) {assert(hnd==0 && fake.active);++fake.polls;if(fake.poll_error) return -1;fill(131072);return 0;}
+/* Mono starts fill two 32 KiB halves; previous_copy holds the second. A WAV
+ * source's PCM byte k is (uint8_t)(44+k). */
+static bool played_pcm(void) {
+    for(size_t i=0;i<fake.previous_size;i++) if(fake.previous_copy[i]!=(uint8_t)(44u+32768u+i)) return false;
+    return fake.previous_size==32768u;
+}
+/* A selected Ogg restarts from its first decoded sample. */
+static bool played_ogg(void) {
+    static _Alignas(16) uint8_t arena[KUI_OGG_WORKSPACE_BYTES];
+    static uint8_t first[32768],second[32768];
+    struct kui_ogg ogg;
+    if(!kui_ogg_open(&ogg,ogg_mono,sizeof(ogg_mono),arena,sizeof(arena),NULL)) return false;
+    bool same=kui_ogg_fill(&ogg,first,sizeof(first))==sizeof(first) &&
+        kui_ogg_fill(&ogg,second,sizeof(second))==sizeof(second) &&
+        fake.previous_size==sizeof(second) && !memcmp(fake.previous_copy,second,sizeof(second));
+    kui_ogg_close(&ogg);return same;
+}
 static void compressed_music(void) {
     (void)ogg_stereo;
     reset(1);kui_music_init(log_line);kui_music_set_config(true,20);
     assert(kui_music_load(0,cancel));
     fake.ogg_file=ogg_mono;fake.size=sizeof(ogg_mono);
     assert(kui_music_load_path("/Music/test.ogg","Compressed song",cancel));
-    allocations_match();assert(state().compressed && state().decoder_bytes==KUI_OGG_WORKSPACE_BYTES);
+    allocations_match();assert(state().compressed && state().decoder_bytes==ARENA_BYTES);
     assert(state().playing && state().current_index==KUI_MUSIC_CUSTOM_INDEX);
     unsigned reads=fake.reads,connects=fake.connects,allocations=state().file_allocations;
     for(unsigned i=0;i<30u;i++) kui_music_service();
     unsigned wanted=99;assert(kui_music_step_cached(1,&wanted) && wanted==0);
-    assert(!state().compressed && kui_music_step_cached(-1,&wanted) && wanted==KUI_MUSIC_CUSTOM_INDEX);
-    assert(state().compressed);
+    assert(!state().compressed && played_pcm());
+    assert(kui_music_step_cached(-1,&wanted) && wanted==KUI_MUSIC_CUSTOM_INDEX);
+    assert(state().compressed && played_ogg());
     for(unsigned i=0;i<30u;i++) kui_music_service();
     assert(fake.reads==reads && fake.connects==connects && state().file_allocations==allocations);
-    /* A second compressed load is staged while the first decoder is polling.
-     * Its arena is part of the same tracked allocation, with no hidden heap. */
+    /* A second compressed load is validated in a tracked staging arena while
+     * the first decoder keeps polling in the shared one; no hidden heap. */
     for(unsigned i=0;i<20u;i++) {
         assert(kui_music_load_path("/Music/test.ogg","Replacement Ogg",cancel));allocations_match();
         fake.cancel_after_reads=fake.reads+1;
@@ -176,8 +206,113 @@ static void compressed_music(void) {
     assert(kui_music_next_index(0,-1)==4 && kui_music_next_index(4,1)==0);
     kui_music_shutdown();
 }
+#ifdef KUI_MUSIC_ALLOC_TEST
+/* Model RAM corruption of the single live allocation of this size. */
+static void corrupt_cached(size_t bytes,size_t at) {
+    unsigned found=0;
+    for(unsigned i=0;i<16u;i++) if(heap.live[i].pointer && heap.live[i].bytes==bytes) {
+        ((uint8_t *)heap.live[i].pointer)[at]^=0xffu;++found;
+    }
+    assert(found==1u);
+}
+#endif
+static void bundled_ogg(void) {
+    /* The shipped layout: five compressed songs share one decoder arena, and
+     * cycling reopens the chosen song without allocating or touching SD. */
+    reset(1);fake.bundled_ogg=true;fake.bundled_wav=false;
+    kui_music_init(log_line);kui_music_set_config(true,20);
+    for(unsigned i=0;i<KUI_MUSIC_TRACKS;i++) {assert(kui_music_load(i,cancel));allocations_match();}
+    struct kui_music_status s=state();
+    assert(s.cached_mask==31u && s.playing && s.compressed && s.current_index==4 && s.pcm_bytes==22050u);
+    assert(s.decoder_bytes==ARENA_BYTES && s.cache_bytes==KUI_MUSIC_TRACKS*sizeof(ogg_mono)+ARENA_BYTES);
+    /* Each load staged its own arena; only the first was kept for playback. */
+    assert(s.file_allocations==2u*KUI_MUSIC_TRACKS && s.file_frees==KUI_MUSIC_TRACKS-1u);
+    assert(s.peak_file_bytes==KUI_MUSIC_TRACKS*sizeof(ogg_mono)+2u*ARENA_BYTES);
+    assert(fake.opens==KUI_MUSIC_TRACKS);
+    unsigned reads=fake.reads,connects=fake.connects,allocated=s.file_allocations,starts=fake.starts;
+    for(unsigned i=0;i<100u;i++) {
+        assert(kui_music_select_cached(i%KUI_MUSIC_TRACKS));allocations_match();
+        assert(state().playing && state().compressed && state().current_index==i%KUI_MUSIC_TRACKS);
+        kui_music_service();
+    }
+    assert(fake.starts==starts+100u);
+    unsigned wanted=99;assert(kui_music_step_cached(-1,&wanted) && wanted==3 && state().compressed && played_ogg());
+    assert(fake.reads==reads && fake.connects==connects && state().file_allocations==allocated);
+    /* A browser path with the 1.5 WAV name, or any ASCII case, reuses the slot. */
+    assert(kui_music_load_path("/KUI/apps/music/menu.wav","Legacy name",cancel));
+    assert(state().current_index==0 && state().compressed && !strcmp(state().title,"After Hours"));
+    assert(kui_music_load_path("/kui/APPS/MUSIC/NEON-CIRCUIT.OGG","Upper case",cancel));
+    assert(state().current_index==1 && state().file_allocations==allocated && fake.reads==reads);
+    /* A custom Ogg shares the same arena; its staging arena is released. */
+    fake.ogg_file=ogg_mono;fake.size=sizeof(ogg_mono);
+    assert(kui_music_load_path("/Music/test.ogg","Custom Ogg",cancel));allocations_match();
+    assert(state().current_index==KUI_MUSIC_CUSTOM_INDEX && state().compressed && state().decoder_bytes==ARENA_BYTES);
+    assert(state().cache_bytes==(KUI_MUSIC_TRACKS+1u)*sizeof(ogg_mono)+ARENA_BYTES);
+#ifdef KUI_MUSIC_ALLOC_TEST
+    /* Failing either the file or its staging arena keeps the current song. */
+    for(unsigned fail=1;fail<=2u;fail++) {
+        allocated=state().file_allocations;heap.fail_at=fail;
+        assert(!kui_music_load_path("/Music/test.ogg","No memory",cancel));
+        assert(!heap.fail_at && strstr(fake.last_log,"Not enough RAM"));allocations_match();
+        assert(state().playing && !strcmp(state().title,"Custom Ogg") && !state().loading_bytes);
+        assert(state().file_allocations==allocated+fail-1u);
+    }
+#endif
+    kui_music_clear_cache();allocations_match();
+    assert(!state().cache_bytes && !state().decoder_bytes && !state().loaded);
+    assert(state().file_allocations==state().file_frees);
+    kui_music_shutdown();
+    /* Both formats present: the Ogg wins. Only the WAV: it is played as PCM. */
+    reset(1);fake.bundled_ogg=true;kui_music_init(log_line);kui_music_set_config(true,20);
+    assert(kui_music_load(2,cancel) && state().compressed && fake.opens==1);
+    kui_music_shutdown();
+    reset(1);kui_music_init(log_line);kui_music_set_config(true,20);
+    assert(kui_music_load(2,cancel) && !state().compressed && state().pcm_bytes==70000u && fake.opens==2);
+    assert(!state().decoder_bytes && state().cache_bytes==70044u);
+    kui_music_shutdown();
+    reset(1);fake.bundled_wav=false;kui_music_init(log_line);kui_music_set_config(true,20);
+    assert(!kui_music_load(2,cancel) && fake.opens==2 && strstr(state().message,"Track file missing"));
+    kui_music_shutdown();
+    /* Replacing the only cached Ogg with a WAV releases the shared arena. */
+    reset(1);kui_music_init(log_line);kui_music_set_config(true,20);
+    assert(kui_music_load(0,cancel));
+    fake.ogg_file=ogg_mono;fake.size=sizeof(ogg_mono);
+    assert(kui_music_load_path("/Music/test.ogg","Custom Ogg",cancel) && state().decoder_bytes==ARENA_BYTES);
+    fake.ogg_file=NULL;source(1,70000u);
+    assert(kui_music_load_path("/Music/test.wav","Custom WAV",cancel));allocations_match();
+    assert(!state().compressed && !state().decoder_bytes && state().cache_bytes==2u*70044u && state().playing);
+    assert(played_pcm());
+    kui_music_shutdown();
+    /* Evicting the last cached Ogg also releases its arena, which is exactly
+     * what lets this 2 MiB replacement reach the 8 MiB budget. */
+    reset(1);fake.bundled_ogg=true;fake.bundled_wav=false;
+    kui_music_init(log_line);kui_music_set_config(true,20);
+    for(unsigned i=0;i<KUI_MUSIC_TRACKS;i++) assert(kui_music_cache_menu(i,cancel));
+    source(1,KUI_MUSIC_CUSTOM_MAX-44u);
+    assert(kui_music_load_path("/Music/test.wav","Six MiB",cancel));allocations_match();
+    assert(state().decoder_bytes==ARENA_BYTES && KUI_MUSIC_CACHE_MAX-state().cache_bytes<2u*1024u*1024u);
+    source(1,2u*1024u*1024u-44u);
+    assert(kui_music_load_path("/Music/test.wav","Two MiB",cancel));allocations_match();
+    assert(state().cached_mask==1u<<KUI_MUSIC_CUSTOM_INDEX && !state().decoder_bytes && state().playing);
+    assert(state().cache_bytes==2u*1024u*1024u && state().peak_file_bytes==KUI_MUSIC_CACHE_MAX);
+    kui_music_shutdown();
+#ifdef KUI_MUSIC_ALLOC_TEST
+    /* A cached Ogg that no longer opens stops cleanly; others still play. */
+    reset(1);kui_music_init(log_line);kui_music_set_config(true,20);
+    assert(kui_music_load(0,cancel));
+    fake.ogg_file=ogg_mono;fake.size=sizeof(ogg_mono);
+    assert(kui_music_load_path("/Music/test.ogg","Custom Ogg",cancel) && kui_music_select_cached(0));
+    corrupt_cached(sizeof(ogg_mono),27u+ogg_mono[26]+1u);
+    allocated=state().file_allocations;
+    assert(!kui_music_step_cached(-1,&wanted) && wanted==KUI_MUSIC_CUSTOM_INDEX);
+    assert(!state().loaded && !state().playing && strstr(state().message,"did not reopen"));
+    assert(kui_music_select_cached(0) && state().playing && !state().compressed && played_pcm());
+    assert(state().file_allocations==allocated);allocations_match();
+    kui_music_shutdown();
+#endif
+}
 static void cache_churn(void) {
-    /* Reproduce the shipped five-song working set, then cycle it repeatedly.
+    /* Reproduce the 1.5 five-WAV working set, then cycle it repeatedly.
      * Selecting cached music must not allocate file memory or touch storage. */
     static const size_t sizes[KUI_MUSIC_TRACKS]={1058444,846764,1058444,769790,940844};
     reset(1);kui_music_init(log_line);kui_music_set_config(true,15);
@@ -234,9 +369,9 @@ static void cache_churn(void) {
     assert(!kui_music_load_path("/Music/test.wav","Over budget",cancel));
     allocations_match();assert(state().file_allocations==allocated && state().playing);
 #ifdef KUI_MUSIC_ALLOC_TEST
-    source(1,65536u);heap.fail_next=true;
+    source(1,65536u);heap.fail_at=1;
     assert(!kui_music_load_path("/Music/test.wav","Allocation failure",cancel));
-    assert(!heap.fail_next);allocations_match();
+    assert(!heap.fail_at);allocations_match();
     assert(state().file_allocations==allocated && state().playing);
 #endif
     kui_music_shutdown();
@@ -254,7 +389,17 @@ static void replacement_interleave(void) {
         assert(kui_music_load_path("/Music/test.wav","Replacement song",cancel));
         allocations_match();assert(state().playing && state().pcm_bytes==fake.size-44u);
     }
-    interleave_resume=false;assert(resume_interleavings>16u);
+    /* Alternating Ogg and WAV replacements also move the shared decoder arena
+     * in and out of use; each swap stays one audio-lock transaction. */
+    for(unsigned i=0;i<16u;i++) {
+        bool ogg=(i&1u)==0;
+        if(ogg) {fake.ogg_file=ogg_mono;fake.size=sizeof(ogg_mono);}
+        else {fake.ogg_file=NULL;source(1,70000u+i*2048u);}
+        assert(kui_music_load_path(ogg?"/Music/test.ogg":"/Music/test.wav","Mixed replacement",cancel));
+        allocations_match();assert(state().playing && state().compressed==ogg);
+        assert(state().decoder_bytes==(ogg?ARENA_BYTES:0u));
+    }
+    interleave_resume=false;assert(resume_interleavings>32u);
     kui_music_shutdown();assert(heap.bytes==0 && heap.allocations==heap.frees);
 #endif
 }
@@ -339,7 +484,7 @@ int main(void) {
     assert(kui_music_load(0,cancel));assert(!state().playing && strstr(state().message,"Audio service unavailable"));
     assert(!fake.init && !thread_live);kui_music_shutdown();thread_fail=false;
 #endif
-    cache_churn();compressed_music();
+    cache_churn();compressed_music();bundled_ogg();
     replacement_interleave();
-    puts("PASS background music: independent polling, no playback I/O, preserved replacements, 1000 cached switches, 300 replacements/failures, exact 8MiB staging budget, allocation cleanup, replacement/resume interleaving");return 0;
+    puts("PASS background music: independent polling, no playback I/O, preserved replacements, 1000 cached switches, 300 replacements/failures, exact 8MiB staging budget, allocation cleanup, replacement/resume interleaving, bundled Oggs sharing one decoder arena, 1.5 WAV fallback");return 0;
 }

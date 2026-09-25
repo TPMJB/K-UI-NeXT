@@ -19,8 +19,10 @@ RAM and is decoded in the existing audio service, using the same double output
 buffers as WAV. No whole-song PCM copy is allocated.
 
 The **8 MiB cache budget includes staging, compressed bytes, alignment padding
-and a 384 KiB decoder arena per retained Ogg**. An Ogg replacement can temporarily
-need two arenas while the previous song continues. All codec allocations,
+and one 384 KiB decoder arena shared by every cached Ogg**. Only the selected Ogg
+is decoded; selecting another rebuilds its decoder in that arena from RAM and
+restarts it. An Ogg load temporarily needs a second, staging arena to validate
+the new file while the previous song continues. All codec allocations,
 including its temporary frame memory, are confined to those arenas. A valid but
 unusually complex Vorbis setup that exceeds the arena is rejected, retaining the
 old song. Fixed callback buffers, the audio thread stack and KOS stream state are
@@ -39,6 +41,26 @@ one full loop, visit menus, switch to a bundled track and back, then clear cache
 Only then try it during an ordinary rip. This is an audio compatibility check;
 no accepted disc-reader benchmark needs repeating. Ogg saves cache memory at the
 cost of ongoing CPU decoding, and its effect on capture speed is not yet measured.
+The owner has since tested an Ogg on the console and reports the decoding cost
+as minuscule; no timing was logged.
+
+## Bundled menu songs as Ogg
+
+After 1.5 the five menu songs ship as Ogg Vorbis (`KUI/apps/music/*.ogg`). With
+all five cached, music holds **913,765 bytes (0.87 MiB)** instead of the WAVs'
+4,674,286 bytes (4.46 MiB): 520,534 compressed bytes plus the one shared
+decoder arena. Startup also reads about 0.5 MiB from SD instead of 4.5 MiB.
+Each Ogg was encoded from the reproducible WAV and decodes to its exact length;
+see the [music record](../resources/music/README.md). A runtime whose card has
+only the 1.5 WAVs plays those, so updating `runtime.kui` alone keeps menu music.
+
+Console check, with the new `KUI/apps/music` and runtime and music enabled:
+confirm a song starts after the splash, then step through all five with Home
+L/R; each should restart from its beginning without clicks at its loop point.
+After the playlist fills, the Music page should read `Cached 0.8 MiB / 8 MiB`
+(the WAVs showed 4.4 MiB), and a log saved with Diagnostics Y should contain
+`cached=913765 (decoder 393231)`. Finally, test once with only the old WAVs in
+that folder.
 
 ## Audio CDs
 
