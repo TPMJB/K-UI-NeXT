@@ -996,7 +996,7 @@ static void games_retail_controls(void) {
 static void games_rendering(void) {
     struct kui_shell_view view={0};
     reset(KUI_SHELL_HOME);s.home_selected=8;render(&view);
-    assert(strstr(drawn,"Games") && strstr(drawn,"9 applications") && strstr(drawn,"V1.5 RC: compatibility varies"));
+    assert(strstr(drawn,"Games") && strstr(drawn,"9 applications") && strstr(drawn,"V1.5: compatibility varies"));
     reset(KUI_SHELL_GAMES);s.games_listing.count=8;s.games_listing.has_more=true;s.games_selected=7;
     for(unsigned i=0;i<8;i++) {
         snprintf(s.games_listing.entries[i].name,sizeof(s.games_listing.entries[i].name),"Game %u with a long but bounded name",i+1);
