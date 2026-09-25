@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
-"""Encode the Dáinsleif splash and synthesize the original startup notes."""
+"""Encode the Dáinsleif splash and embed the original startup notes as Ogg."""
 # SPDX-License-Identifier: GPL-3.0-only
 import argparse
 import hashlib
+import importlib.util
 import math
 from pathlib import Path
 import struct
+import tempfile
+import wave
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 PNG_BLOB = "b08c8ee03362b6775403e1bd50f8609f1c522f40"
 STARTUP_RATE = 44100
 STARTUP_FRAMES = STARTUP_RATE * 265 // 100
+# The runtime embeds this Ogg Vorbis encoding of startup_samples() instead of
+# its 233,730 PCM bytes. --encode-chime rewrites it with the menu music's
+# pinned encoder settings; record the printed hash here.
+CHIME = ROOT / "resources/branding/startup-chime.ogg"
+CHIME_SHA256 = "be4bed5279446fcd0171a7fb2d8fee169fa4b52ca23c0e99c9d6733870d70b11"
 
 def decode_png(data):
     if data[:8] != b"\x89PNG\r\n\x1a\n":
@@ -107,15 +115,38 @@ def array_file(path,name,kind,values,prefix=""):
             out.write(",".join(str(v) for v in items[at:at+16])+",\n")
         out.write("};\n")
 
+def write_chime_wav(path):
+    samples=list(startup_samples())
+    with wave.open(str(path),"wb") as out:
+        out.setparams((1,2,STARTUP_RATE,0,"NONE","not compressed"))
+        out.writeframes(struct.pack(f"<{len(samples)}h",*samples))
+
+def encode_chime():
+    spec=importlib.util.spec_from_file_location("generate_menu_music",ROOT/"tools/generate_menu_music.py")
+    music=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(music)
+    with tempfile.TemporaryDirectory(prefix="kui-chime-") as temp:
+        wav=Path(temp)/"startup-chime.wav"
+        write_chime_wav(wav)
+        music.encode_ogg(wav,CHIME)
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory",type=Path,default=ROOT/"build")
+    parser.add_argument("--encode-chime",action="store_true",
+        help="re-encode resources/branding/startup-chime.ogg (needs ffmpeg/libvorbis)")
     args=parser.parse_args()
+    if args.encode_chime:
+        encode_chime()
+        return
     data=(ROOT/"resources/branding/startup.png").read_bytes()
     if hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()!=PNG_BLOB:
         raise SystemExit("Startup artwork differs from the pinned Dainsleif asset")
     array_file(args.directory/"splash_pixels.inc","kui_splash_pixels","uint16_t",decode_png(data))
-    array_file(args.directory/"startup_pcm.inc","kui_startup_pcm","int16_t",startup_samples(),
+    chime=CHIME.read_bytes()
+    if hashlib.sha256(chime).hexdigest()!=CHIME_SHA256:
+        raise SystemExit("Startup chime differs from the pinned Ogg encoding")
+    array_file(args.directory/"startup_ogg.inc","kui_startup_ogg","uint8_t",chime,
         f"#define KUI_STARTUP_RATE {STARTUP_RATE}u\n#define KUI_STARTUP_COUNT {STARTUP_FRAMES}u\n")
 if __name__=="__main__":
     main()

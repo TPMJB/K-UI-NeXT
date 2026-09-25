@@ -2,6 +2,8 @@
 import hashlib
 import importlib.util
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -30,5 +32,18 @@ class StartupAssets(unittest.TestCase):
         # Fade reaches silence before the deadline, without the old long tail.
         self.assertTrue(any(samples[2*44100:]))
         self.assertFalse(any(samples[round(2.62*44100):]))
+    def test_embedded_chime_encoding(self):
+        """The runtime embeds this Ogg; it decodes to exactly these notes."""
+        data=module.CHIME.read_bytes()
+        self.assertEqual(hashlib.sha256(data).hexdigest(),module.CHIME_SHA256)
+        self.assertLess(len(data),32*1024)
+        checker=ROOT/"build/music-asset-check"
+        self.assertTrue(checker.exists(),"build/music-asset-check is missing; run make test")
+        with tempfile.TemporaryDirectory(prefix="kui-chime-") as temp:
+            wav=Path(temp)/"startup-chime.wav"
+            module.write_chime_wav(wav)
+            result=subprocess.run([str(checker),str(module.CHIME),str(wav)],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn(f"{module.STARTUP_FRAMES} frames at {module.STARTUP_RATE} Hz",result.stdout)
 if __name__=="__main__":
     unittest.main()

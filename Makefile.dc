@@ -69,11 +69,11 @@ $(RUNTIME): $(RUNTIME_OBJECTS)
 
 -include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)
 
-build/splash_pixels.inc build/startup_pcm.inc &: tools/build_splash.py resources/branding/startup.png
+build/splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/startup-chime.ogg
 	python3 tools/build_splash.py
 
 build/dc/src/apps/splash.o: build/splash_pixels.inc
-build/dc/src/apps/startup_sound.o: build/startup_pcm.inc
+build/dc/src/apps/startup_sound.o: build/startup_ogg.inc
 
 # G3 contains no KOS/newlib runtime. The entry image packs a high resident
 # service and a separately linked low client; arch_exec removes KOS first.

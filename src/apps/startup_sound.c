@@ -1,16 +1,22 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/music.h"
+#include "kui/music_ogg.h"
 #include <dc/sound/stream.h>
 #include <kos/thread.h>
 #include <kos/timer.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../build/startup_pcm.inc"
+#include "../../build/startup_ogg.inc"
 #define STARTUP_RING_BYTES 16384u
 #define STARTUP_CALLBACK_BYTES 32768u
 #define STARTUP_BUDGET_MS 2700u
+#define STARTUP_PCM_BYTES ((size_t)KUI_STARTUP_COUNT*2u)
+/* The runtime keeps only the compressed cue. Its decoder arena exists while
+ * the cue plays, before any menu song is cached, and is then released. */
 static struct {
     uint8_t *buffers[2];
+    void *arena;
+    struct kui_ogg ogg;
     size_t position;
     unsigned next;
     kui_cancel_fn cancel;
@@ -28,9 +34,11 @@ static void *startup_data(snd_stream_hnd_t stream,int requested,int *received) {
     if(requested<=0 || (unsigned)requested>STARTUP_CALLBACK_BYTES || (requested&1) ||
        !startup.buffers[0] || !startup.buffers[1]) {startup.failed=true;return NULL;}
     uint8_t *out=startup.buffers[startup.next];startup.next^=1u;
-    size_t total=sizeof(kui_startup_pcm),count=total-startup.position;
+    /* Decode no further than the cue's last sample, so it never rewinds,
+     * then pad with silence as before. */
+    size_t count=STARTUP_PCM_BYTES-startup.position;
     if(count>(size_t)requested) count=(size_t)requested;
-    memcpy(out,(const uint8_t *)kui_startup_pcm+startup.position,count);
+    if(count && kui_ogg_fill(&startup.ogg,out,count)!=count) {startup.failed=true;return NULL;}
     memset(out+count,0,(size_t)requested-count);startup.position+=count;
     *received=requested;return out;
 }
@@ -41,8 +49,12 @@ void kui_music_play_boot_chime(kui_cancel_fn cancel) {
     startup.deadline=deadline;
     startup.buffers[0]=aligned_alloc(32,STARTUP_CALLBACK_BYTES);
     startup.buffers[1]=aligned_alloc(32,STARTUP_CALLBACK_BYTES);
+    startup.arena=aligned_alloc(16,KUI_OGG_WORKSPACE_BYTES);
     snd_stream_hnd_t stream=SND_STREAM_INVALID;bool audio=false;
-    if(!startup.buffers[0] || !startup.buffers[1]) goto done;
+    if(!startup.buffers[0] || !startup.buffers[1] || !startup.arena) goto done;
+    if(!kui_ogg_open(&startup.ogg,kui_startup_ogg,sizeof(kui_startup_ogg),startup.arena,
+       KUI_OGG_WORKSPACE_BYTES,startup_cancelled) || startup.ogg.channels!=1u ||
+       startup.ogg.rate!=KUI_STARTUP_RATE || startup.ogg.frames!=KUI_STARTUP_COUNT) goto done;
     if(snd_stream_init_ex(1,STARTUP_RING_BYTES)<0) {snd_stream_shutdown();goto done;}
     audio=true;stream=snd_stream_alloc(startup_data,STARTUP_RING_BYTES);
     if(stream==SND_STREAM_INVALID) goto done;
@@ -64,5 +76,7 @@ void kui_music_play_boot_chime(kui_cancel_fn cancel) {
 done:
     if(stream!=SND_STREAM_INVALID) snd_stream_destroy(stream);
     if(audio) snd_stream_shutdown();
-    free(startup.buffers[0]);free(startup.buffers[1]);memset(&startup,0,sizeof(startup));
+    /* Destroy has drained DMA and callbacks; only then release the decoder. */
+    kui_ogg_close(&startup.ogg);
+    free(startup.buffers[0]);free(startup.buffers[1]);free(startup.arena);memset(&startup,0,sizeof(startup));
 }

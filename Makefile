@@ -342,7 +342,7 @@ build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c tests/test_vmu_app.c -o $@
 
 # Original startup assets are encoded on the host, never decoded during ripping.
-build/splash_pixels.inc build/startup_pcm.inc &: tools/build_splash.py resources/branding/startup.png
+build/splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/startup-chime.ogg
 	python3 tools/build_splash.py
 
 build/test-splash: tests/test_splash.c src/apps/splash.c include/kui/splash.h build/splash_pixels.inc
@@ -362,9 +362,9 @@ build/test-music-player: tests/test_music_player.c src/apps/music_player.c src/a
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/music_player.c src/apps/wav.c src/core/destination.c src/core/data.c tests/test_music_player.c -o $@
 
-build/test-startup-sound: tests/test_startup_sound.c src/apps/startup_sound.c include/kui/music.h build/startup_pcm.inc
+build/test-startup-sound: tests/test_startup_sound.c src/apps/startup_sound.c src/apps/music_ogg.c include/kui/music.h include/kui/music_ogg.h build/startup_ogg.inc
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/startup_sound.c tests/test_startup_sound.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/stubs -Isrc/dreamcast src/apps/startup_sound.c src/apps/music_ogg.c tests/test_startup_sound.c -lm -o $@
 
 # Recovery checks: sector validation is used by Advanced CRC; CRC replacement stays host-only.
 build/recovery-vectors.inc: tests/make_recovery_vectors.py

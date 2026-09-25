@@ -39,9 +39,20 @@ at 44.1 kHz. The quiet decay is shortened to end by 2.62 seconds and the origina
 long silent tail is removed; total PCM duration is 2.65 seconds. No sampled
 third-party sound or DreamShell audio player is copied.
 
+The runtime embeds `startup-chime.ogg`, an Ogg Vorbis encoding of those 116,865
+samples, instead of the samples themselves: 16,989 bytes rather than 233,730,
+so `runtime.kui` and its resident image shrink by 216,741 bytes. It decodes to
+exactly 116,865 frames at 44.1 kHz, 37.5 dB against the synthesized samples.
+`tools/build_splash.py` checks its pinned SHA-256 before embedding it;
+`python3 tools/build_splash.py --encode-chime` regenerates it with the menu
+music's pinned FFmpeg/libvorbis settings (quality 5, bitexact output).
+The cue allocates a 384 KiB decoder arena and releases it when the cue ends,
+before any menu song is loaded. It decodes only up to the last sample, then
+pads with silence.
+
 The splash is part of the SD runtime, so updating it needs no new boot disc.
 It is shown only at startup, can be skipped with B, and adds no drawing work
-during capture. The chime has a 2.7-second budget including audio setup; its
+during capture. The chime has a 2.7-second budget including audio and decoder setup; its
 player drains audio before preference/card/drive work. The shell separately
 limits splash display to three seconds so slow preference loading cannot hold
 the splash on screen.
