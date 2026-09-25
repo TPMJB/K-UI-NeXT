@@ -46,21 +46,30 @@ as minuscule; no timing was logged.
 
 ## Bundled menu songs as Ogg
 
-After 1.5 the five menu songs ship as Ogg Vorbis (`KUI/apps/music/*.ogg`). With
-all five cached, music holds **913,765 bytes (0.87 MiB)** instead of the WAVs'
-4,674,286 bytes (4.46 MiB): 520,534 compressed bytes plus the one shared
-decoder arena. Startup also reads about 0.5 MiB from SD instead of 4.5 MiB.
-Each Ogg was encoded from the reproducible WAV and decodes to its exact length;
-see the [music record](../resources/music/README.md). A runtime whose card has
-only the 1.5 WAVs plays those, so updating `runtime.kui` alone keeps menu music.
+After 1.5 the menu songs ship as Ogg Vorbis (`KUI/apps/music/*.ogg`), and
+Harbor Lights joins the original five as a sixth song. With all six cached,
+music holds **1,111,209 bytes (1.06 MiB)**: 717,978 compressed bytes plus the
+one shared decoder arena. The five 1.5 WAVs alone held 4,674,286 bytes
+(4.46 MiB), and Harbor Lights' WAV would add 2,646,044 more. Startup reads about
+0.7 MiB from SD instead of 4.5 MiB. Each Ogg was encoded from its reproducible
+WAV and decodes to its exact length; see the
+[music record](../resources/music/README.md). A runtime whose card has only the
+1.5 WAVs plays those five and skips the missing Harbor Lights, so updating
+`runtime.kui` alone keeps menu music.
+
+The startup chime is embedded in the runtime as a 16,989-byte Ogg instead of
+233,730 bytes of PCM, so `runtime.kui` shrinks by 216,741 bytes. Its decoder
+arena exists only while the cue plays.
 
 Console check, with the new `KUI/apps/music` and runtime and music enabled:
-confirm a song starts after the splash, then step through all five with Home
-L/R; each should restart from its beginning without clicks at its loop point.
-After the playlist fills, the Music page should read `Cached 0.8 MiB / 8 MiB`
+confirm the chime sounds as before and a song starts after the splash, then
+step through all six with Home L/R; each should restart from its beginning
+without clicks at its loop point, and the header should name Harbor Lights.
+After the playlist fills, the Music page should read `Cached 1.0 MiB / 8 MiB`
 (the WAVs showed 4.4 MiB), and a log saved with Diagnostics Y should contain
-`cached=913765 (decoder 393231)`. Finally, test once with only the old WAVs in
-that folder.
+`cached=1111209 (decoder 393231)`. Finally, boot a few times with only the old
+WAVs in that folder: music should start every time, and L/R should skip
+Harbor Lights.
 
 ## Audio CDs
 

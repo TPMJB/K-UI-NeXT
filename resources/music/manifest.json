@@ -8,6 +8,7 @@
     {
       "file": "menu.wav",
       "title": "After Hours",
+      "generator": "resources/music/original_generator.py",
       "bytes": 1058444,
       "sha256": "53f00251ef9fc9c87e3a5cd2c05f08254a299ce5b2a1b0dda0a7ef31eb92c25f",
       "channels": 1,
@@ -23,6 +24,7 @@
     {
       "file": "neon-circuit.wav",
       "title": "Neon Circuit",
+      "generator": "resources/music/original_generator.py",
       "bytes": 846764,
       "sha256": "6c5d75ee1720b13a2660a8f1e8df780bb2074db0db99913d9f9474654ab90f94",
       "channels": 1,
@@ -38,6 +40,7 @@
     {
       "file": "orbital-drift.wav",
       "title": "Orbital Drift",
+      "generator": "resources/music/original_generator.py",
       "bytes": 1058444,
       "sha256": "5aff5c8e7d1ed3a4c8fc02b673005d33bbd99134e825e53a701ad08a39227110",
       "channels": 1,
@@ -53,6 +56,7 @@
     {
       "file": "midnight-vector.wav",
       "title": "Midnight Vector",
+      "generator": "resources/music/original_generator.py",
       "bytes": 769790,
       "sha256": "529b771532cb6a47574ea1aba8a47039ad9c7f77ae3e35c251ab05e7e1d305ef",
       "channels": 1,
@@ -68,6 +72,7 @@
     {
       "file": "chrome-horizon.wav",
       "title": "Chrome Horizon",
+      "generator": "resources/music/original_generator.py",
       "bytes": 940844,
       "sha256": "d8cce8e5f501b39ec1f9106cad5ed4dabce2ebbd5ddc7759cef4512e77e75199",
       "channels": 1,
@@ -78,6 +83,22 @@
         "file": "chrome-horizon.ogg",
         "bytes": 112394,
         "sha256": "c3edb577fd01d948a6a5974a9f129f61daf58610c2fdfdd9cbda51b27e356abf"
+      }
+    },
+    {
+      "file": "harbor-lights.wav",
+      "title": "Harbor Lights",
+      "generator": "tools/generate_music_demo.py",
+      "bytes": 2646044,
+      "sha256": "2b1eebc4b7d5b35f395edf4ace91d36192850b06dc4483ceb21a2426c57b3de3",
+      "channels": 1,
+      "sample_bits": 16,
+      "sample_rate": 22050,
+      "frames": 1323000,
+      "ogg": {
+        "file": "harbor-lights.ogg",
+        "bytes": 197444,
+        "sha256": "ebe617d9efc7a5500569b499dca06bd55bc7dae95ac361173bb65e2dab98e69d"
       }
     }
   ],

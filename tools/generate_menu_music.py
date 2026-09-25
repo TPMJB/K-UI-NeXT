@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Generate the independently authored original K-UI PCM loops.
+"""Generate the menu rotation's PCM recordings.
 
---ogg also encodes each loop as the Ogg Vorbis file that ships on the card.
+These are the five independently authored original K-UI loops and Harbor
+Lights, K-UI NeXT's own one-minute piece. --ogg also encodes each recording as
+the Ogg Vorbis file that ships on the card.
 """
 # SPDX-License-Identifier: GPL-3.0-only
 import argparse
@@ -29,21 +31,32 @@ def encode_ogg(wav, ogg):
     print(f"{ogg}: Ogg Vorbis q{OGG_QUALITY}, {len(data):,} bytes, sha256 {hashlib.sha256(data).hexdigest()}")
 
 
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', type=Path, default=ROOT / 'resources/music')
     parser.add_argument('--ogg', action='store_true',
                         help='also write the shipped .ogg beside each WAV (needs ffmpeg/libvorbis)')
     args = parser.parse_args()
-    source = ROOT / 'resources/music/original_generator.py'
-    spec = importlib.util.spec_from_file_location('original_kui_music', source)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = load('original_kui_music', ROOT / 'resources/music/original_generator.py')
+    demo = load('kui_music_demo', ROOT / 'tools/generate_music_demo.py')
+    paths = []
     for index, name in enumerate(module.TRACKS):
         pcm = module.compose() if index == 0 else module.synthwave(index - 1)
         module.write_track(args.directory / name, pcm)
-        if args.ogg:
-            encode_ogg(args.directory / name, (args.directory / name).with_suffix('.ogg'))
+        paths.append(args.directory / name)
+    # Harbor Lights joined the rotation after 1.5, as the sixth song.
+    paths.append(demo.write_wav(args.directory / demo.FILENAME))
+    print(f'{paths[-1]}: {demo.SECONDS}s, mono PCM16, {demo.RATE}Hz, {paths[-1].stat().st_size:,} bytes')
+    if args.ogg:
+        for path in paths:
+            encode_ogg(path, path.with_suffix('.ogg'))
 
 if __name__ == '__main__':
     main()

@@ -13,6 +13,9 @@ import wave
 ROOT = Path(__file__).resolve().parents[1]
 MUSIC = ROOT / 'resources/music'
 CHECKER = ROOT / 'build/music-asset-check'
+ORIGINAL = 'resources/music/original_generator.py'
+# Harbor Lights joined the rotation after 1.5 from K-UI NeXT's own generator.
+DEMO = 'tools/generate_music_demo.py'
 
 class MusicAssets(unittest.TestCase):
     @classmethod
@@ -32,13 +35,15 @@ class MusicAssets(unittest.TestCase):
         self.assertEqual(hashlib.sha256(source).hexdigest(), manifest['source_sha256'])
         blob = b'blob ' + str(len(source)).encode() + b'\0' + source
         self.assertEqual(hashlib.sha1(blob).hexdigest(), manifest['source_git_blob'])
-        self.assertEqual(len(manifest['tracks']), 5)
+        self.assertEqual([track['generator'] for track in manifest['tracks']], [ORIGINAL] * 5 + [DEMO])
         for track in manifest['tracks']:
             with self.subTest(track=track['file']):
                 path = Path(self.generated.name) / track['file']
                 data = path.read_bytes()
                 self.assertEqual(len(data), track['bytes'])
-                self.assertLessEqual(len(data), 2 * 1024 * 1024)
+                if track['generator'] == ORIGINAL:
+                    # 1.5 cards may still hold these WAVs as bundled fallbacks.
+                    self.assertLessEqual(len(data), 2 * 1024 * 1024)
                 self.assertEqual(hashlib.sha256(data).hexdigest(), track['sha256'])
                 with wave.open(str(path), 'rb') as wav:
                     self.assertEqual(wav.getnchannels(), track['channels'])
@@ -61,13 +66,16 @@ class MusicAssets(unittest.TestCase):
                 self.assertLessEqual(len(data), 2 * 1024 * 1024)
                 self.assertEqual(Path(track['ogg']['file']).stem, Path(track['file']).stem)
                 pairs += [str(MUSIC / track['ogg']['file']), str(Path(self.generated.name) / track['file'])]
-        # The runtime requests these names and falls back to the 1.5 WAVs.
+        # The runtime requests these names, slot by slot, and falls back to the
+        # 1.5 WAVs; Harbor Lights has none (NULL).
         source = (ROOT / 'src/apps/music.c').read_text()
         def names(array):
             body = re.search(r'\b%s\[KUI_MUSIC_TRACKS\]=\{(.*?)\};' % array, source, re.S)
-            return re.findall(r'"([^"]+)"', body.group(1))
+            return [name or None for name in re.findall(r'"([^"]+)"|\bNULL\b', body.group(1))]
         self.assertEqual(names('files'), [track['ogg']['file'] for track in tracks])
-        self.assertEqual(names('legacy_files'), [track['file'] for track in tracks])
+        self.assertEqual(names('legacy_files'),
+                         [track['file'] if track['generator'] == ORIGINAL else None for track in tracks])
+        self.assertIn('#define KUI_MUSIC_TRACKS %du' % len(tracks), (ROOT / 'include/kui/music.h').read_text())
         self.assertTrue(CHECKER.exists(), 'build/music-asset-check is missing; run make test')
         result = subprocess.run([str(CHECKER), *pairs], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

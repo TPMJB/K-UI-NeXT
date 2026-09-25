@@ -14,6 +14,11 @@
 #include <string.h>
 /* The player's one shared decoder allocation, including alignment slack. */
 #define ARENA_BYTES (KUI_OGG_WORKSPACE_BYTES+15u)
+/* A 1.5 card holds WAVs for the first five songs only; Harbor Lights, the
+ * last bundled song, has no WAV fallback. */
+#define LEGACY_TRACKS (KUI_MUSIC_TRACKS-1u)
+#define HARBOR (KUI_MUSIC_TRACKS-1u)
+#define ALL_BUNDLED ((1u<<KUI_MUSIC_TRACKS)-1u)
 #ifdef KUI_MUSIC_ALLOC_TEST
 /* The linker wraps the real allocation calls in the player. This independent
  * ledger catches retained allocations even if status accounting is wrong. */
@@ -203,7 +208,7 @@ static void compressed_music(void) {
     assert(!state().loaded && !state().playing && !state().cache_bytes && !state().cached_mask &&
            !state().compressed && !state().decoder_bytes && state().enabled && state().volume==20);
     assert(fake.reads==reads && fake.connects==connects && state().file_allocations==state().file_frees);
-    assert(kui_music_next_index(0,-1)==4 && kui_music_next_index(4,1)==0);
+    assert(kui_music_next_index(0,-1)==HARBOR && kui_music_next_index(HARBOR,1)==0);
     kui_music_shutdown();
 }
 #ifdef KUI_MUSIC_ALLOC_TEST
@@ -223,7 +228,8 @@ static void bundled_ogg(void) {
     kui_music_init(log_line);kui_music_set_config(true,20);
     for(unsigned i=0;i<KUI_MUSIC_TRACKS;i++) {assert(kui_music_load(i,cancel));allocations_match();}
     struct kui_music_status s=state();
-    assert(s.cached_mask==31u && s.playing && s.compressed && s.current_index==4 && s.pcm_bytes==22050u);
+    assert(s.cached_mask==ALL_BUNDLED && s.playing && s.compressed && s.current_index==HARBOR && s.pcm_bytes==22050u);
+    assert(!s.missing_mask && !strcmp(s.title,"Harbor Lights"));
     assert(s.decoder_bytes==ARENA_BYTES && s.cache_bytes==KUI_MUSIC_TRACKS*sizeof(ogg_mono)+ARENA_BYTES);
     /* Each load staged its own arena; only the first was kept for playback. */
     assert(s.file_allocations==2u*KUI_MUSIC_TRACKS && s.file_frees==KUI_MUSIC_TRACKS-1u);
@@ -236,7 +242,8 @@ static void bundled_ogg(void) {
         kui_music_service();
     }
     assert(fake.starts==starts+100u);
-    unsigned wanted=99;assert(kui_music_step_cached(-1,&wanted) && wanted==3 && state().compressed && played_ogg());
+    unsigned wanted=99,last=99u%KUI_MUSIC_TRACKS;
+    assert(kui_music_step_cached(-1,&wanted) && wanted==last-1u && state().compressed && played_ogg());
     assert(fake.reads==reads && fake.connects==connects && state().file_allocations==allocated);
     /* A browser path with the 1.5 WAV name, or any ASCII case, reuses the slot. */
     assert(kui_music_load_path("/KUI/apps/music/menu.wav","Legacy name",cancel));
@@ -311,12 +318,42 @@ static void bundled_ogg(void) {
     kui_music_shutdown();
 #endif
 }
+static void missing_songs(void) {
+    /* A 1.5 card lacks Harbor Lights. Until a load finds it absent, the cycle
+     * still offers it; afterwards L/R skip it. Choosing it by path, or Clear
+     * cache, looks at the card again. */
+    reset(1);kui_music_init(log_line);kui_music_set_config(true,20);
+    for(unsigned i=0;i<LEGACY_TRACKS;i++) assert(kui_music_cache_menu(i,cancel));
+    assert(kui_music_select_cached(HARBOR-1u) && kui_music_next_index(HARBOR-1u,1)==HARBOR);
+    unsigned opens=fake.opens;
+    assert(!kui_music_cache_menu(HARBOR,cancel) && fake.opens==opens+1u);
+    assert(state().missing_mask==1u<<HARBOR && strstr(state().message,"Track file missing"));
+    assert(state().playing && state().current_index==HARBOR-1u);
+    unsigned wanted=99;assert(kui_music_step_cached(1,&wanted) && wanted==0 && state().current_index==0);
+    assert(kui_music_step_cached(-1,&wanted) && wanted==HARBOR-1u);
+    assert(kui_music_next_index(0,-1)==HARBOR-1u && kui_music_next_index(HARBOR-1u,1)==0);
+    fake.bundled_ogg=true;
+    assert(kui_music_load_path("/KUI/apps/music/harbor-lights.ogg","Harbor",cancel));
+    assert(state().current_index==HARBOR && !state().missing_mask && state().compressed);
+    assert(!strcmp(state().title,"Harbor Lights") && kui_music_next_index(HARBOR-1u,1)==HARBOR);
+    kui_music_shutdown();
+    /* With every other bundled song missing, the cycle keeps its place. */
+    reset(1);fake.bundled_wav=false;kui_music_init(log_line);kui_music_set_config(true,20);
+    for(unsigned i=0;i<KUI_MUSIC_TRACKS;i++) assert(!kui_music_cache_menu(i,cancel));
+    assert(state().missing_mask==ALL_BUNDLED && !state().loaded);
+    assert(kui_music_next_index(2,1)==2 && kui_music_next_index(2,-1)==2);
+    assert(!kui_music_step_cached(1,&wanted) && wanted==0);
+    kui_music_clear_cache();assert(!state().missing_mask && kui_music_next_index(2,1)==3);
+    /* A missing custom song is reported without marking a bundled one. */
+    fake.missing=true;assert(!kui_music_load_path("/Music/test.wav","Gone",cancel) && !state().missing_mask);
+    kui_music_shutdown();
+}
 static void cache_churn(void) {
     /* Reproduce the 1.5 five-WAV working set, then cycle it repeatedly.
      * Selecting cached music must not allocate file memory or touch storage. */
-    static const size_t sizes[KUI_MUSIC_TRACKS]={1058444,846764,1058444,769790,940844};
+    static const size_t sizes[LEGACY_TRACKS]={1058444,846764,1058444,769790,940844};
     reset(1);kui_music_init(log_line);kui_music_set_config(true,15);
-    for(unsigned i=0;i<KUI_MUSIC_TRACKS;i++) {
+    for(unsigned i=0;i<LEGACY_TRACKS;i++) {
         source(1,sizes[i]-44u);assert(kui_music_load(i,cancel));allocations_match();
     }
     assert(state().cache_bytes==4674286u);
@@ -330,7 +367,7 @@ static void cache_churn(void) {
     assert(!kui_music_load_path("/KUI/apps/music/menu.wav","Cancelled selection",cancel));
     fake.cancel=false;assert(state().current_index==1);
     for(unsigned i=0;i<1000u;i++) {
-        assert(kui_music_select_cached(i%KUI_MUSIC_TRACKS));allocations_match();
+        assert(kui_music_select_cached(i%LEGACY_TRACKS));allocations_match();
         assert(state().cache_bytes==4674286u && state().file_allocations==allocated);
     }
     assert(fake.reads==reads && fake.connects==connects);
@@ -347,7 +384,7 @@ static void cache_churn(void) {
         fake.short_read=false;fake.cancel_after_reads=0;fake.close_error=false;
         allocations_match();assert(state().loading_bytes==0);
         assert(!strcmp(state().title,"Repeated choice") && state().playing);
-        assert(kui_music_select_cached(i%KUI_MUSIC_TRACKS));
+        assert(kui_music_select_cached(i%LEGACY_TRACKS));
     }
     unsigned lines=fake.log_lines;kui_music_log_stats("stress check");
     assert(fake.log_lines==lines+2u && strstr(fake.last_log,"Stop/mute retains cache"));
@@ -416,7 +453,8 @@ int main(void) {
         /* Background preload doesn't interrupt the old song; all five can be
          * selected during a rip without making even one filesystem call. */
         unsigned starts=fake.starts,destroy=fake.destroy;
-        for(unsigned i=1;i<KUI_MUSIC_TRACKS;i++) assert(kui_music_cache_menu(i,cancel));
+        for(unsigned i=1;i<LEGACY_TRACKS;i++) assert(kui_music_cache_menu(i,cancel));
+        assert(!kui_music_cache_menu(HARBOR,cancel) && state().missing_mask==1u<<HARBOR);
         assert(state().cached_mask==31u && state().current_index==0 && fake.starts==starts && fake.destroy==destroy);
         reads=fake.reads;unsigned connects=fake.connects;
         unsigned wanted=99;assert(kui_music_step_cached(-1,&wanted) && wanted==4 && state().current_index==4);
@@ -449,6 +487,8 @@ int main(void) {
         if(fault==6) fake.unmount_error=true;
         if(fault==7) fake.header[20]=3;
         assert(!kui_music_load(1,cancel));
+        /* Only an absent file marks a song missing, never a failed load. */
+        assert(state().missing_mask==(fault==2?1u<<1:0u));
         assert(state().loaded && state().playing && state().current_index==0 && fake.starts==starts && fake.destroy==destroy);
         unsigned connects=fake.connects;for(unsigned i=0;i<5;i++) kui_music_service();
         assert(fake.connects==connects);kui_music_shutdown();
@@ -484,7 +524,7 @@ int main(void) {
     assert(kui_music_load(0,cancel));assert(!state().playing && strstr(state().message,"Audio service unavailable"));
     assert(!fake.init && !thread_live);kui_music_shutdown();thread_fail=false;
 #endif
-    cache_churn();compressed_music();bundled_ogg();
+    cache_churn();compressed_music();bundled_ogg();missing_songs();
     replacement_interleave();
-    puts("PASS background music: independent polling, no playback I/O, preserved replacements, 1000 cached switches, 300 replacements/failures, exact 8MiB staging budget, allocation cleanup, replacement/resume interleaving, bundled Oggs sharing one decoder arena, 1.5 WAV fallback");return 0;
+    puts("PASS background music: independent polling, no playback I/O, preserved replacements, 1000 cached switches, 300 replacements/failures, exact 8MiB staging budget, allocation cleanup, replacement/resume interleaving, bundled Oggs sharing one decoder arena, 1.5 WAV fallback, missing songs skipped");return 0;
 }

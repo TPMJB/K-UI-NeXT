@@ -102,12 +102,17 @@ def compose():
     return pcm
 
 
-def write_demo(directory):
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / FILENAME
+def write_wav(path):
+    """Write the exact PCM16 recording; the menu rotation's Ogg is encoded from it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as output:
         output.setparams((1, 2, RATE, FRAMES, "NONE", "not compressed"))
         output.writeframes(compose())
+    return path
+
+
+def write_demo(directory):
+    path = write_wav(directory / FILENAME)
     data = path.read_bytes()
     manifest = {
         "title": TITLE,

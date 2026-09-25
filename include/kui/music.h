@@ -2,14 +2,16 @@
 #ifndef KUI_MUSIC_H
 #define KUI_MUSIC_H
 #include "kui/probe.h"
-#define KUI_MUSIC_TRACKS 5u
+#define KUI_MUSIC_TRACKS 6u
 #define KUI_MUSIC_CUSTOM_INDEX KUI_MUSIC_TRACKS
 #define KUI_MUSIC_FILE_MAX (2u*1024u*1024u)
 #define KUI_MUSIC_CUSTOM_MAX (6u*1024u*1024u)
 #define KUI_MUSIC_CACHE_MAX (8u*1024u*1024u)
 struct kui_music_status {
     bool enabled,loaded,playing,paused,compressed;
-    unsigned volume,current_index,cached_mask;
+    /* missing_mask: bundled songs whose files this card lacks. They leave the
+     * L/R cycle until Clear cache or a successful load of that song. */
+    unsigned volume,current_index,cached_mask,missing_mask;
     uint32_t sample_rate,pcm_bytes,cache_bytes,decoder_bytes;
     /* File allocations: ready cache plus an in-flight replacement. cache_bytes
      * includes decoder_bytes, one ~384 KiB arena shared by all cached Oggs;
@@ -45,8 +47,9 @@ bool kui_music_load(unsigned index,kui_cancel_fn cancel);
  * case-insensitive. */
 bool kui_music_load_path(const char *path,const char *title,kui_cancel_fn cancel);
 /* No card I/O, safe while capture owns SD. Returns false if track isn't cached.
- * step_cached traverses bundled songs plus the retained custom song, if any.
- * Returns the wanted bundled index when missing, via wanted. */
+ * step_cached traverses bundled songs plus the retained custom song, if any,
+ * skipping songs known to be missing; with none left it keeps the current one.
+ * Returns the wanted bundled index when uncached, via wanted. */
 bool kui_music_select_cached(unsigned index);
 bool kui_music_step_cached(int direction,unsigned *wanted);
 unsigned kui_music_next_index(unsigned current,int direction);

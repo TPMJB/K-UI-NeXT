@@ -16,9 +16,15 @@ and the playlist expanded in [`7d5b4477`](https://github.com/TPMJB/K-UI_DS/commi
 The selected generator code is reused under this project's GPL-3.0-only terms
 at the maintainer's direction. No DreamShell player, module or binary is copied.
 
-[manifest.json](manifest.json) records the exact generator Git blob/SHA-256 and
-each generated WAV's SHA-256, format, length and frame count. The legacy repository
-generates these WAVs at build time rather than storing WAV binaries. The card
+The rotation's sixth song, **Harbor Lights**, is K-UI NeXT's own original
+one-minute piece from `tools/generate_music_demo.py`. It began as the 1.5
+update's larger-file playback sample; see [its record](demo.md) for provenance
+and terms. It joined the rotation after 1.5, so it has no WAV fallback.
+
+[manifest.json](manifest.json) records the exact generator Git blob/SHA-256,
+each song's generator and each generated WAV's SHA-256, format, length and frame
+count. The legacy repository generates these WAVs at build time rather than
+storing WAV binaries. The card
 receives Ogg Vorbis encodings of those WAVs instead; the manifest also records
 each committed Ogg's size and SHA-256 and the pinned encoder options.
 
@@ -29,6 +35,7 @@ each committed Ogg's size and SHA-256 and the pinned encoder options.
 | `orbital-drift.ogg` (`orbital-drift.wav`) | Orbital Drift | 24.0 seconds | 114,755 |
 | `midnight-vector.ogg` (`midnight-vector.wav`) | Midnight Vector | 17.45 seconds | 107,836 |
 | `chrome-horizon.ogg` (`chrome-horizon.wav`) | Chrome Horizon | 21.33 seconds | 112,394 |
+| `harbor-lights.ogg` (none) | Harbor Lights | 60.0 seconds | 197,444 |
 
 Reproduce the recordings with Python's standard library:
 
@@ -41,17 +48,19 @@ ships the same bytes without needing an encoder. `--ogg` regenerates the WAVs
 and re-encodes them with FFmpeg/libvorbis at quality 5 with bitexact output;
 FFmpeg 6.1.1 with libvorbis 1.3.7 (Ubuntu 24.04) reproduces the recorded bytes.
 Record a deliberate re-encode's printed sizes and hashes in the manifest.
-The asset test regenerates all five WAVs in a temporary directory and compares
+The asset test regenerates all six WAVs in a temporary directory and compares
 them with the manifest. It also checks the committed Oggs' hashes and decodes
 each through the console's Ogg wrapper: the same rate and exact frame count as
 its WAV, 26.9–29.4 dB against it, an exact repeat across the loop point and an
-identical restart. Packaging copies the five Oggs into `/KUI/apps/music/` after
+identical restart. Packaging copies the six Oggs into `/KUI/apps/music/` after
 checking their hashes.
 
-The five WAVs total 4,674,286 bytes of mono PCM16 at 22,050 Hz. The five Oggs
-total **520,534 bytes**, decode to the same lengths and retain the original
-arrangements; the largest is 114,755 bytes. They are not embedded in the runtime
-binary. The separate manifest/generator need not be copied onto the card.
+The five original WAVs total 4,674,286 bytes of mono PCM16 at 22,050 Hz, and
+Harbor Lights' WAV alone is 2,646,044 bytes, above the 2 MiB bundled-file
+limit. The six Oggs total **717,978 bytes**, decode to the same lengths and
+retain the original arrangements; the largest is Harbor Lights at 197,444
+bytes. They are not embedded in the runtime binary. The separate
+manifest/generator need not be copied onto the card.
 
 ## Independent player
 
@@ -59,16 +68,21 @@ The shared background player accepts PCM16 WAV and Ogg Vorbis files, mono or
 stereo at 8–44.1 kHz. It loads each bundled song by its `.ogg` name; a card set
 up for 1.5, which has only the original WAVs, still plays those. Choosing either
 name in Music Player selects the same bundled slot. Each bundled menu file is
-limited to 2 MiB; a custom Music Player
-selection is limited to **6 MiB for the whole file**. The combined cache budget
-is **8 MiB**, including a temporary replacement allocation. Inactive tracks can
-be evicted to stay inside that budget; the current song remains available until
-its replacement has loaded and validated. A missing, invalid, oversized or
-cancelled replacement keeps the previous song and reports the reason.
+limited to 2 MiB; a custom Music Player selection is limited to **6 MiB for the
+whole file**. The combined cache budget is **8 MiB**, including a temporary
+replacement allocation. Inactive tracks can be evicted to stay inside that
+budget; the current song remains available until its replacement has loaded and
+validated. A missing, invalid, oversized or cancelled replacement keeps the
+previous song and reports the reason.
+
+A bundled song whose file is absent, such as Harbor Lights on a 1.5 card, is
+recorded as missing. L/R then skip it, and if the song picked at startup is
+missing, the next one plays instead. Choosing it in Music Player, or Clear
+cache, looks for it again.
 
 Only the existing I/O worker loads files, in cancellable 32-KiB reads. It
 releases SD before selecting the new cache. Idle work attempts to preload all
-five bundled songs, subject to the same budget. A missing or invalid file does
+six bundled songs, subject to the same budget. A missing or invalid file does
 not cause repeated idle-loop reads.
 Audio initialization, allocation and playback failures also latch until an
 explicit Music setting or track change, avoiding repeated idle-loop retries.
@@ -80,22 +94,22 @@ unconditionally pause music. Selecting a song in Music Player returns control
 to the shell after preload, so B/Start can leave the browser without stopping
 playback. Music Player Y stops music; Ripper Y remains Verify.
 
-The five cached menu Oggs retain **913,765 bytes (0.87 MiB)**: 520,534
+The six cached menu Oggs retain **1,111,209 bytes (1.06 MiB)**: 717,978
 compressed bytes plus one 393,231-byte decoder arena (384 KiB and alignment
-slack). The 1.5 WAVs retained 4,674,286 bytes (4.46 MiB), which is still the
-figure for a card that only has them. Only the selected song is decoded. Every
+slack). The five 1.5 WAVs retained 4,674,286 bytes (4.46 MiB), which is still
+the figure for a card that only has them. Only the selected song is decoded. Every
 cached Ogg, including a custom one, shares that arena, and it is released once
 no Ogg remains cached. Selecting a cached Ogg rebuilds its decoder in the arena
 from RAM, without card access or allocation, and restarts it from the
 beginning, as a WAV does. Loading an Ogg validates it in a second, temporary
 arena so the current song keeps playing. That staging arena counts toward the
 8 MiB budget; the first Ogg keeps it as the shared arena, and later loads free
-it. A custom song adds its own retained file until replaced or evicted; both are separate from
-the runtime image, stacks and audio buffers. A rise while the playlist fills
-can therefore be expected. It is not enough by itself to establish a leak.
-Selecting one of the five bundled files manually now shares its existing menu
-cache slot, including an ASCII case variation of its path, instead of creating
-a second custom copy of the same file.
+it. A custom song adds its own retained file until replaced or evicted; both
+are separate from the runtime image, stacks and audio buffers. A rise while the
+playlist fills can therefore be expected. It is not enough by itself to
+establish a leak. Selecting one of the bundled files manually now shares its
+existing menu cache slot, including an ASCII case variation of its path,
+instead of creating a second custom copy of the same file.
 
 The music RAM report separates ready cache, in-flight loading bytes, peak
 combined file allocations and cumulative allocation/free counts. Stop/mute
@@ -107,8 +121,8 @@ not a live-use measurement.
 Home and Ripper L/R select the previous/next bundled song. Cached selections can
 change during capture without touching SD. An uncached choice displays a queued
 change and loads when the storage worker becomes idle; capture retains storage
-ownership. A custom song is chosen through Music Player rather than the bundled
-five-song trigger cycle.
+ownership. A custom song is chosen through Music Player; once cached, it joins
+the six bundled songs in the trigger cycle.
 
 The two callback buffers are **128 KiB each**, KOS uses a further **64-KiB
 separation buffer**, and the audio thread has a **32-KiB stack**. These are

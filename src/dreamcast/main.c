@@ -315,6 +315,16 @@ static bool music_preload_cancelled(void) {
     mutex_unlock(&lock);
     return stop;
 }
+/* A requested bundled song this card lacks must not leave startup silent.
+ * While nothing is loaded, try the next song not yet known to be missing;
+ * each miss is recorded, so this stops within one pass of the playlist. */
+static int next_after_missing(unsigned wanted) {
+    struct kui_music_status status;
+    kui_music_status_copy(&status);
+    if(status.loaded || !(status.missing_mask>>wanted&1u)) return -1;
+    unsigned next=kui_music_next_index(wanted,1);
+    return next<KUI_MUSIC_TRACKS && !(status.missing_mask>>next&1u)?(int)next:-1;
+}
 static void music_idle_work(void) {
     if(kui_cd_audio_owns_drive() || music_preload_cancelled()) return;
     struct kui_music_status status;
@@ -333,7 +343,7 @@ static void music_idle_work(void) {
              * preload cannot overwrite a newer trigger selection. */
             if(current) {
                 if(ok) kui_music_select_cached((unsigned)wanted);
-                music_requested=-1;
+                music_requested=ok?-1:next_after_missing((unsigned)wanted);
             }
             mutex_unlock(&lock);
         }

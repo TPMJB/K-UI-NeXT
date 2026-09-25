@@ -3,6 +3,11 @@
 The SD update includes `Music/harbor-lights.wav`. Copy the `Music` directory to
 the root of the SD card, open **Music**, and choose **harbor-lights.wav**.
 
+Harbor Lights is now also the sixth song in the menu rotation, shipped as
+`KUI/apps/music/harbor-lights.ogg` (197,444 bytes, Ogg Vorbis quality 5) and
+recorded in the menu music manifest. The `Music` copies remain for testing the
+custom-song path.
+
 This original instrumental uses warm synth chords, a small arpeggio and quiet
 electronic percussion. It was synthesized for TPMJB/K-UI-NeXT without external
 recordings, samples, sound fonts or musical material. The generator is
