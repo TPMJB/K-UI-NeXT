@@ -110,7 +110,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
     rule(p,416);
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
     const char *controls=v->video_trial ? "A Keep mode   B Revert" :
-        v->busy ? (song_page?"B Stop safely   L/R Songs":"B Stop safely") :
+        v->busy ? (song_page?"B Stop safely   L/R Songs":s->page==KUI_SHELL_FTP?"B Stop the server":"B Stop safely") :
         s->confirm_gd_boot ? "A Exit to BIOS   B Cancel" :
         s->confirm_quick_resume ? "A Quick resume   B Cancel" :
         s->confirm_new ? "A Start capture   B Cancel" :
@@ -149,6 +149,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_FILES_CONFIRM ? (kui_shell_files_ready(s)?(s->files_job.op==KUI_FILES_OP_COPY?
             "A Copy   B Cancel":s->files_job.op==KUI_FILES_OP_MOVE?"A Move   B Cancel":"A Delete   B Cancel"):"B Back") :
         s->page==KUI_SHELL_FILES_INFO || s->page==KUI_SHELL_FILES_VIEW ? "B Files" :
+        s->page==KUI_SHELL_FTP ? "A Start again   B Network" :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
@@ -232,8 +233,8 @@ static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
         {"Browse, copy or delete saves.","Back up to SD, then restore","checked backups to a free name."},-1},
     {KUI_SHELL_MEMORY,"Memory Test","System tools",
         {"Check available application RAM","with data patterns and report","any mismatches found."},-1},
-    {KUI_SHELL_NETWORK,"Network Test","Connectivity",
-        {"Inspect your network adapter","or connect and test a network.","View results and save a log."},-1},
+    {KUI_SHELL_NETWORK,"Network","Connectivity",
+        {"Inspect your network adapter","and test the network. Share the","SD card by FTP (W5500 on SCI)."},-1},
     {KUI_SHELL_SETTINGS,"Settings","System preferences",
         {"Choose video, memory display","and background music.","Save preferences to SD."},1},
     {KUI_SHELL_DIAGNOSTICS,"Diagnostics","Diagnostics",
@@ -587,10 +588,10 @@ static void app_status(struct paint *p,const struct kui_app_status *status,bool 
 }
 static void utility_page(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     bool memory_test=s->page==KUI_SHELL_MEMORY;
-    title(p,40,108,memory_test?"Memory Test":"Network Test");
+    title(p,40,108,memory_test?"Memory Test":"Network");
     label(p,40,138,MUTED,memory_test?"Tests an allocated RAM region using data patterns.":
-        "Inspect the adapter, then test its network connection.");
-    label(p,40,160,v->busy?MUTED:WHITE,memory_test?"A Run memory test":"A Inspect adapter   X Connect / test network");
+        "BBA, LAN adapter, or a W5500 on the SCI port.");
+    label(p,40,160,v->busy?MUTED:WHITE,memory_test?"A Run memory test":"A Inspect adapter   X Test network   Y FTP server");
     const struct kui_app_status *status=v->app_status;
     panel(p,32,194,576,214,PANEL);
     app_status(p,status,v->busy,202);
@@ -1375,6 +1376,82 @@ static void files_view(struct paint *p,const struct kui_shell *s,const struct ku
     if(kui_files_parent(parent,pic->path)) path_words(p,336,218,608,MUTED,parent);
     label(p,336,258,MUTED,"Shown fitted to this square.");
 }
+/* FTP server: the address and password large, then each client's
+ * transfer, the session's totals and its latest event. */
+static void ftp_client(struct paint *p,const struct kui_ftp_client *c,unsigned y) {
+    char line[160],done[16],total[16],rate[16];
+    snprintf(line,sizeof(line),"%u.%u.%u.%u",c->ip[0],c->ip[1],c->ip[2],c->ip[3]);
+    label(p,48,y,WHITE,line);
+    if(!c->sending && !c->receiving) {
+        words(p,184,y,592,MUTED,c->logged_in?"Logged in, waiting":"Connected, not logged in",false);
+        return;
+    }
+    snprintf(line,sizeof(line),"%s %s",c->sending?"Sending":"Receiving",c->name);
+    words(p,184,y,480,CYAN,line,false);
+    kui_files_size_text(rate,c->rate);
+    snprintf(line,sizeof(line),"%s/s",rate);
+    words(p,488,y,592,MUTED,line,false);
+    kui_files_size_text(done,c->done);
+    if(c->total) {
+        kui_files_size_text(total,c->total);
+        unsigned tenths=kui_shell_progress_tenths(c->done,c->total);
+        box(p,48,y+26,296,6,EDGE);
+        box(p,48,y+26,(unsigned)(296u*(c->done<c->total?c->done:c->total)/c->total),6,CYAN);
+        snprintf(line,sizeof(line),"%u%%  %s of %s",tenths/10u,done,total);
+        words(p,356,y+19,592,MUTED,line,false);
+    } else {
+        snprintf(line,sizeof(line),"%s received so far",done);
+        words(p,48,y+19,592,MUTED,line,false);
+    }
+}
+static void ftp_page(struct paint *p,const struct kui_shell_view *v) {
+    const struct kui_ftp_status *f=v->ftp;
+    char line[160];
+    title(p,40,108,"FTP Server");
+    if(!f || f->state==KUI_FTP_STARTING) {
+        panel(p,32,140,576,112,PANEL);
+        label(p,48,152,CYAN,f && f->message[0]?f->message:"Starting");
+        label(p,48,180,MUTED,"It needs a W5500 on the SCI port and a cable to your");
+        label(p,48,200,MUTED,"router. The SD card stays on SCIF. B stops it at any time.");
+        return;
+    }
+    bool ready=f->state==KUI_FTP_READY;
+    panel(p,32,136,576,80,PANEL);
+    if(ready) {
+        if(f->port==KUI_FTP_PORT) snprintf(line,sizeof(line),"ftp://%u.%u.%u.%u",f->ip[0],f->ip[1],f->ip[2],f->ip[3]);
+        else snprintf(line,sizeof(line),"ftp://%u.%u.%u.%u:%u",f->ip[0],f->ip[1],f->ip[2],f->ip[3],f->port);
+        words(p,48,141,592,CYAN,line,true);
+        snprintf(line,sizeof(line),"User: kui   Password: %s",f->password);
+        words(p,48,167,592,WHITE,line,true);
+        label(p,48,194,f->link?MUTED:AMBER,f->link?f->adapter:"No cable link: check the network cable");
+    } else {
+        bool failed=f->state==KUI_FTP_FAILED;
+        words(p,48,141,592,failed?AMBER:CYAN,failed?"The FTP server stopped":"The FTP server is off",true);
+        label(p,48,170,failed?AMBER:MUTED,f->message);
+        label(p,48,192,MUTED,"A starts it again. B returns to Network.");
+    }
+    panel(p,32,222,576,124,PANEL);
+    unsigned rows=0;
+    for(unsigned i=0;i<KUI_FTP_SESSIONS;i++) {
+        if(!f->clients[i].active) continue;
+        ftp_client(p,&f->clients[i],228+rows*40);
+        ++rows;
+    }
+    if(!rows) {
+        label(p,48,232,MUTED,ready?"No client connected yet. Connect an FTP client to the":"No clients connected.");
+        if(ready) {
+            label(p,48,252,MUTED,"address above, in passive mode (the usual setting).");
+            label(p,48,284,MUTED,"Plain FTP is not encrypted: use it on your home network.");
+        }
+    }
+    char in[16],out[16];
+    kui_files_size_text(in,f->bytes_in);
+    kui_files_size_text(out,f->bytes_out);
+    snprintf(line,sizeof(line),"Received %u file%s (%s), sent %u (%s)",f->files_in,f->files_in==1?"":"s",in,
+        f->files_out,out);
+    label(p,40,352,MUTED,line);
+    for(unsigned i=0;i<f->event_count && i<2;i++) label(p,40,374+i*20,i?MUTED:WHITE,f->events[i]);
+}
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
@@ -1412,6 +1489,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_FILES_CONFIRM: files_confirm(&p,s,v); break;
     case KUI_SHELL_FILES_INFO: files_info(&p,s,v); break;
     case KUI_SHELL_FILES_VIEW: files_view(&p,s,v); break;
+    case KUI_SHELL_FTP: ftp_page(&p,v); break;
     }
     footer(&p,s,v);
     if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s->confirm_quick_resume);

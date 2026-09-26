@@ -25,6 +25,7 @@
 #include "kui/capture_display.h"
 #include "kui/viewport.h"
 #include "kui/network_probe.h"
+#include "kui/ftp.h"
 #include "kui/salvage.h"
 #include "kui/maintenance.h"
 #include "kui/menu_sound.h"
@@ -134,6 +135,9 @@ static bool files_music;
 /* The picture view's pixels: only the worker writes them, and only while
  * the view shows none (its picture is still loading). */
 static uint16_t files_picture_pixels[KUI_FILES_PICTURE_EDGE*KUI_FILES_PICTURE_EDGE];
+/* FTP server: the status it publishes as it runs, drawn on its page. */
+static struct kui_ftp_status ftp_status;
+static bool ftp_seen;
 static bool is_capture_action(unsigned action) {
     return (action>=4 && action<=6) || action==22;
 }
@@ -622,6 +626,9 @@ static void publish_cd_audio(void) {
 static void games_scan_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);games_scan_status=*status;mutex_unlock(&lock);
 }
+static void ftp_publish(const struct kui_ftp_status *status) {
+    mutex_lock(&lock);ftp_status=*status;ftp_seen=true;mutex_unlock(&lock);
+}
 static void files_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);files_status=*status;mutex_unlock(&lock);
 }
@@ -772,6 +779,10 @@ static void *worker(void *unused) {
                 files_result=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(files_result.message,sizeof(files_result.message),"Stopped before starting; nothing changed.");
                 ++files_result_generation;
+            }
+            if(action==64) {
+                ftp_status.state=KUI_FTP_STOPPED;
+                snprintf(ftp_status.message,sizeof(ftp_status.message),"Stopped before starting");
             }
             if(action==63) {
                 memset(&files_picture_result,0,sizeof(files_picture_result));
@@ -954,6 +965,15 @@ static void *worker(void *unused) {
                 struct kui_files_picture picture;
                 kui_files_picture(files_picture_pending,files_picture_pixels,&picture,kui_log,kui_cancelled);
                 mutex_lock(&lock);files_picture_result=picture;++files_picture_generation;mutex_unlock(&lock);
+            }
+            if(action==64) {
+                /* The card stays on SCIF; the W5500 has the SCI port. */
+                kui_sd_set_params(0,true);
+                struct kui_ftp_options options={0};
+                options.seed=(uint32_t)timer_us_gettime64();
+                struct kui_ftp_status result;
+                kui_ftp_run(kui_w5500_console_port(),&options,&result,kui_log,kui_cancelled,ftp_publish);
+                mutex_lock(&lock);ftp_status=result;ftp_seen=true;mutex_unlock(&lock);
             }
             if(action==55) {
                 kui_sd_set_params(0,true);
@@ -1227,6 +1247,7 @@ static void draw_shell(void) {
     char path[KUI_DEST_JOB_CAP], notice[128], title[129], gdi[KUI_DEST_TITLE_CAP+5u];
     char inserted[129],music_title[40],music_notice[128],message[128];
     struct kui_app_status app_status;
+    static struct kui_ftp_status ftp_view;
     struct kui_shell_view view = {.build = KUI_BUILD_ID, .job_dir = path,
         .disc_title = title, .gdi_name = gdi, .settings_notice = notice, .message = message, .log_lines = log_rows,
         .inserted_title=inserted,.music_title=music_title,.music_notice=music_notice,.app_status=&app_status,
@@ -1299,6 +1320,7 @@ static void draw_shell(void) {
     view.retry_fad=capture_display.retry_fad;
     view.done = capture_status.done; view.total = capture_status.total;
     view.committed = capture_status.committed; view.elapsed_ms = capture_status.elapsed_ms;
+    if(shell.page==KUI_SHELL_FTP && ftp_seen) {ftp_view=ftp_status;view.ftp=&ftp_view;}
     unsigned screen_inset=system_current.screen_inset*16u;
     mutex_unlock(&lock);
     view.memory_valid = memory_valid; view.memory_used = memory_status.used;
@@ -1386,6 +1408,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_FILES_CHECK: return 61;
         case KUI_SHELL_FILES_RUN: return 62;
         case KUI_SHELL_FILES_PICTURE: return 63;
+        case KUI_SHELL_FTP_START: return 64;
         default: return 0;
     }
 }
@@ -1738,6 +1761,11 @@ int main(void) {
                 files_status=(struct kui_app_status){0};
             }
             if(action==24) files_music=shell.page==KUI_SHELL_FILES;
+            if(action==64) {
+                ftp_status=(struct kui_ftp_status){0};
+                snprintf(ftp_status.message,sizeof(ftp_status.message),"Starting");
+                ftp_seen=true;
+            }
             if(action==59) {
                 games_scan_status=(struct kui_app_status){0};
                 snprintf(games_scan_status.message,sizeof(games_scan_status.message),"Finding games...");

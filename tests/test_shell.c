@@ -59,7 +59,7 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_FILES_VIEW;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_FTP;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -639,7 +639,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_FILES_VIEW;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_FTP;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -744,7 +744,8 @@ static void new_pages_rendering(void) {
     assert(strstr(drawn,"Memory Test") && strstr(drawn,"Allocated region passed"));
     assert(!strstr(drawn,"Line 3:") && strstr(drawn,"Line 4:") && strstr(drawn,"Line 11:"));
     s.page=KUI_SHELL_NETWORK;render(&v);
-    assert(strstr(drawn,"Network Test") && strstr(drawn,"Inspect adapter"));
+    assert(strstr(drawn,"Network") && strstr(drawn,"Inspect adapter") && strstr(drawn,"Y FTP server"));
+    assert(strstr(drawn,"W5500 on the SCI port"));
     reset(KUI_SHELL_VMU);s.vmu.present=true;s.vmu.total=8;s.vmu.count=8;
     for(unsigned i=0;i<8;i++) {
         snprintf(s.vmu.entries[i].name,16,"SAVE_%02u",i);s.vmu.entries[i].bytes=32768;
@@ -762,7 +763,7 @@ static void new_pages_rendering(void) {
     v.inserted_title="A very long inserted disc title which exceeds the launcher subtitle width";
     render(&v);assert(strstr(drawn,"Inserted:") && strstr(drawn,"..."));
     static const char *const names[]={"Games","Disc Ripper","VMU Manager","File Manager","Music Player",
-        "GD Play","Memory Test","Network Test","Diagnostics","Settings"};
+        "GD Play","Memory Test","Network","Diagnostics","Settings"};
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) {
         s.home_selected=i;render(&v);
         assert(strstr(drawn,"RAM 1 / 16384 KiB") && strstr(drawn,"Memory Test"));
@@ -1460,6 +1461,70 @@ static void files_rendering(void) {
     assert(strstr(drawn,"B Files") && strstr(drawn,"B returns to the File Manager."));
     puts("PASS File Manager rendering: Home entry, rows, notices, progress, actions, confirmations, details, picture, keyboard");
 }
+/* FTP server: Y on the Network page opens its page and starts it; B stops
+ * it while it runs, then returns to Network; A starts it again. */
+static void ftp_controls(void) {
+    reset(KUI_SHELL_NETWORK);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_FTP_START && s.page==KUI_SHELL_FTP);
+    assert(press(KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_START,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_FTP);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_FTP);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FTP_START && s.page==KUI_SHELL_FTP);
+    assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FTP);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_NETWORK);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
+    /* The busy Network page does not start it. */
+    reset(KUI_SHELL_NETWORK);
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_NETWORK);
+    puts("PASS shell FTP controls: start from Network, stop, restart, back");
+}
+static void ftp_rendering(void) {
+    struct kui_shell_view v={.build="a1b2c3d4e5f6",.busy=true};
+    reset(KUI_SHELL_FTP);render(&v);
+    assert(strstr(drawn,"FTP Server") && strstr(drawn,"Starting") && strstr(drawn,"B Stop the server"));
+    struct kui_ftp_status f;
+    memset(&f,0,sizeof(f));
+    snprintf(f.message,sizeof(f.message),"Asking the router for an address (DHCP)");
+    v.ftp=&f;render(&v);
+    assert(strstr(drawn,"Asking the router for an address") && strstr(drawn,"SD card stays on SCIF"));
+    f.state=KUI_FTP_READY;f.link=true;f.port=KUI_FTP_PORT;
+    f.ip[0]=192;f.ip[1]=168;f.ip[2]=1;f.ip[3]=50;
+    snprintf(f.password,sizeof(f.password),"48217365");
+    snprintf(f.adapter,sizeof(f.adapter),"W5500 on SCI at 12.5 MHz; 100 Mbit/s full duplex");
+    render(&v);
+    assert(strstr(drawn,"ftp://192.168.1.50") && !strstr(drawn,"ftp://192.168.1.50:"));
+    assert(strstr(drawn,"User: kui   Password: 48217365") && strstr(drawn,"12.5 MHz; 100 Mbit/s"));
+    assert(strstr(drawn,"No client connected yet") && strstr(drawn,"not encrypted"));
+    assert(strstr(drawn,"Received 0 files (0 B), sent 0 (0 B)"));
+    f.port=2121;render(&v);assert(strstr(drawn,"ftp://192.168.1.50:2121"));
+    f.link=false;render(&v);assert(strstr(drawn,"No cable link"));
+    f.link=true;
+    struct kui_ftp_client *c=f.clients;
+    c[0].active=c[0].logged_in=c[0].sending=true;c[0].ip[0]=192;c[0].ip[1]=168;c[0].ip[2]=1;c[0].ip[3]=20;
+    snprintf(c[0].name,sizeof(c[0].name),"track03.bin");c[0].done=12u*1024u*1024u;c[0].total=48u*1024u*1024u;
+    c[0].rate=480u*1024u;
+    c[2].active=c[2].logged_in=c[2].receiving=true;c[2].ip[0]=10;c[2].ip[3]=7;
+    snprintf(c[2].name,sizeof(c[2].name),"disc.gdi");c[2].done=2048;
+    c[1].active=true;c[1].ip[0]=10;c[1].ip[3]=9;
+    f.files_in=3;f.files_out=1;f.bytes_in=UINT64_C(1288490188);f.bytes_out=2u*1024u*1024u;
+    f.event_count=2;
+    snprintf(f.events[0],sizeof(f.events[0]),"Received /Games/Crazy Taxi/track02.raw (412.3 MB)");
+    snprintf(f.events[1],sizeof(f.events[1]),"192.168.1.20 logged in");
+    render(&v);
+    assert(strstr(drawn,"192.168.1.20") && strstr(drawn,"Sending track03.bin") && strstr(drawn,"25%  12.0 MB of 48.0 MB"));
+    assert(strstr(drawn,"480 KB/s") && strstr(drawn,"Receiving disc.gdi") && strstr(drawn,"2.0 KB received so far"));
+    assert(strstr(drawn,"10.0.0.9") && strstr(drawn,"Connected, not logged in"));
+    assert(strstr(drawn,"Received 3 files (1.2 GB), sent 1 (2.0 MB)") && strstr(drawn,"track02.raw (412.3 MB)"));
+    assert(strstr(drawn,"192.168.1.20 logged in") && !strstr(drawn,"No client connected"));
+    v.busy=false;f.state=KUI_FTP_STOPPED;memset(f.clients,0,sizeof(f.clients));
+    snprintf(f.message,sizeof(f.message),"The FTP server was stopped on the Dreamcast");
+    render(&v);
+    assert(strstr(drawn,"The FTP server is off") && strstr(drawn,"stopped on the Dreamcast"));
+    assert(strstr(drawn,"A Start again   B Network") && strstr(drawn,"No clients connected."));
+    f.state=KUI_FTP_FAILED;snprintf(f.message,sizeof(f.message),"No W5500 answered on the SCI port (read FF)");
+    render(&v);
+    assert(strstr(drawn,"The FTP server stopped") && strstr(drawn,"No W5500 answered"));
+    puts("PASS shell FTP rendering: starting, ready, clients and transfers, stopped, failed");
+}
 int main(int argc,char **argv) {
     games_controls(); games_views(); games_retail_controls(); games_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
@@ -1469,6 +1534,7 @@ int main(int argc,char **argv) {
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
     music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
     files_controls(); files_rendering();
+    ftp_controls(); ftp_rendering();
     puts("PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

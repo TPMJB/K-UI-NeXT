@@ -13,13 +13,23 @@ struct kui_network_probe {
     uint32_t transaction;
     uint64_t start_ms,stage_ms,last_send_ms,echo_ms;
     unsigned sends,received,ignored;
-    bool dhcp,leased,arp_reply,echo_reply;
+    /* lease_seconds: from the DHCP ACK. Set after begin: lease_only ends
+     * once the address is leased and checked (no gateway ARP or ping);
+     * renewing (see kui_network_probe_renew) ends at the ACK. */
+    uint32_t lease_seconds;
+    bool dhcp,leased,arp_reply,echo_reply,lease_only,renewing;
     char failure[80];
 };
 bool kui_network_config_valid(const struct kui_network_config *config);
+/* What the probe is doing at each stage, for progress messages. */
+const char *kui_network_stage_text(enum kui_network_stage stage);
 bool kui_network_parse_ipv4(const char *text,uint8_t out[4]);
 void kui_network_probe_begin(struct kui_network_probe *p,const uint8_t mac[6],uint32_t xid,
     const struct kui_network_config *config,uint64_t now_ms);
+/* Renews a lease: a REQUEST for config's address to `server`, done at the
+ * server's ACK (no conflict check; the address is already in use). */
+void kui_network_probe_renew(struct kui_network_probe *p,const uint8_t mac[6],uint32_t xid,
+    const struct kui_network_config *config,const uint8_t server[4],uint64_t now_ms);
 /* Receive is called only by the worker, never directly from an interrupt. */
 void kui_network_probe_receive(struct kui_network_probe *p,const uint8_t *frame,size_t size,uint64_t now_ms);
 /* Returns a complete outbound frame, or zero. Updates timeout/completion state. */

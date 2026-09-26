@@ -15,6 +15,7 @@ FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
+test: build/test-w5500 build/test-network-w5500 build/test-ftp
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
@@ -37,6 +38,9 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-cd-audio guard
 	./build/test-network-probe
 	./build/test-network-connect
+	./build/test-w5500
+	./build/test-network-w5500
+	./build/test-ftp
 	./build/test-menu-sound
 	./build/test-music-ogg
 	./build/test-music-ogg-seek
@@ -268,13 +272,14 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+test-images: build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
 	python3 tests/test_games_retail.py
 	python3 tests/test_games_image_probe.py
 	python3 tests/test_loader_probe_images.py
 	python3 tests/test_games_images.py
 	python3 tests/test_games_covers_images.py
 	python3 tests/test_files_images.py
+	python3 tests/test_ftp_images.py
 	python3 tests/test_salvage_images.py
 	python3 tests/test_maintenance_images.py
 	python3 tests/test_recovery_scan_images.py
@@ -345,7 +350,7 @@ build/test-memory-app: tests/test_memory_app.c src/apps/memory_pattern.c include
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/memory_pattern.c tests/test_memory_app.c -o $@
 
-build/test-network-app: tests/test_network_app.c src/apps/network_test.c src/apps/network_status.c include/kui/network_test.h $(wildcard tests/apps_stubs/kos/*.h tests/apps_stubs/dc/*.h tests/apps_stubs/dc/net/*.h)
+build/test-network-app: tests/test_network_app.c src/apps/network_test.c src/apps/network_status.c include/kui/network_test.h include/kui/network_w5500.h include/kui/w5500.h $(wildcard tests/apps_stubs/kos/*.h tests/apps_stubs/dc/*.h tests/apps_stubs/dc/net/*.h)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/apps_stubs src/apps/network_test.c src/apps/network_status.c tests/test_network_app.c -o $@
 
@@ -420,9 +425,20 @@ build/test-network-probe: tests/test_network_probe.c src/apps/network_probe.c in
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/network_probe.c tests/test_network_probe.c -o $@
 
-build/test-network-connect: tests/test_network_connect.c src/apps/network_probe.c src/apps/network_connect.c include/kui/network_probe.h
+build/test-network-connect: tests/test_network_connect.c src/apps/network_probe.c src/apps/network_connect.c include/kui/network_probe.h include/kui/network_w5500.h include/kui/w5500.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/apps_stubs src/apps/network_probe.c src/apps/network_connect.c tests/test_network_connect.c -o $@
+
+# The W5500 driver and bring-up against tests/w5500_model.c, a W5500 whose
+# TCP sockets are real localhost sockets.
+W5500_MODEL = tests/w5500_model.c tests/w5500_model.h
+build/test-w5500: tests/test_w5500.c src/core/w5500.c src/apps/network_probe.c include/kui/w5500.h include/kui/network_probe.h $(W5500_MODEL)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/core/w5500.c src/apps/network_probe.c tests/w5500_model.c tests/test_w5500.c -o $@
+
+build/test-network-w5500: tests/test_network_w5500.c src/core/w5500.c src/apps/network_probe.c src/apps/network_w5500.c include/kui/w5500.h include/kui/network_w5500.h include/kui/network_probe.h $(W5500_MODEL)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/core/w5500.c src/apps/network_probe.c src/apps/network_w5500.c tests/w5500_model.c tests/test_network_w5500.c -o $@
 
 build/maintenance-image: tests/maintenance_image.c $(CORE) $(FATFS) src/core/storage_probe.c src/apps/maintenance.c include/kui/maintenance.h
 	@mkdir -p $(@D)
@@ -474,6 +490,17 @@ build/test-files: tests/test_files.c src/core/files_path.c src/core/destination.
 build/files-image: tests/files_image.c $(FILES) $(CORE) $(FATFS) include/kui/files.h include/kui/game_cover.h include/kui/cover_image.h include/kui/pvr_texture.h tests/fixtures/cover_images.h third_party/stb/stb_image.h config/ffconf.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(FILES) $(CORE) $(FATFS) tests/files_image.c $(FILES_WRAP) -lm -o $@
+# The FTP server: protocol pieces alone, then end to end on the W5500 model
+# with real FatFs, driven by Python's ftplib (tests/test_ftp_images.py).
+FTP = src/apps/ftp_server.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/storage_probe.c \
+      src/core/w5500.c src/apps/network_w5500.c src/apps/network_probe.c
+FTP_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir
+build/test-ftp: tests/test_ftp.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c include/kui/ftp.h include/kui/files.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c tests/test_ftp.c -o $@
+build/ftp-image: tests/ftp_image.c $(FTP) $(CORE) $(FATFS) $(W5500_MODEL) include/kui/ftp.h include/kui/w5500.h include/kui/network_w5500.h include/kui/files.h config/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -Itests $(FTP) $(CORE) $(FATFS) tests/w5500_model.c tests/ftp_image.c $(FTP_WRAP) -o $@
 build/games-covers-image: tests/games_covers_image.c $(GAMES_COVERS) $(CORE) $(FATFS) include/kui/games_covers.h include/kui/games.h include/kui/game_cover.h include/kui/pvr_texture.h include/kui/cover_image.h third_party/stb/stb_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(CORE) $(FATFS) tests/games_covers_image.c $(GAMES_COVERS_WRAP) -lm -o $@

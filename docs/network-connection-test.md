@@ -35,6 +35,14 @@ not implemented; such replies are ignored rather than interpreted incompletely.
 The receive callback copies a bounded frame into a four-entry queue and leaves
 all parsing to the worker. Queue drops are reported.
 
+## W5500 on the SCI port
+
+With no BBA or LAN adapter, inspection and the connection test look for a
+W5500 wired to the SCI port. The same probe runs over the W5500's raw
+Ethernet socket (socket 0 in MACRAW mode); the chip's own address stays
+unset during the test. The W5500 also carries K-UI's FTP server; see
+[the FTP server](ftp.md) for the wiring, the SPI speed checks and the tests.
+
 ## Host and console checks
 
 Host protocol tests cover DHCP success/NAK/deadlines, conflict detection, gateway

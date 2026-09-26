@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/network_probe.h"
+#include "kui/network_w5500.h"
 #include <kos/net.h>
 #include <kos/thread.h>
 #include <kos/irq.h>
@@ -22,7 +23,6 @@ static int receive(netif_t *n,const uint8_t *data,int bytes){
 }
 static netif_t *find(const char *name){netif_t *n;LIST_FOREACH(n,net_get_if_list(),if_list)if(n->name&&!strcmp(n->name,name))return n;return NULL;}
 static void emit(struct kui_app_status *out,kui_app_progress_fn progress,const char *message){snprintf(out->message,sizeof(out->message),"%s",message);if(progress)progress(out);}
-static const char *phase(enum kui_network_stage s){switch(s){case KUI_NET_DISCOVER:return "Requesting DHCP offer (15 second limit)";case KUI_NET_REQUEST:return "Requesting DHCP lease (15 second limit)";case KUI_NET_CONFLICT:return "Checking address conflict (3 seconds)";case KUI_NET_ARP:return "Testing gateway ARP (5 second limit)";case KUI_NET_ECHO:return "Testing gateway ping (5 second limit)";default:return "Network test finished";}}
 void kui_network_connect_run(const struct kui_network_config *config,struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress){
     if(!out)return;
     memset(out,0,sizeof(*out));netif_t *n=NULL,*item;unsigned owned=0;bool initialized=false,started=false,target=false;net_input_func old=NULL;
@@ -35,7 +35,9 @@ void kui_network_connect_run(const struct kui_network_config *config,struct kui_
     if(cancel&&cancel())goto stop;
     if(!n){if(la_init()==0){n=find("la");owned=2;}else la_shutdown();}
     if(n&&!(n->flags&NETIF_DETECTED)&&n->if_detect)n->if_detect(n);
-    if(!n||!(n->flags&NETIF_DETECTED)||(n->flags&NETIF_NOETH)||!n->if_init||!n->if_start||!n->if_stop||!n->if_shutdown||!n->if_tx){emit(out,progress,"No supported Ethernet adapter detected");++out->errors;goto done;}
+    /* No BBA or LAN adapter: a W5500 on the SCI port, if one is fitted (DHCP only). */
+    if(!n&&!config&&kui_w5500_network_test(out,log,cancel,progress))return;
+    if(!n||!(n->flags&NETIF_DETECTED)||(n->flags&NETIF_NOETH)||!n->if_init||!n->if_start||!n->if_stop||!n->if_shutdown||!n->if_tx){emit(out,progress,"No Broadband, LAN or W5500 adapter detected");++out->errors;goto done;}
     emit(out,progress,"Starting adapter (KOS link wait: up to 10 seconds)");
     if(!(n->flags&NETIF_INITIALIZED)){if(n->if_init(n)<0){emit(out,progress,"Adapter initialization failed");++out->errors;goto done;}initialized=true;}
     if(cancel&&cancel())goto stop;
@@ -54,7 +56,7 @@ void kui_network_connect_run(const struct kui_network_config *config,struct kui_
         }
         now=timer_ms_gettime64();size_t bytes=kui_network_probe_step(&p,frame,now);
         if(bytes){int result=n->if_tx(n,frame,(int)bytes,NETIF_NOBLOCK);if(result!=NETIF_TX_OK&&result!=NETIF_TX_AGAIN){snprintf(p.failure,sizeof(p.failure),"Adapter packet transmit failed");p.stage=KUI_NET_FAILED;}}
-        if(last!=p.stage){last=p.stage;emit(out,progress,phase(p.stage));if(log)log("Network: %s",out->message);}
+        if(last!=p.stage){last=p.stage;emit(out,progress,kui_network_stage_text(p.stage));if(log)log("Network: %s",out->message);}
         thd_sleep(10);
     }
     out->complete=true;out->passed=p.stage==KUI_NET_DONE;

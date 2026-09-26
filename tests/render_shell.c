@@ -12,7 +12,8 @@
  * games-compact, games-gallery, games-scan, games-detail-art, home-files, home-ripper,
  * files, files-root, files-actions, files-actions-locked, files-pick,
  * files-copy, files-delete, files-refused, files-info, files-info-file,
- * files-view, files-copying, files-keyboard. */
+ * files-view, files-copying, files-keyboard, network, ftp-starting, ftp-ready,
+ * ftp-busy, ftp-stopped, ftp-failed. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -101,6 +102,43 @@ static void files_preview(struct kui_shell *shell,enum kui_files_op op,bool read
     if(!ready) snprintf(pv->status.message,sizeof(pv->status.message),"Not enough free space: needs 1.1 GB, 812.4 MB free");
     shell->page=KUI_SHELL_FILES_CONFIRM;
 }
+/* The FTP server's status in each state its page draws. */
+static struct kui_ftp_status ftp;
+static void ftp_state(struct kui_shell *shell,struct kui_shell_view *view,const char *mode) {
+    shell->page=KUI_SHELL_FTP;view->ftp=&ftp;view->busy=true;
+    memset(&ftp,0,sizeof(ftp));
+    if(!strcmp(mode,"ftp-starting")) {
+        snprintf(ftp.message,sizeof(ftp.message),"Asking the router for an address (DHCP)");
+        return;
+    }
+    ftp.state=KUI_FTP_READY;ftp.link=true;ftp.port=KUI_FTP_PORT;
+    ftp.ip[0]=192;ftp.ip[1]=168;ftp.ip[2]=1;ftp.ip[3]=50;
+    snprintf(ftp.password,sizeof(ftp.password),"48217365");
+    snprintf(ftp.adapter,sizeof(ftp.adapter),"W5500 on SCI at 12.5 MHz; 100 Mbit/s full duplex");
+    if(!strcmp(mode,"ftp-busy")) {
+        struct kui_ftp_client *c=ftp.clients;
+        c[0].active=c[0].logged_in=c[0].receiving=true;c[0].ip[0]=192;c[0].ip[1]=168;c[0].ip[2]=1;c[0].ip[3]=20;
+        snprintf(c[0].name,sizeof(c[0].name),"track03.bin");c[0].done=UINT64_C(301989888);c[0].rate=512000;
+        c[1].active=c[1].logged_in=c[1].sending=true;c[1].ip[0]=192;c[1].ip[1]=168;c[1].ip[2]=1;c[1].ip[3]=20;
+        snprintf(c[1].name,sizeof(c[1].name),"Harbor Lights.ogg");c[1].done=3355443;c[1].total=5452595;c[1].rate=466944;
+        c[2].active=c[2].logged_in=true;c[2].ip[0]=192;c[2].ip[1]=168;c[2].ip[2]=1;c[2].ip[3]=20;
+        ftp.files_in=6;ftp.files_out=2;ftp.bytes_in=UINT64_C(1288490188);ftp.bytes_out=9437184;ftp.connections=3;
+        ftp.event_count=2;
+        snprintf(ftp.events[0],sizeof(ftp.events[0]),"Received /Games/Dead or Alive 2/track02.raw (1.1 GB)");
+        snprintf(ftp.events[1],sizeof(ftp.events[1]),"Created folder /Games/Dead or Alive 2");
+    }
+    if(!strcmp(mode,"ftp-stopped") || !strcmp(mode,"ftp-failed")) {
+        view->busy=false;
+        bool failed=!strcmp(mode,"ftp-failed");
+        ftp.state=failed?KUI_FTP_FAILED:KUI_FTP_STOPPED;
+        snprintf(ftp.message,sizeof(ftp.message),"%s",failed?"No W5500 answered on the SCI port (read FF)":
+            "The FTP server was stopped on the Dreamcast");
+        if(!failed) {
+            ftp.files_in=6;ftp.files_out=2;ftp.bytes_in=UINT64_C(1288490188);ftp.bytes_out=9437184;ftp.event_count=1;
+            snprintf(ftp.events[0],sizeof(ftp.events[0]),"192.168.1.20 disconnected");
+        }
+    }
+}
 static unsigned home_row(enum kui_shell_page page) {
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(kui_shell_home_pages[i]==page) return i;
     return 0;
@@ -127,6 +165,9 @@ int main(int argc,char **argv) {
     if(!strcmp(argv[1],"home-games")) shell.home_selected=home_row(KUI_SHELL_GAMES);
     else if(!strcmp(argv[1],"home-files")) shell.home_selected=home_row(KUI_SHELL_FILES);
     else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_RIPPER);
+    else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
+    else if(!strcmp(argv[1],"network")) shell.page=KUI_SHELL_NETWORK;
+    else if(!strncmp(argv[1],"ftp-",4)) ftp_state(&shell,&view,argv[1]);
     else if(!strcmp(argv[1],"files") || !strcmp(argv[1],"files-root")) {
         files_folder(&shell,!strcmp(argv[1],"files-root"));
         if(!strcmp(argv[1],"files")) {

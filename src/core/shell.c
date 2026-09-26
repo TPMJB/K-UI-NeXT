@@ -741,6 +741,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page==KUI_SHELL_SALVAGE) {s->page=KUI_SHELL_ADVANCED;return KUI_SHELL_NONE;}
         if(s->confirm_restart) {s->confirm_restart=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_SYSTEM_TOOLS) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_FTP) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
         if(s->confirm_vmu_delete) {s->confirm_vmu_delete=false;return KUI_SHELL_NONE;}
         if(s->confirm_vmu_copy) {s->confirm_vmu_copy=false;return KUI_SHELL_NONE;}
         if(s->confirm_music_clear) {s->confirm_music_clear=false;return KUI_SHELL_NONE;}
@@ -1248,6 +1249,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_NETWORK:
         if(buttons&KUI_SHELL_A) return KUI_SHELL_NETWORK_TEST;
         if(buttons&KUI_SHELL_X) return KUI_SHELL_NETWORK_CONNECT;
+        /* The FTP server starts as its page opens; B stops it there. */
+        if(buttons&KUI_SHELL_Y) {s->page=KUI_SHELL_FTP;return KUI_SHELL_FTP_START;}
+        break;
+    case KUI_SHELL_FTP:
+        if(buttons&KUI_SHELL_A) return KUI_SHELL_FTP_START;
         break;
     case KUI_SHELL_SALVAGE: {
         s->salvage_selected=move_count(s->salvage_selected,buttons,5);

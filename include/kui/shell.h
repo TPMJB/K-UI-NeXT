@@ -12,6 +12,7 @@
 #include "kui/games.h"
 #include "kui/games_covers.h"
 #include "kui/files.h"
+#include "kui/ftp.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -36,7 +37,8 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_PROBE_CONFIRM, KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM,
     KUI_SHELL_GAMES_RETAIL_CONFIRM,
     KUI_SHELL_FILES, KUI_SHELL_FILES_ACTIONS, KUI_SHELL_FILES_PICK,
-    KUI_SHELL_FILES_CONFIRM, KUI_SHELL_FILES_INFO, KUI_SHELL_FILES_VIEW };
+    KUI_SHELL_FILES_CONFIRM, KUI_SHELL_FILES_INFO, KUI_SHELL_FILES_VIEW,
+    KUI_SHELL_FTP };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -60,7 +62,8 @@ enum kui_shell_action {
     KUI_SHELL_CD_LIST, KUI_SHELL_CD_PLAY, KUI_SHELL_CD_PAUSE, KUI_SHELL_CD_RESUME, KUI_SHELL_CD_STOP,
     KUI_SHELL_GAMES_LIST, KUI_SHELL_GAMES_INSPECT, KUI_SHELL_GAMES_PROBE,
     KUI_SHELL_GAMES_IMAGE_PROBE, KUI_SHELL_GAMES_RETAIL, KUI_SHELL_GAMES_SCAN,
-    KUI_SHELL_FILES_LIST, KUI_SHELL_FILES_CHECK, KUI_SHELL_FILES_RUN, KUI_SHELL_FILES_PICTURE
+    KUI_SHELL_FILES_LIST, KUI_SHELL_FILES_CHECK, KUI_SHELL_FILES_RUN, KUI_SHELL_FILES_PICTURE,
+    KUI_SHELL_FTP_START
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -232,6 +235,9 @@ struct kui_shell_view {
     /* The File Manager's picture, KUI_FILES_PICTURE_EDGE square; drawn only
      * while shell->files_picture says it loaded. */
     const uint16_t *files_picture;
+    /* The FTP server's last published status, on its page; NULL before the
+     * first start. */
+    const struct kui_ftp_status *ftp;
 };
 /* Estimate only the current moving phase after a 2s warmup; do not imply the
  * later verification duration. A stalled (>3s old) rate is not an estimate. */
