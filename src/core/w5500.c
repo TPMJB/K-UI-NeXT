@@ -11,7 +11,7 @@
 
 static bool ready(const struct kui_w5500 *w) { return w && w->bus && w->bus->frame && !w->failed; }
 static uint64_t now(struct kui_w5500 *w) { return w->bus->now_ms ? w->bus->now_ms(w->bus->ctx) : 0; }
-static void pause(struct kui_w5500 *w, unsigned ms) { if(w->bus->pause) w->bus->pause(w->bus->ctx, ms); }
+static void wait_ms(struct kui_w5500 *w, unsigned ms) { if(w->bus->pause) w->bus->pause(w->bus->ctx, ms); }
 static bool frame(struct kui_w5500 *w, uint8_t block, uint16_t address, bool write, const void *out, void *in,
                   size_t bytes) {
     if(!ready(w)) return false;
@@ -67,7 +67,7 @@ static bool command(struct kui_w5500 *w, unsigned s, uint8_t code) {
         if(!kui_w5500_read8(w, KUI_W5500_SOCKET_REGS(s), KUI_W5500_SN_CR, &value)) return false;
         if(!value) return true;
         if(now(w) - start > COMMAND_MS) { w->failed = true; return false; }
-        if(polls >= 8) pause(w, 1);
+        if(polls >= 8) wait_ms(w, 1);
     }
 }
 /* Sn_IR bits read so far and not yet handed to kui_w5500_events. A SEND
@@ -97,7 +97,7 @@ bool kui_w5500_reset(struct kui_w5500 *w, uint8_t *version) {
         if(!kui_w5500_read8(w, KUI_W5500_COMMON, KUI_W5500_MR, &mode)) return false;
         reset = !(mode & KUI_W5500_MR_RST);
         if(!reset && now(w) - start > RESET_MS) break;
-        if(!reset) pause(w, 1);
+        if(!reset) wait_ms(w, 1);
     }
     /* Read the version either way: 0xff or 0x00 tells the reader nothing
      * is driving the data line back. */
@@ -171,7 +171,7 @@ static bool expect(struct kui_w5500 *w, unsigned s, uint8_t wanted) {
         uint8_t state;
         if(!kui_w5500_status(w, s, &state)) return false;
         if(state == wanted) return true;
-        pause(w, 1);
+        wait_ms(w, 1);
     }
     return false;
 }
@@ -266,7 +266,7 @@ static bool room_for(struct kui_w5500 *w, unsigned s, size_t bytes) {
         if(!kui_w5500_room(w, s, &room)) return false;
         if(room >= bytes) return true;
         if(now(w) - start > COMMAND_MS) return false;
-        pause(w, 1);
+        wait_ms(w, 1);
     }
 }
 bool kui_w5500_datagram_send(struct kui_w5500 *w, unsigned s, const uint8_t ip[4], uint16_t port,

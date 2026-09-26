@@ -5,10 +5,10 @@
  * GPIO on a retail console. The SD card stays on SCIF, which nothing here
  * touches. */
 #include "kui/network_w5500.h"
-#include <arch/timer.h>
 #include <dc/sci.h>
 #include <dc/syscalls.h>
 #include <kos/thread.h>
+#include <kos/timer.h>
 #include <string.h>
 
 static const uint32_t rates[] = {SCI_SPI_BAUD_12M500K, SCI_SPI_BAUD_6M250K, SCI_SPI_BAUD_3M125K, SCI_SPI_BAUD_1M562K};
@@ -25,10 +25,8 @@ static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_
     return ok;
 }
 static uint64_t now_ms(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
-static void pause_ms(void *ctx, unsigned ms) {
-    (void)ctx;
-    if(ms) thd_sleep((int)ms); else thd_pass();
-}
+/* KOS: thd_sleep(0) is thd_pass(). */
+static void pause_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep(ms); }
 static const struct kui_w5500_bus bus = {NULL, frame, now_ms, pause_ms};
 
 static bool open_level(unsigned level) {
