@@ -1,8 +1,7 @@
 # DOA2 launch — SD latency comparison
 
-**Current candidate: in-play read trial.** Still-screen pacing (build
-`2072b48`, owner: "worked really well", early-fight lag remains) plus a
-one-/two-sector trial during play and per-fight counters on A+B+X+Y+Start;
+**Current candidate: read pacing on still screens.** Longer reads while the
+picture is static, all-CMD18 streams and a counter screen on A+B+X+Y+Start;
 see [the pacing test](games-read-pacing.md). The playable baseline below stays
 pinned for comparison.
 

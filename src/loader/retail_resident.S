@@ -84,6 +84,11 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov.l r1,@r0
     mov.l .Lsource,r0
     mov.l r9,@r0
+    /* Publish the caller's original SR (saved above PR and R8..R14) for
+     * diagnostics: IMASK/BL show whether the game called from a handler. */
+    mov.l @(32,r8),r1
+    mov.l .Lcaller_sr,r0
+    mov.l r1,@r0
     mov.l .Lprivate_stack,r15
     mov.l .Ldispatch,r0
     jsr @r0
@@ -143,6 +148,7 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Lguard_value: .long 0x4b554947
 .Ldispatch: .long C_SYMBOL(kui_retail_resident_dispatch)
 .Lsource: .long C_SYMBOL(kui_retail_hook_source)
+.Lcaller_sr: .long C_SYMBOL(kui_retail_hook_sr)
 
 /* The experiment has no hot return. Preserve evidence when code calls the
  * standard menu vector with command 1; other menu functions still forward to

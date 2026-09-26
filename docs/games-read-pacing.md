@@ -58,78 +58,39 @@ masked interrupts during a step with the caller's exact SR restored, CRC
 checks, the one-block cache, and destination cache handling. No timer, DMA,
 interrupt handler or video register is written.
 
-## Console result — still-screen pacing
+## Diagnostics after a load
 
-Build `2072b48` ([CI run 36209735323](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36209735323),
-`sd-update` artifact 10895048305) with the same DOA2 dump, card and boot CD.
-The owner reported: "This actually worked really well. Some longer load times
-between fights but really the only bad load time left was the first ten
-seconds of a fight were pretty laggy. Otherwise it was extremely playable."
-No counter photo or timings were recorded; Evolution 2 was not yet tried.
-The earlier pinned builds described the same early-fight lag (about 5–8 s).
+A+B+X+Y+Start makes most games ask the BIOS for its menu. The reader
+intercepts that and shows counters since launch (hexadecimal):
 
-## Early-fight lag: in-play trial build
-
-The start of a fight still streams data while the game draws every frame.
-Each two-sector step costs about 10 ms of a 16.7 ms frame, so a game whose own
-frame needs more than about 6.7 ms falls to 30 fps (DOA2's game speed drops
-with it). A smaller step leaves the game more of each frame but takes longer
-to deliver the same data. Whether one-sector steps keep DOA2 at full speed
-depends on its own frame time, which the reader cannot see. This build
-measures it on the console:
-
-1. **Trial.** While the picture moves, `EXEC` steps alternate every 120
-   frames (2 s) between one sector and the usual two. Still screens keep the
-   pacing above. For this test, animated loading screens are slower half the
-   time.
-2. **Spin steps fit before the next vblank.** While the picture moves, a step
-   run for a game spinning on `CHECK` reads only what fits before the next
-   vblank-in, or nothing. Previously it could run past the vblank and cost the
-   game a frame. On still screens it is unchanged.
-3. **Fight counters.** Counting restarts whenever the picture starts moving
-   after a still screen, so in DOA2 the counters cover the current fight.
-
-Host models cover the trial alternation, counter resets, vblank crossings and
-a game that spins on `CHECK` after drawing: with light frames the spin steps
-read in its idle time, with heavy frames none run, and none ever passes the
-vblank. The in-game reader dropped its old cumulative counter lines and the
-unused "NATIVE GD IMAGE" banner to make room.
-
-### Reading the counter screen
-
-A+B+X+Y+Start makes most games ask the BIOS for its menu; the reader shows
-these counts since the fight began and stops the game (power off and on
-afterwards). Each line holds two hexadecimal counts: the first four digits,
-then the last four.
-
-| Line | First count / second count |
+| Line | Meaning |
 | --- | --- |
-| 1 SECTOR FRAMES/FLIPS | Frames spent in one-sector periods / new pictures shown in them |
-| 2 SECTOR FRAMES/FLIPS | The same for two-sector periods |
-| SECTORS 1/2 | Sectors read in one-sector / two-sector periods |
-| EXEC CALLS/STEPS | Calls to `EXEC` / steps that read (spin steps included) |
-| SPIN STEPS/CROSSINGS | Steps run for a game spinning on `CHECK` / steps that ran past the next vblank-in |
+| GD CALLS / EXEC CALLS | All calls into the reader / calls to `EXEC` |
+| READ STEPS / SECTORS READ | Steps that read / game sectors delivered |
+| FRAMES SEEN | Frames counted from the scanline register |
+| PACED STEPS | Steps longer than two sectors (still screen) |
+| SPIN STEPS | Steps run because the game spun on `CHECK` |
+| STEP CALLER SR | Caller's status register at the last read; bits 4–7 nonzero means interrupts were masked (usually a handler) |
 
-Flips divided by frames is the game's speed: 1.0 is 60 fps, 0.5 is 30 fps. If
-one-sector periods run near 1.0 and two-sector periods near 0.5, one-sector
-steps during play are the fix. If both are low, the lag needs a finer step or
-comes from something else, and the other counts show which. EXEC calls near
-the frame count mean the game calls once per frame.
+EXEC CALLS close to FRAMES SEEN means the game calls once per frame. PACED
+STEPS of zero after a black-screen load would mean the game kept flipping
+frames, so no pacing applied. The screen stops the game: power off and on
+afterwards.
 
 ## Console test
 
 Use the same card, DOA2 dump and boot CD. Merge this build's `sd-update`
-`KUI` folder onto the card. Build `2072b48` and the pinned baselines
+`KUI` folder onto the card. The pinned baselines
 `baseline/doa2-cmd18-ed31d522c847` and `baseline/doa2-sd-6c02bd8b22f4` remain
 available for rollback.
 
-1. Start a fight and watch the first ten seconds: does it alternate between
-   smoother and laggier roughly every two seconds?
-2. About **six seconds** into the fight, while it is still laggy, press
-   **A+B+X+Y+Start** and photograph the counter screen.
-3. If there is time, power cycle and repeat, pressing it about **twenty
-   seconds** in (after the lag), for the total data the fight start needs.
-4. Optionally do the same in Evolution 2 where it feels slow, and say what was
-   on screen (loading, menu, map or battle).
+1. Time **character select to the first stage** (baseline about 30–32 s).
+   Also note the start-up time to the title screen.
+2. Check that the stage introduction speech, the first seconds of the fight
+   and an FMV feel **no worse** than before. They should be unchanged.
+3. During the fight, press **A+B+X+Y+Start** and photograph the counter
+   screen.
+4. If there is time, do the same in Evolution 2 at a point where it feels
+   slow, and say what was on screen (loading, menu, map or battle).
 
-If a stop screen appears instead, photograph it.
+If a stop screen appears instead, photograph it. One run of each is enough.
