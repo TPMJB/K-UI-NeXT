@@ -67,6 +67,14 @@ static void budgets(void) {
     still_screen(&p, 200, 260);
     p.per = 76u * 16u;
     CHECK(p.top == 199 && kui_retail_pace_budget(&p, 2, 8) == 6);
+    /* A stray reading far past the vblank line cannot stretch the frame
+     * beyond vbi + vbi/8 (292 here), so the budget stays bounded. */
+    still_screen(&p, 262, 260);
+    p.per = 76u * 16u;
+    sample(&p, 1000, 260, 0x200000); sample(&p, 10, 260, 0x200000);
+    CHECK(p.top == 1000 && kui_retail_pace_budget(&p, 2, 8) == 6);
+    sample(&p, 1000, 260, 0x200000); /* ...and while it is current: no pacing */
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 2);
     /* VGA: twice the scanlines per frame and per sector. */
     still_screen(&p, 525, 520);
     p.per = 152u * 16u;

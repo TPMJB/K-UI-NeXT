@@ -15,15 +15,18 @@ void kui_retail_pace_sample(struct kui_retail_pace *p, uint32_t status,
 }
 
 /* Frame length in scanlines. Until a sample at or after the vblank line is
- * seen, vbi+1 underestimates it, which only shortens a step. */
+ * seen, vbi+1 underestimates it, which only shortens a step. Standard modes
+ * wrap within a few lines of vblank-in; the cap keeps one stray reading (for
+ * example during a mode change) from inflating every later budget. */
 static uint32_t frame_lines(const struct kui_retail_pace *p) {
-    return (p->top > p->vbi ? p->top : p->vbi) + 1u;
+    uint32_t cap = p->vbi + p->vbi / 8u, top = p->top > cap ? cap : p->top;
+    return (top > p->vbi ? top : p->vbi) + 1u;
 }
 
 uint32_t kui_retail_pace_budget(const struct kui_retail_pace *p, uint32_t normal,
                                 uint32_t maximum) {
     uint32_t vbi = p->vbi, line = p->line, frame = frame_lines(p);
-    if(p->still < KUI_RETAIL_PACE_STILL_FRAMES || !p->per || vbi < 64u)
+    if(p->still < KUI_RETAIL_PACE_STILL_FRAMES || !p->per || vbi < 64u || line >= frame)
         return normal;
     /* Scanlines until the second vblank-in from now, less an eighth of a
      * frame for card latency and the game's own handler. */
