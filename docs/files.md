@@ -1,9 +1,10 @@
 # File Manager
 
-The File Manager is the tenth app on Home. It browses every folder and file
-on the SD card, opens games, music and pictures, and copies, moves, renames
-and deletes with a check and a confirmation first. It is new since K-UI 1.5.1
-and has not yet been tried on a console.
+The File Manager is on Home, below Games, Disc Ripper and VMU Manager. It
+browses every folder and file on the SD card, opens games, music and
+pictures, and copies, moves, renames and deletes with a check and a
+confirmation first. It is new since K-UI 1.5.1 and has not yet been tried on
+a console.
 
 It is independent K-UI code, written for this project. The earlier K-UI_DS
 File Manager is DreamShell's own File Manager with a K-UI layout on top: its

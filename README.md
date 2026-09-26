@@ -35,9 +35,9 @@ separate contribution or commercial-relicensing agreement.
 
 ## The 1.5 shell
 
-The SD runtime opens ten apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
-**Network Test**, **Settings**, **Diagnostics**, **GD Play**, **Music Player**, **Games**
-and **File Manager** (new since 1.5.1). New captures use a selectable
+The SD runtime opens ten apps, in this order on Home: **Games**, **Disc Ripper**,
+**VMU Manager**, **File Manager** (new since 1.5.1), **Music Player**, **GD Play**,
+**Memory Test**, **Network Test**, **Diagnostics** and **Settings**. New captures use a selectable
 parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
 The hardware-proven acquisition engine remains unchanged.
 

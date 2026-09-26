@@ -9,7 +9,7 @@
  * games, games-detail, games-error, games-advanced, games-probe,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
  * games-retail, games-retail-loading, games-retail-invalid, games-list-art,
- * games-compact, games-gallery, games-scan, games-detail-art, home-files,
+ * games-compact, games-gallery, games-scan, games-detail-art, home-files, home-ripper,
  * files, files-root, files-actions, files-actions-locked, files-pick,
  * files-copy, files-delete, files-refused, files-info, files-info-file,
  * files-view, files-copying, files-keyboard. */
@@ -101,6 +101,10 @@ static void files_preview(struct kui_shell *shell,enum kui_files_op op,bool read
     if(!ready) snprintf(pv->status.message,sizeof(pv->status.message),"Not enough free space: needs 1.1 GB, 812.4 MB free");
     shell->page=KUI_SHELL_FILES_CONFIRM;
 }
+static unsigned home_row(enum kui_shell_page page) {
+    for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(kui_shell_home_pages[i]==page) return i;
+    return 0;
+}
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
     struct kui_settings preferences={true,false,true};
@@ -120,8 +124,9 @@ int main(int argc,char **argv) {
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
     view.music_cache_bytes=1111209;
-    if(!strcmp(argv[1],"home-games")) shell.home_selected=8;
-    else if(!strcmp(argv[1],"home-files")) shell.home_selected=9;
+    if(!strcmp(argv[1],"home-games")) shell.home_selected=home_row(KUI_SHELL_GAMES);
+    else if(!strcmp(argv[1],"home-files")) shell.home_selected=home_row(KUI_SHELL_FILES);
+    else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_RIPPER);
     else if(!strcmp(argv[1],"files") || !strcmp(argv[1],"files-root")) {
         files_folder(&shell,!strcmp(argv[1],"files-root"));
         if(!strcmp(argv[1],"files")) {
@@ -290,8 +295,8 @@ int main(int argc,char **argv) {
     } else if(!strcmp(argv[1],"scan-folder")) {
         shell.page=KUI_SHELL_DESTINATION;shell.browse_for_scan=true;
         strcpy(shell.browse_path,"/Games/MDK2");
-    } else if(!strcmp(argv[1],"home-music")) shell.home_selected=7;
-    else if(!strcmp(argv[1],"home-gd")) shell.home_selected=6;
+    } else if(!strcmp(argv[1],"home-music")) shell.home_selected=home_row(KUI_SHELL_MUSIC);
+    else if(!strcmp(argv[1],"home-gd")) shell.home_selected=home_row(KUI_SHELL_GD_PLAY);
     else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm")) {
         shell.page=KUI_SHELL_GD_PLAY;shell.confirm_gd_boot=!strcmp(argv[1],"gd-confirm");
     } else if(!strcmp(argv[1],"quick-resume")) {
@@ -333,9 +338,9 @@ int main(int argc,char **argv) {
         const char *lines[]={"Broadband and LAN adapters were checked.","No DHCP request or traffic sent.",
             "No reachable network is asserted.","Connect an adapter and inspect again."};
         for(unsigned i=0;i<4;i++) snprintf(status.lines[i],80,"%s",lines[i]);
-    } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=1;
-    else if(!strcmp(argv[1],"home-memory")) shell.home_selected=2;
-    else if(!strcmp(argv[1],"home-network")) shell.home_selected=3;
+    } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=home_row(KUI_SHELL_VMU);
+    else if(!strcmp(argv[1],"home-memory")) shell.home_selected=home_row(KUI_SHELL_MEMORY);
+    else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
     else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination")) {
         shell.page=KUI_SHELL_ADVANCED;

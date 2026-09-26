@@ -128,6 +128,10 @@ struct kui_shell {
      * installed; the browser shows its progress meanwhile. */
     bool files_running;
 };
+/* Home's apps, top to bottom: A on row home_selected opens
+ * kui_shell_home_pages[home_selected]. Drawing looks each app up by page. */
+#define KUI_SHELL_HOME_APPS 10u
+extern const enum kui_shell_page kui_shell_home_pages[KUI_SHELL_HOME_APPS];
 void kui_shell_init(struct kui_shell *shell, const struct kui_settings *settings);
 /* Main owns the reducer. Pass new button edges; a held B must also be included
  * when another edge arrives, so Stop/cancel retains priority over a new action.

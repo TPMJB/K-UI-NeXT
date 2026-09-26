@@ -14,6 +14,11 @@ static void reset(enum kui_shell_page page) {
 static enum kui_shell_action press(unsigned buttons, bool busy) {
     return kui_shell_input(&s,buttons,busy);
 }
+static unsigned home_index(enum kui_shell_page page) {
+    for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(kui_shell_home_pages[i]==page) return i;
+    assert(!"app missing from Home");
+    return 0;
+}
 static void open_destination(void) {
     assert(s.page==KUI_SHELL_RIPPER);
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
@@ -22,9 +27,17 @@ static void open_destination(void) {
     assert(s.page==KUI_SHELL_DESTINATION);
 }
 static void launcher_and_confirmation(void) {
+    /* Games first, Disc Ripper and VMU Manager next, Settings last; each
+     * app appears once. */
+    static const enum kui_shell_page order[KUI_SHELL_HOME_APPS]={KUI_SHELL_GAMES,KUI_SHELL_RIPPER,KUI_SHELL_VMU,
+        KUI_SHELL_FILES,KUI_SHELL_MUSIC,KUI_SHELL_GD_PLAY,KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,
+        KUI_SHELL_DIAGNOSTICS,KUI_SHELL_SETTINGS};
+    assert(!memcmp(order,kui_shell_home_pages,sizeof(order)));
     reset(KUI_SHELL_HOME);
+    assert(s.home_selected==0);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE);
     assert(s.page==KUI_SHELL_HOME);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.home_selected==1);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
     assert(s.page==KUI_SHELL_RIPPER && !s.confirm_new);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_new);
@@ -35,15 +48,14 @@ static void launcher_and_confirmation(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_new);
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.confirm_new);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NEW_DUMP && !s.confirm_new);
-    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
-    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==9);
-    press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false);
-    assert(s.home_selected==5);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DIAGNOSTICS);
-    press(KUI_SHELL_B,false);
-    press(KUI_SHELL_UP,false);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME && s.home_selected==1);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==0);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==KUI_SHELL_HOME_APPS-1);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_LOAD_SYSTEM);
     assert(s.page==KUI_SHELL_SETTINGS);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISCARD_SYSTEM && s.page==KUI_SHELL_HOME);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==KUI_SHELL_HOME_APPS-2);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DIAGNOSTICS);
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
@@ -137,14 +149,13 @@ static void system_transaction_and_video(void) {
     assert(s.saved.crc_only==defaults.crc_only && s.saved.end_readback==defaults.end_readback);
 }
 static void app_navigation_and_vmu(void) {
-    static const enum kui_shell_page pages[]={KUI_SHELL_RIPPER,KUI_SHELL_VMU,
-        KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,KUI_SHELL_SETTINGS,KUI_SHELL_DIAGNOSTICS,
-        KUI_SHELL_GD_PLAY,KUI_SHELL_MUSIC};
-    for(unsigned i=0;i<8;i++) {
+    for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) {
+        enum kui_shell_page page=kui_shell_home_pages[i];
         reset(KUI_SHELL_HOME);s.home_selected=i;
-        enum kui_shell_action expected=i==1?KUI_SHELL_VMU_LIST:
-            i==4?KUI_SHELL_LOAD_SYSTEM:i==7?KUI_SHELL_MUSIC_LIST:KUI_SHELL_NONE;
-        assert(press(KUI_SHELL_A,false)==expected && s.page==pages[i]);
+        enum kui_shell_action expected=page==KUI_SHELL_VMU?KUI_SHELL_VMU_LIST:
+            page==KUI_SHELL_SETTINGS?KUI_SHELL_LOAD_SYSTEM:page==KUI_SHELL_MUSIC?KUI_SHELL_MUSIC_LIST:
+            page==KUI_SHELL_GAMES?KUI_SHELL_GAMES_LIST:page==KUI_SHELL_FILES?KUI_SHELL_FILES_LIST:KUI_SHELL_NONE;
+        assert(press(KUI_SHELL_A,false)==expected && s.page==page);
     }
     reset(KUI_SHELL_MEMORY);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_MEMORY_TEST);
@@ -480,7 +491,7 @@ static void music_and_boot_controls(void) {
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
 }
 static void games_controls(void) {
-    reset(KUI_SHELL_HOME);s.home_selected=8;
+    reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
     assert(s.page==KUI_SHELL_GAMES && !strcmp(s.games_path,"/Games"));
     struct kui_games_page page={.count=2,.has_more=true};
@@ -743,14 +754,25 @@ static void new_pages_rendering(void) {
     assert(strstr(drawn,"LEFT/RIGHT VMU") && strstr(drawn,"L Copy / delete selected"));
     reset(KUI_SHELL_HOME);v.app_status=NULL;
     render(&v);
+    assert(strstr(drawn,"SD game library") && !strstr(drawn,"Inserted:"));
+    s.home_selected=home_index(KUI_SHELL_RIPPER);render(&v);
     assert(strstr(drawn,"Inserted: Sword of the Berserk"));
     v.inserted_title=NULL;render(&v);
     assert(strstr(drawn,"Inserted: No disc detected"));
     v.inserted_title="A very long inserted disc title which exceeds the launcher subtitle width";
     render(&v);assert(strstr(drawn,"Inserted:") && strstr(drawn,"..."));
-    for(unsigned i=0;i<8;i++) {
+    static const char *const names[]={"Games","Disc Ripper","VMU Manager","File Manager","Music Player",
+        "GD Play","Memory Test","Network Test","Diagnostics","Settings"};
+    for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) {
         s.home_selected=i;render(&v);
         assert(strstr(drawn,"RAM 1 / 16384 KiB") && strstr(drawn,"Memory Test"));
+        /* Rows are drawn top to bottom in Home order. */
+        const char *at=drawn;
+        for(unsigned j=0;j<KUI_SHELL_HOME_APPS;j++) {at=strstr(at,names[j]);assert(at);at+=strlen(names[j]);}
+        struct kui_shell_view disc={.inserted_title="MDK2"};
+        render(&disc);
+        enum kui_shell_page page=kui_shell_home_pages[i];
+        assert(!strstr(drawn,"Inserted: MDK2")==(page!=KUI_SHELL_RIPPER && page!=KUI_SHELL_GD_PLAY));
     }
     s.system_saved.show_memory=false;render(&v);
     assert(strstr(drawn,"10 applications") && !strstr(drawn,"RAM 1 /"));
@@ -1006,7 +1028,7 @@ static void games_page(unsigned count,bool more,unsigned view) {
 static void games_views(void) {
     reset(KUI_SHELL_HOME);
     assert(s.games_view==KUI_GAMES_VIEW_SAVED && kui_shell_games_view(&s)==KUI_GAMES_VIEW_LIST);
-    s.home_selected=8;assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
+    s.home_selected=home_index(KUI_SHELL_GAMES);assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
     /* The first listing reports the card's saved view; a failed one does not. */
     games_page(8,true,KUI_GAMES_VIEW_SAVED);assert(s.games_view==KUI_GAMES_VIEW_SAVED);
     games_page(8,true,KUI_GAMES_VIEW_GALLERY);assert(s.games_view==KUI_GAMES_VIEW_GALLERY);
@@ -1071,7 +1093,7 @@ static void games_views(void) {
 }
 static void games_rendering(void) {
     struct kui_shell_view view={0};
-    reset(KUI_SHELL_HOME);s.home_selected=8;render(&view);
+    reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);render(&view);
     assert(strstr(drawn,"Games") && strstr(drawn,"10 applications") && strstr(drawn,"V1.5: compatibility varies"));
     reset(KUI_SHELL_GAMES);s.games_listing.count=8;s.games_listing.has_more=true;s.games_selected=7;
     for(unsigned i=0;i<8;i++) {
@@ -1188,7 +1210,7 @@ static void files_select(const char *name) {
     assert(!"row missing");
 }
 static void files_controls(void) {
-    reset(KUI_SHELL_HOME);s.home_selected=9;
+    reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_FILES);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && s.page==KUI_SHELL_FILES);
     assert(!strcmp(s.files_request.path,"/") && s.files_request.seek==KUI_FILES_SEEK_FIRST && !s.files_request.folders_only);
     files_root();
@@ -1359,7 +1381,7 @@ static void files_controls(void) {
 }
 static void files_rendering(void) {
     struct kui_shell_view v={.build="a1b2c3d4e5f6"};
-    reset(KUI_SHELL_HOME);s.home_selected=9;render(&v);
+    reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_FILES);render(&v);
     assert(strstr(drawn,"File Manager") && strstr(drawn,"SD card files") && strstr(drawn,"10 applications"));
     reset(KUI_SHELL_FILES);files_root();s.files_selected=6;render(&v);
     assert(strstr(drawn,"Games") && strstr(drawn,"readme.txt") && strstr(drawn,"DIR") && strstr(drawn,"TXT"));

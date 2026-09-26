@@ -161,29 +161,29 @@ static void footer(struct paint *p, const struct kui_shell *s,
     if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM && s->page!=KUI_SHELL_FILES_CONFIRM)
         label(p,512,430,MUTED,"L Memory");
 }
-static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
-    if(app==1) {
+static void utility_icon(struct paint *p,enum kui_shell_page app,unsigned x,unsigned y) {
+    if(app==KUI_SHELL_VMU) {
         panel(p,x+30,y+10,68,108,CYAN); box(p,x+38,y+22,52,38,NAVY);
         box(p,x+48,y+76,24,7,NAVY); box(p,x+56,y+68,8,24,NAVY);
         box(p,x+78,y+76,8,8,PINK); box(p,x+80,y+92,8,8,NAVY);
-    } else if(app==2) {
+    } else if(app==KUI_SHELL_MEMORY) {
         for(unsigned i=0;i<5;i++) {
             box(p,x+20+i*20,y+12,6,104,CYAN);
             box(p,x+12,y+20+i*20,104,6,CYAN);
         }
         box(p,x+24,y+24,80,80,EDGE); box(p,x+30,y+30,68,68,PANEL);
         words(p,x+40,y+54,x+98,WHITE,"RAM",true);
-    } else if(app==8) {
+    } else if(app==KUI_SHELL_GAMES) {
         panel(p,x+12,y+38,104,60,CYAN);panel(p,x+20,y+46,88,44,PANEL);
         box(p,x+30,y+61,30,8,CYAN);box(p,x+41,y+50,8,30,CYAN);
         box(p,x+80,y+53,10,10,PINK);box(p,x+94,y+68,10,10,PINK);
         box(p,x+61,y+65,8,4,WHITE);
-    } else if(app==9) {
+    } else if(app==KUI_SHELL_FILES) {
         box(p,x+12,y+22,40,12,EDGE);panel(p,x+12,y+30,104,78,EDGE);
         panel(p,x+26,y+14,64,62,WHITE);
         box(p,x+36,y+26,44,4,EDGE);box(p,x+36,y+36,36,4,EDGE);box(p,x+36,y+46,40,4,EDGE);
         panel(p,x+8,y+52,112,62,CYAN);box(p,x+22,y+96,26,6,PINK);
-    } else if(app==7) {
+    } else if(app==KUI_SHELL_MUSIC) {
         box(p,x+36,y+32,8,62,CYAN);box(p,x+88,y+20,8,62,PINK);
         box(p,x+40,y+28,52,8,CYAN);box(p,x+40,y+20,52,8,PINK);
         panel(p,x+16,y+84,28,18,CYAN);panel(p,x+68,y+72,28,18,PINK);
@@ -195,23 +195,23 @@ static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
         panel(p,x+82,y+82,36,28,CYAN);
     }
 }
-static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
-    if(app==1) {
+static void small_utility_icon(struct paint *p,enum kui_shell_page app,unsigned x,unsigned y) {
+    if(app==KUI_SHELL_VMU) {
         panel(p,x+5,y+1,14,22,CYAN);box(p,x+7,y+4,10,8,NAVY);
         box(p,x+8,y+16,5,2,NAVY);box(p,x+10,y+14,2,6,NAVY);
         box(p,x+15,y+16,2,2,PINK);
-    } else if(app==2) {
+    } else if(app==KUI_SHELL_MEMORY) {
         for(unsigned i=0;i<3;i++) {
             box(p,x+5+i*6,y,2,24,CYAN);box(p,x,y+5+i*6,24,2,CYAN);
         }
         box(p,x+4,y+4,16,16,EDGE);box(p,x+7,y+7,10,10,PANEL);
-    } else if(app==9) {
+    } else if(app==KUI_SHELL_FILES) {
         box(p,x+1,y+4,10,4,CYAN);panel(p,x,y+7,24,16,CYAN);
         box(p,x+4,y+12,16,2,NAVY);box(p,x+4,y+16,10,2,NAVY);box(p,x+17,y+16,3,3,PINK);
-    } else if(app==8) {
+    } else if(app==KUI_SHELL_GAMES) {
         panel(p,x,y+6,24,16,CYAN);box(p,x+3,y+12,9,3,NAVY);
         box(p,x+6,y+9,3,9,NAVY);box(p,x+16,y+9,3,3,PINK);box(p,x+19,y+14,3,3,PINK);
-    } else if(app==7) {
+    } else if(app==KUI_SHELL_MUSIC) {
         box(p,x+7,y+5,3,15,CYAN);box(p,x+18,y+2,3,15,PINK);
         box(p,x+8,y+2,13,3,CYAN);
         box(p,x+2,y+18,8,5,CYAN);box(p,x+13,y+15,8,5,PINK);
@@ -222,49 +222,69 @@ static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned 
         box(p,x+8,y+17,8,7,PINK);box(p,x+16,y+17,8,7,CYAN);
     }
 }
+/* Each Home app by page, so its row can move without touching this table.
+ * art: the embedded icon, or -1 for one drawn by utility_icon. */
+struct home_app {enum kui_shell_page page;const char *name,*category,*details[3];int art;};
+static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
+    {KUI_SHELL_RIPPER,"Disc Ripper","Disc tools",
+        {"Capture discs, check CRCs and","resume interrupted dumps.","Verify saved files when needed."},0},
+    {KUI_SHELL_VMU,"VMU Manager","Save files",
+        {"Browse, copy or delete saves.","Back up to SD, then restore","checked backups to a free name."},-1},
+    {KUI_SHELL_MEMORY,"Memory Test","System tools",
+        {"Check available application RAM","with data patterns and report","any mismatches found."},-1},
+    {KUI_SHELL_NETWORK,"Network Test","Connectivity",
+        {"Inspect your network adapter","or connect and test a network.","View results and save a log."},-1},
+    {KUI_SHELL_SETTINGS,"Settings","System preferences",
+        {"Choose video, memory display","and background music.","Save preferences to SD."},1},
+    {KUI_SHELL_DIAGNOSTICS,"Diagnostics","Diagnostics",
+        {"Inspect the disc and SD card.","Run probes, review messages","and save a diagnostic report."},2},
+    {KUI_SHELL_GD_PLAY,"GD Play","Disc boot",
+        {"Exit K-UI and boot the disc","through the console BIOS.","Console region rules still apply."},0},
+    {KUI_SHELL_MUSIC,"Music Player","Music",
+        {"Play WAV or Ogg music from SD.","Listen to audio CD tracks","or keep music in the background."},-1},
+    {KUI_SHELL_GAMES,"Games","SD game library",
+        {"Launch native GD images from SD.","Browse your game library.","V1.5: compatibility varies."},-1},
+    {KUI_SHELL_FILES,"File Manager","SD card files",
+        {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."},-1}};
+static const struct home_app *home_app(unsigned row) {
+    enum kui_shell_page page=kui_shell_home_pages[row<KUI_SHELL_HOME_APPS?row:0];
+    for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(home_apps[i].page==page) return &home_apps[i];
+    return &home_apps[0];
+}
 static void home(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
-    static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics","GD Play","Music Player","Games","File Manager"};
-    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics","Disc boot","Music","SD game library","SD card files"};
-    static const unsigned icons[]={0,2,2,2,1,2,0,2,2,2};
-    static const char *details[10][3]={
-        {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
-        {"Browse, copy or delete saves.","Back up to SD, then restore", "checked backups to a free name."},
-        {"Check available application RAM", "with data patterns and report", "any mismatches found."},
-        {"Inspect your network adapter", "or connect and test a network.","View results and save a log."},
-        {"Choose video, memory display", "and background music.", "Save preferences to SD."},
-        {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
-        {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
-        {"Play WAV or Ogg music from SD.", "Listen to audio CD tracks", "or keep music in the background."},
-        {"Launch native GD images from SD.", "Browse your game library.", "V1.5: compatibility varies."},
-        {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."}};
-    unsigned selected=s->home_selected<10?s->home_selected:0;
+    unsigned selected=s->home_selected<KUI_SHELL_HOME_APPS?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
-    for(unsigned i=0;i<10;i++) {
+    for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) {
+        const struct home_app *app=home_app(i);
         unsigned y=116+i*27;
         if(selected==i) {
             panel(p,32,y,208,26,SELECTED);
             box(p,32,y+4,3,18,PINK);
         }
-        if((i>=1 && i<=3) || i>=7) small_utility_icon(p,i,44,y+1);
-        else art(p,44,y+1,24,24,kui_art_small_icons[icons[i]]);
-        words(p,80,y+4,230,selected==i?WHITE:MUTED,names[i],false);
+        if(app->art<0) small_utility_icon(p,app->page,44,y+1);
+        else art(p,44,y+1,24,24,kui_art_small_icons[app->art]);
+        words(p,80,y+4,230,selected==i?WHITE:MUTED,app->name,false);
     }
     if(s->system_saved.show_memory && v->memory_valid) {
         char ram[48];snprintf(ram,sizeof(ram),"RAM %lu / %lu KiB",
             (unsigned long)(v->memory_used/1024),(unsigned long)(v->memory_physical/1024));
         words(p,44,391,230,MUTED,ram,false);
-    } else words(p,44,391,230,MUTED,"10 applications",false);
-    title(p,264,112,names[selected]);
-    if(selected==0 || selected==6) {
+    } else {
+        char count[24];snprintf(count,sizeof(count),"%u applications",KUI_SHELL_HOME_APPS);
+        words(p,44,391,230,MUTED,count,false);
+    }
+    const struct home_app *chosen=home_app(selected);
+    title(p,264,112,chosen->name);
+    if(chosen->page==KUI_SHELL_RIPPER || chosen->page==KUI_SHELL_GD_PLAY) {
         char inserted[160];
         snprintf(inserted,sizeof(inserted),"Inserted: %s",
             v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
         label(p,264,144,CYAN,inserted);
-    } else label(p,264,144,CYAN,category[selected]);
+    } else label(p,264,144,CYAN,chosen->category);
     panel(p,264,172,344,140,PANEL);
-    if((selected>=1 && selected<=3) || selected>=7) utility_icon(p,selected,372,178);
-    else art(p,372,178,128,128,kui_art_icons[icons[selected]]);
-    for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,details[selected][i]);
+    if(chosen->art<0) utility_icon(p,chosen->page,372,178);
+    else art(p,372,178,128,128,kui_art_icons[chosen->art]);
+    for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,chosen->details[i]);
     panel(p,264,382,344,28,CYAN);
     label(p,382,388,NAVY,"A  Open app");
 }

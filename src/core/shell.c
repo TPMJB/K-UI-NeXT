@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+const enum kui_shell_page kui_shell_home_pages[KUI_SHELL_HOME_APPS]={KUI_SHELL_GAMES,KUI_SHELL_RIPPER,
+    KUI_SHELL_VMU,KUI_SHELL_FILES,KUI_SHELL_MUSIC,KUI_SHELL_GD_PLAY,KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,
+    KUI_SHELL_DIAGNOSTICS,KUI_SHELL_SETTINGS};
 void kui_shell_set_preferences(struct kui_shell *s, const struct kui_settings *p) {
     if(!s || !p) return;
     s->saved = *p;
@@ -920,12 +923,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     switch(s->page) {
     case KUI_SHELL_HOME:
         if(buttons & KUI_SHELL_Y) return KUI_SHELL_MUSIC_CYCLE;
-        s->home_selected = move_count(s->home_selected, buttons,10);
+        s->home_selected = move_count(s->home_selected, buttons,KUI_SHELL_HOME_APPS);
         if(buttons & KUI_SHELL_A) {
-            static const enum kui_shell_page pages[]={KUI_SHELL_RIPPER,KUI_SHELL_VMU,
-                KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,KUI_SHELL_SETTINGS,KUI_SHELL_DIAGNOSTICS,
-                KUI_SHELL_GD_PLAY,KUI_SHELL_MUSIC,KUI_SHELL_GAMES,KUI_SHELL_FILES};
-            s->page=pages[s->home_selected];
+            s->page=kui_shell_home_pages[s->home_selected];
             if(s->page == KUI_SHELL_SETTINGS) {
                 s->system_draft=s->system_saved;
                 return KUI_SHELL_LOAD_SYSTEM;
