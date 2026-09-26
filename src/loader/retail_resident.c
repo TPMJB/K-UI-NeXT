@@ -152,8 +152,12 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("PACED STEPS",pacing.paced);
     retail_display_hex("SPIN STEPS",pacing.spun);
     retail_display_hex("STEP CALLER SR",pacing.sr);
-    retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
-    retail_display_line("POWER OFF AND ON TO RETURN");
+    retail_display_line("RESTARTING K-UI FROM THE BOOT DISC");
+    retail_display_pause(120u); /* about two seconds for a photograph */
+    /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts
+     * still masked: the console restarts and boots the K-UI disc in the drive.
+     * No game, reader or vector state is relied on afterwards. */
+    ((void (*)(void))(uintptr_t)0xa0000000u)();
     for(;;) __asm__ volatile("nop");
 }
 int kui_retail_resident_init(const struct kui_retail_manifest *prepared,

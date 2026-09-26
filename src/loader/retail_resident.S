@@ -150,9 +150,10 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Lsource: .long C_SYMBOL(kui_retail_hook_source)
 .Lcaller_sr: .long C_SYMBOL(kui_retail_hook_sr)
 
-/* The experiment has no hot return. Preserve evidence when code calls the
- * standard menu vector with command 1; other menu functions still forward to
- * firmware. Use our private stack even if the caller was in a dying game. */
+/* Menu command 1 (return to the BIOS menu; A+B+X+Y+Start in most games)
+ * shows the reader's counters, then restarts the console so the boot disc
+ * starts K-UI again. Other menu functions still forward to firmware. Use our
+ * private stack even if the caller was in a dying game. */
     .align 2
     .global C_SYMBOL(kui_retail_menu_hook)
 C_SYMBOL(kui_retail_menu_hook):

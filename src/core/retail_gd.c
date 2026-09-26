@@ -85,7 +85,10 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     case KUI_RETAIL_GD_REQ_MODE: case KUI_RETAIL_GD_SEEK: nparams = 1; break;
     case KUI_RETAIL_GD_GET_VERS: nparams = 1; break;
     case KUI_RETAIL_GD_GETSCD: nparams = 3; break;
-    case KUI_GD_COMMAND_INIT: case KUI_GD_NOP: case KUI_GD_STOP: break;
+    /* CD audio: accepted and completed without sound (no CDDA emulation). */
+    case KUI_RETAIL_GD_PLAY: case KUI_RETAIL_GD_PLAY2: nparams = 3; break;
+    case KUI_GD_COMMAND_INIT: case KUI_GD_NOP: case KUI_GD_STOP:
+    case KUI_RETAIL_GD_PAUSE: case KUI_RETAIL_GD_RELEASE: break;
     default: return 0;
     }
     if(nparams) {

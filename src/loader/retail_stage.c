@@ -16,6 +16,9 @@ extern const uint8_t __retail_resident_blob_end[] __asm__("__retail_resident_blo
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
+/* Handoff screens stay up about half a second: long enough to see, while a
+ * failure still leaves its last screen for a photograph. */
+#define HANDOFF_PAUSE_FRAMES 30u
 extern void kui_retail_stage_sync(void);
 
 /* High storage is temporary: no pointer to it survives the final handoff.
@@ -30,6 +33,12 @@ static struct kui_loader_sd card;
 static struct kui_loader_sd_stream stream;
 static struct retail_display_state display;
 static enum kui_loader_sd_result last_card_result;
+/* Raw boot sectors are checked, then their 2048 data bytes copied into place.
+ * The executable's CRC32 is taken after loading, for the relay's check that
+ * bootstrap 2 left it unchanged. */
+#define BOOT_CHUNK_SECTORS 16u
+static uint8_t raw_boot[BOOT_CHUNK_SECTORS*KUI_GAME_RAW_BYTES];
+static uint32_t boot_crc;
 
 static void retire_launcher_serial(void) {
     /* KOS scif_spi_shutdown() calls scif_init(), leaving TE/RE enabled; its
@@ -60,12 +69,13 @@ static int physical_run(void *context,uint32_t lba,uint32_t available,uint8_t ou
     last_card_result=kui_retail_sd_read_run(context,&stream,lba,available,out);
     return last_card_result==KUI_LOADER_SD_OK?0:-1;
 }
-static void read_sectors(uint32_t lba,uint32_t count,void *out) {
+static void read_sectors(uint32_t lba,uint32_t count,enum kui_game_sector_format format,void *out) {
     last_card_result=kui_retail_sd_acquire();
     if(last_card_result!=KUI_LOADER_SD_OK)
         stopped("SERIAL SD PINS NOT AVAILABLE",(uint32_t)last_card_result);
+    size_t bytes=format==KUI_GAME_SECTOR_RAW?KUI_GAME_RAW_BYTES:KUI_GAME_DATA_BYTES;
     enum kui_game_result result=kui_retail_image_read(&image,lba,count,
-        KUI_GAME_SECTOR_MODE1,out,(size_t)count*KUI_GAME_DATA_BYTES);
+        format,out,(size_t)count*bytes);
     enum kui_loader_sd_result stop_result=kui_loader_sd_stream_stop(&card,&stream);
     if(last_card_result==KUI_LOADER_SD_OK) last_card_result=stop_result;
     if(stop_result!=KUI_LOADER_SD_OK) image.cache_valid=0;
@@ -128,25 +138,38 @@ void kui_retail_stage_main(const uint8_t *wire) {
     image.read_run=physical_run;
     retail_display_line("LOADING OWNER IP AND EXECUTABLE");
     uint8_t *ip=(uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS;
-    read_sectors(manifest.session_lba,16,ip);
+    read_sectors(manifest.session_lba,16,KUI_GAME_SECTOR_MODE1,ip);
     uint32_t crc=kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES);
     if(crc!=manifest.ip_crc32) stopped("IP CHECKSUM CHANGED",crc);
+    /* K-UI no longer reads the executable before launch. Every boot sector's
+     * sync, mode and address must match its LBA, proving the file map; SD
+     * CRCs cover the transfer. EDC is not required: patched executables
+     * commonly leave it stale, and they launch as before. */
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     uint32_t sectors=(manifest.boot_bytes+2047u)/2048u;
     for(uint32_t done=0;done<sectors;) {
         uint32_t count=sectors-done;
-        if(count>32) count=32;
-        read_sectors(manifest.boot_lba+done,count,boot+(size_t)done*2048);
+        if(count>BOOT_CHUNK_SECTORS) count=BOOT_CHUNK_SECTORS;
+        read_sectors(manifest.boot_lba+done,count,KUI_GAME_SECTOR_RAW,raw_boot);
+        for(uint32_t i=0;i<count;i++) {
+            const uint8_t *sector=raw_boot+(size_t)i*KUI_GAME_RAW_BYTES;
+            enum kui_retail_header header=kui_retail_sector_header(sector,manifest.boot_lba+done+i);
+            if(header!=KUI_RETAIL_HEADER_OK) {
+                retail_display_hex("BOOT SECTOR LBA",manifest.boot_lba+done+i);
+                stopped(header==KUI_RETAIL_HEADER_ADDRESS?"BOOT SECTOR ADDRESS MISMATCH":
+                    "BOOT SECTOR IS NOT MODE 1 DATA",(uint32_t)header);
+            }
+            memcpy(boot+(size_t)(done+i)*2048u,sector+16,2048);
+        }
         done+=count;
         retail_display_progress(done,sectors);
     }
-    crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
-    if(crc!=manifest.boot_crc32) stopped("EXECUTABLE CHECKSUM CHANGED",crc);
+    boot_crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);
     memcpy(original_entry,boot,sizeof(original_entry));
     memcpy(boot,__retail_trampoline_start,sizeof(original_entry));
-    retail_display_line("IP AND EXECUTABLE CHECKSUMS PASSED");
+    retail_display_line("IP CHECKSUM AND BOOT SECTOR HEADERS PASSED");
     retail_display_hex("BOOT BYTES",manifest.boot_bytes);
     retail_display_hex("SD BLOCKS READ",image.blocks_read);
     /* DreamShell's native Katana path clears this IP bootstrap flag before
@@ -156,7 +179,7 @@ void kui_retail_stage_main(const uint8_t *wire) {
     install_resident();
     retail_display_line("READER INSTALLED BEFORE BOOTSTRAP 2");
     retail_display_line("ENTERING OWNER BOOTSTRAP 2");
-    retail_display_pause();
+    retail_display_pause(HANDOFF_PAUSE_FRAMES);
     kui_retail_bootstrap_enter();
 }
 
@@ -182,7 +205,7 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     memcpy(boot,original_entry,sizeof(original_entry));
     uint32_t crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
-    if(crc!=manifest.boot_crc32) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
+    if(crc!=boot_crc) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     size_t bytes=(size_t)(__retail_resident_blob_end-__retail_resident_blob_start);
     if(memcmp(resident,__retail_resident_blob_start,bytes))
@@ -192,5 +215,5 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_line(manifest.title);
     retail_display_line("IF IT STOPS PHOTOGRAPH THE LAST SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
-    retail_display_pause();
+    retail_display_pause(HANDOFF_PAUSE_FRAMES);
 }

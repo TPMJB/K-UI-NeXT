@@ -100,6 +100,11 @@ static bool layout(const struct kui_runtime_image *image) {
         if(((const uint8_t *)image->data)[KUI_RETAIL_MAP_OFFSET+i]) return false;
     return true;
 }
+/* FatFs fast-seek link map: the table size, then (cluster count, first
+ * cluster) pairs ending in zero. Room for more runs than a manifest can hold,
+ * so an over-fragmented track fails on the extent limit, not on this table. */
+#define LINK_MAP_WORDS (2u+2u*(KUI_RETAIL_IMAGE_EXTENTS+1u))
+static DWORD link_map[LINK_MAP_WORDS]; /* One I/O worker prepares at a time. */
 static bool map_track(struct files *files,FATFS *fs,const struct kui_volume *volume,
     const struct kui_game_image_track *track,struct kui_retail_manifest *map,unsigned index) {
     char path[KUI_GAMES_FILE_CAP+3];FIL file;
@@ -108,35 +113,35 @@ static bool map_track(struct files *files,FATFS *fs,const struct kui_volume *vol
     struct kui_retail_track *t=&map->tracks[index];
     *t=(struct kui_retail_track){track->number,track->start_lba,track->end_lba,track->control,map->extent_count,0};
     uint32_t total=(uint32_t)((track->file_bytes+511u)/512u);
-    for(uint32_t block=0;ok && block<total;) {
-        if(stopped(files)) {ok=false;break;}
-        FSIZE_t offset=(FSIZE_t)block*512u;uint8_t byte;UINT got=0;
-        /* One cache read per allocation cluster, not one per track sector.
-         * FatFs direct full-sector reads do not update FIL.sect reliably. */
-        if(f_lseek(&file,offset)!=FR_OK || f_tell(&file)!=offset ||
-            f_read(&file,&byte,1,&got)!=FR_OK || got!=1) {ok=false;break;}
-        uint32_t count=fs->csize-block%fs->csize;
+    /* The allocation table alone lists the file's contiguous cluster runs:
+     * no track data is read (one data read per cluster took seconds). */
+    link_map[0]=LINK_MAP_WORDS;file.cltbl=link_map;
+    if(ok) ok=f_lseek(&file,CREATE_LINKMAP)==FR_OK && !stopped(files);
+    uint32_t block=0;
+    for(const DWORD *run=link_map+1;ok && block<total;run+=2) {
+        if(!run[0] || run[1]<2u || run[1]>=fs->n_fatent) {ok=false;break;}
+        uint64_t sect=(uint64_t)fs->database+(uint64_t)(run[1]-2u)*fs->csize;
+        uint64_t count=(uint64_t)run[0]*fs->csize;
         if(count>total-block) count=total-block;
-        if(file.sect<fs->database || file.sect>=volume->count ||
-            (uint64_t)file.sect+count>volume->count) {ok=false;break;}
-        uint32_t card=volume->start+(uint32_t)file.sect;
+        if(sect<fs->database || sect>=volume->count || sect+count>volume->count) {ok=false;break;}
+        uint32_t card=volume->start+(uint32_t)sect;
         struct kui_retail_extent *last=t->extent_count?&map->extents[map->extent_count-1]:NULL;
-        if(last && (uint64_t)last->card_lba+last->blocks==card) last->blocks+=count;
+        if(last && (uint64_t)last->card_lba+last->blocks==card) last->blocks+=(uint32_t)count;
         else {
             if(map->extent_count==KUI_RETAIL_IMAGE_EXTENTS) {ok=false;break;}
-            map->extents[map->extent_count++]=(struct kui_retail_extent){block,card,count};
+            map->extents[map->extent_count++]=(struct kui_retail_extent){block,card,(uint32_t)count};
             ++t->extent_count;
         }
-        block+=count;
+        block+=(uint32_t)count;
     }
+    file.cltbl=NULL;
     if(f_close(&file)!=FR_OK) ok=false;
     return ok;
 }
-/* Hash only the requested logical bytes; the final sector's allocation or
- * ISO padding is not part of a boot-file checksum. No executable is retained
- * in launcher RAM or transformed for the native GD path. */
+/* Hash only the requested logical bytes of the IP. The boot executable is not
+ * read here: the stage checks each of its sectors' headers as it loads them. */
 static enum kui_game_result extent_crc(const struct kui_game_image *image,
-    uint32_t lba,uint32_t bytes,uint32_t *crc,kui_log_fn log,bool progress) {
+    uint32_t lba,uint32_t bytes,uint32_t *crc) {
     if(!bytes) return KUI_GAME_INVALID;
     enum kui_game_result result=kui_game_image_check(image,lba,(bytes+2047u)/2048u,
         KUI_GAME_SECTOR_MODE1);
@@ -147,8 +152,6 @@ static enum kui_game_result extent_crc(const struct kui_game_image *image,
         if(result!=KUI_GAME_OK) return result;
         uint32_t take=bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
         value=kui_retail_crc32(value,sector,take);done+=take;
-        if(progress && (!(done%(256u*1024u)) || done==bytes))
-            log("Retail boot checksum: %u / %u bytes",done,bytes);
     }
     *crc=value;return KUI_GAME_OK;
 }
@@ -211,12 +214,12 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
         metadata.version,metadata.region);
     for(unsigned i=0;i<image->count;i++)
         if(image->tracks[i].control==0 && image->tracks[i].start_lba>=45000) {
-            log("Retail warning: CD audio playback is unsupported; music may be absent or the game may stop on an audio command");
+            log("Retail warning: CD audio playback is unsupported; the reader accepts audio commands silently, so that music is absent");
             break;
         }
-    r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32,log,false);
+    r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
-    r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,log,true);
+    r=kui_game_image_check(image,map->boot_lba,(map->boot_bytes+2047u)/2048u,KUI_GAME_SECTOR_MODE1);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
     const struct kui_volume volume=*kui_media_volume();
@@ -232,8 +235,8 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
-    log("Retail boot prepared: %u tracks, %u extents; IP CRC32=%08x, %s=%u bytes CRC32=%08x",
-        map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes,map->boot_crc32);
+    log("Retail boot prepared: %u tracks, %u extents; IP CRC32=%08x, %s=%u bytes checked at load",
+        map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes);
     ok=true;
 done:
     if(!close_reader(&files)) {ok=false;problem="cannot close image reader";}

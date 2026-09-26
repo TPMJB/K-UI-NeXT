@@ -1,5 +1,10 @@
 # DOA2 launch — SD latency comparison
 
+**Current candidate: faster launches.** Track maps from the allocation
+table, no executable pre-read, half-second handoff screens, silent CD-audio
+commands and A+B+X+Y+Start restarting K-UI; see
+[the launch-speed test](games-launch-speed.md).
+
 **Current playable baseline: `2072b489c378`**, pinned at
 `baseline/doa2-pacing-2072b489c378` and on `main`: longer reads while the
 picture is static, all-CMD18 streams and a counter screen on A+B+X+Y+Start.
@@ -118,12 +123,14 @@ Evidence: `evidence/games-retail-version-query-2026-09-24.md`.
 3. Press **Y — Launch (experimental)**. On its confirmation screen press
    **A — Launch**. The existing **A — Test image reads** action on image
    details is the previously accepted probe, not this launch.
-4. The loading screen now has a progress bar. Handoff screens pause for
-   approximately three seconds. Photograph the last screen, including its
-   build ID and error details. Unsupported reader operations and a standard
-   BIOS-menu return request now stop on a diagnostic screen. If the game starts, report the furthest point reached: title,
+4. The loading screen now has a progress bar. Handoff screens stay up for
+   about half a second. Photograph the last screen, including its
+   build ID and error details. Unsupported reader operations stop on a
+   diagnostic screen. If the game starts, report the furthest point reached: title,
    menu, or an actual fight, and whether controller input works.
-5. Power off/on to return to K-UI. No hot return is provided.
+5. A+B+X+Y+Start (the game's return-to-menu request) shows the reader's
+   counters for about two seconds, then restarts the console, which boots
+   the K-UI disc again. Otherwise power off/on to return to K-UI.
 
 Preparation reads the IP and boot executable to record their checksums;
 the independent loader checks those bytes again after K-UI shuts down.
@@ -167,9 +174,11 @@ refuse to take over active serial I/O. Requests complete through explicit pollin
 command 17 still copies through the CPU. Hardware DMA interrupts, streaming,
 image CDDA, Windows CE, IDE/CF, and broad game compatibility are not implemented.
 The first game call requiring an unsupported operation therefore stops on
-a diagnostic with the request and SD state. The standard BIOS-menu vector
-is intercepted for return command 1 to retain the caller address and last GD
-request. A direct jump to ROM or a hardware reset can still bypass that trap.
+a diagnostic with the request and SD state. CD-audio PLAY/PAUSE/RELEASE
+commands are accepted without sound. The standard BIOS-menu vector is
+intercepted for return command 1: it shows the caller address, last GD
+request and read counters, then restarts through the boot ROM. A direct jump
+to ROM or a hardware reset bypasses that screen.
 
 GD routing covers the BC supervisor vector, the C0 raw GD vector and both
 direct firmware RAM entries (`0x8c001000`, `0x8c0010f0`). BC miscellaneous

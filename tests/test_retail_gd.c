@@ -231,6 +231,31 @@ static void metadata(void) {
     CHECK(call(KUI_GD_RESET, 0, 0) == 0);
     CHECK(call(KUI_GD_DRIVE, STATUS, 0) == 0 && get(STATUS) == 1);
 }
+static void silent_cd_audio(void) {
+    /* Disc audio commands complete at once, without reads, output or a
+     * change of drive state, so a game waiting on them keeps running. */
+    reset();
+    const uint32_t commands[] = {KUI_RETAIL_GD_PLAY, KUI_RETAIL_GD_PLAY2,
+                                 KUI_RETAIL_GD_PAUSE, KUI_RETAIL_GD_RELEASE};
+    for(unsigned i = 0; i < 4; ++i) {
+        put(PARAM, 3); put(PARAM + 4, 4); put(PARAM + 8, 15);
+        memset(ram + OUTPUT - BEGIN, 0xa5, 64);
+        int32_t token = call(KUI_GD_REQUEST, commands[i], PARAM);
+        CHECK(token > 0);
+        CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
+        CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+        CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+        CHECK(get(STATUS) == 0 && get(STATUS + 8) == 0 && get(STATUS + 12) == 0);
+        CHECK(call(KUI_GD_DRIVE, STATUS, 0) == 0 && get(STATUS) == 1);
+        CHECK(ram[OUTPUT - BEGIN] == 0xa5 && get(PARAM) == 3);
+    }
+    /* PLAY's three parameter words must still be readable guest memory. */
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_PLAY, END - 8) == 0);
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_PLAY2, 0) == 0);
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_PAUSE, 0) > 0);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(ctx.reads == 0 && ctx.checks == 0 && service.diag.read_steps == 0);
+}
 static void version_query(void) {
     static const uint8_t expected[28] = "GDC Version 1.10 1999-03-31\002";
     const uint32_t destinations[] = {OUTPUT + 1, (OUTPUT + 1) & 0x1fffffffu,
@@ -360,7 +385,7 @@ static void bounds_and_modes(void) {
     CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
 }
 int main(void) {
-    large_reads(); paced_steps(); cancel_failures(); metadata(); version_query(); subcode_query(); bounds_and_modes();
+    large_reads(); paced_steps(); cancel_failures(); metadata(); silent_cd_audio(); version_query(); subcode_query(); bounds_and_modes();
     printf("retail GD service: %u checks passed\n", assertions);
     return 0;
 }

@@ -20,6 +20,8 @@ static struct {
     FIL *track;
     unsigned writes, connects, disconnects, files, read_calls, physical_reads;
     uint32_t first_sector;
+    bool boot_read;
+    char track_name[96];
     bool active, connected, injected, cancelled;
 } test;
 static FATFS fs;
@@ -68,6 +70,7 @@ FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
         ++test.files;
         if(strstr(path, "track")) {
             test.track = file;
+            snprintf(test.track_name, sizeof(test.track_name), "%s", path);
             if(fault("size-change")) { ++file->obj.objsize; test.injected = true; }
         }
     }
@@ -80,17 +83,14 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
         ++test.read_calls;
         if(file == test.track) {
             if(fault("read-fail")) { test.injected = true; return FR_DISK_ERR; }
-            if(bytes == 2352 && f_tell(file) == 22u * 2352u && fault("cancel-boot")) {
+            /* The boot executable (track sectors 21 and 22) is read only by
+             * the stage after handoff, never during preparation. */
+            FSIZE_t end = f_tell(file), start = end - *got;
+            if(strstr(test.track_name, "track03") && start < 23u * 2352u && end > 21u * 2352u)
+                test.boot_read = true;
+            /* The last IP sector: the launcher's final read of track data. */
+            if(bytes == 2352 && f_tell(file) == 16u * 2352u && fault("cancel-ip")) {
                 test.cancelled = true; test.injected = true;
-            }
-            if(bytes == 1 && *got == 1) {
-                if(fault("cancel-map")) { test.cancelled = true; test.injected = true; }
-                if(fault("sector-beforedata")) { file->sect = 0; test.injected = true; }
-                if(fault("sector-aftercard")) { file->sect = (LBA_t)test.blocks; test.injected = true; }
-                if(fault("sector-repeat")) {
-                    if(!test.first_sector) test.first_sector = (uint32_t)file->sect;
-                    file->sect = test.first_sector; test.injected = true;
-                }
             }
         }
     }
@@ -99,7 +99,20 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
 FRESULT __real_f_lseek(FIL *, FSIZE_t);
 FRESULT __wrap_f_lseek(FIL *file, FSIZE_t offset) {
     if(file == test.track && fault("seek-fail")) { test.injected = true; return FR_DISK_ERR; }
-    return __real_f_lseek(file, offset);
+    FRESULT result = __real_f_lseek(file, offset);
+    if(test.active && file == test.track && offset == CREATE_LINKMAP && result == FR_OK) {
+        /* Corrupt the allocation-table runs the launcher maps from: a cluster
+         * before the data area, past the volume, or aliasing the first track. */
+        DWORD *run = file->cltbl + 1;
+        if(fault("cancel-map")) { test.cancelled = true; test.injected = true; }
+        if(fault("sector-beforedata")) { run[1] = 1; test.injected = true; }
+        if(fault("sector-aftercard")) { run[1] = file->obj.fs->n_fatent; test.injected = true; }
+        if(fault("sector-repeat")) {
+            if(!test.first_sector) test.first_sector = run[1];
+            run[1] = test.first_sector; test.injected = true;
+        }
+    }
+    return result;
 }
 FRESULT __real_f_close(FIL *);
 FRESULT __wrap_f_close(FIL *file) {
@@ -249,23 +262,22 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
                 assert(!memcmp(actual + n * 2048u, expected[i] + n * KUI_GAME_RAW_BYTES + 16, 2048));
         }
     }
-    uint32_t boot_crc = 0;
+    /* K-UI no longer reads the executable before launch; the stage checks
+     * each boot sector's header as it loads. The detached reader must still
+     * return the exact logical boot bytes, compared with the fixture itself. */
+    assert(map->boot_crc32 == 0);
     for(uint32_t done = 0; done < map->boot_bytes; ) {
-        assert(kui_retail_image_read(&reader, map->boot_lba + done / 2048u, 1,
+        uint32_t n = done / 2048u, bytes = map->boot_bytes - done;
+        if(bytes > 2048u) bytes = 2048u;
+        assert(kui_retail_image_read(&reader, map->boot_lba + n, 1,
             KUI_GAME_SECTOR_MODE1, actual, 2048) == KUI_GAME_OK);
-        uint32_t bytes = map->boot_bytes - done; if(bytes > 2048u) bytes = 2048u;
-        boot_crc = kui_retail_crc32(boot_crc, actual, bytes); done += bytes;
+        assert(!memcmp(actual, expected[2] + (21u + n) * 2352u + 16u, bytes));
+        assert(kui_retail_image_read(&reader, map->boot_lba + n, 1,
+            KUI_GAME_SECTOR_RAW, actual, 2352) == KUI_GAME_OK);
+        assert(kui_retail_sector_header(actual, map->boot_lba + n) == KUI_RETAIL_HEADER_OK);
+        assert(kui_retail_sector_header(actual, map->boot_lba + n + 1u) == KUI_RETAIL_HEADER_ADDRESS);
+        done += bytes;
     }
-    assert(boot_crc == map->boot_crc32);
-    /* Compare expected CRC independently of the resident reader and launcher
-     * extraction; only exact logical boot bytes count, never final padding. */
-    uint32_t expected_crc = 0;
-    for(uint32_t done = 0; done < map->boot_bytes; ) {
-        uint32_t bytes = map->boot_bytes - done; if(bytes > 2048u) bytes = 2048u;
-        const uint8_t *want = expected[2] + (21u + done / 2048u) * 2352u + 16u;
-        expected_crc = kui_crc32(expected_crc, want, bytes); done += bytes;
-    }
-    assert(expected_crc == map->boot_crc32);
     assert(kui_retail_image_read(&reader, map->session_lba, 16,
         KUI_GAME_SECTOR_MODE1, actual, 32768) == KUI_GAME_OK);
     uint32_t ip_crc = kui_retail_crc32(0, actual, 32768), expected_ip_crc = 0;
@@ -281,7 +293,7 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(test.physical_reads == reads && reads > 0);
     for(unsigned i = 0; i < track_count(); ++i) free(expected[i]);
     free(actual); free(map);
-    printf("Detached selected-image read PASS: all raw tracks, cooked data, full IP and exact boot CRCs; %u SD blocks\n", reads);
+    printf("Detached selected-image read PASS: all raw tracks, cooked data, full IP CRC, exact boot bytes and headers; %u SD blocks\n", reads);
 }
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
@@ -291,6 +303,7 @@ static void check(const char *directory) {
         !strcmp(test.fault, "alternate-bootfile") || !strcmp(test.fault, "cdda-warning") ||
         !strcmp(test.fault, "blank-title");
     assert(result == valid);
+    assert(!test.boot_read);
     if(valid) check_mapping(directory, &image);
     else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
     kui_runtime_free(&image);
@@ -309,7 +322,7 @@ int main(int argc, char **argv) {
         assert(!strcmp(argv[3], "check")); test.active = true; check(argv[2]);
         assert(!test.writes && !test.files && !test.connected && test.connects == test.disconnects);
         if(strstr(test.fault, "-fail") || !strncmp(test.fault, "sector-", 7) ||
-            !strcmp(test.fault, "cancel-map") || !strcmp(test.fault, "cancel-boot") || !strcmp(test.fault, "size-change")) assert(test.injected);
+            !strcmp(test.fault, "cancel-map") || !strcmp(test.fault, "cancel-ip") || !strcmp(test.fault, "size-change")) assert(test.injected);
     }
     assert(!fclose(test.image));
     printf("PASS retail preparation %s %s; no active-operation writes\n", argv[3], test.fault);

@@ -302,3 +302,15 @@ enum kui_game_result kui_retail_image_read(struct kui_retail_image *image,
     }
     return KUI_GAME_OK;
 }
+static uint8_t bcd(uint32_t value) { return (uint8_t)((value / 10u) << 4 | value % 10u); }
+enum kui_retail_header kui_retail_sector_header(const uint8_t raw[KUI_GAME_RAW_BYTES],
+    uint32_t lba) {
+    if(raw[0] || raw[11]) return KUI_RETAIL_HEADER_SYNC;
+    for(unsigned i = 1; i < 11; ++i) if(raw[i] != 255) return KUI_RETAIL_HEADER_SYNC;
+    if(raw[15] != 1) return KUI_RETAIL_HEADER_MODE;
+    uint32_t fad = lba + 150u;
+    if(lba >= KUI_GAME_LBA_LIMIT || raw[12] != bcd(fad / 4500u) ||
+       raw[13] != bcd(fad / 75u % 60u) || raw[14] != bcd(fad % 75u))
+        return KUI_RETAIL_HEADER_ADDRESS;
+    return KUI_RETAIL_HEADER_OK;
+}

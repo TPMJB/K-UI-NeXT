@@ -90,12 +90,12 @@ void retail_display_progress(uint32_t done,uint32_t total) {
     for(unsigned y=464;y<472;y++)
         for(unsigned x=0;x<600;x++) frame[y*640+20+x]=x<filled?0x07e0:0x2104;
 }
-void retail_display_pause(void) {
-    /* Keep handoff text visible for about 3 seconds at 50/60 Hz without
-     * borrowing any TMU channel. A stopped scan generator cannot hang us. */
+void retail_display_pause(uint32_t frames_wanted) {
+    /* Keep text visible for frames_wanted video frames (60 or 50 per second)
+     * without borrowing any TMU channel. A stopped scan generator cannot hang us. */
     volatile uint32_t *scan=(volatile uint32_t *)(uintptr_t)0xa05f810cu;
     uint32_t before=*scan&0x3ffu, frames=0;
-    for(uint32_t budget=0;budget<30000000u && frames<180u;budget++) {
+    for(uint32_t budget=0;budget<30000000u && frames<frames_wanted;budget++) {
         uint32_t now=*scan&0x3ffu;
         if(now<before) ++frames;
         before=now;

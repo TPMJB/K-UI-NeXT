@@ -455,7 +455,47 @@ static void maximum_map_tests(void) {
     CHECK(kui_retail_image_check(&decoded, KUI_GAME_LBA_LIMIT - 1, 1, KUI_GAME_SECTOR_RAW) == KUI_GAME_OK);
     CHECK(kui_retail_image_check(&decoded, KUI_GAME_LBA_LIMIT - 1, 2, KUI_GAME_SECTOR_RAW) == KUI_GAME_RANGE);
 }
+static void header_sector(uint8_t raw[KUI_GAME_RAW_BYTES], const uint8_t address[3]) {
+    memset(raw, 0x5a, KUI_GAME_RAW_BYTES);
+    raw[0] = 0; memset(raw + 1, 255, 10); raw[11] = 0;
+    memcpy(raw + 12, address, 3); raw[15] = 1;
+}
+static void header_tests(void) {
+    /* Addresses written out independently: LBA 45021 is FAD 45171 = 10:02:21;
+     * LBA 0 is 00:02:00; LBA 500000 is FAD 500150 = 111:08:50, whose minute
+     * carries into the tens nibble (0xb1) like recovery_sector.c. */
+    const struct { uint32_t lba; uint8_t address[3]; } cases[] = {
+        {45021, {0x10, 0x02, 0x21}}, {0, {0x00, 0x02, 0x00}},
+        {500000, {0xb1, 0x08, 0x50}}, {KUI_GAME_LBA_LIMIT - 1u, {0xf9, 0x59, 0x74}}
+    };
+    uint8_t raw[KUI_GAME_RAW_BYTES];
+    for(unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        header_sector(raw, cases[i].address);
+        CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_OK);
+        /* The data, EDC and ECC fields are deliberately not examined. */
+        raw[16] ^= 0xff; raw[2064] ^= 0xff; raw[2300] ^= 0xff;
+        CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_OK);
+        CHECK(kui_retail_sector_header(raw, cases[i].lba + 1u) == KUI_RETAIL_HEADER_ADDRESS);
+        if(cases[i].lba) CHECK(kui_retail_sector_header(raw, cases[i].lba - 1u) == KUI_RETAIL_HEADER_ADDRESS);
+        for(unsigned byte = 12; byte < 15; ++byte) {
+            raw[byte] ^= 0x01;
+            CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_ADDRESS);
+            raw[byte] ^= 0x01;
+        }
+        raw[15] = 2;
+        CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_MODE);
+        raw[15] = 1;
+        for(unsigned byte = 0; byte < 12; ++byte) {
+            raw[byte] ^= 0x80;
+            CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_SYNC);
+            raw[byte] ^= 0x80;
+        }
+    }
+    header_sector(raw, cases[0].address);
+    CHECK(kui_retail_sector_header(raw, KUI_GAME_LBA_LIMIT) == KUI_RETAIL_HEADER_ADDRESS);
+}
 int main(void) {
+    header_tests();
     wire_tests(); invalid_map_tests(); reader_tests(false); reader_tests(true);
     sequential_cache_tests(false); sequential_cache_tests(true);
     run_span_tests(); run_failure_tests();

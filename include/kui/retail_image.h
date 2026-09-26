@@ -22,6 +22,8 @@ struct kui_retail_extent { uint32_t file_block, card_lba, blocks; };
 struct kui_retail_manifest {
     uint64_t card_sectors, partition_start, partition_end; /* End exclusive. */
     uint32_t track_count, extent_count, session_lba, boot_lba, boot_bytes;
+    /* boot_crc32 is zero from K-UI: the stage checks each boot sector's
+     * header instead of re-reading the file before launch. */
     uint32_t boot_crc32, ip_crc32, gdi_crc32;
     char title[128], product[16], bootfile[24], region[16];
     struct kui_retail_track tracks[KUI_RETAIL_IMAGE_TRACKS];
@@ -79,4 +81,17 @@ enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *,
  * Output must not alias the reader or its manifest. */
 enum kui_game_result kui_retail_image_read(struct kui_retail_image *,
     uint32_t lba, uint32_t count, enum kui_game_sector_format, void *, size_t);
+
+/* Header of one raw Mode 1 sector: the sync pattern, mode 1 and the BCD
+ * address of lba (FAD = lba + 150; minutes above 99 carry into the tens
+ * nibble, as in recovery_sector.c). The stage checks every boot sector this
+ * way, proving the file map pointed at the right sectors; SD CRCs cover the
+ * transfer. EDC is not checked: patched executables often leave it stale.
+ * Returns KUI_RETAIL_HEADER_OK or the first mismatch. */
+enum kui_retail_header {
+    KUI_RETAIL_HEADER_OK, KUI_RETAIL_HEADER_SYNC, KUI_RETAIL_HEADER_MODE,
+    KUI_RETAIL_HEADER_ADDRESS
+};
+enum kui_retail_header kui_retail_sector_header(const uint8_t raw[KUI_GAME_RAW_BYTES],
+    uint32_t lba);
 #endif
