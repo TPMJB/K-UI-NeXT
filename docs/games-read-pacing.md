@@ -20,6 +20,16 @@ screen. If transfer speed limited that load, it would have shortened by about
 a fifth. So the load is limited by how often the game calls the reader, while
 the game itself waits.
 
+## Result: pinned as the Games baseline
+
+The owner found this build the best so far: "This actually worked really
+well... the only bad load time left was the first ten seconds of a fight were
+pretty laggy. Otherwise it was extremely playable." It is pinned at
+`baseline/doa2-pacing-2072b489c378` and is on `main`. A follow-up trial of
+one-sector reads during play made DOA2's fight starts worse and was dropped;
+see [the pin record](evidence/games-doa2-pacing-baseline-2026-09-26.md).
+Serial-SD transport tuning is now closed.
+
 ## What changed
 
 1. **Longer steps only while the picture is still.** The reader samples three
@@ -77,7 +87,7 @@ STEPS of zero after a black-screen load would mean the game kept flipping
 frames, so no pacing applied. The screen stops the game: power off and on
 afterwards.
 
-## Console test
+## Original console test
 
 Use the same card, DOA2 dump and boot CD. Merge this build's `sd-update`
 `KUI` folder onto the card. The pinned baselines
