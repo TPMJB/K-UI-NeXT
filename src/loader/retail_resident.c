@@ -2,6 +2,7 @@
 #include "kui/retail_resident.h"
 #include "kui/retail_gd.h"
 #include "kui/retail_image.h"
+#include "kui/retail_pace.h"
 #include "retail_sd.h"
 #include "retail_display.h"
 #include <stddef.h>
@@ -14,6 +15,10 @@ static struct kui_loader_sd card;
 static struct kui_loader_sd_stream stream;
 static struct kui_gd_track tracks[KUI_RETAIL_IMAGE_TRACKS];
 static struct retail_display_state display;
+static struct kui_retail_pace pace;
+/* Menu-return diagnostics: steps longer than two sectors, steps run for a
+ * game spinning on CHECK, and the caller SR of the last step that read. */
+static struct { uint32_t paced, spun, sr; } pacing;
 uint32_t kui_retail_original_menu;
 extern void kui_retail_menu_hook(void);
 extern void kui_retail_gd_c0_hook(void);
@@ -21,11 +26,7 @@ extern void kui_retail_gd_1000_hook(void);
 extern void kui_retail_gd_10f0_hook(void);
 /* Source: 0=BC supervisor vector, 1=C0 raw GD vector, 2/3=direct firmware
  * entries. Assembly publishes this only after acquiring the resident lock. */
-volatile uint32_t kui_retail_hook_source;
-static struct {
-    uint32_t r7;
-    int32_t result;
-} routing;
+volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
 static enum kui_loader_sd_result card_result;
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
@@ -54,15 +55,21 @@ static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
     if(writing != KUI_RETAIL_MAP_VALIDATE) purge(address, bytes);
     return (uint8_t *)(uintptr_t)((address & 0x1fffffffu) | 0xa0000000u);
 }
-static int read_block(void *unused, uint32_t lba, uint8_t output[512]) {
-    (void)unused;
-    card_result = kui_loader_sd_read(&card, lba, 1, output);
-    return card_result == KUI_LOADER_SD_OK ? 0 : -1;
+/* Read-only PowerVR SPG_STATUS, SPG_VBLANK_INT and FB_R_SOF1: scanline,
+ * vblank-in line and the displayed framebuffer. No video state is changed. */
+static void video_sample(void) {
+    volatile const uint32_t *pvr = (volatile const uint32_t *)(uintptr_t)0xa05f8000u;
+    kui_retail_pace_sample(&pace, pvr[0x10c / 4], pvr[0xcc / 4], pvr[0x50 / 4]);
 }
 static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t output[512]) {
     (void)unused;
+    video_sample(); /* Each block is ~1 ms: long steps still count wraps. */
     card_result = kui_retail_sd_read_run(&card, &stream, lba, available, output);
     return card_result == KUI_LOADER_SD_OK ? 0 : -1;
+}
+/* The image API requires this fallback; with read_run bound it is unused. */
+static int read_block(void *unused, uint32_t lba, uint8_t output[512]) {
+    return read_run(unused, lba, 1, output);
 }
 static enum kui_game_sector_format sector_format(uint32_t bytes) {
     return bytes == 2352 ? KUI_GAME_SECTOR_RAW : KUI_GAME_SECTOR_MODE1;
@@ -111,13 +118,6 @@ static void install_hook(void) {
     *(volatile uint32_t *)(uintptr_t)0xac0000e0u=(uint32_t)(uintptr_t)kui_retail_menu_hook;
     __asm__ __volatile__("" : : : "memory");
 }
-static void report_routing(void) {
-    /* Keep the useful last fault; retire startup route counters to leave
-     * room for GETSCD without moving resident/stack bounds or the SD reader. */
-    retail_display_hex("HOOK GUARD FAULT",kui_retail_hook_fault);
-    retail_display_hex("LAST ROUTE R7",routing.r7);
-    retail_display_hex("LAST ROUTE RESULT",(uint32_t)routing.result);
-}
 static void report_fault(const char *reason, uint32_t function) {
     retail_display_restore(&display);
     retail_display_line("K-UI GAME READER");
@@ -140,11 +140,18 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_line("GAME REQUESTED BIOS MENU RETURN");
     retail_display_hex("CALLER PR",caller);
     retail_display_hex("CALLER STACK",stack);
-    report_routing();
+    retail_display_hex("HOOK GUARD FAULT",kui_retail_hook_fault);
     retail_display_hex("LAST GD COMMAND",service.diag.last_command);
-    retail_display_hex("HOOK GUARD WORD",
-        *(volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM);
     retail_display_hex("SD BLOCKS READ",image.blocks_read);
+    /* How the game drives reads: ABXY+Start after a load shows these. */
+    retail_display_hex("GD CALLS",service.diag.calls);
+    retail_display_hex("EXEC CALLS",service.diag.exec_calls);
+    retail_display_hex("READ STEPS",service.diag.read_steps);
+    retail_display_hex("SECTORS READ",service.diag.sectors_read);
+    retail_display_hex("FRAMES SEEN",pace.frames);
+    retail_display_hex("PACED STEPS",pacing.paced);
+    retail_display_hex("SPIN STEPS",pacing.spun);
+    retail_display_hex("STEP CALLER SR",pacing.sr);
     retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
     for(;;) __asm__ volatile("nop");
@@ -192,6 +199,24 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     install_hook();
     return KUI_RETAIL_RESIDENT_OK;
 }
+/* One EXEC, sized by the pacing policy and timed for the next estimate. */
+static int32_t step(uint32_t r4, uint32_t r5) {
+    uint32_t frames = pace.frames, line = pace.line, before = service.diag.sectors_read;
+    pace.spin = 0;
+    service.step = kui_retail_pace_budget(&pace, KUI_RETAIL_GD_STEP_SECTORS,
+                                          KUI_RETAIL_GD_STEP_MAX);
+    int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, KUI_GD_EXEC);
+    if(service.error == KUI_GD_ERROR_IO)
+        report_fault("IMAGE READ FAILED", KUI_GD_EXEC);
+    uint32_t sectors = service.diag.sectors_read - before;
+    if(sectors) {
+        video_sample();
+        kui_retail_pace_measure(&pace, frames, line, sectors);
+        if(service.step > KUI_RETAIL_GD_STEP_SECTORS) ++pacing.paced;
+        pacing.sr = kui_retail_hook_sr;
+    }
+    return result;
+}
 int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
                                     uint32_t r6, uint32_t r7) {
     /* All paths arrive with the resident entry lock held and interrupts
@@ -203,16 +228,21 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * Font/flash/system BIOS vectors are independent and unchanged. */
     uint32_t source=kui_retail_hook_source;
     if(source>3) return -1;
-    routing.r7=r7; routing.result=0;
     if(source!=1 && r6==UINT32_MAX) {
         return 0;
     }
+    video_sample();
     uint32_t pending = service.pending;
-    int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
-    routing.result=result;
-    if(r7 == KUI_GD_EXEC && service.error == KUI_GD_ERROR_IO)
-        report_fault("IMAGE READ FAILED", r7);
-    else if(r7 == KUI_GD_REQUEST && !pending && result == 0)
+    /* A game polling CHECK in a tight loop is idle until the read finishes;
+     * give it a step, as its EXEC would. The CHECK itself still never reads. */
+    if(r7 == KUI_GD_CHECK && pending && (service.command == KUI_GD_PIOREAD ||
+       service.command == KUI_GD_DMAREAD) && kui_retail_pace_spin(&pace)) {
+        ++pacing.spun;
+        (void)step(0, 0);
+    }
+    int32_t result = r7 == KUI_GD_EXEC ? step(r4, r5) :
+        kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
+    if(r7 == KUI_GD_REQUEST && !pending && result == 0)
         report_fault("GD REQUEST REJECTED", r7);
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))

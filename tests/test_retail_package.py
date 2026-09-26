@@ -127,7 +127,7 @@ class ReleaseMetadata(unittest.TestCase):
 
 class ResidentStackReports(unittest.TestCase):
     required = ("kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
-                "kui_retail_image_read", "kui_loader_sd_read")
+                "kui_retail_image_read", "kui_loader_sd_stream_next")
 
     def report(self, directory, extra=(), frame=64, kind="static"):
         names = self.required + tuple(name for name, _, _ in extra)
@@ -154,7 +154,7 @@ class ResidentStackReports(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "dynamic"):
                 check_stack_usage(tmp, symbols)
             symbols = self.report(tmp)
-            del symbols["_kui_loader_sd_read"]
+            del symbols["_kui_loader_sd_stream_next"]
             with self.assertRaisesRegex(ValueError, "Missing runtime"):
                 check_stack_usage(tmp, symbols)
 
@@ -171,7 +171,7 @@ class RetailLinkedLayout(unittest.TestCase):
         rs, ss, es = (self.symbols[name] for name in ("resident", "stage", "entry"))
         for index, name in enumerate(("kui_retail_resident_init", "kui_retail_resident_hook",
                                      "kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
-                                     "kui_retail_image_read", "kui_loader_sd_read",
+                                     "kui_retail_image_read", "kui_loader_sd_stream_next",
                                      "kui_retail_sd_acquire", "kui_retail_sd_release")):
             rs["_" + name] = layout.RESIDENT_ADDRESS + 4 + index * 4
         rs.update({"__retail_hook_stack": layout.HOOK_STACK,

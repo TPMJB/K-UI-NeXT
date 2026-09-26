@@ -1,5 +1,10 @@
 # DOA2 launch — SD latency comparison
 
+**Current candidate: read pacing on still screens.** Longer reads while the
+picture is static, all-CMD18 streams and a counter screen on A+B+X+Y+Start;
+see [the pacing test](games-read-pacing.md). The playable baseline below stays
+pinned for comparison.
+
 **Current playable baseline: `ed31d522c847`.** The owner reports the integrated
 CMD18 build substantially better and really playable. Character selection to
 the first stage took about 32 seconds; slowdown remained during the first

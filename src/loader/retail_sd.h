@@ -10,7 +10,7 @@
  *
  * Initialization borrows the pins, runs the existing read-only SD protocol and
  * returns the pins, retaining card.ready and the card's protocol state. Later
- * calls bracket kui_loader_sd_read() with acquire/release. A successful acquire
+ * calls bracket image reads with acquire/release. A successful acquire
  * must always be paired with release, including after an SD error. Release is
  * idempotent. This singleton must be linked into the resident itself; none of
  * its function pointers or saved state may belong to the retired launcher.
@@ -27,9 +27,14 @@ enum kui_loader_sd_result kui_retail_sd_init(struct kui_loader_sd *card);
 enum kui_loader_sd_result kui_retail_sd_adopt(struct kui_loader_sd *card,
     const struct kui_loader_sd *prepared);
 /* One physical block for an image callback. available is bounded by the
- * current image request AND extent. Stream only tested runs of 8..10 blocks;
- * shorter tails use CMD17. A stream never survives the enclosing image read:
- * caller must stream_stop before returning pins, including image errors. */
+ * current image request AND extent. Every run, including a one-block tail,
+ * is one CMD18 stream of up to STREAM_MAX blocks: the owner's console measured
+ * two-block streams level with CMD17 (392 vs 395 KiB/s) and longer ones ahead,
+ * and the resident no longer links CMD17 at all. A stream never survives the
+ * enclosing image read: caller must stream_stop before returning pins,
+ * including image errors. STREAM_MAX lets a paced eight-sector EXEC step (at
+ * most 38 blocks) use one stream; the protocol allows 128. */
+#define KUI_RETAIL_SD_STREAM_MAX 64u
 enum kui_loader_sd_result kui_retail_sd_read_run(struct kui_loader_sd *card,
     struct kui_loader_sd_stream *stream, uint32_t lba, uint32_t available,
     uint8_t out[512]);

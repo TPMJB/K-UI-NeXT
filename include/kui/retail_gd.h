@@ -8,6 +8,7 @@
  * native entry must serialize dispatch BEFORE switching to its private stack,
  * preserve the caller's interrupt state, and make P1/P2 data coherent. */
 #define KUI_RETAIL_GD_STEP_SECTORS 2u
+#define KUI_RETAIL_GD_STEP_MAX 8u
 #define KUI_RETAIL_GD_CHECK_SECTORS 8u
 enum kui_retail_map_access {
     /* ops.map writing=0/1 retains read/write access. Validation only checks
@@ -36,6 +37,9 @@ struct kui_retail_gd {
     uint32_t completed_bytes, error, pending, executing, initialized;
     uint32_t position_lba, drive_status, mode[4], outputs[4];
     int32_t status;
+    /* Sectors one EXEC may read: adapter pacing policy, not drive state.
+     * Init sets STEP_SECTORS; values outside 1..STEP_MAX use that default. */
+    uint32_t step;
     struct kui_retail_gd_diagnostics diag;
 };
 
@@ -43,8 +47,8 @@ struct kui_retail_gd {
  * ops.map receives checked P1 addresses. Full read destinations are mapped
  * with KUI_RETAIL_MAP_VALIDATE during REQUEST, without cache maintenance or
  * memory access; EXEC maps each output chunk for writing before use.
- * ops.check is called in <=8-sector chunks with no I/O; ops.read in <=2-sector
- * chunks only from EXEC.
+ * ops.check is called in <=8-sector chunks with no I/O; ops.read only from
+ * EXEC, in chunks of at most step sectors (two unless the adapter paces it).
  * All destination bytes must fit [guest_begin,guest_end). */
 int kui_retail_gd_init(struct kui_retail_gd *, const struct kui_gd_track *,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,

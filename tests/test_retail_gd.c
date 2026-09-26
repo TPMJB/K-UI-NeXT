@@ -60,7 +60,9 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     (void)unused; ++ctx.reads;
     if(count > ctx.max_count) ctx.max_count = count;
     ctx.last_count = count;
-    CHECK(count > 0 && count <= KUI_RETAIL_GD_STEP_SECTORS);
+    uint32_t step = service.step - 1u < KUI_RETAIL_GD_STEP_MAX ?
+        service.step : KUI_RETAIL_GD_STEP_SECTORS;
+    CHECK(count > 0 && count <= step);
     if(ctx.reenter) {
         CHECK(kui_retail_gd_dispatch(&service, KUI_GD_NOP, 0, 0, KUI_GD_REQUEST) == 0);
         CHECK(kui_retail_gd_dispatch(&service, service.token, STATUS, 0, KUI_GD_CHECK) == 4);
@@ -162,6 +164,36 @@ static void cancel_failures(void) {
     CHECK(token > 0); CHECK(call(KUI_GD_INIT, 0, 0) == 0);
     CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.reads == 3);
+}
+static void paced_steps(void) {
+    /* The adapter may change the EXEC size between calls; each chunk stays
+     * contiguous, and invalid values fall back to the two-sector default. */
+    reset(); CHECK(service.step == KUI_RETAIL_GD_STEP_SECTORS);
+    read_params(45000, 40, OUTPUT);
+    int32_t token = call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM);
+    CHECK(token > 0);
+    const uint32_t steps[] = {6, 0, 1, KUI_RETAIL_GD_STEP_MAX, KUI_RETAIL_GD_STEP_MAX + 1,
+                              UINT32_MAX, 3, 8, 8};
+    const uint32_t expected[] = {6, 2, 1, 8, 2, 2, 3, 8, 8};
+    uint32_t done = 0;
+    for(unsigned i = 0; i < sizeof(steps) / sizeof(*steps); ++i) {
+        service.step = steps[i];
+        uint32_t n = expected[i] < 40 - done ? expected[i] : 40 - done;
+        CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.last_count == n);
+        done += n;
+        CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) ==
+              (done == 40 ? KUI_GD_COMPLETED : KUI_GD_PROCESSING));
+        CHECK(get(STATUS + 8) == done * 2048);
+        if(done == 40) break;
+    }
+    CHECK(done == 40 && ctx.sectors == 40 && service.diag.read_steps == 9);
+    CHECK(ctx.max_count == KUI_RETAIL_GD_STEP_MAX);
+    CHECK(ram[OUTPUT - BEGIN + 40 * 2048] == 0xa5);
+    for(unsigned n = 0; n < 40; ++n)
+        for(unsigned i = 0; i < 2048; i += 211)
+            CHECK(ram[OUTPUT - BEGIN + n * 2048 + i] == pattern(45000 + n, i));
+    /* Protocol resets restore drive state, not the adapter's pacing choice. */
+    service.step = 5; CHECK(call(KUI_GD_INIT, 0, 0) == 0 && service.step == 5);
 }
 static void metadata(void) {
     reset();
@@ -328,7 +360,7 @@ static void bounds_and_modes(void) {
     CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
 }
 int main(void) {
-    large_reads(); cancel_failures(); metadata(); version_query(); subcode_query(); bounds_and_modes();
+    large_reads(); paced_steps(); cancel_failures(); metadata(); version_query(); subcode_query(); bounds_and_modes();
     printf("retail GD service: %u checks passed\n", assertions);
     return 0;
 }

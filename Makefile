@@ -15,7 +15,7 @@ FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-resident-image build/test-gd-service build/test-image-client
-test: build/test-retail-image build/test-retail-gd build/test-retail-sd
+test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-cd-audio
 	./build/test-game-image
@@ -27,6 +27,7 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-image-client
 	./build/test-retail-image
 	./build/test-retail-gd
+	./build/test-retail-pace
 	./build/test-retail-sd
 	./build/test-cd-audio guard
 	./build/test-network-probe
@@ -138,6 +139,10 @@ build/test-retail-image: tests/test_retail_image.c src/core/retail_image.c inclu
 build/test-retail-gd: tests/test_retail_gd.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_gd.c tests/test_retail_gd.c -o $@
+
+build/test-retail-pace: tests/test_retail_pace.c src/core/retail_pace.c include/kui/retail_pace.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_pace.c tests/test_retail_pace.c -o $@
 
 build/loader-probe-image: tests/loader_probe_image.c src/apps/games_probe.c $(LOADER_PROBE) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c $(CORE) $(FATFS) include/kui/games_probe.h include/kui/loader_probe.h
 	@mkdir -p $(@D)

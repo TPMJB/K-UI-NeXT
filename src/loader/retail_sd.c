@@ -226,8 +226,7 @@ enum kui_loader_sd_result kui_retail_sd_read_run(struct kui_loader_sd *card,
         if(r != KUI_LOADER_SD_OK) return r;
     }
     if(!stream->active) {
-        if(available < 8) return kui_loader_sd_read(card, lba, 1, out);
-        uint32_t count = available > 10 ? 10 : available;
+        uint32_t count = available > KUI_RETAIL_SD_STREAM_MAX ? KUI_RETAIL_SD_STREAM_MAX : available;
         enum kui_loader_sd_result r = kui_loader_sd_stream_start(card, stream, lba, count);
         if(r != KUI_LOADER_SD_OK) return r;
     }

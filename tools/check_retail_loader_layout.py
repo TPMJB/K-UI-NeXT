@@ -74,7 +74,7 @@ def check_stack_usage(directory, symbols):
                 raise ValueError(f"Invalid resident stack frame: {name}")
             frames[name] = max(frames.get(name, 0), frame)
     for name in ("kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
-                 "kui_retail_image_read", "kui_loader_sd_read"):
+                 "kui_retail_image_read", "kui_loader_sd_stream_next"):
         if name not in frames:
             raise ValueError(f"Missing runtime stack-usage frame: {name}")
     available = (layout.HOOK_STACK - layout.HOOK_STACK_BOTTOM -
@@ -115,7 +115,7 @@ def check_directory(directory):
 
     for name in ("_kui_retail_resident_init", "_kui_retail_resident_hook",
                  "_kui_retail_resident_dispatch", "_kui_retail_gd_dispatch",
-                 "_kui_retail_image_read", "_kui_loader_sd_read",
+                 "_kui_retail_image_read", "_kui_loader_sd_stream_next",
                  "_kui_retail_sd_acquire", "_kui_retail_sd_release"):
         code_symbol(resident, name, layout.RESIDENT_ADDRESS)
     rs, ss, es = (image["symbols"] for image in (resident, stage, entry))

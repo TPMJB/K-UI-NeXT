@@ -24,13 +24,14 @@ static bool fail_stop;
  * retail image callback selects and bounds that already-tested protocol. */
 enum kui_loader_sd_result kui_loader_sd_read(struct kui_loader_sd *card,
     uint32_t lba, uint32_t count, void *out) {
-    assert(card->ready && count == 1);
-    ++run_singles; memset(out, (int)(lba & 255), 512);
-    return KUI_LOADER_SD_OK;
+    /* Image runs no longer use CMD17; count any call as a failure below. */
+    (void)card; (void)lba; (void)count; (void)out;
+    ++run_singles;
+    return KUI_LOADER_SD_COMMAND;
 }
 enum kui_loader_sd_result kui_loader_sd_stream_start(struct kui_loader_sd *card,
     struct kui_loader_sd_stream *stream, uint32_t lba, uint32_t count) {
-    assert(card->ready && !stream->active && count >= 8 && count <= 10);
+    assert(card->ready && !stream->active && count >= 1 && count <= KUI_RETAIL_SD_STREAM_MAX);
     ++run_starts; stream->active = true; stream->next_lba = lba; stream->remaining = count;
     return KUI_LOADER_SD_OK;
 }
@@ -262,25 +263,31 @@ static void bounded_run_selection(void) {
     struct kui_loader_sd card = {.ready = true};
     struct kui_loader_sd_stream stream = {0};
     uint8_t out[512];
-    for(uint32_t i = 0; i < 10; ++i) {
-        assert(kui_retail_sd_read_run(&card, &stream, 100 + i, 40 - i, out) == KUI_LOADER_SD_OK);
-        assert(out[0] == 100 + i);
+    /* One stream is capped at STREAM_MAX even when more blocks are available. */
+    for(uint32_t i = 0; i < KUI_RETAIL_SD_STREAM_MAX; ++i) {
+        assert(kui_retail_sd_read_run(&card, &stream, 100 + i, 90 - i, out) == KUI_LOADER_SD_OK);
+        assert(out[0] == (uint8_t)(100 + i));
     }
-    assert(!stream.active && run_starts == 1 && run_blocks == 10 && !run_singles);
-    assert(kui_retail_sd_read_run(&card, &stream, 110, 7, out) == KUI_LOADER_SD_OK);
-    assert(run_singles == 1);
+    assert(!stream.active && run_starts == 1 && run_blocks == KUI_RETAIL_SD_STREAM_MAX);
+    /* Short tails, even a single block, are streams bounded by what remains. */
+    assert(kui_retail_sd_read_run(&card, &stream, 164, 1, out) == KUI_LOADER_SD_OK);
+    assert(!stream.active && run_starts == 2 && out[0] == 164);
     assert(kui_retail_sd_read_run(&card, &stream, 200, 8, out) == KUI_LOADER_SD_OK);
-    assert(stream.remaining == 7 && stream.next_lba == 201);
+    assert(stream.remaining == 7 && stream.next_lba == 201 && run_starts == 3);
     /* A new extent/request must never continue a prior stream blindly. */
     assert(kui_retail_sd_read_run(&card, &stream, 201, 2, out) == KUI_LOADER_SD_OK);
-    assert(!stream.active && run_stops == 1 && run_singles == 2);
+    assert(run_stops == 1 && run_starts == 4 && stream.remaining == 1 && stream.next_lba == 202);
     assert(kui_retail_sd_read_run(&card, &stream, 300, 10, out) == KUI_LOADER_SD_OK);
+    assert(run_stops == 2 && run_starts == 5 && stream.remaining == 9);
     assert(kui_retail_sd_read_run(&card, &stream, 900, 2, out) == KUI_LOADER_SD_OK);
-    assert(!stream.active && run_stops == 2 && run_singles == 3);
+    assert(run_stops == 3 && run_starts == 6 && stream.remaining == 1);
+    assert(kui_retail_sd_read_run(&card, &stream, 901, 1, out) == KUI_LOADER_SD_OK);
+    assert(!stream.active && run_stops == 3 && run_starts == 6 && out[0] == (uint8_t)901);
     assert(kui_retail_sd_read_run(&card, &stream, 1000, 10, out) == KUI_LOADER_SD_OK);
     fail_stop = true;
     assert(kui_retail_sd_read_run(&card, &stream, 2000, 2, out) == KUI_LOADER_SD_TIMEOUT);
-    assert(!stream.active && !card.ready && run_stops == 3 && run_singles == 3);
+    assert(!stream.active && !card.ready && run_stops == 4 && run_starts == 7);
+    assert(!run_singles);
 }
 
 int main(void) {

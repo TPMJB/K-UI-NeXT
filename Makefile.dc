@@ -147,7 +147,8 @@ RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/ret
     build/retail/src/loader/minic.o build/retail/src/core/retail_image.o \
     build/retail/src/loader/retail_display.o
 RETAIL_RESIDENT := build/retail/src/loader/retail_resident_asm.o \
-    build/retail/src/loader/retail_resident.o build/retail/src/core/retail_gd.o $(RETAIL_COMMON)
+    build/retail/src/loader/retail_resident.o build/retail/src/core/retail_gd.o \
+    build/retail/src/core/retail_pace.o $(RETAIL_COMMON)
 RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
     build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
 RETAIL_BENCH_STAGE := build/retail/src/loader/retail_stage_asm.o \

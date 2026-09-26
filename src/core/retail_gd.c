@@ -55,6 +55,7 @@ int kui_retail_gd_init(struct kui_retail_gd *s,
     s->ops = *ops; s->tracks = tracks; s->track_count = count;
     s->guest_begin = begin; s->guest_end = end; s->initialized = 1;
     s->position_lba = tracks[count > 2 ? 2 : 0].start_lba;
+    s->step = KUI_RETAIL_GD_STEP_SECTORS;
     reset(s);
     return 0;
 }
@@ -69,9 +70,10 @@ static int area_bounds(const struct kui_retail_gd *s, uint32_t area,
     }
     return *first == s->track_count ? -1 : 0;
 }
-static uint32_t step_count(uint32_t remaining) {
-    return remaining > KUI_RETAIL_GD_STEP_SECTORS ?
-        KUI_RETAIL_GD_STEP_SECTORS : remaining;
+static uint32_t step_count(const struct kui_retail_gd *s, uint32_t remaining) {
+    uint32_t step = s->step - 1u < KUI_RETAIL_GD_STEP_MAX ?
+        s->step : KUI_RETAIL_GD_STEP_SECTORS;
+    return remaining > step ? step : remaining;
 }
 static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) {
     if(s->pending) return 0;
@@ -211,7 +213,7 @@ static int32_t execute(struct kui_retail_gd *s) {
     s->executing = 1;
     if(s->command == KUI_GD_PIOREAD || s->command == KUI_GD_DMAREAD) {
         uint32_t done = s->completed_bytes / s->sector_bytes;
-        uint32_t n = step_count(s->count - done), bytes = n * s->sector_bytes;
+        uint32_t n = step_count(s, s->count - done), bytes = n * s->sector_bytes;
         uint8_t *out = guest(s, s->destination + s->completed_bytes, bytes, 2, 1);
         if(!out) s->error = KUI_GD_ERROR_MEMORY;
         else {
