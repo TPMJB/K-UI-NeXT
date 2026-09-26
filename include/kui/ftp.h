@@ -78,6 +78,13 @@ bool kui_ftp_parse(const char *line, char verb[8], const char **argument);
 bool kui_ftp_resolve(char out[KUI_FILES_PATH_CAP], const char *folder, const char *argument);
 /* LIST and NLST take ls options ("-la") before an optional path. */
 const char *kui_ftp_list_path(const char *argument);
+/* A LIST or NLST path whose last name holds * or ? lists the folder before
+ * it, filtered: folder gets the rest of the path ("" for the current
+ * folder), pattern the last name. False when there is no pattern. */
+bool kui_ftp_split_pattern(const char *path, char folder[KUI_FTP_LINE_CAP], char pattern[KUI_FILES_NAME_CAP]);
+/* * any run of characters, ? any one; ASCII letters match either case,
+ * as FAT names do. */
+bool kui_ftp_glob(const char *pattern, const char *name);
 /* PORT h1,h2,h3,h4,p1,p2 and EPRT |1|a.b.c.d|port| (ipv6 set for |2|). */
 bool kui_ftp_parse_port(const char *argument, uint8_t ip[4], uint16_t *port);
 bool kui_ftp_parse_eprt(const char *argument, uint8_t ip[4], uint16_t *port, bool *ipv6);

@@ -122,11 +122,29 @@ static void listings(void) {
     assert(!strcmp(kui_ftp_list_path(""), "") && !strcmp(kui_ftp_list_path(NULL), ""));
     puts("PASS FTP listing lines");
 }
+static void patterns(void) {
+    char folder[KUI_FTP_LINE_CAP], pattern[KUI_FILES_NAME_CAP];
+    assert(kui_ftp_split_pattern("*.bin", folder, pattern) && !strcmp(folder, "") && !strcmp(pattern, "*.bin"));
+    assert(kui_ftp_split_pattern("/Games/Crazy Taxi/track?.raw", folder, pattern) &&
+           !strcmp(folder, "/Games/Crazy Taxi/") && !strcmp(pattern, "track?.raw"));
+    assert(kui_ftp_split_pattern("/*", folder, pattern) && !strcmp(folder, "/") && !strcmp(pattern, "*"));
+    assert(!kui_ftp_split_pattern("/Games/track01.bin", folder, pattern) && !folder[0] && !pattern[0]);
+    assert(!kui_ftp_split_pattern("/Gam*es/track01.bin", folder, pattern));
+    assert(!kui_ftp_split_pattern("", folder, pattern) && !kui_ftp_split_pattern(NULL, folder, pattern));
+    assert(kui_ftp_glob("*", "anything") && kui_ftp_glob("*", "") && kui_ftp_glob("", "") && !kui_ftp_glob("", "x"));
+    assert(kui_ftp_glob("*.bin", "track01.bin") && kui_ftp_glob("*.BIN", "track01.bin") && !kui_ftp_glob("*.bin", "track01.raw"));
+    assert(kui_ftp_glob("track??.*", "Track02.raw") && !kui_ftp_glob("track??.*", "track2.raw"));
+    assert(kui_ftp_glob("*a*b*c", "xxaxxbxxc") && !kui_ftp_glob("*a*b*c", "xxaxxcxxb") && kui_ftp_glob("a**b", "ab"));
+    assert(kui_ftp_glob("?", "x") && !kui_ftp_glob("?", "") && !kui_ftp_glob("?", "xy"));
+    assert(!kui_ftp_glob(NULL, "x") && !kui_ftp_glob("x", NULL));
+    puts("PASS FTP wildcards");
+}
 int main(void) {
     commands();
     paths();
     addresses();
     listings();
+    patterns();
     puts("PASS FTP protocol");
     return 0;
 }

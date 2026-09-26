@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define _DEFAULT_SOURCE
 #include "kui/ftp.h"
+#include "kui/clock.h"
 #include "kui/media.h"
 #include "w5500_model.h"
 #include <assert.h>
@@ -128,6 +129,13 @@ static void publish(const struct kui_ftp_status *s) {
     }
 }
 
+/* New files are dated by K-UI's clock, as on the console: here a fixed
+ * 2026-09-26 12:34:56, so the test knows every date to expect. */
+static bool fixed_clock(void *ctx, int64_t *seconds) {
+    (void)ctx;
+    static const struct kui_datetime now = {2026, 9, 26, 12, 34, 56};
+    return kui_clock_to_seconds(&now, seconds);
+}
 static void put(const char *path, const char *text) {
     FIL file;
     UINT wrote;
@@ -155,6 +163,7 @@ int main(int argc, char **argv) {
     struct stat st;
     assert(!fstat(fileno(test.image), &st));
     test.blocks = (uint64_t)st.st_size / 512u;
+    kui_clock_configure(fixed_clock, NULL, log_line);
     int code = 0;
     if(!strcmp(argv[2], "seed") || !strcmp(argv[2], "bad-password")) {
         seed(!strcmp(argv[2], "bad-password"));

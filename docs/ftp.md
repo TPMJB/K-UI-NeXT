@@ -86,7 +86,9 @@ unencrypted. Use it on your home network only. There is no FTPS or SFTP.
 ## What it does
 
 - **Browse**: every folder and file on the card, with sizes and dates
-  (`LIST`, `NLST`, `MLSD`, `MLST`, `SIZE`, `MDTM`).
+  (`LIST`, `NLST`, `MLSD`, `MLST`, `SIZE`, `MDTM`). `LIST` and `NLST`
+  accept `*` and `?` in the last name (`mget *.bin` in a command-line
+  client), matching capitals either way as FAT does.
 - **Download**, including resuming a partial download (`REST`).
 - **Upload**: the file is written beside its target as
   `KUI-ftp-<n>.kui-part` and takes its name only when the client has sent
@@ -168,11 +170,11 @@ through the W5500's raw Ethernet socket.
   wiring fault and no-chip reports, no cable, the connection test with good,
   silent, conflicting and refusing DHCP servers, and lease renewal.
 - `test-ftp`: command parsing, path resolution (`.`, `..`, limits, unsafe
-  names), `PORT`/`EPRT`, timestamps and listing lines.
+  names), `PORT`/`EPRT`, timestamps, listing lines and wildcards.
 - `test_ftp_images.py`: the whole server on the W5500 model with real FatFs
   on FAT32 and exFAT images, driven by Python's `ftplib`: login and wrong
   passwords, folders, uploads and downloads of up to 20 MB compared by
-  SHA-256, resume, replace, listings, active mode, `EPSV` and `EPRT`,
+  SHA-256, resume, replace, listings and wildcards, active mode, `EPSV` and `EPRT`,
   renames and moves, deletes, protected files, unsafe names, a closed data
   connection, `ABOR`, an upload cut off by a reset, files in use, the
   three-client limit, a full card, stopping with a client connected, no

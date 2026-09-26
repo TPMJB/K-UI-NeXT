@@ -20,6 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/ftp-image")
 HOST = "127.0.0.1"
+# build/ftp-image dates new files by a fixed clock: 2026-09-26 12:34:56.
+CLOCK = "20260926123456"
 
 
 def run(*args, expected=0):
@@ -181,6 +183,13 @@ def transfers(f, port, password, image_kind):
     assert download(f, "hello.txt") == b"replaced\n"
     names = f.nlst()
     assert "hello.txt" in names and "Games" in names and "café.txt" in names, names
+    # Wildcards, as mget sends them: the folder's names that match.
+    assert sorted(f.nlst("Games/*.BIN")) == ["big.bin", "one.bin"], f.nlst("Games/*.BIN")
+    assert f.nlst("*.txt") and all(n.endswith(".txt") for n in f.nlst("*.txt"))
+    assert f.nlst("Games/nothing*") == []
+    wild = []
+    f.dir("-l Games/o?e.*", wild.append)
+    assert len(wild) == 1 and wild[0].endswith(" one.bin"), wild
     assert not any(n.endswith(".kui-part") for n in names + f.nlst("Games"))
     listing = []
     f.dir("Games", listing.append)
@@ -193,7 +202,11 @@ def transfers(f, port, password, image_kind):
     one_line = []
     f.dir("Games/one.bin", one_line.append)
     assert len(one_line) == 1 and one_line[0].endswith(" one.bin"), one_line
-    assert f.sendcmd("MDTM Games/one.bin").startswith("213 20")
+    stamp = f.sendcmd("MDTM Games/one.bin")
+    assert stamp == "213 " + CLOCK if CLOCK else len(stamp) == 18, stamp
+    if CLOCK:
+        assert facts["one.bin"]["modify"] == CLOCK, facts["one.bin"]
+        assert any(line.endswith(" Sep 26 12:34 big.bin") for line in listing), listing
     mlst = f.sendcmd("MLST Games/one.bin")
     assert "type=file;size=%d;" % len(one) in mlst and "/Games/one.bin" in mlst, mlst
     expect("550", lambda: f.size("Games"))
@@ -410,7 +423,8 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     assert line.startswith("421"), (line, output[-3000:])
     f.close()
     assert code == 0 and "STOPPED state=2" in output, output[-3000:]
-    assert "EVENT Received /Games/big.bin (20.0 MB)" in output, output[-3000:]
+    # Every event is logged; the screen shows only the latest.
+    assert "LOG FTP: Received /Games/big.bin (20.0 MB)" in output, output[-3000:]
     return password, files
 
 

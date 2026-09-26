@@ -63,6 +63,7 @@ struct session {
     FILINFO info;
     bool file_open, dir_open, single, source_done;
     char path[KUI_FILES_PATH_CAP], part[KUI_FILES_PATH_CAP];
+    char pattern[KUI_FILES_NAME_CAP]; /* LIST/NLST: only names matching it */
     uint8_t *buffer;
     size_t buffered, sent;
     uint64_t done, total, rate_mark_ms, rate_mark_bytes;
@@ -219,6 +220,7 @@ static void end_transfer(struct server *sv, struct session *s, bool ok, uint64_t
     s->phase = P_IDLE;
     s->rest = 0;
     s->rate = 0;
+    s->pattern[0] = 0;
     sv->changed = true;
 }
 /* Stops the transfer with the given reply (426 and the like). */
@@ -308,6 +310,7 @@ static bool fill_listing(struct server *sv, struct session *s) {
             if(!info->fname[0]) { s->source_done = true; break; }
         }
         if(!strcmp(info->fname, ".") || !strcmp(info->fname, "..")) continue;
+        if(s->pattern[0] && !kui_ftp_glob(s->pattern, info->fname)) continue;
         bool directory = info->fattrib & AM_DIR;
         char *at = (char *)s->buffer + s->buffered;
         size_t room = BUFFER_BYTES - s->buffered, n;
@@ -519,16 +522,20 @@ static bool data_prepared(struct session *s) {
     return false;
 }
 static void start_list(struct server *sv, struct session *s, enum transfer kind, const char *argument, uint64_t now) {
-    char path[KUI_FILES_PATH_CAP];
+    char path[KUI_FILES_PATH_CAP], folder[KUI_FTP_LINE_CAP];
     const char *target = kind == T_MLSD ? argument : kui_ftp_list_path(argument);
+    /* "NLST *.bin" (mget) lists the folder, filtered. */
+    char pattern[KUI_FILES_NAME_CAP] = "";
+    if(kind != T_MLSD && kui_ftp_split_pattern(target, folder, pattern)) target = folder;
     if(!resolved(s, path, target)) return;
     FILINFO info;
     FRESULT r = stat_path(path, &info);
     if(r != FR_OK) { reply(s, missing(r) ? "550 %s: no such file or folder" : "451 Cannot read %s", path); return; }
     bool directory = info.fattrib & AM_DIR;
-    if(kind == T_MLSD && !directory) { reply(s, "501 %s is not a folder", path); return; }
+    if((kind == T_MLSD || pattern[0]) && !directory) { reply(s, "501 %s is not a folder", path); return; }
     if(!data_prepared(s)) return;
     if(!(s->buffer = malloc(BUFFER_BYTES))) { reply(s, "451 Insufficient memory"); return; }
+    memcpy(s->pattern, pattern, sizeof(s->pattern));
     s->single = !directory;
     if(directory) {
         char c[CARD_CAP];
@@ -566,8 +573,12 @@ static void start_retr(struct server *sv, struct session *s, const char *argumen
     if(s->rest > info.fsize) { reply(s, "554 The restart point is past the end of the file"); s->rest = 0; return; }
     if(!data_prepared(s)) return;
     if(!(s->buffer = malloc(BUFFER_BYTES))) { reply(s, "451 Insufficient memory"); return; }
-    if(!card(c, path) || f_open(&s->file, c, FA_READ) != FR_OK || f_lseek(&s->file, s->rest) != FR_OK) {
-        if(s->file_open) f_close(&s->file);
+    FRESULT opened = card(c, path) ? f_open(&s->file, c, FA_READ) : FR_INVALID_NAME;
+    if(opened == FR_OK && f_lseek(&s->file, s->rest) != FR_OK) {
+        (void)f_close(&s->file);
+        opened = FR_INT_ERR;
+    }
+    if(opened != FR_OK) {
         free(s->buffer);
         s->buffer = NULL;
         reply(s, "451 Cannot open %s", path);

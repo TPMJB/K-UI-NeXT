@@ -69,6 +69,32 @@ const char *kui_ftp_list_path(const char *argument) {
     }
     return argument;
 }
+bool kui_ftp_split_pattern(const char *path, char folder[KUI_FTP_LINE_CAP], char pattern[KUI_FILES_NAME_CAP]) {
+    if(!path || !folder || !pattern) return false;
+    folder[0] = pattern[0] = 0;
+    const char *slash = strrchr(path, '/'), *leaf = slash ? slash + 1 : path;
+    size_t n = strlen(leaf), before = (size_t)(leaf - path);
+    if(!strpbrk(leaf, "*?") || n >= KUI_FILES_NAME_CAP || before >= KUI_FTP_LINE_CAP) return false;
+    memcpy(pattern, leaf, n + 1u);
+    memcpy(folder, path, before);
+    folder[before] = 0;
+    return true;
+}
+static unsigned char fold(unsigned char c) { return c >= 'A' && c <= 'Z' ? (unsigned char)(c + 32) : c; }
+bool kui_ftp_glob(const char *pattern, const char *name) {
+    if(!pattern || !name) return false;
+    const char *star = NULL, *resume = NULL;
+    while(*name) {
+        if(*pattern == '*') { star = pattern++; resume = name; }
+        else if(*pattern == '?' || (*pattern && fold((unsigned char)*pattern) == fold((unsigned char)*name))) {
+            ++pattern;
+            ++name;
+        } else if(star) { pattern = star + 1; name = ++resume; }
+        else return false;
+    }
+    while(*pattern == '*') ++pattern;
+    return !*pattern;
+}
 static bool number(const char **text, unsigned limit, unsigned *value) {
     unsigned n = 0, digits = 0;
     while(**text >= '0' && **text <= '9') {
