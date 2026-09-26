@@ -1,16 +1,17 @@
-# K-UI V1.5 "Dáinsleif"
+# K-UI V1.5.1 "Dáinsleif"
 
 An independent Dreamcast environment built directly on upstream KallistiOS.
 
-**Version 1.5.0 is released.** Download the
-[1.5.0 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.5.0), then read
-[the installation guide](docs/release-v1.5.md) and
-[release notes](docs/release-v1.5-notes.md). Dáinsleif adds a crimson startup
-splash and native-GD Games launching without a title allowlist. DOA2 has
-confirmed playable gameplay; Evolution 2 now boots after the GETSCD fix but
-is severely slow. Compatibility remains title-dependent, and speed
-optimization is deferred. Existing boot CDs and FAT32/exFAT cards remain
-usable; no reformat is needed.
+**Version 1.5.1 is released.** Download the
+[1.5.1 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.5.1), then read
+[the installation guide](docs/release-v1.5.1.md) and
+[release notes](docs/release-v1.5.1-notes.md). This Dáinsleif point release
+adds steadier game loading, faster launches, silent CD-audio games, a
+button combination that returns to K-UI, box art with disc titles in three
+Games views, and Ogg menu music. Compatibility remains title-dependent and
+loading speed is bounded by the serial SD interface. Existing boot CDs and
+FAT32/exFAT cards remain usable; no reformat is needed. The
+[1.5.0 notes](docs/release-v1.5-notes.md) remain available.
 
 The current SD runtime adds **raw-track GDI capture, saved-file verification and
 controlled resume** to the independently booting hardware diagnostic. It stays
@@ -40,7 +41,7 @@ parent folder, defaulting to `/Games`, with title-based folders and GDI filename
 The hardware-proven acquisition engine remains unchanged.
 
 Use the existing bootstrap CD and merge the release package's `KUI` folder
-onto the SD card as described in the [installation guide](docs/release-v1.5.md).
+onto the SD card as described in the [installation guide](docs/release-v1.5.1.md).
 Update the runtime and Games payload together; optional original menu music
 is included.
 See [the current app acceptance round](docs/apps-round-five.md) and

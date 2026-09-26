@@ -45,7 +45,7 @@ def verify_assets(directory, release, commit):
             if name.endswith("-release.zip"):
                 require(record["kind"] == "release", "Refusing a diagnostic or candidate package")
                 for entry in ("KUI/runtime.kui", "KUI/apps/games/retail-boot.kui",
-                              "boot-cd/kui-v1.5.cdi", "START-HERE.md", "RELEASE-NOTES.md"):
+                              "boot-cd/kui-v1.5.1.cdi", "START-HERE.md", "RELEASE-NOTES.md"):
                     require(entry in archive.namelist(), "Incomplete release: " + entry)
             else:
                 for entry in ("source/kui-source.tar.gz", "source/kos-source.tar.gz", "LICENSE"):
@@ -59,7 +59,7 @@ def main():
     require(repository == "TPMJB/K-UI-NeXT" and os.environ["GITHUB_REF"] == "refs/heads/main",
             "Release publication requires the upstream main branch")
     release = release_metadata()
-    require(release["version"] == "1.5.0", "This promotion is explicitly scoped to 1.5.0")
+    require(release["version"] == "1.5.1", "This promotion is explicitly scoped to 1.5.1")
     tag = "v" + release["version"]
     message = subprocess.check_output(["git", "show", "-s", "--format=%B", "HEAD"],
                                       cwd=ROOT, text=True)
@@ -84,9 +84,9 @@ def main():
         directory = Path(temporary)
         gh("run", "download", run_id, "--repo", repository, "--name", artifact_name, "--dir", temporary)
         assets = verify_assets(directory, release, commit)
-        notes = (ROOT / "docs/release-v1.5-notes.md").read_text(encoding="utf-8")
-        notes = notes.replace("(release-v1.5.md)",
-                              f"(https://github.com/{repository}/blob/{tag}/docs/release-v1.5.md)")
+        notes = (ROOT / "docs/release-v1.5.1-notes.md").read_text(encoding="utf-8")
+        notes = notes.replace("(release-v1.5.1.md)",
+                              f"(https://github.com/{repository}/blob/{tag}/docs/release-v1.5.1.md)")
         notes += f"\nSource commit: `{commit}`. [Native build]({run['html_url']}).\n"
         notes_file = directory / "release-notes.md"
         notes_file.write_text(notes, encoding="utf-8")

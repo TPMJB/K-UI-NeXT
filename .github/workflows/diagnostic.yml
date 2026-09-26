@@ -38,7 +38,7 @@ jobs:
     # *-shell feature branches build through their PR, where GitHub permits
     # restoring the base branch's caches. Keep ordinary milestone push builds.
     if: >-
-      ${{ !(github.event_name == 'push' && github.ref_name == 'main' && contains(github.event.head_commit.message, 'Release: v1.5.0')) &&
+      ${{ !(github.event_name == 'push' && github.ref_name == 'main' && contains(github.event.head_commit.message, 'Release: v1.5.1')) &&
       (github.event_name != 'push' || !endsWith(github.ref_name, '-shell')) &&
       (github.event_name != 'pull_request' || endsWith(github.head_ref, '-shell') || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository) }}
     runs-on: ubuntu-24.04

@@ -51,9 +51,9 @@ def guide(source):
     text = (ROOT / "docs" / source).read_text()
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
-    text = text.replace("(release-v1.5.md)", "(START-HERE.md)")
+    text = text.replace("(release-v1.5.1.md)", "(START-HERE.md)")
     text = text.replace("(../resources/music/README.md)", "(MUSIC.md)")
-    text = text.replace("(release-v1.5-notes.md)", "(RELEASE-NOTES.md)")
+    text = text.replace("(release-v1.5.1-notes.md)", "(RELEASE-NOTES.md)")
     return text
 
 
@@ -164,8 +164,8 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
-    (dist / "START-HERE.md").write_text(guide("release-v1.5.md"), encoding="utf-8")
-    (dist / "RELEASE-NOTES.md").write_text(guide("release-v1.5-notes.md"), encoding="utf-8")
+    (dist / "START-HERE.md").write_text(guide("release-v1.5.1.md"), encoding="utf-8")
+    (dist / "RELEASE-NOTES.md").write_text(guide("release-v1.5.1-notes.md"), encoding="utf-8")
     for name in ("games-sd-benchmark", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
@@ -346,7 +346,7 @@ def main():
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, bundle_sd / name)
     (bundle / "boot-cd").mkdir()
-    shutil.copyfile(cdi, bundle / "boot-cd/kui-v1.5.cdi")
+    shutil.copyfile(cdi, bundle / "boot-cd/kui-v1.5.1.cdi")
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
     for name in ("START-HERE.md", "RELEASE-NOTES.md", "LICENSE", "THIRD_PARTY.md"):
