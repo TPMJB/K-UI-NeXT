@@ -2,7 +2,9 @@
 
 The Games app can now show box art, the real title of each game, and three
 ways of browsing. Everything here is menu code. The game launcher, the
-in-game reader and the pinned DOA2 behaviour are unchanged.
+in-game reader and the pinned DOA2 behaviour are unchanged. It ships in
+K-UI 1.5.1; on release candidate `cb508b2a4fe4` the owner reports "Box art
+works". Scan time per game has not been measured.
 
 ## Using it
 

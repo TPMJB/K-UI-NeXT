@@ -2,7 +2,16 @@
 
 Five owner-approved changes on top of the pinned pacing build
 (`baseline/doa2-pacing-2072b489c378`). The in-game read path is unchanged
-except for the CD-audio commands and the menu return below.
+except for the CD-audio commands and the menu return below. They ship in
+K-UI 1.5.1.
+
+## Result
+
+On release candidate `cb508b2a4fe4` the owner reports: "DOA2 launch is near
+instant now, which is incredible on SCIF", and "ABXY+Start actually does
+reboot, which saves me time". The CD-audio change has not yet been tried with
+a CD-audio game on the console. These are owner observations, not measured
+timings.
 
 ## What changed
 

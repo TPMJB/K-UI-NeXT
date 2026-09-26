@@ -67,12 +67,18 @@ Loading speed remains bounded by the serial SD interface.
 | --- | --- |
 | Still-screen read pacing, DOA2 | Owner: "This actually worked really well." Some longer loads between fights; the first roughly ten seconds of a fight remain laggy |
 | Still-screen read pacing, Evolution (first game) | Owner: mostly responsive; the few FMVs stutter |
-| Faster launches, silent CD audio, restart combination, box art | Release-candidate console test pending |
+| Faster launches, DOA2 | Owner: "DOA2 launch is near instant now, which is incredible on SCIF" |
+| A+B+X+Y+Start | Owner: "ABXY+Start actually does reboot, which saves me time" |
+| Box art | Owner: "Box art works" |
+| Silent CD audio | Not yet tried on the console; covered by host tests only |
 
 These are owner observations, not measured timings. The read-pacing
 observations come from build `2072b489c378`, whose reader this release
 carries unchanged except for the CD-audio and restart handling above. See the
 [pin record](https://github.com/TPMJB/K-UI-NeXT/blob/v1.5.1/docs/evidence/games-doa2-pacing-baseline-2026-09-26.md).
+The launch, restart and box art observations come from release candidate
+`cb508b2a4fe4`, whose code this release carries unchanged; only these notes
+differ.
 
 For rollback, the 1.5.0 release remains available, and the tested pacing
 build is preserved on branch `baseline/doa2-pacing-2072b489c378`. The earlier

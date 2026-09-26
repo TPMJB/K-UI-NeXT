@@ -1,8 +1,9 @@
 # DOA2 launch — SD latency comparison
 
-**Current candidate: faster launches.** Track maps from the allocation
+**Current release: 1.5.1, faster launches.** Track maps from the allocation
 table, no executable pre-read, half-second handoff screens, silent CD-audio
-commands and A+B+X+Y+Start restarting K-UI; see
+commands and A+B+X+Y+Start restarting K-UI. The owner reports DOA2 launch is
+"near instant now" and the restart works; see
 [the launch-speed test](games-launch-speed.md).
 
 **Current playable baseline: `2072b489c378`**, pinned at
