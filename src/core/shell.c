@@ -22,6 +22,7 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     snprintf(s->music_path,sizeof(s->music_path),"/Music");
     snprintf(s->games_path,sizeof(s->games_path),"/Games");
     s->games_view=KUI_GAMES_VIEW_SAVED;
+    snprintf(s->files_path,sizeof(s->files_path),"/");
     kui_destination_default(s->destination);
     memcpy(s->browse_path,s->destination,sizeof(s->browse_path));
 }
@@ -331,6 +332,292 @@ static enum kui_shell_action save_destination(struct kui_shell *s, const char *p
     s->destination_notice[0]=0;
     return KUI_SHELL_DEST_SAVE;
 }
+/* ---- File Manager ---- */
+#define FILES_ACTION_COUNT 7u
+static const struct kui_files_entry *files_entry(const struct kui_shell *s) {
+    return s->files_selected<s->files_listing.count?&s->files_listing.entries[s->files_selected]:NULL;
+}
+/* The selected row's card path, unless the row cannot be used. */
+static bool files_entry_path(const struct kui_shell *s,char out[KUI_FILES_PATH_CAP]) {
+    const struct kui_files_entry *e=files_entry(s);
+    return e && !e->disabled && kui_files_join(out,s->files_path,e->name);
+}
+static void files_say(struct kui_shell *s,bool error,const char *text) {
+    snprintf(s->files_notice,sizeof(s->files_notice),"%s",text);
+    s->files_notice_detail[0]=0;s->files_notice_error=error;
+}
+static void files_quiet(struct kui_shell *s) {s->files_notice[0]=s->files_notice_detail[0]=0;s->files_notice_error=false;}
+/* Asks for a page of the browser's folder, or the picker's. The anchor is
+ * copied before the page it may belong to is cleared. */
+static enum kui_shell_action list_files(struct kui_shell *s,bool picker,enum kui_files_seek seek,
+        const char *anchor,bool anchor_directory) {
+    struct kui_files_request *r=&s->files_request;
+    memset(r,0,sizeof(*r));
+    memcpy(r->path,picker?s->files_pick_path:s->files_path,sizeof(r->path));
+    r->path[sizeof(r->path)-1]=0;
+    r->folders_only=picker;
+    r->seek=KUI_FILES_SEEK_FIRST;
+    if(seek!=KUI_FILES_SEEK_FIRST && anchor && memchr(anchor,0,KUI_FILES_KEY_CAP) && anchor[0]) {
+        memcpy(r->anchor,anchor,strlen(anchor)+1);
+        r->anchor_directory=anchor_directory;r->seek=seek;
+    }
+    struct kui_files_page *page=picker?&s->files_pick:&s->files_listing;
+    memset(page,0,sizeof(*page));
+    memcpy(page->path,r->path,sizeof(page->path));
+    page->folders_only=picker;
+    snprintf(page->message,sizeof(page->message),"Reading folder...");
+    if(picker) s->files_pick_selected=0; else s->files_selected=0;
+    return KUI_SHELL_FILES_LIST;
+}
+static enum kui_shell_action files_page_turn(struct kui_shell *s,bool picker,bool forward) {
+    const struct kui_files_page *l=picker?&s->files_pick:&s->files_listing;
+    if(forward) {
+        if(!l->count || l->before+l->count>=l->total) return KUI_SHELL_NONE;
+        return list_files(s,picker,KUI_FILES_SEEK_NEXT,l->last,l->last_directory);
+    }
+    if(!l->before) return KUI_SHELL_NONE;
+    if(l->before<=KUI_FILES_ROWS || !l->count) return list_files(s,picker,KUI_FILES_SEEK_FIRST,NULL,false);
+    return list_files(s,picker,KUI_FILES_SEEK_PREVIOUS,l->first,l->first_directory);
+}
+/* Lists the browser's folder again from its current first row. */
+static enum kui_shell_action files_refresh(struct kui_shell *s) {
+    const struct kui_files_page *l=&s->files_listing;
+    return l->count?list_files(s,false,KUI_FILES_SEEK_AT,l->first,l->first_directory):
+        list_files(s,false,KUI_FILES_SEEK_FIRST,NULL,false);
+}
+static void files_begin(struct kui_shell *s,enum kui_files_op op,const char *source) {
+    memset(&s->files_job,0,sizeof(s->files_job));
+    s->files_job.op=op;
+    memcpy(s->files_job.source,source,strlen(source)+1);
+}
+/* Checks the job on its own page: details, or a confirmation that shows
+ * what the check found. */
+static enum kui_shell_action files_check(struct kui_shell *s) {
+    memset(&s->files_preview,0,sizeof(s->files_preview));
+    snprintf(s->files_preview.status.message,sizeof(s->files_preview.status.message),"Checking...");
+    s->files_job.name[0]=0;
+    s->page=s->files_job.op==KUI_FILES_OP_DETAILS?KUI_SHELL_FILES_INFO:KUI_SHELL_FILES_CONFIRM;
+    return KUI_SHELL_FILES_CHECK;
+}
+static enum kui_shell_action files_keyboard(struct kui_shell *s,enum kui_files_op op) {
+    char path[KUI_FILES_PATH_CAP];
+    if(op==KUI_FILES_OP_RENAME) {
+        const struct kui_files_entry *e=files_entry(s);
+        if(!e || !files_entry_path(s,path)) return KUI_SHELL_NONE;
+        files_begin(s,op,path);
+        memcpy(s->keyboard,e->name,strlen(e->name)+1);
+    } else {
+        files_begin(s,op,s->files_path);
+        s->keyboard[0]=0;
+    }
+    memcpy(s->keyboard_original,s->keyboard,sizeof(s->keyboard_original));
+    s->keyboard_selected=0;s->keyboard_upper=false;s->destination_notice[0]=0;
+    s->files_keyboard=true;s->page=KUI_SHELL_KEYBOARD;
+    return KUI_SHELL_NONE;
+}
+static enum kui_shell_action files_name_done(struct kui_shell *s) {
+    if(!s->keyboard[0]) {kui_shell_destination_error(s,"Type a name first.");return KUI_SHELL_NONE;}
+    if(!kui_destination_name_valid(s->keyboard)) {
+        kui_shell_destination_error(s,"Use a name without / that does not end in a space or dot.");
+        return KUI_SHELL_NONE;
+    }
+    memcpy(s->files_job.name,s->keyboard,strlen(s->keyboard)+1);
+    const struct kui_files_entry *e=files_entry(s);
+    bool directory=s->files_job.op==KUI_FILES_OP_MKDIR || (e && e->directory);
+    bool rename=s->files_job.op==KUI_FILES_OP_RENAME;
+    s->files_keyboard=false;s->page=KUI_SHELL_FILES;
+    /* The folder is listed again from the new name, which is selected. */
+    list_files(s,false,KUI_FILES_SEEK_AT,s->files_job.name,directory);
+    files_say(s,false,rename?"Renaming...":"Creating folder...");
+    s->files_running=true;
+    return KUI_SHELL_FILES_RUN;
+}
+static enum kui_shell_action files_open(struct kui_shell *s) {
+    const struct kui_files_entry *e=files_entry(s);
+    char path[KUI_FILES_PATH_CAP];
+    if(!e) return KUI_SHELL_NONE;
+    if(!files_entry_path(s,path)) {
+        s->page=KUI_SHELL_FILES;
+        files_say(s,true,"K-UI cannot use this name; rename it on a computer.");
+        return KUI_SHELL_NONE;
+    }
+    switch(kui_files_kind(e->name,e->directory)) {
+    case KUI_FILES_KIND_FOLDER:
+        s->page=KUI_SHELL_FILES;files_quiet(s);
+        memcpy(s->files_path,path,sizeof(s->files_path));
+        return list_files(s,false,KUI_FILES_SEEK_FIRST,NULL,false);
+    case KUI_FILES_KIND_GDI:
+        memcpy(s->games_selected_path,path,sizeof(s->games_selected_path));
+        s->games_from_files=true;
+        return inspect_game(s);
+    case KUI_FILES_KIND_AUDIO:
+        s->page=KUI_SHELL_FILES;
+        if(strlen(path)>=sizeof(s->music_selected_path)) {
+            files_say(s,true,"This path is too long for the music player.");
+            return KUI_SHELL_NONE;
+        }
+        memcpy(s->music_selected_path,path,strlen(path)+1);
+        files_say(s,false,"Loading music...");
+        return KUI_SHELL_MUSIC_PLAY;
+    case KUI_FILES_KIND_PICTURE:
+        memset(&s->files_picture,0,sizeof(s->files_picture));
+        memcpy(s->files_picture.path,path,sizeof(s->files_picture.path));
+        s->files_picture.format="";
+        snprintf(s->files_picture.message,sizeof(s->files_picture.message),"Loading picture...");
+        s->page=KUI_SHELL_FILES_VIEW;
+        return KUI_SHELL_FILES_PICTURE;
+    default:
+        files_begin(s,KUI_FILES_OP_DETAILS,path);
+        return files_check(s);
+    }
+}
+/* Actions menu: Open, Copy, Move, Rename, Delete, Details, New folder. */
+static enum kui_shell_action files_action(struct kui_shell *s) {
+    unsigned item=s->files_action_selected;
+    if(item==6) return files_keyboard(s,KUI_FILES_OP_MKDIR);
+    char path[KUI_FILES_PATH_CAP];
+    if(!files_entry_path(s,path)) {
+        files_say(s,true,"K-UI cannot use this name; rename it on a computer.");
+        return KUI_SHELL_NONE;
+    }
+    if((item==2 || item==3 || item==4) && kui_files_protected(path)) {
+        files_say(s,true,"K-UI needs this to start; it cannot be moved, renamed or deleted.");
+        return KUI_SHELL_NONE;
+    }
+    files_quiet(s);
+    switch(item) {
+    case 0: return files_open(s);
+    case 1: case 2:
+        files_begin(s,item==1?KUI_FILES_OP_COPY:KUI_FILES_OP_MOVE,path);
+        memcpy(s->files_pick_path,s->files_path,sizeof(s->files_pick_path));
+        s->page=KUI_SHELL_FILES_PICK;
+        return list_files(s,true,KUI_FILES_SEEK_FIRST,NULL,false);
+    case 3: return files_keyboard(s,KUI_FILES_OP_RENAME);
+    case 4: files_begin(s,KUI_FILES_OP_DELETE,path); return files_check(s);
+    default: files_begin(s,KUI_FILES_OP_DETAILS,path); return files_check(s);
+    }
+}
+static enum kui_shell_action files_input(struct kui_shell *s,unsigned buttons) {
+    const struct kui_files_page *l=&s->files_listing;
+    unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+    if(buttons&KUI_SHELL_START) {s->page=KUI_SHELL_HOME;return KUI_SHELL_NONE;}
+    if(buttons&KUI_SHELL_R) {files_quiet(s);return files_refresh(s);}
+    if(buttons&KUI_SHELL_Y) return files_keyboard(s,KUI_FILES_OP_MKDIR);
+    if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)
+        return files_page_turn(s,false,horizontal==KUI_SHELL_RIGHT);
+    unsigned before=s->files_selected;
+    s->files_selected=move_count(s->files_selected,buttons,l->count);
+    if(s->files_selected!=before) s->files_notice_detail[0]=0;
+    if((buttons&KUI_SHELL_X) && s->files_selected<l->count) {
+        s->files_action_selected=0;files_quiet(s);s->page=KUI_SHELL_FILES_ACTIONS;
+        return KUI_SHELL_NONE;
+    }
+    if(buttons&KUI_SHELL_A) return files_open(s);
+    return KUI_SHELL_NONE;
+}
+static enum kui_shell_action files_pick_input(struct kui_shell *s,unsigned buttons) {
+    const struct kui_files_page *l=&s->files_pick;
+    unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+    if(buttons&KUI_SHELL_START) {s->page=KUI_SHELL_FILES;return KUI_SHELL_NONE;}
+    if(buttons&KUI_SHELL_Y) {
+        memcpy(s->files_job.target,s->files_pick_path,sizeof(s->files_job.target));
+        return files_check(s);
+    }
+    if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)
+        return files_page_turn(s,true,horizontal==KUI_SHELL_RIGHT);
+    s->files_pick_selected=move_count(s->files_pick_selected,buttons,l->count);
+    if((buttons&KUI_SHELL_A) && s->files_pick_selected<l->count) {
+        const struct kui_files_entry *e=&l->entries[s->files_pick_selected];
+        char child[KUI_FILES_PATH_CAP];
+        if(e->disabled || !kui_files_join(child,s->files_pick_path,e->name)) {
+            snprintf(s->files_pick.message,sizeof(s->files_pick.message),"%s",
+                kui_files_join(child,s->files_pick_path,e->name) && !strcmp(child,s->files_job.source)?
+                "This is the folder being copied or moved.":"This folder cannot be opened.");
+            return KUI_SHELL_NONE;
+        }
+        memcpy(s->files_pick_path,child,sizeof(s->files_pick_path));
+        return list_files(s,true,KUI_FILES_SEEK_FIRST,NULL,false);
+    }
+    return KUI_SHELL_NONE;
+}
+bool kui_shell_files_ready(const struct kui_shell *s) {
+    if(!s) return false;
+    const struct kui_files_preview *p=&s->files_preview;
+    enum kui_files_op op=s->files_job.op;
+    bool moving=op==KUI_FILES_OP_COPY || op==KUI_FILES_OP_MOVE;
+    return (moving || op==KUI_FILES_OP_DELETE) && p->ready && p->status.passed && p->job.op==op &&
+        memchr(p->job.source,0,sizeof(p->job.source)) && !strcmp(p->job.source,s->files_job.source) &&
+        kui_files_path_valid(s->files_job.source) &&
+        (!moving || (memchr(p->job.target,0,sizeof(p->job.target)) && !strcmp(p->job.target,s->files_job.target) &&
+                     memchr(s->files_job.name,0,sizeof(s->files_job.name)) &&
+                     kui_destination_name_valid(s->files_job.name)));
+}
+void kui_shell_set_files_listing(struct kui_shell *s,const struct kui_files_page *page) {
+    if(!s || !page || !memchr(page->path,0,sizeof(page->path))) return;
+    bool picker=page->folders_only;
+    if(picker?(s->page!=KUI_SHELL_FILES_PICK || strcmp(page->path,s->files_pick_path)):
+              strcmp(page->path,s->files_path)) return;
+    struct kui_files_page *l=picker?&s->files_pick:&s->files_listing;
+    *l=*page;
+    l->message[sizeof(l->message)-1]=0;
+    if(l->count>KUI_FILES_ROWS) l->count=KUI_FILES_ROWS;
+    if(l->before>l->total) l->before=l->total;
+    if(!l->count || !memchr(l->first,0,sizeof(l->first)) || !memchr(l->last,0,sizeof(l->last))) {
+        l->first[0]=l->last[0]=0;
+        if(l->count) l->count=0;
+    }
+    bool moving=s->files_job.op==KUI_FILES_OP_COPY || s->files_job.op==KUI_FILES_OP_MOVE;
+    for(unsigned i=0;i<l->count;i++) {
+        struct kui_files_entry *e=&l->entries[i];
+        char path[KUI_FILES_PATH_CAP];
+        if(!memchr(e->name,0,sizeof(e->name))) {
+            snprintf(e->name,sizeof(e->name),"[Name too long]");e->disabled=true;
+        }
+        if(!e->disabled && !kui_files_join(path,l->path,e->name)) e->disabled=true;
+        /* A copied or moved folder cannot be chosen as its own destination. */
+        if(picker && moving && !e->disabled && !strcmp(path,s->files_job.source)) e->disabled=true;
+    }
+    unsigned *selected=picker?&s->files_pick_selected:&s->files_selected;
+    if(*selected>=l->count) *selected=0;
+}
+void kui_shell_set_files_preview(struct kui_shell *s,const struct kui_files_preview *preview) {
+    if(!s || !preview) return;
+    enum kui_files_op op=s->files_job.op;
+    bool moving=op==KUI_FILES_OP_COPY || op==KUI_FILES_OP_MOVE;
+    if(preview->job.op!=op || s->page!=(op==KUI_FILES_OP_DETAILS?KUI_SHELL_FILES_INFO:KUI_SHELL_FILES_CONFIRM) ||
+       !memchr(preview->job.source,0,sizeof(preview->job.source)) || strcmp(preview->job.source,s->files_job.source) ||
+       (moving && (!memchr(preview->job.target,0,sizeof(preview->job.target)) ||
+                   strcmp(preview->job.target,s->files_job.target)))) return;
+    s->files_preview=*preview;
+    struct kui_app_status *st=&s->files_preview.status;
+    st->message[sizeof(st->message)-1]=0;
+    if(st->line_count>KUI_APP_LINES) st->line_count=KUI_APP_LINES;
+    for(unsigned i=0;i<st->line_count;i++) st->lines[i][KUI_APP_LINE_CAP-1]=0;
+    s->files_preview.job.name[sizeof(s->files_preview.job.name)-1]=0;
+    if(moving) {
+        const char *name=s->files_preview.job.name;
+        if(s->files_preview.ready && kui_destination_name_valid(name)) memcpy(s->files_job.name,name,strlen(name)+1);
+        else s->files_preview.ready=false;
+    }
+}
+void kui_shell_set_files_status(struct kui_shell *s,const struct kui_app_status *status) {
+    if(!s || !status) return;
+    char message[sizeof(status->message)];
+    memcpy(message,status->message,sizeof(message));message[sizeof(message)-1]=0;
+    files_say(s,!status->passed && !status->stopped,message);
+    s->files_running=false;
+    if(status->line_count && status->line_count<=KUI_APP_LINES) {
+        memcpy(s->files_notice_detail,status->lines[0],sizeof(s->files_notice_detail));
+        s->files_notice_detail[sizeof(s->files_notice_detail)-1]=0;
+    }
+}
+void kui_shell_set_files_picture(struct kui_shell *s,const struct kui_files_picture *picture) {
+    if(!s || !picture || s->page!=KUI_SHELL_FILES_VIEW || !memchr(picture->path,0,sizeof(picture->path)) ||
+       strcmp(picture->path,s->files_picture.path)) return;
+    s->files_picture=*picture;
+    s->files_picture.message[sizeof(s->files_picture.message)-1]=0;
+    if(!s->files_picture.format) s->files_picture.format="";
+}
 static const char keyboard_keys[]="qwertyuiopasdfghjkl/zxcvbnm-_.0123456789";
 const char *kui_shell_key_label(unsigned key, bool uppercase) {
     static char character[2];
@@ -373,9 +660,9 @@ static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons
     s->keyboard_selected=keyboard_move(s->keyboard_selected,buttons);
     if(buttons&KUI_SHELL_X) keyboard_backspace(s);
     else if(buttons&KUI_SHELL_Y) s->keyboard_upper=!s->keyboard_upper;
-    else if(buttons&KUI_SHELL_START) return save_destination(s,s->keyboard);
+    else if(buttons&KUI_SHELL_START) return s->files_keyboard?files_name_done(s):save_destination(s,s->keyboard);
     else if(buttons&KUI_SHELL_A) {
-        if(s->keyboard_selected==42) return save_destination(s,s->keyboard);
+        if(s->keyboard_selected==42) return s->files_keyboard?files_name_done(s):save_destination(s,s->keyboard);
         if(s->keyboard_selected==41) keyboard_backspace(s);
         else {
             size_t n=strlen(s->keyboard);
@@ -383,7 +670,7 @@ static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons
                 s->keyboard[n]=s->keyboard_selected==40?' ':
                     *kui_shell_key_label(s->keyboard_selected,s->keyboard_upper);
                 s->keyboard[n+1]=0; s->destination_notice[0]=0;
-            } else kui_shell_destination_error(s,"This folder path is too long.");
+            } else kui_shell_destination_error(s,s->files_keyboard?"This name is too long.":"This folder path is too long.");
         }
     }
     return KUI_SHELL_NONE;
@@ -471,8 +758,38 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page==KUI_SHELL_GAMES_PROBE_CONFIRM) {
             s->page=KUI_SHELL_GAMES_ADVANCED;return KUI_SHELL_NONE;
         }
+        if(s->page==KUI_SHELL_GAMES_DETAIL && s->games_from_files) {
+            s->games_from_files=false;s->page=KUI_SHELL_FILES;return KUI_SHELL_NONE;
+        }
         if(s->page==KUI_SHELL_GAMES_DETAIL || s->page==KUI_SHELL_GAMES_ADVANCED) {
             s->page=KUI_SHELL_GAMES;return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_FILES_VIEW || s->page==KUI_SHELL_FILES_INFO || s->page==KUI_SHELL_FILES_ACTIONS) {
+            s->page=KUI_SHELL_FILES;return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_FILES_CONFIRM) {
+            s->page=s->files_job.op==KUI_FILES_OP_COPY || s->files_job.op==KUI_FILES_OP_MOVE?
+                KUI_SHELL_FILES_PICK:KUI_SHELL_FILES;
+            return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_FILES_PICK) {
+            char parent[KUI_FILES_PATH_CAP];
+            if(kui_files_parent(parent,s->files_pick_path) && strcmp(parent,s->files_pick_path)) {
+                memcpy(s->files_pick_path,parent,sizeof(s->files_pick_path));
+                return list_files(s,true,KUI_FILES_SEEK_FIRST,NULL,false);
+            }
+            s->page=KUI_SHELL_FILES_ACTIONS;return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_FILES) {
+            char parent[KUI_FILES_PATH_CAP],left[KUI_FILES_NAME_CAP];
+            if(kui_files_parent(parent,s->files_path) && strcmp(parent,s->files_path)) {
+                /* The parent is listed from the folder just left. */
+                snprintf(left,sizeof(left),"%s",kui_files_leaf(s->files_path));
+                memcpy(s->files_path,parent,sizeof(s->files_path));
+                files_quiet(s);
+                return list_files(s,false,KUI_FILES_SEEK_AT,left,true);
+            }
+            s->page=KUI_SHELL_HOME;return KUI_SHELL_NONE;
         }
         if(s->page==KUI_SHELL_GAMES) {
             char parent[KUI_DEST_ROOT_CAP];
@@ -490,6 +807,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 return list_music(s,true);
             }
             s->page=KUI_SHELL_HOME; return KUI_SHELL_NONE;
+        }
+        if(s->page == KUI_SHELL_KEYBOARD && s->files_keyboard) {
+            s->files_keyboard=false;s->page=KUI_SHELL_FILES;s->destination_notice[0]=0;
+            return KUI_SHELL_NONE;
         }
         if(s->page == KUI_SHELL_KEYBOARD) {
             snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->keyboard_original);
@@ -529,7 +850,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
-        s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM;
+        s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_FILES_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
         unsigned triggers=buttons & (KUI_SHELL_L|KUI_SHELL_R);
         if(triggers==KUI_SHELL_L) return KUI_SHELL_MUSIC_PREVIOUS;
@@ -599,11 +920,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     switch(s->page) {
     case KUI_SHELL_HOME:
         if(buttons & KUI_SHELL_Y) return KUI_SHELL_MUSIC_CYCLE;
-        s->home_selected = move_count(s->home_selected, buttons,9);
+        s->home_selected = move_count(s->home_selected, buttons,10);
         if(buttons & KUI_SHELL_A) {
             static const enum kui_shell_page pages[]={KUI_SHELL_RIPPER,KUI_SHELL_VMU,
                 KUI_SHELL_MEMORY,KUI_SHELL_NETWORK,KUI_SHELL_SETTINGS,KUI_SHELL_DIAGNOSTICS,
-                KUI_SHELL_GD_PLAY,KUI_SHELL_MUSIC,KUI_SHELL_GAMES};
+                KUI_SHELL_GD_PLAY,KUI_SHELL_MUSIC,KUI_SHELL_GAMES,KUI_SHELL_FILES};
             s->page=pages[s->home_selected];
             if(s->page == KUI_SHELL_SETTINGS) {
                 s->system_draft=s->system_saved;
@@ -613,7 +934,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->page==KUI_SHELL_MUSIC) return list_music(s,true);
             if(s->page==KUI_SHELL_GAMES) {
                 snprintf(s->games_path,sizeof(s->games_path),"/Games");
+                s->games_from_files=false;
                 return list_games(s,true);
+            }
+            if(s->page==KUI_SHELL_FILES) {
+                files_quiet(s);
+                return list_files(s,false,KUI_FILES_SEEK_FIRST,NULL,false);
             }
         }
         break;
@@ -699,6 +1025,29 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_GAMES_RETAIL_CONFIRM:
         if((buttons&KUI_SHELL_A) && kui_shell_games_retail_ready(s))
             return KUI_SHELL_GAMES_RETAIL;
+        break;
+    case KUI_SHELL_FILES:
+        return files_input(s,buttons);
+    case KUI_SHELL_FILES_ACTIONS:
+        s->files_action_selected=move_count(s->files_action_selected,buttons,FILES_ACTION_COUNT);
+        if(buttons&KUI_SHELL_A) return files_action(s);
+        break;
+    case KUI_SHELL_FILES_PICK:
+        return files_pick_input(s,buttons);
+    case KUI_SHELL_FILES_CONFIRM:
+        if((buttons&KUI_SHELL_A) && kui_shell_files_ready(s)) {
+            const struct kui_files_page *l=&s->files_listing;
+            enum kui_files_op op=s->files_job.op;
+            s->page=KUI_SHELL_FILES;
+            /* The browser's folder is listed again in place afterwards. */
+            if(l->count) list_files(s,false,KUI_FILES_SEEK_AT,l->first,l->first_directory);
+            else list_files(s,false,KUI_FILES_SEEK_FIRST,NULL,false);
+            files_say(s,false,op==KUI_FILES_OP_COPY?"Copying...":op==KUI_FILES_OP_MOVE?"Moving...":"Deleting...");
+            s->files_running=true;
+            return KUI_SHELL_FILES_RUN;
+        }
+        break;
+    case KUI_SHELL_FILES_INFO: case KUI_SHELL_FILES_VIEW:
         break;
     case KUI_SHELL_RIPPER:
         if(buttons & KUI_SHELL_A) s->confirm_new = true;

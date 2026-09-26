@@ -24,6 +24,7 @@ RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
+RUNTIME_OBJECTS += build/dc/src/core/files_path.o
 RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
 RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/retail_image.o

@@ -14,7 +14,7 @@ FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 .PHONY: test test-recovery test-images deps diagnostic clean
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
-test: build/test-pvr-texture build/test-game-cover build/test-cover-image
+test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
@@ -24,6 +24,7 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-pvr-texture
 	./build/test-game-cover
 	./build/test-cover-image
+	./build/test-files
 	./build/test-loader-probe build/loader-probe.dat
 	./build/test-loader-sd
 	./build/test-resident-image
@@ -211,17 +212,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+build/test-shell: src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
+build/render-shell: src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/destination.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -267,12 +268,13 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+test-images: build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
 	python3 tests/test_games_retail.py
 	python3 tests/test_games_image_probe.py
 	python3 tests/test_loader_probe_images.py
 	python3 tests/test_games_images.py
 	python3 tests/test_games_covers_images.py
+	python3 tests/test_files_images.py
 	python3 tests/test_salvage_images.py
 	python3 tests/test_maintenance_images.py
 	python3 tests/test_recovery_scan_images.py
@@ -463,6 +465,15 @@ build/games-image: tests/games_image.c $(GAMES) $(CORE) $(FATFS) include/kui/gam
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES) $(CORE) $(FATFS) tests/games_image.c $(GAMES_WRAP) -o $@
 
+FILES = src/apps/files.c src/apps/files_picture.c src/core/files_path.c src/core/destination.c src/core/storage_probe.c \
+        src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c
+FILES_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_write,--wrap=f_read
+build/test-files: tests/test_files.c src/core/files_path.c src/core/destination.c src/core/data.c include/kui/files.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/files_path.c src/core/destination.c src/core/data.c tests/test_files.c -o $@
+build/files-image: tests/files_image.c $(FILES) $(CORE) $(FATFS) include/kui/files.h include/kui/game_cover.h include/kui/cover_image.h include/kui/pvr_texture.h tests/fixtures/cover_images.h third_party/stb/stb_image.h config/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(FILES) $(CORE) $(FATFS) tests/files_image.c $(FILES_WRAP) -lm -o $@
 build/games-covers-image: tests/games_covers_image.c $(GAMES_COVERS) $(CORE) $(FATFS) include/kui/games_covers.h include/kui/games.h include/kui/game_cover.h include/kui/pvr_texture.h include/kui/cover_image.h third_party/stb/stb_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(CORE) $(FATFS) tests/games_covers_image.c $(GAMES_COVERS_WRAP) -lm -o $@

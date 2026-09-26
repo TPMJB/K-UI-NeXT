@@ -11,6 +11,7 @@
 #include "kui/cd_audio.h"
 #include "kui/games.h"
 #include "kui/games_covers.h"
+#include "kui/files.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -33,7 +34,9 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_VMU_RESTORE, KUI_SHELL_CRC_SCAN, KUI_SHELL_VMU_ACTIONS, KUI_SHELL_SYSTEM_TOOLS, KUI_SHELL_SALVAGE, KUI_SHELL_CD_AUDIO,
     KUI_SHELL_GAMES, KUI_SHELL_GAMES_DETAIL, KUI_SHELL_GAMES_ADVANCED,
     KUI_SHELL_GAMES_PROBE_CONFIRM, KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM,
-    KUI_SHELL_GAMES_RETAIL_CONFIRM };
+    KUI_SHELL_GAMES_RETAIL_CONFIRM,
+    KUI_SHELL_FILES, KUI_SHELL_FILES_ACTIONS, KUI_SHELL_FILES_PICK,
+    KUI_SHELL_FILES_CONFIRM, KUI_SHELL_FILES_INFO, KUI_SHELL_FILES_VIEW };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -56,7 +59,8 @@ enum kui_shell_action {
     KUI_SHELL_SALVAGE_NEW, KUI_SHELL_SALVAGE_RESUME, KUI_SHELL_SALVAGE_RECOVER,
     KUI_SHELL_CD_LIST, KUI_SHELL_CD_PLAY, KUI_SHELL_CD_PAUSE, KUI_SHELL_CD_RESUME, KUI_SHELL_CD_STOP,
     KUI_SHELL_GAMES_LIST, KUI_SHELL_GAMES_INSPECT, KUI_SHELL_GAMES_PROBE,
-    KUI_SHELL_GAMES_IMAGE_PROBE, KUI_SHELL_GAMES_RETAIL, KUI_SHELL_GAMES_SCAN
+    KUI_SHELL_GAMES_IMAGE_PROBE, KUI_SHELL_GAMES_RETAIL, KUI_SHELL_GAMES_SCAN,
+    KUI_SHELL_FILES_LIST, KUI_SHELL_FILES_CHECK, KUI_SHELL_FILES_RUN, KUI_SHELL_FILES_PICTURE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -105,6 +109,24 @@ struct kui_shell {
     unsigned advanced_selected;
     enum kui_shell_page settings_return;
     bool keyboard_upper, browse_for_scan;
+    /* File Manager. files_request is the next listing main hands to the
+     * worker: the browser's folder, or the picker's (folders_only). A job
+     * is checked (FILES_CHECK) before it is confirmed and run (FILES_RUN);
+     * the run is followed by files_request, which lists the folder again. */
+    char files_path[KUI_FILES_PATH_CAP], files_pick_path[KUI_FILES_PATH_CAP];
+    struct kui_files_page files_listing, files_pick;
+    struct kui_files_request files_request;
+    struct kui_files_job files_job;
+    struct kui_files_preview files_preview;
+    struct kui_files_picture files_picture;
+    unsigned files_selected, files_pick_selected, files_action_selected;
+    char files_notice[128], files_notice_detail[KUI_APP_LINE_CAP];
+    /* The keyboard types a File Manager name; Games details were opened
+     * from the File Manager, so B returns there. */
+    bool files_keyboard, files_notice_error, games_from_files;
+    /* A copy, move, delete, rename or new folder runs until its status is
+     * installed; the browser shows its progress meanwhile. */
+    bool files_running;
 };
 void kui_shell_init(struct kui_shell *shell, const struct kui_settings *settings);
 /* Main owns the reducer. Pass new button edges; a held B must also be included
@@ -150,6 +172,15 @@ bool kui_shell_games_image_ready(const struct kui_shell *shell);
 unsigned kui_shell_games_view(const struct kui_shell *shell);
 /* Exact initial test profile only; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
+/* File Manager results. A listing is kept only for the folder it was asked
+ * for; a check only for the job and page that asked; a picture only while
+ * its view is open. A run's status becomes the browser's notice. */
+void kui_shell_set_files_listing(struct kui_shell *shell, const struct kui_files_page *page);
+void kui_shell_set_files_preview(struct kui_shell *shell, const struct kui_files_preview *preview);
+void kui_shell_set_files_status(struct kui_shell *shell, const struct kui_app_status *status);
+void kui_shell_set_files_picture(struct kui_shell *shell, const struct kui_files_picture *picture);
+/* The job may be confirmed: its check succeeded and still matches. */
+bool kui_shell_files_ready(const struct kui_shell *shell);
 /* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
  * DEST_SAVE reads browse_path. Main owns the generation check before installing
  * worker results; these functions themselves perform no filesystem I/O. */
@@ -194,6 +225,9 @@ struct kui_shell_view {
      * detail says cover; NULL draws placeholders. */
     const uint16_t (*game_covers)[KUI_COVER_PIXELS];
     const uint16_t *game_detail_cover;
+    /* The File Manager's picture, KUI_FILES_PICTURE_EDGE square; drawn only
+     * while shell->files_picture says it loaded. */
+    const uint16_t *files_picture;
 };
 /* Estimate only the current moving phase after a 2s warmup; do not imply the
  * later verification duration. A stalled (>3s old) rate is not an estimate. */

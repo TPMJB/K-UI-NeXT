@@ -139,8 +139,16 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES ? (kui_shell_games_view(s)==KUI_GAMES_VIEW_LIST?
             "A Open   Y View   LEFT/RIGHT Page   START More":"A Open   Y View   D-pad Move   START More") :
         s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_retail_ready(s)?
-            "A Launch   X Inspect   B Games":kui_shell_games_image_ready(s)?
-            "Y Read test   X Inspect   B Games":"X Inspect again   B Games") :
+            (s->games_from_files?"A Launch   X Inspect   B Files":"A Launch   X Inspect   B Games"):
+            kui_shell_games_image_ready(s)?
+            (s->games_from_files?"Y Read test   X Inspect   B Files":"Y Read test   X Inspect   B Games"):
+            s->games_from_files?"X Inspect again   B Files":"X Inspect again   B Games") :
+        s->page==KUI_SHELL_FILES ? "B Up   START Home   LEFT/RIGHT Page" :
+        s->page==KUI_SHELL_FILES_ACTIONS ? "D-pad Select   A Choose   B Files" :
+        s->page==KUI_SHELL_FILES_PICK ? "B Up   START Cancel   LEFT/RIGHT Page" :
+        s->page==KUI_SHELL_FILES_CONFIRM ? (kui_shell_files_ready(s)?(s->files_job.op==KUI_FILES_OP_COPY?
+            "A Copy   B Cancel":s->files_job.op==KUI_FILES_OP_MOVE?"A Move   B Cancel":"A Delete   B Cancel"):"B Back") :
+        s->page==KUI_SHELL_FILES_INFO || s->page==KUI_SHELL_FILES_VIEW ? "B Files" :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
@@ -150,7 +158,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
-    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM)
+    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM && s->page!=KUI_SHELL_FILES_CONFIRM)
         label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
@@ -170,6 +178,11 @@ static void utility_icon(struct paint *p,unsigned app,unsigned x,unsigned y) {
         box(p,x+30,y+61,30,8,CYAN);box(p,x+41,y+50,8,30,CYAN);
         box(p,x+80,y+53,10,10,PINK);box(p,x+94,y+68,10,10,PINK);
         box(p,x+61,y+65,8,4,WHITE);
+    } else if(app==9) {
+        box(p,x+12,y+22,40,12,EDGE);panel(p,x+12,y+30,104,78,EDGE);
+        panel(p,x+26,y+14,64,62,WHITE);
+        box(p,x+36,y+26,44,4,EDGE);box(p,x+36,y+36,36,4,EDGE);box(p,x+36,y+46,40,4,EDGE);
+        panel(p,x+8,y+52,112,62,CYAN);box(p,x+22,y+96,26,6,PINK);
     } else if(app==7) {
         box(p,x+36,y+32,8,62,CYAN);box(p,x+88,y+20,8,62,PINK);
         box(p,x+40,y+28,52,8,CYAN);box(p,x+40,y+20,52,8,PINK);
@@ -192,6 +205,9 @@ static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned 
             box(p,x+5+i*6,y,2,24,CYAN);box(p,x,y+5+i*6,24,2,CYAN);
         }
         box(p,x+4,y+4,16,16,EDGE);box(p,x+7,y+7,10,10,PANEL);
+    } else if(app==9) {
+        box(p,x+1,y+4,10,4,CYAN);panel(p,x,y+7,24,16,CYAN);
+        box(p,x+4,y+12,16,2,NAVY);box(p,x+4,y+16,10,2,NAVY);box(p,x+17,y+16,3,3,PINK);
     } else if(app==8) {
         panel(p,x,y+6,24,16,CYAN);box(p,x+3,y+12,9,3,NAVY);
         box(p,x+6,y+9,3,9,NAVY);box(p,x+16,y+9,3,3,PINK);box(p,x+19,y+14,3,3,PINK);
@@ -207,10 +223,10 @@ static void small_utility_icon(struct paint *p,unsigned app,unsigned x,unsigned 
     }
 }
 static void home(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
-    static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics","GD Play","Music Player","Games"};
-    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics","Disc boot","Music","SD game library"};
-    static const unsigned icons[]={0,2,2,2,1,2,0,2,2};
-    static const char *details[9][3]={
+    static const char *names[]={"Disc Ripper","VMU Manager","Memory Test","Network Test","Settings","Diagnostics","GD Play","Music Player","Games","File Manager"};
+    static const char *category[]={"Disc tools","Save files","System tools","Connectivity","System preferences","Diagnostics","Disc boot","Music","SD game library","SD card files"};
+    static const unsigned icons[]={0,2,2,2,1,2,0,2,2,2};
+    static const char *details[10][3]={
         {"Capture discs, check CRCs and", "resume interrupted dumps.", "Verify saved files when needed."},
         {"Browse, copy or delete saves.","Back up to SD, then restore", "checked backups to a free name."},
         {"Check available application RAM", "with data patterns and report", "any mismatches found."},
@@ -219,24 +235,25 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         {"Inspect the disc and SD card.", "Run probes, review messages", "and save a diagnostic report."},
         {"Exit K-UI and boot the disc", "through the console BIOS.", "Console region rules still apply."},
         {"Play WAV or Ogg music from SD.", "Listen to audio CD tracks", "or keep music in the background."},
-        {"Launch native GD images from SD.", "Browse your game library.", "V1.5: compatibility varies."}};
-    unsigned selected=s->home_selected<9?s->home_selected:0;
+        {"Launch native GD images from SD.", "Browse your game library.", "V1.5: compatibility varies."},
+        {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."}};
+    unsigned selected=s->home_selected<10?s->home_selected:0;
     panel(p,32,112,208,296,PANEL);
-    for(unsigned i=0;i<9;i++) {
-        unsigned y=116+i*30;
+    for(unsigned i=0;i<10;i++) {
+        unsigned y=116+i*27;
         if(selected==i) {
-            panel(p,32,y,208,28,SELECTED);
-            box(p,32,y+5,3,18,PINK);
+            panel(p,32,y,208,26,SELECTED);
+            box(p,32,y+4,3,18,PINK);
         }
-        if((i>=1 && i<=3) || i>=7) small_utility_icon(p,i,44,y+2);
-        else art(p,44,y+2,24,24,kui_art_small_icons[icons[i]]);
-        words(p,80,y+6,230,selected==i?WHITE:MUTED,names[i],false);
+        if((i>=1 && i<=3) || i>=7) small_utility_icon(p,i,44,y+1);
+        else art(p,44,y+1,24,24,kui_art_small_icons[icons[i]]);
+        words(p,80,y+4,230,selected==i?WHITE:MUTED,names[i],false);
     }
     if(s->system_saved.show_memory && v->memory_valid) {
         char ram[48];snprintf(ram,sizeof(ram),"RAM %lu / %lu KiB",
             (unsigned long)(v->memory_used/1024),(unsigned long)(v->memory_physical/1024));
         words(p,44,391,230,MUTED,ram,false);
-    } else words(p,44,391,230,MUTED,"9 applications",false);
+    } else words(p,44,391,230,MUTED,"10 applications",false);
     title(p,264,112,names[selected]);
     if(selected==0 || selected==6) {
         char inserted[160];
@@ -387,8 +404,10 @@ static void destination(struct paint *p,const struct kui_shell *s,
         "The selected destination is saved to SD.");
 }
 static void keyboard(struct paint *p,const struct kui_shell *s) {
-    title(p,40,108,"Type destination");
-    label(p,40,136,MUTED,"Folder path on SD; START or DONE saves your choice.");
+    bool naming=s->files_keyboard;
+    title(p,40,108,!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
+    label(p,40,136,MUTED,naming?"Name on the SD card; START or DONE applies it.":
+        "Folder path on SD; START or DONE saves your choice.");
     panel(p,32,160,576,32,PANEL);
     char input[KUI_DEST_ROOT_CAP+8];
     const char *start=s->keyboard;
@@ -413,7 +432,8 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
     }
     label(p,40,378,CYAN,s->keyboard_upper?"Y Shift: UPPERCASE":"Y Shift: lowercase");
     label(p,40,398,s->destination_notice[0]?AMBER:MUTED,
-        s->destination_notice[0]?s->destination_notice:
+        s->destination_notice[0]?s->destination_notice:naming?
+        "A name cannot contain / or end with a space or dot.":
         "Example: /Games   New folders are created when used.");
 }
 static void advanced(struct paint *p,const struct kui_shell *s) {
@@ -992,7 +1012,8 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         words(p,44,210,right,v->busy?CYAN:AMBER,d->message,false);
         words(p,44,252,right,MUTED,v->busy?"Reading bounded image metadata from SD.":
             "Check the image files, then press X to inspect again.",false);
-        words(p,44,284,right,MUTED,"B returns to your Games list.",false);
+        words(p,44,284,right,MUTED,s->games_from_files?"B returns to the File Manager.":
+            "B returns to your Games list.",false);
     }
 }
 static void games_advanced(struct paint *p,const struct kui_shell *s) {
@@ -1064,6 +1085,276 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
     if(v->busy && v->app_status && v->app_status->message[0])
         label(p,48,380,CYAN,v->app_status->message);
 }
+/* ---- File Manager ---- */
+/* Long paths keep their end, the folder you are in, behind "...". */
+static void path_words(struct paint *p,unsigned x,unsigned y,unsigned right,uint16_t color,const char *path) {
+    const char *start=path?path:"";
+    unsigned width=kui_shell_font_width(start,false),room=right>x?right-x:0;
+    bool clipped=false;
+    if(width>room) {
+        unsigned dots=kui_shell_font_width("...",false)+KUI_SHELL_FONT_LETTER_SPACING;
+        room=room>dots?room-dots:0;
+        while(*start && width>room) {
+            char one[2]={*start,0};
+            unsigned step=kui_shell_font_width(one,false)+KUI_SHELL_FONT_LETTER_SPACING;
+            width=width>step?width-step:0;
+            ++start;
+            while(((unsigned char)*start&0xc0u)==0x80u) ++start;
+        }
+        clipped=true;
+    }
+    char shown[KUI_FILES_PATH_CAP+4];
+    snprintf(shown,sizeof(shown),"%s%.*s",clipped?"...":"",(int)(KUI_FILES_PATH_CAP-1),start);
+    words(p,x,y,right,color,shown,false);
+}
+/* DIR, or the extension in capitals (four letters at most), or FILE. */
+static void files_tag(char out[8],const struct kui_files_entry *e) {
+    const char *dot=e->directory?NULL:strrchr(e->name,'.');
+    if(e->directory) {snprintf(out,8,"DIR");return;}
+    if(!dot || dot==e->name || !dot[1] || strlen(dot+1)>4) {snprintf(out,8,"FILE");return;}
+    unsigned n=0;
+    for(const char *c=dot+1;*c && n<4;c++) out[n++]=(char)(*c>='a' && *c<='z'?*c-32:*c);
+    out[n]=0;
+}
+static void files_progress(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v,unsigned top) {
+    const struct kui_app_status *st=v->app_status;
+    enum kui_files_op op=s->files_job.op;
+    panel(p,32,top,576,392-top,PANEL);
+    label(p,48,top+12,CYAN,op==KUI_FILES_OP_COPY?"Copying":op==KUI_FILES_OP_MOVE?"Moving":
+        op==KUI_FILES_OP_DELETE?"Deleting":op==KUI_FILES_OP_RENAME?"Renaming":op==KUI_FILES_OP_MKDIR?
+        "Creating folder":"Checking");
+    words(p,48,top+36,592,WHITE,st && st->message[0]?st->message:s->files_notice,false);
+    box(p,48,top+62,544,10,EDGE);
+    if(st && st->total) box(p,48,top+62,(unsigned)(544u*(st->done<st->total?st->done:st->total)/st->total),10,CYAN);
+    if(st && st->total && op==KUI_FILES_OP_COPY) {
+        unsigned tenths=kui_shell_progress_tenths(st->done,st->total);
+        char line[64];
+        snprintf(line,sizeof(line),"%u.%u%%: each file is copied, then read back",tenths/10u,tenths%10u);
+        label(p,48,top+82,MUTED,line);
+    }
+    label(p,48,368,MUTED,op==KUI_FILES_OP_COPY?"B stops safely; the partial copy is removed.":
+        op==KUI_FILES_OP_DELETE?"B stops; items already deleted stay deleted.":"B stops safely.");
+}
+static void files(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_files_page *l=&s->files_listing;
+    unsigned count=l->count<KUI_FILES_ROWS?l->count:KUI_FILES_ROWS;
+    title(p,40,108,"File Manager");
+    path_words(p,40,136,608,CYAN,s->files_path);
+    label(p,40,160,v->busy?MUTED:WHITE,"A Open   X Actions   Y New folder   R Refresh");
+    if(v->busy && s->files_running) {files_progress(p,s,v,190);return;}
+    panel(p,32,190,576,178,PANEL);
+    if(!count) label(p,48,206,MUTED,v->busy?"Reading folder...":l->message[0]?l->message:"This folder is empty.");
+    for(unsigned i=0;i<count;i++) {
+        const struct kui_files_entry *e=&l->entries[i];
+        unsigned y=196+i*21;
+        bool chosen=i==s->files_selected;
+        if(chosen) panel(p,40,y,560,21,SELECTED);
+        char tag[8],size[16];
+        files_tag(tag,e);
+        uint16_t ink=e->disabled?AMBER:chosen?WHITE:MUTED;
+        label(p,50,y+1,e->disabled?AMBER:e->directory?CYAN:MUTED,tag);
+        words(p,100,y+1,e->directory?590:500,ink,e->name,false);
+        if(!e->directory) {
+            kui_files_size_text(size,e->bytes);
+            unsigned width=kui_shell_font_width(size,false);
+            words(p,590-width,y+1,592,chosen?WHITE:MUTED,size,false);
+        }
+    }
+    const char *notice=s->files_notice[0]?s->files_notice:count?l->message:"";
+    label(p,40,378,s->files_notice[0]&&s->files_notice_error?AMBER:CYAN,notice);
+    char line[160];
+    if(s->files_notice_detail[0]) snprintf(line,sizeof(line),"%s",s->files_notice_detail);
+    else if(count) {
+        const struct kui_files_entry *e=s->files_selected<count?&l->entries[s->files_selected]:&l->entries[0];
+        char when[20];
+        kui_files_date_text(when,e->date,e->time);
+        snprintf(line,sizeof(line),"Items %u-%u of %u   Modified %s%s%s",l->before+1,l->before+count,l->total,when,
+            e->attributes&AM_RDO?"   Read-only":"",e->attributes&AM_HID?"   Hidden":"");
+    } else line[0]=0;
+    label(p,40,396,MUTED,line);
+}
+static void files_actions(struct paint *p,const struct kui_shell *s) {
+    static const char *const names[]={"Open","Copy to another folder","Move to another folder","Rename",
+        "Delete","Details","New folder here"};
+    static const char *const notes[]={"Open the folder, game, song or picture.",
+        "Choose a folder; the copy is read back and checked.",
+        "Choose a folder; moving on the same card is instant.",
+        "Type a new name with the on-screen keyboard.",
+        "Review what will be deleted, then confirm.",
+        "Size, date, and what a folder holds.",
+        "Create a folder in this folder."};
+    const struct kui_files_entry *e=s->files_selected<s->files_listing.count?&s->files_listing.entries[s->files_selected]:NULL;
+    char path[KUI_FILES_PATH_CAP];
+    bool usable=e && !e->disabled && kui_files_join(path,s->files_path,e->name);
+    bool locked=usable && kui_files_protected(path);
+    unsigned selected=s->files_action_selected<7?s->files_action_selected:0;
+    title(p,40,108,"File actions");
+    words(p,40,138,608,CYAN,e?e->name:"No item selected",false);
+    for(unsigned i=0;i<7;i++) {
+        unsigned y=164+i*28;
+        bool off=i!=6 && (!usable || (locked && i>=2 && i<=4));
+        panel(p,32,y,576,24,selected==i?SELECTED:PANEL);
+        if(selected==i) box(p,32,y+4,3,16,PINK);
+        label(p,48,y+3,off?AMBER:selected==i?WHITE:MUTED,names[i]);
+    }
+    label(p,40,366,MUTED,notes[selected]);
+    label(p,40,390,s->files_notice[0]?AMBER:locked?PINK:MUTED,s->files_notice[0]?s->files_notice:
+        locked?"K-UI needs this to start: move, rename and delete are off.":!usable?
+        "K-UI cannot use this name; rename it on a computer.":"");
+}
+static void files_pick(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_files_page *l=&s->files_pick;
+    bool copy=s->files_job.op==KUI_FILES_OP_COPY;
+    unsigned count=l->count<KUI_FILES_ROWS?l->count:KUI_FILES_ROWS;
+    title(p,40,108,copy?"Copy to a folder":"Move to a folder");
+    path_words(p,40,138,608,CYAN,s->files_pick_path);
+    panel(p,32,166,576,204,PANEL);
+    if(!count) label(p,48,188,MUTED,v->busy?"Reading folders...":l->message[0]?l->message:"No folders here.");
+    for(unsigned i=0;i<count;i++) {
+        const struct kui_files_entry *e=&l->entries[i];
+        unsigned y=174+i*23;
+        if(i==s->files_pick_selected) {panel(p,40,y,560,23,SELECTED);box(p,40,y+4,3,15,PINK);}
+        label(p,52,y+2,e->disabled?AMBER:i==s->files_pick_selected?WHITE:MUTED,e->name);
+    }
+    label(p,40,376,v->busy?MUTED:WHITE,copy?"A Open folder   Y Copy here":"A Open folder   Y Move here");
+    char line[180];
+    if(count && l->message[0]) snprintf(line,sizeof(line),"%s",l->message);
+    else snprintf(line,sizeof(line),"%s %s",copy?"Copying":"Moving",kui_files_leaf(s->files_job.source));
+    label(p,40,396,count && l->message[0]?AMBER:MUTED,line);
+}
+static void files_summary(char out[96],const struct kui_files_preview *pv) {
+    char size[16];
+    kui_files_size_text(size,pv->bytes);
+    if(pv->directory) snprintf(out,96,"Holds %u file%s and %u folder%s, %s",pv->files,pv->files==1?"":"s",
+        pv->folders,pv->folders==1?"":"s",size);
+    else snprintf(out,96,"%s (%llu bytes)",size,(unsigned long long)pv->bytes);
+}
+static void files_confirm(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_files_preview *pv=&s->files_preview;
+    enum kui_files_op op=s->files_job.op;
+    const char *verb=op==KUI_FILES_OP_COPY?"COPY":op==KUI_FILES_OP_MOVE?"MOVE":"DELETE";
+    char line[200],summary[96];
+    title(p,40,108,op==KUI_FILES_OP_COPY?"Copy":op==KUI_FILES_OP_MOVE?"Move":"Delete");
+    box(p,32,136,576,272,NAVY);panel(p,48,142,544,258,PANEL);box(p,52,146,536,4,PINK);
+    words(p,72,196,568,CYAN,kui_files_leaf(s->files_job.source),false);
+    if(v->busy) {
+        label(p,72,166,WHITE,"CHECKING...");
+        words(p,72,222,568,MUTED,v->app_status && v->app_status->message[0]?v->app_status->message:pv->status.message,false);
+        label(p,72,352,MUTED,"B stops the check");
+        return;
+    }
+    if(!kui_shell_files_ready(s)) {
+        snprintf(line,sizeof(line),"CANNOT %s THIS ITEM",verb);
+        label(p,72,166,AMBER,line);
+        words(p,72,230,568,AMBER,pv->status.message[0]?pv->status.message:"The check did not finish.",false);
+        label(p,384,352,WHITE,"B Back");
+        return;
+    }
+    snprintf(line,sizeof(line),"%s THIS %s?",verb,pv->directory?"FOLDER":"FILE");
+    label(p,72,166,WHITE,line);
+    if(op==KUI_FILES_OP_MOVE && pv->directory) snprintf(summary,sizeof(summary),"The folder and everything in it");
+    else files_summary(summary,pv);
+    label(p,72,222,MUTED,summary);
+    if(op==KUI_FILES_OP_DELETE) {
+        label(p,72,250,AMBER,"This cannot be undone.");
+        if(pv->read_only) {
+            snprintf(line,sizeof(line),"Includes %u read-only item%s.",pv->read_only,pv->read_only==1?"":"s");
+            label(p,72,276,MUTED,line);
+        }
+        label(p,72,302,MUTED,"B stops part way; items already deleted stay deleted.");
+        label(p,72,352,CYAN,"A Delete");
+    } else {
+        char where[KUI_FILES_PATH_CAP+8];
+        unsigned y=276;
+        snprintf(where,sizeof(where),"To: %s",s->files_job.target);
+        path_words(p,72,250,568,MUTED,where);
+        if(pv->renamed) {
+            snprintf(line,sizeof(line),"That name is taken there; it will be %s",s->files_job.name);
+            words(p,72,y,568,AMBER,line,false);
+            y+=24;
+        }
+        if(op==KUI_FILES_OP_COPY && pv->free_known) {
+            char free_text[16];
+            kui_files_size_text(free_text,pv->free_bytes);
+            snprintf(line,sizeof(line),"%s free on the card.",free_text);
+            label(p,72,y,MUTED,line);
+            y+=24;
+        }
+        label(p,72,y,MUTED,op==KUI_FILES_OP_COPY?"The copy is read back and checked; B stops safely.":
+            "Moving on the same card is instant.");
+        label(p,72,352,CYAN,op==KUI_FILES_OP_COPY?"A Copy":"A Move");
+    }
+    label(p,384,352,WHITE,"B Cancel");
+}
+static void files_info(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_files_preview *pv=&s->files_preview;
+    const char *path=s->files_job.source,*name=kui_files_leaf(path);
+    char line[200],size[16],when[20];
+    title(p,40,108,"Details");
+    words(p,40,140,608,CYAN,name,false);
+    panel(p,32,168,576,232,PANEL);
+    if(v->busy || !pv->status.complete) {
+        label(p,48,184,CYAN,"Reading details...");
+        if(v->app_status && v->app_status->message[0]) words(p,48,210,592,MUTED,v->app_status->message,false);
+        return;
+    }
+    if(!pv->status.passed) {
+        words(p,48,184,592,AMBER,pv->status.message,false);
+        return;
+    }
+    enum kui_files_kind kind=kui_files_kind(name,pv->directory);
+    const char *dot=strrchr(name,'.');
+    snprintf(line,sizeof(line),"Type: %s",kind==KUI_FILES_KIND_FOLDER?"Folder":kind==KUI_FILES_KIND_GDI?"GDI game image":
+        kind==KUI_FILES_KIND_AUDIO?"Music (WAV or Ogg)":kind==KUI_FILES_KIND_PICTURE?"Picture":
+        dot && dot!=name && dot[1]?"File":"File without an extension");
+    label(p,48,180,WHITE,line);
+    kui_files_size_text(size,pv->bytes);
+    if(pv->directory) snprintf(line,sizeof(line),"Holds %u file%s and %u folder%s, %s in all",pv->files,pv->files==1?"":"s",
+        pv->folders,pv->folders==1?"":"s",size);
+    else snprintf(line,sizeof(line),"Size: %s (%llu bytes)",size,(unsigned long long)pv->bytes);
+    words(p,48,206,592,WHITE,line,false);
+    kui_files_date_text(when,pv->date,pv->time);
+    snprintf(line,sizeof(line),"Modified: %s",when);
+    label(p,48,232,WHITE,line);
+    snprintf(line,sizeof(line),"Attributes: %s%s%s%s",pv->attributes&(AM_RDO|AM_HID|AM_SYS)?"":"None",
+        pv->attributes&AM_RDO?"Read-only ":"",pv->attributes&AM_HID?"Hidden ":"",pv->attributes&AM_SYS?"System":"");
+    label(p,48,258,WHITE,line);
+    char parent[KUI_FILES_PATH_CAP],where[KUI_FILES_PATH_CAP+8];
+    if(!kui_files_parent(parent,path)) parent[0]=0;
+    snprintf(where,sizeof(where),"In: %s",parent);
+    path_words(p,48,284,592,MUTED,where);
+    if(kui_files_protected(path)) label(p,48,318,PINK,"K-UI needs this to start; it cannot be moved, renamed or deleted.");
+    else if(kui_files_part_name(name)) label(p,48,318,AMBER,"A copy K-UI did not finish; it can be deleted.");
+    if(pv->directory && pv->read_only) {
+        snprintf(line,sizeof(line),"%u read-only item%s inside.",pv->read_only,pv->read_only==1?"":"s");
+        label(p,48,344,MUTED,line);
+    }
+}
+static void files_view(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_files_picture *pic=&s->files_picture;
+    title(p,40,108,kui_files_leaf(pic->path));
+    if(!pic->ok && !v->busy) {
+        panel(p,32,136,576,120,PANEL);
+        words(p,48,152,592,AMBER,pic->message[0]?pic->message:"This picture could not be shown.",false);
+        label(p,48,180,MUTED,"PNG, JPEG and 16-bit PVR pictures up to 3 MB can be shown.");
+        label(p,48,206,MUTED,"B returns to the File Manager.");
+        return;
+    }
+    box(p,38,134,KUI_FILES_PICTURE_EDGE+4,KUI_FILES_PICTURE_EDGE+4,EDGE);
+    if(pic->ok && v->files_picture) cover_image(p,40,136,KUI_FILES_PICTURE_EDGE,v->files_picture);
+    else box(p,40,136,KUI_FILES_PICTURE_EDGE,KUI_FILES_PICTURE_EDGE,PANEL);
+    if(!pic->ok) {label(p,336,140,CYAN,"Loading picture...");return;}
+    char line[160],size[16];
+    label(p,336,140,CYAN,pic->format && pic->format[0]?pic->format:"Picture");
+    snprintf(line,sizeof(line),"%u x %u pixels",pic->width,pic->height);
+    label(p,336,166,WHITE,line);
+    kui_files_size_text(size,pic->bytes);
+    snprintf(line,sizeof(line),"File: %s",size);
+    label(p,336,192,WHITE,line);
+    char parent[KUI_FILES_PATH_CAP];
+    if(kui_files_parent(parent,pic->path)) path_words(p,336,218,608,MUTED,parent);
+    label(p,336,258,MUTED,"Shown fitted to this square.");
+}
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
@@ -1095,6 +1386,12 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM: games_image_probe_confirmation(&p,s,v); break;
     case KUI_SHELL_GAMES_RETAIL_CONFIRM: games_retail_confirmation(&p,s,v); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
+    case KUI_SHELL_FILES: files(&p,s,v); break;
+    case KUI_SHELL_FILES_ACTIONS: files_actions(&p,s); break;
+    case KUI_SHELL_FILES_PICK: files_pick(&p,s,v); break;
+    case KUI_SHELL_FILES_CONFIRM: files_confirm(&p,s,v); break;
+    case KUI_SHELL_FILES_INFO: files_info(&p,s,v); break;
+    case KUI_SHELL_FILES_VIEW: files_view(&p,s,v); break;
     }
     footer(&p,s,v);
     if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s->confirm_quick_resume);

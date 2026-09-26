@@ -170,8 +170,15 @@ static void scaling(void) {
     assert(!kui_cover_scale(NULL, 4, 4, 3, out, 4));
     px = image(4, 4, 3, 1, 2, 3, 255);
     assert(!kui_cover_scale(px, 0, 4, 3, out, 4) && !kui_cover_scale(px, 4, 4, 2, out, 4) &&
-        !kui_cover_scale(px, 4, 4, 3, out, 0) && !kui_cover_scale(px, 4, 4, 3, out, 161) &&
+        !kui_cover_scale(px, 4, 4, 3, out, 0) && !kui_cover_scale(px, 4, 4, 3, out, KUI_COVER_SCALE_MAX + 1u) &&
         !kui_cover_scale(px, 4, 4, 3, NULL, 4));
+    free(px);
+    /* The largest square: a wide image fills its middle rows. */
+    static uint16_t large[KUI_COVER_SCALE_MAX * KUI_COVER_SCALE_MAX];
+    px = image(8, 4, 3, 10, 200, 30, 255);
+    assert(kui_cover_scale(px, 8, 4, 3, large, KUI_COVER_SCALE_MAX));
+    assert(large[0] == navy && large[(KUI_COVER_SCALE_MAX / 2u) * KUI_COVER_SCALE_MAX] == rgb565(10, 200, 30));
+    assert(large[KUI_COVER_SCALE_MAX * KUI_COVER_SCALE_MAX - 1u] == navy);
     free(px);
 }
 static void reduction(void) {

@@ -35,8 +35,9 @@ separate contribution or commercial-relicensing agreement.
 
 ## The 1.5 shell
 
-The SD runtime opens nine apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
-**Network Test**, **Settings**, **Diagnostics**, **GD Play**, **Music Player** and **Games**. New captures use a selectable
+The SD runtime opens ten apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
+**Network Test**, **Settings**, **Diagnostics**, **GD Play**, **Music Player**, **Games**
+and **File Manager** (new since 1.5.1). New captures use a selectable
 parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
 The hardware-proven acquisition engine remains unchanged.
 
@@ -79,6 +80,11 @@ These new app paths still need physical-console acceptance.
   references retain the limited structural result.
   Separate Salvage jobs add durable bad-sector queues, optional zero filling and
   bounded repair passes; unresolved holes never receive a complete-dump claim.
+- File Manager browses every folder and file on SD and opens games, music and
+  pictures. Copy, move, rename and delete are checked and confirmed first;
+  copies are read back and compared before they take their name, nothing is
+  replaced, and the files K-UI needs to start are protected
+  ([details](docs/files.md)). It has not yet been tried on a console.
 - Network Test includes a temporary DHCP/address-conflict/gateway-ping test; it
   does not claim Internet reachability or change saved network settings. Diagnostics retains disc/SD probes, log export,
   mstats and benchmarks. RAM remains visible in the ripper.

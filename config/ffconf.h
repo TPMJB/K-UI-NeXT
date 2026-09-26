@@ -9,7 +9,7 @@
 #define FF_USE_MKFS 0
 #define FF_USE_FASTSEEK 1 /* Games maps track files from the allocation table */
 #define FF_USE_EXPAND 1
-#define FF_USE_CHMOD 0
+#define FF_USE_CHMOD 1 /* File Manager: keeps dates on copies, clears read-only to delete */
 #define FF_USE_LABEL 0
 #define FF_USE_FORWARD 0
 #define FF_USE_STRFUNC 0

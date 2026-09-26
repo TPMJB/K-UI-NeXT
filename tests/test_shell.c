@@ -36,8 +36,8 @@ static void launcher_and_confirmation(void) {
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.confirm_new);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NEW_DUMP && !s.confirm_new);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
-    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==8);
-    press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.home_selected==9);
+    press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false); press(KUI_SHELL_UP,false);
     assert(s.home_selected==5);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DIAGNOSTICS);
     press(KUI_SHELL_B,false);
@@ -47,14 +47,14 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_GAMES_RETAIL_CONFIRM;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_FILES_VIEW;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
         assert(press(KUI_SHELL_L,true)==(page==KUI_SHELL_HOME||page==KUI_SHELL_RIPPER?
             KUI_SHELL_MUSIC_PREVIOUS:(page==KUI_SHELL_GAMES_PROBE_CONFIRM ||
-            page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM || page==KUI_SHELL_GAMES_RETAIL_CONFIRM)?
-            KUI_SHELL_NONE:KUI_SHELL_MSTATS));
+            page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM || page==KUI_SHELL_GAMES_RETAIL_CONFIRM ||
+            page==KUI_SHELL_FILES_CONFIRM)?KUI_SHELL_NONE:KUI_SHELL_MSTATS));
         assert(s.page==page);
     }
     reset(KUI_SHELL_RIPPER); s.confirm_new=true;
@@ -628,7 +628,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_GAMES_RETAIL_CONFIRM;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_FILES_VIEW;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -753,7 +753,7 @@ static void new_pages_rendering(void) {
         assert(strstr(drawn,"RAM 1 / 16384 KiB") && strstr(drawn,"Memory Test"));
     }
     s.system_saved.show_memory=false;render(&v);
-    assert(strstr(drawn,"9 applications") && !strstr(drawn,"RAM 1 /"));
+    assert(strstr(drawn,"10 applications") && !strstr(drawn,"RAM 1 /"));
 }
 static void music_and_boot_rendering(void) {
     struct kui_shell_view v={.music_enabled=true,.music_playing=true,.music_volume=75,
@@ -1072,7 +1072,7 @@ static void games_views(void) {
 static void games_rendering(void) {
     struct kui_shell_view view={0};
     reset(KUI_SHELL_HOME);s.home_selected=8;render(&view);
-    assert(strstr(drawn,"Games") && strstr(drawn,"9 applications") && strstr(drawn,"V1.5: compatibility varies"));
+    assert(strstr(drawn,"Games") && strstr(drawn,"10 applications") && strstr(drawn,"V1.5: compatibility varies"));
     reset(KUI_SHELL_GAMES);s.games_listing.count=8;s.games_listing.has_more=true;s.games_selected=7;
     for(unsigned i=0;i<8;i++) {
         snprintf(s.games_listing.entries[i].name,sizeof(s.games_listing.entries[i].name),"Game %u with a long but bounded name",i+1);
@@ -1156,6 +1156,288 @@ static void games_rendering(void) {
     s.games_detail.native_gd=false;render(&view);
     assert(strstr(drawn,"not ready for native GD launch") && !strstr(drawn,"A Launch"));
 }
+/* ---- File Manager ---- */
+static struct kui_files_page files_result(const char *path,bool picker,unsigned count,unsigned before,unsigned total,
+        const char *const *names,const bool *directories) {
+    struct kui_files_page page;
+    memset(&page,0,sizeof(page));
+    snprintf(page.path,sizeof(page.path),"%s",path);
+    page.folders_only=picker;page.count=count;page.before=before;page.total=total;page.ok=true;
+    for(unsigned i=0;i<count;i++) {
+        struct kui_files_entry *e=&page.entries[i];
+        snprintf(e->name,sizeof(e->name),"%s",names[i]);
+        e->directory=directories[i];e->bytes=directories[i]?0:2048u*(i+1u);
+        e->date=(uint16_t)((46u<<9)|(9u<<5)|26u);e->time=(uint16_t)((14u<<11)|(3u<<5));
+    }
+    if(count) {
+        snprintf(page.first,sizeof(page.first),"%s",names[0]);page.first_directory=directories[0];
+        snprintf(page.last,sizeof(page.last),"%s",names[count-1]);page.last_directory=directories[count-1];
+    }
+    return page;
+}
+static const char *const root_names[]={"Games","KUI","Music","Pictures","cover.png","disc.gdi","readme.txt","song.ogg"};
+static const bool root_directories[]={true,true,true,true,false,false,false,false};
+static void files_root(void) {
+    struct kui_files_page page=files_result("/",false,8,0,12,root_names,root_directories);
+    kui_shell_set_files_listing(&s,&page);
+    assert(s.files_listing.count==8 && !strcmp(s.files_listing.entries[0].name,"Games"));
+}
+static void files_select(const char *name) {
+    for(unsigned i=0;i<s.files_listing.count;i++)
+        if(!strcmp(s.files_listing.entries[i].name,name)) {s.files_selected=i;return;}
+    assert(!"row missing");
+}
+static void files_controls(void) {
+    reset(KUI_SHELL_HOME);s.home_selected=9;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && s.page==KUI_SHELL_FILES);
+    assert(!strcmp(s.files_request.path,"/") && s.files_request.seek==KUI_FILES_SEEK_FIRST && !s.files_request.folders_only);
+    files_root();
+    /* Results for another folder, or the picker's, do not replace the page. */
+    struct kui_files_page other=files_result("/Other",false,1,0,1,root_names,root_directories);
+    kui_shell_set_files_listing(&s,&other);
+    struct kui_files_page picked=files_result("/",true,1,0,1,root_names+1,root_directories+1);
+    kui_shell_set_files_listing(&s,&picked);
+    assert(!strcmp(s.files_listing.entries[0].name,"Games") && s.files_listing.count==8);
+    /* Pages turn from the neighbouring row. */
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_FILES_LIST && s.files_request.seek==KUI_FILES_SEEK_NEXT);
+    assert(!strcmp(s.files_request.anchor,"song.ogg") && !s.files_request.anchor_directory && !s.files_listing.count);
+    static const char *const more[]={"setup.log","video.bin","zeta.txt","~temp"};
+    static const bool files_only[]={false,false,false,false};
+    struct kui_files_page page=files_result("/",false,4,8,12,more,files_only);
+    kui_shell_set_files_listing(&s,&page);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_FILES_LIST && s.files_request.seek==KUI_FILES_SEEK_FIRST);
+    page=files_result("/",false,4,16,30,more,files_only);
+    kui_shell_set_files_listing(&s,&page);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_FILES_LIST && s.files_request.seek==KUI_FILES_SEEK_PREVIOUS);
+    assert(!strcmp(s.files_request.anchor,"setup.log"));
+    files_root();
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_FILES_LIST && s.files_request.seek==KUI_FILES_SEEK_AT);
+    assert(!strcmp(s.files_request.anchor,"Games") && s.files_request.anchor_directory);
+    files_root();
+    /* A opens folders; B goes up, listing from the folder just left. */
+    files_select("Music");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && !strcmp(s.files_path,"/Music"));
+    assert(!strcmp(s.files_request.path,"/Music") && s.files_request.seek==KUI_FILES_SEEK_FIRST);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_FILES_LIST && !strcmp(s.files_path,"/"));
+    assert(s.files_request.seek==KUI_FILES_SEEK_AT && !strcmp(s.files_request.anchor,"Music") && s.files_request.anchor_directory);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
+    s.page=KUI_SHELL_FILES;files_root();
+    /* Games open their details, and B comes back here. */
+    files_select("disc.gdi");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(!strcmp(s.games_selected_path,"/disc.gdi") && s.games_from_files);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES && !s.games_from_files);
+    /* Songs play through the music player. */
+    files_select("song.ogg");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_MUSIC_PLAY && !strcmp(s.music_selected_path,"/song.ogg"));
+    assert(s.page==KUI_SHELL_FILES && !strcmp(s.files_notice,"Loading music..."));
+    /* Pictures open their view; only that picture's result is kept. */
+    files_select("cover.png");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_PICTURE && s.page==KUI_SHELL_FILES_VIEW);
+    assert(!strcmp(s.files_picture.path,"/cover.png") && !s.files_picture.ok);
+    struct kui_files_picture picture={.path="/other.png",.format="PNG",.width=64,.height=48,.ok=true};
+    kui_shell_set_files_picture(&s,&picture);assert(!s.files_picture.ok);
+    snprintf(picture.path,sizeof(picture.path),"/cover.png");
+    kui_shell_set_files_picture(&s,&picture);assert(s.files_picture.ok && s.files_picture.width==64);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES);
+    s.page=KUI_SHELL_FILES_ACTIONS;kui_shell_set_files_picture(&s,&picture);s.page=KUI_SHELL_FILES;
+    /* Other files show details. */
+    files_select("readme.txt");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_CHECK && s.page==KUI_SHELL_FILES_INFO);
+    assert(s.files_job.op==KUI_FILES_OP_DETAILS && !strcmp(s.files_job.source,"/readme.txt"));
+    struct kui_files_preview preview;memset(&preview,0,sizeof(preview));
+    preview.job=s.files_job;preview.status.complete=preview.status.passed=true;preview.bytes=2048;preview.files=1;
+    snprintf(preview.job.source,sizeof(preview.job.source),"/other.txt");
+    kui_shell_set_files_preview(&s,&preview);assert(!s.files_preview.status.complete);
+    preview.job=s.files_job;kui_shell_set_files_preview(&s,&preview);assert(s.files_preview.bytes==2048);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES);
+    /* The actions menu refuses to move, rename or delete what K-UI needs. */
+    files_select("KUI");
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES_ACTIONS && s.files_action_selected==0);
+    for(unsigned item=2;item<=4;item++) {
+        s.files_action_selected=item;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES_ACTIONS);
+        assert(strstr(s.files_notice,"K-UI needs this") && s.files_notice_error);
+    }
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.files_action_selected==3);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_FILES);
+    /* Copy: choose a folder, check, confirm, run, then list the folder again. */
+    files_select("Music");
+    press(KUI_SHELL_X,false);s.files_action_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && s.page==KUI_SHELL_FILES_PICK);
+    assert(s.files_job.op==KUI_FILES_OP_COPY && !strcmp(s.files_job.source,"/Music"));
+    assert(s.files_request.folders_only && !strcmp(s.files_request.path,"/") && !strcmp(s.files_pick_path,"/"));
+    static const char *const folders[]={"Games","KUI","Music","Pictures"};
+    static const bool all_folders[]={true,true,true,true};
+    struct kui_files_page pick=files_result("/",true,4,0,4,folders,all_folders);
+    kui_shell_set_files_listing(&s,&pick);
+    assert(s.files_pick.count==4 && s.files_pick.entries[2].disabled && !s.files_pick.entries[0].disabled);
+    s.files_pick_selected=2;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && strstr(s.files_pick.message,"being copied or moved"));
+    s.files_pick_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && !strcmp(s.files_pick_path,"/Games"));
+    assert(s.files_request.folders_only && !strcmp(s.files_request.path,"/Games"));
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_FILES_CHECK && s.page==KUI_SHELL_FILES_CONFIRM);
+    assert(!strcmp(s.files_job.target,"/Games") && !kui_shell_files_ready(&s));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    memset(&preview,0,sizeof(preview));
+    preview.job=s.files_job;preview.ready=true;preview.status.complete=preview.status.passed=true;
+    preview.directory=true;preview.files=3;preview.bytes=4096;
+    snprintf(preview.job.name,sizeof(preview.job.name),"Music");
+    snprintf(preview.job.target,sizeof(preview.job.target),"/Pictures");
+    kui_shell_set_files_preview(&s,&preview);assert(!kui_shell_files_ready(&s));
+    snprintf(preview.job.target,sizeof(preview.job.target),"/Games");
+    snprintf(preview.job.name,sizeof(preview.job.name),"bad/name");
+    kui_shell_set_files_preview(&s,&preview);assert(!kui_shell_files_ready(&s));
+    snprintf(preview.job.name,sizeof(preview.job.name),"Music");
+    kui_shell_set_files_preview(&s,&preview);assert(kui_shell_files_ready(&s) && !strcmp(s.files_job.name,"Music"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES_PICK);
+    s.page=KUI_SHELL_FILES_CONFIRM;
+    assert(press(KUI_SHELL_A|KUI_SHELL_L,true)==KUI_SHELL_NONE && press(KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_RUN && s.page==KUI_SHELL_FILES && s.files_running);
+    assert(s.files_request.seek==KUI_FILES_SEEK_AT && !strcmp(s.files_request.anchor,"Games") && !s.files_request.folders_only);
+    assert(!strcmp(s.files_notice,"Copying..."));
+    struct kui_app_status status={.complete=true,.passed=true,.line_count=1};
+    snprintf(status.message,sizeof(status.message),"Copied to /Games");
+    snprintf(status.lines[0],sizeof(status.lines[0]),"3 files, 4.0 KB, read back and checked.");
+    kui_shell_set_files_status(&s,&status);
+    assert(!s.files_running && !strcmp(s.files_notice,"Copied to /Games") && !s.files_notice_error);
+    assert(!strcmp(s.files_notice_detail,"3 files, 4.0 KB, read back and checked."));
+    status.passed=false;snprintf(status.message,sizeof(status.message),"The card is full");
+    kui_shell_set_files_status(&s,&status);assert(s.files_notice_error);
+    files_root();
+    /* The picker: B climbs, then returns to the menu; START cancels. */
+    files_select("Pictures");press(KUI_SHELL_X,false);s.files_action_selected=2;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && s.files_job.op==KUI_FILES_OP_MOVE);
+    kui_shell_set_files_listing(&s,&pick);s.files_pick_selected=0;
+    press(KUI_SHELL_A,false);assert(!strcmp(s.files_pick_path,"/Games"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_FILES_LIST && !strcmp(s.files_pick_path,"/"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES_ACTIONS);
+    s.files_action_selected=2;press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES);
+    /* Delete: nothing runs until a ready check is confirmed. */
+    files_select("Pictures");press(KUI_SHELL_X,false);s.files_action_selected=4;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_CHECK && s.page==KUI_SHELL_FILES_CONFIRM);
+    assert(s.files_job.op==KUI_FILES_OP_DELETE && !strcmp(s.files_job.source,"/Pictures"));
+    memset(&preview,0,sizeof(preview));preview.job=s.files_job;preview.status.complete=true;
+    snprintf(preview.status.message,sizeof(preview.status.message),"Cannot read a folder inside");
+    kui_shell_set_files_preview(&s,&preview);
+    assert(!kui_shell_files_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES);
+    /* Rename and new folder use the keyboard; names are checked first. */
+    files_select("readme.txt");press(KUI_SHELL_X,false);s.files_action_selected=3;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && s.files_keyboard);
+    assert(!strcmp(s.keyboard,"readme.txt") && s.files_job.op==KUI_FILES_OP_RENAME);
+    snprintf(s.keyboard,sizeof(s.keyboard),"bad/name");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.destination_notice[0] && s.page==KUI_SHELL_KEYBOARD);
+    s.keyboard[0]=0;assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && strstr(s.destination_notice,"Type a name"));
+    snprintf(s.keyboard,sizeof(s.keyboard),"notes.txt");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_FILES_RUN && s.page==KUI_SHELL_FILES && !s.files_keyboard);
+    assert(!strcmp(s.files_job.name,"notes.txt") && !strcmp(s.files_job.source,"/readme.txt"));
+    assert(s.files_request.seek==KUI_FILES_SEEK_AT && !strcmp(s.files_request.anchor,"notes.txt") && !s.files_request.anchor_directory);
+    assert(s.files_running && !strcmp(s.files_notice,"Renaming..."));
+    kui_shell_set_files_status(&s,&status);files_root();
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && !s.keyboard[0]);
+    assert(s.files_job.op==KUI_FILES_OP_MKDIR && !strcmp(s.files_job.source,"/"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES && !s.files_keyboard);
+    press(KUI_SHELL_Y,false);snprintf(s.keyboard,sizeof(s.keyboard),"Saves");
+    s.keyboard_selected=42;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_RUN && !strcmp(s.files_job.name,"Saves"));
+    assert(s.files_request.anchor_directory && !strcmp(s.files_request.anchor,"Saves"));
+    /* Rows the worker could not name are shown but never used. */
+    files_root();
+    struct kui_files_page broken=files_result("/",false,2,0,2,root_names,root_directories);
+    memset(broken.entries[1].name,'x',sizeof(broken.entries[1].name));
+    kui_shell_set_files_listing(&s,&broken);
+    assert(s.files_listing.entries[1].disabled && !strcmp(s.files_listing.entries[1].name,"[Name too long]"));
+    s.files_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && strstr(s.files_notice,"cannot use this name"));
+    broken.last[sizeof(broken.last)-1]='x';memset(broken.last,'x',sizeof(broken.last));
+    kui_shell_set_files_listing(&s,&broken);assert(!s.files_listing.count);
+    puts("PASS File Manager: navigation, paging anchors, open-with, protected items, copy/move/delete/rename/new folder flows");
+}
+static void files_rendering(void) {
+    struct kui_shell_view v={.build="a1b2c3d4e5f6"};
+    reset(KUI_SHELL_HOME);s.home_selected=9;render(&v);
+    assert(strstr(drawn,"File Manager") && strstr(drawn,"SD card files") && strstr(drawn,"10 applications"));
+    reset(KUI_SHELL_FILES);files_root();s.files_selected=6;render(&v);
+    assert(strstr(drawn,"Games") && strstr(drawn,"readme.txt") && strstr(drawn,"DIR") && strstr(drawn,"TXT"));
+    assert(strstr(drawn,"Items 1-8 of 12") && strstr(drawn,"Modified 2026-09-26 14:03") && strstr(drawn,"14.0 KB"));
+    assert(strstr(drawn,"A Open   X Actions   Y New folder   R Refresh") && strstr(drawn,"B Up   START Home"));
+    s.files_listing.entries[6].attributes=0x03;render(&v);assert(strstr(drawn,"Read-only   Hidden"));
+    struct kui_app_status status={.complete=true,.line_count=1};
+    snprintf(status.message,sizeof(status.message),"The card is full");
+    snprintf(status.lines[0],sizeof(status.lines[0]),"The partial copy was removed.");
+    kui_shell_set_files_status(&s,&status);render(&v);
+    assert(strstr(drawn,"The card is full") && strstr(drawn,"The partial copy was removed.") && !strstr(drawn,"Items 1-8"));
+    s.files_job.op=KUI_FILES_OP_COPY;s.files_running=true;v.busy=true;
+    struct kui_app_status live={.done=500,.total=1000};
+    snprintf(live.message,sizeof(live.message),"Copying 2 of 3: track02.raw");
+    v.app_status=&live;render(&v);
+    assert(strstr(drawn,"Copying 2 of 3: track02.raw") && strstr(drawn,"50.0%") && strstr(drawn,"B stops safely"));
+    assert(!strstr(drawn,"readme.txt"));
+    v.busy=false;v.app_status=NULL;s.files_running=false;
+    reset(KUI_SHELL_FILES);files_root();s.files_selected=1;s.page=KUI_SHELL_FILES_ACTIONS;s.files_action_selected=4;
+    render(&v);
+    assert(strstr(drawn,"File actions") && strstr(drawn,"KUI") && strstr(drawn,"Copy to another folder"));
+    assert(strstr(drawn,"K-UI needs this to start: move, rename and delete are off."));
+    assert(strstr(drawn,"Review what will be deleted, then confirm."));
+    s.files_selected=0;render(&v);assert(!strstr(drawn,"K-UI needs this"));
+    /* Confirmations show what the check found. */
+    s.page=KUI_SHELL_FILES_CONFIRM;s.files_job.op=KUI_FILES_OP_COPY;
+    snprintf(s.files_job.source,sizeof(s.files_job.source),"/Music");
+    snprintf(s.files_job.target,sizeof(s.files_job.target),"/Games");
+    struct kui_files_preview *pv=&s.files_preview;
+    memset(pv,0,sizeof(*pv));pv->job=s.files_job;pv->ready=true;pv->status.complete=pv->status.passed=true;
+    pv->directory=true;pv->files=3;pv->folders=1;pv->bytes=4096;pv->free_known=true;pv->free_bytes=1048576;
+    pv->renamed=true;snprintf(pv->job.name,sizeof(pv->job.name),"Music (2)");
+    snprintf(s.files_job.name,sizeof(s.files_job.name),"Music (2)");
+    render(&v);
+    assert(strstr(drawn,"COPY THIS FOLDER?") && strstr(drawn,"Holds 3 files and 1 folder, 4.0 KB"));
+    assert(strstr(drawn,"To: /Games") && strstr(drawn,"it will be Music (2)") && strstr(drawn,"1.0 MB free"));
+    assert(strstr(drawn,"A Copy") && strstr(drawn,"B Cancel") && !strstr(drawn,"L Memory"));
+    pv->ready=false;snprintf(pv->status.message,sizeof(pv->status.message),"A folder cannot be copied into itself");
+    render(&v);
+    assert(strstr(drawn,"CANNOT COPY THIS ITEM") && strstr(drawn,"copied into itself") && strstr(drawn,"B Back"));
+    assert(!strstr(drawn,"A Copy"));
+    v.busy=true;struct kui_app_status counting={0};
+    snprintf(counting.message,sizeof(counting.message),"Counting: 12 files in 2 folders, 1.0 MB");
+    v.app_status=&counting;render(&v);
+    assert(strstr(drawn,"CHECKING...") && strstr(drawn,"Counting: 12 files") && strstr(drawn,"B stops the check"));
+    v.busy=false;v.app_status=NULL;
+    s.files_job.op=KUI_FILES_OP_DELETE;pv->job=s.files_job;pv->ready=true;pv->read_only=2;
+    render(&v);
+    assert(strstr(drawn,"DELETE THIS FOLDER?") && strstr(drawn,"This cannot be undone.") && strstr(drawn,"2 read-only items"));
+    assert(strstr(drawn,"A Delete"));
+    /* Details and pictures. */
+    s.page=KUI_SHELL_FILES_INFO;s.files_job.op=KUI_FILES_OP_DETAILS;
+    snprintf(s.files_job.source,sizeof(s.files_job.source),"/KUI/runtime.kui");
+    memset(pv,0,sizeof(*pv));pv->job=s.files_job;pv->status.complete=pv->status.passed=true;
+    pv->bytes=1834112;pv->files=1;pv->attributes=0x01;
+    render(&v);
+    assert(strstr(drawn,"runtime.kui") && strstr(drawn,"Size: 1.7 MB (1834112 bytes)") && strstr(drawn,"Read-only"));
+    assert(strstr(drawn,"In: /KUI") && strstr(drawn,"K-UI needs this to start"));
+    s.page=KUI_SHELL_FILES_VIEW;memset(&s.files_picture,0,sizeof(s.files_picture));
+    snprintf(s.files_picture.path,sizeof(s.files_picture.path),"/Pictures/cover.png");
+    snprintf(s.files_picture.message,sizeof(s.files_picture.message),"Image larger than 1.2 megapixels or 3 MB");
+    render(&v);
+    assert(strstr(drawn,"cover.png") && strstr(drawn,"Image larger than 1.2 megapixels") && strstr(drawn,"B Files"));
+    static uint16_t picture[KUI_FILES_PICTURE_EDGE*KUI_FILES_PICTURE_EDGE];
+    for(unsigned i=0;i<KUI_FILES_PICTURE_EDGE*KUI_FILES_PICTURE_EDGE;i++) picture[i]=0x07e0;
+    v.files_picture=picture;s.files_picture.ok=true;s.files_picture.format="PNG";
+    s.files_picture.width=64;s.files_picture.height=48;s.files_picture.bytes=2048;
+    render(&v);
+    assert(strstr(drawn,"PNG") && strstr(drawn,"64 x 48 pixels") && strstr(drawn,"File: 2.0 KB") && strstr(drawn,"/Pictures"));
+    assert(pixels[1+(136+100)*640+40+100]==0x07e0);
+    s.page=KUI_SHELL_KEYBOARD;s.files_keyboard=true;s.files_job.op=KUI_FILES_OP_RENAME;render(&v);
+    assert(strstr(drawn,"Rename") && strstr(drawn,"A name cannot contain /") && !strstr(drawn,"Type destination"));
+    s.files_keyboard=false;render(&v);assert(strstr(drawn,"Type destination"));
+    /* Games details opened here return here. */
+    reset(KUI_SHELL_GAMES_DETAIL);s.games_from_files=true;render(&v);
+    assert(strstr(drawn,"B Files") && strstr(drawn,"B returns to the File Manager."));
+    puts("PASS File Manager rendering: Home entry, rows, notices, progress, actions, confirmations, details, picture, keyboard");
+}
 int main(int argc,char **argv) {
     games_controls(); games_views(); games_retail_controls(); games_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
@@ -1164,6 +1446,7 @@ int main(int argc,char **argv) {
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
     music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
+    files_controls(); files_rendering();
     puts("PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

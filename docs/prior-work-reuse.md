@@ -57,6 +57,15 @@ behaviors in its own shell instead of importing that framework. Likewise,
 `applications/gd_ripper/modules/module.c` and `app.xml` contain mixed upstream
 code and later changes and are not standalone original-file candidates.
 
+The legacy File Manager (`applications/filemanager`) is not a candidate
+either. It is DreamShell's File Manager application: its two-pane list widget
+(`lib/SDL_gui/FileManager.cc`) and its copy, move, delete, rename, archive and
+open-with logic (`lua/main.lua`, whose header names SWAT as author) are
+upstream code. TPMJB's `app.xml` layout and `modules/module.c` controller
+navigation drive that DreamShell Lua/SDL framework and have no use without it.
+K-UI's [File Manager](files.md) is written independently for the K-UI shell
+and imports none of these files.
+
 ## Catalog data is a separate dependency
 
 The [catalog provenance record](https://github.com/TPMJB/K-UI_DS/blob/2a5309298dde8fb100da1e2e4e10517695c9780f/applications/gd_ripper/redump-db.README)

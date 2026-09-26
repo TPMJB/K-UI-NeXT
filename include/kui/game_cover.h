@@ -51,9 +51,13 @@ bool kui_cover_key(const char *entry_name, char out[KUI_COVER_PATH_CAP]);
  * entry's own name when the title is empty or has unreadable characters. */
 void kui_cover_display_title(const char *title, const char *fallback, char out[KUI_COVER_TITLE_CAP]);
 
-/* Fits an image inside edge*edge, centred on KUI_COVER_BACKGROUND, keeping its
- * shape: area-averaged when shrinking, bilinear when enlarging, alpha
- * composited. Pixels are 8-bit RGB (3 channels) or RGBA (4), row-major. */
+/* The largest square kui_cover_scale fills: box art, and the File Manager's
+ * picture view. */
+#define KUI_COVER_SCALE_MAX 512u
+/* Fits an image inside edge*edge (edge at most KUI_COVER_SCALE_MAX), centred
+ * on KUI_COVER_BACKGROUND, keeping its shape: area-averaged when shrinking,
+ * bilinear when enlarging, alpha composited. Pixels are 8-bit RGB (3
+ * channels) or RGBA (4), row-major. */
 bool kui_cover_scale(const uint8_t *pixels, unsigned width, unsigned height, unsigned channels,
                      uint16_t *out, unsigned edge);
 /* Halves a very large image in place (2x2 averages) until it is at most
