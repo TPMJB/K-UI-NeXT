@@ -228,6 +228,40 @@ int main(void) {
     setup(45000); dual32(root() + 10, KUI_GAME_METADATA_MAX_DIRECTORY_BYTES);
     expect(KUI_GAME_METADATA_OK); assert(fixture.reads == 130);
 
+    /* Artwork lookup reuses the root directory the boot lookup located. */
+    uint32_t lba = 1, bytes = 1;
+    uint8_t *art = fixture.sectors[ROOT] + 116;
+    const uint8_t *pvr = (const uint8_t *)"0GDTEX.PVR;1";
+    setup(45000); entry(art, 45030, 34832, 0, pvr, 12); expect(KUI_GAME_METADATA_OK);
+    unsigned before = meta.sectors_read;
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_OK);
+    assert(lba == 45030 && bytes == 34832 && meta.sectors_read == before + 1);
+    assert(kui_game_metadata_find(&ops, &meta, "0gdtex.pvr", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_OK);
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 34831, &lba, &bytes) == KUI_GAME_METADATA_LIMIT);
+    assert(kui_game_metadata_find(&ops, &meta, "MISSING.PVR", 1u << 20, &lba, &bytes) ==
+        KUI_GAME_METADATA_BOOT_NOT_FOUND && lba == 0 && bytes == 0);
+    assert(kui_game_metadata_find(&ops, &meta, "../0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_ARGUMENT);
+    assert(kui_game_metadata_find(NULL, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_ARGUMENT);
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, NULL, &bytes) == KUI_GAME_METADATA_ARGUMENT);
+    fixture.fail_read = fixture.reads;
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_IO);
+    setup(45000); entry(art, 45030, 34832, 0, (const uint8_t *)"0GDTEX.PVR", 10); expect(KUI_GAME_METADATA_OK);
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_OK);
+    setup(45000); entry(art, 45030, 34832, 2, pvr, 12); expect(KUI_GAME_METADATA_OK);
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_UNSUPPORTED);
+    setup(45000); entry(art + entry(art, 45030, 2048, 0, pvr, 12), 45031, 2048, 0, pvr, 12);
+    expect(KUI_GAME_METADATA_OK);
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_ISO);
+    setup(45000); entry(art, 45159, 4096, 0, pvr, 12); expect(KUI_GAME_METADATA_OK);
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_ISO);
+    /* A disc whose boot file is missing still has findable artwork. */
+    setup(45000); entry(art, 45030, 34832, 0, pvr, 12); boot()[33] = 'X';
+    expect(KUI_GAME_METADATA_BOOT_NOT_FOUND);
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_OK);
+    /* No root directory yet: nothing to search. */
+    setup(45000); memset(fixture.sectors[0], 0, 16); expect(KUI_GAME_METADATA_IP_HEADER);
+    assert(kui_game_metadata_find(&ops, &meta, "0GDTEX.PVR", 1u << 20, &lba, &bytes) == KUI_GAME_METADATA_ARGUMENT);
+
     assert(kui_game_metadata_read(NULL, 45000, &meta) == KUI_GAME_METADATA_ARGUMENT);
     assert(!meta.ip_valid && !meta.boot_valid);
     assert(kui_game_metadata_read(&ops, UINT32_MAX, &meta) == KUI_GAME_METADATA_ARGUMENT);

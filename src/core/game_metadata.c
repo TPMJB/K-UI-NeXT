@@ -111,10 +111,12 @@ static bool record_read(const uint8_t *p, size_t available, struct record *out) 
     out->extended = p[1] || p[26] || p[27] || (p[25] & (4u | 8u | 16u | 32u | 64u | 128u));
     return true;
 }
-static enum kui_game_metadata_status directory(const struct kui_game_metadata_ops *ops,
-    struct kui_game_metadata *out, uint8_t *data) {
+/* One regular file in the root directory, matched case-insensitively with
+ * or without ";1". Duplicates, directories and extended records are refused. */
+static enum kui_game_metadata_status find(const struct kui_game_metadata_ops *ops,
+    struct kui_game_metadata *out, uint8_t *data, const char *name, uint32_t max_bytes,
+    uint32_t *lba, uint32_t *bytes) {
     bool found = false;
-    uint32_t boot_lba = 0, boot_bytes = 0;
     for(uint32_t done = 0; done < out->root_bytes;) {
         enum kui_game_metadata_status result = sector(ops, out->root_lba + done / 2048u, data, out);
         if(result != KUI_GAME_METADATA_OK) return result;
@@ -128,25 +130,41 @@ static enum kui_game_metadata_status directory(const struct kui_game_metadata_op
             }
             struct record entry;
             if(!record_read(data + pos, amount - pos, &entry)) return KUI_GAME_METADATA_ISO;
-            if(boot_name(entry.name, entry.name_length, out->bootfile)) {
+            if(boot_name(entry.name, entry.name_length, name)) {
                 if(found) return KUI_GAME_METADATA_ISO;
                 if((entry.flags & 2u) || entry.extended) return KUI_GAME_METADATA_UNSUPPORTED;
-                if(entry.bytes > KUI_GAME_METADATA_MAX_BOOT_BYTES) return KUI_GAME_METADATA_LIMIT;
+                if(entry.bytes > max_bytes) return KUI_GAME_METADATA_LIMIT;
                 if(!extent_valid(ops, entry.lba, entry.bytes, out->volume_blocks))
                     return KUI_GAME_METADATA_ISO;
                 found = true;
-                boot_lba = entry.lba;
-                boot_bytes = entry.bytes;
+                *lba = entry.lba;
+                *bytes = entry.bytes;
             }
             pos += entry.length;
         }
         done += (uint32_t)amount;
     }
-    if(!found) return KUI_GAME_METADATA_BOOT_NOT_FOUND;
+    return found ? KUI_GAME_METADATA_OK : KUI_GAME_METADATA_BOOT_NOT_FOUND;
+}
+static enum kui_game_metadata_status directory(const struct kui_game_metadata_ops *ops,
+    struct kui_game_metadata *out, uint8_t *data) {
+    uint32_t boot_lba = 0, boot_bytes = 0;
+    enum kui_game_metadata_status result = find(ops, out, data, out->bootfile,
+        KUI_GAME_METADATA_MAX_BOOT_BYTES, &boot_lba, &boot_bytes);
+    if(result != KUI_GAME_METADATA_OK) return result;
     out->boot_lba = boot_lba;
     out->boot_bytes = boot_bytes;
     out->boot_valid = true;
     return KUI_GAME_METADATA_OK;
+}
+enum kui_game_metadata_status kui_game_metadata_find(const struct kui_game_metadata_ops *ops,
+    struct kui_game_metadata *metadata, const char *name, uint32_t max_bytes,
+    uint32_t *lba, uint32_t *bytes) {
+    if(!ops || !ops->read_sector || !ops->data_range || !metadata || !metadata->root_bytes ||
+       !name || !root_filename(name) || !lba || !bytes) return KUI_GAME_METADATA_ARGUMENT;
+    *lba = *bytes = 0;
+    uint8_t data[2048];
+    return find(ops, metadata, data, name, max_bytes, lba, bytes);
 }
 enum kui_game_metadata_status kui_game_metadata_read(
     const struct kui_game_metadata_ops *ops, uint32_t session_lba,

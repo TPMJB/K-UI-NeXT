@@ -26,3 +26,27 @@ sample rates are 8–44.1 kHz; clips must contain at least 1024 frames.
 Test tones in `tests/fixtures/music_vorbis.h` are original synthesis, generated
 by `tests/make_music_vorbis.py`. FFmpeg/libvorbis is a host fixture/demo encoder,
 not a linked runtime dependency. Host tests do not need it installed.
+
+# stb_image source record
+
+`stb_image.h` is based on upstream version 2.30 from
+<https://github.com/nothings/stb/blob/2c980bb59875b0d32144a71867fbdebb2f77cd20/stb_image.h>,
+the same stb commit as `stb_vorbis.c`.
+
+Upstream SHA-256: `594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3`
+
+Local SHA-256: `ea9ff2654bbec309b0cf6561375e69364360cbc8252b14f8c9c04ef7cd62eb9a`
+
+The one local change is in `stbi__getn`: a zero-length read returns success
+before copying. An empty PNG chunk previously passed a null buffer to
+`memcpy`, which UBSan reports as undefined behavior; `tests/test_cover_image.c`
+decodes such a file under ASan/UBSan with recovery disabled.
+
+K-UI selects upstream's MIT license, alternative A, retained in the source and
+`LICENSES/stb_image.txt`. No DreamShell code or decoder is used.
+
+The wrapper `src/apps/cover_image.c` builds only the PNG and JPEG readers,
+from memory, without stdio, HDR or SIMD. It decodes only box art the owner
+places in `KUI/covers`, at most 3 MB and 1.2 megapixels, checked from the
+header before decoding. Disc artwork (`0GDTEX.PVR`) never passes through
+stb_image: `src/core/pvr_texture.c` is K-UI's own decoder.

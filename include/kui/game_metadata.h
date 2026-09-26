@@ -55,6 +55,13 @@ struct kui_game_metadata {
 enum kui_game_metadata_status kui_game_metadata_read(
     const struct kui_game_metadata_ops *ops, uint32_t session_lba,
     struct kui_game_metadata *out);
+/* After kui_game_metadata_read has located the root directory (it returned
+ * OK or BOOT_NOT_FOUND), finds one more regular file there by name, with the
+ * same rules as the boot file. BOOT_NOT_FOUND means no such file; LIMIT means
+ * it is larger than max_bytes. Reads count into metadata->sectors_read. */
+enum kui_game_metadata_status kui_game_metadata_find(const struct kui_game_metadata_ops *ops,
+    struct kui_game_metadata *metadata, const char *name, uint32_t max_bytes,
+    uint32_t *lba, uint32_t *bytes);
 const char *kui_game_metadata_status_text(enum kui_game_metadata_status status);
 
 #endif

@@ -36,7 +36,7 @@ static bool split_file(const char *path,char root[KUI_DEST_ROOT_CAP],char name[K
 }
 /* Resolve only an unambiguous immediate GDI. A folder with too many entries
  * remains browsable; reaching the budget never establishes uniqueness. */
-static bool single_gdi(const char *root,char selected[KUI_GAMES_FILE_CAP],kui_cancel_fn cancel) {
+bool kui_games_single_gdi(const char *root,char selected[KUI_GAMES_FILE_CAP],kui_cancel_fn cancel) {
     DIR dir;char path[KUI_GAMES_FILE_CAP+3];
     snprintf(path,sizeof(path),"0:%s",root);
     if(f_opendir(&dir,path)!=FR_OK) return false;
@@ -55,6 +55,10 @@ static bool single_gdi(const char *root,char selected[KUI_GAMES_FILE_CAP],kui_ca
 }
 bool kui_games_list(const char *root,unsigned offset,struct kui_games_page *out,
     kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_games_list_with(root,offset,out,NULL,NULL,log,cancel);
+}
+bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page *out,
+    kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
     if(!out) return false;
     memset(out,0,sizeof(*out));
     if(!kui_destination_normalize(out->root,root) || offset>8192u) {
@@ -73,17 +77,28 @@ bool kui_games_list(const char *root,unsigned offset,struct kui_games_page *out,
         goto done;
     }
     opened=true;
+    /* After the page is full the rest is only counted; a count that cannot
+     * finish leaves the total unknown rather than failing the page. */
+    bool counting=false,counted=true;unsigned listed=0;
     for(unsigned scanned=0;;scanned++) {
         if(stopped(cancel)) {problem="Games browse stopped";goto done;}
-        if(scanned==32768u) {problem="Directory too large to browse";goto done;}
+        if(scanned==32768u) {
+            if(counting) {counted=false;break;}
+            problem="Directory too large to browse";goto done;
+        }
         FILINFO info;r=f_readdir(&dir,&info);
-        if(r!=FR_OK) {problem="Cannot read Games folder";goto done;}
+        if(r!=FR_OK) {
+            if(counting) {counted=false;break;}
+            problem="Cannot read Games folder";goto done;
+        }
         if(!info.fname[0]) break;
         if(info.fname[0]=='.' || (info.fattrib&(AM_HID|AM_SYS))) continue;
         bool directory=(info.fattrib&AM_DIR)!=0;
         if(!directory && !gdi_name(info.fname)) continue;
+        ++listed;
         if(offset) {--offset;continue;}
-        if(out->count==KUI_GAMES_ROWS) {out->has_more=true;break;}
+        if(counting) continue;
+        if(out->count==KUI_GAMES_ROWS) {out->has_more=true;counting=true;continue;}
         struct kui_games_entry *entry=&out->entries[out->count++];
         entry->directory=directory;
         if(strlen(info.fname)>=sizeof(entry->name)) {
@@ -94,15 +109,17 @@ bool kui_games_list(const char *root,unsigned offset,struct kui_games_page *out,
             char child[KUI_DEST_ROOT_CAP];
             entry->disabled=!kui_destination_join(child,out->root,entry->name);
             if(!entry->disabled) {
-                if(single_gdi(child,entry->path,cancel)) entry->directory=false;
+                if(kui_games_single_gdi(child,entry->path,cancel)) entry->directory=false;
                 else strcpy(entry->path,child);
             }
         } else entry->disabled=!file_join(entry->path,out->root,entry->name);
     }
+    out->total=counted?listed:0;
     ok=true;
 done:
     if(stopped(cancel)) {ok=false;problem="Games browse stopped";}
     if(opened && f_closedir(&dir)!=FR_OK) {ok=false;problem="Cannot close Games folder";}
+    if(ok && mounted) mounted(ctx,log,cancel);
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="Cannot release SD filesystem";}
     kui_sd_disconnect();
     snprintf(out->message,sizeof(out->message),"%s",ok?
@@ -177,6 +194,10 @@ static bool metadata_range(void *ctx,uint32_t lba,uint32_t count) {
     return kui_game_image_check(reader->image,lba,count,KUI_GAME_SECTOR_MODE1)==KUI_GAME_OK;
 }
 bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_games_inspect_with(path,out,NULL,NULL,log,cancel);
+}
+bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
+    kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
     if(!out) return false;
     memset(out,0,sizeof(*out));
     struct image_files files={.cancel=cancel,.log=log};
@@ -187,9 +208,10 @@ bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn 
     strcpy(out->path,path);
     if(stopped(cancel)) {out->stopped=true;snprintf(out->message,sizeof(out->message),"Games inspection stopped");return false;}
     if(!kui_sd_connect()) {snprintf(out->message,sizeof(out->message),"SD card unavailable");return false;}
-    FATFS fs;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;
+    FATFS fs;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;bool mounted_card=false;
     const char *problem="Cannot mount SD card";
     if(!kui_mount(&fs,log)) goto done;
+    mounted_card=true;
     uint64_t size=0;
     enum kui_game_result result=image_stat(&files,descriptor,&size);
     if(result!=KUI_GAME_OK) {problem=kui_game_result_name(result);goto done;}
@@ -250,6 +272,7 @@ bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn 
         "Image inspected; native game launch available, compatibility varies";
 done:
     if(stopped(cancel)) {out->valid=false;out->stopped=true;problem="Games inspection stopped";}
+    if(mounted_card && mounted && !out->stopped) mounted(ctx,log,cancel);
     if(f_mount(NULL,"0:",0)!=FR_OK) {out->valid=false;problem="Cannot release SD filesystem";}
     kui_sd_disconnect();free(gdi);free(image);
     snprintf(out->message,sizeof(out->message),"%s",problem);

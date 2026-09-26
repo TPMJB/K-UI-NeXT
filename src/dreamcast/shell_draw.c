@@ -136,7 +136,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
         s->page==KUI_SHELL_RIPPER ? "B Home   START Advanced   L/R Songs" :
         s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   L Actions" :
-        s->page==KUI_SHELL_GAMES ? "B Parent / Home   LEFT/RIGHT Page" :
+        s->page==KUI_SHELL_GAMES ? (kui_shell_games_view(s)==KUI_GAMES_VIEW_LIST?
+            "A Open   Y View   LEFT/RIGHT Page   START More":"A Open   Y View   D-pad Move   START More") :
         s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_retail_ready(s)?
             "A Launch   X Inspect   B Games":kui_shell_games_image_ready(s)?
             "Y Read test   X Inspect   B Games":"X Inspect again   B Games") :
@@ -847,24 +848,110 @@ static void music_player(struct paint *p,const struct kui_shell *s,const struct 
         (unsigned long)((v->music_cache_bytes%1048576u)*10u/1048576u));
     label(p,40,396,MUTED,line);
 }
+/* Box art is already scaled to its cell; only whole rows are copied. */
+static void cover_image(struct paint *p,unsigned x,unsigned y,unsigned edge,const uint16_t *pixels) {
+    if(x>=640 || y>=480) return;
+    unsigned rows=edge<480-y?edge:480-y,cols=edge<640-x?edge:640-x;
+    for(unsigned row=0;row<rows;row++) memcpy(p->fb+(y+row)*640+x,pixels+row*edge,cols*2u);
+}
+static unsigned root_of(unsigned v) {
+    unsigned r=0;
+    while((r+1)*(r+1)<=v) ++r;
+    return r;
+}
+static void round_spot(struct paint *p,unsigned cx,unsigned cy,unsigned radius,uint16_t color) {
+    for(unsigned dy=0;dy<=2*radius;dy++) {
+        unsigned off=dy>radius?dy-radius:radius-dy,dx=root_of(radius*radius-off*off);
+        box(p,cx-dx,cy-radius+dy,2*dx+1,1,color);
+    }
+}
+/* Drawn where a game has no box art yet: a disc; a folder for folders. */
+static void placeholder(struct paint *p,unsigned x,unsigned y,unsigned edge,bool folder) {
+    panel(p,x,y,edge,edge,PANEL);
+    if(folder) {
+        box(p,x+edge/5,y+edge*3/10,edge/4,edge/10,EDGE);
+        box(p,x+edge/5,y+edge*2/5,edge*3/5,edge*7/20,EDGE);
+        return;
+    }
+    round_spot(p,x+edge/2,y+edge/2,edge*3/10,EDGE);
+    round_spot(p,x+edge/2,y+edge/2,edge/10,PANEL);
+    round_spot(p,x+edge/2,y+edge/2,edge/30+1,EDGE);
+}
+static const char *entry_text(const struct kui_games_entry *e) {
+    return e->title[0]?e->title:e->name;
+}
+static const uint16_t *entry_cover(const struct kui_shell *s,const struct kui_shell_view *v,unsigned i) {
+    const struct kui_games_page *l=&s->games_listing;
+    return v->game_covers && i<l->count && l->entries[i].cover && l->view==kui_shell_games_view(s)?
+        v->game_covers[i]:NULL;
+}
+static void entry_art(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v,
+        unsigned i,unsigned x,unsigned y,unsigned edge) {
+    const uint16_t *pixels=entry_cover(s,v,i);
+    if(pixels) cover_image(p,x,y,edge,pixels);
+    else placeholder(p,x,y,edge,s->games_listing.entries[i].directory);
+}
+/* Text centred in a cell, shortened with an ellipsis when it cannot fit. */
+static void centred(struct paint *p,unsigned x,unsigned y,unsigned width,uint16_t color,const char *text) {
+    unsigned w=kui_shell_font_width(text,false);
+    words(p,w<width?x+(width-w)/2:x,y,x+width,color,text,false);
+}
+static void games_scan(struct paint *p,const struct kui_shell_view *v) {
+    const struct kui_app_status *st=v->app_status;
+    panel(p,32,140,576,250,PANEL);
+    label(p,48,152,CYAN,"Scanning for box art");
+    label(p,48,176,WHITE,st && st->message[0]?st->message:"Finding games...");
+    box(p,48,202,544,10,EDGE);
+    if(st && st->total) box(p,48,202,(unsigned)(544u*(st->done<st->total?st->done:st->total)/st->total),10,CYAN);
+    for(unsigned i=0;st && i<st->line_count && i<6;i++) label(p,48,224+i*22,MUTED,st->lines[i]);
+    label(p,48,366,MUTED,"B stops safely; finished covers are kept.");
+}
 static void games(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_games_page *l=&s->games_listing;
+    unsigned view=kui_shell_games_view(s),count=l->count<KUI_GAMES_ROWS?l->count:KUI_GAMES_ROWS;
     title(p,40,108,"Games");
     char line[180];snprintf(line,sizeof(line),"SD: %s",s->games_path);
-    label(p,40,140,CYAN,line);
-    label(p,40,163,MUTED,"A Open / inspect   X Refresh   START Advanced");
-    unsigned count=s->games_listing.count<KUI_GAMES_ROWS?s->games_listing.count:KUI_GAMES_ROWS;
+    words(p,150,116,392,CYAN,line,false);
+    unsigned pages=l->total?(l->total+KUI_GAMES_ROWS-1)/KUI_GAMES_ROWS:0;
+    if(pages) snprintf(line,sizeof(line),"Page %u of %u   %u items",s->games_page+1,
+        pages>s->games_page?pages:s->games_page+1,l->total);
+    else snprintf(line,sizeof(line),"Page %u%s",s->games_page+1,l->has_more?" +":"");
+    unsigned width=kui_shell_font_width(line,false);
+    words(p,width<196?600-width:404,116,608,MUTED,line,false);
+    if(s->games_scanning && v->busy) {games_scan(p,v);return;}
+    unsigned chosen=s->games_selected<count?s->games_selected:0;
     for(unsigned i=0;i<count;i++) {
-        const struct kui_games_entry *e=&s->games_listing.entries[i];
-        unsigned y=186+i*23;
-        if(i==s->games_selected) panel(p,32,y-3,576,23,SELECTED);
-        words(p,44,y,542,e->disabled?AMBER:i==s->games_selected?WHITE:MUTED,e->name,false);
-        words(p,554,y,602,MUTED,e->directory?"DIR":"GDI",false);
+        const struct kui_games_entry *e=&l->entries[i];
+        uint16_t ink=e->disabled?AMBER:i==chosen?WHITE:MUTED;
+        if(view==KUI_GAMES_VIEW_COMPACT) {
+            unsigned x=32+(i/4)*292,y=142+(i%4)*62;
+            if(i==chosen) panel(p,x,y,284,58,SELECTED);
+            entry_art(p,s,v,i,x+4,y+1,KUI_COVER_SMALL);
+            words(p,x+70,y+10,x+280,ink,entry_text(e),false);
+            words(p,x+70,y+32,x+280,MUTED,e->directory?"Folder":strcmp(entry_text(e),e->name)?e->name:"GDI image",false);
+        } else if(view==KUI_GAMES_VIEW_GALLERY) {
+            unsigned x=32+(i%4)*144,y=134+(i/4)*130;
+            if(i==chosen) panel(p,x+10,y-3,124,130,SELECTED);
+            entry_art(p,s,v,i,x+20,y+2,KUI_COVER_MEDIUM);
+            centred(p,x+12,y+110,120,ink,entry_text(e));
+        } else {
+            unsigned y=146+i*30;
+            if(i==chosen) panel(p,32,y-5,388,28,SELECTED);
+            words(p,44,y,e->directory?368:412,ink,entry_text(e),false);
+            if(e->directory) words(p,378,y,412,MUTED,"DIR",false);
+        }
+    }
+    if(view==KUI_GAMES_VIEW_LIST && count) {
+        const struct kui_games_entry *e=&l->entries[chosen];
+        const uint16_t *pixels=entry_cover(s,v,chosen);
+        if(pixels) cover_image(p,436,146,KUI_COVER_LARGE,pixels);
+        else placeholder(p,436,146,KUI_COVER_LARGE,e->directory);
+        centred(p,436,316,KUI_COVER_LARGE,MUTED,e->directory?"Folder":pixels?(strcmp(entry_text(e),e->name)?e->name:""):
+            l->artwork?"No box art found":"No box art yet");
     }
     if(!count && !v->busy) label(p,40,210,MUTED,"No selectable GDI images or folders in this view.");
-    label(p,40,380,v->busy?CYAN:AMBER,s->games_listing.message);
-    snprintf(line,sizeof(line),"PAGE %u%s   Choose an image, then A to launch.",
-        s->games_page+1,s->games_listing.has_more?" +":"");
-    label(p,40,398,MUTED,line);
+    label(p,40,398,v->busy?CYAN:AMBER,!v->busy && count && !l->artwork?
+        "No box art yet: press START, then Scan box art.":l->message);
 }
 static void game_detail(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_games_detail *d=&s->games_detail;
@@ -873,50 +960,53 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         v->busy?"Inspecting image...":d->stopped?"Inspection stopped":"Could not inspect image");
     words(p,40,164,608,MUTED,s->games_selected_path,false);
     panel(p,32,190,576,214,PANEL);
+    bool art=d->cover && v->game_detail_cover;
+    unsigned right=art?428:608;
+    if(art) cover_image(p,440,204,KUI_COVER_LARGE,v->game_detail_cover);
     if(d->valid) {
         char line[160];snprintf(line,sizeof(line),"Product: %s   Region: %s",d->product,d->region);
-        label(p,44,202,WHITE,line);
+        words(p,44,202,right,WHITE,line,false);
         snprintf(line,sizeof(line),"Boot file: %s   %lu bytes",d->boot_file,(unsigned long)d->boot_bytes);
-        label(p,44,228,WHITE,line);
+        words(p,44,228,right,WHITE,line,false);
         snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: %u",d->tracks,d->data_tracks,d->audio_tracks);
-        label(p,44,254,WHITE,line);
+        words(p,44,254,right,WHITE,line,false);
         snprintf(line,sizeof(line),"Image size: %llu bytes",(unsigned long long)d->bytes);
-        label(p,44,280,WHITE,line);
+        words(p,44,280,right,WHITE,line,false);
         snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
-        label(p,44,306,MUTED,line);
+        words(p,44,306,right,MUTED,line,false);
         if(kui_shell_games_retail_ready(s)) {
-            label(p,44,337,CYAN,"A Launch game   Y Advanced read test");
-            label(p,44,365,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
+            words(p,44,337,right,CYAN,"A Launch game   Y Advanced read test",false);
+            words(p,44,365,right,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
                 "CD audio is unavailable; this game may not run.":
-                "V1.5: game compatibility varies.");
+                "V1.5: game compatibility varies.",false);
         } else {
-            label(p,44,337,AMBER,d->windows_ce?"Windows CE games are not supported.":
+            words(p,44,337,right,AMBER,d->windows_ce?"Windows CE games are not supported.":
                 !d->native_gd?"This image has no supported native GD boot header.":
                 d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 16 tracks in V1.5.":
-                "This image exceeds the current launch limits.");
-            label(p,44,365,MUTED,"Y Advanced read test   X Inspect again");
+                "This image exceeds the current launch limits.",false);
+            words(p,44,365,right,MUTED,"Y Advanced read test   X Inspect again",false);
         }
-        label(p,44,386,MUTED,"Metadata checks do not verify every saved sector.");
+        words(p,44,386,right,MUTED,art?"Checks do not verify every saved sector.":
+            "Metadata checks do not verify every saved sector.",false);
     } else {
-        label(p,44,210,v->busy?CYAN:AMBER,d->message);
-        label(p,44,252,MUTED,v->busy?"Reading bounded image metadata from SD.":
-            "Check the image files, then press X to inspect again.");
-        label(p,44,284,MUTED,"B returns to your Games list.");
+        words(p,44,210,right,v->busy?CYAN:AMBER,d->message,false);
+        words(p,44,252,right,MUTED,v->busy?"Reading bounded image metadata from SD.":
+            "Check the image files, then press X to inspect again.",false);
+        words(p,44,284,right,MUTED,"B returns to your Games list.",false);
     }
 }
 static void games_advanced(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Advanced");
     label(p,40,142,CYAN,"Source: SD card");
-    const char *names[]={"Game library","Browse SD folders","Resident loader probe"};
+    const char *names[]={"Game library","Browse SD folders","Scan box art","Resident loader probe"};
     const char *details[]={"Open /Games","Find a GDI image elsewhere on the card",
-        "Test SD reads after leaving the launcher"};
-    for(unsigned i=0;i<3;i++) {
-        unsigned y=172+i*62;
-        panel(p,32,y,576,54,s->games_advanced_selected==i?SELECTED:PANEL);
-        label(p,48,y+7,WHITE,names[i]);label(p,48,y+29,MUTED,details[i]);
+        "Covers and titles for every game in /Games","Test SD reads after leaving the launcher"};
+    for(unsigned i=0;i<4;i++) {
+        unsigned y=166+i*56;
+        panel(p,32,y,576,50,s->games_advanced_selected==i?SELECTED:PANEL);
+        label(p,48,y+6,WHITE,names[i]);label(p,48,y+27,MUTED,details[i]);
     }
-    label(p,40,365,MUTED,"IDE / CF sources are not available yet.");
-    label(p,40,389,MUTED,"A on image details opens the game launch screen.");
+    label(p,40,396,MUTED,"IDE / CF sources are not available yet.");
 }
 static void games_probe_confirmation(struct paint *p,const struct kui_shell_view *v) {
     title(p,40,108,"Games / Resident loader probe");

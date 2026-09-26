@@ -155,6 +155,9 @@ Audio-CD playback is now accepted by owner report. The Games foundation adds
 `/Games` browsing, Advanced > Browse SD folders and bounded GDI/boot metadata
 inspection. It accepts GDI-only folders without a manifest and does not scan
 whole tracks. See [the Games hardware guide](docs/games-test.md).
+Games can also show box art and disc titles in List, Compact and Gallery
+views: Advanced > Scan box art reads each disc's own `0GDTEX.PVR`, or your
+PNG/JPEG in `KUI/covers`. See [box art, titles and views](docs/games-covers.md).
 The separate resident SD service and original post-handoff test program passed
 on hardware: build `7a8493ae825e`, ten checks, 84 SD blocks read after launcher
 shutdown. [Evidence](docs/evidence/games-resident-probe-hardware-2026-09-24.json).

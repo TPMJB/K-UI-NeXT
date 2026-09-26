@@ -21,6 +21,7 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     s->system_draft=s->system_saved;
     snprintf(s->music_path,sizeof(s->music_path),"/Music");
     snprintf(s->games_path,sizeof(s->games_path),"/Games");
+    s->games_view=KUI_GAMES_VIEW_SAVED;
     kui_destination_default(s->destination);
     memcpy(s->browse_path,s->destination,sizeof(s->browse_path));
 }
@@ -157,13 +158,16 @@ void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page
     if(!s || !page || s->page!=KUI_SHELL_GAMES ||
        !memchr(page->root,0,sizeof(page->root)) || strcmp(page->root,s->games_path)) return;
     s->games_listing=*page;
+    s->games_scanning=false;
+    if(page->view<KUI_GAMES_VIEW_COUNT) s->games_view=page->view;
     if(s->games_listing.count>KUI_GAMES_ROWS) s->games_listing.count=KUI_GAMES_ROWS;
     s->games_listing.message[sizeof(s->games_listing.message)-1]=0;
     size_t root_length=strlen(s->games_path);
     for(unsigned i=0;i<s->games_listing.count;i++) {
         struct kui_games_entry *e=&s->games_listing.entries[i];
+        e->title[sizeof(e->title)-1]=0;
         if(!memchr(e->name,0,sizeof(e->name))) {
-            snprintf(e->name,sizeof(e->name),"[Name too long]");e->disabled=true;
+            snprintf(e->name,sizeof(e->name),"[Name too long]");e->disabled=true;e->title[0]=0;
         }
         if(!games_path_safe(e->path,sizeof(e->path)) ||
            (strcmp(s->games_path,"/") &&
@@ -176,7 +180,12 @@ void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page
                 e->disabled=true;
         }
     }
+    for(unsigned i=0;i<s->games_listing.count;i++)
+        if(s->games_listing.entries[i].disabled) s->games_listing.entries[i].cover=false;
     if(s->games_selected>=s->games_listing.count) s->games_selected=0;
+}
+unsigned kui_shell_games_view(const struct kui_shell *s) {
+    return s && s->games_view<KUI_GAMES_VIEW_COUNT?s->games_view:KUI_GAMES_VIEW_LIST;
 }
 void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detail *detail) {
     if(!s || !detail || s->page!=KUI_SHELL_GAMES_DETAIL ||
@@ -210,6 +219,48 @@ static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     memset(&s->games_listing,0,sizeof(s->games_listing));
     snprintf(s->games_listing.message,sizeof(s->games_listing.message),"Reading SD directory...");
     return KUI_SHELL_GAMES_LIST;
+}
+static unsigned move_count(unsigned selected, unsigned buttons,unsigned count);
+/* Turning a page from a grid edge lands on the matching cell; the listing
+ * clamps it if the new page is shorter. */
+static enum kui_shell_action turn_games_page(struct kui_shell *s,bool forward,unsigned select) {
+    if(forward) {
+        if(!s->games_listing.has_more || s->games_page>=UINT_MAX/KUI_GAMES_ROWS) return KUI_SHELL_NONE;
+        ++s->games_page;
+    } else {
+        if(!s->games_page) return KUI_SHELL_NONE;
+        --s->games_page;
+    }
+    enum kui_shell_action action=list_games(s,false);
+    s->games_selected=select;
+    return action;
+}
+/* Compact: two columns of four, filled down the first column. Gallery: two
+ * rows of four, filled across. Moving past a side edge turns the page. */
+static bool games_grid(struct kui_shell *s,unsigned buttons,enum kui_shell_action *action) {
+    unsigned view=kui_shell_games_view(s),count=s->games_listing.count,at=s->games_selected;
+    unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT),vertical=buttons&(KUI_SHELL_UP|KUI_SHELL_DOWN);
+    *action=KUI_SHELL_NONE;
+    if(view==KUI_GAMES_VIEW_LIST) return false;
+    if(at>=count) at=0;
+    if(view==KUI_GAMES_VIEW_COMPACT) {
+        unsigned column=at/4u,row=at%4u;
+        if(horizontal==KUI_SHELL_LEFT) {
+            if(column) s->games_selected=at-4u; else *action=turn_games_page(s,false,row+4u);
+        } else if(horizontal==KUI_SHELL_RIGHT) {
+            if(!column && at+4u<count) s->games_selected=at+4u; else *action=turn_games_page(s,true,row);
+        } else s->games_selected=move_count(at,buttons,count);
+        return true;
+    }
+    unsigned row=at/4u,column=at%4u;
+    if(horizontal==KUI_SHELL_LEFT) {
+        if(column) s->games_selected=at-1u; else *action=turn_games_page(s,false,row*4u+3u);
+    } else if(horizontal==KUI_SHELL_RIGHT) {
+        if(column<3u && at+1u<count) s->games_selected=at+1u; else *action=turn_games_page(s,true,row*4u);
+    } else if(vertical==KUI_SHELL_UP || vertical==KUI_SHELL_DOWN) {
+        if(row) s->games_selected=at-4u; else if(at+4u<count) s->games_selected=at+4u;
+    }
+    return true;
 }
 static enum kui_shell_action inspect_game(struct kui_shell *s) {
     memset(&s->games_detail,0,sizeof(s->games_detail));
@@ -572,14 +623,29 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             break;
         }
         if(buttons&KUI_SHELL_X) return list_games(s,false);
-        if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_LEFT && s->games_page) {
-            --s->games_page;return list_games(s,false);
+        if(buttons&KUI_SHELL_Y) {
+            /* Same page and selection in the next view; its covers differ. */
+            unsigned keep=s->games_selected;
+            s->games_view=(kui_shell_games_view(s)+1u)%KUI_GAMES_VIEW_COUNT;
+            enum kui_shell_action action=list_games(s,false);
+            s->games_selected=keep;
+            return action;
         }
-        if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_RIGHT &&
-           s->games_listing.has_more && s->games_page<UINT_MAX/KUI_GAMES_ROWS) {
-            ++s->games_page;return list_games(s,false);
+        {
+            enum kui_shell_action action;
+            if(games_grid(s,buttons,&action)) {
+                if(action!=KUI_SHELL_NONE) return action;
+            } else {
+                if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_LEFT && s->games_page) {
+                    --s->games_page;return list_games(s,false);
+                }
+                if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_RIGHT &&
+                   s->games_listing.has_more && s->games_page<UINT_MAX/KUI_GAMES_ROWS) {
+                    ++s->games_page;return list_games(s,false);
+                }
+                s->games_selected=move_count(s->games_selected,buttons,s->games_listing.count);
+            }
         }
-        s->games_selected=move_count(s->games_selected,buttons,s->games_listing.count);
         if((buttons&KUI_SHELL_A) && s->games_selected<s->games_listing.count) {
             const struct kui_games_entry *entry=&s->games_listing.entries[s->games_selected];
             if(entry->disabled || !games_path_safe(entry->path,sizeof(entry->path))) {
@@ -606,10 +672,18 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
         break;
     case KUI_SHELL_GAMES_ADVANCED:
-        s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,3);
+        s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,4);
         if(buttons&KUI_SHELL_A) {
-            if(s->games_advanced_selected==2) {
+            if(s->games_advanced_selected==3) {
                 s->page=KUI_SHELL_GAMES_PROBE_CONFIRM;break;
+            }
+            if(s->games_advanced_selected==2) {
+                s->page=KUI_SHELL_GAMES;
+                snprintf(s->games_path,sizeof(s->games_path),"/Games");
+                list_games(s,true);
+                s->games_scanning=true;
+                snprintf(s->games_listing.message,sizeof(s->games_listing.message),"Scanning for box art...");
+                return KUI_SHELL_GAMES_SCAN;
             }
             snprintf(s->games_path,sizeof(s->games_path),"%s",s->games_advanced_selected?"/":"/Games");
             s->page=KUI_SHELL_GAMES;return list_games(s,true);

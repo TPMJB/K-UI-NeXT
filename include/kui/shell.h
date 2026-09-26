@@ -10,6 +10,7 @@
 #include "kui/clock.h"
 #include "kui/cd_audio.h"
 #include "kui/games.h"
+#include "kui/games_covers.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -55,7 +56,7 @@ enum kui_shell_action {
     KUI_SHELL_SALVAGE_NEW, KUI_SHELL_SALVAGE_RESUME, KUI_SHELL_SALVAGE_RECOVER,
     KUI_SHELL_CD_LIST, KUI_SHELL_CD_PLAY, KUI_SHELL_CD_PAUSE, KUI_SHELL_CD_RESUME, KUI_SHELL_CD_STOP,
     KUI_SHELL_GAMES_LIST, KUI_SHELL_GAMES_INSPECT, KUI_SHELL_GAMES_PROBE,
-    KUI_SHELL_GAMES_IMAGE_PROBE, KUI_SHELL_GAMES_RETAIL
+    KUI_SHELL_GAMES_IMAGE_PROBE, KUI_SHELL_GAMES_RETAIL, KUI_SHELL_GAMES_SCAN
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -89,6 +90,9 @@ struct kui_shell {
     unsigned cd_selected;
     char games_path[KUI_DEST_ROOT_CAP], games_selected_path[KUI_GAMES_FILE_CAP];
     unsigned games_page, games_selected, games_advanced_selected;
+    /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
+    unsigned games_view;
+    bool games_scanning; /* The box art scan runs; a listing ends it. */
     struct kui_games_page games_listing;
     struct kui_games_detail games_detail;
     /* Destination is committed only by a successful worker load/save. Browsing
@@ -137,10 +141,13 @@ void kui_shell_set_music_listing(struct kui_shell *shell,
     const struct kui_music_player_page *page);
 /* Games results must still match their active page and requested root/path.
  * Main also checks worker generation to reject stale same-folder pagination.
- * LIST uses games_path + games_page * ROWS; INSPECT uses games_selected_path. */
+ * LIST uses games_path + games_page * ROWS and games_view; INSPECT uses
+ * games_selected_path. SCAN covers /Games, then lists its first page. */
 void kui_shell_set_games_listing(struct kui_shell *shell, const struct kui_games_page *page);
 void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
+/* The view to draw: the saved view once known, else the list. */
+unsigned kui_shell_games_view(const struct kui_shell *shell);
 /* Exact initial test profile only; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
 /* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
@@ -182,6 +189,11 @@ struct kui_shell_view {
     uint32_t memory_used, memory_physical, memory_peak;
     const char *const *log_lines;
     unsigned log_count, total_log_lines;
+    /* Games rows' covers, in the listing's view size (games_listing.view),
+     * and image details' large cover. Valid only where the listing or
+     * detail says cover; NULL draws placeholders. */
+    const uint16_t (*game_covers)[KUI_COVER_PIXELS];
+    const uint16_t *game_detail_cover;
 };
 /* Estimate only the current moving phase after a 2s warmup; do not imply the
  * later verification duration. A stalled (>3s old) rate is not an estimate. */

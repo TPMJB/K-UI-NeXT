@@ -47,10 +47,12 @@ def raw_sector(lba, payload):
     return sector
 
 
-def make_fixture(folder):
+def make_fixture(folder, title=b"Independent Games Fixture", art=None, gdi_name="disc.gdi"):
+    """art: bytes stored in the root directory as 0GDTEX.PVR, from sector 24."""
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    sectors = [bytearray(DATA) for _ in range(64)]
+    art_sectors = (len(art) + DATA - 1) // DATA if art else 0
+    sectors = [bytearray(DATA) for _ in range(max(64, 24 + art_sectors))]
     ip = sectors[0]
     ip[:256] = b" " * 256
     ip[:16] = b"SEGA SEGAKATANA "
@@ -63,7 +65,6 @@ def make_fixture(folder):
     ip[80:96] = b"20260924        "
     ip[96:112] = b"1ST_READ.BIN    "
     ip[112:128] = b"K-UI TEST       "
-    title = b"Independent Games Fixture"
     ip[128:128 + len(title)] = title
     pvd = sectors[16]
     pvd[:7] = b"\x01CD001\x01"
@@ -76,9 +77,14 @@ def make_fixture(folder):
     pvd[156:190] = record(b"\0", SESSION + 20, DATA, True)
     pvd[881] = 1
     sectors[17][:7] = b"\xffCD001\x01"
-    entries = (record(b"\0", SESSION + 20, DATA, True),
+    entries = [record(b"\0", SESSION + 20, DATA, True),
                record(b"\1", SESSION + 20, DATA, True),
-               record(b"1ST_READ.BIN;1", SESSION + 21, DATA * 2))
+               record(b"1ST_READ.BIN;1", SESSION + 21, DATA * 2)]
+    if art:
+        entries.append(record(b"0GDTEX.PVR;1", SESSION + 24, len(art)))
+        for i in range(art_sectors):
+            chunk = art[i * DATA:(i + 1) * DATA]
+            sectors[24 + i][:len(chunk)] = chunk
     offset = 0
     for entry in entries:
         sectors[20][offset:offset + len(entry)] = entry
@@ -88,7 +94,7 @@ def make_fixture(folder):
     (folder / "track01.bin").write_bytes(b"".join(raw_sector(i, bytearray(DATA)) for i in range(4)))
     (folder / "track02.raw").write_bytes(bytes((i * 11 + 5) & 255 for i in range(4 * RAW)))
     (folder / "track03.bin").write_bytes(b"".join(raw_sector(SESSION + i, sector) for i, sector in enumerate(sectors)))
-    (folder / "disc.gdi").write_text(
+    (folder / gdi_name).write_text(
         "3\n1 0 4 2352 track01.bin 0\n2 4 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n",
         encoding="ascii")
 

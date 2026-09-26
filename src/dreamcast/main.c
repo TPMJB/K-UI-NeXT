@@ -16,6 +16,7 @@
 #include "kui/games_probe.h"
 #include "kui/games_image_probe.h"
 #include "kui/games_retail.h"
+#include "kui/games_covers.h"
 #include "kui/image_loader_layout.h"
 #include <arch/exec.h>
 #include "kui/splash.h"
@@ -110,6 +111,13 @@ static struct kui_games_detail games_detail;
 static unsigned games_listing_generation,games_detail_generation;
 static unsigned games_offset_pending,games_result_offset;
 static char games_path_pending[KUI_GAMES_FILE_CAP];
+static unsigned games_view_pending;
+static struct kui_app_status games_scan_status;
+/* Box art for the Games page and image details. Only the worker writes them,
+ * and only while the shell draws no cover from them: each job that fills
+ * them starts after the shell cleared the listing or details it replaces. */
+static uint16_t games_covers[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
+static uint16_t games_detail_cover[KUI_COVER_PIXELS];
 static bool is_capture_action(unsigned action) {
     return (action>=4 && action<=6) || action==22;
 }
@@ -595,6 +603,9 @@ static void publish_cd_audio(void) {
     bool owns=kui_cd_audio_owns_drive();
     mutex_lock(&lock);cd_audio_snapshot=status;cd_drive_owned=owns;++cd_audio_generation;mutex_unlock(&lock);
 }
+static void games_scan_progress(const struct kui_app_status *status) {
+    mutex_lock(&lock);games_scan_status=*status;mutex_unlock(&lock);
+}
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
         action==24 || action==25 || action==56 || action==57 || action==58 || (action>=46 && action<=48);
@@ -705,12 +716,14 @@ static void *worker(void *unused) {
                 snprintf(cd_audio_snapshot.message,sizeof(cd_audio_snapshot.message),"Audio CD operation stopped before starting.");
                 ++cd_audio_generation;
             }
-            if(action==54) {
+            if(action==54 || action==59) {
                 memset(&games_listing,0,sizeof(games_listing));
+                games_listing.view=KUI_GAMES_VIEW_SAVED;
                 snprintf(games_listing.root,sizeof(games_listing.root),"%.*s",
-                    (int)sizeof(games_listing.root)-1,games_path_pending);
-                snprintf(games_listing.message,sizeof(games_listing.message),"Games browse stopped before starting");
-                games_result_offset=games_offset_pending;++games_listing_generation;
+                    (int)sizeof(games_listing.root)-1,action==59?KUI_GAMES_SCAN_ROOT:games_path_pending);
+                snprintf(games_listing.message,sizeof(games_listing.message),"%s",action==59?
+                    "Box art scan stopped before starting":"Games browse stopped before starting");
+                games_result_offset=action==59?0:games_offset_pending;++games_listing_generation;
             }
             if(action==55) {
                 memset(&games_detail,0,sizeof(games_detail));games_detail.stopped=true;
@@ -838,14 +851,27 @@ static void *worker(void *unused) {
             if(action==54) {
                 kui_sd_set_params(0,true);
                 struct kui_games_page page;
-                kui_games_list(games_path_pending,games_offset_pending,&page,kui_log,kui_cancelled);
+                kui_games_list_covers(games_path_pending,games_offset_pending,games_view_pending,&page,
+                    games_covers,kui_log,kui_cancelled);
                 mutex_lock(&lock);games_listing=page;games_result_offset=games_offset_pending;
+                ++games_listing_generation;mutex_unlock(&lock);
+            }
+            if(action==59) {
+                kui_sd_set_params(0,true);
+                struct kui_app_status status;struct kui_games_scan_counts counts;
+                kui_games_scan(&status,&counts,games_scan_progress,kui_log,kui_cancelled);
+                /* Show the library either way: finished covers are kept, and
+                 * a Stop request already ended the scan itself. */
+                struct kui_games_page page;
+                if(kui_games_list_covers(KUI_GAMES_SCAN_ROOT,0,games_view_pending,&page,games_covers,kui_log,NULL))
+                    snprintf(page.message,sizeof(page.message),"%s",status.message);
+                mutex_lock(&lock);games_listing=page;games_result_offset=0;
                 ++games_listing_generation;mutex_unlock(&lock);
             }
             if(action==55) {
                 kui_sd_set_params(0,true);
                 struct kui_games_detail detail;
-                kui_games_inspect(games_path_pending,&detail,kui_log,kui_cancelled);
+                kui_games_inspect_cover(games_path_pending,&detail,games_detail_cover,kui_log,kui_cancelled);
                 mutex_lock(&lock);games_detail=detail;++games_detail_generation;mutex_unlock(&lock);
             }
             if(action==56 || action==57 || action==58) {
@@ -1116,7 +1142,8 @@ static void draw_shell(void) {
     struct kui_app_status app_status;
     struct kui_shell_view view = {.build = KUI_BUILD_ID, .job_dir = path,
         .disc_title = title, .gdi_name = gdi, .settings_notice = notice, .message = message, .log_lines = log_rows,
-        .inserted_title=inserted,.music_title=music_title,.music_notice=music_notice,.app_status=&app_status};
+        .inserted_title=inserted,.music_title=music_title,.music_notice=music_notice,.app_status=&app_status,
+        .game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])games_covers,.game_detail_cover=games_detail_cover};
     mutex_lock(&lock);
     unsigned max_scroll = line_count > KUI_SHELL_LOG_ROWS ? line_count - KUI_SHELL_LOG_ROWS : 0;
     if(shell.scroll > max_scroll) shell.scroll = max_scroll;
@@ -1164,7 +1191,8 @@ static void draw_shell(void) {
     view.video_seconds=video_preview && video_deadline>now?(unsigned)((video_deadline-now+999)/1000):0;
     view.phase_elapsed_ms=now>=phase_started_ms?now-phase_started_ms:0;
     view.progress_age_ms=now>=progress_updated_ms?now-progress_updated_ms:0;
-    app_status=shell.page==KUI_SHELL_MEMORY?memory_test_status:
+    app_status=shell.page==KUI_SHELL_GAMES?games_scan_status:
+        shell.page==KUI_SHELL_MEMORY?memory_test_status:
         (shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM || shell.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
          shell.page==KUI_SHELL_GAMES_RETAIL_CONFIRM)?probe_status:
         shell.page==KUI_SHELL_NETWORK?network_test_status:
@@ -1261,6 +1289,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_GAMES_PROBE: return 56;
         case KUI_SHELL_GAMES_IMAGE_PROBE: return 57;
         case KUI_SHELL_GAMES_RETAIL: return 58;
+        case KUI_SHELL_GAMES_SCAN: return 59;
         default: return 0;
     }
 }
@@ -1590,6 +1619,11 @@ int main(void) {
                 snprintf(games_path_pending,sizeof(games_path_pending),"%s",
                     action==54?shell.games_path:shell.games_selected_path);
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
+            }
+            if(action==54 || action==59) games_view_pending=shell.games_view;
+            if(action==59) {
+                games_scan_status=(struct kui_app_status){0};
+                snprintf(games_scan_status.message,sizeof(games_scan_status.message),"Finding games...");
             }
             if(action==56 || action==57 || action==58) {
                 probe_status=(struct kui_app_status){0};

@@ -554,12 +554,12 @@ static void games_controls(void) {
 
     /* The accepted synthetic probe remains available independently of a game. */
     reset(KUI_SHELL_GAMES_ADVANCED);
-    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==2);
+    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==3);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
     assert(press(KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_L|KUI_SHELL_R|KUI_SHELL_START,false)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
-    assert(s.games_advanced_selected==2);
+    assert(s.games_advanced_selected==3);
     press(KUI_SHELL_A,false);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -993,6 +993,82 @@ static void games_retail_controls(void) {
     assert(!kui_shell_games_retail_ready(&s));
     assert(!kui_shell_games_retail_ready(NULL));
 }
+static void games_page(unsigned count,bool more,unsigned view) {
+    struct kui_games_page page={.count=count,.has_more=more,.view=view,.total=count};
+    strcpy(page.root,s.games_path);
+    for(unsigned i=0;i<count;i++) {
+        snprintf(page.entries[i].name,sizeof(page.entries[i].name),"Game %u",i);
+        snprintf(page.entries[i].path,sizeof(page.entries[i].path),"%s/Game %u/disc.gdi",s.games_path,i);
+        page.entries[i].cover=true;
+    }
+    kui_shell_set_games_listing(&s,&page);
+}
+static void games_views(void) {
+    reset(KUI_SHELL_HOME);
+    assert(s.games_view==KUI_GAMES_VIEW_SAVED && kui_shell_games_view(&s)==KUI_GAMES_VIEW_LIST);
+    s.home_selected=8;assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
+    /* The first listing reports the card's saved view; a failed one does not. */
+    games_page(8,true,KUI_GAMES_VIEW_SAVED);assert(s.games_view==KUI_GAMES_VIEW_SAVED);
+    games_page(8,true,KUI_GAMES_VIEW_GALLERY);assert(s.games_view==KUI_GAMES_VIEW_GALLERY);
+    /* Y moves to the next view on the same page and keeps the selection. */
+    s.games_selected=5;
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && s.games_view==KUI_GAMES_VIEW_LIST);
+    assert(s.games_selected==5 && !s.games_listing.count && !s.games_page);
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.games_view==KUI_GAMES_VIEW_LIST);
+    games_page(8,true,KUI_GAMES_VIEW_LIST);assert(s.games_selected==5);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && s.games_view==KUI_GAMES_VIEW_COMPACT);
+    games_page(8,true,KUI_GAMES_VIEW_COMPACT);
+    /* Compact: columns of four; across is the other column, then a page. */
+    s.games_selected=1;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_selected==5);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.games_selected==6);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.games_selected==2);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.games_selected==2); /* First page. */
+    s.games_selected=6;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_page==1 && s.games_selected==2);
+    games_page(3,false,KUI_GAMES_VIEW_COMPACT);assert(s.games_selected==2);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_page==1); /* Last page; no cell. */
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LIST && !s.games_page && s.games_selected==6);
+    games_page(8,true,KUI_GAMES_VIEW_COMPACT);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && s.games_view==KUI_GAMES_VIEW_GALLERY);
+    games_page(8,true,KUI_GAMES_VIEW_GALLERY);
+    /* Gallery: rows of four; across moves along a row, then a page. */
+    s.games_selected=5;
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.games_selected==4);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.games_selected==0);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.games_selected==4);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.games_selected==0);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.games_selected==0);
+    s.games_selected=7;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_page==1 && s.games_selected==4);
+    games_page(6,true,KUI_GAMES_VIEW_GALLERY);assert(s.games_selected==4);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_selected==5);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_page==2 && s.games_selected==4);
+    games_page(2,false,KUI_GAMES_VIEW_GALLERY);assert(!s.games_selected); /* Short page clamps. */
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && !s.games_selected);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LIST && s.games_page==1 && s.games_selected==3);
+    games_page(8,true,KUI_GAMES_VIEW_GALLERY);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && !strcmp(s.games_selected_path,"/Games/Game 3/disc.gdi"));
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES);
+    /* Stale or unsafe rows never draw a cover; titles are always ended. */
+    struct kui_games_page page={.count=2,.view=KUI_GAMES_VIEW_GALLERY};
+    strcpy(page.root,"/Games");
+    strcpy(page.entries[0].name,"One");strcpy(page.entries[0].path,"/Games/One/disc.gdi");
+    memset(page.entries[0].title,'T',sizeof(page.entries[0].title));page.entries[0].cover=true;
+    strcpy(page.entries[1].name,"Two");strcpy(page.entries[1].path,"/Elsewhere/disc.gdi");page.entries[1].cover=true;
+    kui_shell_set_games_listing(&s,&page);
+    assert(strlen(s.games_listing.entries[0].title)==KUI_COVER_TITLE_CAP-1 && s.games_listing.entries[0].cover);
+    assert(s.games_listing.entries[1].disabled && !s.games_listing.entries[1].cover);
+    /* Box art scan: from Games > Advanced; the next listing ends it. */
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
+    press(KUI_SHELL_DOWN,false);press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==2);
+    strcpy(s.games_path,"/Games/Fighting");s.games_page=3;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_SCAN && s.page==KUI_SHELL_GAMES && s.games_scanning);
+    assert(!strcmp(s.games_path,"/Games") && !s.games_page && !s.games_listing.count && s.games_listing.message[0]);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && s.games_scanning && s.page==KUI_SHELL_GAMES);
+    games_page(8,true,KUI_GAMES_VIEW_GALLERY);assert(!s.games_scanning && s.games_listing.count==8);
+}
 static void games_rendering(void) {
     struct kui_shell_view view={0};
     reset(KUI_SHELL_HOME);s.home_selected=8;render(&view);
@@ -1003,8 +1079,20 @@ static void games_rendering(void) {
         s.games_listing.entries[i].directory=i==0;
     }
     strcpy(s.games_listing.message,"Choose a GDI image to inspect.");render(&view);
-    assert(strstr(drawn,"Game 8") && strstr(drawn,"GDI") && strstr(drawn,"DIR"));
-    assert(strstr(drawn,"PAGE 1 +") && strstr(drawn,"START Advanced") && !strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"Game 8") && strstr(drawn,"DIR"));
+    assert(strstr(drawn,"Page 1 +") && strstr(drawn,"START More") && strstr(drawn,"Y View") && !strstr(drawn,"A Launch"));
+    /* Every view names the entries; a GDI without box art gets a hint. */
+    s.games_listing.total=19;render(&view);assert(strstr(drawn,"Page 1 of 3") && strstr(drawn,"19 items"));
+    assert(strstr(drawn,"No box art yet"));
+    s.games_listing.artwork=true;render(&view);assert(!strstr(drawn,"press START") && strstr(drawn,"Choose a GDI"));
+    strcpy(s.games_listing.entries[7].title,"GAME EIGHT TITLE");render(&view);
+    assert(strstr(drawn,"GAME EIGHT TITLE") && !strstr(drawn,"Game 8"));
+    s.games_view=KUI_GAMES_VIEW_COMPACT;render(&view);
+    assert(strstr(drawn,"GAME EIGHT TITLE") && strstr(drawn,"Game 8") && strstr(drawn,"Folder") && strstr(drawn,"D-pad Move"));
+    s.games_view=KUI_GAMES_VIEW_GALLERY;render(&view);assert(strstr(drawn,"GAME EIGHT") && strstr(drawn,"D-pad Move"));
+    s.games_scanning=true;view.busy=true;render(&view);
+    assert(strstr(drawn,"Scanning for box art") && strstr(drawn,"B stops safely"));
+    s.games_scanning=false;view.busy=false;s.games_view=KUI_GAMES_VIEW_SAVED;
     view.busy=true;render(&view);assert(strstr(drawn,"B Stop safely"));view.busy=false;
     reset(KUI_SHELL_GAMES_DETAIL);strcpy(s.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
     strcpy(s.games_detail.path,s.games_selected_path);
@@ -1029,7 +1117,7 @@ static void games_rendering(void) {
     s.games_detail.stopped=true;render(&view);assert(strstr(drawn,"Inspection stopped"));
     reset(KUI_SHELL_GAMES_ADVANCED);render(&view);
     assert(strstr(drawn,"Game library") && strstr(drawn,"Browse SD folders") && strstr(drawn,"Resident loader probe"));
-    assert(strstr(drawn,"IDE / CF sources are not available") && strstr(drawn,"opens the game launch screen"));
+    assert(strstr(drawn,"Scan box art") && strstr(drawn,"IDE / CF sources are not available"));
     reset(KUI_SHELL_GAMES_PROBE_CONFIRM);render(&view);
     assert(strstr(drawn,"A Start probe") && strstr(drawn,"B Advanced"));
     assert(strstr(drawn,"Exits this menu") && strstr(drawn,"test data after shutdown"));
@@ -1069,7 +1157,7 @@ static void games_rendering(void) {
     assert(strstr(drawn,"not ready for native GD launch") && !strstr(drawn,"A Launch"));
 }
 int main(int argc,char **argv) {
-    games_controls(); games_retail_controls(); games_rendering();
+    games_controls(); games_views(); games_retail_controls(); games_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();
     system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();

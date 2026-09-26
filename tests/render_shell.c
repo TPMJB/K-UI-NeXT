@@ -8,12 +8,53 @@
  * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder, home-games,
  * games, games-detail, games-error, games-advanced, games-probe,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
- * games-retail, games-retail-loading, games-retail-invalid. */
+ * games-retail, games-retail-loading, games-retail-invalid, games-list-art,
+ * games-compact, games-gallery, games-scan, games-detail-art. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
 
 static uint16_t frame[640*480];
+static uint16_t covers[KUI_GAMES_ROWS][KUI_COVER_PIXELS], detail_cover[KUI_COVER_PIXELS];
+static uint16_t rgb565(unsigned r,unsigned g,unsigned b) {
+    return (uint16_t)((r>>3)<<11|(g>>2)<<5|(b>>3));
+}
+/* Abstract stand-in art for previews: shaded colour, a band and a disc.
+ * No game artwork is embedded or reproduced. */
+static void make_cover(uint16_t *out,unsigned edge,unsigned seed) {
+    static const unsigned char hues[8][3]={{200,40,60},{40,110,200},{230,160,30},{60,170,90},
+        {150,60,190},{30,160,170},{220,90,40},{90,90,120}};
+    const unsigned char *c=hues[seed%8];
+    for(unsigned y=0;y<edge;y++) for(unsigned x=0;x<edge;x++) {
+        unsigned shade=255-(y*110/edge);
+        unsigned r=c[0]*shade/255,g=c[1]*shade/255,b=c[2]*shade/255;
+        int band=(int)x-(int)y+(int)(seed*7%edge)-(int)edge/3;
+        if(band>=0 && band<(int)edge/6) {r=(r+255)/2;g=(g+255)/2;b=(b+255)/2;}
+        int dx=(int)x-(int)(edge*2/3),dy=(int)y-(int)(edge*2/3),radius=(int)edge/5;
+        if(dx*dx+dy*dy<radius*radius) {r=r/3;g=g/3;b=b/3;}
+        if(y<edge/7) {r=20;g=24;b=40;}
+        out[y*edge+x]=rgb565(r,g,b);
+    }
+}
+static void library(struct kui_shell *shell,unsigned view) {
+    static const char *names[]={"Fighting","Dead or Alive 2","Resident Evil - Code Veronica","MDK2",
+        "Armada","Grandia II","Sword of the Berserk","Crazy Taxi"};
+    static const char *titles[]={"","DEAD OR ALIVE 2","RESIDENT EVIL CODE:VERONICA","MDK2",
+        "ARMADA","GRANDIA II","SWORD OF THE BERSERK","CRAZY TAXI"};
+    struct kui_games_page *l=&shell->games_listing;
+    shell->page=KUI_SHELL_GAMES;shell->games_view=view;
+    l->count=8;l->total=43;l->has_more=true;l->artwork=true;l->view=view;
+    unsigned edge=view==KUI_GAMES_VIEW_COMPACT?KUI_COVER_SMALL:view==KUI_GAMES_VIEW_GALLERY?KUI_COVER_MEDIUM:KUI_COVER_LARGE;
+    for(unsigned i=0;i<8;i++) {
+        struct kui_games_entry *e=&l->entries[i];
+        snprintf(e->name,sizeof(e->name),"%s",names[i]);
+        snprintf(e->title,sizeof(e->title),"%s",i?titles[i]:names[i]);
+        e->directory=i==0;e->cover=i!=0 && i!=4;
+        if(e->cover) make_cover(covers[i],edge,i);
+    }
+    shell->games_selected=1;
+    strcpy(l->message,"Select a GDI to inspect and launch.");
+}
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
     struct kui_settings preferences={true,false,true};
@@ -41,7 +82,17 @@ int main(int argc,char **argv) {
         for(unsigned i=0;i<8;i++) snprintf(shell.games_listing.entries[i].name,sizeof(shell.games_listing.entries[i].name),"%s",names[i]);
         shell.games_listing.entries[0].directory=true;shell.games_selected=1;
         strcpy(shell.games_listing.message,"Choose a GDI image to inspect.");
-    } else if(!strcmp(argv[1],"games-detail") || !strcmp(argv[1],"games-error")) {
+    } else if(!strcmp(argv[1],"games-list-art")) library(&shell,KUI_GAMES_VIEW_LIST);
+    else if(!strcmp(argv[1],"games-compact")) library(&shell,KUI_GAMES_VIEW_COMPACT);
+    else if(!strcmp(argv[1],"games-gallery")) {library(&shell,KUI_GAMES_VIEW_GALLERY);shell.games_selected=5;}
+    else if(!strcmp(argv[1],"games-scan")) {
+        shell.page=KUI_SHELL_GAMES;shell.games_scanning=true;view.busy=true;view.app_status=&status;
+        status=(struct kui_app_status){.done=11,.total=43,.line_count=5};
+        strcpy(status.message,"Box art 12 of 43: Grandia II");
+        strcpy(status.lines[0],"Games found: 43");strcpy(status.lines[1],"New covers from discs: 9");
+        strcpy(status.lines[2],"New covers from your images: 1");strcpy(status.lines[3],"No artwork found: 1");
+        strcpy(status.lines[4],"Unchanged since last scan: 0");
+    } else if(!strcmp(argv[1],"games-detail") || !strcmp(argv[1],"games-error") || !strcmp(argv[1],"games-detail-art")) {
         shell.page=KUI_SHELL_GAMES_DETAIL;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
@@ -50,6 +101,7 @@ int main(int argc,char **argv) {
         d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->product,"T-3601N");strcpy(d->region,"JUE");
         strcpy(d->boot_file,"1ST_READ.BIN");strcpy(d->message,"Track file missing: track03.bin");
+        if(!strcmp(argv[1],"games-detail-art")) {d->cover=true;make_cover(detail_cover,KUI_COVER_LARGE,1);}
     } else if(!strcmp(argv[1],"games-advanced")) {
         shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=2;
     } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {
@@ -229,6 +281,7 @@ int main(int argc,char **argv) {
         } else if(!strcmp(argv[1],"stopped")) view.outcome=KUI_SHELL_OUTCOME_STOPPED;
         else view.busy=true;
     }
+    view.game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])covers;view.game_detail_cover=detail_cover;
     kui_shell_draw(frame,&shell,&view,NULL,NULL);
     FILE *out=fopen(argv[2],"wb"); if(!out) return 1;
     if(fprintf(out,"P6\n640 480\n255\n")<0) return 1;

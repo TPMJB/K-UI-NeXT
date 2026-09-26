@@ -13,6 +13,7 @@ development, not a claim of a formal clean-room process.
 | Bus activation helper | `src/dreamcast/drive_bus.c` adapts the activation portion of upstream KOS `cdrom_init` at that pin | Original KOS copyright holders and BSD terms retained in the file |
 | Resident probe SD reader | `src/loader/sd_reader.c` adapts the SCIF pin sequence and SD/CSD protocol from upstream KOS `hardware/scif-spi.c`, `hardware/sd.c`, and TMU register definitions from `kernel/timer.c`, all at the same pin; a separate read-only implementation owns its state and timer after kernel shutdown | Original per-file copyright holders and [KOS BSD terms](LICENSES/LICENSE.KOS) retained; no DreamShell source input |
 | stb_vorbis 1.22 | `stb_vorbis.c` with documented short-read guards from `nothings/stb` commit `2c980bb59875b0d32144a71867fbdebb2f77cd20`; bounded, RAM-only Vorbis decoding in the Music app | Upstream alternative A, [MIT notice](LICENSES/stb_vorbis.txt); upstream/local hashes and adaptations in `dependencies.json` |
+| stb_image 2.30 | `stb_image.h` with a documented zero-length read guard, from the same `nothings/stb` commit; PNG and JPEG box art that the owner places in `KUI/covers` | Upstream alternative A, [MIT notice](LICENSES/stb_image.txt); upstream/local hashes and adaptation in `dependencies.json` |
 | FatFs | ChaN R0.16, official patches 1 and 2; SHA-256-pinned downloads, original license and patched source retained | [FatFs notice](LICENSES/LICENSE.FatFs) |
 | Known-dump catalogues (`data/known-dumps/`) | Track names, sizes and CRC32s only, no game or disc data. `redump.db` is adapted from the Libretro database's Redump Dreamcast DAT (CC BY-SA 4.0, share-alike; this file stays under that licence); `tosec.db` is a factual index of TOSEC's 2025-03-13 DAT pack | [Sources and licences](LICENSES/known-dumps-README.txt) |
 | GCC/Binutils/Newlib | KOS stable profile at the pinned KOS revision | Component licenses; GCC runtime exception and Newlib component notices apply to runtime code |
@@ -47,7 +48,12 @@ The BSD `sega-dreamcast/httpd-ack` project informed the earlier feasibility
 research and the declared GDI gap/address convention. No code from it is copied
 into this implementation. The SHA-256/CD EDC routines are new implementations
 of published algorithms; see [the capture format](docs/capture-format.md).
-The command
+Games box art is also new code. The `.PVR` texture reader
+(`src/core/pvr_texture.c`) follows the file layout, layout codes and Morton
+(twiddled) texel order documented by KallistiOS's own texture tool at the
+pinned commit (`utils/pvrtex/file_pvr.c`, `utils/pvrtex/pvr_texture.c`); no
+code is copied from it. `0GDTEX.PVR` is found with the existing independent
+ISO9660 reader. No DreamShell code, cover scanner or decoder is used. The command
 adapter uses KOS's documented firmware structures and status values. It does
 not patch or call the KOS CD-ROM command wrappers.
 
