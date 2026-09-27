@@ -47,7 +47,7 @@ network board, either the W5500 or the Wi-Fi board:
 | 6 | MOSI | shared |
 | 7 | MISO | shared |
 | 8 | Network chip select (GPIO6) | 10 kΩ pull-up to 3.3 V |
-| 9 | Ready (GPIO5), active low | 10 kΩ pull-up to 3.3 V |
+| 9 | Ready (GPIO5) | 10 kΩ pull-up to 3.3 V. The W5500's interrupt (active low), or the Wi-Fi board's ready signal, which changes level each time it is ready for a transfer |
 | 10 | Reset (GPIO0), active low | 10 kΩ pull-up to 3.3 V |
 
 The pull-ups keep every device deselected and running while the console
@@ -106,6 +106,13 @@ GPIO7), so they are left unused.
 - The XIAO's reset button is not on its pins. The reset-request line asks
   K-UI's firmware to restart itself; the ESP32-C5's own watchdog covers a
   hang.
+- **Firmware:** [firmware/kui-wifi](../firmware/kui-wifi/README.md). Load it
+  and test Wi-Fi from a computer before installing the board.
+- **Bench check before sharing the bus:** with the XIAO's chip select high,
+  its MISO pin should float (the ESP32's SPI device mode is expected to let
+  go of it, but Espressif does not document it). If it is driven, a
+  74LVC1G125 buffer enabled by the XIAO's chip select goes in its MISO line,
+  so it cannot fight the SD card.
 
 ## Software still to write
 
@@ -115,11 +122,12 @@ GPIO7), so they are left unused.
 2. The W5500 on GPIO6.
 3. The microSD on GPIO7 in K-UI (through KallistiOS's SD-over-SCI driver)
    and in the game loader (an independent SCI reader).
-4. The XIAO ESP32-C5 firmware: SPI in mode 3, Wi-Fi setup and reconnection,
-   network connections of the same kind the W5500 provides (so the FTP
-   server works over either board), and updates from K-UI. Then K-UI's
-   driver for it and a Wi-Fi setup screen (network list, password with the
-   on-screen keyboard).
+4. The XIAO ESP32-C5 firmware: **written**, see
+   [firmware/kui-wifi](../firmware/kui-wifi/README.md) (SPI in mode 3, Wi-Fi
+   setup and reconnection, sockets like the W5500's, updates from K-UI).
+   Still to do: K-UI's driver for it (the portable part, `kwhost`, is
+   written and tested) and a Wi-Fi setup screen (network list, password with
+   the on-screen keyboard).
 
 Everything up to the console itself can be host-tested first, as the W5500
 and FTP code was.

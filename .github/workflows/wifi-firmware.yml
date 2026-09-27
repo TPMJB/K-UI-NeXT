@@ -1,0 +1,51 @@
+name: Wi-Fi firmware
+
+# The firmware for the Wi-Fi board on the SCI port (firmware/kui-wifi):
+# host tests of the link and bridge code, then ESP-IDF builds for both boards.
+on:
+  push:
+    branches: [claude/wifi-esp32c5-firmware]
+    paths: ['firmware/kui-wifi/**', '.github/workflows/wifi-firmware.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Link and bridge tests (address and undefined-behaviour sanitizers)
+        run: make -C firmware/kui-wifi/test
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container: espressif/idf:v5.5.5
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [esp32c5, esp32c6]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        shell: bash
+        working-directory: firmware/kui-wifi
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target ${{ matrix.target }}
+          idf.py build
+          idf.py merge-bin -o kui-wifi-${{ matrix.target }}.bin
+          mkdir -p out
+          cp build/kui-wifi-${{ matrix.target }}.bin out/
+          cp build/kui-wifi.bin out/kui-wifi-${{ matrix.target }}-update.bin
+          cd out
+          sha256sum *.bin > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kui-wifi-${{ matrix.target }}
+          path: firmware/kui-wifi/out/
+          if-no-files-found: error
