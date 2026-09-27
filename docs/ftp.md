@@ -29,6 +29,10 @@ Chip select on PA7 is how KallistiOS's SCI driver drives it on a retail
 console; K-UI uses that driver unchanged. The W5500's interrupt pin is not
 used.
 
+Planning to add a microSD card or a Wi-Fi board on the same port? See
+[the SCI connector plan](sci-connector.md). There the SD card takes PA7 and
+the W5500 moves to its own chip select, which needs a K-UI update first.
+
 K-UI looks for the W5500 only when asked (Network, or the FTP server),
 never at start-up. It resets the chip, checks its version, and writes and
 reads back 64 test patterns before using it. It starts at 12.5 MHz and, if a
