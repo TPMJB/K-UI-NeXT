@@ -29,6 +29,19 @@ The Wi-Fi branch is meant to go into the W5500 branch once the board works
 on a console, and that branch into `main` for the next release. The
 `milestone/*` and `baseline/*` branches are pinned history; leave them.
 
+## Artwork follow-up — 2026-09-28
+
+`codex/home-icons` completes the seven missing/distinct Home icons on top of
+`claude/modest-galileo-hpjv79`. Each has original editable SVG sources, a native
+128×128 PNG and a separately simplified 24×24 PNG. The original three icons,
+header and splash remain unchanged. All ten Home selections were rendered with
+the production code. [Provenance and rebuild steps](../resources/icons/README.md).
+
+The contact sheet below now shows the completed set. This is an SD runtime
+update; the current working CD is reusable. Merge the art branch into the W5500
+branch before carrying it to Wi-Fi; keep Wi-Fi's own Network description and
+preview modes when resolving the adjacent edits.
+
 ## Next on the hardware
 
 ### The W5500 (next test)
@@ -151,8 +164,8 @@ piece of artwork goes, the technical limits, and what would help most.
 | --- | --- | --- | --- |
 | Startup splash | `resources/branding/startup.png` | 640×480 RGB. The artwork fills 592×444, centred on `#030913`, with lettering inside TV-safe margins (7%). Keep the large source too | `tools/build_splash.py` converts it at build time. It checks the PNG's pinned Git blob, so a new splash updates `PNG_BLOB` and `startup-README.md` |
 | Header brand | `resources/branding/launcher-brand.png` | 256×128 source, shown at 128×64, opaque on navy | `tools/generate_shell_art.py` writes `src/dreamcast/shell_art.inc`; it checks pinned SHA-256s |
-| Home icons (3 drawn so far) | `resources/icons/<name>.svg` and `.png` | 64×64 PNG with transparency; shown at 128×128 and 24×24 | `tools/generate_shell_art.py` (the `SOURCES` and `ICONS` lists), and `home_apps[].art` in `src/dreamcast/shell_draw.c` |
-| Home icons (7 placeholders) | none yet | see below | The same, once art exists |
+| Home icons (3 original) | `resources/icons/<name>.svg` and `.png` | 64×64 PNG with transparency; shown at 128×128 and 24×24 | `tools/generate_shell_art.py` (the `SOURCES` and `ICONS` lists), and `home_apps[].art` in `src/dreamcast/shell_draw.c` |
+| Home icons (7 new) | `resources/icons/<name>[-small].svg` and `.png` | 128×128 and dedicated 24×24 RGBA | `home-icons.json` pins sources; `generate_shell_art.py` embeds both sizes |
 | Boot-disc badge (under the SEGA licence screen) | `resources/branding/boot-disc-badge.*` | 320×90, at most 32 colours, MR format, at most 8,192 bytes | Packaging passes it to mkdcdisc. A new badge needs an MR encoder step, which the repo does not have yet |
 | Startup sound | `resources/branding/startup-chime.ogg` | ≤ 2.65 s, 44.1 kHz mono Ogg Vorbis | `tools/build_splash.py --encode-chime` |
 | Menu music | `resources/music/*.ogg` | Original synthesized songs, Ogg Vorbis | See `resources/music/README.md` |
@@ -163,22 +176,21 @@ it, and the splash about 600 KiB, so a full icon set is affordable.
 
 ### What would help most
 
-1. **Icons for the seven apps that have placeholders.** The contact sheet
-   above shows them as flat blocks. What each app does:
+1. **Home icon completion is implemented on `codex/home-icons`.** The contact
+   sheet above shows the completed set. The seven new icons represent:
    - **Games:** launches games stored on the SD card, with box art.
    - **VMU Manager:** the Dreamcast memory card (the VMU, which has a small
      screen). Browses, backs up and restores game saves.
    - **File Manager:** every file and folder on the SD card.
    - **Music Player:** WAV and Ogg music from the card, and audio CDs.
    - **GD Play:** boots the disc in the drive through the console's own
-     BIOS. It borrows the Disc Ripper's icon today, so it needs its own.
+     BIOS. Its new icon combines a disc and play symbol.
    - **Memory Test:** checks the console's RAM.
    - **Network:** the network adapter, Wi-Fi setup, and sharing the SD card
      over FTP.
 
-   Match the three existing icons (a neon line drawing inside a rounded
-   square with a violet edge), or propose one new set for all ten. The
-   owner decides.
+   The new icons match the existing rounded neon frames and preserve the
+   original three sources. Their list-size versions are separately drawn.
 2. **A splash for the next release,** once the owner names it. Keep the
    character and composition, and restyle the colours and lettering as
    Dáinsleif did.
@@ -188,8 +200,8 @@ it, and the splash about 600 KiB, so a full icon set is affordable.
 
 - **Size:** deliver icons as 128×128 PNGs with transparency, plus a
   separately simplified 24×24 version. At 24×24, a scaled-down detailed
-  icon turns to mush. Today's pipeline takes 64×64 sources; accepting
-  128×128 and 24×24 is a small change to `tools/generate_shell_art.py`.
+  icon turns to mush. The pipeline now accepts native 128×128 and 24×24
+  sources for the new icons; the original three retain their 64×64 inputs.
 - **Generated images:** image generators rarely produce exact sizes or
   clean transparency. Generate large (for example 1024×1024) on a flat
   background that can be keyed out, and scale down afterwards.
@@ -214,11 +226,10 @@ it, and the splash about 600 KiB, so a full icon set is affordable.
 
 ### Getting new art into the build (for whoever writes the code)
 
-- Icons: add the sources to `resources/icons/`, extend `SOURCES` and
-  `ICONS` in `tools/generate_shell_art.py`, run it to regenerate
-  `src/dreamcast/shell_art.inc`, and point the apps' `art` fields in
-  `src/dreamcast/shell_draw.c` at the new icons. Then record the hashes in
-  `resources/branding/README.md`.
+- Icons: edit the large/small SVG sources, run `tools/render_home_icons.py`
+  to regenerate PNGs and `resources/icons/home-icons.json`, then run
+  `tools/generate_shell_art.py` to regenerate `src/dreamcast/shell_art.inc`.
+  All ten apps already use named icon indexes in `shell_draw.c`.
 - Splash: replace `resources/branding/startup.png`, update `PNG_BLOB` in
   `tools/build_splash.py`, and record it in `startup-README.md`.
 - Preview on a computer, without a console: `make build/render-shell`, then

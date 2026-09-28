@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Original K-UI artwork for TPMJB, 2026-09-28. See README.md. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<rect x="2" y="2" width="124" height="124" rx="28" fill="#121A31" stroke="#A54F9D" stroke-width="2"/>
+<g fill="none" stroke="#65E8F2" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M43 42h42c10 0 16 8 19 18l8 28c2 8-8 13-13 7L86 82H42L29 95c-5 6-15 1-13-7l8-28c3-10 9-18 19-18Z"/>
+<path d="M34 62h16m-8-8v16"/>
+<circle cx="86" cy="58" r="4" stroke="#F07DDC"/><circle cx="96" cy="69" r="4" stroke="#F07DDC"/>
+<path d="M58 75h12" stroke="#ACBACD"/>
+</g>
+</svg>

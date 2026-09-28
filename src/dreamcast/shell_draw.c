@@ -162,91 +162,30 @@ static void footer(struct paint *p, const struct kui_shell *s,
     if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM && s->page!=KUI_SHELL_FILES_CONFIRM)
         label(p,512,430,MUTED,"L Memory");
 }
-static void utility_icon(struct paint *p,enum kui_shell_page app,unsigned x,unsigned y) {
-    if(app==KUI_SHELL_VMU) {
-        panel(p,x+30,y+10,68,108,CYAN); box(p,x+38,y+22,52,38,NAVY);
-        box(p,x+48,y+76,24,7,NAVY); box(p,x+56,y+68,8,24,NAVY);
-        box(p,x+78,y+76,8,8,PINK); box(p,x+80,y+92,8,8,NAVY);
-    } else if(app==KUI_SHELL_MEMORY) {
-        for(unsigned i=0;i<5;i++) {
-            box(p,x+20+i*20,y+12,6,104,CYAN);
-            box(p,x+12,y+20+i*20,104,6,CYAN);
-        }
-        box(p,x+24,y+24,80,80,EDGE); box(p,x+30,y+30,68,68,PANEL);
-        words(p,x+40,y+54,x+98,WHITE,"RAM",true);
-    } else if(app==KUI_SHELL_GAMES) {
-        panel(p,x+12,y+38,104,60,CYAN);panel(p,x+20,y+46,88,44,PANEL);
-        box(p,x+30,y+61,30,8,CYAN);box(p,x+41,y+50,8,30,CYAN);
-        box(p,x+80,y+53,10,10,PINK);box(p,x+94,y+68,10,10,PINK);
-        box(p,x+61,y+65,8,4,WHITE);
-    } else if(app==KUI_SHELL_FILES) {
-        box(p,x+12,y+22,40,12,EDGE);panel(p,x+12,y+30,104,78,EDGE);
-        panel(p,x+26,y+14,64,62,WHITE);
-        box(p,x+36,y+26,44,4,EDGE);box(p,x+36,y+36,36,4,EDGE);box(p,x+36,y+46,40,4,EDGE);
-        panel(p,x+8,y+52,112,62,CYAN);box(p,x+22,y+96,26,6,PINK);
-    } else if(app==KUI_SHELL_MUSIC) {
-        box(p,x+36,y+32,8,62,CYAN);box(p,x+88,y+20,8,62,PINK);
-        box(p,x+40,y+28,52,8,CYAN);box(p,x+40,y+20,52,8,PINK);
-        panel(p,x+16,y+84,28,18,CYAN);panel(p,x+68,y+72,28,18,PINK);
-    } else {
-        box(p,x+28,y+38,72,4,CYAN); box(p,x+62,y+40,4,44,CYAN);
-        box(p,x+26,y+40,4,44,CYAN); box(p,x+98,y+40,4,44,CYAN);
-        panel(p,x+44,y+10,40,30,CYAN);
-        panel(p,x+10,y+82,36,28,CYAN); panel(p,x+46,y+82,36,28,PINK);
-        panel(p,x+82,y+82,36,28,CYAN);
-    }
-}
-static void small_utility_icon(struct paint *p,enum kui_shell_page app,unsigned x,unsigned y) {
-    if(app==KUI_SHELL_VMU) {
-        panel(p,x+5,y+1,14,22,CYAN);box(p,x+7,y+4,10,8,NAVY);
-        box(p,x+8,y+16,5,2,NAVY);box(p,x+10,y+14,2,6,NAVY);
-        box(p,x+15,y+16,2,2,PINK);
-    } else if(app==KUI_SHELL_MEMORY) {
-        for(unsigned i=0;i<3;i++) {
-            box(p,x+5+i*6,y,2,24,CYAN);box(p,x,y+5+i*6,24,2,CYAN);
-        }
-        box(p,x+4,y+4,16,16,EDGE);box(p,x+7,y+7,10,10,PANEL);
-    } else if(app==KUI_SHELL_FILES) {
-        box(p,x+1,y+4,10,4,CYAN);panel(p,x,y+7,24,16,CYAN);
-        box(p,x+4,y+12,16,2,NAVY);box(p,x+4,y+16,10,2,NAVY);box(p,x+17,y+16,3,3,PINK);
-    } else if(app==KUI_SHELL_GAMES) {
-        panel(p,x,y+6,24,16,CYAN);box(p,x+3,y+12,9,3,NAVY);
-        box(p,x+6,y+9,3,9,NAVY);box(p,x+16,y+9,3,3,PINK);box(p,x+19,y+14,3,3,PINK);
-    } else if(app==KUI_SHELL_MUSIC) {
-        box(p,x+7,y+5,3,15,CYAN);box(p,x+18,y+2,3,15,PINK);
-        box(p,x+8,y+2,13,3,CYAN);
-        box(p,x+2,y+18,8,5,CYAN);box(p,x+13,y+15,8,5,PINK);
-    } else {
-        box(p,x+11,y+4,2,14,CYAN);box(p,x+3,y+12,18,2,CYAN);
-        box(p,x+3,y+12,2,8,CYAN);box(p,x+19,y+12,2,8,CYAN);
-        box(p,x+8,y+1,8,7,CYAN);box(p,x,y+17,8,7,CYAN);
-        box(p,x+8,y+17,8,7,PINK);box(p,x+16,y+17,8,7,CYAN);
-    }
-}
 /* Each Home app by page, so its row can move without touching this table.
- * art: the embedded icon, or -1 for one drawn by utility_icon. */
-struct home_app {enum kui_shell_page page;const char *name,*category,*details[3];int art;};
+ * All icons are embedded RGB565 assets with separate list-sized artwork. */
+struct home_app {enum kui_shell_page page;const char *name,*category,*details[3];unsigned art;};
 static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
     {KUI_SHELL_RIPPER,"Disc Ripper","Disc tools",
-        {"Capture discs, check CRCs and","resume interrupted dumps.","Verify saved files when needed."},0},
+        {"Capture discs, check CRCs and","resume interrupted dumps.","Verify saved files when needed."},KUI_ART_ICON_DISC_RIPPER},
     {KUI_SHELL_VMU,"VMU Manager","Save files",
-        {"Browse, copy or delete saves.","Back up to SD, then restore","checked backups to a free name."},-1},
+        {"Browse, copy or delete saves.","Back up to SD, then restore","checked backups to a free name."},KUI_ART_ICON_VMU_MANAGER},
     {KUI_SHELL_MEMORY,"Memory Test","System tools",
-        {"Check available application RAM","with data patterns and report","any mismatches found."},-1},
+        {"Check available application RAM","with data patterns and report","any mismatches found."},KUI_ART_ICON_MEMORY_TEST},
     {KUI_SHELL_NETWORK,"Network","Connectivity",
-        {"Inspect your network adapter","and test the network. Share the","SD card by FTP (W5500 on SCI)."},-1},
+        {"Inspect your network adapter","and test the network. Share the","SD card by FTP (W5500 on SCI)."},KUI_ART_ICON_NETWORK},
     {KUI_SHELL_SETTINGS,"Settings","System preferences",
-        {"Choose video, memory display","and background music.","Save preferences to SD."},1},
+        {"Choose video, memory display","and background music.","Save preferences to SD."},KUI_ART_ICON_SETTINGS},
     {KUI_SHELL_DIAGNOSTICS,"Diagnostics","Diagnostics",
-        {"Inspect the disc and SD card.","Run probes, review messages","and save a diagnostic report."},2},
+        {"Inspect the disc and SD card.","Run probes, review messages","and save a diagnostic report."},KUI_ART_ICON_DIAGNOSTICS},
     {KUI_SHELL_GD_PLAY,"GD Play","Disc boot",
-        {"Exit K-UI and boot the disc","through the console BIOS.","Console region rules still apply."},0},
+        {"Exit K-UI and boot the disc","through the console BIOS.","Console region rules still apply."},KUI_ART_ICON_GD_PLAY},
     {KUI_SHELL_MUSIC,"Music Player","Music",
-        {"Play WAV or Ogg music from SD.","Listen to audio CD tracks","or keep music in the background."},-1},
+        {"Play WAV or Ogg music from SD.","Listen to audio CD tracks","or keep music in the background."},KUI_ART_ICON_MUSIC_PLAYER},
     {KUI_SHELL_GAMES,"Games","SD game library",
-        {"Launch native GD images from SD.","Browse your game library.","V1.5: compatibility varies."},-1},
+        {"Launch native GD images from SD.","Browse your game library.","V1.5: compatibility varies."},KUI_ART_ICON_GAMES},
     {KUI_SHELL_FILES,"File Manager","SD card files",
-        {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."},-1}};
+        {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."},KUI_ART_ICON_FILE_MANAGER}};
 static const struct home_app *home_app(unsigned row) {
     enum kui_shell_page page=kui_shell_home_pages[row<KUI_SHELL_HOME_APPS?row:0];
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(home_apps[i].page==page) return &home_apps[i];
@@ -262,8 +201,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
             panel(p,32,y,208,26,SELECTED);
             box(p,32,y+4,3,18,PINK);
         }
-        if(app->art<0) small_utility_icon(p,app->page,44,y+1);
-        else art(p,44,y+1,24,24,kui_art_small_icons[app->art]);
+        art(p,44,y+1,24,24,kui_art_small_icons[app->art]);
         words(p,80,y+4,230,selected==i?WHITE:MUTED,app->name,false);
     }
     if(s->system_saved.show_memory && v->memory_valid) {
@@ -283,8 +221,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         label(p,264,144,CYAN,inserted);
     } else label(p,264,144,CYAN,chosen->category);
     panel(p,264,172,344,140,PANEL);
-    if(chosen->art<0) utility_icon(p,chosen->page,372,178);
-    else art(p,372,178,128,128,kui_art_icons[chosen->art]);
+    art(p,372,178,128,128,kui_art_icons[chosen->art]);
     for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,chosen->details[i]);
     panel(p,264,382,344,28,CYAN);
     label(p,382,388,NAVY,"A  Open app");
