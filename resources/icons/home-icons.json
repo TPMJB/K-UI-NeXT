@@ -3,8 +3,8 @@
   "resources/icons/file-manager-small.svg": "240de27ea4e53004336d7ea20d998546171cb21fa0885075be2d4d42a4ce77fb",
   "resources/icons/file-manager.png": "2bf3fd17cc6818b2cc526200c21893d840ed7611f991ac30ead283a970dcc2db",
   "resources/icons/file-manager.svg": "858ac19e47f7ec4c1d33167440ec381f9325284963c875764344732c65a1cfd3",
-  "resources/icons/games-small.png": "9e86aaa56bd2a3a89d3671526c908d972d4701a9f78c73b6d6ad893356141199",
-  "resources/icons/games-small.svg": "4fab87115dbc966abcc9e06776a5de8e0022334c4294936e543aea3e7360c916",
+  "resources/icons/games-small.png": "8f810132deb674cf006d79d166473513dfa0d43f25070e1aa3f5a77e9acaa385",
+  "resources/icons/games-small.svg": "06208a4f437f33973317872d104b87a307ffdcb0f4d79cc70e5bfadd5e267fa8",
   "resources/icons/games.png": "e7b9a0fa2de3640fa5ab8b16587e4b54adb633fa314be8d1e3edd182afb41b3e",
   "resources/icons/games.svg": "f3cbf12b4565fdba0088d27609ce10d77b7e15a97727a6647ad2773195ede885",
   "resources/icons/gd-play-small.png": "cd3aa125bdfd624aab57682003d80bfa73fddfcc710f1a6a1d96e4ee7325071b",
@@ -23,8 +23,8 @@
   "resources/icons/network-small.svg": "19cb31153c08a919694fedd6b7c460d59bc05c873a909f0ad7ffab959d4d0fbb",
   "resources/icons/network.png": "69ba35c7e47b1822ebbed8a6e6b42cc9ff34503e830d4e2257be75c66a119d80",
   "resources/icons/network.svg": "a2174348eb4fe882e6821a6c5c7e6f91b5fcf9698d0edb4e53574fdb7fd556f4",
-  "resources/icons/vmu-manager-small.png": "0b7589bdcee2e72f8dc6e1bb111cff444d604d8bbab7a3e1b15bd30205702722",
-  "resources/icons/vmu-manager-small.svg": "c8f915a19b7fe75a0292dab56e36b912a765b8780d517006bba6efe3d5c5890c",
+  "resources/icons/vmu-manager-small.png": "1c91a1c7c01c206b0bcf3a8d57df0225c3670c083ccd90c514ef1bfa923311ed",
+  "resources/icons/vmu-manager-small.svg": "ae7c8eef2737ec256fa9cbc381d5303a4de582587fdafa6120e04236fe85fa3d",
   "resources/icons/vmu-manager.png": "65cd3b5f1ad70e2a8fff6cb0c9c7307b8b4ae9390421f2e1f439780843a73bab",
   "resources/icons/vmu-manager.svg": "3b175fb0d8e4746d1755fa79a6ac9ea38db5f924fbdde1ddd4035e23a50c7105"
 }

@@ -37,6 +37,11 @@ on a console, and that branch into `main` for the next release. The
 header and splash remain unchanged. All ten Home selections were rendered with
 the production code. [Provenance and rebuild steps](../resources/icons/README.md).
 
+The first console photo showed crowded Games and VMU Manager list icons. Their
+24×24 artwork has been revised with broader silhouettes, dark controls and dimmer
+frames. Host previews are updated; confirm their legibility on the TV with the
+next SD runtime. This correction changes no launcher logic or memory footprint.
+
 The contact sheet below now shows the completed set. This is an SD runtime
 update; the current working CD is reusable. Merge the art branch into the W5500
 branch before carrying it to Wi-Fi; keep Wi-Fi's own Network description and

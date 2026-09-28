@@ -25,6 +25,12 @@ border `#A54F9D`, and panel `#121A31`. GD Play has its own disc-and-play icon;
 Network combines wireless arcs with wired endpoints. No text or logos appear
 inside the new icons.
 
+Console feedback found the Games and VMU Manager list icons crowded and blurry.
+Their 24×24 versions now use filled cyan silhouettes, pixel-aligned dark controls,
+a larger open VMU screen and dimmer `#654773` tile borders. The large artwork
+stays the same. These changes reduce competing outlines at television resolution;
+the revised pair still needs confirmation on the user's display.
+
 ## Rebuild
 
 ```sh
