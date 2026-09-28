@@ -624,7 +624,7 @@ void kui_wifi_run(const struct kui_wifi_port *port, const struct kui_wifi_reques
         ok = kui_wifi_session_scan(s, cancel);
         if(ok) {
             list_networks(out, &s->host);
-            snprintf(text, sizeof(text), out->count == 1 ? "1 network in range" : "%u networks in range", out->count);
+            snprintf(text, sizeof(text), "%u network%s in range", out->count, out->count == 1 ? "" : "s");
         }
         break;
     case KUI_WIFI_JOIN: {

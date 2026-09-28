@@ -15,11 +15,18 @@ development, not a claim of a formal clean-room process.
 | stb_vorbis 1.22 | `stb_vorbis.c` with documented short-read guards from `nothings/stb` commit `2c980bb59875b0d32144a71867fbdebb2f77cd20`; bounded, RAM-only Vorbis decoding in the Music app | Upstream alternative A, [MIT notice](LICENSES/stb_vorbis.txt); upstream/local hashes and adaptations in `dependencies.json` |
 | stb_image 2.30 | `stb_image.h` with a documented zero-length read guard, from the same `nothings/stb` commit; PNG and JPEG box art that the owner places in `KUI/covers` | Upstream alternative A, [MIT notice](LICENSES/stb_image.txt); upstream/local hashes and adaptation in `dependencies.json` |
 | FatFs | ChaN R0.16, official patches 1 and 2; SHA-256-pinned downloads, original license and patched source retained | [FatFs notice](LICENSES/LICENSE.FatFs) |
+| K-UI Wi-Fi link library | This project's own `firmware/kui-wifi/components/kwlink` (`kwlink.c`, `kwhost.c`): the Dreamcast's side of the Wi-Fi board's link, shared with the board's firmware | MIT rather than GPL-3.0-only, so the firmware, which links Espressif's closed-source Wi-Fi libraries, can use it too; [notice](LICENSES/kui-wifi-kwlink.txt) |
 | Known-dump catalogues (`data/known-dumps/`) | Track names, sizes and CRC32s only, no game or disc data. `redump.db` is adapted from the Libretro database's Redump Dreamcast DAT (CC BY-SA 4.0, share-alike; this file stays under that licence); `tosec.db` is a factual index of TOSEC's 2025-03-13 DAT pack | [Sources and licences](LICENSES/known-dumps-README.txt) |
 | GCC/Binutils/Newlib | KOS stable profile at the pinned KOS revision | Component licenses; GCC runtime exception and Newlib component notices apply to runtime code |
 | mkdcdisc | Canonical Simulant GitLab repository `4d74e40dd2122e14389a305ed1d86dd024201389`; separate host image-writing tool | MIT for its own code, with separate third-party components; upstream `THIRD-PARTY-NOTICES.md` |
 | IP.BIN in the CDI | mkdcdisc MIL-CD template, including the LiENUS homebrew bootstrap | See the upstream IP.BIN provenance below; no DreamShell bootloader |
 | Linux test/build utilities | Distribution `mkfs`, `fsck`, Meson, Ninja, libisofs and mtools | Host tools only; not linked into the Dreamcast executable |
+
+The Wi-Fi board's firmware ([firmware/kui-wifi](firmware/kui-wifi/README.md))
+is a separate program for the ESP32-C5 under its own MIT licence. It is built
+with Espressif's ESP-IDF, including its closed-source Wi-Fi libraries, by its
+own workflow, and is not part of the Dreamcast builds. Its host tests, and
+K-UI's (`tests/wifi_model.c`), run its bridge core on the build computer only.
 
 Source URLs and downloaded-file hashes are in [dependencies.json](dependencies.json).
 The build artifact includes applicable KOS and FatFs license texts and source
