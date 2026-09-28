@@ -2,7 +2,10 @@
 CC ?= cc
 HOST_FLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
 SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
-INCLUDES = -Iinclude -I.deps/fatfs/source
+# The Wi-Fi board's link library (firmware/kui-wifi/components/kwlink) is
+# shared with its firmware.
+KWLINK = firmware/kui-wifi/components/kwlink
+INCLUDES = -Iinclude -I.deps/fatfs/source -I$(KWLINK)/include
 CORE = src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c
 LOADER_PROBE = src/core/loader_probe.c
 RESIDENT_IMAGE = src/core/resident_image.c
@@ -15,7 +18,7 @@ FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
-test: build/test-w5500 build/test-network-w5500 build/test-ftp
+test: build/test-w5500 build/test-network-w5500 build/test-network-wifi build/test-ftp
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
@@ -40,6 +43,7 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-network-connect
 	./build/test-w5500
 	./build/test-network-w5500
+	./build/test-network-wifi
 	./build/test-ftp
 	./build/test-menu-sound
 	./build/test-music-ogg
@@ -216,17 +220,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+build/test-shell: src/core/wifi_text.c include/kui/network_wifi.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c src/core/wifi_text.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
+build/render-shell: src/core/wifi_text.c include/kui/network_wifi.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/wifi_text.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -490,17 +494,27 @@ build/test-files: tests/test_files.c src/core/files_path.c src/core/destination.
 build/files-image: tests/files_image.c $(FILES) $(CORE) $(FATFS) include/kui/files.h include/kui/game_cover.h include/kui/cover_image.h include/kui/pvr_texture.h tests/fixtures/cover_images.h third_party/stb/stb_image.h config/ffconf.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(FILES) $(CORE) $(FATFS) tests/files_image.c $(FILES_WRAP) -lm -o $@
+# The Wi-Fi board's driver on a model of the board: the firmware's own
+# bridge core behind a simulated SPI bus, with real sockets on this machine.
+WIFI_LINK = $(KWLINK)/kwlink.c $(KWLINK)/kwhost.c
+WIFI_MODEL = tests/wifi_model.c firmware/kui-wifi/main/bridge.c
+WIFI_HEADERS = include/kui/network_wifi.h include/kui/net.h tests/wifi_model.h $(wildcard $(KWLINK)/include/*.h) \
+               firmware/kui-wifi/main/bridge.h firmware/kui-wifi/main/bridge_platform.h
+build/test-network-wifi: tests/test_network_wifi.c src/apps/network_wifi.c src/core/wifi_text.c src/core/clock.c $(WIFI_LINK) $(WIFI_MODEL) $(WIFI_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Ifirmware/kui-wifi/main -Itests src/apps/network_wifi.c src/core/wifi_text.c src/core/clock.c $(WIFI_LINK) $(WIFI_MODEL) tests/test_network_wifi.c -o $@
 # The FTP server: protocol pieces alone, then end to end on the W5500 model
-# with real FatFs, driven by Python's ftplib (tests/test_ftp_images.py).
+# and the Wi-Fi board model with real FatFs, driven by Python's ftplib
+# (tests/test_ftp_images.py).
 FTP = src/apps/ftp_server.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/storage_probe.c \
-      src/core/w5500.c src/apps/network_w5500.c src/apps/network_probe.c
+      src/core/w5500.c src/apps/network_w5500.c src/apps/network_probe.c src/apps/network_wifi.c src/core/wifi_text.c $(WIFI_LINK)
 FTP_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir
 build/test-ftp: tests/test_ftp.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c include/kui/ftp.h include/kui/files.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c tests/test_ftp.c -o $@
-build/ftp-image: tests/ftp_image.c $(FTP) $(CORE) $(FATFS) $(W5500_MODEL) include/kui/ftp.h include/kui/w5500.h include/kui/network_w5500.h include/kui/files.h config/ffconf.h
+build/ftp-image: tests/ftp_image.c $(FTP) $(CORE) $(FATFS) $(W5500_MODEL) $(WIFI_MODEL) $(WIFI_HEADERS) include/kui/ftp.h include/kui/w5500.h include/kui/network_w5500.h include/kui/files.h config/ffconf.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -Itests $(FTP) $(CORE) $(FATFS) tests/w5500_model.c tests/ftp_image.c $(FTP_WRAP) -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -Ifirmware/kui-wifi/main -Itests $(FTP) $(CORE) $(FATFS) tests/w5500_model.c $(WIFI_MODEL) tests/ftp_image.c $(FTP_WRAP) -o $@
 build/games-covers-image: tests/games_covers_image.c $(GAMES_COVERS) $(CORE) $(FATFS) include/kui/games_covers.h include/kui/games.h include/kui/game_cover.h include/kui/pvr_texture.h include/kui/cover_image.h third_party/stb/stb_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(CORE) $(FATFS) tests/games_covers_image.c $(GAMES_COVERS_WRAP) -lm -o $@

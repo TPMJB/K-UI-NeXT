@@ -6,9 +6,10 @@ does, over Wi-Fi instead of a cable. It also builds for the XIAO ESP32-C6
 (2.4 GHz only).
 
 **Status: first version, not yet tried on hardware.** The board side is
-complete and host-tested. K-UI itself does not use it yet: its driver and a
-Wi-Fi setup screen come next. Until then the board can be set up and tested
-on its own from a computer, which is worth doing before any soldering.
+complete and host-tested, and so is K-UI's side: its driver, the FTP server
+over the board and a Wi-Fi page to choose a network (see
+[Wi-Fi](../../docs/wifi.md)). The board can be set up and tested on its own
+from a computer first, which is worth doing before any soldering.
 
 ## What it does
 
@@ -84,7 +85,9 @@ The link and bridge code also builds on a normal computer. `make -C
 firmware/kui-wifi/test` runs the tests: exactly-once, in-order delivery
 through bit errors and cut-short transfers; and a simulated Dreamcast
 driving real TCP and UDP sockets on localhost, with listening, connecting,
-closes both ways, a board reset and a firmware update.
+closes both ways, bands, echoes, a board reset and a firmware update. K-UI's
+own tests also run this bridge core, behind K-UI's real driver and FTP
+server (`tests/wifi_model.c` at the top of the repository).
 
 ## Licence
 

@@ -26,6 +26,10 @@ RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadat
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
 RUNTIME_OBJECTS += build/dc/src/core/files_path.o
 RUNTIME_OBJECTS += build/dc/src/core/w5500.o build/dc/src/dreamcast/w5500_sci.o build/dc/src/core/ftp_protocol.o
+# The SCI port's network adapters: its chip selects, and the Wi-Fi board's
+# link, whose library is shared with the board's firmware (MIT).
+RUNTIME_OBJECTS += build/dc/src/dreamcast/sci_port.o build/dc/src/dreamcast/wifi_sci.o build/dc/src/core/wifi_text.o
+RUNTIME_OBJECTS += build/dc/firmware/kui-wifi/components/kwlink/kwlink.o build/dc/firmware/kui-wifi/components/kwlink/kwhost.o
 RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
 RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
@@ -39,7 +43,7 @@ BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf
 include $(KOS_BASE)/Makefile.rules
 
-CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
+CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -Ifirmware/kui-wifi/components/kwlink/include -DKUI_BUILD_ID='"$(BUILD_ID)"'
 # Experimental, never-run-on-hardware code (the GD-ROM DMA probe and its competing thread) is NOT in
 # the default build. Opt in with: make diagnostic KUI_EXPERIMENTAL=1
 ifdef KUI_EXPERIMENTAL

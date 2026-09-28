@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/network_test.h"
 #include "kui/network_w5500.h"
+#include "kui/network_wifi.h"
 #include <kos/net.h>
 #include <dc/net/broadband_adapter.h>
 #include <assert.h>
@@ -40,10 +41,14 @@ uint16_t g2_read_16(uint32_t address) {
     return fake.phy_reads==1?0:fake.phy; /* first read may contain a latched loss */
 }
 static bool cancel(void) {return fake.cancel_after && ++fake.cancel_calls>=fake.cancel_after;}
-/* The W5500 has its own test (test_network_w5500.c); here it is absent. */
-static unsigned w5500_inspections;
+/* The W5500 and the Wi-Fi board have their own tests (test_network_w5500.c,
+ * test_network_wifi.c); here both are absent. */
+static unsigned w5500_inspections,wifi_inspections;
 bool kui_w5500_network_inspect(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn stop) {
     (void)out;(void)log;(void)stop;++w5500_inspections;return false;
+}
+bool kui_wifi_network_inspect(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn stop) {
+    (void)out;(void)log;(void)stop;++wifi_inspections;return false;
 }
 static bool line(const struct kui_app_status *s,const char *text) {
     for(unsigned i=0;i<s->line_count;++i) if(strstr(s->lines[i],text)) return true;
@@ -87,19 +92,21 @@ int main(void) {
     kui_network_app_run(&out,NULL,cancel);
     assert(out.complete && !out.passed && !fake.phy_reads && !fake.bba_init && !fake.lan_init && !fake.unreg);
 
-    /* Nothing on the G2 bus: the SCI port is checked for a W5500 last. */
-    w5500_inspections=0;
+    /* Nothing on the G2 bus: the SCI port is checked last, for a W5500,
+     * then the Wi-Fi board. */
+    w5500_inspections=wifi_inspections=0;
     reset();kui_network_app_run(&out,NULL,cancel);
-    assert(out.complete && !out.passed && strstr(out.message,"No Broadband, LAN or W5500 adapter"));
-    assert(fake.bba_init==1 && fake.lan_init==1 && w5500_inspections==1 && line(&out,"W5500 on the SCI port"));
+    assert(out.complete && !out.passed && strstr(out.message,"No Broadband, LAN, W5500 or Wi-Fi adapter"));
+    assert(fake.bba_init==1 && fake.lan_init==1 && w5500_inspections==1 && wifi_inspections==1);
+    assert(line(&out,"W5500 and Wi-Fi board on SCI"));
     /* A BBA found first: the SCI port is left alone. */
     reset();fake.bba_present=true;kui_network_app_run(&out,NULL,cancel);
-    assert(w5500_inspections==1);
+    assert(w5500_inspections==1 && wifi_inspections==1);
 
     reset();register_if(&modem);modem.flags|=NETIF_NOETH;
     kui_network_app_run(&out,NULL,cancel);
-    assert(out.complete && !out.passed && strstr(out.message,"No Broadband, LAN or W5500 adapter"));
-    assert(w5500_inspections==2);
+    assert(out.complete && !out.passed && strstr(out.message,"No Broadband, LAN, W5500 or Wi-Fi adapter"));
+    assert(w5500_inspections==2 && wifi_inspections==2);
     assert(line(&out,"stock dial-up modem is not an Ethernet adapter"));
     assert(LIST_FIRST(&interfaces)==&modem && !fake.unreg && !fake.phy_reads);
 

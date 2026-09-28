@@ -4,6 +4,7 @@
 #include "kui/clock.h"
 #include "kui/media.h"
 #include "w5500_model.h"
+#include "wifi_model.h"
 #include <assert.h>
 #include <poll.h>
 #include <stdarg.h>
@@ -13,13 +14,18 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* The FTP server on the W5500 model (tests/w5500_model.c) with real FatFs
- * on a card image, driven by tests/test_ftp_images.py through Python's
- * ftplib:
+/* The FTP server on the W5500 model (tests/w5500_model.c) or the Wi-Fi
+ * board model (tests/wifi_model.c) with real FatFs on a card image, driven
+ * by tests/test_ftp_images.py through Python's ftplib:
  *   ftp-image IMAGE seed                     K-UI's start-up files
  *   ftp-image IMAGE bad-password             an unusable password file
- *   ftp-image IMAGE serve PORT PASSIVE       serve until stdin closes
- *   ftp-image IMAGE serve PORT PASSIVE absent    no W5500 answers
+ *   ftp-image IMAGE serve PORT PASSIVE       serve on the W5500 until stdin closes
+ *   ftp-image IMAGE serve PORT PASSIVE absent    no W5500 answers (no Wi-Fi port)
+ *   ftp-image IMAGE serve PORT PASSIVE wifi      no W5500; the Wi-Fi board serves
+ *   ftp-image IMAGE serve PORT PASSIVE none      neither answers
+ *   ftp-image IMAGE serve PORT PASSIVE offline   the Wi-Fi board has no network set up
+ * On stdin while serving: s stops, r restarts the Wi-Fi board, d drops its
+ * Wi-Fi and u brings it back on another address.
  * Every open file and folder must be closed when the card is released. */
 static struct {
     FILE *image;
@@ -103,12 +109,16 @@ static const char *speed(unsigned level) { (void)level; return "12.5 MHz"; }
 static void mac(uint8_t out[6]) { static const uint8_t m[6] = {0x02, 0x4b, 0x55, 0x49, 0x46, 0x54}; memcpy(out, m, 6); }
 static const struct kui_w5500_port port = {&bus, 1, open_level, close_port, speed, mac};
 const struct kui_w5500_port *kui_w5500_console_port(void) { return &port; }
+const struct kui_wifi_port *kui_wifi_console_port(void) { return &wifi_model_port; }
 
 static bool cancel(void) {
     struct pollfd in = {.fd = 0, .events = POLLIN};
     if(!test.stop && poll(&in, 1, 0) > 0) {
         char byte;
         if(read(0, &byte, 1) <= 0 || byte == 's') test.stop = true;
+        else if(byte == 'r') wifi_model_restart();
+        else if(byte == 'd') wifi_model_drop();
+        else if(byte == 'u') wifi_model_recover((const uint8_t[4]){127, 0, 0, 2});
     }
     return test.stop;
 }
@@ -157,7 +167,10 @@ static void seed(bool bad_password) {
 }
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IOLBF, 0);
-    if(argc < 3) { fprintf(stderr, "usage: ftp-image IMAGE seed|bad-password|serve PORT PASSIVE [absent]\n"); return 2; }
+    if(argc < 3) {
+        fprintf(stderr, "usage: ftp-image IMAGE seed|bad-password|serve PORT PASSIVE [absent|wifi|none|offline]\n");
+        return 2;
+    }
     test.image = fopen(argv[1], "r+b");
     assert(test.image);
     struct stat st;
@@ -168,14 +181,27 @@ int main(int argc, char **argv) {
     if(!strcmp(argv[2], "seed") || !strcmp(argv[2], "bad-password")) {
         seed(!strcmp(argv[2], "bad-password"));
         puts("SEEDED");
-    } else if(!strcmp(argv[2], "serve") && (argc == 5 || (argc == 6 && !strcmp(argv[5], "absent")))) {
+    } else if(!strcmp(argv[2], "serve") && (argc == 5 || argc == 6)) {
+        static const char *const modes[] = {"w5500", "absent", "wifi", "none", "offline"};
+        const char *mode = argc == 6 ? argv[5] : modes[0];
+        unsigned kind = 0;
+        while(kind < 5 && strcmp(mode, modes[kind])) ++kind;
+        if(kind == 5) { fprintf(stderr, "unknown adapter %s\n", mode); return 2; }
+        bool wifi = kind >= 2;
         struct kui_ftp_options options = {(uint16_t)atoi(argv[3]), (uint16_t)atoi(argv[4]), 40, 1234};
         struct kui_ftp_status status;
-        struct w5500_model_options model = {.absent = argc == 6};
+        struct w5500_model_options model = {.absent = strcmp(mode, "w5500") != 0};
         w5500_model_start(&model);
-        kui_ftp_run(&port, &options, &status, log_line, cancel, publish);
+        /* The board on the second chip select, as when it replaces a W5500
+         * wired to the usual point. */
+        struct wifi_model_options board = {!strcmp(mode, "none"), 1, 0, false,
+            (uint8_t)(!strcmp(mode, "offline") ? KWM_WIFI_IDLE : KWM_WIFI_ONLINE)};
+        if(wifi) wifi_model_start(&board);
+        const struct kui_net_ports ports = {&port, wifi ? &wifi_model_port : NULL};
+        kui_ftp_run(&ports, &options, &status, log_line, cancel, publish);
         printf("STOPPED state=%d in=%u out=%u failures=%u connections=%u message=%s\n", status.state, status.files_in,
             status.files_out, status.failures, status.connections, status.message);
+        if(wifi) wifi_model_stop();
         w5500_model_stop();
         code = status.state == KUI_FTP_STOPPED ? 0 : 1;
     } else { fprintf(stderr, "unknown mode %s\n", argv[2]); return 2; }

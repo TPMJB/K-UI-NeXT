@@ -112,6 +112,8 @@ nothing from an earlier connection on a slot can be mistaken for the new one.
 | 0x03 | WIFI_SCAN | none |
 | 0x04 | WIFI_JOIN | u8 band mode (0 keep, 1 2.4 GHz only, 2 5 GHz only, 3 both), u8 save, u8 ssid length, u8 password length, ssid, password |
 | 0x05 | WIFI_LEAVE | u8 forget the saved network |
+| 0x06 | WIFI_BAND | u8 band mode (1 2.4 GHz only, 2 5 GHz only, 3 both), kept across restarts; the WIFI_STATUS that follows shows it |
+| 0x07 | ECHO | any bytes; answered by ECHO_R with the same bytes (the host checks a clock rate with large frames) |
 | 0x10 | SOCK_OPEN | u8 kind (1 TCP listen, 2 TCP connect, 3 UDP), u8 flags (0x01 no delay, 0x02 keep-alive), u16 local port, u8 ip[4], u16 remote port, u16 keep-alive seconds, u32 receive credit |
 | 0x11 | SOCK_CLOSE | u8 how (0 abort now, 1 send what is queued, then FIN) |
 | 0x12 | SOCK_SEND | TCP: data. UDP: u8 ip[4], u16 port, data |
@@ -131,6 +133,7 @@ nothing from an earlier connection on a slot can be mistaken for the new one.
 | 0x82 | WIFI_STATUS | u8 state, u8 band (0, 2 or 5), u8 channel, i8 RSSI, u8 ip[4], mask[4], gateway[4], dns[4], bssid[6], u8 band mode, u8 last disconnect reason, u8 saved, u8 ssid length, ssid |
 | 0x83 | WIFI_SCAN_R | u8 status, u8 count, then per network: u8 channel, i8 RSSI, u8 security (0 open, 1 WEP, 2 WPA, 3 WPA2, 4 WPA3, 5 enterprise, 6 other), u8 ssid length, bssid[6], ssid |
 | 0x84 | WIFI_JOIN_R | u8 status (0 accepted) |
+| 0x85 | ECHO_R | the ECHO's bytes |
 | 0x90 | SOCK_STATE | u8 state, u8 error, u16 local port, u8 ip[4], u16 remote port |
 | 0x91 | SOCK_TXCREDIT | u32 more bytes the host may send on this slot |
 | 0x92 | SOCK_DATA | TCP: data. UDP: u8 ip[4], u16 port, data (one datagram) |

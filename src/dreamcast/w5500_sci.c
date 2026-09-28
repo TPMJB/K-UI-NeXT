@@ -1,27 +1,29 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The W5500's SPI link on this console: the SH-4's SCI port in synchronous
- * mode through KOS's SCI driver (dc/sci.h). TXD1 carries MOSI, RXD1 MISO
- * and SCK1 the clock; chip select is port A pin 7, which KOS drives as a
- * GPIO on a retail console. The SD card stays on SCIF, which nothing here
- * touches. */
+ * mode (sci_port.c). TXD1 carries MOSI, RXD1 MISO and SCK1 the clock. The
+ * chip select is GPIO7 (port A pin 7, the usual W5500 point) or GPIO6 (the
+ * network connector's); both are tried, each from the fastest rate down.
+ * The SD card stays on SCIF, which nothing here touches. */
 #include "kui/network_w5500.h"
+#include "sci_port.h"
 #include <dc/sci.h>
 #include <dc/syscalls.h>
 #include <kos/thread.h>
 #include <kos/timer.h>
 #include <string.h>
 
-static const uint32_t rates[] = {SCI_SPI_BAUD_12M500K, SCI_SPI_BAUD_6M250K, SCI_SPI_BAUD_3M125K, SCI_SPI_BAUD_1M562K};
-static const char *const names[] = {"12.5 MHz", "6.25 MHz", "3.125 MHz", "1.5625 MHz"};
-static bool running;
+static const unsigned selects[] = {7u, 6u};
+static const char *const names[] = {"12.5 MHz", "6.25 MHz", "3.125 MHz", "1.5625 MHz", "12.5 MHz, select GPIO6",
+                                    "6.25 MHz, select GPIO6", "3.125 MHz, select GPIO6", "1.5625 MHz, select GPIO6"};
+#define LEVELS (sizeof(names) / sizeof(names[0]))
 
 static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes) {
     (void)ctx;
-    if(!running) return false;
-    sci_spi_set_cs(true);
+    if(!kui_sci_running()) return false;
+    kui_sci_select(true);
     bool ok = sci_spi_write_data(header, 3) == SCI_OK;
     if(ok && bytes) ok = (out ? sci_spi_write_data(out, bytes) : sci_spi_read_data(in, bytes)) == SCI_OK;
-    sci_spi_set_cs(false);
+    kui_sci_select(false);
     return ok;
 }
 static uint64_t now_ms(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
@@ -30,17 +32,10 @@ static void pause_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep(ms); }
 static const struct kui_w5500_bus bus = {NULL, frame, now_ms, pause_ms};
 
 static bool open_level(unsigned level) {
-    if(level >= sizeof(rates) / sizeof(rates[0])) return false;
-    if(running) { sci_shutdown(); running = false; }
-    /* No DMA buffer: every transfer is programmed I/O. */
-    running = sci_init(rates[level], SCI_MODE_SPI, SCI_CLK_INT, 0) == SCI_OK;
-    return running;
+    return level < LEVELS && kui_sci_open(level % KUI_SCI_RATES, selects[level / KUI_SCI_RATES]);
 }
-static void close_port(void) {
-    if(running) sci_shutdown();
-    running = false;
-}
-static const char *speed(unsigned level) { return level < sizeof(names) / sizeof(names[0]) ? names[level] : "?"; }
+static void close_port(void) { kui_sci_close(); }
+static const char *speed(unsigned level) { return level < LEVELS ? names[level] : "?"; }
 static void mac(uint8_t out[6]) {
     /* The W5500 has no address of its own. A locally administered one is
      * made from the console's unique ID, so it stays the same each time. */
@@ -50,5 +45,5 @@ static void mac(uint8_t out[6]) {
     out[0] = 0x02;
     for(unsigned i = 1; i < 6; ++i) out[i] = (uint8_t)(hash >> ((i - 1u) * 8u));
 }
-static const struct kui_w5500_port port = {&bus, sizeof(rates) / sizeof(rates[0]), open_level, close_port, speed, mac};
+static const struct kui_w5500_port port = {&bus, LEVELS, open_level, close_port, speed, mac};
 const struct kui_w5500_port *kui_w5500_console_port(void) { return &port; }

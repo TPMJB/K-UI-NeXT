@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: MIT */
 /* The Wi-Fi board's side of the K-UI link. See PROTOCOL.md and bridge.h. */
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE /* sockets and select() when built on a computer for tests */
+#endif
 #include "bridge.h"
 #include <arpa/inet.h>
 #include <errno.h>
@@ -416,6 +419,12 @@ static void handle(struct kwb *b, const struct kwm *m) {
     case KWM_WIFI_JOIN: join(b, m); break;
     case KWM_WIFI_LEAVE:
         if(pf->wifi_leave) pf->wifi_leave(pf->ctx, m->len && m->body[0]);
+        b->wifi_dirty = true;
+        break;
+    case KWM_ECHO: reply(b, KWM_ECHO_R, 0, m->body, m->len); break;
+    case KWM_WIFI_BAND:
+        /* The answer is the status that follows, with its band mode. */
+        if(m->len && pf->wifi_band) pf->wifi_band(pf->ctx, m->body[0]);
         b->wifi_dirty = true;
         break;
     case KWM_SOCK_OPEN: case KWM_SOCK_CLOSE: case KWM_SOCK_SEND: case KWM_SOCK_CREDIT: socket_message(b, m); break;

@@ -90,7 +90,10 @@ These new app paths still need physical-console acceptance.
   W5500 wired to the SCI port (a modification), Network also finds that adapter
   and runs an FTP server for the SD card: uploads take their name only once
   complete, and K-UI's start-up files are protected
-  ([details](docs/ftp.md)). It has not yet been tried on a console.
+  ([details](docs/ftp.md)). It has not yet been tried on a console. The same
+  works over K-UI's Wi-Fi board (a XIAO ESP32-C5 with K-UI's own firmware) on
+  the SCI port, set up on Network's Wi-Fi page ([details](docs/wifi.md)); the
+  board is not yet tried on a console either.
   Diagnostics retains disc/SD probes, log export,
   mstats and benchmarks. RAM remains visible in the ripper.
 - Music keeps playing from RAM during menu actions and capture; uncached song

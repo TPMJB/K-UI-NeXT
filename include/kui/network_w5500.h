@@ -2,6 +2,7 @@
 #ifndef KUI_NETWORK_W5500_H
 #define KUI_NETWORK_W5500_H
 #include "kui/apps.h"
+#include "kui/net.h"
 #include "kui/network_probe.h"
 #include "kui/w5500.h"
 
@@ -60,6 +61,9 @@ bool kui_w5500_session_renew(struct kui_w5500_session *s, unsigned udp, unsigned
                              kui_cancel_fn cancel);
 /* Resets the chip (every socket closes) and closes the port. */
 void kui_w5500_session_end(struct kui_w5500_session *s);
+/* The chip's sockets for the FTP server. `sent` means the peer has
+ * acknowledged everything: the socket's transmit buffer is empty again. */
+void kui_w5500_session_sockets(struct kui_w5500_session *s, struct kui_net_sockets *out);
 /* Seconds until the lease should be renewed (half of it) and until it
  * runs out, from `now_ms`; zero when already due. */
 uint32_t kui_w5500_session_renew_in(const struct kui_w5500_session *s, uint64_t now_ms);

@@ -1,11 +1,13 @@
 # SCI connector plan: microSD, W5500 and Wi-Fi
 
-**Plan; only the W5500 part exists today.** This is the wiring to solder once,
-so that a microSD card, the W5500 and later a Wi-Fi board all plug into the
-same SCI port. Today's build still expects the W5500 alone, with its chip
-select on GPIO7 ([FTP server](ftp.md)). The software for everything else
-below is planned, not written. Solder-point details are still to be checked
-against photos of the owner's VA1 board before anyone solders.
+**Plan; the network part is written, the microSD part is not.** This is the
+wiring to solder once, so that a microSD card, the W5500 and later a Wi-Fi
+board all plug into the same SCI port. K-UI finds a W5500 with its chip
+select on GPIO7 (the usual point) or GPIO6 (this connector's), and the Wi-Fi
+board on GPIO6 or GPIO7 ([FTP server](ftp.md), [Wi-Fi](wifi.md)). The
+microSD card on the SCI port is planned, not written. Solder-point details
+are still to be checked against photos of the owner's VA1 board before
+anyone solders.
 
 ## One bus, several chip selects
 
@@ -54,7 +56,8 @@ The pull-ups keep every device deselected and running while the console
 boots and while a game runs. The microSD card sits on the same SCLK, MOSI
 and MISO lines with its own chip select, GPIO7, also pulled up. GPIO7 is
 what KallistiOS's SD-over-SCI driver uses, so the SD card gets it and the
-W5500 moves to GPIO6.
+network board moves to GPIO6. A W5500 already soldered to GPIO7 at RA101
+keeps working there until the microSD card needs that pin.
 
 ## The devices
 
@@ -89,7 +92,7 @@ GPIO7), so they are left unused.
 | D8 (GPIO8) | pin 5, SCLK |
 | D10 (GPIO10) | pin 6, MOSI |
 | D9 (GPIO9) | pin 7, MISO |
-| D0 (GPIO1) | pin 8, network chip select |
+| D0 (GPIO1) | pin 8, network chip select (GPIO6; GPIO7 also works) |
 | D1 (GPIO0) | pin 9, ready |
 | D4 (GPIO23) | pin 10, reset request (optional) |
 | 5V | pin 1 |
@@ -114,20 +117,23 @@ GPIO7), so they are left unused.
   74LVC1G125 buffer enabled by the XIAO's chip select goes in its MISO line,
   so it cannot fight the SD card.
 
-## Software still to write
+## Software
 
-1. A shared SCI bus layer: one owner for the SCI port, a lock so devices take
-   turns, each device's own clock speed (SD cards start slowly), chip
-   selects on GPIO7 and GPIO6, and the ready and reset lines.
-2. The W5500 on GPIO6.
+1. The SCI port as a bus: **written** for the network adapters
+   (`src/dreamcast/sci_port.c`): chip selects on GPIO7 (through KallistiOS's
+   SCI driver) and GPIO6, each device's clock rate, and READY on GPIO5. Only
+   the storage worker uses it, one device at a time. The reset line (GPIO0)
+   is not driven yet; the board's own watchdog covers a hang. Still to do
+   when the microSD card arrives: sharing the port with it.
+2. The W5500 on GPIO6: **written** (it is tried after GPIO7).
 3. The microSD on GPIO7 in K-UI (through KallistiOS's SD-over-SCI driver)
-   and in the game loader (an independent SCI reader).
-4. The XIAO ESP32-C5 firmware: **written**, see
+   and in the game loader (an independent SCI reader): still to write.
+4. The XIAO ESP32-C5: **written**. Its firmware is in
    [firmware/kui-wifi](../firmware/kui-wifi/README.md) (SPI in mode 3, Wi-Fi
-   setup and reconnection, sockets like the W5500's, updates from K-UI).
-   Still to do: K-UI's driver for it (the portable part, `kwhost`, is
-   written and tested) and a Wi-Fi setup screen (network list, password with
-   the on-screen keyboard).
+   setup and reconnection, sockets like the W5500's, updates from K-UI), and
+   K-UI's side, the driver, the FTP server over it and the Wi-Fi page, is
+   described in [Wi-Fi](wifi.md). Still to do: updating the board's firmware
+   from K-UI (the link can already carry it).
 
 Everything up to the console itself can be host-tested first, as the W5500
 and FTP code was.

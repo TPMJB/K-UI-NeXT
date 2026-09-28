@@ -36,6 +36,9 @@ struct kwb_platform {
     /* 0 when accepted; progress arrives as KWB_NOTE_WIFI. */
     uint8_t (*wifi_join)(void *ctx, const char *ssid, const char *password, bool save, uint8_t band_mode);
     void (*wifi_leave)(void *ctx, bool forget);
+    /* KWM_BAND_24, KWM_BAND_5 or KWM_BAND_BOTH, kept across restarts;
+     * false when the board cannot use it. */
+    bool (*wifi_band)(void *ctx, uint8_t band_mode);
     /* Starts a lookup; KWB_NOTE_DNS when done, then dns_result (false: none). */
     bool (*dns_start)(void *ctx, const char *name);
     bool (*dns_result)(void *ctx, uint8_t ip[4]);

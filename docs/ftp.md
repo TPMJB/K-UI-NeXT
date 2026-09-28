@@ -1,15 +1,17 @@
-# FTP server (W5500 on the SCI port)
+# FTP server (W5500 or Wi-Fi board on the SCI port)
 
 K-UI can share the SD card over your home network with FTP, so games,
 music and pictures can be copied to and from a computer without taking the
-card out. It needs a WIZnet W5500 Ethernet module wired to the console's
-SCI port (a modification). It is new since K-UI 1.5.1 and has not yet been
-tried on a console.
+card out. It needs a network adapter wired to the console's SCI port (a
+modification): a WIZnet W5500 Ethernet module, or K-UI's Wi-Fi board (see
+[Wi-Fi](wifi.md)). It is new since K-UI 1.5.1 and has not yet been tried on
+a console.
 
 It is independent K-UI code. The W5500 driver is written from WIZnet's
 W5500 datasheet and uses KallistiOS's SCI driver (`dc/sci.h`) only to move
 bytes; it does not use KallistiOS's own W5500 network driver, which also
-probes the serial port the SD adapter uses. No DreamShell code is involved.
+probes the serial port the SD adapter uses. The Wi-Fi board runs K-UI's own
+firmware. No DreamShell code is involved.
 
 ## The hardware
 
@@ -21,23 +23,26 @@ on the SH-4's other serial interface, SCI, run as SPI:
 | MOSI | SCI TXD |
 | MISO | SCI RXD |
 | SCLK | SCI SCK |
-| SCSn (chip select) | SH-4 port A, pin 7 (PA7) |
+| SCSn (chip select) | SH-4 port A, pin 7 (PA7), or pin 6 (PA6) |
 | 3.3 V and GND | 3.3 V and ground |
 | RSTn | held high (or to a reset line) |
 
-Chip select on PA7 is how KallistiOS's SCI driver drives it on a retail
-console; K-UI uses that driver unchanged. The W5500's interrupt pin is not
-used.
-
-Planning to add a microSD card or a Wi-Fi board on the same port? See
-[the SCI connector plan](sci-connector.md). There the SD card takes PA7 and
-the W5500 moves to its own chip select, which needs a K-UI update first.
+Chip select on PA7 (at RA101, the usual point) is how KallistiOS's SCI
+driver drives it on a retail console; K-UI uses that driver unchanged. PA6
+is the network connector's select in [the SCI connector plan](sci-connector.md),
+which leaves PA7 for a microSD card; K-UI drives PA6 itself. The W5500's
+interrupt pin is not used.
 
 K-UI looks for the W5500 only when asked (Network, or the FTP server),
 never at start-up. It resets the chip, checks its version, and writes and
-reads back 64 test patterns before using it. It starts at 12.5 MHz and, if a
-pattern comes back wrong, tries 6.25, 3.125 and 1.5625 MHz. If every speed
-fails, it says the W5500 was found but its wiring check failed.
+reads back 64 test patterns before using it. It starts at 12.5 MHz with the
+select on PA7 and, if a pattern comes back wrong, tries 6.25, 3.125 and
+1.5625 MHz, then the same with the select on PA6 ("select GPIO6" in its
+messages). If every speed fails, it says the W5500 was found but its wiring
+check failed.
+
+With no W5500, the FTP server and the Network app look for the Wi-Fi board
+next (see [Wi-Fi](wifi.md)).
 
 The W5500 has no MAC address of its own. K-UI makes a locally administered
 one from the console's unique ID, so it is the same every time (the router
@@ -45,10 +50,12 @@ sees one device).
 
 ## Using it
 
-1. Connect the W5500 to your router with a network cable.
+1. Connect the W5500 to your router with a network cable, or set up the
+   Wi-Fi board on the Wi-Fi page (Network, START).
 2. Open **Network** on Home and press **Y (FTP server)**.
-3. K-UI finds the W5500, opens the SD card, waits for the cable link and asks
-   the router for an address (DHCP). Then it shows:
+3. K-UI finds the adapter, opens the SD card, and waits for the cable link
+   and asks the router for an address (DHCP), or waits for the Wi-Fi board
+   to be online (it keeps its own address). Then it shows:
    - the address, such as `ftp://192.168.1.50`;
    - the user (`kui`; any name works) and the password.
 4. Connect an FTP client to that address on port 21 with that password.
@@ -125,30 +132,34 @@ files can be added to those folders. Update K-UI itself on a computer.
 - File times are the console clock's local time; clients that read `MLSD`
   as UTC may show them shifted by your time zone.
 - The SD card on the serial port sets the pace: it reads at about 0.7 MB/s
-  and writes at about 1.1 MB/s, and the W5500's link adds its own time, so
+  and writes at about 1.1 MB/s, and the adapter's link adds its own time, so
   expect well under 1 MB/s (not yet measured on a console). A computer with
   a card reader is much faster for whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.
-- The address lease is renewed at half its time. If the router refuses, or
-  the lease runs out, the server stops and says why.
+- The W5500's address lease is renewed at half its time. If the router
+  refuses, or the lease runs out, the server stops and says why. The Wi-Fi
+  board keeps its own lease; if its Wi-Fi drops, the server keeps running,
+  says so, and shows a new address if the router gives it one.
 
 ## Network app
 
 **A (Inspect adapter)** and **X (Test network)** also look for a W5500 on the
-SCI port when no Broadband or LAN adapter is found. Inspection reports the
-chip, the SPI speed that passed the wiring check, the cable link and the MAC
-address. The network test runs the same DHCP, address-conflict, gateway ARP
-and ping checks as with a BBA (see [the connection test](network-connection-test.md)),
-through the W5500's raw Ethernet socket.
+SCI port when no Broadband or LAN adapter is found, then for the Wi-Fi board
+(see [Wi-Fi](wifi.md)). Inspection reports the chip, the SPI speed that
+passed the wiring check, the cable link and the MAC address. The network
+test runs the same DHCP, address-conflict, gateway ARP and ping checks as
+with a BBA (see [the connection test](network-connection-test.md)), through
+the W5500's raw Ethernet socket.
 
 ## How it is built
 
 - `src/core/w5500.c`: the W5500 driver: SPI frames, registers, sockets,
   TCP, UDP and MACRAW, over any SPI link (`struct kui_w5500_bus`).
 - `src/dreamcast/w5500_sci.c`: that link on the console, through KOS's SCI
-  driver; the four speeds and the MAC address from the console ID.
+  driver (`src/dreamcast/sci_port.c` adds the PA6 select); the four speeds
+  at each select and the MAC address from the console ID.
 - `src/apps/network_w5500.c`: finding the chip, the cable link, DHCP through
   the existing network probe (raw frames on socket 0), lease renewal over
   UDP, and the Network app's inspection and test.
@@ -156,8 +167,10 @@ through the W5500's raw Ethernet socket.
   lines.
 - `src/apps/ftp_server.c`: the server loop on the storage worker: sessions,
   data connections, the card through FatFs, and the status the screen draws.
-  It uses the W5500's own TCP sockets: 0-2 carry data (socket 0 is used for
-  DHCP first), 3-6 listen for control connections.
+  It uses the adapter's TCP sockets through `kui/net.h`: 0-2 carry data (on
+  the W5500, socket 0 is used for DHCP first), 3-6 listen for control
+  connections. `src/apps/network_w5500.c` and `src/apps/network_wifi.c`
+  provide them.
 - `src/core/shell.c`, `src/dreamcast/shell_draw.c`, `src/dreamcast/main.c`:
   the FTP Server page, Y on the Network page, and worker action 64.
 
@@ -182,15 +195,18 @@ through the W5500's raw Ethernet socket.
   renames and moves, deletes, protected files, unsafe names, a closed data
   connection, `ABOR`, an upload cut off by a reset, files in use, the
   three-client limit, a full card, stopping with a client connected, no
-  W5500 and an unusable password file. `fsck` checks every image, and on
-  FAT32 mtools reads the uploads back independently. Every run must leave no
-  file or folder open.
+  W5500 and an unusable password file. On FAT32 all of it runs again over
+  the Wi-Fi board model (`tests/wifi_model.c`, the firmware's own bridge
+  core), with Wi-Fi dropping and coming back and the board restarting; no
+  adapter at all, and the board with no network set up, are reported.
+  `fsck` checks every image, and on FAT32 mtools reads the uploads back
+  independently. Every run must leave no file or folder open.
 - `test-shell`: Y on Network, Stop, restart and back, and every state of the
   FTP page.
 
 These run on the host. They check the protocol, the driver's register and
-socket handling, and the card; they cannot check the SCI wiring or the
-W5500 itself.
+socket handling, and the card; they cannot check the SCI wiring, the W5500
+or the Wi-Fi board themselves.
 
 ## Console test
 

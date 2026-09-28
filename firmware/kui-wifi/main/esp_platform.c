@@ -56,6 +56,10 @@ static void leave(void *ctx, bool forget) {
     (void)ctx;
     wifi_leave(forget);
 }
+static bool band(void *ctx, uint8_t band_mode) {
+    (void)ctx;
+    return wifi_set_band(band_mode);
+}
 
 /* One lookup at a time (the bridge core sees to that). */
 static QueueHandle_t lookups;
@@ -156,7 +160,7 @@ static void reboot(void *ctx) {
     esp_restart();
 }
 
-static const struct kwb_platform platform = {NULL, now_ms, info, status, scan, scan_results, join, leave,
+static const struct kwb_platform platform = {NULL, now_ms, info, status, scan, scan_results, join, leave, band,
                                              dns_start, dns_result, time_now, ota_begin, ota_write, ota_end, reboot};
 
 const struct kwb_platform *platform_start(struct kwb *b) {

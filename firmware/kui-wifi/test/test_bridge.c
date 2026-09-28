@@ -80,6 +80,12 @@ static void fake_leave(void *ctx, bool forget) {
     if(forget) f->wifi.saved = 0;
     kwb_notify(f->bridge, KWB_NOTE_WIFI);
 }
+static bool fake_band(void *ctx, uint8_t band) {
+    struct fake *f = ctx;
+    if(band != KWM_BAND_24 && band != KWM_BAND_5 && band != KWM_BAND_BOTH) return false;
+    f->wifi.band_mode = band;
+    return true;
+}
 static bool fake_dns_start(void *ctx, const char *name) {
     struct fake *f = ctx;
     f->dns_ok = !strcmp(name, "localhost");
@@ -120,8 +126,8 @@ static uint8_t fake_ota_end(void *ctx) {
 }
 static void fake_reboot(void *ctx) { ++((struct fake *)ctx)->reboots; }
 static const struct kwb_platform platform = {&fake, fake_now, fake_info, fake_wifi, fake_scan, fake_scan_results,
-                                             fake_join, fake_leave, fake_dns_start, fake_dns_result, fake_time,
-                                             fake_ota_begin, fake_ota_write, fake_ota_end, fake_reboot};
+                                             fake_join, fake_leave, fake_band, fake_dns_start, fake_dns_result,
+                                             fake_time, fake_ota_begin, fake_ota_write, fake_ota_end, fake_reboot};
 
 /* The SPI bus between them. The board arms its next frame as soon as a
  * transfer ends, as the firmware does. */
@@ -248,6 +254,18 @@ static void wifi_controls(void) {
     CHECK(kwh_wifi_leave(host, true));
     UNTIL(host->counts.wifi > before && host->wifi.state == KWM_WIFI_IDLE, 20);
     fake.wifi.state = KWM_WIFI_ONLINE;
+    before = host->counts.wifi;
+    CHECK(kwh_wifi_band(host, KWM_BAND_5));
+    UNTIL(host->counts.wifi > before && host->wifi.band_mode == KWM_BAND_5, 20);
+    before = host->counts.wifi;
+    CHECK(kwh_wifi_band(host, 9));
+    UNTIL(host->counts.wifi > before, 20);
+    CHECK(host->wifi.band_mode == KWM_BAND_5);
+    uint8_t sample[KWM_BODY_MAX];
+    for(size_t i = 0; i < sizeof sample; ++i) sample[i] = pattern(8, i);
+    CHECK(kwh_echo(host, sample, sizeof sample));
+    UNTIL(host->counts.echo, 20);
+    CHECK(host->echo_len == sizeof sample && !memcmp(host->echo, sample, sizeof sample));
     CHECK(kwh_dns(host, 7, "localhost"));
     UNTIL(host->counts.dns, 20);
     CHECK(host->dns_tag == 7 && host->dns_status == 0 && !memcmp(host->dns_ip, LOCALHOST, 4));
@@ -257,7 +275,7 @@ static void wifi_controls(void) {
     CHECK(kwh_time(host));
     UNTIL(host->counts.time, 20);
     CHECK(host->time_status == 0 && host->time_ms == 1790000000123ull);
-    printf("wifi: status, scan, join, leave, dns and time answered\n");
+    printf("wifi: status, scan, join, leave, band, echo, dns and time answered\n");
 }
 
 static void tcp_listen(void) {
@@ -286,6 +304,17 @@ static void tcp_listen(void) {
     close(c);
     unsigned steps = exchange(a, 3, 1u << 20, 1, 2);
     printf("tcp: 1 MiB each way on one connection in %u transfers\n", steps);
+    /* Everything sent has left the board's buffer once its credit is back. */
+    UNTIL(kwh_flushed(host, 3), 50);
+    CHECK(host->slot[3].tx_capacity == 8192);
+    CHECK(kwh_send(host, 3, "x", 1) == 1 && !kwh_flushed(host, 3));
+    UNTIL(kwh_flushed(host, 3), 50);
+    char one;
+    for(unsigned i = 0; recv(a, &one, 1, 0) != 1; ++i) {
+        CHECK(i < 200);
+        step();
+    }
+    CHECK(one == 'x');
     /* Orderly close from our side: the client reads everything, then EOF. */
     CHECK(kwh_close(host, 3, true));
     CHECK(kwh_state(host, 3) == KWM_CLOSING && kwh_room(host, 3) == 0);

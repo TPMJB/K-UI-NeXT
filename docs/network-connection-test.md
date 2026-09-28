@@ -43,6 +43,13 @@ Ethernet socket (socket 0 in MACRAW mode); the chip's own address stays
 unset during the test. The W5500 also carries K-UI's FTP server; see
 [the FTP server](ftp.md) for the wiring, the SPI speed checks and the tests.
 
+## The Wi-Fi board on the SCI port
+
+With no W5500 either, they look for K-UI's Wi-Fi board. It gets its own
+address, so its test is different: it waits for the board to be online, then
+looks up `pool.ntp.org` through it and reads the time the board set from the
+internet; a successful lookup is the pass. See [Wi-Fi](wifi.md).
+
 ## Host and console checks
 
 Host protocol tests cover DHCP success/NAK/deadlines, conflict detection, gateway

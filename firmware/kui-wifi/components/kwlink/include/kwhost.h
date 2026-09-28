@@ -48,12 +48,14 @@ struct kwh_slot {
     /* TCP: the byte stream. UDP: records of u16 length, ip[4], u16 port, data. */
     uint8_t rx[KWH_RX];
     size_t rx_head, rx_len;
-    /* Bytes the board will take now; bytes read and not yet credited back. */
-    uint32_t tx_credit, credit_back;
+    /* Bytes the board will take now; bytes read and not yet credited back.
+     * tx_capacity: the most credit held at once, which is the board's whole
+     * buffer for the slot (its first grant). */
+    uint32_t tx_credit, credit_back, tx_capacity;
 };
 /* Each answer bumps its counter, so a caller can wait for a new one. */
 struct kwh_counts {
-    uint32_t hello, wifi, scan, join, dns, time, ota, reboot, lost;
+    uint32_t hello, wifi, scan, join, dns, time, ota, reboot, lost, echo;
 };
 struct kwh {
     const struct kwh_bus *bus;
@@ -69,12 +71,17 @@ struct kwh {
     uint64_t time_ms;
     uint8_t ota_phase, ota_status;
     uint32_t ota_written;
+    uint8_t echo[KWM_BODY_MAX];
+    size_t echo_len;
     struct kwh_counts counts;
     struct kwh_slot slot[KWM_SLOTS];
     uint8_t queue[KWH_QUEUE];
     size_t queue_len;
     uint8_t out[KWL_FRAME_MAX], in[KWL_FRAME_MAX];
-    uint32_t transfers, failures;
+    /* transfers: completed; heard: valid frames from the board (any
+     * session); failures: transfers that did not happen, and data beyond
+     * the credit given. */
+    uint32_t transfers, heard, failures;
 };
 
 void kwh_init(struct kwh *h, const struct kwh_bus *bus);
@@ -95,7 +102,12 @@ bool kwh_wifi_scan(struct kwh *h);
 /* band: KWM_BAND_*. The password is not kept here. */
 bool kwh_wifi_join(struct kwh *h, const char *ssid, const char *password, bool save, uint8_t band);
 bool kwh_wifi_leave(struct kwh *h, bool forget);
+/* KWM_BAND_24, KWM_BAND_5 or KWM_BAND_BOTH; the next Wi-Fi status shows it. */
+bool kwh_wifi_band(struct kwh *h, uint8_t band);
 bool kwh_dns(struct kwh *h, uint8_t tag, const char *name);
+/* The board sends the bytes straight back (echo, echo_len): a check that
+ * large frames cross the wires intact. At most KWM_BODY_MAX bytes. */
+bool kwh_echo(struct kwh *h, const void *data, size_t len);
 bool kwh_time(struct kwh *h);
 bool kwh_ota_begin(struct kwh *h, uint32_t size, const uint8_t sha256[32]);
 /* At most KWM_BODY_MAX - 4 bytes per call, in order. */
@@ -117,6 +129,9 @@ bool kwh_peer(const struct kwh *h, unsigned s, uint8_t ip[4], uint16_t *port);
 /* TCP: bytes that kwh_send takes now; UDP: the largest datagram. */
 size_t kwh_room(const struct kwh *h, unsigned s);
 size_t kwh_send(struct kwh *h, unsigned s, const void *data, size_t len);
+/* Everything sent on the slot has reached the board and left its buffer
+ * (TCP: handed to its network stack). */
+bool kwh_flushed(const struct kwh *h, unsigned s);
 bool kwh_sendto(struct kwh *h, unsigned s, const uint8_t ip[4], uint16_t port, const void *data, size_t len);
 /* TCP: bytes waiting. */
 size_t kwh_available(const struct kwh *h, unsigned s);

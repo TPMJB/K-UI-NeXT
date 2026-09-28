@@ -13,6 +13,7 @@
 #include "kui/games_covers.h"
 #include "kui/files.h"
 #include "kui/ftp.h"
+#include "kui/network_wifi.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -38,7 +39,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_RETAIL_CONFIRM,
     KUI_SHELL_FILES, KUI_SHELL_FILES_ACTIONS, KUI_SHELL_FILES_PICK,
     KUI_SHELL_FILES_CONFIRM, KUI_SHELL_FILES_INFO, KUI_SHELL_FILES_VIEW,
-    KUI_SHELL_FTP };
+    KUI_SHELL_FTP, KUI_SHELL_WIFI };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -63,7 +64,8 @@ enum kui_shell_action {
     KUI_SHELL_GAMES_LIST, KUI_SHELL_GAMES_INSPECT, KUI_SHELL_GAMES_PROBE,
     KUI_SHELL_GAMES_IMAGE_PROBE, KUI_SHELL_GAMES_RETAIL, KUI_SHELL_GAMES_SCAN,
     KUI_SHELL_FILES_LIST, KUI_SHELL_FILES_CHECK, KUI_SHELL_FILES_RUN, KUI_SHELL_FILES_PICTURE,
-    KUI_SHELL_FTP_START
+    KUI_SHELL_FTP_START, KUI_SHELL_WIFI_REFRESH, KUI_SHELL_WIFI_JOIN, KUI_SHELL_WIFI_FORGET,
+    KUI_SHELL_WIFI_BAND
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -111,7 +113,8 @@ struct kui_shell {
     unsigned browser_selected, browser_page, keyboard_selected;
     unsigned advanced_selected;
     enum kui_shell_page settings_return;
-    bool keyboard_upper, browse_for_scan;
+    unsigned keyboard_layer; /* KUI_SHELL_KEYS_* */
+    bool browse_for_scan;
     /* File Manager. files_request is the next listing main hands to the
      * worker: the browser's folder, or the picker's (folders_only). A job
      * is checked (FILES_CHECK) before it is confirmed and run (FILES_RUN);
@@ -130,6 +133,16 @@ struct kui_shell {
     /* A copy, move, delete, rename or new folder runs until its status is
      * installed; the browser shows its progress meanwhile. */
     bool files_running;
+    /* The Wi-Fi page: the board's latest view; rows are the band setting,
+     * the networks in range, then "Other network". wifi_request is the job
+     * main hands to the worker (JOIN, BAND); main wipes its password once
+     * taken. The keyboard types the password, or first the name of a
+     * network typed by hand (wifi_typing_name). */
+    struct kui_wifi_view wifi;
+    unsigned wifi_selected;
+    struct kui_wifi_request wifi_request;
+    uint8_t wifi_security; /* of the network being joined; 0xff: not known */
+    bool wifi_keyboard, wifi_typing_name, confirm_wifi_forget;
 };
 /* Home's apps, top to bottom: A on row home_selected opens
  * kui_shell_home_pages[home_selected]. Drawing looks each app up by page. */
@@ -196,9 +209,16 @@ void kui_shell_set_listing(struct kui_shell *shell,
     const struct kui_destination_page *page);
 void kui_shell_destination_error(struct kui_shell *shell, const char *message);
 /* Keyboard has four QWERTY/digit rows of ten keys, then SPACE/BACK/DONE.
- * Only directions may be repeated; A and the other action buttons are edges. */
+ * Only directions may be repeated; A and the other action buttons are edges.
+ * Y cycles its layers: lowercase, uppercase, then symbols. */
 #define KUI_SHELL_KEY_COUNT 43u
-const char *kui_shell_key_label(unsigned key, bool uppercase);
+enum { KUI_SHELL_KEYS_LOWER, KUI_SHELL_KEYS_UPPER, KUI_SHELL_KEYS_SYMBOLS, KUI_SHELL_KEY_LAYERS };
+const char *kui_shell_key_label(unsigned key, unsigned layer);
+/* The Wi-Fi page's view from the worker. A view without a scan keeps the
+ * networks already listed. */
+void kui_shell_set_wifi(struct kui_shell *shell, const struct kui_wifi_view *view);
+/* Rows on the Wi-Fi page: the band setting, each network, "Other network". */
+unsigned kui_shell_wifi_rows(const struct kui_shell *shell);
 
 /* Main copies shared worker state while locked, then draws outside the lock.
  * Pointer fields remain valid for this draw. log_lines contains up to LOG_ROWS

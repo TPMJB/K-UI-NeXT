@@ -186,6 +186,11 @@ static void deliver(void *ctx, const uint8_t *payload, size_t len) {
         case KWM_HELLO_R: hello_r(h, &m); break;
         case KWM_WIFI_STATUS: wifi_r(h, &m); break;
         case KWM_WIFI_SCAN_R: scan_r(h, &m); break;
+        case KWM_ECHO_R:
+            memcpy(h->echo, m.body, m.len);
+            h->echo_len = m.len;
+            ++h->counts.echo;
+            break;
         case KWM_WIFI_JOIN_R:
             h->join_status = m.len ? m.body[0] : KWM_E_OTHER;
             ++h->counts.join;
@@ -195,6 +200,7 @@ static void deliver(void *ctx, const uint8_t *payload, size_t len) {
             if(current && m.len >= 4 && s->state != KWM_CLOSED && s->state != KWM_CLOSING) {
                 uint32_t more = kwl_get32(m.body);
                 s->tx_credit = s->tx_credit > UINT32_MAX - more ? UINT32_MAX : s->tx_credit + more;
+                if(s->tx_credit > s->tx_capacity) s->tx_capacity = s->tx_credit;
             }
             break;
         case KWM_SOCK_DATA: if(current) data_r(h, s, &m); break;
@@ -252,7 +258,9 @@ bool kwh_step(struct kwh *h) {
         return false;
     }
     ++h->transfers;
-    if(kwl_receive(&h->link, h->in, len, &io) == KWL_LOST) {
+    enum kwl_result result = kwl_receive(&h->link, h->in, len, &io);
+    if(result == KWL_OK || result == KWL_SYNCED || result == KWL_IGNORED || result == KWL_LOST) ++h->heard;
+    if(result == KWL_LOST) {
         /* The board restarted: its sockets are gone. Start again. */
         ++h->counts.lost;
         begin(h, (uint16_t)(h->session * 40503u + 1u));
@@ -283,6 +291,7 @@ bool kwh_wifi_leave(struct kwh *h, bool forget) {
     uint8_t body = forget;
     return queue(h, KWM_WIFI_LEAVE, 0, &body, 1) != NULL;
 }
+bool kwh_wifi_band(struct kwh *h, uint8_t band) { return queue(h, KWM_WIFI_BAND, 0, &band, 1) != NULL; }
 bool kwh_dns(struct kwh *h, uint8_t tag, const char *name) {
     size_t len = name ? strlen(name) : 0;
     if(!len || len > KWM_NAME_MAX) return false;
@@ -293,6 +302,7 @@ bool kwh_dns(struct kwh *h, uint8_t tag, const char *name) {
     memcpy(body + 2, name, len);
     return true;
 }
+bool kwh_echo(struct kwh *h, const void *data, size_t len) { return queue(h, KWM_ECHO, 0, data, len) != NULL; }
 bool kwh_time(struct kwh *h) { return queue(h, KWM_TIME, 0, NULL, 0) != NULL; }
 bool kwh_ota_begin(struct kwh *h, uint32_t size, const uint8_t sha256[32]) {
     uint8_t body[36];
@@ -386,6 +396,9 @@ size_t kwh_room(const struct kwh *h, unsigned i) {
     }
     if(!streaming(s->state)) return 0;
     return smaller(smaller(s->tx_credit, KWM_BODY_MAX), queue_room(h));
+}
+bool kwh_flushed(const struct kwh *h, unsigned i) {
+    return i < KWM_SLOTS && h->slot[i].tx_capacity && h->slot[i].tx_credit >= h->slot[i].tx_capacity;
 }
 size_t kwh_send(struct kwh *h, unsigned i, const void *data, size_t len) {
     size_t n = smaller(len, kwh_room(h, i));
