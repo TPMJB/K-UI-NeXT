@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Original K-UI artwork for TPMJB, 2026-09-28. See README.md. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+<rect x="0.5" y="0.5" width="23" height="23" rx="5" fill="#121A31" stroke="#654773"/>
+<!-- A filled body keeps the controls separate at television resolution. -->
+<path d="M6 7h12l3 12h-5l-3-4h-2l-3 4H3Z" fill="#65E8F2"/>
+<g fill="#121A31" shape-rendering="crispEdges">
+<path d="M9 9h2v2h2v2h-2v2H9v-2H7v-2h2Z"/>
+<path d="M15 10h3v3h-3Z"/>
+</g>
+</svg>

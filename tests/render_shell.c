@@ -166,6 +166,8 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"home-files")) shell.home_selected=home_row(KUI_SHELL_FILES);
     else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_RIPPER);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
+    else if(!strcmp(argv[1],"home-settings")) shell.home_selected=home_row(KUI_SHELL_SETTINGS);
+    else if(!strcmp(argv[1],"home-diagnostics")) shell.home_selected=home_row(KUI_SHELL_DIAGNOSTICS);
     else if(!strcmp(argv[1],"network")) shell.page=KUI_SHELL_NETWORK;
     else if(!strncmp(argv[1],"ftp-",4)) ftp_state(&shell,&view,argv[1]);
     else if(!strcmp(argv[1],"files") || !strcmp(argv[1],"files-root")) {

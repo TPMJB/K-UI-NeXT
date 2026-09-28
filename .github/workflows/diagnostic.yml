@@ -99,6 +99,17 @@ jobs:
                   raise SystemExit('RC-only request includes changes outside Games eligibility, branding and packaging')
               requested = True
               print('V1.5 release: focused checks recorded locally; native build, layout and packaging checks run here.')
+          artwork = 'Validation: artwork-only' in message.splitlines()
+          if artwork:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
+              exact = {'.github/workflows/diagnostic.yml', 'src/dreamcast/shell_draw.c',
+                       'src/dreamcast/shell_art.inc', 'tests/render_shell.c',
+                       'tools/generate_shell_art.py', 'tools/render_home_icons.py',
+                       'tools/render_app_previews.py', 'resources/branding/README.md'}
+              if not paths or any(p not in exact and not p.startswith(('resources/icons/', 'docs/')) for p in paths):
+                  raise SystemExit('Artwork-only request includes changes outside artwork, renderer and previews')
+              requested = True
+              print('Home artwork: source pins and production previews checked locally; native build and package size checks run here.')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('console_only=' + str(requested).lower() + '\n')
           PY
