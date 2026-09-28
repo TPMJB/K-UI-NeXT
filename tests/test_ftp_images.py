@@ -462,6 +462,9 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     full_card(f)
     if adapter == ("wifi",):
         wifi_events(server, port, password)
+        # The board's restart closed every connection, this one too.
+        f.close()
+        f = client(port, password)
     # Stopping with a client connected: it is told.
     f.sock.settimeout(30)
     code, output = server.stop()
