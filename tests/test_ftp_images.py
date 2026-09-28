@@ -57,6 +57,18 @@ class Server:
             if line.startswith("STOPPED "):
                 self.seen.set()
 
+    def send(self, key):
+        """A key on the harness's stdin: n makes the next upload's rename to
+        its name fail, N also the rename that puts the old file back."""
+        self.proc.stdin.write(key)
+        self.proc.stdin.flush()
+
+    def wait_for(self, text, seconds=20):
+        deadline = time.monotonic() + seconds
+        while not any(text in line for line in self.lines):
+            assert time.monotonic() < deadline, f"never saw {text!r}:\n" + "\n".join(self.lines[-30:])
+            time.sleep(0.05)
+
     def stop(self):
         self.proc.stdin.close()
         code = self.proc.wait(60)
@@ -286,6 +298,35 @@ def changes(f, case_insensitive):
     print("PASS FTP changes: rename, move, delete, RMD, read-only", flush=True)
 
 
+def replacing(f, server):
+    """A file an upload replaces stays until the upload has its name: if that
+    rename fails, the old file is back under its name; if putting it back
+    fails too, it is kept under the spare name the reply gives."""
+    upload(f, "Games/keep.txt", b"the original\n")
+    server.send("n")
+    server.wait_for("ARMED 1")
+    text = expect("451", lambda: upload(f, "Games/keep.txt", b"its replacement\n"))
+    assert "old file kept" in text, text
+    assert download(f, "Games/keep.txt") == b"the original\n"
+    names = f.nlst("Games")
+    assert not any(n.startswith("KUI-ftp-") for n in names), names
+    server.send("N")
+    server.wait_for("ARMED 2")
+    text = expect("451", lambda: upload(f, "Games/keep.txt", b"its replacement\n"))
+    spare = text.split()[-1]
+    names = f.nlst("Games")
+    assert spare.startswith("KUI-ftp-") and spare.endswith(".kui-old") and spare in names, (text, names)
+    assert "keep.txt" not in names and not any(n.endswith(".kui-part") for n in names), names
+    assert download(f, "Games/" + spare) == b"the original\n"
+    f.rename("Games/" + spare, "Games/keep.txt")
+    upload(f, "Games/keep.txt", b"its replacement\n")
+    assert download(f, "Games/keep.txt") == b"its replacement\n"
+    names = f.nlst("Games")
+    assert not any(n.startswith("KUI-ftp-") for n in names), names
+    f.delete("Games/keep.txt")
+    print("PASS FTP replacing: the old file stays until the upload has its name", flush=True)
+
+
 def protected(f):
     for action in (lambda: f.delete("KUI/runtime.kui"), lambda: f.rename("KUI", "KUI-old"),
                    lambda: f.rename("KUI/apps", "apps"), lambda: f.rmd("KUI/apps/games"),
@@ -409,6 +450,7 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     folders(f)
     files = transfers(f, port, password, kind)
     changes(f, case_insensitive)
+    replacing(f, server)
     protected(f)
     aborts(f, port, password, files)
     limits(port, password, 1)

@@ -20,11 +20,14 @@
  *   ftp-image IMAGE bad-password             an unusable password file
  *   ftp-image IMAGE serve PORT PASSIVE       serve until stdin closes
  *   ftp-image IMAGE serve PORT PASSIVE absent    no W5500 answers
+ * On stdin while serving: s stops; n makes the next upload's rename to its
+ * name fail, N also the rename that puts back the file it replaced (each
+ * prints ARMED and a count).
  * Every open file and folder must be closed when the card is released. */
 static struct {
     FILE *image;
     uint64_t blocks;
-    unsigned files, dirs;
+    unsigned files, dirs, armed, fail_part, fail_old;
     bool active, connected, ready, stop;
     char last_event[KUI_APP_LINE_CAP];
 } test;
@@ -85,6 +88,16 @@ FRESULT __wrap_f_closedir(DIR *dir) {
     if(test.active) { assert(test.dirs); --test.dirs; }
     return result;
 }
+static bool ends_with(const char *text, const char *suffix) {
+    size_t n = strlen(text), k = strlen(suffix);
+    return n > k && !strcmp(text + n - k, suffix);
+}
+FRESULT __real_f_rename(const TCHAR *from, const TCHAR *to);
+FRESULT __wrap_f_rename(const TCHAR *from, const TCHAR *to) {
+    if(test.fail_part && ends_with(from, ".kui-part")) { --test.fail_part; return FR_DENIED; }
+    if(test.fail_old && ends_with(from, ".kui-old")) { --test.fail_old; return FR_DENIED; }
+    return __real_f_rename(from, to);
+}
 
 /* The model's clock runs ahead while the server starts, so the three
  * second address check does not hold up every case. */
@@ -109,6 +122,11 @@ static bool cancel(void) {
     if(!test.stop && poll(&in, 1, 0) > 0) {
         char byte;
         if(read(0, &byte, 1) <= 0 || byte == 's') test.stop = true;
+        else if(byte == 'n' || byte == 'N') {
+            ++test.fail_part;
+            if(byte == 'N') ++test.fail_old;
+            printf("ARMED %u\n", ++test.armed);
+        }
     }
     return test.stop;
 }

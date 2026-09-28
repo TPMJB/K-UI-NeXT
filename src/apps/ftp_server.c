@@ -34,6 +34,8 @@
 #define DRAIN_MS 10000u     /* for a closing data connection to finish */
 #define STOP_MS 1000u
 #define PART_LIMIT 99u
+/* A file an upload replaces, until the upload has taken its name. */
+#define OLD_SUFFIX ".kui-old"
 enum {FREE = -1, REJECTING = -2, RENEWING = -3};
 enum transfer {T_NONE, T_LIST, T_NLST, T_MLSD, T_RETR, T_STOR};
 enum phase {P_IDLE, P_CONNECT, P_RUN, P_DRAIN};
@@ -238,11 +240,12 @@ static void fail_transfer(struct server *sv, struct session *s, uint64_t now, co
     end_transfer(sv, s, false, now);
     reply(s, "%s", text);
 }
-static bool part_path(char out[KUI_FILES_PATH_CAP], const char *target) {
+/* A KUI-ftp-<n><suffix> name nobody uses yet beside target. */
+static bool spare_path(char out[KUI_FILES_PATH_CAP], const char *target, const char *suffix) {
     char parent[KUI_FILES_PATH_CAP], name[32];
     if(!kui_files_parent(parent, target)) return false;
     for(unsigned n = 1; n <= PART_LIMIT; ++n) {
-        snprintf(name, sizeof(name), "KUI-ftp-%u%s", n, KUI_FILES_PART_SUFFIX);
+        snprintf(name, sizeof(name), "KUI-ftp-%u%s", n, suffix);
         FILINFO info;
         if(!kui_files_join(out, parent, name)) return false;
         if(stat_path(out, &info) == FR_NO_FILE) return true;
@@ -330,22 +333,39 @@ static bool fill_listing(struct server *sv, struct session *s) {
     return true;
 }
 static void finish_upload(struct server *sv, struct session *s, uint64_t now) {
-    char from[CARD_CAP], to[CARD_CAP];
+    char from[CARD_CAP], to[CARD_CAP], aside[KUI_FILES_PATH_CAP] = "", kept[CARD_CAP] = "";
     FRESULT r = f_close(&s->file);
     s->file_open = false;
     const char *problem = NULL;
+    bool replacing = false;
     if(r != FR_OK) problem = "451 The SD card could not finish the file";
     else if(!card(from, s->part) || !card(to, s->path)) problem = "451 Invalid path";
     else {
         FILINFO old;
         FRESULT seen = stat_path(s->path, &old);
-        if(seen == FR_OK && (old.fattrib & AM_DIR)) problem = "553 A folder now has that name";
-        else if(seen == FR_OK && (r = f_unlink(to)) != FR_OK) problem = "451 Cannot replace the old file";
+        replacing = seen == FR_OK;
+        if(replacing && (old.fattrib & AM_DIR)) problem = "553 A folder now has that name";
+        /* Read-only files are not replaced, as when uploads deleted them. */
+        else if(replacing && (old.fattrib & AM_RDO)) problem = "451 Cannot replace the old file";
         else if(seen != FR_OK && seen != FR_NO_FILE) problem = "451 Cannot check the destination";
-        else if((r = f_rename(from, to)) != FR_OK) problem = "451 Cannot give the upload its name";
+        /* The old file moves aside until the upload has its name, so a
+         * failed rename can put it back. */
+        else if(replacing && (!spare_path(aside, s->path, OLD_SUFFIX) || !card(kept, aside) || f_rename(to, kept) != FR_OK))
+            problem = "451 Cannot replace the old file";
+        else if(f_rename(from, to) != FR_OK) {
+            problem = "451 Cannot give the upload its name";
+            if(replacing && f_rename(kept, to) == FR_OK) problem = "451 Cannot name the upload; old file kept";
+            else if(replacing) {
+                event(sv, "The old %.32s is now %.24s", kui_files_leaf(s->path), kui_files_leaf(aside));
+                fail_transfer(sv, s, now, "451 Cannot name the upload; the old file is now %s", kui_files_leaf(aside));
+                return;
+            }
+        }
     }
     if(problem) { fail_transfer(sv, s, now, "%s", problem); return; }
     s->part[0] = 0;
+    if(replacing && f_unlink(kept) != FR_OK)
+        event(sv, "The old %.32s is left as %.24s", kui_files_leaf(s->path), kui_files_leaf(aside));
     char size[16];
     size_words(size, s->done);
     ++sv->status->files_in;
@@ -608,7 +628,7 @@ static void start_stor(struct server *sv, struct session *s, const char *argumen
         return;
     }
     if(!data_prepared(s)) return;
-    if(!part_path(s->part, path)) { reply(s, "451 Too many unfinished uploads in that folder"); return; }
+    if(!spare_path(s->part, path, KUI_FILES_PART_SUFFIX)) { reply(s, "451 Too many unfinished uploads in that folder"); return; }
     if(!(s->buffer = malloc(BUFFER_BYTES))) { s->part[0] = 0; reply(s, "451 Insufficient memory"); return; }
     if(!card(c, s->part) || f_open(&s->file, c, FA_WRITE | FA_CREATE_NEW) != FR_OK) {
         free(s->buffer);
