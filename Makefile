@@ -508,7 +508,7 @@ build/test-network-wifi: tests/test_network_wifi.c src/apps/network_wifi.c src/c
 # (tests/test_ftp_images.py).
 FTP = src/apps/ftp_server.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/storage_probe.c \
       src/core/w5500.c src/apps/network_w5500.c src/apps/network_probe.c src/apps/network_wifi.c src/core/wifi_text.c $(WIFI_LINK)
-FTP_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir
+FTP_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_rename
 build/test-ftp: tests/test_ftp.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c include/kui/ftp.h include/kui/files.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c tests/test_ftp.c -o $@

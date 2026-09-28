@@ -105,7 +105,12 @@ unencrypted. Use it on your home network only. There is no FTPS or SFTP.
   `KUI-ftp-<n>.kui-part` and takes its name only when the client has sent
   all of it. If the upload stops (cancelled, connection lost, card full, or
   B on the console), the part file is removed and nothing else changes. An
-  existing file of that name is replaced only once the new one is complete.
+  existing file of that name is replaced only once the new one is complete:
+  it waits beside it as `KUI-ftp-<n>.kui-old` while the upload takes its
+  name, and is deleted after. If the upload cannot take the name, the old
+  file gets its name back; if even that fails, the reply (and the console)
+  says which `.kui-old` name it is kept under. Read-only files are not
+  replaced.
 - **Rename and move** (`RNFR`/`RNTO`, also between folders), **delete**
   (read-only files included, as in the File Manager), **new folder** and
   **remove folder** (empty folders; clients delete the contents first).
@@ -191,7 +196,9 @@ the W5500's raw Ethernet socket.
 - `test_ftp_images.py`: the whole server on the W5500 model with real FatFs
   on FAT32 and exFAT images, driven by Python's `ftplib`: login and wrong
   passwords, folders, uploads and downloads of up to 20 MB compared by
-  SHA-256, resume, replace, listings and wildcards, active mode, `EPSV` and `EPRT`,
+  SHA-256, resume, replace (and a replace whose rename fails, then one
+  whose old file cannot be put back either: the old file survives both),
+  listings and wildcards, active mode, `EPSV` and `EPRT`,
   renames and moves, deletes, protected files, unsafe names, a closed data
   connection, `ABOR`, an upload cut off by a reset, files in use, the
   three-client limit, a full card, stopping with a client connected, no

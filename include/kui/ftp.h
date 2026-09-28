@@ -20,8 +20,9 @@
  * Paths follow the File Manager's rules (kui/files.h): FAT-safe UTF-8
  * names under 128 bytes, paths under 384. Uploads are written beside
  * their target as KUI-ftp-<n>.kui-part and take their name only once the
- * client has sent all of it; K-UI's own start-up files cannot be replaced,
- * renamed or deleted. */
+ * client has sent all of it; a file they replace waits as KUI-ftp-<n>.kui-old
+ * until then and gets its name back if the upload cannot take it. K-UI's own
+ * start-up files cannot be replaced, renamed or deleted. */
 #define KUI_FTP_PORT 21u
 #define KUI_FTP_PASSIVE_FIRST 50000u
 #define KUI_FTP_PASSIVE_COUNT 1000u
