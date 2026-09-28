@@ -256,7 +256,9 @@ static void dns(struct kwb *b, const struct kwm *m) {
         size_t len = smaller(m->body[1], KWM_NAME_MAX);
         memcpy(name, m->body + 2, len);
         name[len] = 0;
-        if(b->pf->dns_start && b->pf->dns_start(b->pf->ctx, name)) {
+        uint32_t ticket = b->dns_ticket + 1u;
+        if(b->pf->dns_start && b->pf->dns_start(b->pf->ctx, ticket, name)) {
+            b->dns_ticket = ticket;
             b->dns_busy = true;
             b->dns_tag = m->body[0];
             return;
@@ -592,11 +594,19 @@ static void notes(struct kwb *b) {
         reply(b, KWM_WIFI_SCAN_R, 0, body, len);
         b->scan_busy = false;
     }
-    if((n & KWB_NOTE_DNS) && b->dns_busy) {
-        uint8_t body[6] = {b->dns_tag, 1};
-        if(b->pf->dns_result && b->pf->dns_result(b->pf->ctx, body + 2)) body[1] = 0;
-        reply(b, KWM_DNS_R, 0, body, sizeof body);
-        b->dns_busy = false;
+    if(n & KWB_NOTE_DNS) {
+        uint32_t ticket;
+        bool found;
+        uint8_t ip[4];
+        /* A lookup from before a reset may end now: only the one the host is
+         * waiting for is answered. */
+        while(b->pf->dns_result && b->pf->dns_result(b->pf->ctx, &ticket, &found, ip)) {
+            if(!b->dns_busy || ticket != b->dns_ticket) continue;
+            uint8_t body[6] = {b->dns_tag, found ? 0 : 1};
+            if(found) memcpy(body + 2, ip, 4);
+            reply(b, KWM_DNS_R, 0, body, sizeof body);
+            b->dns_busy = false;
+        }
     }
 }
 

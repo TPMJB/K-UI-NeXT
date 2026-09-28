@@ -35,7 +35,8 @@ struct link_stats {
     uint32_t transfers, resets;
     bool host_seen;
 };
-void link_start(struct kwb *bridge);
+/* True once the link has armed its first transfer. */
+bool link_start(struct kwb *bridge);
 void link_stats(struct link_stats *out);
 
 /* The USB console (console.c). */

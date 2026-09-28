@@ -4,6 +4,7 @@
  * other OTA slot, checked against the SHA-256 the Dreamcast sends. */
 #include "board.h"
 #include "esp_app_desc.h"
+#include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
@@ -61,37 +62,56 @@ static bool band(void *ctx, uint8_t band_mode) {
     return wifi_set_band(band_mode);
 }
 
-/* One lookup at a time (the bridge core sees to that). */
-static QueueHandle_t lookups;
-static char lookup_name[KWM_NAME_MAX + 1];
-static uint8_t lookup_ip[4];
-static volatile bool lookup_ok;
+/* Name lookups run one after another on their own task. Each request
+ * carries its name and ticket, and each result its ticket: a lookup that
+ * was running when the link reset still ends, and the bridge core drops
+ * its result. */
+struct lookup {
+    uint32_t ticket;
+    char name[KWM_NAME_MAX + 1];
+};
+struct lookup_result {
+    uint32_t ticket;
+    bool found;
+    uint8_t ip[4];
+};
+static QueueHandle_t lookups, results;
 static void lookup_task(void *arg) {
     (void)arg;
     for(;;) {
-        uint8_t token;
-        if(xQueueReceive(lookups, &token, portMAX_DELAY) != pdTRUE) continue;
+        struct lookup q;
+        if(xQueueReceive(lookups, &q, portMAX_DELAY) != pdTRUE) continue;
         struct addrinfo hints, *found = NULL;
         memset(&hints, 0, sizeof hints);
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
-        bool ok = getaddrinfo(lookup_name, NULL, &hints, &found) == 0 && found;
-        if(ok) memcpy(lookup_ip, &((struct sockaddr_in *)found->ai_addr)->sin_addr.s_addr, 4);
+        struct lookup_result r = {q.ticket, false, {0}};
+        r.found = getaddrinfo(q.name, NULL, &hints, &found) == 0 && found;
+        if(r.found) memcpy(r.ip, &((struct sockaddr_in *)found->ai_addr)->sin_addr.s_addr, 4);
         if(found) freeaddrinfo(found);
-        lookup_ok = ok;
+        /* Should the bridge core have fallen behind, the oldest result goes. */
+        if(xQueueSend(results, &r, 0) != pdTRUE) {
+            struct lookup_result dropped;
+            (void)xQueueReceive(results, &dropped, 0);
+            (void)xQueueSend(results, &r, 0);
+        }
         kwb_notify(bridge, KWB_NOTE_DNS);
     }
 }
-static bool dns_start(void *ctx, const char *name) {
+static bool dns_start(void *ctx, uint32_t ticket, const char *name) {
     (void)ctx;
-    uint8_t token = 1;
-    snprintf(lookup_name, sizeof lookup_name, "%s", name);
-    return xQueueSend(lookups, &token, 0) == pdTRUE;
+    struct lookup q = {ticket, {0}};
+    snprintf(q.name, sizeof q.name, "%s", name);
+    return xQueueSend(lookups, &q, 0) == pdTRUE;
 }
-static bool dns_result(void *ctx, uint8_t ip[4]) {
+static bool dns_result(void *ctx, uint32_t *ticket, bool *found, uint8_t ip[4]) {
     (void)ctx;
-    memcpy(ip, lookup_ip, 4);
-    return lookup_ok;
+    struct lookup_result r;
+    if(xQueueReceive(results, &r, 0) != pdTRUE) return false;
+    *ticket = r.ticket;
+    *found = r.found;
+    memcpy(ip, r.ip, 4);
+    return true;
 }
 static bool time_now(void *ctx, uint64_t *unix_ms) {
     (void)ctx;
@@ -165,7 +185,12 @@ static const struct kwb_platform platform = {NULL, now_ms, info, status, scan, s
 
 const struct kwb_platform *platform_start(struct kwb *b) {
     bridge = b;
-    lookups = xQueueCreate(1, 1);
-    xTaskCreate(lookup_task, "kui-dns", 4096, NULL, 4, NULL);
+    /* Room for a new request while one from before a link reset runs. */
+    lookups = xQueueCreate(2, sizeof(struct lookup));
+    results = xQueueCreate(2, sizeof(struct lookup_result));
+    if(!lookups || !results || xTaskCreate(lookup_task, "kui-dns", 4096, NULL, 4, NULL) != pdPASS) {
+        ESP_LOGE(TAG, "no memory for name lookups");
+        return NULL;
+    }
     return &platform;
 }

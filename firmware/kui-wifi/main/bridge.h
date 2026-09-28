@@ -53,6 +53,7 @@ struct kwb {
     uint32_t notes;
     bool wifi_dirty, scan_busy, dns_busy, reboot_due;
     uint8_t dns_tag;
+    uint32_t dns_ticket; /* the lookup the host is waiting for */
     uint32_t reboot_at;
     unsigned next_data;
     uint8_t scratch[KWM_BODY_MAX];

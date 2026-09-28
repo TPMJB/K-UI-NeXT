@@ -21,7 +21,8 @@ static struct {
     unsigned level;
     uint8_t armed[KWL_FRAME_MAX], in[KWL_FRAME_MAX];
     struct kwb_wifi wifi;
-    bool dns_found;
+    bool dns_found, dns_done;
+    uint32_t dns_ticket;
     /* A join under way: the state it ends in, and when. */
     bool joining;
     uint8_t outcome, outcome_channel;
@@ -136,16 +137,22 @@ static bool pf_band(void *ctx, uint8_t band) {
     kwb_notify(&m.bridge, KWB_NOTE_WIFI);
     return true;
 }
-static bool pf_dns_start(void *ctx, const char *name) {
+static bool pf_dns_start(void *ctx, uint32_t ticket, const char *name) {
     (void)ctx;
+    m.dns_ticket = ticket;
+    m.dns_done = true;
     m.dns_found = !strcmp(name, "localhost") || !strcmp(name, "pool.ntp.org");
     kwb_notify(&m.bridge, KWB_NOTE_DNS);
     return true;
 }
-static bool pf_dns_result(void *ctx, uint8_t ip[4]) {
+static bool pf_dns_result(void *ctx, uint32_t *ticket, bool *found, uint8_t ip[4]) {
     (void)ctx;
+    if(!m.dns_done) return false;
+    m.dns_done = false;
+    *ticket = m.dns_ticket;
+    *found = m.dns_found;
     memcpy(ip, localhost, 4);
-    return m.dns_found;
+    return true;
 }
 static bool pf_time(void *ctx, uint64_t *ms) {
     (void)ctx;

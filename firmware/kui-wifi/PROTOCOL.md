@@ -151,6 +151,20 @@ connecting, 0x17 established, 0x18 closing (FIN queued), 0x1c peer closed,
 0x22 UDP. Errors: 0 none, 1 refused, 2 timed out, 3 reset, 4 unreachable,
 5 out of memory, 6 port in use, 7 Wi-Fi offline, 8 invalid request, 9 other.
 
+A DNS request is answered once, by DNS_R with its tag. A lookup still running
+when the link resets or a new session starts is never answered: its result
+is dropped, even if it ends after a new DNS request has been sent.
+
+## Firmware updates
+
+OTA_BEGIN, OTA_DATA and OTA_END write the new image to the board's other
+firmware slot and check it against the SHA-256 from OTA_BEGIN; OTA_END then
+selects it for the next start (REBOOT starts it). The new firmware starts
+on trial: it is kept once everything on the board has started and the
+Dreamcast has reached it over the link, which is how any further update
+would arrive. If it fails to start, or the board restarts before the
+Dreamcast has reached it, the board goes back to the firmware it had before.
+
 ## Sockets
 
 Eight slots. A listening slot takes the first connection to its port, as a

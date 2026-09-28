@@ -34,7 +34,10 @@ struct fake {
     char joined_ssid[33], joined_password[65];
     bool joined_save;
     uint8_t joined_band;
-    bool dns_ok;
+    /* Lookups end at once, or, held, only when the test ends them. */
+    bool dns_hold;
+    unsigned dns_started, dns_done, dns_ended;
+    struct { uint32_t ticket; bool found; } dns[4];
     uint8_t *ota;
     uint32_t ota_size, ota_written;
     bool ota_open;
@@ -86,15 +89,29 @@ static bool fake_band(void *ctx, uint8_t band) {
     f->wifi.band_mode = band;
     return true;
 }
-static bool fake_dns_start(void *ctx, const char *name) {
-    struct fake *f = ctx;
-    f->dns_ok = !strcmp(name, "localhost");
+static void fake_dns_end(struct fake *f) {
+    CHECK(f->dns_ended < f->dns_started);
+    ++f->dns_ended;
     kwb_notify(f->bridge, KWB_NOTE_DNS);
+}
+static bool fake_dns_start(void *ctx, uint32_t ticket, const char *name) {
+    struct fake *f = ctx;
+    CHECK(f->dns_started < 4);
+    f->dns[f->dns_started].ticket = ticket;
+    f->dns[f->dns_started].found = !strcmp(name, "localhost");
+    ++f->dns_started;
+    if(!f->dns_hold) fake_dns_end(f);
     return true;
 }
-static bool fake_dns_result(void *ctx, uint8_t ip[4]) {
+static bool fake_dns_result(void *ctx, uint32_t *ticket, bool *found, uint8_t ip[4]) {
+    struct fake *f = ctx;
+    if(f->dns_done == f->dns_ended) return false;
+    *ticket = f->dns[f->dns_done].ticket;
+    *found = f->dns[f->dns_done].found;
     memcpy(ip, LOCALHOST, 4);
-    return ((struct fake *)ctx)->dns_ok;
+    /* Four at most in this test: start again once all have been taken. */
+    if(++f->dns_done == f->dns_started) f->dns_done = f->dns_ended = f->dns_started = 0;
+    return true;
 }
 static bool fake_time(void *ctx, uint64_t *ms) {
     (void)ctx;
@@ -489,6 +506,30 @@ static void board_reset(void) {
     printf("reset: host resynchronised, sockets closed\n");
 }
 
+/* A lookup still running when the link resets ends after it: its result must
+ * not answer the next request. */
+static void dns_across_reset(void) {
+    fake.dns_hold = true;
+    CHECK(kwh_dns(host, 21, "localhost"));
+    UNTIL(fake.dns_started == 1, 20);
+    uint32_t hellos = host->counts.hello, answers = host->counts.dns;
+    kwb_reset(bridge);
+    UNTIL(host->ready && host->counts.hello > hellos, 50);
+    CHECK(kwh_dns(host, 22, "nowhere.invalid"));
+    UNTIL(fake.dns_started == 2, 20);
+    fake_dns_end(&fake); /* localhost, from before the reset */
+    for(unsigned i = 0; i < 20; ++i) step();
+    CHECK(host->counts.dns == answers);
+    fake_dns_end(&fake);
+    UNTIL(host->counts.dns > answers, 20);
+    CHECK(host->dns_tag == 22 && host->dns_status != 0);
+    fake.dns_hold = false;
+    CHECK(kwh_dns(host, 23, "localhost"));
+    UNTIL(host->counts.dns > answers + 1, 20);
+    CHECK(host->dns_tag == 23 && host->dns_status == 0 && !memcmp(host->dns_ip, LOCALHOST, 4));
+    printf("dns: a lookup from before a reset does not answer the next request\n");
+}
+
 /* Reopening a slot at once: nothing from the old connection leaks in. */
 static void reuse(void) {
     uint16_t first = (uint16_t)(base_port + 5), second = (uint16_t)(base_port + 6);
@@ -557,6 +598,7 @@ int main(void) {
     udp();
     noisy();
     board_reset();
+    dns_across_reset();
     reuse();
     ota_and_reboot();
     printf("test_bridge: all passed (%u transfers)\n", (unsigned)host->transfers);

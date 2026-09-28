@@ -44,7 +44,10 @@ You need the board, a USB-C data cable and `esptool` (`pip install esptool`).
    in, then try again.
 
 `kui-wifi-esp32c5-update.bin` in the same download is the app on its own,
-for updates sent from the Dreamcast later. `SHA256SUMS` lists checksums.
+for updates sent from the Dreamcast later. `SHA256SUMS` lists checksums. An
+update sent from the Dreamcast is kept only once the new firmware has
+started and the Dreamcast has reached it over the link; otherwise the board
+goes back to the firmware it had (see [PROTOCOL.md](PROTOCOL.md)).
 
 ## Testing it on the bench
 

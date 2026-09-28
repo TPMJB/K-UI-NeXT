@@ -39,9 +39,13 @@ struct kwb_platform {
     /* KWM_BAND_24, KWM_BAND_5 or KWM_BAND_BOTH, kept across restarts;
      * false when the board cannot use it. */
     bool (*wifi_band)(void *ctx, uint8_t band_mode);
-    /* Starts a lookup; KWB_NOTE_DNS when done, then dns_result (false: none). */
-    bool (*dns_start)(void *ctx, const char *name);
-    bool (*dns_result)(void *ctx, uint8_t ip[4]);
+    /* Starts looking up a name for request `ticket`; KWB_NOTE_DNS when a
+     * lookup ends. One running when the link resets can still end after
+     * it, so each result carries the ticket it answers. */
+    bool (*dns_start)(void *ctx, uint32_t ticket, const char *name);
+    /* Takes the next finished lookup; false when there is none. *found: the
+     * name has an address, ip. */
+    bool (*dns_result)(void *ctx, uint32_t *ticket, bool *found, uint8_t ip[4]);
     /* False until the clock has been set from the network. */
     bool (*time_now)(void *ctx, uint64_t *unix_ms);
     /* Firmware update: 0 for success, otherwise an error code. */
