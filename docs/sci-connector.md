@@ -32,7 +32,10 @@ From the published W5500 SCI wiring and the SCI-SPI mod notes:
 | GPIO0, GPIO5, GPIO6 | other RA101 pins; which pin is which is still to be confirmed |
 | 5 V | the drive connector's 5 V pins (A3/B3) or another point chosen from photos |
 
-Check every point with a multimeter before soldering.
+Check every point with a multimeter before soldering. The owner's photos
+of both sides of the VA1 board (sent 2026-09-28) show R115, R140 (beside
+IC105) and CE113 on the underside. R122 and RA101 are not yet identified
+in them.
 
 ## The connector
 

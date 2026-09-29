@@ -22,7 +22,7 @@ drive) and artwork.
 | Branch | What is on it | State |
 | --- | --- | --- |
 | `main` | The 1.5.1 release | Released |
-| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP have not run on a console yet |
+| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP have not run on a console yet |
 | `claude/wifi-esp32c5-firmware` | Everything above, plus the Wi-Fi board's firmware (`firmware/kui-wifi`) and K-UI's side of it: the Wi-Fi page, and FTP over Wi-Fi | CI green (host tests, both boards' firmware builds, Dreamcast build). Not tried on hardware; the boards have not arrived |
 
 The Wi-Fi branch is meant to go into the W5500 branch once the board works
@@ -61,18 +61,21 @@ on a console, and that branch into `main` for the next release. The
 3. Console test:
    [the Wi-Fi guide](https://github.com/TPMJB/K-UI-NeXT/blob/claude/wifi-esp32c5-firmware/docs/wifi.md#console-test).
 
-### The IDE/CF board (design waiting on photos)
+### The CF board (designed, not yet made)
 
-The plan is a small board with a CF socket, wired as the IDE slave under
-the GD-ROM's connector, the way the G1-ATA mod is done. The design needs:
+The mainboard is a VA1, the card goes inside, and the owner's photos of
+both sides are in. [hardware/cf-board](../hardware/cf-board/README.md) has
+the rev 1 design: a 66.5 x 54 mm board with a CompactFlash socket, wired
+as the slave beside the GD-ROM drive. It includes the schematic, the
+routed board, Gerbers, the parts list, a wiring guide and a 1:1 fit
+template. Its netlist and DRC checks are clean.
 
-1. The mainboard revision (VA0, VA1 or VA2). The SCI plan assumes VA1.
-2. Where the card should go: inside the console, or reachable from outside
-   (for example, through the modem bay).
-3. Photos of both sides of the mainboard around the drive connector, with
-   the drive removed and a ruler in the shot. Photos of the SCI points
-   (R115, R122, R140, RA101, CE113) taken the same way would also let the
-   connector plan be checked before anyone solders.
+1. Print the fit template and find a spot inside the console for it.
+2. Check the drive connector's orientation (the README's first wiring
+   step).
+3. Order the board and parts, then build and wire it.
+
+K-UI cannot read the card until the storage rework adds a G1 ATA path.
 
 ### Waiting for a console check
 

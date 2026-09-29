@@ -13,3 +13,9 @@ track[0-9][0-9].raw
 checkpoint-[ab].bin
 disc.gdi
 resources/music/*.wav
+
+# KiCad's per-user state and its backups and caches.
+*.kicad_prl
+*-backups/
+fp-info-cache
+_autosave-*

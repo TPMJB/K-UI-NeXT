@@ -21,6 +21,9 @@ development, not a claim of a formal clean-room process.
 | mkdcdisc | Canonical Simulant GitLab repository `4d74e40dd2122e14389a305ed1d86dd024201389`; separate host image-writing tool | MIT for its own code, with separate third-party components; upstream `THIRD-PARTY-NOTICES.md` |
 | IP.BIN in the CDI | mkdcdisc MIL-CD template, including the LiENUS homebrew bootstrap | See the upstream IP.BIN provenance below; no DreamShell bootloader |
 | Linux test/build utilities | Distribution `mkfs`, `fsck`, Meson, Ninja, libisofs and mtools | Host tools only; not linked into the Dreamcast executable |
+| KiCad 7 libraries (CF board) | Symbols and footprints used by `hardware/cf-board`; `cf-board.pretty/CF-Card_3M_N7E50-E516xx-30_SmallRing.kicad_mod` is KiCad's `CF-Card_3M_N7E50-E516xx-30` with its board-lock rings cut from 3.99 to 3.2 mm | CC-BY-SA 4.0 with the KiCad libraries' exception for designs that use them; the adapted footprint file stays under CC-BY-SA 4.0 |
+| iceGDROM riser board (reference) | Only the signal on each pin of the Dreamcast's GD-ROM connector, taken from `zeldin/iceGDROM` `pcb/riser`; no files copied | GPL-3.0 upstream; facts only |
+| KiCad, Freerouting, kiutils | Host tools that draw, route and check the CF board (`hardware/cf-board/tools/build.sh`) | Host tools only; nothing from them is in the board files beyond their output |
 
 The Wi-Fi board's firmware ([firmware/kui-wifi](firmware/kui-wifi/README.md))
 is a separate program for the ESP32-C5 under its own MIT licence. It is built
