@@ -123,17 +123,6 @@ bool kui_w5500_bus_check(struct kui_w5500 *w, unsigned rounds) {
            !kui_w5500_read(w, KUI_W5500_COMMON, KUI_W5500_GAR, in, sizeof(in))) return false;
         if(memcmp(out, in, sizeof(out))) return false;
     }
-    /* Then 1 KB each way through socket 0's transmit buffer (2 KB after the
-     * reset), so a link that moves long transfers its own way (by DMA, say)
-     * is checked the way uploads use it. */
-    static uint8_t block_out[1024], block_in[1024];
-    for(unsigned i = 0; i < sizeof(block_out); ++i) {
-        seed = seed * 1103515245u + 12345u;
-        block_out[i] = (uint8_t)(seed >> 16);
-    }
-    if(!kui_w5500_write(w, KUI_W5500_SOCKET_TX(0), 0, block_out, sizeof(block_out)) ||
-       !kui_w5500_read(w, KUI_W5500_SOCKET_TX(0), 0, block_in, sizeof(block_in)) ||
-       memcmp(block_out, block_in, sizeof(block_out))) return false;
     static const uint8_t zero[18];
     return kui_w5500_write(w, KUI_W5500_COMMON, KUI_W5500_GAR, zero, sizeof(zero));
 }
