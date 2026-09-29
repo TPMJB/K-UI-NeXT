@@ -189,9 +189,11 @@ through the W5500's raw Ethernet socket.
   renames and moves, deletes, protected files, unsafe names, a closed data
   connection, `ABOR`, an upload cut off by a reset, files in use, the
   three-client limit, a full card, stopping with a client connected, no
-  W5500 and an unusable password file. `fsck` checks every image, and on
-  FAT32 mtools reads the uploads back independently. Every run must leave no
-  file or folder open.
+  W5500 and an unusable password file. With 1 ms of network latency in the
+  model, 2 MB each way must pass without the server sleeping while it waits
+  for the client (a sleep lasts about 8 ms on the console). `fsck` checks
+  every image, and on FAT32 mtools reads the uploads back independently.
+  Every run must leave no file or folder open.
 - `test-shell`: Y on Network, Stop, restart and back, and every state of the
   FTP page.
 

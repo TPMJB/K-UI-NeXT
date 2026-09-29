@@ -17,6 +17,10 @@ struct w5500_model_options {
     bool dhcp_nak;        /* the DHCP server refuses REQUESTs */
     bool conflict;        /* someone answers ARP for the leased address */
     uint32_t lease_seconds;
+    /* Real time, in microseconds, before a SEND's data leaves and before more
+     * data from the peer arrives, as on a network. A server that sleeps while
+     * it waits for either shows it here as it does on the console. */
+    unsigned latency_us;
 };
 extern const struct kui_w5500_bus w5500_model_bus;
 void w5500_model_start(const struct w5500_model_options *options);

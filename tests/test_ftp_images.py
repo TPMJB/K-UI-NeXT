@@ -327,6 +327,40 @@ def replacing(f, server):
     print("PASS FTP replacing: the old file stays until the upload has its name", flush=True)
 
 
+def keeps_moving(f, server):
+    """While a transfer moves, the server yields between passes instead of
+    sleeping. On the console a sleep lasts a scheduler tick (about 8 ms), and
+    sleeping each time it waited for the client's acknowledgements, or for
+    its next segments, held transfers near 300 KiB/s. With the model's 1 ms
+    network latency, a server that sleeps like that shows a sleep for about
+    every 4 KB here: over 500 for 2 MiB."""
+    data = random.randbytes(2 * 1024 * 1024)
+    upload(f, "Games/moving.bin", data)
+    reports = [0]
+
+    def marker(key, name, count):
+        server.send(key)
+        text = f"{name} {count} "
+        server.wait_for(text)
+        return int(next(line for line in server.lines if line.startswith(text)).split()[2])
+
+    def sleeps():
+        reports[0] += 1
+        return marker("p", "PAUSES", reports[0])
+
+    assert marker("l", "LATENCY", 1) == 1000
+    sleeps()
+    assert download(f, "Games/moving.bin") == data
+    down = sleeps()
+    upload(f, "Games/moving.bin", data)
+    up = sleeps()
+    assert marker("l", "LATENCY", 2) == 0
+    f.delete("Games/moving.bin")
+    # About 50 sleeps come from the commands around the transfers.
+    assert down < 200 and up < 200, (down, up)
+    print(f"PASS FTP transfers keep moving: {down} and {up} sleeps for 2 MiB each way", flush=True)
+
+
 def protected(f):
     for action in (lambda: f.delete("KUI/runtime.kui"), lambda: f.rename("KUI", "KUI-old"),
                    lambda: f.rename("KUI/apps", "apps"), lambda: f.rmd("KUI/apps/games"),
@@ -451,6 +485,7 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     files = transfers(f, port, password, kind)
     changes(f, case_insensitive)
     replacing(f, server)
+    keeps_moving(f, server)
     protected(f)
     aborts(f, port, password, files)
     limits(port, password, 1)

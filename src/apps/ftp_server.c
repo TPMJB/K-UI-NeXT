@@ -192,6 +192,17 @@ static void forget_data(struct server *sv, struct session *s, uint64_t now) {
 
 /* ---- Transfers ---- */
 static bool transferring(const struct session *s) { return s->kind != T_NONE; }
+/* While a transfer is moving, a pass with nothing to do yields instead of
+ * sleeping. On the console a 1 ms sleep lasts a scheduler tick (about 8 ms),
+ * and a transfer finds nothing to do after nearly every 4 KB: the client's
+ * acknowledgements, or its next segments, are still on their way. */
+static bool moving(const struct server *sv) {
+    for(unsigned i = 0; i < KUI_FTP_SESSIONS; ++i) {
+        const struct session *s = &sv->sessions[i];
+        if(s->active && transferring(s) && (s->phase == P_RUN || s->phase == P_DRAIN)) return true;
+    }
+    return false;
+}
 /* Another client's transfer is on `path`, inside it, or holds it. */
 static bool in_use(const struct server *sv, const struct session *self, const char *path) {
     for(unsigned i = 0; i < KUI_FTP_SESSIONS; ++i) {
@@ -1236,7 +1247,7 @@ void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options
                 lease(sv, now);
             }
             publish(sv, now, false);
-            port->bus->pause(port->bus->ctx, work ? 0 : 1);
+            port->bus->pause(port->bus->ctx, work || moving(sv) ? 0 : 1);
         }
         bool asked = cancel && cancel();
         stop_all(sv, asked ? "The FTP server on the Dreamcast is stopping" : sv->stop_reason);
