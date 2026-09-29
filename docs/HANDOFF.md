@@ -22,7 +22,7 @@ drive) and artwork.
 | Branch | What is on it | State |
 | --- | --- | --- |
 | `main` | The 1.5.1 release | Released |
-| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP have not run on a console yet |
+| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 works on the owner's console (reported 2026-09-29); FTP's console results are still to be recorded |
 | `claude/wifi-esp32c5-firmware` | Everything above, plus the Wi-Fi board's firmware (`firmware/kui-wifi`) and K-UI's side of it: the Wi-Fi page, and FTP over Wi-Fi | CI green (host tests, both boards' firmware builds, Dreamcast build). Not tried on hardware; the boards have not arrived |
 
 The Wi-Fi branch is meant to go into the W5500 branch once the board works
@@ -31,7 +31,13 @@ on a console, and that branch into `main` for the next release. The
 
 ## Next on the hardware
 
-### The W5500 (next test)
+### The W5500 (works on the console)
+
+The owner reports the W5500 working on the console (2026-09-29). It takes
+its power from the Robot Retro power supply's 5 V instead of 3.3 V at
+CE113, which saved two solder points; that suits a W5500 module with its
+own 3.3 V regulator (a 5V pin). Still to record: the FTP console test's
+screens and speeds (below).
 
 - **Build:** the Diagnostic build run
   [36466253986](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36466253986)
@@ -57,7 +63,11 @@ on a console, and that branch into `main` for the next release. The
    - it can supply about 500 mA (Wi-Fi bursts draw 300 to 400 mA);
    - its ground is shared with the console's.
    Keep a ~220 µF capacitor next to the XIAO, run a ground wire with the
-   signals, and never use the console's original fan port.
+   signals, and never use the console's original fan port. The W5500
+   already runs from that supply's 5 V. The XIAO's 5V pin is also its USB
+   power line, so put a Schottky diode (a 1N5817 or SS14, band toward the
+   XIAO) in its 5 V lead, as Seeed advises for powering a XIAO through that
+   pin; otherwise unplug the lead before connecting USB.
 3. Console test:
    [the Wi-Fi guide](https://github.com/TPMJB/K-UI-NeXT/blob/claude/wifi-esp32c5-firmware/docs/wifi.md#console-test).
 
