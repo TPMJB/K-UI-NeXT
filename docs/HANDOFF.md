@@ -22,7 +22,7 @@ drive) and artwork.
 | Branch | What is on it | State |
 | --- | --- | --- |
 | `main` | The 1.5.1 release | Released |
-| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 works on the owner's console (reported 2026-09-29); FTP's console results are still to be recorded |
+| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP work on the owner's console (2026-09-29), at about 300 KiB/s each way; a build that should be faster is waiting to be tried |
 | `claude/wifi-esp32c5-firmware` | Everything above, plus the Wi-Fi board's firmware (`firmware/kui-wifi`) and K-UI's side of it: the Wi-Fi page, and FTP over Wi-Fi | CI green (host tests, both boards' firmware builds, Dreamcast build). Not tried on hardware; the boards have not arrived |
 
 The Wi-Fi branch is meant to go into the W5500 branch once the board works
@@ -36,8 +36,13 @@ on a console, and that branch into `main` for the next release. The
 The owner reports the W5500 working on the console (2026-09-29). It takes
 its power from the Robot Retro power supply's 5 V instead of 3.3 V at
 CE113, which saved two solder points; that suits a W5500 module with its
-own 3.3 V regulator (a 5V pin). Still to record: the FTP console test's
-screens and speeds (below).
+own 3.3 V regulator (a 5V pin).
+
+FTP works too. With the SPI link at 12.5 MHz and a 100 Mbit/s full-duplex
+cable link, uploads to the SD card ran at about 304 KiB/s and downloads at
+260 to 320 KiB/s, in bursts. The server slept about 8 ms (a scheduler
+tick) each time a transfer waited for the network; commit `765f8d4` keeps
+transfers moving instead. Next: try that build and compare the speeds.
 
 - **Build:** the Diagnostic build run
   [36466253986](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36466253986)

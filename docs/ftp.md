@@ -4,8 +4,9 @@ K-UI can share the SD card over your home network with FTP, so games,
 music and pictures can be copied to and from a computer without taking the
 card out. It needs a network adapter wired to the console's SCI port (a
 modification): a WIZnet W5500 Ethernet module, or K-UI's Wi-Fi board (see
-[Wi-Fi](wifi.md)). It is new since K-UI 1.5.1 and has not yet been tried on
-a console.
+[Wi-Fi](wifi.md)). It is new since K-UI 1.5.1. On the owner's console
+(2026-09-29) it moved about 300 KiB/s each way over the W5500; the Wi-Fi
+board has not been tried on a console yet.
 
 It is independent K-UI code. The W5500 driver is written from WIZnet's
 W5500 datasheet and uses KallistiOS's SCI driver (`dc/sci.h`) only to move
@@ -136,10 +137,14 @@ files can be added to those folders. Update K-UI itself on a computer.
 - IPv4 and DHCP only; no static address yet.
 - File times are the console clock's local time; clients that read `MLSD`
   as UTC may show them shifted by your time zone.
-- The SD card on the serial port sets the pace: it reads at about 0.7 MB/s
-  and writes at about 1.1 MB/s, and the adapter's link adds its own time, so
-  expect well under 1 MB/s (not yet measured on a console). A computer with
-  a card reader is much faster for whole game libraries.
+- Speed: the SD card on the serial port reads at about 0.7 MB/s and writes
+  at about 1.1 MB/s, and the adapter's link adds its own time. On the
+  owner's console, over the W5500 (SPI at 12.5 MHz, a 100 Mbit/s
+  full-duplex cable link), the build of 2026-09-28 uploaded to the card at
+  about 304 KiB/s and downloaded at 260 to 320 KiB/s, in bursts. That build
+  slept about 8 ms each time a transfer waited for the network; later
+  builds keep transfers moving, and their speed is still to be measured. A
+  computer with a card reader is much faster for whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.
@@ -202,12 +207,15 @@ the W5500's raw Ethernet socket.
   renames and moves, deletes, protected files, unsafe names, a closed data
   connection, `ABOR`, an upload cut off by a reset, files in use, the
   three-client limit, a full card, stopping with a client connected, no
-  W5500 and an unusable password file. On FAT32 all of it runs again over
-  the Wi-Fi board model (`tests/wifi_model.c`, the firmware's own bridge
-  core), with Wi-Fi dropping and coming back and the board restarting; no
-  adapter at all, and the board with no network set up, are reported.
-  `fsck` checks every image, and on FAT32 mtools reads the uploads back
-  independently. Every run must leave no file or folder open.
+  W5500 and an unusable password file. With 1 ms of network latency in the
+  W5500 model, 2 MB each way must pass without the server sleeping while it
+  waits for the client (a sleep lasts about 8 ms on the console). On FAT32
+  all of it runs again over the Wi-Fi board model (`tests/wifi_model.c`,
+  the firmware's own bridge core), with Wi-Fi dropping and coming back and
+  the board restarting; no adapter at all, and the board with no network
+  set up, are reported. `fsck` checks every image, and on FAT32 mtools
+  reads the uploads back independently. Every run must leave no file or
+  folder open.
 - `test-shell`: Y on Network, Stop, restart and back, and every state of the
   FTP page.
 

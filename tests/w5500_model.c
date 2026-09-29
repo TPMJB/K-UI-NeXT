@@ -21,6 +21,7 @@ struct sock {
     uint8_t regs[0x40], tx[RING], rx[RING];
     uint16_t tx_rd, tx_wr, rx_rd, rx_wr, send_end;
     unsigned send_frame; /* a SEND goes out a few model steps after it starts */
+    uint64_t send_us, rx_us; /* when a SEND started; when data last arrived */
     bool sending, discon;
     int fd;
 };
@@ -37,6 +38,11 @@ const uint8_t w5500_model_lease[4] = {10, 0, 0, 2};
 static const uint8_t gateway_ip[4] = {10, 0, 0, 1}, gateway_mac[6] = {0x02, 0, 0, 0, 0, 0x01};
 static const uint8_t other_mac[6] = {0x02, 0, 0, 0, 0, 0x77};
 
+static uint64_t now_us(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (uint64_t)t.tv_sec * 1000000u + (uint64_t)t.tv_nsec / 1000u;
+}
 static uint16_t get16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 static void put16(uint8_t *p, unsigned v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
 static unsigned rx_size(const struct sock *s) { return s->regs[SN_RXBUF] * 1024u; }
@@ -302,6 +308,7 @@ static void command(unsigned n, uint8_t code) {
             assert(!s->sending);
             s->send_end = s->tx_wr;
             s->send_frame = m.ticks;
+            s->send_us = now_us();
             s->sending = true;
         }
         break;
@@ -347,7 +354,7 @@ static void tick(void) {
         struct sock *s = &m.s[n];
         if(s->fd < 0) continue;
         unsigned size = tx_size(s);
-        bool due = m.ticks - s->send_frame >= 3u;
+        bool due = m.ticks - s->send_frame >= 3u && now_us() - s->send_us >= m.options.latency_us;
         while(s->sending && due && s->tx_rd != s->send_end) {
             unsigned at = s->tx_rd & (size - 1u), run = (uint16_t)(s->send_end - s->tx_rd);
             if(run > size - at) run = size - at;
@@ -366,13 +373,15 @@ static void tick(void) {
         uint8_t state = s->regs[SN_SR];
         if(state != KUI_W5500_ESTABLISHED && state != KUI_W5500_FIN_WAIT) continue;
         unsigned rsize = rx_size(s);
-        for(;;) {
+        bool arrived = false;
+        while(now_us() - s->rx_us >= m.options.latency_us) {
             unsigned used = (uint16_t)(s->rx_wr - s->rx_rd), at = s->rx_wr & (rsize - 1u);
             if(used >= rsize) break;
             unsigned room = rsize - used;
             if(room > rsize - at) room = rsize - at;
             ssize_t got = recv(s->fd, s->rx + at, room, MSG_DONTWAIT);
             if(got > 0) {
+                arrived = true;
                 s->rx_wr = (uint16_t)(s->rx_wr + got);
                 s->regs[SN_IR] |= KUI_W5500_IR_RECV;
                 w5500_model_counts.received_bytes += (uint64_t)got;
@@ -388,6 +397,7 @@ static void tick(void) {
                 break;
             }
         }
+        if(arrived) s->rx_us = now_us();
     }
 }
 

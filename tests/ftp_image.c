@@ -27,12 +27,15 @@
  * On stdin while serving: s stops, r restarts the Wi-Fi board, d drops its
  * Wi-Fi and u brings it back on another address; n makes the next upload's
  * rename to its name fail, N also the rename that puts back the file it
- * replaced (each prints ARMED and a count).
+ * replaced (each prints ARMED and a count); l turns the W5500 model's 1 ms
+ * network latency on or off (LATENCY, a count and the latency in
+ * microseconds); p prints PAUSES, a count and how many sleeping pauses the
+ * server has asked for since the last p.
  * Every open file and folder must be closed when the card is released. */
 static struct {
     FILE *image;
     uint64_t blocks;
-    unsigned files, dirs, armed, fail_part, fail_old;
+    unsigned files, dirs, armed, fail_part, fail_old, latencies, reports, sleeps;
     bool active, connected, ready, stop;
     char last_event[KUI_APP_LINE_CAP];
 } test;
@@ -112,6 +115,7 @@ static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_
 static uint64_t now_ms(void *ctx) { return w5500_model_bus.now_ms(ctx); }
 static void pause_ms(void *ctx, unsigned ms) {
     if(!test.ready) w5500_model_advance(100);
+    else if(ms) ++test.sleeps;
     w5500_model_bus.pause(ctx, ms);
 }
 static const struct kui_w5500_bus bus = {NULL, frame, now_ms, pause_ms};
@@ -135,6 +139,13 @@ static bool cancel(void) {
             ++test.fail_part;
             if(byte == 'N') ++test.fail_old;
             printf("ARMED %u\n", ++test.armed);
+        } else if(byte == 'l') {
+            struct w5500_model_options *o = w5500_model_live();
+            o->latency_us = o->latency_us ? 0 : 1000u;
+            printf("LATENCY %u %u\n", ++test.latencies, o->latency_us);
+        } else if(byte == 'p') {
+            printf("PAUSES %u %u\n", ++test.reports, test.sleeps);
+            test.sleeps = 0;
         }
     }
     return test.stop;
