@@ -28,7 +28,7 @@ From the published W5500 SCI wiring and the SCI-SPI mod notes:
 | SCLK (SCI SCK) | R140 |
 | GPIO7 (PA7) | RA101, the usual chip-select point |
 | GPIO0, GPIO5, GPIO6 | other RA101 pins; which pin is which is still to be confirmed |
-| 5 V | the drive connector's 5 V pins (A3/B3) or another point chosen from photos |
+| 5 V | the drive connector's 5 V pins (A3/B3), or the Robot Retro power supply's 5 V (its fan header, on version 1.1 or later, needs no soldering) |
 
 Check every point with a multimeter before soldering. The owner's photos
 of both sides of the VA1 board (sent 2026-09-28) show R115, R140 (beside
@@ -80,6 +80,10 @@ converter rather than the console's 3.3 V supply.
 | RSTn | pin 10, reset |
 | 3.3 V, GND | pins 3, 4 |
 
+A W5500 module with its own 3.3 V regulator (it has a 5V pin) can take
+5 V from pin 1 instead. The owner's W5500 works that way (2026-09-29),
+powered from the Robot Retro supply's 5 V.
+
 ### Wi-Fi: Seeed XIAO ESP32-C5
 
 Dual-band (2.4 and 5 GHz) Wi-Fi 6 with WPA3, 21 × 17.8 mm, powered from
@@ -105,7 +109,12 @@ GPIO7), so they are left unused.
   2.4/5 GHz U.FL antenna, placed outside the console's metal shielding (on
   the case, or through the modem bay with a U.FL to RP-SMA lead).
 - **Power.** Put a capacitor of about 220 µF next to its 5V pin to cover the
-  short current spikes when it transmits.
+  short current spikes when it transmits. The 5V pin is also the XIAO's USB
+  power line, so put a Schottky diode (a 1N5817 or SS14, band toward the
+  XIAO) in the 5 V lead, as Seeed advises for powering a XIAO through that
+  pin. Then USB and the console's 5 V cannot feed each other when firmware
+  is loaded over USB with the board installed. Without the diode, unplug
+  the 5 V lead before connecting USB.
 - The XIAO's reset button is not on its pins. The reset-request line asks
   K-UI's firmware to restart itself; the ESP32-C5's own watchdog covers a
   hang.
@@ -135,3 +144,4 @@ and FTP code was.
 - [XIAO ESP32-C5 pin map](https://github.com/espressif/arduino-esp32/blob/master/variants/XIAO_ESP32C5/pins_arduino.h)
 - [XIAO ESP32-C5 board description](https://github.com/zephyrproject-rtos/zephyr/blob/main/boards/seeed/xiao_esp32c5/doc/index.rst)
 - [ESP32-C5 strapping pins](https://www.espboards.dev/blog/esp32-strapping-pins/)
+- [XIAO ESP32-C5 getting started, Seeed](https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/) (the 5V pin is the USB power line; power it through a diode. Read through search summaries, as the wiki is blocked from the build environment)
