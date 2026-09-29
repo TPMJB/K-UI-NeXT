@@ -4,7 +4,7 @@ K-UI can share the SD card over your home network with FTP, so games,
 music and pictures can be copied to and from a computer without taking the
 card out. It needs a WIZnet W5500 Ethernet module wired to the console's
 SCI port (a modification). It is new since K-UI 1.5.1. On the owner's
-console (2026-09-29) it moved about 300 KiB/s each way.
+console (2026-09-29) it moves about 370 KiB/s each way.
 
 It is independent K-UI code. The W5500 driver is written from WIZnet's
 W5500 datasheet and uses KallistiOS's SCI driver (`dc/sci.h`) only to move
@@ -134,9 +134,12 @@ files can be added to those folders. Update K-UI itself on a computer.
   console (SPI at 12.5 MHz, a 100 Mbit/s full-duplex cable link), the build
   of 2026-09-28 uploaded to the card at about 304 KiB/s and downloaded at
   260 to 320 KiB/s, in bursts. That build slept about 8 ms each time a
-  transfer waited for the network; later builds keep transfers moving, and
-  their speed is still to be measured. A computer with a card reader is
-  much faster for whole game libraries.
+  transfer waited for the network. The build that keeps transfers moving
+  (`a911dc9`) does about 370 KiB/s each way. Downloads still arrive in
+  bursts: the network waits while each 16 KB is read from the card, the
+  slower half of a download. Uploads alternate too, but the computer's own
+  buffering hides it. A computer with a card reader is much faster for
+  whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.
