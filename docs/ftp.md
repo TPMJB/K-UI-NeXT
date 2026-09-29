@@ -35,9 +35,13 @@ the W5500 moves to its own chip select, which needs a K-UI update first.
 
 K-UI looks for the W5500 only when asked (Network, or the FTP server),
 never at start-up. It resets the chip, checks its version, and writes and
-reads back 64 test patterns before using it. It starts at 12.5 MHz and, if a
-pattern comes back wrong, tries 6.25, 3.125 and 1.5625 MHz. If every speed
-fails, it says the W5500 was found but its wiring check failed.
+reads back 64 test patterns and a 1 KB block before using it. It starts at
+12.5 MHz with DMA reads (K-UI's own, on DMA channel 1; a test on the console
+is pending) and, if the check fails, tries 12.5 MHz without DMA, then 6.25,
+3.125 and 1.5625 MHz. If every speed fails, it says the W5500 was found but
+its wiring check failed. A DMA read that does not finish within a couple of
+milliseconds is read again without DMA; after four such reads in a row, DMA
+stays off and the screen says "DMA failed".
 
 The W5500 has no MAC address of its own. K-UI makes a locally administered
 one from the console's unique ID, so it is the same every time (the router

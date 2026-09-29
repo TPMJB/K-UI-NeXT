@@ -54,8 +54,13 @@ KallistiOS's DMA mode for the SCI (DMA channel 1) could stream those reads
 and, for downloads, send while the card is read. A first try, reads through
 KallistiOS's `sci_spi_dma_read_data` (commit `389f9ca`), locked the console
 as the FTP server started (the music looped a second of sound) and rebooted
-it on Network's test, so it was reverted. A second try should first run a
-single DMA read on its own, from Diagnostics, logging each step.
+it on Network's test, so it was reverted. KallistiOS's routine never sets
+the SCI's RIE bit, so the SCI never asks for DMA, and it then sleeps in
+`dma_wait_complete` for an interrupt it never enabled. The second try is
+K-UI's own DMA read (`src/dreamcast/w5500_sci.c`): RIE only during a read,
+the SCI's interrupt masked, channel 1 programmed directly, and deadlines on
+every wait with a fallback to plain reads. The FTP screen shows "12.5 MHz
+with DMA" when it works, and "DMA failed" when it gave up.
 
 - **Build:** the Diagnostic build run
   [36635569185](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36635569185)
