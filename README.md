@@ -90,8 +90,8 @@ These new app paths still need physical-console acceptance.
   W5500 wired to the SCI port (a modification), Network also finds that adapter
   and runs an FTP server for the SD card: uploads take their name only once
   complete, and K-UI's start-up files are protected
-  ([details](docs/ftp.md)). On the owner's console it moved about
-  300 KiB/s each way over the W5500 (2026-09-29). The same works over K-UI's
+  ([details](docs/ftp.md)). On the owner's console it moves about
+  370 KiB/s each way over the W5500 (2026-09-29). The same works over K-UI's
   Wi-Fi board (a XIAO ESP32-C5 with K-UI's own firmware) on the SCI port,
   set up on Network's Wi-Fi page ([details](docs/wifi.md)); the board is
   not yet tried on a console.

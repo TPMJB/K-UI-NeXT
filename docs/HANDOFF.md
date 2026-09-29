@@ -22,7 +22,7 @@ drive) and artwork.
 | Branch | What is on it | State |
 | --- | --- | --- |
 | `main` | The 1.5.1 release | Released |
-| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP work on the owner's console (2026-09-29), at about 300 KiB/s each way; a build that should be faster is waiting to be tried |
+| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP work on the owner's console (2026-09-29), at about 370 KiB/s each way |
 | `claude/wifi-esp32c5-firmware` | Everything above, plus the Wi-Fi board's firmware (`firmware/kui-wifi`) and K-UI's side of it: the Wi-Fi page, and FTP over Wi-Fi | CI green (host tests, both boards' firmware builds, Dreamcast build). Not tried on hardware; the boards have not arrived |
 
 The Wi-Fi branch is meant to go into the W5500 branch once the board works
@@ -42,7 +42,17 @@ FTP works too. With the SPI link at 12.5 MHz and a 100 Mbit/s full-duplex
 cable link, uploads to the SD card ran at about 304 KiB/s and downloads at
 260 to 320 KiB/s, in bursts. The server slept about 8 ms (a scheduler
 tick) each time a transfer waited for the network; commit `765f8d4` keeps
-transfers moving instead. Next: try that build and compare the speeds.
+transfers moving instead, and with it both directions run at about
+370 KiB/s. Downloads still come in bursts, because the network waits while
+each 16 KB is read from the card.
+
+What limits each direction now: an upload spends about two-thirds of its
+time reading the W5500 through KallistiOS's SCI read, which waits after
+every byte; the card write is the rest. A download spends most of its time
+reading the card (about 700 KB/s), with the network idle meanwhile.
+KallistiOS's DMA mode for the SCI (DMA channel 1) could stream those reads
+and, for downloads, send while the card is read. Not started; it needs the
+owner's go-ahead and a console to test on.
 
 - **Build:** the Diagnostic build run
   [36635569185](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36635569185)
