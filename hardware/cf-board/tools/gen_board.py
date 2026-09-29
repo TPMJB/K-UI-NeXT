@@ -26,6 +26,7 @@ X0, YC = 25.1, 27.0          # the CF socket's origin
 J2X, J2Y = 6.0, 7.0          # the wire pads' pin 1
 TRACK, CLEAR, VIA, DRILL = 0.25, 0.2, 0.6, 0.3
 KEEPOUT = 2.4                # radius kept clear of tracks and vias at the mounting holes
+SILK_STROKE = 0.15           # thinnest silkscreen text stroke, mm
 
 # ref: (x, y, rotation, side)
 PLACE = {
@@ -66,12 +67,13 @@ def read_netlist(path):
     return comps, pads
 
 
-def silk_text(board, text, x, y, size=0.8, layer=pcbnew.F_SilkS, justify=0, angle=0, bold=False):
+def silk_text(board, text, x, y, size=0.8, layer=pcbnew.F_SilkS, justify=0, angle=0, bold=False, width=None):
     t = pcbnew.PCB_TEXT(board)
     t.SetText(text)
     t.SetLayer(layer)
-    t.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
-    t.SetTextThickness(mm(max(0.12, size * 0.15)))
+    t.SetTextSize(pcbnew.VECTOR2I(mm(width or size), mm(size)))
+    # Strokes of 0.15 mm or more print legibly at the usual board houses.
+    t.SetTextThickness(mm(max(SILK_STROKE, size * 0.15)))
     t.SetBold(bold)
     t.SetPosition(P(x, y))
     t.SetTextAngleDegrees(angle)
@@ -153,7 +155,7 @@ def build(netlist):
             fp.Reference().SetHorizJustify(pcbnew.GR_TEXT_H_ALIGN_RIGHT if side == "B"
                                            else pcbnew.GR_TEXT_H_ALIGN_LEFT)
             fp.Reference().SetTextAngleDegrees(0)
-            fp.Reference().SetTextThickness(mm(0.12))
+            fp.Reference().SetTextThickness(mm(SILK_STROKE))
 
     # No tracks or vias under a screw head or washer at the mounting holes.
     import math
@@ -199,10 +201,11 @@ def build(netlist):
             label = n.lstrip("/").replace("~{", "/").replace("}", "")
             if label:
                 # Mirrored text on the underside: "left" grows outward from column A,
-                # "right" outward from column B.
+                # "right" outward from column B. Narrowed a little, so that the
+                # longest (/DMACK) stays well clear of the board edge.
                 a_side = leg[0] == "A"
                 silk_text(board, label, px - 1.05 if a_side else px + 1.05, y, size=0.8, layer=pcbnew.B_SilkS,
-                          justify=-1 if a_side else 1)
+                          justify=-1 if a_side else 1, width=0.7)
     silk_text(board, "CN503", J2X + 1, J2Y - 2.3, size=0.8)
     silk_text(board, "A", J2X - 2.4, J2Y - 2.3, size=0.8)
     silk_text(board, "B", J2X + 4.4, J2Y - 2.3, size=0.8)
