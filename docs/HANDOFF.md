@@ -51,8 +51,11 @@ time reading the W5500 through KallistiOS's SCI read, which waits after
 every byte; the card write is the rest. A download spends most of its time
 reading the card (about 700 KB/s), with the network idle meanwhile.
 KallistiOS's DMA mode for the SCI (DMA channel 1) could stream those reads
-and, for downloads, send while the card is read. Not started; it needs the
-owner's go-ahead and a console to test on.
+and, for downloads, send while the card is read. The first step, DMA for
+reads, is on this branch for the owner to test: the FTP screen says
+"12.5 MHz with DMA" when it is in use. It is not yet on the Wi-Fi branch;
+if it works, it goes into that branch's shared SCI layer. Sending while the
+card is read comes after that.
 
 - **Build:** the Diagnostic build run
   [36635569185](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36635569185)
