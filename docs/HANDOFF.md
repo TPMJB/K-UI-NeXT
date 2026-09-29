@@ -45,9 +45,10 @@ tick) each time a transfer waited for the network; commit `765f8d4` keeps
 transfers moving instead. Next: try that build and compare the speeds.
 
 - **Build:** the Diagnostic build run
-  [36466253986](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36466253986)
-  (`claude/modest-galileo-hpjv79`, commit `fcbc6de`). Download `sd-update`,
-  merge its `KUI` folder onto the card and keep the boot CD.
+  [36635569185](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36635569185)
+  (`claude/modest-galileo-hpjv79`, commit `a911dc9`, with the transfer fix).
+  Download `sd-update`, merge its `KUI` folder onto the card and keep the
+  boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
   [the SCI connector plan](sci-connector.md). The chip select goes on RA101
   (GPIO7), MISO on R115, MOSI on R122, SCLK on R140, 3.3 V and ground at
