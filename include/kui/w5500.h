@@ -100,12 +100,30 @@ struct kui_w5500_bus {
     /* Milliseconds from any fixed start, and a pause that lets others run. */
     uint64_t (*now_ms)(void *ctx);
     void (*pause)(void *ctx, unsigned ms);
+    /* Optional, for kui_w5500_stream: a frame whose data moves without the
+     * CPU (by DMA on the console). It sends the header, starts the data and
+     * returns; `done` runs once the data has moved and chip select is
+     * released, with ok false if it did not all move: from an interrupt on
+     * the console, from `poll` on a host. `done` may call `frame` and start
+     * the next async frame, but never `pause`. At most async_max bytes.
+     * False: nothing started, and `done` will not run. */
+    bool (*frame_async)(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
+                        void (*done)(void *arg, bool ok), void *arg);
+    /* Runs `done` for async frames that have ended where nothing else does
+     * (a host); and gives up on one that has not ended (no `done` follows). */
+    void (*poll)(void *ctx);
+    void (*cancel)(void *ctx);
+    size_t async_max;
+    /* Optional: microseconds from any fixed start, to time a transfer. */
+    uint64_t (*now_us)(void *ctx);
 };
 struct kui_w5500 {
     const struct kui_w5500_bus *bus;
     /* A transfer failed or the chip stopped answering; every later call
      * fails until kui_w5500_reset succeeds. */
     bool failed;
+    /* The bus's async frames passed the wiring check both ways. */
+    bool async;
     /* Bit s: socket s has a SEND the chip has not yet confirmed. The next
      * one waits for it (a second SEND while one runs is not allowed). */
     uint8_t sending;
@@ -128,9 +146,10 @@ bool kui_w5500_write16(struct kui_w5500 *w, uint8_t block, uint16_t address, uin
 /* Software reset, then the version register must read 0x04. Afterwards
  * every socket is closed with the default 2 KB buffers. */
 bool kui_w5500_reset(struct kui_w5500 *w, uint8_t *version);
-/* Writes a pattern through socket 7's transmit buffer and reads it back:
- * proves the wiring carries data both ways at the current SPI speed. The
- * socket must be closed; its buffer keeps the pattern. */
+/* Writes patterns to registers and 1 KB through socket 0's transmit buffer
+ * and reads them back: proves the wiring carries data both ways at the
+ * current SPI speed. The socket must be closed. With async frames, also
+ * moves 1 KB each way through them and sets w->async if that works. */
 bool kui_w5500_bus_check(struct kui_w5500 *w, unsigned rounds);
 bool kui_w5500_link(struct kui_w5500 *w, struct kui_w5500_link *out);
 /* Buffer sizes in KB (0, 1, 2, 4, 8 or 16), each set of eight adding up to
@@ -180,4 +199,54 @@ bool kui_w5500_datagram_receive(struct kui_w5500 *w, unsigned s, uint8_t ip[4], 
 bool kui_w5500_frame_receive(struct kui_w5500 *w, uint8_t *frame, size_t capacity, size_t *bytes);
 /* Sends one frame, waiting (up to 100 ms) for room and for the SEND. */
 bool kui_w5500_frame_send(struct kui_w5500 *w, const uint8_t *frame, size_t bytes);
+
+/* A TCP socket's data moved between the chip and a ring in memory by async
+ * frames, while the CPU does other work (the SD card). Each frame's `done`
+ * does the few register frames between pieces (Sn_RX_RD and RECV, or
+ * Sn_TX_WR and SEND) and starts the next piece, so the CPU is needed only
+ * for those. When there is nothing to move yet, a wait frame (a short
+ * read that changes nothing) looks again a little later, up to a limit.
+ *
+ * While the bus is lent to the stream (run), nothing else may use the
+ * chip; hold takes it back, waiting for the piece under way. head and tail
+ * count bytes: receiving, the stream adds at head and the owner takes from
+ * tail; sending, the owner puts at head and the stream takes from tail. */
+#define KUI_W5500_STREAM_WAIT_BYTES 256u
+struct kui_w5500_stream {
+    struct kui_w5500 *w;
+    uint8_t *ring;
+    uint32_t size;                 /* a power of two */
+    volatile uint32_t head, tail;
+    volatile bool lent, busy, stop, failed;
+    unsigned socket, waits;
+    bool sending;
+    uint16_t pointer;              /* Sn_RX_RD or Sn_TX_WR, as the stream has moved it */
+    uint16_t unsent;               /* sending: written to the chip, not yet in a SEND */
+    uint32_t piece, max_piece;
+    uint64_t started_us, busy_us;  /* time with a piece under way */
+    uint8_t scratch[KUI_W5500_STREAM_WAIT_BYTES];
+};
+/* Needs w->async and an open TCP socket that nothing else reads or sends
+ * on until kui_w5500_stream_end. */
+bool kui_w5500_stream_begin(struct kui_w5500_stream *st, struct kui_w5500 *w, unsigned s, bool sending,
+                            uint8_t *ring, uint32_t size);
+void kui_w5500_stream_run(struct kui_w5500_stream *st);
+/* False once the stream has failed (a frame failed or never ended). */
+bool kui_w5500_stream_hold(struct kui_w5500_stream *st);
+/* Receiving: bytes waiting at ring + (tail & (size - 1)), then taking them. */
+uint32_t kui_w5500_stream_ready(const struct kui_w5500_stream *st);
+void kui_w5500_stream_take(struct kui_w5500_stream *st, uint32_t bytes);
+/* Sending: room at ring + (head & (size - 1)), then putting bytes there. */
+uint32_t kui_w5500_stream_room(const struct kui_w5500_stream *st);
+void kui_w5500_stream_put(struct kui_w5500_stream *st, uint32_t bytes);
+/* Sending, while held: everything put is on the chip and in a SEND. */
+bool kui_w5500_stream_sent(const struct kui_w5500_stream *st);
+/* Where nothing else ends async frames (a host): ends those that have.
+ * The owner calls it while it waits. */
+void kui_w5500_stream_poll(struct kui_w5500_stream *st);
+/* Holds the bus and forgets the stream, leaving the socket as the plain
+ * calls expect it, even after the stream failed: what the stream wrote to
+ * the chip is sent. Bytes still in the ring are the owner's. False if the
+ * chip has failed or that SEND did. */
+bool kui_w5500_stream_end(struct kui_w5500_stream *st);
 #endif

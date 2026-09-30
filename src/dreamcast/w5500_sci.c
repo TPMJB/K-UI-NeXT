@@ -10,6 +10,7 @@
 #include <arch/timer.h>
 #include <dc/sci.h>
 #include <dc/syscalls.h>
+#include <kos/irq.h>
 #include <kos/thread.h>
 #include <kos/timer.h>
 #include <string.h>
@@ -39,8 +40,12 @@ static const char *const names[] = {"12.5 MHz with DMA", "12.5 MHz", "6.25 MHz",
 #define SCTDR1 (*(volatile uint8_t *)0xffe0000cu)
 #define SCSSR1 (*(volatile uint8_t *)0xffe00010u)
 #define SCRDR1 (*(volatile uint8_t *)0xffe00014u)
+#define SCTDR1_ADDR 0xffe0000cu
 #define SCRDR1_ADDR 0xffe00014u
+#define SCR_TIE 0x80u
 #define SCR_RIE 0x40u
+#define SCR_TE 0x20u
+#define SCR_RE 0x10u
 #define SSR_TDRE 0x80u
 #define SSR_RDRF 0x40u
 #define SSR_ORER 0x20u
@@ -51,6 +56,9 @@ static const char *const names[] = {"12.5 MHz with DMA", "12.5 MHz", "6.25 MHz",
  * starts the byte in SCTDR1; writing 1 leaves the other flags as they are
  * (RDRF included, which the DMA clears as it reads), and MPBT stays 0. */
 #define SSR_CLEAR_TDRE 0x7cu
+/* Written to SCSSR1 to clear RDRF and the receive errors, leaving TDRE
+ * (a 1 written changes nothing) and MPBT alone. */
+#define SSR_CLEAR_RECEIVE 0x84u
 #define SAR1 (*(volatile uint32_t *)0xffa00010u)
 #define DAR1 (*(volatile uint32_t *)0xffa00014u)
 #define TCR1 (*(volatile uint32_t *)0xffa00018u)
@@ -58,9 +66,12 @@ static const char *const names[] = {"12.5 MHz with DMA", "12.5 MHz", "6.25 MHz",
 #define DMAOR (*(volatile uint32_t *)0xffa00040u)
 #define CHCR_DE 0x1u
 #define CHCR_TE 0x2u
+#define CHCR_IE 0x4u
 /* Destination increments, source fixed, the SCI's receive request, cycle
  * steal, one byte at a time, no interrupt. */
 #define CHCR_SCI_RX ((1u << 14) | ((uint32_t)DMA_REQUEST_SCI_RECEIVE << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
+/* Source increments, destination fixed, the SCI's transmit request. */
+#define CHCR_SCI_TX ((1u << 12) | ((uint32_t)DMA_REQUEST_SCI_TRANSMIT << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
 
 static bool running, dma;
 static unsigned dma_failures;
@@ -120,7 +131,8 @@ static void dma_recover(void) {
     if(SCSSR1 & (SSR_ORER | SSR_FER | SSR_PER)) SCSSR1 &= (uint8_t)~(SSR_ORER | SSR_FER | SSR_PER);
 }
 static bool read_data(const uint8_t header[3], uint8_t *in, size_t bytes) {
-    if(dma && bytes >= DMA_MIN) {
+    /* Not from an async frame's `done`: channel 1 is the async frames'. */
+    if(dma && bytes >= DMA_MIN && !irq_inside_int()) {
         bool ok = true;
         for(size_t at = 0; ok && at < bytes; at += DMA_BYTES)
             ok = dma_piece(in + at, bytes - at < DMA_BYTES ? bytes - at : DMA_BYTES);
@@ -146,13 +158,131 @@ static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_
     sci_spi_set_cs(false);
     return ok;
 }
+
+/* Async frames, for FTP transfers (kui_w5500_stream): the data moves by
+ * DMA channel 1 with no help from the CPU, which meanwhile reads or writes
+ * the SD card, and channel 1's transfer-end interrupt finishes the frame.
+ * Writes: transmit-only (as KOS's writes), the SCI asking the DMA for each
+ * byte (TIE). Reads: receive-only. The SH-4 manual: with the internal
+ * clock and only receiving, the SCI clocks continuously until an overrun
+ * or until RE is cleared; with the DMA emptying the receive register the
+ * bytes come back to back. After the last one the clock runs on for a byte
+ * or two, which the chip answers with more of its buffer and changes
+ * nothing, until the overrun stops it. A read that overruns midway stops
+ * early instead and never ends: the stream then gives up on it (cancel)
+ * and async frames stay off. KOS last set transmit-only (the header); the
+ * frame's end sets that again. */
+static struct {
+    volatile bool busy;
+    bool reading;
+    uint8_t *in;
+    size_t bytes;
+    void (*done)(void *arg, bool ok);
+    void *arg;
+} async;
+static bool async_ready; /* the interrupt handler is in place */
+
+static void receive_clear(void) {
+    if(SCSSR1 & SSR_RDRF) (void)SCRDR1;
+    SCSSR1 = SSR_CLEAR_RECEIVE;
+}
+static bool transmit_ended(void) {
+    uint64_t deadline = timer_us_gettime64() + 50u;
+    while(!(SCSSR1 & SSR_TEND))
+        if(timer_us_gettime64() > deadline) return false;
+    return true;
+}
+/* Stops whatever the frame left running and hands the port back to KOS
+ * as it was: transmit only, nothing pending. Interrupts off. */
+static bool async_stop(void) {
+    bool ended = true;
+    CHCR1 = 0;
+    if(async.reading) {
+        SCSCR1 &= (uint8_t)~(SCR_RE | SCR_RIE);
+        sci_spi_set_cs(false);
+        receive_clear();
+        timer_spin_delay_ns(1500);
+        SCSCR1 |= SCR_TE;
+    } else {
+        SCSCR1 &= (uint8_t)~SCR_TIE;
+        ended = transmit_ended();
+        sci_spi_set_cs(false);
+    }
+    async.busy = false;
+    return ended;
+}
+static void dma_end(irq_t code, irq_context_t *context, void *data) {
+    (void)code; (void)context; (void)data;
+    bool finished = (CHCR1 & CHCR_TE) != 0;
+    if(!async.busy) { CHCR1 = 0; return; }
+    bool ok = async_stop() && finished;
+    if(ok && async.reading) {
+        (void)dma_map_dst(dma_buffer, async.bytes);
+        for(size_t i = 0; i < async.bytes; ++i) async.in[i] = reversed[dma_buffer[i]];
+    }
+    async.done(async.arg, ok);
+}
+static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
+                        void (*done)(void *arg, bool ok), void *arg) {
+    (void)ctx;
+    if(!running || !dma || !async_ready || async.busy || !done || !bytes || bytes > DMA_BYTES || !out == !in)
+        return false;
+    sci_spi_set_cs(true);
+    if(sci_spi_write_data(header, 3) != SCI_OK) { sci_spi_set_cs(false); return false; }
+    async.reading = !out;
+    async.in = in;
+    async.bytes = bytes;
+    async.done = done;
+    async.arg = arg;
+    async.busy = true;
+    CHCR1 = 0;
+    if(out) {
+        for(size_t i = 0; i < bytes; ++i) dma_buffer[i] = reversed[out[i]];
+        SAR1 = dma_map_src(dma_buffer, bytes);
+        DAR1 = hw_to_dma_addr(SCTDR1_ADDR);
+        TCR1 = (uint32_t)bytes;
+        CHCR1 = CHCR_SCI_TX | CHCR_IE;
+        /* The header has gone, so the transmit register is empty: the
+         * first request comes at once. */
+        SCSCR1 |= SCR_TIE;
+    } else {
+        SAR1 = hw_to_dma_addr(SCRDR1_ADDR);
+        DAR1 = dma_map_dst(dma_buffer, bytes);
+        TCR1 = (uint32_t)bytes;
+        CHCR1 = CHCR_SCI_RX | CHCR_IE;
+        /* Transmit off, a pause, then receive on (as KOS changes modes):
+         * the clock starts at once. */
+        SCSCR1 &= (uint8_t)~(SCR_TE | SCR_RE);
+        timer_spin_delay_ns(1500);
+        SCSCR1 |= SCR_RE | SCR_RIE;
+    }
+    return true;
+}
+static void cancel_async(void *ctx) {
+    (void)ctx;
+    irq_mask_t mask = irq_disable();
+    if(async.busy) (void)async_stop();
+    irq_restore(mask);
+}
+static void async_on(bool on) {
+    if(async_ready) {
+        cancel_async(NULL);
+        irq_set_handler(EXC_DMAC_DMTE1, NULL, NULL);
+        async_ready = false;
+    }
+    if(on) async_ready = irq_set_handler(EXC_DMAC_DMTE1, dma_end, NULL) == 0;
+}
+
 static uint64_t now_ms(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
+static uint64_t now_us(void *ctx) { (void)ctx; return timer_us_gettime64(); }
 /* KOS: thd_sleep(0) is thd_pass(). */
 static void pause_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep(ms); }
-static const struct kui_w5500_bus bus = {NULL, frame, now_ms, pause_ms};
+static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms, .frame_async = frame_async,
+                                         .cancel = cancel_async, .async_max = DMA_BYTES, .now_us = now_us};
 
 static bool open_level(unsigned level) {
     if(level >= sizeof(rates) / sizeof(rates[0])) return false;
+    async_on(false);
     if(running) { sci_shutdown(); running = false; }
     for(unsigned b = 0; b < 256u; ++b) {
         unsigned r = 0;
@@ -164,9 +294,11 @@ static bool open_level(unsigned level) {
     /* RIE also raises the SCI's own interrupt, which nothing handles. */
     if(dma) irq_set_priority(IRQ_SRC_SCI1, IRQ_PRIO_MASKED);
     running = sci_init(rates[level], SCI_MODE_SPI, SCI_CLK_INT, 0) == SCI_OK;
+    if(running && dma) async_on(true);
     return running;
 }
 static void close_port(void) {
+    async_on(false);
     if(running) sci_shutdown();
     running = false;
 }

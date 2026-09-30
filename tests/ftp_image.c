@@ -20,17 +20,20 @@
  *   ftp-image IMAGE bad-password             an unusable password file
  *   ftp-image IMAGE serve PORT PASSIVE       serve until stdin closes
  *   ftp-image IMAGE serve PORT PASSIVE absent    no W5500 answers
+ *   ftp-image IMAGE serve PORT PASSIVE sync      a W5500 without async frames
+ * Otherwise uploads and downloads stream through the model's async frames.
  * On stdin while serving: s stops; n makes the next upload's rename to its
  * name fail, N also the rename that puts back the file it replaced (each
  * prints ARMED and a count); l turns the model's 1 ms network latency on or
  * off (LATENCY, a count and the latency in microseconds); p prints PAUSES, a
  * count and how many sleeping pauses the server has asked for since the
- * last p.
+ * last p; f and x make the 20th async frame from then fail or never end
+ * (FAULT, a count and the key).
  * Every open file and folder must be closed when the card is released. */
 static struct {
     FILE *image;
     uint64_t blocks;
-    unsigned files, dirs, armed, fail_part, fail_old, latencies, reports, sleeps;
+    unsigned files, dirs, armed, fail_part, fail_old, latencies, reports, sleeps, faults;
     bool active, connected, ready, stop;
     char last_event[KUI_APP_LINE_CAP];
 } test;
@@ -113,7 +116,15 @@ static void pause_ms(void *ctx, unsigned ms) {
     else if(ms) ++test.sleeps;
     w5500_model_bus.pause(ctx, ms);
 }
-static const struct kui_w5500_bus bus = {NULL, frame, now_ms, pause_ms};
+static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
+                        void (*done)(void *arg, bool ok), void *arg) {
+    return w5500_model_bus.frame_async(ctx, header, out, in, bytes, done, arg);
+}
+static void poll_async(void *ctx) { w5500_model_bus.poll(ctx); }
+static void cancel_async(void *ctx) { w5500_model_bus.cancel(ctx); }
+static uint64_t now_us(void *ctx) { return w5500_model_bus.now_us(ctx); }
+static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms, .frame_async = frame_async,
+                                         .poll = poll_async, .cancel = cancel_async, .async_max = 4096, .now_us = now_us};
 static bool open_level(unsigned level) { return level == 0; }
 static void close_port(void) {}
 static const char *speed(unsigned level) { (void)level; return "12.5 MHz"; }
@@ -137,6 +148,12 @@ static bool cancel(void) {
         } else if(byte == 'p') {
             printf("PAUSES %u %u\n", ++test.reports, test.sleeps);
             test.sleeps = 0;
+        } else if(byte == 'f' || byte == 'x') {
+            /* The 20th async frame from now fails, or never ends. */
+            struct w5500_model_options *o = w5500_model_live();
+            if(byte == 'f') o->async_fail_after = 20;
+            else o->async_stall_after = 20;
+            printf("FAULT %u %c\n", ++test.faults, byte);
         }
     }
     return test.stop;
@@ -186,7 +203,7 @@ static void seed(bool bad_password) {
 }
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IOLBF, 0);
-    if(argc < 3) { fprintf(stderr, "usage: ftp-image IMAGE seed|bad-password|serve PORT PASSIVE [absent]\n"); return 2; }
+    if(argc < 3) { fprintf(stderr, "usage: ftp-image IMAGE seed|bad-password|serve PORT PASSIVE [absent|sync]\n"); return 2; }
     test.image = fopen(argv[1], "r+b");
     assert(test.image);
     struct stat st;
@@ -197,10 +214,12 @@ int main(int argc, char **argv) {
     if(!strcmp(argv[2], "seed") || !strcmp(argv[2], "bad-password")) {
         seed(!strcmp(argv[2], "bad-password"));
         puts("SEEDED");
-    } else if(!strcmp(argv[2], "serve") && (argc == 5 || (argc == 6 && !strcmp(argv[5], "absent")))) {
+    } else if(!strcmp(argv[2], "serve") && (argc == 5 || (argc == 6 && (!strcmp(argv[5], "absent") ||
+                                                                          !strcmp(argv[5], "sync"))))) {
         struct kui_ftp_options options = {(uint16_t)atoi(argv[3]), (uint16_t)atoi(argv[4]), 40, 1234};
         struct kui_ftp_status status;
-        struct w5500_model_options model = {.absent = argc == 6};
+        struct w5500_model_options model = {.absent = argc == 6 && !strcmp(argv[5], "absent"),
+                                            .no_async = argc == 6 && !strcmp(argv[5], "sync")};
         w5500_model_start(&model);
         kui_ftp_run(&port, &options, &status, log_line, cancel, publish);
         printf("STOPPED state=%d in=%u out=%u failures=%u connections=%u message=%s\n", status.state, status.files_in,

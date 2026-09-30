@@ -34,6 +34,18 @@ static struct {
     uint64_t offset_ms;
 } m;
 struct w5500_model_counts w5500_model_counts;
+/* The async frame under way: its data moves when the bus is next polled,
+ * as a DMA transfer would meanwhile. */
+#define ASYNC_MAX 4096u
+static struct {
+    bool pending, fail, stall;
+    uint8_t header[3];
+    const uint8_t *out;
+    uint8_t *in;
+    size_t bytes;
+    void (*done)(void *arg, bool ok);
+    void *arg;
+} async;
 const uint8_t w5500_model_lease[4] = {10, 0, 0, 2};
 static const uint8_t gateway_ip[4] = {10, 0, 0, 1}, gateway_mac[6] = {0x02, 0, 0, 0, 0, 0x01};
 static const uint8_t other_mac[6] = {0x02, 0, 0, 0, 0, 0x77};
@@ -71,6 +83,7 @@ static void reset_all(void) {
 }
 void w5500_model_start(const struct w5500_model_options *options) {
     memset(&m, 0, sizeof(m));
+    memset(&async, 0, sizeof(async));
     memset(&w5500_model_counts, 0, sizeof(w5500_model_counts));
     for(unsigned i = 0; i < KUI_W5500_SOCKETS; ++i) m.s[i].fd = m.listeners[i].fd = -1;
     if(options) m.options = *options;
@@ -451,6 +464,8 @@ static void socket_put(unsigned n, uint16_t a, uint8_t v) {
 }
 static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes) {
     (void)ctx;
+    /* Chip select belongs to the async frame until it ends. */
+    assert(!async.pending);
     tick();
     ++w5500_model_counts.frames;
     uint16_t address = get16(header);
@@ -491,4 +506,36 @@ static void pause_ms(void *ctx, unsigned ms) {
     tick();
     usleep(ms ? ms * 1000u : 100u);
 }
-const struct kui_w5500_bus w5500_model_bus = {NULL, frame, now_ms, pause_ms};
+static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
+                        void (*done)(void *arg, bool ok), void *arg) {
+    (void)ctx;
+    assert(!async.pending);
+    assert(done && bytes && bytes <= ASYNC_MAX && (out ? !in : !!in));
+    if(m.options.no_async) return false;
+    memcpy(async.header, header, 3);
+    async.out = out;
+    async.in = in;
+    async.bytes = bytes;
+    async.done = done;
+    async.arg = arg;
+    async.fail = m.options.async_fail_after && !--m.options.async_fail_after;
+    async.stall = m.options.async_stall_after && !--m.options.async_stall_after;
+    async.pending = true;
+    ++w5500_model_counts.async_frames;
+    return true;
+}
+static void poll_async(void *ctx) {
+    if(!async.pending || async.stall || m.options.async_stalls) return;
+    async.pending = false;
+    bool ok = frame(ctx, async.header, async.out, async.in, async.bytes) && !async.fail && !m.options.async_fails;
+    /* May start the next one, which waits for the next poll. */
+    async.done(async.arg, ok);
+}
+static void cancel_async(void *ctx) {
+    (void)ctx;
+    if(async.pending) ++w5500_model_counts.async_cancels;
+    async.pending = false;
+}
+static uint64_t bus_now_us(void *ctx) { (void)ctx; return now_us(); }
+const struct kui_w5500_bus w5500_model_bus = {NULL, frame, now_ms, pause_ms, frame_async, poll_async, cancel_async,
+                                              ASYNC_MAX, bus_now_us};

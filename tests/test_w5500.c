@@ -315,6 +315,177 @@ static void macraw(void) {
     puts("PASS W5500 MACRAW: DHCP, conflict check, gateway ARP and ping, silent and refusing servers");
 }
 
+/* Streams: a socket's data moved by async frames, which the model ends
+ * when the bus is polled (hold polls; so does each run of the loop here). */
+static uint32_t least(uint32_t a, uint32_t b) { return a < b ? a : b; }
+static void stream_open(unsigned s, uint16_t port, int *fd) {
+    assert(kui_w5500_bus_check(&chip, 8) && chip.async);
+    assert(kui_w5500_set_mac(&chip, mac));
+    uint8_t rx[8] = {8, 2, 2, 1, 1, 1, 1, 0}, tx[8] = {8, 2, 2, 1, 1, 1, 1, 0};
+    assert(kui_w5500_buffers(&chip, rx, tx));
+    assert(kui_w5500_open(&chip, s, KUI_W5500_TCP | KUI_W5500_MR_NODELAY, port) && kui_w5500_listen(&chip, s));
+    *fd = client(port);
+    wait_state(s, KUI_W5500_ESTABLISHED);
+}
+static void streams(void) {
+    enum {TOTAL = 300000, RING = 65536};
+    static uint8_t sent[TOTAL], got[TOTAL], ring[RING];
+    struct kui_w5500_stream st;
+    int fd;
+
+    /* Upload: the client's data into a 64 KB ring, the owner taking it as
+     * the card would (32 KB at a time, sometimes after letting it fill). */
+    start(NULL);
+    stream_open(0, (uint16_t)(port_base + 11), &fd);
+    for(size_t i = 0; i < TOTAL; ++i) sent[i] = pattern(i, 5);
+    assert(!kui_w5500_stream_begin(&st, &chip, 0, false, ring, 3000)); /* not a power of two */
+    assert(kui_w5500_stream_begin(&st, &chip, 0, false, ring, RING) && st.max_piece == 4096);
+    size_t out = 0, in = 0;
+    unsigned full = 0, rounds = 0;
+    while(in < TOTAL) {
+        if(out < TOTAL) {
+            ssize_t n = send(fd, sent + out, TOTAL - out > 30000 ? 30000 : TOTAL - out, MSG_DONTWAIT);
+            if(n > 0) out += (size_t)n;
+        }
+        kui_w5500_stream_run(&st);
+        w5500_model_bus.pause(NULL, 0);
+        assert(kui_w5500_stream_hold(&st) && !st.lent && !st.busy);
+        uint32_t ready = kui_w5500_stream_ready(&st);
+        assert(ready <= RING && in + ready <= TOTAL);
+        if(ready == RING) ++full;
+        /* The first third is taken only once the ring is full: the stream
+         * must stop there and go on when there is room again. */
+        ++rounds;
+        if(in < TOTAL / 3 && ready < RING) continue;
+        uint32_t at = st.tail & (RING - 1u), n = least(least(ready, RING - at), rounds % 3u ? 32768u : 5000u);
+        memcpy(got + in, ring + at, n);
+        kui_w5500_stream_take(&st, n);
+        in += n;
+    }
+    assert(!memcmp(sent, got, TOTAL));
+    assert(full);
+    /* The chip has nothing left, and its pointer matches the stream's. */
+    uint16_t waiting = 1, pointer = 0;
+    assert(kui_w5500_received(&chip, 0, &waiting) && !waiting);
+    assert(kui_w5500_read16(&chip, KUI_W5500_SOCKET_REGS(0), KUI_W5500_SN_RX_RD, &pointer) && pointer == st.pointer);
+    /* The client's FIN: the stream simply finds nothing more. */
+    shutdown(fd, SHUT_WR);
+    wait_state(0, KUI_W5500_CLOSE_WAIT);
+    kui_w5500_stream_run(&st);
+    assert(kui_w5500_stream_hold(&st) && !kui_w5500_stream_ready(&st));
+    kui_w5500_stream_end(&st);
+    assert(!st.w && kui_w5500_close(&chip, 0));
+    close(fd);
+    w5500_model_stop();
+
+    /* Download: the owner puts data in as the card gives it; pieces go to
+     * the chip while a SEND is still under way, sent together after it. */
+    start(NULL);
+    stream_open(0, (uint16_t)(port_base + 12), &fd);
+    for(size_t i = 0; i < TOTAL; ++i) sent[i] = pattern(i, 6);
+    assert(kui_w5500_stream_begin(&st, &chip, 0, true, ring, RING) && st.max_piece == 4096);
+    out = in = 0;
+    unsigned overlapped = 0;
+    for(rounds = 0; in < TOTAL; ++rounds) {
+        uint32_t room = kui_w5500_stream_room(&st), at = st.head & (RING - 1u);
+        uint32_t n = least(least(room, RING - at), least(rounds % 3u ? 32768u : 3000u, (uint32_t)(TOTAL - out)));
+        if(n) {
+            memcpy(ring + at, sent + out, n);
+            kui_w5500_stream_put(&st, n);
+            out += n;
+        }
+        kui_w5500_stream_run(&st);
+        ssize_t got_now = recv(fd, got + in, TOTAL - in, MSG_DONTWAIT);
+        if(got_now > 0) in += (size_t)got_now;
+        w5500_model_bus.pause(NULL, 0);
+        assert(kui_w5500_stream_hold(&st));
+        if(st.unsent && (chip.sending & 1u)) ++overlapped;
+        assert(rounds < 200000);
+    }
+    assert(!memcmp(sent, got, TOTAL) && overlapped);
+    assert(kui_w5500_stream_sent(&st));
+    assert(kui_w5500_stream_end(&st));
+    /* Everything acknowledged: the whole transmit buffer is free again. */
+    uint16_t room = 0;
+    for(unsigned i = 0; i < 1000 && room != 8192; ++i) { settle(); assert(kui_w5500_room(&chip, 0, &room)); }
+    assert(room == 8192);
+    close(fd);
+    w5500_model_stop();
+
+    /* Ended with pieces on the chip that no SEND has taken yet: they are
+     * sent, and the plain calls carry on from there with the ring's rest. */
+    start(NULL);
+    stream_open(0, (uint16_t)(port_base + 14), &fd);
+    for(size_t i = 0; i < 20000; ++i) sent[i] = pattern(i, 8);
+    assert(kui_w5500_stream_begin(&st, &chip, 0, true, ring, RING));
+    memcpy(ring, sent, 20000);
+    kui_w5500_stream_put(&st, 20000);
+    for(unsigned i = 0; i < 1000 && !st.unsent; ++i) {
+        kui_w5500_stream_run(&st);
+        assert(kui_w5500_stream_hold(&st));
+    }
+    assert(st.unsent && st.head != st.tail);
+    uint32_t rest = st.head - st.tail, from = st.tail;
+    assert(kui_w5500_stream_end(&st) && !st.w);
+    for(size_t done = 0; done < rest;) {
+        uint16_t space = 0;
+        assert(kui_w5500_room(&chip, 0, &space));
+        uint16_t n = (uint16_t)(rest - done < space ? rest - done : space);
+        if(n) { assert(kui_w5500_send(&chip, 0, ring + from + done, n)); done += n; }
+        else settle();
+    }
+    for(in = 0; in < 20000;) {
+        ssize_t n = recv(fd, got + in, 20000 - in, MSG_DONTWAIT);
+        if(n > 0) in += (size_t)n; else settle();
+    }
+    assert(!memcmp(sent, got, 20000));
+    close(fd);
+    w5500_model_stop();
+
+    /* No async frames, or ones that fail the check: none used. */
+    struct w5500_model_options none = {.no_async = true}, failing = {.async_fails = true};
+    start(&none);
+    assert(kui_w5500_bus_check(&chip, 8) && !chip.async && !kui_w5500_stream_begin(&st, &chip, 0, false, ring, RING));
+    w5500_model_stop();
+    start(&failing);
+    assert(kui_w5500_bus_check(&chip, 8) && !chip.async);
+    w5500_model_stop();
+
+    /* A frame that fails mid-stream fails the stream, not the chip; one
+     * that never ends is given up after 50 ms, and async stays off. */
+    start(NULL);
+    stream_open(0, (uint16_t)(port_base + 13), &fd);
+    assert(send(fd, sent, 5000, 0) == 5000);
+    assert(kui_w5500_stream_begin(&st, &chip, 0, false, ring, RING));
+    for(unsigned i = 0; i < 100 && kui_w5500_stream_ready(&st) < 5000; ++i) {
+        kui_w5500_stream_run(&st);
+        assert(kui_w5500_stream_hold(&st));
+        settle();
+    }
+    assert(kui_w5500_stream_ready(&st) == 5000 && !memcmp(ring, sent, 5000));
+    assert(send(fd, sent, 3000, 0) == 3000);
+    for(unsigned i = 0; i < 20; ++i) settle();
+    w5500_model_live()->async_fails = true;
+    kui_w5500_stream_run(&st);
+    assert(!kui_w5500_stream_hold(&st) && st.failed && !chip.failed && chip.async);
+    kui_w5500_stream_run(&st); /* a failed stream stays stopped */
+    assert(!st.lent && !st.busy);
+    w5500_model_live()->async_fails = false;
+    assert(kui_w5500_stream_begin(&st, &chip, 0, false, ring, RING));
+    w5500_model_live()->async_stalls = true;
+    kui_w5500_stream_run(&st);
+    assert(st.busy);
+    assert(!kui_w5500_stream_hold(&st) && st.failed && !chip.async && w5500_model_counts.async_cancels == 1);
+    assert(!kui_w5500_stream_begin(&st, &chip, 0, false, ring, RING));
+    /* The chip is still there, and the data the stream never took is too. */
+    w5500_model_live()->async_stalls = false;
+    uint16_t left = 0;
+    assert(state(0) == KUI_W5500_ESTABLISHED && kui_w5500_received(&chip, 0, &left) && left == 3000);
+    close(fd);
+    w5500_model_stop();
+    puts("PASS W5500 streams: upload and download by async frames, full ring, failing and stalled frames");
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
     /* Below Linux's ephemeral ports (32768 and up). */
@@ -324,6 +495,7 @@ int main(void) {
     tcp_client();
     datagrams();
     macraw();
+    streams();
     puts("PASS W5500 driver");
     return 0;
 }

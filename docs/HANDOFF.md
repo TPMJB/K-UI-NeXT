@@ -69,11 +69,28 @@ instead of 16. With them, uploads run at about 520 KiB/s (about 550 with
 the music off, since the CPU both clocks the SCI and drives the card) and
 downloads at about 380 KiB/s (2026-09-30). The Wi-Fi branch's shared SCI
 layer (`sci_port.c`) now has the same DMA transfer, full duplex, for the
-W5500 and the Wi-Fi board (merge `c0e057b`, run 36651240236). Still to do:
-that build with the same W5500 (its FTP screen should say "12.5 MHz with
-DMA", at these speeds); a checksum of an upload made with DMA; and, for
-more, overlapping the card and the network (DMA in both directions), whose
-ceiling is about 900 KiB/s up and 600 down.
+W5500 and the Wi-Fi board (merge `c0e057b`, run 36651240236). An upload
+made with DMA reads checked out byte for byte on the owner's computer.
+
+Next, the card and the network at the same time. In the builds so far the
+CPU did both in turn: it clocked the W5500's bytes, then drove the card
+(KallistiOS bit-bangs the card on SCIF, so the card always takes the
+CPU). Now the W5500's side needs no CPU: its data moves by DMA channel 1
+both ways (reads in the SCI's receive-only mode, whose clock runs on by
+itself; writes asked for by the SCI byte by byte), and channel 1's
+transfer-end interrupt finishes each piece and starts the next
+(`kui_w5500_stream` in `src/core/w5500.c`, the async frames in
+`src/dreamcast/w5500_sci.c`). One upload or download at a time streams
+through a 128 KB ring while the FTP loop writes or reads the card 32 KB at
+a time. Socket 0 has 8 KB buffers now, so one piece moves while the next
+arrives. Also, KallistiOS's SD driver waits out the card's busy time after
+each write by polling at the scheduler's ticks (10 ms apart at its
+100 Hz); the scheduler runs at 1000 Hz while the FTP server runs. The
+wiring check moves 1 KB each way this new way before it is used, and the
+FTP screen then says "overlapped"; a failure midway leaves the transfer to
+go on the old way. After each transfer the screen shows its speed and how
+busy the card and the network were. The ceiling is the card: about
+1.1 MB/s up and 0.7 MB/s down. Not yet tried on the console.
 
 - **Build:** the Diagnostic build run
   [36651238049](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36651238049)

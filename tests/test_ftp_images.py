@@ -40,6 +40,7 @@ class Server:
                                      text=True, env=env)
         self.lines = []
         self.password = None
+        self.adapter = None
         self.seen = threading.Event()
         threading.Thread(target=self._read, daemon=True).start()
         if ready:
@@ -53,6 +54,7 @@ class Server:
             if line.startswith("READY "):
                 fields = dict(part.split("=", 1) for part in line.split()[1:4])
                 self.password = fields["password"]
+                self.adapter = line.split("adapter=", 1)[1]
                 self.seen.set()
             if line.startswith("STOPPED "):
                 self.seen.set()
@@ -77,6 +79,9 @@ class Server:
 
     def output(self):
         return "\n".join(self.lines)
+
+    def count(self, text):
+        return sum(text in line for line in self.lines)
 
 
 def client(port, password, passive=True):
@@ -475,6 +480,36 @@ def full_card(f):
     print("PASS FTP full card: 452, nothing kept, room again afterwards", flush=True)
 
 
+def streams(f, server):
+    """Uploads and downloads move by the model's async frames while the
+    card works (the adapter line says "overlapped"). A frame that fails
+    partway leaves that transfer to go on without them; one that never ends
+    is given up after 50 ms, and later transfers go without them too."""
+    assert "overlapped" in server.adapter, server.adapter
+    data = random.randbytes(3 * 1024 * 1024 + 777)
+    faults = [0]
+
+    def fault(key):
+        faults[0] += 1
+        server.send(key)
+        server.wait_for(f"FAULT {faults[0]} {key}")
+
+    # Every event is logged; EVENT shows only the latest at each update.
+    failed = "LOG FTP: A DMA transfer failed; going on without"
+    fault("f")
+    upload(f, "Games/stream.bin", data)
+    assert server.count(failed) == 1, server.output()[-3000:]
+    fault("f")
+    assert digest(download(f, "Games/stream.bin")) == digest(data)
+    assert server.count(failed) == 2, server.output()[-3000:]
+    fault("x")
+    upload(f, "Games/stream.bin", data)
+    server.wait_for("LOG FTP: DMA transfers stopped; going on without them")
+    assert digest(download(f, "Games/stream.bin")) == digest(data)
+    f.delete("Games/stream.bin")
+    print("PASS FTP streams: overlapped transfers, a failed and a stalled DMA frame", flush=True)
+
+
 def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=None):
     server = Server(binary, image, port, passive, env=env)
     password = server.password
@@ -490,6 +525,7 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     aborts(f, port, password, files)
     limits(port, password, 1)
     full_card(f)
+    streams(f, server)
     # Stopping with a client connected: it is told.
     f.sock.settimeout(30)
     code, output = server.stop()
@@ -541,9 +577,17 @@ def main():
                 assert (out / "password.txt").read_text().strip() == password
                 listing = run("mdir", "-i", str(image), "-/", "-a", "::/")
                 assert ".kui-part" not in listing.lower(), listing
-            # The password is kept for the next start.
-            again = Server(BINARY, image, port + 2, passive)
-            assert again.password == password
+            # The password is kept for the next start. This time the W5500
+            # has no async frames: transfers go the plain way.
+            again = Server(BINARY, image, port + 2, passive, extra=("sync",))
+            assert again.password == password and "overlapped" not in again.adapter, again.adapter
+            f = client(port + 2, password)
+            data = random.randbytes(5 * 1024 * 1024 + 99)
+            upload(f, "Games/plain.bin", data)
+            assert digest(download(f, "Games/plain.bin")) == digest(data)
+            assert download(f, "Games/plain.bin", rest=12345) == data[12345:]
+            f.delete("Games/plain.bin")
+            f.quit()
             code, output = again.stop()
             assert code == 0, output
             run(*fsck, "-n", str(image))
