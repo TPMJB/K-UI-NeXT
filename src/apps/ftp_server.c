@@ -121,6 +121,7 @@ struct server {
     int data_owner[DATA_SOCKETS];
     bool data_draining[DATA_SOCKETS];
     uint64_t data_since[DATA_SOCKETS];
+    uint8_t data_close_state[DATA_SOCKETS];
     int control_owner[CONTROL_SOCKETS];
     uint64_t control_since[CONTROL_SOCKETS];
     char password[KUI_FTP_PASSWORD_CAP];
@@ -199,7 +200,7 @@ static int data_take(struct server *sv, struct session *s, uint64_t now) {
             if(sv->data_owner[j] != FREE) continue;
             /* A connection still closing is cut short only when needed. */
             if(sv->data_draining[j] && (!pass || now - sv->data_since[j] < 1000u)) continue;
-            if(sv->data_draining[j]) (void)kui_w5500_close(&sv->net.chip, j);
+            if(sv->data_draining[j] && !kui_w5500_close(&sv->net.chip, j)) return -1;
             sv->data_draining[j] = false;
             sv->data_owner[j] = (int)index_of(sv, s);
             sv->data_since[j] = now;
@@ -216,15 +217,33 @@ static void data_release(struct server *sv, struct session *s, bool graceful, ui
     sv->data_draining[j] = graceful && kui_w5500_disconnect(&sv->net.chip, j);
     if(!sv->data_draining[j]) (void)kui_w5500_close(&sv->net.chip, j);
     sv->data_since[j] = now;
+    sv->data_close_state[j] = 0xffu;
 }
 static void data_poll(struct server *sv, uint64_t now) {
     for(unsigned j = 0; j < DATA_SOCKETS; ++j) {
-        if(!sv->data_draining[j]) continue;
+        if(!sv->data_draining[j] || sv->data_owner[j] != FREE) continue;
         uint8_t state = KUI_W5500_CLOSED;
-        (void)kui_w5500_status(&sv->net.chip, j, &state);
-        if(state == KUI_W5500_CLOSED || now - sv->data_since[j] > DRAIN_MS) {
-            if(state != KUI_W5500_CLOSED) (void)kui_w5500_close(&sv->net.chip, j);
+        if(!kui_w5500_status(&sv->net.chip, j, &state)) continue;
+        uint64_t elapsed = now - sv->data_since[j];
+        if(state != sv->data_close_state[j]) {
+            sv->data_close_state[j] = state;
+            if(sv->log) sv->log("FTP: data socket %u closing state %02X after %llu ms",
+                j, (unsigned)state, (unsigned long long)elapsed);
+        }
+        if(state == KUI_W5500_CLOSED) {
             sv->data_draining[j] = false;
+            continue;
+        }
+        /* The FIN exchange has finished in TIME_WAIT. On the owner's W5500,
+         * retired listing connections otherwise flood ACKs in response to the
+         * peer's resets until our ten-second cleanup. Reap only an unowned,
+         * completed data connection; FIN_WAIT/CLOSING must finish their FIN
+         * exchange, and live transfers/control sockets are never touched. */
+        bool finished = state == KUI_W5500_TIME_WAIT;
+        if((finished || elapsed > DRAIN_MS) && kui_w5500_close(&sv->net.chip, j)) {
+            sv->data_draining[j] = false;
+            if(sv->log) sv->log("FTP: data socket %u closed from %02X after %llu ms (%s)",
+                j, (unsigned)state, (unsigned long long)elapsed, finished ? "TIME_WAIT cleanup" : "deadline");
         }
     }
 }

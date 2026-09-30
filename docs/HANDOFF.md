@@ -1,5 +1,16 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## FTP packet-capture follow-up (2026-09-30)
+
+The full owner capture ties slow upload starts to ten-second ACK/RST storms
+from already-completed directory listings. Two uploads recover immediately
+when the preceding listing's storm stops; an upload starting after the storm
+runs normally. See [the capture evidence and targeted hardware check](evidence/ftp-close-storm-2026-09-30.md).
+The test change reaps completed W5500 data sockets in TIME_WAIT and logs their
+closing states, while retaining tracking on failed status reads/CLOSE. This
+is based on tested W5500 commit `1da58d6`; hardware confirmation is pending.
+When porting to the Wi-Fi branch, keep this cleanup W5500-specific.
+
 Where the project stands, what the hardware needs next, and a brief for the
 artwork. It is written for whoever picks the project up, including another
 AI assistant helping with the art. The disc reader has its own handoff:

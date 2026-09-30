@@ -15,7 +15,7 @@ FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
-test: build/test-w5500 build/test-network-w5500 build/test-ftp
+test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
@@ -41,6 +41,7 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-w5500
 	./build/test-network-w5500
 	./build/test-ftp
+	./build/test-ftp-cleanup
 	./build/test-menu-sound
 	./build/test-music-ogg
 	./build/test-music-ogg-seek
@@ -498,6 +499,9 @@ FTP_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,-
 build/test-ftp: tests/test_ftp.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c include/kui/ftp.h include/kui/files.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c tests/test_ftp.c -o $@
+build/test-ftp-cleanup: tests/test_ftp_cleanup.c src/apps/ftp_server.c include/kui/ftp.h include/kui/w5500.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_ftp_cleanup.c -Wl,--gc-sections -o $@
 build/ftp-image: tests/ftp_image.c $(FTP) $(CORE) $(FATFS) $(W5500_MODEL) include/kui/ftp.h include/kui/w5500.h include/kui/network_w5500.h include/kui/files.h config/ffconf.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -Itests $(FTP) $(CORE) $(FATFS) tests/w5500_model.c tests/ftp_image.c $(FTP_WRAP) -o $@
