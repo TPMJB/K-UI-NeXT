@@ -44,7 +44,7 @@ cable link, uploads to the SD card ran at about 304 KiB/s and downloads at
 tick) each time a transfer waited for the network; commit `765f8d4` keeps
 transfers moving instead, and with it both directions run at about
 370 KiB/s. Downloads still come in bursts, because the network waits while
-each 16 KB is read from the card.
+each 32 KB is read from the card.
 
 What limits each direction now: an upload spends about two-thirds of its
 time reading the W5500 through KallistiOS's SCI read, which waits after

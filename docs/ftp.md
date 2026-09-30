@@ -141,7 +141,7 @@ files can be added to those folders. Update K-UI itself on a computer.
   260 to 320 KiB/s, in bursts. That build slept about 8 ms each time a
   transfer waited for the network. The build that keeps transfers moving
   (`a911dc9`) does about 370 KiB/s each way. Downloads still arrive in
-  bursts: the network waits while each 16 KB is read from the card, the
+  bursts: the network waits while each 32 KB is read from the card, the
   slower half of a download. Uploads alternate too, but the computer's own
   buffering hides it. With DMA reads (`c70375c`), uploads reach about
   500 KiB/s; downloads are unchanged. A computer with a card reader is

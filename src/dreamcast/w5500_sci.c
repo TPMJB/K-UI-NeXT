@@ -47,6 +47,10 @@ static const char *const names[] = {"12.5 MHz with DMA", "12.5 MHz", "6.25 MHz",
 #define SSR_FER 0x10u
 #define SSR_PER 0x08u
 #define SSR_TEND 0x04u
+/* Written to SCSSR1 just after reading TDRE as 1: the 0 clears TDRE and
+ * starts the byte in SCTDR1; writing 1 leaves the other flags as they are
+ * (RDRF included, which the DMA clears as it reads), and MPBT stays 0. */
+#define SSR_CLEAR_TDRE 0x7cu
 #define SAR1 (*(volatile uint32_t *)0xffa00010u)
 #define DAR1 (*(volatile uint32_t *)0xffa00014u)
 #define TCR1 (*(volatile uint32_t *)0xffa00018u)
@@ -85,8 +89,10 @@ static bool dma_piece(uint8_t *in, size_t bytes) {
         for(unsigned spins = 0; !(SCSSR1 & SSR_TDRE);)
             if(!(++spins & 255u) && timer_us_gettime64() > deadline) { ok = false; break; }
         if(!ok) break;
+        /* One read (the wait above) and two writes a byte, so the CPU keeps
+         * up with the 12.5 MHz clock; a read-modify-write of SCSSR1 did not. */
         SCTDR1 = 0xff;
-        SCSSR1 &= (uint8_t)~SSR_TDRE;
+        SCSSR1 = SSR_CLEAR_TDRE;
     }
     for(unsigned spins = 0; ok && !(SCSSR1 & SSR_TEND);)
         if(!(++spins & 255u) && timer_us_gettime64() > deadline) ok = false;

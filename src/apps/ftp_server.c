@@ -20,7 +20,9 @@
 #define CONTROL_FIRST 3u
 #define CONTROL_SOCKETS 4u
 #define CARD_CAP (KUI_FILES_PATH_CAP + 2u)
-#define BUFFER_BYTES (16u * 1024u)
+/* The card is read and written 32 KB at a time: each card command has a
+ * fixed cost, so larger pieces move more for it. */
+#define BUFFER_BYTES (32u * 1024u)
 #define IN_CAP 1024u
 #define OUT_CAP 2048u
 #define CONNECT_MS 30000u   /* for the client to open a data connection */
