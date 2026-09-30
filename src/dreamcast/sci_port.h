@@ -2,6 +2,8 @@
 #ifndef KUI_SCI_PORT_H
 #define KUI_SCI_PORT_H
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 /* The SH-4's SCI port as an SPI bus (KOS dc/sci.h) for the network
  * adapters wired to it (docs/sci-connector.md), with one chip select at a
@@ -17,4 +19,15 @@ bool kui_sci_running(void);
 void kui_sci_select(bool active);
 /* GPIO5's level. */
 bool kui_sci_ready(void);
+
+/* A transfer inside a selected frame with DMA channel 1 taking in the bytes
+ * after the first (see sci_port.c), full duplex; out NULL clocks out 0xff.
+ * Worth it from KUI_SCI_DMA_MIN bytes. It returns false when a piece did not
+ * finish in time or ended with a receive error; the port is then ready for
+ * a programmed transfer again, and what the device made of the frame is its
+ * caller's business. kui_sci_dma_ready says whether the DMA controller can
+ * be used at all. */
+#define KUI_SCI_DMA_MIN 16u
+bool kui_sci_dma_ready(void);
+bool kui_sci_dma_transfer(const uint8_t *out, uint8_t *in, size_t bytes);
 #endif

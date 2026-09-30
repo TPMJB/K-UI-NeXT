@@ -22,7 +22,7 @@ drive) and artwork.
 | Branch | What is on it | State |
 | --- | --- | --- |
 | `main` | The 1.5.1 release | Released |
-| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP work on the owner's console (2026-09-29), at about 370 KiB/s each way |
+| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP work on the owner's console: uploads about 500 KiB/s with DMA reads, downloads about 370 KiB/s (2026-09-30) |
 | `claude/wifi-esp32c5-firmware` | Everything above, plus the Wi-Fi board's firmware (`firmware/kui-wifi`) and K-UI's side of it: the Wi-Fi page, and FTP over Wi-Fi | CI green (host tests, both boards' firmware builds, Dreamcast build). Not tried on hardware; the boards have not arrived |
 
 The Wi-Fi branch is meant to go into the W5500 branch once the board works
@@ -44,19 +44,33 @@ cable link, uploads to the SD card ran at about 304 KiB/s and downloads at
 tick) each time a transfer waited for the network; commit `765f8d4` keeps
 transfers moving instead, and with it both directions run at about
 370 KiB/s. Downloads still come in bursts, because the network waits while
-each 16 KB is read from the card.
+each 32 KB is read from the card.
 
 What limits each direction now: an upload spends about two-thirds of its
 time reading the W5500 through KallistiOS's SCI read, which waits after
 every byte; the card write is the rest. A download spends most of its time
 reading the card (about 700 KB/s), with the network idle meanwhile.
 KallistiOS's DMA mode for the SCI (DMA channel 1) could stream those reads
-and, for downloads, send while the card is read. Not started; it needs the
-owner's go-ahead and a console to test on.
+and, for downloads, send while the card is read. A first try, reads through
+KallistiOS's `sci_spi_dma_read_data` (commit `389f9ca`), locked the console
+as the FTP server started (the music looped a second of sound) and rebooted
+it on Network's test, so it was reverted. KallistiOS's routine never sets
+the SCI's RIE bit, so the SCI never asks for DMA, and it then sleeps in
+`dma_wait_complete` for an interrupt it never enabled. The second try is
+K-UI's own DMA read (`src/dreamcast/w5500_sci.c`): RIE only during a read,
+the SCI's interrupt masked, channel 1 programmed directly, and deadlines on
+every wait with a fallback to plain reads. The FTP screen shows "12.5 MHz
+with DMA" when it works, and "DMA failed" when it gave up. It works on the
+owner's console (commit `c70375c`, run 36648048581): uploads went from about
+370 to about 500 KiB/s; downloads are unchanged. Still to do: a checksum
+of an upload made this way; carrying it into the Wi-Fi branch's shared SCI
+layer (`sci_port.c`); and, for more, overlapping the card and the network
+(DMA in both directions), whose ceiling is about 900 KiB/s up and 600 down.
 
 - **Build:** the Diagnostic build run
-  [36635569185](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36635569185)
-  (`claude/modest-galileo-hpjv79`, commit `a911dc9`, with the transfer fix).
+  [36648048581](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36648048581)
+  (`claude/modest-galileo-hpjv79`, commit `c70375c`, with DMA reads; the
+  build before them is run 36635569185).
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and

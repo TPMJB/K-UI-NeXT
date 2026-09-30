@@ -4,9 +4,9 @@ K-UI can share the SD card over your home network with FTP, so games,
 music and pictures can be copied to and from a computer without taking the
 card out. It needs a network adapter wired to the console's SCI port (a
 modification): a WIZnet W5500 Ethernet module, or K-UI's Wi-Fi board (see
-[Wi-Fi](wifi.md)). It is new since K-UI 1.5.1. On the owner's console
-(2026-09-29) it moves about 370 KiB/s each way over the W5500; the Wi-Fi
-board has not been tried on a console yet.
+[Wi-Fi](wifi.md)). It is new since K-UI 1.5.1. On the owner's console,
+over the W5500, it uploads at about 500 KiB/s and downloads at about
+370 KiB/s (2026-09-30); the Wi-Fi board has not been tried on a console yet.
 
 It is independent K-UI code. The W5500 driver is written from WIZnet's
 W5500 datasheet and uses KallistiOS's SCI driver (`dc/sci.h`) only to move
@@ -36,11 +36,15 @@ interrupt pin is not used.
 
 K-UI looks for the W5500 only when asked (Network, or the FTP server),
 never at start-up. It resets the chip, checks its version, and writes and
-reads back 64 test patterns before using it. It starts at 12.5 MHz with the
-select on PA7 and, if a pattern comes back wrong, tries 6.25, 3.125 and
-1.5625 MHz, then the same with the select on PA6 ("select GPIO6" in its
-messages). If every speed fails, it says the W5500 was found but its wiring
-check failed.
+reads back 64 test patterns and a 1 KB block before using it. It starts at
+12.5 MHz with DMA reads (K-UI's own, on DMA channel 1, in `sci_port.c`;
+they work on the owner's console) with the select on PA7, and, if the check
+fails, tries 12.5 MHz without DMA, then 6.25, 3.125 and 1.5625 MHz, then
+the same with the select on PA6 ("select GPIO6" in its messages). If every
+speed fails, it says the W5500 was found but its wiring check failed. A DMA
+read that does not finish within a couple of milliseconds is read again
+without DMA; after four such reads in a row, DMA stays off and the screen
+says "DMA failed".
 
 With no W5500, the FTP server and the Network app look for the Wi-Fi board
 next (see [Wi-Fi](wifi.md)).
@@ -144,10 +148,11 @@ files can be added to those folders. Update K-UI itself on a computer.
   about 304 KiB/s and downloaded at 260 to 320 KiB/s, in bursts. That build
   slept about 8 ms each time a transfer waited for the network. The build
   that keeps transfers moving (`a911dc9`) does about 370 KiB/s each way.
-  Downloads still arrive in bursts: the network waits while each 16 KB is
+  Downloads still arrive in bursts: the network waits while each 32 KB is
   read from the card, the slower half of a download. Uploads alternate too,
-  but the computer's own buffering hides it. A computer with a card reader
-  is much faster for whole game libraries.
+  but the computer's own buffering hides it. With DMA reads (`c70375c`),
+  uploads reach about 500 KiB/s; downloads are unchanged. A computer with a
+  card reader is much faster for whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.

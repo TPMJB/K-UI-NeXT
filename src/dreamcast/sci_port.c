@@ -3,6 +3,9 @@
  * per pin (the low one set: output; the high one set: no pull-up) and PDTRA
  * the pins' levels, at the addresses KOS's SCI driver uses for GPIO7. */
 #include "sci_port.h"
+#include <arch/dmac.h>
+#include <arch/irq.h>
+#include <arch/timer.h>
 #include <dc/sci.h>
 #include <stdint.h>
 
@@ -16,6 +19,46 @@ static const uint32_t rates[KUI_SCI_RATES] = {SCI_SPI_BAUD_12M500K, SCI_SPI_BAUD
 static bool running;
 static unsigned selected = 7u;
 
+/* DMA (kui_sci_dma_transfer). KOS's programmed transfers wait for each byte
+ * before clocking the next; with DMA channel 1 emptying the receive register,
+ * the CPU clocks bytes out back to back. This is K-UI's own transfer, not
+ * KOS's sci_spi_dma_read_data: that one never sets the SCI's RIE bit, so the
+ * SCI never asks the DMA controller for a byte, and it then waits in
+ * dma_wait_complete for an interrupt it did not enable (the console locked up
+ * with it, commit 389f9ca). Here RIE is set only for the length of a piece,
+ * the SCI's own interrupt is masked, channel 1 is programmed directly, and
+ * every wait has a deadline. It works on the owner's console with the W5500
+ * (uploads from about 370 to about 500 KiB/s). */
+#define DMA_BYTES 4096u  /* one piece of a longer transfer */
+#define SCSCR1 (*(volatile uint8_t *)0xffe00008u)
+#define SCTDR1 (*(volatile uint8_t *)0xffe0000cu)
+#define SCSSR1 (*(volatile uint8_t *)0xffe00010u)
+#define SCRDR1 (*(volatile uint8_t *)0xffe00014u)
+#define SCRDR1_ADDR 0xffe00014u
+#define SCR_RIE 0x40u
+#define SSR_TDRE 0x80u
+#define SSR_RDRF 0x40u
+#define SSR_ORER 0x20u
+#define SSR_FER 0x10u
+#define SSR_PER 0x08u
+#define SSR_TEND 0x04u
+/* Written to SCSSR1 just after reading TDRE as 1: the 0 clears TDRE and
+ * starts the byte in SCTDR1; writing 1 leaves the other flags as they are
+ * (RDRF included, which the DMA clears as it reads), and MPBT stays 0. */
+#define SSR_CLEAR_TDRE 0x7cu
+#define SAR1 (*(volatile uint32_t *)0xffa00010u)
+#define DAR1 (*(volatile uint32_t *)0xffa00014u)
+#define TCR1 (*(volatile uint32_t *)0xffa00018u)
+#define CHCR1 (*(volatile uint32_t *)0xffa0001cu)
+#define DMAOR (*(volatile uint32_t *)0xffa00040u)
+#define CHCR_DE 0x1u
+#define CHCR_TE 0x2u
+/* Destination increments, source fixed, the SCI's receive request, cycle
+ * steal, one byte at a time, no interrupt. */
+#define CHCR_SCI_RX ((1u << 14) | ((uint32_t)DMA_REQUEST_SCI_RECEIVE << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
+static uint8_t dma_buffer[DMA_BYTES] __attribute__((aligned(32)));
+static uint8_t reversed[256];
+
 /* 0: input with pull-up; 1: output. */
 static void pin_mode(unsigned pin, uint32_t mode) {
     PCTRA = (PCTRA & ~(UINT32_C(3) << (pin * 2u))) | (mode << (pin * 2u));
@@ -27,9 +70,18 @@ static void pin_high(unsigned pin, bool high) {
 bool kui_sci_open(unsigned rate, unsigned select) {
     kui_sci_close();
     if(rate >= KUI_SCI_RATES || (select != 6u && select != 7u)) return false;
-    /* No DMA buffer: every transfer is programmed I/O. KOS takes GPIO7 as
-     * its chip select and leaves it high, so a device there stays
-     * deselected while another is used. */
+    for(unsigned b = 0; b < 256u; ++b) {
+        unsigned r = 0;
+        for(unsigned bit = 0; bit < 8u; ++bit) r |= ((b >> bit) & 1u) << (7u - bit);
+        reversed[b] = (uint8_t)r;
+    }
+    /* RIE, which DMA needs, also raises the SCI's own interrupt; nothing
+     * handles it. */
+    irq_set_priority(IRQ_SRC_SCI1, IRQ_PRIO_MASKED);
+    /* No KOS DMA buffer: KOS's transfers are programmed I/O, and DMA is
+     * kui_sci_dma_transfer's own. KOS takes GPIO7 as its chip select and
+     * leaves it high, so a device there stays deselected while another is
+     * used. */
     if(sci_init(rates[rate], SCI_MODE_SPI, SCI_CLK_INT, 0) != SCI_OK) return false;
     running = true;
     selected = select;
@@ -54,3 +106,66 @@ void kui_sci_select(bool active) {
     else sci_spi_set_cs(active);
 }
 bool kui_sci_ready(void) { return (PDTRA >> PIN_READY) & 1u; }
+
+/* DMA is on, with no address error or NMI stop, and channel 1 is idle. */
+bool kui_sci_dma_ready(void) {
+    return running && (DMAOR & 0x7u) == 0x1u && (!(CHCR1 & CHCR_DE) || (CHCR1 & CHCR_TE));
+}
+/* One piece: its first byte by a KOS programmed transfer, which also leaves
+ * KOS's driver with transmit and receive on, as it expects; the rest by DMA
+ * while the CPU clocks out the outgoing bytes (or 0xff). */
+static bool dma_piece(const uint8_t *out, uint8_t *in, size_t bytes) {
+    if((out ? sci_spi_rw_data(out, in, 1) : sci_spi_read_data(in, 1)) != SCI_OK) return false;
+    size_t rest = bytes - 1u;
+    if(!rest) return true;
+    uint64_t deadline = timer_us_gettime64() + 2000u + rest;
+    bool ok = true;
+    CHCR1 = 0;
+    SAR1 = hw_to_dma_addr(SCRDR1_ADDR);
+    DAR1 = dma_map_dst(dma_buffer, rest);
+    TCR1 = (uint32_t)rest;
+    CHCR1 = CHCR_SCI_RX;
+    SCSCR1 |= SCR_RIE;
+    for(size_t i = 0; ok && i < rest; ++i) {
+        for(unsigned spins = 0; !(SCSSR1 & SSR_TDRE);)
+            if(!(++spins & 255u) && timer_us_gettime64() > deadline) { ok = false; break; }
+        if(!ok) break;
+        /* One read (the wait above) and two writes a byte, so the CPU keeps
+         * up with the 12.5 MHz clock. */
+        SCTDR1 = out ? reversed[out[1u + i]] : 0xffu;
+        SCSSR1 = SSR_CLEAR_TDRE;
+    }
+    for(unsigned spins = 0; ok && !(SCSSR1 & SSR_TEND);)
+        if(!(++spins & 255u) && timer_us_gettime64() > deadline) ok = false;
+    for(unsigned spins = 0; ok && !(CHCR1 & CHCR_TE);)
+        if(!(++spins & 255u) && timer_us_gettime64() > deadline) ok = false;
+    SCSCR1 &= (uint8_t)~SCR_RIE;
+    CHCR1 = 0;
+    if(!ok || (SCSSR1 & (SSR_ORER | SSR_FER | SSR_PER))) return false;
+    /* Drop any cached copy of the buffer, then read what the DMA wrote. */
+    (void)dma_map_dst(dma_buffer, rest);
+    for(size_t i = 0; i < rest; ++i) in[1u + i] = reversed[dma_buffer[i]];
+    return true;
+}
+/* After a failed piece: the DMA stopped, the transmitter finished, and no
+ * error or stale byte left for the programmed transfer that follows. */
+static void dma_recover(void) {
+    SCSCR1 &= (uint8_t)~SCR_RIE;
+    CHCR1 = 0;
+    uint64_t deadline = timer_us_gettime64() + 1000u;
+    while(!(SCSSR1 & SSR_TEND) && timer_us_gettime64() < deadline) {}
+    if(SCSSR1 & SSR_RDRF) {
+        (void)SCRDR1;
+        SCSSR1 &= (uint8_t)~SSR_RDRF;
+    }
+    if(SCSSR1 & (SSR_ORER | SSR_FER | SSR_PER)) SCSSR1 &= (uint8_t)~(SSR_ORER | SSR_FER | SSR_PER);
+}
+bool kui_sci_dma_transfer(const uint8_t *out, uint8_t *in, size_t bytes) {
+    if(!running || !in || !bytes) return false;
+    for(size_t at = 0; at < bytes; at += DMA_BYTES)
+        if(!dma_piece(out ? out + at : NULL, in + at, bytes - at < DMA_BYTES ? bytes - at : DMA_BYTES)) {
+            dma_recover();
+            return false;
+        }
+    return true;
+}
