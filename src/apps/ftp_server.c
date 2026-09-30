@@ -407,6 +407,8 @@ static void begin_transfer(struct server *sv, struct session *s, enum transfer k
     s->rate = 0;
     s->rate_mark_ms = 0;
     s->source_done = false;
+    s->card_failed = s->ending = false;
+    s->card_result = FR_OK;
     s->buffered = s->sent = 0;
     snprintf(s->path, sizeof(s->path), "%s", path);
     if(s->data < 0 && s->active_ready) {
