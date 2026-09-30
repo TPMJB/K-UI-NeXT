@@ -93,12 +93,14 @@ busy the card and the network were. The ceiling is the card: about
 1.1 MB/s up and 0.7 MB/s down. Not yet tried on the console.
 
 - **Build:** the Diagnostic build run
-  [36651238049](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36651238049)
-  (`claude/modest-galileo-hpjv79`, commit `56fd05d`, DMA reads and the
-  trims; the build without DMA is run 36635569185). The Wi-Fi branch's
-  build with the same DMA in its shared SCI layer is run
-  [36651240236](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36651240236)
-  (merge `c0e057b`).
+  [36663891917](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36663891917)
+  (`claude/modest-galileo-hpjv79`, commit `6f83189`, the card and the
+  network at the same time; the build before it, with DMA reads and the
+  trims, is run 36651238049). The Wi-Fi branch's build of the same is run
+  [36663986571](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36663986571)
+  (merge `cc5c5e1`). On the FTP screen the adapter line should end
+  ", overlapped"; after each transfer a line gives its speed and how busy
+  the card and the network were.
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
