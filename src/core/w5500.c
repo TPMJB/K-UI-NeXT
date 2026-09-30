@@ -425,6 +425,7 @@ static void piece_done(void *arg, bool ok) {
     unsigned s = st->socket;
     stream_ended(st, true);
     if(!ok) { st->failed = true; return; }
+    ++st->pieces;
     st->pointer = (uint16_t)(st->pointer + st->piece);
     if(st->sending) {
         /* Sent with the next SEND, once the one under way has finished. */
@@ -445,7 +446,7 @@ static void wait_done(void *arg, bool ok) {
 }
 /* Nothing to move yet: a short read that changes nothing, then look again. */
 static void stream_wait(struct kui_w5500_stream *st) {
-    if(st->waits >= WAIT_LIMIT) return;
+    if(st->waits >= WAIT_LIMIT) { ++st->stalled; return; }
     ++st->waits;
     unsigned s = st->socket;
     stream_start(st, st->sending ? KUI_W5500_SOCKET_TX(s) : KUI_W5500_SOCKET_RX(s), st->scratch, sizeof(st->scratch),
@@ -480,6 +481,7 @@ static void stream_step(struct kui_w5500_stream *st) {
             st->piece = n;
             stream_start(st, KUI_W5500_SOCKET_TX(s), st->ring + at, n, true, piece_done);
         } else if(queued || st->unsent) stream_wait(st);
+        else ++st->starved;
         return;
     }
     uint16_t waiting;
@@ -495,6 +497,7 @@ static void stream_step(struct kui_w5500_stream *st) {
         stream_start(st, KUI_W5500_SOCKET_RX(s), st->ring + at, n, false, piece_done);
     } else if(!waiting) stream_wait(st);
     /* A full ring waits for the owner to take from it and run the stream. */
+    else ++st->starved;
 }
 bool kui_w5500_stream_begin(struct kui_w5500_stream *st, struct kui_w5500 *w, unsigned s, bool sending,
                             uint8_t *ring, uint32_t size) {

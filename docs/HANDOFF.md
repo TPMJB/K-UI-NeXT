@@ -82,15 +82,25 @@ transfer-end interrupt finishes each piece and starts the next
 (`kui_w5500_stream` in `src/core/w5500.c`, the async frames in
 `src/dreamcast/w5500_sci.c`). One upload or download at a time streams
 through a 128 KB ring while the FTP loop writes or reads the card 32 KB at
-a time. Socket 0 has 8 KB buffers now, so one piece moves while the next
-arrives. Also, KallistiOS's SD driver waits out the card's busy time after
+a time; pieces are half the socket's 4 KB buffer, so one moves while the
+next arrives. Also, KallistiOS's SD driver waits out the card's busy time after
 each write by polling at the scheduler's ticks (10 ms apart at its
 100 Hz); the scheduler runs at 1000 Hz while the FTP server runs. The
 wiring check moves 1 KB each way this new way before it is used, and the
 FTP screen then says "overlapped"; a failure midway leaves the transfer to
-go on the old way. After each transfer the screen shows its speed and how
-busy the card and the network were. The ceiling is the card: about
-1.1 MB/s up and 0.7 MB/s down. Not yet tried on the console.
+go on the old way. The ceiling is the card, which KallistiOS bit-bangs on
+SCIF with the CPU: about 1 MB/s written and 0.55 to 0.7 MB/s read (SWAT's
+own figures for a W5500 on SCIF, which is driven the same way, are about
+1000 KB/s out and 550 KB/s in).
+
+On the console (2026-09-30) the first build of it (`6f83189`) said
+"overlapped" but stayed at about 500 KiB/s. That build gave socket 0 8 KB
+buffers and sockets 1 and 2 only 2 KB, and after a directory listing
+socket 0 is still closing, so the next transfer usually got a 2 KB socket.
+All three have 4 KB again, and after each transfer two lines now say where
+the time went: the transfer's speed with the card's and the network's own
+speeds while each worked, then (streamed) the socket, the average piece and
+how often the stream stopped for the card or for the network.
 
 - **Build:** the Diagnostic build run
   [36663891917](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36663891917)
