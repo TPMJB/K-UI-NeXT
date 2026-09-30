@@ -1515,6 +1515,23 @@ static void ftp_rendering(void) {
     assert(strstr(drawn,"10.0.0.9") && strstr(drawn,"Connected, not logged in"));
     assert(strstr(drawn,"Received 3 files (1.2 GB), sent 1 (2.0 MB)") && strstr(drawn,"track02.raw (412.3 MB)"));
     assert(strstr(drawn,"192.168.1.20 logged in") && !strstr(drawn,"No client connected"));
+    /* The last upload's and download's lines stay whole; the newest events
+     * fill the rows left. */
+    f.event_count=3;
+    snprintf(f.events[2],sizeof(f.events[2]),"192.168.1.20 connected");
+    render(&v);
+    assert(strstr(drawn,"192.168.1.20 connected"));
+    snprintf(f.last_in,sizeof(f.last_in),"Last up 1023 KiB/s: card 1041, net 1402, overlap 100%%, 999+ retries");
+    render(&v);
+    assert(strstr(drawn,f.last_in) && strstr(drawn,"track02.raw (412.3 MB)") && strstr(drawn,"192.168.1.20 logged in"));
+    assert(!strstr(drawn,"192.168.1.20 connected"));
+    snprintf(f.last_out,sizeof(f.last_out),"Last down 1023 KiB/s: card 1041, net 1402, overlap 100%%, 999 retries");
+    render(&v);
+    assert(strstr(drawn,f.last_in) && strstr(drawn,f.last_out) && strstr(drawn,"track02.raw (412.3 MB)"));
+    assert(!strstr(drawn,"192.168.1.20 logged in"));
+    snprintf(f.last_out,sizeof(f.last_out),"Last down 1023 KiB/s: card 1041, net 1051, overlap 12%%, then no DMA");
+    render(&v);
+    assert(strstr(drawn,f.last_out));
     v.busy=false;f.state=KUI_FTP_STOPPED;memset(f.clients,0,sizeof(f.clients));
     snprintf(f.message,sizeof(f.message),"The FTP server was stopped on the Dreamcast");
     render(&v);

@@ -371,8 +371,8 @@ static void streams(void) {
         in += n;
     }
     assert(!memcmp(sent, got, TOTAL));
-    /* The full ring shows as stops for the owner. */
-    assert(full && st.starved && st.pieces >= TOTAL / 4096u);
+    /* The full ring shows as stops for the owner; the stream's time counts. */
+    assert(full && st.starved && st.pieces >= TOTAL / 4096u && st.busy_us && !st.retries);
     /* The chip has nothing left, and its pointer matches the stream's. */
     uint16_t waiting = 1, pointer = 0;
     assert(kui_w5500_received(&chip, 0, &waiting) && !waiting);
@@ -459,24 +459,37 @@ static void streams(void) {
     start(&failing);
     assert(kui_w5500_bus_check(&chip, 8) && !chip.async);
     w5500_model_stop();
+    /* One that fails once in the check (its first read) is tried again. */
+    struct w5500_model_options once = {.async_fail_after = 2};
+    start(&once);
+    assert(kui_w5500_bus_check(&chip, 8) && chip.async);
+    w5500_model_stop();
 
-    /* A frame that fails mid-stream fails the stream, not the chip; one
-     * that never ends is given up after 50 ms, and async stays off. */
+    /* A frame that fails partway is tried again after idle clocks, and the
+     * data arrives whole. 64 failures in a row fail the stream, not the
+     * chip, and async frames stay on for the next; one that never ends is
+     * given up after 50 ms, and async frames stay off. */
     start(NULL);
     stream_open(0, (uint16_t)(port_base + 13), &fd);
     assert(send(fd, sent, 5000, 0) == 5000);
     assert(kui_w5500_stream_begin(&st, &chip, 0, false, ring, RING));
+    for(unsigned i = 0; i < 20; ++i) settle();
+    w5500_model_live()->async_fail_after = 1;
     for(unsigned i = 0; i < 100 && kui_w5500_stream_ready(&st) < 5000; ++i) {
         kui_w5500_stream_run(&st);
+        for(unsigned j = 0; j < 8; ++j) kui_w5500_stream_poll(&st);
         assert(kui_w5500_stream_hold(&st));
         settle();
     }
     assert(kui_w5500_stream_ready(&st) == 5000 && !memcmp(ring, sent, 5000));
+    assert(st.retries == 1 && !st.fails && !st.failed && w5500_model_counts.idle_frames);
     assert(send(fd, sent, 3000, 0) == 3000);
     for(unsigned i = 0; i < 20; ++i) settle();
     w5500_model_live()->async_fails = true;
     kui_w5500_stream_run(&st);
-    assert(!kui_w5500_stream_hold(&st) && st.failed && !chip.failed && chip.async);
+    for(unsigned i = 0; i < 1000 && !st.failed; ++i) kui_w5500_stream_poll(&st);
+    assert(st.failed && st.fails == 64 && st.retries == 65 && !st.busy);
+    assert(!kui_w5500_stream_hold(&st) && !chip.failed && chip.async);
     kui_w5500_stream_run(&st); /* a failed stream stays stopped */
     assert(!st.lent && !st.busy);
     w5500_model_live()->async_fails = false;
@@ -492,7 +505,7 @@ static void streams(void) {
     assert(state(0) == KUI_W5500_ESTABLISHED && kui_w5500_received(&chip, 0, &left) && left == 3000);
     close(fd);
     w5500_model_stop();
-    puts("PASS W5500 streams: upload and download by async frames, full ring, failing and stalled frames");
+    puts("PASS W5500 streams: upload and download by async frames, full ring, retried, failing and stalled frames");
 }
 
 int main(void) {

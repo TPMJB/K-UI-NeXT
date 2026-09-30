@@ -52,15 +52,29 @@ next (see [Wi-Fi](wifi.md)).
 At 12.5 MHz with DMA, the check also moves 1 KB each way by DMA with no
 help from the CPU (reads in the SCI's receive-only mode, whose clock runs on
 by itself; writes asked for by the SCI byte by byte), finished by DMA
-channel 1's transfer-end interrupt. When that works, the FTP screen's
-adapter line says "overlapped": one upload or download at a time then
-moves between the W5500 and a 128 KB ring in memory by those transfers,
-each finished piece starting the next from the interrupt, while the CPU
-writes (or reads) the card. The network and the card then work at the same
-time instead of taking turns. A DMA transfer that fails leaves that
-transfer to go on the plain way ("A DMA transfer failed; going on
-without"); one that never ends is given up after 50 ms, and later
-transfers go the plain way too ("DMA transfers stopped").
+channel 1's transfer-end interrupt; each direction gets three tries. When
+that works, the FTP screen's adapter line says "overlapped": one upload or
+download at a time then moves between the W5500 and a 128 KB ring in
+memory by those transfers, each finished piece starting the next from the
+interrupt, while the CPU writes (or reads) the card. The network and the
+card then work at the same time instead of taking turns. While there is
+nothing to move yet, the stream waits with idle clocks (a DMA write with
+the W5500's chip select off, which it ignores) rather than reads.
+
+A DMA read can fall behind: the SCI's receive register must be emptied
+within one byte's 640 ns, and another bus master (a screen redraw into
+video memory, music into sound memory) can hold the bus longer. The read
+then overruns and the SCI stops its clock partway, so the DMA would wait
+forever. The SH-4's second timer (TMU1, which KallistiOS leaves unused)
+times every DMA transfer: one still going at its deadline (its bytes' time
+plus about 250 us for a read, three times that plus 2 ms for a write) is
+stopped and ends as failed. Nothing the stream keeps has changed then (the
+chip's read and write pointers move only after a whole piece), so the
+piece is tried again after a short pause, which grows with each failure
+in a row. 64 failures in a row leave that transfer to go on the plain way
+("DMA transfers kept failing; going on without"); the next transfer
+streams again. A transfer that never ends even so is given up after 50 ms,
+and later transfers go the plain way too ("DMA transfers stopped").
 
 The W5500 has no MAC address of its own. K-UI makes a locally administered
 one from the console's unique ID, so it is the same every time (the router
@@ -174,13 +188,27 @@ files can be added to those folders. Update K-UI itself on a computer.
   the console but stayed at about 500 KiB/s. It gave the first data socket
   8 KB buffers and the other two 2 KB, and a transfer often lands on a
   small one: a listing just before leaves socket 0 closing for a moment.
-  All three have 4 KB again. The ceiling is the card, which KallistiOS
-  drives by toggling the SCIF pins bit by bit with the CPU: about 1 MB/s
-  written and 0.55 to 0.7 MB/s read. After each transfer two lines give its
-  speed and each side's own speed while it worked, for example "612 KiB/s;
-  card 840 KiB/s, network 1310 KiB/s" (overlapped, the slower side is the
-  limit), and for a streamed transfer its socket, its average piece and how
-  often the stream stopped to wait for the card or the network. A computer
+  All three have 4 KB again (`0234c29`). That build measured about
+  523 KiB/s up (card 1041, network 1051) and 348 KiB/s down (card 573,
+  network 884): exactly the two sides one after the other. Its readout
+  could not tell whether the stream ran, though: it counted the network's
+  time as whatever was not the card's, so the two always added up that
+  way. The likely fault is a DMA read that fell behind and overran: the
+  stream then waited 50 ms and switched DMA off for the rest of the
+  session. The next build tries such a piece again (see above) and gives
+  each transfer a line that shows the overlap. The ceiling is the card,
+  which KallistiOS drives by toggling the SCIF pins bit by bit with the
+  CPU: about 1 MB/s written and 0.55 to 0.7 MB/s read. The FTP screen keeps
+  a line for the last upload and one for the last download, until the next
+  one the same way ends, for example "Last up 983 KiB/s: card 1041,
+  net 1320, overlap 96%, 3 retries": the transfer's speed, the card's and
+  the network's own speeds while each worked, and the share of the data
+  the network moved while the card was busy (near 100% when they worked at
+  once, 0% when they took turns), then the DMA pieces tried again. Instead
+  of the overlap it says "DMA off", "DMA in use" (another transfer had it)
+  or "no DMA (Wi-Fi)", or "then no DMA" after it when the stream gave up
+  partway. The log also gets the stream's socket, average piece and how
+  often it waited for the card or the network. A computer
   with a card reader is much faster for whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
@@ -236,8 +264,10 @@ the W5500's raw Ethernet socket.
   and down through a 64 KB ring by the model's async frames (which end when
   the bus is polled), a ring that fills and goes on, pieces written while a
   SEND is still going, a stream ended with data on the chip not yet sent,
-  and async frames that are absent, fail the check, fail midway or never
-  end.
+  and async frames that are absent, fail the check (and one that fails it
+  once, which is tried again), fail once midway (tried again after idle
+  clocks, the data whole), fail 64 times in a row (the stream fails, async
+  frames stay on) or never end (they go off).
 - `test-network-w5500`: finding the chip, slower speeds on a noisy bus, the
   wiring fault and no-chip reports, no cable, the connection test with good,
   silent, conflicting and refusing DHCP servers, and lease renewal.
@@ -254,10 +284,12 @@ the W5500's raw Ethernet socket.
   three-client limit, a full card, stopping with a client connected, no
   W5500 and an unusable password file. Over the W5500, transfers stream
   through the model's async frames (the adapter line must say
-  "overlapped"); a frame that fails partway through an upload, then a
-  download, and one that never ends, must leave the transfer to finish the
-  plain way with the same data. A restart without async frames checks the
-  plain way. With 1 ms of network latency in the
+  "overlapped") and leave their "Last up" and "Last down" lines; a frame
+  that fails partway through an upload, then a download, is tried again
+  and the line says "1 retry"; 64 failures in a row, and then a frame that
+  never ends, must leave the transfer to finish the plain way with the
+  same data ("then no DMA", and "DMA off" for the next). A restart without
+  async frames checks the plain way. With 1 ms of network latency in the
   W5500 model, 2 MB each way must pass without the server sleeping while it
   waits for the client (a sleep lasts about 8 ms on the console). On FAT32
   all of it runs again over the Wi-Fi board model (`tests/wifi_model.c`,

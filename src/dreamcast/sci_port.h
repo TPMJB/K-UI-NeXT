@@ -35,9 +35,13 @@ bool kui_sci_dma_transfer(const uint8_t *out, uint8_t *in, size_t bytes);
  * transfer, then `bytes` (at most KUI_SCI_ASYNC_MAX) written from `out` or
  * read into `in` by DMA channel 1 with no help from the CPU; `done` runs
  * from channel 1's transfer-end interrupt once the chip select is
- * released. Cancel gives up on one that has not ended (no `done`). */
+ * released, or with ok false from TMU1's when the frame is still going at
+ * its deadline (a read the DMA fell behind on). kui_sci_idle is one of
+ * `bytes` idle clocks with no chip selected (kui_w5500_bus.idle_async).
+ * Cancel gives up on one that has not ended (no `done`). */
 #define KUI_SCI_ASYNC_MAX 4096u
 bool kui_sci_async(const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
                    void (*done)(void *arg, bool ok), void *arg);
+bool kui_sci_idle(size_t bytes, void (*done)(void *arg, bool ok), void *arg);
 void kui_sci_async_cancel(void);
 #endif

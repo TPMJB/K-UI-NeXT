@@ -23,9 +23,11 @@ struct w5500_model_options {
     unsigned latency_us;
     /* Async frames (kui_w5500_bus.frame_async), which end when the bus is
      * polled: none offered; each one reporting failure; none ever ending;
-     * and, counting down, the one frame that fails or never ends. */
+     * counting down, the one frame that fails or never ends; and this many
+     * more failing in a row (after async_fail_after's one, or at once). Idle
+     * frames always end. */
     bool no_async, async_fails, async_stalls;
-    unsigned async_fail_after, async_stall_after;
+    unsigned async_fail_after, async_stall_after, async_fail_run;
 };
 extern const struct kui_w5500_bus w5500_model_bus;
 void w5500_model_start(const struct w5500_model_options *options);
@@ -35,7 +37,7 @@ extern const uint8_t w5500_model_lease[4];
 /* Counters for assertions. */
 struct w5500_model_counts {
     unsigned frames, commands, dhcp_discovers, dhcp_requests, udp_requests, arp_probes, pings;
-    unsigned accepted, refused, resets, async_frames, async_cancels;
+    unsigned accepted, refused, resets, async_frames, async_cancels, idle_frames;
     uint64_t sent_bytes, received_bytes;
 };
 extern struct w5500_model_counts w5500_model_counts;

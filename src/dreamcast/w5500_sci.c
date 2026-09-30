@@ -10,8 +10,9 @@
  * changes nothing on the chip; after DMA_GIVE_UP failures in a row, DMA
  * stays off. At the DMA levels the bus also has async frames for FTP
  * transfers (kui_sci_async: the data moves by DMA with no help from the
- * CPU, and the transfer-end interrupt finishes each frame). The SD card
- * stays on SCIF, which nothing here touches. */
+ * CPU, the transfer-end interrupt finishes each frame, and TMU1 ends one
+ * that runs late as failed) and idle clocks for a stream's waits
+ * (kui_sci_idle). The SD card stays on SCIF, which nothing here touches. */
 #include "kui/network_w5500.h"
 #include "sci_port.h"
 #include <dc/sci.h>
@@ -61,13 +62,18 @@ static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, 
     (void)ctx;
     return dma && kui_sci_async(header, out, in, bytes, done, arg);
 }
+static bool idle_async(void *ctx, size_t bytes, void (*done)(void *arg, bool ok), void *arg) {
+    (void)ctx;
+    return dma && kui_sci_idle(bytes, done, arg);
+}
 static void cancel_async(void *ctx) { (void)ctx; kui_sci_async_cancel(); }
 static uint64_t now_ms(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
 static uint64_t now_us(void *ctx) { (void)ctx; return timer_us_gettime64(); }
 /* KOS: thd_sleep(0) is thd_pass(). */
 static void pause_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep(ms); }
 static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms, .frame_async = frame_async,
-                                         .cancel = cancel_async, .async_max = KUI_SCI_ASYNC_MAX, .now_us = now_us};
+                                         .cancel = cancel_async, .async_max = KUI_SCI_ASYNC_MAX, .now_us = now_us,
+                                         .idle_async = idle_async};
 
 static bool open_level(unsigned level) {
     if(level >= LEVELS) return false;

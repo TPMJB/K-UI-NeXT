@@ -19,7 +19,7 @@
 static const uint32_t rates[KUI_SCI_RATES] = {SCI_SPI_BAUD_12M500K, SCI_SPI_BAUD_6M250K, SCI_SPI_BAUD_3M125K,
                                               SCI_SPI_BAUD_1M562K};
 static bool running;
-static unsigned selected = 7u;
+static unsigned selected = 7u, rate_open;
 
 /* DMA (kui_sci_dma_transfer). KOS's programmed transfers wait for each byte
  * before clocking the next; with DMA channel 1 emptying the receive register,
@@ -68,6 +68,16 @@ static unsigned selected = 7u;
 #define CHCR_SCI_RX ((1u << 14) | ((uint32_t)DMA_REQUEST_SCI_RECEIVE << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
 /* Source increments, destination fixed, the SCI's transmit request. */
 #define CHCR_SCI_TX ((1u << 12) | ((uint32_t)DMA_REQUEST_SCI_TRANSMIT << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
+/* Both fixed: the same byte again and again. */
+#define CHCR_SCI_IDLE (((uint32_t)DMA_REQUEST_SCI_TRANSMIT << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
+/* TMU1, which KOS leaves unused: its start bit, counter and control. */
+#define TMU_TSTR (*(volatile uint8_t *)0xffd80004u)
+#define TMU_TCOR1 (*(volatile uint32_t *)0xffd80014u)
+#define TMU_TCNT1 (*(volatile uint32_t *)0xffd80018u)
+#define TMU_TCR1 (*(volatile uint16_t *)0xffd8001cu)
+#define TSTR_STR1 0x02u
+/* Underflow interrupt on, count at Pphi/4, and the underflow flag cleared. */
+#define TCR_UNIE 0x0020u
 static uint8_t dma_buffer[DMA_BYTES] __attribute__((aligned(32)));
 static uint8_t reversed[256];
 static void async_on(bool on);
@@ -98,6 +108,7 @@ bool kui_sci_open(unsigned rate, unsigned select) {
     if(sci_init(rates[rate], SCI_MODE_SPI, SCI_CLK_INT, 0) != SCI_OK) return false;
     running = true;
     selected = select;
+    rate_open = rate;
     if(select == PIN_SELECT) {
         /* High before it drives, so the device never sees a stray select. */
         pin_high(PIN_SELECT, true);
@@ -194,9 +205,18 @@ bool kui_sci_dma_transfer(const uint8_t *out, uint8_t *in, size_t bytes) {
  * until RE is cleared; with the DMA emptying the receive register the bytes
  * come back to back. After the last one the clock runs on for a byte or
  * two, which the W5500 answers with more of its buffer and changes nothing,
- * until the overrun stops it. A read that overruns midway stops early
- * instead and never ends: its user then gives up on it (cancel). KOS last
- * set transmit-only (the header); the frame's end sets that again. */
+ * until the overrun stops it. KOS last set transmit-only (the header); the
+ * frame's end sets that again.
+ *
+ * A read the DMA falls behind on (another bus master held the bus for more
+ * than a byte's time: a screen redraw into video memory, music into sound
+ * memory) overruns midway: the SCI stops its clock and the DMA waits for
+ * bytes that never come. So TMU1 times every async frame, and one still
+ * under way at its deadline is stopped and ends as failed, for its user to
+ * try again. TMU1 counts at Pphi/4, the SCI's clock at 12.5 MHz: a byte
+ * takes 8 counts there, twice that at each slower rate. */
+#define READ_MARGIN 3200u   /* about 250 us */
+#define WRITE_MARGIN 25000u /* about 2 ms: a write only slows down */
 static struct {
     volatile bool busy;
     bool reading;
@@ -205,7 +225,28 @@ static struct {
     void (*done)(void *arg, bool ok);
     void *arg;
 } async;
-static bool async_ready; /* the interrupt handler is in place */
+static bool async_ready; /* the interrupt handlers are in place */
+static irq_cb_t tmu1_before;
+/* The source of idle clocks: one byte, read again and again. */
+static uint8_t idle_source[32] __attribute__((aligned(32)));
+
+static uint32_t byte_counts(size_t bytes) { return (uint32_t)bytes * (8u << rate_open); }
+/* TSTR also starts KOS's timers: changed with interrupts off. */
+static void deadline_set(uint32_t counts) {
+    irq_mask_t mask = irq_disable();
+    TMU_TSTR &= (uint8_t)~TSTR_STR1;
+    TMU_TCR1 = TCR_UNIE;
+    TMU_TCNT1 = counts;
+    TMU_TCOR1 = counts;
+    TMU_TSTR |= TSTR_STR1;
+    irq_restore(mask);
+}
+static void deadline_clear(void) {
+    irq_mask_t mask = irq_disable();
+    TMU_TSTR &= (uint8_t)~TSTR_STR1;
+    TMU_TCR1 = 0;
+    irq_restore(mask);
+}
 
 static void receive_clear(void) {
     if(SCSSR1 & SSR_RDRF) (void)SCRDR1;
@@ -221,6 +262,7 @@ static bool transmit_ended(void) {
  * as it was: transmit only, nothing pending. Interrupts off. */
 static bool async_stop(void) {
     bool ended = true;
+    deadline_clear();
     CHCR1 = 0;
     if(async.reading) {
         SCSCR1 &= (uint8_t)~(SCR_RE | SCR_RIE);
@@ -247,6 +289,16 @@ static void dma_end(irq_t code, irq_context_t *context, void *data) {
     }
     async.done(async.arg, ok);
 }
+/* TMU1 at a frame's deadline. */
+static void deadline_end(irq_t code, irq_context_t *context, void *data) {
+    (void)code; (void)context; (void)data;
+    TMU_TSTR &= (uint8_t)~TSTR_STR1;
+    TMU_TCR1 = 0;
+    /* One that has just ended is finished by its own interrupt, next. */
+    if(!async.busy || (CHCR1 & CHCR_TE)) return;
+    (void)async_stop();
+    async.done(async.arg, false);
+}
 bool kui_sci_async(const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
                    void (*done)(void *arg, bool ok), void *arg) {
     if(!running || !async_ready || async.busy || !done || !bytes || bytes > DMA_BYTES || !out == !in) return false;
@@ -265,6 +317,7 @@ bool kui_sci_async(const uint8_t header[3], const uint8_t *out, uint8_t *in, siz
         DAR1 = hw_to_dma_addr(SCTDR1_ADDR);
         TCR1 = (uint32_t)bytes;
         CHCR1 = CHCR_SCI_TX | CHCR_IE;
+        deadline_set(byte_counts(bytes) * 3u + WRITE_MARGIN);
         /* The header has gone, so the transmit register is empty: the
          * first request comes at once. */
         SCSCR1 |= SCR_TIE;
@@ -273,12 +326,35 @@ bool kui_sci_async(const uint8_t header[3], const uint8_t *out, uint8_t *in, siz
         DAR1 = dma_map_dst(dma_buffer, bytes);
         TCR1 = (uint32_t)bytes;
         CHCR1 = CHCR_SCI_RX | CHCR_IE;
+        deadline_set(byte_counts(bytes) + READ_MARGIN);
         /* Transmit off, a pause, then receive on (as KOS changes modes):
          * the clock starts at once. */
         SCSCR1 &= (uint8_t)~(SCR_TE | SCR_RE);
         timer_spin_delay_ns(1500);
         SCSCR1 |= SCR_RE | SCR_RIE;
     }
+    return true;
+}
+/* Idle clocks: a write with no chip selected. Its first byte goes through
+ * KOS, which leaves the port transmit-only (after a programmed read it is
+ * not), then the DMA sends the rest. */
+bool kui_sci_idle(size_t bytes, void (*done)(void *arg, bool ok), void *arg) {
+    if(!running || !async_ready || async.busy || !done || bytes < 2u || bytes > DMA_BYTES) return false;
+    idle_source[0] = 0xff;
+    if(sci_spi_write_data(idle_source, 1) != SCI_OK) return false;
+    async.reading = false;
+    async.in = NULL;
+    async.bytes = bytes - 1u;
+    async.done = done;
+    async.arg = arg;
+    async.busy = true;
+    CHCR1 = 0;
+    SAR1 = dma_map_src(idle_source, 1);
+    DAR1 = hw_to_dma_addr(SCTDR1_ADDR);
+    TCR1 = (uint32_t)(bytes - 1u);
+    CHCR1 = CHCR_SCI_IDLE | CHCR_IE;
+    deadline_set(byte_counts(bytes) * 3u + WRITE_MARGIN);
+    SCSCR1 |= SCR_TIE;
     return true;
 }
 void kui_sci_async_cancel(void) {
@@ -289,8 +365,21 @@ void kui_sci_async_cancel(void) {
 static void async_on(bool on) {
     if(async_ready) {
         kui_sci_async_cancel();
+        deadline_clear();
         irq_set_handler(EXC_DMAC_DMTE1, NULL, NULL);
+        irq_set_priority(IRQ_SRC_TMU1, IRQ_PRIO_MASKED);
+        irq_set_handler(EXC_TMU1_TUNI1, tmu1_before.hdl, tmu1_before.data);
         async_ready = false;
     }
-    if(on) async_ready = irq_set_handler(EXC_DMAC_DMTE1, dma_end, NULL) == 0;
+    if(!on) return;
+    deadline_clear();
+    tmu1_before = irq_get_handler(EXC_TMU1_TUNI1);
+    if(irq_set_handler(EXC_DMAC_DMTE1, dma_end, NULL) || irq_set_handler(EXC_TMU1_TUNI1, deadline_end, NULL)) {
+        irq_set_handler(EXC_DMAC_DMTE1, NULL, NULL);
+        irq_set_handler(EXC_TMU1_TUNI1, tmu1_before.hdl, tmu1_before.data);
+        return;
+    }
+    /* The DMA controller's level, as KOS sets it. */
+    irq_set_priority(IRQ_SRC_TMU1, 3);
+    async_ready = true;
 }
