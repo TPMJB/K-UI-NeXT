@@ -125,6 +125,18 @@ and the stream's interrupts take CPU time. The next build pauses with TMU1
 alone (no DMA while nothing arrives), looks half as often while it waits,
 and shows the share of pieces tried again instead of a count.
 
+That build (`a05977c`) measured, with the music on, about 719 KiB/s up
+(card 827, net 791, overlap 96%, 25.1% retried; 830 after a slow start)
+and 500 down (card 503, net 1345); with the music off, 856 up (card 870,
+net 1126, overlap 99%, 9.0% retried) and 515 down (card 518, net 1339).
+The music player polled its stream every 8 ms, and each poll reads the
+sound chip's play position over the G2 bus, holding the SH-4's bus long
+enough to make a DMA read fall behind (about 78 more retries a second).
+It now polls every 32 ms (`src/apps/music.c`); KallistiOS refills only
+after half its buffer has played, so a refill still starts with over
+300 ms of audio queued. With the music off, uploads are limited by the
+card (870 KiB/s against 1041 alone) and downloads too (518 against 573).
+
 - **Build:** the Diagnostic build run
   [36730241374](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36730241374)
   (`claude/modest-galileo-hpjv79`, commit `a05977c`: the stream's pauses

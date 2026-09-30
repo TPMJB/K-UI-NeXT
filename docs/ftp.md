@@ -203,7 +203,18 @@ files can be added to those folders. Update K-UI itself on a computer.
   and the stream's interrupts take CPU time. So the build after that
   pauses with TMU1 alone instead of idle clocks (a DMA write with the chip
   select off, which kept the DMA busy while nothing arrived) and looks
-  half as often while it waits. The FTP screen keeps a line for the last
+  half as often while it waits. That build (`a05977c`) measured, with the
+  music on, about 719 KiB/s up (card 827, net 791, overlap 96%, 25.1% of
+  pieces retried; it climbed to 830 after a slow first few seconds) and
+  500 KiB/s down (card 503, net 1345); with the music off, 856 up
+  (card 870, net 1126, overlap 99%, 9.0% retried) and 515 down (card 518,
+  net 1339). The music player polled its stream every 8 ms, and each poll
+  reads the sound chip's play position over the G2 bus, which holds the
+  SH-4's bus long enough to make a DMA read fall behind: about 78 more
+  pieces a second had to be retried. It now polls every 32 ms, which
+  KallistiOS's half-buffer refills allow with over 300 ms of audio still
+  queued. The 9% left with the music off is most likely the screen's
+  redraws into video memory. The FTP screen keeps a line for the last
   upload and one for the last download, until the next one the same way
   ends, for example "Last up 803 KiB/s: card 816, net 897, overlap 99%,
   0.4% retried": the transfer's speed, the card's and the network's own
