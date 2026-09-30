@@ -49,6 +49,8 @@
 #define RENEW_RETRY_MS 60000u
 #define DRAIN_MS 10000u     /* for a closing data connection to finish */
 #define STOP_MS 1000u
+/* Seconds at the start of a streamed transfer that the log traces. */
+#define TRACE_SECONDS 10u
 #define PART_LIMIT 99u
 /* A file an upload replaces, until the upload has taken its name. */
 #define OLD_SUFFIX ".kui-old"
@@ -102,6 +104,11 @@ struct session {
     uint32_t pieces, starved, stalled, retries;
     bool used_stream, fell_back;
     const char *no_stream;
+    /* The trace of its first seconds (trace_line): when the last line was,
+     * the counts then, and the slowest card operation since. */
+    uint64_t trace_us, trace_slowest_us;
+    uint32_t trace_net, trace_card, trace_retries, trace_starved, trace_stalled, trace_passes;
+    unsigned trace_lines;
 };
 struct server {
     struct kui_w5500_session net;
@@ -118,6 +125,7 @@ struct server {
     uint64_t control_since[CONTROL_SOCKETS];
     char password[KUI_FTP_PASSWORD_CAP];
     uint64_t published_ms, link_ms, renew_after_ms;
+    uint32_t passes; /* over the sockets, by the main loop */
     bool changed, connected, mounted;
     const char *stop_reason;
     FATFS fs;
@@ -548,11 +556,43 @@ static bool write_buffer(struct server *sv, struct session *s, uint64_t now) {
     s->buffered = 0;
     return true;
 }
+/* Each second of a streamed transfer's first TRACE_SECONDS, one log line
+ * short enough for the Diagnostics page: the time since the data
+ * connection opened; what the network ("net") and the card each moved
+ * (KiB/s); the ring's fill (KiB); the stream's pieces tried again ("re"),
+ * and its stops ("w") for the card (a full or empty ring) and for the
+ * network (nothing through all its waits); the main loop's passes over the
+ * sockets ("p"); and the slowest card operation ("slow", ms). For telling
+ * where a slow start goes. */
+static void trace_line(struct server *sv, struct session *s) {
+    uint64_t now = now_us(sv), us = now - s->trace_us;
+    if(s->trace_lines >= TRACE_SECONDS || us < 1000000u) return;
+    const struct kui_w5500_stream *st = &sv->stream;
+    uint32_t net = stream_mark(sv, s), card = s->kind == T_STOR ? st->tail : st->head;
+    uint64_t tenths = (now - s->run_us) / 100000u;
+    ++s->trace_lines;
+    if(sv->log)
+        sv->log("FTP %llu.%llus net %llu card %llu ring %lu re %lu w %lu/%lu p %lu slow %lu",
+            (unsigned long long)(tenths / 10u), (unsigned long long)(tenths % 10u), kib_per_s(net - s->trace_net, us),
+            kib_per_s(card - s->trace_card, us), (unsigned long)((st->head - st->tail) / 1024u),
+            (unsigned long)(st->retries - s->trace_retries), (unsigned long)(st->starved - s->trace_starved),
+            (unsigned long)(st->stalled - s->trace_stalled), (unsigned long)(sv->passes - s->trace_passes),
+            (unsigned long)(s->trace_slowest_us / 1000u));
+    s->trace_us = now;
+    s->trace_net = net;
+    s->trace_card = card;
+    s->trace_retries = st->retries;
+    s->trace_starved = st->starved;
+    s->trace_stalled = st->stalled;
+    s->trace_passes = sv->passes;
+    s->trace_slowest_us = 0;
+}
 /* The streamed transfer on the chip's side, with the bus held: progress,
  * the connection's state and the ends. The card's side is stream_card. */
 static bool stream_transfer(struct server *sv, struct session *s, uint64_t now, uint8_t state) {
     struct kui_w5500_stream *st = &sv->stream;
     stream_account(sv, s, now);
+    trace_line(sv, s);
     if(s->card_failed) { card_failure(sv, s, now); return true; }
     /* First, as a connection that has gone also stops the stream. */
     if(state != KUI_W5500_ESTABLISHED && state != KUI_W5500_CLOSE_WAIT) {
@@ -609,6 +649,7 @@ static bool stream_card(struct server *sv) {
     if(!s || s->phase != P_RUN || s->card_failed) return false;
     /* Meanwhile the stream moves what it can: that share overlapped. */
     uint32_t before = stream_mark(sv, s);
+    uint64_t card_before = s->card_us;
     if(s->kind == T_STOR) {
         uint32_t ready = kui_w5500_stream_ready(st), at = st->tail & (RING_BYTES - 1u);
         if(ready < BUFFER_BYTES && !(s->ending && ready)) return false;
@@ -616,6 +657,7 @@ static bool stream_card(struct server *sv) {
         if(n > RING_BYTES - at) n = RING_BYTES - at;
         if(card_write(sv, s, sv->ring + at, n)) kui_w5500_stream_take(st, n);
         s->overlap += stream_mark(sv, s) - before;
+        if(s->card_us - card_before > s->trace_slowest_us) s->trace_slowest_us = s->card_us - card_before;
         return true;
     }
     if(s->source_done || kui_w5500_stream_room(st) < BUFFER_BYTES) return false;
@@ -624,6 +666,7 @@ static bool stream_card(struct server *sv) {
     FRESULT r = f_read(&s->file, sv->ring + (st->head & (RING_BYTES - 1u)), BUFFER_BYTES, &got);
     s->card_us += now_us(sv) - start;
     s->overlap += stream_mark(sv, s) - before;
+    if(s->card_us - card_before > s->trace_slowest_us) s->trace_slowest_us = s->card_us - card_before;
     if(r != FR_OK) { s->card_failed = true; s->card_result = r; return true; }
     if(got) kui_w5500_stream_put(st, got);
     if(got < BUFFER_BYTES) s->source_done = true;
@@ -640,6 +683,11 @@ static bool stream_begin(struct server *sv, struct session *s) {
     s->ending = false;
     s->seen = 0;
     s->stream_socket = (unsigned)s->data;
+    s->trace_us = now_us(sv);
+    s->trace_slowest_us = 0;
+    s->trace_net = s->trace_card = s->trace_retries = s->trace_starved = s->trace_stalled = 0;
+    s->trace_passes = sv->passes;
+    s->trace_lines = 0;
     return true;
 }
 static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
@@ -1522,6 +1570,7 @@ void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options
                 }
                 if(async != sv->net.chip.async) adapter(sv);
                 sv->poll_ms = now;
+                ++sv->passes;
                 if(sv->streaming) kui_w5500_stream_run(&sv->stream);
             }
             if(sv->streaming) {
