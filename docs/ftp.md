@@ -167,15 +167,21 @@ files can be added to those folders. Update K-UI itself on a computer.
   uploads reach about 500 KiB/s; downloads are unchanged. A tighter DMA
   loop and 32 KB card transfers (`56fd05d`) bring uploads to about
   520 KiB/s (about 550 with the music off) and downloads to about
-  380 KiB/s. The overlapped build (over the W5500: the network and the
-  card at the same time, 8 KB buffers on the first data socket, and
-  KallistiOS's scheduler at 1000 Hz while the server runs, so the card's
-  busy time after each write costs at most a millisecond instead of up to
-  ten) is still to be measured; its ceiling is the card: about 1.1 MB/s up
-  and 0.7 MB/s down. After each transfer the screen shows its speed and
-  how busy the card and the network were, for example "612 KiB/s; card
-  busy 48%, network 71%" (overlapped, the two add up to more than 100%). A
-  computer with a card reader is much faster for whole game libraries.
+  380 KiB/s. The first overlapped build (`6f83189`: over the W5500, the
+  network and the card at the same time, and KallistiOS's scheduler at
+  1000 Hz while the server runs, so the card's busy time after each write
+  costs at most a millisecond instead of up to ten) said "overlapped" on
+  the console but stayed at about 500 KiB/s. It gave the first data socket
+  8 KB buffers and the other two 2 KB, and a transfer often lands on a
+  small one: a listing just before leaves socket 0 closing for a moment.
+  All three have 4 KB again. The ceiling is the card, which KallistiOS
+  drives by toggling the SCIF pins bit by bit with the CPU: about 1 MB/s
+  written and 0.55 to 0.7 MB/s read. After each transfer two lines give its
+  speed and each side's own speed while it worked, for example "612 KiB/s;
+  card 840 KiB/s, network 1310 KiB/s" (overlapped, the slower side is the
+  limit), and for a streamed transfer its socket, its average piece and how
+  often the stream stopped to wait for the card or the network. A computer
+  with a card reader is much faster for whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.
@@ -209,7 +215,7 @@ the W5500's raw Ethernet socket.
 - `src/apps/ftp_server.c`: the server loop on the storage worker: sessions,
   data connections, the card through FatFs, and the status the screen draws.
   It uses the adapter's TCP sockets through `kui/net.h`: 0-2 carry data (on
-  the W5500, socket 0, with 8 KB buffers, is used for DHCP first), 3-6
+  the W5500, socket 0 is used for DHCP first), 3-6
   listen for control connections. `src/apps/network_w5500.c` and
   `src/apps/network_wifi.c` provide them. Over the W5500, one upload or
   download at a time streams (`kui_w5500_stream` in `src/core/w5500.c`, the

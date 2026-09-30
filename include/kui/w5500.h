@@ -224,6 +224,11 @@ struct kui_w5500_stream {
     uint16_t unsent;               /* sending: written to the chip, not yet in a SEND */
     uint32_t piece, max_piece;
     uint64_t started_us, busy_us;  /* time with a piece under way */
+    /* For telling where a transfer's time goes: pieces moved, and times the
+     * stream stopped to wait for its owner (a full ring when receiving, an
+     * empty one when sending) or for the chip (nothing arrived, or no room,
+     * through all its wait frames). */
+    uint32_t pieces, starved, stalled;
     uint8_t scratch[KUI_W5500_STREAM_WAIT_BYTES];
 };
 /* Needs w->async and an open TCP socket that nothing else reads or sends

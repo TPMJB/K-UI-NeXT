@@ -352,7 +352,15 @@ static void streams(void) {
         assert(kui_w5500_stream_hold(&st) && !st.lent && !st.busy);
         uint32_t ready = kui_w5500_stream_ready(&st);
         assert(ready <= RING && in + ready <= TOTAL);
-        if(ready == RING) ++full;
+        if(ready == RING) {
+            /* Run with no room: nothing starts, and it counts as a stop for
+             * the owner. */
+            ++full;
+            uint32_t before = st.starved;
+            kui_w5500_stream_run(&st);
+            assert(!st.busy && kui_w5500_stream_hold(&st));
+            assert(st.starved == before + 1u);
+        }
         /* The first third is taken only once the ring is full: the stream
          * must stop there and go on when there is room again. */
         ++rounds;
@@ -363,7 +371,8 @@ static void streams(void) {
         in += n;
     }
     assert(!memcmp(sent, got, TOTAL));
-    assert(full);
+    /* The full ring shows as stops for the owner. */
+    assert(full && st.starved && st.pieces >= TOTAL / 4096u);
     /* The chip has nothing left, and its pointer matches the stream's. */
     uint16_t waiting = 1, pointer = 0;
     assert(kui_w5500_received(&chip, 0, &waiting) && !waiting);

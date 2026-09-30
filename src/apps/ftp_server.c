@@ -6,10 +6,11 @@
  *
  * Sockets: 0-2 carry data, 3-6 listen for control connections on port 21:
  * one more than there are sessions, so a client over the limit is told
- * why. On the W5500, data socket 0 has 8 KB buffers each way (it is taken
- * first, and first used for DHCP), 1 and 2 have 2 KB, control sockets 1 KB,
- * and lease renewals borrow the last free data socket for UDP. The Wi-Fi
- * board keeps its own lease.
+ * why. On the W5500, data sockets have 4 KB buffers each way (0 is first
+ * used for DHCP) and control sockets 1 KB; the data sockets are alike, as
+ * a transfer lands on whichever is free, often not 0, which a listing just
+ * before may still be closing. Lease renewals borrow the last free data
+ * socket for UDP. The Wi-Fi board keeps its own lease.
  *
  * On the W5500, one upload or download at a time moves by the chip's async
  * frames when the wiring check passed them (DMA on the console,
@@ -96,8 +97,11 @@ struct session {
     uint32_t seen;
     /* Microseconds: when the data connection opened, time spent on the card
      * and (streamed) with the network moving data; after a stream ended,
-     * when it did and the card's time until then. */
-    uint64_t run_us, card_us, net_us, plain_us, plain_card_us;
+     * when it did and the card's time until then. The stream's socket,
+     * bytes, pieces and stops (kui_w5500_stream). */
+    uint64_t run_us, card_us, net_us, plain_us, plain_card_us, stream_bytes;
+    unsigned stream_socket;
+    uint32_t pieces, starved, stalled;
 };
 struct server {
     /* The adapter in use: the W5500 session, or the Wi-Fi board's (large,
@@ -328,6 +332,10 @@ static bool stream_stop(struct server *sv, struct session *s, bool keep, uint64_
     }
     uint32_t left = st->head - st->tail;
     s->net_us += st->busy_us;
+    s->stream_bytes += s->kind == T_STOR ? st->head : st->tail;
+    s->pieces += st->pieces;
+    s->starved += st->starved;
+    s->stalled += st->stalled;
     s->plain_us = now_us(sv);
     s->plain_card_us = s->card_us;
     bool ok = kui_w5500_stream_end(st);
@@ -473,8 +481,12 @@ static bool fill_listing(struct server *sv, struct session *s) {
     return true;
 }
 /* After a transfer's own event: its speed from the data connection's
- * opening, and how much of that time the card and the network were busy.
- * Streamed, the two overlap; otherwise the network's share is the rest. */
+ * opening, and the speeds the card and the network each managed while they
+ * worked on it. Streamed, the two overlap, and the slower one is the limit;
+ * otherwise the network's time is the rest. A streamed transfer also says
+ * which socket it had, its average piece, and how often the stream stopped
+ * to wait for the card (a full or empty ring) or for the network. */
+static unsigned long long kib_per_s(uint64_t bytes, uint64_t us) { return us ? bytes * 1000000u / us / 1024u : 0; }
 static void timing(struct server *sv, const struct session *s) {
     uint64_t end = now_us(sv), total = end - s->run_us;
     if(!s->run_us || total < 100000u || !s->done) return;
@@ -484,8 +496,11 @@ static void timing(struct server *sv, const struct session *s) {
         uint64_t after = end - s->plain_us, card = s->card_us - s->plain_card_us;
         net = s->net_us + (after > card ? after - card : 0);
     }
-    event(sv, "%llu KiB/s; card busy %u%%, network %u%%", (unsigned long long)(s->done * 1000000u / total / 1024u),
-        (unsigned)(s->card_us * 100u / total), (unsigned)(net * 100u / total));
+    if(s->pieces)
+        event(sv, "Socket %u, %llu B pieces; stopped for the card %lu times, network %lu", s->stream_socket,
+            (unsigned long long)(s->stream_bytes / s->pieces), (unsigned long)s->starved, (unsigned long)s->stalled);
+    event(sv, "%llu KiB/s; card %llu KiB/s, network %llu KiB/s", kib_per_s(s->done, total), kib_per_s(s->done, s->card_us),
+        kib_per_s(s->done, net));
 }
 static void finish_upload(struct server *sv, struct session *s, uint64_t now) {
     char from[CARD_CAP], to[CARD_CAP], aside[KUI_FILES_PATH_CAP] = "", kept[CARD_CAP] = "";
@@ -625,6 +640,7 @@ static bool stream_begin(struct server *sv, struct session *s) {
     s->streamed = true;
     s->ending = false;
     s->seen = 0;
+    s->stream_socket = (unsigned)s->data;
     return true;
 }
 static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
@@ -634,7 +650,8 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
             s->phase = P_RUN;
             s->progress_ms = now;
             s->run_us = now_us(sv);
-            s->card_us = s->net_us = s->plain_us = s->plain_card_us = 0;
+            s->card_us = s->net_us = s->plain_us = s->plain_card_us = s->stream_bytes = 0;
+            s->pieces = s->starved = s->stalled = 0;
             (void)stream_begin(sv, s);
             return true;
         }
@@ -1419,7 +1436,7 @@ static bool find_adapter(struct server *sv) {
     if(ports->w5500) {
         stage(sv, "Looking for a W5500 on the SCI port");
         if(kui_w5500_session_find(&sv->w5500, ports->w5500, sv->log)) {
-            static const uint8_t rx[KUI_W5500_SOCKETS] = {8, 2, 2, 1, 1, 1, 1, 0}, tx[KUI_W5500_SOCKETS] = {8, 2, 2, 1, 1, 1, 1, 0};
+            static const uint8_t rx[KUI_W5500_SOCKETS] = {4, 4, 4, 1, 1, 1, 1, 0}, tx[KUI_W5500_SOCKETS] = {4, 4, 4, 1, 1, 1, 1, 0};
             if(!kui_w5500_buffers(&sv->w5500.chip, rx, tx)) { fail(sv, "The W5500 stopped answering"); return false; }
             kui_w5500_session_sockets(&sv->w5500, &sv->net);
             memcpy(sv->mac, sv->w5500.mac, 6);
