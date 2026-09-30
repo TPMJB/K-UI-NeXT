@@ -126,16 +126,16 @@ alone (no DMA while nothing arrives), looks half as often while it waits,
 and shows the share of pieces tried again instead of a count.
 
 - **Build:** the Diagnostic build run
-  [36725717777](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36725717777)
-  (`claude/modest-galileo-hpjv79`, commit `477d3bf`: DMA pieces that fall
-  behind are tried again under TMU1's deadline, idle clocks for the
-  stream's waits, and the kept lines for the last upload and download; the
-  4 KB socket build is run 36712110309, the first overlapped build run
-  36663891917). The Wi-Fi branch's build of the same is run
-  [36726269311](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36726269311)
-  (merge `82c0549`). On the FTP screen the adapter line should end
+  [36730241374](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36730241374)
+  (`claude/modest-galileo-hpjv79`, commit `a05977c`: the stream's pauses
+  timed by TMU1 alone, longer waits while nothing arrives, and the share
+  of DMA pieces tried again on the kept lines; the retrying build that
+  reached 803/500 KiB/s is run 36725717777). The Wi-Fi branch's build of
+  the same is run
+  [36747675968](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36747675968)
+  (merge `9689011`). On the FTP screen the adapter line should end
   ", overlapped"; after an upload and a download the screen keeps "Last
-  up" and "Last down" lines (speed, card, net, overlap, retries).
+  up" and "Last down" lines (speed, card, net, overlap, share retried).
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
