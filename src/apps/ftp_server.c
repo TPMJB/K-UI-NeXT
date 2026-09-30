@@ -48,6 +48,7 @@
 #define RENEW_LIMIT_MS 3000u
 #define RENEW_RETRY_MS 60000u
 #define DRAIN_MS 10000u     /* for a closing data connection to finish */
+#define CLOSING_MS 250u     /* bound the observed W5500 CLOSING ACK/RST storm */
 #define STOP_MS 1000u
 /* Seconds at the start of a streamed transfer that the log traces. */
 #define TRACE_SECONDS 10u
@@ -122,6 +123,7 @@ struct server {
     bool data_draining[DATA_SOCKETS];
     uint64_t data_since[DATA_SOCKETS];
     uint8_t data_close_state[DATA_SOCKETS];
+    uint64_t data_close_since[DATA_SOCKETS];
     int control_owner[CONTROL_SOCKETS];
     uint64_t control_since[CONTROL_SOCKETS];
     char password[KUI_FTP_PASSWORD_CAP];
@@ -227,6 +229,7 @@ static void data_poll(struct server *sv, uint64_t now) {
         uint64_t elapsed = now - sv->data_since[j];
         if(state != sv->data_close_state[j]) {
             sv->data_close_state[j] = state;
+            sv->data_close_since[j] = now;
             if(sv->log) sv->log("FTP: data socket %u closing state %02X after %llu ms",
                 j, (unsigned)state, (unsigned long long)elapsed);
         }
@@ -234,16 +237,21 @@ static void data_poll(struct server *sv, uint64_t now) {
             sv->data_draining[j] = false;
             continue;
         }
-        /* The FIN exchange has finished in TIME_WAIT. On the owner's W5500,
-         * retired listing connections otherwise flood ACKs in response to the
-         * peer's resets until our ten-second cleanup. Reap only an unowned,
-         * completed data connection; FIN_WAIT/CLOSING must finish their FIN
-         * exchange, and live transfers/control sockets are never touched. */
+        /* The owner's W5500 remains in CLOSING (1A), flooding ACKs in response
+         * to peer resets. These unowned, gracefully retired data sockets have
+         * already completed their application payload: P_DRAIN waits for all
+         * sent bytes to be acknowledged; uploads drain and finalize the file.
+         * Give CLOSING a bounded final-handshake grace period, measured from
+         * entry to that state, then stop the storm. FIN_WAIT/LAST_ACK retain
+         * the original deadline. TIME_WAIT can be reaped immediately. */
         bool finished = state == KUI_W5500_TIME_WAIT;
-        if((finished || elapsed > DRAIN_MS) && kui_w5500_close(&sv->net.chip, j)) {
+        uint64_t state_elapsed = now - sv->data_close_since[j];
+        bool closing_stuck = state == KUI_W5500_CLOSING && state_elapsed >= CLOSING_MS;
+        if((finished || closing_stuck || elapsed > DRAIN_MS) && kui_w5500_close(&sv->net.chip, j)) {
             sv->data_draining[j] = false;
-            if(sv->log) sv->log("FTP: data socket %u closed from %02X after %llu ms (%s)",
-                j, (unsigned)state, (unsigned long long)elapsed, finished ? "TIME_WAIT cleanup" : "deadline");
+            if(sv->log) sv->log("FTP: data socket %u closed from %02X after %llu ms, state %llu ms (%s)",
+                j, (unsigned)state, (unsigned long long)elapsed, (unsigned long long)state_elapsed,
+                finished ? "TIME_WAIT cleanup" : closing_stuck ? "CLOSING timeout" : "deadline");
         }
     }
 }

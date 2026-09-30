@@ -43,7 +43,7 @@ This strongly implicates the retired listing connection's packet storm. It
 does not expose the W5500's internal Sn_SR register; TIME_WAIT is a targeted
 workaround to verify on hardware, not a hardware-proven root-state diagnosis.
 
-## Test-build change
+## First test and hardware result
 
 `data_poll()` now explicitly closes unowned, draining W5500 data sockets in
 TIME_WAIT, after the FIN exchange. Other closing states retain the existing
@@ -61,12 +61,43 @@ One focused host regression checks handshake-state gating, ownership, failed
 register operations, deadline cleanup and one-time logging. It cannot simulate
 or prove elimination of the hardware packet storm.
 
+The owner tested `6968f755` and supplied an untruncated diagnostic log. No
+TIME_WAIT cleanup occurred: every retired listing remained in **CLOSING
+(`1A`)** and was closed only at the existing deadline (10,014–10,088 ms).
+Each slow upload recovered immediately following those closes. Upload
+averages were 698, 631 and 620 KiB/s, while active card-write rates remained
+836, 842 and 843 KiB/s. Completed upload sockets closed normally through
+LAST_ACK (`1D`) then CLOSED (`00`), or were already CLOSED when polled.
+The initial TIME_WAIT-only workaround therefore missed the observed state.
+
+## Correction: bound the observed CLOSING state
+
+Only unowned, gracefully draining data sockets are force-closed after 250 ms
+continuously observed in CLOSING. The timer begins on the state transition,
+not on the earlier DISCON request. TIME_WAIT is still reaped immediately;
+FIN_WAIT/LAST_ACK retain the original overall ten-second deadline. Failed
+status reads or CLOSE preserve cleanup responsibility. Logs now include both
+total close time and time in the observed state.
+
+This limit is a hardware workaround, not a claim that CLOSING means a fully
+completed TCP handshake. Listings and downloads enter this cleanup only after
+P_DRAIN confirms SEND completion and a fully acknowledged transmit buffer;
+uploads enter it only after peer FIN, drained receive data and file
+finalization. The tradeoff is a shorter final FIN/ACK retry period, rather
+than dropping unacknowledged application payload. The existing forced socket
+reuse already permits cutting a retired connection short after one second.
+250 ms bounds the demonstrated storm without retaining another full second
+of network saturation. Normal-state progression and failure retention are
+covered by the focused regression; this correction still needs console
+confirmation.
+
 ## Hardware check
 
 Use the SD-update artifact from the test commit. Browse a directory and upload
 the same existing test file two or three times promptly, without waiting ten
 seconds between listings and uploads. Save Diagnostics after stopping FTP.
-Look for `closed from 1B ... (TIME_WAIT cleanup)` and steady initial rates.
-If logs instead reach a `deadline` close, the raw state identifies the next
-target; do not assume this workaround succeeded. A bounded packet capture
+Look for `closed from 1A ... state 250 ms (CLOSING timeout)` (allowing normal
+polling/scheduling delay) and steady initial rates. If logs instead reach a
+ten-second `deadline` close, inspect the recorded state; do not assume the
+workaround succeeded. A bounded packet capture
 can then confirm whether the ACK/RST storm disappeared if needed.

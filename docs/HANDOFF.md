@@ -6,10 +6,15 @@ The full owner capture ties slow upload starts to ten-second ACK/RST storms
 from already-completed directory listings. Two uploads recover immediately
 when the preceding listing's storm stops; an upload starting after the storm
 runs normally. See [the capture evidence and targeted hardware check](evidence/ftp-close-storm-2026-09-30.md).
-The test change reaps completed W5500 data sockets in TIME_WAIT and logs their
-closing states, while retaining tracking on failed status reads/CLOSE. This
-is based on tested W5500 commit `1da58d6`; hardware confirmation is pending.
-When porting to the Wi-Fi branch, keep this cleanup W5500-specific.
+The first test (`6968f755`) did not remove the stalls: hardware logs identify
+stuck CLOSING (`1A`), not TIME_WAIT (`1B`). Every slow upload recovered when
+the `1A` socket was force-closed at the old ten-second deadline. The correction
+bounds CLOSING to 250 ms in that state, only for unowned data sockets whose
+application payload is already complete. TIME_WAIT cleanup stays immediate;
+FIN_WAIT/LAST_ACK keep the original deadline. Failed register operations retain
+cleanup tracking, and logs include state duration. Hardware confirmation of
+this correction is pending. When porting to the Wi-Fi branch, keep this
+cleanup W5500-specific.
 
 Where the project stands, what the hardware needs next, and a brief for the
 artwork. It is written for whoever picks the project up, including another

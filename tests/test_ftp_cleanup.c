@@ -87,11 +87,67 @@ int main(void) {
     for(unsigned j = 0; j < DATA_SOCKETS; ++j)
         assert(!sockets[j].reads && !sockets[j].closes);
 
-    /* FIN_WAIT/CLOSING still need the peer's FIN/ACK; keep the old deadline. */
+    /* A stuck CLOSING connection gets 250 ms from its observed transition,
+     * even if it spent several seconds in FIN_WAIT after release. */
+    reset();
+    server.data_draining[0] = true;
+    sockets[0].state = KUI_W5500_FIN_WAIT;
+    data_poll(&server, 1000);
+    sockets[0].state = KUI_W5500_CLOSING;
+    data_poll(&server, 6000);
+    assert(server.data_draining[0] && !sockets[0].closes);
+    assert(server.data_close_since[0] == 6000);
+    data_poll(&server, 6249);
+    assert(server.data_draining[0] && !sockets[0].closes && !cleanup_logs);
+    data_poll(&server, 6250);
+    assert(!server.data_draining[0] && sockets[0].closes == 1 && cleanup_logs == 1);
+    assert(strstr(cleanup_log, "1A") && strstr(cleanup_log, "CLOSING timeout"));
+    data_poll(&server, 6350);
+    assert(sockets[0].closes == 1 && cleanup_logs == 1);
+
+    /* Failed reads cannot start the CLOSING clock. Once it starts, failed
+     * reads or closes cannot reset the clock or discard cleanup ownership. */
+    reset();
+    server.data_draining[0] = true;
+    sockets[0].state = KUI_W5500_CLOSING;
+    sockets[0].readable = false;
+    data_poll(&server, 1000);
+    data_poll(&server, 2000);
+    assert(server.data_close_state[0] == 0xff && !sockets[0].closes);
+    sockets[0].readable = true;
+    data_poll(&server, 3000);
+    assert(server.data_close_since[0] == 3000 && !sockets[0].closes);
+    data_poll(&server, 3249);
+    assert(server.data_draining[0] && !sockets[0].closes);
+    sockets[0].readable = false;
+    data_poll(&server, 3250);
+    assert(server.data_draining[0] && !sockets[0].closes);
+    sockets[0].readable = true;
+    sockets[0].closable = false;
+    data_poll(&server, 3251);
+    assert(server.data_draining[0] && sockets[0].closes == 1 && !cleanup_logs);
+    assert(server.data_close_since[0] == 3000);
+    sockets[0].closable = true;
+    data_poll(&server, 3252);
+    assert(!server.data_draining[0] && sockets[0].closes == 2 && cleanup_logs == 1);
+
+    /* A normally advancing CLOSING connection still closes immediately on
+     * TIME_WAIT, without waiting for the CLOSING timeout. */
+    reset();
+    server.data_draining[0] = true;
+    sockets[0].state = KUI_W5500_CLOSING;
+    data_poll(&server, 1000);
+    assert(!sockets[0].closes);
+    sockets[0].state = KUI_W5500_TIME_WAIT;
+    data_poll(&server, 1001);
+    assert(!server.data_draining[0] && sockets[0].closes == 1 && cleanup_logs == 1);
+    assert(strstr(cleanup_log, "1B") && strstr(cleanup_log, "TIME_WAIT cleanup"));
+
+    /* FIN_WAIT/LAST_ACK still need the peer's FIN/ACK; keep the old deadline. */
     reset();
     server.data_draining[0] = server.data_draining[1] = server.data_draining[2] = true;
     sockets[0].state = KUI_W5500_FIN_WAIT;
-    sockets[1].state = KUI_W5500_CLOSING;
+    sockets[1].state = KUI_W5500_LAST_ACK;
     sockets[2].state = KUI_W5500_CLOSED;
     data_poll(&server, 1000 + DRAIN_MS);
     assert(server.data_draining[0] && server.data_draining[1] && !server.data_draining[2]);
