@@ -152,16 +152,14 @@ emptying ring with stops for the network; a burst of retries as a large
 upload tells whether frames were lost on the way.
 
 - **Build:** the Diagnostic build run
-  [36750709659](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36750709659)
-  (`claude/modest-galileo-hpjv79`, commit `6306263`: the music polls its
-  stream every 32 ms instead of 8, on top of the timer-paused build
-  `a05977c`, run 36730241374). The Wi-Fi branch's build of the same is
-  run
-  [36750784925](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36750784925)
-  (merge `0a2c808`). On the FTP screen the adapter line should end
-  ", overlapped"; after an upload and a download the screen keeps "Last
-  up" and "Last down" lines (speed, card, net, overlap, share retried).
-  Compare an upload with the music on and off.
+  [36754858957](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36754858957)
+  (`claude/modest-galileo-hpjv79`, commit `1da58d6`: the per-second trace
+  of each streamed transfer's first ten seconds, on top of the 32 ms music
+  polling build `6306263`, run 36750709659). The Wi-Fi branch's build of
+  the same is run
+  [36755409001](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36755409001)
+  (merge `fe5fc7c`). After an upload that starts slowly, the trace's
+  lines ("FTP 1.0s net ...") are on the Diagnostics page (UP to scroll).
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
