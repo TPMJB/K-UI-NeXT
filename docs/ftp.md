@@ -221,7 +221,18 @@ files can be added to those folders. Update K-UI itself on a computer.
   pieces a second had to be retried. It now polls every 32 ms, which
   KallistiOS's half-buffer refills allow with over 300 ms of audio still
   queued. The 9% left with the music off is most likely the screen's
-  redraws into video memory. The FTP screen keeps a line for the last
+  redraws into video memory. With that build (`6306263`) retries with the
+  music on fell to about 13%, but the speeds hardly changed: some uploads,
+  with the music on or off but more often on, start at about 200 KiB/s,
+  drop to about 80 for a few seconds, then climb to about 830. To see
+  where such a start goes, the log (Diagnostics, UP to scroll) now traces
+  each second of a streamed transfer's first ten, for example "FTP 3.0s
+  net 80 card 96 ring 128 re 1 w 250/0 p 260 slow 1850": the time since
+  the data connection opened; what the network and the card each moved
+  that second (KiB/s); the ring's fill (KiB); DMA pieces tried again; the
+  stream's stops for the card (a full or empty ring) and for the network
+  (nothing through all its waits); the server's passes over its sockets;
+  and the slowest card operation (ms). The FTP screen keeps a line for the last
   upload and one for the last download, until the next one the same way
   ends, for example "Last up 803 KiB/s: card 816, net 897, overlap 99%,
   0.4% retried": the transfer's speed, the card's and the network's own

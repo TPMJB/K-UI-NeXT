@@ -137,6 +137,20 @@ after half its buffer has played, so a refill still starts with over
 300 ms of audio queued. With the music off, uploads are limited by the
 card (870 KiB/s against 1041 alone) and downloads too (518 against 573).
 
+With the 32 ms build (`6306263`) retries with the music on fell to about
+13%, but the speeds hardly changed. Some uploads, with the music on or off
+but more often on, start at about 200 KiB/s, drop to about 80 for a few
+seconds, then climb to about 830. The next build logs each second of a
+streamed transfer's first ten ("FTP 3.0s net 80 card 96 ring 128 re 1
+w 250/0 p 260 slow 1850": network and card KiB/s, ring fill in KiB, DMA
+pieces retried, stops for the card/network, passes over the sockets,
+slowest card operation in ms), readable on the Diagnostics page. A card
+stall shows as a full ring and a large "slow"; a network stall as an
+emptying ring with stops for the network; a burst of retries as a large
+"re". The computer's own TCP retransmission count (Windows:
+`netstat -s -p tcp`, "Segments Retransmitted") before and after such an
+upload tells whether frames were lost on the way.
+
 - **Build:** the Diagnostic build run
   [36750709659](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36750709659)
   (`claude/modest-galileo-hpjv79`, commit `6306263`: the music polls its
