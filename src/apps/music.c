@@ -16,6 +16,14 @@
  * copies RAM only, leaving the single SD/optical worker free to run captures. */
 #define MUSIC_STREAM_BYTES 65536u
 #define MUSIC_CALLBACK_BYTES (MUSIC_STREAM_BYTES*2u)
+/* How often the audio worker polls the stream. Each poll reads the sound
+ * chip's play position over the G2 bus, which holds the SH-4's bus long
+ * enough to make an FTP upload's DMA read from the W5500 fall behind and
+ * be tried again (w5500_sci.c): at 8 ms that cost uploads with music on a
+ * quarter of their DMA pieces. KOS refills only once half the buffer has
+ * played (at least 340 ms at 48 kHz), so a refill still starts with over
+ * 300 ms of audio queued. */
+#define MUSIC_POLL_MS 32u
 #define MUSIC_SLOTS (KUI_MUSIC_TRACKS+1u)
 /* One decoder arena, plus 16-byte alignment slack, serves whichever cached
  * Ogg is selected. Unselected Oggs retain only their compressed bytes. */
@@ -149,7 +157,7 @@ static void *audio_worker(void *unused) {
     for(;;) {
         lock_audio();bool stop=music.thread_stop;unlock_audio();
         if(stop) break;
-        kui_music_service();thd_sleep(8);
+        kui_music_service();thd_sleep(MUSIC_POLL_MS);
     }
     return NULL;
 }
