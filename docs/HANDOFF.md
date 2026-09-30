@@ -116,17 +116,16 @@ network moved while the card was busy; 0% means they took turns), then
 the DMA pieces tried again, or why there was no DMA.
 
 - **Build:** the Diagnostic build run
-  [36712110309](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36712110309)
-  (`claude/modest-galileo-hpjv79`, commit `0234c29`: the card and the
-  network at the same time, 4 KB on every data socket, and the readout of
-  where each transfer's time went; the first overlapped build is run
-  36663891917, the one before the overlap run 36651238049). The Wi-Fi
-  branch's build of the same is run
-  [36712268347](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36712268347)
-  (merge `c02838b`). On the FTP screen the adapter line should end
-  ", overlapped"; after each transfer two lines give its speed with the
-  card's and the network's own speeds, and the stream's socket, average
-  piece and stops.
+  [36725717777](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36725717777)
+  (`claude/modest-galileo-hpjv79`, commit `477d3bf`: DMA pieces that fall
+  behind are tried again under TMU1's deadline, idle clocks for the
+  stream's waits, and the kept lines for the last upload and download; the
+  4 KB socket build is run 36712110309, the first overlapped build run
+  36663891917). The Wi-Fi branch's build of the same is run
+  [36726269311](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36726269311)
+  (merge `82c0549`). On the FTP screen the adapter line should end
+  ", overlapped"; after an upload and a download the screen keeps "Last
+  up" and "Last down" lines (speed, card, net, overlap, retries).
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
