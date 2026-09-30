@@ -138,16 +138,16 @@ after half its buffer has played, so a refill still starts with over
 card (870 KiB/s against 1041 alone) and downloads too (518 against 573).
 
 - **Build:** the Diagnostic build run
-  [36730241374](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36730241374)
-  (`claude/modest-galileo-hpjv79`, commit `a05977c`: the stream's pauses
-  timed by TMU1 alone, longer waits while nothing arrives, and the share
-  of DMA pieces tried again on the kept lines; the retrying build that
-  reached 803/500 KiB/s is run 36725717777). The Wi-Fi branch's build of
-  the same is run
-  [36747675968](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36747675968)
-  (merge `9689011`). On the FTP screen the adapter line should end
+  [36750709659](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36750709659)
+  (`claude/modest-galileo-hpjv79`, commit `6306263`: the music polls its
+  stream every 32 ms instead of 8, on top of the timer-paused build
+  `a05977c`, run 36730241374). The Wi-Fi branch's build of the same is
+  run
+  [36750784925](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36750784925)
+  (merge `0a2c808`). On the FTP screen the adapter line should end
   ", overlapped"; after an upload and a download the screen keeps "Last
   up" and "Last down" lines (speed, card, net, overlap, share retried).
+  Compare an upload with the music on and off.
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
