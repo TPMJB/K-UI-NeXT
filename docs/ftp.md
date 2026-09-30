@@ -58,8 +58,11 @@ download at a time then moves between the W5500 and a 128 KB ring in
 memory by those transfers, each finished piece starting the next from the
 interrupt, while the CPU writes (or reads) the card. The network and the
 card then work at the same time instead of taking turns. While there is
-nothing to move yet, the stream waits with idle clocks (a DMA write with
-the W5500's chip select off, which it ignores) rather than reads.
+nothing to move yet, the stream pauses rather than reads: TMU1 times the
+pause, and the SCI and the DMA controller stay quiet (the card's
+bit-banging shares the SH-4's peripheral bus with the DMA). Each pause
+after the first is twice as long, 328 us, as each look costs the CPU a
+few register reads.
 
 A DMA read can fall behind: the SCI's receive register must be emptied
 within one byte's 640 ns, and another bus master (a screen redraw into
@@ -169,47 +172,57 @@ files can be added to those folders. Update K-UI itself on a computer.
 - File times are the console clock's local time; clients that read `MLSD`
   as UTC may show them shifted by your time zone.
 - Speed: the SD card on the serial port reads at about 0.7 MB/s and writes
-  at about 1.1 MB/s, and the adapter's link adds its own time. On the
-  owner's console, over the W5500 (SPI at 12.5 MHz, a 100 Mbit/s
-  full-duplex cable link), the build of 2026-09-28 uploaded to the card at
-  about 304 KiB/s and downloaded at 260 to 320 KiB/s, in bursts. That build
-  slept about 8 ms each time a transfer waited for the network. The build
-  that keeps transfers moving (`a911dc9`) does about 370 KiB/s each way.
-  Downloads still arrive in bursts: the network waits while each 32 KB is
-  read from the card, the slower half of a download. Uploads alternate too,
-  but the computer's own buffering hides it. With DMA reads (`c70375c`),
-  uploads reach about 500 KiB/s; downloads are unchanged. A tighter DMA
-  loop and 32 KB card transfers (`56fd05d`) bring uploads to about
-  520 KiB/s (about 550 with the music off) and downloads to about
-  380 KiB/s. The first overlapped build (`6f83189`: over the W5500, the
-  network and the card at the same time, and KallistiOS's scheduler at
-  1000 Hz while the server runs, so the card's busy time after each write
-  costs at most a millisecond instead of up to ten) said "overlapped" on
-  the console but stayed at about 500 KiB/s. It gave the first data socket
-  8 KB buffers and the other two 2 KB, and a transfer often lands on a
-  small one: a listing just before leaves socket 0 closing for a moment.
-  All three have 4 KB again (`0234c29`). That build measured about
-  523 KiB/s up (card 1041, network 1051) and 348 KiB/s down (card 573,
-  network 884): exactly the two sides one after the other. Its readout
-  could not tell whether the stream ran, though: it counted the network's
-  time as whatever was not the card's, so the two always added up that
-  way. The likely fault is a DMA read that fell behind and overran: the
-  stream then waited 50 ms and switched DMA off for the rest of the
-  session. The next build tries such a piece again (see above) and gives
-  each transfer a line that shows the overlap. The ceiling is the card,
+  at about 1.1 MB/s, and the adapter's link adds its own time. On the owner's
+  console, over the W5500 (SPI at 12.5 MHz, a 100 Mbit/s full-duplex cable
+  link), the build of 2026-09-28 uploaded to the card at about 304 KiB/s and downloaded at
+  260 to 320 KiB/s, in bursts. That build slept about 8 ms each time a
+  transfer waited for the network. The build that keeps transfers moving
+  (`a911dc9`) does about 370 KiB/s each way. Downloads still arrive in
+  bursts: the network waits while each 32 KB is read from the card, the
+  slower half of a download. Uploads alternate too, but the computer's own
+  buffering hides it. With DMA reads (`c70375c`), uploads reach about
+  500 KiB/s; downloads are unchanged. A tighter DMA loop and 32 KB card
+  transfers (`56fd05d`) bring uploads to about 520 KiB/s (about 550 with
+  the music off) and downloads to about 380 KiB/s. The first overlapped
+  build (`6f83189`: over the W5500, the network and the card at the same
+  time, and KallistiOS's scheduler at 1000 Hz while the server runs, so the
+  card's busy time after each write costs at most a millisecond instead of
+  up to ten) said "overlapped" on the console but stayed at about 500 KiB/s. It
+  gave the first data socket 8 KB buffers and the other two 2 KB, and a
+  transfer often lands on a small one: a listing just before leaves socket
+  0 closing for a moment. All three have 4 KB again (`0234c29`). That
+  build measured about 523 KiB/s up (card 1041, network 1051) and
+  348 KiB/s down (card 573, network 884): exactly the two sides one after
+  the other. Its readout could not tell whether the stream ran, though:
+  it counted the network's time as whatever was not the card's, so the two
+  always added up that way. The likely fault is a DMA read that fell
+  behind and overran: the stream then waited 50 ms and switched DMA off
+  for the rest of the session. The next build (`477d3bf`) tries such a
+  piece again (see above) and gives each transfer a line that shows the
+  overlap. It measured about 803 KiB/s up (card 816, net 897, overlap 99%,
+  more than 999 pieces tried again) and 500 KiB/s down (card 503,
+  net 1347, overlap 99%): the card and the network now work at the same
+  time, and the card is the limit both ways. The ceiling is the card,
   which KallistiOS drives by toggling the SCIF pins bit by bit with the
-  CPU: about 1 MB/s written and 0.55 to 0.7 MB/s read. The FTP screen keeps
-  a line for the last upload and one for the last download, until the next
-  one the same way ends, for example "Last up 983 KiB/s: card 1041,
-  net 1320, overlap 96%, 3 retries": the transfer's speed, the card's and
-  the network's own speeds while each worked, and the share of the data
-  the network moved while the card was busy (near 100% when they worked at
-  once, 0% when they took turns), then the DMA pieces tried again. Instead
-  of the overlap it says "DMA off", "DMA in use" (another transfer had it)
-  or "no DMA (Wi-Fi)", or "then no DMA" after it when the stream gave up
-  partway. The log also gets the stream's socket, average piece and how
-  often it waited for the card or the network. A computer
-  with a card reader is much faster for whole game libraries.
+  CPU: about 1 MB/s written and 0.55 to 0.7 MB/s read, and less while the
+  stream runs (816 against 1041 KiB/s written, 503 against 573 read). The
+  bit-banging is bound by the SH-4's peripheral bus, which the DMA shares,
+  and the stream's interrupts take CPU time. So the build after that
+  pauses with TMU1 alone instead of idle clocks (a DMA write with the chip
+  select off, which kept the DMA busy while nothing arrived) and looks
+  half as often while it waits. The FTP screen keeps a line for the last
+  upload and one for the last download, until the next one the same way
+  ends, for example "Last up 803 KiB/s: card 816, net 897, overlap 99%,
+  0.4% retried": the transfer's speed, the card's and the network's own
+  speeds while each worked, and the share of the data the network moved
+  while the card was busy (near 100% when they worked at once, 0% when
+  they took turns), then the share of DMA pieces tried again (rounded up,
+  so a single one shows as 0.1%). Instead of the overlap it says "DMA off",
+  "DMA in use" (another transfer had it) or "no DMA (Wi-Fi)", or "then no
+  DMA" after it when the stream gave up partway. The log also gets the stream's socket,
+  average piece, how often it waited for the card or the network, and
+  how many pieces were tried again. A computer with a card reader is much
+  faster for whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.
@@ -286,8 +299,8 @@ the W5500's raw Ethernet socket.
   through the model's async frames (the adapter line must say
   "overlapped") and leave their "Last up" and "Last down" lines; a frame
   that fails partway through an upload, then a download, is tried again
-  and the line says "1 retry"; 64 failures in a row, and then a frame that
-  never ends, must leave the transfer to finish the plain way with the
+  and the line says "0.1% retried"; 64 failures in a row, and then a frame
+  that never ends, must leave the transfer to finish the plain way with the
   same data ("then no DMA", and "DMA off" for the next). A restart without
   async frames checks the plain way. With 1 ms of network latency in the
   W5500 model, 2 MB each way must pass without the server sleeping while it

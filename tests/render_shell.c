@@ -127,7 +127,7 @@ static void ftp_state(struct kui_shell *shell,struct kui_shell_view *view,const 
         ftp.event_count=2;
         snprintf(ftp.events[0],sizeof(ftp.events[0]),"Received /Games/Dead or Alive 2/track02.raw (1.1 GB)");
         snprintf(ftp.events[1],sizeof(ftp.events[1]),"Created folder /Games/Dead or Alive 2");
-        snprintf(ftp.last_in,sizeof(ftp.last_in),"Last up 1023 KiB/s: card 1041, net 1402, overlap 100%%, 999+ retries");
+        snprintf(ftp.last_in,sizeof(ftp.last_in),"Last up 1023 KiB/s: card 1041, net 1402, overlap 100%%, 12.5%% retried");
         snprintf(ftp.last_out,sizeof(ftp.last_out),"Last down 548 KiB/s: card 573, net 1402, overlap 99%%");
     }
     if(!strcmp(mode,"ftp-stopped") || !strcmp(mode,"ftp-failed")) {

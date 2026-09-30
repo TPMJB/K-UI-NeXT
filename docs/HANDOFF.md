@@ -108,12 +108,22 @@ and the DMA waits forever; the stream then gave up after 50 ms and
 switched DMA off for the whole session. Now TMU1 (unused by KallistiOS)
 times every DMA transfer and ends a late one as failed; the stream tries
 that piece again after a short pause (64 failures in a row leave only that
-transfer to go on the old way), waits with idle clocks instead of reads,
+transfer to go on the old way), pauses instead of reading while it waits,
 and the wiring check gives its DMA transfers three tries. The FTP screen
 keeps a line for the last upload and the last download: speed, the card's
 and the network's own speeds, and the overlap (the share of the data the
 network moved while the card was busy; 0% means they took turns), then
 the DMA pieces tried again, or why there was no DMA.
+
+On the console (2026-09-30) that build (`477d3bf`) reached about
+803 KiB/s up (card 816, net 897, overlap 99%, more than 999 pieces tried
+again) and 500 KiB/s down (card 503, net 1347, overlap 99%): the overlap
+works, and the card is the limit both ways. The card runs slower while the
+stream runs (816 against 1041 KiB/s written, 503 against 573 read): its
+bit-banging is bound by the SH-4's peripheral bus, which the DMA shares,
+and the stream's interrupts take CPU time. The next build pauses with TMU1
+alone (no DMA while nothing arrives), looks half as often while it waits,
+and shows the share of pieces tried again instead of a count.
 
 - **Build:** the Diagnostic build run
   [36725717777](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36725717777)

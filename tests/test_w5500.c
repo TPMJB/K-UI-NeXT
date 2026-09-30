@@ -465,7 +465,7 @@ static void streams(void) {
     assert(kui_w5500_bus_check(&chip, 8) && chip.async);
     w5500_model_stop();
 
-    /* A frame that fails partway is tried again after idle clocks, and the
+    /* A frame that fails partway is tried again after a pause, and the
      * data arrives whole. 64 failures in a row fail the stream, not the
      * chip, and async frames stay on for the next; one that never ends is
      * given up after 50 ms, and async frames stay off. */

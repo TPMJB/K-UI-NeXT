@@ -116,9 +116,9 @@ struct kui_w5500_bus {
     size_t async_max;
     /* Optional: microseconds from any fixed start, to time a transfer. */
     uint64_t (*now_us)(void *ctx);
-    /* Optional, for a stream's pauses: an async frame of `bytes` clocks with
-     * chip select off, which the chip ignores. A wait of known length that
-     * reads nothing, so nothing in it can fall behind. */
+    /* Optional, for a stream's pauses: waits as long as `bytes` would take
+     * on the bus, touching nothing (the console times it with TMU1), then
+     * `done` runs as for frame_async. Nothing in it can fall behind. */
     bool (*idle_async)(void *ctx, size_t bytes, void (*done)(void *arg, bool ok), void *arg);
 };
 struct kui_w5500 {
@@ -208,9 +208,9 @@ bool kui_w5500_frame_send(struct kui_w5500 *w, const uint8_t *frame, size_t byte
  * frames, while the CPU does other work (the SD card). Each frame's `done`
  * does the few register frames between pieces (Sn_RX_RD and RECV, or
  * Sn_TX_WR and SEND) and starts the next piece, so the CPU is needed only
- * for those. When there is nothing to move yet, a wait frame (idle clocks,
- * or a short read that changes nothing) looks again a little later, up to
- * a limit. A frame that does not all move (on the console, a read the DMA
+ * for those. When there is nothing to move yet, a wait (a pause, or a
+ * short read that changes nothing) looks again a little later, up to a
+ * limit. A frame that does not all move (on the console, a read the DMA
  * fell behind on) changes nothing the stream keeps: it is tried again
  * after a pause, and only many failures in a row fail the stream.
  *

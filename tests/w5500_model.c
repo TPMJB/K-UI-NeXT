@@ -530,7 +530,7 @@ static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, 
     ++w5500_model_counts.async_frames;
     return true;
 }
-/* Idle clocks: the chip sees nothing, and they always end. */
+/* A pause: the chip sees nothing, and it always ends. */
 static bool idle_async(void *ctx, size_t bytes, void (*done)(void *arg, bool ok), void *arg) {
     (void)ctx;
     assert(!async.pending);

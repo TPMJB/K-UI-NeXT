@@ -11,7 +11,7 @@
  * stays off. At the DMA levels the bus also has async frames for FTP
  * transfers (kui_sci_async: the data moves by DMA with no help from the
  * CPU, the transfer-end interrupt finishes each frame, and TMU1 ends one
- * that runs late as failed) and idle clocks for a stream's waits
+ * that runs late as failed) and timed pauses for a stream's waits
  * (kui_sci_idle). The SD card stays on SCIF, which nothing here touches. */
 #include "kui/network_w5500.h"
 #include "sci_port.h"
