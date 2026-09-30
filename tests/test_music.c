@@ -67,7 +67,7 @@ kthread_t *thd_create_ex(const kthread_attr_t *attrs,void *(*routine)(void *),vo
     thread_live=true;return &fake_thread;
 }
 int thd_join(kthread_t *thread,void **result) {assert(thread==&fake_thread && thread_live && !result);thread_live=false;return 0;}
-void thd_sleep(unsigned ms) {assert(ms==8);}
+void thd_sleep(unsigned ms) {assert(ms==32);}
 #endif
 static void put16(uint8_t *p,unsigned n) {p[0]=(uint8_t)n;p[1]=(uint8_t)(n>>8);}
 static void put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(n>>(8*i));}

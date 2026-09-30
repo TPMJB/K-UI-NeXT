@@ -9,13 +9,18 @@
  * games, games-detail, games-error, games-advanced, games-probe,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
  * games-retail, games-retail-loading, games-retail-invalid, games-list-art,
- * games-compact, games-gallery, games-scan, games-detail-art. */
+ * games-compact, games-gallery, games-scan, games-detail-art, home-files, home-ripper,
+ * files, files-root, files-actions, files-actions-locked, files-pick,
+ * files-copy, files-delete, files-refused, files-info, files-info-file,
+ * files-view, files-copying, files-keyboard, network, ftp-starting, ftp-ready,
+ * ftp-busy, ftp-stopped, ftp-failed. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
 
 static uint16_t frame[640*480];
 static uint16_t covers[KUI_GAMES_ROWS][KUI_COVER_PIXELS], detail_cover[KUI_COVER_PIXELS];
+static uint16_t picture[KUI_FILES_PICTURE_EDGE*KUI_FILES_PICTURE_EDGE];
 static uint16_t rgb565(unsigned r,unsigned g,unsigned b) {
     return (uint16_t)((r>>3)<<11|(g>>2)<<5|(b>>3));
 }
@@ -55,6 +60,91 @@ static void library(struct kui_shell *shell,unsigned view) {
     shell->games_selected=1;
     strcpy(l->message,"Select a GDI to inspect and launch.");
 }
+/* A game folder as the File Manager lists it: folders first, then files. */
+static void files_folder(struct kui_shell *shell,bool root) {
+    static const struct {const char *name;unsigned long long bytes;bool dir;unsigned char attr;} game[]={
+        {"Saves",0,true,0},{"._track03.bin",4096,false,0x02},{"Dead or Alive 2.gdi",112,false,0},
+        {"cover.png",251203,false,0},{"notes.txt",1834,false,0},{"track01.bin",1425312,false,0},
+        {"track02.raw",2724048,false,0},{"track03.bin",1181616048ull,false,0}},
+      top[]={{"Games",0,true,0},{"KUI",0,true,0},{"Music",0,true,0},{"System Volume Information",0,true,0x06},
+        {"Pictures",0,true,0},{"autorun.inf",112,false,0x01},{"readme.txt",2048,false,0},{"setup.log",9021,false,0}};
+    struct kui_files_page *l=&shell->files_listing;
+    shell->page=KUI_SHELL_FILES;
+    snprintf(shell->files_path,sizeof(shell->files_path),"%s",root?"/":"/Games/Fighting/Dead or Alive 2");
+    snprintf(l->path,sizeof(l->path),"%s",shell->files_path);
+    l->count=8;l->before=root?0:8;l->total=root?8:19;
+    for(unsigned i=0;i<8;i++) {
+        struct kui_files_entry *e=&l->entries[i];
+        snprintf(e->name,sizeof(e->name),"%s",root?top[i].name:game[i].name);
+        e->bytes=root?top[i].bytes:game[i].bytes;e->directory=root?top[i].dir:game[i].dir;
+        e->attributes=root?top[i].attr:game[i].attr;
+        e->date=(uint16_t)((46u<<9)|(9u<<5)|26u);e->time=(uint16_t)((14u<<11)|(3u<<5));
+    }
+    snprintf(l->first,sizeof(l->first),"%s",l->entries[0].name);l->first_directory=true;
+    snprintf(l->last,sizeof(l->last),"%s",l->entries[7].name);
+    shell->files_selected=root?1:7;
+}
+static void files_preview(struct kui_shell *shell,enum kui_files_op op,bool ready) {
+    files_folder(shell,false);
+    struct kui_files_preview *pv=&shell->files_preview;
+    shell->files_job.op=op;
+    snprintf(shell->files_job.source,sizeof(shell->files_job.source),"%s",op==KUI_FILES_OP_DELETE?
+        "/Games/Fighting/Dead or Alive 2":"/Games/Fighting/Dead or Alive 2/track03.bin");
+    if(op==KUI_FILES_OP_COPY) snprintf(shell->files_job.target,sizeof(shell->files_job.target),"/Backup/Fighting");
+    pv->job=shell->files_job;pv->ready=ready;pv->status.complete=true;pv->status.passed=ready;
+    pv->directory=op==KUI_FILES_OP_DELETE;pv->files=pv->directory?7:1;pv->folders=pv->directory?1:0;
+    pv->bytes=pv->directory?1185767203ull:1181616048ull;pv->free_known=true;pv->free_bytes=21474836480ull;
+    pv->date=(uint16_t)((46u<<9)|(9u<<5)|26u);pv->time=(uint16_t)((14u<<11)|(3u<<5));
+    if(op==KUI_FILES_OP_COPY) {
+        pv->renamed=true;snprintf(pv->job.name,sizeof(pv->job.name),"track03 (2).bin");
+        snprintf(shell->files_job.name,sizeof(shell->files_job.name),"%s",pv->job.name);
+    }
+    if(!ready) snprintf(pv->status.message,sizeof(pv->status.message),"Not enough free space: needs 1.1 GB, 812.4 MB free");
+    shell->page=KUI_SHELL_FILES_CONFIRM;
+}
+/* The FTP server's status in each state its page draws. */
+static struct kui_ftp_status ftp;
+static void ftp_state(struct kui_shell *shell,struct kui_shell_view *view,const char *mode) {
+    shell->page=KUI_SHELL_FTP;view->ftp=&ftp;view->busy=true;
+    memset(&ftp,0,sizeof(ftp));
+    if(!strcmp(mode,"ftp-starting")) {
+        snprintf(ftp.message,sizeof(ftp.message),"Asking the router for an address (DHCP)");
+        return;
+    }
+    ftp.state=KUI_FTP_READY;ftp.link=true;ftp.port=KUI_FTP_PORT;
+    ftp.ip[0]=192;ftp.ip[1]=168;ftp.ip[2]=1;ftp.ip[3]=50;
+    snprintf(ftp.password,sizeof(ftp.password),"48217365");
+    snprintf(ftp.adapter,sizeof(ftp.adapter),"W5500 on SCI at 12.5 MHz; 100 Mbit/s full duplex");
+    if(!strcmp(mode,"ftp-busy")) {
+        struct kui_ftp_client *c=ftp.clients;
+        c[0].active=c[0].logged_in=c[0].receiving=true;c[0].ip[0]=192;c[0].ip[1]=168;c[0].ip[2]=1;c[0].ip[3]=20;
+        snprintf(c[0].name,sizeof(c[0].name),"track03.bin");c[0].done=UINT64_C(301989888);c[0].rate=512000;
+        c[1].active=c[1].logged_in=c[1].sending=true;c[1].ip[0]=192;c[1].ip[1]=168;c[1].ip[2]=1;c[1].ip[3]=20;
+        snprintf(c[1].name,sizeof(c[1].name),"Harbor Lights.ogg");c[1].done=3355443;c[1].total=5452595;c[1].rate=466944;
+        c[2].active=c[2].logged_in=true;c[2].ip[0]=192;c[2].ip[1]=168;c[2].ip[2]=1;c[2].ip[3]=20;
+        ftp.files_in=6;ftp.files_out=2;ftp.bytes_in=UINT64_C(1288490188);ftp.bytes_out=9437184;ftp.connections=3;
+        ftp.event_count=2;
+        snprintf(ftp.events[0],sizeof(ftp.events[0]),"Received /Games/Dead or Alive 2/track02.raw (1.1 GB)");
+        snprintf(ftp.events[1],sizeof(ftp.events[1]),"Created folder /Games/Dead or Alive 2");
+        snprintf(ftp.last_in,sizeof(ftp.last_in),"Last up 1023 KiB/s: card 1041, net 1402, overlap 100%%, 12.5%% retried");
+        snprintf(ftp.last_out,sizeof(ftp.last_out),"Last down 548 KiB/s: card 573, net 1402, overlap 99%%");
+    }
+    if(!strcmp(mode,"ftp-stopped") || !strcmp(mode,"ftp-failed")) {
+        view->busy=false;
+        bool failed=!strcmp(mode,"ftp-failed");
+        ftp.state=failed?KUI_FTP_FAILED:KUI_FTP_STOPPED;
+        snprintf(ftp.message,sizeof(ftp.message),"%s",failed?"No W5500 answered on the SCI port (read FF)":
+            "The FTP server was stopped on the Dreamcast");
+        if(!failed) {
+            ftp.files_in=6;ftp.files_out=2;ftp.bytes_in=UINT64_C(1288490188);ftp.bytes_out=9437184;ftp.event_count=1;
+            snprintf(ftp.events[0],sizeof(ftp.events[0]),"192.168.1.20 disconnected");
+        }
+    }
+}
+static unsigned home_row(enum kui_shell_page page) {
+    for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(kui_shell_home_pages[i]==page) return i;
+    return 0;
+}
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
     struct kui_settings preferences={true,false,true};
@@ -74,7 +164,60 @@ int main(int argc,char **argv) {
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
     view.music_cache_bytes=1111209;
-    if(!strcmp(argv[1],"home-games")) shell.home_selected=8;
+    if(!strcmp(argv[1],"home-games")) shell.home_selected=home_row(KUI_SHELL_GAMES);
+    else if(!strcmp(argv[1],"home-files")) shell.home_selected=home_row(KUI_SHELL_FILES);
+    else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_RIPPER);
+    else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
+    else if(!strcmp(argv[1],"network")) shell.page=KUI_SHELL_NETWORK;
+    else if(!strncmp(argv[1],"ftp-",4)) ftp_state(&shell,&view,argv[1]);
+    else if(!strcmp(argv[1],"files") || !strcmp(argv[1],"files-root")) {
+        files_folder(&shell,!strcmp(argv[1],"files-root"));
+        if(!strcmp(argv[1],"files")) {
+            snprintf(shell.files_notice,sizeof(shell.files_notice),"Copied to /Backup/Fighting");
+            snprintf(shell.files_notice_detail,sizeof(shell.files_notice_detail),"7 files, 1.1 GB, read back and checked.");
+        }
+    } else if(!strcmp(argv[1],"files-actions") || !strcmp(argv[1],"files-actions-locked")) {
+        files_folder(&shell,true);shell.page=KUI_SHELL_FILES_ACTIONS;shell.files_action_selected=1;
+        if(!strcmp(argv[1],"files-actions-locked")) {shell.files_selected=1;shell.files_action_selected=4;}
+        else shell.files_selected=0;
+    } else if(!strcmp(argv[1],"files-pick")) {
+        files_folder(&shell,false);shell.page=KUI_SHELL_FILES_PICK;
+        shell.files_job.op=KUI_FILES_OP_COPY;
+        snprintf(shell.files_job.source,sizeof(shell.files_job.source),"/Games/Fighting/Dead or Alive 2");
+        snprintf(shell.files_pick_path,sizeof(shell.files_pick_path),"/Backup");
+        const char *folders[]={"Dreamcast","Fighting","Racing","RPG"};
+        shell.files_pick.count=4;shell.files_pick.total=4;shell.files_pick.folders_only=true;
+        for(unsigned i=0;i<4;i++) {
+            snprintf(shell.files_pick.entries[i].name,sizeof(shell.files_pick.entries[i].name),"%s",folders[i]);
+            shell.files_pick.entries[i].directory=true;
+        }
+        shell.files_pick_selected=1;
+    } else if(!strcmp(argv[1],"files-copy")) files_preview(&shell,KUI_FILES_OP_COPY,true);
+    else if(!strcmp(argv[1],"files-delete")) files_preview(&shell,KUI_FILES_OP_DELETE,true);
+    else if(!strcmp(argv[1],"files-refused")) files_preview(&shell,KUI_FILES_OP_COPY,false);
+    else if(!strcmp(argv[1],"files-info") || !strcmp(argv[1],"files-info-file")) {
+        bool file=!strcmp(argv[1],"files-info-file");
+        files_preview(&shell,file?KUI_FILES_OP_COPY:KUI_FILES_OP_DELETE,true);
+        shell.files_job.op=KUI_FILES_OP_DETAILS;shell.files_preview.job.op=KUI_FILES_OP_DETAILS;
+        if(file) snprintf(shell.files_job.source,sizeof(shell.files_job.source),"/KUI/runtime.kui");
+        if(file) {shell.files_preview.bytes=1834112;shell.files_preview.attributes=0x20;}
+        shell.page=KUI_SHELL_FILES_INFO;
+    } else if(!strcmp(argv[1],"files-view")) {
+        shell.page=KUI_SHELL_FILES_VIEW;
+        snprintf(shell.files_picture.path,sizeof(shell.files_picture.path),"/Pictures/Harbor at night.png");
+        shell.files_picture.ok=true;shell.files_picture.format="PNG";
+        shell.files_picture.width=1024;shell.files_picture.height=768;shell.files_picture.bytes=845120;
+        make_cover(picture,KUI_FILES_PICTURE_EDGE,3);
+    } else if(!strcmp(argv[1],"files-copying")) {
+        files_folder(&shell,false);shell.files_job.op=KUI_FILES_OP_COPY;shell.files_running=true;view.busy=true;
+        status=(struct kui_app_status){.done=1181616048ull,.total=2u*1185767203ull};
+        snprintf(status.message,sizeof(status.message),"Checking 7 of 7: track03.bin");
+        view.app_status=&status;
+    } else if(!strcmp(argv[1],"files-keyboard")) {
+        files_folder(&shell,false);shell.page=KUI_SHELL_KEYBOARD;shell.files_keyboard=true;
+        shell.files_job.op=KUI_FILES_OP_MKDIR;shell.keyboard_selected=22;
+        snprintf(shell.keyboard,sizeof(shell.keyboard),"Saves backup");
+    }
     else if(!strcmp(argv[1],"games")) {
         shell.page=KUI_SHELL_GAMES;shell.games_listing.count=8;shell.games_listing.has_more=true;
         const char *names[]={"Fighting","Dead or Alive 2","Resident Evil - Code Veronica","MDK2",
@@ -195,8 +338,8 @@ int main(int argc,char **argv) {
     } else if(!strcmp(argv[1],"scan-folder")) {
         shell.page=KUI_SHELL_DESTINATION;shell.browse_for_scan=true;
         strcpy(shell.browse_path,"/Games/MDK2");
-    } else if(!strcmp(argv[1],"home-music")) shell.home_selected=7;
-    else if(!strcmp(argv[1],"home-gd")) shell.home_selected=6;
+    } else if(!strcmp(argv[1],"home-music")) shell.home_selected=home_row(KUI_SHELL_MUSIC);
+    else if(!strcmp(argv[1],"home-gd")) shell.home_selected=home_row(KUI_SHELL_GD_PLAY);
     else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm")) {
         shell.page=KUI_SHELL_GD_PLAY;shell.confirm_gd_boot=!strcmp(argv[1],"gd-confirm");
     } else if(!strcmp(argv[1],"quick-resume")) {
@@ -238,9 +381,9 @@ int main(int argc,char **argv) {
         const char *lines[]={"Broadband and LAN adapters were checked.","No DHCP request or traffic sent.",
             "No reachable network is asserted.","Connect an adapter and inspect again."};
         for(unsigned i=0;i<4;i++) snprintf(status.lines[i],80,"%s",lines[i]);
-    } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=1;
-    else if(!strcmp(argv[1],"home-memory")) shell.home_selected=2;
-    else if(!strcmp(argv[1],"home-network")) shell.home_selected=3;
+    } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=home_row(KUI_SHELL_VMU);
+    else if(!strcmp(argv[1],"home-memory")) shell.home_selected=home_row(KUI_SHELL_MEMORY);
+    else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
     else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination")) {
         shell.page=KUI_SHELL_ADVANCED;
@@ -282,6 +425,7 @@ int main(int argc,char **argv) {
         else view.busy=true;
     }
     view.game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])covers;view.game_detail_cover=detail_cover;
+    view.files_picture=picture;
     kui_shell_draw(frame,&shell,&view,NULL,NULL);
     FILE *out=fopen(argv[2],"wb"); if(!out) return 1;
     if(fprintf(out,"P6\n640 480\n255\n")<0) return 1;

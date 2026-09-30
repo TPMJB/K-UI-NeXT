@@ -1,0 +1,343 @@
+# FTP server (W5500 on the SCI port)
+
+K-UI can share the SD card over your home network with FTP, so games,
+music and pictures can be copied to and from a computer without taking the
+card out. It needs a WIZnet W5500 Ethernet module wired to the console's
+SCI port (a modification). It is new since K-UI 1.5.1. On the owner's
+console it uploads at about 520 KiB/s and downloads at about 380 KiB/s
+(2026-09-30).
+
+It is independent K-UI code. The W5500 driver is written from WIZnet's
+W5500 datasheet and uses KallistiOS's SCI driver (`dc/sci.h`) only to move
+bytes; it does not use KallistiOS's own W5500 network driver, which also
+probes the serial port the SD adapter uses. No DreamShell code is involved.
+
+## The hardware
+
+The SD adapter stays where it is, on the serial port (SCIF). The W5500 goes
+on the SH-4's other serial interface, SCI, run as SPI:
+
+| W5500 | Console |
+| --- | --- |
+| MOSI | SCI TXD |
+| MISO | SCI RXD |
+| SCLK | SCI SCK |
+| SCSn (chip select) | SH-4 port A, pin 7 (PA7) |
+| 3.3 V and GND | 3.3 V and ground |
+| RSTn | held high (or to a reset line) |
+
+Chip select on PA7 is how KallistiOS's SCI driver drives it on a retail
+console; K-UI uses that driver unchanged. The W5500's interrupt pin is not
+used.
+
+Planning to add a microSD card or a Wi-Fi board on the same port? See
+[the SCI connector plan](sci-connector.md). There the SD card takes PA7 and
+the W5500 moves to its own chip select, which needs a K-UI update first.
+
+K-UI looks for the W5500 only when asked (Network, or the FTP server),
+never at start-up. It resets the chip, checks its version, and writes and
+reads back 64 test patterns and a 1 KB block before using it. It starts at
+12.5 MHz with DMA reads (K-UI's own, on DMA channel 1; they work on the
+owner's console) and, if the check fails, tries 12.5 MHz without DMA, then 6.25,
+3.125 and 1.5625 MHz. If every speed fails, it says the W5500 was found but
+its wiring check failed. A DMA read that does not finish within a couple of
+milliseconds is read again without DMA; after four such reads in a row, DMA
+stays off and the screen says "DMA failed".
+
+At 12.5 MHz with DMA, the check also moves 1 KB each way by DMA with no
+help from the CPU (reads in the SCI's receive-only mode, whose clock runs on
+by itself; writes asked for by the SCI byte by byte), finished by DMA
+channel 1's transfer-end interrupt; each direction gets three tries. When
+that works, the FTP screen's adapter line says "overlapped": one upload or
+download at a time then moves between the W5500 and a 128 KB ring in
+memory by those transfers, each finished piece starting the next from the
+interrupt, while the CPU writes (or reads) the card. The network and the
+card then work at the same time instead of taking turns. While there is
+nothing to move yet, the stream pauses rather than reads: TMU1 times the
+pause, and the SCI and the DMA controller stay quiet (the card's
+bit-banging shares the SH-4's peripheral bus with the DMA). Each pause
+after the first is twice as long, 328 us, as each look costs the CPU a
+few register reads.
+
+A DMA read can fall behind: the SCI's receive register must be emptied
+within one byte's 640 ns, and another bus master (a screen redraw into
+video memory, music into sound memory) can hold the bus longer. The read
+then overruns and the SCI stops its clock partway, so the DMA would wait
+forever. The SH-4's second timer (TMU1, which KallistiOS leaves unused)
+times every DMA transfer: one still going at its deadline (its bytes' time
+plus about 250 us for a read, three times that plus 2 ms for a write) is
+stopped and ends as failed. Nothing the stream keeps has changed then (the
+chip's read and write pointers move only after a whole piece), so the
+piece is tried again after a short pause, which grows with each failure
+in a row. 64 failures in a row leave that transfer to go on the plain way
+("DMA transfers kept failing; going on without"); the next transfer
+streams again. A transfer that never ends even so is given up after 50 ms,
+and later transfers go the plain way too ("DMA transfers stopped").
+
+The W5500 has no MAC address of its own. K-UI makes a locally administered
+one from the console's unique ID, so it is the same every time (the router
+sees one device).
+
+## Using it
+
+1. Connect the W5500 to your router with a network cable.
+2. Open **Network** on Home and press **Y (FTP server)**.
+3. K-UI finds the W5500, opens the SD card, waits for the cable link and asks
+   the router for an address (DHCP). Then it shows:
+   - the address, such as `ftp://192.168.1.50`;
+   - the user (`kui`; any name works) and the password.
+4. Connect an FTP client to that address on port 21 with that password.
+5. **B** stops the server. Anything still being uploaded is discarded and
+   connected clients are told the server is stopping. **A** starts it again;
+   **B** again returns to Network.
+
+The screen shows each connected client and what it is sending or receiving,
+with progress, speed, the totals so far and the latest events. While the
+server runs, the rest of K-UI waits (music already playing keeps playing).
+
+### The password
+
+The first start saves a random 8-digit password in `KUI/ftp-password.txt`;
+later starts use the same one, so an FTP client can remember it. To choose
+your own, edit that file on a computer: 1 to 32 letters, digits or symbols
+on one line. Delete the file (with the File Manager, say) to get a new
+random one. A wrong password is answered only after two seconds, and three
+in a row close the connection.
+
+This is plain FTP: the password and the files cross the network
+unencrypted. Use it on your home network only. There is no FTPS or SFTP.
+
+### Clients
+
+- **FileZilla**: Host `192.168.1.50` (as shown), User `kui`, the password,
+  Port 21. In the Site Manager, set Encryption to "Only use plain FTP
+  (insecure)" to avoid the TLS question. FileZilla uses up to three
+  connections (one to browse, two to transfer), which is exactly what K-UI
+  serves; if you raised its limit, set "Limit number of simultaneous
+  connections" to 3.
+- **WinSCP**: File protocol FTP, Encryption "No encryption".
+- **Windows File Explorer**: type `ftp://192.168.1.50` in the address bar.
+- **macOS Finder** (Go, Connect to Server) can read but not write.
+- Command-line clients (`ftp`, `lftp`, `curl`) work too. Passive mode is
+  the usual setting and works through any home router; active mode (PORT)
+  works too, but only back to the client's own address.
+
+## What it does
+
+- **Browse**: every folder and file on the card, with sizes and dates
+  (`LIST`, `NLST`, `MLSD`, `MLST`, `SIZE`, `MDTM`). `LIST` and `NLST`
+  accept `*` and `?` in the last name (`mget *.bin` in a command-line
+  client), matching capitals either way as FAT does.
+- **Download**, including resuming a partial download (`REST`).
+- **Upload**: the file is written beside its target as
+  `KUI-ftp-<n>.kui-part` and takes its name only when the client has sent
+  all of it. If the upload stops (cancelled, connection lost, card full, or
+  B on the console), the part file is removed and nothing else changes. An
+  existing file of that name is replaced only once the new one is complete:
+  it waits beside it as `KUI-ftp-<n>.kui-old` while the upload takes its
+  name, and is deleted after. If the upload cannot take the name, the old
+  file gets its name back; if even that fails, the reply (and the console)
+  says which `.kui-old` name it is kept under. Read-only files are not
+  replaced.
+- **Rename and move** (`RNFR`/`RNTO`, also between folders), **delete**
+  (read-only files included, as in the File Manager), **new folder** and
+  **remove folder** (empty folders; clients delete the contents first).
+- **One transfer per file**: a file being sent to one client cannot be
+  replaced, renamed or deleted by another until it is done ("450 ... being
+  transferred by another client").
+
+### What is protected
+
+As in the File Manager, K-UI's start-up files `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui`, and the folders that hold them, cannot be
+replaced, renamed or deleted over FTP. They can be downloaded, and other
+files can be added to those folders. Update K-UI itself on a computer.
+
+## Limits
+
+- Names follow the File Manager's rules: FAT-safe UTF-8 names under 128
+  bytes, whole paths under 384 bytes. Names outside them are listed but
+  cannot be opened over FTP.
+- Uploads cannot be resumed (`REST` before `STOR`, `APPE`): send the whole
+  file again.
+- Up to three clients at once; a fourth is told so ("421").
+- IPv4 and DHCP only; no static address yet.
+- File times are the console clock's local time; clients that read `MLSD`
+  as UTC may show them shifted by your time zone.
+- Speed: the SD card on the serial port reads at about 0.7 MB/s and writes
+  at about 1.1 MB/s, and the W5500's link adds its own time. On the owner's
+  console (SPI at 12.5 MHz, a 100 Mbit/s full-duplex cable link), the build
+  of 2026-09-28 uploaded to the card at about 304 KiB/s and downloaded at
+  260 to 320 KiB/s, in bursts. That build slept about 8 ms each time a
+  transfer waited for the network. The build that keeps transfers moving
+  (`a911dc9`) does about 370 KiB/s each way. Downloads still arrive in
+  bursts: the network waits while each 32 KB is read from the card, the
+  slower half of a download. Uploads alternate too, but the computer's own
+  buffering hides it. With DMA reads (`c70375c`), uploads reach about
+  500 KiB/s; downloads are unchanged. A tighter DMA loop and 32 KB card
+  transfers (`56fd05d`) bring uploads to about 520 KiB/s (about 550 with
+  the music off) and downloads to about 380 KiB/s. The first overlapped
+  build (`6f83189`: the network and the card at the same time, and
+  KallistiOS's scheduler at 1000 Hz while the server runs, so the card's
+  busy time after each write costs at most a millisecond instead of up to
+  ten) said "overlapped" on the console but stayed at about 500 KiB/s. It
+  gave the first data socket 8 KB buffers and the other two 2 KB, and a
+  transfer often lands on a small one: a listing just before leaves socket
+  0 closing for a moment. All three have 4 KB again (`0234c29`). That
+  build measured about 523 KiB/s up (card 1041, network 1051) and
+  348 KiB/s down (card 573, network 884): exactly the two sides one after
+  the other. Its readout could not tell whether the stream ran, though:
+  it counted the network's time as whatever was not the card's, so the two
+  always added up that way. The likely fault is a DMA read that fell
+  behind and overran: the stream then waited 50 ms and switched DMA off
+  for the rest of the session. The next build (`477d3bf`) tries such a
+  piece again (see above) and gives each transfer a line that shows the
+  overlap. It measured about 803 KiB/s up (card 816, net 897, overlap 99%,
+  more than 999 pieces tried again) and 500 KiB/s down (card 503,
+  net 1347, overlap 99%): the card and the network now work at the same
+  time, and the card is the limit both ways. The ceiling is the card,
+  which KallistiOS drives by toggling the SCIF pins bit by bit with the
+  CPU: about 1 MB/s written and 0.55 to 0.7 MB/s read, and less while the
+  stream runs (816 against 1041 KiB/s written, 503 against 573 read). The
+  bit-banging is bound by the SH-4's peripheral bus, which the DMA shares,
+  and the stream's interrupts take CPU time. So the build after that
+  pauses with TMU1 alone instead of idle clocks (a DMA write with the chip
+  select off, which kept the DMA busy while nothing arrived) and looks
+  half as often while it waits. That build (`a05977c`) measured, with the
+  music on, about 719 KiB/s up (card 827, net 791, overlap 96%, 25.1% of
+  pieces retried; it climbed to 830 after a slow first few seconds) and
+  500 KiB/s down (card 503, net 1345); with the music off, 856 up
+  (card 870, net 1126, overlap 99%, 9.0% retried) and 515 down (card 518,
+  net 1339). The music player polled its stream every 8 ms, and each poll
+  reads the sound chip's play position over the G2 bus, which holds the
+  SH-4's bus long enough to make a DMA read fall behind: about 78 more
+  pieces a second had to be retried. It now polls every 32 ms, which
+  KallistiOS's half-buffer refills allow with over 300 ms of audio still
+  queued. The 9% left with the music off is most likely the screen's
+  redraws into video memory. With that build (`6306263`) retries with the
+  music on fell to about 13%, but the speeds hardly changed: some uploads,
+  with the music on or off but more often on, start at about 200 KiB/s,
+  drop to about 80 for a few seconds, then climb to about 830. To see
+  where such a start goes, the log (Diagnostics, UP to scroll) now traces
+  each second of a streamed transfer's first ten, for example "FTP 3.0s
+  net 80 card 96 ring 128 re 1 w 250/0 p 260 slow 1850": the time since
+  the data connection opened; what the network and the card each moved
+  that second (KiB/s); the ring's fill (KiB); DMA pieces tried again; the
+  stream's stops for the card (a full or empty ring) and for the network
+  (nothing through all its waits); the server's passes over its sockets;
+  and the slowest card operation (ms). The FTP screen keeps a line for the last
+  upload and one for the last download, until the next one the same way
+  ends, for example "Last up 803 KiB/s: card 816, net 897, overlap 99%,
+  0.4% retried": the transfer's speed, the card's and the network's own
+  speeds while each worked, and the share of the data the network moved
+  while the card was busy (near 100% when they worked at once, 0% when
+  they took turns), then the share of DMA pieces tried again (rounded up,
+  so a single one shows as 0.1%). Instead of the overlap it says "DMA off"
+  or "DMA in use" (another transfer had it), or "then no DMA" after it
+  when the stream gave up partway. The log also gets the stream's socket,
+  average piece, how often it waited for the card or the network, and
+  how many pieces were tried again. A computer with a card reader is much
+  faster for whole game libraries.
+- A client that goes quiet for ten minutes, or does not log in within a
+  minute, is disconnected. A transfer with no progress for a minute is
+  stopped.
+- The address lease is renewed at half its time. If the router refuses, or
+  the lease runs out, the server stops and says why.
+
+## Network app
+
+**A (Inspect adapter)** and **X (Test network)** also look for a W5500 on the
+SCI port when no Broadband or LAN adapter is found. Inspection reports the
+chip, the SPI speed that passed the wiring check, the cable link and the MAC
+address. The network test runs the same DHCP, address-conflict, gateway ARP
+and ping checks as with a BBA (see [the connection test](network-connection-test.md)),
+through the W5500's raw Ethernet socket.
+
+## How it is built
+
+- `src/core/w5500.c`: the W5500 driver: SPI frames, registers, sockets,
+  TCP, UDP and MACRAW, over any SPI link (`struct kui_w5500_bus`).
+- `src/dreamcast/w5500_sci.c`: that link on the console, through KOS's SCI
+  driver; the four speeds and the MAC address from the console ID.
+- `src/apps/network_w5500.c`: finding the chip, the cable link, DHCP through
+  the existing network probe (raw frames on socket 0), lease renewal over
+  UDP, and the Network app's inspection and test.
+- `src/core/ftp_protocol.c`: commands, paths, `PORT`/`EPRT` and listing
+  lines.
+- `src/apps/ftp_server.c`: the server loop on the storage worker: sessions,
+  data connections, the card through FatFs, and the status the screen draws.
+  It uses the W5500's own TCP sockets: 0-2 carry data (socket 0 is used for
+  DHCP first), 3-6 listen for control connections. One
+  upload or download at a time streams (`kui_w5500_stream` in
+  `src/core/w5500.c`) while the loop writes or reads the card.
+- `src/core/shell.c`, `src/dreamcast/shell_draw.c`, `src/dreamcast/main.c`:
+  the FTP Server page, Y on the Network page, and worker action 64.
+
+## Validation
+
+- `test-w5500`: the driver against `tests/w5500_model.c`, a W5500 for host
+  tests whose TCP sockets are real localhost sockets and whose raw socket
+  reaches a small network with a DHCP server: reset and version, the wiring
+  check (including a noisy bus and no chip), buffer sizes, TCP accept,
+  receive and send through wrapping buffers, one SEND at a time, both ways of
+  closing, resets, refused connections, active connections, UDP, and DHCP,
+  address conflict, gateway ARP and ping over MACRAW. Streams: 300 KB up
+  and down through a 64 KB ring by the model's async frames (which end when
+  the bus is polled), a ring that fills and goes on, pieces written while a
+  SEND is still going, a stream ended with data on the chip not yet sent,
+  and async frames that are absent, fail the check (and one that fails it
+  once, which is tried again), fail once midway (tried again after idle
+  clocks, the data whole), fail 64 times in a row (the stream fails, async
+  frames stay on) or never end (they go off).
+- `test-network-w5500`: finding the chip, slower speeds on a noisy bus, the
+  wiring fault and no-chip reports, no cable, the connection test with good,
+  silent, conflicting and refusing DHCP servers, and lease renewal.
+- `test-ftp`: command parsing, path resolution (`.`, `..`, limits, unsafe
+  names), `PORT`/`EPRT`, timestamps, listing lines and wildcards.
+- `test_ftp_images.py`: the whole server on the W5500 model with real FatFs
+  on FAT32 and exFAT images, driven by Python's `ftplib`: login and wrong
+  passwords, folders, uploads and downloads of up to 20 MB compared by
+  SHA-256, resume, replace (and a replace whose rename fails, then one
+  whose old file cannot be put back either: the old file survives both),
+  listings and wildcards, active mode, `EPSV` and `EPRT`,
+  renames and moves, deletes, protected files, unsafe names, a closed data
+  connection, `ABOR`, an upload cut off by a reset, files in use, the
+  three-client limit, a full card, stopping with a client connected, no
+  W5500 and an unusable password file. Transfers stream through the model's
+  async frames (the adapter line must say "overlapped") and leave their
+  "Last up" and "Last down" lines; a frame that fails partway through an
+  upload, then a download, is tried again and the line says "0.1% retried"; 64
+  failures in a row, and then a frame that never ends, must leave the
+  transfer to finish the plain way with the same data ("then no DMA", and
+  "DMA off" for the next). A restart without async frames checks the
+  plain way. With 1 ms of network latency in the
+  model, 2 MB each way must pass without the server sleeping while it waits
+  for the client (a sleep lasts about 8 ms on the console). `fsck` checks
+  every image, and on FAT32 mtools reads the uploads back independently.
+  Every run must leave no file or folder open.
+- `test-shell`: Y on Network, Stop, restart and back, and every state of the
+  FTP page.
+
+These run on the host. They check the protocol, the driver's register and
+socket handling, and the card; they cannot check the SCI wiring or the
+W5500 itself.
+
+## Console test
+
+Use a card whose contents are backed up.
+
+1. Open **Network**, press **A**: it should report the W5500, an SPI speed
+   and "Link: 100 Mbit/s" with the cable connected. Photograph it.
+2. Press **X**: the connection test should get an address and ping the
+   router.
+3. Press **Y**: note the address and password. From a computer, connect
+   with FileZilla, list the root and `/Games`, and download a small file.
+4. Upload a folder with a few files, then a large file (a game track), and
+   note the speed on the console screen.
+5. Rename and delete the uploaded files, and check that deleting
+   `KUI/runtime.kui` is refused.
+6. Stop the server with **B** during an upload: the client should be told,
+   and no part file should remain.
+
+Photograph anything that looks wrong, and save a report from Diagnostics
+afterwards (the FTP server's events are in the log).

@@ -225,7 +225,7 @@ static uint16_t enlarge(const uint8_t *px, unsigned w, unsigned h, unsigned ch,
     return finish(&s);
 }
 bool kui_cover_scale(const uint8_t *px, unsigned w, unsigned h, unsigned ch, uint16_t *out, unsigned edge) {
-    if(!px || !out || !w || !h || (ch != 3 && ch != 4) || !edge || edge > KUI_COVER_LARGE ||
+    if(!px || !out || !w || !h || (ch != 3 && ch != 4) || !edge || edge > KUI_COVER_SCALE_MAX ||
        w > 8192u || h > 8192u) return false;
     unsigned dw, dh;
     fit(w, h, edge, &dw, &dh);

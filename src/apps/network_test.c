@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/network_test.h"
+#include "kui/network_w5500.h"
 #include <kos/net.h>
 #include <dc/g2bus.h>
 #include <dc/net/broadband_adapter.h>
@@ -59,6 +60,8 @@ void kui_network_app_run(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn
         }
     }
     if(!(cancel && cancel())) {
+        /* No BBA or LAN adapter: a W5500 on the SCI port reports itself. */
+        if(!interface && kui_w5500_network_inspect(out,log,cancel)) return;
         struct kui_network_snapshot state;snapshot(&state,interface);
         kui_network_describe(out,&state);
     }

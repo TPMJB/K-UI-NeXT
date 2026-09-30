@@ -12,9 +12,9 @@ void kui_network_describe(struct kui_app_status *out,const struct kui_network_sn
     if(!out) return;
     memset(out,0,sizeof(*out));out->complete=true;out->done=out->total=1;
     if(!s || !s->present) {
-        snprintf(out->message,sizeof(out->message),"No BBA or LAN adapter detected");
+        snprintf(out->message,sizeof(out->message),"No Broadband, LAN or W5500 adapter detected");
         out->line_count=4;
-        snprintf(out->lines[0],KUI_APP_LINE_CAP,"Upstream KOS BBA/LAN detection completed");
+        snprintf(out->lines[0],KUI_APP_LINE_CAP,"Checked: BBA and LAN (KOS drivers), W5500 on the SCI port");
         snprintf(out->lines[1],KUI_APP_LINE_CAP,"A stock dial-up modem is not an Ethernet adapter");
         snprintf(out->lines[2],KUI_APP_LINE_CAP,"Link and IP configuration unavailable");
         snprintf(out->lines[3],KUI_APP_LINE_CAP,"DHCP and Internet reachability were not tested");

@@ -35,8 +35,9 @@ separate contribution or commercial-relicensing agreement.
 
 ## The 1.5 shell
 
-The SD runtime opens nine apps: **Disc Ripper**, **VMU Manager**, **Memory Test**,
-**Network Test**, **Settings**, **Diagnostics**, **GD Play**, **Music Player** and **Games**. New captures use a selectable
+The SD runtime opens ten apps, in this order on Home: **Games**, **Disc Ripper**,
+**VMU Manager**, **File Manager** (new since 1.5.1), **Music Player**, **GD Play**,
+**Memory Test**, **Network**, **Diagnostics** and **Settings**. New captures use a selectable
 parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
 The hardware-proven acquisition engine remains unchanged.
 
@@ -79,8 +80,19 @@ These new app paths still need physical-console acceptance.
   references retain the limited structural result.
   Separate Salvage jobs add durable bad-sector queues, optional zero filling and
   bounded repair passes; unresolved holes never receive a complete-dump claim.
-- Network Test includes a temporary DHCP/address-conflict/gateway-ping test; it
-  does not claim Internet reachability or change saved network settings. Diagnostics retains disc/SD probes, log export,
+- File Manager browses every folder and file on SD and opens games, music and
+  pictures. Copy, move, rename and delete are checked and confirmed first;
+  copies are read back and compared before they take their name, nothing is
+  replaced, and the files K-UI needs to start are protected
+  ([details](docs/files.md)). It has not yet been tried on a console.
+- Network includes a temporary DHCP/address-conflict/gateway-ping test; it
+  does not claim Internet reachability or change saved network settings. With a
+  W5500 wired to the SCI port (a modification), Network also finds that adapter
+  and runs an FTP server for the SD card: uploads take their name only once
+  complete, and K-UI's start-up files are protected
+  ([details](docs/ftp.md)). On the owner's console it uploads at about
+  520 KiB/s and downloads at about 380 KiB/s (2026-09-30).
+  Diagnostics retains disc/SD probes, log export,
   mstats and benchmarks. RAM remains visible in the ripper.
 - Music keeps playing from RAM during menu actions and capture; uncached song
   changes wait until the storage worker is idle. Console continuity still needs checking.

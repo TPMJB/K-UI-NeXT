@@ -24,12 +24,18 @@ bool kui_network_config_valid(const struct kui_network_config *c){
     if(u32(c->gateway) && (!usable(c->gateway)||u32(c->gateway)==u32(c->ip)||((u32(c->gateway)^u32(c->ip))&u32(c->mask))))return false;
     return !u32(c->dns)||usable(c->dns);
 }
+const char *kui_network_stage_text(enum kui_network_stage s){switch(s){case KUI_NET_DISCOVER:return "Requesting DHCP offer (15 second limit)";case KUI_NET_REQUEST:return "Requesting DHCP lease (15 second limit)";case KUI_NET_CONFLICT:return "Checking address conflict (3 seconds)";case KUI_NET_ARP:return "Testing gateway ARP (5 second limit)";case KUI_NET_ECHO:return "Testing gateway ping (5 second limit)";default:return "Network test finished";}}
 static void failed(struct kui_network_probe *p,const char *why){p->stage=KUI_NET_FAILED;snprintf(p->failure,sizeof(p->failure),"%s",why);}
 static void stage(struct kui_network_probe *p,enum kui_network_stage s,uint64_t now){p->stage=s;p->stage_ms=now;p->last_send_ms=0;p->sends=0;}
 void kui_network_probe_begin(struct kui_network_probe *p,const uint8_t mac[6],uint32_t xid,const struct kui_network_config *c,uint64_t now){
     memset(p,0,sizeof(*p));memcpy(p->mac,mac,6);p->transaction=xid?xid:1;p->start_ms=now;p->dhcp=c==NULL;
     if(c){p->config=*c;if(!kui_network_config_valid(c)){failed(p,"Invalid static IPv4 configuration");return;}}
     stage(p,c?KUI_NET_CONFLICT:KUI_NET_DISCOVER,now);
+}
+void kui_network_probe_renew(struct kui_network_probe *p,const uint8_t mac[6],uint32_t xid,const struct kui_network_config *c,const uint8_t server[4],uint64_t now){
+    memset(p,0,sizeof(*p));memcpy(p->mac,mac,6);p->transaction=xid?xid:1;p->start_ms=now;p->dhcp=true;p->renewing=true;
+    if(!c||!server||!kui_network_config_valid(c)||!usable(server)){failed(p,"No lease to renew");return;}
+    p->config=*c;memcpy(p->server,server,4);stage(p,KUI_NET_REQUEST,now);
 }
 static void ethernet(struct kui_network_probe *p,uint8_t *f,const uint8_t *dst,unsigned proto){memcpy(f,dst,6);memcpy(f+6,p->mac,6);put16(f+12,proto);}
 static void ip_header(uint8_t *ip,unsigned n,unsigned proto,const uint8_t src[4],const uint8_t dst[4]){ip[0]=0x45;put16(ip+2,n);ip[8]=64;ip[9]=(uint8_t)proto;memcpy(ip+12,src,4);memcpy(ip+16,dst,4);put16(ip+10,checksum(ip,20));}
@@ -55,7 +61,7 @@ static size_t echo_frame(struct kui_network_probe *p,uint8_t *f){
 size_t kui_network_probe_step(struct kui_network_probe *p,uint8_t f[KUI_NETWORK_FRAME_MAX],uint64_t now){
     if(!p||!f||p->stage>=KUI_NET_DONE)return 0;
     uint64_t age=now-p->stage_ms;
-    if(p->stage==KUI_NET_CONFLICT&&age>=3000){if(!u32(p->config.gateway)){stage(p,KUI_NET_DONE,now);return 0;}stage(p,KUI_NET_ARP,now);age=0;}
+    if(p->stage==KUI_NET_CONFLICT&&age>=3000){if(!u32(p->config.gateway)||p->lease_only){stage(p,KUI_NET_DONE,now);return 0;}stage(p,KUI_NET_ARP,now);age=0;}
     uint64_t limit=p->stage==KUI_NET_DISCOVER||p->stage==KUI_NET_REQUEST?15000:5000;
     if(age>=limit){failed(p,p->stage==KUI_NET_DISCOVER?"No DHCP offer within 15 seconds":p->stage==KUI_NET_REQUEST?"No DHCP ACK within 15 seconds":p->stage==KUI_NET_ARP?"Gateway did not answer ARP":"Gateway did not answer ICMP (may filter ping)");return 0;}
     uint64_t interval=p->stage==KUI_NET_DISCOVER||p->stage==KUI_NET_REQUEST?4000:1000;
@@ -113,7 +119,7 @@ void kui_network_probe_receive(struct kui_network_probe *p,const uint8_t *f,size
         if(type==6&&p->stage==KUI_NET_REQUEST){failed(p,"DHCP server rejected the requested address");return;}
         if(!kui_network_config_valid(&c)||!lease)goto ignore;
         if(type==2&&p->stage==KUI_NET_DISCOVER){p->config=c;memcpy(p->server,server,4);stage(p,KUI_NET_REQUEST,now);return;}
-        if(type==5&&p->stage==KUI_NET_REQUEST&&!memcmp(c.ip,p->config.ip,4)){p->config=c;p->leased=true;stage(p,KUI_NET_CONFLICT,now);return;}
+        if(type==5&&p->stage==KUI_NET_REQUEST&&!memcmp(c.ip,p->config.ip,4)){p->config=c;p->leased=true;p->lease_seconds=lease;stage(p,p->renewing?KUI_NET_DONE:KUI_NET_CONFLICT,now);return;}
     }else if(p->stage==KUI_NET_ECHO){
         if(ip[9]!=1||memcmp(ip+12,p->config.gateway,4)||memcmp(ip+16,p->config.ip,4)||len!=ihl+20)goto ignore;
         const uint8_t *e=ip+ihl;if(e[0]||e[1]||checksum(e,20)||u16(e+4)!=0x4b55||u16(e+6)!=1||memcmp(e+8,"KUI-TEST",8)||u32(e+16)!=p->transaction)goto ignore;

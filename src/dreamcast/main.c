@@ -25,6 +25,7 @@
 #include "kui/capture_display.h"
 #include "kui/viewport.h"
 #include "kui/network_probe.h"
+#include "kui/ftp.h"
 #include "kui/salvage.h"
 #include "kui/maintenance.h"
 #include "kui/menu_sound.h"
@@ -118,6 +119,25 @@ static struct kui_app_status games_scan_status;
  * them starts after the shell cleared the listing or details it replaces. */
 static uint16_t games_covers[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
 static uint16_t games_detail_cover[KUI_COVER_PIXELS];
+/* File Manager: requests copied from the shell when a job is queued, and
+ * results the main loop installs by generation. files_status is the live
+ * progress; files_result a finished run's (or File Manager song's) status. */
+static struct kui_files_request files_request_pending;
+static struct kui_files_job files_job_pending;
+static struct kui_files_preview files_totals_pending;
+static char files_picture_pending[KUI_FILES_PATH_CAP];
+static struct kui_files_page files_listing_result;
+static struct kui_files_preview files_preview_result;
+static struct kui_app_status files_status,files_result;
+static struct kui_files_picture files_picture_result;
+static unsigned files_listing_generation,files_preview_generation,files_result_generation,files_picture_generation;
+static bool files_music;
+/* The picture view's pixels: only the worker writes them, and only while
+ * the view shows none (its picture is still loading). */
+static uint16_t files_picture_pixels[KUI_FILES_PICTURE_EDGE*KUI_FILES_PICTURE_EDGE];
+/* FTP server: the status it publishes as it runs, drawn on its page. */
+static struct kui_ftp_status ftp_status;
+static bool ftp_seen;
 static bool is_capture_action(unsigned action) {
     return (action>=4 && action<=6) || action==22;
 }
@@ -606,6 +626,21 @@ static void publish_cd_audio(void) {
 static void games_scan_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);games_scan_status=*status;mutex_unlock(&lock);
 }
+static void ftp_publish(const struct kui_ftp_status *status) {
+    mutex_lock(&lock);ftp_status=*status;ftp_seen=true;mutex_unlock(&lock);
+}
+static void files_progress(const struct kui_app_status *status) {
+    mutex_lock(&lock);files_status=*status;mutex_unlock(&lock);
+}
+/* A song chosen in the File Manager reports there: its name when it plays. */
+static void files_song_result(const struct kui_app_status *result) {
+    files_result=*result;
+    if(result->passed) {
+        const char *slash=strrchr(music_path_pending,'/');
+        snprintf(files_result.message,sizeof(files_result.message),"Playing %.100s",slash?slash+1:music_path_pending);
+    }
+    files_music=false;++files_result_generation;
+}
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
         action==24 || action==25 || action==56 || action==57 || action==58 || (action>=46 && action<=48);
@@ -725,6 +760,38 @@ static void *worker(void *unused) {
                     "Box art scan stopped before starting":"Games browse stopped before starting");
                 games_result_offset=action==59?0:games_offset_pending;++games_listing_generation;
             }
+            if(action==60 || action==62) {
+                memset(&files_listing_result,0,sizeof(files_listing_result));
+                memcpy(files_listing_result.path,files_request_pending.path,sizeof(files_listing_result.path));
+                files_listing_result.folders_only=files_request_pending.folders_only;
+                snprintf(files_listing_result.message,sizeof(files_listing_result.message),
+                    "Stopped before listing; press R to list this folder again.");
+                ++files_listing_generation;
+            }
+            if(action==61) {
+                memset(&files_preview_result,0,sizeof(files_preview_result));
+                files_preview_result.job=files_job_pending;
+                files_preview_result.status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(files_preview_result.status.message,sizeof(files_preview_result.status.message),"Check stopped before starting");
+                ++files_preview_generation;
+            }
+            if(action==62) {
+                files_result=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(files_result.message,sizeof(files_result.message),"Stopped before starting; nothing changed.");
+                ++files_result_generation;
+            }
+            if(action==64) {
+                ftp_status.state=KUI_FTP_STOPPED;
+                snprintf(ftp_status.message,sizeof(ftp_status.message),"Stopped before starting");
+            }
+            if(action==63) {
+                memset(&files_picture_result,0,sizeof(files_picture_result));
+                memcpy(files_picture_result.path,files_picture_pending,sizeof(files_picture_result.path));
+                files_picture_result.format="";
+                snprintf(files_picture_result.message,sizeof(files_picture_result.message),"Picture stopped before loading");
+                ++files_picture_generation;
+            }
+            if(action==24 && files_music) files_song_result(&player_status);
             if(action==55) {
                 memset(&games_detail,0,sizeof(games_detail));games_detail.stopped=true;
                 strcpy(games_detail.path,games_path_pending);
@@ -840,6 +907,7 @@ static void *worker(void *unused) {
                     kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);
                 player_status=result;
+                if(files_music) files_song_result(&result);
                 if(result.passed) {
                     system_current.music_enabled=true;system_pending=system_current;
                     system_ok=true;++system_generation;
@@ -867,6 +935,52 @@ static void *worker(void *unused) {
                     snprintf(page.message,sizeof(page.message),"%s",status.message);
                 mutex_lock(&lock);games_listing=page;games_result_offset=0;
                 ++games_listing_generation;mutex_unlock(&lock);
+            }
+            if(action==60) {
+                kui_sd_set_params(0,true);
+                struct kui_files_page page;
+                kui_files_list(&files_request_pending,&page,kui_log,kui_cancelled);
+                mutex_lock(&lock);files_listing_result=page;++files_listing_generation;mutex_unlock(&lock);
+            }
+            if(action==61) {
+                kui_sd_set_params(0,true);
+                struct kui_files_preview preview;
+                kui_files_preview(&files_job_pending,&preview,kui_log,kui_cancelled,files_progress);
+                mutex_lock(&lock);files_preview_result=preview;++files_preview_generation;mutex_unlock(&lock);
+            }
+            if(action==62) {
+                kui_sd_set_params(0,true);
+                struct kui_app_status status;
+                kui_files_commit(&files_job_pending,&files_totals_pending,&status,kui_log,kui_cancelled,files_progress);
+                /* The folder is listed again even after Stop, which ended the run itself. */
+                struct kui_files_page page;
+                kui_files_list(&files_request_pending,&page,kui_log,NULL);
+                mutex_lock(&lock);
+                files_result=status;++files_result_generation;
+                files_listing_result=page;++files_listing_generation;
+                mutex_unlock(&lock);
+            }
+            if(action==63) {
+                kui_sd_set_params(0,true);
+                struct kui_files_picture picture;
+                kui_files_picture(files_picture_pending,files_picture_pixels,&picture,kui_log,kui_cancelled);
+                mutex_lock(&lock);files_picture_result=picture;++files_picture_generation;mutex_unlock(&lock);
+            }
+            if(action==64) {
+                /* The card stays on SCIF; the W5500 has the SCI port. */
+                kui_sd_set_params(0,true);
+                struct kui_ftp_options options={0};
+                options.seed=(uint32_t)timer_us_gettime64();
+                struct kui_ftp_status result;
+                /* KOS's SD writes wait out the card's busy time after each
+                 * write by polling it at the scheduler's ticks, 10 ms apart
+                 * at KOS's 100 Hz; at 1000 Hz that wait is a millisecond at
+                 * most. Only while the FTP server runs. */
+                unsigned hz=thd_get_hz();
+                thd_set_hz(1000);
+                kui_ftp_run(kui_w5500_console_port(),&options,&result,kui_log,kui_cancelled,ftp_publish);
+                thd_set_hz(hz);
+                mutex_lock(&lock);ftp_status=result;ftp_seen=true;mutex_unlock(&lock);
             }
             if(action==55) {
                 kui_sd_set_params(0,true);
@@ -1078,7 +1192,7 @@ static void *worker(void *unused) {
 #endif
         }
 #ifdef KUI_SD_RUNTIME
-        if(action!=12 && action!=27) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
+        if(action!=12 && action!=27 && action!=60) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
         if(action==1 || (action>=4 && action<=7) || action==22 || (action>=46 && action<=48)) kui_disc_identity_invalidate(&disc_identity);
 #else
         kui_log("Operation ended. Y saves the current log to SD.");
@@ -1140,10 +1254,12 @@ static void draw_shell(void) {
     char path[KUI_DEST_JOB_CAP], notice[128], title[129], gdi[KUI_DEST_TITLE_CAP+5u];
     char inserted[129],music_title[40],music_notice[128],message[128];
     struct kui_app_status app_status;
+    static struct kui_ftp_status ftp_view;
     struct kui_shell_view view = {.build = KUI_BUILD_ID, .job_dir = path,
         .disc_title = title, .gdi_name = gdi, .settings_notice = notice, .message = message, .log_lines = log_rows,
         .inserted_title=inserted,.music_title=music_title,.music_notice=music_notice,.app_status=&app_status,
-        .game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])games_covers,.game_detail_cover=games_detail_cover};
+        .game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])games_covers,.game_detail_cover=games_detail_cover,
+        .files_picture=files_picture_pixels};
     mutex_lock(&lock);
     unsigned max_scroll = line_count > KUI_SHELL_LOG_ROWS ? line_count - KUI_SHELL_LOG_ROWS : 0;
     if(shell.scroll > max_scroll) shell.scroll = max_scroll;
@@ -1191,7 +1307,11 @@ static void draw_shell(void) {
     view.video_seconds=video_preview && video_deadline>now?(unsigned)((video_deadline-now+999)/1000):0;
     view.phase_elapsed_ms=now>=phase_started_ms?now-phase_started_ms:0;
     view.progress_age_ms=now>=progress_updated_ms?now-progress_updated_ms:0;
-    app_status=shell.page==KUI_SHELL_GAMES?games_scan_status:
+    bool files_page=shell.page==KUI_SHELL_FILES || shell.page==KUI_SHELL_FILES_ACTIONS ||
+        shell.page==KUI_SHELL_FILES_PICK || shell.page==KUI_SHELL_FILES_CONFIRM ||
+        shell.page==KUI_SHELL_FILES_INFO || shell.page==KUI_SHELL_FILES_VIEW;
+    app_status=files_page?files_status:
+        shell.page==KUI_SHELL_GAMES?games_scan_status:
         shell.page==KUI_SHELL_MEMORY?memory_test_status:
         (shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM || shell.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
          shell.page==KUI_SHELL_GAMES_RETAIL_CONFIRM)?probe_status:
@@ -1207,6 +1327,7 @@ static void draw_shell(void) {
     view.retry_fad=capture_display.retry_fad;
     view.done = capture_status.done; view.total = capture_status.total;
     view.committed = capture_status.committed; view.elapsed_ms = capture_status.elapsed_ms;
+    if(shell.page==KUI_SHELL_FTP && ftp_seen) {ftp_view=ftp_status;view.ftp=&ftp_view;}
     unsigned screen_inset=system_current.screen_inset*16u;
     mutex_unlock(&lock);
     view.memory_valid = memory_valid; view.memory_used = memory_status.used;
@@ -1290,6 +1411,11 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_GAMES_IMAGE_PROBE: return 57;
         case KUI_SHELL_GAMES_RETAIL: return 58;
         case KUI_SHELL_GAMES_SCAN: return 59;
+        case KUI_SHELL_FILES_LIST: return 60;
+        case KUI_SHELL_FILES_CHECK: return 61;
+        case KUI_SHELL_FILES_RUN: return 62;
+        case KUI_SHELL_FILES_PICTURE: return 63;
+        case KUI_SHELL_FTP_START: return 64;
         default: return 0;
     }
 }
@@ -1404,6 +1530,7 @@ int main(void) {
     unsigned seen_clock_generation=0,seen_vmu_backups=0,seen_vmu_restore=0;
     unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0;
     unsigned seen_games_listing=0,seen_games_detail=0;
+    unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
@@ -1457,6 +1584,18 @@ int main(void) {
             if(shell.games_page*KUI_GAMES_ROWS==games_result_offset)
                 kui_shell_set_games_listing(&shell,&games_listing);
             seen_games_listing=games_listing_generation;
+        }
+        if(seen_files_result!=files_result_generation) {
+            kui_shell_set_files_status(&shell,&files_result);seen_files_result=files_result_generation;
+        }
+        if(seen_files_listing!=files_listing_generation) {
+            kui_shell_set_files_listing(&shell,&files_listing_result);seen_files_listing=files_listing_generation;
+        }
+        if(seen_files_preview!=files_preview_generation) {
+            kui_shell_set_files_preview(&shell,&files_preview_result);seen_files_preview=files_preview_generation;
+        }
+        if(seen_files_picture!=files_picture_generation) {
+            kui_shell_set_files_picture(&shell,&files_picture_result);seen_files_picture=files_picture_generation;
         }
         if(seen_games_detail!=games_detail_generation) {
             kui_shell_set_games_detail(&shell,&games_detail);
@@ -1621,6 +1760,19 @@ int main(void) {
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
             }
             if(action==54 || action==59) games_view_pending=shell.games_view;
+            if(action>=60 && action<=63) {
+                files_request_pending=shell.files_request;
+                files_job_pending=shell.files_job;
+                if(action==62) files_totals_pending=shell.files_preview;
+                if(action==63) memcpy(files_picture_pending,shell.files_picture.path,sizeof(files_picture_pending));
+                files_status=(struct kui_app_status){0};
+            }
+            if(action==24) files_music=shell.page==KUI_SHELL_FILES;
+            if(action==64) {
+                ftp_status=(struct kui_ftp_status){0};
+                snprintf(ftp_status.message,sizeof(ftp_status.message),"Starting");
+                ftp_seen=true;
+            }
             if(action==59) {
                 games_scan_status=(struct kui_app_status){0};
                 snprintf(games_scan_status.message,sizeof(games_scan_status.message),"Finding games...");
