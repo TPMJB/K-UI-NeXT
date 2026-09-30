@@ -103,14 +103,17 @@ speeds while each worked, then (streamed) the socket, the average piece and
 how often the stream stopped for the card or for the network.
 
 - **Build:** the Diagnostic build run
-  [36663891917](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36663891917)
-  (`claude/modest-galileo-hpjv79`, commit `6f83189`, the card and the
-  network at the same time; the build before it, with DMA reads and the
-  trims, is run 36651238049). The Wi-Fi branch's build of the same is run
-  [36663986571](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36663986571)
-  (merge `cc5c5e1`). On the FTP screen the adapter line should end
-  ", overlapped"; after each transfer a line gives its speed and how busy
-  the card and the network were.
+  [36712110309](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36712110309)
+  (`claude/modest-galileo-hpjv79`, commit `0234c29`: the card and the
+  network at the same time, 4 KB on every data socket, and the readout of
+  where each transfer's time went; the first overlapped build is run
+  36663891917, the one before the overlap run 36651238049). The Wi-Fi
+  branch's build of the same is run
+  [36712268347](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36712268347)
+  (merge `c02838b`). On the FTP screen the adapter line should end
+  ", overlapped"; after each transfer two lines give its speed with the
+  card's and the network's own speeds, and the stream's socket, average
+  piece and stops.
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
