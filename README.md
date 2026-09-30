@@ -91,7 +91,7 @@ These new app paths still need physical-console acceptance.
   and runs an FTP server for the SD card: uploads take their name only once
   complete, and K-UI's start-up files are protected
   ([details](docs/ftp.md)). On the owner's console it uploads at about
-  500 KiB/s and downloads at about 370 KiB/s (2026-09-30).
+  520 KiB/s and downloads at about 380 KiB/s (2026-09-30).
   Diagnostics retains disc/SD probes, log export,
   mstats and benchmarks. RAM remains visible in the ripper.
 - Music keeps playing from RAM during menu actions and capture; uncached song
