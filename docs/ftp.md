@@ -5,8 +5,8 @@ music and pictures can be copied to and from a computer without taking the
 card out. It needs a network adapter wired to the console's SCI port (a
 modification): a WIZnet W5500 Ethernet module, or K-UI's Wi-Fi board (see
 [Wi-Fi](wifi.md)). It is new since K-UI 1.5.1. On the owner's console,
-over the W5500, it uploads at about 500 KiB/s and downloads at about
-370 KiB/s (2026-09-30); the Wi-Fi board has not been tried on a console yet.
+over the W5500, it uploads at about 520 KiB/s and downloads at about
+380 KiB/s (2026-09-30); the Wi-Fi board has not been tried on a console yet.
 
 It is independent K-UI code. The W5500 driver is written from WIZnet's
 W5500 datasheet and uses KallistiOS's SCI driver (`dc/sci.h`) only to move
@@ -151,8 +151,11 @@ files can be added to those folders. Update K-UI itself on a computer.
   Downloads still arrive in bursts: the network waits while each 32 KB is
   read from the card, the slower half of a download. Uploads alternate too,
   but the computer's own buffering hides it. With DMA reads (`c70375c`),
-  uploads reach about 500 KiB/s; downloads are unchanged. A computer with a
-  card reader is much faster for whole game libraries.
+  uploads reach about 500 KiB/s; downloads are unchanged. A tighter DMA
+  loop and 32 KB card transfers (`56fd05d`) bring uploads to about
+  520 KiB/s (about 550 with the music off) and downloads to about
+  380 KiB/s. A computer with a card reader is much faster for whole game
+  libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.

@@ -22,8 +22,8 @@ drive) and artwork.
 | Branch | What is on it | State |
 | --- | --- | --- |
 | `main` | The 1.5.1 release | Released |
-| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP work on the owner's console: uploads about 500 KiB/s with DMA reads, downloads about 370 KiB/s (2026-09-30) |
-| `claude/wifi-esp32c5-firmware` | Everything above, plus the Wi-Fi board's firmware (`firmware/kui-wifi`) and K-UI's side of it: the Wi-Fi page, and FTP over Wi-Fi | CI green (host tests, both boards' firmware builds, Dreamcast build). Not tried on hardware; the boards have not arrived |
+| `claude/modest-galileo-hpjv79` | 1.5.1 plus the File Manager, Games first on Home, the W5500 driver and FTP server, the SCI connector plan, the CF board design, and this handoff | CI green (host tests and Dreamcast build). The W5500 and FTP work on the owner's console: uploads about 520 KiB/s with DMA reads (about 550 with the music off), downloads about 380 KiB/s (2026-09-30) |
+| `claude/wifi-esp32c5-firmware` | Everything above, plus the Wi-Fi board's firmware (`firmware/kui-wifi`) and K-UI's side of it: the Wi-Fi page, and FTP over Wi-Fi | CI green (host tests, both boards' firmware builds, Dreamcast build). The boards are not tried on hardware; they have not arrived. Its shared SCI layer has the W5500 branch's DMA reads (merge `c0e057b`), still to be tried with the W5500 |
 
 The Wi-Fi branch is meant to go into the W5500 branch once the board works
 on a console, and that branch into `main` for the next release. The
@@ -62,15 +62,26 @@ the SCI's interrupt masked, channel 1 programmed directly, and deadlines on
 every wait with a fallback to plain reads. The FTP screen shows "12.5 MHz
 with DMA" when it works, and "DMA failed" when it gave up. It works on the
 owner's console (commit `c70375c`, run 36648048581): uploads went from about
-370 to about 500 KiB/s; downloads are unchanged. Still to do: a checksum
-of an upload made this way; carrying it into the Wi-Fi branch's shared SCI
-layer (`sci_port.c`); and, for more, overlapping the card and the network
-(DMA in both directions), whose ceiling is about 900 KiB/s up and 600 down.
+370 to about 500 KiB/s; downloads are unchanged. Two trims followed
+(commit `56fd05d`, run 36651238049): one register read and two writes a
+byte in the loop that clocks a DMA read, and card transfers of 32 KB
+instead of 16. With them, uploads run at about 520 KiB/s (about 550 with
+the music off, since the CPU both clocks the SCI and drives the card) and
+downloads at about 380 KiB/s (2026-09-30). The Wi-Fi branch's shared SCI
+layer (`sci_port.c`) now has the same DMA transfer, full duplex, for the
+W5500 and the Wi-Fi board (merge `c0e057b`, run 36651240236). Still to do:
+that build with the same W5500 (its FTP screen should say "12.5 MHz with
+DMA", at these speeds); a checksum of an upload made with DMA; and, for
+more, overlapping the card and the network (DMA in both directions), whose
+ceiling is about 900 KiB/s up and 600 down.
 
 - **Build:** the Diagnostic build run
-  [36648048581](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36648048581)
-  (`claude/modest-galileo-hpjv79`, commit `c70375c`, with DMA reads; the
-  build before them is run 36635569185).
+  [36651238049](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36651238049)
+  (`claude/modest-galileo-hpjv79`, commit `56fd05d`, DMA reads and the
+  trims; the build without DMA is run 36635569185). The Wi-Fi branch's
+  build with the same DMA in its shared SCI layer is run
+  [36651240236](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36651240236)
+  (merge `c0e057b`).
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
