@@ -14,6 +14,13 @@
 /* Wait frames in a row before a stream stops looking until it is run
  * again: with 256 bytes each, about 10 ms at 12.5 MHz. */
 #define WAIT_LIMIT 64u
+/* Failed frames in a row before a stream gives up. Each is tried again
+ * after PAUSE_STEP idle bytes per failure so far (at most PAUSE_MAX), as
+ * whatever held the console's bus (a screen redraw, music) usually lets go
+ * within milliseconds: 64 in a row take about a quarter of a second. */
+#define RETRY_LIMIT 64u
+#define PAUSE_STEP 256u
+#define PAUSE_MAX 4096u
 
 static bool ready(const struct kui_w5500 *w) { return w && w->bus && w->bus->frame && !w->failed; }
 static uint64_t now(struct kui_w5500 *w) { return w->bus->now_ms ? w->bus->now_ms(w->bus->ctx) : 0; }
@@ -168,19 +175,27 @@ bool kui_w5500_bus_check(struct kui_w5500 *w, unsigned rounds) {
        !kui_w5500_read(w, KUI_W5500_SOCKET_TX(0), 0, block_in, sizeof(block_in)) ||
        memcmp(block_out, block_in, sizeof(block_out))) return false;
     /* Async frames: 1 KB written by one and read back plainly, then read by
-     * one. A failure here only leaves them unused. */
+     * one. Each gets three tries, as a frame can fail now and then (on the
+     * console, a read the DMA fell behind on while something else held the
+     * bus); a failure here only leaves them unused. */
     if(w->bus->frame_async && w->bus->async_max >= sizeof(block_out)) {
         for(unsigned i = 0; i < sizeof(block_out); ++i) {
             seed = seed * 1103515245u + 12345u;
             block_out[i] = (uint8_t)(seed >> 16);
         }
-        bool moved = async_frame(w, KUI_W5500_SOCKET_TX(0), 1024, block_out, NULL, sizeof(block_out));
-        if(!kui_w5500_read(w, KUI_W5500_SOCKET_TX(0), 1024, block_in, sizeof(block_in))) return false;
-        moved = moved && !memcmp(block_out, block_in, sizeof(block_out));
-        memset(block_in, 0, sizeof(block_in));
-        moved = moved && async_frame(w, KUI_W5500_SOCKET_TX(0), 1024, NULL, block_in, sizeof(block_in)) &&
-            !memcmp(block_out, block_in, sizeof(block_out));
-        w->async = moved;
+        bool wrote = false, read = false;
+        for(unsigned tries = 0; !wrote && tries < 3u; ++tries) {
+            bool moved = async_frame(w, KUI_W5500_SOCKET_TX(0), 1024, block_out, NULL, sizeof(block_out));
+            memset(block_in, 0, sizeof(block_in));
+            if(!kui_w5500_read(w, KUI_W5500_SOCKET_TX(0), 1024, block_in, sizeof(block_in))) return false;
+            wrote = moved && !memcmp(block_out, block_in, sizeof(block_out));
+        }
+        for(unsigned tries = 0; wrote && !read && tries < 3u; ++tries) {
+            memset(block_in, 0, sizeof(block_in));
+            read = async_frame(w, KUI_W5500_SOCKET_TX(0), 1024, NULL, block_in, sizeof(block_in)) &&
+                !memcmp(block_out, block_in, sizeof(block_out));
+        }
+        w->async = wrote && read;
     }
     static const uint8_t zero[18];
     return kui_w5500_write(w, KUI_W5500_COMMON, KUI_W5500_GAR, zero, sizeof(zero));
@@ -403,54 +418,95 @@ static bool command_now(struct kui_w5500 *w, unsigned s, uint8_t code) {
 static uint64_t now_us(struct kui_w5500 *w) { return w->bus->now_us ? w->bus->now_us(w->bus->ctx) : 0; }
 static uint32_t least(uint32_t a, uint32_t b) { return a < b ? a : b; }
 static void stream_step(struct kui_w5500_stream *st);
-/* busy_us counts the pieces, not the waits. */
-static void stream_ended(struct kui_w5500_stream *st, bool piece) {
-    if(piece) st->busy_us += now_us(st->w) - st->started_us;
-    st->busy = false;
+/* Frames under way back to back count as one stretch of busy time. */
+static void chain_begin(struct kui_w5500_stream *st) {
+    if(st->chained) return;
+    st->chained = true;
+    st->started_us = now_us(st->w);
+}
+/* After a frame's `done` (or run) has started nothing more. */
+static void chain_end(struct kui_w5500_stream *st) {
+    if(st->busy || !st->chained) return;
+    st->busy_us += now_us(st->w) - st->started_us;
+    st->chained = false;
 }
 static void stream_start(struct kui_w5500_stream *st, uint8_t block, uint8_t *data, uint32_t bytes, bool write,
                          void (*done)(void *arg, bool ok)) {
     const struct kui_w5500_bus *bus = st->w->bus;
     const uint8_t header[3] = {(uint8_t)(st->pointer >> 8), (uint8_t)st->pointer, (uint8_t)(block << 3 | (write ? 4u : 0u))};
+    chain_begin(st);
     st->busy = true;
-    st->started_us = now_us(st->w);
     if(!bus->frame_async(bus->ctx, header, write ? data : NULL, write ? NULL : data, bytes, done, st)) {
         st->busy = false;
         st->failed = true;
     }
 }
+static void stream_idle(struct kui_w5500_stream *st, uint32_t bytes, void (*done)(void *arg, bool ok)) {
+    const struct kui_w5500_bus *bus = st->w->bus;
+    chain_begin(st);
+    st->busy = true;
+    if(!bus->idle_async(bus->ctx, bytes, done, st)) {
+        st->busy = false;
+        st->failed = true;
+    }
+}
+/* After idle clocks, which change nothing whatever happened to them. */
+static void idle_done(void *arg, bool ok) {
+    struct kui_w5500_stream *st = arg;
+    (void)ok;
+    st->busy = false;
+    stream_step(st);
+    chain_end(st);
+}
+/* A frame that did not all move changed nothing the stream keeps (Sn_RX_RD
+ * and Sn_TX_WR move only after a whole piece): it is tried again, after a
+ * pause that grows with the failures in a row. */
+static void frame_failed(struct kui_w5500_stream *st) {
+    ++st->retries;
+    if(++st->fails >= RETRY_LIMIT) { st->failed = true; return; }
+    if(st->stop) return;
+    if(st->w->bus->idle_async) stream_idle(st, least(st->fails * PAUSE_STEP, PAUSE_MAX), idle_done);
+    else stream_step(st);
+}
 static void piece_done(void *arg, bool ok) {
     struct kui_w5500_stream *st = arg;
     struct kui_w5500 *w = st->w;
     unsigned s = st->socket;
-    stream_ended(st, true);
-    if(!ok) { st->failed = true; return; }
-    ++st->pieces;
-    st->pointer = (uint16_t)(st->pointer + st->piece);
-    if(st->sending) {
-        /* Sent with the next SEND, once the one under way has finished. */
-        st->unsent = (uint16_t)(st->unsent + st->piece);
-        st->tail += st->piece;
-    } else {
-        if(!kui_w5500_write16(w, KUI_W5500_SOCKET_REGS(s), KUI_W5500_SN_RX_RD, st->pointer) ||
-           !command_now(w, s, KUI_W5500_RECV)) { st->failed = true; return; }
-        st->head += st->piece;
+    st->busy = false;
+    if(!ok) frame_failed(st);
+    else {
+        st->fails = 0;
+        ++st->pieces;
+        st->pointer = (uint16_t)(st->pointer + st->piece);
+        if(st->sending) {
+            /* Sent with the next SEND, once the one under way has finished. */
+            st->unsent = (uint16_t)(st->unsent + st->piece);
+            st->tail += st->piece;
+            stream_step(st);
+        } else if(kui_w5500_write16(w, KUI_W5500_SOCKET_REGS(s), KUI_W5500_SN_RX_RD, st->pointer) &&
+                  command_now(w, s, KUI_W5500_RECV)) {
+            st->head += st->piece;
+            stream_step(st);
+        } else st->failed = true;
     }
-    stream_step(st);
+    chain_end(st);
 }
 static void wait_done(void *arg, bool ok) {
     struct kui_w5500_stream *st = arg;
-    stream_ended(st, false);
-    if(!ok) { st->failed = true; return; }
-    stream_step(st);
+    st->busy = false;
+    if(ok) stream_step(st);
+    else frame_failed(st);
+    chain_end(st);
 }
-/* Nothing to move yet: a short read that changes nothing, then look again. */
+/* Nothing to move yet: idle clocks, or else a short read that changes
+ * nothing, then look again. */
 static void stream_wait(struct kui_w5500_stream *st) {
     if(st->waits >= WAIT_LIMIT) { ++st->stalled; return; }
     ++st->waits;
     unsigned s = st->socket;
-    stream_start(st, st->sending ? KUI_W5500_SOCKET_TX(s) : KUI_W5500_SOCKET_RX(s), st->scratch, sizeof(st->scratch),
-                 false, wait_done);
+    if(st->w->bus->idle_async) stream_idle(st, sizeof(st->scratch), idle_done);
+    else stream_start(st, st->sending ? KUI_W5500_SOCKET_TX(s) : KUI_W5500_SOCKET_RX(s), st->scratch,
+                      sizeof(st->scratch), false, wait_done);
 }
 static void stream_step(struct kui_w5500_stream *st) {
     struct kui_w5500 *w = st->w;
@@ -528,6 +584,7 @@ void kui_w5500_stream_run(struct kui_w5500_stream *st) {
     if(!st->busy) {
         st->waits = 0;
         stream_step(st);
+        chain_end(st);
     }
 }
 bool kui_w5500_stream_hold(struct kui_w5500_stream *st) {
@@ -542,10 +599,13 @@ bool kui_w5500_stream_hold(struct kui_w5500_stream *st) {
         if(now(w) - start > ASYNC_MS) {
             if(bus->cancel) bus->cancel(bus->ctx);
             if(st->busy) {
-                /* Never ended: no more async frames this session. */
+                /* Never ended (the console's bus ends one that runs late,
+                 * so something else is wrong): no more async frames this
+                 * session. */
                 st->busy = false;
                 st->failed = true;
                 w->async = false;
+                chain_end(st);
             }
             break;
         }

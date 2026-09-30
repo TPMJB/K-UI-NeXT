@@ -97,10 +97,23 @@ On the console (2026-09-30) the first build of it (`6f83189`) said
 "overlapped" but stayed at about 500 KiB/s. That build gave socket 0 8 KB
 buffers and sockets 1 and 2 only 2 KB, and after a directory listing
 socket 0 is still closing, so the next transfer usually got a 2 KB socket.
-All three have 4 KB again, and after each transfer two lines now say where
-the time went: the transfer's speed with the card's and the network's own
-speeds while each worked, then (streamed) the socket, the average piece and
-how often the stream stopped for the card or for the network.
+All three have 4 KB again (`0234c29`). That build measured about
+523 KiB/s up (card 1041, network 1051) and 348 KiB/s down (card 573,
+network 884), exactly the two sides one after the other; but its readout
+counted the network's time as whatever was not the card's, so it could
+not show whether the stream ran at all. The likely fault: a DMA read that
+falls behind (another bus master, such as a screen redraw or music, holds
+the bus for more than a byte's 640 ns) overruns, the SCI stops its clock,
+and the DMA waits forever; the stream then gave up after 50 ms and
+switched DMA off for the whole session. Now TMU1 (unused by KallistiOS)
+times every DMA transfer and ends a late one as failed; the stream tries
+that piece again after a short pause (64 failures in a row leave only that
+transfer to go on the old way), waits with idle clocks instead of reads,
+and the wiring check gives its DMA transfers three tries. The FTP screen
+keeps a line for the last upload and the last download: speed, the card's
+and the network's own speeds, and the overlap (the share of the data the
+network moved while the card was busy; 0% means they took turns), then
+the DMA pieces tried again, or why there was no DMA.
 
 - **Build:** the Diagnostic build run
   [36712110309](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36712110309)

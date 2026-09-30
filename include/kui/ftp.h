@@ -61,6 +61,9 @@ struct kui_ftp_status {
     /* Recent events, newest first. */
     char events[KUI_FTP_EVENTS][KUI_APP_LINE_CAP];
     unsigned event_count;
+    /* The last upload's and download's speeds ("" until one ends), kept
+     * until the next one the same way ends. */
+    char last_in[KUI_APP_LINE_CAP], last_out[KUI_APP_LINE_CAP];
 };
 typedef void (*kui_ftp_publish_fn)(const struct kui_ftp_status *status);
 /* Mounts the card, finds the W5500, takes a DHCP lease and serves until

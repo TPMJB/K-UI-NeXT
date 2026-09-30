@@ -1449,8 +1449,16 @@ static void ftp_page(struct paint *p,const struct kui_shell_view *v) {
     kui_files_size_text(out,f->bytes_out);
     snprintf(line,sizeof(line),"Received %u file%s (%s), sent %u (%s)",f->files_in,f->files_in==1?"":"s",in,
         f->files_out,out);
-    label(p,40,352,MUTED,line);
-    for(unsigned i=0;i<f->event_count && i<2;i++) label(p,40,374+i*20,i?MUTED:WHITE,f->events[i]);
+    words(p,200,114,608,MUTED,line,false);
+    /* The last upload's and download's speeds stay until the next one the
+     * same way ends; recent events, newest first, fill the rest. */
+    const char *lines[3];
+    uint16_t colors[3];
+    unsigned count=0;
+    if(f->last_in[0]) {lines[count]=f->last_in;colors[count++]=CYAN;}
+    if(f->last_out[0]) {lines[count]=f->last_out;colors[count++]=CYAN;}
+    for(unsigned i=0;i<f->event_count && count<3;i++) {lines[count]=f->events[i];colors[count++]=i?MUTED:WHITE;}
+    for(unsigned i=0;i<count;i++) label(p,40,352+i*21,colors[i],lines[i]);
 }
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {

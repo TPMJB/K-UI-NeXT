@@ -27,9 +27,9 @@
  * prints ARMED and a count); l turns the model's 1 ms network latency on or
  * off (LATENCY, a count and the latency in microseconds); p prints PAUSES, a
  * count and how many sleeping pauses the server has asked for since the
- * last p; f and x make the 20th async frame from then fail or never end
- * (FAULT, a count and the key); w makes the next card write fail (WRITE and
- * a count).
+ * last p; f and x make the 20th async frame from then fail or never end,
+ * and F fail with the 63 after it, 64 in a row (FAULT, a count and the
+ * key); w makes the next card write fail (WRITE and a count).
  * Every open file and folder must be closed when the card is released. */
 static struct {
     FILE *image;
@@ -129,8 +129,12 @@ static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, 
 static void poll_async(void *ctx) { w5500_model_bus.poll(ctx); }
 static void cancel_async(void *ctx) { w5500_model_bus.cancel(ctx); }
 static uint64_t now_us(void *ctx) { return w5500_model_bus.now_us(ctx); }
+static bool idle_async(void *ctx, size_t bytes, void (*done)(void *arg, bool ok), void *arg) {
+    return w5500_model_bus.idle_async(ctx, bytes, done, arg);
+}
 static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms, .frame_async = frame_async,
-                                         .poll = poll_async, .cancel = cancel_async, .async_max = 4096, .now_us = now_us};
+                                         .poll = poll_async, .cancel = cancel_async, .async_max = 4096, .now_us = now_us,
+                                         .idle_async = idle_async};
 static bool open_level(unsigned level) { return level == 0; }
 static void close_port(void) {}
 static const char *speed(unsigned level) { (void)level; return "12.5 MHz"; }
@@ -157,11 +161,13 @@ static bool cancel(void) {
         } else if(byte == 'w') {
             ++test.fail_write;
             printf("WRITE %u\n", ++test.writes);
-        } else if(byte == 'f' || byte == 'x') {
-            /* The 20th async frame from now fails, or never ends. */
+        } else if(byte == 'f' || byte == 'F' || byte == 'x') {
+            /* The 20th async frame from now fails (with the 63 after it), or
+             * never ends. */
             struct w5500_model_options *o = w5500_model_live();
-            if(byte == 'f') o->async_fail_after = 20;
-            else o->async_stall_after = 20;
+            if(byte == 'x') o->async_stall_after = 20;
+            else o->async_fail_after = 20;
+            if(byte == 'F') o->async_fail_run = 63;
             printf("FAULT %u %c\n", ++test.faults, byte);
         }
     }

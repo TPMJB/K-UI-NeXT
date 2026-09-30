@@ -482,9 +482,12 @@ def full_card(f):
 
 def streams(f, server):
     """Uploads and downloads move by the model's async frames while the
-    card works (the adapter line says "overlapped"). A frame that fails
-    partway leaves that transfer to go on without them; one that never ends
-    is given up after 50 ms, and later transfers go without them too."""
+    card works (the adapter line says "overlapped"), and each leaves the
+    screen's line for the last upload or download. A frame that fails
+    partway is tried again and the transfer goes on streaming; 64 failures
+    in a row leave that transfer to go on without them, and the next one
+    streams again; one that never ends is given up after 50 ms, and later
+    transfers go without them."""
     assert "overlapped" in server.adapter, server.adapter
     data = random.randbytes(3 * 1024 * 1024 + 777)
     faults = [0]
@@ -494,20 +497,40 @@ def streams(f, server):
         server.send(key)
         server.wait_for(f"FAULT {faults[0]} {key}")
 
+    def last(way, action):
+        """Runs the transfer, then returns its line (way "up" or "down")."""
+        prefix = f"LOG FTP: Last {way} "
+        before = server.count(prefix)
+        result = action()
+        deadline = time.monotonic() + 20
+        while server.count(prefix) <= before:
+            assert time.monotonic() < deadline, server.output()[-3000:]
+            time.sleep(0.05)
+        return [line for line in server.lines if prefix in line][-1], result
+
     # Every event is logged; EVENT shows only the latest at each update.
-    failed = "LOG FTP: A DMA transfer failed; going on without"
+    kept = "LOG FTP: DMA transfers kept failing; going on without"
+    line, _ = last("up", lambda: upload(f, "Games/stream.bin", data))
+    assert "KiB/s: card " in line and ", overlap " in line and "retr" not in line, line
     fault("f")
-    upload(f, "Games/stream.bin", data)
-    assert server.count(failed) == 1, server.output()[-3000:]
+    line, _ = last("up", lambda: upload(f, "Games/stream.bin", data))
+    assert line.endswith(", 1 retry"), line
     fault("f")
-    assert digest(download(f, "Games/stream.bin")) == digest(data)
-    assert server.count(failed) == 2, server.output()[-3000:]
+    line, got = last("down", lambda: download(f, "Games/stream.bin"))
+    assert digest(got) == digest(data) and line.endswith(", 1 retry"), line
+    assert server.count(kept) == 0, server.output()[-3000:]
+    fault("F")
+    line, _ = last("up", lambda: upload(f, "Games/stream.bin", data))
+    assert line.endswith(", then no DMA") and server.count(kept) == 1, line
+    line, got = last("down", lambda: download(f, "Games/stream.bin"))
+    assert digest(got) == digest(data) and ", overlap " in line and "no DMA" not in line, line
     fault("x")
     upload(f, "Games/stream.bin", data)
     server.wait_for("LOG FTP: DMA transfers stopped; going on without them")
-    assert digest(download(f, "Games/stream.bin")) == digest(data)
+    line, got = last("down", lambda: download(f, "Games/stream.bin"))
+    assert digest(got) == digest(data) and line.endswith(", DMA off"), line
     f.delete("Games/stream.bin")
-    print("PASS FTP streams: overlapped transfers, a failed and a stalled DMA frame", flush=True)
+    print("PASS FTP streams: overlapped transfers, their lines, retried, failing and stalled DMA frames", flush=True)
 
 
 def card_fails(f, server):

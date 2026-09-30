@@ -94,10 +94,14 @@ struct session {
     /* Microseconds: when the data connection opened, time spent on the card
      * and (streamed) with the network moving data; after a stream ended,
      * when it did and the card's time until then. The stream's socket,
-     * bytes, pieces and stops (kui_w5500_stream). */
-    uint64_t run_us, card_us, net_us, plain_us, plain_card_us, stream_bytes;
+     * bytes, pieces, stops and frames tried again (kui_w5500_stream), and
+     * the bytes it moved while the card was busy. Whether this transfer
+     * streamed, went on without the stream, or why it never had one. */
+    uint64_t run_us, card_us, net_us, plain_us, plain_card_us, stream_bytes, overlap;
     unsigned stream_socket;
-    uint32_t pieces, starved, stalled;
+    uint32_t pieces, starved, stalled, retries;
+    bool used_stream, fell_back;
+    const char *no_stream;
 };
 struct server {
     struct kui_w5500_session net;
@@ -257,9 +261,13 @@ static bool in_use(const struct server *sv, const struct session *self, const ch
     return false;
 }
 /* ---- The streamed transfer ---- */
+/* The stream's count of bytes moved: into the ring (an upload) or out of
+ * it to the chip (a download). */
+static uint32_t stream_mark(const struct server *sv, const struct session *s) {
+    return s->kind == T_STOR ? sv->stream.head : sv->stream.tail;
+}
 static void stream_account(struct server *sv, struct session *s, uint64_t now) {
-    const struct kui_w5500_stream *st = &sv->stream;
-    uint32_t mark = s->kind == T_STOR ? st->head : st->tail, moved = mark - s->seen;
+    uint32_t mark = stream_mark(sv, s), moved = mark - s->seen;
     if(!moved) return;
     s->seen = mark;
     s->done += moved;
@@ -292,10 +300,11 @@ static bool stream_stop(struct server *sv, struct session *s, bool keep, uint64_
     }
     uint32_t left = st->head - st->tail;
     s->net_us += st->busy_us;
-    s->stream_bytes += s->kind == T_STOR ? st->head : st->tail;
+    s->stream_bytes += stream_mark(sv, s);
     s->pieces += st->pieces;
     s->starved += st->starved;
     s->stalled += st->stalled;
+    s->retries += st->retries;
     s->plain_us = now_us(sv);
     s->plain_card_us = s->card_us;
     bool ok = kui_w5500_stream_end(st);
@@ -441,27 +450,48 @@ static bool fill_listing(struct server *sv, struct session *s) {
     (void)sv;
     return true;
 }
-/* After a transfer's own event: its speed from the data connection's
- * opening, and the speeds the card and the network each managed while they
- * worked on it. Streamed, the two overlap, and the slower one is the limit;
- * otherwise the network's time is the rest. A streamed transfer also says
- * which socket it had, its average piece, and how often the stream stopped
- * to wait for the card (a full or empty ring) or for the network. */
+/* After a transfer's own event, the line the screen keeps for the last
+ * upload or download: its speed from the data connection's opening, then
+ * the card's and the network's own speeds (each over the time it worked)
+ * and how the two went together. Streamed, "overlap" is the share of the
+ * data the network moved while the card was busy: near 100% when they
+ * worked at once, 0% when they took turns (the total then comes out as
+ * the two speeds one after the other). Otherwise the network's time is the
+ * rest, and the line says why there was no stream. The log also gets the
+ * stream's socket, average piece, how often it stopped to wait for the
+ * card (a full or empty ring) or for the network, and its frames tried
+ * again. */
 static unsigned long long kib_per_s(uint64_t bytes, uint64_t us) { return us ? bytes * 1000000u / us / 1024u : 0; }
 static void timing(struct server *sv, const struct session *s) {
     uint64_t end = now_us(sv), total = end - s->run_us;
     if(!s->run_us || total < 100000u || !s->done) return;
     uint64_t net = total > s->card_us ? total - s->card_us : 0;
-    if(s->plain_us) {
-        /* The stream's pieces, then the plain way's time off the card. */
-        uint64_t after = end - s->plain_us, card = s->card_us - s->plain_card_us;
+    char how[40];
+    if(s->used_stream) {
+        /* The stream's own time, then the plain way's time off the card. */
+        uint64_t after = s->plain_us ? end - s->plain_us : 0, card = s->card_us - s->plain_card_us;
         net = s->net_us + (after > card ? after - card : 0);
-    }
+        unsigned share = (unsigned)(s->overlap * 100u / s->done);
+        if(s->fell_back) snprintf(how, sizeof(how), "overlap %u%%, then no DMA", share);
+        else if(s->retries > 999u) snprintf(how, sizeof(how), "overlap %u%%, 999+ retries", share);
+        else if(s->retries)
+            snprintf(how, sizeof(how), "overlap %u%%, %lu retr%s", share, (unsigned long)s->retries,
+                s->retries == 1u ? "y" : "ies");
+        else snprintf(how, sizeof(how), "overlap %u%%", share);
+    } else snprintf(how, sizeof(how), "%s", s->no_stream ? s->no_stream : "no DMA");
+    bool in = s->kind == T_STOR;
+    char *line = in ? sv->status->last_in : sv->status->last_out;
+    /* Cut short only if the speeds were absurd. */
+    if(snprintf(line, KUI_APP_LINE_CAP, "Last %s %llu KiB/s: card %llu, net %llu, %s", in ? "up" : "down",
+                kib_per_s(s->done, total), kib_per_s(s->done, s->card_us), kib_per_s(s->done, net), how) < 0)
+        line[0] = 0;
+    sv->changed = true;
+    if(!sv->log) return;
+    sv->log("FTP: %s", line);
     if(s->pieces)
-        event(sv, "Socket %u, %llu B pieces; stopped for the card %lu times, network %lu", s->stream_socket,
-            (unsigned long long)(s->stream_bytes / s->pieces), (unsigned long)s->starved, (unsigned long)s->stalled);
-    event(sv, "%llu KiB/s; card %llu KiB/s, network %llu KiB/s", kib_per_s(s->done, total), kib_per_s(s->done, s->card_us),
-        kib_per_s(s->done, net));
+        sv->log("FTP: socket %u, %llu B pieces; waited for the card %lu times, network %lu; %lu retries",
+            s->stream_socket, (unsigned long long)(s->stream_bytes / s->pieces), (unsigned long)s->starved,
+            (unsigned long)s->stalled, (unsigned long)s->retries);
 }
 static void finish_upload(struct server *sv, struct session *s, uint64_t now) {
     char from[CARD_CAP], to[CARD_CAP], aside[KUI_FILES_PATH_CAP] = "", kept[CARD_CAP] = "";
@@ -530,9 +560,11 @@ static bool stream_transfer(struct server *sv, struct session *s, uint64_t now, 
         return true;
     }
     if(st->failed) {
-        /* The async frames stopped: the transfer goes on without them. */
+        /* The async frames kept failing, or one never ended (then they stay
+         * off): the transfer goes on without them. */
         bool lost = !sv->net.chip.async;
-        event(sv, lost ? "DMA transfers stopped; going on without them" : "A DMA transfer failed; going on without");
+        s->fell_back = true;
+        event(sv, lost ? "DMA transfers stopped; going on without them" : "DMA transfers kept failing; going on without");
         if(!stream_stop(sv, s, true, now)) {
             if(s->card_failed) card_failure(sv, s, now);
             else fail_transfer(sv, s, now, "426 The network adapter stopped");
@@ -574,12 +606,15 @@ static bool stream_card(struct server *sv) {
     struct session *s = sv->streaming;
     struct kui_w5500_stream *st = &sv->stream;
     if(!s || s->phase != P_RUN || s->card_failed) return false;
+    /* Meanwhile the stream moves what it can: that share overlapped. */
+    uint32_t before = stream_mark(sv, s);
     if(s->kind == T_STOR) {
         uint32_t ready = kui_w5500_stream_ready(st), at = st->tail & (RING_BYTES - 1u);
         if(ready < BUFFER_BYTES && !(s->ending && ready)) return false;
         uint32_t n = ready < BUFFER_BYTES ? ready : BUFFER_BYTES;
         if(n > RING_BYTES - at) n = RING_BYTES - at;
         if(card_write(sv, s, sv->ring + at, n)) kui_w5500_stream_take(st, n);
+        s->overlap += stream_mark(sv, s) - before;
         return true;
     }
     if(s->source_done || kui_w5500_stream_room(st) < BUFFER_BYTES) return false;
@@ -587,18 +622,20 @@ static bool stream_card(struct server *sv) {
     uint64_t start = now_us(sv);
     FRESULT r = f_read(&s->file, sv->ring + (st->head & (RING_BYTES - 1u)), BUFFER_BYTES, &got);
     s->card_us += now_us(sv) - start;
+    s->overlap += stream_mark(sv, s) - before;
     if(r != FR_OK) { s->card_failed = true; s->card_result = r; return true; }
     if(got) kui_w5500_stream_put(st, got);
     if(got < BUFFER_BYTES) s->source_done = true;
     return true;
 }
 static bool stream_begin(struct server *sv, struct session *s) {
+    s->no_stream = !sv->net.chip.async ? "DMA off" : sv->streaming ? "DMA in use" : "no DMA";
     if(sv->streaming || !sv->net.chip.async || (s->kind != T_RETR && s->kind != T_STOR)) return false;
     if(!sv->ring && !(sv->ring = malloc(RING_BYTES))) return false;
     if(!kui_w5500_stream_begin(&sv->stream, &sv->net.chip, (unsigned)s->data, s->kind == T_RETR, sv->ring, RING_BYTES))
         return false;
     sv->streaming = s;
-    s->streamed = true;
+    s->streamed = s->used_stream = true;
     s->ending = false;
     s->seen = 0;
     s->stream_socket = (unsigned)s->data;
@@ -611,8 +648,9 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
             s->phase = P_RUN;
             s->progress_ms = now;
             s->run_us = now_us(sv);
-            s->card_us = s->net_us = s->plain_us = s->plain_card_us = s->stream_bytes = 0;
-            s->pieces = s->starved = s->stalled = 0;
+            s->card_us = s->net_us = s->plain_us = s->plain_card_us = s->stream_bytes = s->overlap = 0;
+            s->pieces = s->starved = s->stalled = s->retries = 0;
+            s->used_stream = s->fell_back = false;
             (void)stream_begin(sv, s);
             return true;
         }

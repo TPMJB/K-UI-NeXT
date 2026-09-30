@@ -72,6 +72,16 @@ static const char *const names[] = {"12.5 MHz with DMA", "12.5 MHz", "6.25 MHz",
 #define CHCR_SCI_RX ((1u << 14) | ((uint32_t)DMA_REQUEST_SCI_RECEIVE << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
 /* Source increments, destination fixed, the SCI's transmit request. */
 #define CHCR_SCI_TX ((1u << 12) | ((uint32_t)DMA_REQUEST_SCI_TRANSMIT << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
+/* Both fixed: the same byte again and again. */
+#define CHCR_SCI_IDLE (((uint32_t)DMA_REQUEST_SCI_TRANSMIT << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
+/* TMU1, which KOS leaves unused: its start bit, counter and control. */
+#define TMU_TSTR (*(volatile uint8_t *)0xffd80004u)
+#define TMU_TCOR1 (*(volatile uint32_t *)0xffd80014u)
+#define TMU_TCNT1 (*(volatile uint32_t *)0xffd80018u)
+#define TMU_TCR1 (*(volatile uint16_t *)0xffd8001cu)
+#define TSTR_STR1 0x02u
+/* Underflow interrupt on, count at Pphi/4, and the underflow flag cleared. */
+#define TCR_UNIE 0x0020u
 
 static bool running, dma;
 static unsigned dma_failures;
@@ -168,10 +178,19 @@ static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_
  * or until RE is cleared; with the DMA emptying the receive register the
  * bytes come back to back. After the last one the clock runs on for a byte
  * or two, which the chip answers with more of its buffer and changes
- * nothing, until the overrun stops it. A read that overruns midway stops
- * early instead and never ends: the stream then gives up on it (cancel)
- * and async frames stay off. KOS last set transmit-only (the header); the
- * frame's end sets that again. */
+ * nothing, until the overrun stops it. KOS last set transmit-only (the
+ * header); the frame's end sets that again.
+ *
+ * A read the DMA falls behind on (another bus master held the bus for more
+ * than a byte's 640 ns: a screen redraw into video memory, music into
+ * sound memory) overruns midway: the SCI stops its clock and the DMA waits
+ * for bytes that never come. So TMU1 times every async frame, and one still
+ * under way at its deadline is stopped and ends as failed, for the stream
+ * to try again. At 12.5 MHz, the only speed with async frames, the SCI's
+ * clock is Pphi/4 and so is TMU1's count: a byte takes 8 counts. */
+#define COUNTS_PER_BYTE 8u
+#define READ_MARGIN 3200u   /* about 250 us */
+#define WRITE_MARGIN 25000u /* about 2 ms: a write only slows down */
 static struct {
     volatile bool busy;
     bool reading;
@@ -180,7 +199,27 @@ static struct {
     void (*done)(void *arg, bool ok);
     void *arg;
 } async;
-static bool async_ready; /* the interrupt handler is in place */
+static bool async_ready; /* the interrupt handlers are in place */
+static irq_cb_t tmu1_before;
+/* The source of idle clocks: one byte, read again and again. */
+static uint8_t idle_source[32] __attribute__((aligned(32)));
+
+/* TSTR also starts KOS's timers: changed with interrupts off. */
+static void deadline_set(uint32_t counts) {
+    irq_mask_t mask = irq_disable();
+    TMU_TSTR &= (uint8_t)~TSTR_STR1;
+    TMU_TCR1 = TCR_UNIE;
+    TMU_TCNT1 = counts;
+    TMU_TCOR1 = counts;
+    TMU_TSTR |= TSTR_STR1;
+    irq_restore(mask);
+}
+static void deadline_clear(void) {
+    irq_mask_t mask = irq_disable();
+    TMU_TSTR &= (uint8_t)~TSTR_STR1;
+    TMU_TCR1 = 0;
+    irq_restore(mask);
+}
 
 static void receive_clear(void) {
     if(SCSSR1 & SSR_RDRF) (void)SCRDR1;
@@ -196,6 +235,7 @@ static bool transmit_ended(void) {
  * as it was: transmit only, nothing pending. Interrupts off. */
 static bool async_stop(void) {
     bool ended = true;
+    deadline_clear();
     CHCR1 = 0;
     if(async.reading) {
         SCSCR1 &= (uint8_t)~(SCR_RE | SCR_RIE);
@@ -222,6 +262,16 @@ static void dma_end(irq_t code, irq_context_t *context, void *data) {
     }
     async.done(async.arg, ok);
 }
+/* TMU1 at a frame's deadline. */
+static void deadline_end(irq_t code, irq_context_t *context, void *data) {
+    (void)code; (void)context; (void)data;
+    TMU_TSTR &= (uint8_t)~TSTR_STR1;
+    TMU_TCR1 = 0;
+    /* One that has just ended is finished by its own interrupt, next. */
+    if(!async.busy || (CHCR1 & CHCR_TE)) return;
+    (void)async_stop();
+    async.done(async.arg, false);
+}
 static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
                         void (*done)(void *arg, bool ok), void *arg) {
     (void)ctx;
@@ -242,6 +292,7 @@ static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, 
         DAR1 = hw_to_dma_addr(SCTDR1_ADDR);
         TCR1 = (uint32_t)bytes;
         CHCR1 = CHCR_SCI_TX | CHCR_IE;
+        deadline_set((uint32_t)bytes * COUNTS_PER_BYTE * 3u + WRITE_MARGIN);
         /* The header has gone, so the transmit register is empty: the
          * first request comes at once. */
         SCSCR1 |= SCR_TIE;
@@ -250,12 +301,36 @@ static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, 
         DAR1 = dma_map_dst(dma_buffer, bytes);
         TCR1 = (uint32_t)bytes;
         CHCR1 = CHCR_SCI_RX | CHCR_IE;
+        deadline_set((uint32_t)bytes * COUNTS_PER_BYTE + READ_MARGIN);
         /* Transmit off, a pause, then receive on (as KOS changes modes):
          * the clock starts at once. */
         SCSCR1 &= (uint8_t)~(SCR_TE | SCR_RE);
         timer_spin_delay_ns(1500);
         SCSCR1 |= SCR_RE | SCR_RIE;
     }
+    return true;
+}
+/* Idle clocks: a write with chip select off, which the chip ignores. Its
+ * first byte goes through KOS, which leaves the port transmit-only (after
+ * a programmed read it is not), then the DMA sends the rest. */
+static bool idle_async(void *ctx, size_t bytes, void (*done)(void *arg, bool ok), void *arg) {
+    (void)ctx;
+    if(!running || !dma || !async_ready || async.busy || !done || bytes < 2u || bytes > DMA_BYTES) return false;
+    idle_source[0] = 0xff;
+    if(sci_spi_write_data(idle_source, 1) != SCI_OK) return false;
+    async.reading = false;
+    async.in = NULL;
+    async.bytes = bytes - 1u;
+    async.done = done;
+    async.arg = arg;
+    async.busy = true;
+    CHCR1 = 0;
+    SAR1 = dma_map_src(idle_source, 1);
+    DAR1 = hw_to_dma_addr(SCTDR1_ADDR);
+    TCR1 = (uint32_t)(bytes - 1u);
+    CHCR1 = CHCR_SCI_IDLE | CHCR_IE;
+    deadline_set((uint32_t)bytes * COUNTS_PER_BYTE * 3u + WRITE_MARGIN);
+    SCSCR1 |= SCR_TIE;
     return true;
 }
 static void cancel_async(void *ctx) {
@@ -267,10 +342,23 @@ static void cancel_async(void *ctx) {
 static void async_on(bool on) {
     if(async_ready) {
         cancel_async(NULL);
+        deadline_clear();
         irq_set_handler(EXC_DMAC_DMTE1, NULL, NULL);
+        irq_set_priority(IRQ_SRC_TMU1, IRQ_PRIO_MASKED);
+        irq_set_handler(EXC_TMU1_TUNI1, tmu1_before.hdl, tmu1_before.data);
         async_ready = false;
     }
-    if(on) async_ready = irq_set_handler(EXC_DMAC_DMTE1, dma_end, NULL) == 0;
+    if(!on) return;
+    deadline_clear();
+    tmu1_before = irq_get_handler(EXC_TMU1_TUNI1);
+    if(irq_set_handler(EXC_DMAC_DMTE1, dma_end, NULL) || irq_set_handler(EXC_TMU1_TUNI1, deadline_end, NULL)) {
+        irq_set_handler(EXC_DMAC_DMTE1, NULL, NULL);
+        irq_set_handler(EXC_TMU1_TUNI1, tmu1_before.hdl, tmu1_before.data);
+        return;
+    }
+    /* The DMA controller's level, as KOS sets it. */
+    irq_set_priority(IRQ_SRC_TMU1, 3);
+    async_ready = true;
 }
 
 static uint64_t now_ms(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
@@ -278,7 +366,8 @@ static uint64_t now_us(void *ctx) { (void)ctx; return timer_us_gettime64(); }
 /* KOS: thd_sleep(0) is thd_pass(). */
 static void pause_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep(ms); }
 static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms, .frame_async = frame_async,
-                                         .cancel = cancel_async, .async_max = DMA_BYTES, .now_us = now_us};
+                                         .cancel = cancel_async, .async_max = DMA_BYTES, .now_us = now_us,
+                                         .idle_async = idle_async};
 
 static bool open_level(unsigned level) {
     if(level >= sizeof(rates) / sizeof(rates[0])) return false;

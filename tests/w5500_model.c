@@ -38,7 +38,7 @@ struct w5500_model_counts w5500_model_counts;
  * as a DMA transfer would meanwhile. */
 #define ASYNC_MAX 4096u
 static struct {
-    bool pending, fail, stall;
+    bool pending, fail, stall, idle;
     uint8_t header[3];
     const uint8_t *out;
     uint8_t *in;
@@ -518,14 +518,41 @@ static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, 
     async.bytes = bytes;
     async.done = done;
     async.arg = arg;
-    async.fail = m.options.async_fail_after && !--m.options.async_fail_after;
+    async.idle = false;
+    bool counting = m.options.async_fail_after != 0;
+    async.fail = counting && !--m.options.async_fail_after;
+    if(!counting && m.options.async_fail_run) {
+        async.fail = true;
+        --m.options.async_fail_run;
+    }
     async.stall = m.options.async_stall_after && !--m.options.async_stall_after;
     async.pending = true;
     ++w5500_model_counts.async_frames;
     return true;
 }
+/* Idle clocks: the chip sees nothing, and they always end. */
+static bool idle_async(void *ctx, size_t bytes, void (*done)(void *arg, bool ok), void *arg) {
+    (void)ctx;
+    assert(!async.pending);
+    assert(done && bytes && bytes <= ASYNC_MAX);
+    if(m.options.no_async) return false;
+    memset(&async, 0, sizeof(async));
+    async.idle = true;
+    async.bytes = bytes;
+    async.done = done;
+    async.arg = arg;
+    async.pending = true;
+    ++w5500_model_counts.idle_frames;
+    return true;
+}
 static void poll_async(void *ctx) {
-    if(!async.pending || async.stall || m.options.async_stalls) return;
+    if(!async.pending) return;
+    if(async.idle) {
+        async.pending = false;
+        async.done(async.arg, true);
+        return;
+    }
+    if(async.stall || m.options.async_stalls) return;
     async.pending = false;
     bool ok = frame(ctx, async.header, async.out, async.in, async.bytes) && !async.fail && !m.options.async_fails;
     /* May start the next one, which waits for the next poll. */
@@ -537,5 +564,6 @@ static void cancel_async(void *ctx) {
     async.pending = false;
 }
 static uint64_t bus_now_us(void *ctx) { (void)ctx; return now_us(); }
-const struct kui_w5500_bus w5500_model_bus = {NULL, frame, now_ms, pause_ms, frame_async, poll_async, cancel_async,
-                                              ASYNC_MAX, bus_now_us};
+const struct kui_w5500_bus w5500_model_bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms,
+                                              .frame_async = frame_async, .poll = poll_async, .cancel = cancel_async,
+                                              .async_max = ASYNC_MAX, .now_us = bus_now_us, .idle_async = idle_async};
