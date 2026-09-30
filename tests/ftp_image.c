@@ -24,18 +24,22 @@
  *   ftp-image IMAGE serve PORT PASSIVE wifi      no W5500; the Wi-Fi board serves
  *   ftp-image IMAGE serve PORT PASSIVE none      neither answers
  *   ftp-image IMAGE serve PORT PASSIVE offline   the Wi-Fi board has no network set up
+ *   ftp-image IMAGE serve PORT PASSIVE sync      a W5500 without async frames
+ * On the W5500, uploads and downloads otherwise stream through the model's
+ * async frames.
  * On stdin while serving: s stops, r restarts the Wi-Fi board, d drops its
  * Wi-Fi and u brings it back on another address; n makes the next upload's
  * rename to its name fail, N also the rename that puts back the file it
  * replaced (each prints ARMED and a count); l turns the W5500 model's 1 ms
  * network latency on or off (LATENCY, a count and the latency in
  * microseconds); p prints PAUSES, a count and how many sleeping pauses the
- * server has asked for since the last p.
+ * server has asked for since the last p; f and x make the W5500 model's 20th
+ * async frame from then fail or never end (FAULT, a count and the key).
  * Every open file and folder must be closed when the card is released. */
 static struct {
     FILE *image;
     uint64_t blocks;
-    unsigned files, dirs, armed, fail_part, fail_old, latencies, reports, sleeps;
+    unsigned files, dirs, armed, fail_part, fail_old, latencies, reports, sleeps, faults;
     bool active, connected, ready, stop;
     char last_event[KUI_APP_LINE_CAP];
 } test;
@@ -118,7 +122,15 @@ static void pause_ms(void *ctx, unsigned ms) {
     else if(ms) ++test.sleeps;
     w5500_model_bus.pause(ctx, ms);
 }
-static const struct kui_w5500_bus bus = {NULL, frame, now_ms, pause_ms};
+static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
+                        void (*done)(void *arg, bool ok), void *arg) {
+    return w5500_model_bus.frame_async(ctx, header, out, in, bytes, done, arg);
+}
+static void poll_async(void *ctx) { w5500_model_bus.poll(ctx); }
+static void cancel_async(void *ctx) { w5500_model_bus.cancel(ctx); }
+static uint64_t now_us(void *ctx) { return w5500_model_bus.now_us(ctx); }
+static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms, .frame_async = frame_async,
+                                         .poll = poll_async, .cancel = cancel_async, .async_max = 4096, .now_us = now_us};
 static bool open_level(unsigned level) { return level == 0; }
 static void close_port(void) {}
 static const char *speed(unsigned level) { (void)level; return "12.5 MHz"; }
@@ -146,6 +158,12 @@ static bool cancel(void) {
         } else if(byte == 'p') {
             printf("PAUSES %u %u\n", ++test.reports, test.sleeps);
             test.sleeps = 0;
+        } else if(byte == 'f' || byte == 'x') {
+            /* The 20th async frame from now fails, or never ends. */
+            struct w5500_model_options *o = w5500_model_live();
+            if(byte == 'f') o->async_fail_after = 20;
+            else o->async_stall_after = 20;
+            printf("FAULT %u %c\n", ++test.faults, byte);
         }
     }
     return test.stop;
@@ -196,7 +214,7 @@ static void seed(bool bad_password) {
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IOLBF, 0);
     if(argc < 3) {
-        fprintf(stderr, "usage: ftp-image IMAGE seed|bad-password|serve PORT PASSIVE [absent|wifi|none|offline]\n");
+        fprintf(stderr, "usage: ftp-image IMAGE seed|bad-password|serve PORT PASSIVE [absent|wifi|none|offline|sync]\n");
         return 2;
     }
     test.image = fopen(argv[1], "r+b");
@@ -210,15 +228,15 @@ int main(int argc, char **argv) {
         seed(!strcmp(argv[2], "bad-password"));
         puts("SEEDED");
     } else if(!strcmp(argv[2], "serve") && (argc == 5 || argc == 6)) {
-        static const char *const modes[] = {"w5500", "absent", "wifi", "none", "offline"};
+        static const char *const modes[] = {"w5500", "absent", "wifi", "none", "offline", "sync"};
         const char *mode = argc == 6 ? argv[5] : modes[0];
         unsigned kind = 0;
-        while(kind < 5 && strcmp(mode, modes[kind])) ++kind;
-        if(kind == 5) { fprintf(stderr, "unknown adapter %s\n", mode); return 2; }
-        bool wifi = kind >= 2;
+        while(kind < 6 && strcmp(mode, modes[kind])) ++kind;
+        if(kind == 6) { fprintf(stderr, "unknown adapter %s\n", mode); return 2; }
+        bool wifi = kind >= 2 && kind <= 4;
         struct kui_ftp_options options = {(uint16_t)atoi(argv[3]), (uint16_t)atoi(argv[4]), 40, 1234};
         struct kui_ftp_status status;
-        struct w5500_model_options model = {.absent = strcmp(mode, "w5500") != 0};
+        struct w5500_model_options model = {.absent = kind >= 1 && kind <= 4, .no_async = kind == 5};
         w5500_model_start(&model);
         /* The board on the second chip select, as when it replaces a W5500
          * wired to the usual point. */

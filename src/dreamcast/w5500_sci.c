@@ -8,11 +8,15 @@
  * first; if it fails there, the next level is the same clock without DMA. A
  * DMA read that fails later is read again by programmed I/O, as reading
  * changes nothing on the chip; after DMA_GIVE_UP failures in a row, DMA
- * stays off. The SD card stays on SCIF, which nothing here touches. */
+ * stays off. At the DMA levels the bus also has async frames for FTP
+ * transfers (kui_sci_async: the data moves by DMA with no help from the
+ * CPU, and the transfer-end interrupt finishes each frame). The SD card
+ * stays on SCIF, which nothing here touches. */
 #include "kui/network_w5500.h"
 #include "sci_port.h"
 #include <dc/sci.h>
 #include <dc/syscalls.h>
+#include <kos/irq.h>
 #include <kos/thread.h>
 #include <kos/timer.h>
 #include <string.h>
@@ -29,7 +33,8 @@ static bool dma;
 static unsigned dma_failures;
 
 static bool read_data(const uint8_t header[3], uint8_t *in, size_t bytes) {
-    if(dma && bytes >= KUI_SCI_DMA_MIN) {
+    /* Not from an async frame's `done`: channel 1 is the async frames'. */
+    if(dma && bytes >= KUI_SCI_DMA_MIN && !irq_inside_int()) {
         if(kui_sci_dma_transfer(NULL, in, bytes)) {
             dma_failures = 0;
             return true;
@@ -51,10 +56,18 @@ static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_
     kui_sci_select(false);
     return ok;
 }
+static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
+                        void (*done)(void *arg, bool ok), void *arg) {
+    (void)ctx;
+    return dma && kui_sci_async(header, out, in, bytes, done, arg);
+}
+static void cancel_async(void *ctx) { (void)ctx; kui_sci_async_cancel(); }
 static uint64_t now_ms(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
+static uint64_t now_us(void *ctx) { (void)ctx; return timer_us_gettime64(); }
 /* KOS: thd_sleep(0) is thd_pass(). */
 static void pause_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep(ms); }
-static const struct kui_w5500_bus bus = {NULL, frame, now_ms, pause_ms};
+static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms, .frame_async = frame_async,
+                                         .cancel = cancel_async, .async_max = KUI_SCI_ASYNC_MAX, .now_us = now_us};
 
 static bool open_level(unsigned level) {
     if(level >= LEVELS) return false;

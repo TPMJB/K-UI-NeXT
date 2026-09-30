@@ -988,7 +988,14 @@ static void *worker(void *unused) {
                 options.seed=(uint32_t)timer_us_gettime64();
                 const struct kui_net_ports ports={kui_w5500_console_port(),kui_wifi_console_port()};
                 struct kui_ftp_status result;
+                /* KOS's SD writes wait out the card's busy time after each
+                 * write by polling it at the scheduler's ticks, 10 ms apart
+                 * at KOS's 100 Hz; at 1000 Hz that wait is a millisecond at
+                 * most. Only while the FTP server runs. */
+                unsigned hz=thd_get_hz();
+                thd_set_hz(1000);
                 kui_ftp_run(&ports,&options,&result,kui_log,kui_cancelled,ftp_publish);
+                thd_set_hz(hz);
                 mutex_lock(&lock);ftp_status=result;ftp_seen=true;mutex_unlock(&lock);
             }
             if(action>=65 && action<=68) {

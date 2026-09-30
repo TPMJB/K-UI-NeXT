@@ -17,7 +17,15 @@ static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_
 }
 static uint64_t now_ms(void *ctx) { return w5500_model_bus.now_ms(ctx); }
 static void pause_ms(void *ctx, unsigned ms) { w5500_model_advance(ms); w5500_model_bus.pause(ctx, 0); }
-static const struct kui_w5500_bus bus = {NULL, frame, now_ms, pause_ms};
+static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
+                        void (*done)(void *arg, bool ok), void *arg) {
+    assert(is_open);
+    return w5500_model_bus.frame_async(ctx, header, out, in, bytes, done, arg);
+}
+static void poll_async(void *ctx) { w5500_model_bus.poll(ctx); }
+static void cancel_async(void *ctx) { w5500_model_bus.cancel(ctx); }
+static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .pause = pause_ms, .frame_async = frame_async,
+                                         .poll = poll_async, .cancel = cancel_async, .async_max = 4096};
 static bool open_level(unsigned level) {
     assert(!is_open && level < 4);
     is_open = true;

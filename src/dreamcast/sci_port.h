@@ -30,4 +30,14 @@ bool kui_sci_ready(void);
 #define KUI_SCI_DMA_MIN 16u
 bool kui_sci_dma_ready(void);
 bool kui_sci_dma_transfer(const uint8_t *out, uint8_t *in, size_t bytes);
+
+/* An async frame (kui_w5500_bus.frame_async): the header by a programmed
+ * transfer, then `bytes` (at most KUI_SCI_ASYNC_MAX) written from `out` or
+ * read into `in` by DMA channel 1 with no help from the CPU; `done` runs
+ * from channel 1's transfer-end interrupt once the chip select is
+ * released. Cancel gives up on one that has not ended (no `done`). */
+#define KUI_SCI_ASYNC_MAX 4096u
+bool kui_sci_async(const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
+                   void (*done)(void *arg, bool ok), void *arg);
+void kui_sci_async_cancel(void);
 #endif
