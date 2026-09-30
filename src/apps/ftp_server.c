@@ -457,7 +457,8 @@ static bool fill_listing(struct server *sv, struct session *s) {
  * data the network moved while the card was busy: near 100% when they
  * worked at once, 0% when they took turns (the total then comes out as
  * the two speeds one after the other). Otherwise the network's time is the
- * rest, and the line says why there was no stream. The log also gets the
+ * rest, and the line says why there was no stream. Then the share of DMA
+ * pieces tried again (a read the DMA fell behind on). The log also gets the
  * stream's socket, average piece, how often it stopped to wait for the
  * card (a full or empty ring) or for the network, and its frames tried
  * again. */
@@ -472,11 +473,11 @@ static void timing(struct server *sv, const struct session *s) {
         uint64_t after = s->plain_us ? end - s->plain_us : 0, card = s->card_us - s->plain_card_us;
         net = s->net_us + (after > card ? after - card : 0);
         unsigned share = (unsigned)(s->overlap * 100u / s->done);
+        /* The share of DMA pieces tried again, rounded up so one shows. */
+        uint64_t tries = (uint64_t)s->pieces + s->retries;
+        unsigned tenths = tries ? (unsigned)(((uint64_t)s->retries * 1000u + tries - 1u) / tries) : 0;
         if(s->fell_back) snprintf(how, sizeof(how), "overlap %u%%, then no DMA", share);
-        else if(s->retries > 999u) snprintf(how, sizeof(how), "overlap %u%%, 999+ retries", share);
-        else if(s->retries)
-            snprintf(how, sizeof(how), "overlap %u%%, %lu retr%s", share, (unsigned long)s->retries,
-                s->retries == 1u ? "y" : "ies");
+        else if(s->retries) snprintf(how, sizeof(how), "overlap %u%%, %u.%u%% retried", share, tenths / 10u, tenths % 10u);
         else snprintf(how, sizeof(how), "overlap %u%%", share);
     } else snprintf(how, sizeof(how), "%s", s->no_stream ? s->no_stream : "no DMA");
     bool in = s->kind == T_STOR;

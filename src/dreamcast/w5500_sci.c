@@ -72,8 +72,6 @@ static const char *const names[] = {"12.5 MHz with DMA", "12.5 MHz", "6.25 MHz",
 #define CHCR_SCI_RX ((1u << 14) | ((uint32_t)DMA_REQUEST_SCI_RECEIVE << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
 /* Source increments, destination fixed, the SCI's transmit request. */
 #define CHCR_SCI_TX ((1u << 12) | ((uint32_t)DMA_REQUEST_SCI_TRANSMIT << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
-/* Both fixed: the same byte again and again. */
-#define CHCR_SCI_IDLE (((uint32_t)DMA_REQUEST_SCI_TRANSMIT << 8) | ((uint32_t)DMA_UNITSIZE_8BIT << 4) | CHCR_DE)
 /* TMU1, which KOS leaves unused: its start bit, counter and control. */
 #define TMU_TSTR (*(volatile uint8_t *)0xffd80004u)
 #define TMU_TCOR1 (*(volatile uint32_t *)0xffd80014u)
@@ -186,14 +184,16 @@ static bool frame(void *ctx, const uint8_t header[3], const uint8_t *out, uint8_
  * sound memory) overruns midway: the SCI stops its clock and the DMA waits
  * for bytes that never come. So TMU1 times every async frame, and one still
  * under way at its deadline is stopped and ends as failed, for the stream
- * to try again. At 12.5 MHz, the only speed with async frames, the SCI's
- * clock is Pphi/4 and so is TMU1's count: a byte takes 8 counts. */
+ * to try again; it also times the stream's pauses. At 12.5 MHz, the only
+ * speed with async frames, the SCI's clock is Pphi/4 and so is TMU1's
+ * count: a byte takes 8 counts. */
 #define COUNTS_PER_BYTE 8u
 #define READ_MARGIN 3200u   /* about 250 us */
 #define WRITE_MARGIN 25000u /* about 2 ms: a write only slows down */
 static struct {
     volatile bool busy;
     bool reading;
+    bool pausing; /* a pause (idle_async): TMU1 only */
     uint8_t *in;
     size_t bytes;
     void (*done)(void *arg, bool ok);
@@ -201,8 +201,6 @@ static struct {
 } async;
 static bool async_ready; /* the interrupt handlers are in place */
 static irq_cb_t tmu1_before;
-/* The source of idle clocks: one byte, read again and again. */
-static uint8_t idle_source[32] __attribute__((aligned(32)));
 
 /* TSTR also starts KOS's timers: changed with interrupts off. */
 static void deadline_set(uint32_t counts) {
@@ -236,6 +234,11 @@ static bool transmit_ended(void) {
 static bool async_stop(void) {
     bool ended = true;
     deadline_clear();
+    if(async.pausing) {
+        async.pausing = false;
+        async.busy = false;
+        return true;
+    }
     CHCR1 = 0;
     if(async.reading) {
         SCSCR1 &= (uint8_t)~(SCR_RE | SCR_RIE);
@@ -254,7 +257,7 @@ static bool async_stop(void) {
 static void dma_end(irq_t code, irq_context_t *context, void *data) {
     (void)code; (void)context; (void)data;
     bool finished = (CHCR1 & CHCR_TE) != 0;
-    if(!async.busy) { CHCR1 = 0; return; }
+    if(!async.busy || async.pausing) { CHCR1 = 0; return; }
     bool ok = async_stop() && finished;
     if(ok && async.reading) {
         (void)dma_map_dst(dma_buffer, async.bytes);
@@ -267,8 +270,14 @@ static void deadline_end(irq_t code, irq_context_t *context, void *data) {
     (void)code; (void)context; (void)data;
     TMU_TSTR &= (uint8_t)~TSTR_STR1;
     TMU_TCR1 = 0;
+    if(!async.busy) return;
+    if(async.pausing) {
+        (void)async_stop();
+        async.done(async.arg, true);
+        return;
+    }
     /* One that has just ended is finished by its own interrupt, next. */
-    if(!async.busy || (CHCR1 & CHCR_TE)) return;
+    if(CHCR1 & CHCR_TE) return;
     (void)async_stop();
     async.done(async.arg, false);
 }
@@ -280,6 +289,7 @@ static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, 
     sci_spi_set_cs(true);
     if(sci_spi_write_data(header, 3) != SCI_OK) { sci_spi_set_cs(false); return false; }
     async.reading = !out;
+    async.pausing = false;
     async.in = in;
     async.bytes = bytes;
     async.done = done;
@@ -310,27 +320,21 @@ static bool frame_async(void *ctx, const uint8_t header[3], const uint8_t *out, 
     }
     return true;
 }
-/* Idle clocks: a write with chip select off, which the chip ignores. Its
- * first byte goes through KOS, which leaves the port transmit-only (after
- * a programmed read it is not), then the DMA sends the rest. */
+/* A stream's pause: as long as `bytes` would take at 12.5 MHz, timed by
+ * TMU1 alone. The bus stays quiet, as does the DMA controller, whose
+ * transfers would slow the SD card's bit-banging on the same peripheral
+ * bus. */
 static bool idle_async(void *ctx, size_t bytes, void (*done)(void *arg, bool ok), void *arg) {
     (void)ctx;
-    if(!running || !dma || !async_ready || async.busy || !done || bytes < 2u || bytes > DMA_BYTES) return false;
-    idle_source[0] = 0xff;
-    if(sci_spi_write_data(idle_source, 1) != SCI_OK) return false;
+    if(!running || !dma || !async_ready || async.busy || !done || !bytes || bytes > DMA_BYTES) return false;
     async.reading = false;
+    async.pausing = true;
     async.in = NULL;
-    async.bytes = bytes - 1u;
+    async.bytes = 0;
     async.done = done;
     async.arg = arg;
     async.busy = true;
-    CHCR1 = 0;
-    SAR1 = dma_map_src(idle_source, 1);
-    DAR1 = hw_to_dma_addr(SCTDR1_ADDR);
-    TCR1 = (uint32_t)(bytes - 1u);
-    CHCR1 = CHCR_SCI_IDLE | CHCR_IE;
-    deadline_set((uint32_t)bytes * COUNTS_PER_BYTE * 3u + WRITE_MARGIN);
-    SCSCR1 |= SCR_TIE;
+    deadline_set((uint32_t)bytes * COUNTS_PER_BYTE);
     return true;
 }
 static void cancel_async(void *ctx) {

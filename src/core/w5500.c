@@ -11,9 +11,12 @@
 /* An async frame moves at most a few KB: a few milliseconds at the SPI
  * speeds that have one. One that has not ended by then never will. */
 #define ASYNC_MS 50u
-/* Wait frames in a row before a stream stops looking until it is run
- * again: with 256 bytes each, about 10 ms at 12.5 MHz. */
+/* Waits in a row before a stream stops looking until it is run again. A
+ * pause lasts WAIT_BYTES at 12.5 MHz (164 us), then twice that from the
+ * second on (each look is a few register reads for the CPU), so 64 of them
+ * take about 21 ms; a read wait lasts WAIT_BYTES. */
 #define WAIT_LIMIT 64u
+#define WAIT_BYTES KUI_W5500_STREAM_WAIT_BYTES
 /* Failed frames in a row before a stream gives up. Each is tried again
  * after PAUSE_STEP idle bytes per failure so far (at most PAUSE_MAX), as
  * whatever held the console's bus (a screen redraw, music) usually lets go
@@ -450,7 +453,7 @@ static void stream_idle(struct kui_w5500_stream *st, uint32_t bytes, void (*done
         st->failed = true;
     }
 }
-/* After idle clocks, which change nothing whatever happened to them. */
+/* After a pause, which changes nothing whatever happened in it. */
 static void idle_done(void *arg, bool ok) {
     struct kui_w5500_stream *st = arg;
     (void)ok;
@@ -498,13 +501,13 @@ static void wait_done(void *arg, bool ok) {
     else frame_failed(st);
     chain_end(st);
 }
-/* Nothing to move yet: idle clocks, or else a short read that changes
+/* Nothing to move yet: a pause, or else a short read that changes
  * nothing, then look again. */
 static void stream_wait(struct kui_w5500_stream *st) {
     if(st->waits >= WAIT_LIMIT) { ++st->stalled; return; }
-    ++st->waits;
     unsigned s = st->socket;
-    if(st->w->bus->idle_async) stream_idle(st, sizeof(st->scratch), idle_done);
+    bool first = !st->waits++;
+    if(st->w->bus->idle_async) stream_idle(st, first ? WAIT_BYTES : 2u * WAIT_BYTES, idle_done);
     else stream_start(st, st->sending ? KUI_W5500_SOCKET_TX(s) : KUI_W5500_SOCKET_RX(s), st->scratch,
                       sizeof(st->scratch), false, wait_done);
 }

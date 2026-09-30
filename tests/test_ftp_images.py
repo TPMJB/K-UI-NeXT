@@ -484,7 +484,8 @@ def streams(f, server):
     """Uploads and downloads move by the model's async frames while the
     card works (the adapter line says "overlapped"), and each leaves the
     screen's line for the last upload or download. A frame that fails
-    partway is tried again and the transfer goes on streaming; 64 failures
+    partway is tried again (the line gives the share of pieces tried again,
+    rounded up) and the transfer goes on streaming; 64 failures
     in a row leave that transfer to go on without them, and the next one
     streams again; one that never ends is given up after 50 ms, and later
     transfers go without them."""
@@ -514,10 +515,10 @@ def streams(f, server):
     assert "KiB/s: card " in line and ", overlap " in line and "retr" not in line, line
     fault("f")
     line, _ = last("up", lambda: upload(f, "Games/stream.bin", data))
-    assert line.endswith(", 1 retry"), line
+    assert line.endswith(", 0.1% retried"), line
     fault("f")
     line, got = last("down", lambda: download(f, "Games/stream.bin"))
-    assert digest(got) == digest(data) and line.endswith(", 1 retry"), line
+    assert digest(got) == digest(data) and line.endswith(", 0.1% retried"), line
     assert server.count(kept) == 0, server.output()[-3000:]
     fault("F")
     line, _ = last("up", lambda: upload(f, "Games/stream.bin", data))

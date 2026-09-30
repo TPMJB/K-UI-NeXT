@@ -1521,11 +1521,11 @@ static void ftp_rendering(void) {
     snprintf(f.events[2],sizeof(f.events[2]),"192.168.1.20 connected");
     render(&v);
     assert(strstr(drawn,"192.168.1.20 connected"));
-    snprintf(f.last_in,sizeof(f.last_in),"Last up 1023 KiB/s: card 1041, net 1402, overlap 100%%, 999+ retries");
+    snprintf(f.last_in,sizeof(f.last_in),"Last up 1023 KiB/s: card 1041, net 1402, overlap 100%%, 12.5%% retried");
     render(&v);
     assert(strstr(drawn,f.last_in) && strstr(drawn,"track02.raw (412.3 MB)") && strstr(drawn,"192.168.1.20 logged in"));
     assert(!strstr(drawn,"192.168.1.20 connected"));
-    snprintf(f.last_out,sizeof(f.last_out),"Last down 1023 KiB/s: card 1041, net 1402, overlap 100%%, 999 retries");
+    snprintf(f.last_out,sizeof(f.last_out),"Last down 573 KiB/s: card 599, net 1402, overlap 100%%, 12.5%% retried");
     render(&v);
     assert(strstr(drawn,f.last_in) && strstr(drawn,f.last_out) && strstr(drawn,"track02.raw (412.3 MB)"));
     assert(!strstr(drawn,"192.168.1.20 logged in"));

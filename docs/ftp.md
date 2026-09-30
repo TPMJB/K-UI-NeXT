@@ -53,8 +53,11 @@ download at a time then moves between the W5500 and a 128 KB ring in
 memory by those transfers, each finished piece starting the next from the
 interrupt, while the CPU writes (or reads) the card. The network and the
 card then work at the same time instead of taking turns. While there is
-nothing to move yet, the stream waits with idle clocks (a DMA write with
-the W5500's chip select off, which it ignores) rather than reads.
+nothing to move yet, the stream pauses rather than reads: TMU1 times the
+pause, and the SCI and the DMA controller stay quiet (the card's
+bit-banging shares the SH-4's peripheral bus with the DMA). Each pause
+after the first is twice as long, 328 us, as each look costs the CPU a
+few register reads.
 
 A DMA read can fall behind: the SCI's receive register must be emptied
 within one byte's 640 ns, and another bus master (a screen redraw into
@@ -187,21 +190,32 @@ files can be added to those folders. Update K-UI itself on a computer.
   it counted the network's time as whatever was not the card's, so the two
   always added up that way. The likely fault is a DMA read that fell
   behind and overran: the stream then waited 50 ms and switched DMA off
-  for the rest of the session. The next build tries such a piece again
-  (see above) and gives each transfer a line that shows the overlap. The
-  ceiling is the card, which KallistiOS drives by toggling the SCIF pins
-  bit by bit with the CPU: about 1 MB/s written and 0.55 to 0.7 MB/s read.
-  The FTP screen keeps a line for the last upload and one for the last
-  download, until the next one the same way ends, for example "Last up
-  983 KiB/s: card 1041, net 1320, overlap 96%, 3 retries": the transfer's
-  speed, the card's and the network's own speeds while each worked, and
-  the share of the data the network moved while the card was busy (near
-  100% when they worked at once, 0% when they took turns), then the DMA
-  pieces tried again. Instead of the overlap it says "DMA off" or "DMA in
-  use" (another transfer had it), or "then no DMA" after it when the
-  stream gave up partway. The log also gets the stream's socket, average
-  piece and how often it waited for the card or the network. A computer
-  with a card reader is much faster for whole game libraries.
+  for the rest of the session. The next build (`477d3bf`) tries such a
+  piece again (see above) and gives each transfer a line that shows the
+  overlap. It measured about 803 KiB/s up (card 816, net 897, overlap 99%,
+  more than 999 pieces tried again) and 500 KiB/s down (card 503,
+  net 1347, overlap 99%): the card and the network now work at the same
+  time, and the card is the limit both ways. The ceiling is the card,
+  which KallistiOS drives by toggling the SCIF pins bit by bit with the
+  CPU: about 1 MB/s written and 0.55 to 0.7 MB/s read, and less while the
+  stream runs (816 against 1041 KiB/s written, 503 against 573 read). The
+  bit-banging is bound by the SH-4's peripheral bus, which the DMA shares,
+  and the stream's interrupts take CPU time. So the build after that
+  pauses with TMU1 alone instead of idle clocks (a DMA write with the chip
+  select off, which kept the DMA busy while nothing arrived) and looks
+  half as often while it waits. The FTP screen keeps a line for the last
+  upload and one for the last download, until the next one the same way
+  ends, for example "Last up 803 KiB/s: card 816, net 897, overlap 99%,
+  0.4% retried": the transfer's speed, the card's and the network's own
+  speeds while each worked, and the share of the data the network moved
+  while the card was busy (near 100% when they worked at once, 0% when
+  they took turns), then the share of DMA pieces tried again (rounded up,
+  so a single one shows as 0.1%). Instead of the overlap it says "DMA off"
+  or "DMA in use" (another transfer had it), or "then no DMA" after it
+  when the stream gave up partway. The log also gets the stream's socket,
+  average piece, how often it waited for the card or the network, and
+  how many pieces were tried again. A computer with a card reader is much
+  faster for whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.
@@ -270,7 +284,7 @@ through the W5500's raw Ethernet socket.
   W5500 and an unusable password file. Transfers stream through the model's
   async frames (the adapter line must say "overlapped") and leave their
   "Last up" and "Last down" lines; a frame that fails partway through an
-  upload, then a download, is tried again and the line says "1 retry"; 64
+  upload, then a download, is tried again and the line says "0.1% retried"; 64
   failures in a row, and then a frame that never ends, must leave the
   transfer to finish the plain way with the same data ("then no DMA", and
   "DMA off" for the next). A restart without async frames checks the
