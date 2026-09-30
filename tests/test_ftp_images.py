@@ -510,6 +510,30 @@ def streams(f, server):
     print("PASS FTP streams: overlapped transfers, a failed and a stalled DMA frame", flush=True)
 
 
+def card_fails(f, server):
+    """A card write that fails during an upload: 451, nothing kept, and the
+    next upload on the same connection works."""
+    server.send("w")
+    server.wait_for("WRITE 1")
+    try:
+        upload(f, "Games/failing.bin", random.randbytes(300 * 1024))
+        raise AssertionError("an upload whose card write failed succeeded")
+    except (ConnectionError, OSError, ftplib.error_temp) as error:
+        if not isinstance(error, ftplib.error_temp):
+            try:
+                f.voidresp()
+                raise AssertionError("an upload whose card write failed succeeded")
+            except ftplib.error_temp as late:
+                error = late
+        assert str(error).startswith("451"), str(error)
+    names = f.nlst("Games")
+    assert "failing.bin" not in names and not any(n.endswith(".kui-part") for n in names), names
+    upload(f, "Games/after-fail.bin", b"the card works again\n")
+    assert download(f, "Games/after-fail.bin") == b"the card works again\n"
+    f.delete("Games/after-fail.bin")
+    print("PASS FTP card write failure: 451, nothing kept, the next upload works", flush=True)
+
+
 def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=None):
     server = Server(binary, image, port, passive, env=env)
     password = server.password
@@ -525,6 +549,7 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     aborts(f, port, password, files)
     limits(port, password, 1)
     full_card(f)
+    card_fails(f, server)
     streams(f, server)
     # Stopping with a client connected: it is told.
     f.sock.settimeout(30)

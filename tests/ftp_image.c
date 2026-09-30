@@ -28,12 +28,13 @@
  * off (LATENCY, a count and the latency in microseconds); p prints PAUSES, a
  * count and how many sleeping pauses the server has asked for since the
  * last p; f and x make the 20th async frame from then fail or never end
- * (FAULT, a count and the key).
+ * (FAULT, a count and the key); w makes the next card write fail (WRITE and
+ * a count).
  * Every open file and folder must be closed when the card is released. */
 static struct {
     FILE *image;
     uint64_t blocks;
-    unsigned files, dirs, armed, fail_part, fail_old, latencies, reports, sleeps, faults;
+    unsigned files, dirs, armed, fail_part, fail_old, latencies, reports, sleeps, faults, fail_write, writes;
     bool active, connected, ready, stop;
     char last_event[KUI_APP_LINE_CAP];
 } test;
@@ -98,6 +99,11 @@ static bool ends_with(const char *text, const char *suffix) {
     size_t n = strlen(text), k = strlen(suffix);
     return n > k && !strcmp(text + n - k, suffix);
 }
+FRESULT __real_f_write(FIL *file, const void *data, UINT bytes, UINT *wrote);
+FRESULT __wrap_f_write(FIL *file, const void *data, UINT bytes, UINT *wrote) {
+    if(test.fail_write && test.active) { --test.fail_write; *wrote = 0; return FR_DISK_ERR; }
+    return __real_f_write(file, data, bytes, wrote);
+}
 FRESULT __real_f_rename(const TCHAR *from, const TCHAR *to);
 FRESULT __wrap_f_rename(const TCHAR *from, const TCHAR *to) {
     if(test.fail_part && ends_with(from, ".kui-part")) { --test.fail_part; return FR_DENIED; }
@@ -148,6 +154,9 @@ static bool cancel(void) {
         } else if(byte == 'p') {
             printf("PAUSES %u %u\n", ++test.reports, test.sleeps);
             test.sleeps = 0;
+        } else if(byte == 'w') {
+            ++test.fail_write;
+            printf("WRITE %u\n", ++test.writes);
         } else if(byte == 'f' || byte == 'x') {
             /* The 20th async frame from now fails, or never ends. */
             struct w5500_model_options *o = w5500_model_live();
