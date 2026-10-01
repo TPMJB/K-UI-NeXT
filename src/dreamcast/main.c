@@ -1231,7 +1231,8 @@ static void draw_boot(void) {
     static struct kui_boot_view last_view;
     static char last_lines[KUI_BOOT_LOG_ROWS][LINE_BYTES],last_status[128];
     char visible[KUI_BOOT_LOG_ROWS][LINE_BYTES]={{0}},status[128];
-    struct kui_boot_view view={.build=KUI_BUILD_ID,.worker_available=boot_worker_available};
+    struct kui_boot_view view={.build=KUI_BUILD_ID,.worker_available=boot_worker_available,
+        .from_card=kui_storage_boot_from_card()};
     mutex_lock(&lock);
     unsigned maximum=line_count>KUI_BOOT_LOG_ROWS?line_count-KUI_BOOT_LOG_ROWS:0;
     if(boot_ui.scroll>maximum) boot_ui.scroll=maximum;
@@ -1254,7 +1255,8 @@ static void draw_boot(void) {
         boot_ui.transport==last_ui.transport && boot_ui.confirm==last_ui.confirm &&
         boot_ui.scroll==last_ui.scroll && boot_ui.log_column==last_ui.log_column &&
         view.busy==last_view.busy && view.cancelled==last_view.cancelled &&
-        view.worker_available==last_view.worker_available && view.countdown==last_view.countdown &&
+        view.worker_available==last_view.worker_available && view.from_card==last_view.from_card &&
+        view.countdown==last_view.countdown &&
         view.line_count==last_view.line_count && view.total_lines==last_view.total_lines &&
         !strcmp(status,last_status) && !memcmp(visible,last_lines,sizeof(visible));
     if(same) return;
@@ -1266,7 +1268,7 @@ static void draw_boot(void) {
     last_ui=boot_ui;
     /* Only retain scalar fields: the snapshot's text pointers are stack-local. */
     last_view=(struct kui_boot_view){.busy=view.busy,.cancelled=view.cancelled,
-        .worker_available=view.worker_available,.countdown=view.countdown,
+        .worker_available=view.worker_available,.from_card=view.from_card,.countdown=view.countdown,
         .line_count=view.line_count,.total_lines=view.total_lines};
     strcpy(last_status,status);memcpy(last_lines,visible,sizeof(visible));drawn=true;
 }
@@ -1525,6 +1527,8 @@ int main(void) {
 #ifndef KUI_SD_RUNTIME
     kui_boot_ui_init(&boot_ui,timer_ms_gettime64());
     kui_log("CD menu: B stays here; X opens recovery; startup boot begins after 3 seconds.");
+    kui_log(kui_storage_boot_from_card()?"Card boot: automatic loader override bypassed.":
+        "CD autoboot: optional /KUI/boot.kui first; Start K-UI bypasses it.");
     kui_log("Choose Auto, SCIF, SCI or IDE/CF. A retries after inserting an SD card.");
     kui_log("Boot images are read-only. Built-in diagnostics label and confirm writes.");
 #endif
@@ -1918,14 +1922,17 @@ int main(void) {
         if(requested==KUI_BOOT_STOP) {
             mutex_lock(&lock);if(busy) cancel_requested=true;mutex_unlock(&lock);
         } else if(requested==KUI_BOOT_RUNTIME || requested==KUI_BOOT_RECOVERY ||
-                  requested==KUI_BOOT_TOOLS || requested==KUI_BOOT_MEASURE) {
+                  requested==KUI_BOOT_TOOLS || requested==KUI_BOOT_MEASURE ||
+                  requested==KUI_BOOT_AUTOBOOT) {
             mutex_lock(&lock);
             bool claimed=!busy && !pending && !(buttons&CONT_B);
             if(claimed) {busy=true;cancel_requested=false;ui_hz_busy=2;}
             mutex_unlock(&lock);
             if(claimed) {
                 enum kui_boot_mode mode=requested==KUI_BOOT_RECOVERY?KUI_BOOT_MODE_RECOVERY:
-                    requested==KUI_BOOT_TOOLS?KUI_BOOT_MODE_TOOLS:KUI_BOOT_MODE_NORMAL;
+                    requested==KUI_BOOT_TOOLS?KUI_BOOT_MODE_TOOLS:
+                    requested==KUI_BOOT_AUTOBOOT?kui_boot_autostart_mode(kui_storage_boot_from_card()):
+                    KUI_BOOT_MODE_NORMAL;
                 boot_ui.autoboot_until=0;boot_attempt_cancelled=false;
                 boot_attempt_previous=controller_buttons();boot_held_navigation=0;
                 bool measure=requested==KUI_BOOT_MEASURE;
@@ -1935,8 +1942,10 @@ int main(void) {
                     boot_ui.scroll=boot_ui.log_column=0;
                 }
                 snprintf(boot_notice,sizeof(boot_notice),"Reading selected boot image...");
-                kui_log("CD boot: %s from %s",requested==KUI_BOOT_RECOVERY?"recovery":
-                    requested==KUI_BOOT_TOOLS?"card tools":measure?"measure runtime":"runtime",kui_storage_name(boot_ui.transport));
+                kui_log("%s boot: %s from %s",kui_storage_boot_from_card()?"Card":"CD",
+                    requested==KUI_BOOT_RECOVERY?"recovery":requested==KUI_BOOT_TOOLS?"card tools":
+                    measure?"measure runtime":mode==KUI_BOOT_MODE_AUTOBOOT?"optional loader/runtime":"runtime",
+                    kui_storage_name(boot_ui.transport));
                 draw_boot();
                 enum kui_runtime_result result=measure?kui_bootstrap_measure(boot_ui.transport,boot_cancelled):
                     kui_bootstrap_start(boot_ui.transport,mode,boot_cancelled);
@@ -1952,7 +1961,8 @@ int main(void) {
                 } else {
                     snprintf(boot_notice,sizeof(boot_notice),"%s. Insert/check the card, then press A to retry.",
                         kui_runtime_result_name(result));
-                    boot_ui.page=KUI_BOOT_HOME;boot_ui.selected=(unsigned)requested-(unsigned)KUI_BOOT_RUNTIME;
+                    boot_ui.page=KUI_BOOT_HOME;boot_ui.selected=requested==KUI_BOOT_AUTOBOOT?0u:
+                        (unsigned)requested-(unsigned)KUI_BOOT_RUNTIME;
                 }
                 previous=controller_buttons();boot_held_navigation=0;last_draw=0;was_busy=false;
             }

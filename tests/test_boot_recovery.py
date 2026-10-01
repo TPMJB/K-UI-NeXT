@@ -116,10 +116,10 @@ def main():
         no_marker = root / "no-marker.kui"
         no_marker.write_bytes(package(marker=False))
 
-        def fat_image(name, primary=good, recovery=rescue, extension=None):
+        def fat_image(name, primary=good, recovery=rescue, extension=None, boot=None):
             image = root / (name + ".img")
             shutil.copyfile(clean, image)
-            run(BINARY, image, "seed", primary or "-", recovery or "-", extension or "-")
+            run(BINARY, image, "seed", primary or "-", recovery or "-", extension or "-", boot or "-")
             return image
 
         checks = 0
@@ -146,6 +146,19 @@ def main():
         only_tools = fat_image("only-tools", None, None, tools)
         check(only_tools, "fail")
         check(only_tools, "tools", "tools")
+        # CD-only autoboot can select a compatible card bootstrap. Manual
+        # Start/Recovery bypass it, and rejection retains same-volume fallback.
+        with_boot = fat_image("with-boot", boot=tools)
+        check(with_boot, "tools", "autoboot", transport=0)
+        check(with_boot, "runtime")
+        check(with_boot, "recovery", "recovery")
+        check(with_boot, "cancel", "autoboot", fault="cancel")
+        check(valid, "runtime", "autoboot")
+        check(fat_image("bad-boot", boot=corrupt), "runtime", "autoboot")
+        check(fat_image("boot-recovery", primary=corrupt, boot=corrupt), "recovery", "autoboot")
+        # Unlike legacy normal SCIF programs, an automatic override must have
+        # a marker so card-origin startup cannot automatically select itself.
+        check(fat_image("boot-no-marker", boot=no_marker), "runtime", "autoboot", transport=0)
         for name, primary, recovery, expected in (
             ("bad-primary", corrupt, rescue, "recovery"),
             ("missing-primary", None, rescue, "recovery"),
@@ -187,6 +200,7 @@ def main():
         shutil.copyfile(good, tree / "KUI/runtime.kui")
         shutil.copyfile(rescue, tree / "KUI/recovery.kui")
         shutil.copyfile(tools, tree / "KUI/tools.kui")
+        shutil.copyfile(tools, tree / "KUI/boot.kui")
         direct = root / "direct-ext4.img"
         with direct.open("wb") as f:
             f.truncate(32 * 1024 * 1024)
@@ -194,6 +208,7 @@ def main():
         check(direct, "runtime")
         check(direct, "recovery", "recovery")
         check(direct, "tools", "tools")
+        check(direct, "tools", "autoboot")
         print(f"PASS {checks} boot recovery scenarios: real FAT/ext4, MBR/GPT, fallback, recovery/tools selection, transport filtering, cancellation, isolation and zero writes")
 
 

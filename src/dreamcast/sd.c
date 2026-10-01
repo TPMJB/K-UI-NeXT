@@ -15,7 +15,7 @@
 /* One filesystem owner, one selected device per boot. Explicit benchmark
  * connections do not change that identity or fall back to another device. */
 static unsigned requested=KUI_STORAGE_AUTO,selected=KUI_STORAGE_AUTO,active=KUI_STORAGE_AUTO;
-static bool check_crc=true,connected,sci_detected,write_attempted;
+static bool check_crc=true,connected,sci_detected,write_attempted,boot_from_card;
 static struct kui_loader_sd sci;
 static struct kui_ata ata;
 static struct kui_ata_bus ata_bus;
@@ -41,10 +41,12 @@ bool kui_storage_sci_reserved(void) {
 }
 void kui_storage_boot_begin(void) {
     unsigned hint=kui_storage_boot_transport(&boot_marker);
+    boot_from_card=hint<KUI_STORAGE_AUTO;
     if(hint<KUI_STORAGE_AUTO) selected=hint;
     boot_marker.transport=KUI_STORAGE_AUTO;
     boot_marker.inverse=~(uint32_t)KUI_STORAGE_AUTO;
 }
+bool kui_storage_boot_from_card(void) {return boot_from_card;}
 void kui_sd_set_params(unsigned transport,bool crc) {
     if(connected) return;
     requested=transport<=KUI_STORAGE_AUTO?transport:KUI_STORAGE_AUTO;

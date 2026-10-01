@@ -4,4 +4,7 @@
 #include <stdint.h>
 /* Copy the original 640x480 RGB565 startup art to an off-screen framebuffer. */
 void kui_splash_draw(uint16_t *frame);
+/* The CD boot menu has separate artwork; dim in RAM before writing pixels. */
+void kui_boot_splash_draw(uint16_t *frame);
+void kui_boot_splash_draw_dimmed(uint16_t *frame);
 #endif

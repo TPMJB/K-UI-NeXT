@@ -394,12 +394,12 @@ build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c tests/test_vmu_app.c -o $@
 
 # Original startup assets are encoded on the host, never decoded during ripping.
-build/splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/startup-chime.ogg
+build/splash_pixels.inc build/boot_splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/boot-red.png resources/branding/startup-chime.ogg
 	python3 tools/build_splash.py
 
-build/test-splash: tests/test_splash.c src/apps/splash.c include/kui/splash.h build/splash_pixels.inc
+build/test-splash: tests/test_splash.c src/apps/splash.c src/apps/boot_splash.c include/kui/splash.h build/splash_pixels.inc build/boot_splash_pixels.inc
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/splash.c tests/test_splash.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/splash.c src/apps/boot_splash.c tests/test_splash.c -o $@
 
 build/test-gd-play: tests/test_gd_play.c src/apps/gd_play.c include/kui/gd_play.h tests/gd_play_stubs/arch/arch.h
 	@mkdir -p $(@D)
@@ -556,9 +556,9 @@ build/test-boot-ui: tests/test_boot_ui.c src/core/boot_ui.c include/kui/boot_ui.
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_boot_ui.c src/core/boot_ui.c -o $@
 
-build/render-boot: tests/render_boot.c src/core/boot_ui.c src/dreamcast/boot_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/apps/splash.c build/splash_pixels.inc include/kui/boot_ui.h include/kui/version.h
+build/render-boot: tests/render_boot.c src/core/boot_ui.c src/dreamcast/boot_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/apps/boot_splash.c build/boot_splash_pixels.inc include/kui/boot_ui.h include/kui/version.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) tests/render_boot.c src/core/boot_ui.c src/dreamcast/boot_draw.c src/dreamcast/shell_font.c src/apps/splash.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) tests/render_boot.c src/core/boot_ui.c src/dreamcast/boot_draw.c src/dreamcast/shell_font.c src/apps/boot_splash.c -o $@
 
 build/ext4-boot: tests/ext4_boot.c src/core/ext4_boot.c src/core/boot_volume.c src/core/runtime_image.c src/core/data.c include/kui/ext4_boot.h include/kui/boot_volume.h include/kui/runtime.h $(LWEXT4_HOST_OBJECTS) $(LWEXT4_HEADERS)
 	@mkdir -p $(@D)

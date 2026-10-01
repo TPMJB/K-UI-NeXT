@@ -16,12 +16,16 @@ FAT32-boot/ext4-data layout described in [boot-recovery.md](boot-recovery.md).
 No ext4 repair program is bundled; current apps intentionally reject that split
 layout until the runtime gains ext4 support.
 
-## First test without reburning
+## Check the final artwork without reburning
 
-The owner confirmed normal SCIF boot with the `82984` CD. Its photographed
-1,546,484-byte runtime load took roughly seven seconds by observation; that
-was not an instrumented measurement. The new timing/redraw revision needs
-console validation.
+The owner confirmed normal SCIF boot with the `82984` CD, then confirmed a
+substantially faster launch after entering Card tools and checking the new
+`18dd87d457fc` bootstrap build. The photographed measurement of the same
+1,546,484-byte runtime reported 60 ms initialization and 2,771 ms load/check
+(544.8 KiB/s), with three redraws totaling 818 ms. Drawing overlaps loading;
+these durations must not be added. The old CD still loaded Card tools slowly,
+as expected. This validates the redraw correction, not a timed comparison or
+the newer optional override/artwork changes.
 
 Use the **bootstrap-cd** download, but copy **only `KUI/tools.kui`** onto the
 card. Keep `KUI/runtime.kui` and `KUI/recovery.kui` unchanged. This utility is
@@ -30,12 +34,13 @@ it is not an ext4 repair program.
 
 1. Boot the existing compatible graphical CD (the `82984` build has Card tools),
    pause its automatic startup and choose **Card tools**.
-2. When the newly loaded menu appears, press **B** to pause its automatic
-   startup. Open **Diagnostics → Measure load time**.
-3. Read the phase timings in the log. This action reads and verifies the runtime
-   without executing it or writing the card. Afterwards, return Home and choose
-   **Start K-UI** when ready. Take one photo of the measurement results,
-   including the redraw count/time.
+2. Confirm the red artwork, then press **B** to open the menu. Its header should
+   say **Card boot / recovery** and show the new package's build ID.
+3. Choose **Start K-UI** and confirm the normal runtime opens. The prior loading
+   correction is already confirmed; no repeat timing measurement is requested.
+
+Diagnostics → Measure load time remains available for later troubleshooting.
+It reads and verifies the runtime without executing it or writing the card.
 
 The log separates device initialization from loading/checking and reports the
 loaded build and effective KiB/s. Loading/checking includes partition and
@@ -45,19 +50,23 @@ startup. Measurement uses the normal filename policy: if `runtime.kui` fails,
 `recovery.kui` may be measured instead, with the fallback/build shown in logs.
 
 The existing CD still performs the initial `tools.kui` load at its old speed.
-This is a measurement utility, not a permanent update to the burned CD. The
-test can distinguish loading costs in the new code before deciding whether a
-CD refresh is worthwhile. No card formatting or new runtime installation is
-needed. A CD without a Card tools entry cannot use this particular shortcut.
+This card utility does not permanently update the burned CD. The short check
+previews the final artwork and boot menu before using another CD-R; it does not
+exercise CD-origin automatic selection of `boot.kui`. No card formatting or new
+runtime installation is needed. A CD without a Card tools entry cannot use this
+particular shortcut.
 
 ## Install and use
 
 Burn `kui-bootstrap.cdi` as a disc image onto a new boot CD-R. Normal startup
 shows the original K-UI badge, including `github.com/TPMJB`, under the Sega
-logo, then the Dáinsleif artwork and startup countdown. Any input opens the
+logo, then the red Dáinsleif artwork and startup countdown. Any input opens the
 graphical menu. After three seconds without input,
-Start K-UI searches SCIF, SCI and IDE/CF. On each device it tries
-`/KUI/runtime.kui`, then `/KUI/recovery.kui` if the first image cannot load.
+unattended CD startup searches SCIF, SCI and IDE/CF. On each device it tries
+optional `/KUI/boot.kui`, then `/KUI/runtime.kui` and `/KUI/recovery.kui` when an
+image cannot load. The package deliberately leaves `boot.kui` absent, so normal
+startup still loads the runtime directly. A bootstrap already loaded from the
+card skips the optional override to avoid recursion.
 It accepts the existing FatFs layouts or the clean ext4 profile documented
 above. Compatible runtime updates can reuse this CD; a bootstrap bug fix or
 unsupported format change may still require a replacement.
@@ -65,7 +74,10 @@ unsupported format change may still require a replacement.
 Any input pauses automatic startup. Select Start K-UI, Recovery, Card tools,
 Diagnostics or Help with Up/Down and A. Left/Right on Home chooses Auto, SCIF,
 SCI or IDE/CF for this session; an explicit source does not fall back to another
-device. B returns or stops the current operation, and a later attempt can still
+device. Manual **Start K-UI** always bypasses `boot.kui`; Recovery and Card tools
+retain their separate fixed paths. Hold B during startup to keep those built-in
+CD paths available if an optional override launches but hangs. B returns or
+stops the current operation, and a later attempt can still
 run. X on Home loads only `/KUI/recovery.kui`, useful when a checksum-valid normal
 runtime hangs after launch. Card tools loads only `/KUI/tools.kui`; this
 bootstrap package supplies the measurement utility as an optional manual copy.
@@ -116,10 +128,22 @@ image, or return to Home if absent; Card tools should report its missing file
 when none is installed, or open the new menu when this utility is copied.
 Measure load time must return after validation without starting an image.
 Confirm that write/read, save-log and benchmark actions
-show confirmation first. Normal SCIF boot on `82984` is confirmed; the new
-timing/redraw revision awaits console validation. SCI and IDE/CF paths retain
+show confirmation first. Normal SCIF boot from `18dd87d457fc` and its redraw
+correction are confirmed. The newer optional override and red artwork still
+await console validation. SCI and IDE/CF paths retain
 the hardware status and short
 integrity/game check described in the storage guide.
+
+## Later boot-menu updates without another CD
+
+The optional `/KUI/boot.kui` hook lets a compatible bootstrap utility replace
+the menu on unattended CD startup. Future releases may provide an explicit
+update for that filename; for this release, leave it absent for faster startup.
+See [the override and recovery contract](boot-recovery.md#optional-card-update-for-the-boot-menu).
+It uses the existing version-1 envelope and validated transport marker, with no
+new on-disk ABI. Updates to code that runs after the CD reads that image can
+then arrive on the card. New unsupported hardware, filesystem or envelope
+requirements that prevent the CD reading it may still require a new disc.
 
 ## Historical playable Games baseline
 

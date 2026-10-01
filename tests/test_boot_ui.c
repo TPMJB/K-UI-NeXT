@@ -11,12 +11,13 @@ int main(void) {
     kui_boot_ui_init(&ui,1000);
     assert(ui.transport==KUI_STORAGE_AUTO);
     assert(kui_boot_ui_input(&ui,0,3999,false,true)==KUI_BOOT_NONE);
-    assert(kui_boot_ui_input(&ui,0,4000,false,true)==KUI_BOOT_RUNTIME);
+    assert(kui_boot_ui_input(&ui,0,4000,false,true)==KUI_BOOT_AUTOBOOT);
     assert(input(&ui,0,false,true)==KUI_BOOT_NONE); /* no repeated probes */
     assert(input(&ui,KUI_BOOT_A,false,true)==KUI_BOOT_RUNTIME); /* insert and retry */
     kui_boot_ui_init(&ui,1000);
     assert(kui_boot_ui_input(&ui,KUI_BOOT_B,3999,false,true)==KUI_BOOT_NONE);
     assert(!ui.autoboot_until && input(&ui,0,false,true)==KUI_BOOT_NONE);
+    assert(input(&ui,KUI_BOOT_A,false,true)==KUI_BOOT_RUNTIME); /* manual override bypass */
     assert(input(&ui,KUI_BOOT_X,false,true)==KUI_BOOT_RECOVERY);
     assert(input(&ui,KUI_BOOT_B,false,true)==KUI_BOOT_NONE);
     input(&ui,KUI_BOOT_RIGHT,false,true);
@@ -62,6 +63,9 @@ int main(void) {
     kui_boot_ui_init(&ui,1000);
     assert(kui_boot_ui_input(&ui,0,4000,true,true)==KUI_BOOT_NONE);
     assert(!ui.autoboot_until);
-    puts("boot UI: countdown, retry, source, recovery/tools, confirmations and busy ownership passed");
+    kui_boot_ui_init(&ui,1000);
+    assert(kui_boot_ui_input(&ui,KUI_BOOT_X,4000,false,true)==KUI_BOOT_RECOVERY);
+    assert(!ui.autoboot_until); /* recovery wins even at the autoboot deadline */
+    puts("boot UI: separate auto/manual boot, retry, source, recovery/tools, confirmations and busy ownership passed");
     return 0;
 }

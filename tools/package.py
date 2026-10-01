@@ -348,13 +348,16 @@ def main():
     for name in ("LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, boot / name)
     shutil.copytree(dist / "LICENSES", boot / "LICENSES")
+    for name in ("boot-red.png", "boot-red-README.md", "boot-red-prompt.txt"):
+        shutil.copyfile(ROOT / "resources/branding" / name, boot / name)
     boot_record = {"kind": "bootstrap-cd", "commit": commit, "release": release,
                    "compiler": compiler, "dependencies": lock,
                    "bootstrap": {
                        "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
                        "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                        "cdi_sha256": hashlib.sha256(cdi.read_bytes()).hexdigest(),
-                       "cdi_bytes": cdi.stat().st_size, "badge": badge_info},
+                       "cdi_bytes": cdi.stat().st_size, "badge": badge_info,
+                       "artwork_sha256": hashlib.sha256((ROOT / "resources/branding/boot-red.png").read_bytes()).hexdigest()},
                    "card_utility": {**tools_info, "path": "KUI/tools.kui",
                        "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
                        "package_sha256": hashlib.sha256(tools_package).hexdigest(),
@@ -367,13 +370,12 @@ def main():
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
         "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
-        "FIRST TEST: no CD reburn. Copy only KUI/tools.kui onto the card; leave\n"
+        "CARD PREVIEW: no CD reburn. Copy only KUI/tools.kui onto the card; leave\n"
         "KUI/runtime.kui and KUI/recovery.kui unchanged. On the existing compatible\n"
-        "CD choose Card tools. When the new menu opens, press B to pause automatic\n"
-        "startup, then Diagnostics -> Measure load time. It validates normal boot\n"
-        "selection (including recovery fallback) without execution or writes and\n"
-        "shows phase timings. Photograph the results, including redraw count/time.\n"
-        "You may then return Home and choose Start K-UI. The existing CD still loads\n"
+        "CD choose Card tools. Check the red artwork, press B, and confirm the\n"
+        "Card boot / recovery header and this package's build ID. Choose Start K-UI\n"
+        "to confirm normal launch. No repeat timing measurement is requested.\n"
+        "This preview does not exercise CD-origin boot.kui selection. The old CD loads\n"
         "tools.kui at its old speed; this utility does not patch the burned disc.\n"
         "The same bootstrap is included as kui-bootstrap.cdi for a later CD refresh.\n"
         "For SCI/IDE boot, also install this run's matching runtime and Games payloads.\n"
@@ -381,7 +383,11 @@ def main():
         "This CD also loads runtime.kui from clean, compatible ext4 volumes read-only.\n"
         "The supplied runtime still uses FAT32/exFAT; keep your card as-is for now.\n"
         "Read EXT4-BOOTSTRAP.md for the fixed format and future card-only development.\n"
-        "The artwork shows a three-second automatic boot countdown; any input pauses it.\n"
+        "Crimson Dainsleif artwork shows a three-second countdown; any input pauses it.\n"
+        "CD autoboot first tries optional KUI/boot.kui, then runtime/recovery on the same\n"
+        "source. This optional update file is not installed by the package. Manual Start\n"
+        "and Recovery bypass it; card-loaded bootstrap menus skip it to avoid loops.\n"
+        "The header identifies CD boot versus Card boot. Read BOOTLOADER-REFRESH.md.\n"
         "Up/Down selects; A opens; B returns/stops; X on Home selects recovery; Y opens logs.\n"
         "Left/Right on Home chooses Auto, SCIF, SCI or IDE/CF for this session.\n"
         "Failed loading returns Home for retry after SD insertion while idle. Power off\n"
@@ -391,8 +397,9 @@ def main():
         "Card tools loads KUI/tools.kui only; the supplied file is this exact bootstrap\n"
         "as a version-1 card utility, not an ext4 repair program. Future compatible\n"
         "tools/recovery programs can arrive as card updates.\n"
-        "Normal SCIF boot on 82984 was confirmed; this timing/redraw revision awaits\n"
-        "console validation. STORAGE-TRANSPORTS.md records other hardware boundaries.\n"
+        "SCIF measurement and faster full launch were confirmed on 18dd87d. This final\n"
+        "artwork/update-hook revision still needs a card test before burning.\n"
+        "STORAGE-TRANSPORTS.md records SCI/IDE hardware boundaries.\n"
         "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
     boot_hashes = []
     for path in sorted(boot.rglob("*")):

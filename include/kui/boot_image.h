@@ -5,9 +5,15 @@
 #include "kui/runtime.h"
 #include "kui/storage.h"
 
-enum kui_boot_mode { KUI_BOOT_MODE_NORMAL, KUI_BOOT_MODE_RECOVERY, KUI_BOOT_MODE_TOOLS };
+enum kui_boot_mode { KUI_BOOT_MODE_NORMAL, KUI_BOOT_MODE_RECOVERY, KUI_BOOT_MODE_TOOLS,
+    KUI_BOOT_MODE_AUTOBOOT };
+
+/* Only unattended CD-origin startup consults boot.kui. A card-loaded menu
+ * goes directly to runtime/recovery, even if that same override is present. */
+enum kui_boot_mode kui_boot_autostart_mode(bool from_card);
 
 /* Fixed filename policy; tools/recovery each try only their requested image.
+ * CD autoboot tries boot, runtime, then recovery on the same selected source.
  * Returns NULL for an invalid mode or after the final attempt. */
 const char *kui_boot_image_mode_path(enum kui_boot_mode mode, unsigned attempt);
 /* Enumerate exactly the requested physical source, or SCIF/SCI/IDE for AUTO.

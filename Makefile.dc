@@ -23,7 +23,7 @@ BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build
     build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
 LOADER_OBJECTS += $(BENCH_OBJECTS)
 LOADER_OBJECTS += build/dc/src/core/boot_ui.o build/dc/src/dreamcast/boot_draw.o \
-    build/dc/src/dreamcast/shell_font.o build/dc/src/apps/splash.o
+    build/dc/src/dreamcast/shell_font.o build/dc/src/apps/boot_splash.o
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/dc/main-runtime.o
 RUNTIME_OBJECTS += $(BENCH_OBJECTS)
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
@@ -38,7 +38,7 @@ RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
 RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewport.o build/dc/src/core/salvage.o build/dc/src/core/recovery_crc.o
-APP_SOURCES := $(wildcard src/apps/*.c)
+APP_SOURCES := $(filter-out src/apps/boot_splash.c,$(wildcard src/apps/*.c))
 RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
@@ -87,10 +87,11 @@ $(RUNTIME): $(RUNTIME_OBJECTS)
 
 -include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)
 
-build/splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/startup-chime.ogg
+build/splash_pixels.inc build/boot_splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/boot-red.png resources/branding/startup-chime.ogg
 	python3 tools/build_splash.py
 
 build/dc/src/apps/splash.o: build/splash_pixels.inc
+build/dc/src/apps/boot_splash.o: build/boot_splash_pixels.inc
 build/dc/src/apps/startup_sound.o: build/startup_ogg.inc
 
 # G3 contains no KOS/newlib runtime. The entry image packs a high resident

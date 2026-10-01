@@ -7,8 +7,9 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { WHITE=0xf7bf, MUTED=0xad79, CYAN=0x5f1f, CRIMSON=0xd92a,
-    PANEL=0x0863, SELECTED=0x30c8, EDGE=0x426b, AMBER=0xfdeb };
+/* Ivory and warm accents stay legible over dark crimson on RF/composite. */
+enum { WHITE=0xff9b, MUTED=0xcdd7, SALMON=0xf594, CRIMSON=0xe12a,
+    PANEL=0x1042, SELECTED=0x58a4, EDGE=0x7946, AMBER=0xfd6f };
 static void box(uint16_t *frame,unsigned x,unsigned y,unsigned w,unsigned h,uint16_t c) {
     for(unsigned row=y;row<y+h && row<480;row++)
         for(unsigned col=x;col<x+w && col<640;col++) frame[row*640+col]=c;
@@ -92,20 +93,20 @@ static void menu(uint16_t *f,const struct kui_boot_ui *ui,const struct kui_boot_
             details[4]="No writes. Y shows logs.";break;
         }
     }
-    text(f,336,126,596,CYAN,heading,false);
+    text(f,336,126,596,SALMON,heading,false);
     for(unsigned i=0;i<6;i++) line(f,336,159+i*26,596,details[i]);
     if(!v->worker_available && !home_page)
         text(f,336,307,596,AMBER,"Diagnostics unavailable",false);
 }
 static void help(uint16_t *f) {
     static const char *const help_lines[]={
-        "Start K-UI: runtime.kui, then recovery.kui if needed.",
-        "Recovery (X): only /KUI/recovery.kui. Y opens the log.",
-        "Card tools: optional /KUI/tools.kui; install it first.",
-        "Boot reads are read-only. No format or repair is built in.",
-        "Insert an SD card while idle, then select Start K-UI.",
+        "CD startup first tries optional /KUI/boot.kui.",
+        "Card startup skips boot.kui; Start K-UI bypasses it.",
+        "Start: runtime.kui, then recovery.kui. X: recovery only.",
+        "Card tools: optional /KUI/tools.kui. Y opens the log.",
+        "Boot reads only; no format or repair. Insert cards idle.",
         "Power off before changing adapters, wiring or IDE/CF.",
-        "Auto searches SCIF, SCI, then IDE. Left/Right picks one.",
+        "Auto tries SCIF, SCI, then IDE. Left/Right picks one.",
         "A FAT boot partition takes priority over ext4 data.",
         "Dirty ext4 needs external repair or a separate tool."
     };
@@ -116,8 +117,8 @@ static void help(uint16_t *f) {
 void kui_boot_ui_draw(uint16_t *frame,const struct kui_boot_ui *ui,
         const struct kui_boot_view *view) {
     if(!frame || !ui || !view) return;
-    kui_splash_draw(frame);
     if(view->countdown && !view->busy && ui->page==KUI_BOOT_HOME) {
+        kui_boot_splash_draw(frame);
         box(frame,32,360,576,96,PANEL);
         box(frame,32,360,5,96,CRIMSON);
         char countdown[64];snprintf(countdown,sizeof(countdown),"Starting K-UI in %u...",view->countdown);
@@ -126,21 +127,21 @@ void kui_boot_ui_draw(uint16_t *frame,const struct kui_boot_ui *ui,
         line(frame,48,432,592,"Any other button pauses automatic startup.");
         return;
     }
-    /* The original art is a quiet backdrop. Opaque panels keep the controls
+    /* The boot art is a quiet backdrop. Opaque panels keep the controls
      * readable over RF/composite; no scaling, fine-line icons or animations. */
-    for(unsigned i=0;i<640*480;i++) frame[i]=(uint16_t)((frame[i]&0xe79cu)>>2);
+    kui_boot_splash_draw_dimmed(frame);
     box(frame,32,24,576,76,PANEL);
     box(frame,32,24,5,76,CRIMSON);
     text(frame,48,34,366,WHITE,"K-UI Boot",true);
-    line(frame,48,65,366,"Dainsleif / CD recovery");
-    text(frame,392,36,594,CYAN,KUI_RELEASE_SHORT,false);
+    line(frame,48,65,366,view->from_card?"Card boot / recovery":"CD boot / recovery");
+    text(frame,392,36,594,SALMON,KUI_RELEASE_SHORT,false);
     char build[40];snprintf(build,sizeof(build),"Build %.12s",view->build?view->build:"local");
     line(frame,392,65,594,build);
     if(ui->page==KUI_BOOT_HOME || ui->page==KUI_BOOT_DIAGNOSTICS) {
         menu(frame,ui,view);
         box(frame,32,346,576,34,PANEL);
         char label[80];snprintf(label,sizeof(label),"Source: %s",source(ui->transport));
-        text(frame,46,354,420,CYAN,label,false);
+        text(frame,46,354,420,SALMON,label,false);
         if(ui->page==KUI_BOOT_HOME) line(frame,442,354,596,"Left/Right");
     } else if(ui->page==KUI_BOOT_HELP) help(frame);
     else if(ui->page==KUI_BOOT_CONFIRM) {
@@ -164,14 +165,14 @@ void kui_boot_ui_draw(uint16_t *frame,const struct kui_boot_ui *ui,
         }
         char label[96];snprintf(label,sizeof(label),"Log: %u lines   Scroll %u   Columns %u+",
             view->total_lines,ui->scroll,ui->log_column+1);
-        text(frame,42,386,598,CYAN,label,false);
+        text(frame,42,386,598,SALMON,label,false);
     }
     char status[100];
     if(view->busy) snprintf(status,sizeof(status),"%s",view->cancelled?"Stopping safely...":
         view->status?view->status:"Reading selected boot image...");
     else if(view->countdown) snprintf(status,sizeof(status),"Starting in %u... any button opens the menu.",view->countdown);
     else snprintf(status,sizeof(status),"%s",view->status?view->status:"Idle. Choose Start K-UI to try the selected source.");
-    if(ui->page!=KUI_BOOT_LOG) text(frame,40,392,600,view->busy?CYAN:WHITE,status,false);
+    if(ui->page!=KUI_BOOT_LOG) text(frame,40,392,600,view->busy?SALMON:WHITE,status,false);
     box(frame,32,420,576,2,EDGE);
     const char *controls=view->busy?"B Stop safely   Y Log":
         ui->page==KUI_BOOT_LOG?"Up/Down Scroll   Left/Right Pan   Start Latest   B Back":

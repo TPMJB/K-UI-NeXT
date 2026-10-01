@@ -27,6 +27,8 @@ unsigned kui_storage_active(void);
 const char *kui_storage_name(unsigned transport);
 bool kui_storage_sci_reserved(void);
 void kui_storage_boot_begin(void);
+/* Latched before consuming the transport marker; unchanged by later probes. */
+bool kui_storage_boot_from_card(void);
 /* Benchmark compatibility: returns the full transport ID, not a bool. */
 unsigned kui_sd_active_sci(void);
 bool kui_sd_connect(void);

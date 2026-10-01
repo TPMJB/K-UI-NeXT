@@ -25,7 +25,7 @@ enum kui_boot_action kui_boot_ui_input(struct kui_boot_ui *ui,
     }
     if(ui->autoboot_until && now>=ui->autoboot_until) {
         ui->autoboot_until=0;
-        return KUI_BOOT_RUNTIME;
+        return KUI_BOOT_AUTOBOOT;
     }
     if(ui->page==KUI_BOOT_LOG) {
         if(pressed&KUI_BOOT_UP) {if(ui->scroll<1500) ++ui->scroll;}

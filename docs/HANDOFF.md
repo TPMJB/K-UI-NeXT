@@ -2,24 +2,31 @@
 
 ## Standalone storage development (2026-09-30)
 
-The owner confirmed that the `82984` CD boots normally through SCIF. Its photo
-shows a 1,546,484-byte runtime, with roughly seven seconds spent loading by
-observation rather than instrumentation. To investigate that loading time, test
-the corrected loader without another burn: the **bootstrap-cd** artifact now
-includes `KUI/tools.kui`, made from the exact CD-bootstrap ELF with the existing
-version-1 envelope and unique transport-marker checks. Copy **only that file**
-and keep the `82984` CD, normal runtime and recovery copy. On the old CD choose
-Card tools; press B in the newly loaded menu, then Diagnostics → **Measure load
-time**. The read-only measurement validates normal boot selection, including
-recovery fallback, but does not execute it. Photograph the phase timings and
-redraw count/time. The initial utility load still uses the old CD's behavior;
-this test does not permanently fix the burned CD. Measurement and revised
-redraw behavior await console validation.
+The owner confirmed that the `82984` CD boots normally through SCIF, but loads
+slowly. The `18dd87d457fc` corrected bootstrap has now been tested through Card
+tools and **Start K-UI from that new menu boots substantially faster**. Its
+read-only measurement of runtime `82984d3d2388` (1,546,484 bytes) reported 60 ms
+initialization, 2,771 ms load/check (544.8 KiB/s), and three redraws totaling
+818 ms. Drawing overlaps the load measurement. The initial Card tools load
+still uses the old CD and remains slow. No further timing tests are requested
+for that correction; installing the corrected CD removes that initial old
+loader step.
+
+The next CD refresh adds optional `/KUI/boot.kui` on unattended **CD-origin**
+startup, allowing later boot-menu fixes to arrive on the card. It is deliberately
+not installed by default, avoiding an extra image load during normal startup.
+Per source, autoboot tries boot → runtime → recovery; manual Start K-UI bypasses
+boot, and explicit Recovery/Tools keep their fixed paths. Card-loaded bootstrap
+startup skips the override, using the validated transport marker to prevent
+self-loading loops. The header distinguishes CD/card origin. Existing v1 image
+validation remains in force, with a mandatory marker for automatic overrides
+even on SCIF. Hold B on CD startup to bypass a checksum-valid override that
+hangs. This new optional path and red artwork still need hardware validation.
 
 The CD interface is now settled around [independent boot/recovery images](boot-recovery.md):
 the graphical Dáinsleif menu auto-starts after three seconds without input;
-any input pauses it. Start K-UI tries `/KUI/runtime.kui` then `/KUI/recovery.kui`
-on the same device. Recovery or X on Home selects recovery only; Card tools
+any input pauses it. Manual Start K-UI tries `/KUI/runtime.kui` then
+`/KUI/recovery.kui` on the same device, bypassing the optional loader override. Recovery or X on Home selects recovery only; Card tools
 selects `/KUI/tools.kui` (optional bootstrap utility supplied separately in the
 bootstrap-cd artifact). Home Left/Right chooses a
 session-only Auto/SCIF/SCI/IDE source. B backs out/stops, Y opens logs, and failed

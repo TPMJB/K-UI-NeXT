@@ -3,10 +3,20 @@
 #include "kui/boot_volume.h"
 #include "kui/ext4_boot.h"
 #include "kui/storage_policy.h"
+#include <string.h>
+
+enum kui_boot_mode kui_boot_autostart_mode(bool from_card) {
+    return from_card ? KUI_BOOT_MODE_NORMAL : KUI_BOOT_MODE_AUTOBOOT;
+}
 
 const char *kui_boot_image_mode_path(enum kui_boot_mode mode, unsigned attempt) {
     if(mode == KUI_BOOT_MODE_RECOVERY) return attempt == 0 ? "0:/KUI/recovery.kui" : NULL;
     if(mode == KUI_BOOT_MODE_TOOLS) return attempt == 0 ? "0:/KUI/tools.kui" : NULL;
+    if(mode == KUI_BOOT_MODE_AUTOBOOT) {
+        if(attempt == 0) return "0:/KUI/boot.kui";
+        if(attempt == 1) return KUI_RUNTIME_PATH;
+        return attempt == 2 ? "0:/KUI/recovery.kui" : NULL;
+    }
     if(mode != KUI_BOOT_MODE_NORMAL) return NULL;
     if(attempt == 0) return KUI_RUNTIME_PATH;
     return attempt == 1 ? "0:/KUI/recovery.kui" : NULL;
@@ -26,8 +36,12 @@ static enum kui_runtime_result accept_image(struct kui_runtime_image *image,
     unsigned transport, const char *path, kui_log_fn log,
     kui_cancel_fn cancelled) {
     if(cancelled()) return KUI_RUNTIME_CANCELLED;
+    /* An automatic override must receive the marker even on SCIF, so an
+     * override built from this bootstrap can identify its card origin and
+     * never automatically load itself again. Legacy normal SCIF images keep
+     * their existing compatibility exception. */
     if(!kui_storage_patch_boot(image->data, image->info.payload_bytes, transport) &&
-       transport != KUI_STORAGE_SCIF) {
+       (transport != KUI_STORAGE_SCIF || !strcmp(path,"0:/KUI/boot.kui"))) {
         log("Boot image %s lacks a valid storage handoff", path + 2);
         return KUI_RUNTIME_VERSION_ERROR;
     }
