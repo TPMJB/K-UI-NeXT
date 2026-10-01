@@ -68,8 +68,11 @@ with block polling for ineligible buffers or a channel owned by another user.
 It does not use the upstream DMA helper that previously stalled W5500 reads.
 The initial polled runtime soak measured 522 KiB/s writes and 529 KiB/s reads; these are
 filesystem-call measurements, not the bus clock rate or retail Games results.
-The DMA candidate still needs a console speed/integrity check. Broader card/module compatibility remains open. Gameplay
-needs its own console measurement. IDE/CF initially uses bounded PIO; optical reads and CF writes
+The first DMA build passed a [416 MiB soak](evidence/sci-dma-soak-2026-10-01.md)
+at 1,005 KiB/s writes and 926 KiB/s reads, with zero errors or DMA faults.
+DOA2 improved substantially but retains a little lag. The next processing
+optimization and broader card/module compatibility remain hardware pending.
+Gameplay needs its own console measurement. IDE/CF initially uses bounded PIO; optical reads and CF writes
 must take turns on their common G1 bus.
 
 ## First console check

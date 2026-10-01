@@ -1,5 +1,20 @@
 # Hardware evidence
 
+## SCI DMA soak passed; DOA2 substantially improved — 2026-10-01
+
+Runtime **cf8e7ea7866b**, run **4**, passed 26 cycles and 416 MiB written and
+verified after remount, with zero errors or DMA faults. Write/read throughput
+was **1,004.62/926.11 KiB/s**: 92.55%/75.15% faster than the first SCI run.
+Reads are 51.25% faster than SCIF; writes remain 6.97% lower. Recorded DMA
+reads exactly match the verified payload's sector count. See the
+[original reports, conditions and comparison](evidence/sci-dma-soak-2026-10-01.md).
+
+The owner reports DOA2 is now "much better", with a tiny amount of lag remaining
+in some areas. This is qualitative title-specific evidence; it does not prove
+the cause of that lag or accept other games, VMU and FMV behavior. The next
+original optimization combines receive processing and overlaps transmit CRC
+work while retaining integrity checks and the existing game pacing.
+
 ## Initial SCI DOA2 play check — 2026-10-01
 
 After the passing SCI soak below, the owner tried Dead or Alive 2 and reported

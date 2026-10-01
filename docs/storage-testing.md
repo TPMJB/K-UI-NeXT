@@ -104,6 +104,12 @@ integrity and actual DMA use before another long soak. Raw throughput figures
 from different presets are useful preliminary observations, but the saved
 baseline comparison still requires matching recipes.
 
+The first DMA build, `cf8e7ea7866b`, then passed the owner's matching 15-minute
+Soak: 26 cycles/416 MiB, zero errors or DMA faults, write/read
+1,004.62/926.11 KiB/s. Its saved counters establish DMA activation. Preserve
+this [DMA result](evidence/sci-dma-soak-2026-10-01.md) alongside the initial
+polled SCI and SCIF baselines when assessing further changes.
+
 Host checks cover real FAT32/exFAT images, corruption and stale-cycle data,
 short I/O, cancellation, flush/close/remount errors, scratch ownership and
 interrupted result/baseline writes. These tests exercise runtime filesystem I/O;

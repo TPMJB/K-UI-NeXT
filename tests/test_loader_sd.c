@@ -26,6 +26,7 @@ struct mock {
     unsigned stop_fault, read_fault_block, tick_step, token_delay, token_delay_reload;
     uint32_t next_address;
     unsigned block_calls, block_bytes, fail_block_call, fail_block_after, fault_calls;
+    unsigned bad_crc_call;
     bool block_fault;
     uint64_t wire_hash;
 };
@@ -275,9 +276,9 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
     return received;
 }
 static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
-                            size_t count, bool slow) {
+                            size_t count, bool slow, uint16_t *crc_out) {
     struct mock *m = ctx;
-    CHECK(!tx && rx && !slow && (count == 16 || count == 512));
+    CHECK(!tx && rx && !slow && crc_out && (count == 16 || count == 512));
     ++m->block_calls;
     for(size_t i = 0; i < count; ++i) {
         if(m->block_calls == m->fail_block_call && i == m->fail_block_after) {
@@ -287,6 +288,7 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
         rx[i] = transfer(ctx, 0xff, false);
         ++m->block_bytes;
     }
+    *crc_out = reference_crc16(rx, (unsigned)count) ^ (m->block_calls == m->bad_crc_call);
     return true;
 }
 static uint32_t ticks(void *ctx) {
@@ -681,6 +683,36 @@ static void block_failures(void) {
     }
 }
 
+static void block_crc_failures(void) {
+    use_blocks = true;
+    struct mock m = {.version2=true, .high_capacity=true, .bad_crc_call=1};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_CRC);
+    CHECK(!card.ready && !m.selected && m.end == 1);
+    for(unsigned multi = 0; multi < 2; ++multi) {
+        m = (struct mock){.version2=true, .high_capacity=true};
+        b = bus(&m);
+        CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+        m.bad_crc_call = m.block_calls + (multi ? 2 : 1);
+        uint8_t data[3 * 512];
+        memset(data, 0xa5, sizeof(data));
+        enum kui_loader_sd_result result = multi ?
+            kui_loader_sd_read_multi(&card, 37, 3, data) :
+            kui_loader_sd_read(&card, 37, 1, data);
+        CHECK(result == KUI_LOADER_SD_CRC && card.ready && !m.selected);
+        CHECK(m.stops == multi && !m.active_deselects && !m.undrained_stops);
+        CHECK(card.last_command == (multi ? 18u : 17u));
+        /* Wire data and its transmitted CRC are correct. Only the callback's
+         * result is wrong, proving the core verifies that returned CRC. */
+        unsigned prefix = (multi ? 2 : 1) * 512;
+        for(unsigned i = 0; i < prefix; ++i)
+            CHECK(data[i] == pattern(37 + i / 512, i % 512));
+        for(unsigned i = prefix; i < sizeof(data); ++i) CHECK(data[i] == 0xa5);
+        kui_loader_sd_shutdown(&card);
+    }
+}
+
 static void protocol_cases(void) {
     normal(true, true);
     normal(true, false);
@@ -751,6 +783,7 @@ int main(void) {
     }
     block_equivalence();
     block_failures();
+    block_crc_failures();
     printf("loader SD protocol: %u assertions passed\n", checks);
     return 0;
 }

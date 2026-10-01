@@ -137,6 +137,12 @@ static uint8_t reverse(uint8_t x) {
     };
     return (uint8_t)((nibble[x & 15u] << 4) | nibble[x >> 4]);
 }
+static uint16_t data_crc(uint16_t crc, uint8_t data) {
+    /* Fold eight x^16+x^12+x^5+1 steps without a second lookup table. */
+    uint32_t x = (crc >> 8) ^ data;
+    x ^= x >> 4;
+    return (uint16_t)((crc << 8) ^ (x << 12) ^ (x << 5) ^ x);
+}
 static bool wait_flag(uint8_t flag) {
     for(unsigned n = 0; n < POLLS; ++n) {
         uint8_t status = rd8(SSR);
@@ -213,14 +219,6 @@ static void purge_buffer(void *buffer) {
         __asm__ __volatile__("ocbp @%0" : : "r"(p) : "memory");
 #endif
 }
-static uint8_t *uncached(void *buffer) {
-#ifdef KUI_SCI_SD_TEST
-    return buffer;
-#else
-    return (uint8_t *)(((uintptr_t)buffer & 0x1fffffffu) | 0xa0000000u);
-#endif
-}
-
 #ifndef KUI_RETAIL_TRANSPORT
 /* The game reader is read-only and carries neither this buffer nor TX DMA. */
 static uint8_t dma_write_buffer[512] __attribute__((aligned(32)));
@@ -229,7 +227,7 @@ static uint8_t dma_write_buffer[512] __attribute__((aligned(32)));
 /* Original bounded DMAC implementation using SH7750 manual sections 14/15.
  * Return -1 before touching the channel when it cannot be borrowed. A
  * started transfer must never fall back at an uncertain SD-stream position. */
-static int dma_block(const uint8_t *tx, uint8_t *rx) {
+static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     void *buffer = rx;
     bool writing = tx != NULL;
 #ifndef KUI_RETAIL_TRANSPORT
@@ -263,6 +261,7 @@ static int dma_block(const uint8_t *tx, uint8_t *rx) {
      * remain masked until it is removed; DMAC completion IRQ is disabled. */
     wr8(SCR, writing ? 0xa0u : 0x70u);
     port.work += 512u * 8u;
+    uint16_t crc = 0;
     bool ok = true;
     if(!writing) {
         for(unsigned i = 0; i < 512 && ok; ++i) {
@@ -270,6 +269,15 @@ static int dma_block(const uint8_t *tx, uint8_t *rx) {
             if(ok) {wr8(TDR, 0xff); wr8(SSR, 0x7cu);}
         }
     }
+#ifndef KUI_RETAIL_TRANSPORT
+    else {
+        /* The DMA reads its reversed bounce buffer while the CPU checks
+         * the immutable logical source; these accesses cannot race. */
+        /* Keep source reads after transfer start so CPU and wire overlap. */
+        __asm__ __volatile__("" : : : "memory");
+        for(unsigned i = 0; i < 512; ++i) crc = data_crc(crc, tx[i]);
+    }
+#endif
     unsigned n = 0;
     while(ok && !(rd32(DMA_CONTROL) & DMA_END)) {
         if(++n == POLLS || (rd8(SSR) & ERRORS) ||
@@ -287,9 +295,14 @@ static int dma_block(const uint8_t *tx, uint8_t *rx) {
     (void)rd32(DMA_CONTROL);
     wr32(DMA_CONTROL, 0);
     if(ok && !writing) {
-        uint8_t *p = uncached(buffer);
-        for(unsigned i = 0; i < 512; ++i) p[i] = reverse(p[i]);
+        /* The pre-DMA purge invalidated every complete buffer line. Only
+         * now, after stopping DMA, may the CPU refill through the caller's
+         * original P1/P2 pointer. Retain cached logical bytes for copying. */
         __asm__ __volatile__("" : : : "memory");
+        for(unsigned i = 0; i < 512; ++i) {
+            rx[i] = reverse(rx[i]);
+            crc = data_crc(crc, rx[i]);
+        }
     }
     for(unsigned i = 0; i < 4; ++i) wr32(DMA_SAR + 4u*i, saved[i]);
     if(ok) wr8(SCR, 0x30u);
@@ -298,11 +311,12 @@ static int dma_block(const uint8_t *tx, uint8_t *rx) {
     if(!ok) COUNT(failures);
     else if(writing) COUNT(tx_blocks);
     else COUNT(rx_blocks);
+    if(ok && crc_out) *crc_out = crc;
     return ok;
 }
 
 static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
-                           size_t count, bool slow) {
+                           size_t count, bool slow, uint16_t *crc_out) {
     (void)ctx;
 #ifdef KUI_RETAIL_TRANSPORT
     /* Resident block users are read-only. Keep runtime write support out of
@@ -313,7 +327,7 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
         return false;
     if(!prepare(slow)) return false;
     if(!slow && count == 512 && (!tx || !rx)) {
-        int result = dma_block(tx, rx);
+        int result = dma_block(tx, rx, crc_out);
         if(result >= 0) return result != 0;
     }
     COUNT(polled_blocks);
@@ -323,6 +337,7 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
     if(!wait_flag(TDRE)) return false;
     wr8(TDR, tx ? reverse(tx[0]) : 0xff);
     wr8(SSR, 0x7cu);
+    uint16_t crc = 0;
     for(size_t i = 0; i < count; ++i) {
         port.work += slow ? 256u : 8u;
         if(!wait_flag(RDRF | TDRE)) return false;
@@ -332,8 +347,11 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
             if(tx) wr8(TDR, reverse(tx[i+1]));
             wr8(SSR, 0x7cu);
         }
-        if(rx) rx[i] = reverse(received);
+        uint8_t logical = rx ? reverse(received) : tx[i];
+        if(rx) rx[i] = logical;
+        crc = data_crc(crc, logical);
     }
+    if(crc_out) *crc_out = crc;
     return true;
 }
 static uint32_t ticks(void *ctx) { (void)ctx; return port.work; }

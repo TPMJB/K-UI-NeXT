@@ -56,6 +56,16 @@ static uint8_t reversed(uint8_t value) {
 static uint8_t received_byte(unsigned index) {
     return (uint8_t)(index*37u+11u); /* Every value once per 256 bytes. */
 }
+/* SD's CRC16-CCITT, computed bit by bit as an independent test oracle. */
+static uint16_t crc16_reference(const uint8_t *bytes,size_t count) {
+    uint16_t crc=0;
+    for(size_t i=0;i<count;++i) {
+        crc^=(uint16_t)bytes[i]<<8;
+        for(unsigned bit=0;bit<8;++bit)
+            crc=(uint16_t)((crc<<1)^((crc&0x8000u)?0x1021u:0));
+    }
+    return crc;
+}
 static bool dma_running(unsigned request) {
     return (hw.chcr&3u)==1u && ((hw.chcr>>8)&15u)==request;
 }
@@ -294,12 +304,12 @@ static void test_scalar_failures(const struct kui_loader_sd_bus *bus) {
 }
 static void test_blocks(const struct kui_loader_sd_bus *bus) {
     uint8_t tx[512], rx[514];
-    const size_t counts[]={1,255,256,512};
     assert(bus->transfer_block);
     for(unsigned mode=0;mode<3;++mode) {
-        for(size_t size=0;size<sizeof(counts)/sizeof(counts[0]);++size) {
-            for(unsigned slow=0;slow<2;++slow) {
-                size_t count=counts[size];
+        for(size_t count=1;count<=512;++count) {
+            for(unsigned variant=0;variant<4;++variant) {
+                unsigned slow=variant&1u;
+                bool with_crc=(variant&2u)!=0;
                 reset(); assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
                 hw.patterned_rx=true;
                 /* Exercise both minimum and delayed readiness. */
@@ -309,7 +319,9 @@ static void test_blocks(const struct kui_loader_sd_bus *bus) {
                 memset(rx,0x5a,sizeof(rx));
                 uint32_t before=bus->ticks(NULL);
                 unsigned delays=hw.delays;
-                assert(bus->transfer_block(NULL,mode==0?NULL:tx,mode==1?NULL:rx+1,count,slow!=0));
+                uint16_t crc=0xa55a;
+                assert(bus->transfer_block(NULL,mode==0?NULL:tx,mode==1?NULL:rx+1,count,slow!=0,with_crc?&crc:NULL));
+                assert(crc==(with_crc?crc16_reference(mode==1?tx:rx+1,count):0xa55a));
                 assert(kui_sci_sd_healthy() && hw.bytes==count && !hw.active);
                 assert(bus->ticks(NULL)-before==count*(slow?256u:8u));
                 assert(hw.brr==(slow?31:0) && !(hw.pdtr&0x80));
@@ -335,29 +347,32 @@ static void test_blocks(const struct kui_loader_sd_bus *bus) {
     reset(); assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
     hw.patterned_rx=true;
     for(size_t i=0;i<sizeof(tx);++i) tx[i]=(uint8_t)i;
-    assert(bus->transfer_block(NULL,tx,tx,sizeof(tx),false));
+    uint16_t crc=0xa55a;
+    assert(bus->transfer_block(NULL,tx,tx,sizeof(tx),false,&crc));
+    assert(crc==crc16_reference(tx,sizeof(tx)));
     for(size_t i=0;i<sizeof(tx);++i) {
         assert(hw.sent[i]==reversed((uint8_t)i));
         assert(tx[i]==received_byte((unsigned)i));
     }
     /* Fast -> slow -> fast changes occur only at a completed-byte boundary. */
-    assert(bus->transfer_block(NULL,NULL,rx,1,true) && hw.brr==31);
-    assert(bus->transfer_block(NULL,NULL,rx,1,false) && hw.brr==0);
+    assert(bus->transfer_block(NULL,NULL,rx,1,true,NULL) && hw.brr==31);
+    assert(bus->transfer_block(NULL,NULL,rx,1,false,NULL) && hw.brr==0);
     kui_sci_sd_release(); restored();
 }
 static void test_block_arguments(const struct kui_loader_sd_bus *bus) {
     uint8_t byte=0x5a;
+    uint16_t crc=0xa55a;
     reset();
     unsigned reads=hw.reads, writes=hw.writes;
-    assert(!bus->transfer_block(NULL,NULL,&byte,1,false));
-    assert(hw.reads==reads && hw.writes==writes && byte==0x5a);
+    assert(!bus->transfer_block(NULL,NULL,&byte,1,false,&crc));
+    assert(hw.reads==reads && hw.writes==writes && byte==0x5a && crc==0xa55a);
     assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
     reads=hw.reads; writes=hw.writes;
     uint32_t ticks=bus->ticks(NULL);
-    assert(!bus->transfer_block(NULL,NULL,NULL,1,false));
-    assert(!bus->transfer_block(NULL,&byte,NULL,0,false));
-    assert(!bus->transfer_block(NULL,NULL,&byte,513,false));
-    assert(hw.reads==reads && hw.writes==writes && byte==0x5a);
+    assert(!bus->transfer_block(NULL,NULL,NULL,1,false,&crc));
+    assert(!bus->transfer_block(NULL,&byte,NULL,0,false,&crc));
+    assert(!bus->transfer_block(NULL,NULL,&byte,513,false,&crc));
+    assert(hw.reads==reads && hw.writes==writes && byte==0x5a && crc==0xa55a);
     assert(bus->ticks(NULL)==ticks && kui_sci_sd_healthy());
     kui_sci_sd_release(); restored();
 }
@@ -370,7 +385,9 @@ static void test_block_failures(const struct kui_loader_sd_bus *bus) {
             hw.timeout=!fault; hw.overrun=fault;
             memset(rx,0x5a,sizeof(rx));
             bus->select(NULL,true);
-            assert(!bus->transfer_block(NULL,writing?tx:NULL,writing?NULL:rx,sizeof(rx),false));
+            uint16_t crc=0xa55a;
+            assert(!bus->transfer_block(NULL,writing?tx:NULL,writing?NULL:rx,sizeof(rx),false,&crc));
+            assert(crc==0xa55a);
             assert(!kui_sci_sd_healthy() && hw.scr==0 && !hw.active);
             assert(hw.bytes==137 && hw.polls<12000);
             if(!writing) {
@@ -378,7 +395,8 @@ static void test_block_failures(const struct kui_loader_sd_bus *bus) {
                 for(size_t i=136;i<sizeof(rx);++i) assert(rx[i]==0x5a);
             }
             unsigned reads=hw.reads, writes=hw.writes;
-            assert(!bus->transfer_block(NULL,NULL,rx,1,false));
+            assert(!bus->transfer_block(NULL,NULL,rx,1,false,&crc));
+            assert(crc==0xa55a);
             assert(bus->transfer(NULL,0xff,false)==0xff);
             assert(hw.reads==reads && hw.writes==writes && hw.bytes==137);
             kui_sci_sd_release(); restored();
@@ -403,25 +421,29 @@ static void test_dma_blocks(const struct kui_loader_sd_bus *bus) {
     uint8_t *rx=storage+32;
     for(size_t i=0;i<sizeof(tx);++i) tx[i]=(uint8_t)i;
     for(unsigned writing=0;writing<2;++writing) {
-        dma_ready(bus);
-        memset(storage,0x5a,sizeof(storage));
-        uint32_t before=bus->ticks(NULL);
-        assert(bus->transfer_block(NULL,writing?tx:NULL,writing?NULL:rx,512,false));
-        assert(kui_sci_sd_healthy() && hw.bytes==512 && hw.dma_bytes==512);
-        assert(hw.dma_starts==1 && hw.cache_purges==1 && hw.received==0);
-        assert(hw.irq_disables==hw.irq_restores && !hw.irq_disabled);
-        assert(!hw.active && !hw.queued && hw.chcr==0x4000 && hw.tcr==7);
-        assert(hw.sar==0x0c002000 && hw.dar==0x0c004000 && hw.dmaor==0x0301);
-        assert(bus->ticks(NULL)-before==512u*8u);
-        for(unsigned i=0;i<512;++i) {
-            assert(hw.sent[i]==(writing?reversed(tx[i]):0xff));
-            if(!writing) assert(rx[i]==received_byte(i));
+        for(unsigned with_crc=0;with_crc<2;++with_crc) {
+            dma_ready(bus);
+            memset(storage,0x5a,sizeof(storage));
+            uint32_t before=bus->ticks(NULL);
+            uint16_t crc=0xa55a;
+            assert(bus->transfer_block(NULL,writing?tx:NULL,writing?NULL:rx,512,false,with_crc?&crc:NULL));
+            assert(crc==(with_crc?crc16_reference(writing?tx:rx,512):0xa55a));
+            assert(kui_sci_sd_healthy() && hw.bytes==512 && hw.dma_bytes==512);
+            assert(hw.dma_starts==1 && hw.cache_purges==1 && hw.received==0);
+            assert(hw.irq_disables==hw.irq_restores && !hw.irq_disabled);
+            assert(!hw.active && !hw.queued && hw.chcr==0x4000 && hw.tcr==7);
+            assert(hw.sar==0x0c002000 && hw.dar==0x0c004000 && hw.dmaor==0x0301);
+            assert(bus->ticks(NULL)-before==512u*8u);
+            for(unsigned i=0;i<512;++i) {
+                assert(hw.sent[i]==(writing?reversed(tx[i]):0xff));
+                if(!writing) assert(rx[i]==received_byte(i));
+            }
+            for(unsigned i=0;i<32;++i) assert(storage[i]==0x5a && storage[i+544]==0x5a);
+            assert(bus->transfer(NULL,0x40,false)==received_byte(512));
+            assert(hw.sent[512]==reversed(0x40));
+            bus->select(NULL,false);
+            kui_sci_sd_release(); restored();
         }
-        for(unsigned i=0;i<32;++i) assert(storage[i]==0x5a && storage[i+544]==0x5a);
-        assert(bus->transfer(NULL,0x40,false)==received_byte(512));
-        assert(hw.sent[512]==reversed(0x40));
-        bus->select(NULL,false);
-        kui_sci_sd_release(); restored();
     }
 }
 static void test_dma_unavailable(const struct kui_loader_sd_bus *bus) {
@@ -434,7 +456,9 @@ static void test_dma_unavailable(const struct kui_loader_sd_bus *bus) {
             if(which) hw.dmaor=dmaor_states[state];
             else hw.chcr=chcr_states[state];
             uint32_t chcr=hw.chcr, dmaor=hw.dmaor;
-            assert(bus->transfer_block(NULL,NULL,rx,512,false));
+            uint16_t crc=0xa55a;
+            assert(bus->transfer_block(NULL,NULL,rx,512,false,&crc));
+            assert(crc==crc16_reference(rx,512));
             assert(hw.bytes==512 && !hw.dma_writes && !hw.dma_starts && !hw.cache_purges);
             assert(hw.chcr==chcr && hw.dmaor==dmaor);
             assert(hw.irq_disables==hw.irq_restores && !hw.irq_disabled);
@@ -455,7 +479,9 @@ static void test_dma_failures(const struct kui_loader_sd_bus *bus) {
             hw.timeout=fault==0; hw.overrun=fault==1; hw.dma_stall=fault==2;
             hw.dma_completion_stall=fault==3; hw.dma_error=fault==4;
             hw.dma_late_error=fault==5; /* AE and TE become visible together. */
-            assert(!bus->transfer_block(NULL,writing?tx:NULL,writing?NULL:storage+32,512,false));
+            uint16_t crc=0xa55a;
+            assert(!bus->transfer_block(NULL,writing?tx:NULL,writing?NULL:storage+32,512,false,&crc));
+            assert(crc==0xa55a);
             assert(!kui_sci_sd_healthy() && hw.scr==0 && !hw.active && !hw.queued);
             assert(hw.bytes<=((fault==3 || fault==5)?512u:139u) && hw.polls<30000 && hw.dma_starts==1);
             if(fault==3) assert(hw.bytes==512 && hw.dma_bytes==512);
@@ -465,7 +491,8 @@ static void test_dma_failures(const struct kui_loader_sd_bus *bus) {
             assert(hw.sar==0x0c002000 && hw.dar==0x0c004000 && hw.tcr==7 && hw.chcr==0x4000);
             for(unsigned i=0;i<32;++i) assert(storage[i]==0x5a && storage[i+544]==0x5a);
             unsigned reads=hw.reads, writes=hw.writes;
-            assert(!bus->transfer_block(NULL,NULL,storage+32,512,false));
+            assert(!bus->transfer_block(NULL,NULL,storage+32,512,false,&crc));
+            assert(crc==0xa55a);
             assert(bus->transfer(NULL,0xff,false)==0xff);
             assert(hw.reads==reads && hw.writes==writes);
             kui_sci_sd_release();
@@ -476,6 +503,7 @@ static void test_dma_failures(const struct kui_loader_sd_bus *bus) {
 }
 int main(void) {
     const struct kui_loader_sd_bus *bus=kui_sci_sd_bus(); assert(bus);
+    assert(crc16_reference((const uint8_t *)"123456789",9)==0x31c3);
     test_ownership(bus);
     test_scalar_failures(bus);
     test_blocks(bus);
@@ -484,5 +512,5 @@ int main(void) {
     test_dma_blocks(bus);
     test_dma_unavailable(bus);
     test_dma_failures(bus);
-    puts("SCI SD bus: delayed polled/DMA blocks, byte order, bounded faults and ownership restoration passed");
+    puts("SCI SD bus: polled/DMA byte order and CRC, bounded faults and ownership restoration passed");
 }

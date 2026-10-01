@@ -33,6 +33,15 @@ throughput and DMA counts before another long soak or DOA2 comparison. A
 runtime-only update does not replace the game reader. Do not claim a measured
 speed improvement until the new console results arrive.
 
+Those results have now arrived for **cf8e7ea7866b**: run 4 passed 26 cycles,
+416 MiB verified, zero errors/DMA faults, and write/read
+**1,004.62/926.11 KiB/s**. Reads are 75.15% faster than initial SCI and 51.25%
+faster than SCIF. The owner reports DOA2 is "much better" with a tiny amount of
+lag remaining. See the [DMA soak evidence](evidence/sci-dma-soak-2026-10-01.md).
+The next candidate targets receive reversal/CRC passes and overlaps write CRC
+with DMA, keeping game pacing unchanged. It still needs console validation;
+do not attribute all remaining game lag to storage or promise disc equivalence.
+
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now
 synchronizes the BIOS last-set timestamp as well as the RTC and KOS cached time.
@@ -108,7 +117,8 @@ without sharing SCI between storage and network boards. See
 [storage-transports.md](storage-transports.md) for the matching boot-CD/runtime
 installation, source selection and first hardware check. This is a development
 build: SCI runtime storage has the initial passing soak above and a qualitative
-DOA2 report. The new SCI DMA paths and CF hardware/driver remain unverified on
+DOA2 report. The first SCI DMA paths also passed the later soak and improved
+DOA2; their processing follow-up and CF hardware/driver remain unverified on
 the console.
 Full ext4 application support and shared SCI-bus operation remain outside this
 change. Development is

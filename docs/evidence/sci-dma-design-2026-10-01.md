@@ -21,13 +21,19 @@ methods halfway through the sector.
 For eligible 512-byte reads, DMA channel 1 moves SCI receive data directly
 into the caller's isolated, 32-byte-aligned RAM buffer. The CPU supplies exactly
 512 dummy bytes to generate the clock; it no longer reads/clears the receive
-register once per payload byte. After DMA completion, software restores byte
-bit order through the uncached alias. The game reader's existing sector cache
-is aligned for this purpose, avoiding another 512-byte resident buffer.
+register once per payload byte. The first validated build restored byte bit
+order through the uncached alias, then calculated CRC in a separate pass.
+The follow-up candidate combines reversal and CRC after DMA completion through
+the caller's original alias, allowing isolated P1 buffers to use cache again
+after the pre-DMA purge. No CPU access occurs while DMA owns the buffer.
+The game reader's existing aligned sector cache avoids a second resident buffer.
 
 Runtime writes use a separate aligned sector buffer, reverse the outgoing bits
-before transmission and let channel 1 feed the transmit register. This buffer
-and write implementation are excluded from the read-only game resident.
+before transmission and let channel 1 feed the transmit register. The follow-up
+candidate computes CRC from the immutable original source while transmit DMA
+is active. CRC is published only after successful completion; protocol CRC
+bytes and response checking remain unchanged. This buffer and write
+implementation are excluded from the read-only game resident.
 
 DMA is borrowed only when the controller is enabled without a global error and
 channel 1 has no active transfer, unacknowledged completion or enabled completion
@@ -66,8 +72,13 @@ operation. Protocol tests exercise equivalent bulk/scalar framing, CRC
 failures, stream limits and stop-command cleanup. Native builds must still
 pass the instruction, resident memory and stack guards at their existing limits.
 
-Host tests cannot establish the actual console speed or DMA timing. Keep the
-initial soak as the baseline. Install matching `KUI/runtime.kui` and
+The first DMA build **cf8e7ea7866b** passed the owner's 15-minute soak with
+416 MiB verified, zero errors/DMA faults and write/read 1,004.62/926.11 KiB/s.
+DOA2 was substantially improved with a little lag remaining. See the
+[hardware result](sci-dma-soak-2026-10-01.md). This does not validate the
+follow-up processing changes or establish disc-equivalent game behavior.
+
+Keep both original and first-DMA soaks as comparison points. Install matching `KUI/runtime.kui` and
 `KUI/apps/games/retail-boot.kui`; the existing `6af5e11` boot CD and exFAT card
 remain usable. First run Diagnostics → R → Storage tests → Quick once, and
 inspect integrity, throughput and the DMA counts. A longer soak and another

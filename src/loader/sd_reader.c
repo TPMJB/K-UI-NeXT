@@ -109,12 +109,10 @@ static enum kui_loader_sd_result read_payload(struct kui_loader_sd *card,
                                              uint8_t *data, size_t count) {
     uint16_t crc = 0;
     if(!card->slow && card->bus.transfer_block) {
-        if(!card->bus.transfer_block(card->bus.ctx, NULL, data, count, false)) {
+        if(!card->bus.transfer_block(card->bus.ctx, NULL, data, count, false, &crc)) {
             card->ready = false;
             return KUI_LOADER_SD_TIMEOUT;
         }
-        for(size_t i = 0; i < count; ++i)
-            crc = data_crc(crc, data[i]);
     } else {
         for(size_t i = 0; i < count; ++i) {
             data[i] = transfer(card, 0xff);

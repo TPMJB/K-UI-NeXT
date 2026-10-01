@@ -10,6 +10,7 @@ struct mock {
     uint32_t now,address;
     uint8_t frame[6],data[514],reply[2];
     unsigned block_calls,block_bytes,fail_block_call,fail_block_after,fault_calls;
+    unsigned bad_crc_call,crc_rejections;
     bool block_fault;
     uint64_t wire_hash;
 };
@@ -37,9 +38,11 @@ static uint8_t transfer(void *ctx,uint8_t value,bool slow) {
         m->data[m->data_n-1]=value;
         if(++m->data_n==515) {
             uint16_t crc=reference_crc(m->data);
-            assert(m->data[512]==(uint8_t)(crc>>8) && m->data[513]==(uint8_t)crc);
+            bool crc_ok=m->data[512]==(uint8_t)(crc>>8) && m->data[513]==(uint8_t)crc;
+            assert(crc_ok || (m->bad_crc_call && m->block_calls==m->bad_crc_call));
+            if(!crc_ok) ++m->crc_rejections;
             ++m->blocks;m->data_n=0;
-            m->reply[0]=m->no_data_reply?0xff:m->reject?m->reject:5;
+            m->reply[0]=!crc_ok?0x0b:m->no_data_reply?0xff:m->reject?m->reject:5;
             m->reply_n=1;m->busy=m->no_data_reply?0:3;
             if(!m->multi) m->writing=false;
         }
@@ -63,9 +66,9 @@ static uint8_t transfer(void *ctx,uint8_t value,bool slow) {
     return 0xff;
 }
 static bool transfer_block(void *ctx,const uint8_t *tx,uint8_t *rx,
-                           size_t count,bool slow) {
+                           size_t count,bool slow,uint16_t *crc_out) {
     struct mock *m=ctx;
-    assert(tx && !rx && count==512 && !slow);
+    assert(tx && !rx && count==512 && !slow && crc_out);
     ++m->block_calls;
     for(size_t i=0;i<count;i++) {
         if(m->block_calls==m->fail_block_call && i==m->fail_block_after) {
@@ -73,6 +76,7 @@ static bool transfer_block(void *ctx,const uint8_t *tx,uint8_t *rx,
         }
         (void)transfer(ctx,tx[i],false);++m->block_bytes;
     }
+    *crc_out=reference_crc(tx)^(m->block_calls==m->bad_crc_call);
     return true;
 }
 static struct kui_loader_sd card(struct mock *m) {
@@ -160,6 +164,34 @@ static void block_failures(void) {
         assert(kui_sci_sd_sync(&c)==KUI_LOADER_SD_NOT_READY && m.fault_calls==fault_calls);
     }
 }
+static void block_crc_tests(void) {
+    uint8_t data[1024];
+    static const uint16_t expected[]={0x0000,0x7fa1,0x31c3};
+    slow_path=false;
+    for(unsigned mode=0;mode<2;mode++) {
+        use_blocks=mode!=0;
+        for(unsigned vector=0;vector<3;vector++) {
+            memset(data,vector==1?0xff:0,512);
+            if(vector==2) memcpy(data+503,"123456789",9);
+            assert(reference_crc(data)==expected[vector]);
+            struct mock m={0};struct kui_loader_sd c=card(&m);
+            assert(kui_sci_sd_write(&c,17,1,data)==KUI_LOADER_SD_OK);
+            assert(m.data[512]==(uint8_t)(expected[vector]>>8) &&
+                   m.data[513]==(uint8_t)expected[vector] && !m.crc_rejections);
+        }
+    }
+    use_blocks=true;
+    for(unsigned i=0;i<sizeof(data);i++) data[i]=(uint8_t)(i*29u+7u);
+    for(unsigned count=1;count<=2;count++) {
+        struct mock m={.bad_crc_call=count};struct kui_loader_sd c=card(&m);
+        assert(kui_sci_sd_write(&c,17,count,data)==KUI_LOADER_SD_CRC);
+        assert(!c.ready && !m.selected && m.crc_rejections==1);
+        assert(m.blocks==count && m.stops==count-1 && m.block_bytes==count*512);
+        assert(c.last_command==(count==1?24:25) && c.last_response==0x0b);
+        unsigned packets=m.packets;
+        assert(kui_sci_sd_write(&c,17,1,data)==KUI_LOADER_SD_NOT_READY && m.packets==packets);
+    }
+}
 int main(void) {
     for(unsigned mode=0;mode<3;mode++) {
         use_blocks=mode!=0;slow_path=mode==2;
@@ -167,5 +199,6 @@ int main(void) {
     }
     block_equivalence();
     block_failures();
+    block_crc_tests();
     return 0;
 }
