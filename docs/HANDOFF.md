@@ -2,12 +2,23 @@
 
 ## Standalone storage development (2026-09-30)
 
+The refreshed CD now also contains a read-only ext4 `/KUI/runtime.kui` loader;
+see [ext4-bootstrap.md](ext4-bootstrap.md). It accepts supported clean 1/2/4 KiB
+ext4 volumes on raw media, a sole Linux MBR partition, or strictly validated GPT.
+The pinned real-image fixture uses 4 KiB blocks. No journal replay, repair or
+device writes occur. **Apps and Games preparation still use FatFs/exFAT/FAT32;
+keep the working card format until a later runtime adds ext4 app access.** This
+CD prepares compatible future runtime updates to arrive on the card, while
+bootstrap defects or incompatible format changes may still require a reburn.
+Console validation of ext4 boot remains pending.
+
 The owner requested a single-card boot and Games path for SCIF, SCI and IDE/CF,
 without sharing SCI between storage and network boards. See
 [storage-transports.md](storage-transports.md) for the matching boot-CD/runtime
 installation, source selection and first hardware check. This is a development
 build: SCI microSD and the CF hardware/driver remain unverified on the console.
-ext4 and shared SCI-bus operation are not part of this change. Development is
+Full ext4 application support and shared SCI-bus operation remain outside this
+change. Development is
 in [PR #6](https://github.com/TPMJB/K-UI-NeXT/pull/6). The Games package embeds
 three separately linked readers and installs only the selected one; all three
 retain the existing low-memory, stack, instruction and embedded-byte audits.

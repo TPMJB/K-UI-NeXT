@@ -3,7 +3,9 @@
 This development build adds storage discovery to the CD bootstrap, runtime and
 native Games reader. SCIF is the existing hardware-tested path. SCI microSD and
 IDE/CF need console validation; a successful build is not a hardware pass.
-The filesystem remains exFAT/FAT32 through FatFs. ext4 is future work.
+Application filesystems remain exFAT/FAT32 through FatFs. The refreshed CD also
+includes a [read-only ext4 runtime loader](ext4-bootstrap.md), preparing for a
+later runtime with ext4 app support. Keep the existing working card filesystem.
 
 ## Install for one-card SCI testing
 
@@ -75,6 +77,7 @@ for comparisons. No formatting or bulk reripping is required for this check.
 
 The block-device boundary is shared, while Games continues to consume validated
 physical extents. IDE/CF therefore starts with the existing exFAT support.
-Adding ext4 will require filesystem operations and extent export separately;
-it is not enabled by detecting an ATA device. See
+The CD's ext4 reader loads only `/KUI/runtime.kui`; full ext4 use still requires
+application filesystem operations and game extent export separately. It is not
+enabled by detecting an ATA device. See
 [the filesystem design](storage-filesystems.md).

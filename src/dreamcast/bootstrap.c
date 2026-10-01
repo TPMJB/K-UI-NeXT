@@ -2,6 +2,8 @@
 #include "platform.h"
 #include "kui/runtime.h"
 #include "kui/storage_policy.h"
+#include "kui/ext4_boot.h"
+#include "kui/media.h"
 #include <arch/exec.h>
 #include <kos/thread.h>
 #include <stdlib.h>
@@ -16,12 +18,30 @@ void kui_bootstrap_load(kui_cancel_fn cancelled) {
     /* A present but empty SCIF card must not hide a runtime on SCI/IDE.
      * Only validated images choose a source; probing never writes the card. */
     for(unsigned candidate=KUI_STORAGE_SCIF;candidate<KUI_STORAGE_AUTO;candidate++) {
-        if(cancelled()) break;
+        if(cancelled()) {result=KUI_RUNTIME_CANCELLED;break;}
+        result=KUI_RUNTIME_IO;
         kui_sd_set_params(candidate,true);
         if(!kui_sd_connect()) continue;
         if(kui_mount(&fs,kui_log))
             result=kui_runtime_read(KUI_RUNTIME_PATH,&image,kui_log,cancelled);
-        if(f_mount(NULL,"0:",0)!=FR_OK && result==KUI_RUNTIME_OK) result=KUI_RUNTIME_IO;
+        bool unmounted=f_mount(NULL,"0:",0)==FR_OK;
+        if(!unmounted && result==KUI_RUNTIME_OK) result=KUI_RUNTIME_IO;
+        if(unmounted && result!=KUI_RUNTIME_OK && result!=KUI_RUNTIME_CANCELLED && !cancelled()) {
+            struct kui_media_ops raw;
+            /* The raw view cannot write or flush. Ext4 parsing runs only
+             * after FatFs has released the device and keeps the same source. */
+            if(kui_sd_raw_read_ops(&raw)) {
+                enum kui_ext4_boot_result ext4=kui_ext4_boot_read(&raw,&image,kui_log,cancelled);
+                if(ext4==KUI_EXT4_BOOT_OK) {
+                    result=KUI_RUNTIME_OK;
+                    kui_log("Read-only ext4 bootstrap succeeded; the runtime must provide ext4 app support.");
+                } else if(ext4==KUI_EXT4_BOOT_CANCELLED) result=KUI_RUNTIME_CANCELLED;
+                else if(ext4==KUI_EXT4_BOOT_MEMORY) result=KUI_RUNTIME_MEMORY;
+                else if(ext4!=KUI_EXT4_BOOT_NOT_FOUND) result=KUI_RUNTIME_IO;
+                /* No ext4 volume: retain the precise FatFs runtime error,
+                 * including a failed checksum, instead of masking it. */
+            }
+        }
         kui_sd_disconnect();
         if(result==KUI_RUNTIME_OK) {
             /* Patch initialized RAM only after the original image checksum

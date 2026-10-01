@@ -49,6 +49,8 @@ def release_metadata(path=ROOT / "include/kui/version.h"):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
+    for name in ("storage-transports", "ext4-bootstrap", "bootloader-refresh"):
+        text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     text = text.replace("(release-v1.5.1.md)", "(START-HERE.md)")
@@ -169,6 +171,7 @@ def main():
     (dist / "HARDWARE-TEST.md").write_text(guide("hardware-test.md"))
     (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
     (dist / "STORAGE-TRANSPORTS.md").write_text(guide("storage-transports.md"))
+    (dist / "EXT4-BOOTSTRAP.md").write_text(guide("ext4-bootstrap.md"))
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
@@ -201,6 +204,10 @@ def main():
     # Include the actual third-party source inputs for these test artifacts,
     # including build scripts, local adaptations, and toolchain license texts.
     lock = json.loads((ROOT / "dependencies.json").read_text())
+    for name, expected in lock["lwext4"]["files_sha256"].items():
+        path = ROOT / lock["lwext4"]["path"] / name
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise SystemExit(f"{path.relative_to(ROOT)} differs from its dependency record")
     source = dist / "source"
     source.mkdir(exist_ok=True)
     run("git", "archive", "--format=tar.gz", "--prefix=K-UI-NeXT/", "-o", str(source / "kui-source.tar.gz"), "HEAD")
@@ -226,6 +233,7 @@ def main():
     update = dist / "sd-update"
     (update / "KUI").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", update / "STORAGE-TRANSPORTS.md")
+    shutil.copyfile(dist / "EXT4-BOOTSTRAP.md", update / "EXT4-BOOTSTRAP.md")
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
     shutil.copytree(sd / "apps", update / "KUI/apps", dirs_exist_ok=True)
     shutil.copytree(sd / "tests/scan", update / "KUI/tests/scan", dirs_exist_ok=True)
@@ -245,11 +253,13 @@ def main():
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
-        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
         "Install KUI/runtime.kui and the matching Games payload on your storage card.\n"
         "SCIF can keep its existing boot CD; SCI/IDE boot requires this run's new bootstrap CD.\n"
         "Read STORAGE-TRANSPORTS.md before testing standalone SCI microSD or IDE/CF.\n"
+        "The CD can read compatible ext4, but this runtime still needs FAT32/exFAT.\n"
+        "Keep your card's filesystem; EXT4-BOOTSTRAP.md explains future runtime updates.\n"
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "The six menu songs, now including Harbor Lights, are Ogg Vorbis.\n"
         "Older menu WAVs in that folder are only a fallback.\n"
@@ -290,7 +300,7 @@ def main():
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
-        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n"
         "The benchmark ELF, link maps, disassembly and stack reports are under retail-bench-build/.\n\n"
         "Copy this package's KUI/runtime.kui and KUI/apps/games/retail-boot.kui to the SD card.\n"
@@ -310,6 +320,7 @@ def main():
     boot.mkdir()
     shutil.copyfile(cdi, boot / "kui-bootstrap.cdi")
     shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", boot / "STORAGE-TRANSPORTS.md")
+    shutil.copyfile(dist / "EXT4-BOOTSTRAP.md", boot / "EXT4-BOOTSTRAP.md")
     (boot / "BOOTLOADER-REFRESH.md").write_text(guide("bootloader-refresh.md"))
     shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.png", boot / "boot-disc-badge.png")
     shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.md", boot / "BADGE-PROVENANCE.md")
@@ -329,11 +340,14 @@ def main():
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
-        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
         "This package refreshes only the boot CD. Burn kui-bootstrap.cdi as a disc image.\n"
         "For SCI/IDE boot, also install this run's matching runtime and Games payloads.\n"
         "Read STORAGE-TRANSPORTS.md; one storage card is sufficient.\n"
+        "This CD also loads runtime.kui from clean, compatible ext4 volumes read-only.\n"
+        "The supplied runtime still uses FAT32/exFAT; keep your card as-is for now.\n"
+        "Read EXT4-BOOTSTRAP.md for the fixed format and future card-only development.\n"
         "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
     boot_hashes = []
     for path in sorted(boot.rglob("*")):
@@ -362,7 +376,7 @@ def main():
     shutil.copyfile(cdi, bundle / "boot-cd/kui-v1.5.1.cdi")
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
     shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
     bundle_record = {**record, "kind": "release",
@@ -376,13 +390,15 @@ def main():
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         f"The accompanying {release['artifact_prefix']}-source.zip contains exact K-UI, KOS,\n"
-        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n"
         "Original badge and splash provenance are in resources/branding/ in that source.\n\n"
         "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
         "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
         "Existing boot CDs work with SCIF; SCI/IDE boot needs the new CDI in boot-cd/.\n"
         "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
+        "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
+        "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
         "The normal retail game reader is installed; no SD benchmark payload is included.\n",
         encoding="utf-8")
     bundle_hashes = []

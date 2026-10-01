@@ -6,6 +6,12 @@ See [storage-transports.md](storage-transports.md). The older bootstrap cannot
 learn new storage hardware through a runtime update alone. The historical
 SCIF-only installation below remains applicable to older accepted builds.
 
+**Read-only ext4 bootstrap:** the refreshed CD can also load `/KUI/runtime.kui`
+from the [supported clean ext4 profile](ext4-bootstrap.md). Current applications
+remain FatFs/exFAT/FAT32, so keep the working card's filesystem. Later compatible
+ext4-capable runtimes can arrive as card updates; journal replay, repair and
+ext4 application writes are not implemented by this CD feature.
+
 **Current update:** the M1.5 SD runtime opens a launcher with Disc Ripper,
 Settings and Diagnostics. See [the shell test](m15-shell-test.md) for its controls.
 Its package contract is unchanged; keep using your accepted bootstrap CD. The
@@ -125,7 +131,9 @@ cannot be extracted. Saved logs distinguish `SD runtime` from `CD bootstrap`.
 
 ## Stable version-1 package contract
 
-The bootstrap reads `0:/KUI/runtime.kui` using the existing FatFs/serial adapter.
+The original bootstrap reads `0:/KUI/runtime.kui` using the FatFs/serial adapter.
+The refreshed storage CD additionally reads `/KUI/runtime.kui` through its
+read-only ext4 adapter; both readers validate the same package contract below.
 It opens the file read-only, validates the header before allocating, checks the
 exact file length, reads the whole payload with exact-length checks, and verifies
 its CRC32. Close/unmount, SD shutdown and cancellation checks precede execution.

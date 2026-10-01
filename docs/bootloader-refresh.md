@@ -5,11 +5,19 @@ IDE/CF, also install the runtime and Games files from this same run's SD-update
 artifact. See [storage-transports.md](storage-transports.md). Older accepted
 SCIF runtimes can still use this CD, but do not contain SCI/IDE game readers.
 
+This CD also has a [read-only ext4 runtime loader](ext4-bootstrap.md), so a future
+compatible ext4-capable runtime can be installed through card updates. The
+current runtime's apps still require exFAT/FAT32: keep the working card format
+for this refresh. The CD reader does not add ext4 writes, recovery or app support.
+
 ## Install and use
 
 Burn `kui-bootstrap.cdi` as a disc image onto a new boot CD-R. Normal startup
 shows the original K-UI badge, including `github.com/TPMJB`, under the Sega
 logo, then searches SCIF, SCI and IDE/CF for a valid `/KUI/runtime.kui`.
+It accepts the existing FatFs layouts or the clean ext4 profile documented
+above. Compatible runtime updates can reuse this CD; a bootstrap bug fix or
+unsupported format change may still require a replacement.
 
 To stay in the CD tools, hold **B from power-on** until the built-in CD
 diagnostics screen appears. Release B, then press the **right trigger (R)**
@@ -35,6 +43,8 @@ The default sections are optical, hash and SD. Selected SD/capture benchmarks
 write temporary test files; reports save automatically when a run finishes or
 stops. Existing game files are preserved. Use the existing benchmark guide to
 choose longer sweeps; this boot refresh does not request a new sweep.
+These CD tools continue using FatFs. Ext4 bootstrap loading does not enable
+their log writes, settings or storage benchmarks on ext4.
 
 For optical measurements, wait for the CD tools, replace the boot CD with a
 known-good retail GD-ROM, and close the lid before pressing R. The tools and

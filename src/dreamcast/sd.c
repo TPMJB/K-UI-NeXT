@@ -15,7 +15,7 @@
 /* One filesystem owner, one selected device per boot. Explicit benchmark
  * connections do not change that identity or fall back to another device. */
 static unsigned requested=KUI_STORAGE_AUTO,selected=KUI_STORAGE_AUTO,active=KUI_STORAGE_AUTO;
-static bool check_crc=true,connected,sci_detected;
+static bool check_crc=true,connected,sci_detected,write_attempted;
 static struct kui_loader_sd sci;
 static struct kui_ata ata;
 static struct kui_ata_bus ata_bus;
@@ -99,6 +99,8 @@ static int read_blocks(void *ctx,uint32_t block,size_t count,uint8_t *data) {
 static int write_blocks(void *ctx,uint32_t block,size_t count,const uint8_t *data) {
     (void)ctx;
     if(!connected || !data || !valid_count(count)) return -1;
+    /* A failed request can still have modified earlier sectors. */
+    write_attempted=true;
     if(active==KUI_STORAGE_SCIF) return sd_write_blocks(block,count,data);
     if(active==KUI_STORAGE_SCI)
         return kui_sci_sd_write(&sci,block,(uint32_t)count,data) && kui_sci_sd_healthy()?0:-1;
@@ -124,10 +126,18 @@ void kui_sd_disconnect(void) {
     if(active==KUI_STORAGE_SCIF) sd_shutdown();
     else if(active==KUI_STORAGE_SCI) {kui_loader_sd_shutdown(&sci);sci_end(NULL);}
     else {
-        if(ata.ready && sync_card(NULL)) kui_log("IDE/CF final sync failed; do not remove the device yet");
+        if(write_attempted && ata.ready && sync_card(NULL))
+            kui_log("IDE/CF final sync failed; do not remove the device yet");
         kui_ata_shutdown(&ata);
     }
     connected=false;
+}
+bool kui_sd_raw_read_ops(struct kui_media_ops *out) {
+    if(!out) return false;
+    *out=(struct kui_media_ops){0};
+    if(!connected) return false;
+    *out=(struct kui_media_ops){.blocks=blocks,.read=read_blocks};
+    return true;
 }
 static bool open_device(unsigned transport) {
     bool ok=false;
@@ -152,7 +162,7 @@ static bool open_device(unsigned transport) {
         if(!ok) kui_log("IDE/CF initialization failed: ATA=%u",(unsigned)ata.error);
     }
     if(!ok) return false;
-    active=transport;connected=true;
+    active=transport;connected=true;write_attempted=false;
     struct kui_media_ops ops={NULL,blocks,read_blocks,write_blocks,sync_card};
     kui_media_set(&ops);
     return true;
