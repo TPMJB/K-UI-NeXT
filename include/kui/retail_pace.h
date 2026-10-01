@@ -5,8 +5,10 @@
 
 /* Read pacing for the retail GD service. The SD reader is synchronous: a
  * game that calls EXEC once per video frame gets one step per frame, however
- * idle it is. While the game presents new frames, every step keeps the
- * default size. Once the displayed framebuffer has not changed for STILL_FRAMES
+ * idle it is. While the game presents new frames, a measured step may grow
+ * to four sectors if its predicted duration fits within half a frame. The
+ * default size remains the floor; this is not a hard elapsed-time deadline.
+ * Once the displayed framebuffer has not changed for STILL_FRAMES
  * scanline wraps (a static or black loading screen), a step may continue
  * until shortly before the second vertical-blank interrupt from now. Crossing
  * one vblank delays that interrupt but does not lose it, so a step made in the
@@ -29,8 +31,9 @@ struct kui_retail_pace {
  * (at least once per frame of work) so scanline wraps are counted. */
 void kui_retail_pace_sample(struct kui_retail_pace *, uint32_t status,
     uint32_t vblank, uint32_t fb);
-/* Sectors the next step may read: normal unless the screen is static and a
- * step has been measured; never more than maximum. */
+/* Sectors the next step may read: normal until valid timing is measured;
+ * moving buffers allow up to four within half a frame, still buffers use the
+ * longer allowance. Caller supplies normal <= maximum; never exceeds maximum. */
 uint32_t kui_retail_pace_budget(const struct kui_retail_pace *, uint32_t normal,
     uint32_t maximum);
 /* A step that began at (frames, line) and read sectors has just finished;

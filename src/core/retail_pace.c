@@ -26,11 +26,21 @@ static uint32_t frame_lines(const struct kui_retail_pace *p) {
 uint32_t kui_retail_pace_budget(const struct kui_retail_pace *p, uint32_t normal,
                                 uint32_t maximum) {
     uint32_t vbi = p->vbi, line = p->line, frame = frame_lines(p);
-    if(p->still < KUI_RETAIL_PACE_STILL_FRAMES || !p->per || vbi < 64u || line >= frame)
+    if(!p->per || vbi < 64u || line >= frame)
         return normal;
-    /* Scanlines until the second vblank-in from now, less an eighth of a
-     * frame for card latency and the game's own handler. */
-    uint32_t left = (line < vbi ? vbi - line : frame - line + vbi) + frame - frame / 8u;
+    /* Moving buffers do not prove the game is busy: loading screens may
+     * flip too. Permit a small batch when its measured cost fits half a
+     * frame, capped at four sectors. This bounds the predicted duration,
+     * not the next-vblank crossing or an unexpected card stall. The normal
+     * step remains the floor even when it takes longer than this allowance. */
+    uint32_t left = frame / 2u;
+    if(p->still < KUI_RETAIL_PACE_STILL_FRAMES) {
+        if(maximum > 4u) maximum = 4u;
+    } else {
+        /* Still screen: retain the second-vblank allowance, less an eighth
+         * of a frame for card latency and the game's own handler. */
+        left = (line < vbi ? vbi - line : frame - line + vbi) + frame - frame / 8u;
+    }
     uint32_t n = normal;
     while(n < maximum && (n + 1u) * p->per <= left * 16u) ++n;
     return n;

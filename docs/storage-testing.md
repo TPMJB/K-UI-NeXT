@@ -152,6 +152,15 @@ module-wake correction or game DMA/batching behavior. The owner's 29-second
 Kasumi-selection-to-first-fight observation is recorded separately; return
 counters were not captured, and another capture attempt was deferred.
 
+Build **6cc2abb460b5** subsequently passed Quick run 9 and Soak run 10:
+4 MiB and 160 MiB respectively, zero errors/DMA faults. Soak write/read
+1,198.32/1,064.87 KiB/s is +0.14%/+1.52% versus run 8; RX checking fell
+12.4% to 68.48 microseconds per sector. The matching game counter photo
+shows roughly two sectors per step and no enlarged budgets. See the
+[reports and separate game-counter interpretation](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md).
+The next experiment changes game pacing, so another Storage soak is not the
+next gate: use the same DOA2 load, gameplay/audio and FMV comparison.
+
 Host checks cover real FAT32/exFAT images, corruption and stale-cycle data,
 short I/O, cancellation, flush/close/remount errors, scratch ownership and
 interrupted result/baseline writes. These tests exercise runtime filesystem I/O;

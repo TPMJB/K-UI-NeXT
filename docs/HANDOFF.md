@@ -1,5 +1,29 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Current game-loading experiment (2026-10-01)
+
+Grouped CRC build **6cc2abb460b5** passed Quick run 9 and five-minute Soak
+run 10 with zero errors. Soak write/read **1,198.32/1,064.87 KiB/s**;
+RX check **68.48 us**, down 12.4% from run 8. A matching DOA2 menu-return
+photo now shows zero enlarged/spin steps and roughly two sectors per read
+step. Launch-wide counters do not isolate the owner's earlier **29-second
+Kasumi-selection-to-first-fight** timing. The next candidate changes only
+game pacing: measured moving-buffer steps can grow to four within a predicted
+half-frame allowance; two-sector fallback and the existing still-screen path
+remain. Console speed/gameplay acceptance is pending. See
+[evidence](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md) and
+[policy/test instructions](games-read-pacing.md). No repeat Storage soak is
+needed before the DOA2 timing, fight-start/audio and FMV comparison.
+
+The owner also requested Windows CE support. The
+[CE loader audit](evidence/windows-ce-loader-audit-2026-10-01.md) finds a
+separate boot-layout requirement, not a SCIF speed threshold: the CE prefix
+destination overlaps the live high stage. Normal CE Launch remains blocked.
+The next development target is a separately identified CE boot probe for the
+already inspected ARMADA image, preserving the accepted native path. Its
+prefix/body placement and resident/kernel interaction need validation before
+a playable CE claim.
+
 ## Standalone storage development (2026-09-30)
 
 The owner approved the first testing features under main-menu Diagnostics on

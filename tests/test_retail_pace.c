@@ -108,6 +108,43 @@ static void measurement(void) {
     CHECK(p.per == kept);
 }
 
+static void moving_screen(void) {
+    struct kui_retail_pace p;
+    memset(&p, 0, sizeof(p));
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 2); /* no video samples */
+    sample(&p, 261, 260, 0x200000);
+    sample(&p, 10, 260, 0x600000);
+    CHECK(p.still == 0 && kui_retail_pace_budget(&p, 2, 8) == 2);
+    /* Four sectors at 32.75 lines each exactly fill half a 262-line frame.
+     * The estimate has four fractional bits, so test both sides without
+     * rounding every sector up to a whole line. */
+    p.per = 524;
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 4);
+    CHECK(kui_retail_pace_budget(&p, 2, 3) == 3);
+    CHECK(kui_retail_pace_budget(&p, 2, 2) == 2);
+    p.per = 525;
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 3);
+    p.per = 698;
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 3);
+    p.per = 699;
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 2);
+    p.per = 1;
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 4); /* never reaches still-screen eight */
+    p.per = 76u * 16u;
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 2); /* slower SCIF stays at the floor */
+    p.per = 524;
+    sample(&p, 250, 260, 0x200000);
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 4);
+    sample(&p, 261, 260, 0x600000);
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 4); /* budget is duration, not a vblank deadline */
+    sample(&p, 1000, 260, 0x600000);
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 2); /* invalid current scanline */
+    sample(&p, 10, 63, 0x600000); p.per = 1;
+    CHECK(kui_retail_pace_budget(&p, 2, 8) == 2); /* implausible mode */
+    sample(&p, 10, 520, 0x600000);
+    CHECK(p.per == 0 && kui_retail_pace_budget(&p, 2, 8) == 2); /* new mode relearns */
+}
+
 static void spinning(void) {
     struct kui_retail_pace p;
     memset(&p, 0, sizeof(p));
@@ -138,6 +175,7 @@ static void spinning(void) {
  * at entry and after each sector, as the resident's block reads do. */
 struct model {
     uint32_t frame, vbi, cost, overhead, latency, flips, work, maximum;
+    uint32_t slow_after, slow_cost, slow_extended;
     uint64_t now;
     struct kui_retail_pace pace;
     uint32_t fb, sectors, steps, extended, double_cross, max_step;
@@ -157,10 +195,12 @@ static void model_run(struct model *m, uint32_t frames) {
         model_sample(m);
         uint32_t f0 = m->pace.frames, l0 = m->pace.line;
         uint32_t n = kui_retail_pace_budget(&m->pace, 2, m->maximum ? m->maximum : 8);
+        uint32_t cost = m->slow_cost && m->steps >= m->slow_after ? m->slow_cost : m->cost;
+        if(m->slow_cost && m->steps > m->slow_after && n > 2) ++m->slow_extended;
         uint64_t start = m->now, first = next_vbi(m, start);
         m->now += m->overhead;
         for(uint32_t i = 0; i < n; ++i) {
-            m->now += m->cost;
+            m->now += cost;
             model_sample(m);
         }
         kui_retail_pace_measure(&m->pace, f0, l0, n);
@@ -183,8 +223,8 @@ static void simulations(void) {
     model_run(&m, 1200);
     CHECK(m.double_cross == 0 && m.max_step == 6);
     CHECK(m.sectors * 100u >= 1200u * 280u); /* about 3 sectors per frame, not 2 */
-    /* Presenting frames keeps every step at the accepted two sectors, even
-     * when flips slow to one every eighth frame. */
+    /* This slower SCIF cost cannot fit a third sector in half a frame;
+     * changing buffers therefore keeps the accepted two-sector step. */
     struct model busy = {.frame = 262, .vbi = 260, .cost = 76, .overhead = 5, .latency = 16,
                          .flips = 8};
     model_run(&busy, 1200);
@@ -209,10 +249,36 @@ static void simulations(void) {
         model_run(&paced, 600); model_run(&fixed, 600);
         CHECK(paced.double_cross == 0 && paced.sectors >= fixed.sectors);
     }
+    /* Measured SCI-like transfers can fit four sectors while buffers flip.
+     * Learn from complete steps, including overhead, in all three modes. */
+    const struct model modes[] = {
+        {.frame = 262, .vbi = 260, .cost = 30, .overhead = 5, .latency = 16, .flips = 1},
+        {.frame = 525, .vbi = 520, .cost = 60, .overhead = 10, .latency = 32, .flips = 1},
+        {.frame = 312, .vbi = 310, .cost = 30, .overhead = 5, .latency = 16, .flips = 1}
+    };
+    for(unsigned i = 0; i < sizeof(modes) / sizeof(modes[0]); ++i) {
+        struct model paced = modes[i], fixed = paced;
+        fixed.maximum = 2;
+        model_run(&paced, 600); model_run(&fixed, 600);
+        CHECK(paced.extended > 0 && paced.max_step == 4 && paced.double_cross == 0);
+        CHECK(paced.sectors * 10u > fixed.sectors * 19u);
+        /* An upstream three-sector cap is honored even on the faster card. */
+        struct model capped = modes[i]; capped.maximum = 3;
+        model_run(&capped, 600);
+        CHECK(capped.extended > 0 && capped.max_step == 3 && capped.double_cross == 0);
+        /* A card slowdown can overrun the estimate once. Measuring that
+         * step must immediately remove the larger moving-screen allowance. */
+        struct model slows = modes[i];
+        slows.slow_after = 64;
+        slows.slow_cost = i == 1 ? 152 : 76;
+        model_run(&slows, 600);
+        CHECK(slows.max_step == 4 && slows.slow_extended == 0 && slows.double_cross == 0);
+        CHECK(kui_retail_pace_budget(&slows.pace, 2, 8) == 2);
+    }
 }
 
 int main(void) {
-    sampling(); budgets(); measurement(); spinning(); simulations();
+    sampling(); budgets(); measurement(); moving_screen(); spinning(); simulations();
     printf("retail read pacing: %u checks passed\n", assertions);
     return 0;
 }

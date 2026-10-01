@@ -1,4 +1,41 @@
-# Games launcher: read pacing on still screens
+# Games launcher: measured read pacing
+
+## SCI follow-up experiment — 2026-10-01
+
+The owner's build `6cc2abb460b5` counter photograph shows zero enlarged
+steps and approximately two game sectors per successful step. The prior
+29-second Kasumi-to-first-fight observation remains the timed baseline;
+the photograph contains launch-wide counters, not that load alone. See the
+[grouped-CRC results and counter evidence](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md).
+
+The new experiment permits up to **four sectors even when framebuffer
+addresses change**, provided the measured cost predicts they fit within half
+a video frame (about 8.3 ms at 60 Hz or 10 ms at 50 Hz). Unknown, invalid or
+slow timing retains two sectors. The existing still-screen allowance of up
+to eight sectors is unchanged. The estimate includes the previous step's
+storage acquisition, transfer and cleanup; it follows slower measurements
+immediately and faster measurements gradually.
+
+This is a predicted allowance, not a deadline: an unexpected card stall can
+overrun it, and the baseline two-sector floor can itself take longer. Reads
+still mask interrupts while working, so gameplay, speech and FMVs require
+console comparison. CRC, stream cleanup, memory/stack limits and the caller's
+status restoration remain unchanged. Host models are not console speed results.
+
+For this build, test the same DOA2 sequence: time Kasumi selection to the first
+fight, check the first ten seconds of combat and an FMV, then photograph the
+return counters. Another Storage soak is not needed for this pacing-only change.
+`PACED STEPS` now includes the short allowance as well as still-screen steps.
+
+Validation: 201 focused pacing checks pass with ASan/UBSan, plus an independent
+optimized host build. Native normal/benchmark layout, stack and instruction
+audits pass: SCI payload 11,168 bytes, end `0x8c00bae8` (24 bytes free),
+stack 1,180/1,232 bytes. SCIF/IDE conservative stack bounds are 1,076/996
+bytes. The menu-return heading is shortened to `GAME MENU RETURN` to fit the
+policy within the unchanged resident reservation. No guard limit was changed.
+
+The remainder describes the original, accepted SCIF pacing baseline; its
+statement that changing buffers always retain two sectors is historical.
 
 After 1.5 the retail game reader was reviewed again for speed, without the
 2048-byte track conversion. The serial SD transfer is at its hardware limit;
@@ -82,9 +119,10 @@ intercepts that and shows counters since launch (hexadecimal):
 | SPIN STEPS | Steps run because the game spun on `CHECK` |
 | STEP CALLER SR | Caller's status register at the last read; bits 4–7 nonzero means interrupts were masked (usually a handler) |
 
-EXEC CALLS close to FRAMES SEEN means the game calls once per frame. PACED
-STEPS of zero after a black-screen load would mean the game kept flipping
-frames, so no pacing applied. The screen stops the game and stays visible for
+FRAMES SEEN can miss wraps between samples, so these cumulative counters do
+not establish an exact EXEC rate. Zero PACED STEPS means no successful read
+was granted an enlarged budget; framebuffer changes are only one possible
+reason, alongside timing validity and estimated cost. The screen stops the game and stays visible for
 about 15 seconds at 60 Hz (18 seconds at 50 Hz), then reboots to K-UI. Start
 recording before pressing the combination. Some games handle it as an internal
 restart; the counter screen appears only when the game requests the BIOS menu.

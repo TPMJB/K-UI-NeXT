@@ -136,7 +136,7 @@ static void report_fault(const char *reason, uint32_t function) {
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
     retail_display_restore(&display);
-    retail_display_line("GAME REQUESTED MENU RETURN");
+    retail_display_line("GAME MENU RETURN");
     retail_display_hex("CALLER PR",caller);
     retail_display_hex("CALLER STACK",stack);
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);

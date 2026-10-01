@@ -1,5 +1,22 @@
 # Hardware evidence
 
+## SCI grouped CRC passed; game counter capture obtained — 2026-10-01
+
+Build **6cc2abb460b5** passed Quick run **9** (4 MiB) and Soak run **10**
+(160 MiB, ten cycles), with zero errors/DMA faults and successful remount
+verification and cleanup. Soak write/read rates are **1,198.32/1,064.87 KiB/s**,
+respectively +0.14%/+1.52% versus run 8. RX checking fell from 78.18 to
+68.48 microseconds per sector, a 12.4% reduction; Quick independently reports
+68.57 microseconds. Overall read gains remain modest and run variation applies.
+
+The matching game counter photograph shows no guard fault, zero enlarged
+or spin-triggered steps and approximately two sectors per successful read step.
+It does not identify physical SCI DMA use or isolate the previously reported
+29-second character-to-fight load. See the
+[raw reports, photo transcription and limits](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md).
+The resulting half-frame/max-four batching candidate requires console testing;
+these results validate its parent, not the new pacing policy.
+
 ## SCI word-reversal build soak passed; write setup improved — 2026-10-01
 
 Runtime **499bcb53c2d4**, run **8**, passed the same five-minute Soak recipe
