@@ -5,13 +5,15 @@
 #include "kui/media.h"
 #include <arch/exec.h>
 #include <kos/thread.h>
+#include <kos/timer.h>
+#include <inttypes.h>
 #include <stdlib.h>
 
 /* Only called by the boot menu with exclusive storage ownership and no active
  * I/O worker. Failed/cancelled calls release their state for insertion/retry;
  * KOS shuts down the remaining kernel services at successful handoff. */
-enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
-    enum kui_boot_mode mode,kui_cancel_fn cancelled) {
+static enum kui_runtime_result bootstrap_load(unsigned transport_filter,
+    enum kui_boot_mode mode,kui_cancel_fn cancelled,bool execute) {
     struct kui_runtime_image image = {0};
     enum kui_runtime_result result = KUI_RUNTIME_IO;
     unsigned chosen_transport=KUI_STORAGE_AUTO;
@@ -25,11 +27,30 @@ enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
         if(cancelled()) {result=KUI_RUNTIME_CANCELLED;break;}
         result=KUI_RUNTIME_IO;
         kui_sd_set_params(candidate,true);
-        if(!kui_sd_connect()) {kui_sd_disconnect();continue;}
+        uint64_t init_start=timer_us_gettime64();
+        bool connected=kui_sd_connect();
+        uint64_t init_us=timer_us_gettime64()-init_start;
+        if(!connected) {
+            kui_sd_disconnect();
+            kui_log("%s init: %" PRIu64 " ms; unavailable",kui_storage_name(candidate),init_us/1000u);
+            continue;
+        }
         struct kui_media_ops raw;
+        uint64_t load_start=timer_us_gettime64();
         if(kui_sd_raw_read_ops(&raw))
             result=kui_boot_image_read_mode(&raw,candidate,mode,&image,kui_log,cancelled);
+        uint64_t load_us=timer_us_gettime64()-load_start;
         kui_sd_disconnect();
+        kui_log("%s: init %" PRIu64 " ms; load/check %" PRIu64 " ms",
+            kui_storage_name(candidate),init_us/1000u,load_us/1000u);
+        if(result==KUI_RUNTIME_OK) {
+            /* File/partition reads, CRCs, marker validation and any UI work
+             * called by that path are included. This is not raw bus speed. */
+            uint64_t rate10=load_us ? (uint64_t)image.info.payload_bytes*UINT64_C(10000000)/(load_us*1024u) : 0;
+            kui_log("%" PRIu32 " bytes; %" PRIu64 ".%" PRIu64 " KiB/s including checks/UI",
+                image.info.payload_bytes,rate10/10u,rate10%10u);
+        }
+        kui_log("Image load result: %s",kui_runtime_result_name(result));
         /* The portable reader validates checksums, chooses normal/recovery
          * images, and patches the transport before returning success. */
         if(result==KUI_RUNTIME_OK) {chosen_transport=candidate;break;}
@@ -45,6 +66,11 @@ enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
         kui_log("Card image not started: %s", kui_runtime_result_name(result));
         kui_runtime_free(&image);
         return result;
+    }
+    if(!execute) {
+        kui_log("Measured %s build %s; no image started",kui_storage_name(chosen_transport),image.info.build);
+        kui_runtime_free(&image);
+        return KUI_RUNTIME_OK;
     }
     /* arch_exec copies forward from a staged, word-aligned buffer. Require
      * its physical address to be above the destination and below the main
@@ -65,6 +91,14 @@ enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
     thd_sleep(250);
     if(cancelled()) { kui_runtime_free(&image); return KUI_RUNTIME_CANCELLED; }
     arch_exec(image.data, image.info.payload_bytes);
+}
+enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
+    enum kui_boot_mode mode,kui_cancel_fn cancelled) {
+    return bootstrap_load(transport_filter,mode,cancelled,true);
+}
+enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
+    kui_cancel_fn cancelled) {
+    return bootstrap_load(transport_filter,KUI_BOOT_MODE_NORMAL,cancelled,false);
 }
 void kui_bootstrap_load(kui_cancel_fn cancelled,bool recovery_only) {
     (void)kui_bootstrap_start(KUI_STORAGE_AUTO,

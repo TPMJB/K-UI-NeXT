@@ -167,6 +167,8 @@ static struct kui_boot_ui boot_ui;
 static bool boot_worker_available,boot_attempt_cancelled;
 static unsigned boot_attempt_previous,boot_held_navigation;
 static uint64_t boot_last_draw,boot_repeat_at;
+static uint64_t boot_draw_us;
+static unsigned boot_draw_count;
 static char boot_notice[128]="Ready to load K-UI. Choose a source or insert your card.";
 #endif
 /* The UI thread is main(). It shares the one CPU with the I/O worker, and a
@@ -1221,6 +1223,13 @@ static void *worker(void *unused) {
 
 #ifndef KUI_SD_RUNTIME
 static void draw_boot(void) {
+    /* Keep the displayed frame until something visible changes. In particular,
+     * reading another 32 KiB must not copy/dim 600 KiB of VRAM and wait for
+     * vertical blank again. Each changed frame fully repaints the back buffer. */
+    static bool drawn;
+    static struct kui_boot_ui last_ui;
+    static struct kui_boot_view last_view;
+    static char last_lines[KUI_BOOT_LOG_ROWS][LINE_BYTES],last_status[128];
     char visible[KUI_BOOT_LOG_ROWS][LINE_BYTES]={{0}},status[128];
     struct kui_boot_view view={.build=KUI_BUILD_ID,.worker_available=boot_worker_available};
     mutex_lock(&lock);
@@ -1241,9 +1250,25 @@ static void draw_boot(void) {
     if(boot_ui.autoboot_until>now)
         view.countdown=(unsigned)((boot_ui.autoboot_until-now+999u)/1000u);
     view.status=status;
+    bool same=drawn && boot_ui.page==last_ui.page && boot_ui.selected==last_ui.selected &&
+        boot_ui.transport==last_ui.transport && boot_ui.confirm==last_ui.confirm &&
+        boot_ui.scroll==last_ui.scroll && boot_ui.log_column==last_ui.log_column &&
+        view.busy==last_view.busy && view.cancelled==last_view.cancelled &&
+        view.worker_available==last_view.worker_available && view.countdown==last_view.countdown &&
+        view.line_count==last_view.line_count && view.total_lines==last_view.total_lines &&
+        !strcmp(status,last_status) && !memcmp(visible,last_lines,sizeof(visible));
+    if(same) return;
+    uint64_t started=timer_us_gettime64();
     kui_boot_ui_draw(vram_s,&boot_ui,&view);
     vid_waitvbl();vid_flip(-1);
-    boot_last_draw=now;
+    boot_draw_us+=timer_us_gettime64()-started;++boot_draw_count;
+    boot_last_draw=timer_ms_gettime64();
+    last_ui=boot_ui;
+    /* Only retain scalar fields: the snapshot's text pointers are stack-local. */
+    last_view=(struct kui_boot_view){.busy=view.busy,.cancelled=view.cancelled,
+        .worker_available=view.worker_available,.countdown=view.countdown,
+        .line_count=view.line_count,.total_lines=view.total_lines};
+    strcpy(last_status,status);memcpy(last_lines,visible,sizeof(visible));drawn=true;
 }
 #endif
 
@@ -1892,7 +1917,8 @@ int main(void) {
             input_at,working,boot_worker_available);
         if(requested==KUI_BOOT_STOP) {
             mutex_lock(&lock);if(busy) cancel_requested=true;mutex_unlock(&lock);
-        } else if(requested==KUI_BOOT_RUNTIME || requested==KUI_BOOT_RECOVERY || requested==KUI_BOOT_TOOLS) {
+        } else if(requested==KUI_BOOT_RUNTIME || requested==KUI_BOOT_RECOVERY ||
+                  requested==KUI_BOOT_TOOLS || requested==KUI_BOOT_MEASURE) {
             mutex_lock(&lock);
             bool claimed=!busy && !pending && !(buttons&CONT_B);
             if(claimed) {busy=true;cancel_requested=false;ui_hz_busy=2;}
@@ -1902,17 +1928,32 @@ int main(void) {
                     requested==KUI_BOOT_TOOLS?KUI_BOOT_MODE_TOOLS:KUI_BOOT_MODE_NORMAL;
                 boot_ui.autoboot_until=0;boot_attempt_cancelled=false;
                 boot_attempt_previous=controller_buttons();boot_held_navigation=0;
+                bool measure=requested==KUI_BOOT_MEASURE;
+                boot_draw_us=0;boot_draw_count=0;
+                if(measure) {
+                    boot_ui.page=KUI_BOOT_LOG;boot_ui.return_page=KUI_BOOT_DIAGNOSTICS;
+                    boot_ui.scroll=boot_ui.log_column=0;
+                }
                 snprintf(boot_notice,sizeof(boot_notice),"Reading selected boot image...");
                 kui_log("CD boot: %s from %s",requested==KUI_BOOT_RECOVERY?"recovery":
-                    requested==KUI_BOOT_TOOLS?"card tools":"runtime",kui_storage_name(boot_ui.transport));
+                    requested==KUI_BOOT_TOOLS?"card tools":measure?"measure runtime":"runtime",kui_storage_name(boot_ui.transport));
                 draw_boot();
-                enum kui_runtime_result result=kui_bootstrap_start(boot_ui.transport,mode,boot_cancelled);
+                enum kui_runtime_result result=measure?kui_bootstrap_measure(boot_ui.transport,boot_cancelled):
+                    kui_bootstrap_start(boot_ui.transport,mode,boot_cancelled);
                 /* Successful handoff never returns. Failed/cancelled attempts
                  * release storage before the menu permits another action. */
                 mutex_lock(&lock);busy=false;cancel_requested=false;ui_hz_busy=KUI_OPT_UI_FULL;mutex_unlock(&lock);
-                snprintf(boot_notice,sizeof(boot_notice),"%s. Insert/check the card, then press A to retry.",
-                    kui_runtime_result_name(result));
-                boot_ui.page=KUI_BOOT_HOME;boot_ui.selected=(unsigned)requested-(unsigned)KUI_BOOT_RUNTIME;
+                if(measure) {
+                    kui_log("Boot screen: %u redraws, %" PRIu64 " ms drawing/waiting",boot_draw_count,boot_draw_us/1000u);
+                    kui_log("Load measurement: %s; runtime was not started",kui_runtime_result_name(result));
+                    snprintf(boot_notice,sizeof(boot_notice),"Measurement finished. B returns to Diagnostics.");
+                    boot_ui.page=KUI_BOOT_LOG;boot_ui.return_page=KUI_BOOT_DIAGNOSTICS;
+                    boot_ui.selected=4;boot_ui.scroll=boot_ui.log_column=0;
+                } else {
+                    snprintf(boot_notice,sizeof(boot_notice),"%s. Insert/check the card, then press A to retry.",
+                        kui_runtime_result_name(result));
+                    boot_ui.page=KUI_BOOT_HOME;boot_ui.selected=(unsigned)requested-(unsigned)KUI_BOOT_RUNTIME;
+                }
                 previous=controller_buttons();boot_held_navigation=0;last_draw=0;was_busy=false;
             }
         } else {

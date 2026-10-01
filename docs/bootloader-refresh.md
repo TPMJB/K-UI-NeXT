@@ -1,6 +1,7 @@
 # Boot CD refresh: graphical menu, storage and recovery
 
-The bootstrap artifact contains the boot CD. For standalone SCI microSD or
+The bootstrap artifact contains the boot CD and an optional card utility for
+testing the same bootstrap without burning another disc. For standalone SCI microSD or
 IDE/CF, also install the runtime and Games files from this same run's SD-update
 artifact. See [storage-transports.md](storage-transports.md). Older accepted
 SCIF runtimes can still use this CD, but do not contain SCI/IDE game readers.
@@ -14,6 +15,40 @@ It also supports a retained `/KUI/recovery.kui` image and the future same-card
 FAT32-boot/ext4-data layout described in [boot-recovery.md](boot-recovery.md).
 No ext4 repair program is bundled; current apps intentionally reject that split
 layout until the runtime gains ext4 support.
+
+## First test without reburning
+
+The owner confirmed normal SCIF boot with the `82984` CD. Its photographed
+1,546,484-byte runtime load took roughly seven seconds by observation; that
+was not an instrumented measurement. The new timing/redraw revision needs
+console validation.
+
+Use the **bootstrap-cd** download, but copy **only `KUI/tools.kui`** onto the
+card. Keep `KUI/runtime.kui` and `KUI/recovery.kui` unchanged. This utility is
+the exact new CD-bootstrap executable in the existing version-1 envelope;
+it is not an ext4 repair program.
+
+1. Boot the existing compatible graphical CD (the `82984` build has Card tools),
+   pause its automatic startup and choose **Card tools**.
+2. When the newly loaded menu appears, press **B** to pause its automatic
+   startup. Open **Diagnostics → Measure load time**.
+3. Read the phase timings in the log. This action reads and verifies the runtime
+   without executing it or writing the card. Afterwards, return Home and choose
+   **Start K-UI** when ready. Take one photo of the measurement results,
+   including the redraw count/time.
+
+The log separates device initialization from loading/checking and reports the
+loaded build and effective KiB/s. Loading/checking includes partition and
+filesystem reads, checksums, transport handoff validation and UI callbacks; it
+excludes disconnect, final report drawing, the handoff delay and runtime
+startup. Measurement uses the normal filename policy: if `runtime.kui` fails,
+`recovery.kui` may be measured instead, with the fallback/build shown in logs.
+
+The existing CD still performs the initial `tools.kui` load at its old speed.
+This is a measurement utility, not a permanent update to the burned CD. The
+test can distinguish loading costs in the new code before deciding whether a
+CD refresh is worthwhile. No card formatting or new runtime installation is
+needed. A CD without a Card tools entry cannot use this particular shortcut.
 
 ## Install and use
 
@@ -32,8 +67,8 @@ Diagnostics or Help with Up/Down and A. Left/Right on Home chooses Auto, SCIF,
 SCI or IDE/CF for this session; an explicit source does not fall back to another
 device. B returns or stops the current operation, and a later attempt can still
 run. X on Home loads only `/KUI/recovery.kui`, useful when a checksum-valid normal
-runtime hangs after launch. Card tools loads only optional `/KUI/tools.kui`;
-that future-compatible payload is not supplied in this build.
+runtime hangs after launch. Card tools loads only `/KUI/tools.kui`; this
+bootstrap package supplies the measurement utility as an optional manual copy.
 
 If loading fails, return to Home and retry with A after checking or inserting
 the SD card while idle. Do not change cards during loading or diagnostics.
@@ -47,7 +82,8 @@ polling. Preserve a known-working recovery image during ordinary updates.
 | Diagnostics → Write/read test | Confirm with A before creating temporary test data |
 | Diagnostics → Save log | Confirm with A before saving a report |
 | Diagnostics → Benchmarks | Confirm with A; run settings from `/KUI/bench.cfg` |
-| Y, or View log | Open the log viewer |
+| Diagnostics → Measure load time | Read/verify using normal boot selection and show phase timings; no execution or writes |
+| Y | Open the log viewer |
 | Up/Down in log | Scroll |
 | Left/Right in log | Pan long lines |
 | Start in log | Jump to newest lines |
@@ -77,9 +113,12 @@ selected device; confirm its storage transport in Diagnostics.
 Pause automatic startup, check Home/Help/log navigation, and verify B can stop
 an attempt without preventing a later retry. Recovery should load the retained
 image, or return to Home if absent; Card tools should report its missing file
-when none is installed. Confirm that write/read, save-log and benchmark actions
-show confirmation first. These controls and card-insertion retry still need
-console validation. New SCI and IDE/CF paths additionally need the short
+when none is installed, or open the new menu when this utility is copied.
+Measure load time must return after validation without starting an image.
+Confirm that write/read, save-log and benchmark actions
+show confirmation first. Normal SCIF boot on `82984` is confirmed; the new
+timing/redraw revision awaits console validation. SCI and IDE/CF paths retain
+the hardware status and short
 integrity/game check described in the storage guide.
 
 ## Historical playable Games baseline

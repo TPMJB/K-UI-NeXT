@@ -12,7 +12,7 @@ enum kui_boot_button { KUI_BOOT_UP=1u, KUI_BOOT_DOWN=2u, KUI_BOOT_LEFT=4u,
     KUI_BOOT_Y=128u, KUI_BOOT_START=256u };
 enum kui_boot_action { KUI_BOOT_NONE, KUI_BOOT_RUNTIME, KUI_BOOT_RECOVERY,
     KUI_BOOT_TOOLS, KUI_BOOT_PROBE, KUI_BOOT_WRITE_TEST, KUI_BOOT_SAVE_LOG,
-    KUI_BOOT_BENCH, KUI_BOOT_STOP };
+    KUI_BOOT_BENCH, KUI_BOOT_STOP, KUI_BOOT_MEASURE };
 struct kui_boot_ui {
     enum kui_boot_page page, return_page;
     enum kui_boot_action confirm;

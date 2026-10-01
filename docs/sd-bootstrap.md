@@ -16,8 +16,8 @@ ext4 application writes are not implemented by this CD feature.
 then `/KUI/recovery.kui` on the same device. The graphical menu auto-starts after
 three seconds without input; any input pauses it. Select Recovery or use X on
 Home for recovery only. Diagnostics opens built-in checks, B returns/stops and
-still permits retry, and Card tools selects optional `/KUI/tools.kui` (not
-supplied). Home Left/Right selects Auto/SCIF/SCI/IDE for the session. Keep the working recovery image when updating the
+still permits retry, and Card tools selects optional `/KUI/tools.kui`. The
+bootstrap-cd package supplies the bootstrap as a load-measurement utility. Home Left/Right selects Auto/SCIF/SCI/IDE for the session. Keep the working recovery image when updating the
 normal runtime. The future [same-card boot/data layout](boot-recovery.md) uses
 128 MiB FAT32 for these files and ext4 for data; current app runtimes still
 reject two-partition cards, so keep exFAT unchanged for now.

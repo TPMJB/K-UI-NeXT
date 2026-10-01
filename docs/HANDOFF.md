@@ -2,11 +2,26 @@
 
 ## Standalone storage development (2026-09-30)
 
+The owner confirmed that the `82984` CD boots normally through SCIF. Its photo
+shows a 1,546,484-byte runtime, with roughly seven seconds spent loading by
+observation rather than instrumentation. To investigate that loading time, test
+the corrected loader without another burn: the **bootstrap-cd** artifact now
+includes `KUI/tools.kui`, made from the exact CD-bootstrap ELF with the existing
+version-1 envelope and unique transport-marker checks. Copy **only that file**
+and keep the `82984` CD, normal runtime and recovery copy. On the old CD choose
+Card tools; press B in the newly loaded menu, then Diagnostics → **Measure load
+time**. The read-only measurement validates normal boot selection, including
+recovery fallback, but does not execute it. Photograph the phase timings and
+redraw count/time. The initial utility load still uses the old CD's behavior;
+this test does not permanently fix the burned CD. Measurement and revised
+redraw behavior await console validation.
+
 The CD interface is now settled around [independent boot/recovery images](boot-recovery.md):
 the graphical Dáinsleif menu auto-starts after three seconds without input;
 any input pauses it. Start K-UI tries `/KUI/runtime.kui` then `/KUI/recovery.kui`
 on the same device. Recovery or X on Home selects recovery only; Card tools
-selects optional `/KUI/tools.kui` (not bundled). Home Left/Right chooses a
+selects `/KUI/tools.kui` (optional bootstrap utility supplied separately in the
+bootstrap-cd artifact). Home Left/Right chooses a
 session-only Auto/SCIF/SCI/IDE source. B backs out/stops, Y opens logs, and failed
 attempts return Home for retry after idle SD insertion. Diagnostics exposes
 optical checks and confirms every write/read, save-log or benchmark action.

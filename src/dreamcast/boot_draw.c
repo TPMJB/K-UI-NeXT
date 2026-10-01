@@ -44,7 +44,7 @@ static const char *source(unsigned transport) {
 }
 static void menu(uint16_t *f,const struct kui_boot_ui *ui,const struct kui_boot_view *v) {
     static const char *const home[]={"Start K-UI","Recovery","Card tools","Diagnostics","Help"};
-    static const char *const diagnostics[]={"Check optical drive","Storage write test","Save log to card","Run benchmark","View log"};
+    static const char *const diagnostics[]={"Check optical drive","Storage write test","Save log to card","Run benchmark","Measure load time"};
     bool home_page=ui->page==KUI_BOOT_HOME;
     box(f,32,112,280,224,PANEL);
     box(f,320,112,288,224,PANEL);
@@ -65,7 +65,7 @@ static void menu(uint16_t *f,const struct kui_boot_ui *ui,const struct kui_boot_
             details[3]="Keep a known-good copy";details[4]="on the FAT boot volume.";break;
         case 2: heading="UPDATEABLE TOOLS";
             details[0]="Load /KUI/tools.kui";details[1]="from the selected card.";
-            details[3]="Optional future tools;";details[4]="install a compatible";details[5]="K-UI package first.";break;
+            details[3]="Install the boot utility";details[4]="to measure loading";details[5]="without a new CD.";break;
         case 3: heading="BUILT-IN UTILITIES";
             details[0]="Inspect the optical drive,";details[1]="test storage, save logs";details[2]="or run a benchmark.";
             details[4]="Writes ask before starting.";break;
@@ -87,9 +87,9 @@ static void menu(uint16_t *f,const struct kui_boot_ui *ui,const struct kui_boot_
         case 3: heading="CONFIGURED BENCHMARK";
             details[0]="Read /KUI/bench.cfg.";details[1]="May write temporary files";details[2]="and a result report.";
             details[4]="B requests a safe stop.";break;
-        default: heading="BOOT / TASK HISTORY";
-            details[0]="Read the detailed log.";details[1]="Up/Down scrolls history.";
-            details[3]="Left/Right pans long lines.";details[4]="Start shows the latest.";break;
+        default: heading="READ-ONLY LOAD TIMING";
+            details[0]="Read and validate runtime.";details[1]="Show time and throughput";details[2]="without starting the app.";
+            details[4]="No writes. Y shows logs.";break;
         }
     }
     text(f,336,126,596,CYAN,heading,false);

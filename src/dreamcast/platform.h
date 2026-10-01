@@ -41,6 +41,11 @@ void kui_bootstrap_load(kui_cancel_fn cancelled,bool recovery_only);
 /* Caller owns storage exclusively; no diagnostic job may be running. */
 enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
     enum kui_boot_mode mode,kui_cancel_fn cancelled);
+/* Same exclusive/read-only boot path and normal/recovery fallback, timed.
+ * Releases the validated image and returns; never executes it or waits for
+ * the boot handoff delay. The rate includes validation and UI callback work. */
+enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
+    kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
 /* Normal capture uses a normalized card-root destination (for example /Games)

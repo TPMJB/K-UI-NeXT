@@ -54,6 +54,11 @@ int main(void) {
     ui.page=KUI_BOOT_DIAGNOSTICS;ui.selected=1;
     assert(input(&ui,KUI_BOOT_A,false,false)==KUI_BOOT_NONE);
     assert(ui.page==KUI_BOOT_DIAGNOSTICS);
+    ui.selected=4;
+    assert(input(&ui,KUI_BOOT_A,false,false)==KUI_BOOT_MEASURE); /* read-only, main-thread owned */
+    assert(input(&ui,KUI_BOOT_A,true,true)==KUI_BOOT_NONE);
+    assert(input(&ui,KUI_BOOT_Y,false,true)==KUI_BOOT_NONE);
+    assert(ui.page==KUI_BOOT_LOG); /* history remains available without its old menu row */
     kui_boot_ui_init(&ui,1000);
     assert(kui_boot_ui_input(&ui,0,4000,true,true)==KUI_BOOT_NONE);
     assert(!ui.autoboot_until);

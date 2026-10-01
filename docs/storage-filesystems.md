@@ -29,7 +29,8 @@ The new [boot-only ext4 reader](../src/core/ext4_boot.c) uses a separate validat
 partition view and does not replace these application APIs. It loads normal,
 recovery or optional card-tools images, with no writes or journal replay.
 The graphical CD menu can retry these fixed paths or select a transport;
-`tools.kui` is not bundled and does not imply a repair implementation.
+The bootstrap-cd package supplies `tools.kui` for read-only load measurement;
+it does not implement filesystem repair.
 The FAT boot reader
 has its own explicit read-only extent view; it does not relax normal app
 mounting. Compatible future ext4

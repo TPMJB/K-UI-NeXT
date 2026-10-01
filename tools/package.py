@@ -61,6 +61,18 @@ def guide(source):
     return text
 
 
+def storage_image(elf_data, build, label):
+    """Validate an executable and its initialized transport handoff before saving."""
+    payload, memory = flatten_elf(elf_data)
+    storage_marker = bytes.fromhex("4b554953424f4f540100000003000000fcffffff")
+    locations = [offset for offset in range(0, len(payload) - 19, 4)
+                 if payload[offset:offset + 20] == storage_marker]
+    if len(locations) != 1:
+        raise SystemExit(f"{label} must contain exactly one storage source handoff marker")
+    package = envelope(payload, memory, build)
+    return package, verify(package)
+
+
 def main():
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)
     if dirty:
@@ -109,15 +121,11 @@ def main():
         shutil.copyfile(ROOT / "build" / name, dist / name)
     for name in ("kui-runtime.elf", "kui-runtime.map"):
         shutil.copyfile(ROOT / "build" / name, dist / name)
-    payload, memory = flatten_elf(runtime.read_bytes())
-    # A unique initialized marker lets the bootstrap pass its selected medium
-    # without using a fixed RAM mailbox. Verify the actual linked image.
-    storage_marker = bytes.fromhex("4b554953424f4f540100000003000000fcffffff")
-    locations = [offset for offset in range(0, len(payload) - 19, 4)
-                 if payload[offset:offset + 20] == storage_marker]
-    if len(locations) != 1:
-        raise SystemExit("Runtime must contain exactly one storage source handoff marker")
-    package = envelope(payload, memory, commit[:12])
+    package, runtime_info = storage_image(runtime.read_bytes(), commit[:12], "Runtime")
+    # The exact CD bootstrap also runs through an existing compatible CD's
+    # Card tools entry. The same ELF/envelope/unique-marker checks apply; no
+    # alternate load address, enlarged limits, or normal-runtime replacement.
+    tools_package, tools_info = storage_image(elf.read_bytes(), commit[:12], "Bootstrap utility")
     sd = dist / "sd/KUI"
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "runtime.kui").write_bytes(package)
@@ -225,7 +233,7 @@ def main():
             shutil.copyfile(path, source / path.name)
     compiler = subprocess.check_output(["sh-elf-gcc", "--version"], text=True).splitlines()[0]
     record = {"commit": commit, "release": release, "compiler": compiler, "dependencies": lock,
-              "runtime": verify(package), "loader_probe": probe_info,
+              "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
               "retail_boot": retail_info,
               "hardware_tested": False,
@@ -267,7 +275,8 @@ def main():
         "Preserve any known-working KUI/recovery.kui during updates. BOOT-RECOVERY.md\n"
         "describes the new CD's fallback and future independent FAT32 boot partition.\n"
         "The new graphical CD menu supports idle SD retry and a manual source choice.\n"
-        "Card tools loads optional KUI/tools.kui; no tools or repair image is bundled.\n"
+        "The bootstrap-cd artifact supplies optional KUI/tools.kui for measurement\n"
+        "through an existing CD's Card tools entry; no ext4 repair image is bundled.\n"
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "The six menu songs, now including Harbor Lights, are Ogg Vorbis.\n"
         "Older menu WAVs in that folder are only a fallback.\n"
@@ -321,11 +330,14 @@ def main():
             bench_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(benchmark)}")
     (benchmark / "SHA256SUMS").write_text("\n".join(bench_hashes) + "\n")
     # A boot-disc refresh is separate from SD/runtime updates and the large
-    # source/diagnostic download. It contains only the CDI and its records.
+    # source/diagnostic download. Its optional card utility allows testing the
+    # identical bootstrap code without reburning or replacing runtime/recovery.
     boot = dist / "bootstrap-cd"
     if boot.exists():
         shutil.rmtree(boot)
     boot.mkdir()
+    (boot / "KUI").mkdir()
+    (boot / "KUI/tools.kui").write_bytes(tools_package)
     shutil.copyfile(cdi, boot / "kui-bootstrap.cdi")
     shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", boot / "STORAGE-TRANSPORTS.md")
     shutil.copyfile(dist / "EXT4-BOOTSTRAP.md", boot / "EXT4-BOOTSTRAP.md")
@@ -343,6 +355,10 @@ def main():
                        "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                        "cdi_sha256": hashlib.sha256(cdi.read_bytes()).hexdigest(),
                        "cdi_bytes": cdi.stat().st_size, "badge": badge_info},
+                   "card_utility": {**tools_info, "path": "KUI/tools.kui",
+                       "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
+                       "package_sha256": hashlib.sha256(tools_package).hexdigest(),
+                       "purpose": "same bootstrap menu and read-only runtime-load measurement"},
                    "hardware_tested": False}
     (boot / "build.json").write_text(json.dumps(boot_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (boot / "SOURCE.txt").write_text(
@@ -351,7 +367,15 @@ def main():
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
         "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
-        "This package refreshes only the boot CD. Burn kui-bootstrap.cdi as a disc image.\n"
+        "FIRST TEST: no CD reburn. Copy only KUI/tools.kui onto the card; leave\n"
+        "KUI/runtime.kui and KUI/recovery.kui unchanged. On the existing compatible\n"
+        "CD choose Card tools. When the new menu opens, press B to pause automatic\n"
+        "startup, then Diagnostics -> Measure load time. It validates normal boot\n"
+        "selection (including recovery fallback) without execution or writes and\n"
+        "shows phase timings. Photograph the results, including redraw count/time.\n"
+        "You may then return Home and choose Start K-UI. The existing CD still loads\n"
+        "tools.kui at its old speed; this utility does not patch the burned disc.\n"
+        "The same bootstrap is included as kui-bootstrap.cdi for a later CD refresh.\n"
         "For SCI/IDE boot, also install this run's matching runtime and Games payloads.\n"
         "Read STORAGE-TRANSPORTS.md; one storage card is sufficient.\n"
         "This CD also loads runtime.kui from clean, compatible ext4 volumes read-only.\n"
@@ -364,9 +388,11 @@ def main():
         "before changing adapters, wiring, boards or IDE/CF hardware.\n"
         "Diagnostics confirms write/read, save-log and benchmark actions before writing.\n"
         "BOOT-RECOVERY.md covers independent FAT32 boot/ext4 data and recovery.kui.\n"
-        "Card tools loads optional KUI/tools.kui only. No tools or ext4 repair program\n"
-        "is bundled; compatible tools/recovery programs can arrive as card updates.\n"
-        "Graphical controls, SD insertion retry and new storage need console validation.\n"
+        "Card tools loads KUI/tools.kui only; the supplied file is this exact bootstrap\n"
+        "as a version-1 card utility, not an ext4 repair program. Future compatible\n"
+        "tools/recovery programs can arrive as card updates.\n"
+        "Normal SCIF boot on 82984 was confirmed; this timing/redraw revision awaits\n"
+        "console validation. STORAGE-TRANSPORTS.md records other hardware boundaries.\n"
         "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
     boot_hashes = []
     for path in sorted(boot.rglob("*")):
@@ -421,7 +447,8 @@ def main():
         "Preserve any working recovery.kui; BOOT-RECOVERY.md describes boot fallback\n"
         "and the future split-card layout. No ext4 repair program is bundled yet.\n"
         "The graphical CD menu offers manual source selection and idle SD retry; B\n"
-        "returns/stops without disabling later attempts. Optional tools.kui is not supplied.\n"
+        "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
+        "artifact supplies optional tools.kui for read-only load measurement.\n"
         "The normal retail game reader is installed; no SD benchmark payload is included.\n",
         encoding="utf-8")
     bundle_hashes = []

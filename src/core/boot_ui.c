@@ -67,7 +67,7 @@ enum kui_boot_action kui_boot_ui_input(struct kui_boot_ui *ui,
         ui->page=ui->selected==3?KUI_BOOT_DIAGNOSTICS:KUI_BOOT_HELP;
         ui->selected=0;
     } else {
-        if(ui->selected==4) {logs(ui);return KUI_BOOT_NONE;}
+        if(ui->selected==4) return KUI_BOOT_MEASURE;
         if(!worker_available) return KUI_BOOT_NONE;
         if(ui->selected==0) return KUI_BOOT_PROBE;
         ui->confirm=(enum kui_boot_action)(KUI_BOOT_WRITE_TEST+ui->selected-1);

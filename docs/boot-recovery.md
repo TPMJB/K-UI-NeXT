@@ -37,7 +37,7 @@ The menu uses the launcher font, high-contrast panels and TV-safe margins.
 | No input for three seconds | Automatically run Start K-UI; any input pauses automatic startup |
 | Start K-UI | Try `/KUI/runtime.kui`, then `/KUI/recovery.kui` on that device if the first image is missing, unreadable or rejected |
 | Recovery, or X on Home | Try only `/KUI/recovery.kui`; do not substitute the normal image |
-| Card tools | Try only the optional `/KUI/tools.kui`; none is bundled |
+| Card tools | Try only `/KUI/tools.kui`; the bootstrap-cd package supplies an optional bootstrap measurement utility |
 | Diagnostics | Open built-in optical/storage checks and log actions |
 | Help | Show loading, recovery and card guidance |
 | Up/Down, A | Select a menu item, then open it |
@@ -70,13 +70,15 @@ or IDE/CF hardware still requires power off. A retry freshly initializes the
 selected source; it does not continuously poll for inserted cards.
 
 Diagnostics offers an optical probe, storage write/read test, save log,
-benchmarks and view log. Write/read, save log and benchmarks require A on an
+benchmarks and **Measure load time**. The measurement reads/checks normal boot
+selection (including recovery fallback) without executing an image or writing;
+Y still opens the log. Write/read, save log and benchmarks require A on an
 explicit confirmation page because they can write. The old X-to-write and
 trigger-to-benchmark shortcuts are replaced by these menu actions. Ordinary
 storage checks use the selected source; benchmarks follow `bench.cfg`, including
 its transport setting. In the log viewer, Up/Down scrolls, Left/Right pans long
-lines, Start shows the newest lines, and B returns. Graphical menu controls and
-card-insertion retry still need console validation.
+lines, Start shows the newest lines, and B returns. Normal SCIF boot on `82984`
+was confirmed; the new timing/redraw revision still needs console validation.
 
 ## Partition policy
 
@@ -131,9 +133,16 @@ bootstrap rejects recovery-needed volumes and disables journal operations in
 the [pinned library's journal implementation](../third_party/lwext4/src/ext4_journal.c).
 The separate FAT boot path does not need ext4 recovery to start an image.
 
-The optional Card tools entry has a fixed `/KUI/tools.kui` path and never
-substitutes a normal or recovery image. No tools payload or repair/network
-program is bundled. Future tools and dedicated recovery payloads must implement
+The Card tools entry has a fixed `/KUI/tools.kui` path and never substitutes a
+normal or recovery image. The **bootstrap-cd** download now supplies the exact
+bootstrap executable as a version-1 card utility. Copy only that file, choose
+Card tools on the existing compatible CD, press B in the new menu to pause
+automatic startup, then select Diagnostics → Measure load time. This allows
+testing without reburning or replacing `runtime.kui`/`recovery.kui`. The old CD
+still initially loads the utility at its old speed; the card file does not
+permanently change the burned CD. See [the measurement procedure](bootloader-refresh.md#first-test-without-reburning).
+
+No ext4 repair or network utility is bundled. Future tools and dedicated recovery payloads must implement
 the operations they advertise and satisfy the same executable and transport
 handoff requirements as normal images.
 
