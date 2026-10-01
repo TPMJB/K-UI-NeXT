@@ -32,13 +32,19 @@ Its physical design and the new ATA driver remain unverified on hardware.
 
 ## Selection and ownership
 
-Discovery order is SCIF, SCI, then IDE/CF. Startup tries normal then recovery
-images on each device; hold X to request recovery only, or B for CD tools.
+Auto discovery order is SCIF, SCI, then IDE/CF. The graphical boot menu starts
+automatically after three seconds without input; any input pauses it. Startup
+tries normal then recovery images on each device. Recovery or X on Home requests
+recovery only. Home Left/Right can select one explicit transport for this
+session. B returns/stops and still permits a later retry; Diagnostics opens the
+built-in checks, and Card tools loads only optional `/KUI/tools.kui`.
 If a FAT boot partition exists, files there are authoritative and the CD never
 substitutes a runtime from ext4 data. Startup searches for a valid image;
 the selected source is passed to the new runtime. Normal operations keep that
 device selected. A failed read/write does not silently redirect the operation
-onto another card. Power off before changing devices.
+onto another card. An idle boot menu can retry after SD card insertion in a
+suitable socket. Power off before changing adapters, wiring, boards or IDE/CF;
+do not remove media during an operation.
 
 Games records the selected transport in its validated physical-sector map.
 The high stage and resident reader use that same transport after the launcher
@@ -64,9 +70,11 @@ must take turns on their common G1 bus.
 
 Use a card with free space. First confirm startup, Games browsing, and a saved
 diagnostics report on the selected medium. Then use Diagnostics' existing
-write/reread check to verify data integrity before trying a new rip. For the
+write/reread check to verify data integrity before trying a new rip. CD-menu
+write/read, save-log and benchmark actions require confirmation. For the
 optional SD throughput benchmark, copy [t13-sci-storage.cfg](bench-cfgs/t13-sci-storage.cfg)
-to `/KUI/bench.cfg` on the same card before pressing R; its explicit SCI setting
+to `/KUI/bench.cfg` on the same card before confirming Benchmarks in the CD menu
+(or using Diagnostics R in the application runtime); its explicit SCI setting
 avoids the benchmark's default SCIF target. An absent
 or unsupported device should report failure and return to recovery, not hang.
 

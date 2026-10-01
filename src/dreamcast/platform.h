@@ -5,6 +5,7 @@
 #include "kui/capture.h"
 #include "kui/bench.h"
 #include "kui/storage.h"
+#include "kui/boot_image.h"
 
 /* True when compiling for the Dreamcast's SH-4. GCC defines a DIFFERENT macro for each SH-4 mode:
  * __SH4__ only for plain -m4, __SH4_SINGLE__ for -m4-single (which is how KOS builds), plus
@@ -37,6 +38,9 @@ bool kui_sd_raw_read_ops(struct kui_media_ops *out);
 void kui_disc_probe(void);
 void kui_drive_init_bus(void);
 void kui_bootstrap_load(kui_cancel_fn cancelled,bool recovery_only);
+/* Caller owns storage exclusively; no diagnostic job may be running. */
+enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
+    enum kui_boot_mode mode,kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
 /* Normal capture uses a normalized card-root destination (for example /Games)

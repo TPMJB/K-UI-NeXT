@@ -4,6 +4,9 @@
 #include "kui/ui_rate.h"
 #include "kui/report.h"
 #include "kui/clock_platform.h"
+#ifndef KUI_SD_RUNTIME
+#include "kui/boot_ui.h"
+#endif
 #ifdef KUI_SD_RUNTIME
 #include "kui/shell.h"
 #include "kui/settings.h"
@@ -47,6 +50,9 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #define KUI_BUILD_ID "local-unversioned"
 #endif
 #define KUI_BUTTON_BENCH (1u<<29)
+#ifndef KUI_SD_RUNTIME
+#define KUI_BUTTON_BOOT_LEFT (1u<<30)
+#endif
 #ifdef KUI_SD_RUNTIME
 #define KUI_BUTTON_MSTATS (1u<<30)
 static struct kui_memory_stats memory_status;
@@ -156,6 +162,13 @@ static unsigned line_count;
 static bool log_truncated, busy, cancel_requested, saving_report;
 static unsigned pending;
 static char report[LOG_LINES * LINE_BYTES + 256];
+#ifndef KUI_SD_RUNTIME
+static struct kui_boot_ui boot_ui;
+static bool boot_worker_available,boot_attempt_cancelled;
+static unsigned boot_attempt_previous,boot_held_navigation;
+static uint64_t boot_last_draw,boot_repeat_at;
+static char boot_notice[128]="Ready to load K-UI. Choose a source or insert your card.";
+#endif
 /* The UI thread is main(). It shares the one CPU with the I/O worker, and a
  * full-screen software redraw plus vid_waitvbl (a busy-wait in this KOS) is a
  * lot of CPU. The cap below lets an operation trade screen updates for speed;
@@ -1195,7 +1208,7 @@ static void *worker(void *unused) {
         if(action!=12 && action!=27 && action!=60) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
         if(action==1 || (action>=4 && action<=7) || action==22 || (action>=46 && action<=48)) kui_disc_identity_invalidate(&disc_identity);
 #else
-        kui_log("Operation ended. Y saves the current log to SD.");
+        kui_log("Operation ended. View Log; saving a report is a separate write action.");
 #endif
         mutex_lock(&lock);
         busy = false;
@@ -1207,39 +1220,30 @@ static void *worker(void *unused) {
 }
 
 #ifndef KUI_SD_RUNTIME
-static void draw(unsigned scroll) {
-    char visible[VISIBLE_LINES][LINE_BYTES] = {{0}};
-    char status[LINE_BYTES];
+static void draw_boot(void) {
+    char visible[KUI_BOOT_LOG_ROWS][LINE_BYTES]={{0}},status[128];
+    struct kui_boot_view view={.build=KUI_BUILD_ID,.worker_available=boot_worker_available};
     mutex_lock(&lock);
-    unsigned end = line_count > scroll ? line_count - scroll : 0;
-    unsigned first = end > VISIBLE_LINES ? end - VISIBLE_LINES : 0;
-    unsigned actual=end-first;
-    for(unsigned i = first; i < end; ++i) strcpy(visible[i - first], lines[i]);
-    snprintf(status, sizeof(status), "%s  |  %u log lines%s",
-        busy ? (saving_report ? (cancel_requested?"STOPPING LOG SAVE":"SAVING LOG") :
-            (cancel_requested ? "STOP REQUESTED" : "WORKING")) : "READY",
-        line_count, log_truncated ? " (earlier lines truncated)" : "");
+    unsigned maximum=line_count>KUI_BOOT_LOG_ROWS?line_count-KUI_BOOT_LOG_ROWS:0;
+    if(boot_ui.scroll>maximum) boot_ui.scroll=maximum;
+    unsigned end=line_count-boot_ui.scroll;
+    unsigned first=end>KUI_BOOT_LOG_ROWS?end-KUI_BOOT_LOG_ROWS:0;
+    view.line_count=end-first;view.total_lines=line_count;
+    for(unsigned i=0;i<view.line_count;i++) {
+        strcpy(visible[i],lines[first+i]);view.lines[i]=visible[i];
+    }
+    view.busy=busy;view.cancelled=cancel_requested;
+    if(busy) snprintf(status,sizeof(status),"%s",cancel_requested?"Stopping safely...":
+        saving_report?"Saving diagnostic report...":line_count?lines[line_count-1]:"Working...");
+    else snprintf(status,sizeof(status),"%s",boot_notice);
     mutex_unlock(&lock);
-    /* Multibuffer mode keeps this drawing area separate from the displayed
-     * frame. Clearing the displayed frame exposes blank/partial redraws. */
-    vid_clear(8, 16, 24);
-    minifont_set_color(100, 220, 220);
-    minifont_draw_str(vram_s + 20 * 640 + 16, 640, KUI_RELEASE_SHORT " | " KUI_ROLE);
-    minifont_set_color(220, 230, 235);
-    minifont_draw_str(vram_s + 44 * 640 + 16, 640, "Build " KUI_BUILD_ID);
-    minifont_draw_str(vram_s + 44*640+440,640,"R: Bench");
-    minifont_draw_str(vram_s + 68 * 640 + 16, 640,
-        "A Disc probe   X Write/read SD test   Y Save log");
-    minifont_draw_str(vram_s + 88 * 640 + 16, 640,
-        "B Stop   Up/Down scroll   Start latest");
-    minifont_draw_str(vram_s + 116 * 640 + 16, 640, status);
-    unsigned top=144,shown=VISIBLE_LINES;
-    unsigned first_visible=actual>shown?actual-shown:0;
-    for(unsigned i = 0; i < shown && i+first_visible<actual; ++i)
-        minifont_draw_str(vram_s + (top + i * 16) * 640 + 16, 640, visible[i+first_visible]);
-    /* Publish the completed frame, then let KOS select the next drawing area. */
-    vid_waitvbl();
-    vid_flip(-1);
+    uint64_t now=timer_ms_gettime64();
+    if(boot_ui.autoboot_until>now)
+        view.countdown=(unsigned)((boot_ui.autoboot_until-now+999u)/1000u);
+    view.status=status;
+    kui_boot_ui_draw(vram_s,&boot_ui,&view);
+    vid_waitvbl();vid_flip(-1);
+    boot_last_draw=now;
 }
 #endif
 
@@ -1432,18 +1436,53 @@ static unsigned controller_buttons(void) {
     if(state->joyy>48) buttons|=CONT_DPAD_DOWN;
 #ifdef KUI_SD_RUNTIME
     if(state->ltrig>128) buttons|=KUI_BUTTON_MSTATS;
+#else
+    if(state->ltrig>128) buttons|=KUI_BUTTON_BOOT_LEFT;
 #endif
     if(state->rtrig>128) buttons|=KUI_BUTTON_BENCH;
     return buttons;
 }
 
 #ifndef KUI_SD_RUNTIME
+static unsigned boot_buttons(unsigned buttons) {
+    unsigned out=0;
+    if(buttons&CONT_DPAD_UP) out|=KUI_BOOT_UP;
+    if(buttons&CONT_DPAD_DOWN) out|=KUI_BOOT_DOWN;
+    if(buttons&(CONT_DPAD_LEFT|KUI_BUTTON_BOOT_LEFT)) out|=KUI_BOOT_LEFT;
+    if(buttons&(CONT_DPAD_RIGHT|KUI_BUTTON_BENCH)) out|=KUI_BOOT_RIGHT;
+    if(buttons&CONT_A) out|=KUI_BOOT_A;
+    if(buttons&CONT_B) out|=KUI_BOOT_B;
+    if(buttons&CONT_X) out|=KUI_BOOT_X;
+    if(buttons&CONT_Y) out|=KUI_BOOT_Y;
+    if(buttons&CONT_START) out|=KUI_BOOT_START;
+    return out;
+}
+static unsigned boot_input_events(unsigned buttons,unsigned pressed,uint64_t now) {
+    /* Repeat only vertical log navigation; boot and write actions remain
+     * edge-triggered. This also runs while the synchronous loader owns main. */
+    unsigned held=boot_ui.page==KUI_BOOT_LOG?
+        buttons&(CONT_DPAD_UP|CONT_DPAD_DOWN):0;
+    if(held!=boot_held_navigation) {
+        boot_held_navigation=held;boot_repeat_at=now+400u;
+    } else if(held && now>=boot_repeat_at) {
+        pressed|=held;boot_repeat_at=now+80u;
+    }
+    if(pressed && (buttons&CONT_B)) pressed|=CONT_B;
+    return boot_buttons(pressed);
+}
 static bool boot_cancelled(void) {
-    /* Once observed, B keeps this boot on CD even if released during SD cleanup. */
-    static bool fallback;
-    fallback = fallback || (controller_buttons() & CONT_B) != 0;
-    draw(0);
-    return fallback;
+    unsigned buttons=controller_buttons();
+    uint64_t now=timer_ms_gettime64();
+    unsigned pressed=boot_input_events(buttons,buttons&~boot_attempt_previous,now);
+    boot_attempt_previous=buttons;
+    /* Busy input can only open/scroll the log or request Stop. It cannot
+     * change transport, queue a worker, or start a second boot attempt. */
+    (void)kui_boot_ui_input(&boot_ui,pressed,now,true,boot_worker_available);
+    /* Sticky only for this attempt; retry resets it after B is released. */
+    boot_attempt_cancelled=boot_attempt_cancelled || (buttons&CONT_B)!=0;
+    mutex_lock(&lock);cancel_requested=boot_attempt_cancelled;mutex_unlock(&lock);
+    if(now-boot_last_draw>=125u) draw_boot();
+    return boot_attempt_cancelled;
 }
 #endif
 
@@ -1459,24 +1498,19 @@ int main(void) {
             (vid_mode->flags & VID_PAL ? "PAL" : "NTSC"),
         vid_mode->flags & VID_INTERLACE ? "interlaced" : "progressive");
 #ifndef KUI_SD_RUNTIME
-    kui_log("Hold B during startup for built-in diagnostics.");
-    kui_log("Hold X during startup to load /KUI/recovery.kui only.");
-    kui_log("Otherwise find /KUI/runtime.kui on SCIF, SCI or IDE/CF.");
-    uint64_t until = timer_ms_gettime64() + 1500;
-    bool fallback = false;
-    bool recovery_only = false;
-    while(timer_ms_gettime64() < until) {
-        recovery_only = recovery_only || (controller_buttons() & CONT_X) != 0;
-        if(boot_cancelled()) { fallback = true; break; }
-        thd_sleep(16);
-    }
-    if(!fallback) kui_bootstrap_load(boot_cancelled,recovery_only);
-    kui_log("Using built-in CD diagnostics; SD runtime is not running.");
+    kui_boot_ui_init(&boot_ui,timer_ms_gettime64());
+    kui_log("CD menu: B stays here; X opens recovery; startup boot begins after 3 seconds.");
+    kui_log("Choose Auto, SCIF, SCI or IDE/CF. A retries after inserting an SD card.");
+    kui_log("Boot images are read-only. Built-in diagnostics label and confirm writes.");
 #endif
     kui_log("Diagnostic code and fonts are loaded entirely in RAM.");
     kui_log("Replace boot CD with a known-good retail GD-ROM; close lid.");
+#ifdef KUI_SD_RUNTIME
     kui_log("Diagnostics page: A disc samples; X SD test; Y save log.");
-    kui_log("Use a spare test card. No formatting; existing files preserved.");
+#else
+    kui_log("Open Diagnostics for disc samples, storage write/read checks, or log saving.");
+#endif
+    kui_log("Use a spare test card for write tests. No formatting; existing files preserved.");
 #ifdef KUI_SD_RUNTIME
     kui_system_settings_default(&system_current);system_pending=system_current;
     kui_music_init(kui_log);kui_disc_identity_init(&disc_identity);disc_snapshot=disc_identity;
@@ -1504,21 +1538,23 @@ int main(void) {
     kui_log("Diagnostics R trigger: isolated benchmarks from /KUI/bench.cfg.");
     kui_log("The screen redraws 2x a second while working, which frees CPU (ui_hz=full: off).");
 #else
-    kui_log("R trigger: benchmarks from /KUI/bench.cfg; B stops safely.");
+    kui_log("Configured benchmarks use /KUI/bench.cfg; B stops safely.");
     kui_log("Bench SD sections write temporary test files; results auto-save to SD.");
     kui_log("Full capture is available in the updated SD runtime.");
 #endif
     kthread_attr_t attrs = {.stack_size = 64 * 1024, .label = "kui-io"};
-    if(!thd_create_ex(&attrs, worker, NULL)) {
-        kui_log("Unable to start I/O worker; reset console");
-        for(;;) {
-#ifdef KUI_SD_RUNTIME
-            draw_shell();
-#else
-            draw(0);
+    kthread_t *io_worker=thd_create_ex(&attrs,worker,NULL);
+#ifndef KUI_SD_RUNTIME
+    boot_worker_available=io_worker!=NULL;
 #endif
-            thd_sleep(100);
-        }
+    if(!io_worker) {
+#ifdef KUI_SD_RUNTIME
+        kui_log("Unable to start I/O worker; reset console");
+        for(;;) {draw_shell();thd_sleep(100);}
+#else
+        kui_log("Diagnostic worker unavailable; boot, recovery, tools and log viewing remain available.");
+        snprintf(boot_notice,sizeof(boot_notice),"Diagnostics unavailable; boot and recovery still work.");
+#endif
     }
 #ifdef KUI_SD_RUNTIME
     kui_memory_log("runtime ready");
@@ -1526,11 +1562,6 @@ int main(void) {
     uint64_t next_memory_sample=timer_ms_gettime64()+1000;
 #endif
     unsigned previous = 0;
-#ifndef KUI_SD_RUNTIME
-    /* Consume held startup keys: a failed X recovery boot must not turn
-     * into the diagnostics X write test without a release and new press. */
-    previous = controller_buttons();
-#endif
     uint64_t last_draw = 0;
     bool was_busy = false;
 #ifdef KUI_SD_RUNTIME
@@ -1543,8 +1574,6 @@ int main(void) {
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
-#else
-    unsigned scroll = 0;
 #endif
     for(;;) {
         unsigned buttons = controller_buttons();
@@ -1852,20 +1881,55 @@ int main(void) {
             memory_valid = kui_memory_snapshot(&memory_status); next_memory_sample = timer_ms_gettime64() + 1000;
         }
 #else
-        mutex_lock(&lock);
-        if(pressed & CONT_B) cancel_requested = true;
-        if(!busy && !(buttons & CONT_B)) {
-            unsigned action = pressed & CONT_A ? 1 : pressed & CONT_X ? 2 : pressed & CONT_Y ? 3 :
-                pressed & KUI_BUTTON_BENCH ? 7 : 0;
-            if(action) {
-                pending = action; busy = true; cancel_requested = false; scroll = 0;
+        /* Only the main thread updates menu state. A CD worker has no idle
+         * peripheral activity, and busy remains set until its cleanup ends. */
+        uint64_t input_at=timer_ms_gettime64();
+        unsigned menu_input=boot_input_events(buttons,pressed,input_at);
+        mutex_lock(&lock);bool working=busy;mutex_unlock(&lock);
+        if(was_busy && !working)
+            snprintf(boot_notice,sizeof(boot_notice),"Operation finished. View Log for the result.");
+        enum kui_boot_action requested=kui_boot_ui_input(&boot_ui,menu_input,
+            input_at,working,boot_worker_available);
+        if(requested==KUI_BOOT_STOP) {
+            mutex_lock(&lock);if(busy) cancel_requested=true;mutex_unlock(&lock);
+        } else if(requested==KUI_BOOT_RUNTIME || requested==KUI_BOOT_RECOVERY || requested==KUI_BOOT_TOOLS) {
+            mutex_lock(&lock);
+            bool claimed=!busy && !pending && !(buttons&CONT_B);
+            if(claimed) {busy=true;cancel_requested=false;ui_hz_busy=2;}
+            mutex_unlock(&lock);
+            if(claimed) {
+                enum kui_boot_mode mode=requested==KUI_BOOT_RECOVERY?KUI_BOOT_MODE_RECOVERY:
+                    requested==KUI_BOOT_TOOLS?KUI_BOOT_MODE_TOOLS:KUI_BOOT_MODE_NORMAL;
+                boot_ui.autoboot_until=0;boot_attempt_cancelled=false;
+                boot_attempt_previous=controller_buttons();boot_held_navigation=0;
+                snprintf(boot_notice,sizeof(boot_notice),"Reading selected boot image...");
+                kui_log("CD boot: %s from %s",requested==KUI_BOOT_RECOVERY?"recovery":
+                    requested==KUI_BOOT_TOOLS?"card tools":"runtime",kui_storage_name(boot_ui.transport));
+                draw_boot();
+                enum kui_runtime_result result=kui_bootstrap_start(boot_ui.transport,mode,boot_cancelled);
+                /* Successful handoff never returns. Failed/cancelled attempts
+                 * release storage before the menu permits another action. */
+                mutex_lock(&lock);busy=false;cancel_requested=false;ui_hz_busy=KUI_OPT_UI_FULL;mutex_unlock(&lock);
+                snprintf(boot_notice,sizeof(boot_notice),"%s. Insert/check the card, then press A to retry.",
+                    kui_runtime_result_name(result));
+                boot_ui.page=KUI_BOOT_HOME;boot_ui.selected=(unsigned)requested-(unsigned)KUI_BOOT_RUNTIME;
+                previous=controller_buttons();boot_held_navigation=0;last_draw=0;was_busy=false;
+            }
+        } else {
+            unsigned action=requested==KUI_BOOT_PROBE?1u:requested==KUI_BOOT_WRITE_TEST?2u:
+                requested==KUI_BOOT_SAVE_LOG?3u:requested==KUI_BOOT_BENCH?7u:0u;
+            if(action && boot_worker_available) {
+                mutex_lock(&lock);
+                if(!busy && !pending && !(buttons&CONT_B)) {
+                    kui_sd_set_params(boot_ui.transport,true);
+                    pending=action;busy=true;cancel_requested=false;ui_hz_busy=2;
+                    boot_ui.scroll=boot_ui.log_column=0;
+                    boot_ui.return_page=KUI_BOOT_DIAGNOSTICS;boot_ui.page=KUI_BOOT_LOG;
+                }
+                mutex_unlock(&lock);
             }
         }
-        if((pressed & CONT_DPAD_UP) && scroll + VISIBLE_LINES < line_count) ++scroll;
-        if((pressed & CONT_DPAD_DOWN) && scroll) --scroll;
-        if(pressed & CONT_START) scroll = 0;
-        bool is_busy = busy;
-        mutex_unlock(&lock);
+        mutex_lock(&lock);bool is_busy=busy;mutex_unlock(&lock);
 #endif
         /* Idle: always redraw, as before. Busy: at most ui_hz_busy redraws per
          * second, plus one at each start and end so the screen is never stale
@@ -1882,7 +1946,7 @@ int main(void) {
 #ifdef KUI_SD_RUNTIME
             draw_shell();
 #else
-            draw(scroll);
+            draw_boot();
 #endif
             last_draw = t;
         }

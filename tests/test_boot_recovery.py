@@ -28,11 +28,11 @@ def run(*args):
     return result.stdout
 
 
-def package(recovery=False, marker=True):
-    data = bytearray([0x72 if recovery else 0x61]) * 65536
+def package(recovery=False, marker=True, tools=False):
+    data = bytearray([0x74 if tools else 0x72 if recovery else 0x61]) * 65536
     if marker:
         struct.pack_into("<5I", data, 32, 0x5349554B, 0x544F4F42, 1, 3, 0xFFFFFFFC)
-    return envelope(data, len(data), "222222222222" if recovery else "111111111111")
+    return envelope(data, len(data), "333333333333" if tools else "222222222222" if recovery else "111111111111")
 
 
 def partitioned(path, fat, ext, gpt=False):
@@ -109,15 +109,17 @@ def main():
         good, rescue = root / "runtime.kui", root / "recovery.kui"
         good.write_bytes(package())
         rescue.write_bytes(package(True))
+        tools = root / "tools.kui"
+        tools.write_bytes(package(tools=True))
         corrupt = root / "corrupt.kui"
         corrupt.write_bytes(package()[:-1] + b"\xff")
         no_marker = root / "no-marker.kui"
         no_marker.write_bytes(package(marker=False))
 
-        def fat_image(name, primary=good, recovery=rescue):
+        def fat_image(name, primary=good, recovery=rescue, extension=None):
             image = root / (name + ".img")
             shutil.copyfile(clean, image)
-            run(BINARY, image, "seed", primary or "-", recovery or "-")
+            run(BINARY, image, "seed", primary or "-", recovery or "-", extension or "-")
             return image
 
         checks = 0
@@ -136,6 +138,14 @@ def main():
         check(valid, "cancel", fault="cancel")
         check(valid, "fail", fault="io")
         check(valid, "recovery", fault="io-once")
+        check(valid, "fail", "tools")  # A missing extension never boots the runtime.
+        with_tools = fat_image("with-tools", extension=tools)
+        check(with_tools, "tools", "tools", transport=2)
+        check(with_tools, "runtime")  # Tools are never an automatic fallback.
+        check(fat_image("bad-tools", extension=corrupt), "fail", "tools")
+        only_tools = fat_image("only-tools", None, None, tools)
+        check(only_tools, "fail")
+        check(only_tools, "tools", "tools")
         for name, primary, recovery, expected in (
             ("bad-primary", corrupt, rescue, "recovery"),
             ("missing-primary", None, rescue, "recovery"),
@@ -153,6 +163,9 @@ def main():
             blocked = partitioned(image, valid, ext, gpt)
             check(image, "runtime", blocked=blocked)
             check(image, "recovery", "recovery", transport=2, blocked=blocked)
+        image = root / "tools-split.img"
+        blocked = partitioned(image, with_tools, ext)
+        check(image, "tools", "tools", blocked=blocked)
         only_normal = fat_image("no-recovery", good, None)
         check(only_normal, "fail", "recovery")  # X never substitutes normal runtime.
         check(fat_image("bad-recovery", good, corrupt), "fail", "recovery")
@@ -173,13 +186,15 @@ def main():
         (tree / "KUI").mkdir(parents=True)
         shutil.copyfile(good, tree / "KUI/runtime.kui")
         shutil.copyfile(rescue, tree / "KUI/recovery.kui")
+        shutil.copyfile(tools, tree / "KUI/tools.kui")
         direct = root / "direct-ext4.img"
         with direct.open("wb") as f:
             f.truncate(32 * 1024 * 1024)
         run("mkfs.ext4", "-q", "-F", "-b", "4096", "-I", "256", "-O", PROFILE, "-d", tree, direct)
         check(direct, "runtime")
         check(direct, "recovery", "recovery")
-        print(f"PASS {checks} boot recovery scenarios: real FAT/ext4, MBR/GPT, fallback, forced recovery, cancellation, isolation and zero writes")
+        check(direct, "tools", "tools")
+        print(f"PASS {checks} boot recovery scenarios: real FAT/ext4, MBR/GPT, fallback, recovery/tools selection, transport filtering, cancellation, isolation and zero writes")
 
 
 if __name__ == "__main__":

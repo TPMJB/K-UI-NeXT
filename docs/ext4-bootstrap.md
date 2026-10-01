@@ -24,8 +24,10 @@ Startup keeps the SCIF, SCI, IDE/CF search order. A validated FAT boot candidate
 is authoritative: the loader tries normal then recovery files there and never
 falls through to the ext4 data partition. Without a FAT candidate, direct ext4
 loading remains supported; raw media is tried as FatFs first. Each accepted
-image passes header, length and payload CRC checks. Hold X selects only
-`/KUI/recovery.kui`; hold B retains the built-in CD tools. See
+image passes header, length and payload CRC checks. Recovery or X on Home
+selects only `/KUI/recovery.kui`; Card tools selects only optional `/KUI/tools.kui`.
+B backs out or stops an attempt, and failed attempts return to the graphical
+menu for retry. See
 [the complete startup policy](boot-recovery.md#startup-controls-and-file-selection).
 
 The ext4 adapter never forwards writes or synchronization calls. Journaling is

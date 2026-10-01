@@ -22,6 +22,8 @@ BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build
     build/dc/src/core/settings.o build/dc/src/core/settings_file.o \
     build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
 LOADER_OBJECTS += $(BENCH_OBJECTS)
+LOADER_OBJECTS += build/dc/src/core/boot_ui.o build/dc/src/dreamcast/boot_draw.o \
+    build/dc/src/dreamcast/shell_font.o build/dc/src/apps/splash.o
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/dc/main-runtime.o
 RUNTIME_OBJECTS += $(BENCH_OBJECTS)
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o

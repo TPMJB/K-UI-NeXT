@@ -1,4 +1,4 @@
-# Boot CD refresh: standalone storage and recovery images
+# Boot CD refresh: graphical menu, storage and recovery
 
 The bootstrap artifact contains the boot CD. For standalone SCI microSD or
 IDE/CF, also install the runtime and Games files from this same run's SD-update
@@ -19,57 +19,68 @@ layout until the runtime gains ext4 support.
 
 Burn `kui-bootstrap.cdi` as a disc image onto a new boot CD-R. Normal startup
 shows the original K-UI badge, including `github.com/TPMJB`, under the Sega
-logo, then searches SCIF, SCI and IDE/CF. On each device it tries
+logo, then the Dáinsleif artwork and startup countdown. Any input opens the
+graphical menu. After three seconds without input,
+Start K-UI searches SCIF, SCI and IDE/CF. On each device it tries
 `/KUI/runtime.kui`, then `/KUI/recovery.kui` if the first image cannot load.
 It accepts the existing FatFs layouts or the clean ext4 profile documented
 above. Compatible runtime updates can reuse this CD; a bootstrap bug fix or
 unsupported format change may still require a replacement.
 
-To stay in the CD tools, hold **B from power-on** until the built-in CD
-diagnostics screen appears. Release B, then press the **right trigger (R)**
-to start the benchmark runner. B is checked during the startup grace period,
-through SD runtime loading, and before handoff; once seen it stays latched
-for this boot. If neither image can load, startup returns to the CD tools.
+Any input pauses automatic startup. Select Start K-UI, Recovery, Card tools,
+Diagnostics or Help with Up/Down and A. Left/Right on Home chooses Auto, SCIF,
+SCI or IDE/CF for this session; an explicit source does not fall back to another
+device. B returns or stops the current operation, and a later attempt can still
+run. X on Home loads only `/KUI/recovery.kui`, useful when a checksum-valid normal
+runtime hangs after launch. Card tools loads only optional `/KUI/tools.kui`;
+that future-compatible payload is not supplied in this build.
 
-Hold **X from power-on through the startup prompt** to skip the normal image
-and load only `/KUI/recovery.kui`. This also bypasses a checksum-valid runtime
-that hangs after launch. Keep a known-working recovery image when updating the
-normal runtime. X below describes its different function once CD tools appear.
+If loading fails, return to Home and retry with A after checking or inserting
+the SD card while idle. Do not change cards during loading or diagnostics.
+Only use live card insertion with a suitable SD socket; power off to change
+adapters, wiring, boards or IDE/CF hardware. There is no automatic insertion
+polling. Preserve a known-working recovery image during ordinary updates.
 
-| Control in CD tools | Action |
+| Menu/control | Action |
 | --- | --- |
-| R trigger | Run benchmarks configured by `/KUI/bench.cfg` |
-| B | Stop the current operation safely |
-| A | Probe the inserted optical disc |
-| X | Run the SD write/read check |
-| Y | Save the diagnostic log to SD |
-| Up / Down | Scroll the log |
-| Start | Jump to the latest log lines |
+| Diagnostics → Optical probe | Probe the inserted optical disc |
+| Diagnostics → Write/read test | Confirm with A before creating temporary test data |
+| Diagnostics → Save log | Confirm with A before saving a report |
+| Diagnostics → Benchmarks | Confirm with A; run settings from `/KUI/bench.cfg` |
+| Y, or View log | Open the log viewer |
+| Up/Down in log | Scroll |
+| Left/Right in log | Pan long lines |
+| Start in log | Jump to newest lines |
+| B | Go back or stop safely |
 
-Benchmarks do not start automatically when B selects recovery. They use the
+Benchmarks never start automatically or from a trigger shortcut. They use the
 existing runner and options from SD, including saved settings followed by
 explicit `bench.cfg` overrides. Missing configuration uses defaults; an
 unavailable SD card or rejected configuration prevents the benchmark run.
 The default sections are optical, hash and SD. Selected SD/capture benchmarks
 write temporary test files; reports save automatically when a run finishes or
 stops. Existing game files are preserved. Use the existing benchmark guide to
-choose longer sweeps; this boot refresh does not request a new sweep.
+choose longer sweeps; this boot refresh does not request a new sweep. Ordinary
+storage checks follow the Home source; benchmark transport follows `bench.cfg`.
 These CD tools continue using FatFs. Ext4 bootstrap loading does not enable
 their log writes, settings or storage benchmarks on ext4.
 
 For optical measurements, wait for the CD tools, replace the boot CD with a
-known-good retail GD-ROM, and close the lid before pressing R. The tools and
+known-good retail GD-ROM, and close the lid before selecting the probe or
+confirming a benchmark. The tools and
 fonts are already in RAM. The CD menu does not offer a full-disc capture.
 
 ## Next console check
 
 One normal boot should show the badge and enter the matching launcher from the
 selected device; confirm its storage transport in Diagnostics.
-One boot holding B should stay in the CD tools with `R: Bench` visible.
-One boot holding X should load the retained recovery image (or stay in CD tools
-if it is absent). That checks recovery controls. The new SCI and IDE/CF paths
-additionally need
-the short integrity/game check described in the storage guide.
+Pause automatic startup, check Home/Help/log navigation, and verify B can stop
+an attempt without preventing a later retry. Recovery should load the retained
+image, or return to Home if absent; Card tools should report its missing file
+when none is installed. Confirm that write/read, save-log and benchmark actions
+show confirmation first. These controls and card-insertion retry still need
+console validation. New SCI and IDE/CF paths additionally need the short
+integrity/game check described in the storage guide.
 
 ## Historical playable Games baseline
 

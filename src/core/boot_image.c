@@ -4,10 +4,20 @@
 #include "kui/ext4_boot.h"
 #include "kui/storage_policy.h"
 
-const char *kui_boot_image_path(bool recovery_only, unsigned attempt) {
-    if(recovery_only) return attempt == 0 ? "0:/KUI/recovery.kui" : NULL;
+const char *kui_boot_image_mode_path(enum kui_boot_mode mode, unsigned attempt) {
+    if(mode == KUI_BOOT_MODE_RECOVERY) return attempt == 0 ? "0:/KUI/recovery.kui" : NULL;
+    if(mode == KUI_BOOT_MODE_TOOLS) return attempt == 0 ? "0:/KUI/tools.kui" : NULL;
+    if(mode != KUI_BOOT_MODE_NORMAL) return NULL;
     if(attempt == 0) return KUI_RUNTIME_PATH;
     return attempt == 1 ? "0:/KUI/recovery.kui" : NULL;
+}
+const char *kui_boot_image_path(bool recovery_only, unsigned attempt) {
+    return kui_boot_image_mode_path(recovery_only ? KUI_BOOT_MODE_RECOVERY : KUI_BOOT_MODE_NORMAL, attempt);
+}
+unsigned kui_boot_transport_at(unsigned filter, unsigned attempt) {
+    if(filter == KUI_STORAGE_AUTO)
+        return attempt < KUI_STORAGE_AUTO ? attempt : KUI_STORAGE_AUTO;
+    return filter < KUI_STORAGE_AUTO && attempt == 0 ? filter : KUI_STORAGE_AUTO;
 }
 
 /* This runs only after the on-disk header, size and original payload CRC pass.
@@ -51,11 +61,11 @@ finish:
 }
 
 static enum kui_runtime_result read_fat(const struct kui_media_ops *raw,
-    const struct kui_volume *volume, unsigned transport, bool recovery_only,
+    const struct kui_volume *volume, unsigned transport, enum kui_boot_mode mode,
     struct kui_runtime_image *out, kui_log_fn log, kui_cancel_fn cancelled) {
     enum kui_runtime_result result = KUI_RUNTIME_IO;
     for(unsigned attempt = 0;; ++attempt) {
-        const char *path = kui_boot_image_path(recovery_only, attempt);
+        const char *path = kui_boot_image_mode_path(mode, attempt);
         if(!path) break;
         if(cancelled()) return KUI_RUNTIME_CANCELLED;
         /* A read error poisons diskio's current session. Recovery is a new
@@ -69,12 +79,12 @@ static enum kui_runtime_result read_fat(const struct kui_media_ops *raw,
 }
 
 static enum kui_runtime_result read_ext4(const struct kui_media_ops *raw,
-    unsigned transport, bool recovery_only, struct kui_runtime_image *out,
+    unsigned transport, enum kui_boot_mode mode, struct kui_runtime_image *out,
     kui_log_fn log, kui_cancel_fn cancelled, bool *not_found) {
     enum kui_runtime_result result = KUI_RUNTIME_IO;
     *not_found = false;
     for(unsigned attempt = 0;; ++attempt) {
-        const char *path = kui_boot_image_path(recovery_only, attempt);
+        const char *path = kui_boot_image_mode_path(mode, attempt);
         if(!path) break;
         if(cancelled()) { result = KUI_RUNTIME_CANCELLED; break; }
         enum kui_ext4_boot_result ext4 =
@@ -99,13 +109,13 @@ static enum kui_runtime_result read_ext4(const struct kui_media_ops *raw,
     return result;
 }
 
-enum kui_runtime_result kui_boot_image_read(const struct kui_media_ops *raw,
-    unsigned transport, bool recovery_only, struct kui_runtime_image *out,
+enum kui_runtime_result kui_boot_image_read_mode(const struct kui_media_ops *raw,
+    unsigned transport, enum kui_boot_mode mode, struct kui_runtime_image *out,
     kui_log_fn log, kui_cancel_fn cancelled) {
     if(!out) return KUI_RUNTIME_IO;
     *out = (struct kui_runtime_image){0};
     if(!raw || !raw->blocks || !raw->read || !log || !cancelled ||
-       transport >= KUI_STORAGE_AUTO) return KUI_RUNTIME_IO;
+       transport >= KUI_STORAGE_AUTO || !kui_boot_image_mode_path(mode, 0)) return KUI_RUNTIME_IO;
     if(cancelled()) return KUI_RUNTIME_CANCELLED;
     struct kui_boot_layout layout;
     enum kui_boot_volume_result scan = kui_boot_volume_scan(raw, &layout);
@@ -128,19 +138,25 @@ enum kui_runtime_result kui_boot_image_read(const struct kui_media_ops *raw,
     /* A boot partition is authoritative. Never bypass its failed/missing
      * recovery file by loading a different payload from the ext4 data volume. */
     if(fat)
-        return read_fat(raw, &fat->volume, transport, recovery_only, out, log, cancelled);
+        return read_fat(raw, &fat->volume, transport, mode, out, log, cancelled);
     enum kui_runtime_result fat_result = KUI_RUNTIME_IO;
     if(whole) {
-        fat_result = read_fat(raw, &whole->volume, transport, recovery_only, out, log, cancelled);
+        fat_result = read_fat(raw, &whole->volume, transport, mode, out, log, cancelled);
         if(stop_attempts(fat_result)) return fat_result;
     }
     if(whole || linux_volume) {
         bool not_found;
         enum kui_runtime_result result =
-            read_ext4(raw, transport, recovery_only, out, log, cancelled, &not_found);
+            read_ext4(raw, transport, mode, out, log, cancelled, &not_found);
         /* Keep a precise FatFs image error when the raw disk simply is not
          * ext4, instead of replacing it with a filesystem-probe error. */
         return not_found && result == KUI_RUNTIME_IO ? fat_result : result;
     }
     return KUI_RUNTIME_IO;
+}
+enum kui_runtime_result kui_boot_image_read(const struct kui_media_ops *raw,
+    unsigned transport, bool recovery_only, struct kui_runtime_image *out,
+    kui_log_fn log, kui_cancel_fn cancelled) {
+    return kui_boot_image_read_mode(raw, transport,
+        recovery_only ? KUI_BOOT_MODE_RECOVERY : KUI_BOOT_MODE_NORMAL, out, log, cancelled);
 }

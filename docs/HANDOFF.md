@@ -3,8 +3,15 @@
 ## Standalone storage development (2026-09-30)
 
 The CD interface is now settled around [independent boot/recovery images](boot-recovery.md):
-normal startup tries `/KUI/runtime.kui` then `/KUI/recovery.kui` on the same
-device; X selects recovery only and B selects CD tools. The recommended future
+the graphical Dáinsleif menu auto-starts after three seconds without input;
+any input pauses it. Start K-UI tries `/KUI/runtime.kui` then `/KUI/recovery.kui`
+on the same device. Recovery or X on Home selects recovery only; Card tools
+selects optional `/KUI/tools.kui` (not bundled). Home Left/Right chooses a
+session-only Auto/SCIF/SCI/IDE source. B backs out/stops, Y opens logs, and failed
+attempts return Home for retry after idle SD insertion. Diagnostics exposes
+optical checks and confirms every write/read, save-log or benchmark action.
+Wiring/adapter/IDE changes still require power off. Graphical controls and
+insertion retry remain hardware validation work. The recommended future
 card layout is 128 MiB FAT32 boot/recovery plus ext4 data. A validated FAT boot
 partition takes precedence and can load without mounting dirty ext4 data;
 failure there never redirects loading to the Linux data partition. Keep a

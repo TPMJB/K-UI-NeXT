@@ -1,7 +1,8 @@
 # Boot and recovery on one card
 
-The refreshed CD can load a normal image or a separate known-working image
-from the same card. For the future ext4 application runtime, the recommended
+The refreshed CD has a graphical Dáinsleif boot menu and can load a normal
+image or a separate known-working image from the same card. For the future
+ext4 application runtime, the recommended
 layout is **128 MiB FAT32 for boot/recovery, with the remaining space as ext4
 data**. Keeping the boot files outside ext4 lets recovery start even when the
 data filesystem is dirty or uses a feature the CD's ext4 reader cannot handle.
@@ -17,7 +18,7 @@ image, not a claim that the image can repair ext4.
 
 | Volume | Files and purpose |
 | --- | --- |
-| 128 MiB FAT32 boot partition | `/KUI/runtime.kui` for normal startup; `/KUI/recovery.kui` for the retained working image |
+| 128 MiB FAT32 boot partition | `/KUI/runtime.kui` for normal startup; `/KUI/recovery.kui` for the retained working image; optional `/KUI/tools.kui` |
 | Remaining space, ext4 data partition | Games, music, settings, rips and other app data once the runtime supports ext4 |
 
 Both partitions are on the same card/device. Partition names and filesystem
@@ -28,13 +29,24 @@ boot images must be an explicit operation, separate from ordinary app writes.
 
 ## Startup controls and file selection
 
-| At startup | Behavior |
-| --- | --- |
-| No button | Try `/KUI/runtime.kui`, then `/KUI/recovery.kui` on that device if the first image is missing, unreadable or rejected |
-| Hold X from power-on through the startup prompt | Try only `/KUI/recovery.kui`; do not substitute the normal image |
-| Hold B | Stay in the built-in CD tools; B overrides loading |
+The original Dáinsleif artwork appears during the three-second countdown.
+The menu uses the launcher font, high-contrast panels and TV-safe margins.
 
-The device search order remains SCIF, SCI, then IDE/CF. Each device's normal
+| Menu/control | Behavior |
+| --- | --- |
+| No input for three seconds | Automatically run Start K-UI; any input pauses automatic startup |
+| Start K-UI | Try `/KUI/runtime.kui`, then `/KUI/recovery.kui` on that device if the first image is missing, unreadable or rejected |
+| Recovery, or X on Home | Try only `/KUI/recovery.kui`; do not substitute the normal image |
+| Card tools | Try only the optional `/KUI/tools.kui`; none is bundled |
+| Diagnostics | Open built-in optical/storage checks and log actions |
+| Help | Show loading, recovery and card guidance |
+| Up/Down, A | Select a menu item, then open it |
+| Left/Right on Home | Choose Auto, SCIF, SCI or IDE/CF for this CD session; the choice is not saved |
+| B | Return to the previous page, or stop the current operation; it does not permanently disable later boot attempts |
+| Y | Open the log viewer |
+
+In Auto, device search remains SCIF, SCI, then IDE/CF. An explicit source tries
+only that source. Each device's normal
 and recovery attempts happen before advancing to another device. Cancellation
 or allocation failure stops loading. Every accepted image passes the same
 header, length and payload checksum checks and receives the selected transport.
@@ -47,10 +59,24 @@ and direct clean ext4 boot remain supported; direct ext4 is used only when no
 FAT boot candidate exists.
 
 Checksums detect damaged packages, not bugs in executable code. A package can
-pass every check and then hang. Power off and boot holding X to bypass that
-normal image. If no usable recovery image is found, the CD tools remain
-available. X's meaning after the CD tools appear is their existing storage
-check, not the startup selection control.
+pass every check and then hang. Power off and select Recovery, or press X on
+Home, to bypass that normal image. Failed or cancelled attempts return to Home
+with the CD menu still available; select Start K-UI and press A to retry.
+
+Insert an SD card only while the menu is idle and storage has been released,
+then retry. Do not change cards while loading or running diagnostics. The
+adapter/socket must support card insertion; changing adapters, wiring, boards
+or IDE/CF hardware still requires power off. A retry freshly initializes the
+selected source; it does not continuously poll for inserted cards.
+
+Diagnostics offers an optical probe, storage write/read test, save log,
+benchmarks and view log. Write/read, save log and benchmarks require A on an
+explicit confirmation page because they can write. The old X-to-write and
+trigger-to-benchmark shortcuts are replaced by these menu actions. Ordinary
+storage checks use the selected source; benchmarks follow `bench.cfg`, including
+its transport setting. In the log viewer, Up/Down scrolls, Left/Right pans long
+lines, Start shows the newest lines, and B returns. Graphical menu controls and
+card-insertion retry still need console validation.
 
 ## Partition policy
 
@@ -104,6 +130,12 @@ bootstrap rejects recovery-needed volumes and disables journal operations in
 [its configuration](../config/lwext4/generated/ext4_config.h), independently of
 the [pinned library's journal implementation](../third_party/lwext4/src/ext4_journal.c).
 The separate FAT boot path does not need ext4 recovery to start an image.
+
+The optional Card tools entry has a fixed `/KUI/tools.kui` path and never
+substitutes a normal or recovery image. No tools payload or repair/network
+program is bundled. Future tools and dedicated recovery payloads must implement
+the operations they advertise and satisfy the same executable and transport
+handoff requirements as normal images.
 
 The 1.5 version-1 `KUIRUN1` envelope stays unchanged: a 64-byte header and a
 validated payload of at most 4 MiB. Future recovery or application improvements

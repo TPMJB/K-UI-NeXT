@@ -13,8 +13,11 @@ ext4-capable runtimes can arrive as card updates; journal replay, repair and
 ext4 application writes are not implemented by this CD feature.
 
 **Independent recovery image:** normal startup now tries `/KUI/runtime.kui`,
-then `/KUI/recovery.kui` on the same device. Hold X at startup for recovery only,
-or B for built-in CD tools. Keep the working recovery image when updating the
+then `/KUI/recovery.kui` on the same device. The graphical menu auto-starts after
+three seconds without input; any input pauses it. Select Recovery or use X on
+Home for recovery only. Diagnostics opens built-in checks, B returns/stops and
+still permits retry, and Card tools selects optional `/KUI/tools.kui` (not
+supplied). Home Left/Right selects Auto/SCIF/SCI/IDE for the session. Keep the working recovery image when updating the
 normal runtime. The future [same-card boot/data layout](boot-recovery.md) uses
 128 MiB FAT32 for these files and ext4 for data; current app runtimes still
 reject two-partition cards, so keep exFAT unchanged for now.
@@ -74,11 +77,14 @@ program and changes the final heading to `K-UI NeXT | SD runtime`.
 If the heading stays on `CD bootstrap` after startup, the embedded diagnostics
 are running. Look for `Using built-in CD diagnostics; SD runtime is not running.`
 Earlier lines can show a missing file, SD initialization/mount problem, invalid
-package, cancellation or a staging-address rejection. Holding B also selects
-fallback. The disc and storage tests are available in either program, so those
+package, cancellation or a staging-address rejection. On the refreshed CD,
+failed or cancelled loading returns to Home for retry; B no longer permanently
+chooses diagnostics for the rest of the boot. The disc and storage tests are available in either program, so those
 tests passing alone does not distinguish the execution path.
 
-Press Y once the screen is ready to save the current boot log. Wait for the save
+On the refreshed CD, select Diagnostics → Save log and confirm with A. Y opens
+the log viewer; it does not write a report. In the older diagnostic runtime,
+Y retains its save-log action. Wait for the save
 to finish, note the exact path shown by `Report saved`, then power off and retrieve
 that file. Its header and the on-screen heading use the same compile-time role;
 a CD fallback log starts with `K-UI CD bootstrap`, and an SD program log starts
@@ -87,17 +93,17 @@ also resolve the distinction.
 
 ## Recovery and one-disc acceptance session
 
-Hold **B** as the bootstrap appears to use the built-in diagnostics. The refreshed
+Pause automatic startup and select **Diagnostics** to use the built-in checks. The refreshed
 CD first tries a valid recovery image when the normal image is missing, invalid
 or unreadable; without either image it falls back with a visible explanation.
 The historical rejection session below assumed no `recovery.kui`; temporarily
 remove that optional file to exercise the same direct-to-CD fallback checks.
-The final fallback is automatic and needs no menu selection. It keeps
+The final fallback returns to Home and needs no successful card load. It keeps
 the CD diagnostics available when the SD runtime cannot load. Restoring the
 good runtime file is a manual step; the bootstrap does not repair SD files.
 An executable with valid checksums can still contain a software bug; if it
-hangs after launch, power off and hold X for the retained recovery image, or B
-for the CD tools. This escape path
+hangs after launch, power off and select Recovery (or X on Home) for the retained
+image, or Diagnostics for the CD tools. This escape path
 does not depend on the SD runtime working.
 
 Use one burned bootstrap disc for all of these checks. Change files only with
@@ -122,7 +128,7 @@ attempt to read the file for these tests to exercise automatic fallback.
 | Check | Expected result |
 | --- | --- |
 | Valid `sd/KUI/runtime.kui` | Final heading is `SD runtime`; build ID is correct |
-| Hold B at startup with a valid package present | `CD bootstrap` fallback; controller and diagnostics work |
+| Pause startup with B and select Diagnostics with a valid package present | CD menu and diagnostics remain available; return Home and retry are still possible |
 | Rename runtime.kui temporarily, or boot without the SD card | Explanation and usable built-in diagnostics |
 | Copy `loader-tests/truncated.kui` as `KUI/runtime.kui` | Rejected; no runtime launch |
 | Repeat with bad-magic, bad-checksum, oversized and wrong-version fixtures | Each is rejected; fallback remains usable |

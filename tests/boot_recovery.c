@@ -47,17 +47,34 @@ static void seed_file(const char *name,const char *source) {
     }
     assert(!ferror(in)); assert(!fclose(in)); assert(f_close(&out)==FR_OK);
 }
+static void check_policy(void) {
+    for(unsigned source=KUI_STORAGE_SCIF;source<KUI_STORAGE_AUTO;++source) {
+        assert(kui_boot_transport_at(source,0)==source);
+        assert(kui_boot_transport_at(source,1)==KUI_STORAGE_AUTO);
+        assert(kui_boot_transport_at(KUI_STORAGE_AUTO,source)==source);
+    }
+    assert(kui_boot_transport_at(KUI_STORAGE_AUTO,3)==KUI_STORAGE_AUTO);
+    assert(kui_boot_transport_at(99,0)==KUI_STORAGE_AUTO);
+    assert(!strcmp(kui_boot_image_mode_path(KUI_BOOT_MODE_TOOLS,0),"0:/KUI/tools.kui"));
+    assert(!kui_boot_image_mode_path(KUI_BOOT_MODE_TOOLS,1));
+    assert(!kui_boot_image_mode_path(KUI_BOOT_MODE_RECOVERY,1));
+    assert(!kui_boot_image_mode_path((enum kui_boot_mode)99,0));
+    assert(!strcmp(kui_boot_image_path(false,0),kui_boot_image_mode_path(KUI_BOOT_MODE_NORMAL,0)));
+    assert(!strcmp(kui_boot_image_path(true,0),kui_boot_image_mode_path(KUI_BOOT_MODE_RECOVERY,0)));
+}
 int main(int argc,char **argv) {
     setvbuf(stdout,NULL,_IONBF,0);
-    assert(argc==5 || argc==9);
+    check_policy();
+    assert(argc==5 || argc==6 || argc==9);
     struct stat st; assert(!lstat(argv[1],&st) && S_ISREG(st.st_mode) && st.st_size%512==0);
     bool seed=!strcmp(argv[2],"seed");
     disk=fopen(argv[1],seed?"r+b":"rb"); assert(disk); capacity=(uint64_t)st.st_size/512;
     const struct kui_media_ops media={NULL,blocks,read_blocks,write_blocks,sync_blocks};
     if(seed) {
-        assert(argc==5); kui_media_set(&media); FATFS fs; assert(kui_mount(&fs,log_line));
+        assert(argc==5 || argc==6); kui_media_set(&media); FATFS fs; assert(kui_mount(&fs,log_line));
         FRESULT r=f_mkdir("0:/KUI"); assert(r==FR_OK || r==FR_EXIST);
         seed_file("0:/KUI/runtime.kui",argv[3]); seed_file("0:/KUI/recovery.kui",argv[4]);
+        if(argc==6) seed_file("0:/KUI/tools.kui",argv[5]);
         assert(f_mount(NULL,"0:",0)==FR_OK); assert(!fclose(disk)); return 0;
     }
     assert(argc==9); loading=true;
@@ -68,14 +85,18 @@ int main(int argc,char **argv) {
     unsigned repeats=(unsigned)strtoul(argv[8],NULL,10); assert(repeats && repeats<=2);
     for(unsigned n=0;n<repeats;++n) {
         reads=polls=0; fault_injected=false; struct kui_runtime_image image={0};
-        enum kui_runtime_result result=kui_boot_image_read(&media,transport,
-            !strcmp(argv[3],"recovery"),&image,log_line,cancelled);
+        enum kui_boot_mode mode=!strcmp(argv[3],"tools") ? KUI_BOOT_MODE_TOOLS :
+            !strcmp(argv[3],"recovery") ? KUI_BOOT_MODE_RECOVERY : KUI_BOOT_MODE_NORMAL;
+        enum kui_runtime_result result=kui_boot_image_read_mode(&media,transport,
+            mode,&image,log_line,cancelled);
         if(!strcmp(argv[2],"fail") || !strcmp(argv[2],"cancel")) {
             assert(result!=KUI_RUNTIME_OK && !image.data && !image.info.payload_bytes);
             if(!strcmp(argv[2],"cancel")) assert(result==KUI_RUNTIME_CANCELLED);
         } else {
             assert(result==KUI_RUNTIME_OK && image.data && image.info.payload_bytes==65536);
-            assert(!strcmp(image.info.build,!strcmp(argv[2],"runtime")?"111111111111":"222222222222"));
+            const char *build=!strcmp(argv[2],"runtime") ? "111111111111" :
+                !strcmp(argv[2],"tools") ? "333333333333" : "222222222222";
+            assert(!strcmp(image.info.build,build));
             struct kui_storage_boot_marker marker;
             memcpy(&marker,(uint8_t *)image.data+32,sizeof(marker));
             assert(kui_storage_boot_transport(&marker)==transport);

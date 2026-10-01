@@ -50,7 +50,9 @@ def release_metadata(path=ROOT / "include/kui/version.h"):
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
     for name in ("storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery"):
-        text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
+        # Preserve section anchors while matching the packaged uppercase names.
+        text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
+                      "(" + name.upper() + ".md", text)
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     text = text.replace("(release-v1.5.1.md)", "(START-HERE.md)")
@@ -264,6 +266,8 @@ def main():
         "Keep your card's filesystem; EXT4-BOOTSTRAP.md explains future runtime updates.\n"
         "Preserve any known-working KUI/recovery.kui during updates. BOOT-RECOVERY.md\n"
         "describes the new CD's fallback and future independent FAT32 boot partition.\n"
+        "The new graphical CD menu supports idle SD retry and a manual source choice.\n"
+        "Card tools loads optional KUI/tools.kui; no tools or repair image is bundled.\n"
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "The six menu songs, now including Harbor Lights, are Ogg Vorbis.\n"
         "Older menu WAVs in that folder are only a fallback.\n"
@@ -353,9 +357,16 @@ def main():
         "This CD also loads runtime.kui from clean, compatible ext4 volumes read-only.\n"
         "The supplied runtime still uses FAT32/exFAT; keep your card as-is for now.\n"
         "Read EXT4-BOOTSTRAP.md for the fixed format and future card-only development.\n"
-        "BOOT-RECOVERY.md covers independent FAT32 boot/ext4 data and recovery.kui\n"
-        "fallback. Hold X for that file only; B stays in CD diagnostics. No ext4\n"
-        "repair program is bundled yet; repair software can arrive as a card update.\n"
+        "The artwork shows a three-second automatic boot countdown; any input pauses it.\n"
+        "Up/Down selects; A opens; B returns/stops; X on Home selects recovery; Y opens logs.\n"
+        "Left/Right on Home chooses Auto, SCIF, SCI or IDE/CF for this session.\n"
+        "Failed loading returns Home for retry after SD insertion while idle. Power off\n"
+        "before changing adapters, wiring, boards or IDE/CF hardware.\n"
+        "Diagnostics confirms write/read, save-log and benchmark actions before writing.\n"
+        "BOOT-RECOVERY.md covers independent FAT32 boot/ext4 data and recovery.kui.\n"
+        "Card tools loads optional KUI/tools.kui only. No tools or ext4 repair program\n"
+        "is bundled; compatible tools/recovery programs can arrive as card updates.\n"
+        "Graphical controls, SD insertion retry and new storage need console validation.\n"
         "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
     boot_hashes = []
     for path in sorted(boot.rglob("*")):
@@ -409,6 +420,8 @@ def main():
         "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
         "Preserve any working recovery.kui; BOOT-RECOVERY.md describes boot fallback\n"
         "and the future split-card layout. No ext4 repair program is bundled yet.\n"
+        "The graphical CD menu offers manual source selection and idle SD retry; B\n"
+        "returns/stops without disabling later attempts. Optional tools.kui is not supplied.\n"
         "The normal retail game reader is installed; no SD benchmark payload is included.\n",
         encoding="utf-8")
     bundle_hashes = []

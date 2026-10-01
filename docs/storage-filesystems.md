@@ -26,8 +26,11 @@ file locations through `FATFS.csize`, `FATFS.database` and `FIL.sect` in
 [games_retail.c](../src/apps/games_retail.c).
 
 The new [boot-only ext4 reader](../src/core/ext4_boot.c) uses a separate validated
-partition view and does not replace these application APIs. It loads normal or
-recovery runtime images, with no writes or journal replay. The FAT boot reader
+partition view and does not replace these application APIs. It loads normal,
+recovery or optional card-tools images, with no writes or journal replay.
+The graphical CD menu can retry these fixed paths or select a transport;
+`tools.kui` is not bundled and does not imply a repair implementation.
+The FAT boot reader
 has its own explicit read-only extent view; it does not relax normal app
 mounting. Compatible future ext4
 runtimes can therefore be installed as card updates under the new CD; changes
