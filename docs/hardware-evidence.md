@@ -1,5 +1,19 @@
 # Hardware evidence
 
+## SCIF storage soak baseline passed — 2026-10-01
+
+The owner designates run **1** from runtime **3a368ddcfaff** as the SCIF baseline
+for upcoming SCI testing. The 15-minute exFAT soak finished in **15 min 7 s**:
+**21 cycles**, **336 MiB written and verified**, zero reported transport/FatFs
+errors and successful cleanup. Across 64 KiB requests, aggregate write/read
+rates were **1,079.94 / 612.32 KiB/s**; maximum call durations were
+**141.026 / 173.527 ms**. Music was off and UI refresh was 2 Hz.
+
+See the [baseline record and original reports](evidence/scif-soak-baseline-2026-10-01.md)
+for exact settings and latency interpretation. Retain the same card, exFAT
+128 KiB allocation units, build and 15-minute recipe for SCI. SCI remains
+hardware pending; no repeat of this accepted SCIF run is requested.
+
 ## Selected-image GD request test: hardware pending — 2026-09-24
 
 The next Games increment implements selected-GDI allocation mapping and a

@@ -11,8 +11,13 @@ Result JSON/CSV and validated history records remain in `/KUI/tests/tNNNNNN/`.
 The older `bench.cfg` workflow is under Advanced benchmarks; Diagnostics A/X/Y
 retain their existing actions. See [storage testing](storage-testing.md).
 This is an SD runtime update; the `6af5e11` boot CD and existing card format stay
-compatible. FAT32/exFAT host fixtures cover failures and interrupted saves;
-console UI, performance and SCI hardware acceptance remain pending.
+compatible. FAT32/exFAT host fixtures cover failures and interrupted saves.
+The owner's first SCIF soak is now the accepted comparison baseline: runtime
+`3a368ddcfaff`, exFAT/128 KiB clusters, 21 cycles and 336 MiB verified in 15 min
+7 s, zero reported errors, write/read 1,079.94/612.32 KiB/s. See the
+[original reports and baseline record](evidence/scif-soak-baseline-2026-10-01.md).
+SCI hardware and the other new controls remain pending their own acceptance;
+do not ask for another SCIF soak to re-establish this baseline.
 
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now

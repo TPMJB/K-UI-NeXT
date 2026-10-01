@@ -89,8 +89,11 @@ errors; CSV has one row per complete sample. Reports omit unfinished samples
 from rates while retaining whole-run counters and the failure outcome. Run IDs
 do not depend on the console clock.
 
+The first [SCIF soak baseline](evidence/scif-soak-baseline-2026-10-01.md) passed
+on 2026-10-01: 21 cycles, 336 MiB written/verified and zero reported errors.
+
 Host checks cover real FAT32/exFAT images, corruption and stale-cycle data,
 short I/O, cancellation, flush/close/remount errors, scratch ownership and
-interrupted result/baseline writes. On-console performance and SCI hardware
-validation are still required. These tests exercise runtime filesystem I/O;
+interrupted result/baseline writes. SCI hardware validation is still required.
+These tests exercise runtime filesystem I/O;
 retail Games readers are separate programs and are not benchmarked here.
