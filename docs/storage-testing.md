@@ -91,9 +91,15 @@ do not depend on the console clock.
 
 The first [SCIF soak baseline](evidence/scif-soak-baseline-2026-10-01.md) passed
 on 2026-10-01: 21 cycles, 336 MiB written/verified and zero reported errors.
+The matching [SCI soak](evidence/sci-soak-baseline-2026-10-01.md) also passed:
+15 cycles, 240 MiB written/verified and zero errors. SCI write/read rates were
+521.75/528.75 KiB/s versus SCIF's 1,079.94/612.32 KiB/s, respectively 51.69%
+and 13.65% lower. This is an accepted initial integrity/performance baseline,
+not evidence of a speed improvement.
 
 Host checks cover real FAT32/exFAT images, corruption and stale-cycle data,
 short I/O, cancellation, flush/close/remount errors, scratch ownership and
-interrupted result/baseline writes. SCI hardware validation is still required.
-These tests exercise runtime filesystem I/O;
-retail Games readers are separate programs and are not benchmarked here.
+interrupted result/baseline writes. These tests exercise runtime filesystem I/O;
+retail Games readers are separate programs and are not benchmarked here. The
+next SCI check is the same DOA2 image using a matching SCI-capable
+`/KUI/apps/games/retail-boot.kui`; a runtime-only update does not replace it.

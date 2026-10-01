@@ -1,8 +1,10 @@
 # Standalone SCIF, SCI and IDE/CF storage
 
 This development build adds storage discovery to the CD bootstrap, runtime and
-native Games reader. SCIF is the existing hardware-tested path. SCI microSD and
-IDE/CF need console validation; a successful build is not a hardware pass.
+native Games reader. SCIF is the existing hardware-tested path. SCI microSD
+has now passed a [15-minute runtime storage soak](evidence/sci-soak-baseline-2026-10-01.md)
+with zero errors, but measured throughput is below SCIF in this initial build.
+SCI retail Games and IDE/CF still need console validation.
 Application filesystems remain exFAT/FAT32 through FatFs. The refreshed CD also
 includes a [read-only ext4 runtime loader](ext4-bootstrap.md), preparing for a
 later runtime with ext4 app support. Keep the existing working card filesystem.
@@ -17,9 +19,10 @@ interface now; current apps still intentionally reject two-partition media.
    the matching `KUI` application assets keeps the runtime and game loader
    together. Preserve an existing known-working `KUI/recovery.kui` when merging
    the package; do not replace both runtime copies during an ordinary update.
-2. Burn **this run's `kui-bootstrap.cdi`** from the bootstrap artifact once.
+2. Use the SCI-capable **`6af5e11` boot CD** (or a later compatible bootstrap).
    Older boot CDs only look at SCIF; replacing a file cannot update the burned
-   CD's storage driver. Later compatible runtime updates can reuse the new CD.
+   CD's storage driver. The diagnostics runtime update does not require another
+   burn when that SCI-capable CD is already in use.
 3. With power off, move the same card to the standalone SCI microSD board and
    connect it in place of the W5500. No second microSD card is required.
 4. Boot normally. Check that the runtime build matches the download and the
@@ -62,24 +65,31 @@ The existing W5500 plus SCIF-card configuration remains supported.
 
 SCI uses bounded hardware-clocked, polled transfers for this initial build.
 It does not use the upstream DMA path that previously stalled W5500 reads.
-Actual SD speed, card/module compatibility and gameplay behavior need console
-measurements. IDE/CF initially uses bounded PIO; optical reads and CF writes
+The first runtime soak measured 522 KiB/s writes and 529 KiB/s reads; these are
+filesystem-call measurements, not the bus clock rate or retail Games results.
+Performance tuning and broader card/module compatibility remain open. Gameplay
+needs its own console measurement. IDE/CF initially uses bounded PIO; optical reads and CF writes
 must take turns on their common G1 bus.
 
 ## First console check
 
-Use a card with free space. First confirm startup, Games browsing, and a saved
-diagnostics report on the selected medium. Then use Diagnostics' existing
-write/reread check to verify data integrity before trying a new rip. CD-menu
-write/read, save-log and benchmark actions require confirmation. For the
-optional SD throughput benchmark, copy [t13-sci-storage.cfg](bench-cfgs/t13-sci-storage.cfg)
-to `/KUI/bench.cfg` on the same card before confirming Benchmarks in the CD menu
-(or using Diagnostics R in the application runtime); its explicit SCI setting
-avoids the benchmark's default SCIF target. An absent
-or unsupported device should report failure and return to recovery, not hang.
+Use a card with free space. Diagnostics → R → Storage tests provides Quick,
+Compare and Soak on the device selected at boot; see the
+[storage testing guide](storage-testing.md). The owner's SCIF and SCI 15-minute
+soaks are now complete; no repeat is needed before the first game test.
+The legacy benchmark remains under Storage tests → Advanced, or Benchmarks in
+the CD menu. It uses `/KUI/bench.cfg`; [t13-sci-storage.cfg](bench-cfgs/t13-sci-storage.cfg)
+explicitly selects SCI. The new Storage tests presets do not use that file.
+An absent or unsupported device should report failure and return to recovery,
+not hang.
 
-Try DOA2 and Evolution 2 first, recording the build and selected transport,
-time to gameplay, transitions, FMV/audio behavior and VMU save/load. Compare
+Start with one DOA2 run using the existing image: record character selection
+to first-stage load time, the first ten seconds of fighting, one FMV and return
+to K-UI with A+B+X+Y+Start. Copy the SCI-capable `retail-boot.kui` from build
+`3a368ddcfaff` into `/KUI/apps/games/` first; a runtime-only update leaves the
+previous Games reader in place. The launcher validates checksums and layout,
+but does not reject every older SCIF-only payload before handing off to it.
+Evolution 2, further transitions and VMU save/load can follow. Compare
 against the accepted SCIF build using the same game files. A title screen is
 not a complete compatibility result. Faster storage does not add Windows CE
 or image-backed CD audio support.

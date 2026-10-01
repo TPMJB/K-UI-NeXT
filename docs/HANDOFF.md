@@ -16,8 +16,18 @@ The owner's first SCIF soak is now the accepted comparison baseline: runtime
 `3a368ddcfaff`, exFAT/128 KiB clusters, 21 cycles and 336 MiB verified in 15 min
 7 s, zero reported errors, write/read 1,079.94/612.32 KiB/s. See the
 [original reports and baseline record](evidence/scif-soak-baseline-2026-10-01.md).
-SCI hardware and the other new controls remain pending their own acceptance;
-do not ask for another SCIF soak to re-establish this baseline.
+The first SCI soak also passed: same build and recipe, 15 cycles and 240 MiB
+verified in 15 min 56 s, zero reported errors. Write/read rates were
+521.75/528.75 KiB/s, respectively 51.69%/13.65% lower than SCIF. See the
+[SCI report and comparison](evidence/sci-soak-baseline-2026-10-01.md). This accepts
+runtime SCI integrity for that run; SCI Games and the other new controls remain
+pending their own acceptance. Investigate SCI's generic full-duplex byte loop
+before treating its throughput as representative of the hardware. The next
+game compatibility check is the same DOA2 image with a matching
+SCI-capable `/KUI/apps/games/retail-boot.kui`, checking first-stage load, the
+first ten seconds of fighting, one FMV and return to K-UI. A runtime-only update does not replace
+that loader. Do not request another identical soak before this game check or
+claim a speed improvement from these results.
 
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now
@@ -32,7 +42,8 @@ fix, retaining version 1.5.1 and the `6af5e11` boot CD.
 The owner confirmed the final red Card tools menu from `6af5e11a8612` works
 (2026-10-01); an initial old-artwork report was resolved after correcting which
 file was copied. The `6af5e11` boot CD is ready to burn. Its optional CD-origin
-`boot.kui` override and SCI/IDE still await hardware testing. The owner also
+`boot.kui` override and IDE still await hardware testing. SCI runtime soak
+evidence above does not independently validate that override. The owner also
 requested the identical red image for the SD runtime startup. That artwork-only
 card update keeps version 1.5.1, startup sound/timing and the existing CD contract;
 it does not require another CD image or burn.
@@ -92,7 +103,8 @@ The owner requested a single-card boot and Games path for SCIF, SCI and IDE/CF,
 without sharing SCI between storage and network boards. See
 [storage-transports.md](storage-transports.md) for the matching boot-CD/runtime
 installation, source selection and first hardware check. This is a development
-build: SCI microSD and the CF hardware/driver remain unverified on the console.
+build: SCI runtime storage now has the passing soak above, while its separate
+retail reader and the CF hardware/driver remain unverified on the console.
 Full ext4 application support and shared SCI-bus operation remain outside this
 change. Development is
 in [PR #6](https://github.com/TPMJB/K-UI-NeXT/pull/6). The Games package embeds

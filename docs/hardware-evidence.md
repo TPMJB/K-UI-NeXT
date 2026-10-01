@@ -1,18 +1,32 @@
 # Hardware evidence
 
+## SCI storage soak passed; slower than SCIF — 2026-10-01
+
+The owner's SCI microSD run **2**, runtime **3a368ddcfaff**, passed the same
+15-minute exFAT/128 KiB-cluster recipe as the SCIF baseline. It completed in
+**15 min 56 s**, verifying **240 MiB across 15 cycles**, with zero reported
+transport/FatFs errors and successful cleanup. Write/read throughput was
+**521.75 / 528.75 KiB/s**, **51.69% / 13.65% lower** than SCIF. The report
+establishes runtime integrity for this run, not a performance improvement.
+
+See the [SCI baseline and original reports](evidence/sci-soak-baseline-2026-10-01.md)
+for the complete comparison and latency interpretation. Runtime storage is
+ready for a first Games compatibility check; the separate SCI retail reader
+remains untested. Use the same DOA2 image and a matching SCI-capable
+`/KUI/apps/games/retail-boot.kui`. IDE/CF remains hardware pending.
+
 ## SCIF storage soak baseline passed — 2026-10-01
 
 The owner designates run **1** from runtime **3a368ddcfaff** as the SCIF baseline
-for upcoming SCI testing. The 15-minute exFAT soak finished in **15 min 7 s**:
+for SCI comparison. The 15-minute exFAT soak finished in **15 min 7 s**:
 **21 cycles**, **336 MiB written and verified**, zero reported transport/FatFs
 errors and successful cleanup. Across 64 KiB requests, aggregate write/read
 rates were **1,079.94 / 612.32 KiB/s**; maximum call durations were
 **141.026 / 173.527 ms**. Music was off and UI refresh was 2 Hz.
 
 See the [baseline record and original reports](evidence/scif-soak-baseline-2026-10-01.md)
-for exact settings and latency interpretation. Retain the same card, exFAT
-128 KiB allocation units, build and 15-minute recipe for SCI. SCI remains
-hardware pending; no repeat of this accepted SCIF run is requested.
+for exact settings and latency interpretation. The SCI comparison above uses
+matching reported settings. No repeat of this accepted SCIF run is requested.
 
 ## Selected-image GD request test: hardware pending — 2026-09-24
 

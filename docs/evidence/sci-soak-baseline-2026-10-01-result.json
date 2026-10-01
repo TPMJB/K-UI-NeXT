@@ -1,0 +1,15 @@
+{
+  "schema":1,"id":2,"build":"3a368ddcfaff","card_label":"sci",
+  "preset":2,"repeats":1,"soak_minutes":15,"outcome":2,
+  "transport":1,"filesystem":"exFAT","cluster_bytes":131072,"volume_start":2048,"volume_sectors":249997312,"free_bytes":82732122112,
+  "music_playing":false,"ui_hz":2,"local_seconds":1790858187,
+  "elapsed_us":955936465,"written_bytes":251658240,"verified_bytes":251658240,"cycles":15,
+  "write_latency": {"calls":3840,"total_us":471033201,"over_20ms":3840,"over_100ms":3840,"min_us":108524,"max_us":293726,"p95_upper_us":262143},
+  "read_latency": {"calls":3840,"total_us":464792007,"over_20ms":3840,"over_100ms":3840,"min_us":108029,"max_us":181576,"p95_upper_us":262143},
+  "errors":{"total":0,"read":0,"write":0,"sync":0,"init":0,"timeout":0,"crc":0,"rejected":0,"io":0,
+    "operation":0,"result":0,"transport":0,"lba":0,"count":0,"sd_command":0,"sd_response":0,"sd_detail_valid":false},
+  "fatfs_error":0,"failure_offset":0,"cleanup_failed":false,"failure_phase":"","message":"All written data verified after remount",
+  "samples":[
+    {"chunk_bytes":65536,"repeat":1,"bytes":251658240,"write_us":471033201,"read_us":464792007,"sync_us":119620,"verified":true}
+  ]
+}
