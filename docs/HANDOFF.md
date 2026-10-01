@@ -55,6 +55,11 @@ reader and aligned runtime TX staging. Native guards pass unchanged (24 bytes
 resident space, 52 bytes conservative stack headroom); console acceptance is
 pending. Active-DMA processing remains a separate experiment. Game pacing remains unchanged; do not attribute
 all remaining game lag to storage or promise disc equivalence.
+A following SCI correction removes the undocumented 200,000-iteration module-
+wake delay, which could repeat on every retail read step when MSTP0 was set.
+The BRR wait, register restoration and pacing remain. See the
+[reference review, DOA2 comparison and hardware rationale](evidence/sci-game-loading-review-2026-10-01.md);
+console acceptance remains pending.
 
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now

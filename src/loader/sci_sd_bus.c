@@ -100,7 +100,9 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) {
     port.mode = rd32(PCTR) & CS_MODE; port.data = rd16(PDTR) & CS;
     if(port.standby) {
         wr8(STB, rd8(STB) & ~1u);
-        delay(200000u); /* >=1 ms at 200 MHz, no borrowed hardware timer. */
+        /* Module standby leaves CPG running (SH7750 manual 9.6.2).
+         * Confirm the write; the required BRR settling wait follows below. */
+        (void)rd8(STB);
     }
     wr8(SCR, 0);
     wr16(PDTR, rd16(PDTR) | CS); /* Deselected before changing pin direction. */
