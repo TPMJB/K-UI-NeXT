@@ -6,13 +6,17 @@ IDE/CF need console validation; a successful build is not a hardware pass.
 Application filesystems remain exFAT/FAT32 through FatFs. The refreshed CD also
 includes a [read-only ext4 runtime loader](ext4-bootstrap.md), preparing for a
 later runtime with ext4 app support. Keep the existing working card filesystem.
+The [boot/recovery plan](boot-recovery.md) recommends a future 128 MiB FAT32
+boot partition plus ext4 data on the same card. The CD supports that loading
+interface now; current apps still intentionally reject two-partition media.
 
 ## Install for one-card SCI testing
 
 1. Keep the existing card's filesystem, games and preferences. Copy this run's
    `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` onto that card. Updating
-   the complete `KUI` folder from the SD-update artifact also supplies the
-   matching application assets. Do not mix runtime and game-loader builds.
+   the matching `KUI` application assets keeps the runtime and game loader
+   together. Preserve an existing known-working `KUI/recovery.kui` when merging
+   the package; do not replace both runtime copies during an ordinary update.
 2. Burn **this run's `kui-bootstrap.cdi`** from the bootstrap artifact once.
    Older boot CDs only look at SCIF; replacing a file cannot update the burned
    CD's storage driver. Later compatible runtime updates can reuse the new CD.
@@ -28,7 +32,10 @@ Its physical design and the new ATA driver remain unverified on hardware.
 
 ## Selection and ownership
 
-Discovery order is SCIF, SCI, then IDE/CF. Startup searches for a valid runtime;
+Discovery order is SCIF, SCI, then IDE/CF. Startup tries normal then recovery
+images on each device; hold X to request recovery only, or B for CD tools.
+If a FAT boot partition exists, files there are authoritative and the CD never
+substitutes a runtime from ext4 data. Startup searches for a valid image;
 the selected source is passed to the new runtime. Normal operations keep that
 device selected. A failed read/write does not silently redirect the operation
 onto another card. Power off before changing devices.
@@ -77,7 +84,7 @@ for comparisons. No formatting or bulk reripping is required for this check.
 
 The block-device boundary is shared, while Games continues to consume validated
 physical extents. IDE/CF therefore starts with the existing exFAT support.
-The CD's ext4 reader loads only `/KUI/runtime.kui`; full ext4 use still requires
+The CD's readers load `/KUI/runtime.kui` or `/KUI/recovery.kui`; full ext4 use still requires
 application filesystem operations and game extent export separately. It is not
 enabled by detecting an ATA device. See
 [the filesystem design](storage-filesystems.md).

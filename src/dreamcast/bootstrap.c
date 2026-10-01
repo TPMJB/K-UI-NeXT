@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
 #include "kui/runtime.h"
-#include "kui/storage_policy.h"
-#include "kui/ext4_boot.h"
+#include "kui/boot_image.h"
 #include "kui/media.h"
 #include <arch/exec.h>
 #include <kos/thread.h>
@@ -10,8 +9,7 @@
 
 /* Only called by main before the I/O worker is created. Mount/read/unmount
  * have one owner; KOS shuts down the remaining kernel services at handoff. */
-void kui_bootstrap_load(kui_cancel_fn cancelled) {
-    FATFS fs;
+void kui_bootstrap_load(kui_cancel_fn cancelled,bool recovery_only) {
     struct kui_runtime_image image = {0};
     enum kui_runtime_result result = KUI_RUNTIME_IO;
     unsigned chosen_transport=KUI_STORAGE_AUTO;
@@ -22,38 +20,15 @@ void kui_bootstrap_load(kui_cancel_fn cancelled) {
         result=KUI_RUNTIME_IO;
         kui_sd_set_params(candidate,true);
         if(!kui_sd_connect()) continue;
-        if(kui_mount(&fs,kui_log))
-            result=kui_runtime_read(KUI_RUNTIME_PATH,&image,kui_log,cancelled);
-        bool unmounted=f_mount(NULL,"0:",0)==FR_OK;
-        if(!unmounted && result==KUI_RUNTIME_OK) result=KUI_RUNTIME_IO;
-        if(unmounted && result!=KUI_RUNTIME_OK && result!=KUI_RUNTIME_CANCELLED && !cancelled()) {
-            struct kui_media_ops raw;
-            /* The raw view cannot write or flush. Ext4 parsing runs only
-             * after FatFs has released the device and keeps the same source. */
-            if(kui_sd_raw_read_ops(&raw)) {
-                enum kui_ext4_boot_result ext4=kui_ext4_boot_read(&raw,&image,kui_log,cancelled);
-                if(ext4==KUI_EXT4_BOOT_OK) {
-                    result=KUI_RUNTIME_OK;
-                    kui_log("Read-only ext4 bootstrap succeeded; the runtime must provide ext4 app support.");
-                } else if(ext4==KUI_EXT4_BOOT_CANCELLED) result=KUI_RUNTIME_CANCELLED;
-                else if(ext4==KUI_EXT4_BOOT_MEMORY) result=KUI_RUNTIME_MEMORY;
-                else if(ext4!=KUI_EXT4_BOOT_NOT_FOUND) result=KUI_RUNTIME_IO;
-                /* No ext4 volume: retain the precise FatFs runtime error,
-                 * including a failed checksum, instead of masking it. */
-            }
-        }
+        struct kui_media_ops raw;
+        if(kui_sd_raw_read_ops(&raw))
+            result=kui_boot_image_read(&raw,candidate,recovery_only,&image,kui_log,cancelled);
         kui_sd_disconnect();
-        if(result==KUI_RUNTIME_OK) {
-            /* Patch initialized RAM only after the original image checksum
-             * passes. Older SCIF runtimes remain bootable; SCI/IDE must
-             * understand the source handoff to avoid selecting another card. */
-            bool patched=kui_storage_patch_boot(image.data,image.info.payload_bytes,candidate);
-            if(patched || candidate==KUI_STORAGE_SCIF) {chosen_transport=candidate;break;}
-            kui_log("%s runtime lacks a valid storage handoff; update runtime.kui",
-                kui_storage_name(candidate));
-            result=KUI_RUNTIME_VERSION_ERROR;
-        }
+        /* The portable reader validates checksums, chooses normal/recovery
+         * images, and patches the transport before returning success. */
+        if(result==KUI_RUNTIME_OK) {chosen_transport=candidate;break;}
         kui_runtime_free(&image);
+        if(result==KUI_RUNTIME_CANCELLED || result==KUI_RUNTIME_MEMORY) break;
     }
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(result == KUI_RUNTIME_OK && cancelled()) result = KUI_RUNTIME_CANCELLED;

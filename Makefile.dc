@@ -14,7 +14,7 @@ OBJECTS := $(patsubst %.c,build/dc/%.o,$(SOURCES)) build/dc/ff.o build/dc/ffunic
 include config/lwext4.mk
 LWEXT4_OBJECTS := $(patsubst %.c,build/dc/%.o,$(LWEXT4_SOURCES))
 LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/dreamcast/bootstrap.o
-LOADER_OBJECTS += build/dc/src/core/boot_volume.o build/dc/src/core/ext4_boot.o $(LWEXT4_OBJECTS)
+LOADER_OBJECTS += build/dc/src/core/boot_volume.o build/dc/src/core/boot_image.o build/dc/src/core/ext4_boot.o $(LWEXT4_OBJECTS)
 # The CD recovery menu uses the same benchmark runner as SD Diagnostics.
 BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o \
     build/dc/src/core/timing.o build/dc/src/core/destination.o build/dc/src/core/destination_file.o \

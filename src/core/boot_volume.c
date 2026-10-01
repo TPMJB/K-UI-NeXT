@@ -11,6 +11,17 @@ static const uint8_t linux_guid[16] = {
     0xaf,0x3d,0xc6,0x0f,0x83,0x84,0x72,0x47,
     0x8e,0x79,0x3d,0x69,0xd8,0x47,0x7d,0xe4
 };
+/* UEFI ESP and Microsoft Basic Data type GUIDs (on-disk mixed endian).
+ * Basic Data can contain non-FAT filesystems; the caller must actually mount
+ * and validate FAT before treating either type as a usable boot volume. */
+static const uint8_t esp_guid[16] = {
+    0x28,0x73,0x2a,0xc1,0x1f,0xf8,0xd2,0x11,
+    0xba,0x4b,0x00,0xa0,0xc9,0x3e,0xc9,0x3b
+};
+static const uint8_t basic_guid[16] = {
+    0xa2,0xa0,0xd0,0xeb,0xe5,0xb9,0x33,0x44,
+    0x87,0xc0,0x68,0xb6,0xb7,0x26,0x99,0xc7
+};
 static uint32_t le32(const uint8_t *p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
            (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
@@ -29,6 +40,15 @@ struct header {
     uint32_t first, last, table, entries, crc;
     uint8_t guid[16];
 };
+static enum kui_boot_volume_result add_candidate(struct kui_boot_layout *layout,
+        enum kui_boot_volume_kind kind, uint32_t first, uint32_t count) {
+    for(unsigned i = 0; i < layout->count; ++i)
+        if(layout->candidates[i].kind == kind) return KUI_BOOT_VOLUME_AMBIGUOUS;
+    if(layout->count == 2) return KUI_BOOT_VOLUME_AMBIGUOUS;
+    layout->candidates[layout->count++] = (struct kui_boot_candidate){kind,
+        {first, count, kind != KUI_BOOT_VOLUME_RAW}};
+    return KUI_BOOT_VOLUME_OK;
+}
 static enum kui_boot_volume_result header(const struct kui_media_ops *m,
         uint32_t total, bool backup, struct header *out) {
     uint8_t sector[512];
@@ -62,7 +82,7 @@ static enum kui_boot_volume_result header(const struct kui_media_ops *m,
     return KUI_BOOT_VOLUME_OK;
 }
 static enum kui_boot_volume_result gpt(const struct kui_media_ops *m,
-                                      uint32_t total, struct kui_volume *out) {
+                                      uint32_t total, struct kui_boot_layout *out) {
     if(total < 68u) return KUI_BOOT_VOLUME_INVALID;
     struct header primary, backup;
     enum kui_boot_volume_result result = header(m, total, false, &primary);
@@ -73,8 +93,7 @@ static enum kui_boot_volume_result gpt(const struct kui_media_ops *m,
        primary.entries != backup.entries || primary.crc != backup.crc ||
        memcmp(primary.guid, backup.guid, 16)) return KUI_BOOT_VOLUME_INVALID;
     struct range { uint32_t first, last; uint8_t guid[16]; } ranges[GPT_MAX_ENTRIES];
-    unsigned used = 0, linux_count = 0;
-    struct kui_volume candidate = {0};
+    unsigned used = 0;
     uint32_t crc = 0;
     uint8_t p[512], b[512];
     for(uint32_t n = 0; n < primary.entries; n += 4u) {
@@ -97,60 +116,98 @@ static enum kui_boot_volume_result gpt(const struct kui_media_ops *m,
             ranges[used].first = (uint32_t)first;
             ranges[used].last = (uint32_t)last;
             memcpy(ranges[used++].guid, entry + 16, 16);
-            if(!memcmp(entry, linux_guid, 16)) {
-                ++linux_count;
-                candidate = (struct kui_volume){(uint32_t)first,
-                    (uint32_t)(last - first + 1u), true};
-            }
+            if(!memcmp(entry, linux_guid, 16))
+                result = add_candidate(out, KUI_BOOT_VOLUME_LINUX_CANDIDATE,
+                    (uint32_t)first, (uint32_t)(last - first + 1u));
+            else if(!memcmp(entry, esp_guid, 16) || !memcmp(entry, basic_guid, 16))
+                result = add_candidate(out, KUI_BOOT_VOLUME_FAT_CANDIDATE,
+                    (uint32_t)first, (uint32_t)(last - first + 1u));
+            if(result != KUI_BOOT_VOLUME_OK) return result;
         }
     }
     if(crc != primary.crc) return KUI_BOOT_VOLUME_INVALID;
-    if(linux_count > 1u) return KUI_BOOT_VOLUME_AMBIGUOUS;
-    if(!linux_count) return KUI_BOOT_VOLUME_UNSUPPORTED;
-    *out = candidate;
-    return KUI_BOOT_VOLUME_OK;
+    return out->count ? KUI_BOOT_VOLUME_OK : KUI_BOOT_VOLUME_UNSUPPORTED;
 }
 
-enum kui_boot_volume_result kui_boot_volume_select(const struct kui_media_ops *m,
-                                                   struct kui_volume *out) {
-    if(!out) return KUI_BOOT_VOLUME_INVALID;
-    *out = (struct kui_volume){0};
+static enum kui_boot_volume_result scan(const struct kui_media_ops *m,
+                                        struct kui_boot_layout *out) {
     if(!m || !m->blocks || !m->read) return KUI_BOOT_VOLUME_INVALID;
     uint64_t blocks = m->blocks(m->ctx);
     if(!blocks || blocks > UINT32_MAX) return KUI_BOOT_VOLUME_UNSUPPORTED;
     uint8_t mbr[512];
     if(!read_sector(m, 0, mbr)) return KUI_BOOT_VOLUME_IO;
-    if(mbr[510] != 0x55 || mbr[511] != 0xaa) {
-        *out = (struct kui_volume){0, (uint32_t)blocks, false};
-        return KUI_BOOT_VOLUME_OK;
-    }
+    /* FAT superfloppy boot code may occupy the MBR partition-table bytes.
+     * Preserve the existing explicit FAT32/exFAT whole-volume recognition. */
+    struct kui_volume whole;
+    if(mbr[510] != 0x55 || mbr[511] != 0xaa ||
+       (kui_select_volume(mbr, blocks, &whole) && !whole.partitioned))
+        return add_candidate(out, KUI_BOOT_VOLUME_RAW, 0, (uint32_t)blocks);
     unsigned found = 0;
-    const uint8_t *partition = NULL;
+    const uint8_t *partitions[4];
     for(unsigned i = 0; i < 4; ++i) {
         const uint8_t *entry = mbr + 446 + 16u * i;
         if(!entry[4]) {
             if(!zero(entry, 16)) return KUI_BOOT_VOLUME_INVALID;
             continue;
         }
-        ++found;
         if((entry[0] != 0 && entry[0] != 0x80) || !le32(entry + 8) ||
            !kui_block_range(le32(entry + 8), le32(entry + 12), blocks))
             return KUI_BOOT_VOLUME_INVALID;
-        partition = entry;
+        partitions[found++] = entry;
     }
-    if(found > 1u) return KUI_BOOT_VOLUME_AMBIGUOUS;
-    if(!partition) {
+    if(!found) {
         /* A raw filesystem may have an otherwise empty boot-sector signature.
          * Its superblock remains authoritative at the next layer. */
-        *out = (struct kui_volume){0, (uint32_t)blocks, false};
-        return KUI_BOOT_VOLUME_OK;
+        return add_candidate(out, KUI_BOOT_VOLUME_RAW, 0, (uint32_t)blocks);
     }
-    if(partition[4] == 0xee) {
-        if(partition[0] || le32(partition + 8) != 1u ||
-           le32(partition + 12) != blocks - 1u) return KUI_BOOT_VOLUME_INVALID;
+    for(unsigned i = 0; i < found; ++i) {
+        const uint8_t *p = partitions[i];
+        if(p[4] != 0xee) continue;
+        if(found != 1) return KUI_BOOT_VOLUME_AMBIGUOUS; /* hybrid protective MBR */
+        if(p[0] || le32(p + 8) != 1u || le32(p + 12) != blocks - 1u)
+            return KUI_BOOT_VOLUME_INVALID;
         return gpt(m, (uint32_t)blocks, out);
     }
-    if(partition[4] != 0x83) return KUI_BOOT_VOLUME_UNSUPPORTED;
-    *out = (struct kui_volume){le32(partition + 8), le32(partition + 12), true};
+    for(unsigned i = 0; i < found; ++i) {
+        const uint8_t *p = partitions[i];
+        uint32_t first = le32(p + 8), count = le32(p + 12);
+        for(unsigned j = 0; j < i; ++j) {
+            uint32_t other = le32(partitions[j] + 8), size = le32(partitions[j] + 12);
+            if((uint64_t)first < (uint64_t)other + size &&
+               (uint64_t)other < (uint64_t)first + count) return KUI_BOOT_VOLUME_INVALID;
+        }
+        enum kui_boot_volume_kind kind;
+        if(p[4] == 0x83) kind = KUI_BOOT_VOLUME_LINUX_CANDIDATE;
+        else if(p[4] == 0x0b || p[4] == 0x0c || p[4] == 0x07)
+            kind = KUI_BOOT_VOLUME_FAT_CANDIDATE;
+        else return KUI_BOOT_VOLUME_UNSUPPORTED;
+        enum kui_boot_volume_result result = add_candidate(out, kind, first, count);
+        if(result != KUI_BOOT_VOLUME_OK) return result;
+    }
     return KUI_BOOT_VOLUME_OK;
+}
+
+enum kui_boot_volume_result kui_boot_volume_scan(const struct kui_media_ops *m,
+                                                 struct kui_boot_layout *out) {
+    if(!out) return KUI_BOOT_VOLUME_INVALID;
+    *out = (struct kui_boot_layout){0};
+    struct kui_boot_layout candidate = {0};
+    enum kui_boot_volume_result result = scan(m, &candidate);
+    if(result == KUI_BOOT_VOLUME_OK) *out = candidate;
+    return result;
+}
+
+enum kui_boot_volume_result kui_boot_volume_select(const struct kui_media_ops *m,
+                                                   struct kui_volume *out) {
+    if(!out) return KUI_BOOT_VOLUME_INVALID;
+    *out = (struct kui_volume){0};
+    struct kui_boot_layout layout;
+    enum kui_boot_volume_result result = kui_boot_volume_scan(m, &layout);
+    if(result != KUI_BOOT_VOLUME_OK) return result;
+    for(unsigned i = 0; i < layout.count; ++i) {
+        if(layout.candidates[i].kind == KUI_BOOT_VOLUME_FAT_CANDIDATE) continue;
+        *out = layout.candidates[i].volume;
+        return KUI_BOOT_VOLUME_OK;
+    }
+    return KUI_BOOT_VOLUME_UNSUPPORTED;
 }

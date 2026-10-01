@@ -12,6 +12,13 @@ remain FatFs/exFAT/FAT32, so keep the working card's filesystem. Later compatibl
 ext4-capable runtimes can arrive as card updates; journal replay, repair and
 ext4 application writes are not implemented by this CD feature.
 
+**Independent recovery image:** normal startup now tries `/KUI/runtime.kui`,
+then `/KUI/recovery.kui` on the same device. Hold X at startup for recovery only,
+or B for built-in CD tools. Keep the working recovery image when updating the
+normal runtime. The future [same-card boot/data layout](boot-recovery.md) uses
+128 MiB FAT32 for these files and ext4 for data; current app runtimes still
+reject two-partition cards, so keep exFAT unchanged for now.
+
 **Current update:** the M1.5 SD runtime opens a launcher with Disc Ripper,
 Settings and Diagnostics. See [the shell test](m15-shell-test.md) for its controls.
 Its package contract is unchanged; keep using your accepted bootstrap CD. The
@@ -80,13 +87,17 @@ also resolve the distinction.
 
 ## Recovery and one-disc acceptance session
 
-Hold **B** as the bootstrap appears to use the built-in diagnostics. Missing,
-invalid or unreadable runtime files also fall back with a visible explanation.
-This recovery is automatic; there is no recovery menu or test button. It keeps
+Hold **B** as the bootstrap appears to use the built-in diagnostics. The refreshed
+CD first tries a valid recovery image when the normal image is missing, invalid
+or unreadable; without either image it falls back with a visible explanation.
+The historical rejection session below assumed no `recovery.kui`; temporarily
+remove that optional file to exercise the same direct-to-CD fallback checks.
+The final fallback is automatic and needs no menu selection. It keeps
 the CD diagnostics available when the SD runtime cannot load. Restoring the
 good runtime file is a manual step; the bootstrap does not repair SD files.
 An executable with valid checksums can still contain a software bug; if it
-hangs after launch, power off and boot again while holding B. This escape path
+hangs after launch, power off and hold X for the retained recovery image, or B
+for the CD tools. This escape path
 does not depend on the SD runtime working.
 
 Use one burned bootstrap disc for all of these checks. Change files only with

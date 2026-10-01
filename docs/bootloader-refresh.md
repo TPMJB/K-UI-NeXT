@@ -1,4 +1,4 @@
-# Boot CD refresh: standalone storage and hold-B recovery
+# Boot CD refresh: standalone storage and recovery images
 
 The bootstrap artifact contains the boot CD. For standalone SCI microSD or
 IDE/CF, also install the runtime and Games files from this same run's SD-update
@@ -8,13 +8,19 @@ SCIF runtimes can still use this CD, but do not contain SCI/IDE game readers.
 This CD also has a [read-only ext4 runtime loader](ext4-bootstrap.md), so a future
 compatible ext4-capable runtime can be installed through card updates. The
 current runtime's apps still require exFAT/FAT32: keep the working card format
-for this refresh. The CD reader does not add ext4 writes, recovery or app support.
+for this refresh. The CD reader does not add ext4 writes, filesystem repair or
+app support.
+It also supports a retained `/KUI/recovery.kui` image and the future same-card
+FAT32-boot/ext4-data layout described in [boot-recovery.md](boot-recovery.md).
+No ext4 repair program is bundled; current apps intentionally reject that split
+layout until the runtime gains ext4 support.
 
 ## Install and use
 
 Burn `kui-bootstrap.cdi` as a disc image onto a new boot CD-R. Normal startup
 shows the original K-UI badge, including `github.com/TPMJB`, under the Sega
-logo, then searches SCIF, SCI and IDE/CF for a valid `/KUI/runtime.kui`.
+logo, then searches SCIF, SCI and IDE/CF. On each device it tries
+`/KUI/runtime.kui`, then `/KUI/recovery.kui` if the first image cannot load.
 It accepts the existing FatFs layouts or the clean ext4 profile documented
 above. Compatible runtime updates can reuse this CD; a bootstrap bug fix or
 unsupported format change may still require a replacement.
@@ -23,7 +29,12 @@ To stay in the CD tools, hold **B from power-on** until the built-in CD
 diagnostics screen appears. Release B, then press the **right trigger (R)**
 to start the benchmark runner. B is checked during the startup grace period,
 through SD runtime loading, and before handoff; once seen it stays latched
-for this boot. A missing or invalid SD runtime also returns to the CD tools.
+for this boot. If neither image can load, startup returns to the CD tools.
+
+Hold **X from power-on through the startup prompt** to skip the normal image
+and load only `/KUI/recovery.kui`. This also bypasses a checksum-valid runtime
+that hangs after launch. Keep a known-working recovery image when updating the
+normal runtime. X below describes its different function once CD tools appear.
 
 | Control in CD tools | Action |
 | --- | --- |
@@ -55,7 +66,9 @@ fonts are already in RAM. The CD menu does not offer a full-disc capture.
 One normal boot should show the badge and enter the matching launcher from the
 selected device; confirm its storage transport in Diagnostics.
 One boot holding B should stay in the CD tools with `R: Bench` visible.
-That checks recovery controls. The new SCI and IDE/CF paths additionally need
+One boot holding X should load the retained recovery image (or stay in CD tools
+if it is absent). That checks recovery controls. The new SCI and IDE/CF paths
+additionally need
 the short integrity/game check described in the storage guide.
 
 ## Historical playable Games baseline

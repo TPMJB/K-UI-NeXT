@@ -79,11 +79,13 @@ static enum kui_ext4_boot_result inspect_super(kui_log_fn log) {
        inode < 128 || inode > bytes || (inode & (inode - 1u))) return KUI_EXT4_BOOT_INVALID;
     return KUI_EXT4_BOOT_OK;
 }
-enum kui_ext4_boot_result kui_ext4_boot_read(const struct kui_media_ops *raw,
-    struct kui_runtime_image *out, kui_log_fn log, kui_cancel_fn cancelled) {
+enum kui_ext4_boot_result kui_ext4_boot_read_path(const struct kui_media_ops *raw,
+    const char *path, struct kui_runtime_image *out, kui_log_fn log,
+    kui_cancel_fn cancelled) {
     if(!out) return KUI_EXT4_BOOT_INVALID;
     *out = (struct kui_runtime_image){0};
-    if(!raw || !raw->read || !raw->blocks || !log || !cancelled) return KUI_EXT4_BOOT_INVALID;
+    if(!raw || !raw->read || !raw->blocks || !path || path[0] != '/' ||
+       !log || !cancelled) return KUI_EXT4_BOOT_INVALID;
     if(cancelled()) return KUI_EXT4_BOOT_CANCELLED;
     memset(&boot, 0, sizeof(boot)); boot.raw = raw; boot.cancelled = cancelled;
     enum kui_boot_volume_result volume = kui_boot_volume_select(raw, &boot.volume);
@@ -103,8 +105,8 @@ enum kui_ext4_boot_result kui_ext4_boot_read(const struct kui_media_ops *raw,
     int err = ext4_mount("kui-boot", "/", true);
     if(err) { result = err == ENOMEM ? KUI_EXT4_BOOT_MEMORY : KUI_EXT4_BOOT_INVALID; goto finish; }
     mounted = true;
-    err = ext4_fopen(&file, "/KUI/runtime.kui", "r");
-    if(err) { log("ext4 boot: /KUI/runtime.kui missing or unreadable (%d)", err); result=KUI_EXT4_BOOT_RUNTIME; goto finish; }
+    err = ext4_fopen(&file, path, "r");
+    if(err) { log("ext4 boot: %s missing or unreadable (%d)", path, err); result=KUI_EXT4_BOOT_RUNTIME; goto finish; }
     opened = true;
     uint8_t header[KUI_RUNTIME_HEADER_BYTES]; size_t got = 0;
     enum kui_runtime_result runtime = KUI_RUNTIME_IO;
@@ -137,4 +139,8 @@ finish:
     if(result != KUI_EXT4_BOOT_OK) kui_runtime_free(out);
     boot.raw = NULL;
     return result;
+}
+enum kui_ext4_boot_result kui_ext4_boot_read(const struct kui_media_ops *raw,
+    struct kui_runtime_image *out, kui_log_fn log, kui_cancel_fn cancelled) {
+    return kui_ext4_boot_read_path(raw, "/KUI/runtime.kui", out, log, cancelled);
 }

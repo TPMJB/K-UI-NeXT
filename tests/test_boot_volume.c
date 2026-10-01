@@ -12,6 +12,14 @@ static const uint8_t linux_guid[16] = {
     0xaf,0x3d,0xc6,0x0f,0x83,0x84,0x72,0x47,
     0x8e,0x79,0x3d,0x69,0xd8,0x47,0x7d,0xe4
 };
+static const uint8_t esp_guid[16] = {
+    0x28,0x73,0x2a,0xc1,0x1f,0xf8,0xd2,0x11,
+    0xba,0x4b,0x00,0xa0,0xc9,0x3e,0xc9,0x3b
+};
+static const uint8_t basic_guid[16] = {
+    0xa2,0xa0,0xd0,0xeb,0xe5,0xb9,0x33,0x44,
+    0x87,0xc0,0x68,0xb6,0xb7,0x26,0x99,0xc7
+};
 static void put32(uint8_t *p, uint32_t v) {
     for(unsigned i = 0; i < 4; ++i) p[i] = (uint8_t)(v >> (i * 8));
 }
@@ -81,8 +89,24 @@ static void expect(enum kui_boot_volume_result expected) {
     assert(kui_boot_volume_select(&media, &v) == expected);
     if(expected != KUI_BOOT_VOLUME_OK) assert(v.start == 0 && v.count == 0 && !v.partitioned);
 }
+static struct kui_boot_layout expect_scan(enum kui_boot_volume_result expected) {
+    struct kui_boot_layout layout;
+    memset(&layout, 0xa5, sizeof(layout));
+    assert(kui_boot_volume_scan(&media, &layout) == expected);
+    if(expected != KUI_BOOT_VOLUME_OK) {
+        assert(layout.count == 0);
+        for(unsigned i = 0; i < 2; ++i) {
+            assert(layout.candidates[i].kind == KUI_BOOT_VOLUME_RAW);
+            assert(layout.candidates[i].volume.start == 0);
+            assert(layout.candidates[i].volume.count == 0);
+            assert(!layout.candidates[i].volume.partitioned);
+        }
+    }
+    return layout;
+}
 int main(void) {
     struct kui_volume v;
+    struct kui_boot_layout layout;
     clear_disk();
     assert(kui_boot_volume_select(&media, &v) == KUI_BOOT_VOLUME_OK);
     assert(v.start == 0 && v.count == 256 && !v.partitioned && reads == 1);
@@ -99,6 +123,34 @@ int main(void) {
     clear_disk(); fail_block = 0; expect(KUI_BOOT_VOLUME_IO);
     clear_disk(); device_blocks = UINT64_C(0x100000000);
     expect(KUI_BOOT_VOLUME_UNSUPPORTED); assert(reads == 0);
+
+    clear_disk();
+    layout = expect_scan(KUI_BOOT_VOLUME_OK);
+    assert(layout.count == 1 && layout.candidates[0].kind == KUI_BOOT_VOLUME_RAW);
+    assert(layout.candidates[0].volume.start == 0 && layout.candidates[0].volume.count == 256);
+    /* FAT superfloppy code is not a partition table, even with nonzero bytes
+     * in the area that an MBR would use for entries. */
+    disk[0][510] = 0x55; disk[0][511] = 0xaa; disk[0][12] = 2;
+    memcpy(disk[0] + 82, "FAT32   ", 8); memset(disk[0] + 446, 0xa5, 64);
+    layout = expect_scan(KUI_BOOT_VOLUME_OK);
+    assert(layout.count == 1 && layout.candidates[0].kind == KUI_BOOT_VOLUME_RAW);
+    clear_disk(); mbr_entry(0, 0x0c, 16, 100); mbr_entry(1, 0x83, 150, 50);
+    layout = expect_scan(KUI_BOOT_VOLUME_OK);
+    assert(layout.count == 2 && layout.candidates[0].kind == KUI_BOOT_VOLUME_FAT_CANDIDATE);
+    assert(layout.candidates[0].volume.start == 16 && layout.candidates[0].volume.count == 100);
+    assert(layout.candidates[1].kind == KUI_BOOT_VOLUME_LINUX_CANDIDATE);
+    assert(kui_boot_volume_select(&media, &v) == KUI_BOOT_VOLUME_OK && v.start == 150 && v.count == 50);
+    mbr_entry(1, 0x83, 80, 50); expect_scan(KUI_BOOT_VOLUME_INVALID);
+    mbr_entry(1, 0x07, 150, 50); expect_scan(KUI_BOOT_VOLUME_AMBIGUOUS);
+    mbr_entry(1, 0xef, 150, 50); expect_scan(KUI_BOOT_VOLUME_UNSUPPORTED);
+    clear_disk(); mbr_entry(0, 0x07, 16, 100);
+    layout = expect_scan(KUI_BOOT_VOLUME_OK);
+    assert(layout.count == 1 && layout.candidates[0].kind == KUI_BOOT_VOLUME_FAT_CANDIDATE);
+    expect(KUI_BOOT_VOLUME_UNSUPPORTED); /* ext4 helper never chooses FAT */
+    clear_disk(); mbr_entry(0, 0x83, 150, 50); mbr_entry(1, 0x0b, 16, 100);
+    layout = expect_scan(KUI_BOOT_VOLUME_OK);
+    assert(layout.candidates[0].kind == KUI_BOOT_VOLUME_LINUX_CANDIDATE);
+    assert(layout.candidates[1].kind == KUI_BOOT_VOLUME_FAT_CANDIDATE);
 
     make_gpt();
     assert(kui_boot_volume_select(&media, &v) == KUI_BOOT_VOLUME_OK);
@@ -123,6 +175,22 @@ int main(void) {
     make_gpt(); mbr_entry(1, 0x83, 50, 51); expect(KUI_BOOT_VOLUME_AMBIGUOUS);
     make_gpt(); fail_block = 255; expect(KUI_BOOT_VOLUME_IO);
     make_gpt(); fail_block = 223; expect(KUI_BOOT_VOLUME_IO);
-    puts("boot volume: raw, Linux MBR, GPT copies/CRCs/bounds/ambiguity and read-only failures passed");
+    make_gpt(); memcpy(disk[2] + 128, esp_guid, 16); table_commit();
+    layout = expect_scan(KUI_BOOT_VOLUME_OK);
+    assert(layout.count == 2 && layout.candidates[0].kind == KUI_BOOT_VOLUME_LINUX_CANDIDATE);
+    assert(layout.candidates[1].kind == KUI_BOOT_VOLUME_FAT_CANDIDATE);
+    assert(layout.candidates[1].volume.start == 150 && layout.candidates[1].volume.count == 51);
+    assert(kui_boot_volume_select(&media, &v) == KUI_BOOT_VOLUME_OK && v.start == 50);
+    memcpy(disk[2] + 128, basic_guid, 16); table_commit();
+    layout = expect_scan(KUI_BOOT_VOLUME_OK);
+    assert(layout.count == 2 && layout.candidates[1].kind == KUI_BOOT_VOLUME_FAT_CANDIDATE);
+    /* ESP plus Basic Data is ambiguous, regardless of partition names. */
+    gpt_entry(2, false, 110, 130); memcpy(disk[2] + 256, esp_guid, 16);
+    memcpy(disk[2] + 256 + 56, "K\0U\0I\0", 6); table_commit();
+    expect_scan(KUI_BOOT_VOLUME_AMBIGUOUS);
+    make_gpt(); memcpy(disk[2] + 128, esp_guid, 16); table_commit();
+    disk[255][40] ^= 1; expect_scan(KUI_BOOT_VOLUME_INVALID);
+    make_gpt(); fail_block = 223; expect_scan(KUI_BOOT_VOLUME_IO);
+    puts("boot volume: typed raw/FAT/Linux discovery, split MBR/GPT, CRCs/bounds/ambiguity and read-only failures passed");
     return 0;
 }

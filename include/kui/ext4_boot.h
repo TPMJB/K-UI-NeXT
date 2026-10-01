@@ -14,4 +14,9 @@ enum kui_ext4_boot_result {
  * Success owns out->data; every failure leaves out empty. */
 enum kui_ext4_boot_result kui_ext4_boot_read(const struct kui_media_ops *raw,
     struct kui_runtime_image *out, kui_log_fn log, kui_cancel_fn cancelled);
+/* Same rules as above, for an absolute filesystem path such as
+ * /KUI/recovery.kui (without the FatFs drive prefix). */
+enum kui_ext4_boot_result kui_ext4_boot_read_path(const struct kui_media_ops *raw,
+    const char *path, struct kui_runtime_image *out, kui_log_fn log,
+    kui_cancel_fn cancelled);
 #endif

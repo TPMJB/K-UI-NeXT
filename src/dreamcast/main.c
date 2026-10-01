@@ -1460,14 +1460,17 @@ int main(void) {
         vid_mode->flags & VID_INTERLACE ? "interlaced" : "progressive");
 #ifndef KUI_SD_RUNTIME
     kui_log("Hold B during startup for built-in diagnostics.");
+    kui_log("Hold X during startup to load /KUI/recovery.kui only.");
     kui_log("Otherwise find /KUI/runtime.kui on SCIF, SCI or IDE/CF.");
     uint64_t until = timer_ms_gettime64() + 1500;
     bool fallback = false;
+    bool recovery_only = false;
     while(timer_ms_gettime64() < until) {
+        recovery_only = recovery_only || (controller_buttons() & CONT_X) != 0;
         if(boot_cancelled()) { fallback = true; break; }
         thd_sleep(16);
     }
-    if(!fallback) kui_bootstrap_load(boot_cancelled);
+    if(!fallback) kui_bootstrap_load(boot_cancelled,recovery_only);
     kui_log("Using built-in CD diagnostics; SD runtime is not running.");
 #endif
     kui_log("Diagnostic code and fonts are loaded entirely in RAM.");
@@ -1523,6 +1526,11 @@ int main(void) {
     uint64_t next_memory_sample=timer_ms_gettime64()+1000;
 #endif
     unsigned previous = 0;
+#ifndef KUI_SD_RUNTIME
+    /* Consume held startup keys: a failed X recovery boot must not turn
+     * into the diagnostics X write test without a release and new press. */
+    previous = controller_buttons();
+#endif
     uint64_t last_draw = 0;
     bool was_busy = false;
 #ifdef KUI_SD_RUNTIME

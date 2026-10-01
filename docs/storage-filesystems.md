@@ -7,6 +7,13 @@ The [ext4 bootstrap guide](ext4-bootstrap.md) defines the pinned format, partiti
 layouts and read-only limits. SCI and IDE/CF still need console validation;
 see [installation and test scope](storage-transports.md).
 
+The agreed future same-card layout is **128 MiB FAT32 boot/recovery plus ext4
+data**, documented in [boot-recovery.md](boot-recovery.md). The boot volume
+stores `/KUI/runtime.kui` and a retained `/KUI/recovery.kui`, allowing startup
+independently of dirty ext4 data. This fixes the CD interface now; do not format
+the working card yet. Current app mounting intentionally keeps its original
+single-volume policy, and no ext4 repair program is bundled.
+
 ## Current boundaries
 
 [media.h](../include/kui/media.h) already separates block reads, writes, capacity
@@ -19,8 +26,10 @@ file locations through `FATFS.csize`, `FATFS.database` and `FIL.sect` in
 [games_retail.c](../src/apps/games_retail.c).
 
 The new [boot-only ext4 reader](../src/core/ext4_boot.c) uses a separate validated
-partition view and does not replace these application APIs. It loads only
-`/KUI/runtime.kui`, with no writes or journal replay. Compatible future ext4
+partition view and does not replace these application APIs. It loads normal or
+recovery runtime images, with no writes or journal replay. The FAT boot reader
+has its own explicit read-only extent view; it does not relax normal app
+mounting. Compatible future ext4
 runtimes can therefore be installed as card updates under the new CD; changes
 to the CD's supported format or fixes to its own reader may still need a reburn.
 
@@ -38,6 +47,10 @@ to the CD's supported format or fixes to its own reader may still need a reburn.
    extent exporter. Replace direct FatFs dependencies progressively, starting
    with Games browsing and preparation. Do not reuse the existing globals for
    concurrent mounts.
+5. For split media, bind ordinary apps to the validated ext4 data partition.
+   Never retry a failed data operation on the FAT boot partition. Boot-image
+   updates must be explicit, and preserve the working recovery image until a
+   replacement has passed hardware checks.
 
 Upstream [lwext4](https://github.com/gkostka/lwext4) is now pinned and configured
 for the read-only CD bootstrap. Application integration, writable operations,

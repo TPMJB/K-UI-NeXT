@@ -49,7 +49,7 @@ def release_metadata(path=ROOT / "include/kui/version.h"):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("storage-transports", "ext4-bootstrap", "bootloader-refresh"):
+    for name in ("storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
@@ -172,6 +172,7 @@ def main():
     (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
     (dist / "STORAGE-TRANSPORTS.md").write_text(guide("storage-transports.md"))
     (dist / "EXT4-BOOTSTRAP.md").write_text(guide("ext4-bootstrap.md"))
+    (dist / "BOOT-RECOVERY.md").write_text(guide("boot-recovery.md"))
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
@@ -234,6 +235,7 @@ def main():
     (update / "KUI").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", update / "STORAGE-TRANSPORTS.md")
     shutil.copyfile(dist / "EXT4-BOOTSTRAP.md", update / "EXT4-BOOTSTRAP.md")
+    shutil.copyfile(dist / "BOOT-RECOVERY.md", update / "BOOT-RECOVERY.md")
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
     shutil.copytree(sd / "apps", update / "KUI/apps", dirs_exist_ok=True)
     shutil.copytree(sd / "tests/scan", update / "KUI/tests/scan", dirs_exist_ok=True)
@@ -260,6 +262,8 @@ def main():
         "Read STORAGE-TRANSPORTS.md before testing standalone SCI microSD or IDE/CF.\n"
         "The CD can read compatible ext4, but this runtime still needs FAT32/exFAT.\n"
         "Keep your card's filesystem; EXT4-BOOTSTRAP.md explains future runtime updates.\n"
+        "Preserve any known-working KUI/recovery.kui during updates. BOOT-RECOVERY.md\n"
+        "describes the new CD's fallback and future independent FAT32 boot partition.\n"
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "The six menu songs, now including Harbor Lights, are Ogg Vorbis.\n"
         "Older menu WAVs in that folder are only a fallback.\n"
@@ -321,6 +325,7 @@ def main():
     shutil.copyfile(cdi, boot / "kui-bootstrap.cdi")
     shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", boot / "STORAGE-TRANSPORTS.md")
     shutil.copyfile(dist / "EXT4-BOOTSTRAP.md", boot / "EXT4-BOOTSTRAP.md")
+    shutil.copyfile(dist / "BOOT-RECOVERY.md", boot / "BOOT-RECOVERY.md")
     (boot / "BOOTLOADER-REFRESH.md").write_text(guide("bootloader-refresh.md"))
     shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.png", boot / "boot-disc-badge.png")
     shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.md", boot / "BADGE-PROVENANCE.md")
@@ -348,6 +353,9 @@ def main():
         "This CD also loads runtime.kui from clean, compatible ext4 volumes read-only.\n"
         "The supplied runtime still uses FAT32/exFAT; keep your card as-is for now.\n"
         "Read EXT4-BOOTSTRAP.md for the fixed format and future card-only development.\n"
+        "BOOT-RECOVERY.md covers independent FAT32 boot/ext4 data and recovery.kui\n"
+        "fallback. Hold X for that file only; B stays in CD diagnostics. No ext4\n"
+        "repair program is bundled yet; repair software can arrive as a card update.\n"
         "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
     boot_hashes = []
     for path in sorted(boot.rglob("*")):
@@ -376,7 +384,7 @@ def main():
     shutil.copyfile(cdi, bundle / "boot-cd/kui-v1.5.1.cdi")
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
     shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
     bundle_record = {**record, "kind": "release",
@@ -399,6 +407,8 @@ def main():
         "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
         "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
         "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
+        "Preserve any working recovery.kui; BOOT-RECOVERY.md describes boot fallback\n"
+        "and the future split-card layout. No ext4 repair program is bundled yet.\n"
         "The normal retail game reader is installed; no SD benchmark payload is included.\n",
         encoding="utf-8")
     bundle_hashes = []

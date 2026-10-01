@@ -21,7 +21,7 @@ test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/
 test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
-test: build/test-boot-volume build/ext4-boot
+test: build/test-boot-volume build/ext4-boot build/boot-recovery
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-cd-audio
@@ -42,6 +42,7 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-retail-sd
 	./build/test-boot-volume
 	python3 tests/test_ext4_boot.py
+	python3 tests/test_boot_recovery.py
 	./build/test-ata
 	./build/test-storage-policy
 	./build/test-sci-sd-bus
@@ -553,3 +554,8 @@ build/test-boot-volume: tests/test_boot_volume.c src/core/boot_volume.c src/core
 build/ext4-boot: tests/ext4_boot.c src/core/ext4_boot.c src/core/boot_volume.c src/core/runtime_image.c src/core/data.c include/kui/ext4_boot.h include/kui/boot_volume.h include/kui/runtime.h $(LWEXT4_HOST_OBJECTS) $(LWEXT4_HEADERS)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(LWEXT4_CPPFLAGS) tests/ext4_boot.c src/core/ext4_boot.c src/core/boot_volume.c src/core/runtime_image.c src/core/data.c $(LWEXT4_HOST_OBJECTS) -o $@
+
+BOOT_RECOVERY_SOURCES := src/core/boot_image.c src/core/boot_volume.c src/core/ext4_boot.c src/core/runtime_image.c src/core/runtime_file.c src/core/storage_policy.c src/core/storage_probe.c
+build/boot-recovery: tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FATFS) $(LWEXT4_HOST_OBJECTS) $(LWEXT4_HEADERS) include/kui/boot_image.h include/kui/boot_volume.h include/kui/ext4_boot.h include/kui/media.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(LWEXT4_CPPFLAGS) tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FATFS) $(LWEXT4_HOST_OBJECTS) -o $@

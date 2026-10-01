@@ -2,9 +2,21 @@
 
 ## Standalone storage development (2026-09-30)
 
+The CD interface is now settled around [independent boot/recovery images](boot-recovery.md):
+normal startup tries `/KUI/runtime.kui` then `/KUI/recovery.kui` on the same
+device; X selects recovery only and B selects CD tools. The recommended future
+card layout is 128 MiB FAT32 boot/recovery plus ext4 data. A validated FAT boot
+partition takes precedence and can load without mounting dirty ext4 data;
+failure there never redirects loading to the Linux data partition. Keep a
+known-working recovery image untouched during normal updates. Current exFAT
+cards work unchanged; **do not repartition for normal use yet**. Current app
+mounting still rejects two partitions intentionally. Ext4 app access, writes,
+journal replay and a repair UI are future card development, not bundled tools.
+
 The refreshed CD now also contains a read-only ext4 `/KUI/runtime.kui` loader;
 see [ext4-bootstrap.md](ext4-bootstrap.md). It accepts supported clean 1/2/4 KiB
-ext4 volumes on raw media, a sole Linux MBR partition, or strictly validated GPT.
+ext4 volumes on raw media, a Linux MBR partition, or strictly validated GPT
+when no authoritative FAT boot candidate exists.
 The pinned real-image fixture uses 4 KiB blocks. No journal replay, repair or
 device writes occur. **Apps and Games preparation still use FatFs/exFAT/FAT32;
 keep the working card format until a later runtime adds ext4 app access.** This
