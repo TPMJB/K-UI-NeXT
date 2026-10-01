@@ -466,11 +466,12 @@ static void clock_operation(bool write) {
     mutex_lock(&lock);
     clock_valid=valid;clock_snapshot=now;++clock_generation;
     snprintf(clock_note,sizeof(clock_note),"%s",!written?
-        "Clock write not confirmed. Check the displayed time before retrying.":
+        "Clock update not confirmed. Set the time in the Dreamcast BIOS.":
         !valid?"Clock unavailable. Set a valid local date and time.":
-        write?"Console clock updated and read back.":"Local console time; no timezone conversion.");
+        write?"Console clock and BIOS timestamp updated.":"Local console time; no timezone conversion.");
     mutex_unlock(&lock);
-    if(write) kui_log("Clock edit: %s",written?"RTC and system time confirmed":"not confirmed");
+    if(write) kui_log("Clock edit: %s",written?"RTC, system time and BIOS timestamp confirmed":
+        "not confirmed; use the Dreamcast BIOS clock editor");
     if(valid) kui_log("Clock now: %04u-%02u-%02u %02u:%02u:%02u local",
         (unsigned)now.year,(unsigned)now.month,(unsigned)now.day,
         (unsigned)now.hour,(unsigned)now.minute,(unsigned)now.second);

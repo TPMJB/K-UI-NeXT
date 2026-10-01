@@ -223,7 +223,7 @@ build/test-clock: tests/test_clock.c src/core/clock.c include/kui/clock.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/clock.c tests/test_clock.c -o $@
 
-build/test-clock-platform: tests/test_clock_platform.c src/core/clock.c src/dreamcast/clock.c include/kui/clock.h include/kui/clock_platform.h tests/clock_stubs/arch/rtc.h
+build/test-clock-platform: tests/test_clock_platform.c src/core/clock.c src/dreamcast/clock.c include/kui/clock.h include/kui/clock_platform.h tests/clock_stubs/arch/rtc.h tests/clock_stubs/dc/flashrom.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/clock_stubs src/core/clock.c src/dreamcast/clock.c tests/test_clock_platform.c -o $@
 

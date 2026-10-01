@@ -2,6 +2,16 @@
 
 ## Standalone storage development (2026-09-30)
 
+The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
+Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now
+synchronizes the BIOS last-set timestamp as well as the RTC and KOS cached time.
+It preserves the full system configuration record, appends with CRC/readback,
+and never erases flash. Invalid/full flash is refused before setting the RTC;
+later failures direct the user to the BIOS clock editor. Focused host checks
+cover preservation and interrupted writes; console reboot acceptance is still
+pending. See [clock details](clock-and-file-dates.md). This is an SD-runtime-only
+fix, retaining version 1.5.1 and the `6af5e11` boot CD.
+
 The owner confirmed the final red Card tools menu from `6af5e11a8612` works
 (2026-10-01); an initial old-artwork report was resolved after correcting which
 file was copied. The `6af5e11` boot CD is ready to burn. Its optional CD-origin
