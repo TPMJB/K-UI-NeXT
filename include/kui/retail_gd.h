@@ -29,10 +29,14 @@ struct kui_retail_gd_diagnostics {
     uint32_t last_error;
     int32_t last_result;
 };
+struct kui_retail_track;
 struct kui_retail_gd {
     struct kui_gd_ops ops;
-    const struct kui_gd_track *tracks;
-    uint32_t track_count, guest_begin, guest_end;
+    union {
+        const struct kui_gd_track *tracks;
+        const struct kui_retail_track *image_tracks;
+    };
+    uint32_t image_track_layout, track_count, guest_begin, guest_end;
     uint32_t sector_part, track_type, sector_bytes;
     uint32_t token, command, lba, count, destination, area, request_bytes;
     uint32_t completed_bytes, error, pending, executing, initialized;
@@ -62,9 +66,17 @@ int kui_retail_gd_init(struct kui_retail_gd *, const struct kui_gd_track *,
 void kui_retail_gd_init_validated(struct kui_retail_gd *, const struct kui_gd_track *,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,
     uint32_t guest_end);
+/* Same trusted initialization using the manifest's actual track array.
+ * This borrows each track's GD subobject with its enclosing array's stride;
+ * the manifest must remain resident and immutable for the service lifetime. */
+void kui_retail_gd_init_manifest_validated(struct kui_retail_gd *,
+    const struct kui_retail_track *, uint32_t count, const struct kui_gd_ops *,
+    uint32_t guest_begin, uint32_t guest_end);
 
-/* PIOREAD/DMAREAD are polled CPU copies, without DMA hardware, IRQ or callback.
- * CHECK never reads storage. Completion/failure is acknowledged once by CHECK;
+/* Virtual PIOREAD/DMAREAD complete by polling and CPU copy into guest memory;
+ * no virtual GD DMA interrupt/callback is generated. The physical sector
+ * backend may use SCI DMA independently. CHECK never reads storage.
+ * Completion/failure is acknowledged once by CHECK;
  * a subsequent CHECK returns NOT_FOUND. ABORT retains completed chunk bytes.
  * MISC and stream functions are not handled here. Callback-clear (r4=0) is a
  * supported no-op; nonzero callback installation is explicitly unsupported.

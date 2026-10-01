@@ -26,11 +26,23 @@
 #define ERRORS 0x38u
 #define TEND 0x04u
 #define POLLS 10000u
+#define DMA_SAR UINT32_C(0xffa00010)
+#define DMA_DAR UINT32_C(0xffa00014)
+#define DMA_COUNT UINT32_C(0xffa00018)
+#define DMA_CONTROL UINT32_C(0xffa0001c)
+#define DMA_OPERATION UINT32_C(0xffa00040)
+#define DMA_RX UINT32_C(0x4911)
+#define DMA_TX UINT32_C(0x1811)
+#define DMA_END 2u
 
 #ifdef KUI_SCI_SD_TEST
 extern uint32_t kui_sci_sd_test_read(uint32_t address, unsigned width);
 extern void kui_sci_sd_test_write(uint32_t address, uint32_t value, unsigned width);
 extern void kui_sci_sd_test_delay(uint32_t count);
+extern uint32_t kui_sci_sd_test_irq_disable(void);
+extern void kui_sci_sd_test_irq_restore(uint32_t value);
+extern uint32_t kui_sci_sd_test_dma_address(const void *buffer, size_t count);
+extern void kui_sci_sd_test_cache_purge(void *buffer, size_t count);
 #define rd8(a) ((uint8_t)kui_sci_sd_test_read(a, 1))
 #define rd16(a) ((uint16_t)kui_sci_sd_test_read(a, 2))
 #define rd32(a) kui_sci_sd_test_read(a, 4)
@@ -53,6 +65,13 @@ static struct {
     bool acquired, fault, slow;
 } port;
 static bool wait_flag(uint8_t flag);
+#ifndef KUI_RETAIL_TRANSPORT
+static struct kui_sci_sd_stats stats;
+#define COUNT(field) (++stats.field)
+void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out) { if(out) *out = stats; }
+#else
+#define COUNT(field) ((void)0)
+#endif
 
 static void delay(uint32_t count) {
 #ifdef KUI_SCI_SD_TEST
@@ -113,36 +132,38 @@ static void select_card(void *ctx, bool selected) {
     }
 }
 static uint8_t reverse(uint8_t x) {
-    x = (uint8_t)((x >> 4) | (x << 4));
-    x = (uint8_t)(((x & 0xccu) >> 2) | ((x & 0x33u) << 2));
-    return (uint8_t)(((x & 0xaau) >> 1) | ((x & 0x55u) << 1));
+    static const uint8_t nibble[16] = {
+        0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15
+    };
+    return (uint8_t)((nibble[x & 15u] << 4) | nibble[x >> 4]);
 }
 static bool wait_flag(uint8_t flag) {
     for(unsigned n = 0; n < POLLS; ++n) {
         uint8_t status = rd8(SSR);
         if(status & ERRORS) break;
-        if(status & flag) return true;
+        if((status & flag) == flag) return true;
     }
     port.fault = true;
     wr8(SCR, 0);
     return false;
 }
-static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
-    (void)ctx;
-    /* Minimum wire time in the protocol's nominal 12.5 MHz ticks: a slow
-     * byte takes 256 ticks, a fast byte eight. CPU/poll overhead only makes
-     * the deadline more conservative; sd_reader also imposes finite byte
-     * budgets. Retaining SCIF's 125 units would prematurely shorten SCI
-     * token/busy waits as the bus gets faster. This is not wall-clock time. */
-    port.work += slow ? 256u : 8u;
-    if(!port.acquired || port.fault) return 0xff;
+static bool prepare(bool slow) {
+    if(!port.acquired || port.fault) return false;
     if(port.slow != slow) {
-        if(!wait_flag(TEND)) return 0xff;
+        if(!wait_flag(TEND)) return false;
         wr8(SCR, 0); wr8(BRR, slow ? 31 : 0); /* Fast: 12.5 MHz. */
         delay(1024u);
         port.slow = slow;
     }
     wr8(SCR, 0x30u); /* TE + RE; clock generated only for transmitted bytes. */
+    return true;
+}
+static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
+    (void)ctx;
+    /* Nominal wire ticks, not a wall-clock claim. The protocol also bounds
+     * byte counts; the runtime supplies a hardware timer for its deadlines. */
+    port.work += slow ? 256u : 8u;
+    if(!prepare(slow)) return 0xff;
     if(!wait_flag(TDRE)) return 0xff;
     wr8(TDR, reverse(data));
     wr8(SSR, 0x7cu); /* Clear observed TDRE, preserve the other flags. */
@@ -151,8 +172,174 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
     wr8(SSR, 0xbcu); /* Clear observed RDRF, preserve TDRE and errors. */
     return reverse(received);
 }
+
+static uint32_t mask_interrupts(void) {
+#ifdef KUI_SCI_SD_TEST
+    return kui_sci_sd_test_irq_disable();
+#else
+    uint32_t before, masked;
+    __asm__ __volatile__("stc sr,%0" : "=r"(before));
+    masked = before | 0xf0u;
+    __asm__ __volatile__("ldc %0,sr" : : "r"(masked) : "t", "memory");
+    return before;
+#endif
+}
+static void restore_interrupts(uint32_t before) {
+#ifdef KUI_SCI_SD_TEST
+    kui_sci_sd_test_irq_restore(before);
+#else
+    __asm__ __volatile__("ldc %0,sr" : : "r"(before) : "t", "memory");
+#endif
+}
+static uint32_t dma_address(void *buffer) {
+    uintptr_t p = (uintptr_t)buffer;
+    if(p & 31u) return 0;
+#ifdef KUI_SCI_SD_TEST
+    return kui_sci_sd_test_dma_address(buffer, 512);
+#else
+    /* Only the Dreamcast's 16 MiB RAM, through P1 or P2; never MMU mappings
+     * or an arbitrary peripheral supplied by a caller. */
+    if((p >> 24) != 0x8cu && (p >> 24) != 0xacu) return 0;
+    p &= 0x1fffffffu;
+    return p <= 0x0d000000u - 512u ? (uint32_t)p : 0;
+#endif
+}
+static void purge_buffer(void *buffer) {
+#ifdef KUI_SCI_SD_TEST
+    kui_sci_sd_test_cache_purge(buffer, 512);
+#else
+    uintptr_t first = ((uintptr_t)buffer & 0x1fffffffu) | 0x80000000u;
+    for(uintptr_t p = first; p < first + 512; p += 32)
+        __asm__ __volatile__("ocbp @%0" : : "r"(p) : "memory");
+#endif
+}
+static uint8_t *uncached(void *buffer) {
+#ifdef KUI_SCI_SD_TEST
+    return buffer;
+#else
+    return (uint8_t *)(((uintptr_t)buffer & 0x1fffffffu) | 0xa0000000u);
+#endif
+}
+
+#ifndef KUI_RETAIL_TRANSPORT
+/* The game reader is read-only and carries neither this buffer nor TX DMA. */
+static uint8_t dma_write_buffer[512] __attribute__((aligned(32)));
+#endif
+
+/* Original bounded DMAC implementation using SH7750 manual sections 14/15.
+ * Return -1 before touching the channel when it cannot be borrowed. A
+ * started transfer must never fall back at an uncertain SD-stream position. */
+static int dma_block(const uint8_t *tx, uint8_t *rx) {
+    void *buffer = rx;
+    bool writing = tx != NULL;
+#ifndef KUI_RETAIL_TRANSPORT
+    if(writing) buffer = dma_write_buffer;
+#else
+    if(writing) return -1;
+#endif
+    uint32_t address = dma_address(buffer);
+    if(!address) return -1;
+    uint32_t before = mask_interrupts();
+    /* TE is hardware-set and cannot be recreated by restoring a snapshot.
+     * Leave completed/unacknowledged transfers and pending IRQs untouched. */
+    uint32_t saved[4];
+    saved[3] = rd32(DMA_CONTROL);
+    if((saved[3] & 7u) || (rd32(DMA_OPERATION) & 7u) != 1u) {
+        restore_interrupts(before); return -1;
+    }
+    for(unsigned i = 0; i < 3; ++i) saved[i] = rd32(DMA_SAR + 4u*i);
+#ifndef KUI_RETAIL_TRANSPORT
+    if(writing)
+        for(unsigned i = 0; i < 512; ++i) dma_write_buffer[i] = reverse(tx[i]);
+#endif
+    purge_buffer(buffer);
+    wr32(DMA_CONTROL, 0);
+    wr32(DMA_SAR, writing ? address : RDR & 0x1fffffffu);
+    wr32(DMA_DAR, writing ? TDR & 0x1fffffffu : address);
+    wr32(DMA_COUNT, 512);
+    if(writing) wr8(SCR, 0); /* Change direction only between complete bytes. */
+    wr32(DMA_CONTROL, writing ? DMA_TX : DMA_RX);
+    /* The SCI request enable is required on Dreamcast hardware. CPU IRQs
+     * remain masked until it is removed; DMAC completion IRQ is disabled. */
+    wr8(SCR, writing ? 0xa0u : 0x70u);
+    port.work += 512u * 8u;
+    bool ok = true;
+    if(!writing) {
+        for(unsigned i = 0; i < 512 && ok; ++i) {
+            ok = wait_flag(TDRE);
+            if(ok) {wr8(TDR, 0xff); wr8(SSR, 0x7cu);}
+        }
+    }
+    unsigned n = 0;
+    while(ok && !(rd32(DMA_CONTROL) & DMA_END)) {
+        if(++n == POLLS || (rd8(SSR) & ERRORS) ||
+           (rd32(DMA_OPERATION) & 7u) != 1u) ok = false;
+    }
+    if(ok) ok = (rd32(DMA_OPERATION) & 7u) == 1u &&
+        rd32(DMA_COUNT) == 0 && wait_flag(TEND);
+    /* TEND can assert during the last bit: allow its final edge before
+     * changing mode or returning to token/CRC operations. */
+    if(ok) delay(32u);
+    wr8(SCR, 0); /* Remove RIE/TIE before releasing the channel or CPU mask. */
+    wr32(DMA_CONTROL, 0);
+    /* A just-finishing request may have set TE while DE was being cleared.
+     * Read that final status before clearing its hardware-set flag. */
+    (void)rd32(DMA_CONTROL);
+    wr32(DMA_CONTROL, 0);
+    if(ok && !writing) {
+        uint8_t *p = uncached(buffer);
+        for(unsigned i = 0; i < 512; ++i) p[i] = reverse(p[i]);
+        __asm__ __volatile__("" : : : "memory");
+    }
+    for(unsigned i = 0; i < 4; ++i) wr32(DMA_SAR + 4u*i, saved[i]);
+    if(ok) wr8(SCR, 0x30u);
+    else port.fault = true;
+    restore_interrupts(before);
+    if(!ok) COUNT(failures);
+    else if(writing) COUNT(tx_blocks);
+    else COUNT(rx_blocks);
+    return ok;
+}
+
+static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
+                           size_t count, bool slow) {
+    (void)ctx;
+#ifdef KUI_RETAIL_TRANSPORT
+    /* Resident block users are read-only. Keep runtime write support out of
+     * the fixed low-memory image, including the programmed fallback. */
+    if(tx) return false;
+#endif
+    if(!count || count > 512 || (!tx && !rx) || !port.acquired || port.fault)
+        return false;
+    if(!prepare(slow)) return false;
+    if(!slow && count == 512 && (!tx || !rx)) {
+        int result = dma_block(tx, rx);
+        if(result >= 0) return result != 0;
+    }
+    COUNT(polled_blocks);
+    /* One byte in flight, so interrupt latency cannot overrun a second
+     * receive. Commands and short/unaligned payloads need no DMAC ownership.
+     * Start the next wire byte before reversing/storing the previous one. */
+    if(!wait_flag(TDRE)) return false;
+    wr8(TDR, tx ? reverse(tx[0]) : 0xff);
+    wr8(SSR, 0x7cu);
+    for(size_t i = 0; i < count; ++i) {
+        port.work += slow ? 256u : 8u;
+        if(!wait_flag(RDRF | TDRE)) return false;
+        uint8_t received = rd8(RDR);
+        wr8(SSR, 0xbcu);
+        if(i + 1 < count) {
+            if(tx) wr8(TDR, reverse(tx[i+1]));
+            wr8(SSR, 0x7cu);
+        }
+        if(rx) rx[i] = reverse(received);
+    }
+    return true;
+}
 static uint32_t ticks(void *ctx) { (void)ctx; return port.work; }
-static const struct kui_loader_sd_bus bus = {NULL, begin, end, select_card, transfer, ticks};
+static const struct kui_loader_sd_bus bus = {
+    NULL, begin, end, select_card, transfer, ticks, transfer_block
+};
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return &bus; }
 bool kui_sci_sd_healthy(void) { return port.acquired && !port.fault; }
 #else
@@ -160,4 +347,9 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) { return KUI_LOADER_SD_UNSUPP
 void kui_sci_sd_release(void) {}
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return NULL; }
 bool kui_sci_sd_healthy(void) { return false; }
+#ifndef KUI_RETAIL_TRANSPORT
+void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out) {
+    if(out) *out = (struct kui_sci_sd_stats){0};
+}
+#endif
 #endif

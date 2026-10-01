@@ -111,7 +111,8 @@ static bool map_track(struct files *files,FATFS *fs,const struct kui_volume *vol
     if(stopped(files) || !join(files,track->name,path) || f_open(&file,path,FA_READ)!=FR_OK) return false;
     bool ok=f_size(&file)==track->file_bytes && fs->csize;
     struct kui_retail_track *t=&map->tracks[index];
-    *t=(struct kui_retail_track){track->number,track->start_lba,track->end_lba,track->control,map->extent_count,0};
+    *t=(struct kui_retail_track){.gd={.number=track->number,.start_lba=track->start_lba,
+        .end_lba=track->end_lba,.control=track->control},.first_extent=map->extent_count};
     uint32_t total=(uint32_t)((track->file_bytes+511u)/512u);
     /* The allocation table alone lists the file's contiguous cluster runs:
      * no track data is read (one data read per cluster took seconds). */

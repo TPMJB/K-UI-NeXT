@@ -1,5 +1,15 @@
 # Hardware evidence
 
+## Initial SCI DOA2 play check — 2026-10-01
+
+After the passing SCI soak below, the owner tried Dead or Alive 2 and reported
+that it was "largely the same" as SCIF. This is an initial qualitative play
+observation, with no measured load-time improvement or separate acceptance of
+FMV, return-to-menu and VMU operations. It does not establish the exact retail
+payload build from a report. The owner requested an original SCI performance
+fix, including DMA investigation, before broader testing. Reference projects
+may inform the design; their implementation is not to be copied.
+
 ## SCI storage soak passed; slower than SCIF — 2026-10-01
 
 The owner's SCI microSD run **2**, runtime **3a368ddcfaff**, passed the same
@@ -11,8 +21,8 @@ establishes runtime integrity for this run, not a performance improvement.
 
 See the [SCI baseline and original reports](evidence/sci-soak-baseline-2026-10-01.md)
 for the complete comparison and latency interpretation. Runtime storage is
-ready for a first Games compatibility check; the separate SCI retail reader
-remains untested. Use the same DOA2 image and a matching SCI-capable
+ready for Games compatibility checks; the initial DOA2 observation above does
+not complete that coverage. Use the same image and a matching SCI-capable
 `/KUI/apps/games/retail-boot.kui`. IDE/CF remains hardware pending.
 
 ## SCIF storage soak baseline passed — 2026-10-01

@@ -25,9 +25,13 @@ struct mock {
     unsigned multi_commands, stream_blocks, stops, active_deselects, undrained_stops;
     unsigned stop_fault, read_fault_block, tick_step, token_delay, token_delay_reload;
     uint32_t next_address;
+    unsigned block_calls, block_bytes, fail_block_call, fail_block_after, fault_calls;
+    bool block_fault;
+    uint64_t wire_hash;
 };
 
 static unsigned checks;
+static bool use_blocks;
 #define CHECK(x) do { assert(x); ++checks; } while(0)
 
 static uint8_t reference_crc7(const uint8_t *bytes, unsigned count) {
@@ -243,10 +247,13 @@ static void select_card(void *ctx, bool selected) {
 }
 static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
     struct mock *m = ctx;
+    m->wire_hash = (m->wire_hash ^ (data | ((unsigned)m->selected << 8) |
+                                  ((unsigned)slow << 9))) * UINT64_C(1099511628211);
     if(m->fault != FAULT_STOPPED_TIMER && !m->frozen_timer)
         m->now += m->tick_step ? m->tick_step : (slow ? 400u : 20u);
     if(slow) ++m->slow_bytes;
     else ++m->fast_bytes;
+    if(m->block_fault) { ++m->fault_calls; return 0xff; }
     if(!m->selected)
         return 0xff;
     if(m->fault == FAULT_BUSY)
@@ -267,11 +274,28 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
     }
     return received;
 }
+static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
+                            size_t count, bool slow) {
+    struct mock *m = ctx;
+    CHECK(!tx && rx && !slow && (count == 16 || count == 512));
+    ++m->block_calls;
+    for(size_t i = 0; i < count; ++i) {
+        if(m->block_calls == m->fail_block_call && i == m->fail_block_after) {
+            m->block_fault = true;
+            return false;
+        }
+        rx[i] = transfer(ctx, 0xff, false);
+        ++m->block_bytes;
+    }
+    return true;
+}
 static uint32_t ticks(void *ctx) {
     return ((struct mock *)ctx)->now;
 }
 static struct kui_loader_sd_bus bus(struct mock *m) {
-    return (struct kui_loader_sd_bus){m, begin, end, select_card, transfer, ticks};
+    return (struct kui_loader_sd_bus){.ctx=m, .begin=begin, .end=end,
+        .select=select_card, .transfer=transfer, .ticks=ticks,
+        .transfer_block=use_blocks ? transfer_block : NULL};
 }
 
 static void normal(bool version2, bool high_capacity) {
@@ -587,9 +611,77 @@ static void stream_errors(void) {
     CHECK(m.packets == packets);
 }
 
-int main(void) {
-    static const uint8_t text[] = "123456789";
-    CHECK(reference_crc16(text, 9) == 0x31c3);
+static void block_equivalence(void) {
+    struct mock models[2] = {
+        {.version2=true, .high_capacity=true},
+        {.version2=true, .high_capacity=true}
+    };
+    uint8_t data[2][3 * 512];
+    for(unsigned mode = 0; mode < 2; ++mode) {
+        use_blocks = mode != 0;
+        struct kui_loader_sd_bus b = bus(&models[mode]);
+        struct kui_loader_sd card;
+        CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+        CHECK(kui_loader_sd_read(&card, 37, 3, data[mode]) == KUI_LOADER_SD_OK);
+        CHECK(kui_loader_sd_read_multi(&card, 37, 3, data[mode]) == KUI_LOADER_SD_OK);
+        /* Even an installed callback must not replace the setup-speed path. */
+        unsigned calls = models[mode].block_calls;
+        card.slow = true;
+        CHECK(kui_loader_sd_read(&card, 37, 1, data[mode]) == KUI_LOADER_SD_OK);
+        CHECK(models[mode].block_calls == calls);
+        kui_loader_sd_shutdown(&card);
+    }
+    CHECK(!memcmp(data[0], data[1], sizeof(data[0])));
+    CHECK(models[0].wire_hash == models[1].wire_hash);
+    CHECK(models[0].now == models[1].now && models[0].packets == models[1].packets);
+    CHECK(models[0].fast_bytes == models[1].fast_bytes &&
+          models[0].slow_bytes == models[1].slow_bytes && models[0].stops == models[1].stops);
+    CHECK(models[0].block_calls == 0 && models[1].block_calls == 7);
+    CHECK(models[1].block_bytes == 16 + 6 * 512);
+}
+
+static void block_failures(void) {
+    use_blocks = true;
+    struct mock m = {.version2=true, .high_capacity=true,
+                     .fail_block_call=1, .fail_block_after=7};
+    struct kui_loader_sd_bus b = bus(&m);
+    struct kui_loader_sd card;
+    CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_TIMEOUT);
+    CHECK(!card.ready && !m.selected && m.end == 1 && m.block_bytes == 7);
+    CHECK(m.fault_calls == 1); /* Deselect clock only; no trailing CRC reads. */
+    for(unsigned multi = 0; multi < 2; ++multi) {
+        m = (struct mock){.version2=true, .high_capacity=true};
+        b = bus(&m);
+        CHECK(kui_loader_sd_init_bus(&card, &b) == KUI_LOADER_SD_OK);
+        m.fail_block_call = m.block_calls + (multi ? 2 : 1);
+        m.fail_block_after = 17;
+        uint8_t data[3 * 512];
+        memset(data, 0xa5, sizeof(data));
+        struct kui_loader_sd_stream stream = {0};
+        if(multi) {
+            CHECK(kui_loader_sd_stream_start(&card, &stream, 37, 3) == KUI_LOADER_SD_OK);
+            CHECK(kui_loader_sd_stream_next(&card, &stream, data) == KUI_LOADER_SD_OK);
+            CHECK(kui_loader_sd_stream_next(&card, &stream, data + 512) == KUI_LOADER_SD_TIMEOUT);
+            CHECK(!stream.active && !stream.remaining && stream.next_lba == 38);
+            CHECK(m.fault_calls == 28); /* CMD12 + stuff + bounded response + release. */
+            CHECK(card.last_command == 18 && m.active_deselects == 1);
+        } else {
+            CHECK(kui_loader_sd_read(&card, 37, 1, data) == KUI_LOADER_SD_TIMEOUT);
+            CHECK(m.fault_calls == 1 && card.last_command == 17);
+        }
+        CHECK(!card.ready && !m.selected && m.block_fault);
+        unsigned prefix = (multi ? 512 : 0) + 17;
+        for(unsigned i = 0; i < prefix; ++i)
+            CHECK(data[i] == pattern(37 + i / 512, i % 512));
+        for(unsigned i = prefix; i < sizeof(data); ++i) CHECK(data[i] == 0xa5);
+        unsigned calls = m.fast_bytes;
+        CHECK(kui_loader_sd_read(&card, 0, 1, data) == KUI_LOADER_SD_NOT_READY);
+        CHECK(kui_loader_sd_read_multi(&card, 0, 1, data) == KUI_LOADER_SD_NOT_READY);
+        CHECK(m.fast_bytes == calls);
+    }
+}
+
+static void protocol_cases(void) {
     normal(true, true);
     normal(true, false);
     normal(false, false);
@@ -648,6 +740,17 @@ int main(void) {
     CHECK(strcmp(kui_loader_sd_result_name(KUI_LOADER_SD_CRC), "SD CRC16 mismatch") == 0);
     CHECK(strcmp(kui_loader_sd_result_name((enum kui_loader_sd_result)-1), "unknown SD error") == 0);
     kui_loader_sd_shutdown(NULL);
+}
+
+int main(void) {
+    static const uint8_t text[] = "123456789";
+    CHECK(reference_crc16(text, 9) == 0x31c3);
+    for(unsigned mode = 0; mode < 2; ++mode) {
+        use_blocks = mode != 0;
+        protocol_cases();
+    }
+    block_equivalence();
+    block_failures();
     printf("loader SD protocol: %u assertions passed\n", checks);
     return 0;
 }

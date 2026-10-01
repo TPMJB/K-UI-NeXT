@@ -79,8 +79,15 @@ enum kui_loader_sd_result kui_sci_sd_write(struct kui_loader_sd *c,uint32_t lba,
         if(!ready(c)) {result=KUI_LOADER_SD_TIMEOUT;c->last_response=0xff;break;}
         (void)byte(c,multi?0xfc:0xfe);
         uint16_t crc=0;
-        for(unsigned i=0;i<512;i++) {
-            uint8_t value=*data++;crc=crc16(crc,value);(void)byte(c,value);
+        if(!c->slow && c->bus.transfer_block) {
+            if(!c->bus.transfer_block(c->bus.ctx,data,NULL,512,false)) {
+                c->ready=false;result=KUI_LOADER_SD_TIMEOUT;c->last_response=0xff;break;
+            }
+            for(unsigned i=0;i<512;i++) crc=crc16(crc,*data++);
+        } else {
+            for(unsigned i=0;i<512;i++) {
+                uint8_t value=*data++;crc=crc16(crc,value);(void)byte(c,value);
+            }
         }
         (void)byte(c,(uint8_t)(crc>>8));(void)byte(c,(uint8_t)crc);
         uint8_t reply=0xff;

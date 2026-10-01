@@ -27,6 +27,7 @@ FORBIDDEN_SYMBOLS = {
 INIT_ONLY = {
     "kui_retail_resident_init", "kui_retail_manifest_decode",
     "kui_retail_image_init", "kui_retail_gd_init", "kui_retail_gd_init_validated", "kui_retail_sd_init",
+    "kui_retail_gd_init_manifest_validated", "init_validated",
     "kui_loader_sd_init_bus", "capacity",
     "kui_retail_sd_adopt",  # Called only by resident_init on the high stage stack.
     "kui_retail_storage_adopt",  # Rebinds the prepared transport before game entry.
@@ -57,17 +58,23 @@ def check_bss(image, base, prefix):
 
 
 def check_stack_usage(directory, symbols, transport="scif"):
-    reports = list(Path(directory).rglob("*.su"))
+    # LTO may rename clones differently in .su and ELF, and distinct local
+    # functions can share a name. Count every emitted row, including init,
+    # instead of filtering by symbols or collapsing names. Only these final
+    # reports describe the linked SCI code; pre-LTO reports are not a fallback.
+    lto = transport == "sci"
+    reports = list((Path(directory) / "lto").glob("*.ltrans*.su")) if lto else list(Path(directory).rglob("*.su"))
     if not reports:
         raise ValueError("Missing compiler stack-usage reports")
     frames = {}
+    emitted_frames = []
     for report in reports:
         for line in report.read_text().splitlines():
             fields = line.split("\t")
             if len(fields) != 3:
                 raise ValueError(f"Malformed stack-usage report: {report.name}")
             name = fields[0].rsplit(":", 1)[-1]
-            if "_" + name not in symbols or name in INIT_ONLY:
+            if not lto and ("_" + name not in symbols or name in INIT_ONLY):
                 continue
             if fields[2] != "static":
                 raise ValueError(f"Unbounded/dynamic resident stack frame: {name}")
@@ -75,18 +82,20 @@ def check_stack_usage(directory, symbols, transport="scif"):
             if frame < 0:
                 raise ValueError(f"Invalid resident stack frame: {name}")
             frames[name] = max(frames.get(name, 0), frame)
+            emitted_frames.append(frame)
     for name in ("kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
                  "kui_retail_image_read",
                  "kui_ata_read" if transport == "ide" else "kui_loader_sd_stream_next"):
-        if name not in frames:
+        if name not in frames or "_" + name not in symbols:
             raise ValueError(f"Missing runtime stack-usage frame: {name}")
     available = (layout.HOOK_STACK - layout.HOOK_STACK_BOTTOM -
                  STACK_GUARD_BYTES - STACK_ALIGNMENT_GAP)
-    maximum = sum(frames.values()) + ASSEMBLY_STACK_BYTES
+    maximum = sum(emitted_frames if lto else frames.values()) + ASSEMBLY_STACK_BYTES
     if maximum > available:
         raise ValueError(f"Resident conservative stack sum {maximum} exceeds {available}")
     return {"conservative_bytes": maximum, "available_bytes": available,
-            "assembly_allowance": ASSEMBLY_STACK_BYTES, "retained_c_frames": len(frames)}
+            "assembly_allowance": ASSEMBLY_STACK_BYTES,
+            "retained_c_frames": len(emitted_frames) if lto else len(frames)}
 
 
 def check_directory(directory):

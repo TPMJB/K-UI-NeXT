@@ -12,7 +12,6 @@ static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
 static struct kui_retail_gd service;
 static struct kui_retail_storage card;
-static struct kui_gd_track tracks[KUI_RETAIL_IMAGE_TRACKS];
 static struct retail_display_state display;
 static struct kui_retail_pace pace;
 /* Menu-return diagnostics: steps longer than two sectors, steps run for a
@@ -185,13 +184,9 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     image.manifest = &manifest;
     image.read_block = read_block;
     image.read_run = read_run;
-    for(uint32_t i = 0; i < manifest.track_count; ++i) {
-        const struct kui_retail_track *t = &manifest.tracks[i];
-        tracks[i] = (struct kui_gd_track){t->number, t->control, t->start_lba, t->end_lba};
-    }
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, read_sectors};
-    kui_retail_gd_init_validated(&service, tracks, manifest.track_count, &ops,
-                                 KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
+    kui_retail_gd_init_manifest_validated(&service, manifest.tracks,
+        manifest.track_count, &ops, KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
     volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
     for(unsigned i = 0; i < 4; ++i) guard[i] = 0x4b554947u;
     kui_retail_original_menu=*(volatile uint32_t *)(uintptr_t)0x8c0000e0u;

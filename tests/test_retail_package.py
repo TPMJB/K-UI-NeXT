@@ -158,6 +158,57 @@ class ResidentStackReports(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Missing runtime"):
                 check_stack_usage(tmp, symbols)
 
+    def lto_report(self, directory, extra=()):
+        symbols = self.report(directory)
+        target = Path(directory) / "lto"
+        target.mkdir()
+        report = target / "resident-sci.elf.ltrans0.ltrans.su"
+        text = (Path(directory) / "resident.su").read_text()
+        text += "".join(f"other.c:1:1:{name}\t{size}\t{kind}\n"
+                        for name, size, kind in extra)
+        report.write_text(text)
+        return symbols, report
+
+    def test_lto_counts_local_duplicates_clones_and_initialization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            symbols, _ = self.lto_report(tmp, (
+                ("transfer", 40, "static"), ("transfer", 80, "static"),
+                ("helper.constprop", 120, "static"),
+                ("kui_retail_resident_init", 64, "static")))
+            # Neither local transfer nor the compiler-renamed clone occurs
+            # in the public-symbol map. Their frames must still be counted.
+            symbols["_helper.constprop.0"] = layout.RESIDENT_ADDRESS
+            result = check_stack_usage(tmp, symbols, "sci")
+            self.assertEqual(result["conservative_bytes"], 256 + 256 + 40 + 80 + 120 + 64)
+            self.assertEqual(result["retained_c_frames"], 8)
+
+    def test_lto_missing_final_reports_and_unexported_bad_frames_reject(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            symbols = self.report(tmp)
+            with self.assertRaisesRegex(ValueError, "Missing compiler"):
+                check_stack_usage(tmp, symbols, "sci")
+            symbols, report = self.lto_report(tmp, (("local", 8, "dynamic,bounded"),))
+            with self.assertRaisesRegex(ValueError, "dynamic"):
+                check_stack_usage(tmp, symbols, "sci")
+            text = report.read_text().replace("8\tdynamic,bounded", "800\tstatic")
+            report.write_text(text)
+            with self.assertRaisesRegex(ValueError, "exceeds"):
+                check_stack_usage(tmp, symbols, "sci")
+            report.write_text(text.replace("800\tstatic", "-1\tstatic"))
+            with self.assertRaisesRegex(ValueError, "Invalid resident"):
+                check_stack_usage(tmp, symbols, "sci")
+
+    def test_lto_requires_audited_entry_frame_and_linked_symbol(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            symbols, report = self.lto_report(tmp)
+            del symbols["_kui_loader_sd_stream_next"]
+            with self.assertRaisesRegex(ValueError, "Missing runtime"):
+                check_stack_usage(tmp, symbols, "sci")
+            symbols["_kui_loader_sd_stream_next"] = layout.RESIDENT_ADDRESS
+            report.write_text(report.read_text().replace("kui_loader_sd_stream_next", "renamed"))
+            with self.assertRaisesRegex(ValueError, "Missing runtime"):
+                check_stack_usage(tmp, symbols, "sci")
+
 
 class RetailLinkedLayout(unittest.TestCase):
     def setUp(self):
@@ -196,7 +247,12 @@ class RetailLinkedLayout(unittest.TestCase):
                 frames[-1] = "kui_ata_read"
             report = "\n".join(f"test.c:1:1:{frame}\t32\tstatic" for frame in frames)
             (self.directory / transport).mkdir()
-            (self.directory / transport / "resident.su").write_text(report + "\n")
+            if transport == "sci":
+                (self.directory / transport / "lto").mkdir()
+                report_path = self.directory / transport / "lto/resident-sci.elf.ltrans0.ltrans.su"
+            else:
+                report_path = self.directory / transport / "resident.su"
+            report_path.write_text(report + "\n")
         for index, name in enumerate(("kui_retail_stage_main", "kui_retail_stage_relay",
                                      "kui_retail_bootstrap_enter", "kui_retail_game_resume")):
             ss["_" + name] = layout.STAGE_ADDRESS + 4 + index * 4
@@ -253,6 +309,12 @@ class RetailLinkedLayout(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "hook stack"):
             check_directory(self.directory)
 
+    def test_lto_source_filename_does_not_exempt_real_device_function(self):
+        self.symbols["resident-sci"]["_sd_reader.c.12345678"] = layout.RESIDENT_ADDRESS + 4
+        self.write()
+        with self.assertRaisesRegex(ValueError, "Forbidden runtime/device symbol"):
+            check_directory(self.directory)
+
     def test_every_transport_has_independent_blob_and_stack_check(self):
         for transport in TRANSPORTS:
             name = "resident-" + transport
@@ -260,7 +322,8 @@ class RetailLinkedLayout(unittest.TestCase):
             with self.subTest(transport=transport), self.assertRaisesRegex(ValueError, "different/invalid low resident"):
                 check_directory(self.directory)
             self.payload[name][0] ^= 0x80; self.write()
-            report = self.directory / transport / "resident.su"
+            report = self.directory / transport / (
+                "lto/resident-sci.elf.ltrans0.ltrans.su" if transport == "sci" else "resident.su")
             text = report.read_text()
             report.write_text(text.replace("\t32\t", "\t2048\t"))
             with self.subTest(transport=transport), self.assertRaisesRegex(ValueError, "exceeds"):

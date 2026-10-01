@@ -163,6 +163,16 @@ RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(RETAIL_CPU) -DKUI_RETAIL
     -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections -fno-jump-tables \
     -fstack-usage -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
 RETAIL_LINK := $(RETAIL_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+# SCI's DMA reader shares the original protected low-memory reservation.
+# Cross-unit optimization and SH call relaxation recover code space without
+# changing the stack boundary. Keep audited entry points and compiler-emitted
+# memory helpers visible; audit the actual LTO-generated stack frames below.
+RETAIL_SCI_FLAGS := -flto -mrelax
+RETAIL_SCI_LINK := $(RETAIL_SCI_FLAGS) -Os -fstack-usage -save-temps=obj -Wl,--relax \
+    -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
+    -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
+    -Wl,-u,_kui_retail_image_read -Wl,-u,_kui_loader_sd_stream_next \
+    -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release
 RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/retail_sd.o \
     build/retail/src/loader/retail_storage.o build/retail/src/loader/sci_sd_bus.o \
     build/retail/src/core/ata.o build/retail/src/dreamcast/ata_bus.o \
@@ -205,13 +215,16 @@ build/retail/resident-scif.bin: build/retail/resident-scif.elf
 	sh-elf-objcopy -O binary $< $@
 build/retail/sci/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
 build/retail/sci/%_asm.o: %.S
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
 build/retail/sci/src/loader/retail_display.o: force-build-id
 build/retail/resident-sci.elf: $(RETAIL_SCI) src/loader/retail_resident.ld
-	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-sci.map -o $@ $(RETAIL_SCI) -lgcc
+	@mkdir -p build/retail/sci/lto
+	rm -f build/retail/resident-sci.elf.ltrans*.su build/retail/sci/lto/*.su
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-sci.map -o $@ $(RETAIL_SCI) -lgcc
+	cp build/retail/resident-sci.elf.ltrans*.su build/retail/sci/lto/
 build/retail/resident-sci.bin: build/retail/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@
 build/retail/ide/%.o: %.c

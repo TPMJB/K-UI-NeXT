@@ -97,6 +97,13 @@ The matching [SCI soak](evidence/sci-soak-baseline-2026-10-01.md) also passed:
 and 13.65% lower. This is an accepted initial integrity/performance baseline,
 not evidence of a speed improvement.
 
+The [SCI DMA candidate](evidence/sci-dma-design-2026-10-01.md) adds per-run DMA
+read/write, polling and failure counts to the Diagnostics log and the existing
+message field of passing SCI results. Start with Quick once to check both data
+integrity and actual DMA use before another long soak. Raw throughput figures
+from different presets are useful preliminary observations, but the saved
+baseline comparison still requires matching recipes.
+
 Host checks cover real FAT32/exFAT images, corruption and stale-cycle data,
 short I/O, cancellation, flush/close/remount errors, scratch ownership and
 interrupted result/baseline writes. These tests exercise runtime filesystem I/O;

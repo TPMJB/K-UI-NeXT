@@ -55,7 +55,8 @@ static void reset(void) {
     card.blocks = 2000; card.ready = true;
     manifest.card_sectors = 2000; manifest.partition_start = 100;
     manifest.partition_end = 1900; manifest.track_count = manifest.extent_count = 1;
-    manifest.tracks[0] = (struct kui_retail_track){1, 45000, 45009, 4, 0, 1};
+    manifest.tracks[0] = (struct kui_retail_track){.gd={.number=1, .start_lba=45000,
+        .end_lba=45009, .control=4}, .first_extent=0, .extent_count=1};
     manifest.extents[0] = (struct kui_retail_extent){0, 1000, 42};
 }
 static enum kui_sd_bench_status run(void) {
@@ -76,7 +77,7 @@ int main(void) {
         assert(s->blocks == 80 && s->max_ticks == cost);
         assert(s->ticks == (uint64_t)(80 / groups[g]) * cost);
     }
-    reset(); manifest.tracks[0].end_lba = 45008; /* Only 36 full blocks. */
+    reset(); manifest.tracks[0].gd.end_lba = 45008; /* Only 36 full blocks. */
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
     reset(); manifest.extents[0].file_block = 2; /* Last block is padding. */
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
@@ -84,7 +85,7 @@ int main(void) {
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
     reset(); manifest.extents[0].card_lba = UINT32_MAX - 20;
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
-    reset(); manifest.tracks[0].control = 0;
+    reset(); manifest.tracks[0].gd.control = 0;
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
     reset(); manifest.tracks[0].first_extent = UINT32_MAX;
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);

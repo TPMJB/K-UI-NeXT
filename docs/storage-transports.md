@@ -63,11 +63,12 @@ storage owns that port. Sharing the wires between SD and Ethernet/Wi-Fi, extra
 chip selects, and simultaneous-device arbitration are outside this change.
 The existing W5500 plus SCIF-card configuration remains supported.
 
-SCI uses bounded hardware-clocked, polled transfers for this initial build.
-It does not use the upstream DMA path that previously stalled W5500 reads.
-The first runtime soak measured 522 KiB/s writes and 529 KiB/s reads; these are
+SCI now has an [original bounded sector-DMA implementation](evidence/sci-dma-design-2026-10-01.md),
+with block polling for ineligible buffers or a channel owned by another user.
+It does not use the upstream DMA helper that previously stalled W5500 reads.
+The initial polled runtime soak measured 522 KiB/s writes and 529 KiB/s reads; these are
 filesystem-call measurements, not the bus clock rate or retail Games results.
-Performance tuning and broader card/module compatibility remain open. Gameplay
+The DMA candidate still needs a console speed/integrity check. Broader card/module compatibility remains open. Gameplay
 needs its own console measurement. IDE/CF initially uses bounded PIO; optical reads and CF writes
 must take turns on their common G1 bus.
 

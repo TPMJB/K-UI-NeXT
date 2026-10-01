@@ -34,6 +34,7 @@
 #include "kui/menu_sound.h"
 #include "kui/cd_audio.h"
 #include "kui/storage_test.h"
+#include "sci_sd_bus.h"
 #endif
 #include <kos.h>
 #include <dc/minifont.h>
@@ -522,7 +523,27 @@ static void storage_test_operation(unsigned action) {
             metadata.transport=kui_storage_active();
             const struct kui_storage_test_ops ops={NULL,storage_test_now,storage_test_cancelled,
                 storage_test_publish,storage_test_errors,kui_log};
+            struct kui_sci_sd_stats dma_before, dma_after;
+            kui_sci_sd_stats_get(&dma_before);
             kui_storage_test_run(&storage_test_pending,&metadata,&ops,&result);
+            if(metadata.transport==KUI_STORAGE_SCI) {
+                kui_sci_sd_stats_get(&dma_after);
+                uint32_t reads=dma_after.rx_blocks-dma_before.rx_blocks;
+                uint32_t writes=dma_after.tx_blocks-dma_before.tx_blocks;
+                uint32_t polled=dma_after.polled_blocks-dma_before.polled_blocks;
+                uint32_t failures=dma_after.failures-dma_before.failures;
+                kui_log("SCI test DMA: read=%lu write=%lu polled=%lu failures=%lu",
+                    (unsigned long)reads,(unsigned long)writes,
+                    (unsigned long)polled,(unsigned long)failures);
+                /* Reuse the versioned result's existing message field so
+                 * JSON and History retain proof of DMA use without changing
+                 * the binary format or hiding a failure's original cause. */
+                if(result.outcome==KUI_STORAGE_TEST_PASSED)
+                    snprintf(result.message,sizeof(result.message),
+                        "Verified after remount; DMA R/W %lu/%lu; PIO %lu; faults %lu",
+                        (unsigned long)reads,(unsigned long)writes,
+                        (unsigned long)polled,(unsigned long)failures);
+            }
             /* Persist a small final result even after Stop. The sample loop
              * has already finished; do not lose its outcome to a latched B. */
             if(result.id && !kui_storage_test_save(&result,kui_log))

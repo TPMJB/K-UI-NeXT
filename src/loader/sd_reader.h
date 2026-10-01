@@ -17,6 +17,15 @@ struct kui_loader_sd_bus {
     void (*select)(void *ctx, bool selected);
     uint8_t (*transfer)(void *ctx, uint8_t data, bool slow);
     uint32_t (*ticks)(void *ctx);
+    /* Optional bounded payload transfer, used only at fast speed. Count is
+     * 1..512; NULL tx clocks 0xff and NULL rx discards received bytes. At
+     * least one buffer is required. No token/CRC/command framing is included.
+     * Invalid arguments or missing ownership reject without I/O. Otherwise
+     * false means an uncertain partial transfer and a latched bus fault:
+     * callers must invalidate the card, attempt bounded protocol cleanup,
+     * then release/reacquire and initialize before reuse. */
+    bool (*transfer_block)(void *ctx, const uint8_t *tx, uint8_t *rx,
+                           size_t count, bool slow);
 };
 
 enum kui_loader_sd_result {

@@ -20,14 +20,18 @@ The first SCI soak also passed: same build and recipe, 15 cycles and 240 MiB
 verified in 15 min 56 s, zero reported errors. Write/read rates were
 521.75/528.75 KiB/s, respectively 51.69%/13.65% lower than SCIF. See the
 [SCI report and comparison](evidence/sci-soak-baseline-2026-10-01.md). This accepts
-runtime SCI integrity for that run; SCI Games and the other new controls remain
-pending their own acceptance. Investigate SCI's generic full-duplex byte loop
-before treating its throughput as representative of the hardware. The next
-game compatibility check is the same DOA2 image with a matching
-SCI-capable `/KUI/apps/games/retail-boot.kui`, checking first-stage load, the
-first ten seconds of fighting, one FMV and return to K-UI. A runtime-only update does not replace
-that loader. Do not request another identical soak before this game check or
-claim a speed improvement from these results.
+runtime SCI integrity for that run. The owner subsequently tried DOA2 and
+reported it was largely the same as SCIF; this qualitative check does not
+establish the exact retail payload build or complete gameplay/FMVs/VMU coverage.
+The owner requested a performance fix and explicitly prohibited copying SWAT's
+implementation. The [original SCI DMA candidate](evidence/sci-dma-design-2026-10-01.md)
+uses bounded sector DMA, an aligned existing game-reader cache and block polling
+when DMA cannot be borrowed. Diagnostics records actual DMA and fallback counts.
+Hardware speed and timing remain unverified. Install matching `KUI/runtime.kui`
+and `KUI/apps/games/retail-boot.kui`, then run Quick once and inspect integrity,
+throughput and DMA counts before another long soak or DOA2 comparison. A
+runtime-only update does not replace the game reader. Do not claim a measured
+speed improvement until the new console results arrive.
 
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now
@@ -103,8 +107,9 @@ The owner requested a single-card boot and Games path for SCIF, SCI and IDE/CF,
 without sharing SCI between storage and network boards. See
 [storage-transports.md](storage-transports.md) for the matching boot-CD/runtime
 installation, source selection and first hardware check. This is a development
-build: SCI runtime storage now has the passing soak above, while its separate
-retail reader and the CF hardware/driver remain unverified on the console.
+build: SCI runtime storage has the initial passing soak above and a qualitative
+DOA2 report. The new SCI DMA paths and CF hardware/driver remain unverified on
+the console.
 Full ext4 application support and shared SCI-bus operation remain outside this
 change. Development is
 in [PR #6](https://github.com/TPMJB/K-UI-NeXT/pull/6). The Games package embeds

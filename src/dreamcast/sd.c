@@ -272,7 +272,7 @@ bool kui_sd_connect(void) {
         return false;
     }
     kui_log("Storage: %s%s",kui_storage_name(active),active==KUI_STORAGE_SCI?
-        " (12.5 MHz, bounded programmed I/O, CRC checked)":
+        " (12.5 MHz, bounded sector DMA with PIO fallback, CRC checked)":
         active==KUI_STORAGE_IDE?" (G1 slave, bounded PIO)":check_crc?" (CRC checked)":" (read CRC disabled)");
     return true;
 }
