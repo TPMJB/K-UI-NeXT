@@ -124,25 +124,25 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_line(kui_retail_storage_name(card.transport));
     retail_display_line(reason);
     retail_display_hex("GD function", function);
-    retail_display_hex("Command", service.diag.last_command);
+    retail_display_hex("GD COMMAND", service.diag.last_command);
     retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Format" : "LBA", service.diag.last_lba);
     retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Bytes" : "Sectors", service.diag.last_count);
     retail_display_hex("Destination", service.diag.last_destination);
-    retail_display_hex("Storage result", (uint32_t)card_result);
-    retail_display_hex("Storage blocks read", image.blocks_read);
-    retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
-    retail_display_line("POWER OFF AND ON TO RETURN");
+    retail_display_hex("IO RESULT", (uint32_t)card_result);
+    retail_display_hex("BLOCKS READ", image.blocks_read);
+    retail_display_line("STOPPED - PHOTOGRAPH THIS SCREEN");
+    retail_display_line("POWER CYCLE TO RETURN");
     for(;;) __asm__ volatile("nop");
 }
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
     retail_display_restore(&display);
-    retail_display_line("GAME REQUESTED BIOS MENU RETURN");
+    retail_display_line("GAME REQUESTED MENU RETURN");
     retail_display_hex("CALLER PR",caller);
     retail_display_hex("CALLER STACK",stack);
-    retail_display_hex("HOOK GUARD FAULT",kui_retail_hook_fault);
-    retail_display_hex("LAST GD COMMAND",service.diag.last_command);
-    retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
+    retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
+    retail_display_hex("GD COMMAND",service.diag.last_command);
+    retail_display_hex("BLOCKS READ",image.blocks_read);
     /* How the game drives reads: ABXY+Start after a load shows these. */
     retail_display_hex("GD CALLS",service.diag.calls);
     retail_display_hex("EXEC CALLS",service.diag.exec_calls);
@@ -152,7 +152,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("PACED STEPS",pacing.paced);
     retail_display_hex("SPIN STEPS",pacing.spun);
     retail_display_hex("STEP CALLER SR",pacing.sr);
-    retail_display_line("RESTARTING K-UI FROM THE BOOT DISC");
+    retail_display_line("RESTARTING K-UI");
     retail_display_pause(120u); /* about two seconds for a photograph */
     /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts
      * still masked: the console restarts and boots the K-UI disc in the drive.
