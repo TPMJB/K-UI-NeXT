@@ -1,5 +1,22 @@
 # Hardware evidence
 
+## SCI word-reversal build soak passed; write setup improved — 2026-10-01
+
+Runtime **499bcb53c2d4**, run **8**, passed the same five-minute Soak recipe
+as run 7: 10 cycles/160 MiB verified in 306.434992 seconds, zero errors/DMA
+faults and successful cleanup. Write/read rates were **1,196.64/1,048.89 KiB/s**,
+respectively 5.65%/0.44% above run 7. TX setup fell from 35.96 to
+20.21 microseconds per sector. RX reversal/CRC did not improve: 78.18 versus
+77.18 microseconds, with transfer still near 331 microseconds. The small
+read-rate change does not establish a repeatable read gain.
+
+The owner timed the current DOA2 test at **29 seconds from selecting Kasumi
+to the first fight**. The brief return-counter display could not be captured;
+no game DMA, batch-size or standby-state values are available. A retry was
+deferred until the display is easier to capture. See the
+[original soak reports and separate game observation](evidence/sci-dma-word-soak-2026-10-01.md).
+The runtime pass does not prove a game speed change or the module-wake hypothesis.
+
 ## SCI DMA Quick and five-minute profile soak passed — 2026-10-01
 
 Runtime **65fcaafadb98** passed run **6**, a 4 MiB Quick check, and run **7**,

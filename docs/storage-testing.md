@@ -141,6 +141,17 @@ and 77.18 microseconds reversal/CRC per sector. These totals identify the
 post-transfer check as a candidate for further work; they do not assign all
 remaining file-read time to the card or establish a future speed gain.
 
+The subsequent [499bcb53c2d4 Soak](evidence/sci-dma-word-soak-2026-10-01.md),
+run 8, passed the same five-minute/160 MiB recipe with zero errors/DMA faults.
+Write/read rates were 1,196.64/1,048.89 KiB/s, +5.65%/+0.44% versus run 7.
+TX setup fell from 35.96 to 20.21 microseconds per sector, while RX
+reversal/CRC increased slightly from 77.18 to 78.18 microseconds. The measured
+benefit is write preparation; the small read-rate difference does not establish
+a repeatable read gain. Runtime tests do not prove the separate retail
+module-wake correction or game DMA/batching behavior. The owner's 29-second
+Kasumi-selection-to-first-fight observation is recorded separately; return
+counters were not captured, and another capture attempt was deferred.
+
 Host checks cover real FAT32/exFAT images, corruption and stale-cycle data,
 short I/O, cancellation, flush/close/remount errors, scratch ownership and
 interrupted result/baseline writes. These tests exercise runtime filesystem I/O;

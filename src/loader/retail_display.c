@@ -92,12 +92,13 @@ void retail_display_progress(uint32_t done,uint32_t total) {
 }
 void retail_display_pause(uint32_t frames_wanted) {
     /* Keep text visible for frames_wanted video frames (60 or 50 per second)
-     * without borrowing any TMU channel. A stopped scan generator cannot hang us. */
+     * without borrowing any TMU channel. Each frame has a finite polling budget,
+     * so a stopped scan generator cannot hang us during a longer pause. */
     volatile uint32_t *scan=(volatile uint32_t *)(uintptr_t)0xa05f810cu;
     uint32_t before=*scan&0x3ffu, frames=0;
     for(uint32_t budget=0;budget<30000000u && frames<frames_wanted;budget++) {
         uint32_t now=*scan&0x3ffu;
-        if(now<before) ++frames;
+        if(now<before) { ++frames; budget=0; }
         before=now;
     }
 }

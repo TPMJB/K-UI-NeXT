@@ -50,16 +50,29 @@ conclusion. The Soak is 12.74%/12.76% above cf8e7ea, but differs in duration
 and spans two changes. RX phase means are 331.02 microseconds transfer and
 77.18 microseconds reversal/CRC; remaining file-call time includes work outside
 those phases. See the [profile evidence](evidence/sci-dma-profile-2026-10-01.md).
-The next candidate implements table-free four-byte reversal in the shared
-reader and aligned runtime TX staging. Native guards pass unchanged (24 bytes
-resident space, 52 bytes conservative stack headroom); console acceptance is
-pending. Active-DMA processing remains a separate experiment. Game pacing remains unchanged; do not attribute
-all remaining game lag to storage or promise disc equivalence.
-A following SCI correction removes the undocumented 200,000-iteration module-
+The four-byte reversal and wake-correction build **499bcb53c2d4** passed run 8,
+the same five-minute Soak recipe: 10 cycles/160 MiB, zero errors/DMA faults,
+write/read **1,196.64/1,048.89 KiB/s**. That is +5.65%/+0.44% versus run 7.
+TX setup fell from 35.96 to 20.21 microseconds per sector; RX reversal/CRC
+did not improve (78.18 versus 77.18 microseconds). See the
+[new soak and game observation](evidence/sci-dma-word-soak-2026-10-01.md).
+Native guards retain 24 bytes resident space and 52 bytes conservative stack
+headroom. Active-DMA processing remains a separate experiment. Game pacing
+remains unchanged; do not attribute all remaining game lag to storage or
+promise disc equivalence.
+The SCI correction removes the undocumented 200,000-iteration module-
 wake delay, which could repeat on every retail read step when MSTP0 was set.
 The BRR wait, register restoration and pacing remain. See the
 [reference review, DOA2 comparison and hardware rationale](evidence/sci-game-loading-review-2026-10-01.md);
-console acceptance remains pending.
+the actual game standby state and speed effect remain unmeasured by the
+runtime soak. The owner reports **29 seconds from selecting Kasumi to the first
+fight** on the current game test. A+B+X+Y+Start usually restarted the game;
+the return path eventually triggered, but its brief counter screen was not
+captured. A repeat was deferred until that display is easier to capture.
+Do not infer game DMA eligibility, batch sizes or a matched speed improvement.
+The following candidate checks four CRC bytes directly from each reversed word
+and extends the return counters to 900 video frames. Native and focused
+sanitizer checks pass; console gain and capture usability remain pending.
 
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now

@@ -341,12 +341,20 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
          * now, after stopping DMA, may the CPU refill through the caller's
          * original P1/P2 pointer. Retain cached logical bytes for copying. */
         __asm__ __volatile__("" : : : "memory");
-        for(unsigned i = 0; i < 512; ++i) {
-            if(!(i & 3u)) {
-                alias_word *word = (alias_word *)(rx + i);
-                *word = reverse(*word);
+        for(unsigned i = 0; i < 128; ++i) {
+            uint32_t word = reverse(((alias_word *)rx)[i]);
+            ((alias_word *)rx)[i] = word;
+            /* Consume logical bytes in memory order without reloading the
+             * just-written cache line or testing the word boundary per byte. */
+            for(unsigned byte = 0; byte < 4; ++byte) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+                crc = data_crc(crc, (uint8_t)word);
+                word >>= 8;
+#else
+                crc = data_crc(crc, (uint8_t)(word >> 24));
+                word <<= 8;
+#endif
             }
-            crc = data_crc(crc, rx[i]);
         }
 #ifndef KUI_RETAIL_TRANSPORT
         check_us = profile_time() - transfer_stopped;

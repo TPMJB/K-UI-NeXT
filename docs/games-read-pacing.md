@@ -78,14 +78,16 @@ intercepts that and shows counters since launch (hexadecimal):
 | GD CALLS / EXEC CALLS | All calls into the reader / calls to `EXEC` |
 | READ STEPS / SECTORS READ | Steps that read / game sectors delivered |
 | FRAMES SEEN | Frames counted from the scanline register |
-| PACED STEPS | Steps longer than two sectors (still screen) |
+| PACED STEPS | Steps granted a budget above two sectors; short request tails may read fewer |
 | SPIN STEPS | Steps run because the game spun on `CHECK` |
 | STEP CALLER SR | Caller's status register at the last read; bits 4–7 nonzero means interrupts were masked (usually a handler) |
 
 EXEC CALLS close to FRAMES SEEN means the game calls once per frame. PACED
 STEPS of zero after a black-screen load would mean the game kept flipping
-frames, so no pacing applied. The screen stops the game: power off and on
-afterwards.
+frames, so no pacing applied. The screen stops the game and stays visible for
+about 15 seconds at 60 Hz (18 seconds at 50 Hz), then reboots to K-UI. Start
+recording before pressing the combination. Some games handle it as an internal
+restart; the counter screen appears only when the game requests the BIOS menu.
 
 ## Original console test
 

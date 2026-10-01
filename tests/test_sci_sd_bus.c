@@ -35,6 +35,8 @@ static struct {
     unsigned writes, reads, polls, bytes, delays, received, tdr_writes;
     unsigned byte_polls, remaining, fault_byte;
     uint8_t sent[MAX_BYTES], receive_value, queued_value;
+    uint8_t pattern_bias, custom_rx[512];
+    bool use_custom_rx;
     uint32_t sar, dar, tcr, chcr, dmaor;
     unsigned dma_writes, dma_starts, dma_bytes, dma_complete_delay;
     unsigned cache_purges, irq_disables, irq_restores;
@@ -54,7 +56,8 @@ static uint8_t reversed(uint8_t value) {
     return result;
 }
 static uint8_t received_byte(unsigned index) {
-    return (uint8_t)(index*37u+11u); /* Every value once per 256 bytes. */
+    if(hw.use_custom_rx) return hw.custom_rx[index % 512u];
+    return (uint8_t)(index*37u+11u+hw.pattern_bias); /* Every value once per 256 bytes. */
 }
 /* SD's CRC16-CCITT, computed bit by bit as an independent test oracle. */
 static uint16_t crc16_reference(const uint8_t *bytes,size_t count) {
@@ -603,6 +606,52 @@ static void test_dma_error_before_seed(const struct kui_loader_sd_bus *bus) {
     assert(!kui_sci_sd_healthy());
     kui_sci_sd_release(); restored();
 }
+
+/* Each logical byte must reach CRC in memory order, independent of its lane. */
+static void test_dma_grouped_rx(const struct kui_loader_sd_bus *bus) {
+    _Alignas(32) uint8_t storage[576];
+    uint8_t expected[512], *rx=storage+32;
+    bool seen[4][256]={{false}};
+    for(unsigned pattern=0;pattern<40;++pattern) {
+        dma_ready(bus);
+        hw.pattern_bias=(uint8_t)(pattern&3u);
+        if(pattern>=4) {
+            hw.use_custom_rx=true;
+            uint32_t state=0x9e3779b9u^pattern;
+            for(unsigned i=0;i<512;++i) {
+                state^=state<<13; state^=state>>17; state^=state<<5;
+                hw.custom_rx[i]=pattern==4?0u:pattern==5?255u:
+                    pattern==6?((i&1u)?0xa5u:0x5au):
+                    pattern==7?(uint8_t)(1u<<(i&7u)):
+                    pattern==8?(uint8_t)((i>>2)^((i&3u)*0x55u)):
+                    (uint8_t)(state>>((i&3u)*8u));
+            }
+        }
+        for(unsigned i=0;i<512;++i) {
+            expected[i]=received_byte(i);
+            if(pattern<4) seen[i&3u][expected[i]]=true;
+        }
+        memset(storage,0x5a,sizeof(storage));
+        struct profile_clock clock=profile_clock_at(100u*pattern);
+        kui_sci_sd_profile_timer(profile_now,&clock);
+        uint16_t crc=0xa55a;
+        assert(bus->transfer_block(NULL,NULL,rx,512,false,&crc));
+        assert(crc==crc16_reference(expected,512));
+        assert(!memcmp(rx,expected,512));
+        assert(clock.calls==4);
+        assert(kui_sci_sd_healthy() && hw.bytes==512 && hw.dma_bytes==512);
+        assert(hw.dma_starts==1 && hw.cache_purges==1 && hw.received==0);
+        assert(hw.tdr_writes==1 && hw.irq_disables==hw.irq_restores);
+        assert(!hw.active && !hw.queued && !hw.irq_disabled);
+        for(unsigned i=0;i<32;++i) assert(storage[i]==0x5a && storage[i+544]==0x5a);
+        kui_sci_sd_profile_timer(NULL,NULL);
+        kui_sci_sd_release(); restored();
+    }
+    for(unsigned position=0;position<4;++position)
+        for(unsigned value=0;value<256;++value) assert(seen[position][value]);
+    puts("Grouped RX: every byte value in every word position and 36 mixed patterns passed");
+}
+
 int main(void) {
     const struct kui_loader_sd_bus *bus=kui_sci_sd_bus(); assert(bus);
     assert(crc16_reference((const uint8_t *)"123456789",9)==0x31c3);
@@ -613,6 +662,7 @@ int main(void) {
     test_block_failures(bus);
     test_dma_blocks(bus);
     test_dma_source_offsets(bus);
+    test_dma_grouped_rx(bus);
     test_dma_error_before_seed(bus);
     test_dma_unavailable(bus);
     test_dma_failures(bus);

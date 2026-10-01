@@ -152,7 +152,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("SPIN STEPS",pacing.spun);
     retail_display_hex("STEP CALLER SR",pacing.sr);
     retail_display_line("RESTARTING K-UI");
-    retail_display_pause(120u); /* about two seconds for a photograph */
+    retail_display_pause(900u); /* ~15 seconds at 60 Hz to capture the counters */
     /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts
      * still masked: the console restarts and boots the K-UI disc in the drive.
      * No game, reader or vector state is relied on afterwards. */
