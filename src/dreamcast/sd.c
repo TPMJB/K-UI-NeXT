@@ -2,6 +2,7 @@
 #include "platform.h"
 #include "kui/media.h"
 #include "kui/storage_policy.h"
+#include "kui/storage_error.h"
 #include "kui/ata.h"
 #include "sci_sd_storage.h"
 #include "../loader/sci_sd_bus.h"
@@ -20,9 +21,59 @@ static struct kui_loader_sd sci;
 static struct kui_ata ata;
 static struct kui_ata_bus ata_bus;
 static struct kui_loader_sd_bus sci_bus;
+static struct kui_storage_errors storage_errors;
 /* Must remain initialized data in the loadable payload, not BSS. */
 static volatile struct kui_storage_boot_marker boot_marker=KUI_STORAGE_BOOT_INITIALIZER;
 extern semaphore_t _g1_ata_sem;
+
+void kui_storage_errors_reset(void) {storage_errors=(struct kui_storage_errors){0};}
+void kui_storage_errors_get(struct kui_storage_errors *out) {if(out) *out=storage_errors;}
+static void increment(uint32_t *value) {if(*value<UINT32_MAX) ++*value;}
+static int failed(enum kui_storage_error_operation operation,
+                  enum kui_storage_error_result result,unsigned transport,
+                  uint32_t block,uint32_t count,bool sd_detail) {
+    increment(&storage_errors.total);
+    switch(operation) {
+        case KUI_STORAGE_ERROR_READ:increment(&storage_errors.read_errors);break;
+        case KUI_STORAGE_ERROR_WRITE:increment(&storage_errors.write_errors);break;
+        case KUI_STORAGE_ERROR_SYNC:increment(&storage_errors.sync_errors);break;
+        case KUI_STORAGE_ERROR_INIT:increment(&storage_errors.init_errors);break;
+        default:break;
+    }
+    switch(result) {
+        case KUI_STORAGE_ERROR_TIMEOUT:increment(&storage_errors.timeout_errors);break;
+        case KUI_STORAGE_ERROR_CRC:increment(&storage_errors.crc_errors);break;
+        case KUI_STORAGE_ERROR_REJECTED:increment(&storage_errors.rejected_errors);break;
+        default:increment(&storage_errors.io_errors);break;
+    }
+    storage_errors.last_operation=operation;storage_errors.last_result=result;
+    storage_errors.last_transport=transport;
+    storage_errors.last_lba=block;storage_errors.last_count=count;
+    storage_errors.sd_detail_valid=sd_detail;
+    storage_errors.sd_command=sd_detail?sci.last_command:0;
+    storage_errors.sd_response=sd_detail?sci.last_response:0;
+    return -1;
+}
+static int sci_failed(enum kui_storage_error_operation operation,
+                      enum kui_loader_sd_result result,uint32_t block,uint32_t count) {
+    if(result==KUI_LOADER_SD_ARGUMENT || result==KUI_LOADER_SD_NOT_READY ||
+       result==KUI_LOADER_SD_RANGE) return -1;
+    enum kui_storage_error_result reason=KUI_STORAGE_ERROR_IO;
+    if(result==KUI_LOADER_SD_TIMEOUT) reason=KUI_STORAGE_ERROR_TIMEOUT;
+    else if(result==KUI_LOADER_SD_CRC) reason=KUI_STORAGE_ERROR_CRC;
+    else if(result==KUI_LOADER_SD_COMMAND || result==KUI_LOADER_SD_TOKEN)
+        reason=KUI_STORAGE_ERROR_REJECTED;
+    /* An OK protocol result plus an unhealthy SCI lease has no trustworthy
+     * protocol failure detail. Do not attach the previous command to it. */
+    return failed(operation,reason,KUI_STORAGE_SCI,block,count,
+                  result!=KUI_LOADER_SD_OK && sci.last_command!=0xff);
+}
+static int ata_failed(enum kui_storage_error_operation operation,uint32_t block,uint32_t count) {
+    if(ata.error==KUI_ATA_INVALID || ata.error==KUI_ATA_RANGE ||
+       ata.error==KUI_ATA_BUSY) return -1;
+    return failed(operation,ata.error==KUI_ATA_TIMEOUT?KUI_STORAGE_ERROR_TIMEOUT:
+        KUI_STORAGE_ERROR_IO,KUI_STORAGE_IDE,block,count,false);
+}
 
 const char *kui_storage_name(unsigned transport) {
     switch(transport) {
@@ -33,6 +84,7 @@ const char *kui_storage_name(unsigned transport) {
     }
 }
 unsigned kui_storage_active(void) {return active;}
+unsigned kui_storage_selected(void) {return selected;}
 unsigned kui_sd_active_sci(void) {return active;}
 bool kui_storage_sci_reserved(void) {
     /* A recognized SD card with an invalid filesystem still occupies these
@@ -84,16 +136,24 @@ static bool valid_count(size_t count) {
 static int read_blocks(void *ctx,uint32_t block,size_t count,uint8_t *data) {
     (void)ctx;
     if(!connected || !data || !valid_count(count)) return -1;
-    if(active==KUI_STORAGE_SCIF) return sd_read_blocks(block,count,data);
+    if(active==KUI_STORAGE_SCIF) {
+        int result=sd_read_blocks(block,count,data);
+        if(result) (void)failed(KUI_STORAGE_ERROR_READ,KUI_STORAGE_ERROR_IO,
+            active,block,(uint32_t)count,false);
+        return result;
+    }
     if(active==KUI_STORAGE_IDE) {
         if(!ata_lock()) return -1;
         bool ok=kui_ata_read(&ata,block,(uint32_t)count,data);
-        sem_signal(&_g1_ata_sem);return ok?0:-1;
+        sem_signal(&_g1_ata_sem);
+        return ok?0:ata_failed(KUI_STORAGE_ERROR_READ,block,(uint32_t)count);
     }
     if((uint64_t)block+count>sci.blocks) return -1;
     while(count) {
         uint32_t n=count>KUI_LOADER_SD_MAX_READ_BLOCKS?KUI_LOADER_SD_MAX_READ_BLOCKS:(uint32_t)count;
-        if(kui_loader_sd_read_multi(&sci,block,n,data)!=KUI_LOADER_SD_OK || !kui_sci_sd_healthy()) return -1;
+        enum kui_loader_sd_result result=kui_loader_sd_read_multi(&sci,block,n,data);
+        if(result!=KUI_LOADER_SD_OK || !kui_sci_sd_healthy())
+            return sci_failed(KUI_STORAGE_ERROR_READ,result,block,n);
         count-=n;block+=n;data+=(size_t)n*512;
     }
     return 0;
@@ -103,24 +163,40 @@ static int write_blocks(void *ctx,uint32_t block,size_t count,const uint8_t *dat
     if(!connected || !data || !valid_count(count)) return -1;
     /* A failed request can still have modified earlier sectors. */
     write_attempted=true;
-    if(active==KUI_STORAGE_SCIF) return sd_write_blocks(block,count,data);
-    if(active==KUI_STORAGE_SCI)
-        return kui_sci_sd_write(&sci,block,(uint32_t)count,data) && kui_sci_sd_healthy()?0:-1;
+    if(active==KUI_STORAGE_SCIF) {
+        int result=sd_write_blocks(block,count,data);
+        if(result) (void)failed(KUI_STORAGE_ERROR_WRITE,KUI_STORAGE_ERROR_IO,
+            active,block,(uint32_t)count,false);
+        return result;
+    }
+    if(active==KUI_STORAGE_SCI) {
+        enum kui_loader_sd_result result=kui_sci_sd_write(&sci,block,(uint32_t)count,data);
+        return result==KUI_LOADER_SD_OK && kui_sci_sd_healthy()?0:
+            sci_failed(KUI_STORAGE_ERROR_WRITE,result,block,(uint32_t)count);
+    }
     if(!ata_lock()) return -1;
     bool ok=kui_ata_write(&ata,block,(uint32_t)count,data);
-    sem_signal(&_g1_ata_sem);return ok?0:-1;
+    sem_signal(&_g1_ata_sem);
+    return ok?0:ata_failed(KUI_STORAGE_ERROR_WRITE,block,(uint32_t)count);
 }
 static int sync_card(void *ctx) {
     (void)ctx;
     if(!connected) return -1;
-    if(active==KUI_STORAGE_SCI) return kui_sci_sd_sync(&sci) && kui_sci_sd_healthy()?0:-1;
+    if(active==KUI_STORAGE_SCI) {
+        enum kui_loader_sd_result result=kui_sci_sd_sync(&sci);
+        return result==KUI_LOADER_SD_OK && kui_sci_sd_healthy()?0:
+            sci_failed(KUI_STORAGE_ERROR_SYNC,result,0,0);
+    }
     if(active==KUI_STORAGE_IDE) {
         if(!ata_lock()) return -1;
-        bool ok=kui_ata_sync(&ata);sem_signal(&_g1_ata_sem);return ok?0:-1;
+        bool ok=kui_ata_sync(&ata);sem_signal(&_g1_ata_sem);
+        return ok?0:ata_failed(KUI_STORAGE_ERROR_SYNC,0,0);
     }
     uint8_t sector[512];
     /* KOS's fresh read waits for the preceding write's busy phase. */
-    return sd_read_blocks(0,1,sector);
+    int result=sd_read_blocks(0,1,sector);
+    if(result) (void)failed(KUI_STORAGE_ERROR_SYNC,KUI_STORAGE_ERROR_IO,active,0,0,false);
+    return result;
 }
 void kui_sd_disconnect(void) {
     if(!connected) return;
@@ -146,6 +222,7 @@ static bool open_device(unsigned transport) {
     if(transport==KUI_STORAGE_SCIF) {
         sd_init_params_t params={SD_IF_SCIF,check_crc};
         ok=sd_init_ex(&params)==0;
+        if(!ok) (void)failed(KUI_STORAGE_ERROR_INIT,KUI_STORAGE_ERROR_IO,transport,0,0,false);
     } else if(transport==KUI_STORAGE_SCI) {
         irq_mask_t mask=irq_disable();
         enum kui_loader_sd_result result=kui_sci_sd_acquire();
@@ -155,12 +232,16 @@ static bool open_device(unsigned transport) {
             result=kui_loader_sd_init_bus(&sci,&sci_bus);
             ok=result==KUI_LOADER_SD_OK && kui_sci_sd_healthy();
             if(ok) sci_detected=true;
-            if(!ok) sci_end(NULL);
+            if(!ok) {
+                (void)sci_failed(KUI_STORAGE_ERROR_INIT,result,0,0);
+                sci_end(NULL);
+            }
         }
         if(!ok) kui_log("SCI SD initialization: %s",kui_loader_sd_result_name(result));
     } else if(transport==KUI_STORAGE_IDE && ata_lock()) {
         ata_bus=*kui_ata_native_bus();ata_bus.now_us=now_us;ata_bus.pause=pause_ata;
         ok=kui_ata_init(&ata,&ata_bus);sem_signal(&_g1_ata_sem);
+        if(!ok) (void)ata_failed(KUI_STORAGE_ERROR_INIT,0,0);
         if(!ok) kui_log("IDE/CF initialization failed: ATA=%u",(unsigned)ata.error);
     }
     if(!ok) return false;

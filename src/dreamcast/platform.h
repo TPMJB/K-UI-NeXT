@@ -24,6 +24,8 @@ bool kui_cancelled(void);
  * fail without switching devices. SCI always verifies data CRCs. */
 void kui_sd_set_params(unsigned transport, bool check_crc);
 unsigned kui_storage_active(void);
+/* Stable boot-selected device; an explicit legacy benchmark cannot change it. */
+unsigned kui_storage_selected(void);
 const char *kui_storage_name(unsigned transport);
 bool kui_storage_sci_reserved(void);
 void kui_storage_boot_begin(void);

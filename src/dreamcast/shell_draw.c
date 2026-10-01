@@ -3,6 +3,7 @@
 #include "kui/version.h"
 #include "kui/shell_font.h"
 #include "kui/retail_image.h"
+#include "kui/storage.h"
 #include "shell_art.inc"
 #include <stdio.h>
 #include <string.h>
@@ -122,6 +123,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_music_clear ? "A Clear music cache   B Cancel" :
         s->confirm_restart ? "A Restart console   B Cancel" :
         s->confirm_salvage ? "A Start salvage   B Cancel" :
+        s->confirm_storage_test ? "A Start test   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
@@ -150,6 +152,12 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "A Copy   B Cancel":s->files_job.op==KUI_FILES_OP_MOVE?"A Move   B Cancel":"A Delete   B Cancel"):"B Back") :
         s->page==KUI_SHELL_FILES_INFO || s->page==KUI_SHELL_FILES_VIEW ? "B Files" :
         s->page==KUI_SHELL_FTP ? "A Start again   B Network" :
+        s->page==KUI_SHELL_STORAGE_TESTS ? (s->storage_test_show_result?
+            (s->storage_test_result.saved && s->storage_test_result.outcome==KUI_STORAGE_TEST_PASSED?
+                (s->storage_test_details?"X Summary   Y Baseline   B Back":"X Details   Y Baseline   B Back"):
+                (s->storage_test_details?"X Summary   B Back":"X Details   B Back")):
+            "D-pad Select/change   A Open   B Diagnostics") :
+        s->page==KUI_SHELL_STORAGE_TEST_HISTORY ? "A View   Y Baseline   X Refresh   B Back" :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
@@ -159,7 +167,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
-    if(!v->video_trial && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM && s->page!=KUI_SHELL_FILES_CONFIRM)
+    if(!v->video_trial && !s->confirm_storage_test && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM && s->page!=KUI_SHELL_FILES_CONFIRM)
         label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,enum kui_shell_page app,unsigned x,unsigned y) {
@@ -426,8 +434,8 @@ static void destination(struct paint *p,const struct kui_shell *s,
 }
 static void keyboard(struct paint *p,const struct kui_shell *s) {
     bool naming=s->files_keyboard;
-    title(p,40,108,!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
-    label(p,40,136,MUTED,naming?"Name on the SD card; START or DONE applies it.":
+    title(p,40,108,s->storage_test_keyboard?"Card nickname":!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
+    label(p,40,136,MUTED,s->storage_test_keyboard?"Label for test reports; START or DONE applies it.":naming?"Name on the SD card; START or DONE applies it.":
         "Folder path on SD; START or DONE saves your choice.");
     panel(p,32,160,576,32,PANEL);
     char input[KUI_DEST_ROOT_CAP+8];
@@ -453,7 +461,8 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
     }
     label(p,40,378,CYAN,s->keyboard_upper?"Y Shift: UPPERCASE":"Y Shift: lowercase");
     label(p,40,398,s->destination_notice[0]?AMBER:MUTED,
-        s->destination_notice[0]?s->destination_notice:naming?
+        s->destination_notice[0]?s->destination_notice:s->storage_test_keyboard?
+        "Up to 23 characters, e.g. Samsung 128GB. Optional.":naming?
         "A name cannot contain / or end with a space or dot.":
         "Example: /Games   New folders are created when used.");
 }
@@ -798,7 +807,7 @@ static void diagnostics(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     title(p,40,108,"Diagnostics");
     label(p,40,138,v->busy?MUTED:WHITE,"A Disc probe   X SD test   Y Save log");
-    label(p,40,160,MUTED,"R Benchmarks   UP/DOWN Scroll   START Latest");
+    label(p,40,160,MUTED,"R Storage tests   UP/DOWN Scroll   START Latest");
     panel(p,32,190,576,190,PANEL);
     unsigned count=v->log_count<KUI_SHELL_LOG_ROWS?v->log_count:KUI_SHELL_LOG_ROWS;
     if(!count) label(p,40,204,MUTED,"Diagnostic messages appear here.");
@@ -808,6 +817,228 @@ static void diagnostics(struct paint *p, const struct kui_shell *s,
     snprintf(line,sizeof(line),"%u lines  %s%s",v->total_log_lines,
         s->scroll?"SCROLLED":"LATEST",v->log_truncated?"  Earlier lines truncated":"");
     label(p,40,392,CYAN,line);
+}
+static const char *test_transport(unsigned transport) {
+    return transport==KUI_STORAGE_SCIF?"SCIF":transport==KUI_STORAGE_SCI?"SCI":
+        transport==KUI_STORAGE_IDE?"IDE":"Unknown";
+}
+static void test_recipe(char *line,size_t cap,const struct kui_storage_test_request *r) {
+    if(r->preset==KUI_STORAGE_TEST_SOAK)
+        snprintf(line,cap,"Soak: 16 MiB, 64 KiB chunks, %u minutes",r->soak_minutes);
+    else snprintf(line,cap,"%s: %u MiB, %s KiB chunks, %u repeat%s",
+        kui_storage_test_preset_name(r->preset),r->preset==KUI_STORAGE_TEST_QUICK?4:16,
+        r->preset==KUI_STORAGE_TEST_QUICK?"64":"16/64/256",r->repeats,r->repeats==1?"":"s");
+}
+static void storage_test_confirmation(struct paint *p,const struct kui_shell *s,
+        const struct kui_shell_view *v) {
+    box(p,32,132,576,284,NAVY);panel(p,48,154,544,240,PANEL);
+    box(p,52,158,536,4,PINK);
+    label(p,64,177,WHITE,"RUN STORAGE TESTS?");
+    char line[144];test_recipe(line,sizeof(line),&s->storage_test_request);
+    label(p,64,207,CYAN,line);
+    snprintf(line,sizeof(line),"Target: %s",v->storage_test_target?v->storage_test_target:"active storage device");
+    label(p,64,232,WHITE,line);
+    label(p,64,258,MUTED,"Writes a dedicated temporary test file, then rereads it.");
+    label(p,64,282,MUTED,"Existing files stay intact. Music pauses during the test.");
+    label(p,64,306,MUTED,"The result is saved; the temporary file is removed.");
+    label(p,64,330,MUTED,"B stops safely. Keep the card connected until finished.");
+    label(p,64,365,CYAN,"A Start test");label(p,384,365,WHITE,"B Cancel");
+}
+static void storage_test_progress(struct paint *p,const struct kui_shell_view *v) {
+    const struct kui_storage_test_progress *r=v->storage_test_progress;
+    title(p,40,108,"Storage tests");
+    char line[144];snprintf(line,sizeof(line),"Target: %s",
+        v->storage_test_target?v->storage_test_target:"active storage device");
+    label(p,40,140,CYAN,line);
+    panel(p,32,173,576,212,PANEL);
+    title(p,48,190,v->cancel_requested?"Stopping safely...":r&&r->phase[0]?r->phase:"Preparing tests...");
+    if(r) {
+        unsigned pct=kui_shell_progress_tenths(r->done,r->total);
+        snprintf(line,sizeof(line),"%llu / %llu KiB  (%u.%u%%)",
+            (unsigned long long)(r->done/1024),(unsigned long long)(r->total/1024),pct/10,pct%10);
+        label(p,48,227,WHITE,line);
+        box(p,48,252,544,13,EDGE);box(p,48,252,544*pct/1000,13,CYAN);
+        if(r->preset==KUI_STORAGE_TEST_SOAK)
+            snprintf(line,sizeof(line),"Cycle %u  |  Elapsed %llu:%02llu  /  %llu min target",
+                r->repeat,(unsigned long long)(r->elapsed_us/60000000),
+                (unsigned long long)(r->elapsed_us/1000000%60),(unsigned long long)(r->target_us/60000000));
+        else snprintf(line,sizeof(line),"Repeat %u / %u  |  Step %u / %u  |  Elapsed %llu:%02llu",
+            r->repeat,r->repeats,r->step,r->steps,(unsigned long long)(r->elapsed_us/60000000),
+            (unsigned long long)(r->elapsed_us/1000000%60));
+        label(p,48,286,MUTED,line);
+    }
+    label(p,48,322,MUTED,"Write, flush, remount, then verify every saved byte.");
+    label(p,48,348,v->cancel_requested?AMBER:MUTED,v->cancel_requested?
+        "Finishing the current operation and removing the test file.":"B stops this run. Other storage actions are locked.");
+    label(p,40,396,MUTED,"Read/write speeds and verification time are saved separately.");
+}
+static void test_rate_range(const struct kui_storage_test_result *r,uint32_t chunk,bool write,
+        uint32_t *low,uint32_t *high,unsigned *count) {
+    *low=UINT32_MAX;*high=0;*count=0;
+    for(unsigned i=0;i<r->sample_count && i<KUI_STORAGE_TEST_SAMPLES;i++) {
+        const struct kui_storage_test_sample *s=&r->samples[i];
+        uint64_t us=write?s->write_us:s->read_us;
+        if(s->chunk_bytes!=chunk || !s->verified || !us) continue;
+        uint64_t value=(s->bytes/1024)*1000000/us;
+        uint32_t rate=value>UINT32_MAX?UINT32_MAX:(uint32_t)value;
+        if(rate<*low) *low=rate;
+        if(rate>*high) *high=rate;
+        ++*count;
+    }
+}
+static void test_delta(char *line,size_t cap,const char *name,uint32_t rate,uint32_t baseline) {
+    if(!rate || !baseline) {snprintf(line,cap,"%s n/a",name);return;}
+    int64_t delta=((int64_t)rate-baseline)*1000/baseline;
+    uint64_t magnitude=(uint64_t)(delta<0?-delta:delta);
+    snprintf(line,cap,"%s %c%llu.%llu%%",name,delta<0?'-':'+',
+        (unsigned long long)(magnitude/10),(unsigned long long)(magnitude%10));
+}
+static void storage_test_result(struct paint *p,const struct kui_shell *s) {
+    const struct kui_storage_test_result *r=&s->storage_test_result;
+    const struct kui_storage_test_result *b=&s->storage_test_history.baseline;
+    char line[160];snprintf(line,sizeof(line),"Storage test #%lu  -  %s",(unsigned long)r->id,
+        kui_storage_test_outcome_name(r->outcome));title(p,40,108,line);
+    test_recipe(line,sizeof(line),&r->request);label(p,40,138,CYAN,line);
+    if(s->storage_test_details) {
+        snprintf(line,sizeof(line),"Build %.12s   Card: %.23s",r->metadata.build,
+            r->request.card_label[0]?r->request.card_label:"unlabelled");label(p,40,162,WHITE,line);
+        snprintf(line,sizeof(line),"%s   %.7s   Cluster %lu KiB   UI %u Hz   Music %s",
+            test_transport(r->metadata.transport),r->metadata.filesystem,
+            (unsigned long)(r->metadata.cluster_bytes/1024),r->metadata.ui_hz,
+            r->metadata.music_playing?"on":"off");label(p,40,184,MUTED,line);
+        snprintf(line,sizeof(line),"Elapsed %llu:%02llu   Cycles %llu   Verified %llu MiB",
+            (unsigned long long)(r->elapsed_us/60000000),(unsigned long long)(r->elapsed_us/1000000%60),
+            (unsigned long long)r->cycles,(unsigned long long)(r->verified_bytes/1048576));label(p,40,206,MUTED,line);
+        snprintf(line,sizeof(line),"Errors %lu: CRC %lu  Timeout %lu  Rejected %lu  I/O %lu",
+            (unsigned long)r->errors.total,(unsigned long)r->errors.crc_errors,
+            (unsigned long)r->errors.timeout_errors,(unsigned long)r->errors.rejected_errors,
+            (unsigned long)r->errors.io_errors);label(p,40,232,r->errors.total?AMBER:MUTED,line);
+        snprintf(line,sizeof(line),"Last: %s / %s   Sector %lu +%lu",
+            kui_storage_error_operation_name(r->errors.last_operation),
+            kui_storage_error_result_name(r->errors.last_result),(unsigned long)r->errors.last_lba,
+            (unsigned long)r->errors.last_count);label(p,40,254,MUTED,line);
+        if(r->errors.sd_detail_valid) snprintf(line,sizeof(line),"SD CMD%u  Response 0x%02X   Filesystem error %u",
+            r->errors.sd_command,r->errors.sd_response,r->fatfs_error);
+        else snprintf(line,sizeof(line),"Filesystem error %u",r->fatfs_error);
+        label(p,40,276,MUTED,line);
+        snprintf(line,sizeof(line),"Phase %.23s   Byte offset %llu",r->failure_phase[0]?r->failure_phase:"none",
+            (unsigned long long)r->failure_offset);label(p,40,298,MUTED,line);
+        label(p,40,322,r->outcome==KUI_STORAGE_TEST_FAILED?AMBER:WHITE,r->message);
+        label(p,40,348,MUTED,r->saved?"Saved report:":"Result could not be saved:");
+        label(p,40,370,r->saved?CYAN:AMBER,r->path[0]?r->path:"No saved path");
+        label(p,40,394,r->cleanup_failed?AMBER:MUTED,r->cleanup_failed?
+            "Temporary file cleanup failed; see the report.":"X Summary   LEFT/RIGHT Select chunk on summary");
+        return;
+    }
+    static const uint32_t chunks[]={16384,65536,262144};
+    uint32_t chunk=r->request.preset==KUI_STORAGE_TEST_COMPARE?chunks[s->storage_test_chunk%3]:65536;
+    uint32_t write=kui_storage_test_rate(r,chunk,true),read=kui_storage_test_rate(r,chunk,false);
+    snprintf(line,sizeof(line),"%lu KiB chunks  |  Median write %lu / read %lu KiB/s",
+        (unsigned long)(chunk/1024),(unsigned long)write,(unsigned long)read);
+    label(p,40,166,WHITE,line);
+    uint32_t wl,wh,rl,rh;unsigned wn,rn;
+    test_rate_range(r,chunk,true,&wl,&wh,&wn);test_rate_range(r,chunk,false,&rl,&rh,&rn);
+    if(wn>1 && rn>1) snprintf(line,sizeof(line),"Range: write %lu-%lu / read %lu-%lu KiB/s",
+        (unsigned long)wl,(unsigned long)wh,(unsigned long)rl,(unsigned long)rh);
+    else snprintf(line,sizeof(line),"%s",r->request.preset==KUI_STORAGE_TEST_SOAK?
+        "Soak rate covers all complete cycles; X shows run details.":"One verified sample per chunk; use repeats to measure variation.");
+    label(p,40,188,MUTED,line);
+    snprintf(line,sizeof(line),"Verification: %s  |  Errors %lu  |  Cycles %llu",
+        r->outcome==KUI_STORAGE_TEST_PASSED?"PASSED":r->outcome==KUI_STORAGE_TEST_STOPPED?"STOPPED / partial":"FAILED / incomplete",
+        (unsigned long)r->errors.total,(unsigned long long)r->cycles);
+    label(p,40,214,r->outcome==KUI_STORAGE_TEST_PASSED?GREEN:AMBER,line);
+    snprintf(line,sizeof(line),"Worst pause: write %lu.%lu / read %lu.%lu ms",
+        (unsigned long)(r->write_latency.max_us/1000),(unsigned long)(r->write_latency.max_us%1000/100),
+        (unsigned long)(r->read_latency.max_us/1000),(unsigned long)(r->read_latency.max_us%1000/100));
+    label(p,40,238,MUTED,line);
+    snprintf(line,sizeof(line),"p95 upper bound: write %lu / read %lu ms",
+        (unsigned long)(((uint64_t)r->write_latency.p95_upper_us+999)/1000),
+        (unsigned long)(((uint64_t)r->read_latency.p95_upper_us+999)/1000));label(p,40,260,MUTED,line);
+    if(!s->storage_test_history.baseline_valid) {
+        label(p,40,286,CYAN,r->saved && r->outcome==KUI_STORAGE_TEST_PASSED?
+            "No baseline. Y saves this passing result as the baseline.":
+            "No baseline. Choose a saved passing result in History.");
+        line[0]=0;
+    } else {
+        snprintf(line,sizeof(line),"Baseline #%lu: %.12s / %s / %.23s",(unsigned long)b->id,
+            b->metadata.build,test_transport(b->metadata.transport),
+            b->request.card_label[0]?b->request.card_label:"unlabelled");label(p,40,286,CYAN,line);
+        if(r->id==b->id) snprintf(line,sizeof(line),"This result is the saved baseline.");
+        else if(!kui_storage_test_comparable(r,b)) snprintf(line,sizeof(line),
+            "No comparison: recipe, filesystem/settings or outcome differ.");
+        else {
+            char write_delta[48],read_delta[48];
+            test_delta(write_delta,sizeof(write_delta),"Write",write,kui_storage_test_rate(b,chunk,true));
+            test_delta(read_delta,sizeof(read_delta),"Read",read,kui_storage_test_rate(b,chunk,false));
+            snprintf(line,sizeof(line),"%s  /  %s  (matching measurement settings)",write_delta,read_delta);
+        }
+    }
+    label(p,40,308,MUTED,line);
+    snprintf(line,sizeof(line),"This run: %.12s / %s / %.23s",r->metadata.build,
+        test_transport(r->metadata.transport),r->request.card_label[0]?r->request.card_label:"unlabelled");
+    label(p,40,332,MUTED,line);
+    label(p,40,356,r->saved?MUTED:AMBER,r->saved?"Saved report:":"Not saved: keep a photo of these results.");
+    label(p,40,376,r->saved?CYAN:AMBER,r->path[0]?r->path:r->message);
+    label(p,40,398,r->cleanup_failed?AMBER:MUTED,r->cleanup_failed?
+        "Temporary file cleanup failed; see X Details.":r->request.preset==KUI_STORAGE_TEST_COMPARE?
+        "LEFT/RIGHT Select chunk   X Details":"X Details shows timing, metadata and error information.");
+}
+static void storage_tests(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    if(v->busy && v->storage_test_progress) {storage_test_progress(p,v);return;}
+    if(s->storage_test_show_result) {storage_test_result(p,s);return;}
+    title(p,40,108,"Storage tests");
+    char line[144];snprintf(line,sizeof(line),"Target: %s",v->storage_test_target?v->storage_test_target:"active storage device");
+    label(p,40,137,CYAN,line);
+    const char *names[]={"Preset","Repeats","Soak duration","Card nickname","Start test","Repeat last test","History and baseline","Advanced benchmarks"};
+    for(unsigned i=0;i<8;i++) {
+        unsigned y=156+i*24;bool selected=i==s->storage_test_selected;
+        panel(p,32,y,576,22,selected?SELECTED:PANEL);
+        if(selected) box(p,32,y+3,3,16,PINK);
+        label(p,48,y+3,selected?WHITE:MUTED,names[i]);
+        switch(i) {
+        case 0: snprintf(line,sizeof(line),"< %s >",kui_storage_test_preset_name(s->storage_test_request.preset));break;
+        case 1: snprintf(line,sizeof(line),s->storage_test_request.preset==KUI_STORAGE_TEST_SOAK?"Until time target":"< %u >",s->storage_test_request.repeats);break;
+        case 2: snprintf(line,sizeof(line),s->storage_test_request.preset==KUI_STORAGE_TEST_SOAK?"< %u minutes >":"Soak only",s->storage_test_request.soak_minutes);break;
+        case 3: snprintf(line,sizeof(line),"%.23s",s->storage_test_request.card_label[0]?s->storage_test_request.card_label:"A Edit (optional)");break;
+        case 5: snprintf(line,sizeof(line),"%s",s->storage_test_last_valid?"A Review":"No previous test");break;
+        case 7: snprintf(line,sizeof(line),"bench.cfg");break;
+        default: snprintf(line,sizeof(line),"A Open");break;
+        }
+        words(p,350,y+3,594,selected?CYAN:MUTED,line,false);
+    }
+    test_recipe(line,sizeof(line),&s->storage_test_request);label(p,40,357,WHITE,line);
+    label(p,40,380,MUTED,"Write speed, verified read speed, pauses and saved results.");
+    label(p,40,399,MUTED,v->busy?"Working... B stops safely.":"Runs on the active device. Existing files are kept.");
+}
+static void storage_test_history(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_storage_test_history *h=&s->storage_test_history;
+    title(p,40,108,"Storage test history");
+    label(p,40,137,MUTED,v->busy?"Reading saved results...":"Newest eight results on this storage device");
+    unsigned count=h->count<KUI_STORAGE_TEST_HISTORY?h->count:KUI_STORAGE_TEST_HISTORY;
+    char line[160];
+    for(unsigned i=0;i<count;i++) {
+        const struct kui_storage_test_result *r=&h->rows[i];
+        unsigned y=158+i*24;bool selected=i==s->storage_history_selected;
+        panel(p,32,y,576,22,selected?SELECTED:PANEL);
+        snprintf(line,sizeof(line),"%c #%lu  %-7s  %-7s  %s  %.23s",
+            h->baseline_valid && h->baseline.id==r->id?'*':' ',(unsigned long)r->id,
+            kui_storage_test_preset_name(r->request.preset),kui_storage_test_outcome_name(r->outcome),
+            test_transport(r->metadata.transport),r->request.card_label[0]?r->request.card_label:"unlabelled");
+        label(p,40,y+3,selected?WHITE:MUTED,line);
+    }
+    if(!count && !v->busy) label(p,40,178,MUTED,"No saved test results yet. B returns to test setup.");
+    if(h->baseline_valid) snprintf(line,sizeof(line),"* Baseline #%lu   %.12s / %s / %.23s",
+        (unsigned long)h->baseline.id,h->baseline.metadata.build,test_transport(h->baseline.metadata.transport),
+        h->baseline.request.card_label[0]?h->baseline.request.card_label:"unlabelled");
+    else snprintf(line,sizeof(line),"Y selects a saved passing result as the baseline.");
+    label(p,40,360,CYAN,line);
+    if(count) {
+        const struct kui_storage_test_result *r=&h->rows[s->storage_history_selected<count?s->storage_history_selected:0];
+        snprintf(line,sizeof(line),"%.12s   %.7s   Cluster %lu KiB   Music %s",r->metadata.build,
+            r->metadata.filesystem,(unsigned long)(r->metadata.cluster_bytes/1024),r->metadata.music_playing?"on":"off");
+        label(p,40,380,MUTED,line);
+    }
+    label(p,40,400,MUTED,h->message[0]?h->message:"A opens rates, comparison, metadata and error details.");
 }
 static void confirmation(struct paint *p,bool quick) {
     box(p,32,154,576,262,NAVY);
@@ -1471,6 +1702,8 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_SETTINGS: system_settings(&p,s,v); break;
     case KUI_SHELL_RIPPER_SETTINGS: ripper_settings(&p,s,v); break;
     case KUI_SHELL_DIAGNOSTICS: diagnostics(&p,s,v); break;
+    case KUI_SHELL_STORAGE_TESTS: storage_tests(&p,s,v); break;
+    case KUI_SHELL_STORAGE_TEST_HISTORY: storage_test_history(&p,s,v); break;
     case KUI_SHELL_DESTINATION: destination(&p,s,v); break;
     case KUI_SHELL_KEYBOARD: keyboard(&p,s); break;
     case KUI_SHELL_ADVANCED: advanced(&p,s); break;
@@ -1502,6 +1735,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     footer(&p,s,v);
     if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s->confirm_quick_resume);
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
+    if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
        s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);

@@ -13,7 +13,9 @@
  * files, files-root, files-actions, files-actions-locked, files-pick,
  * files-copy, files-delete, files-refused, files-info, files-info-file,
  * files-view, files-copying, files-keyboard, network, ftp-starting, ftp-ready,
- * ftp-busy, ftp-stopped, ftp-failed. */
+ * ftp-busy, ftp-stopped, ftp-failed, storage-tests, storage-test-confirm,
+ * storage-test-busy, storage-test-result, storage-test-details,
+ * storage-test-mismatch, storage-test-history. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -145,6 +147,57 @@ static unsigned home_row(enum kui_shell_page page) {
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(kui_shell_home_pages[i]==page) return i;
     return 0;
 }
+static struct kui_storage_test_history test_history;
+static struct kui_storage_test_progress test_progress;
+static void storage_tests(struct kui_shell *s,struct kui_shell_view *v,const char *mode) {
+    s->page=KUI_SHELL_STORAGE_TESTS;v->storage_test_target="SCI SD";
+    s->storage_test_request.preset=KUI_STORAGE_TEST_COMPARE;s->storage_test_request.repeats=3;
+    s->storage_test_selected=4;snprintf(s->storage_test_request.card_label,24,"Samsung 128GB");
+    v->busy=false;
+    if(!strcmp(mode,"storage-tests")) return;
+    if(!strcmp(mode,"storage-test-confirm")) {s->confirm_storage_test=true;return;}
+    if(!strcmp(mode,"storage-test-busy")) {
+        test_progress=(struct kui_storage_test_progress){.preset=KUI_STORAGE_TEST_SOAK,.repeat=12,
+            .done=2097152,.total=16777216,.elapsed_us=420000000,.target_us=900000000};
+        snprintf(test_progress.phase,sizeof(test_progress.phase),"Verifying");
+        v->storage_test_progress=&test_progress;v->busy=true;return;
+    }
+    memset(&test_history,0,sizeof(test_history));test_history.count=8;
+    for(unsigned i=0;i<8;i++) {
+        struct kui_storage_test_result *r=&test_history.rows[i];
+        r->id=12-i;r->request=s->storage_test_request;r->saved=true;
+        r->outcome=i==3?KUI_STORAGE_TEST_STOPPED:i==5?KUI_STORAGE_TEST_FAILED:KUI_STORAGE_TEST_PASSED;
+        r->metadata.transport=i<4?1:0;r->metadata.cluster_bytes=131072;r->metadata.ui_hz=2;
+        snprintf(r->metadata.filesystem,sizeof(r->metadata.filesystem),"exFAT");
+        snprintf(r->metadata.build,sizeof(r->metadata.build),"%s",i<4?"a1b2c3d4e5f6":"112233445566");
+        snprintf(r->path,sizeof(r->path),"0:/KUI/tests/t%06u",r->id);
+        snprintf(r->message,sizeof(r->message),"Every saved byte matched after remount.");
+        r->sample_count=9;r->cycles=9;r->elapsed_us=235000000;r->verified_bytes=144u*1048576;
+        r->write_latency.max_us=84201;r->write_latency.p95_upper_us=20000;
+        r->read_latency.max_us=19425;r->read_latency.p95_upper_us=20000;
+        for(unsigned j=0;j<9;j++) r->samples[j]=(struct kui_storage_test_sample){
+            .chunk_bytes=16384u<<(j%3*2),.repeat=j/3+1,.bytes=16u*1048576,
+            .write_us=10000000+j*100000,.read_us=7000000+j*100000,.verified=true};
+    }
+    test_history.baseline_valid=true;test_history.baseline=test_history.rows[4];
+    for(unsigned i=0;i<9;i++) {test_history.baseline.samples[i].read_us*=2;test_history.baseline.samples[i].write_us*=2;}
+    kui_shell_set_storage_test_history(s,&test_history);
+    if(!strcmp(mode,"storage-test-history")) {s->page=KUI_SHELL_STORAGE_TEST_HISTORY;return;}
+    kui_shell_set_storage_test_result(s,&test_history.rows[0]);
+    if(!strcmp(mode,"storage-test-details")) {
+        s->storage_test_details=true;s->storage_test_result.outcome=KUI_STORAGE_TEST_FAILED;
+        s->storage_test_result.errors.total=s->storage_test_result.errors.crc_errors=1;
+        s->storage_test_result.errors.last_operation=KUI_STORAGE_ERROR_READ;
+        s->storage_test_result.errors.last_result=KUI_STORAGE_ERROR_CRC;
+        s->storage_test_result.errors.last_lba=1234567;s->storage_test_result.errors.last_count=128;
+        s->storage_test_result.errors.sd_detail_valid=true;s->storage_test_result.errors.sd_command=18;
+        s->storage_test_result.errors.sd_response=0x0b;s->storage_test_result.fatfs_error=1;
+        snprintf(s->storage_test_result.failure_phase,24,"Verify read");
+        s->storage_test_result.failure_offset=2097152;
+        snprintf(s->storage_test_result.message,128,"Read failed during verification. See saved report.");
+    }
+    if(!strcmp(mode,"storage-test-mismatch")) s->storage_test_history.baseline.metadata.cluster_bytes=65536;
+}
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
     struct kui_settings preferences={true,false,true};
@@ -170,6 +223,7 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
     else if(!strcmp(argv[1],"network")) shell.page=KUI_SHELL_NETWORK;
     else if(!strncmp(argv[1],"ftp-",4)) ftp_state(&shell,&view,argv[1]);
+    else if(!strncmp(argv[1],"storage-test",12)) storage_tests(&shell,&view,argv[1]);
     else if(!strcmp(argv[1],"files") || !strcmp(argv[1],"files-root")) {
         files_folder(&shell,!strcmp(argv[1],"files-root"));
         if(!strcmp(argv[1],"files")) {

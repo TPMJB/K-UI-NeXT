@@ -5,7 +5,7 @@ endif
 
 TARGET := build/kui-diagnostic.elf
 RUNTIME := build/kui-runtime.elf
-SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
+SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_error.c src/core/storage_probe.c \
            src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
            src/loader/sd_reader.c src/loader/sci_sd_bus.c src/dreamcast/sci_sd_storage.c \
            src/core/report.c \
@@ -26,6 +26,7 @@ LOADER_OBJECTS += build/dc/src/core/boot_ui.o build/dc/src/dreamcast/boot_draw.o
     build/dc/src/dreamcast/shell_font.o build/dc/src/apps/boot_splash.o
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/dc/main-runtime.o
 RUNTIME_OBJECTS += $(BENCH_OBJECTS)
+RUNTIME_OBJECTS += build/dc/src/core/storage_test_model.o build/dc/src/core/storage_test.o build/dc/src/core/storage_test_store.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o

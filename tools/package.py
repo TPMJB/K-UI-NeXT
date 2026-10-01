@@ -49,7 +49,7 @@ def release_metadata(path=ROOT / "include/kui/version.h"):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery"):
+    for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery"):
         # Preserve section anchors while matching the packaged uppercase names.
         text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
                       "(" + name.upper() + ".md", text)
@@ -181,6 +181,7 @@ def main():
     (dist / "HARDWARE-TEST.md").write_text(guide("hardware-test.md"))
     (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
     (dist / "STORAGE-TRANSPORTS.md").write_text(guide("storage-transports.md"))
+    (dist / "STORAGE-TESTING.md").write_text(guide("storage-testing.md"))
     (dist / "EXT4-BOOTSTRAP.md").write_text(guide("ext4-bootstrap.md"))
     (dist / "BOOT-RECOVERY.md").write_text(guide("boot-recovery.md"))
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))

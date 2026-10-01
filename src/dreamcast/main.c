@@ -33,6 +33,7 @@
 #include "kui/maintenance.h"
 #include "kui/menu_sound.h"
 #include "kui/cd_audio.h"
+#include "kui/storage_test.h"
 #endif
 #include <kos.h>
 #include <dc/minifont.h>
@@ -96,6 +97,13 @@ static struct kui_datetime clock_pending,clock_snapshot;
 static bool clock_valid;
 static unsigned clock_generation;
 static char clock_note[128];
+static struct kui_storage_test_request storage_test_pending;
+static uint32_t storage_baseline_pending;
+static struct kui_storage_test_result storage_test_result;
+static struct kui_storage_test_history storage_test_history;
+static struct kui_storage_test_progress storage_test_progress;
+static unsigned storage_test_generation, storage_history_generation;
+static bool storage_test_running;
 static struct kui_app_status scan_status,salvage_status;
 static char salvage_path_pending[KUI_DEST_JOB_CAP];
 static unsigned salvage_passes_pending;
@@ -476,6 +484,73 @@ static void clock_operation(bool write) {
         (unsigned)now.year,(unsigned)now.month,(unsigned)now.day,
         (unsigned)now.hour,(unsigned)now.minute,(unsigned)now.second);
 }
+static uint64_t storage_test_now(void *ctx) {(void)ctx;return timer_us_gettime64();}
+static bool storage_test_cancelled(void *ctx) {(void)ctx;return kui_cancelled();}
+static void storage_test_errors(void *ctx,struct kui_storage_errors *out) {
+    (void)ctx;kui_storage_errors_get(out);
+}
+static void storage_test_publish(void *ctx,const struct kui_storage_test_progress *progress) {
+    (void)ctx;
+    mutex_lock(&lock);storage_test_progress=*progress;mutex_unlock(&lock);
+}
+/* Only the existing filesystem worker executes tests or accesses result files.
+ * Keep the larger snapshots out of the worker stack. None of these operations
+ * consult bench.cfg or redirect I/O to a device other than the selected one. */
+static void storage_test_operation(unsigned action) {
+    static struct kui_storage_test_result result;
+    static struct kui_storage_test_history history;
+    struct kui_music_status music={0};
+    bool resume_music=false;
+    result=(struct kui_storage_test_result){0};
+    history=(struct kui_storage_test_history){0};
+    if(action==65) {
+        result.request=storage_test_pending;
+        snprintf(result.metadata.build,sizeof(result.metadata.build),"%.15s",KUI_BUILD_ID);
+        result.metadata.transport=kui_storage_selected();
+        result.metadata.ui_hz=2;
+        struct kui_datetime clock;
+        if(kui_clock_now(&clock)) (void)kui_clock_to_seconds(&clock,&result.metadata.local_seconds);
+        kui_music_status_copy(&music);resume_music=music.playing;
+        if(resume_music) kui_music_pause();
+        kui_storage_errors_reset();
+    }
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    bool connected=kui_sd_connect();
+    if(connected) {
+        if(action==65) {
+            struct kui_storage_test_metadata metadata=result.metadata;
+            metadata.transport=kui_storage_active();
+            const struct kui_storage_test_ops ops={NULL,storage_test_now,storage_test_cancelled,
+                storage_test_publish,storage_test_errors,kui_log};
+            kui_storage_test_run(&storage_test_pending,&metadata,&ops,&result);
+            /* Persist a small final result even after Stop. The sample loop
+             * has already finished; do not lose its outcome to a latched B. */
+            if(result.id && !kui_storage_test_save(&result,kui_log))
+                kui_log("Storage test result could not be saved; keep the results screen.");
+            kui_log("Storage test %u: %s; result %s",(unsigned)result.id,
+                kui_storage_test_outcome_name(result.outcome),result.saved?"saved":"not saved");
+        }
+        bool baseline_ok=true;
+        if(action==67) baseline_ok=kui_storage_test_set_baseline(storage_baseline_pending,kui_log);
+        (void)kui_storage_test_load_history(&history,kui_log);
+        if(action==67) snprintf(history.message,sizeof(history.message),"%s",baseline_ok?
+            "Baseline saved. Matching tests show comparisons.":"Baseline save could not be confirmed. See Diagnostics log.");
+        kui_sd_disconnect();
+    } else {
+        snprintf(history.message,sizeof(history.message),"Storage unavailable; no device switch was attempted.");
+        if(action==65) {
+            result.outcome=KUI_STORAGE_TEST_FAILED;
+            snprintf(result.failure_phase,sizeof(result.failure_phase),"connect");
+            snprintf(result.message,sizeof(result.message),"Selected storage unavailable. Check Diagnostics log.");
+            kui_storage_errors_get(&result.errors);
+        }
+    }
+    if(resume_music) kui_music_resume();
+    mutex_lock(&lock);
+    if(action==65) {storage_test_result=result;++storage_test_generation;}
+    storage_test_history=history;++storage_history_generation;
+    mutex_unlock(&lock);
+}
 static bool scan_cancel(void *ctx) { (void)ctx;return kui_cancelled(); }
 static uint64_t scan_now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static void scan_progress(void *ctx,const struct kui_scan_status *status) {
@@ -659,7 +734,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || (action>=46 && action<=48);
 }
 #endif
 static void *worker(void *unused) {
@@ -717,6 +792,14 @@ static void *worker(void *unused) {
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
             if(action==56 || action==57 || action==58) probe_launch_failed=true;
+            if(action==65) {
+                storage_test_result=(struct kui_storage_test_result){0};
+                storage_test_result.request=storage_test_pending;
+                storage_test_result.outcome=KUI_STORAGE_TEST_FAILED;
+                snprintf(storage_test_result.message,sizeof(storage_test_result.message),
+                    "Audio CD stop failed; storage test did not start.");
+                ++storage_test_generation;
+            }
             mutex_unlock(&lock);action=0;
         } else if(action && needs_cd_handoff(action)) publish_cd_audio();
 #endif
@@ -837,6 +920,13 @@ static void *worker(void *unused) {
                 clock_valid=false;++clock_generation;
                 snprintf(clock_note,sizeof(clock_note),"Clock operation stopped before starting.");
             }
+            if(action==65) {
+                storage_test_result=(struct kui_storage_test_result){0};
+                storage_test_result.request=storage_test_pending;
+                storage_test_result.outcome=KUI_STORAGE_TEST_STOPPED;
+                snprintf(storage_test_result.message,sizeof(storage_test_result.message),"Stopped before starting.");
+                ++storage_test_generation;
+            }
             if(action == 8 || action == 9)
                 snprintf(settings_note, sizeof(settings_note), "Settings operation stopped before starting.");
             mutex_unlock(&lock);
@@ -864,6 +954,7 @@ static void *worker(void *unused) {
                 save_report("auto bench",outcome,true);
             }
 #ifdef KUI_SD_RUNTIME
+            if(action>=65 && action<=67) storage_test_operation(action);
             if(action == 8 || action == 9) {
                 settings_operation(action == 9);
                 if(!system_loaded) system_operation(false);
@@ -1215,6 +1306,9 @@ static void *worker(void *unused) {
 #endif
         mutex_lock(&lock);
         busy = false;
+#ifdef KUI_SD_RUNTIME
+        storage_test_running=false;
+#endif
         cancel_requested = false;
         ui_hz_busy = KUI_OPT_UI_FULL;   /* no operation leaves its cap behind for the next */
         mutex_unlock(&lock);
@@ -1287,6 +1381,7 @@ static void draw_shell(void) {
     char inserted[129],music_title[40],music_notice[128],message[128];
     struct kui_app_status app_status;
     static struct kui_ftp_status ftp_view;
+    struct kui_storage_test_progress test_progress;
     struct kui_shell_view view = {.build = KUI_BUILD_ID, .job_dir = path,
         .disc_title = title, .gdi_name = gdi, .settings_notice = notice, .message = message, .log_lines = log_rows,
         .inserted_title=inserted,.music_title=music_title,.music_notice=music_notice,.app_status=&app_status,
@@ -1302,6 +1397,9 @@ static void draw_shell(void) {
     }
     view.log_count = end - first; view.total_log_lines = line_count;
     view.log_truncated = log_truncated;
+    test_progress=storage_test_progress;
+    view.storage_test_progress=storage_test_running?&test_progress:NULL;
+    view.storage_test_target=kui_storage_name(kui_storage_selected());
     view.busy = busy; view.saving = saving_report; view.cancel_requested = cancel_requested;
     view.outcome = capture_outcome; view.saved_verified = capture_summary.verified;
     snprintf(path, sizeof(path), "%s", capture_summary.job_dir);
@@ -1448,6 +1546,9 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_FILES_RUN: return 62;
         case KUI_SHELL_FILES_PICTURE: return 63;
         case KUI_SHELL_FTP_START: return 64;
+        case KUI_SHELL_TEST_RUN: return 65;
+        case KUI_SHELL_TEST_HISTORY: return 66;
+        case KUI_SHELL_TEST_BASELINE: return 67;
         default: return 0;
     }
 }
@@ -1598,6 +1699,7 @@ int main(void) {
     unsigned seen_settings_generation = 0, seen_destination_generation = 0;
     unsigned seen_system_generation=0,seen_vmu_generation=0,seen_music_listing=0;
     unsigned seen_clock_generation=0,seen_vmu_backups=0,seen_vmu_restore=0;
+    unsigned seen_storage_test=0,seen_storage_history=0;
     unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0;
     unsigned seen_games_listing=0,seen_games_detail=0;
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
@@ -1672,6 +1774,14 @@ int main(void) {
         if(seen_clock_generation!=clock_generation) {
             kui_shell_set_clock(&shell,clock_valid?&clock_snapshot:NULL,clock_note);
             seen_clock_generation=clock_generation;
+        }
+        if(seen_storage_test!=storage_test_generation) {
+            kui_shell_set_storage_test_result(&shell,&storage_test_result);
+            seen_storage_test=storage_test_generation;
+        }
+        if(seen_storage_history!=storage_history_generation) {
+            kui_shell_set_storage_test_history(&shell,&storage_test_history);
+            seen_storage_history=storage_history_generation;
         }
         if(seen_vmu_backups!=vmu_backups_generation) {
             kui_shell_set_vmu_backups(&shell,&vmu_backups);
@@ -1775,6 +1885,13 @@ int main(void) {
             action = 0;
         }
         if(action && !busy) {
+            if(action==65) {
+                storage_test_running=true;
+                storage_test_pending=shell.storage_test_request;
+                storage_test_progress=(struct kui_storage_test_progress){.preset=storage_test_pending.preset};
+                snprintf(storage_test_progress.phase,sizeof(storage_test_progress.phase),"Preparing");
+            }
+            if(action==67) storage_baseline_pending=shell.storage_test_baseline_id;
             if(action == 10 || action == 11) {
                 strcpy(destination_pending, shell.browse_path);
                 destination_offset = shell.browser_page * KUI_DEST_PAGE_SIZE;

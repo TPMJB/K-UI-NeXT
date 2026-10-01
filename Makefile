@@ -4,6 +4,7 @@ HOST_FLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
 SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
 INCLUDES = -Iinclude -I.deps/fatfs/source
 CORE = src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c
+STORAGE_TEST_MODEL = src/core/storage_test_model.c src/core/storage_error.c
 LOADER_PROBE = src/core/loader_probe.c
 RESIDENT_IMAGE = src/core/resident_image.c
 GD_SERVICE = src/core/gd_service.c
@@ -23,7 +24,8 @@ test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage
-test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+	./build/test-storage-errors
 	./build/test-cd-audio
 	./build/test-game-image
 	./build/test-game-metadata
@@ -251,17 +253,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+build/test-shell: $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/destination.c src/core/files_path.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
+build/render-shell: $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/destination.c src/core/files_path.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -307,7 +309,19 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+STORAGE_TEST = $(STORAGE_TEST_MODEL) src/core/storage_test.c src/core/storage_test_store.c
+STORAGE_TEST_HEADERS = include/kui/storage_test.h include/kui/storage_error.h
+build/storage-test-image: tests/storage_test_image.c $(CORE) $(STORAGE_TEST) src/core/storage_probe.c $(FATFS) $(STORAGE_TEST_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(STORAGE_TEST) src/core/storage_probe.c $(FATFS) tests/storage_test_image.c -Wl,--wrap=f_open -Wl,--wrap=f_read -Wl,--wrap=f_write -Wl,--wrap=f_sync -Wl,--wrap=f_close -Wl,--wrap=f_mount -Wl,--wrap=f_unlink -Wl,--wrap=f_getfree -o $@
+
+build/storage-test-store-image: tests/storage_test_store_image.c $(CORE) $(STORAGE_TEST_MODEL) src/core/storage_test_store.c $(FATFS) $(STORAGE_TEST_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(STORAGE_TEST_MODEL) src/core/storage_test_store.c $(FATFS) tests/storage_test_store_image.c -o $@
+
+test-images: build/storage-test-image build/storage-test-store-image build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+	python3 tests/test_storage_test_images.py
+	python3 tests/test_storage_test_store_images.py
 	python3 tests/test_games_retail.py
 	python3 tests/test_games_image_probe.py
 	python3 tests/test_loader_probe_images.py
@@ -568,3 +582,8 @@ BOOT_RECOVERY_SOURCES := src/core/boot_image.c src/core/boot_volume.c src/core/e
 build/boot-recovery: tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FATFS) $(LWEXT4_HOST_OBJECTS) $(LWEXT4_HEADERS) include/kui/boot_image.h include/kui/boot_volume.h include/kui/ext4_boot.h include/kui/media.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(LWEXT4_CPPFLAGS) tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FATFS) $(LWEXT4_HOST_OBJECTS) -o $@
+
+# Runtime storage failure snapshots, with fake hardware below the real adapter.
+build/test-storage-errors: tests/test_storage_errors.c src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c include/kui/storage_error.h src/dreamcast/sci_sd_storage.h src/loader/sci_sd_bus.h tests/storage_stubs/dc/sd.h tests/storage_stubs/kos/sem.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c tests/test_storage_errors.c -o $@

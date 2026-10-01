@@ -2,6 +2,18 @@
 
 ## Standalone storage development (2026-09-30)
 
+The owner approved the first testing features under main-menu Diagnostics on
+2026-10-01. R opens Storage tests: Quick/Compare/Soak, optional repeats and card
+nickname, persistent history/baseline, complete-run latency statistics and
+transport error details. Tests use the boot-selected device and their own
+scratch file; every complete cycle flushes, remounts and verifies its contents.
+Result JSON/CSV and validated history records remain in `/KUI/tests/tNNNNNN/`.
+The older `bench.cfg` workflow is under Advanced benchmarks; Diagnostics A/X/Y
+retain their existing actions. See [storage testing](storage-testing.md).
+This is an SD runtime update; the `6af5e11` boot CD and existing card format stay
+compatible. FAT32/exFAT host fixtures cover failures and interrupted saves;
+console UI, performance and SCI hardware acceptance remain pending.
+
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now
 synchronizes the BIOS last-set timestamp as well as the RTC and KOS cached time.
