@@ -129,6 +129,18 @@ phase totals. The Diagnostics log includes the same totals. History and CSV
 retain their existing format; the detailed profile is exported only in the
 original JSON, while History retains the DMA activity summary.
 
+The first [profiled hardware results](evidence/sci-dma-profile-2026-10-01.md),
+build `65fcaafadb98`, passed Quick (run 6, 4 MiB) and five-minute Soak (run 7,
+160 MiB), both with zero errors/DMA faults. Quick write/read rates were
+1,097.42/1,037.03 KiB/s; Soak reached 1,132.60/1,044.27 KiB/s. The latest
+single Quick is slightly slower than a6cb218's Quick, which does not establish
+a regression given instrumentation and run variation. The new Soak is faster
+than cf8e7ea's fifteen-minute result, but duration and build differences prevent
+isolating the latest change. Soak RX means are 331.02 microseconds transfer
+and 77.18 microseconds reversal/CRC per sector. These totals identify the
+post-transfer check as a candidate for further work; they do not assign all
+remaining file-read time to the card or establish a future speed gain.
+
 Host checks cover real FAT32/exFAT images, corruption and stale-cycle data,
 short I/O, cancellation, flush/close/remount errors, scratch ownership and
 interrupted result/baseline writes. These tests exercise runtime filesystem I/O;

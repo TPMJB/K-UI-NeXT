@@ -41,9 +41,20 @@ passed run 5, a **4 MiB Quick** check, at write/read **1,104.35/1,052.72 KiB/s**
 zero errors/DMA faults. These are +9.93%/+13.67% versus the earlier soak, but
 different presets prevent a controlled sustained comparison. See the
 [Quick report and optimization review](evidence/sci-dma-cached-quick-2026-10-01.md).
-Game pacing remains unchanged. The next candidate measures DMA phases and
-reduces remaining transfer CPU work; do not attribute all remaining game lag
-to storage or promise disc equivalence.
+The feed/profile build **65fcaafadb98** then passed run 6 Quick (4 MiB) and
+run 7 five-minute Soak (10 cycles/160 MiB), with zero errors/DMA faults.
+Write/read rates were **1,097.42/1,037.03 KiB/s** for Quick and
+**1,132.60/1,044.27 KiB/s** for Soak. Quick is slightly slower than a6cb218's
+single Quick result; instrumentation and run variation prevent a regression
+conclusion. The Soak is 12.74%/12.76% above cf8e7ea, but differs in duration
+and spans two changes. RX phase means are 331.02 microseconds transfer and
+77.18 microseconds reversal/CRC; remaining file-call time includes work outside
+those phases. See the [profile evidence](evidence/sci-dma-profile-2026-10-01.md).
+The next candidate implements table-free four-byte reversal in the shared
+reader and aligned runtime TX staging. Native guards pass unchanged (24 bytes
+resident space, 52 bytes conservative stack headroom); console acceptance is
+pending. Active-DMA processing remains a separate experiment. Game pacing remains unchanged; do not attribute
+all remaining game lag to storage or promise disc equivalence.
 
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now
@@ -122,8 +133,9 @@ installation, source selection and first hardware check. This is a development
 build: SCI runtime storage has the initial passing soak above and a qualitative
 DOA2 report. The first SCI DMA paths also passed the later soak and improved
 DOA2; their cached processing follow-up passed the short runtime check above.
-The next feed/profile candidate and CF hardware/driver remain unverified on
-the console.
+The feed/profile follow-up also passed runtime Quick and five-minute Soak
+checks above; separate retail performance acceptance and CF hardware/driver
+validation remain pending.
 Full ext4 application support and shared SCI-bus operation remain outside this
 change. Development is
 in [PR #6](https://github.com/TPMJB/K-UI-NeXT/pull/6). The Games package embeds

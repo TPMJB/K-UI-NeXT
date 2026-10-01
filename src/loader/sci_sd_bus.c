@@ -139,12 +139,18 @@ static void select_card(void *ctx, bool selected) {
         wr16(PDTR, selected ? rd16(PDTR) & (uint16_t)~CS : rd16(PDTR) | CS);
     }
 }
-static uint8_t reverse(uint8_t x) {
-    static const uint8_t nibble[16] = {
-        0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15
-    };
-    return (uint8_t)((nibble[x & 15u] << 4) | nibble[x >> 4]);
+static uint32_t reverse(uint32_t x) {
+    /* Reverse each byte independently, retaining its position in the word. */
+    uint32_t t = (x ^ (x >> 1)) & UINT32_C(0x55555555);
+    x ^= t ^ (t << 1);
+    t = (x ^ (x >> 2)) & UINT32_C(0x33333333);
+    x ^= t ^ (t << 2);
+    t = (x ^ (x >> 4)) & UINT32_C(0x0f0f0f0f);
+    return x ^ t ^ (t << 4);
 }
+/* DMA RX and the staging array have proven 32-byte alignment. This type may
+ * alias the caller's byte array without relaxing aliasing for the whole build. */
+typedef uint32_t alias_word __attribute__((__may_alias__));
 static uint16_t data_crc(uint16_t crc, uint8_t data) {
     /* Fold eight x^16+x^12+x^5+1 steps without a second lookup table. */
     uint32_t x = (crc >> 8) ^ data;
@@ -228,10 +234,8 @@ static void purge_buffer(void *buffer) {
 #endif
 }
 static bool feed_read(void) {
-    if(!wait_flag(TDRE)) return false;
     /* TDR retains its value after the shift register takes it. As in the
      * programmed read path, seed once and clear TDRE for each exact byte. */
-    wr8(TDR, 0xff);
     for(unsigned left = 512; left; --left) {
         unsigned n = POLLS;
         for(;;) {
@@ -240,6 +244,7 @@ static bool feed_read(void) {
             if(status & TDRE) break;
             if(!--n) return false;
         }
+        if(left == 512) wr8(TDR, 0xff);
         wr8(SSR, 0x7cu);
     }
     return true;
@@ -275,8 +280,14 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
 #endif
     for(unsigned i = 0; i < 3; ++i) saved[i] = rd32(DMA_SAR + 4u*i);
 #ifndef KUI_RETAIL_TRANSPORT
-    if(writing)
-        for(unsigned i = 0; i < 512; ++i) dma_write_buffer[i] = reverse(tx[i]);
+    if(writing) {
+        if((uintptr_t)tx & 3u) {
+            for(unsigned i = 0; i < 512; ++i) dma_write_buffer[i] = reverse(tx[i]);
+        } else {
+            for(unsigned i = 0; i < 128; ++i)
+                ((alias_word *)dma_write_buffer)[i] = reverse(((const alias_word *)tx)[i]);
+        }
+    }
 #endif
     purge_buffer(buffer);
     wr32(DMA_CONTROL, 0);
@@ -329,7 +340,10 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
          * original P1/P2 pointer. Retain cached logical bytes for copying. */
         __asm__ __volatile__("" : : : "memory");
         for(unsigned i = 0; i < 512; ++i) {
-            rx[i] = reverse(rx[i]);
+            if(!(i & 3u)) {
+                alias_word *word = (alias_word *)(rx + i);
+                *word = reverse(*word);
+            }
             crc = data_crc(crc, rx[i]);
         }
 #ifndef KUI_RETAIL_TRANSPORT

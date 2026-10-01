@@ -1,5 +1,22 @@
 # Hardware evidence
 
+## SCI DMA Quick and five-minute profile soak passed — 2026-10-01
+
+Runtime **65fcaafadb98** passed run **6**, a 4 MiB Quick check, and run **7**,
+a five-minute Soak completing 10 cycles/160 MiB in 315.049953 seconds. Both
+verified after remount with zero errors/DMA faults and successful cleanup.
+Write/read rates were **1,097.42/1,037.03 KiB/s** for Quick and
+**1,132.60/1,044.27 KiB/s** for Soak. Quick is slightly slower than a6cb218's
+single Quick run (0.63%/1.49%); instrumentation and run variation prevent a
+regression conclusion. Soak is 12.74%/12.76% above cf8e7ea, but five versus
+fifteen minutes and two intervening changes prevent a controlled comparison.
+
+Soak averages **331.02 microseconds for RX transfer** and **77.18 microseconds
+for reversal/CRC** per DMA sector. A further 68.88 microseconds per sector of
+timed file reads lies outside measured RX phases; it is not solely card time.
+See the [original reports, exact comparisons and phase analysis](evidence/sci-dma-profile-2026-10-01.md).
+This is runtime evidence; no new retail-game timing accompanies the reports.
+
 ## SCI cached processing Quick passed — 2026-10-01
 
 Runtime **a6cb21895c37**, run **5**, passed a **4 MiB Quick** check with zero

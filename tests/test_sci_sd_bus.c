@@ -578,6 +578,31 @@ static void test_dma_profile(const struct kui_loader_sd_bus *bus) {
     kui_sci_sd_profile_timer(NULL,NULL);
     kui_sci_sd_release(); restored();
 }
+static void test_dma_source_offsets(const struct kui_loader_sd_bus *bus) {
+    _Alignas(32) uint8_t source[516];
+    for(unsigned i=0;i<sizeof(source);++i) source[i]=(uint8_t)(i*7u);
+    for(unsigned offset=0;offset<4;++offset) {
+        const uint8_t *tx=source+offset;
+        dma_ready(bus);
+        uint16_t crc=0;
+        assert(bus->transfer_block(NULL,tx,NULL,512,false,&crc));
+        assert(crc==crc16_reference(tx,512));
+        assert(hw.bytes==512 && hw.dma_bytes==512 && !hw.tdr_writes);
+        for(unsigned i=0;i<512;++i) assert(hw.sent[i]==reversed(tx[i]));
+        kui_sci_sd_release(); restored();
+    }
+}
+static void test_dma_error_before_seed(const struct kui_loader_sd_bus *bus) {
+    _Alignas(32) uint8_t rx[512];
+    dma_ready(bus);
+    hw.ssr|=ORER;
+    uint16_t crc=0xa55a;
+    assert(!bus->transfer_block(NULL,NULL,rx,512,false,&crc));
+    assert(crc==0xa55a && !hw.tdr_writes && !hw.bytes && !hw.dma_bytes);
+    assert(hw.scr==0 && hw.chcr==0x4000 && hw.tcr==7 && !hw.irq_disabled);
+    assert(!kui_sci_sd_healthy());
+    kui_sci_sd_release(); restored();
+}
 int main(void) {
     const struct kui_loader_sd_bus *bus=kui_sci_sd_bus(); assert(bus);
     assert(crc16_reference((const uint8_t *)"123456789",9)==0x31c3);
@@ -587,6 +612,8 @@ int main(void) {
     test_block_arguments(bus);
     test_block_failures(bus);
     test_dma_blocks(bus);
+    test_dma_source_offsets(bus);
+    test_dma_error_before_seed(bus);
     test_dma_unavailable(bus);
     test_dma_failures(bus);
     test_dma_profile(bus);
