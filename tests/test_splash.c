@@ -3,8 +3,8 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
-/* RGB565 of the #030913 frame around the 592x444 Dainsleif artwork. */
-#define BACKGROUND 0x0042u
+/* RGB565 of the #090102 frame around the 576x432 crimson artwork. */
+#define BACKGROUND 0x0800u
 static uint16_t guarded[640u*480u+2u];
 static uint16_t expected_dimmed[640u*480u];
 int main(void) {
@@ -28,6 +28,6 @@ int main(void) {
     for(unsigned i=0;i<640u*480u;i++) assert(guarded[i+1]==expected_dimmed[i]);
     kui_boot_splash_draw(NULL);
     kui_boot_splash_draw_dimmed(NULL);
-    puts("PASS original splash and pixel-equivalent boot backdrop without framebuffer reads");
+    puts("PASS crimson runtime splash and pixel-equivalent boot backdrop without framebuffer reads");
     return 0;
 }

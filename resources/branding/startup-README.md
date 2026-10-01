@@ -1,36 +1,29 @@
-# K-UI V1.5 “Dáinsleif” startup
+# K-UI crimson Dáinsleif startup
 
-`startup.png` is the 640×480 RGB splash for K-UI V1.5 “Dáinsleif”. It keeps
-TPMJB's established visor portrait, chrome wordmark and perspective grid, with
-crimson neon and restrained cyan accents. The name includes the acute accent
-in Dáinsleif. This artwork replaces the SD runtime splash only; the original
-badge beneath Sega's logo on the boot disc is a separate asset.
+`startup.png` is the 640×480 RGB SD runtime splash. At the owner's request on
+2026-10-01, it now uses the exact approved red boot-menu artwork: the new visor
+portrait, crimson light, chrome K-UI lettering and Dáinsleif title. Software
+remains 1.5.1; 2.0 follows SCI testing/tuning. The badge beneath Sega's logo is
+a separate asset.
 
-The built-in image generation tool produced `startup-dainsleif-source.png`
-on 2026-09-24 as a single edit of the previous startup artwork. The original source is retained separately at
-1448×1086 RGB (4:3); the exact request is recorded in
-`startup-dainsleif-prompt.txt`. The previous splash was the approved 640×480
-preview from [K-UI_DS resources/boot-preview.png](https://github.com/TPMJB/K-UI_DS/blob/2a5309298dde8fb100da1e2e4e10517695c9780f/resources/boot-preview.png),
-Git blob `33b49462795c7db399c1a5e9af7b9b96b1378140`.
+The runtime and `boot-red.png` are byte-for-byte identical. Artwork provenance,
+the original generation prompt and TV-safe conversion are recorded in
+[boot-red-README.md](boot-red-README.md). The 576×432 composition is centered in
+a 640×480 frame with a `#090102` border. No new image generation or lettering
+change was needed for this runtime update.
 
-The deployment image is downsampled to 592×444 and centered in a 640×480
-frame, keeping lettering inside television-safe margins. No lettering or
-illustration was changed after generation. The deterministic conversion is:
+- Runtime and boot PNG Git blob: `f2b9132613a527f90759fdb0fd70d47a6eb07563`.
+- PNG SHA-256: `f1cfdd82dba67518af18fe208a1334f18dc0bee2041590f9ade2af0f2c3549e1`.
+- Original source PNG SHA-256: `d4b67cc589009c776bff4488d0206dc71abc3efce566b0248a624abeed1314fe`.
 
-```sh
-convert resources/branding/startup-dainsleif-source.png \
-  -filter Lanczos -resize 592x444 -background '#030913' \
-  -gravity center -extent 640x480 -strip -define png:color-type=2 \
-  resources/branding/startup.png
-```
+The host encoder checks the pinned PNG identity and converts it to RGB565.
+Each executable links only its own fixed 640×480 array: runtime dimensions,
+memory usage, sound and startup timing are unchanged. Updating `KUI/runtime.kui`
+is sufficient for this splash change; the confirmed `6af5e11` boot CD remains
+compatible and does not need rebuilding or reburning.
 
-- Runtime PNG Git blob: `b08c8ee03362b6775403e1bd50f8609f1c522f40`.
-- Runtime PNG SHA-256: `16e4bed7e4d8c160de400b66445b512b77232261a35ead0c0cb6c7df7f71a7eb`.
-- Source PNG SHA-256: `111ec10a6c2a94c5841a28ae4fb918fb3a9707cc1946ac438d8c8187383d0cdf`.
-
-The host encoder checks the pinned runtime PNG identity and converts it to
-RGB565 without importing a DreamShell renderer. Runtime dimensions, memory
-usage and startup timing are unchanged.
+The preceding September 24 artwork and its generation prompt remain documented
+in Git history (`startup.png` blob `b08c8ee03362b6775403e1bd50f8609f1c522f40`).
 
 The startup sound still uses the original three-note composition and timbre
 documented in the prior K-UI_DS revision's `utils/build_boot_assets.py`. Its

@@ -2,6 +2,14 @@
 
 ## Standalone storage development (2026-09-30)
 
+The owner confirmed the final red Card tools menu from `6af5e11a8612` works
+(2026-10-01); an initial old-artwork report was resolved after correcting which
+file was copied. The `6af5e11` boot CD is ready to burn. Its optional CD-origin
+`boot.kui` override and SCI/IDE still await hardware testing. The owner also
+requested the identical red image for the SD runtime startup. That artwork-only
+card update keeps version 1.5.1, startup sound/timing and the existing CD contract;
+it does not require another CD image or burn.
+
 The owner confirmed that the `82984` CD boots normally through SCIF, but loads
 slowly. The `18dd87d457fc` corrected bootstrap has now been tested through Card
 tools and **Start K-UI from that new menu boots substantially faster**. Its
@@ -358,9 +366,9 @@ piece of artwork goes, the technical limits, and what would help most.
 - **Brand:** the startup splash ([startup.png](../resources/branding/startup.png))
   shows the K-UI character: a woman in a large futuristic visor, drawn in
   neon outlines, with chrome "K-UI" lettering and a perspective grid, in a
-  1980s retro-futuristic style. For Dáinsleif it is crimson neon with
-  restrained cyan. The request that produced it is kept word for word in
-  [startup-dainsleif-prompt.txt](../resources/branding/startup-dainsleif-prompt.txt).
+  1980s retro-futuristic style. The CD and SD runtime now share the approved
+  crimson portrait. The request that produced it is kept word for word in
+  [boot-red-prompt.txt](../resources/branding/boot-red-prompt.txt).
   The header brand and the boot-disc badge are older K-UI artwork in cyan
   and magenta.
 
@@ -368,7 +376,7 @@ piece of artwork goes, the technical limits, and what would help most.
 
 | Piece | Files | Size and format | How it gets into the build |
 | --- | --- | --- | --- |
-| Startup splash | `resources/branding/startup.png` | 640×480 RGB. The artwork fills 592×444, centred on `#030913`, with lettering inside TV-safe margins (7%). Keep the large source too | `tools/build_splash.py` converts it at build time. It checks the PNG's pinned Git blob, so a new splash updates `PNG_BLOB` and `startup-README.md` |
+| Startup splash | `resources/branding/startup.png` | 640×480 RGB. Same approved image as `boot-red.png`: 576×432, centred on `#090102`, with TV-safe margins. The large source is retained separately | `tools/build_splash.py` converts it at build time. It checks the PNG's pinned Git blob, so a new splash updates `PNG_BLOB` and `startup-README.md` |
 | Header brand | `resources/branding/launcher-brand.png` | 256×128 source, shown at 128×64, opaque on navy | `tools/generate_shell_art.py` writes `src/dreamcast/shell_art.inc`; it checks pinned SHA-256s |
 | Home icons (3 drawn so far) | `resources/icons/<name>.svg` and `.png` | 64×64 PNG with transparency; shown at 128×128 and 24×24 | `tools/generate_shell_art.py` (the `SOURCES` and `ICONS` lists), and `home_apps[].art` in `src/dreamcast/shell_draw.c` |
 | Home icons (7 placeholders) | none yet | see below | The same, once art exists |
