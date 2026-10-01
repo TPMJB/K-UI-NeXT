@@ -283,7 +283,7 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
     for(unsigned i=first;i<end;i++) out->status.total+=(uint64_t)le16(snap->directory+snap->entries[i]*32+24)*BLOCK_BYTES;
     check=malloc(sizeof(*check));
     if(!check) {fail(&s,"Not enough RAM for VMU verification");goto done;}
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(!kui_sd_connect()) {fail(&s,"Cannot connect SD card for VMU backup");goto done;}
     connected=true;
     if(!kui_mount(&fs,log)) {fail(&s,"Cannot mount SD card for VMU backup");goto done;}
@@ -386,7 +386,7 @@ void kui_vmu_backups_run(unsigned page,struct kui_vmu_backup_view *out,
     DIR root,sub;FILINFO folder,file;
     if(page>UINT32_MAX/KUI_VMU_ROWS) {fail(&s,"Invalid backup page");goto done;}
     if(cancelled(&s)) goto done;
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(!kui_sd_connect()) {fail(&s,"Cannot connect SD card for VMU backups");goto done;}
     connected=true;
     if(!kui_mount(&fs,s.log)) {fail(&s,"Cannot mount SD card for VMU backups");goto done;}
@@ -552,7 +552,7 @@ void kui_vmu_restore_run(const char *path,unsigned slot,bool commit,
     if(cancelled(&s)) goto done;
     s.device=maple_enum_dev((int)s.port,(int)s.unit);
     if(!s.device || !s.device->valid || !(s.device->info.functions&MAPLE_FUNC_MEMCARD)) {fail(&s,"No VMU in the selected destination slot");goto done;}
-    out->present=true;kui_sd_set_params(0,true);
+    out->present=true;kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(!kui_sd_connect()) {fail(&s,"Cannot connect SD card for VMU restore");goto done;}
     connected=true;
     if(!kui_mount(&fs,s.log)) {fail(&s,"Cannot mount SD card for VMU restore");goto done;}
@@ -750,7 +750,7 @@ static void managed_run(bool copy,unsigned source_slot,unsigned page,unsigned se
         managed_preview.destination_fingerprint==destination->fingerprint));
     managed_preview.valid=false;
     if(!matches) {fail(&source,"VMU or save bytes changed since preview; preview again");goto done;}
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(!kui_sd_connect()) {fail(&source,"Cannot connect SD; VMU managed writes require a verified backup");goto done;}
     connected=true;
     if(!kui_mount(&fs,source.log)) {fail(&source,"Cannot mount SD for VMU safety backup");goto done;}

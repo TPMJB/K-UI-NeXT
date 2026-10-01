@@ -95,7 +95,7 @@ enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *m,
     return range_check(m, lba, count, format);
 }
 enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manifest *m) {
-    if(!tracks_valid(m) || !m->card_sectors || m->card_sectors > UINT64_C(0x100000000) ||
+    if(!tracks_valid(m) || m->storage_transport > KUI_STORAGE_IDE || !m->card_sectors || m->card_sectors > UINT64_C(0x100000000) ||
        m->partition_start >= m->partition_end || m->partition_end > m->card_sectors ||
        !m->extent_count || m->extent_count > KUI_RETAIL_IMAGE_EXTENTS ||
        !text_valid(m->title, sizeof(m->title), true) ||
@@ -152,6 +152,7 @@ enum kui_game_result kui_retail_manifest_encode(const struct kui_retail_manifest
     put32(out + 8, KUI_RETAIL_IMAGE_VERSION);
     put32(out + 12, KUI_RETAIL_IMAGE_WIRE_BYTES);
     put32(out + 20, m->track_count); put32(out + 24, m->extent_count);
+    put32(out + 28, m->storage_transport);
     put64(out + 32, m->card_sectors);
     put64(out + 40, m->partition_start); put64(out + 48, m->partition_end);
     put32(out + 56, m->session_lba); put32(out + 60, m->boot_lba);
@@ -181,11 +182,12 @@ enum kui_game_result kui_retail_manifest_decode(
     if(!wire || memcmp(wire, "KUIRTI01", 8) ||
        get32(wire + 8) != KUI_RETAIL_IMAGE_VERSION ||
        get32(wire + 12) != KUI_RETAIL_IMAGE_WIRE_BYTES ||
-       get32(wire + 16) != wire_crc(wire) || !zeroes(wire + 28, 4) ||
+       get32(wire + 16) != wire_crc(wire) ||
        !zeroes(wire + 264, 56) ||
        !zeroes(wire + USED_BYTES, KUI_RETAIL_IMAGE_WIRE_BYTES - USED_BYTES))
         return KUI_GAME_INVALID;
     m->track_count = get32(wire + 20); m->extent_count = get32(wire + 24);
+    m->storage_transport = get32(wire + 28);
     if(m->track_count > KUI_RETAIL_IMAGE_TRACKS ||
        m->extent_count > KUI_RETAIL_IMAGE_EXTENTS) goto invalid;
     m->card_sectors = get64(wire + 32); m->partition_start = get64(wire + 40);

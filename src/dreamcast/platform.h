@@ -4,6 +4,7 @@
 #include "kui/probe.h"
 #include "kui/capture.h"
 #include "kui/bench.h"
+#include "kui/storage.h"
 
 /* True when compiling for the Dreamcast's SH-4. GCC defines a DIFFERENT macro for each SH-4 mode:
  * __SH4__ only for plain -m4, __SH4_SINGLE__ for -m4-single (which is how KOS builds), plus
@@ -17,11 +18,15 @@
 #endif
 void kui_log(const char *format, ...);
 bool kui_cancelled(void);
-/* Transport for the NEXT kui_sd_connect(): use_sci picks KOS SD_IF_SCI
- * (synchronous serial, DMA capable) over the SD_IF_SCIF bit-bang default;
- * check_crc verifies the data-block CRC16 on reads. */
-void kui_sd_set_params(unsigned use_sci, bool check_crc);
-/* Which transport the last successful connect opened, after any fallback. */
+/* AUTO reopens the boot-selected device; the first call discovers a usable
+ * SCIF, SCI or IDE/CF volume. Explicit IDs are benchmark/bootstrap only and
+ * fail without switching devices. SCI always verifies data CRCs. */
+void kui_sd_set_params(unsigned transport, bool check_crc);
+unsigned kui_storage_active(void);
+const char *kui_storage_name(unsigned transport);
+bool kui_storage_sci_reserved(void);
+void kui_storage_boot_begin(void);
+/* Benchmark compatibility: returns the full transport ID, not a bool. */
 unsigned kui_sd_active_sci(void);
 bool kui_sd_connect(void);
 void kui_sd_disconnect(void);

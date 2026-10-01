@@ -1,8 +1,9 @@
 # SD and IDE/CF filesystem support
 
-**Future work; not implemented.** This assessment covers direct serial SD and
-IDE/CF storage. K-UI currently uses FatFs for FAT32/exFAT. It has no lwext4
-backend or implemented IDE/CF adapter.
+**ext4 remains future work.** The standalone storage development build adds
+SCIF/SCI SD and IDE/CF transports while retaining FatFs for FAT32/exFAT. SCI and
+IDE/CF still need console validation. See [installation and test scope](storage-transports.md).
+There is no lwext4 backend yet.
 
 ## Current boundaries
 

@@ -53,6 +53,7 @@ static int sync_image(void *ctx) {
     (void)ctx; return fflush(test.image) || fsync(fileno(test.image)) ? -1 : 0;
 }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
+unsigned kui_storage_active(void) { return KUI_STORAGE_SCIF; }
 bool kui_sd_connect(void) {
     assert(!test.connected); ++test.connects;
     test.connected = true; kui_media_set(&media); return true;

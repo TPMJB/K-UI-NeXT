@@ -1,5 +1,19 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Standalone storage development (2026-09-30)
+
+The owner requested a single-card boot and Games path for SCIF, SCI and IDE/CF,
+without sharing SCI between storage and network boards. See
+[storage-transports.md](storage-transports.md) for the matching boot-CD/runtime
+installation, source selection and first hardware check. This is a development
+build: SCI microSD and the CF hardware/driver remain unverified on the console.
+ext4 and shared SCI-bus operation are not part of this change.
+
+The preceding FTP correction was confirmed on hardware and merged to main in
+[PR #5](https://github.com/TPMJB/K-UI-NeXT/pull/5); that PR records the approved
+timing and throughput results. Keep that known-good W5500/SCIF build as the
+comparison point while bringing up new storage.
+
 ## FTP packet-capture follow-up (2026-09-30)
 
 The full owner capture ties slow upload starts to ten-second ACK/RST storms
@@ -12,8 +26,8 @@ the `1A` socket was force-closed at the old ten-second deadline. The correction
 bounds CLOSING to 250 ms in that state, only for unowned data sockets whose
 application payload is already complete. TIME_WAIT cleanup stays immediate;
 FIN_WAIT/LAST_ACK keep the original deadline. Failed register operations retain
-cleanup tracking, and logs include state duration. Hardware confirmation of
-this correction is pending. When porting to the Wi-Fi branch, keep this
+cleanup tracking, and logs include state duration. Hardware confirmation is
+recorded in PR #5. When porting to the Wi-Fi branch, keep this
 cleanup W5500-specific.
 
 Where the project stands, what the hardware needs next, and a brief for the

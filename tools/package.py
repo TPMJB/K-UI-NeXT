@@ -106,6 +106,13 @@ def main():
     for name in ("kui-runtime.elf", "kui-runtime.map"):
         shutil.copyfile(ROOT / "build" / name, dist / name)
     payload, memory = flatten_elf(runtime.read_bytes())
+    # A unique initialized marker lets the bootstrap pass its selected medium
+    # without using a fixed RAM mailbox. Verify the actual linked image.
+    storage_marker = bytes.fromhex("4b554953424f4f540100000003000000fcffffff")
+    locations = [offset for offset in range(0, len(payload) - 19, 4)
+                 if payload[offset:offset + 20] == storage_marker]
+    if len(locations) != 1:
+        raise SystemExit("Runtime must contain exactly one storage source handoff marker")
     package = envelope(payload, memory, commit[:12])
     sd = dist / "sd/KUI"
     sd.mkdir(parents=True, exist_ok=True)
@@ -161,6 +168,7 @@ def main():
     shutil.copyfile(ROOT / "THIRD_PARTY.md", dist / "THIRD_PARTY.md")
     (dist / "HARDWARE-TEST.md").write_text(guide("hardware-test.md"))
     (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
+    (dist / "STORAGE-TRANSPORTS.md").write_text(guide("storage-transports.md"))
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
@@ -217,6 +225,7 @@ def main():
     # dependency archives remain available in this run's diagnostic artifact.
     update = dist / "sd-update"
     (update / "KUI").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", update / "STORAGE-TRANSPORTS.md")
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
     shutil.copytree(sd / "apps", update / "KUI/apps", dirs_exist_ok=True)
     shutil.copytree(sd / "tests/scan", update / "KUI/tests/scan", dirs_exist_ok=True)
@@ -238,7 +247,9 @@ def main():
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
         "FatFs and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
-        "Install KUI/runtime.kui on the SD card. Keep your existing boot CD.\n"
+        "Install KUI/runtime.kui and the matching Games payload on your storage card.\n"
+        "SCIF can keep its existing boot CD; SCI/IDE boot requires this run's new bootstrap CD.\n"
+        "Read STORAGE-TRANSPORTS.md before testing standalone SCI microSD or IDE/CF.\n"
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "The six menu songs, now including Harbor Lights, are Ogg Vorbis.\n"
         "Older menu WAVs in that folder are only a fallback.\n"
@@ -250,7 +261,7 @@ def main():
         "Update both KUI/runtime.kui and KUI/apps/games/retail-boot.kui from this package.\n"
         "DOA2 has confirmed gameplay; Evolution 2 boots with severe slowdown.\n"
         "Other titles and VMU save/load compatibility remain under community testing.\n"
-        "Games reads SD only; games may write VMU saves. Power cycle to return.\n"
+        "Games reads the selected storage device; games may write VMU saves. Power cycle to return.\n"
         "Keep existing preferences and dumps. No repeated read probe or benchmark is requested.\n"
         "APPS-ROUND-FIVE.md covers the other apps. See RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
@@ -298,6 +309,7 @@ def main():
         shutil.rmtree(boot)
     boot.mkdir()
     shutil.copyfile(cdi, boot / "kui-bootstrap.cdi")
+    shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", boot / "STORAGE-TRANSPORTS.md")
     (boot / "BOOTLOADER-REFRESH.md").write_text(guide("bootloader-refresh.md"))
     shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.png", boot / "boot-disc-badge.png")
     shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.md", boot / "BADGE-PROVENANCE.md")
@@ -320,7 +332,8 @@ def main():
         "FatFs and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
         "This package refreshes only the boot CD. Burn kui-bootstrap.cdi as a disc image.\n"
-        "Keep the existing SD card and its KUI/runtime.kui and Games payloads unchanged.\n"
+        "For SCI/IDE boot, also install this run's matching runtime and Games payloads.\n"
+        "Read STORAGE-TRANSPORTS.md; one storage card is sufficient.\n"
         "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
     boot_hashes = []
     for path in sorted(boot.rglob("*")):
@@ -349,7 +362,7 @@ def main():
     shutil.copyfile(cdi, bundle / "boot-cd/kui-v1.5.1.cdi")
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
     shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
     bundle_record = {**record, "kind": "release",
@@ -368,7 +381,8 @@ def main():
         "Original badge and splash provenance are in resources/branding/ in that source.\n\n"
         "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
         "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
-        "Your current working boot CD can load this runtime; the CDI in boot-cd/ is optional.\n"
+        "Existing boot CDs work with SCIF; SCI/IDE boot needs the new CDI in boot-cd/.\n"
+        "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
         "The normal retail game reader is installed; no SD benchmark payload is included.\n",
         encoding="utf-8")
     bundle_hashes = []

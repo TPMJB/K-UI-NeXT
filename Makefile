@@ -18,6 +18,7 @@ test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/
 test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
+test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage
 test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-cd-audio
 	./build/test-game-image
@@ -35,6 +36,11 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-retail-gd
 	./build/test-retail-pace
 	./build/test-retail-sd
+	./build/test-ata
+	./build/test-storage-policy
+	./build/test-sci-sd-bus
+	./build/test-retail-storage
+	./build/test-sci-sd-storage
 	./build/test-cd-audio guard
 	./build/test-network-probe
 	./build/test-network-connect
@@ -92,6 +98,26 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 
 deps:
 	python3 tools/fetch_deps.py
+
+build/test-ata: tests/test_ata.c src/core/ata.c include/kui/ata.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude src/core/ata.c tests/test_ata.c -o $@
+
+build/test-storage-policy: tests/test_storage_policy.c src/core/storage_policy.c include/kui/storage_policy.h include/kui/storage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude src/core/storage_policy.c tests/test_storage_policy.c -o $@
+
+build/test-sci-sd-bus: tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $@
+
+build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage.c src/loader/retail_storage.h include/kui/ata.h include/kui/storage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/loader/retail_storage.c tests/test_retail_storage.c -o $@
+
+build/test-sci-sd-storage: tests/test_sci_sd_storage.c src/dreamcast/sci_sd_storage.c src/dreamcast/sci_sd_storage.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader -Isrc/dreamcast src/dreamcast/sci_sd_storage.c tests/test_sci_sd_storage.c -o $@
 
 build/test-loader-probe: tests/test_loader_probe.c $(LOADER_PROBE) src/loader/client.c include/kui/loader_probe.h
 	@mkdir -p $(@D)

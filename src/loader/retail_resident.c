@@ -3,7 +3,7 @@
 #include "kui/retail_gd.h"
 #include "kui/retail_image.h"
 #include "kui/retail_pace.h"
-#include "retail_sd.h"
+#include "retail_storage.h"
 #include "retail_display.h"
 #include <stddef.h>
 #include <string.h>
@@ -11,8 +11,7 @@
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
 static struct kui_retail_gd service;
-static struct kui_loader_sd card;
-static struct kui_loader_sd_stream stream;
+static struct kui_retail_storage card;
 static struct kui_gd_track tracks[KUI_RETAIL_IMAGE_TRACKS];
 static struct retail_display_state display;
 static struct kui_retail_pace pace;
@@ -64,7 +63,7 @@ static void video_sample(void) {
 static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t output[512]) {
     (void)unused;
     video_sample(); /* Each block is ~1 ms: long steps still count wraps. */
-    card_result = kui_retail_sd_read_run(&card, &stream, lba, available, output);
+    card_result = kui_retail_storage_read_run(&card, lba, available, output);
     return card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
 /* The image API requires this fallback; with read_run bound it is unused. */
@@ -83,14 +82,14 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
                         uint32_t bytes, void *out) {
     (void)unused;
     if(bytes != 2048 && bytes != 2352) return -1;
-    card_result = kui_retail_sd_acquire();
+    card_result = kui_retail_storage_acquire(&card);
     if(card_result != KUI_LOADER_SD_OK) return -1;
     enum kui_game_result result = kui_retail_image_read(&image, lba, count,
         sector_format(bytes), out, (size_t)count * bytes);
-    enum kui_loader_sd_result stopped = kui_loader_sd_stream_stop(&card, &stream);
+    enum kui_loader_sd_result stopped = kui_retail_storage_stop(&card);
     if(card_result == KUI_LOADER_SD_OK) card_result = stopped;
     if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
-    kui_retail_sd_release();
+    kui_retail_storage_release(&card);
     return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
 static void redirect_entry(uint32_t address,void (*target)(void)) {
@@ -122,14 +121,15 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_restore(&display);
     retail_display_line("K-UI GAME READER");
     retail_display_line(manifest.title);
+    retail_display_line(kui_retail_storage_name(card.transport));
     retail_display_line(reason);
     retail_display_hex("GD function", function);
     retail_display_hex("Command", service.diag.last_command);
     retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Format" : "LBA", service.diag.last_lba);
     retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Bytes" : "Sectors", service.diag.last_count);
     retail_display_hex("Destination", service.diag.last_destination);
-    retail_display_hex("SD result", (uint32_t)card_result);
-    retail_display_hex("SD blocks read", image.blocks_read);
+    retail_display_hex("Storage result", (uint32_t)card_result);
+    retail_display_hex("Storage blocks read", image.blocks_read);
     retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
     for(;;) __asm__ volatile("nop");
@@ -142,7 +142,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("CALLER STACK",stack);
     retail_display_hex("HOOK GUARD FAULT",kui_retail_hook_fault);
     retail_display_hex("LAST GD COMMAND",service.diag.last_command);
-    retail_display_hex("SD BLOCKS READ",image.blocks_read);
+    retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
     /* How the game drives reads: ABXY+Start after a load shows these. */
     retail_display_hex("GD CALLS",service.diag.calls);
     retail_display_hex("EXEC CALLS",service.diag.exec_calls);
@@ -161,7 +161,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     for(;;) __asm__ volatile("nop");
 }
 int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
-    const struct kui_loader_sd *prepared_card, uint32_t original_gd_vector,
+    const struct kui_retail_storage *prepared_card, uint32_t original_gd_vector,
     const struct retail_display_state *saved_display) {
     uint32_t area = original_gd_vector & 0xff000000u;
     uint32_t p1 = (original_gd_vector & 0x00ffffffu) | 0x8c000000u;
@@ -177,8 +177,9 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
      * owner IP/executable. Copy it and rebind initialized card state to local
      * callbacks. No second SD reset or manifest parser remains in low RAM. */
     manifest = *prepared;
-    card_result = kui_retail_sd_adopt(&card, prepared_card);
-    if(card_result != KUI_LOADER_SD_OK || card.blocks < manifest.card_sectors)
+    card_result = kui_retail_storage_adopt(&card, prepared_card);
+    if(card_result != KUI_LOADER_SD_OK || kui_retail_storage_blocks(&card) < manifest.card_sectors ||
+       card.transport != manifest.storage_transport)
         return KUI_RETAIL_RESIDENT_SD;
     /* _start cleared all resident BSS, including image/cache/stream/counters. */
     image.manifest = &manifest;

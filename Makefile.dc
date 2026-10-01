@@ -6,6 +6,8 @@ endif
 TARGET := build/kui-diagnostic.elf
 RUNTIME := build/kui-runtime.elf
 SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
+           src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
+           src/loader/sd_reader.c src/loader/sci_sd_bus.c src/dreamcast/sci_sd_storage.c \
            src/core/report.c \
            src/dreamcast/main.c src/dreamcast/clock.c src/dreamcast/disc.c src/dreamcast/drive_bus.c src/dreamcast/sd.c
 OBJECTS := $(patsubst %.c,build/dc/%.o,$(SOURCES)) build/dc/ff.o build/dc/ffunicode.o
@@ -39,7 +41,11 @@ BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf
 include $(KOS_BASE)/Makefile.rules
 
-CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
+CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
+# Shared freestanding buses also serve the CD bootstrap/runtime. Keep the
+# console guard explicit here rather than importing KOS into their headers.
+build/dc/src/dreamcast/ata_bus.o build/dc/src/loader/sci_sd_bus.o: CPPFLAGS += -DKUI_ON_CONSOLE=1
+build/dc/src/loader/sd_reader.o: CPPFLAGS += -DKUI_RETAIL_FAST_IO=1
 # Experimental, never-run-on-hardware code (the GD-ROM DMA probe and its competing thread) is NOT in
 # the default build. Opt in with: make diagnostic KUI_EXPERIMENTAL=1
 ifdef KUI_EXPERIMENTAL
@@ -147,6 +153,8 @@ RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(RETAIL_CPU) -DKUI_RETAIL
     -fstack-usage -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
 RETAIL_LINK := $(RETAIL_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
 RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/retail_sd.o \
+    build/retail/src/loader/retail_storage.o build/retail/src/loader/sci_sd_bus.o \
+    build/retail/src/core/ata.o build/retail/src/dreamcast/ata_bus.o \
     build/retail/src/loader/minic.o build/retail/src/core/retail_image.o \
     build/retail/src/loader/retail_display.o
 RETAIL_RESIDENT := build/retail/src/loader/retail_resident_asm.o \

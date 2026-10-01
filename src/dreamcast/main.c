@@ -281,7 +281,7 @@ static void settings_operation(bool save) {
     bool ok = false, destination_ok = false;
     char root[KUI_DEST_ROOT_CAP];
     kui_destination_default(root);
-    kui_sd_set_params(0, true);
+    kui_sd_set_params(KUI_STORAGE_AUTO, true);
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs, kui_log)) {
@@ -303,7 +303,7 @@ static void settings_operation(bool save) {
         ++destination_generation;
     }
     snprintf(settings_note, sizeof(settings_note), "%s", ok ?
-        (save ? "Preferences saved to SD." : "Preferences loaded; bench.cfg may override capture.") :
+        (save ? "Preferences saved to storage." : "Preferences loaded; bench.cfg may override capture.") :
         (save ? "Save not confirmed; reopen Settings to check the card." :
                 "Could not load preferences. See Diagnostics."));
     mutex_unlock(&lock);
@@ -408,7 +408,7 @@ static void system_operation(bool save) {
     mutex_lock(&lock); value=system_pending; legacy_memory=settings_current.show_memory; mutex_unlock(&lock);
     if(!save) kui_system_settings_default(&value);
     bool ok=false;
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs,kui_log)) {
@@ -496,7 +496,7 @@ static void scan_operation(void) {
     snprintf(result.message,sizeof(result.message),"Could not connect SD for Advanced CRC scan.");
     const struct kui_scan_ops ops={.cancelled=scan_cancel,.now_ms=scan_now,
         .progress=scan_progress,.log=kui_log};
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(kui_sd_connect()) {
         kui_recovery_scan(scan_path_pending,&ops,&result);
         kui_sd_disconnect();
@@ -547,7 +547,7 @@ static void salvage_operation(unsigned action) {
         .passes=salvage_passes_pending,.job=salvage_path_pending,.progress=salvage_progress};
     const struct kui_capture_ops ops={.read=salvage_read,.cancelled=scan_cancel,
         .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID};
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(kui_disc_prepare(sessions) && kui_plan_tracks(sessions,&plan) && !kui_cancelled() && kui_sd_connect()) {
         kui_disc_timing_phase(NULL,true);
         if(action==46 || kui_salvage_latest(&plan,&ops,salvage_path_pending))
@@ -586,7 +586,7 @@ static void destination_operation(bool save) {
     mutex_unlock(&lock);
     struct kui_destination_page listing = {0};
     bool ok = false;
-    kui_sd_set_params(0, true);
+    kui_sd_set_params(KUI_STORAGE_AUTO, true);
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs, kui_log)) {
@@ -890,7 +890,7 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(action==23) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_music_player_page page;
                 bool ok=kui_music_player_list(music_path_pending,music_offset_pending,&page,kui_log,kui_cancelled);
                 mutex_lock(&lock);
@@ -900,7 +900,7 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(action==24) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status result;
                 active_app=24;
                 kui_music_player_run(music_path_pending,system_current.music_volume,&result,
@@ -917,7 +917,7 @@ static void *worker(void *unused) {
                 publish_music();
             }
             if(action==54) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_games_page page;
                 kui_games_list_covers(games_path_pending,games_offset_pending,games_view_pending,&page,
                     games_covers,kui_log,kui_cancelled);
@@ -925,7 +925,7 @@ static void *worker(void *unused) {
                 ++games_listing_generation;mutex_unlock(&lock);
             }
             if(action==59) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status status;struct kui_games_scan_counts counts;
                 kui_games_scan(&status,&counts,games_scan_progress,kui_log,kui_cancelled);
                 /* Show the library either way: finished covers are kept, and
@@ -937,19 +937,19 @@ static void *worker(void *unused) {
                 ++games_listing_generation;mutex_unlock(&lock);
             }
             if(action==60) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_files_page page;
                 kui_files_list(&files_request_pending,&page,kui_log,kui_cancelled);
                 mutex_lock(&lock);files_listing_result=page;++files_listing_generation;mutex_unlock(&lock);
             }
             if(action==61) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_files_preview preview;
                 kui_files_preview(&files_job_pending,&preview,kui_log,kui_cancelled,files_progress);
                 mutex_lock(&lock);files_preview_result=preview;++files_preview_generation;mutex_unlock(&lock);
             }
             if(action==62) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status status;
                 kui_files_commit(&files_job_pending,&files_totals_pending,&status,kui_log,kui_cancelled,files_progress);
                 /* The folder is listed again even after Stop, which ended the run itself. */
@@ -961,14 +961,14 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(action==63) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_files_picture picture;
                 kui_files_picture(files_picture_pending,files_picture_pixels,&picture,kui_log,kui_cancelled);
                 mutex_lock(&lock);files_picture_result=picture;++files_picture_generation;mutex_unlock(&lock);
             }
             if(action==64) {
                 /* The card stays on SCIF; the W5500 has the SCI port. */
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_ftp_options options={0};
                 options.seed=(uint32_t)timer_us_gettime64();
                 struct kui_ftp_status result;
@@ -983,13 +983,13 @@ static void *worker(void *unused) {
                 mutex_lock(&lock);ftp_status=result;ftp_seen=true;mutex_unlock(&lock);
             }
             if(action==55) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_games_detail detail;
                 kui_games_inspect_cover(games_path_pending,&detail,games_detail_cover,kui_log,kui_cancelled);
                 mutex_lock(&lock);games_detail=detail;++games_detail_generation;mutex_unlock(&lock);
             }
             if(action==56 || action==57 || action==58) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 bool prepared=action==58?
                     kui_games_retail_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
@@ -1066,13 +1066,13 @@ static void *worker(void *unused) {
             if(action==30) scan_operation();
             if(action==31) {
                 struct kui_vmu_backup_view result;
-                active_app=31;kui_sd_set_params(0,true);
+                active_app=31;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 kui_vmu_backups_run(vmu_backup_page_pending,&result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);vmu_backups=result;++vmu_backups_generation;mutex_unlock(&lock);
             }
             if(action==32 || action==33) {
                 struct kui_vmu_view result;
-                active_app=action;kui_sd_set_params(0,true);
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 kui_vmu_restore_run(vmu_restore_path_pending,vmu_slot_pending,action==33,
                     &result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);vmu_snapshot=result;++vmu_restore_generation;mutex_unlock(&lock);
@@ -1092,7 +1092,7 @@ static void *worker(void *unused) {
             }
             if(action>=37 && action<=40) {
                 struct kui_vmu_view result;
-                active_app=action;kui_sd_set_params(0,true);
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 if(action<=38) kui_vmu_delete_run(vmu_slot_pending,vmu_page_pending,vmu_selected_pending,
                     action==38,&result,kui_log,kui_cancelled,app_progress);
                 else kui_vmu_copy_run(vmu_slot_pending,vmu_page_pending,vmu_selected_pending,
@@ -1120,7 +1120,7 @@ static void *worker(void *unused) {
             }
             if(action>=41 && action<=43) {
                 struct kui_app_status result;
-                active_app=action;kui_sd_set_params(0,true);
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 kui_maintenance_run(action-41,&result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);maintenance_status=result;mutex_unlock(&lock);
                 if(action!=41) {
@@ -1448,6 +1448,7 @@ static bool boot_cancelled(void) {
 #endif
 
 int main(void) {
+    kui_storage_boot_begin();
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
     kui_log("Running " KUI_RELEASE_SHORT " " KUI_ROLE " build " KUI_BUILD_ID);
@@ -1459,7 +1460,7 @@ int main(void) {
         vid_mode->flags & VID_INTERLACE ? "interlaced" : "progressive");
 #ifndef KUI_SD_RUNTIME
     kui_log("Hold B during startup for built-in diagnostics.");
-    kui_log("Otherwise load /KUI/runtime.kui from SD.");
+    kui_log("Otherwise find /KUI/runtime.kui on SCIF, SCI or IDE/CF.");
     uint64_t until = timer_ms_gettime64() + 1500;
     bool fallback = false;
     while(timer_ms_gettime64() < until) {
@@ -1482,7 +1483,7 @@ int main(void) {
     kui_shell_init(&shell, &settings_current);
     kui_shell_set_system_preferences(&shell,&system_current);
     kui_destination_default(destination_current);
-    snprintf(settings_note,sizeof(settings_note),"Loading preferences from SD...");
+    snprintf(settings_note,sizeof(settings_note),"Loading preferences from storage...");
     pending = 27; busy = true; splash_active=true;
     splash_deadline=timer_ms_gettime64()+3000;
     kui_log("K-UI launcher: Disc Ripper, VMU, Memory, Network, Settings, Diagnostics, GD Play and Music.");
@@ -1789,7 +1790,7 @@ int main(void) {
             if(action==20 || action==45) network_test_status=(struct kui_app_status){0};
             if(action == 8 || action == 9)
                 snprintf(settings_note, sizeof(settings_note), "%s", action == 8 ?
-                    "Loading preferences from SD..." : "Saving preferences to SD...");
+                    "Loading preferences from storage..." : "Saving preferences to SD...");
             pending = action; busy = true; cancel_requested = false; shell.scroll = 0;
             ui_hz_busy = 2;
             if(is_capture_action(action)) {

@@ -16,6 +16,8 @@ static struct {
     enum kui_capture_result result;
     struct kui_capture_stats stats;
     unsigned engine_calls, simulated_writes;
+    unsigned storage, dma_ends;
+    bool exercise_dma, dma_pending;
     char order[32], log[512], destination[KUI_DEST_ROOT_CAP];
     size_t order_size, log_size;
 } fake;
@@ -74,15 +76,18 @@ bool kui_plan_tracks(const struct kui_toc sessions[2],struct kui_capture_plan *o
     return fake.plan_ok;
 }
 bool kui_sd_connect(void) {note('S');return fake.connect_ok;}
+unsigned kui_storage_active(void) {return fake.storage;}
 void kui_sd_disconnect(void) {note('U');}
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
     (void)ctx;(void)fad;(void)sectors;(void)out;assert(!"unexpected disc read");return KUI_READ_FATAL;
 }
 bool kui_disc_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
-    (void)ctx;(void)fad;(void)sectors;(void)out;assert(!"unexpected DMA read");return false;
+    (void)ctx;(void)fad;(void)sectors;(void)out;
+    assert(fake.exercise_dma && !fake.dma_pending);fake.dma_pending=true;return true;
 }
 enum kui_read_result kui_disc_read_end(void *ctx) {
-    (void)ctx;assert(!"unexpected DMA completion");return KUI_READ_FATAL;
+    (void)ctx;assert(fake.exercise_dma && fake.dma_pending);
+    fake.dma_pending=false;++fake.dma_ends;return KUI_READ_OK;
 }
 void kui_capture_status(void *ctx,const struct kui_capture_progress *progress) {
     (void)ctx;(void)progress;
@@ -112,6 +117,15 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     assert(ops->options->output && ops->options->output->game_names);
     assert(!strcmp(ops->options->output->parent,fake.destination));
     assert(!ops->options->bench);
+    if(fake.exercise_dma) {
+        uint8_t buffer[32];
+        assert(ops->read_begin(NULL,45150,1,buffer));
+        /* This is where the engine can write the previous chunk. IDE must
+         * have finished optical DMA already; serial SD retains overlap. */
+        assert(fake.dma_pending==(fake.storage!=KUI_STORAGE_IDE));
+        assert(ops->read_end(NULL)==KUI_READ_OK);
+        assert(!fake.dma_pending && fake.dma_ends==1);
+    }
     *ops->stats=fake.stats;
     if(mode!=KUI_CAPTURE_VERIFY) ++fake.simulated_writes;
     return fake.result;
@@ -151,6 +165,9 @@ static void run_destination(const char *destination) {
 static void run_success(void) {run_destination("/Games");}
 int main(void) {
     expect_empty_stats();
+    for(unsigned storage=KUI_STORAGE_SCIF;storage<=KUI_STORAGE_IDE;storage++) {
+        reset();fake.storage=storage;fake.exercise_dma=true;run_success();
+    }
     /* Completion is not necessarily read-back verification. Preserve exactly
      * what the engine reports for every action and returned outcome. */
     for(unsigned mode=KUI_CAPTURE_NEW;mode<=KUI_CAPTURE_VERIFY;++mode) {

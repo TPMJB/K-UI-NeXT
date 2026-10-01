@@ -2,6 +2,7 @@
 #ifndef KUI_RETAIL_IMAGE_H
 #define KUI_RETAIL_IMAGE_H
 #include "kui/game_image.h"
+#include "kui/storage.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -22,6 +23,7 @@ struct kui_retail_extent { uint32_t file_block, card_lba, blocks; };
 struct kui_retail_manifest {
     uint64_t card_sectors, partition_start, partition_end; /* End exclusive. */
     uint32_t track_count, extent_count, session_lba, boot_lba, boot_bytes;
+    uint32_t storage_transport; /* Wire offset28; old zero field means SCIF. */
     /* boot_crc32 is zero from K-UI: the stage checks each boot sector's
      * header instead of re-reading the file before launch. */
     uint32_t boot_crc32, ip_crc32, gdi_crc32;

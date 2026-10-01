@@ -1,5 +1,11 @@
 # Reuse one boot disc for SD updates
 
+**Standalone SCI/IDE development:** booting without a SCIF card requires the
+new storage-capable bootstrap CD, plus the matching runtime and Games loader.
+See [storage-transports.md](storage-transports.md). The older bootstrap cannot
+learn new storage hardware through a runtime update alone. The historical
+SCIF-only installation below remains applicable to older accepted builds.
+
 **Current update:** the M1.5 SD runtime opens a launcher with Disc Ripper,
 Settings and Diagnostics. See [the shell test](m15-shell-test.md) for its controls.
 Its package contract is unchanged; keep using your accepted bootstrap CD. The

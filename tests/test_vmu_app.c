@@ -3,6 +3,7 @@
 #include "kui/apps.h"
 #include "kui/destination.h"
 #include "kui/media.h"
+#include "kui/storage.h"
 #include <dc/maple.h>
 #include <dc/vmufs.h>
 #include <assert.h>
@@ -136,7 +137,7 @@ static int sync_image(void *ctx) {
     return fflush(image) || fsync(fileno(image))?-1:0;
 }
 static const struct kui_media_ops media={NULL,blocks,read_image,write_image,sync_image};
-void kui_sd_set_params(unsigned sci,bool crc) {assert(!sci && crc);}
+void kui_sd_set_params(unsigned sci,bool crc) {assert(sci==KUI_STORAGE_AUTO && crc);}
 bool kui_sd_connect(void) {
     ++connects;
     if(is("connect-fail")) {injected=true;return false;}

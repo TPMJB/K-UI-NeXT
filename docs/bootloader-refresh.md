@@ -1,13 +1,15 @@
-# Boot CD refresh: original badge and hold-B recovery
+# Boot CD refresh: standalone storage and hold-B recovery
 
-This package updates the boot CD only. Keep the playable SD files already
-installed from build `ed31d522c847`; there is no runtime or Games update here.
+The bootstrap artifact contains the boot CD. For standalone SCI microSD or
+IDE/CF, also install the runtime and Games files from this same run's SD-update
+artifact. See [storage-transports.md](storage-transports.md). Older accepted
+SCIF runtimes can still use this CD, but do not contain SCI/IDE game readers.
 
 ## Install and use
 
 Burn `kui-bootstrap.cdi` as a disc image onto a new boot CD-R. Normal startup
 shows the original K-UI badge, including `github.com/TPMJB`, under the Sega
-logo, then loads `/KUI/runtime.kui` from SD as before.
+logo, then searches SCIF, SCI and IDE/CF for a valid `/KUI/runtime.kui`.
 
 To stay in the CD tools, hold **B from power-on** until the built-in CD
 diagnostics screen appears. Release B, then press the **right trigger (R)**
@@ -40,13 +42,13 @@ fonts are already in RAM. The CD menu does not offer a full-disc capture.
 
 ## Next console check
 
-One normal boot should show the badge and enter your existing SD launcher.
+One normal boot should show the badge and enter the matching launcher from the
+selected device; confirm its storage transport in Diagnostics.
 One boot holding B should stay in the CD tools with `R: Bench` visible.
-That is enough to check the refreshed boot path; another Games comparison or
-storage sweep is not required. The benchmark runner is available whenever
-you choose to use it.
+That checks recovery controls. The new SCI and IDE/CF paths additionally need
+the short integrity/game check described in the storage guide.
 
-## Preserved playable Games build
+## Historical playable Games baseline
 
 The owner reported the CMD18 build substantially better and really playable:
 about 32 seconds from character selection to the first stage, slow character

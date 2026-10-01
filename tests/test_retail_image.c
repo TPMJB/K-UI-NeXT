@@ -114,6 +114,21 @@ static void wire_tests(void) {
     CHECK(wire[256] == 0x47 && wire[259] == 0x10 && wire[260] == 0x30 && wire[263] == 0x67);
     CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
     CHECK(!memcmp(&decoded, &manifest, sizeof(manifest)));
+    /* Preserve old SCIF wire maps, carry SCI/IDE, reject discovery/unknown IDs
+     * even when the wire CRC is valid. Encode errors leave output unchanged. */
+    for(uint32_t transport = KUI_STORAGE_SCIF; transport <= KUI_STORAGE_IDE; ++transport) {
+        manifest.storage_transport = transport;
+        CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+        CHECK(wire[28] == transport);
+        CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
+        CHECK(decoded.storage_transport == transport);
+    }
+    manifest.storage_transport = KUI_STORAGE_SCIF;
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+    put32(wire + 28, KUI_STORAGE_AUTO); refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    CHECK(!memcmp(&decoded, &empty, sizeof(decoded)));
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
     memcpy(clean_wire, wire, sizeof(wire));
     /* Every byte is covered by the CRC, including unused space. */
     for(unsigned i = 0; i < sizeof(wire); ++i) {
@@ -123,7 +138,7 @@ static void wire_tests(void) {
         wire[i] ^= 1;
     }
     /* Valid CRC cannot bless noncanonical fields, unused entries or text tails. */
-    const unsigned reserved[] = {28, 31, 264, 319, 344, 351, 320 + 4 * 32,
+    const unsigned reserved[] = {31, 264, 319, 344, 351, 320 + 4 * 32,
         832 + manifest.extent_count * 12, 2368, 4095,
         72 + sizeof("Original retail image test"), 200 + sizeof("KUITEST"),
         216 + sizeof("1ST_READ.BIN"), 240 + sizeof("JUE")};
