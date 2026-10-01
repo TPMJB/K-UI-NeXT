@@ -28,7 +28,11 @@ int main(void) {
     struct kui_storage_boot_marker before[2];memcpy(before,pair,sizeof(pair));
     assert(!kui_storage_patch_boot(pair,sizeof(pair),KUI_STORAGE_IDE));
     assert(!memcmp(before,pair,sizeof(pair)));
-    pair[1].version=2;assert(!kui_storage_patch_boot(pair,sizeof(pair),KUI_STORAGE_IDE));
+    pair[1].version=2;
+    assert(kui_storage_patch_boot(pair,sizeof(pair),KUI_STORAGE_IDE));
+    assert(kui_storage_boot_transport(&pair[0])==KUI_STORAGE_IDE);
+    assert(pair[1].version==2 && pair[1].transport==KUI_STORAGE_AUTO);
+    assert(!kui_storage_patch_boot(&pair[1],sizeof(pair[1]),KUI_STORAGE_IDE));
     memset(pair,0,sizeof(pair));assert(!kui_storage_patch_boot(pair,sizeof(pair),KUI_STORAGE_IDE));
     assert(!kui_storage_patch_boot(pair,19,KUI_STORAGE_IDE));
     return 0;

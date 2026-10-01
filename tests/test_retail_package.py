@@ -9,7 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import retail_package as layout
-from check_retail_loader_layout import check_directory, check_stack_usage
+from check_retail_loader_layout import check_directory, check_stack_usage, TRANSPORTS
 from image_probe_package import inspect_image_probe
 from loader_package import inspect_probe
 from package import release_metadata
@@ -163,21 +163,40 @@ class RetailLinkedLayout(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.directory = Path(self.temp.name)
-        self.bases = {"resident": layout.RESIDENT_ADDRESS, "stage": layout.STAGE_ADDRESS,
-                      "entry": layout.EXEC_ADDRESS}
-        self.payload = {"resident": bytearray(128), "stage": bytearray(256)}
-        self.symbols = {"resident": {}, "stage": {}, "entry": {}}
-        self.memory = {"resident": 512, "stage": 1024}
-        rs, ss, es = (self.symbols[name] for name in ("resident", "stage", "entry"))
-        for index, name in enumerate(("kui_retail_resident_init", "kui_retail_resident_hook",
-                                     "kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
-                                     "kui_retail_image_read", "kui_loader_sd_stream_next",
-                                     "kui_retail_sd_acquire", "kui_retail_sd_release")):
-            rs["_" + name] = layout.RESIDENT_ADDRESS + 4 + index * 4
-        rs.update({"__retail_hook_stack": layout.HOOK_STACK,
-                   "__retail_hook_stack_bottom": layout.HOOK_STACK_BOTTOM,
-                   "_kui_retail_hook_active": layout.RESIDENT_ADDRESS + 128,
-                   "_kui_retail_hook_fault": layout.RESIDENT_ADDRESS + 132})
+        self.bases = {"stage": layout.STAGE_ADDRESS, "entry": layout.EXEC_ADDRESS}
+        self.payload = {"stage": bytearray(256)}
+        self.symbols = {"stage": {}, "entry": {}}
+        self.memory = {"stage": 1024}
+        ss, es = self.symbols["stage"], self.symbols["entry"]
+        for transport in TRANSPORTS:
+            name = "resident-" + transport
+            self.bases[name] = layout.RESIDENT_ADDRESS
+            self.payload[name] = bytearray(128)
+            # Distinct bytes expose accidentally swapped transport blobs.
+            self.payload[name][0] = TRANSPORTS.index(transport)
+            self.memory[name] = 512
+            rs = self.symbols[name] = {}
+            required = ["kui_retail_resident_init", "kui_retail_resident_hook",
+                        "kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
+                        "kui_retail_image_read"]
+            if transport == "ide":
+                required += ["kui_ata_read"]
+            else:
+                required += ["kui_loader_sd_stream_next"]
+                prefix = "kui_retail_sd_" if transport == "scif" else "kui_sci_sd_"
+                required += [prefix + "acquire", prefix + "release"]
+            for index, symbol in enumerate(required):
+                rs["_" + symbol] = layout.RESIDENT_ADDRESS + 4 + index * 4
+            rs.update({"__retail_hook_stack": layout.HOOK_STACK,
+                       "__retail_hook_stack_bottom": layout.HOOK_STACK_BOTTOM,
+                       "_kui_retail_hook_active": layout.RESIDENT_ADDRESS + 128,
+                       "_kui_retail_hook_fault": layout.RESIDENT_ADDRESS + 132})
+            frames = list(ResidentStackReports.required)
+            if transport == "ide":
+                frames[-1] = "kui_ata_read"
+            report = "\n".join(f"test.c:1:1:{frame}\t32\tstatic" for frame in frames)
+            (self.directory / transport).mkdir()
+            (self.directory / transport / "resident.su").write_text(report + "\n")
         for index, name in enumerate(("kui_retail_stage_main", "kui_retail_stage_relay",
                                      "kui_retail_bootstrap_enter", "kui_retail_game_resume")):
             ss["_" + name] = layout.STAGE_ADDRESS + 4 + index * 4
@@ -185,22 +204,23 @@ class RetailLinkedLayout(unittest.TestCase):
         ss["__retail_trampoline_end"] = layout.STAGE_ADDRESS + 256
         struct.pack_into("<I", self.payload["stage"], 240,
                          ss["_kui_retail_game_resume"] | 0x20000000)
-        ss["__retail_resident_blob_start"] = layout.STAGE_ADDRESS + 256
-        self.payload["stage"] += self.payload["resident"]
-        ss["__retail_resident_blob_end"] = layout.STAGE_ADDRESS + len(self.payload["stage"])
-        for name in ("resident", "stage"):
+        for transport in TRANSPORTS:
+            label = "__retail_resident_" + transport + "_blob_"
+            ss[label + "start"] = layout.STAGE_ADDRESS + len(self.payload["stage"])
+            self.payload["stage"] += self.payload["resident-" + transport]
+            ss[label + "end"] = layout.STAGE_ADDRESS + len(self.payload["stage"])
+        for name in self.payload:
             base = self.bases[name]; syms = self.symbols[name]
-            syms[f"__retail_{name}_binary_end"] = base + len(self.payload[name])
-            syms[f"__retail_{name}_bss_begin"] = base + len(self.payload[name])
-            syms[f"__retail_{name}_bss_end"] = base + self.memory[name]
+            prefix = "resident" if name.startswith("resident-") else name
+            syms[f"__retail_{prefix}_binary_end"] = base + len(self.payload[name])
+            syms[f"__retail_{prefix}_bss_begin"] = base + len(self.payload[name])
+            syms[f"__retail_{prefix}_bss_end"] = base + self.memory[name]
         self.payload["entry"] = bytearray(layout.STAGE_BLOB_OFFSET) + self.payload["stage"]
         self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]))
         self.memory["entry"] = len(self.payload["entry"])
         es.update({"__retail_map": layout.EXEC_ADDRESS + layout.MAP_OFFSET,
                    "__retail_stage_blob_start": layout.EXEC_ADDRESS + layout.STAGE_BLOB_OFFSET,
                    "__retail_stage_blob_end": layout.EXEC_ADDRESS + len(self.payload["entry"])})
-        report = "\n".join(f"test.c:1:1:{name}\t32\tstatic" for name in ResidentStackReports.required)
-        (self.directory / "resident.su").write_text(report + "\n")
         self.write()
 
     def tearDown(self):
@@ -215,22 +235,37 @@ class RetailLinkedLayout(unittest.TestCase):
 
     def test_valid_resident_stage_and_entry(self):
         result = check_directory(self.directory)
-        self.assertEqual(result["resident"]["payload_bytes"], 128)
-        self.assertEqual(result["resident_stack"]["conservative_bytes"], 384)
+        for transport in TRANSPORTS:
+            self.assertEqual(result["resident-" + transport]["payload_bytes"], 128)
+            self.assertEqual(result["resident_stacks"][transport]["conservative_bytes"], 384)
 
     def test_embedded_identity_timer_import_and_guard(self):
-        self.payload["resident"][0] = 1; self.write()
+        self.payload["resident-scif"][0] = 1; self.write()
         with self.assertRaisesRegex(ValueError, "different/invalid low resident"):
             check_directory(self.directory)
-        self.payload["resident"][0] = 0
-        self.symbols["resident"]["_native_ticks"] = layout.RESIDENT_ADDRESS + 4
+        self.payload["resident-scif"][0] = 0
+        self.symbols["resident-scif"]["_native_ticks"] = layout.RESIDENT_ADDRESS + 4
         self.write()
         with self.assertRaisesRegex(ValueError, "Forbidden"):
             check_directory(self.directory)
-        del self.symbols["resident"]["_native_ticks"]
-        self.symbols["resident"]["__retail_hook_stack"] += 4; self.write()
+        del self.symbols["resident-scif"]["_native_ticks"]
+        self.symbols["resident-scif"]["__retail_hook_stack"] += 4; self.write()
         with self.assertRaisesRegex(ValueError, "hook stack"):
             check_directory(self.directory)
+
+    def test_every_transport_has_independent_blob_and_stack_check(self):
+        for transport in TRANSPORTS:
+            name = "resident-" + transport
+            self.payload[name][0] ^= 0x80; self.write()
+            with self.subTest(transport=transport), self.assertRaisesRegex(ValueError, "different/invalid low resident"):
+                check_directory(self.directory)
+            self.payload[name][0] ^= 0x80; self.write()
+            report = self.directory / transport / "resident.su"
+            text = report.read_text()
+            report.write_text(text.replace("\t32\t", "\t2048\t"))
+            with self.subTest(transport=transport), self.assertRaisesRegex(ValueError, "exceeds"):
+                check_directory(self.directory)
+            report.write_text(text)
 
     def test_relay_size_bss_and_blank_manifest(self):
         self.symbols["stage"]["__retail_trampoline_end"] += 4; self.write()
@@ -241,10 +276,10 @@ class RetailLinkedLayout(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "uncached high-stage relay"):
             check_directory(self.directory)
         self.payload["stage"][240] ^= 1
-        self.symbols["resident"]["__retail_resident_bss_begin"] -= 4; self.write()
+        self.symbols["resident-scif"]["__retail_resident_bss_begin"] -= 4; self.write()
         with self.assertRaisesRegex(ValueError, "BSS"):
             check_directory(self.directory)
-        self.symbols["resident"]["__retail_resident_bss_begin"] += 4
+        self.symbols["resident-scif"]["__retail_resident_bss_begin"] += 4
         self.payload["entry"][layout.MAP_OFFSET] = 1; self.write()
         with self.assertRaisesRegex(ValueError, "blank"):
             check_directory(self.directory)

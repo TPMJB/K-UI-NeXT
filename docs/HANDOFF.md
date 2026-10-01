@@ -7,7 +7,10 @@ without sharing SCI between storage and network boards. See
 [storage-transports.md](storage-transports.md) for the matching boot-CD/runtime
 installation, source selection and first hardware check. This is a development
 build: SCI microSD and the CF hardware/driver remain unverified on the console.
-ext4 and shared SCI-bus operation are not part of this change.
+ext4 and shared SCI-bus operation are not part of this change. Development is
+in [PR #6](https://github.com/TPMJB/K-UI-NeXT/pull/6). The Games package embeds
+three separately linked readers and installs only the selected one; all three
+retain the existing low-memory, stack, instruction and embedded-byte audits.
 
 The preceding FTP correction was confirmed on hardware and merged to main in
 [PR #5](https://github.com/TPMJB/K-UI-NeXT/pull/5); that PR records the approved

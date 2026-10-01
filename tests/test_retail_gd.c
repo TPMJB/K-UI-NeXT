@@ -83,6 +83,10 @@ static void reset(void) {
     memset(&ctx, 0, sizeof(ctx)); memset(ram, 0xa5, sizeof(ram));
     CHECK(kui_retail_gd_init(&service, tracks, 3, &ops, BEGIN, END) == 0);
     CHECK(service.tracks == tracks && sizeof(service) < 512);
+    struct kui_retail_gd expected = service;
+    memset(&service, 0xa5, sizeof(service));
+    kui_retail_gd_init_validated(&service, tracks, 3, &ops, BEGIN, END);
+    CHECK(!memcmp(&service, &expected, sizeof(service)));
 }
 static void read_params(uint32_t lba, uint32_t count, uint32_t dest) {
     put(PARAM, lba + 150); put(PARAM + 4, count); put(PARAM + 8, dest); put(PARAM + 12, 0);

@@ -172,6 +172,11 @@ static void wire_tests(void) {
 }
 static void invalid_map_tests(void) {
     fixture(true); backup = manifest;
+    /* A track cannot cross the low/high-density boundary. The high stage
+     * proves this once before the resident adopts the GD service state. */
+    manifest.tracks[2].start_lba = 44999;
+    CHECK(kui_retail_image_check(&manifest, 44999, 1, KUI_GAME_SECTOR_RAW) == KUI_GAME_INVALID);
+    manifest = backup;
 #define BAD(field, value) do { manifest = backup; manifest.field = (value); \
     CHECK(kui_retail_manifest_validate(&manifest) != KUI_GAME_OK); } while(0)
     BAD(track_count, 0); BAD(track_count, 17); BAD(extent_count, 0);

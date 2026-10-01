@@ -66,6 +66,7 @@ static bool tracks_valid(const struct kui_retail_manifest *m) {
         const struct kui_retail_track *t = &m->tracks[i];
         if(t->number != i + 1 || t->start_lba >= t->end_lba ||
            t->end_lba > KUI_GAME_LBA_LIMIT ||
+           (t->start_lba < 45000u && t->end_lba > 45000u) ||
            (t->control != 0 && t->control != 4) ||
            (i && m->tracks[i - 1].end_lba > t->start_lba)) return false;
     }
@@ -88,11 +89,15 @@ static enum kui_game_result range_check(const struct kui_retail_manifest *m,
     }
     return cursor == end ? KUI_GAME_OK : KUI_GAME_RANGE;
 }
+enum kui_game_result kui_retail_image_check_validated(const struct kui_retail_manifest *m,
+    uint32_t lba, uint32_t count, enum kui_game_sector_format format) {
+    if(count > KUI_RETAIL_IMAGE_MAX_SECTORS) return KUI_GAME_RANGE;
+    return range_check(m, lba, count, format);
+}
 enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *m,
     uint32_t lba, uint32_t count, enum kui_game_sector_format format) {
     if(!tracks_valid(m)) return KUI_GAME_INVALID;
-    if(count > KUI_RETAIL_IMAGE_MAX_SECTORS) return KUI_GAME_RANGE;
-    return range_check(m, lba, count, format);
+    return kui_retail_image_check_validated(m, lba, count, format);
 }
 enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manifest *m) {
     if(!tracks_valid(m) || m->storage_transport > KUI_STORAGE_IDE || !m->card_sectors || m->card_sectors > UINT64_C(0x100000000) ||
@@ -273,7 +278,7 @@ static enum kui_game_result file_read(struct kui_retail_image *image,
 enum kui_game_result kui_retail_image_read(struct kui_retail_image *image,
     uint32_t lba, uint32_t count, enum kui_game_sector_format format, void *out, size_t capacity) {
     if(!image || !image->manifest || !image->read_block || !out) return KUI_GAME_INVALID;
-    enum kui_game_result r = kui_retail_image_check(image->manifest, lba, count, format);
+    enum kui_game_result r = kui_retail_image_check_validated(image->manifest, lba, count, format);
     if(r != KUI_GAME_OK) return r;
     uint32_t sector_bytes = format == KUI_GAME_SECTOR_RAW ? KUI_GAME_RAW_BYTES : KUI_GAME_DATA_BYTES;
     if(capacity < (size_t)sector_bytes * count) return KUI_GAME_RANGE;

@@ -72,6 +72,11 @@ enum kui_game_result kui_retail_image_init(struct kui_retail_image *,
     const struct kui_retail_manifest *, kui_retail_read_block, void *);
 enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *,
     uint32_t lba, uint32_t count, enum kui_game_sector_format);
+/* Same request bounds/type checks with a map that was fully validated once
+ * and remains immutable. Used by initialized image readers and the resident;
+ * externally supplied maps must use the full check/validate APIs above. */
+enum kui_game_result kui_retail_image_check_validated(const struct kui_retail_manifest *,
+    uint32_t lba, uint32_t count, enum kui_game_sector_format);
 /* Preflight range/type/capacity before any IO or output changes. Count <=64.
  * MODE1 checks a 16-byte sync/mode header and copies only 2048 user bytes;
  * RAW copies 2352 bytes from either data or audio tracks. Later IO/mode errors

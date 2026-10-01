@@ -11,8 +11,12 @@
 #include <stdint.h>
 #include <string.h>
 
-extern const uint8_t __retail_resident_blob_start[] __asm__("__retail_resident_blob_start");
-extern const uint8_t __retail_resident_blob_end[] __asm__("__retail_resident_blob_end");
+extern const uint8_t __retail_resident_scif_blob_start[] __asm__("__retail_resident_scif_blob_start");
+extern const uint8_t __retail_resident_scif_blob_end[] __asm__("__retail_resident_scif_blob_end");
+extern const uint8_t __retail_resident_sci_blob_start[] __asm__("__retail_resident_sci_blob_start");
+extern const uint8_t __retail_resident_sci_blob_end[] __asm__("__retail_resident_sci_blob_end");
+extern const uint8_t __retail_resident_ide_blob_start[] __asm__("__retail_resident_ide_blob_start");
+extern const uint8_t __retail_resident_ide_blob_end[] __asm__("__retail_resident_ide_blob_end");
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
@@ -38,6 +42,27 @@ static enum kui_loader_sd_result last_card_result;
 #define BOOT_CHUNK_SECTORS 16u
 static uint8_t raw_boot[BOOT_CHUNK_SECTORS*KUI_GAME_RAW_BYTES];
 static uint32_t boot_crc;
+static const uint8_t *resident_blob;
+static size_t resident_bytes;
+
+static void select_resident(void) {
+    const uint8_t *end;
+    switch(manifest.storage_transport) {
+        case KUI_STORAGE_SCIF:
+            resident_blob=__retail_resident_scif_blob_start;
+            end=__retail_resident_scif_blob_end;
+            break;
+        case KUI_STORAGE_SCI:
+            resident_blob=__retail_resident_sci_blob_start;
+            end=__retail_resident_sci_blob_end;
+            break;
+        default: /* Manifest decoding has already rejected every other ID. */
+            resident_blob=__retail_resident_ide_blob_start;
+            end=__retail_resident_ide_blob_end;
+            break;
+    }
+    resident_bytes=(size_t)(end-resident_blob);
+}
 
 static void retire_launcher_serial(void) {
     /* KOS scif_spi_shutdown() calls scif_init(), leaving TE/RE enabled; its
@@ -95,7 +120,7 @@ void kui_retail_boot_returned(void) {
 }
 
 static void install_resident(void) {
-    size_t bytes=(size_t)(__retail_resident_blob_end-__retail_resident_blob_start);
+    size_t bytes=resident_bytes;
     if(!bytes || bytes>KUI_RETAIL_RESIDENT_LIMIT-KUI_RETAIL_RESIDENT_ADDRESS)
         stopped("RESIDENT BOUNDS FAILED",(uint32_t)bytes);
     uint32_t firmware=*(volatile uint32_t *)(uintptr_t)0x8c0000bcu;
@@ -103,7 +128,7 @@ static void install_resident(void) {
     if((firmware&1u) || canonical<0x8c000100u || canonical>=KUI_RETAIL_IP_ADDRESS)
         stopped("UNSUPPORTED FIRMWARE GD VECTOR",firmware);
     memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,
-           __retail_resident_blob_start,bytes);
+           resident_blob,bytes);
     kui_retail_stage_sync();
     kui_retail_resident_entry init=(kui_retail_resident_entry)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     int initialized=init(&manifest,&card,firmware,&display);
@@ -116,6 +141,7 @@ void kui_retail_stage_main(const uint8_t *wire) {
     memcpy(wire_copy,wire,sizeof(wire_copy));
     enum kui_game_result result=kui_retail_manifest_decode(wire_copy,&manifest);
     if(result!=KUI_GAME_OK) stopped("INVALID RETAIL MAP",(uint32_t)result);
+    select_resident();
     if(manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
        manifest.session_lba<45000)
@@ -213,8 +239,8 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     uint32_t crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
     if(crc!=boot_crc) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
-    size_t bytes=(size_t)(__retail_resident_blob_end-__retail_resident_blob_start);
-    if(memcmp(resident,__retail_resident_blob_start,bytes))
+    size_t bytes=resident_bytes;
+    if(memcmp(resident,resident_blob,bytes))
         stopped("BOOTSTRAP ALTERED RESIDENT",0);
     retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
     retail_display_line("ENTERING GAME");

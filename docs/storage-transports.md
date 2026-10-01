@@ -34,6 +34,9 @@ onto another card. Power off before changing devices.
 Games records the selected transport in its validated physical-sector map.
 The high stage and resident reader use that same transport after the launcher
 shuts down; filesystem code and launcher callbacks do not survive into games.
+Only the selected transport's reader remains resident during gameplay. Each
+reader keeps the original protected low-memory and stack limits; the temporary
+high stage contains all three and installs the matching one.
 Existing zero-valued transport maps mean SCIF. Unknown device IDs are rejected.
 
 This is a **standalone-device implementation**. SCI microSD occupies the SCI
@@ -52,7 +55,10 @@ must take turns on their common G1 bus.
 
 Use a card with free space. First confirm startup, Games browsing, and a saved
 diagnostics report on the selected medium. Then use Diagnostics' existing
-write/reread check to verify data integrity before trying a new rip. An absent
+write/reread check to verify data integrity before trying a new rip. For the
+optional SD throughput benchmark, copy [t13-sci-storage.cfg](bench-cfgs/t13-sci-storage.cfg)
+to `/KUI/bench.cfg` on the same card before pressing R; its explicit SCI setting
+avoids the benchmark's default SCIF target. An absent
 or unsupported device should report failure and return to recovery, not hang.
 
 Try DOA2 and Evolution 2 first, recording the build and selected transport,

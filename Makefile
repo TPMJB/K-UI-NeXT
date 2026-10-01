@@ -111,7 +111,7 @@ build/test-sci-sd-bus: tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loade
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $@
 
-build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage.c src/loader/retail_storage.h include/kui/ata.h include/kui/storage.h
+build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage.c src/loader/retail_storage.h src/loader/retail_storage_impl.h src/loader/sci_sd_bus.h include/kui/ata.h include/kui/storage.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/loader/retail_storage.c tests/test_retail_storage.c -o $@
 

@@ -55,6 +55,14 @@ int kui_retail_gd_init(struct kui_retail_gd *, const struct kui_gd_track *,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,
     uint32_t guest_end);
 
+/* Resident-only initialization after the high stage has validated the entire
+ * immutable manifest (including GD session boundaries). Pointers/callbacks and
+ * guest bounds must be valid. This keeps duplicate input validation out of the
+ * protected low-memory reader; untrusted callers use kui_retail_gd_init. */
+void kui_retail_gd_init_validated(struct kui_retail_gd *, const struct kui_gd_track *,
+    uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,
+    uint32_t guest_end);
+
 /* PIOREAD/DMAREAD are polled CPU copies, without DMA hardware, IRQ or callback.
  * CHECK never reads storage. Completion/failure is acknowledged once by CHECK;
  * a subsequent CHECK returns NOT_FOUND. ABORT retains completed chunk bytes.

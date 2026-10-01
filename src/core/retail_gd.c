@@ -51,13 +51,18 @@ int kui_retail_gd_init(struct kui_retail_gd *s,
            (t->start_lba < 45000u && t->end_lba > 45000u) ||
            (i && tracks[i - 1].end_lba > t->start_lba)) return -1;
     }
+    kui_retail_gd_init_validated(s, tracks, count, ops, begin, end);
+    return 0;
+}
+void kui_retail_gd_init_validated(struct kui_retail_gd *s,
+    const struct kui_gd_track *tracks, uint32_t count,
+    const struct kui_gd_ops *ops, uint32_t begin, uint32_t end) {
     memset(s, 0, sizeof(*s));
     s->ops = *ops; s->tracks = tracks; s->track_count = count;
     s->guest_begin = begin; s->guest_end = end; s->initialized = 1;
     s->position_lba = tracks[count > 2 ? 2 : 0].start_lba;
     s->step = KUI_RETAIL_GD_STEP_SECTORS;
     reset(s);
-    return 0;
 }
 static int area_bounds(const struct kui_retail_gd *s, uint32_t area,
                        uint32_t *first, uint32_t *last) {

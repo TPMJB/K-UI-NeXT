@@ -76,7 +76,7 @@ static enum kui_game_sector_format sector_format(uint32_t bytes) {
 static int check_sectors(void *unused, uint32_t lba, uint32_t count, uint32_t bytes) {
     (void)unused;
     if(bytes != 2048 && bytes != 2352) return -1;
-    return kui_retail_image_check(&manifest, lba, count, sector_format(bytes)) == KUI_GAME_OK ? 0 : -1;
+    return kui_retail_image_check_validated(&manifest, lba, count, sector_format(bytes)) == KUI_GAME_OK ? 0 : -1;
 }
 static int read_sectors(void *unused, uint32_t lba, uint32_t count,
                         uint32_t bytes, void *out) {
@@ -190,9 +190,8 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
         tracks[i] = (struct kui_gd_track){t->number, t->control, t->start_lba, t->end_lba};
     }
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, read_sectors};
-    if(kui_retail_gd_init(&service, tracks, manifest.track_count, &ops,
-                         KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END))
-        return KUI_RETAIL_RESIDENT_SERVICE;
+    kui_retail_gd_init_validated(&service, tracks, manifest.track_count, &ops,
+                                 KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
     volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
     for(unsigned i = 0; i < 4; ++i) guard[i] = 0x4b554947u;
     kui_retail_original_menu=*(volatile uint32_t *)(uintptr_t)0x8c0000e0u;

@@ -70,9 +70,18 @@ static uint64_t blocks(void *ctx) {
     if(active==KUI_STORAGE_SCI) return sci.ready?sci.blocks:0;
     uint64_t bytes=sd_get_size();return bytes==UINT64_MAX?0:bytes/512;
 }
+static bool valid_count(size_t count) {
+    /* Pointer advancement must fit on SH-4; the protocol count is also
+     * 32-bit when this adapter is compiled on a wider host. */
+    if(!count || count>SIZE_MAX/512u) return false;
+#if SIZE_MAX > UINT32_MAX
+    if(count>UINT32_MAX) return false;
+#endif
+    return true;
+}
 static int read_blocks(void *ctx,uint32_t block,size_t count,uint8_t *data) {
     (void)ctx;
-    if(!connected || !data || !count || count>UINT32_MAX) return -1;
+    if(!connected || !data || !valid_count(count)) return -1;
     if(active==KUI_STORAGE_SCIF) return sd_read_blocks(block,count,data);
     if(active==KUI_STORAGE_IDE) {
         if(!ata_lock()) return -1;
@@ -89,7 +98,7 @@ static int read_blocks(void *ctx,uint32_t block,size_t count,uint8_t *data) {
 }
 static int write_blocks(void *ctx,uint32_t block,size_t count,const uint8_t *data) {
     (void)ctx;
-    if(!connected || !data || !count || count>UINT32_MAX) return -1;
+    if(!connected || !data || !valid_count(count)) return -1;
     if(active==KUI_STORAGE_SCIF) return sd_write_blocks(block,count,data);
     if(active==KUI_STORAGE_SCI)
         return kui_sci_sd_write(&sci,block,(uint32_t)count,data) && kui_sci_sd_healthy()?0:-1;

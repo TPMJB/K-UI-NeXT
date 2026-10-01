@@ -157,9 +157,18 @@ RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/ret
     build/retail/src/core/ata.o build/retail/src/dreamcast/ata_bus.o \
     build/retail/src/loader/minic.o build/retail/src/core/retail_image.o \
     build/retail/src/loader/retail_display.o
-RETAIL_RESIDENT := build/retail/src/loader/retail_resident_asm.o \
-    build/retail/src/loader/retail_resident.o build/retail/src/core/retail_gd.o \
-    build/retail/src/core/retail_pace.o $(RETAIL_COMMON)
+# Each resident carries one physical transport. All retain the same low-RAM
+# linker bounds; the temporary high stage embeds/selects the matching image.
+RETAIL_RESIDENT_COMMON_SRC := src/loader/retail_resident.c src/core/retail_gd.c \
+    src/core/retail_pace.c src/loader/minic.c src/core/retail_image.c \
+    src/loader/retail_display.c
+RETAIL_SCIF_SRC := $(RETAIL_RESIDENT_COMMON_SRC) src/loader/sd_reader.c src/loader/retail_sd.c
+RETAIL_SCI_SRC := $(RETAIL_SCIF_SRC) src/loader/sci_sd_bus.c
+RETAIL_IDE_SRC := $(RETAIL_RESIDENT_COMMON_SRC) src/core/ata.c src/dreamcast/ata_bus.c
+RETAIL_SCIF := $(patsubst %.c,build/retail/scif/%.o,$(RETAIL_SCIF_SRC)) build/retail/scif/src/loader/retail_resident_asm.o
+RETAIL_SCI := $(patsubst %.c,build/retail/sci/%.o,$(RETAIL_SCI_SRC)) build/retail/sci/src/loader/retail_resident_asm.o
+RETAIL_IDE := $(patsubst %.c,build/retail/ide/%.o,$(RETAIL_IDE_SRC)) build/retail/ide/src/loader/retail_resident_asm.o
+RETAIL_RESIDENT_BINS := build/retail/resident-scif.bin build/retail/resident-sci.bin build/retail/resident-ide.bin
 RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
     build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
 RETAIL_BENCH_STAGE := build/retail/src/loader/retail_stage_asm.o \
@@ -172,11 +181,40 @@ build/retail/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
 build/retail/src/loader/retail_display.o: force-build-id
-build/retail/resident.elf: $(RETAIL_RESIDENT) src/loader/retail_resident.ld
-	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident.map -o $@ $(RETAIL_RESIDENT) -lgcc
-build/retail/resident.bin: build/retail/resident.elf
+build/retail/scif/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
+build/retail/scif/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
+build/retail/scif/src/loader/retail_display.o: force-build-id
+build/retail/resident-scif.elf: $(RETAIL_SCIF) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-scif.map -o $@ $(RETAIL_SCIF) -lgcc
+build/retail/resident-scif.bin: build/retail/resident-scif.elf
 	sh-elf-objcopy -O binary $< $@
-build/retail/src/loader/retail_stage_asm.o: build/retail/resident.bin
+build/retail/sci/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
+build/retail/sci/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
+build/retail/sci/src/loader/retail_display.o: force-build-id
+build/retail/resident-sci.elf: $(RETAIL_SCI) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-sci.map -o $@ $(RETAIL_SCI) -lgcc
+build/retail/resident-sci.bin: build/retail/resident-sci.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail/ide/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
+build/retail/ide/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
+build/retail/ide/src/loader/retail_display.o: force-build-id
+build/retail/resident-ide.elf: $(RETAIL_IDE) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-ide.map -o $@ $(RETAIL_IDE) -lgcc
+build/retail/resident-ide.bin: build/retail/resident-ide.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail/src/loader/retail_stage_asm.o: $(RETAIL_RESIDENT_BINS)
 build/retail/stage.elf: $(RETAIL_STAGE) src/loader/retail_stage.ld
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,build/retail/stage.map -o $@ $(RETAIL_STAGE) -lgcc
 build/retail/stage.bin: build/retail/stage.elf
@@ -202,11 +240,11 @@ build/retail-bench/retail_entry_asm.o: src/loader/retail_entry.S build/retail-be
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_STAGE_BIN='"build/retail-bench/stage.bin"' -MMD -MP -c $< -o $@
 build/retail-bench/entry.elf: build/retail-bench/retail_entry_asm.o src/loader/retail_entry.ld build/retail/entry.elf
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail-bench/entry.map -o $@ $<
-	cp build/retail/resident.elf build/retail/resident.bin build/retail/resident.map build/retail-bench/
-	cp -r build/retail/src build/retail-bench/
+	cp build/retail/resident-*.elf build/retail/resident-*.bin build/retail/resident-*.map build/retail-bench/
+	cp -r build/retail/src build/retail/scif build/retail/sci build/retail/ide build/retail-bench/
 	python3 tools/check_retail_instructions.py build/retail-bench
 	python3 tools/check_retail_loader_layout.py build/retail-bench
 	python3 tools/record_build.py $@
 
--include $(RETAIL_RESIDENT:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
+-include $(RETAIL_SCIF:.o=.d) $(RETAIL_SCI:.o=.d) $(RETAIL_IDE:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
 -include $(RETAIL_BENCH_STAGE:.o=.d) build/retail-bench/retail_entry_asm.d

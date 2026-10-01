@@ -21,11 +21,13 @@ bool kui_storage_patch_boot(void *payload,size_t bytes,unsigned transport) {
     for(size_t offset=0;offset<=bytes-20;offset+=4) {
         uint8_t *candidate=p+offset;
         if(get32(candidate)!=KUI_STORAGE_BOOT_MAGIC1 ||
-           get32(candidate+4)!=KUI_STORAGE_BOOT_MAGIC2) continue;
-        /* A duplicate or malformed recognizable marker is ambiguous, even
-         * if another valid marker exists elsewhere in the image. */
-        if(found || get32(candidate+8)!=1 || get32(candidate+12)!=KUI_STORAGE_AUTO ||
-           get32(candidate+16)!=~(uint32_t)KUI_STORAGE_AUTO) return false;
+           get32(candidate+4)!=KUI_STORAGE_BOOT_MAGIC2 ||
+           get32(candidate+8)!=1 || get32(candidate+12)!=KUI_STORAGE_AUTO ||
+           get32(candidate+16)!=~(uint32_t)KUI_STORAGE_AUTO) continue;
+        /* Comparison constants can appear together in an SH literal pool.
+         * Only the complete initialized record is a marker; require exactly
+         * one such record before modifying the checksum-validated payload. */
+        if(found) return false;
         found=candidate;
     }
     if(!found) return false;
