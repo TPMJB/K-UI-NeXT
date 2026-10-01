@@ -1,5 +1,14 @@
 # Hardware evidence
 
+## SCI cached processing Quick passed — 2026-10-01
+
+Runtime **a6cb21895c37**, run **5**, passed a **4 MiB Quick** check with zero
+errors/DMA faults. Write/read rates were **1,104.35/1,052.72 KiB/s**, respectively
+9.93%/13.67% above the first DMA soak. This is preliminary run-to-run evidence:
+Quick is much shorter than Soak and does not establish a sustained gain.
+DMA reads exactly match the 8,192 verified sectors. See the
+[original reports and review](evidence/sci-dma-cached-quick-2026-10-01.md).
+
 ## SCI DMA soak passed; DOA2 substantially improved — 2026-10-01
 
 Runtime **cf8e7ea7866b**, run **4**, passed 26 cycles and 416 MiB written and

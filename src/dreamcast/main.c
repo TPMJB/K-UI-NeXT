@@ -504,6 +504,9 @@ static void storage_test_operation(unsigned action) {
     bool resume_music=false;
     result=(struct kui_storage_test_result){0};
     history=(struct kui_storage_test_history){0};
+    /* Profiling is scoped to the engine call below, never connection,
+     * History/report writes, normal runtime I/O or the separate game reader. */
+    kui_sci_sd_profile_timer(NULL,NULL);
     if(action==65) {
         result.request=storage_test_pending;
         snprintf(result.metadata.build,sizeof(result.metadata.build),"%.15s",KUI_BUILD_ID);
@@ -525,16 +528,42 @@ static void storage_test_operation(unsigned action) {
                 storage_test_publish,storage_test_errors,kui_log};
             struct kui_sci_sd_stats dma_before, dma_after;
             kui_sci_sd_stats_get(&dma_before);
+            if(metadata.transport==KUI_STORAGE_SCI)
+                kui_sci_sd_profile_timer(storage_test_now,NULL);
             kui_storage_test_run(&storage_test_pending,&metadata,&ops,&result);
+            /* Engine returns here for Pass, Stop and every failure. Disable
+             * before the final snapshot and all persistence/history I/O. */
+            kui_sci_sd_profile_timer(NULL,NULL);
             if(metadata.transport==KUI_STORAGE_SCI) {
                 kui_sci_sd_stats_get(&dma_after);
                 uint32_t reads=dma_after.rx_blocks-dma_before.rx_blocks;
                 uint32_t writes=dma_after.tx_blocks-dma_before.tx_blocks;
                 uint32_t polled=dma_after.polled_blocks-dma_before.polled_blocks;
                 uint32_t failures=dma_after.failures-dma_before.failures;
+                result.sci_profile=(struct kui_storage_test_sci_profile){
+                    .present=true,.rx_dma_blocks=reads,.tx_dma_blocks=writes,
+                    .polled_blocks=polled,.dma_failures=failures,
+                    .profiled_rx_blocks=dma_after.profiled_rx_blocks-dma_before.profiled_rx_blocks,
+                    .profiled_tx_blocks=dma_after.profiled_tx_blocks-dma_before.profiled_tx_blocks,
+                    .rx_setup_us=dma_after.rx_setup_us-dma_before.rx_setup_us,
+                    .rx_transfer_us=dma_after.rx_transfer_us-dma_before.rx_transfer_us,
+                    .rx_check_us=dma_after.rx_check_us-dma_before.rx_check_us,
+                    .tx_setup_us=dma_after.tx_setup_us-dma_before.tx_setup_us,
+                    .tx_transfer_us=dma_after.tx_transfer_us-dma_before.tx_transfer_us
+                };
                 kui_log("SCI test DMA: read=%lu write=%lu polled=%lu failures=%lu",
                     (unsigned long)reads,(unsigned long)writes,
                     (unsigned long)polled,(unsigned long)failures);
+                const struct kui_storage_test_sci_profile *profile=&result.sci_profile;
+                kui_log("SCI profile RX %lu blocks: setup=%llu transfer=%llu check=%llu us",
+                    (unsigned long)profile->profiled_rx_blocks,
+                    (unsigned long long)profile->rx_setup_us,
+                    (unsigned long long)profile->rx_transfer_us,
+                    (unsigned long long)profile->rx_check_us);
+                kui_log("SCI profile TX %lu blocks: setup=%llu transfer=%llu us",
+                    (unsigned long)profile->profiled_tx_blocks,
+                    (unsigned long long)profile->tx_setup_us,
+                    (unsigned long long)profile->tx_transfer_us);
                 /* Reuse the versioned result's existing message field so
                  * JSON and History retain proof of DMA use without changing
                  * the binary format or hiding a failure's original cause. */

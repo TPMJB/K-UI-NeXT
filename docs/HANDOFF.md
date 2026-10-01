@@ -27,20 +27,23 @@ The owner requested a performance fix and explicitly prohibited copying SWAT's
 implementation. The [original SCI DMA candidate](evidence/sci-dma-design-2026-10-01.md)
 uses bounded sector DMA, an aligned existing game-reader cache and block polling
 when DMA cannot be borrowed. Diagnostics records actual DMA and fallback counts.
-Hardware speed and timing remain unverified. Install matching `KUI/runtime.kui`
-and `KUI/apps/games/retail-boot.kui`, then run Quick once and inspect integrity,
-throughput and DMA counts before another long soak or DOA2 comparison. A
-runtime-only update does not replace the game reader. Do not claim a measured
-speed improvement until the new console results arrive.
+Install matching `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui`; a
+runtime-only update does not replace the game reader. Console results below
+distinguish the accepted builds from subsequent candidates.
 
 Those results have now arrived for **cf8e7ea7866b**: run 4 passed 26 cycles,
 416 MiB verified, zero errors/DMA faults, and write/read
 **1,004.62/926.11 KiB/s**. Reads are 75.15% faster than initial SCI and 51.25%
 faster than SCIF. The owner reports DOA2 is "much better" with a tiny amount of
 lag remaining. See the [DMA soak evidence](evidence/sci-dma-soak-2026-10-01.md).
-The next candidate targets receive reversal/CRC passes and overlaps write CRC
-with DMA, keeping game pacing unchanged. It still needs console validation;
-do not attribute all remaining game lag to storage or promise disc equivalence.
+The cached reversal/CRC and overlapped write-CRC build **a6cb21895c37** then
+passed run 5, a **4 MiB Quick** check, at write/read **1,104.35/1,052.72 KiB/s**,
+zero errors/DMA faults. These are +9.93%/+13.67% versus the earlier soak, but
+different presets prevent a controlled sustained comparison. See the
+[Quick report and optimization review](evidence/sci-dma-cached-quick-2026-10-01.md).
+Game pacing remains unchanged. The next candidate measures DMA phases and
+reduces remaining transfer CPU work; do not attribute all remaining game lag
+to storage or promise disc equivalence.
 
 The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
 Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now
@@ -118,7 +121,8 @@ without sharing SCI between storage and network boards. See
 installation, source selection and first hardware check. This is a development
 build: SCI runtime storage has the initial passing soak above and a qualitative
 DOA2 report. The first SCI DMA paths also passed the later soak and improved
-DOA2; their processing follow-up and CF hardware/driver remain unverified on
+DOA2; their cached processing follow-up passed the short runtime check above.
+The next feed/profile candidate and CF hardware/driver remain unverified on
 the console.
 Full ext4 application support and shared SCI-bus operation remain outside this
 change. Development is

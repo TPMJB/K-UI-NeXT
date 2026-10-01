@@ -19,7 +19,18 @@ bool kui_sci_sd_healthy(void);
 #ifndef KUI_RETAIL_TRANSPORT
 struct kui_sci_sd_stats {
     uint32_t rx_blocks, tx_blocks, polled_blocks, failures;
+    uint32_t profiled_rx_blocks, profiled_tx_blocks;
+    uint64_t rx_setup_us, rx_transfer_us, rx_check_us;
+    uint64_t tx_setup_us, tx_transfer_us;
 };
 void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out);
+/* Optional runtime diagnostics, configured only between serialized transfers.
+ * NULL disables timing. The callback must work with CPU interrupts masked.
+ * Successful DMA samples accumulate independently of the lifetime counters:
+ * setup starts after channel eligibility and includes purge/TX reversal;
+ * transfer includes CPU feeding/CRC, wire waits and stopping SCI/DMA;
+ * RX check measures the post-DMA reversal/CRC pass. Channel restoration and
+ * SD commands/tokens/busy waits are outside these phases. No per-byte timing. */
+void kui_sci_sd_profile_timer(uint64_t (*now_us)(void *), void *ctx);
 #endif
 #endif

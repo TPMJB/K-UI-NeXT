@@ -37,9 +37,31 @@ def main():
                     assert report["free_bytes"] == 32_000_000_000
                     assert report["written_bytes"] == report["verified_bytes"] == 4 * 1048576
                     assert report["samples"][0]["verified"] is True
+                    assert report["sci_profile"] == {
+                        "timing_scope": "successful_dma_payloads",
+                        "rx_dma_blocks": 4294967295, "tx_dma_blocks": 90210,
+                        "polled_blocks": 3, "dma_failures": 2,
+                        "profiled_rx_blocks": 17, "profiled_tx_blocks": 18,
+                        "rx_setup_us": 5000000001, "rx_transfer_us": 5000000002,
+                        "rx_check_us": 5000000003, "tx_setup_us": 5000000004,
+                        "tx_transfer_us": 5000000005,
+                    }
+                    unprofiled = json.loads((folder / "unprofiled.json").read_text())
+                    assert "sci_profile" not in unprofiled
+                    failed = json.loads((folder / "failed-result.json").read_text())
+                    assert failed["message"] == "hardware CRC failure"
+                    assert failed["sci_profile"] == report["sci_profile"]
+                    # Version/size and the entire payload are unchanged;
+                    # only run IDs and their final checksums may differ.
+                    plain = (folder / "unprofiled.bin").read_bytes()
+                    profiled = (folder / "profiled.bin").read_bytes()
+                    assert len(plain) == len(profiled) == 1536
+                    assert plain[:16] == profiled[:16] == b"KUITEST1\x01\x00\x00\x00\x00\x06\x00\x00"
+                    assert plain[20:-4] == profiled[20:-4]
                     with (folder / "result.csv").open(newline="") as stream:
                         rows = list(csv.DictReader(stream))
                     assert len(rows) == 1 and rows[0]["card_label"] == report["card_label"]
+                    assert len(rows[0]) == 17
                     assert int(rows[0]["read_us"]) == report["samples"][0]["read_us"]
                 print(f"PASS {kind} storage test persistence {scenario}", flush=True)
 

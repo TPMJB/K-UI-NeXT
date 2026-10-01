@@ -75,8 +75,47 @@ pass the instruction, resident memory and stack guards at their existing limits.
 The first DMA build **cf8e7ea7866b** passed the owner's 15-minute soak with
 416 MiB verified, zero errors/DMA faults and write/read 1,004.62/926.11 KiB/s.
 DOA2 was substantially improved with a little lag remaining. See the
-[hardware result](sci-dma-soak-2026-10-01.md). This does not validate the
-follow-up processing changes or establish disc-equivalent game behavior.
+[hardware result](sci-dma-soak-2026-10-01.md). The cached processing build
+**a6cb21895c37** subsequently passed a 4 MiB Quick check at write/read
+1,104.35/1,052.72 KiB/s, zero errors/DMA faults. See the
+[short result](sci-dma-cached-quick-2026-10-01.md); different presets prevent
+a controlled sustained comparison, and neither establishes disc equivalence.
+
+## Next feed and phase-measurement candidate
+
+Receive DMA now seeds TDR with 0xff once, then clears observed TDRE exactly
+512 times to generate the payload clocks. The existing programmed read path
+already reuses the retained TDR value. This removes 511 redundant peripheral
+writes per sector. A specialized bounded loop keeps the error check and the
+10,000-poll limit for every byte while avoiding resident helper-call overhead.
+Normal runtime `-O2` already inlined the old helpers; do not claim a runtime
+call-overhead defect. DMA ownership, count/completion checks, final-edge guard,
+fault latching, CRC and stream cleanup remain unchanged.
+
+Storage tests alone enable an injected microsecond timer at DMA boundaries.
+Successful sampled reads accumulate setup, transfer and post-DMA reversal/CRC
+time; writes accumulate setup (including reversal/purge) and transfer time
+(including overlapped CRC). Independent sampled-block counts supply the
+denominators. Failed DMA attempts do not enter those totals. Counters still
+include completed bus transfers whose protocol CRC is subsequently rejected;
+integrity is reported separately by the existing error/result fields.
+
+These are software phase durations, not clock-active measurements. Setup
+starts after channel eligibility. Transfer includes CPU feeding, completion
+waits, the final-edge guard and stopping SCI/DMA. Channel restoration, commands,
+token/busy waits, polling fallback and filesystem work remain outside the
+measured phases. Timer overhead is included; timestamps are never read inside
+the byte loop, and no timestamp is inserted between enabling SCI and feeding.
+
+Detailed counts/totals are additive `sci_profile` fields in the live
+`result.json`, with totals also logged. The binary History format, CSV and
+success-message DMA summary remain compatible; loading History does not
+reconstruct the detailed profile. Timing is disabled before result saving,
+and for normal runtime I/O. All profiling state/code is excluded from the
+small game resident. The next console Quick report should locate whether the
+remaining cost is transfer feeding, receive processing or outside these phases.
+This candidate does not add a second DMA channel, cross-sector buffers, a CRC
+table, longer interrupt masking, or changed game pacing.
 
 Keep both original and first-DMA soaks as comparison points. Install matching `KUI/runtime.kui` and
 `KUI/apps/games/retail-boot.kui`; the existing `6af5e11` boot CD and exFAT card

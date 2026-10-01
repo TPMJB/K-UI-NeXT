@@ -35,6 +35,21 @@ struct kui_storage_test_sample {
     uint64_t bytes, write_us, read_us, sync_us;
     bool verified;
 };
+/* Live SCI test telemetry, exported only in result.json. It is deliberately
+ * absent from the version-1 binary record and CSV: loading History clears it,
+ * while the existing message retains the compact DMA activity summary.
+ * Phase totals cover successful, sampled DMA payloads only; divide by the
+ * independent profiled counts, not every DMA attempt. Units are microseconds.
+ * Setup excludes channel eligibility; transfer includes CPU feed/CRC and DMA
+ * stop; RX check is the post-DMA reverse/CRC pass. Register restoration and
+ * SD framing/card-busy/filesystem work are outside these phase totals. */
+struct kui_storage_test_sci_profile {
+    bool present;
+    uint32_t rx_dma_blocks, tx_dma_blocks, polled_blocks, dma_failures;
+    uint32_t profiled_rx_blocks, profiled_tx_blocks;
+    uint64_t rx_setup_us, rx_transfer_us, rx_check_us;
+    uint64_t tx_setup_us, tx_transfer_us;
+};
 struct kui_storage_test_result {
     uint32_t id;
     struct kui_storage_test_request request;
@@ -48,6 +63,7 @@ struct kui_storage_test_result {
     uint64_t failure_offset;
     char failure_phase[24], message[128], path[KUI_STORAGE_TEST_PATH];
     bool saved, cleanup_failed;
+    struct kui_storage_test_sci_profile sci_profile;
 };
 struct kui_storage_test_progress {
     unsigned preset, repeat, repeats, step, steps;

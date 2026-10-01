@@ -51,6 +51,15 @@ static void complete(struct kui_storage_test_result *r, unsigned outcome) {
     strcpy(r->message,"Quoted \"pass\" \\ control\n\t\001");
     assert(kui_storage_test_save(r,NULL) && r->saved);
 }
+static void with_profile(struct kui_storage_test_result *r) {
+    r->sci_profile=(struct kui_storage_test_sci_profile){
+        .present=true,.rx_dma_blocks=UINT32_MAX,.tx_dma_blocks=90210,
+        .polled_blocks=3,.dma_failures=2,.profiled_rx_blocks=17,.profiled_tx_blocks=18,
+        .rx_setup_us=UINT64_C(5000000001),.rx_transfer_us=UINT64_C(5000000002),
+        .rx_check_us=UINT64_C(5000000003),.tx_setup_us=UINT64_C(5000000004),
+        .tx_transfer_us=UINT64_C(5000000005)
+    };
+}
 static void write_file(const char *path, const void *bytes, UINT size) {
     FIL f; UINT done; assert(f_open(&f,path,FA_WRITE|FA_CREATE_ALWAYS)==FR_OK);
     assert(f_write(&f,bytes,size,&done)==FR_OK && done==size); assert(f_sync(&f)==FR_OK);
@@ -77,7 +86,7 @@ static void export_file(const char *path, const char *folder, const char *name) 
 static void regular_tests(const char *folder) {
     struct kui_storage_test_result r;
     refresh(); assert(!history.count && !history.baseline_valid);
-    create(&r); assert(r.id==1); complete(&r,KUI_STORAGE_TEST_PASSED);
+    create(&r); assert(r.id==1); with_profile(&r); complete(&r,KUI_STORAGE_TEST_PASSED);
     export_file("0:/KUI/tests/t000001/result.json",folder,"result.json");
     export_file("0:/KUI/tests/t000001/result.csv",folder,"result.csv");
     assert(kui_storage_test_set_baseline(1,NULL));
@@ -87,7 +96,12 @@ static void regular_tests(const char *folder) {
     assert(history.rows[0].metadata.free_bytes==UINT64_C(32000000000));
     assert(!strcmp(history.rows[0].message,"Quoted \"pass\" \\ control\n\t\001"));
     assert(!strcmp(history.baseline.request.card_label,"SD \"A\",\\test"));
+    /* Live exports retain telemetry; the unchanged binary/history does not
+     * invent profiling data when loading old or newly saved records. */
+    assert(!history.rows[0].sci_profile.present && !history.baseline.sci_profile.present);
+    assert(!history.rows[0].sci_profile.profiled_rx_blocks && !history.rows[0].sci_profile.rx_setup_us);
     create(&r); assert(r.id==2); complete(&r,KUI_STORAGE_TEST_STOPPED);
+    export_file("0:/KUI/tests/t000002/result.json",folder,"unprofiled.json");
     assert(!kui_storage_test_set_baseline(2,NULL));
     create(&r); assert(r.id==3); r.outcome=KUI_STORAGE_TEST_FAILED;
     r.errors.total=1; r.errors.write_errors=1; r.errors.crc_errors=1;
@@ -96,9 +110,12 @@ static void regular_tests(const char *folder) {
     r.errors.last_count=64; r.errors.sd_command=25; r.errors.sd_response=11; r.errors.sd_detail_valid=true;
     r.fatfs_error=FR_DISK_ERR; r.failure_offset=UINT64_C(123456789012);
     strcpy(r.failure_phase,"write"); strcpy(r.message,"hardware CRC failure");
+    with_profile(&r);
     assert(kui_storage_test_save(&r,NULL)); assert(!kui_storage_test_set_baseline(3,NULL));
+    export_file("0:/KUI/tests/t000003/result.json",folder,"failed-result.json");
     refresh(); assert(history.rows[0].errors.last_lba==123456 && history.rows[0].errors.sd_detail_valid);
     assert(history.rows[0].failure_offset==UINT64_C(123456789012));
+    assert(!history.rows[0].sci_profile.present && !strcmp(history.rows[0].message,"hardware CRC failure"));
     create(&r); assert(r.id==4); /* Interrupted run has no result.bin. */
     refresh(); assert(history.rows[0].outcome==KUI_STORAGE_TEST_FAILED && !history.rows[0].saved);
     assert(!strcmp(history.rows[0].failure_phase,"interrupted")); assert(!kui_storage_test_set_baseline(4,NULL));
@@ -137,6 +154,12 @@ static void regular_tests(const char *folder) {
     mount(); write_file("0:/KUI/tests/T000200","user-owned",10); reset_media();
     create(&r); assert(r.id==201);
     mount(); assert(f_stat("0:/KUI/tests/T000200",&info)==FR_OK && info.fsize==10); reset_media();
+    /* These equal completed records differ only in ID and live telemetry.
+     * The Python harness compares every other committed binary byte. */
+    create(&r); assert(r.id==202); complete(&r,KUI_STORAGE_TEST_PASSED);
+    export_file("0:/KUI/tests/t000202/result.bin",folder,"unprofiled.bin");
+    create(&r); assert(r.id==203); with_profile(&r); complete(&r,KUI_STORAGE_TEST_PASSED);
+    export_file("0:/KUI/tests/t000203/result.bin",folder,"profiled.bin");
 }
 static void fault_tests(const char *kind) {
     struct kui_storage_test_result r;

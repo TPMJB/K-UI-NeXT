@@ -291,6 +291,19 @@ static void json_latency(struct output *o,const char *key,const struct kui_stora
         ",\"min_us\":%" PRIu32 ",\"max_us\":%" PRIu32 ",\"p95_upper_us\":%" PRIu32 "},\n",
         key,l->calls,l->total_us,l->over_20ms,l->over_100ms,l->min_us,l->max_us,l->p95_upper_us);
 }
+static void json_sci_profile(struct output *o,const struct kui_storage_test_sci_profile *p) {
+    if(!p->present) return;
+    format(o,"  \"sci_profile\":{\"timing_scope\":\"successful_dma_payloads\","
+        "\"rx_dma_blocks\":%" PRIu32 ",\"tx_dma_blocks\":%" PRIu32
+        ",\"polled_blocks\":%" PRIu32 ",\"dma_failures\":%" PRIu32 ",\n",
+        p->rx_dma_blocks,p->tx_dma_blocks,p->polled_blocks,p->dma_failures);
+    format(o,"    \"profiled_rx_blocks\":%" PRIu32 ",\"profiled_tx_blocks\":%" PRIu32
+        ",\"rx_setup_us\":%" PRIu64 ",\"rx_transfer_us\":%" PRIu64
+        ",\"rx_check_us\":%" PRIu64 ",\"tx_setup_us\":%" PRIu64
+        ",\"tx_transfer_us\":%" PRIu64 "},\n",
+        p->profiled_rx_blocks,p->profiled_tx_blocks,p->rx_setup_us,p->rx_transfer_us,
+        p->rx_check_us,p->tx_setup_us,p->tx_transfer_us);
+}
 static FRESULT reports(const struct kui_storage_test_result *r, bool csv) {
     char path[112]; snprintf(path,sizeof(path),"%s/result.%s",r->path,csv?"csv":"json");
     struct output o; o.error=f_open(&o.file,path,FA_WRITE|FA_CREATE_NEW); if(o.error!=FR_OK) return o.error;
@@ -317,6 +330,7 @@ static FRESULT reports(const struct kui_storage_test_result *r, bool csv) {
         format(&o,"  \"elapsed_us\":%" PRIu64 ",\"written_bytes\":%" PRIu64 ",\"verified_bytes\":%" PRIu64 ",\"cycles\":%" PRIu64 ",\n",
             r->elapsed_us,r->written_bytes,r->verified_bytes,r->cycles);
         json_latency(&o,"write_latency",&r->write_latency); json_latency(&o,"read_latency",&r->read_latency);
+        json_sci_profile(&o,&r->sci_profile);
         const struct kui_storage_errors *e=&r->errors;
         format(&o,"  \"errors\":{\"total\":%" PRIu32 ",\"read\":%" PRIu32 ",\"write\":%" PRIu32 ",\"sync\":%" PRIu32 ",\"init\":%" PRIu32
             ",\"timeout\":%" PRIu32 ",\"crc\":%" PRIu32 ",\"rejected\":%" PRIu32 ",\"io\":%" PRIu32 ",\n",

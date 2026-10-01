@@ -67,8 +67,16 @@ static struct {
 static bool wait_flag(uint8_t flag);
 #ifndef KUI_RETAIL_TRANSPORT
 static struct kui_sci_sd_stats stats;
+static uint64_t (*profile_clock)(void *);
+static void *profile_context;
 #define COUNT(field) (++stats.field)
 void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out) { if(out) *out = stats; }
+void kui_sci_sd_profile_timer(uint64_t (*now_us)(void *), void *ctx) {
+    profile_clock = now_us; profile_context = ctx;
+}
+static uint64_t profile_time(void) {
+    return profile_clock ? profile_clock(profile_context) : 0;
+}
 #else
 #define COUNT(field) ((void)0)
 #endif
@@ -219,6 +227,23 @@ static void purge_buffer(void *buffer) {
         __asm__ __volatile__("ocbp @%0" : : "r"(p) : "memory");
 #endif
 }
+static bool feed_read(void) {
+    if(!wait_flag(TDRE)) return false;
+    /* TDR retains its value after the shift register takes it. As in the
+     * programmed read path, seed once and clear TDRE for each exact byte. */
+    wr8(TDR, 0xff);
+    for(unsigned left = 512; left; --left) {
+        unsigned n = POLLS;
+        for(;;) {
+            uint8_t status = rd8(SSR);
+            if(status & ERRORS) return false;
+            if(status & TDRE) break;
+            if(!--n) return false;
+        }
+        wr8(SSR, 0x7cu);
+    }
+    return true;
+}
 #ifndef KUI_RETAIL_TRANSPORT
 /* The game reader is read-only and carries neither this buffer nor TX DMA. */
 static uint8_t dma_write_buffer[512] __attribute__((aligned(32)));
@@ -245,6 +270,9 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     if((saved[3] & 7u) || (rd32(DMA_OPERATION) & 7u) != 1u) {
         restore_interrupts(before); return -1;
     }
+#ifndef KUI_RETAIL_TRANSPORT
+    uint64_t setup_started = profile_time();
+#endif
     for(unsigned i = 0; i < 3; ++i) saved[i] = rd32(DMA_SAR + 4u*i);
 #ifndef KUI_RETAIL_TRANSPORT
     if(writing)
@@ -259,16 +287,14 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     wr32(DMA_CONTROL, writing ? DMA_TX : DMA_RX);
     /* The SCI request enable is required on Dreamcast hardware. CPU IRQs
      * remain masked until it is removed; DMAC completion IRQ is disabled. */
+#ifndef KUI_RETAIL_TRANSPORT
+    uint64_t transfer_started = profile_time();
+#endif
     wr8(SCR, writing ? 0xa0u : 0x70u);
     port.work += 512u * 8u;
     uint16_t crc = 0;
     bool ok = true;
-    if(!writing) {
-        for(unsigned i = 0; i < 512 && ok; ++i) {
-            ok = wait_flag(TDRE);
-            if(ok) {wr8(TDR, 0xff); wr8(SSR, 0x7cu);}
-        }
-    }
+    if(!writing) ok = feed_read();
 #ifndef KUI_RETAIL_TRANSPORT
     else {
         /* The DMA reads its reversed bounce buffer while the CPU checks
@@ -294,6 +320,9 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
      * Read that final status before clearing its hardware-set flag. */
     (void)rd32(DMA_CONTROL);
     wr32(DMA_CONTROL, 0);
+#ifndef KUI_RETAIL_TRANSPORT
+    uint64_t transfer_stopped = profile_time(), check_us = 0;
+#endif
     if(ok && !writing) {
         /* The pre-DMA purge invalidated every complete buffer line. Only
          * now, after stopping DMA, may the CPU refill through the caller's
@@ -303,6 +332,9 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
             rx[i] = reverse(rx[i]);
             crc = data_crc(crc, rx[i]);
         }
+#ifndef KUI_RETAIL_TRANSPORT
+        check_us = profile_time() - transfer_stopped;
+#endif
     }
     for(unsigned i = 0; i < 4; ++i) wr32(DMA_SAR + 4u*i, saved[i]);
     if(ok) wr8(SCR, 0x30u);
@@ -311,6 +343,20 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     if(!ok) COUNT(failures);
     else if(writing) COUNT(tx_blocks);
     else COUNT(rx_blocks);
+#ifndef KUI_RETAIL_TRANSPORT
+    if(ok && profile_clock) {
+        if(writing) {
+            ++stats.profiled_tx_blocks;
+            stats.tx_setup_us += transfer_started - setup_started;
+            stats.tx_transfer_us += transfer_stopped - transfer_started;
+        } else {
+            ++stats.profiled_rx_blocks;
+            stats.rx_setup_us += transfer_started - setup_started;
+            stats.rx_transfer_us += transfer_stopped - transfer_started;
+            stats.rx_check_us += check_us;
+        }
+    }
+#endif
     if(ok && crc_out) *crc_out = crc;
     return ok;
 }
@@ -368,6 +414,9 @@ bool kui_sci_sd_healthy(void) { return false; }
 #ifndef KUI_RETAIL_TRANSPORT
 void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out) {
     if(out) *out = (struct kui_sci_sd_stats){0};
+}
+void kui_sci_sd_profile_timer(uint64_t (*now_us)(void *), void *ctx) {
+    (void)now_us; (void)ctx;
 }
 #endif
 #endif

@@ -110,6 +110,25 @@ Soak: 26 cycles/416 MiB, zero errors or DMA faults, write/read
 this [DMA result](evidence/sci-dma-soak-2026-10-01.md) alongside the initial
 polled SCI and SCIF baselines when assessing further changes.
 
+The cached processing build `a6cb21895c37` passed a subsequent **Quick** run:
+4 MiB verified, zero errors/DMA faults, write/read 1,104.35/1,052.72 KiB/s.
+Keep this [short result](evidence/sci-dma-cached-quick-2026-10-01.md) separate
+from the sustained baseline; its inactive `soak_minutes` setting is not the
+actual preset.
+
+New SCI results also include an optional `sci_profile` object in `result.json`.
+Its microsecond totals separate DMA setup, transfer, and receive reversal/CRC;
+divide by `profiled_rx_blocks` or `profiled_tx_blocks`, not payload bytes or all
+DMA attempts. Profiling is enabled only during Storage tests and adds some
+timer overhead. Counts cover successful DMA payload operations, including any
+metadata within the run; protocol CRC acceptance remains a separate check.
+Transfer time includes CPU feeding and completion waits, so it is not a direct
+measurement of clock-active time. Commands, card token/busy waits, channel
+restoration, polling fallback and filesystem costs are not included in these
+phase totals. The Diagnostics log includes the same totals. History and CSV
+retain their existing format; the detailed profile is exported only in the
+original JSON, while History retains the DMA activity summary.
+
 Host checks cover real FAT32/exFAT images, corruption and stale-cycle data,
 short I/O, cancellation, flush/close/remount errors, scratch ownership and
 interrupted result/baseline writes. These tests exercise runtime filesystem I/O;

@@ -32,7 +32,7 @@ static struct {
     uint8_t smr,brr,scr,tdr,ssr,rdr,ptr,stb;
     uint32_t pctr;
     uint16_t pdtr;
-    unsigned writes, reads, polls, bytes, delays, received;
+    unsigned writes, reads, polls, bytes, delays, received, tdr_writes;
     unsigned byte_polls, remaining, fault_byte;
     uint8_t sent[MAX_BYTES], receive_value, queued_value;
     uint32_t sar, dar, tcr, chcr, dmaor;
@@ -65,6 +65,25 @@ static uint16_t crc16_reference(const uint8_t *bytes,size_t count) {
             crc=(uint16_t)((crc<<1)^((crc&0x8000u)?0x1021u:0));
     }
     return crc;
+}
+struct profile_clock {
+    uint64_t values[4];
+    unsigned calls;
+};
+static struct profile_clock profile_clock_at(uint64_t start) {
+    return (struct profile_clock){{start,start+11u,start+28u,start+57u},0};
+}
+static uint64_t profile_now(void *ctx) {
+    struct profile_clock *clock=ctx;
+    /* Reading the profiling clock must never interrupt the wire stream. */
+    assert(!hw.active && !hw.queued && !(hw.scr&0xc0));
+    assert(clock && clock->calls<4);
+    return clock->values[clock->calls++];
+}
+static void same_profile(const struct kui_sci_sd_stats *a,const struct kui_sci_sd_stats *b) {
+    assert(a->profiled_rx_blocks==b->profiled_rx_blocks && a->profiled_tx_blocks==b->profiled_tx_blocks);
+    assert(a->rx_setup_us==b->rx_setup_us && a->rx_transfer_us==b->rx_transfer_us && a->rx_check_us==b->rx_check_us);
+    assert(a->tx_setup_us==b->tx_setup_us && a->tx_transfer_us==b->tx_transfer_us);
 }
 static bool dma_running(unsigned request) {
     return (hw.chcr&3u)==1u && ((hw.chcr>>8)&15u)==request;
@@ -222,7 +241,7 @@ void kui_sci_sd_test_write(uint32_t address,uint32_t value,unsigned width) {
             }
             hw.scr=value; break;
         case TDR:
-            assert(width==1 && (hw.ssr&TDRE)); hw.tdr=value; break;
+            assert(width==1 && (hw.ssr&TDRE)); ++hw.tdr_writes; hw.tdr=value; break;
         case SSR: {
             assert(width==1);
             bool start=!(value&TDRE) && (hw.ssr&TDRE);
@@ -362,6 +381,10 @@ static void test_blocks(const struct kui_loader_sd_bus *bus) {
 static void test_block_arguments(const struct kui_loader_sd_bus *bus) {
     uint8_t byte=0x5a;
     uint16_t crc=0xa55a;
+    struct profile_clock clock=profile_clock_at(0);
+    struct kui_sci_sd_stats before,after;
+    kui_sci_sd_profile_timer(profile_now,&clock);
+    kui_sci_sd_stats_get(&before);
     reset();
     unsigned reads=hw.reads, writes=hw.writes;
     assert(!bus->transfer_block(NULL,NULL,&byte,1,false,&crc));
@@ -374,6 +397,9 @@ static void test_block_arguments(const struct kui_loader_sd_bus *bus) {
     assert(!bus->transfer_block(NULL,NULL,&byte,513,false,&crc));
     assert(hw.reads==reads && hw.writes==writes && byte==0x5a && crc==0xa55a);
     assert(bus->ticks(NULL)==ticks && kui_sci_sd_healthy());
+    kui_sci_sd_stats_get(&after); same_profile(&before,&after);
+    assert(clock.calls==0);
+    kui_sci_sd_profile_timer(NULL,NULL);
     kui_sci_sd_release(); restored();
 }
 static void test_block_failures(const struct kui_loader_sd_bus *bus) {
@@ -412,7 +438,7 @@ static void dma_ready(const struct kui_loader_sd_bus *bus) {
     reset(); assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
     hw.patterned_rx=true;
     assert(bus->transfer(NULL,0xff,false)==received_byte(0));
-    hw.bytes=0; hw.received=0; hw.polls=0;
+    hw.bytes=0; hw.received=0; hw.polls=0; hw.tdr_writes=0;
     hw.dma_available=true;
     bus->select(NULL,true);
 }
@@ -430,6 +456,7 @@ static void test_dma_blocks(const struct kui_loader_sd_bus *bus) {
             assert(crc==(with_crc?crc16_reference(writing?tx:rx,512):0xa55a));
             assert(kui_sci_sd_healthy() && hw.bytes==512 && hw.dma_bytes==512);
             assert(hw.dma_starts==1 && hw.cache_purges==1 && hw.received==0);
+            assert(hw.tdr_writes==(writing?0u:1u)); /* One RX dummy seed, 512 wire bytes. */
             assert(hw.irq_disables==hw.irq_restores && !hw.irq_disabled);
             assert(!hw.active && !hw.queued && hw.chcr==0x4000 && hw.tcr==7);
             assert(hw.sar==0x0c002000 && hw.dar==0x0c004000 && hw.dmaor==0x0301);
@@ -479,9 +506,14 @@ static void test_dma_failures(const struct kui_loader_sd_bus *bus) {
             hw.timeout=fault==0; hw.overrun=fault==1; hw.dma_stall=fault==2;
             hw.dma_completion_stall=fault==3; hw.dma_error=fault==4;
             hw.dma_late_error=fault==5; /* AE and TE become visible together. */
+            struct profile_clock clock=profile_clock_at(1000);
+            struct kui_sci_sd_stats before,after;
+            kui_sci_sd_profile_timer(profile_now,&clock);
+            kui_sci_sd_stats_get(&before);
             uint16_t crc=0xa55a;
             assert(!bus->transfer_block(NULL,writing?tx:NULL,writing?NULL:storage+32,512,false,&crc));
             assert(crc==0xa55a);
+            kui_sci_sd_stats_get(&after); same_profile(&before,&after);
             assert(!kui_sci_sd_healthy() && hw.scr==0 && !hw.active && !hw.queued);
             assert(hw.bytes<=((fault==3 || fault==5)?512u:139u) && hw.polls<30000 && hw.dma_starts==1);
             if(fault==3) assert(hw.bytes==512 && hw.dma_bytes==512);
@@ -495,11 +527,56 @@ static void test_dma_failures(const struct kui_loader_sd_bus *bus) {
             assert(crc==0xa55a);
             assert(bus->transfer(NULL,0xff,false)==0xff);
             assert(hw.reads==reads && hw.writes==writes);
+            kui_sci_sd_profile_timer(NULL,NULL);
             kui_sci_sd_release();
             assert(hw.dmaor==(fault>=4?0x0305u:0x0301u));
             hw.dmaor=0x0301; restored();
         }
     }
+}
+static void test_dma_profile(const struct kui_loader_sd_bus *bus) {
+    _Alignas(32) uint8_t rx[512],tx[512]={0};
+    struct kui_sci_sd_stats before,after;
+    struct profile_clock clock=profile_clock_at(0);
+    /* NULL unregisters a previously installed clock; ordinary transfers
+     * must not call it or add timing samples while profiling is disabled. */
+    kui_sci_sd_profile_timer(profile_now,&clock);
+    kui_sci_sd_profile_timer(NULL,NULL);
+    dma_ready(bus);
+    kui_sci_sd_stats_get(&before);
+    assert(bus->transfer_block(NULL,NULL,rx,512,false,NULL));
+    kui_sci_sd_stats_get(&after); same_profile(&before,&after);
+    assert(clock.calls==0);
+    kui_sci_sd_release(); restored();
+    for(unsigned writing=0;writing<2;++writing) {
+        dma_ready(bus);
+        /* The RX sequence crosses the uint64 counter boundary. */
+        clock=profile_clock_at(writing?1000:UINT64_MAX-12u);
+        kui_sci_sd_profile_timer(profile_now,&clock);
+        kui_sci_sd_stats_get(&before);
+        assert(bus->transfer_block(NULL,writing?tx:NULL,writing?NULL:rx,512,false,NULL));
+        kui_sci_sd_stats_get(&after);
+        assert(clock.calls==(writing?3u:4u));
+        assert(after.profiled_rx_blocks==before.profiled_rx_blocks+!writing);
+        assert(after.profiled_tx_blocks==before.profiled_tx_blocks+writing);
+        assert(after.rx_setup_us==before.rx_setup_us+(writing?0u:11u));
+        assert(after.rx_transfer_us==before.rx_transfer_us+(writing?0u:17u));
+        assert(after.rx_check_us==before.rx_check_us+(writing?0u:29u));
+        assert(after.tx_setup_us==before.tx_setup_us+(writing?11u:0u));
+        assert(after.tx_transfer_us==before.tx_transfer_us+(writing?17u:0u));
+        assert(hw.bytes==512 && hw.dma_bytes==512 && !hw.active && !hw.queued);
+        kui_sci_sd_profile_timer(NULL,NULL);
+        kui_sci_sd_release(); restored();
+    }
+    dma_ready(bus);
+    clock=profile_clock_at(0);
+    kui_sci_sd_profile_timer(profile_now,&clock);
+    kui_sci_sd_stats_get(&before);
+    assert(bus->transfer_block(NULL,NULL,rx,16,false,NULL));
+    kui_sci_sd_stats_get(&after); same_profile(&before,&after);
+    assert(clock.calls==0 && hw.bytes==16 && !hw.dma_starts);
+    kui_sci_sd_profile_timer(NULL,NULL);
+    kui_sci_sd_release(); restored();
 }
 int main(void) {
     const struct kui_loader_sd_bus *bus=kui_sci_sd_bus(); assert(bus);
@@ -512,5 +589,6 @@ int main(void) {
     test_dma_blocks(bus);
     test_dma_unavailable(bus);
     test_dma_failures(bus);
-    puts("SCI SD bus: polled/DMA byte order and CRC, bounded faults and ownership restoration passed");
+    test_dma_profile(bus);
+    puts("SCI SD bus: polled/DMA data, CRC, profiling, bounded faults and ownership restoration passed");
 }
