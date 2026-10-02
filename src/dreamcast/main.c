@@ -36,6 +36,8 @@
 #include "kui/storage_test.h"
 #include "sd.h"
 #include "sci_sd_bus.h"
+#include "kui/sci_video_quiet.h"
+#include <dc/sq.h>
 #endif
 #include <kos.h>
 #include <dc/minifont.h>
@@ -107,6 +109,9 @@ static struct kui_storage_test_progress storage_test_progress;
 static unsigned storage_test_generation, storage_history_generation;
 static bool storage_test_running;
 static struct kui_app_status sci_async_status;
+/* Only the UI thread draws. A fresh request is acknowledged by that thread
+ * after its final frame and SQ drain, never merely by the worker setting a flag. */
+static struct kui_sci_video_quiet sci_video_quiet;
 static struct kui_app_status scan_status,salvage_status;
 static char salvage_path_pending[KUI_DEST_JOB_CAP];
 static unsigned salvage_passes_pending;
@@ -604,6 +609,42 @@ static void storage_test_operation(unsigned action) {
     mutex_unlock(&lock);
 }
 /* Independent experiment report: never added to the soak history/baseline. */
+static bool sci_video_quiet_begin(uint32_t *generation) {
+    mutex_lock(&lock);
+    *generation=kui_sci_video_quiet_request(&sci_video_quiet);
+    snprintf(sci_async_status.message,sizeof(sci_async_status.message),"60-second stress: display updates paused.");
+    mutex_unlock(&lock);
+    uint64_t started=timer_ms_gettime64();
+    for(unsigned polls=0;polls<200;polls++) {
+        mutex_lock(&lock);
+        bool cancelled=cancel_requested;
+        bool acknowledged=sci_video_quiet.requested && sci_video_quiet.generation==*generation &&
+            sci_video_quiet.acknowledged;
+        mutex_unlock(&lock);
+        if(cancelled) break;
+        if(acknowledged) return true;
+        if(timer_ms_gettime64()-started>=2000u) break;
+        thd_sleep(10);
+    }
+    mutex_lock(&lock);
+    kui_sci_video_quiet_withdraw(&sci_video_quiet,*generation);
+    mutex_unlock(&lock);
+    return false;
+}
+static void sci_video_quiet_end(uint32_t generation,struct kui_sd_async_result *result) {
+    mutex_lock(&lock);
+    result->video_quiet_requested=true;
+    if(sci_video_quiet.generation==generation) {
+        result->video_quiet_acknowledged=sci_video_quiet.acknowledged;
+        result->video_sq_drained=sci_video_quiet.acknowledged;
+        result->video_frames_during=sci_video_quiet.acknowledged?
+            sci_video_quiet.total_frames-sci_video_quiet.first_frame:0;
+        result->video_redraws_skipped=sci_video_quiet.skipped;
+        kui_sci_video_quiet_withdraw(&sci_video_quiet,generation);
+        snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Reads ended; preparing the result...");
+    }
+    mutex_unlock(&lock);
+}
 static bool sci_async_integrity(const struct kui_sd_async_result *result) {
     const struct kui_sci_async_probe_result *r=&result->probe;
     if(!r->crc_ok || !r->baseline_ok || !r->guards_ok) return false;
@@ -633,12 +674,14 @@ static bool sci_async_passed(const struct kui_sd_async_result *result) {
         r->safe_restored && r->handlers_restored && r->registers_restored &&
         sci_async_completion(result) && r->fast.overlap_batches &&
         (!result->sustained || (result->duration_complete && !result->iteration_limit &&
+            result->video_quiet_requested && result->video_quiet_acknowledged && result->video_sq_drained &&
+            !result->video_frames_during &&
             result->stress_elapsed_us>=result->target_us && result->target_us>=KUI_SD_ASYNC_STRESS_US &&
             result->heartbeat.installed && result->heartbeat.restored && !result->heartbeat.ownership_lost &&
             result->heartbeat.dma_ticks));
 }
 static bool sci_async_save(const struct kui_sd_async_result *result,char path[96]) {
-    static char stage[2][2048],json[8192],baseline[3][192];
+    static char stage[2][2048],json[8192],baseline[3][192],fault[640];
     const struct kui_sci_async_probe_result *r=&result->probe;
     const struct kui_sci_async_stage *stages[]={&r->slow,&r->fast};
     path[0]=0;
@@ -699,12 +742,25 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         if(used+2>sizeof(baseline[a])) return false;
         baseline[a][used++]=']';baseline[a][used]=0;
     }
+    const struct kui_sci_async_fault *f=&r->fault;
+    int fault_size=snprintf(fault,sizeof(fault),
+        "{\"valid\":%lu,\"event\":%lu,\"ssr\":%lu,\"scr\":%lu,\"dmaor\":%lu,"
+        "\"sar\":%lu,\"dar\":%lu,\"tcr\":%lu,\"chcr\":%lu,\"lba\":%lu,"
+        "\"start_address\":%lu,\"context_valid\":%lu,\"pc\":%lu,\"sr\":%lu,\"request_elapsed_us\":%llu}",
+        (unsigned long)f->valid,(unsigned long)f->event,(unsigned long)f->ssr,(unsigned long)f->scr,
+        (unsigned long)f->dmaor,(unsigned long)f->sar,(unsigned long)f->dar,(unsigned long)f->tcr,
+        (unsigned long)f->chcr,(unsigned long)f->lba,(unsigned long)f->start_address,
+        (unsigned long)f->context_valid,(unsigned long)f->pc,(unsigned long)f->sr,
+        (unsigned long long)f->request_elapsed_us);
+    if(fault_size<0 || (size_t)fault_size>=sizeof(fault)) return false;
     struct kui_datetime clock;int64_t local_seconds=0;
     if(kui_clock_now(&clock)) (void)kui_clock_to_seconds(&clock,&local_seconds);
     int n=snprintf(json,sizeof(json),
         "{\n  \"schema\":2,\n  \"kind\":\"SCI async probe\",\n  \"build\":\"%.15s\",\n"
         "  \"mode\":\"%s\",\n  \"target_us\":%llu,\n  \"stress_elapsed_us\":%llu,\n"
         "  \"duration_complete\":%s,\n  \"iteration_limit\":%s,\n"
+        "  \"video_quiet_requested\":%s,\n  \"video_quiet_acknowledged\":%s,\n  \"video_sq_drained\":%s,\n"
+        "  \"video_frames_during\":%lu,\n  \"video_redraws_skipped\":%lu,\n"
         "  \"baseline_sectors\":%lu,\n  \"distinct_lbas_verified\":%lu,\n  \"distinct_payloads\":%lu,\n"
         "  \"baseline_lbas\":%s,\n  \"baseline_crcs\":%s,\n  \"baseline_reads\":%s,\n"
         "  \"read_cycles\":%lu,\n  \"poll_calls\":%lu,\n  \"worker_yields\":%lu,\n"
@@ -729,10 +785,13 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         "  \"timer_irq_instrumented\":%s,\n"
         "  \"max_irq_masked_us\":%llu,\n  \"max_irq_handler_us\":%llu,\n"
         "  \"probe_passed\":%s,\n  \"read_integrity_verified\":%s,\n  \"completion_irq_verified\":%s,\n"
-        "  \"cpu_overlap_observed\":%s,\n  \"slow\":%s,\n  \"fast\":%s\n}\n",
+        "  \"cpu_overlap_observed\":%s,\n  \"fault\":%s,\n  \"slow\":%s,\n  \"fast\":%s\n}\n",
         KUI_BUILD_ID,result->sustained?"sustained":"quick",
         (unsigned long long)result->target_us,(unsigned long long)result->stress_elapsed_us,
         result->duration_complete?"true":"false",result->iteration_limit?"true":"false",
+        result->video_quiet_requested?"true":"false",result->video_quiet_acknowledged?"true":"false",
+        result->video_sq_drained?"true":"false",(unsigned long)result->video_frames_during,
+        (unsigned long)result->video_redraws_skipped,
         (unsigned long)result->baseline_sectors,(unsigned long)result->distinct_lbas_verified,(unsigned long)result->distinct_payloads,
         baseline[0],baseline[1],baseline[2],
         (unsigned long)result->read_cycles,(unsigned long)result->poll_calls,(unsigned long)result->worker_yields,
@@ -760,7 +819,7 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         r->timer_irq_instrumented?"true":"false",
         (unsigned long long)r->max_irq_masked_us,(unsigned long long)r->max_irq_handler_us,
         sci_async_passed(result)?"true":"false",sci_async_integrity(result)?"true":"false",sci_async_completion(result)?"true":"false",
-        r->fast.overlap_batches?"true":"false",stage[0],stage[1]);
+        r->fast.overlap_batches?"true":"false",fault,stage[0],stage[1]);
     if(n<0 || (size_t)n>=sizeof(json)) return false;
     FATFS fs;bool saved=false;
     if(!kui_mount(&fs,kui_log)) return false;
@@ -800,17 +859,35 @@ static void sci_async_operation(bool sustained) {
         kui_sd_set_params(KUI_STORAGE_SCI,true);
         connected=kui_sd_connect();
         if(connected) {
-            if(sustained) kui_sd_async_stress(&result,storage_test_cancelled,NULL);
+            if(sustained) {
+                uint32_t quiet_generation;
+                if(sci_video_quiet_begin(&quiet_generation))
+                    kui_sd_async_stress(&result,storage_test_cancelled,NULL);
+                else {
+                    result.sustained=true;
+                    result.probe.status=kui_cancelled()?KUI_SCI_ASYNC_CANCELLED:KUI_SCI_ASYNC_BUSY;
+                    snprintf(result.message,sizeof(result.message),"%s",result.probe.status==KUI_SCI_ASYNC_CANCELLED?
+                        "Stopped before stress reads started.":"Display pause not acknowledged; stress did not start.");
+                }
+                /* The wrapper zeroes result and returns only after closing the
+                 * reader and attempting safe recovery. Preserve the handshake
+                 * separately until then, including all early failure paths. */
+                sci_video_quiet_end(quiet_generation,&result);
+            }
             else kui_sd_async_probe(&result,storage_test_cancelled,NULL);
             if(result.recovery_verified) saved=sci_async_save(&result,path);
             const struct kui_sci_async_probe_result *r=&result.probe;
             bool heartbeat_fault=result.sustained && (result.heartbeat.ownership_lost ||
                 (result.heartbeat.installed && !result.heartbeat.restored));
+            bool video_fault=result.sustained && r->status==KUI_SCI_ASYNC_OK &&
+                (!result.video_quiet_acknowledged || !result.video_sq_drained || result.video_frames_during);
             status.stopped=r->status==KUI_SCI_ASYNC_CANCELLED;
             status.passed=sci_async_passed(&result);
-            status.errors=result.restart_required || heartbeat_fault || (r->status!=KUI_SCI_ASYNC_OK && !status.stopped);
+            status.errors=result.restart_required || heartbeat_fault || video_fault || (r->status!=KUI_SCI_ASYNC_OK && !status.stopped);
             snprintf(status.message,sizeof(status.message),"%s",result.message);
-            if(r->status==KUI_SCI_ASYNC_OK && result.recovery_verified && !heartbeat_fault)
+            if(video_fault)
+                snprintf(status.message,sizeof(status.message),"Display pause not verified; stress proof is incomplete.");
+            else if(r->status==KUI_SCI_ASYNC_OK && result.recovery_verified && !heartbeat_fault)
                 snprintf(status.message,sizeof(status.message),"%s",status.passed?
                     result.sustained?"60-second stress passed with timer IRQs during DMA.":
                     "Verified reads with CPU work during DMA.":"Read test finished; async proof is incomplete.");
@@ -823,7 +900,10 @@ static void sci_async_operation(bool sustained) {
                 (unsigned long)r->slow.overlap_batches,(unsigned long)r->fast.overlap_batches);
             snprintf(status.lines[3],KUI_APP_LINE_CAP,"CRC %s  Data %s  Buffer guards %s",
                 r->crc_ok?"OK":"unconfirmed",r->baseline_ok?"OK":"unconfirmed",r->guards_ok?"OK":"unconfirmed");
-            snprintf(status.lines[4],KUI_APP_LINE_CAP,"Normal read recovery: %s",result.recovery_verified?"verified":result.restart_required?"FAILED - restart required":"not attempted");
+            snprintf(status.lines[4],KUI_APP_LINE_CAP,"Normal read recovery: %s",result.recovery_verified?"verified":
+                result.recovery_phase==KUI_SD_ASYNC_RECOVERY_NONE?
+                    (result.restart_required?"not attempted; restart required":"not attempted"):
+                    (result.restart_required?"FAILED - restart required":"not verified"));
             snprintf(status.lines[5],KUI_APP_LINE_CAP,"%s",saved?"Saved independent report:":"Report not saved; photograph this result.");
             snprintf(status.lines[6],KUI_APP_LINE_CAP,"%.79s",path[0]?path+2:"No saved path");
             snprintf(status.lines[7],KUI_APP_LINE_CAP,"Normal game reads are unchanged by this experiment.");
@@ -839,8 +919,9 @@ static void sci_async_operation(bool sustained) {
                 snprintf(api_line,sizeof(api_line),"API max us: begin %llu poll %llu finish %llu",
                     (unsigned long long)r->max_begin_us,(unsigned long long)r->max_poll_us,(unsigned long long)r->max_finish_us);
                 snprintf(status.lines[3],KUI_APP_LINE_CAP,"%.79s",api_line);
-                snprintf(status.lines[7],KUI_APP_LINE_CAP,"Timer max gap %llu us; total ticks %lu",
-                    (unsigned long long)result.heartbeat.max_gap_us,(unsigned long)result.heartbeat.total_ticks);
+                snprintf(status.lines[7],KUI_APP_LINE_CAP,"Display quiet %s; frames %lu; skipped %lu",
+                    result.video_quiet_acknowledged && result.video_sq_drained?"verified":"unconfirmed",
+                    (unsigned long)result.video_frames_during,(unsigned long)result.video_redraws_skipped);
             }
             if(!status.passed && r->status!=KUI_SCI_ASYNC_OK) {
                 const struct kui_sci_async_stage *stage=r->fast.attempted?&r->fast:&r->slow;
@@ -910,7 +991,39 @@ static void sci_async_operation(bool sustained) {
                             kui_sd_async_recovery_name(result.recovery_phase),detail,
                             (unsigned)result.recovery_command,(unsigned)result.recovery_response);
                     else snprintf(status.lines[6],KUI_APP_LINE_CAP,"Recover %s: %.24s; no command",
-                        kui_sd_async_recovery_name(result.recovery_phase),detail);
+                            kui_sd_async_recovery_name(result.recovery_phase),detail);
+                }
+                if(result.sustained) {
+                    char run_line[160];
+                    uint32_t lba=r->fault.valid?r->fault.lba:r->lba;
+                    snprintf(run_line,sizeof(run_line),"Elapsed %llu.%03llu s; reads %lu; LBA %lu",
+                        (unsigned long long)(result.stress_elapsed_us/1000000u),
+                        (unsigned long long)((result.stress_elapsed_us/1000u)%1000u),
+                        (unsigned long)result.read_cycles,(unsigned long)lba);
+                    snprintf(status.lines[0],KUI_APP_LINE_CAP,"%.79s",run_line);
+                    /* Keep framing/reset failures intact. A pure receive/DMA
+                     * failure instead needs the active-window and pre-stop
+                     * evidence on screen, since quarantine prevents a file. */
+                    if(r->fault.valid && !stage->bus_faults && !stage->handoff_failures && !stage->module_reset_failures) {
+                        const struct kui_sci_async_fault *f=&r->fault;
+                        snprintf(status.lines[1],KUI_APP_LINE_CAP,"Timer%lu DMA%lu Quiet%s SQ%s frames%lu",
+                            (unsigned long)result.heartbeat.total_ticks,(unsigned long)result.heartbeat.dma_ticks,
+                            result.video_quiet_acknowledged?"ACK":"NO",result.video_sq_drained?"OK":"NO",
+                            (unsigned long)result.video_frames_during);
+                        snprintf(status.lines[2],KUI_APP_LINE_CAP,"Pre SSR%02lX SCR%02lX OR%08lX event%03lX",
+                            (unsigned long)(f->ssr&255u),(unsigned long)(f->scr&255u),
+                            (unsigned long)f->dmaor,(unsigned long)f->event);
+                        snprintf(status.lines[3],KUI_APP_LINE_CAP,"DMA left %lu CHCR%08lX ERI%lu RXI%lu",
+                            (unsigned long)f->tcr,(unsigned long)f->chcr,
+                            (unsigned long)stage->sci_error_irqs,(unsigned long)stage->unexpected_rx_irqs);
+                        if(!saved && result.recovery_phase==KUI_SD_ASYNC_RECOVERY_NONE) {
+                            if(f->context_valid)
+                                snprintf(status.lines[6],KUI_APP_LINE_CAP,"PC%08lX SR%08lX request %llu us",
+                                    (unsigned long)f->pc,(unsigned long)f->sr,(unsigned long long)f->request_elapsed_us);
+                            else snprintf(status.lines[6],KUI_APP_LINE_CAP,"No IRQ context; request %llu us",
+                                (unsigned long long)f->request_elapsed_us);
+                        }
+                    }
                 }
             }
             kui_log("SCI async probe: %s; report %s",result.message,saved?path:"not saved");
@@ -1754,7 +1867,10 @@ static void draw_boot(void) {
 
 #ifdef KUI_SD_RUNTIME
 static void draw_shell(void) {
-    mutex_lock(&lock);bool startup=splash_active;mutex_unlock(&lock);
+    mutex_lock(&lock);
+    if(!kui_sci_video_quiet_draw_begin(&sci_video_quiet)) {mutex_unlock(&lock);return;}
+    bool startup=splash_active;
+    mutex_unlock(&lock);
     if(startup) {
         kui_splash_draw(vram_s);vid_waitvbl();vid_flip(-1);return;
     }
@@ -1784,6 +1900,7 @@ static void draw_shell(void) {
     view.storage_test_progress=storage_test_running?&test_progress:NULL;
     view.storage_test_target=kui_storage_name(kui_storage_selected());
     view.busy = busy; view.saving = saving_report; view.cancel_requested = cancel_requested;
+    view.sci_video_quiet=sci_video_quiet.requested;
     view.outcome = capture_outcome; view.saved_verified = capture_summary.verified;
     snprintf(path, sizeof(path), "%s", capture_summary.job_dir);
     snprintf(title, sizeof(title), "%s", capture_summary.disc_title[0]?
@@ -2503,9 +2620,25 @@ int main(void) {
         uint64_t t = timer_ms_gettime64();
         bool due = kui_ui_redraw_due(is_busy, was_busy, hz, t, last_draw);
         was_busy = is_busy;
+#ifdef KUI_SD_RUNTIME
+        mutex_lock(&lock);
+        uint32_t quiet_generation;bool quiet_pending,quiet_skipped;
+        due=kui_sci_video_quiet_draw_due(&sci_video_quiet,due,&quiet_generation,&quiet_pending,&quiet_skipped);
+        if(quiet_skipped) last_draw=t;
+        mutex_unlock(&lock);
+#endif
         if(due) {
 #ifdef KUI_SD_RUNTIME
             draw_shell();
+            if(quiet_pending) {
+                /* This is the sole drawing thread. Complete every store queue
+                 * write from this and prior frames before releasing the worker.
+                 * This handoff adds no IRQ mask around drawing or sq_wait. */
+                sq_wait();
+                mutex_lock(&lock);
+                (void)kui_sci_video_quiet_ack(&sci_video_quiet,quiet_generation);
+                mutex_unlock(&lock);
+            }
 #else
             draw_boot();
 #endif

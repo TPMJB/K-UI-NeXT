@@ -8,7 +8,7 @@
 /* A deliberately small KOS surface for the isolated host hardware model. */
 typedef unsigned irq_t;
 typedef unsigned irq_mask_t;
-typedef struct { unsigned unused; } irq_context_t;
+typedef struct { uint32_t pc, sr; } irq_context_t;
 typedef void (*irq_hdl_t)(irq_t, irq_context_t *, void *);
 typedef struct { irq_hdl_t hdl; void *data; } irq_cb_t;
 typedef enum { IRQ_SRC_SCI1, IRQ_SRC_DMAC } irq_src_t;

@@ -17,7 +17,8 @@
  * storage-test-busy, storage-test-result, storage-test-details,
  * storage-test-mismatch, storage-test-history, sci-async-probe, sci-async-result,
  * sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure, sci-async-bus-failure,
- * sci-async-reset-failure, sci-async-stress-result, sci-async-stress-busy, sci-async-stress-failure. */
+ * sci-async-reset-failure, sci-async-stress-result, sci-async-stress-busy, sci-async-stress-failure,
+ * sci-async-quiet-fault. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -457,12 +458,21 @@ int main(int argc,char **argv) {
                     "CRC/data/guards OK; DMA interrupts 76543","CPU batches 346892; timer during DMA 2183",
                     "API max us: begin 108 poll 7 finish 92","Normal read recovery: verified",
                     "Saved independent report:","/KUI/tests/sci-async-0003/sci-async-probe.json",
-                    "Timer max gap 18200 us; total ticks 6214"};
+                    "Display quiet verified; frames 0; skipped 120"};
                 for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",stress_lines[i]);
             }
         } else if(!strcmp(argv[1],"sci-async-stress-busy")) {
-            view.busy=true;
-            snprintf(status.message,sizeof(status.message),"Preparing 16 baselines, then 60 seconds of varied reads...");
+            view.busy=true;view.sci_video_quiet=true;
+            snprintf(status.message,sizeof(status.message),"60-second stress: display updates paused.");
+        } else if(!strcmp(argv[1],"sci-async-quiet-fault")) {
+            status.complete=true;status.errors=1;status.line_count=8;
+            snprintf(status.message,sizeof(status.message),"SCI receive error. Storage locked until restart.");
+            const char *fault_lines[]={"Elapsed 0.503 s; reads 559; LBA 23456789",
+                "Timer49 DMA29 QuietACK SQOK frames0","Pre SSRA6 SCRC0 OR00008201 event4E0",
+                "DMA left 363 CHCR00004911 ERI1 RXI0","Normal read recovery: not attempted; restart required",
+                "Report not saved; photograph this result.","PC8C21ABCD SR40000000 request 328 us",
+                "DMA: DMA560 SSRA6 SPTR05 R100 TKFE"};
+            for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",fault_lines[i]);
         } else if(!strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure") || !strcmp(argv[1],"sci-async-bus-failure") || !strcmp(argv[1],"sci-async-reset-failure") || !strcmp(argv[1],"sci-async-stress-failure")) {
             status.complete=true;status.errors=1;status.line_count=8;
             snprintf(status.message,sizeof(status.message),"SCI unsupported state; reinit init failed. Restart required.");

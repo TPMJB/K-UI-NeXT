@@ -60,6 +60,7 @@ static struct {
     unsigned module_asserts, module_resumes, module_polls;
     unsigned module_signature_bad, reinit_stage;
     uint32_t command_argument;
+    uint32_t interrupted_pc, interrupted_sr;
     uint64_t now;
     uint8_t baseline[512], command_bytes[5], *dma_buffer;
     size_t dma_size;
@@ -131,7 +132,7 @@ static void deliver(irq_t irq) {
        hw.priorities[source]<=((hw.irq_mask>>4)&15u) || hw.inside_irq) return;
     irq_cb_t callback=hw.handlers[index];
     if(!callback.hdl) return;
-    irq_context_t context={0};
+    irq_context_t context={.pc=hw.interrupted_pc,.sr=hw.interrupted_sr};
     hw.inside_irq=true; ++hw.dispatches;
     callback.hdl(irq,&context,callback.data);
     hw.inside_irq=false;
@@ -484,6 +485,7 @@ static struct kui_loader_sd reset(void) {
     hw.smr=0x80; hw.brr=0; hw.scr=0x30; hw.ssr=TDRE|TEND; hw.sptr=0x04;
     hw.sck_pin=true;
     hw.pdtr=0x1280;
+    hw.interrupted_pc=0x8c123456;hw.interrupted_sr=0x40000000;
     hw.sar=0x0c002000; hw.dar=0x0c004000; hw.tcr=19;
     hw.chcr=0x4000; hw.dmaor=0x0301;
     hw.priorities[IRQ_SRC_SCI1]=2; hw.priorities[IRQ_SRC_DMAC]=5;
@@ -1174,6 +1176,85 @@ static void test_reader_speed_resync_failure(void) {
     assert(result.registers_restored && result.handlers_restored && !result.safe_restored);
     assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_BUSY);
 }
+static void test_fault_snapshot_first_rejected_request(void) {
+    struct kui_loader_sd card=reset();hw.force_tail_overrun=true;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    uint8_t payload[512];
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    /* Prior good completion and even a valid trailing ERI are not faults. */
+    for(unsigned i=0;i<4;++i) {
+        hw.fault=i==3?TRAILING_ERI:NO_FAULT;
+        assert(kui_sci_async_begin(&reader,120+i,false)==KUI_SCI_ASYNC_OK);
+        assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+        assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
+        assert(!result.fault.valid);
+    }
+    hw.fault=EARLY_ERROR;
+    assert(kui_sci_async_begin(&reader,987,false)==KUI_SCI_ASYNC_OK);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_RECEIVE_ERROR);
+    const struct kui_sci_async_fault saved=result.fault;
+    assert(saved.valid && saved.event==EXC_SCI_ERI && saved.lba==987);
+    assert(saved.ssr==(TDRE|TEND|ORER) && saved.scr==0x50);
+    assert(saved.chcr==0x4915 && saved.chcr!=result.fast.last_chcr);
+    assert(result.fast.last_chcr==0x4910 && saved.tcr==450);
+    assert(saved.sar==0x1fe00014 && saved.dar==DMA_BASE+64 && saved.start_address==DMA_BASE);
+    assert(saved.dmaor==0x0301 && saved.request_elapsed_us>0);
+    assert(saved.context_valid && saved.pc==hw.interrupted_pc && saved.sr==hw.interrupted_sr);
+    assert(hw.cache_invalidates==4 && result.fast.passed==4);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_RECEIVE_ERROR);
+    assert(kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_RECEIVE_ERROR);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
+    assert(result.dma_quarantined && !result.safe_restored);
+    assert(!memcmp(&saved,&result.fault,sizeof(saved)));
+    irq_context_t stale={.pc=0x8cabcdef,.sr=0};
+    hw.probe_handlers[1].hdl(EXC_SCI_ERI,&stale,hw.probe_handlers[1].data);
+    assert(!memcmp(&saved,&result.fault,sizeof(saved)));
+}
+static void test_fault_snapshot_never_reuses_successful_eri(void) {
+    struct kui_loader_sd card=reset();hw.fault=TRAILING_ERI;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    uint8_t payload[512];
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    begin_active(&reader);
+    for(unsigned i=0;i<100 && receiving();++i) kui_sci_async_test_work_tick();
+    assert(!receiving());
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
+    assert(result.fast.sci_error_irqs==1 && result.fast.passed==1 && !result.fault.valid);
+    install_foreign_dma();
+    assert(kui_sci_async_begin(&reader,987,false)==KUI_SCI_ASYNC_DMA_ERROR);
+    assert(!result.fault.valid);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
+    assert(!result.fault.valid && hw.chcr==0x1025);
+}
+static void test_fault_snapshot_forced_stop_context_unavailable(void) {
+    struct kui_loader_sd card=reset();hw.fault=DMA_FAULT;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_begin(&reader,321,false)==KUI_SCI_ASYNC_OK);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_DMA_ERROR);
+    assert(result.fault.valid && !result.fault.event && result.fault.lba==321);
+    assert(result.fault.scr==0x50 && result.fault.chcr==0x4915 && result.fault.tcr==450);
+    assert(result.fault.dmaor==0x0305);
+    assert(!result.fault.context_valid && !result.fault.pc && !result.fault.sr);
+    assert(!hw.cache_invalidates);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE && result.dma_quarantined);
+    assert(result.fault.dmaor==0x0305 && hw.dmaor==0x0305);
+}
+static void test_fault_snapshot_foreign_preserves_owner(void) {
+    struct kui_loader_sd card=reset();struct kui_sci_async_reader reader={0};
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    begin_active(&reader);install_foreign_dma();
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_DMA_ERROR);
+    assert(result.fault.valid && !result.fault.event && !result.fault.context_valid);
+    assert(result.fault.sar==0x0c080000 && result.fault.dar==0x0c090000);
+    assert(result.fault.chcr==0x1025 && result.fault.tcr==64);
+    assert(result.fault.start_address==DMA_BASE);
+    assert(!hw.cache_invalidates && hw.chcr==0x1025 && hw.tcr==64);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE && result.foreign_dma);
+    assert(hw.handlers[0].hdl==foreign_handler && hw.chcr==0x1025);
+}
 static void isolated(void (*test)(void)) {
     /* The production API deliberately has no reset for a poisoned session. */
     pid_t child=fork(); assert(child>=0);
@@ -1182,6 +1263,10 @@ static void isolated(void (*test)(void)) {
     assert(WIFEXITED(status) && WEXITSTATUS(status)==0);
 }
 int main(void) {
+    isolated(test_fault_snapshot_first_rejected_request);
+    isolated(test_fault_snapshot_never_reuses_successful_eri);
+    isolated(test_fault_snapshot_forced_stop_context_unavailable);
+    isolated(test_fault_snapshot_foreign_preserves_owner);
     test_reader_slow_close_resyncs_bus();
     isolated(test_reader_speed_resync_failure);
     test_reader_ready_close_discards();
@@ -1242,6 +1327,7 @@ int main(void) {
     test_cancellation();
     puts("SCI module reset: bounded gates, restoration and modeled RX recovery passed; console proof still required");
     puts("SCI reader lifecycle: bounded polling, cancel/drain, no early publish and ownership passed");
+    puts("SCI first fault: pre-stop control/context preserved; good completions excluded");
     puts("SCI async probe host tests passed");
     return 0;
 }

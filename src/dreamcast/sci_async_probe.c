@@ -129,6 +129,7 @@ struct probe {
     volatile bool armed,done,foreign_dma,quarantined;
     volatile uint32_t end_chcr,end_count,end_ssr,event;
     uint64_t start_us;
+    struct kui_sci_async_fault fault_candidate;
 };
 static bool occupied;
 static bool poisoned;
@@ -156,9 +157,32 @@ static void unmask(struct probe *p, irq_mask_t mask, uint64_t start) {
  * as an abort-drain acknowledgement: only TE+count0 proves completion. Without
  * that evidence, quarantine the persistent buffer and channel until restart.
  */
-static void freeze(struct probe *p) {
+static void freeze(struct probe *p,irq_t event,const irq_context_t *context,
+        uint64_t observed_us) {
     p->stage->snapshot_ssr=rd(SSR,1);
     p->stage->snapshot_sptr=rd(SPTR,1);
+    /* A normal completion pays only two additional reads. ERI/RXI, forced
+     * stops and unexpected completion state retain pre-stop evidence. A
+     * trailing ERI can still be a valid completed read, so keep this private
+     * until foreground classification actually rejects the request. */
+    uint32_t control_before=0,count_before=0;
+    bool exceptional=event!=EXC_DMAC_DMTE1;
+    if(!exceptional) {
+        control_before=rd(CHCR,4);count_before=rd(TCR,4);
+        exceptional=count_before || !(control_before&2u) ||
+            (p->stage->snapshot_ssr&(FLAGS&~ORER));
+    }
+    if(exceptional && !p->fault_candidate.valid) {
+        struct kui_sci_async_fault *f=&p->fault_candidate;
+        f->event=(uint32_t)event;f->ssr=p->stage->snapshot_ssr;
+        f->scr=rd(SCR,1);f->dmaor=rd(DMAOR,4);f->sar=rd(SAR,4);f->dar=rd(DAR,4);
+        f->tcr=event==EXC_DMAC_DMTE1?count_before:rd(TCR,4);
+        f->chcr=event==EXC_DMAC_DMTE1?control_before:rd(CHCR,4);
+        f->lba=p->lba;f->start_address=p->start_address;
+        f->request_elapsed_us=observed_us-p->request_us;
+        if(context) {f->context_valid=1;f->pc=context->pc;f->sr=context->sr;}
+        f->valid=1;
+    }
     wr(SCR,0,1);
     if(!active_dma_owned(p)) {p->foreign_dma=true;return;}
     uint32_t control=rd(CHCR,4);
@@ -181,13 +205,12 @@ static void freeze(struct probe *p) {
     (void)rd(SSR,1);
 }
 static void interrupt(irq_t code, irq_context_t *context, void *data) {
-    (void)context;
     struct probe *p=data;
     /* A stale invocation must not touch a restored/foreign channel. */
     if(!p->armed) return;
     uint64_t start=timer_us_gettime64();
     p->armed=false;
-    freeze(p);
+    freeze(p,code,context,start);
     p->event=(uint32_t)code;
     if(code==EXC_DMAC_DMTE1) ++p->stage->dma_irqs;
     else if(code==EXC_SCI_ERI) ++p->stage->sci_error_irqs;
@@ -249,7 +272,7 @@ static bool dma_unchanged(const struct probe *p) {
 static void release(struct probe *p) {
     if(!p->leased) return;
     uint64_t start=timer_us_gettime64(); irq_mask_t mask=irq_disable();
-    if(p->armed) {p->armed=false;freeze(p);}
+    if(p->armed) {p->armed=false;freeze(p,0,NULL,start);}
     if(!p->quarantined && !dma_unchanged(p)) p->foreign_dma=true;
     /* No source is enabled when the prior callback becomes visible again. */
     if(!p->module_unavailable) wr(SCR,0,1);
@@ -520,6 +543,8 @@ static enum kui_sci_async_status measured(struct probe *p,uint64_t *max,
     return status;
 }
 static enum kui_sci_async_status failed(struct probe *p,enum kui_sci_async_status status) {
+    if(status!=KUI_SCI_ASYNC_CANCELLED && p->fault_candidate.valid && !p->out->fault.valid)
+        p->out->fault=p->fault_candidate;
     if(!p->module_unavailable && p->stage->last_phase<KUI_SCI_ASYNC_PHASE_DMA &&
        p->stage->last_phase!=KUI_SCI_ASYNC_PHASE_GPIO) {
         p->stage->snapshot_ssr=rd(SSR,1);p->stage->snapshot_sptr=rd(SPTR,1);
@@ -592,6 +617,9 @@ static enum kui_sci_async_status finish_request(struct probe *p,uint8_t *dst,con
     s->elapsed_us+=timer_us_gettime64()-p->request_us;
     if(p->cancel_requested) return failed(p,KUI_SCI_ASYNC_CANCELLED);
     if(dst) memcpy(dst,p->rx.bytes,512);
+    /* A valid trailing ERI belongs to this successful request, not a later
+     * ownership failure discovered before the next request can begin. */
+    p->fault_candidate=(struct kui_sci_async_fault){0};
     ++s->passed;p->phase=READER_IDLE;p->request_status=KUI_SCI_ASYNC_OK;
     return KUI_SCI_ASYNC_OK;
 }
@@ -644,6 +672,7 @@ enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reade
         p->lba=lba;p->slow=slow;p->out->lba=lba;p->request_us=start;
         p->polls=p->frame_count=0;p->cancel_requested=false;
         p->payload_validated=p->completion_recorded=false;
+        p->fault_candidate=(struct kui_sci_async_fault){0};
         p->out->guards_ok=p->out->crc_ok=p->out->baseline_ok=p->out->baseline_checked=false;
         s->last_phase=KUI_SCI_ASYNC_PHASE_BUFFER;++s->attempted;
         s->command_response=s->last_token=0xff;
@@ -678,7 +707,7 @@ enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader
         if(!p->done) {
             timeout=++p->polls>=MAX_POLLS || start-p->start_us>=TRIAL_TIMEOUT_US;
             if(dma_error || timeout || !active_dma_owned(p)) {
-                p->armed=false;freeze(p);p->done=true;
+                p->armed=false;freeze(p,0,NULL,start);p->done=true;
             }
         }
         unmask(p,mask,masked_start);

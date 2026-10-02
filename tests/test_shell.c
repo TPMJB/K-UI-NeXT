@@ -1669,6 +1669,8 @@ static void storage_test_rendering(void) {
     assert(strstr(drawn,"DMA left 513") && strstr(drawn,"CHCR00004911") && strstr(drawn,"ERI1 RXI0"));
     v.busy=true;probe.complete=false;v.cancel_requested=true;render(&v);
     assert(strstr(drawn,"Stopping safely") && strstr(drawn,"Keep the card connected"));
+    v.cancel_requested=false;v.sci_video_quiet=true;render(&v);
+    assert(strstr(drawn,"screen stays still") && strstr(drawn,"controller input stay active") && strstr(drawn,"Hold B"));
     puts("PASS storage tests rendering: progress, rates, safe baseline comparison, metadata, errors and persistence warnings");
 }
 int main(int argc,char **argv) {

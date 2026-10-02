@@ -102,11 +102,28 @@ struct kui_sci_async_stage {
     uint64_t elapsed_us, receive_us, max_receive_us;
 };
 
+/* First failed request's exceptional-stop evidence, before SCR/CHCR writes.
+ * These are ordered register reads, not one simultaneous hardware snapshot.
+ * Successful completion normally does not capture this record; valid==0 is
+ * distinct from a captured zero value. CRC-only failures after normal
+ * completion, or ownership changes first detected after stopping, can lack
+ * this pre-stop record. event==0 denotes a foreground stop.
+ * Context PC/SR are present only when context_valid!=0. They identify the
+ * interrupted instruction, not necessarily the cause of the receive error.
+ * request_elapsed_us is measured at stop entry, from begin(), including
+ * command framing and any time the worker was preempted. */
+struct kui_sci_async_fault {
+    uint32_t valid, event, ssr, scr, dmaor, sar, dar, tcr, chcr;
+    uint32_t lba, start_address, context_valid, pc, sr;
+    uint64_t request_elapsed_us;
+};
+
 struct kui_sci_async_probe_result {
     enum kui_sci_async_status status;
     enum kui_sci_async_status operation_status; /* Before cleanup classification. */
     uint32_t lba;
     struct kui_sci_async_stage slow, fast;
+    struct kui_sci_async_fault fault;
     uint64_t elapsed_us, max_irq_masked_us, max_irq_handler_us;
     /* Foreground API duration, including IRQ preemption; not wire time.
      * No API waits for an in-flight DMA to complete. */

@@ -1,5 +1,24 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI stress: 559 verified reads, then incomplete receive (2026-10-02 UTC)
+
+The owner confirms Quick passes on **c0c285482dac**. Its JSON verifies all
+16 slow + 64 fast reads and normal recovery. The sustained run fails both
+after Quick and when run first after reboot. The photo shows 559 verified
+reads/IRQs/resets, then attempt 560 stops with an SCI overrun, 363 DMA bytes
+remaining and no completion bit. Prior handoffs/resets all passed. No normal
+recovery read or report write followed unsafe cleanup. See the
+[exact evidence and next isolation experiment](evidence/sci-async-stress-overrun-2026-10-02.md).
+
+Next X candidate pauses shell framebuffer writes only after the UI finishes
+its last frame and explicitly drains store queues. It retains full-speed
+SCI, timer IRQs, scheduling, controller cancellation and all data/ownership
+checks. It also captures the first failed DMA state before cleanup writes.
+Periodic rendering contention is a hypothesis, not a confirmed cause; even
+a quiet-screen pass would not establish game-rendering coexistence. Build,
+review and console confirmation are pending. Native game and CE integration
+are not enabled by this experiment.
+
 ## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)
 
 The successful short probe now backs a reusable bounded

@@ -225,6 +225,7 @@ const char *kui_shell_key_label(unsigned key, bool uppercase);
  * phase uses the existing kui_capture_phase numeric values (0..4); phase 4 is
  * completed, never an assertion that saved bytes were verified. */
 struct kui_shell_view {
+    bool sci_video_quiet;
     const char *build, *job_dir, *message, *settings_notice;
     const char *disc_title, *inserted_title, *gdi_name;
     const char *music_title, *music_notice;

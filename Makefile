@@ -23,7 +23,7 @@ test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cl
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
-test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime
+test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
 test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-storage-errors
 	./build/test-cd-audio
@@ -54,6 +54,7 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-sci-sd-storage
 	./build/test-sci-async-probe
 	./build/test-sci-async-heartbeat
+	./build/test-sci-video-quiet
 	./build/test-sci-async-runtime
 	./build/test-sci-async-runtime restore
 	./build/test-sci-async-runtime quarantine
@@ -147,6 +148,10 @@ build/test-sci-sd-storage: tests/test_sci_sd_storage.c src/dreamcast/sci_sd_stor
 build/test-sci-async-probe: tests/test_sci_async_probe.c tests/sci_async_probe_test_support.h src/dreamcast/sci_async_probe.c include/kui/sci_async_probe.h src/loader/sd_reader.h src/loader/sci_sd_bus.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_ASYNC_PROBE_TEST=1 -Iinclude -Isrc/loader src/dreamcast/sci_async_probe.c tests/test_sci_async_probe.c -o $@
+
+build/test-sci-video-quiet: tests/test_sci_video_quiet.c include/kui/sci_video_quiet.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude tests/test_sci_video_quiet.c -o $@
 
 build/test-sci-async-heartbeat: tests/test_sci_async_heartbeat.c tests/sci_async_heartbeat_test_support.h src/dreamcast/sci_async_heartbeat.c src/dreamcast/sci_async_heartbeat.h
 	@mkdir -p $(@D)

@@ -1021,7 +1021,7 @@ static void sci_async_probe(struct paint *p,const struct kui_shell_view *v) {
         label(p,48,194,WHITE,"Read-only tests of existing sectors on the SCI card");
         label(p,48,226,MUTED,"A Quick: the same sector at slow and fast speeds.");
         label(p,48,250,MUTED,"X 60-second stress: 16 sectors spread across the card.");
-        label(p,48,274,MUTED,"Checks data, CPU work, interrupts and read recovery.");
+        label(p,48,274,MUTED,"Stress pauses screen updates; hold B to stop safely.");
         label(p,48,306,MUTED,"Only the final JSON report writes to /KUI/tests.");
         label(p,48,330,MUTED,"Normal game reads are unchanged by this experiment.");
         label(p,48,369,CYAN,"A Quick test   X 60s stress   B Back");
@@ -1033,6 +1033,10 @@ static void sci_async_probe(struct paint *p,const struct kui_shell_view *v) {
     if(result) {
         unsigned count=r->line_count<8?r->line_count:8;
         for(unsigned i=0;i<count;i++) label(p,40,220+i*23,i==6?CYAN:MUTED,r->lines[i]);
+    } else if(v->sci_video_quiet) {
+        label(p,40,246,MUTED,"This screen stays still until the read test finishes.");
+        label(p,40,278,MUTED,"Reads, timer interrupts and controller input stay active.");
+        label(p,40,310,MUTED,"Hold B to stop safely. Wait for the result screen.");
     } else {
         label(p,40,246,MUTED,"Reading baselines, then checking autonomous transfers.");
         label(p,40,278,MUTED,"Hold B to stop safely between reads and check recovery.");

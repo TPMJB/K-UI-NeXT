@@ -26,6 +26,10 @@ struct kui_sd_async_result {
      * CRC-checked reads before the reusable reader takes its lease. Timing
      * excludes baseline preparation and the final normal-reader recovery. */
     bool sustained, duration_complete, iteration_limit;
+    /* Main-thread framebuffer quiet window: acknowledged only after its final
+     * frame and store-queue drain. The worker merges these after recovery. */
+    bool video_quiet_requested, video_quiet_acknowledged, video_sq_drained;
+    uint32_t video_frames_during, video_redraws_skipped;
     uint32_t baseline_sectors, distinct_lbas_verified, distinct_payloads;
     uint32_t baseline_lbas[KUI_SD_ASYNC_STRESS_SECTORS];
     uint32_t baseline_crcs[KUI_SD_ASYNC_STRESS_SECTORS];
