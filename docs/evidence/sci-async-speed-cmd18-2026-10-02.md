@@ -98,4 +98,9 @@ from the async copy and a failed measurement going through reinitialization.
 
 ## Delivery
 
-Pending CI.
+Source `97b590137b9bb67828f4bdea6d0ce2198770b5d9` passed
+[Diagnostic run 204](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37025928884):
+host tests and the Dreamcast build. The update is the run's
+`kui-1.5.1-dainsleif-sd-update` artifact; only `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` need replacing. Run R (and optionally Y, to
+confirm the masked-time reading) and return the JSON reports.

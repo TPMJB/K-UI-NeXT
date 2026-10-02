@@ -10,8 +10,11 @@ microseconds. **R** now also runs two read-only CMD18 measurements: a 16 KiB
 continuous capture that records the card's gap between blocks, and 64 blocks
 read one DMA at a time with an SCI reset and reselection between them (the
 cycle a receive-only streaming reader needs). See
-[the change record](evidence/sci-async-speed-cmd18-2026-10-02.md). Build and
-console results are pending; run R (Y optional) and return the JSON.
+[the change record](evidence/sci-async-speed-cmd18-2026-10-02.md). Build
+**97b590137b9b** passed [Diagnostic run 204](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37025928884)
+(host and Dreamcast jobs). Install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `sd-update` artifact, run R (Y
+optional) and return the JSON. Console results are pending.
 
 ## SCI stress: 559 verified reads, then incomplete receive (2026-10-02 UTC)
 
