@@ -1,5 +1,11 @@
 # SCI async probe: first receive wait fails after verified DMA
 
+**Follow-up:** the owner subsequently ran `0e9a2f814231` successfully: 16 slow
+and 64 fast reads passed, with 64 successful resets and normal storage recovery
+without card reinitialization. See the [full console result](sci-async-repeat-read-pass-2026-10-02.md).
+The design and delivery text below records what was known before that test.
+
+
 The owner tested `c25c1f6c2190` and again reported "framing bus fault".
 The exact uploaded report is preserved as
 [`sci-async-console-c25c1f6c2190.json`](sci-async-console-c25c1f6c2190.json).

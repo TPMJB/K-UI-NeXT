@@ -1,5 +1,24 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI repeated autonomous reads pass on console (2026-10-02 UTC)
+
+**0e9a2f814231 passes the full isolated async probe:** 16/16 slow and 64/64
+fast reads, all 80 DMA completion interrupts, CRC/data/guard checks, and CPU
+work during reception. All 64 fast trailing overruns took the new SCI-only
+reset successfully, STBCR `02 -> 03 -> 02`; slow reads required no reset.
+Zero bus faults, timeouts, premature errors or handoff/reset failures.
+Normal checked storage recovery succeeded **without card reinitialization**.
+See the [exact report, interpretation and next gate](evidence/sci-async-repeat-read-pass-2026-10-02.md).
+
+This resolves the repeat-read framing failure in the supplied run and is the
+known successful autonomous-transfer baseline. Mean fast receive time is
+339.5625 us; the advance is repeatability and handoff, not a throughput claim.
+One short LBA-0 CMD17 run does not establish sustained/multi-sector reliability,
+filesystem speed, timer/scheduler responsiveness, game integration or CE support.
+Next develop bounded start/poll/finish runtime stress with varied prevalidated
+sectors and an independent heartbeat, then design the native game integration
+within its measured code/stack limits. No new binary is needed for this record.
+
 ## SCI first fault localized; module-reset experiment (2026-10-02 UTC)
 
 Build **c25c1f6c2190** again verified 16 slow and one fast autonomous read.
@@ -12,8 +31,8 @@ See the [exact report and bounded next experiment](evidence/sci-async-module-res
 The next candidate conditionally pulses only SCI's STBCR.MSTP0 after completed,
 CRC/data/guard-verified DMA with trailing overrun. It checks reset defaults,
 restores the current framing configuration and retains first-fault reporting.
-This tests retained receiver state; the internal cause and console success are
-unproven. No reset is allowed for foreign or quarantined DMA or failed payload
+This tests retained receiver state; the internal cause remains unproven.
+The subsequent console run passes, as recorded above. No reset is allowed for foreign or quarantined DMA or failed payload
 checks. Unconfirmed module resume blocks all further SCI/storage access and
 requires restart. Ordinary game reads and CE launch remain unchanged.
 Run this candidate's SCI async probe once and return JSON/photo; no soak or CD.
@@ -24,7 +43,8 @@ build IDs/runtime CRCs and linked native instruction/layout/stack audits pass.
 SCI resident remains 11,156 bytes, end `8c00baec`, stack 1,172/1,232. Retail
 payload is identical to c25c after normalizing its four build labels. Replace
 both included files, retain boot CD 6af5e11, reboot and run the probe once.
-Console validation remains pending.
+The subsequent console report confirms all 80 probe reads and ordinary recovery;
+see the newer successful-run record above.
 
 ## SCI repeat-read failure narrowed to framing (2026-10-02 UTC)
 
