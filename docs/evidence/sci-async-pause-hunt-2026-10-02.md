@@ -60,9 +60,10 @@ stopped or TMU2 jumped.
 **Reset loop** (1 s, after the streaming pass, reader still open): the
 between-block handoff (deselect, module reset with interrupts masked,
 re-initialization) back to back with the card deselected and no DMA: tens of
-thousands of resets, against about 4,200 in the reads. It counts resets whose masked window took 0.5 ms or more,
-keeps their uptimes and the slowest reset's steps. Its windows stay out of
-the reads' pause log and `max_irq_masked_us`.
+thousands of resets, against about 4,200 in the reads. It counts resets whose
+masked window took 0.5 ms or more, keeps the first 8 uptimes and the slowest
+reset's steps. Its windows stay out of the reads' pause log and
+`max_irq_masked_us`.
 
 **Idle CPU tests** (after the reader closed, 1 s each, no SCI activity):
 
@@ -73,7 +74,7 @@ the reads' pause log and `max_irq_masked_us`.
 - unmasked: interrupts and other threads run.
 
 Each reports its longest gap between reads (and that gap in CPU cycles), when
-it happened, and the uptime of every gap of 0.5 ms or more.
+it happened, how many gaps took 0.5 ms or more and the first 8 uptimes.
 
 R takes about 4 s longer; screen updates stay paused throughout.
 
@@ -83,7 +84,7 @@ R takes about 4 s longer; screen updates stay paused throughout.
 | --- | --- | --- |
 | Reset loop: many resets over 0.5 ms, the time in one step | The MSTP0 cycle stalls | Stop resetting the module between blocks: clear the overrun another way, or receive transmit-fed so no overrun ends a block |
 | Masked idle tests have gaps (RAM only, or both) | The console stalls the bus or the core | Not the reader's; document it |
-| Only the unmasked test and unmasked reads | Interrupts or another thread | Find which; it does not apply under a game |
+| Only the unmasked test and unmasked reads | Interrupts or another K-UI thread | Find which; none of them runs under a game |
 | None anywhere | Rarer than once per run, or tied to reception | Run R again |
 
 **Screen.** Lines 3 to 5 replace the per-block lines (still in the report):
