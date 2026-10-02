@@ -677,10 +677,10 @@ static bool sci_async_passed(const struct kui_sd_async_result *result) {
     bool common=r->status==KUI_SCI_ASYNC_OK && result->baseline_verified && result->recovery_verified &&
         r->safe_restored && r->handlers_restored && r->registers_restored &&
         sci_async_completion(result);
-    /* Speed polls with no other work, so it has no CPU-overlap evidence. */
-    /* The CMD18 measurements must run, and every block they validated must
-     * equal the async pass's copy; what they find about the card is reported,
-     * not a failure. */
+    /* Speed polls with no other work, so it has no CPU-overlap evidence. The
+     * CMD18 measurements must run and every block they validated must equal
+     * the async pass's copy; what they find about the card is reported, not
+     * a failure. */
     if(result->speed) return common && result->video_quiet_acknowledged && result->video_sq_drained &&
         !result->video_frames_during && result->stream_ran && result->resume_ran &&
         result->stream_match && result->resume_match;
@@ -1083,7 +1083,9 @@ static void sci_async_operation(unsigned mode) {
                     result.recovery_verified?"verified":"not verified");
             }
             if(!status.passed && r->status!=KUI_SCI_ASYNC_OK) {
-                const struct kui_sci_async_stage *stage=r->fast.attempted?&r->fast:&r->slow;
+                /* A failed CMD18 measurement keeps its own counters. */
+                const struct kui_sci_async_stage *stage=r->cmd18.attempted>r->cmd18.passed?&r->cmd18:
+                    r->fast.attempted?&r->fast:&r->slow;
                 if(stage->handoff_checks || stage->bus_faults || stage->bus_fault_valid) {
                     snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow %lu/%lu IRQ%lu  Fast %lu/%lu IRQ%lu",
                         (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs,
