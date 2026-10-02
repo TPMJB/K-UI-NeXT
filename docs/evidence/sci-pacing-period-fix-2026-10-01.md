@@ -1,5 +1,10 @@
 # Game pacing: use the programmed scanline period
 
+**Console follow-up:** build `ce7006087f20` now shows enlarged steps on
+79.19% of reading calls, an owner-reported 18-second Kasumi load and working
+FMVs. See the [result and remaining fight-start issue](sci-pacing-period-console-2026-10-01.md).
+The original pre-test reasoning below is retained for provenance.
+
 ## Trigger and limits
 
 The owner's `8d930310f79d` return photo still shows zero enlarged steps:
@@ -89,8 +94,9 @@ end `0x8c00baec` (20 bytes free), conservative stack 1,184/1,232 bytes.
 SCIF/IDE payloads are 10,652/9,876 bytes and stack bounds 1,084/1,004 bytes.
 Normal entry/stage payloads are 56,704/48,512 bytes; normal/benchmark audits
 inspect 18,962/19,831 linked instructions. There are no unresolved symbols
-or resident FPU instructions. Official CI/package verification follows before
-delivery; these numbers describe the local preflight.
+or resident FPU instructions. Official CI run 36947691757 subsequently passed
+both jobs with the same audit figures; the console result records package
+verification and provenance.
 
 Repeat the same Kasumi-to-first-fight timing and check the first ten seconds
 of combat, speech and an FMV. Then capture the K-UI return screen; if DOA2

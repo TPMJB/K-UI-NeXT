@@ -2,7 +2,16 @@
 
 ## SCI follow-up experiment — 2026-10-01
 
-**Initial console result:** the owner reports about **25 seconds** from Kasumi
+**Console result — ce7006087f20:** the owner reports **18 seconds** from
+Kasumi selection to the first fight (previously 25), **FMVs playing fine**,
+and remaining slowdown during the first **seven seconds** of combat.
+The return photo confirms batching: 5,355/6,762 reading steps enlarged
+(79.19%), 21,872 sectors (3.23455 per step), zero spin steps and guard fault.
+Latest period/vblank is **525/260**, the geometry mishandled by the old code.
+Keep this as the current DOA2 comparison build. See the
+[console evidence and limits](evidence/sci-pacing-period-console-2026-10-01.md).
+
+**Earlier build — initial console result:** the owner reports about **25 seconds** from Kasumi
 selection to match start on `8d930310f79d` (earlier 29 seconds), noticeably
 smoother combat and only slight slowdown during the first roughly ten seconds.
 The earlier severe slowdown lasted about ten seconds too; severity improved
@@ -11,15 +20,15 @@ Storage throughput remains unchanged. The later matching photo shows **zero
 paced/spin steps**, 5,970 read steps and 11,880 sectors (1.989950 per step).
 Normal title-screen resets preserve the cumulative counters. Thus larger
 batches did not activate; the reported improvement's cause remains unknown.
-FMV acceptance is outstanding. See the
+FMV acceptance was not reported for that build. See the
 [report and photo transcription](evidence/sci-game-pacing-result-2026-10-01.md).
 
-**Next candidate:** the [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+**Correction tested above:** the [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
 uses `SPG_LOAD`'s actual scanline counter period instead of inferring it from
 the vblank interrupt position. Measurement epochs discard samples spanning
 invalid or changed geometry; return diagnostics expose the timing inputs.
-Console performance is pending. This source-level defect does not prove the
-exact reason DOA2 rejected enlargement in the old photograph.
+The latest capture confirms activation and 525/260 geometry, while the old
+photograph lacked the inputs to identify its exact rejection reason.
 
 The owner's build `6cc2abb460b5` counter photograph shows zero enlarged
 steps and approximately two game sectors per successful step. The prior

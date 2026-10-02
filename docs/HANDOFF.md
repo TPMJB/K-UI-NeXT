@@ -2,7 +2,16 @@
 
 ## Current game-loading experiment (2026-10-01)
 
-**Counter follow-up:** the **8d930310f79d** return photo shows **zero paced
+**Console result — ce7006087f20:** the owner reports **18 seconds** from
+Kasumi selection to the first fight (previously 25), **FMVs playing fine**,
+and remaining slowdown during the first **seven seconds** of combat.
+The return photo confirms batching: 5,355/6,762 reading steps enlarged
+(79.19%), 21,872 sectors (3.23455 per step), zero spin steps and guard fault.
+Latest period/vblank is **525/260**, the geometry mishandled by the old code.
+Keep this as the current DOA2 comparison build. See the
+[console evidence and limits](evidence/sci-pacing-period-console-2026-10-01.md).
+
+**Prior build — counter follow-up:** the **8d930310f79d** return photo shows **zero paced
 and spin steps**, 5,970 read steps and 11,880 game sectors (1.989950 per step),
 with no guard fault. The owner went through DOA2's title screen and several
 more reset attempts before capturing it; normal soft resets preserve these
@@ -11,17 +20,17 @@ The owner's **about 25 seconds** Kasumi-to-match observation (earlier 29),
 noticeably smoother first ten seconds and smooth audio remain observations;
 their cause cannot be attributed to larger read batches. Storage Soak run 13
 passes 160 MiB/ten cycles with zero errors, write/read
-**1,197.40/1,064.98 KiB/s**, effectively unchanged. Keep this as the comparison
-build; FMV and broader compatibility acceptance remain pending. See the
+**1,197.40/1,064.98 KiB/s**, effectively unchanged. The later period-corrected build above supersedes
+this comparison; broad compatibility remains pending. See the
 [reports, photo transcription and limits](evidence/sci-game-pacing-result-2026-10-01.md).
 
-The next [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+The tested [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
 reads actual scanline geometry from `SPG_LOAD`, invalidates measurements across
 mode changes or invalid samples, and displays the pacing inputs. The earlier
 policy inferred counter length from the vblank interrupt position, which is
 not valid for all video modes. This is a code defect independent of the
-unknown exact rejection reason in the old DOA2 photograph. Console performance
-of the correction is pending; the two-sector fallback, CRC and guards remain.
+unknown exact rejection reason in the old DOA2 photograph. Its first console
+result is recorded above; the two-sector fallback, CRC and guards remain.
 
 Grouped CRC build **6cc2abb460b5** previously passed Quick run 9 and five-minute
 Soak run 10 with zero errors. Soak write/read **1,198.32/1,064.87 KiB/s**;

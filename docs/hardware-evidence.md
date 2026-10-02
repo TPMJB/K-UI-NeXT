@@ -1,5 +1,16 @@
 # Hardware evidence
 
+## SCI period correction: batching active and FMVs improved — 2026-10-01
+
+**Console result — ce7006087f20:** the owner reports **18 seconds** from
+Kasumi selection to the first fight (previously 25), **FMVs playing fine**,
+and remaining slowdown during the first **seven seconds** of combat.
+The return photo confirms batching: 5,355/6,762 reading steps enlarged
+(79.19%), 21,872 sectors (3.23455 per step), zero spin steps and guard fault.
+Latest period/vblank is **525/260**, the geometry mishandled by the old code.
+Keep this as the current DOA2 comparison build. See the
+[console evidence and limits](evidence/sci-pacing-period-console-2026-10-01.md).
+
 ## SCI batching: reported improvement, zero enlarged steps — 2026-10-01
 
 The owner reports **about 25 seconds from selecting Kasumi to match start**
@@ -20,10 +31,10 @@ Storage Soak run **13** passes 160 MiB/ten cycles in 303.722145 seconds,
 with zero errors/DMA faults and successful remount verification/cleanup.
 Write/read **1,197.40/1,064.98 KiB/s** is effectively unchanged versus run 10.
 See the [reports, photo transcription and scope](evidence/sci-game-pacing-result-2026-10-01.md).
-The next [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
-uses actual `SPG_LOAD` geometry and adds timing diagnostics. It has no console
-performance result yet; the old photograph does not identify the precise
-condition that prevented larger batches.
+The subsequent [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+uses actual `SPG_LOAD` geometry and adds timing diagnostics. Its positive
+console result is recorded above; this older photograph did not identify
+the precise condition that prevented larger batches.
 
 ## SCI grouped CRC passed; game counter capture obtained — 2026-10-01
 
