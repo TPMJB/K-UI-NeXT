@@ -142,7 +142,6 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     /* How the game drives reads: ABXY+Start after a load shows these. */
     retail_display_hex("READ STEPS",service.diag.read_steps);
     retail_display_hex("SECTORS READ",service.diag.sectors_read);
-    retail_display_hex("FRAMES SEEN",pace.frames);
     retail_display_hex("PACED STEPS",pacing.paced);
     retail_display_hex("SPIN STEPS",pacing.spun);
     /* Latest sampled geometry/cost, possibly changed by a title-screen
@@ -151,7 +150,6 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("PACE VBI",pace.vbi);
     retail_display_hex("PACE COST16",pace.per);
     retail_display_hex("PACE STILL",pace.still);
-    retail_display_hex("PACE LINE",pace.line);
     retail_display_line("RESTARTING K-UI");
     retail_display_pause(900u); /* ~15 seconds at 60 Hz to capture the counters */
     /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts

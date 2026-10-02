@@ -141,3 +141,65 @@ while this new boot path is developed.
 This audit produces a concrete development target. It does not ship a CE
 unlock, claim an observed CE crash, or attribute CE incompatibility to card
 speed alone.
+
+## Proposed development sequence after native testing
+
+This sequence is **not implemented**. It records the owner's request to try
+more native games before working on CE, with concrete, independently authored
+probe boundaries. The [SCI inline CRC candidate](sci-inline-crc-2026-10-01.md)
+is the next native change to measure first; host/build checks do not establish
+a console speed improvement.
+
+1. Retest DOA2's load, FMV and early-fight behavior, then sample other owned
+   native titles with gameplay and VMU save/load checks. Record each title's
+   result separately. Native launch support is not a promise that every game
+   works; the present virtual GD service accepts CD audio commands without
+   producing CDDA sound.
+2. Add a CE-only preparation/probe package with an explicit profile handshake.
+   Require CE metadata and the matching package, rejecting native/CE package
+   mismatches. Preserve the existing native package and ordinary CE Launch
+   restriction while these probes establish the handoff.
+3. Link the CE stage at the candidate address `0x8ce10000`, retaining memory
+   end `0x8cfe0000` and stack `0x8cff0000`. This starts 64 KiB above the native
+   stage and leaves the prefix destination clear. The existing period-fix
+   stage's linked code/data/BSS span was `0x16ec0` bytes; the candidate range
+   provides `0x1d0000` bytes before the memory end. These are layout calculations,
+   not proof that the CE bootstrap leaves this allocation intact. Re-link the
+   entry, relay and package addresses; merely copying native-linked code to
+   the new address is invalid. Keep native memory reservations unchanged.
+4. Implement a pure checked load plan, then a placement-only console probe.
+   For the inspected ARMADA file, the proposed split is:
+
+   | Part | File offset | Image LBA | Bytes | Destination, end exclusive |
+   | --- | --- | --- | --- | --- |
+   | Prefix | `0` | `548388` | `0x800` | `[0x8ce01000, 0x8ce01800)` |
+   | Body | `0x800` | `548389` | `0x131800` | `[0x8c010000, 0x8c141800)` |
+
+   The file is exactly 612 sectors: one prefix sector and 611 body sectors.
+   The prefix ends `0xe800` bytes below the proposed stage. Validate every
+   sector header and physical SD CRC, then report separate prefix/body
+   checksums and verified destinations. This first probe stops before entering
+   the owner bootstrap. For other files, validate sector rounding, declared
+   byte lengths, arithmetic overflow and every live source/destination range.
+5. Once placement passes, add a separate bootstrap-entry probe that preserves
+   entry state and reports stack, SR, VBR, cache state and resident integrity.
+   Independently validate the CE IP flag behavior and relay assumptions;
+   neither the native flag edit nor its exact VBR/stack expectations is an
+   established CE contract. Keep the stage and original-entry data live until
+   the relay is finished, and leave no runtime pointers into that stage.
+6. Probe the first GD requests, recording original argument/buffer addresses
+   before `retail_gd.c` canonicalizes them, together with caller SR/VBR and
+   MMU state. Stop before dereferencing an unsupported mapping. The current
+   physical-alias conversion is not a general virtual-address translator.
+   Fit probe diagnostics within checked resident/stack limits; do not assume
+   the CE kernel preserves disposable high-stage memory for a trace buffer.
+7. Implement the request, mapping or completion behavior that the owned title
+   actually requires. Confirm resident survival and a working title screen,
+   then test gameplay, FMV/audio and VMU save/load as separate milestones.
+
+Before console execution, test truncated prefix/body data, exact load limits,
+rounding/overflow, package/profile mismatches, every live-range collision
+(including the original `0x8ce01000` conflict), relocated relay targets and
+entry-state preservation. Audit the CE ELF, BSS, stack and instructions while
+retaining native checks. Faster SCI and successful placement alone do not
+establish Windows CE boot or gameplay compatibility.

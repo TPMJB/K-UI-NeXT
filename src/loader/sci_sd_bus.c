@@ -153,7 +153,9 @@ static uint32_t reverse(uint32_t x) {
 /* DMA RX and the staging array have proven 32-byte alignment. This type may
  * alias the caller's byte array without relaxing aliasing for the whole build. */
 typedef uint32_t alias_word __attribute__((__may_alias__));
-static uint16_t data_crc(uint16_t crc, uint8_t data) {
+/* Keep the RX word and byte counter in registers: the size-optimized SH-4
+ * build otherwise spills both around a CRC function call for every byte. */
+static inline __attribute__((always_inline)) uint16_t data_crc(uint16_t crc, uint8_t data) {
     /* Fold eight x^16+x^12+x^5+1 steps without a second lookup table. */
     uint32_t x = (crc >> 8) ^ data;
     x ^= x >> 4;

@@ -2,6 +2,15 @@
 
 ## Current game-loading experiment (2026-10-01)
 
+**Next candidate — CRC overhead:** force-inline the unchanged SCI CRC16
+helper to remove per-byte calls/spills in both runtime and game-reader code.
+Host CRC/fault tests and native layout/stack/instruction checks pass. The
+`FRAMES SEEN` and `PACE LINE` display fields are removed to fit; their timing
+state is retained and all guards are unchanged. Console performance is pending.
+See the [candidate, test sequence and next optimizations](evidence/sci-inline-crc-2026-10-01.md).
+Test Storage Quick and DOA2 first, then broaden native-game coverage before
+the separately scoped ARMADA Windows CE probe.
+
 **Console result — ce7006087f20:** the owner reports **18 seconds** from
 Kasumi selection to the first fight (previously 25), **FMVs playing fine**,
 and remaining slowdown during the first **seven seconds** of combat.
