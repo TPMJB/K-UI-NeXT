@@ -75,3 +75,35 @@ The update is the run's `kui-1.5.1-dainsleif-sd-update` artifact; only
 2. **R**: async KiB/s versus ordinary KiB/s, and the setup time per block. If
    setup (command plus card wait) is small, single-block reads can approach the
    CMD18 reader; if it is large, the async path needs streaming reads first.
+
+## Console results (8daab44490f5)
+
+The owner ran Y and R; both passed. Reports:
+[screen-on stress](sci-async-console-8daab44490f5-screen.json) and
+[speed](sci-async-console-8daab44490f5-speed.json).
+
+**Y, 60 s with the screen updating.** 65,422 reads, all verified (CRC, data,
+guards); 51 mid-payload overruns (0.85 per second, one per 1,283 reads), all 51
+proven idle and retried successfully; no undrained overrun, no restart, normal
+recovery without reinitialization. The first overrun stopped after 431 of 514
+bytes with DMAOR `8201` (normal) while the CPU was at PC `8c05dbda`. Timer:
+5,990 ticks, 2,039 during DMA, longest gap 12.5 ms. The 10,028 us
+`max_irq_masked_us` conflicts with that 12.5 ms longest tick gap (a real 10 ms
+masked window would delay a tick by up to 10 ms); it is most likely a
+timestamp artifact and needs a direct measurement.
+
+**R, 1 MiB of `/KUI/runtime.kui` (LBA 88,450,816).** Both passes returned the
+same CRC32. Ordinary reader (CMD18 runs): 1,089 KiB/s. Async reader (one CMD17
+per block): 587 KiB/s, 850.8 us per block:
+
+| Phase | us per block |
+| --- | ---: |
+| Setup: command, card wait, DMA start | 312.2 |
+| Receive (514 bytes; wire time 329) | 345.4 |
+| Finish: reverse, CRC, handoff and SCI reset | 148.1 |
+| Loop and API overhead | 45.1 |
+
+The card's own wait averaged 58.3 bytes (max 63), about 37 us at 12.5 MHz, so
+most of the 312 us setup is per-byte software cost in the diagnostic framing
+loop (a wall-clock timeout read on every byte), not card latency. Finish uses
+bit-by-bit reversal and CRC rather than the reader's optimized routines.

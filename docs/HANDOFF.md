@@ -34,7 +34,11 @@ Build **8daab44490f5** passed [Diagnostic run 202](https://github.com/TPMJB/K-UI
 (host and Dreamcast jobs). Install `KUI/runtime.kui` and
 `KUI/apps/games/retail-boot.kui` from its `sd-update` artifact, keep the current
 boot CD, then run Y and R and return both JSON reports and result photos.
-Console results pending; native game reads and the CE gate are unchanged.
+**Console: both passed.** Y: 65,422 reads verified with the screen updating,
+51 overruns all retried, no restart. R: same data; ordinary reader 1,089 KiB/s,
+async single-block reader 587 KiB/s (setup 312 us, receive 345 us, finish 148 us
+per block; card wait only about 37 us). Native game reads and the CE gate are
+unchanged.
 
 ## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)
 
