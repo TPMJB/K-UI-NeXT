@@ -41,7 +41,8 @@ enum fault { NO_FAULT, EARLY_ERROR, BAD_CRC, WRONG_DATA, STALLED,
              TOKEN_NOT_ENDED, BAD_GPIO_CONTROL, HANDOFF_REASSERTED_ERROR,
              HANDOFF_STUCK_ERROR, HANDOFF_NO_TEND, BUS_FAULT_ON_DESELECT,
              BUS_FAULT_ON_COMMAND, BUS_FAULT_ON_READY_DESELECT,
-             BUS_FAULT_ON_IDLE_CLOCK, BUS_FAULT_ON_READY_POLL };
+             BUS_FAULT_ON_IDLE_CLOCK, BUS_FAULT_ON_READY_POLL,
+             PERSISTENT_OVERRUN, LATE_DMA_AFTER_STOP, LATE_BYTE_AFTER_STOP };
 static struct {
     uint8_t smr, brr, scr, ssr, rdr, scmr, sptr, stbcr;
     uint16_t pdtr;
@@ -73,6 +74,9 @@ static struct {
     bool module_assert_failure, module_resume_failure, module_reinitializing;
     bool bus_fault_on_tail_deselect, foreign_on_tail_deselect;
     bool timer_stopped;
+    /* A payload overrun stops reception part way through the block. */
+    bool aborted_dma, overrun_this_dma;
+    unsigned fences, late_writes;
     bool bus_slow, speed_resync_failure;
     struct kui_sci_sd_fault first_bus_fault;
     enum fault fault;
@@ -158,12 +162,20 @@ static void advance(void) {
     if(hw.advancing) return;
     hw.advancing=true;
     if(receiving() && hw.fault!=STALLED) {
+        bool once=hw.fault==EARLY_ERROR || hw.fault==LATE_DMA_AFTER_STOP ||
+            hw.fault==LATE_BYTE_AFTER_STOP;
+        bool overrun=once?!hw.fault_fired:hw.fault==PERSISTENT_OVERRUN && !hw.overrun_this_dma;
+        if(overrun && hw.transferred>=64) {
+            /* RDR was not read in time: reception stops mid-block and the
+             * receiver needs the module reset before ordinary transfers. */
+            hw.fault_fired=hw.overrun_this_dma=true;
+            hw.aborted_dma=hw.receiver_stalled=true;
+            hw.ssr|=ORER; deliver(EXC_SCI_ERI);
+        }
         if(!hw.fault_fired && hw.transferred>=64 &&
-           (hw.fault==EARLY_ERROR || hw.fault==DMA_FAULT || hw.fault==EARLY_RX_IRQ ||
-            hw.fault==FOREIGN_DURING_DMA)) {
+           (hw.fault==DMA_FAULT || hw.fault==EARLY_RX_IRQ || hw.fault==FOREIGN_DURING_DMA)) {
             hw.fault_fired=true;
-            if(hw.fault==EARLY_ERROR) { hw.ssr|=ORER; deliver(EXC_SCI_ERI); }
-            else if(hw.fault==EARLY_RX_IRQ) { hw.ssr|=RDRF; deliver(EXC_SCI_RXI); }
+            if(hw.fault==EARLY_RX_IRQ) { hw.ssr|=RDRF; deliver(EXC_SCI_RXI); }
             else if(hw.fault==FOREIGN_DURING_DMA) {
                 install_foreign_dma(); hw.ssr|=ORER; deliver(EXC_SCI_ERI);
             }
@@ -242,6 +254,19 @@ void irq_set_priority(irq_src_t source,unsigned priority) {
 }
 uint64_t timer_us_gettime64(void) { if(!hw.timer_stopped) hw.now+=37; advance(); return hw.now; }
 void kui_sci_async_test_work_tick(void) { ++hw.work_ticks; hw.now+=11; advance(); }
+/* A transfer accepted before DE was cleared may still complete late: once for
+ * LATE_BYTE_AFTER_STOP, and on every fence for LATE_DMA_AFTER_STOP. */
+void kui_sci_async_test_bus_fence(void) {
+    ++hw.fences;
+    bool late=hw.fault==LATE_DMA_AFTER_STOP ||
+        (hw.fault==LATE_BYTE_AFTER_STOP && !hw.late_writes);
+    if(late && hw.aborted_dma && hw.tcr && hw.dma_buffer && !(hw.chcr&DE)) {
+        size_t offset=hw.dar-DMA_BASE;
+        assert(offset<hw.dma_size);
+        hw.dma_buffer[offset]=reverse_byte(logical_byte(hw.transferred));
+        ++hw.dar; ++hw.transferred; ++hw.total_bytes; --hw.tcr; ++hw.late_writes;
+    }
+}
 void kui_sci_async_test_delay(uint32_t count) {
     assert(count);
     if(hw.module_reinitializing && hw.reinit_stage==3 && count>=1024) hw.reinit_stage=4;
@@ -299,7 +324,7 @@ void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
             assert((value&~1u)==(hw.stbcr&~1u));
             if(value&1u) {
                 ++hw.module_asserts;
-                assert(hw.transferred==514 && (hw.sptr&0x8bu)==0x83u);
+                assert((hw.transferred==514 || hw.aborted_dma) && (hw.sptr&0x8bu)==0x83u);
                 if(!hw.module_assert_failure) hw.stbcr=value;
             } else {
                 ++hw.module_resumes;
@@ -345,6 +370,7 @@ void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
                 assert(hw.brr==0 || hw.brr==31);
                 if(hw.brr) ++hw.slow_starts; else ++hw.fast_starts;
                 hw.transferred=0; ++hw.dma_starts;
+                hw.aborted_dma=hw.overrun_this_dma=false;
             }
             hw.scr=value;
             if(!(value&0x20u)) hw.ssr|=TEND;
@@ -580,6 +606,11 @@ static void quarantined_fault(enum fault fault,enum kui_sci_async_status cause) 
     assert(hw.sar!=0x0c002000 && hw.dar!=0x0c004000 && hw.tcr!=19);
     assert(hw.dmaor==(fault==DMA_FAULT?0x0305u:0x0301u));
     if(fault==STALLED) assert(result.slow.timeouts==1);
+    if(fault==LATE_DMA_AFTER_STOP) {
+        /* Still moving after the stop: never proven idle, never retried. */
+        assert(result.slow.undrained_overruns==1 && !result.slow.payload_overruns);
+        assert(!result.slow.overrun_retries && hw.late_writes==3 && hw.command_count==1);
+    }
     for(unsigned i=0;i<3;++i) {
         assert(hw.handlers[i].hdl==original_handler);
         assert(hw.handlers[i].data==&handler_data[i]);
@@ -595,7 +626,79 @@ static void quarantined_fault(enum fault fault,enum kui_sci_async_status cause) 
     assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_BUSY);
     assert(!result.started && hw.writes==writes && !hw.cache_invalidates);
 }
-static void test_early_error_quarantined(void) { quarantined_fault(EARLY_ERROR,KUI_SCI_ASYNC_RECEIVE_ERROR); }
+static enum kui_sci_async_status poll_complete(struct kui_sci_async_reader *reader);
+static void begin_active(struct kui_sci_async_reader *reader);
+static void test_late_dma_quarantined(void) { quarantined_fault(LATE_DMA_AFTER_STOP,KUI_SCI_ASYNC_RECEIVE_ERROR); }
+/* One overrun mid-payload: proven idle, receiver reset, rest of the block
+ * clocked out, the same CMD17 re-issued, and every later read unaffected. */
+static void test_payload_overrun_retried(enum fault fault) {
+    struct kui_loader_sd card=reset(); hw.fault=fault;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_OK);
+    assert(result.status==KUI_SCI_ASYNC_OK && !result.dma_quarantined && !result.foreign_dma);
+    assert(result.slow.attempted==16 && result.slow.passed==16);
+    assert(result.fast.attempted==64 && result.fast.passed==64);
+    assert(result.slow.payload_overruns==1 && result.slow.overrun_retries==1);
+    assert(!result.slow.undrained_overruns && !result.fast.payload_overruns);
+    assert(result.slow.sci_error_irqs==1 && result.slow.dma_irqs==16 && result.slow.dma_started==17);
+    assert(result.slow.module_reset_attempts==1 && result.slow.module_resets==1);
+    assert(result.slow.handoff_checks==17 && !result.slow.handoff_failures);
+    assert(hw.command_count==81 && hw.dma_starts==81 && hw.module_asserts==1);
+    unsigned late=fault==LATE_BYTE_AFTER_STOP?1u:0u;
+    assert(hw.total_bytes==80u*514u+64u+late && hw.late_writes==late && hw.fences>=4);
+    const struct kui_sci_async_fault *f=&result.first_overrun;
+    assert(f->valid && f->event==EXC_SCI_ERI && f->lba==123 && f->tcr==450);
+    assert(f->dar==DMA_BASE+64 && f->chcr==0x4915 && f->ssr==(TDRE|TEND|ORER));
+    assert(f->scr==0x50 && f->context_valid && f->pc==hw.interrupted_pc);
+    assert(!result.fault.valid && result.guards_ok && result.crc_ok && result.baseline_ok);
+    assert(result.slow.framing_us && result.slow.finish_us && result.fast.framing_us);
+    restored(&result);
+}
+static void test_payload_overrun_once(void) { test_payload_overrun_retried(EARLY_ERROR); }
+static void test_payload_overrun_late_byte(void) { test_payload_overrun_retried(LATE_BYTE_AFTER_STOP); }
+static void test_payload_overrun_cancel(void) {
+    struct kui_loader_sd card=reset();hw.fault=PERSISTENT_OVERRUN;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    begin_active(&reader);
+    assert(kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_PENDING);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_CANCELLED);
+    /* The receiver is still reset before the request ends; no re-issue. */
+    assert(result.fast.payload_overruns==1 && !result.fast.overrun_retries);
+    assert(result.fast.module_resets==1 && hw.command_count==1 && hw.dma_starts==1);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_CANCELLED);
+    assert(!result.dma_quarantined && !result.fast.passed);
+    restored(&result);
+}
+static void test_token_bytes_and_quantum(void) {
+    struct kui_loader_sd card=reset();hw.token_delay=5;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    uint8_t payload[512];
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    kui_sci_async_set_framing_quantum(&reader,4096);
+    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
+    /* One poll sends the command, waits for the token and starts the DMA. */
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_PENDING && hw.dma_starts==1 && receiving());
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
+    assert(!memcmp(payload,hw.baseline,512));
+    assert(result.fast.token_bytes==5 && result.fast.max_token_bytes==5);
+    hw.token_delay=2;
+    assert(kui_sci_async_begin(&reader,124,false)==KUI_SCI_ASYNC_OK);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
+    assert(result.fast.token_bytes==7 && result.fast.max_token_bytes==5);
+    assert(result.fast.framing_us && result.fast.finish_us && result.fast.passed==2);
+    /* Out-of-range quanta are clamped, never zero or unbounded. */
+    kui_sci_async_set_framing_quantum(&reader,0);
+    assert(kui_sci_async_begin(&reader,125,false)==KUI_SCI_ASYNC_OK);
+    unsigned bytes=hw.bus_bytes;
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_PENDING);
+    assert(hw.bus_bytes-bytes<=8 && hw.dma_starts==2 && !receiving());
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
+}
 static void test_early_rx_irq_quarantined(void) { quarantined_fault(EARLY_RX_IRQ,KUI_SCI_ASYNC_RECEIVE_ERROR); }
 static void test_timeout_quarantined(void) { quarantined_fault(STALLED,KUI_SCI_ASYNC_TIMEOUT); }
 static void test_missing_end_quarantined(void) { quarantined_fault(TRAILING_WITHOUT_END,KUI_SCI_ASYNC_RECEIVE_ERROR); }
@@ -1189,9 +1292,15 @@ static void test_fault_snapshot_first_rejected_request(void) {
         assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
         assert(!result.fault.valid);
     }
-    hw.fault=EARLY_ERROR;
+    hw.fault=PERSISTENT_OVERRUN;
     assert(kui_sci_async_begin(&reader,987,false)==KUI_SCI_ASYNC_OK);
     assert(poll_complete(&reader)==KUI_SCI_ASYNC_RECEIVE_ERROR);
+    /* Every attempt overran; the last one's evidence describes the failure. */
+    assert(result.fast.payload_overruns==1u+KUI_SCI_ASYNC_OVERRUN_RETRIES);
+    assert(result.fast.overrun_retries==KUI_SCI_ASYNC_OVERRUN_RETRIES);
+    assert(!result.fast.undrained_overruns && hw.command_count==8);
+    assert(result.first_overrun.valid && result.first_overrun.lba==987);
+    assert(result.first_overrun.tcr==450 && result.first_overrun.dar==DMA_BASE+64);
     const struct kui_sci_async_fault saved=result.fault;
     assert(saved.valid && saved.event==EXC_SCI_ERI && saved.lba==987);
     assert(saved.ssr==(TDRE|TEND|ORER) && saved.scr==0x50);
@@ -1203,8 +1312,9 @@ static void test_fault_snapshot_first_rejected_request(void) {
     assert(hw.cache_invalidates==4 && result.fast.passed==4);
     assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_RECEIVE_ERROR);
     assert(kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_RECEIVE_ERROR);
-    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
-    assert(result.dma_quarantined && !result.safe_restored);
+    /* Proven idle: local cleanup succeeds; no quarantine or restart. */
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RECEIVE_ERROR);
+    assert(!result.dma_quarantined && result.safe_restored);
     assert(!memcmp(&saved,&result.fault,sizeof(saved)));
     irq_context_t stale={.pc=0x8cabcdef,.sr=0};
     hw.probe_handlers[1].hdl(EXC_SCI_ERI,&stale,hw.probe_handlers[1].data);
@@ -1289,7 +1399,11 @@ int main(void) {
     test_sptr_reads_pins_with_transmitter_on_or_off();
     test_preexisting_gpio_output_no_touch();
     test_no_foreground_overlap();
-    isolated(test_early_error_quarantined);
+    isolated(test_late_dma_quarantined);
+    isolated(test_payload_overrun_once);
+    isolated(test_payload_overrun_late_byte);
+    isolated(test_payload_overrun_cancel);
+    test_token_bytes_and_quantum();
     test_fault(BAD_CRC,KUI_SCI_ASYNC_CRC);
     test_fault(WRONG_DATA,KUI_SCI_ASYNC_MISMATCH);
     isolated(test_timeout_quarantined);
@@ -1328,6 +1442,7 @@ int main(void) {
     puts("SCI module reset: bounded gates, restoration and modeled RX recovery passed; console proof still required");
     puts("SCI reader lifecycle: bounded polling, cancel/drain, no early publish and ownership passed");
     puts("SCI first fault: pre-stop control/context preserved; good completions excluded");
+    puts("SCI payload overrun: proven-idle retry, late byte, cancel, retry limit and undrained quarantine passed");
     puts("SCI async probe host tests passed");
     return 0;
 }

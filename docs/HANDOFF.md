@@ -19,6 +19,19 @@ a quiet-screen pass would not establish game-rendering coexistence. Build,
 review and console confirmation are pending. Native game and CE integration
 are not enabled by this experiment.
 
+## SCI async: overrun retry, screen-on stress and speed comparison (2026-10-02 UTC)
+
+The owner's quiet 60-second stress on `9e8fd8372705` passed: 71,641 reads, no
+errors, 2,278 timer ticks during DMA. Work continues on
+`claude/modest-galileo-hpjv79` (merged from `codex/storage-transports`).
+A mid-payload receive overrun is now retried when the stopped channel is
+provably idle (MSTP0 reset, rest of the block clocked out, same CMD17 again,
+at most three times); any other incomplete stop still quarantines. The probe
+page adds **Y** (60-second stress with the screen updating) and **R** (1 MiB
+speed comparison, ordinary CMD18 reader versus one async CMD17 per block).
+See [the change record](evidence/sci-async-overrun-retry-2026-10-02.md).
+Console results pending; native game reads and the CE gate are unchanged.
+
 ## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)
 
 The successful short probe now backs a reusable bounded

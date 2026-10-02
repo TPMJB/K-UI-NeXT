@@ -14,6 +14,10 @@ enum kui_sd_async_recovery_phase {
 #define KUI_SD_ASYNC_STRESS_SECTORS 16u
 #define KUI_SD_ASYNC_STRESS_US UINT64_C(60000000)
 #define KUI_SD_ASYNC_STRESS_READ_LIMIT 262144u
+/* Speed comparison: the same real data, 1 MiB, read first by the ordinary
+ * reader (CMD18 runs, CPU-fed) and then by the async reader (one CMD17 per
+ * block, polled with no other work). */
+#define KUI_SD_ASYNC_SPEED_BLOCKS 2048u
 struct kui_sd_async_result {
     struct kui_sci_async_probe_result probe;
     bool baseline_verified, recovery_verified, recovery_reinitialized, restart_required;
@@ -26,6 +30,8 @@ struct kui_sd_async_result {
      * CRC-checked reads before the reusable reader takes its lease. Timing
      * excludes baseline preparation and the final normal-reader recovery. */
     bool sustained, duration_complete, iteration_limit;
+    /* Set by the caller after the run: shell redraws were left running. */
+    bool screen_active;
     /* Main-thread framebuffer quiet window: acknowledged only after its final
      * frame and store-queue drain. The worker merges these after recovery. */
     bool video_quiet_requested, video_quiet_acknowledged, video_sq_drained;
@@ -37,11 +43,19 @@ struct kui_sd_async_result {
     struct kui_sci_async_heartbeat_result heartbeat;
     uint32_t read_cycles, poll_calls, worker_yields;
     uint64_t target_us, stress_elapsed_us, read_elapsed_us, max_read_us;
+    /* Speed comparison. speed_lba starts /KUI/runtime.kui when found,
+     * otherwise the volume's data area; both passes read the same blocks. */
+    bool speed, speed_file_found, speed_match;
+    uint32_t speed_lba, speed_blocks, speed_async_blocks;
+    uint32_t speed_normal_crc, speed_async_crc;
+    uint64_t speed_normal_us, speed_async_us;
     char message[128];
 };
 const char *kui_sd_async_recovery_name(enum kui_sd_async_recovery_phase phase);
 void kui_sd_async_probe(struct kui_sd_async_result *out,
     bool (*cancelled)(void *),void *cancel_ctx);
 void kui_sd_async_stress(struct kui_sd_async_result *out,
+    bool (*cancelled)(void *),void *cancel_ctx);
+void kui_sd_async_speed(struct kui_sd_async_result *out,
     bool (*cancelled)(void *),void *cancel_ctx);
 #endif

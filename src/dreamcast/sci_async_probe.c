@@ -41,6 +41,11 @@
 #define MAX_POLLS 200000u
 #define HANDOFF_POLLS 8u
 #define FRAMING_QUANTUM 8u
+#define MAX_QUANTUM 4096u
+/* More than the 514-byte block an overrun can interrupt; the card idles at
+ * 0xff after the block, so extra clocks are harmless for CMD17. */
+#define DRAIN_BYTES 1024u
+#define IDLE_CHECKS 4u
 
 #ifdef KUI_SCI_ASYNC_PROBE_TEST
 #define rd(a,w) kui_sci_async_test_read(a,w)
@@ -124,9 +129,10 @@ struct probe {
     enum reader_phase phase;
     enum kui_sci_async_status request_status;
     bool slow, cancel_requested, payload_validated, completion_recorded;
-    uint64_t opened_us, request_us, frame_us;
+    unsigned retries, quantum;
+    uint64_t opened_us, request_us, frame_us, attempt_us;
     uint32_t expected_sar,expected_dar,expected_tcr,expected_chcr,start_address;
-    volatile bool armed,done,foreign_dma,quarantined;
+    volatile bool armed,done,foreign_dma,quarantined,overrun_abort;
     volatile uint32_t end_chcr,end_count,end_ssr,event;
     uint64_t start_us;
     struct kui_sci_async_fault fault_candidate;
@@ -152,10 +158,44 @@ static void unmask(struct probe *p, irq_mask_t mask, uint64_t start) {
     max_time(&p->out->max_irq_masked_us,start); irq_restore(mask);
 }
 
+/* Each idle check is preceded by an uncached read of the receive area, so a
+ * transfer the channel had already accepted has had the external bus too. */
+static void bus_fence(const struct probe *p) {
+#ifdef KUI_SCI_ASYNC_PROBE_TEST
+    (void)p;kui_sci_async_test_bus_fence();
+#else
+    (void)*(volatile uint32_t *)(uintptr_t)(p->start_address|UINT32_C(0xa0000000));
+#endif
+}
+/* With SCR=0 the SCI raises no further receive request and with DE clear the
+ * channel accepts none. Renesas 14.3.6 gives no acknowledgement for one it
+ * had already accepted, so wait until the stopped count and address agree and
+ * stay unchanged across consecutive checks. At most two late transfers are
+ * tolerated; anything else is treated as not provably idle. A late byte can
+ * only land inside this receive area: a retry rewrites every payload byte and
+ * CRC/guards still gate publication. */
+static bool stopped_channel_idle(const struct probe *p) {
+    uint32_t first=rd(TCR,4),count=first,address=rd(DAR,4);
+    unsigned stable=0;
+    if(!first || first>514u) return false;
+    for(unsigned n=0;n<4u*IDLE_CHECKS;++n) {
+        bus_fence(p);settle(256);
+        uint32_t next_count=rd(TCR,4),next_address=rd(DAR,4);
+        bool same=next_count==count && next_address==address;
+        count=next_count;address=next_address;
+        if(!count || count>first || first-count>2u || (rd(CHCR,4)&1u)) return false;
+        if(same && address==p->start_address+(514u-count)) {
+            if(++stable>=IDLE_CHECKS) return true;
+        } else stable=0;
+    }
+    return false;
+}
+
 /* Stop the source before the channel. DE/IE are cleared while preserving an
  * already-set TE, then TE is acknowledged. The readback/settle is NOT treated
- * as an abort-drain acknowledgement: only TE+count0 proves completion. Without
- * that evidence, quarantine the persistent buffer and channel until restart.
+ * as an abort-drain acknowledgement: only TE+count0 proves completion. A lone
+ * receive overrun whose stopped channel is proven idle becomes retryable;
+ * every other incomplete stop quarantines the buffer and channel until restart.
  */
 static void freeze(struct probe *p,irq_t event,const irq_context_t *context,
         uint64_t observed_us) {
@@ -194,9 +234,17 @@ static void freeze(struct probe *p,irq_t event,const irq_context_t *context,
     p->end_ssr=rd(SSR,1);
     p->stage->snapshot_ssr=p->end_ssr;
     p->stage->snapshot_sptr=rd(SPTR,1);
-    if(p->end_count || !(p->end_chcr&2u)) p->quarantined=true;
+    if(p->end_count || !(p->end_chcr&2u)) {
+        bool overrun=event==EXC_SCI_ERI && (p->end_ssr&ORER) && !(p->end_ssr&(FLAGS&~ORER));
+        if(overrun && stopped_channel_idle(p)) p->overrun_abort=true;
+        else {
+            if(overrun) ++p->stage->undrained_overruns;
+            p->quarantined=true;
+        }
+    }
     if(!p->quarantined) {
         wr(CHCR,0,4);
+        if(p->overrun_abort) wr(TCR,0,4);
         p->expected_sar=rd(SAR,4);p->expected_dar=rd(DAR,4);
         p->expected_tcr=rd(TCR,4);p->expected_chcr=0;
     }
@@ -316,8 +364,9 @@ static void release(struct probe *p) {
     unmask(p,mask,start);
 }
 
-/* A completed, validated CMD17 with trailing overrun is the only reset
- * candidate. Renesas 9.2.1/9.6 and 15.1.4 document MSTP0 as SCI-only module
+/* A completed, validated CMD17 with trailing overrun, or a payload overrun
+ * whose stopped channel was proven idle, is a reset candidate. Renesas
+ * 9.2.1/9.6 and 15.1.4 document MSTP0 as SCI-only module
  * standby and initialization of SCI registers except SPTR. This experiment
  * tests whether that stronger reset restores the receiver after ORER; the
  * console has not established its internal cause. No DMA abort is inferred.
@@ -333,8 +382,9 @@ static enum kui_sci_async_status module_reset(struct probe *p) {
     if(p->armed || p->quarantined || p->foreign_dma || !dma_unchanged(p)) {
         p->foreign_dma=true;result=KUI_SCI_ASYNC_DMA_ERROR;goto failed;
     }
-    if(p->end_count || !(p->end_chcr&2u) || !(p->end_ssr&ORER) ||
-       !p->payload_validated || !p->out->guards_ok || !p->out->crc_ok ||
+    bool completed=!p->end_count && (p->end_chcr&2u) && p->payload_validated &&
+        p->out->guards_ok && p->out->crc_ok;
+    if(!(completed || p->overrun_abort) || !(p->end_ssr&ORER) ||
        !kui_sci_sd_healthy() || !(rd(PDTR,2)&0x80u) || rd(SCR,1)!=0 ||
        (rd(SSR,1)&(RDRF|FLAGS)) || (rd(SPTR,1)&0x8au)!=0x82u) goto failed;
     /* Only the SCI bit changes. The short mask protects these RMWs and the
@@ -407,7 +457,7 @@ static enum kui_sci_async_status frame_poll(struct probe *p) {
     const struct kui_loader_sd *c=p->card;
     struct kui_sci_async_stage *s=p->stage;
     if(!dma_unchanged(p)) {p->foreign_dma=true;return KUI_SCI_ASYNC_DMA_ERROR;}
-    for(unsigned budget=0;budget<FRAMING_QUANTUM;++budget) {
+    for(unsigned budget=0;budget<p->quantum;++budget) {
         s->framing_index=p->frame_count;
         if(s->last_phase==KUI_SCI_ASYNC_PHASE_TOKEN_END) {
             uint32_t ssr=rd(SSR,1);
@@ -460,11 +510,26 @@ static enum kui_sci_async_status frame_poll(struct probe *p) {
                 value=byte(c,0xff,p->slow);s->last_token=value;
                 if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
                 if(value==0xfe) {
+                    s->token_bytes+=p->frame_count;
+                    if(p->frame_count>s->max_token_bytes) s->max_token_bytes=p->frame_count;
                     s->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN_END;
                     p->frame_count=0;p->frame_us=timer_us_gettime64();
                 } else if(value!=0xff) return KUI_SCI_ASYNC_TOKEN;
                 else if(++p->frame_count>=8192u || timer_us_gettime64()-p->frame_us>=FRAME_TIMEOUT_US)
                     return KUI_SCI_ASYNC_TIMEOUT;
+                break;
+            case KUI_SCI_ASYNC_FRAMING_DRAIN:
+                /* Finish clocking a block cut short by an overrun, with CS
+                 * low, before deselecting and re-issuing the command. */
+                if(!p->frame_count) {
+                    c->bus.select(c->bus.ctx,true);
+                    if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                }
+                (void)byte(c,0xff,p->slow);
+                if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                if(++p->frame_count>=DRAIN_BYTES) {
+                    s->framing_step=KUI_SCI_ASYNC_FRAMING_DESELECT;p->frame_count=0;
+                }
                 break;
             default: return KUI_SCI_ASYNC_ARGUMENT;
         }
@@ -574,6 +639,7 @@ static enum kui_sci_async_status arm(struct probe *p) {
     p->start_address=p->buffer_address;
     p->done=false;p->event=0;p->end_count=514;p->end_chcr=0;p->end_ssr=0;
     p->start_us=timer_us_gettime64();p->armed=true;
+    s->framing_us+=p->start_us-p->attempt_us;
     s->last_phase=KUI_SCI_ASYNC_PHASE_DMA;++s->dma_started;
     wr(CHCR,RX_DMA,4);
     wr(SCR,0x50u,1); /* RIE + RE, no transmitter/dummy-byte CPU loop. */
@@ -589,6 +655,32 @@ static void completion(struct probe *p) {
     if(receive>p->stage->max_receive_us) p->stage->max_receive_us=receive;
     p->stage->last_remaining=p->end_count;p->stage->last_chcr=p->end_chcr;
     p->stage->last_ssr=p->end_ssr;
+}
+/* A proven-idle overrun leaves the card part way through its block. Restore
+ * the receiver as after any trailing overrun (deselect, MSTP0 reset and
+ * synchronous re-initialization), then clock out the rest of the block and
+ * re-issue the same CMD17, at most KUI_SCI_ASYNC_OVERRUN_RETRIES times. */
+static enum kui_sci_async_status overrun_retry(struct probe *p) {
+    struct kui_sci_async_stage *s=p->stage;
+    ++s->payload_overruns;
+    if(p->fault_candidate.valid && !p->out->first_overrun.valid)
+        p->out->first_overrun=p->fault_candidate;
+    enum kui_sci_async_status result=handoff(p,p->card,p->slow);
+    p->overrun_abort=false;
+    if(result!=KUI_SCI_ASYNC_OK) return result;
+    if(p->cancel_requested) return KUI_SCI_ASYNC_CANCELLED;
+    if(p->retries>=KUI_SCI_ASYNC_OVERRUN_RETRIES) return KUI_SCI_ASYNC_RECEIVE_ERROR;
+    ++p->retries;++s->overrun_retries;
+    p->fault_candidate=(struct kui_sci_async_fault){0};
+    p->polls=p->frame_count=0;p->done=false;p->event=0;
+    p->completion_recorded=p->payload_validated=false;
+    p->attempt_us=timer_us_gettime64();
+    memset(&p->rx,SENTINEL,sizeof(p->rx));
+    cache(&p->rx,sizeof(p->rx),false);
+    s->last_phase=KUI_SCI_ASYNC_PHASE_READY;
+    s->framing_step=KUI_SCI_ASYNC_FRAMING_DRAIN;s->framing_index=0;
+    p->phase=READER_FRAMING;
+    return KUI_SCI_ASYNC_PENDING;
 }
 static enum kui_sci_async_status finish_request(struct probe *p,uint8_t *dst,const uint8_t *expected) {
     struct kui_sci_async_stage *s=p->stage;
@@ -643,7 +735,7 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
     struct probe *p=&state;p->out=out;p->card=c;p->owner=reader;
     if(!++next_generation) ++next_generation;
     reader->generation=p->generation=next_generation;
-    p->opened_us=start;p->phase=READER_IDLE;
+    p->opened_us=start;p->phase=READER_IDLE;p->quantum=FRAMING_QUANTUM;
     max_time(&out->max_irq_masked_us,reservation_start);irq_restore(mask);
     out->slow.clock_hz=390625;out->fast.clock_hz=12500000;
     out->slow.command_response=out->slow.last_token=0xffu;
@@ -672,6 +764,7 @@ enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reade
         p->lba=lba;p->slow=slow;p->out->lba=lba;p->request_us=start;
         p->polls=p->frame_count=0;p->cancel_requested=false;
         p->payload_validated=p->completion_recorded=false;
+        p->retries=0;p->overrun_abort=false;p->attempt_us=start;
         p->fault_candidate=(struct kui_sci_async_fault){0};
         p->out->guards_ok=p->out->crc_ok=p->out->baseline_ok=p->out->baseline_checked=false;
         s->last_phase=KUI_SCI_ASYNC_PHASE_BUFFER;++s->attempted;
@@ -716,11 +809,12 @@ enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader
             if(p->foreign_dma) result=KUI_SCI_ASYNC_DMA_ERROR;
             else if(dma_error) result=KUI_SCI_ASYNC_DMA_ERROR;
             else if(timeout || !p->event) {++p->stage->timeouts;result=KUI_SCI_ASYNC_TIMEOUT;}
+            else if(p->overrun_abort && !p->quarantined) result=overrun_retry(p);
             else if(p->quarantined || p->end_count || !(p->end_chcr&2u) ||
                     p->event==EXC_SCI_RXI || (p->end_ssr&(FLAGS&~ORER))) {
                 ++p->stage->premature_errors;result=KUI_SCI_ASYNC_RECEIVE_ERROR;
             } else {p->phase=READER_READY;result=KUI_SCI_ASYNC_OK;}
-            if(result!=KUI_SCI_ASYNC_OK) result=failed(p,result);
+            if(result!=KUI_SCI_ASYNC_OK && result!=KUI_SCI_ASYNC_PENDING) result=failed(p,result);
         }
     } else if(p->phase==READER_READY) result=KUI_SCI_ASYNC_OK;
     else if(p->phase==READER_FAILED) result=p->request_status;
@@ -733,7 +827,11 @@ enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *read
     uint64_t start=timer_us_gettime64();enum kui_sci_async_status result;
     if(!dst && !p->cancel_requested) result=KUI_SCI_ASYNC_ARGUMENT;
     else if(p->phase==READER_FRAMING || p->phase==READER_DMA) result=KUI_SCI_ASYNC_PENDING;
-    else if(p->phase==READER_READY) result=finish_request(p,dst,expected);
+    else if(p->phase==READER_READY) {
+        struct kui_sci_async_stage *s=p->stage;
+        result=finish_request(p,dst,expected);
+        s->finish_us+=timer_us_gettime64()-start;
+    }
     else result=p->phase==READER_FAILED?p->request_status:KUI_SCI_ASYNC_ARGUMENT;
     return measured(p,&p->out->max_finish_us,start,result);
 }
@@ -763,6 +861,10 @@ enum kui_sci_async_status kui_sci_async_close(struct kui_sci_async_reader *reade
     p->out->elapsed_us=timer_us_gettime64()-p->opened_us;
     irq_mask_t mask=irq_disable();occupied=false;reader->generation=0;irq_restore(mask);
     return measured(p,&p->out->max_close_us,start,p->out->status);
+}
+void kui_sci_async_set_framing_quantum(struct kui_sci_async_reader *reader,unsigned bytes) {
+    struct probe *p=reader_state(reader);if(!p) return;
+    p->quantum=bytes<FRAMING_QUANTUM?FRAMING_QUANTUM:bytes>MAX_QUANTUM?MAX_QUANTUM:bytes;
 }
 uint32_t kui_sci_async_work_sample(struct kui_sci_async_reader *reader) {
     struct probe *p=reader_state(reader);
@@ -846,6 +948,6 @@ const char *kui_sci_async_phase_name(enum kui_sci_async_phase p) {
 
 const char *kui_sci_async_framing_name(enum kui_sci_async_framing_step s) {
     static const char *const names[]={"none","deselect","idle clock","select",
-        "ready poll","command","response","token","handoff deselect"};
+        "ready poll","command","response","token","handoff deselect","drain"};
     return (unsigned)s<sizeof(names)/sizeof(names[0])?names[s]:"unknown";
 }

@@ -157,7 +157,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
                 (s->storage_test_details?"X Summary   Y Baseline   B Back":"X Details   Y Baseline   B Back"):
                 (s->storage_test_details?"X Summary   B Back":"X Details   B Back")):
             "D-pad Select/change   A Open   B Diagnostics") :
-        s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Quick   X 60s stress   B Back" :
+        s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Quick   X 60s stress   Y With screen   R Speed   B Back" :
         s->page==KUI_SHELL_STORAGE_TEST_HISTORY ? "A View   Y Baseline   X Refresh   B Back" :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
@@ -1018,13 +1018,15 @@ static void sci_async_probe(struct paint *p,const struct kui_shell_view *v) {
     bool result=r && r->complete;
     if(!result && !v->busy) {
         panel(p,32,174,576,225,PANEL);
-        label(p,48,194,WHITE,"Read-only tests of existing sectors on the SCI card");
-        label(p,48,226,MUTED,"A Quick: the same sector at slow and fast speeds.");
-        label(p,48,250,MUTED,"X 60-second stress: 16 sectors spread across the card.");
-        label(p,48,274,MUTED,"Stress pauses screen updates; hold B to stop safely.");
-        label(p,48,306,MUTED,"Only the final JSON report writes to /KUI/tests.");
-        label(p,48,330,MUTED,"Normal game reads are unchanged by this experiment.");
-        label(p,48,369,CYAN,"A Quick test   X 60s stress   B Back");
+        label(p,48,190,WHITE,"Read-only tests of existing sectors on the SCI card");
+        label(p,48,216,MUTED,"A Quick: the same sector at slow and fast speeds.");
+        label(p,48,238,MUTED,"X 60-second stress: 16 sectors spread across the card.");
+        label(p,48,260,MUTED,"Y The same stress with the screen updating.");
+        label(p,48,282,MUTED,"R Speed: 1 MiB of a real file, normal vs async reader.");
+        label(p,48,304,MUTED,"X and R pause screen updates; hold B to stop safely.");
+        label(p,48,326,MUTED,"Only the final JSON report writes to /KUI/tests.");
+        label(p,48,348,MUTED,"Normal game reads are unchanged by this experiment.");
+        label(p,48,376,CYAN,"A Quick   X 60s stress   Y With screen   R Speed");
         return;
     }
     words(p,40,172,604,r && r->errors?AMBER:WHITE,v->cancel_requested?

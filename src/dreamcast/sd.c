@@ -410,15 +410,83 @@ close:
         out->probe.operation_status=status;
 }
 
+/* Mounted only to locate a real file; raw reads follow after unmounting. */
+static void async_speed_range(struct kui_sd_async_result *out) {
+    FATFS fs;FIL file;
+    memset(&fs,0,sizeof(fs));memset(&file,0,sizeof(file));
+    out->speed_blocks=KUI_SD_ASYNC_SPEED_BLOCKS;out->speed_lba=0;
+    if(sci.blocks<out->speed_blocks) out->speed_blocks=(uint32_t)sci.blocks;
+    if(!kui_mount(&fs,kui_log)) return;
+    uint64_t start=fs.database;
+    if(f_open(&file,"0:/KUI/runtime.kui",FA_READ)==FR_OK) {
+        if(file.obj.sclust>=2u) {
+            start=(uint64_t)fs.database+(uint64_t)fs.csize*(file.obj.sclust-2u);
+            out->speed_file_found=true;
+        }
+        (void)f_close(&file);
+    }
+    if(start+out->speed_blocks<=sci.blocks) out->speed_lba=(uint32_t)start;
+    else out->speed_file_found=false;
+    (void)f_mount(NULL,"0:",0);
+}
+static void async_speed(struct kui_sd_async_result *out,
+        bool (*cancelled)(void *),void *cancel_ctx) {
+    static uint8_t chunk[KUI_LOADER_SD_MAX_READ_BLOCKS*512u] __attribute__((aligned(32)));
+    static uint8_t block[512] __attribute__((aligned(32)));
+    const uint32_t lba=out->speed_lba,total=out->speed_blocks;
+    enum kui_sci_async_status status=KUI_SCI_ASYNC_OK;
+    uint64_t started=timer_us_gettime64();
+    for(uint32_t done=0;done<total;) {
+        if(cancelled && cancelled(cancel_ctx)) {out->probe.status=KUI_SCI_ASYNC_CANCELLED;return;}
+        uint32_t n=total-done;
+        if(n>KUI_LOADER_SD_MAX_READ_BLOCKS) n=KUI_LOADER_SD_MAX_READ_BLOCKS;
+        enum kui_loader_sd_result read=kui_loader_sd_read_multi(&sci,lba+done,n,chunk);
+        if(read!=KUI_LOADER_SD_OK || !kui_sci_sd_healthy()) {
+            out->probe.status=KUI_SCI_ASYNC_MISMATCH;
+            snprintf(out->message,sizeof(out->message),"Ordinary reader failed at block %lu: %s.",
+                (unsigned long)(lba+done),kui_loader_sd_result_name(read));
+            return;
+        }
+        out->speed_normal_crc=kui_crc32(out->speed_normal_crc,chunk,(size_t)n*512u);
+        done+=n;
+    }
+    out->speed_normal_us=timer_us_gettime64()-started;
+    struct kui_sci_async_reader reader={0};
+    status=kui_sci_async_open(&reader,&sci,&out->probe);
+    if(status!=KUI_SCI_ASYNC_OK) return;
+    kui_sci_async_set_framing_quantum(&reader,4096u);
+    started=timer_us_gettime64();
+    for(uint32_t i=0;i<total && status==KUI_SCI_ASYNC_OK;++i) {
+        if(cancelled && cancelled(cancel_ctx)) {status=KUI_SCI_ASYNC_CANCELLED;break;}
+        status=kui_sci_async_begin(&reader,lba+i,false);
+        if(status==KUI_SCI_ASYNC_OK)
+            do status=kui_sci_async_poll(&reader); while(status==KUI_SCI_ASYNC_PENDING);
+        if(status==KUI_SCI_ASYNC_OK) status=kui_sci_async_finish(&reader,block,NULL);
+        if(status==KUI_SCI_ASYNC_OK) {
+            out->speed_async_crc=kui_crc32(out->speed_async_crc,block,512);
+            ++out->speed_async_blocks;
+        }
+    }
+    out->speed_async_us=timer_us_gettime64()-started;
+    enum kui_sci_async_status closed=kui_sci_async_close(&reader);
+    if(closed!=KUI_SCI_ASYNC_OK) status=closed;
+    if(out->probe.status!=KUI_SCI_ASYNC_RESTORE) out->probe.status=status;
+    if(out->probe.operation_status==KUI_SCI_ASYNC_OK) out->probe.operation_status=status;
+    out->speed_match=status==KUI_SCI_ASYNC_OK && out->speed_async_blocks==total &&
+        out->speed_async_crc==out->speed_normal_crc;
+}
+
+enum async_mode {ASYNC_QUICK, ASYNC_STRESS, ASYNC_SPEED};
 static void async_run(struct kui_sd_async_result *out,
-        bool (*cancelled)(void *),void *cancel_ctx,bool sustained) {
+        bool (*cancelled)(void *),void *cancel_ctx,enum async_mode mode) {
+    const bool sustained=mode==ASYNC_STRESS;
     /* Dedicated storage, never a guest destination or the bus DMA buffer.
      * Only the serialized storage worker may call either diagnostic. */
     static uint8_t baseline[KUI_SD_ASYNC_STRESS_SECTORS][512] __attribute__((aligned(32)));
     static uint8_t verify[512] __attribute__((aligned(32)));
     if(!out) return;
     *out=(struct kui_sd_async_result){0};
-    out->sustained=sustained;
+    out->sustained=sustained;out->speed=mode==ASYNC_SPEED;
     out->target_us=sustained?KUI_SD_ASYNC_STRESS_US:0;
     out->recovery_command=out->recovery_response=0xff;
     out->probe.status=KUI_SCI_ASYNC_UNSUPPORTED;
@@ -432,6 +500,7 @@ static void async_run(struct kui_sd_async_result *out,
         snprintf(out->message,sizeof(out->message),"Stopped before reading the baseline.");
         return;
     }
+    if(out->speed) async_speed_range(out);
     if(f_mount(NULL,"0:",0)!=FR_OK) {
         out->probe.status=KUI_SCI_ASYNC_BUSY;
         snprintf(out->message,sizeof(out->message),"Volume could not be unmounted; probe did not start.");
@@ -463,6 +532,7 @@ static void async_run(struct kui_sd_async_result *out,
     }
     out->baseline_verified=true;
     if(sustained) async_sustained(baseline,verify,out,cancelled,cancel_ctx);
+    else if(out->speed) async_speed(out,cancelled,cancel_ctx);
     else (void)kui_sci_async_probe_run(&sci,0,baseline[0],cancelled,cancel_ctx,&out->probe);
     if(out->probe.status==KUI_SCI_ASYNC_RESTORE ||
        (out->probe.started && !out->probe.safe_restored)) {
@@ -520,10 +590,14 @@ unsafe:
 }
 void kui_sd_async_probe(struct kui_sd_async_result *out,
         bool (*cancelled)(void *),void *cancel_ctx) {
-    async_run(out,cancelled,cancel_ctx,false);
+    async_run(out,cancelled,cancel_ctx,ASYNC_QUICK);
 }
 void kui_sd_async_stress(struct kui_sd_async_result *out,
         bool (*cancelled)(void *),void *cancel_ctx) {
-    async_run(out,cancelled,cancel_ctx,true);
+    async_run(out,cancelled,cancel_ctx,ASYNC_STRESS);
+}
+void kui_sd_async_speed(struct kui_sd_async_result *out,
+        bool (*cancelled)(void *),void *cancel_ctx) {
+    async_run(out,cancelled,cancel_ctx,ASYNC_SPEED);
 }
 #endif

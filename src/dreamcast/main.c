@@ -609,10 +609,10 @@ static void storage_test_operation(unsigned action) {
     mutex_unlock(&lock);
 }
 /* Independent experiment report: never added to the soak history/baseline. */
-static bool sci_video_quiet_begin(uint32_t *generation) {
+static bool sci_video_quiet_begin(uint32_t *generation,const char *notice) {
     mutex_lock(&lock);
     *generation=kui_sci_video_quiet_request(&sci_video_quiet);
-    snprintf(sci_async_status.message,sizeof(sci_async_status.message),"60-second stress: display updates paused.");
+    snprintf(sci_async_status.message,sizeof(sci_async_status.message),"%s",notice);
     mutex_unlock(&lock);
     uint64_t started=timer_ms_gettime64();
     for(unsigned polls=0;polls<200;polls++) {
@@ -647,6 +647,10 @@ static void sci_video_quiet_end(uint32_t generation,struct kui_sd_async_result *
 }
 static bool sci_async_integrity(const struct kui_sd_async_result *result) {
     const struct kui_sci_async_probe_result *r=&result->probe;
+    /* Speed: the async pass must reproduce the ordinary pass's CRC32. */
+    if(result->speed)
+        return r->crc_ok && r->guards_ok && result->speed_match && result->speed_blocks &&
+            r->fast.passed==result->speed_blocks && r->fast.attempted==r->fast.passed;
     if(!r->crc_ok || !r->baseline_ok || !r->guards_ok) return false;
     if(result->sustained) {
         if(!result->baseline_verified || !r->baseline_checked || result->baseline_sectors<2 ||
@@ -670,18 +674,39 @@ static bool sci_async_completion(const struct kui_sd_async_result *result) {
 }
 static bool sci_async_passed(const struct kui_sd_async_result *result) {
     const struct kui_sci_async_probe_result *r=&result->probe;
-    return r->status==KUI_SCI_ASYNC_OK && result->baseline_verified && result->recovery_verified &&
+    bool common=r->status==KUI_SCI_ASYNC_OK && result->baseline_verified && result->recovery_verified &&
         r->safe_restored && r->handlers_restored && r->registers_restored &&
-        sci_async_completion(result) && r->fast.overlap_batches &&
+        sci_async_completion(result);
+    /* Speed polls with no other work, so it has no CPU-overlap evidence. */
+    if(result->speed) return common && result->video_quiet_acknowledged && result->video_sq_drained &&
+        !result->video_frames_during;
+    /* With the screen left running, retried overruns are expected evidence,
+     * not a failure: every read must still verify. */
+    return common && r->fast.overlap_batches &&
         (!result->sustained || (result->duration_complete && !result->iteration_limit &&
-            result->video_quiet_requested && result->video_quiet_acknowledged && result->video_sq_drained &&
-            !result->video_frames_during &&
+            (result->screen_active || (result->video_quiet_requested && result->video_quiet_acknowledged &&
+            result->video_sq_drained && !result->video_frames_during)) &&
             result->stress_elapsed_us>=result->target_us && result->target_us>=KUI_SD_ASYNC_STRESS_US &&
             result->heartbeat.installed && result->heartbeat.restored && !result->heartbeat.ownership_lost &&
             result->heartbeat.dma_ticks));
 }
+static uint32_t sci_async_kib_s(uint64_t blocks,uint64_t us) {
+    return us?(uint32_t)(blocks*UINT64_C(500000)/us):0;
+}
+static bool sci_async_fault_json(char *out,size_t size,const struct kui_sci_async_fault *f) {
+    int n=snprintf(out,size,
+        "{\"valid\":%lu,\"event\":%lu,\"ssr\":%lu,\"scr\":%lu,\"dmaor\":%lu,"
+        "\"sar\":%lu,\"dar\":%lu,\"tcr\":%lu,\"chcr\":%lu,\"lba\":%lu,"
+        "\"start_address\":%lu,\"context_valid\":%lu,\"pc\":%lu,\"sr\":%lu,\"request_elapsed_us\":%llu}",
+        (unsigned long)f->valid,(unsigned long)f->event,(unsigned long)f->ssr,(unsigned long)f->scr,
+        (unsigned long)f->dmaor,(unsigned long)f->sar,(unsigned long)f->dar,(unsigned long)f->tcr,
+        (unsigned long)f->chcr,(unsigned long)f->lba,(unsigned long)f->start_address,
+        (unsigned long)f->context_valid,(unsigned long)f->pc,(unsigned long)f->sr,
+        (unsigned long long)f->request_elapsed_us);
+    return n>=0 && (size_t)n<size;
+}
 static bool sci_async_save(const struct kui_sd_async_result *result,char path[96]) {
-    static char stage[2][2048],json[8192],baseline[3][192],fault[640];
+    static char stage[2][2048],json[8192],baseline[3][192],fault[640],first_overrun[640],speed[512];
     const struct kui_sci_async_probe_result *r=&result->probe;
     const struct kui_sci_async_stage *stages[]={&r->slow,&r->fast};
     path[0]=0;
@@ -703,7 +728,9 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
             "\"bus_fault_valid\":%lu,\"bus_wait_flag\":%lu,\"bus_fault_ssr\":%lu,\"bus_fault_scr\":%lu,"
             "\"bus_fault_smr\":%lu,\"bus_fault_brr\":%lu,\"bus_fault_scmr\":%lu,\"bus_fault_sptr\":%lu,"
             "\"bus_fault_pdtr\":%lu,\"bus_fault_polls\":%lu,"
-            "\"elapsed_us\":%llu,\"receive_us\":%llu,\"max_receive_us\":%llu}",
+            "\"elapsed_us\":%llu,\"receive_us\":%llu,\"max_receive_us\":%llu,"
+            "\"payload_overruns\":%lu,\"overrun_retries\":%lu,\"undrained_overruns\":%lu,"
+            "\"token_bytes\":%lu,\"max_token_bytes\":%lu,\"framing_us\":%llu,\"finish_us\":%llu}",
             (unsigned long)s->clock_hz,(unsigned long)s->attempted,(unsigned long)s->passed,
             (unsigned long)s->dma_irqs,(unsigned long)s->sci_error_irqs,(unsigned long)s->unexpected_rx_irqs,
             (unsigned long)s->trailing_overruns,(unsigned long)s->premature_errors,(unsigned long)s->timeouts,
@@ -724,7 +751,10 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
             (unsigned long)s->bus_fault_smr,(unsigned long)s->bus_fault_brr,
             (unsigned long)s->bus_fault_scmr,(unsigned long)s->bus_fault_sptr,
             (unsigned long)s->bus_fault_pdtr,(unsigned long)s->bus_fault_polls,
-            (unsigned long long)s->elapsed_us,(unsigned long long)s->receive_us,(unsigned long long)s->max_receive_us);
+            (unsigned long long)s->elapsed_us,(unsigned long long)s->receive_us,(unsigned long long)s->max_receive_us,
+            (unsigned long)s->payload_overruns,(unsigned long)s->overrun_retries,(unsigned long)s->undrained_overruns,
+            (unsigned long)s->token_bytes,(unsigned long)s->max_token_bytes,
+            (unsigned long long)s->framing_us,(unsigned long long)s->finish_us);
         if(n<0 || (size_t)n>=sizeof(stage[i])) return false;
     }
     const uint32_t *baseline_values[]={result->baseline_lbas,result->baseline_crcs,result->baseline_reads};
@@ -742,17 +772,20 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         if(used+2>sizeof(baseline[a])) return false;
         baseline[a][used++]=']';baseline[a][used]=0;
     }
-    const struct kui_sci_async_fault *f=&r->fault;
-    int fault_size=snprintf(fault,sizeof(fault),
-        "{\"valid\":%lu,\"event\":%lu,\"ssr\":%lu,\"scr\":%lu,\"dmaor\":%lu,"
-        "\"sar\":%lu,\"dar\":%lu,\"tcr\":%lu,\"chcr\":%lu,\"lba\":%lu,"
-        "\"start_address\":%lu,\"context_valid\":%lu,\"pc\":%lu,\"sr\":%lu,\"request_elapsed_us\":%llu}",
-        (unsigned long)f->valid,(unsigned long)f->event,(unsigned long)f->ssr,(unsigned long)f->scr,
-        (unsigned long)f->dmaor,(unsigned long)f->sar,(unsigned long)f->dar,(unsigned long)f->tcr,
-        (unsigned long)f->chcr,(unsigned long)f->lba,(unsigned long)f->start_address,
-        (unsigned long)f->context_valid,(unsigned long)f->pc,(unsigned long)f->sr,
-        (unsigned long long)f->request_elapsed_us);
-    if(fault_size<0 || (size_t)fault_size>=sizeof(fault)) return false;
+    if(!sci_async_fault_json(fault,sizeof(fault),&r->fault) ||
+       !sci_async_fault_json(first_overrun,sizeof(first_overrun),&r->first_overrun)) return false;
+    int speed_size=snprintf(speed,sizeof(speed),
+        "{\"file_found\":%s,\"lba\":%lu,\"blocks\":%lu,\"async_blocks\":%lu,"
+        "\"normal_us\":%llu,\"async_us\":%llu,\"normal_kib_s\":%lu,\"async_kib_s\":%lu,"
+        "\"normal_crc32\":%lu,\"async_crc32\":%lu,\"match\":%s}",
+        result->speed_file_found?"true":"false",(unsigned long)result->speed_lba,
+        (unsigned long)result->speed_blocks,(unsigned long)result->speed_async_blocks,
+        (unsigned long long)result->speed_normal_us,(unsigned long long)result->speed_async_us,
+        (unsigned long)sci_async_kib_s(result->speed_blocks,result->speed_normal_us),
+        (unsigned long)sci_async_kib_s(result->speed_async_blocks,result->speed_async_us),
+        (unsigned long)result->speed_normal_crc,(unsigned long)result->speed_async_crc,
+        result->speed_match?"true":"false");
+    if(speed_size<0 || (size_t)speed_size>=sizeof(speed)) return false;
     struct kui_datetime clock;int64_t local_seconds=0;
     if(kui_clock_now(&clock)) (void)kui_clock_to_seconds(&clock,&local_seconds);
     int n=snprintf(json,sizeof(json),
@@ -785,8 +818,9 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         "  \"timer_irq_instrumented\":%s,\n"
         "  \"max_irq_masked_us\":%llu,\n  \"max_irq_handler_us\":%llu,\n"
         "  \"probe_passed\":%s,\n  \"read_integrity_verified\":%s,\n  \"completion_irq_verified\":%s,\n"
-        "  \"cpu_overlap_observed\":%s,\n  \"fault\":%s,\n  \"slow\":%s,\n  \"fast\":%s\n}\n",
-        KUI_BUILD_ID,result->sustained?"sustained":"quick",
+        "  \"cpu_overlap_observed\":%s,\n  \"fault\":%s,\n  \"first_overrun\":%s,\n"
+        "  \"screen_redraws\":%s,\n  \"speed\":%s,\n  \"slow\":%s,\n  \"fast\":%s\n}\n",
+        KUI_BUILD_ID,result->speed?"speed":result->sustained?(result->screen_active?"sustained-screen":"sustained"):"quick",
         (unsigned long long)result->target_us,(unsigned long long)result->stress_elapsed_us,
         result->duration_complete?"true":"false",result->iteration_limit?"true":"false",
         result->video_quiet_requested?"true":"false",result->video_quiet_acknowledged?"true":"false",
@@ -819,7 +853,8 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         r->timer_irq_instrumented?"true":"false",
         (unsigned long long)r->max_irq_masked_us,(unsigned long long)r->max_irq_handler_us,
         sci_async_passed(result)?"true":"false",sci_async_integrity(result)?"true":"false",sci_async_completion(result)?"true":"false",
-        r->fast.overlap_batches?"true":"false",fault,stage[0],stage[1]);
+        r->fast.overlap_batches?"true":"false",fault,first_overrun,
+        result->screen_active?"true":"false",speed,stage[0],stage[1]);
     if(n<0 || (size_t)n>=sizeof(json)) return false;
     FATFS fs;bool saved=false;
     if(!kui_mount(&fs,kui_log)) return false;
@@ -844,7 +879,8 @@ done:
     if(!saved) path[0]=0;
     return saved;
 }
-static void sci_async_operation(bool sustained) {
+enum {SCI_ASYNC_QUICK, SCI_ASYNC_STRESS, SCI_ASYNC_SCREEN, SCI_ASYNC_SPEED};
+static void sci_async_operation(unsigned mode) {
     static struct kui_sd_async_result result;
     struct kui_app_status status={.complete=true};
     struct kui_music_status music={0};char path[96]={0};
@@ -859,27 +895,36 @@ static void sci_async_operation(bool sustained) {
         kui_sd_set_params(KUI_STORAGE_SCI,true);
         connected=kui_sd_connect();
         if(connected) {
-            if(sustained) {
+            /* Stress X and Speed pause shell redraws; stress Y leaves them
+             * running so receive overruns under screen traffic are counted. */
+            bool quiet=mode==SCI_ASYNC_STRESS || mode==SCI_ASYNC_SPEED;
+            if(quiet) {
                 uint32_t quiet_generation;
-                if(sci_video_quiet_begin(&quiet_generation))
-                    kui_sd_async_stress(&result,storage_test_cancelled,NULL);
-                else {
-                    result.sustained=true;
+                if(sci_video_quiet_begin(&quiet_generation,mode==SCI_ASYNC_SPEED?
+                       "Speed comparison: display updates paused.":"60-second stress: display updates paused.")) {
+                    if(mode==SCI_ASYNC_SPEED) kui_sd_async_speed(&result,storage_test_cancelled,NULL);
+                    else kui_sd_async_stress(&result,storage_test_cancelled,NULL);
+                } else {
+                    result.sustained=mode==SCI_ASYNC_STRESS;result.speed=mode==SCI_ASYNC_SPEED;
                     result.probe.status=kui_cancelled()?KUI_SCI_ASYNC_CANCELLED:KUI_SCI_ASYNC_BUSY;
                     snprintf(result.message,sizeof(result.message),"%s",result.probe.status==KUI_SCI_ASYNC_CANCELLED?
-                        "Stopped before stress reads started.":"Display pause not acknowledged; stress did not start.");
+                        "Stopped before reads started.":"Display pause not acknowledged; test did not start.");
                 }
                 /* The wrapper zeroes result and returns only after closing the
                  * reader and attempting safe recovery. Preserve the handshake
                  * separately until then, including all early failure paths. */
                 sci_video_quiet_end(quiet_generation,&result);
             }
+            else if(mode==SCI_ASYNC_SCREEN) {
+                kui_sd_async_stress(&result,storage_test_cancelled,NULL);
+                result.screen_active=true;
+            }
             else kui_sd_async_probe(&result,storage_test_cancelled,NULL);
             if(result.recovery_verified) saved=sci_async_save(&result,path);
             const struct kui_sci_async_probe_result *r=&result.probe;
             bool heartbeat_fault=result.sustained && (result.heartbeat.ownership_lost ||
                 (result.heartbeat.installed && !result.heartbeat.restored));
-            bool video_fault=result.sustained && r->status==KUI_SCI_ASYNC_OK &&
+            bool video_fault=quiet && r->status==KUI_SCI_ASYNC_OK &&
                 (!result.video_quiet_acknowledged || !result.video_sq_drained || result.video_frames_during);
             status.stopped=r->status==KUI_SCI_ASYNC_CANCELLED;
             status.passed=sci_async_passed(&result);
@@ -889,8 +934,12 @@ static void sci_async_operation(bool sustained) {
                 snprintf(status.message,sizeof(status.message),"Display pause not verified; stress proof is incomplete.");
             else if(r->status==KUI_SCI_ASYNC_OK && result.recovery_verified && !heartbeat_fault)
                 snprintf(status.message,sizeof(status.message),"%s",status.passed?
+                    result.speed?"Speed comparison finished; both readers returned the same data.":
+                    result.screen_active?"60 seconds with screen updates: every read verified.":
                     result.sustained?"60-second stress passed with timer IRQs during DMA.":
-                    "Verified reads with CPU work during DMA.":"Read test finished; async proof is incomplete.");
+                    "Verified reads with CPU work during DMA.":
+                    result.speed?"Speed comparison finished; data match not confirmed.":
+                    "Read test finished; async proof is incomplete.");
             status.line_count=8;
             snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow: %lu/%lu reads verified; %lu DMA interrupts",
                 (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs);
@@ -916,12 +965,34 @@ static void sci_async_operation(bool sustained) {
                     sci_async_integrity(&result)?"OK":"unconfirmed",(unsigned long)r->fast.dma_irqs);
                 snprintf(status.lines[2],KUI_APP_LINE_CAP,"CPU batches %lu; timer during DMA %lu",
                     (unsigned long)r->fast.overlap_batches,(unsigned long)result.heartbeat.dma_ticks);
-                snprintf(api_line,sizeof(api_line),"API max us: begin %llu poll %llu finish %llu",
-                    (unsigned long long)r->max_begin_us,(unsigned long long)r->max_poll_us,(unsigned long long)r->max_finish_us);
+                snprintf(api_line,sizeof(api_line),"Overruns %lu, retried %lu, not idle %lu; max read %llu us",
+                    (unsigned long)r->fast.payload_overruns,(unsigned long)r->fast.overrun_retries,
+                    (unsigned long)r->fast.undrained_overruns,(unsigned long long)result.max_read_us);
                 snprintf(status.lines[3],KUI_APP_LINE_CAP,"%.79s",api_line);
-                snprintf(status.lines[7],KUI_APP_LINE_CAP,"Display quiet %s; frames %lu; skipped %lu",
+                if(result.screen_active)
+                    snprintf(status.lines[7],KUI_APP_LINE_CAP,"Screen kept updating; max poll %llu us",
+                        (unsigned long long)r->max_poll_us);
+                else snprintf(status.lines[7],KUI_APP_LINE_CAP,"Display quiet %s; frames %lu; skipped %lu",
                     result.video_quiet_acknowledged && result.video_sq_drained?"verified":"unconfirmed",
                     (unsigned long)result.video_frames_during,(unsigned long)result.video_redraws_skipped);
+            }
+            if(result.speed) {
+                const struct kui_sci_async_stage *f=&r->fast;
+                uint64_t n=f->passed?f->passed:1u;
+                snprintf(status.lines[0],KUI_APP_LINE_CAP,"Speed: %lu blocks from LBA %lu (%s)",
+                    (unsigned long)result.speed_blocks,(unsigned long)result.speed_lba,
+                    result.speed_file_found?"runtime.kui":"data area");
+                snprintf(status.lines[1],KUI_APP_LINE_CAP,"Ordinary reader (CMD18 runs): %lu KiB/s",
+                    (unsigned long)sci_async_kib_s(result.speed_blocks,result.speed_normal_us));
+                snprintf(status.lines[2],KUI_APP_LINE_CAP,"Async reader (one CMD17 per block): %lu KiB/s",
+                    (unsigned long)sci_async_kib_s(result.speed_async_blocks,result.speed_async_us));
+                snprintf(status.lines[3],KUI_APP_LINE_CAP,"Per block us: setup %lu  receive %lu  finish %lu",
+                    (unsigned long)(f->framing_us/n),(unsigned long)(f->receive_us/n),(unsigned long)(f->finish_us/n));
+                snprintf(status.lines[4],KUI_APP_LINE_CAP,"Card wait %lu.%lu bytes avg, %lu max; overruns %lu",
+                    (unsigned long)(f->token_bytes/n),(unsigned long)((f->token_bytes*UINT64_C(10)/n)%10u),
+                    (unsigned long)f->max_token_bytes,(unsigned long)f->payload_overruns);
+                snprintf(status.lines[7],KUI_APP_LINE_CAP,"Data match %s; normal read recovery %s",
+                    result.speed_match?"yes":"NO",result.recovery_verified?"verified":"not verified");
             }
             if(!status.passed && r->status!=KUI_SCI_ASYNC_OK) {
                 const struct kui_sci_async_stage *stage=r->fast.attempted?&r->fast:&r->slow;
@@ -1221,7 +1292,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==68 || action==69 || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || (action>=68 && action<=71) || (action>=46 && action<=48);
 }
 #endif
 static void *worker(void *unused) {
@@ -1279,7 +1350,7 @@ static void *worker(void *unused) {
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
             if(action==56 || action==57 || action==58) probe_launch_failed=true;
-            if(action==68 || action==69) {
+            if(action>=68 && action<=71) {
                 sci_async_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Audio CD stop failed; probe did not start.");
             }
@@ -1411,7 +1482,7 @@ static void *worker(void *unused) {
                 clock_valid=false;++clock_generation;
                 snprintf(clock_note,sizeof(clock_note),"Clock operation stopped before starting.");
             }
-            if(action==68 || action==69) {
+            if(action>=68 && action<=71) {
                 sci_async_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Stopped before starting.");
             }
@@ -1450,7 +1521,7 @@ static void *worker(void *unused) {
             }
 #ifdef KUI_SD_RUNTIME
             if(action>=65 && action<=67) storage_test_operation(action);
-            if(action==68 || action==69) sci_async_operation(action==69);
+            if(action>=68 && action<=71) sci_async_operation(action-68u);
             if(action == 8 || action == 9) {
                 settings_operation(action == 9);
                 if(!system_loaded) system_operation(false);
@@ -2052,6 +2123,8 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_TEST_BASELINE: return 67;
         case KUI_SHELL_SCI_ASYNC_RUN: return 68;
         case KUI_SHELL_SCI_ASYNC_STRESS: return 69;
+        case KUI_SHELL_SCI_ASYNC_SCREEN: return 70;
+        case KUI_SHELL_SCI_ASYNC_SPEED: return 71;
         default: return 0;
     }
 }
@@ -2388,10 +2461,12 @@ int main(void) {
             action = 0;
         }
         if(action && !busy) {
-            if(action==68 || action==69) {
+            if(action>=68 && action<=71) {
                 sci_async_status=(struct kui_app_status){0};
-                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"%s",action==69?
-                    "Preparing 16 baselines, then 60 seconds of varied reads...":
+                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"%s",
+                    action==71?"Locating /KUI/runtime.kui, then reading 1 MiB with each reader...":
+                    action==70?"Preparing 16 baselines, then 60 seconds of reads with the screen updating...":
+                    action==69?"Preparing 16 baselines, then 60 seconds of varied reads...":
                     "Preparing baseline, then slow and fast read trials...");
             }
             if(action==65) {

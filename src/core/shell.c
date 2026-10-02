@@ -1458,6 +1458,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_SCI_ASYNC_PROBE:
         if(buttons&KUI_SHELL_A) return KUI_SHELL_SCI_ASYNC_RUN;
         if(buttons&KUI_SHELL_X) return KUI_SHELL_SCI_ASYNC_STRESS;
+        if(buttons&KUI_SHELL_Y) return KUI_SHELL_SCI_ASYNC_SCREEN;
+        if(buttons&KUI_SHELL_R) return KUI_SHELL_SCI_ASYNC_SPEED;
         break;
     case KUI_SHELL_STORAGE_TEST_HISTORY:
         s->storage_history_selected=move_count(s->storage_history_selected,buttons,s->storage_test_history.count);

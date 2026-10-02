@@ -56,7 +56,9 @@ enum kui_sci_async_framing_step {
     KUI_SCI_ASYNC_FRAMING_COMMAND,
     KUI_SCI_ASYNC_FRAMING_RESPONSE,
     KUI_SCI_ASYNC_FRAMING_TOKEN,
-    KUI_SCI_ASYNC_FRAMING_HANDOFF
+    KUI_SCI_ASYNC_FRAMING_HANDOFF,
+    /* Clocking out the rest of a block interrupted by a receive overrun. */
+    KUI_SCI_ASYNC_FRAMING_DRAIN
 };
 
 enum kui_sci_async_module_reset_state {
@@ -100,6 +102,16 @@ struct kui_sci_async_stage {
     /* receive_us includes start-to-worker-observation/cleanup overhead;
      * it is not payload wire time or maximum CPU blocking time. */
     uint64_t elapsed_us, receive_us, max_receive_us;
+    /* Receive overruns before the payload completed. Each one whose stopped
+     * channel was proven idle is retried with a fresh CMD17, at most
+     * KUI_SCI_ASYNC_OVERRUN_RETRIES times per request; one that cannot be
+     * proven idle still quarantines the channel (undrained_overruns). */
+    uint32_t payload_overruns, overrun_retries, undrained_overruns;
+    /* Card access time: 0xff bytes clocked between R1 and the data token. */
+    uint32_t token_bytes, max_token_bytes;
+    /* Summed time from each attempt's start to its DMA start (command and
+     * card access time), and time spent in finish (checks and handoff). */
+    uint64_t framing_us, finish_us;
 };
 
 /* First failed request's exceptional-stop evidence, before SCR/CHCR writes.
@@ -124,6 +136,9 @@ struct kui_sci_async_probe_result {
     uint32_t lba;
     struct kui_sci_async_stage slow, fast;
     struct kui_sci_async_fault fault;
+    /* Pre-stop evidence of the first payload overrun, even when its retry
+     * succeeded. fault above still describes only a failed request. */
+    struct kui_sci_async_fault first_overrun;
     uint64_t elapsed_us, max_irq_masked_us, max_irq_handler_us;
     /* Foreground API duration, including IRQ preemption; not wire time.
      * No API waits for an in-flight DMA to complete. */
@@ -145,8 +160,9 @@ struct kui_sci_async_probe_result {
  * already-enabled DMAC interrupt priority. Both SCI GPIO directions must be
  * inputs because sampled pin reads cannot preserve foreign output latches.
  * Does not change global DMAOR or
- * the shared DMAC priority. Each poll performs at most eight framing bytes,
- * or a single DMA-state observation; it never waits for DMA completion.
+ * the shared DMAC priority. Each poll performs at most eight framing bytes
+ * (see set_framing_quantum), or a single DMA-state observation; it never
+ * waits for DMA completion.
  * begin returns OK for an accepted request. poll returns PENDING until finish
  * is available, OK when ready, or a terminal error. finish copies exactly
  * 512 bytes only after guards, CRC, optional expected data, and handoff pass.
@@ -157,11 +173,16 @@ struct kui_sci_async_probe_result {
  * Once ready, close can validate/discard the payload and release the lease.
  * safe_restored describes local hardware/IRQ cleanup, not card recovery;
  * callers still perform an ordinary verified read before trusting recovery.
- * An incomplete DMA has no documented abort-drain acknowledgement: its static
- * destination and channel are quarantined, safe_restored=false, until restart.
+ * An incomplete DMA has no documented abort-drain acknowledgement. A lone
+ * receive overrun is retried only after the stopped channel's count and
+ * address agree and stay unchanged across repeated checks; any late byte can
+ * only land in the static receive area, which the retry rewrites and CRC and
+ * guards still gate. Every other incomplete DMA, and an overrun that cannot be
+ * proven idle, quarantines the destination and channel until restart.
  * A stale/copied handle cannot operate another lease. No game integration is
  * implied by this runtime API. Foreground calls are not reentrant. */
 struct kui_sci_async_reader { uint32_t generation; };
+#define KUI_SCI_ASYNC_OVERRUN_RETRIES 3u
 enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader,
     const struct kui_loader_sd *card, struct kui_sci_async_probe_result *out);
 enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reader,
@@ -171,6 +192,10 @@ enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *read
     uint8_t dst[512], const uint8_t expected[512]);
 enum kui_sci_async_status kui_sci_async_cancel(struct kui_sci_async_reader *reader);
 enum kui_sci_async_status kui_sci_async_close(struct kui_sci_async_reader *reader);
+/* Framing byte operations allowed per poll (default 8). A client that does
+ * not need to yield between bytes may raise it, up to 4096, so one poll can
+ * send the command and wait for the token. Values are clamped to 8..4096. */
+void kui_sci_async_set_framing_quantum(struct kui_sci_async_reader *reader, unsigned bytes);
 /* Surround actual caller CPU work. work_sample is read-only and IRQ-safe.
  * Zero sample means no actively owned DMA. Credit
  * requires count progress with bytes still outstanding after the work. */
