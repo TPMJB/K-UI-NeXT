@@ -15,9 +15,17 @@ its last frame and explicitly drains store queues. It retains full-speed
 SCI, timer IRQs, scheduling, controller cancellation and all data/ownership
 checks. It also captures the first failed DMA state before cleanup writes.
 Periodic rendering contention is a hypothesis, not a confirmed cause; even
-a quiet-screen pass would not establish game-rendering coexistence. Build,
-review and console confirmation are pending. Native game and CE integration
-are not enabled by this experiment.
+a quiet-screen pass would not establish game-rendering coexistence.
+
+Candidate **9e8fd8372705** passed independent source review and full host/Dreamcast
+CI run 201. Delivered as `K-UI-SCI-Async-Quiet-9e8fd8372705.zip` (789,218 bytes).
+All 96 source-manifest hashes, runtime CRCs and both build labels are verified;
+native game payload is unchanged except its four build labels. The
+[completed CI audit](evidence/sci-async-quiet-ci-9e8fd8372705.json) confirms unchanged
+resident layout/stack bounds. Replace both included files, keep the current CD,
+reboot, run A Quick then X 60s. The display intentionally stays still during X;
+return JSON and a result photo. Hardware confirmation is pending. Native game
+and CE integration are not enabled by this experiment.
 
 ## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)
 

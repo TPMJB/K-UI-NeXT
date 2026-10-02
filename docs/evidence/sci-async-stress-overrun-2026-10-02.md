@@ -101,3 +101,30 @@ and CE work still require their separately documented contracts.
 
 Implementation review, full build/package verification and the next console
 result will be recorded with delivery. No corrected hardware result is claimed.
+
+
+## Verified candidate delivery
+
+Source **9e8fd837270588b8559c6d2b66d19ef14b1aed3f** passed independent source
+review and both jobs of [Diagnostic build 201](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37012523280).
+The [completed-log CI audit](sci-async-quiet-ci-9e8fd8372705.json) records all
+12 wrapper cases, lifecycle/heartbeat, quiet-handshake and first-fault checks.
+Native instruction counts, resident layouts, stack bounds and stage sizes
+remain identical to c0c285482dac; no unresolved symbols or resident FPU use.
+
+SD source artifact **11229130918**, SHA-256
+`c39758ac183957e83e32c169ac84233c7aca3760e6813c84f71fda4632a889bc`,
+passed ZIP integrity and all 96 manifest hashes. Both delivered packages
+identify build `9e8fd8372705` and pass their runtime header/payload CRC checks.
+The native game payload is byte-identical to 0e9a2f814231 after normalizing
+exactly four build labels.
+
+Minimal delivery: `K-UI-SCI-Async-Quiet-9e8fd8372705.zip`, **789,218 bytes**,
+SHA-256 `40c5378d980ea6812f929c804b90a86692f439b3fadf4e8b5a640a9c107bddb2`.
+It contains `KUI/runtime.kui`, `KUI/apps/games/retail-boot.kui`, instructions,
+checksums and the build record. Keep the existing boot CD and replace both
+files. Reboot; run A Quick, then X 60s if Quick passes. The still screen is
+intentional; B requests safe cancellation. Return the saved JSON and full
+result photograph. If storage locks, photograph the screen and restart.
+Console outcome is pending; no sustained-pass or game/CE compatibility claim
+is made from the host/CI results.

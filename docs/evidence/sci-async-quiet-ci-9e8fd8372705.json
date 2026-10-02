@@ -1,0 +1,132 @@
+{
+  "source_commit": "9e8fd837270588b8559c6d2b66d19ef14b1aed3f",
+  "ci_run": 37012523280,
+  "host_job": 110855434802,
+  "dreamcast_job": 110859206278,
+  "conclusion": "success",
+  "instruction_counts": {
+    "normal": 19039,
+    "benchmark": 19908
+  },
+  "normal_layout": {
+    "entry": {
+      "memory_end": "0x8c01ddc0",
+      "payload_bytes": 56768,
+      "unresolved_symbols": 0
+    },
+    "resident-ide": {
+      "memory_end": "0x8c00b5b8",
+      "payload_bytes": 9832,
+      "unresolved_symbols": 0
+    },
+    "resident-sci": {
+      "memory_end": "0x8c00baec",
+      "payload_bytes": 11156,
+      "unresolved_symbols": 0
+    },
+    "resident-scif": {
+      "memory_end": "0x8c00b8c8",
+      "payload_bytes": 10608,
+      "unresolved_symbols": 0
+    },
+    "resident_stacks": {
+      "ide": {
+        "assembly_allowance": 256,
+        "available_bytes": 1232,
+        "conservative_bytes": 1000,
+        "retained_c_frames": 45
+      },
+      "sci": {
+        "assembly_allowance": 256,
+        "available_bytes": 1232,
+        "conservative_bytes": 1172,
+        "retained_c_frames": 45
+      },
+      "scif": {
+        "assembly_allowance": 256,
+        "available_bytes": 1232,
+        "conservative_bytes": 1080,
+        "retained_c_frames": 49
+      }
+    },
+    "stage": {
+      "memory_end": "0x8ce16f28",
+      "payload_bytes": 48576,
+      "unresolved_symbols": 0
+    }
+  },
+  "benchmark_layout": {
+    "entry": {
+      "memory_end": "0x8c01e7f8",
+      "payload_bytes": 59384,
+      "unresolved_symbols": 0
+    },
+    "resident-ide": {
+      "memory_end": "0x8c00b5b8",
+      "payload_bytes": 9832,
+      "unresolved_symbols": 0
+    },
+    "resident-sci": {
+      "memory_end": "0x8c00baec",
+      "payload_bytes": 11156,
+      "unresolved_symbols": 0
+    },
+    "resident-scif": {
+      "memory_end": "0x8c00b8c8",
+      "payload_bytes": 10608,
+      "unresolved_symbols": 0
+    },
+    "resident_stacks": {
+      "ide": {
+        "assembly_allowance": 256,
+        "available_bytes": 1232,
+        "conservative_bytes": 1000,
+        "retained_c_frames": 45
+      },
+      "sci": {
+        "assembly_allowance": 256,
+        "available_bytes": 1232,
+        "conservative_bytes": 1172,
+        "retained_c_frames": 45
+      },
+      "scif": {
+        "assembly_allowance": 256,
+        "available_bytes": 1232,
+        "conservative_bytes": 1080,
+        "retained_c_frames": 49
+      }
+    },
+    "stage": {
+      "memory_end": "0x8ce1dde8",
+      "payload_bytes": 51192,
+      "unresolved_symbols": 0
+    }
+  },
+  "host_async_runtime_cases": 12,
+  "host_async_runtime_arguments": [
+    "",
+    "restore",
+    "quarantine",
+    "recovery",
+    "reinit",
+    "reacquire",
+    "baseline",
+    "baseline-mismatch",
+    "stress-quarantine",
+    "stress-recovery",
+    "stress-baseline",
+    "stress-baseline-mismatch"
+  ],
+  "host_lifecycle_passed": true,
+  "host_heartbeat_passed": true,
+  "host_display_quiet_passed": true,
+  "host_first_fault_passed": true,
+  "prior_source_commit": "c0c285482dac1aea555335e2eacb9c8d5f6b3867",
+  "resident_layout_and_stack_unchanged": true,
+  "stage_payload_delta": 0,
+  "benchmark_stage_payload_delta": 0,
+  "logs": {
+    "host-110855434802.log": "103c974ffaa46a96b649aae0d00ce77638c1fd9df0b5236466bfa91032be5483",
+    "dreamcast-110859206278.log": "3e35817278873b1ab043d3725e43d117ac81d2d54b0088d029137a4de80d4e1a"
+  }
+}
