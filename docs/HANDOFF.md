@@ -11,8 +11,11 @@ the gap byte is lost. `kui_sci_async_begin_stream` reads CMD18 streams through
 `poll`/`finish` (reset and reselection between blocks, CMD12 after the last,
 CMD12 + CMD18 again after a lost token or overrun), and **R** reads the same
 1 MiB a fourth time through it. See
-[the change record](evidence/sci-async-cmd18-stream-2026-10-02.md). Build and
-console results are pending; run R and return the JSON.
+[the change record](evidence/sci-async-cmd18-stream-2026-10-02.md). Build
+**3aa4554c44d9** passed [Diagnostic run 205](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37044237806)
+(host and Dreamcast jobs); install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `sd-update` artifact, run R and
+return the JSON. Console results are pending.
 
 ## SCI async: leaner reader and CMD18 measurements (2026-10-02 UTC)
 

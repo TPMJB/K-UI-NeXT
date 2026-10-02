@@ -93,4 +93,8 @@ block that differs from the ordinary pass.
 
 ## Delivery
 
-Pending CI.
+Source `3aa4554c44d9ab34b2d2ee9dc4a253e800f61f69` passed
+[Diagnostic run 205](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37044237806):
+host tests and the Dreamcast build. The update is the run's
+`kui-1.5.1-dainsleif-sd-update` artifact; only `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` need replacing. Run R and return the JSON.
