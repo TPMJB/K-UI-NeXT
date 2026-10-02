@@ -24,8 +24,12 @@ the source word and byte-loop counter around each call. The candidate removes
 DMA read**. The 128 word-reversal calls and their outer-loop stack accesses
 remain. Assembly evidence establishes removed work, not measured speed.
 
-The shared change applies to runtime and detached game-reader SCI code,
-including runtime TX CRC work and polled paths. RX checks still occur after
+The shared source change applies to runtime and detached game-reader SCI code,
+including runtime TX CRC work and polled paths. **Later package comparison
+confirmed that the runtime already inlined this helper: executable runtime
+code is unchanged. Only the detached resident gains the removed CRC calls
+and spills.** See the [console result and byte comparison](sci-inline-crc-result-2026-10-01.md).
+RX checks still occur after
 DMA has fully stopped. There is no new table, buffer, clock rate, framing
 sequence, DMA overlap, interrupt contract or pacing allowance. Every block's
 CRC remains checked before successful data return.
@@ -66,12 +70,12 @@ before delivering the candidate. No console gain has yet been established.
 
 1. Keep the current boot CD, card format and images. Replace the matching
    runtime and game-loader files together.
-2. Run **Diagnostics → Storage → Quick** once on SCI and send its result.
-   This time runtime transport code changed: compare the RX check phase
-   against approximately 68.43 us/block and reads against 1,064.98 KiB/s
-   from the last soak. Quick-versus-soak is indicative, not a controlled
-   same-preset percentage comparison; the earlier Quick read was 1,068.19
-   KiB/s with RX checking 68.57 us/block.
+2. The original recommendation was to run **Diagnostics → Storage → Quick**
+   and compare RX check time against approximately 68.43 us/block. That
+   performance expectation was incorrect: later binary inspection found that
+   runtime code was unchanged because it had already inlined CRC. Run 18's
+   completed soak now confirms integrity and stable runtime rates; no repeat
+   storage test is needed solely to seek a runtime gain from this annotation.
 3. Repeat DOA2 Kasumi-to-first-fight timing, opening combat and an FMV.
    Send the return screen and note any game resets. Compare with 18 seconds
    and the remaining seven-second slowdown, not the older two-sector build.
@@ -113,8 +117,9 @@ blocks during reads. The next hypothesis is a separate receive-only CMD17
 diagnostic that DMA-reads 514 bytes and measures useful CPU work during
 reception, maximum blocked span and timer/IRQ responsiveness. Primary SH7091
 code corroborates the SCI port-register mapping; independently validate the
-probe GPIO/EIO behavior before relying on it. The diagnostic is unimplemented,
-may cost command overhead and must not be enabled in the existing resident by simply unmasking
+probe GPIO/EIO behavior before relying on it. The diagnostic was unimplemented
+when proposed and is now under implementation. It may cost command overhead
+and must not be enabled in the existing resident by simply unmasking
 interrupts. Prioritize these measurements before further blind throughput
 tuning; do not assume channel 3 provides a second SCI DMA channel. Broaden
 native coverage and keep CE boot placement, asynchronous transfer and original
@@ -143,6 +148,25 @@ bytes, SHA-256 `1c4db2cd7063d412d90ffecd2a1d72fcb4f9e7dd4955e17c244cbac41c86bec5
 | `KUI/runtime.kui` | 1,595,396 | `e7b0559d98f9b2f036fc2a5ad117d009252676317428770328320f057ae3bbe6` |
 | `KUI/apps/games/retail-boot.kui` | 56,712 | `7b0e5b0897f0052728fd9c17b67bec9e211e78f8672d382c6092efb7a6427410` |
 
-Both display build `93794e47df59`. Console measurements remain pending. Keep
+Both display build `93794e47df59`. Console measurements were pending at package
+delivery; the subsequent result is recorded below. Keep
 the existing `6af5e11` boot CD and `ce7006087f20` comparison package. This is
 an incremental CRC-cost experiment, not an asynchronous-reader or CE build.
+
+## Console result and runtime correction (2026-10-02 UTC)
+
+The subsequent **run 18** passes 160 MiB/ten cycles with zero errors and
+successful remount verification. Write/read rates are **1,201.16/1,068.10
+KiB/s**, respectively +0.31%/+0.29% against run 13, with essentially unchanged
+DMA phase timings. The owner reports **"Gameplay was largely unchanged."**
+No new exact load time or measured gameplay improvement is established.
+
+The delivered `ce7006087f20` and `93794e47df59` runtime payloads are
+byte-identical after normalizing package/build-ID/SDK build metadata. The
+runtime already inlined CRC; the shared annotation changed the detached
+resident's assembly, not runtime performance. The earlier suggestion that
+this Storage test could demonstrate a runtime CRC gain was incorrect. The
+[full result](sci-inline-crc-result-2026-10-01.md) preserves raw reports,
+provenance, phase totals and the reproducible binary comparison. The separate
+autonomous-reception diagnostic is now under implementation; it remains
+unmeasured and is not asynchronous game-reader support.

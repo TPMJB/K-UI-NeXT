@@ -157,6 +157,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
                 (s->storage_test_details?"X Summary   Y Baseline   B Back":"X Details   Y Baseline   B Back"):
                 (s->storage_test_details?"X Summary   B Back":"X Details   B Back")):
             "D-pad Select/change   A Open   B Diagnostics") :
+        s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Run probe   B Storage tests" :
         s->page==KUI_SHELL_STORAGE_TEST_HISTORY ? "A View   Y Baseline   X Refresh   B Back" :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
@@ -989,8 +990,8 @@ static void storage_tests(struct paint *p,const struct kui_shell *s,const struct
     title(p,40,108,"Storage tests");
     char line[144];snprintf(line,sizeof(line),"Target: %s",v->storage_test_target?v->storage_test_target:"active storage device");
     label(p,40,137,CYAN,line);
-    const char *names[]={"Preset","Repeats","Soak duration","Card nickname","Start test","Repeat last test","History and baseline","Advanced benchmarks"};
-    for(unsigned i=0;i<8;i++) {
+    const char *names[]={"Preset","Repeats","Soak duration","Card nickname","Start test","Repeat last test","History and baseline","Advanced benchmarks","SCI async probe"};
+    for(unsigned i=0;i<9;i++) {
         unsigned y=156+i*24;bool selected=i==s->storage_test_selected;
         panel(p,32,y,576,22,selected?SELECTED:PANEL);
         if(selected) box(p,32,y+3,3,16,PINK);
@@ -1002,13 +1003,41 @@ static void storage_tests(struct paint *p,const struct kui_shell *s,const struct
         case 3: snprintf(line,sizeof(line),"%.23s",s->storage_test_request.card_label[0]?s->storage_test_request.card_label:"A Edit (optional)");break;
         case 5: snprintf(line,sizeof(line),"%s",s->storage_test_last_valid?"A Review":"No previous test");break;
         case 7: snprintf(line,sizeof(line),"bench.cfg");break;
+        case 8: snprintf(line,sizeof(line),"Experimental read test");break;
         default: snprintf(line,sizeof(line),"A Open");break;
         }
         words(p,350,y+3,594,selected?CYAN:MUTED,line,false);
     }
-    test_recipe(line,sizeof(line),&s->storage_test_request);label(p,40,357,WHITE,line);
-    label(p,40,380,MUTED,"Write speed, verified read speed, pauses and saved results.");
+    test_recipe(line,sizeof(line),&s->storage_test_request);label(p,40,378,WHITE,line);
     label(p,40,399,MUTED,v->busy?"Working... B stops safely.":"Runs on the active device. Existing files are kept.");
+}
+static void sci_async_probe(struct paint *p,const struct kui_shell_view *v) {
+    title(p,40,108,"SCI async probe");
+    label(p,40,138,CYAN,"Tests whether the CPU can work during an SCI read.");
+    const struct kui_app_status *r=v->app_status;
+    bool result=r && r->complete;
+    if(!result && !v->busy) {
+        panel(p,32,174,576,225,PANEL);
+        label(p,48,194,WHITE,"Experimental read test for the selected SCI card");
+        label(p,48,226,MUTED,"Reads the same existing sector at slow and fast speeds.");
+        label(p,48,250,MUTED,"Checks data, interrupts, CPU work and normal read recovery.");
+        label(p,48,274,MUTED,"Music pauses; other storage actions wait until it finishes.");
+        label(p,48,306,MUTED,"Only the final JSON report writes to /KUI/tests.");
+        label(p,48,330,MUTED,"Normal game reads are unchanged by this experiment.");
+        label(p,48,369,CYAN,"A Run probe   B Back");
+        return;
+    }
+    words(p,40,172,604,r && r->errors?AMBER:WHITE,v->cancel_requested?
+        "Stopping safely, then checking normal read recovery...":
+        r && r->message[0]?r->message:"Preparing probe...",false);
+    if(result) {
+        unsigned count=r->line_count<8?r->line_count:8;
+        for(unsigned i=0;i<count;i++) label(p,40,220+i*23,i==6?CYAN:MUTED,r->lines[i]);
+    } else {
+        label(p,40,246,MUTED,"Reading a baseline, then checking autonomous transfers.");
+        label(p,40,278,MUTED,"B stops between bounded trials and checks recovery.");
+        label(p,40,310,MUTED,"Keep the card connected until the result appears.");
+    }
 }
 static void storage_test_history(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_storage_test_history *h=&s->storage_test_history;
@@ -1704,6 +1733,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_DIAGNOSTICS: diagnostics(&p,s,v); break;
     case KUI_SHELL_STORAGE_TESTS: storage_tests(&p,s,v); break;
     case KUI_SHELL_STORAGE_TEST_HISTORY: storage_test_history(&p,s,v); break;
+    case KUI_SHELL_SCI_ASYNC_PROBE: sci_async_probe(&p,v); break;
     case KUI_SHELL_DESTINATION: destination(&p,s,v); break;
     case KUI_SHELL_KEYBOARD: keyboard(&p,s); break;
     case KUI_SHELL_ADVANCED: advanced(&p,s); break;

@@ -23,7 +23,7 @@ test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cl
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
-test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage
+test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-runtime
 test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-storage-errors
 	./build/test-cd-audio
@@ -51,6 +51,13 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-sci-sd-bus
 	./build/test-retail-storage
 	./build/test-sci-sd-storage
+	./build/test-sci-async-probe
+	./build/test-sci-async-runtime
+	./build/test-sci-async-runtime restore
+	./build/test-sci-async-runtime quarantine
+	./build/test-sci-async-runtime recovery
+	./build/test-sci-async-runtime baseline
+	./build/test-sci-async-runtime baseline-mismatch
 	./build/test-cd-audio guard
 	./build/test-network-probe
 	./build/test-network-connect
@@ -128,6 +135,14 @@ build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage
 build/test-sci-sd-storage: tests/test_sci_sd_storage.c src/dreamcast/sci_sd_storage.c src/dreamcast/sci_sd_storage.h src/loader/sd_reader.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader -Isrc/dreamcast src/dreamcast/sci_sd_storage.c tests/test_sci_sd_storage.c -o $@
+
+build/test-sci-async-probe: tests/test_sci_async_probe.c tests/sci_async_probe_test_support.h src/dreamcast/sci_async_probe.c include/kui/sci_async_probe.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_ASYNC_PROBE_TEST=1 -Iinclude -Isrc/loader src/dreamcast/sci_async_probe.c tests/test_sci_async_probe.c -o $@
+
+build/test-sci-async-runtime: tests/test_sci_async_runtime.c src/dreamcast/sd.c src/dreamcast/sd.h include/kui/sci_async_probe.h src/core/storage_error.c src/core/storage_policy.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_ASYNC_RUNTIME=1 -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c src/core/data.c tests/test_sci_async_runtime.c -o $@
 
 build/test-loader-probe: tests/test_loader_probe.c $(LOADER_PROBE) src/loader/client.c include/kui/loader_probe.h
 	@mkdir -p $(@D)

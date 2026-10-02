@@ -792,6 +792,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             } else s->page=KUI_SHELL_DIAGNOSTICS;
             return KUI_SHELL_NONE;
         }
+        if(s->page==KUI_SHELL_SCI_ASYNC_PROBE) {
+            s->page=KUI_SHELL_STORAGE_TESTS;return KUI_SHELL_NONE;
+        }
         if(s->page==KUI_SHELL_STORAGE_TEST_HISTORY) {
             s->page=KUI_SHELL_STORAGE_TESTS;s->storage_test_show_result=false;
             return KUI_SHELL_NONE;
@@ -1413,7 +1416,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             break;
         }
-        s->storage_test_selected=move_count(s->storage_test_selected,buttons,8);
+        s->storage_test_selected=move_count(s->storage_test_selected,buttons,9);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
             unsigned add=horizontal==KUI_SHELL_LEFT?2:1;
@@ -1447,10 +1450,14 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->page=KUI_SHELL_STORAGE_TEST_HISTORY;s->storage_history_selected=0;
             return KUI_SHELL_TEST_HISTORY;
         case 7: s->page=KUI_SHELL_DIAGNOSTICS;return KUI_SHELL_BENCH;
+        case 8: s->page=KUI_SHELL_SCI_ASYNC_PROBE;break;
         default: break;
         }
         break;
     }
+    case KUI_SHELL_SCI_ASYNC_PROBE:
+        if(buttons&KUI_SHELL_A) return KUI_SHELL_SCI_ASYNC_RUN;
+        break;
     case KUI_SHELL_STORAGE_TEST_HISTORY:
         s->storage_history_selected=move_count(s->storage_history_selected,buttons,s->storage_test_history.count);
         if(s->storage_test_history.count) {

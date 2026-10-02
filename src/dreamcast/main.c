@@ -34,6 +34,7 @@
 #include "kui/menu_sound.h"
 #include "kui/cd_audio.h"
 #include "kui/storage_test.h"
+#include "sd.h"
 #include "sci_sd_bus.h"
 #endif
 #include <kos.h>
@@ -105,6 +106,7 @@ static struct kui_storage_test_history storage_test_history;
 static struct kui_storage_test_progress storage_test_progress;
 static unsigned storage_test_generation, storage_history_generation;
 static bool storage_test_running;
+static struct kui_app_status sci_async_status;
 static struct kui_app_status scan_status,salvage_status;
 static char salvage_path_pending[KUI_DEST_JOB_CAP];
 static unsigned salvage_passes_pending;
@@ -601,6 +603,145 @@ static void storage_test_operation(unsigned action) {
     storage_test_history=history;++storage_history_generation;
     mutex_unlock(&lock);
 }
+/* Independent experiment report: never added to the soak history/baseline. */
+static bool sci_async_integrity(const struct kui_sci_async_probe_result *r) {
+    return r->crc_ok && r->baseline_ok && r->guards_ok &&
+        r->slow.passed==KUI_SCI_ASYNC_SLOW_TRIALS && r->slow.attempted==r->slow.passed &&
+        r->fast.passed==KUI_SCI_ASYNC_FAST_TRIALS && r->fast.attempted==r->fast.passed;
+}
+static bool sci_async_completion(const struct kui_sci_async_probe_result *r) {
+    return sci_async_integrity(r) && r->slow.dma_irqs==r->slow.passed && r->fast.dma_irqs==r->fast.passed;
+}
+static bool sci_async_passed(const struct kui_sd_async_result *result) {
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    return r->status==KUI_SCI_ASYNC_OK && result->baseline_verified && result->recovery_verified &&
+        r->safe_restored && r->handlers_restored && r->registers_restored &&
+        sci_async_completion(r) && r->fast.overlap_batches;
+}
+static bool sci_async_save(const struct kui_sd_async_result *result,char path[96]) {
+    static char stage[2][1536],json[4608];
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    const struct kui_sci_async_stage *stages[]={&r->slow,&r->fast};
+    path[0]=0;
+    for(unsigned i=0;i<2;i++) {
+        const struct kui_sci_async_stage *s=stages[i];
+        int n=snprintf(stage[i],sizeof(stage[i]),
+            "{\"clock_hz\":%lu,\"attempted\":%lu,\"passed\":%lu,"
+            "\"dma_irqs\":%lu,\"sci_error_irqs\":%lu,\"unexpected_rx_irqs\":%lu,"
+            "\"trailing_overruns\":%lu,\"premature_errors\":%lu,\"timeouts\":%lu,"
+            "\"overlap_batches\":%lu,\"overlap_iterations\":%lu,\"work_checksum\":%lu,"
+            "\"last_remaining\":%lu,\"last_chcr\":%lu,\"last_ssr\":%lu,"
+            "\"elapsed_us\":%llu,\"receive_us\":%llu,\"max_receive_us\":%llu}",
+            (unsigned long)s->clock_hz,(unsigned long)s->attempted,(unsigned long)s->passed,
+            (unsigned long)s->dma_irqs,(unsigned long)s->sci_error_irqs,(unsigned long)s->unexpected_rx_irqs,
+            (unsigned long)s->trailing_overruns,(unsigned long)s->premature_errors,(unsigned long)s->timeouts,
+            (unsigned long)s->overlap_batches,(unsigned long)s->overlap_iterations,(unsigned long)s->work_checksum,
+            (unsigned long)s->last_remaining,(unsigned long)s->last_chcr,(unsigned long)s->last_ssr,
+            (unsigned long long)s->elapsed_us,(unsigned long long)s->receive_us,(unsigned long long)s->max_receive_us);
+        if(n<0 || (size_t)n>=sizeof(stage[i])) return false;
+    }
+    struct kui_datetime clock;int64_t local_seconds=0;
+    if(kui_clock_now(&clock)) (void)kui_clock_to_seconds(&clock,&local_seconds);
+    int n=snprintf(json,sizeof(json),
+        "{\n  \"schema\":1,\n  \"kind\":\"SCI async probe\",\n  \"build\":\"%.15s\",\n"
+        "  \"local_seconds\":%lld,\n  \"transport\":\"SCI\",\n  \"lba\":%lu,\n"
+        "  \"status\":%u,\n  \"status_name\":\"%s\",\n  \"started\":%s,\n"
+        "  \"operation_status\":%u,\n  \"operation_status_name\":\"%s\",\n"
+        "  \"dma_quarantined\":%s,\n  \"foreign_dma\":%s,\n"
+        "  \"baseline_verified\":%s,\n  \"baseline_crc32\":%lu,\n"
+        "  \"safe_restored\":%s,\n  \"guards_ok\":%s,\n  \"crc_ok\":%s,\n  \"baseline_ok\":%s,\n"
+        "  \"handlers_restored\":%s,\n  \"registers_restored\":%s,\n"
+        "  \"recovery_verified\":%s,\n  \"recovery_reinitialized\":%s,\n  \"elapsed_us\":%llu,\n"
+        "  \"timer_irq_instrumented\":%s,\n"
+        "  \"max_irq_masked_us\":%llu,\n  \"max_irq_handler_us\":%llu,\n"
+        "  \"probe_passed\":%s,\n  \"read_integrity_verified\":%s,\n  \"completion_irq_verified\":%s,\n"
+        "  \"cpu_overlap_observed\":%s,\n  \"slow\":%s,\n  \"fast\":%s\n}\n",
+        KUI_BUILD_ID,(long long)local_seconds,(unsigned long)r->lba,(unsigned)r->status,
+        kui_sci_async_status_name(r->status),r->started?"true":"false",
+        (unsigned)r->operation_status,kui_sci_async_status_name(r->operation_status),
+        r->dma_quarantined?"true":"false",r->foreign_dma?"true":"false",
+        result->baseline_verified?"true":"false",(unsigned long)result->baseline_crc32,
+        r->safe_restored?"true":"false",r->guards_ok?"true":"false",r->crc_ok?"true":"false",r->baseline_ok?"true":"false",
+        r->handlers_restored?"true":"false",r->registers_restored?"true":"false",
+        result->recovery_verified?"true":"false",result->recovery_reinitialized?"true":"false",
+        (unsigned long long)r->elapsed_us,r->timer_irq_instrumented?"true":"false",
+        (unsigned long long)r->max_irq_masked_us,(unsigned long long)r->max_irq_handler_us,
+        sci_async_passed(result)?"true":"false",sci_async_integrity(r)?"true":"false",sci_async_completion(r)?"true":"false",
+        r->fast.overlap_batches?"true":"false",stage[0],stage[1]);
+    if(n<0 || (size_t)n>=sizeof(json)) return false;
+    FATFS fs;bool saved=false;
+    if(!kui_mount(&fs,kui_log)) return false;
+    const char *parents[]={"0:/KUI","0:/KUI/tests"};
+    for(unsigned i=0;i<2;i++) {
+        FRESULT f=f_mkdir(parents[i]);
+        if(f!=FR_OK && f!=FR_EXIST) goto done;
+    }
+    char dir[64],temp[96];bool created=false;
+    for(unsigned id=1;id<=9999;id++) {
+        snprintf(dir,sizeof(dir),"0:/KUI/tests/sci-async-%04u",id);
+        FRESULT f=f_mkdir(dir);
+        if(f==FR_OK) {created=true;break;}
+        if(f!=FR_EXIST) goto done;
+    }
+    if(!created) goto done;
+    snprintf(temp,sizeof(temp),"%s/report.tmp",dir);
+    snprintf(path,96,"%s/sci-async-probe.json",dir);
+    saved=kui_write_new_file(temp,json,(size_t)n,kui_log) && f_rename(temp,path)==FR_OK;
+done:
+    if(f_mount(NULL,"0:",0)!=FR_OK) saved=false;
+    if(!saved) path[0]=0;
+    return saved;
+}
+static void sci_async_operation(void) {
+    static struct kui_sd_async_result result;
+    struct kui_app_status status={.complete=true};
+    struct kui_music_status music={0};char path[96]={0};
+    kui_music_status_copy(&music);
+    if(music.playing) kui_music_pause();
+    result=(struct kui_sd_async_result){0};
+    bool connected=false,saved=false;
+    if(kui_storage_selected()!=KUI_STORAGE_SCI) {
+        snprintf(status.message,sizeof(status.message),"Requires SCI storage. Current device was not changed.");
+        status.errors=1;
+    } else {
+        kui_sd_set_params(KUI_STORAGE_SCI,true);
+        connected=kui_sd_connect();
+        if(connected) {
+            kui_sd_async_probe(&result,storage_test_cancelled,NULL);
+            if(result.recovery_verified) saved=sci_async_save(&result,path);
+            const struct kui_sci_async_probe_result *r=&result.probe;
+            status.stopped=r->status==KUI_SCI_ASYNC_CANCELLED;
+            status.passed=sci_async_passed(&result);
+            status.errors=result.restart_required || (r->status!=KUI_SCI_ASYNC_OK && !status.stopped);
+            snprintf(status.message,sizeof(status.message),"%s",result.message);
+            if(r->status==KUI_SCI_ASYNC_OK && result.recovery_verified)
+                snprintf(status.message,sizeof(status.message),"%s",status.passed?
+                    "Verified reads with CPU work during DMA.":"Read test finished; async proof is incomplete.");
+            status.line_count=8;
+            snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow: %lu/%lu reads verified; %lu DMA interrupts",
+                (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs);
+            snprintf(status.lines[1],KUI_APP_LINE_CAP,"Fast: %lu/%lu reads verified; %lu DMA interrupts",
+                (unsigned long)r->fast.passed,(unsigned long)r->fast.attempted,(unsigned long)r->fast.dma_irqs);
+            snprintf(status.lines[2],KUI_APP_LINE_CAP,"CPU overlap batches: slow %lu / fast %lu",
+                (unsigned long)r->slow.overlap_batches,(unsigned long)r->fast.overlap_batches);
+            snprintf(status.lines[3],KUI_APP_LINE_CAP,"CRC %s  Data %s  Buffer guards %s",
+                r->crc_ok?"OK":"unconfirmed",r->baseline_ok?"OK":"unconfirmed",r->guards_ok?"OK":"unconfirmed");
+            snprintf(status.lines[4],KUI_APP_LINE_CAP,"Normal read recovery: %s",result.recovery_verified?"verified":result.restart_required?"FAILED - restart required":"not attempted");
+            snprintf(status.lines[5],KUI_APP_LINE_CAP,"%s",saved?"Saved independent report:":"Report not saved; photograph this result.");
+            snprintf(status.lines[6],KUI_APP_LINE_CAP,"%.79s",path[0]?path+2:"No saved path");
+            snprintf(status.lines[7],KUI_APP_LINE_CAP,"Normal game reads are unchanged by this experiment.");
+            kui_log("SCI async probe: %s; report %s",result.message,saved?path:"not saved");
+            kui_sd_disconnect();
+        } else {
+            snprintf(status.message,sizeof(status.message),"SCI unavailable; probe did not start. See Diagnostics.");
+            status.errors=1;
+        }
+    }
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(music.playing && !result.restart_required) kui_music_resume();
+    mutex_lock(&lock);sci_async_status=status;mutex_unlock(&lock);
+}
+
 static bool scan_cancel(void *ctx) { (void)ctx;return kui_cancelled(); }
 static uint64_t scan_now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static void scan_progress(void *ctx,const struct kui_scan_status *status) {
@@ -784,7 +925,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==68 || (action>=46 && action<=48);
 }
 #endif
 static void *worker(void *unused) {
@@ -842,6 +983,10 @@ static void *worker(void *unused) {
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
             if(action==56 || action==57 || action==58) probe_launch_failed=true;
+            if(action==68) {
+                sci_async_status=(struct kui_app_status){.complete=true,.errors=1};
+                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Audio CD stop failed; probe did not start.");
+            }
             if(action==65) {
                 storage_test_result=(struct kui_storage_test_result){0};
                 storage_test_result.request=storage_test_pending;
@@ -970,6 +1115,10 @@ static void *worker(void *unused) {
                 clock_valid=false;++clock_generation;
                 snprintf(clock_note,sizeof(clock_note),"Clock operation stopped before starting.");
             }
+            if(action==68) {
+                sci_async_status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Stopped before starting.");
+            }
             if(action==65) {
                 storage_test_result=(struct kui_storage_test_result){0};
                 storage_test_result.request=storage_test_pending;
@@ -1005,6 +1154,7 @@ static void *worker(void *unused) {
             }
 #ifdef KUI_SD_RUNTIME
             if(action>=65 && action<=67) storage_test_operation(action);
+            if(action==68) sci_async_operation();
             if(action == 8 || action == 9) {
                 settings_operation(action == 9);
                 if(!system_loaded) system_operation(false);
@@ -1490,7 +1640,8 @@ static void draw_shell(void) {
     bool files_page=shell.page==KUI_SHELL_FILES || shell.page==KUI_SHELL_FILES_ACTIONS ||
         shell.page==KUI_SHELL_FILES_PICK || shell.page==KUI_SHELL_FILES_CONFIRM ||
         shell.page==KUI_SHELL_FILES_INFO || shell.page==KUI_SHELL_FILES_VIEW;
-    app_status=files_page?files_status:
+    app_status=shell.page==KUI_SHELL_SCI_ASYNC_PROBE?sci_async_status:
+        files_page?files_status:
         shell.page==KUI_SHELL_GAMES?games_scan_status:
         shell.page==KUI_SHELL_MEMORY?memory_test_status:
         (shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM || shell.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
@@ -1599,6 +1750,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_TEST_RUN: return 65;
         case KUI_SHELL_TEST_HISTORY: return 66;
         case KUI_SHELL_TEST_BASELINE: return 67;
+        case KUI_SHELL_SCI_ASYNC_RUN: return 68;
         default: return 0;
     }
 }
@@ -1935,6 +2087,10 @@ int main(void) {
             action = 0;
         }
         if(action && !busy) {
+            if(action==68) {
+                sci_async_status=(struct kui_app_status){0};
+                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Preparing baseline, then slow and fast read trials...");
+            }
             if(action==65) {
                 storage_test_running=true;
                 storage_test_pending=shell.storage_test_request;

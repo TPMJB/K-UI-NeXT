@@ -59,7 +59,7 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_STORAGE_TEST_HISTORY;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_SCI_ASYNC_PROBE;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -1607,6 +1607,14 @@ static void storage_test_controls(void) {
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE); /* failed persistence is not a baseline */
     press(KUI_SHELL_B,false);s.storage_test_selected=7;assert(press(KUI_SHELL_A,false)==KUI_SHELL_BENCH);
     assert(s.page==KUI_SHELL_DIAGNOSTICS);
+    press(KUI_SHELL_R,false);s.storage_test_selected=8;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_STORAGE_TESTS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SCI_ASYNC_PROBE);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SCI_ASYNC_RUN);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_SCI_ASYNC_PROBE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_STORAGE_TESTS);
+    assert(s.storage_test_selected==8);
     puts("PASS storage tests controls: Diagnostics entry, presets, labels, confirmation, Stop, repeat, history and baseline guards");
 }
 static void storage_test_rendering(void) {
@@ -1636,6 +1644,16 @@ static void storage_test_rendering(void) {
     render(&v);assert(strstr(drawn,"Sector 12345 +4") && strstr(drawn,"CMD24") && strstr(drawn,"cleanup failed"));
     s.page=KUI_SHELL_STORAGE_TEST_HISTORY;render(&v);
     assert(strstr(drawn,"Newest eight results") && strstr(drawn,"Samsung 128GB") && strstr(drawn,"Baseline #9"));
+    s.page=KUI_SHELL_SCI_ASYNC_PROBE;v.app_status=NULL;v.busy=false;render(&v);
+    assert(strstr(drawn,"SCI async probe") && strstr(drawn,"CPU can work") && strstr(drawn,"/KUI/tests"));
+    struct kui_app_status probe={.complete=true,.line_count=2};
+    snprintf(probe.message,sizeof(probe.message),"Read test finished; async proof is incomplete.");
+    snprintf(probe.lines[0],KUI_APP_LINE_CAP,"CPU overlap batches: slow 0 / fast 0");
+    snprintf(probe.lines[1],KUI_APP_LINE_CAP,"Normal read recovery: verified");
+    v.app_status=&probe;render(&v);
+    assert(strstr(drawn,"proof is incomplete") && strstr(drawn,"slow 0 / fast 0") && strstr(drawn,"recovery: verified"));
+    v.busy=true;probe.complete=false;v.cancel_requested=true;render(&v);
+    assert(strstr(drawn,"Stopping safely") && strstr(drawn,"Keep the card connected"));
     puts("PASS storage tests rendering: progress, rates, safe baseline comparison, metadata, errors and persistence warnings");
 }
 int main(int argc,char **argv) {

@@ -5,6 +5,11 @@ design/evidence update, not an implemented asynchronous reader or CE unlock.
 The CRC-inlining candidate **93794e47df59** is unchanged; its CI/package and
 console validation are separate from the proposals below.
 
+Update: the first [runtime diagnostic is now implemented](sci-async-probe-2026-10-02.md),
+with console validation pending. It measures CPU overlap and its own completion
+IRQs; independent timer IRQ progress and game-reader integration remain later
+milestones. The original proposal below records the broader desired evidence.
+
 ## New report and confirmed architecture
 
 The owner relayed SWAT's explanation that the remaining DOA2 slowdown comes

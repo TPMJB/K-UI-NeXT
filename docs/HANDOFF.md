@@ -10,13 +10,26 @@ Holly GD-DMA completion. K-UI's IDE resident is currently PIO too. Faster CRC
 does not create asynchronous game I/O. ARMADA's actual IRQ requirements remain
 untraced, and its separate boot-layout conflict still exists.
 
-Candidate **93794e47df59** passed host and Dreamcast CI; the matching
-runtime/game update and all artifact hashes are verified. It is ready for
-the next Storage Quick/DOA2 comparison; console results remain pending. The next design experiment is a
-**receive-only CMD17 diagnostic**, DMA-reading 514 bytes with bounded cleanup,
-to test useful CPU work during reception. This is unimplemented and may trade
-throughput for CPU availability. Measure maximum blocked span as well as
-KiB/s and timer/IRQ responsiveness. Validate the probe GPIO/EIO controls
+Candidate **93794e47df59** passed host and Dreamcast CI and now passes
+console Soak run 18: 160 MiB/ten cycles, zero errors, write/read
+**1,201.16/1,068.10 KiB/s**, effectively unchanged (+0.31%/+0.29%) from run 13.
+The owner says **"Gameplay was largely unchanged."** The runtime already
+inlined CRC: its payload is byte-identical to `ce7006087f20` after normalizing
+build metadata, so no runtime speed gain was expected. The forced annotation
+changes the detached resident's assembly, with no measured gameplay benefit.
+Its return photo reports 3.82609 sectors per step and 91.03% enlarged steps,
+zero guard fault and zero spin steps, and latest period/vblank 525/260 with cost 1104;
+these session-wide counters do not isolate fight startup.
+See the [reports, binary comparison and console limits](evidence/sci-inline-crc-result-2026-10-01.md).
+The next experiment is the implemented runtime-only **SCI async probe** under
+Diagnostics → Storage tests. It tests 16 slow and 64 fast receive-only CMD17
+reads of 514 bytes, checking CRC/data/guards, CPU overlap, completion IRQs and
+ordinary-read recovery. Console validation remains pending; incomplete DMA
+aborts quarantine storage until restart. Reports use
+`/KUI/tests/sci-async-NNNN/sci-async-probe.json` after verified recovery.
+Independent timer IRQ responsiveness is not instrumented in this first probe.
+See [implementation, tests and evidence limits](evidence/sci-async-probe-2026-10-02.md).
+It may trade throughput for CPU availability. Validate the probe GPIO/EIO controls
 independently: Linux corroborates the SH7091 port address despite a different
 label in pinned KOS. This is not an established accepted-driver defect. Do not
 unmask the existing private-stack reader or assume channel 3 can service SCI.
@@ -26,14 +39,16 @@ completion/IRQ milestones. See the
 
 ## Current game-loading experiment (2026-10-01)
 
-**Next candidate — CRC overhead:** force-inline the unchanged SCI CRC16
-helper to remove per-byte calls/spills in both runtime and game-reader code.
-Host CRC/fault tests and native layout/stack/instruction checks pass. The
-`FRAMES SEEN` and `PACE LINE` display fields are removed to fit; their timing
-state is retained and all guards are unchanged. Console performance is pending.
-See the [candidate, test sequence and next optimizations](evidence/sci-inline-crc-2026-10-01.md).
-Test Storage Quick and DOA2 first, then broaden native-game coverage before
-the separately scoped ARMADA Windows CE probe.
+**CRC result — 93794e47df59:** forcing the unchanged SCI CRC16 helper inline
+removes per-byte calls/spills in the detached resident. The runtime had already
+inlined it, correcting the earlier expectation of runtime gain. Host/native
+checks and the console soak pass, but the owner reports largely unchanged
+gameplay. The `FRAMES SEEN` and `PACE LINE` display fields are removed to fit;
+their timing state and all guards remain. See the
+[candidate and validation](evidence/sci-inline-crc-2026-10-01.md) and
+[console result](evidence/sci-inline-crc-result-2026-10-01.md). No repeat soak
+is needed to seek a gain from unchanged runtime code. Broaden native-game
+coverage and keep the asynchronous diagnostic and ARMADA CE probe separate.
 
 **Console result — ce7006087f20:** the owner reports **18 seconds** from
 Kasumi selection to the first fight (previously 25), **FMVs playing fine**,
