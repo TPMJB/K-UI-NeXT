@@ -1,5 +1,10 @@
 # SCI connector plan: microSD, W5500 and Wi-Fi
 
+**Standalone storage update:** [storage-transports.md](storage-transports.md)
+describes the development build for one SCI microSD board in place of the
+network board. The shared-bus wiring/software below remains a separate plan;
+it is not required for standalone SCIF/SCI/IDE storage testing.
+
 **Plan; only the W5500 part exists today.** This is the wiring to solder once,
 so that a microSD card, the W5500 and later a Wi-Fi board all plug into the
 same SCI port. Today's build still expects the W5500 alone, with its chip

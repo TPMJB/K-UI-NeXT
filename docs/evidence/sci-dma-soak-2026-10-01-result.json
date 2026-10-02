@@ -1,0 +1,15 @@
+{
+  "schema":1,"id":4,"build":"cf8e7ea7866b","card_label":"sci",
+  "preset":2,"repeats":1,"soak_minutes":15,"outcome":2,
+  "transport":1,"filesystem":"exFAT","cluster_bytes":131072,"volume_start":2048,"volume_sectors":249997312,"free_bytes":82730680320,
+  "music_playing":false,"ui_hz":2,"local_seconds":1790863164,
+  "elapsed_us":917692062,"written_bytes":436207616,"verified_bytes":436207616,"cycles":26,
+  "write_latency": {"calls":6656,"total_us":424025226,"over_20ms":6656,"over_100ms":295,"min_us":56188,"max_us":157238,"p95_upper_us":131071},
+  "read_latency": {"calls":6656,"total_us":459968795,"over_20ms":6656,"over_100ms":548,"min_us":62435,"max_us":130972,"p95_upper_us":131071},
+  "errors":{"total":0,"read":0,"write":0,"sync":0,"init":0,"timeout":0,"crc":0,"rejected":0,"io":0,
+    "operation":0,"result":0,"transport":0,"lba":0,"count":0,"sd_command":0,"sd_response":0,"sd_detail_valid":false},
+  "fatfs_error":0,"failure_offset":0,"cleanup_failed":false,"failure_phase":"","message":"Verified after remount; DMA R/W 851968/853377; PIO 3063; faults 0",
+  "samples":[
+    {"chunk_bytes":65536,"repeat":1,"bytes":436207616,"write_us":424025226,"read_us":459968795,"sync_us":148419,"verified":true}
+  ]
+}

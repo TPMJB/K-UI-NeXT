@@ -156,58 +156,29 @@ Some things the model already tells you, before you change anything:
 
 ## The SD transport experiment
 
-`src/dreamcast/sd.c` asks KOS for a transport by name instead of calling plain
-`sd_init()`, which hardcodes `SD_IF_SCIF` with CRC checking on. Two knobs drive it:
+Normal storage selection now follows the bootstrap's selected device. The
+benchmark runner still accepts explicit `sd_if=scif` or `sd_if=sci` selections;
+a missing requested device is skipped, without switching to a different card.
+`bench.cfg` itself is read from the normal selected device before its benchmark
+settings apply. A benchmark selection does not change that boot-time choice.
 
-| bench.cfg | KOS call | What it does |
+| bench.cfg | Backend | Behavior |
 |---|---|---|
-| `sd_if=scif` | `SD_IF_SCIF` | SPI emulated by bit-banging the SCIF pins. Works on the common jj1odm-style adapter. |
-| `sd_if=sci` | `SD_IF_SCI` | SH4 synchronous serial, DMA capable. Needs an adapter wired to the SCI pins. |
-| `sd_crc=on/off` | `check_crc` | Software CRC16 verification. KOS computes it on writes regardless, so this only moves the read rate. |
+| `sd_if=scif` | KOS SCIF | Existing bit-banged serial adapter. |
+| `sd_if=sci` | K-UI SCI | Hardware-clocked polled transfers, CRC checked; no DMA. |
+| `sd_crc=on/off` | SCIF read CRC | Writes retain CRC. SCI always checks read CRC, so `sci` with `off` is explicitly skipped. |
 
-Both keys take a list, and the SD benches are swept over every combination in
-one run, dropping and reopening the SD link between each. `sd_if=scif,sci` with
-`sd_crc=on,off` measures all four configurations from a single boot, with no
-card removal. Every SD line then carries its own `if=` and `crc=`, so the lines
-stand alone:
+Use one transport at a time for standalone-board testing. The existing default
+benchmark configuration requests SCIF; for SCI, copy
+[the short SCI configuration](bench-cfgs/t13-sci-storage.cfg) to
+`/KUI/bench.cfg`. It measures one 8 MiB write/reread workload without optical or
+hash sweeps. Restore your previous configuration after the measurement.
+Diagnostics **X** remains the simpler integrity check on the selected device,
+including IDE/CF. The explicit transport sweep does not yet offer an IDE key.
 
-```
-BENCH sd write if=scif crc=on chunk=128 expand=0 bytes=8128512 us=9449030 kib_s=840.0
-```
-
-Run time multiplies, so pair a transport sweep with one chunk size and
-`expand=off`; four transports at `chunks=128`, `sd_mib=8` takes about two
-minutes. Optical and hash run once, before any mount, and are unaffected.
-
-A setting that cannot be opened is skipped rather than measured: if SCI will
-not initialise, the platform falls back to SCIF, the log says
-`BENCH sd if=sci skipped: fell back to scif`, and no line is recorded under the
-wrong name. The same guard drops a configuration whose actual transport was
-already measured, so a fallback can never produce two contradictory `if=sci`
-rows.
-
-If `sci` is not wired on your adapter, `sd_init_ex` fails, the log says so, and
-the run falls back to `scif` and continues. Nothing is at risk, and the
-`SD transport:` line in every report names what the numbers were actually
-measured on, so a fallback can never be mistaken for a result.
-
-Reading `bench.cfg` always happens over `scif` with CRC on, before the file's
-own setting is applied. That is deliberate: a card cannot be made unreadable by
-the setting stored on it.
-
-What the outcomes mean:
-
-- **`sci` works and writes jump well above ~820 KiB/s** — the write ceiling was
-  the bit-bang driver, not the card. Every prediction in this document needs
-  redoing with the new number, and the SD write stops being the thing worth
-  hiding work behind.
-- **`sci` works but writes barely move** — ~820 KiB/s really is the card or the
-  adapter, and the pipeline restructuring is the remaining path.
-- **`sci` fails to initialise** — your adapter is SCIF-wired. The `sd_crc=off`
-  result still matters on its own for the read path.
-- **`sd_crc=off` lifts reads much above ~460 KiB/s** — software CRC16 is what
-  makes reads slower than writes, which mostly costs you on resume, where
-  prefix verification reads back everything already written.
+Every measurement names its actual `if=` and `crc=` values. Do not interpret a
+skipped configuration as a performance result. See
+[the storage installation guide](storage-transports.md) before using a new board.
 
 ## The experiment layer
 

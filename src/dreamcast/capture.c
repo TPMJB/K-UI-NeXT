@@ -3,10 +3,21 @@
 
 /* The overlapped GD-ROM DMA read, in every build since it was proven on hardware (Trips 11-12).
  * Whether a capture uses it is capture_read= (default dma). */
+/* IDE and the GD-ROM share G1. Preserve GD DMA, but finish it here
+ * before the engine can write the preceding chunk to the ATA slave. */
+static bool serialized_read;
+static enum kui_read_result serialized_result;
 static bool capture_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
-    return kui_disc_read_begin(ctx,fad,sectors,out);
+    if(!kui_disc_read_begin(ctx,fad,sectors,out)) return false;
+    if(kui_storage_active()==KUI_STORAGE_IDE) {
+        serialized_result=kui_disc_read_end(ctx);serialized_read=true;
+    }
+    return true;
 }
-static enum kui_read_result capture_read_end(void *ctx) { return kui_disc_read_end(ctx); }
+static enum kui_read_result capture_read_end(void *ctx) {
+    if(serialized_read) {serialized_read=false;return serialized_result;}
+    return kui_disc_read_end(ctx);
+}
 #define KUI_CAPTURE_DMA_OPS capture_read_begin,capture_read_end
 #include <kos/timer.h>
 #include <string.h>

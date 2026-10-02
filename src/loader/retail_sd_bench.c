@@ -16,10 +16,10 @@ static bool bench_window(const struct kui_retail_manifest *m,
         return false;
     for(uint32_t i = 0; i < m->track_count; ++i) {
         const struct kui_retail_track *t = &m->tracks[i];
-        if(t->control != 4 || t->start_lba < 45000 || t->end_lba <= t->start_lba ||
+        if(t->gd.control != 4 || t->gd.start_lba < 45000 || t->gd.end_lba <= t->gd.start_lba ||
            t->first_extent >= m->extent_count ||
            t->extent_count > m->extent_count - t->first_extent) continue;
-        uint64_t full_blocks = (uint64_t)(t->end_lba - t->start_lba) * 2352 / 512;
+        uint64_t full_blocks = (uint64_t)(t->gd.end_lba - t->gd.start_lba) * 2352 / 512;
         for(uint32_t j = 0; j < t->extent_count; ++j) {
             const struct kui_retail_extent *e = &m->extents[t->first_extent + j];
             uint64_t end = (uint64_t)e->card_lba + KUI_SD_BENCH_BLOCKS;

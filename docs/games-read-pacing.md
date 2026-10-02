@@ -1,4 +1,78 @@
-# Games launcher: read pacing on still screens
+# Games launcher: measured read pacing
+
+## SCI follow-up experiment — 2026-10-01
+
+**Next candidate — CRC overhead:** force-inline the unchanged SCI CRC16
+helper to remove per-byte calls/spills in both runtime and game-reader code.
+Host CRC/fault tests and native layout/stack/instruction checks pass. The
+`FRAMES SEEN` and `PACE LINE` display fields are removed to fit; their timing
+state is retained and all guards are unchanged. Console performance is pending.
+See the [candidate, test sequence and next optimizations](evidence/sci-inline-crc-2026-10-01.md).
+Test Storage Quick and DOA2 first, then broaden native-game coverage before
+the separately scoped ARMADA Windows CE probe.
+
+**Console result — ce7006087f20:** the owner reports **18 seconds** from
+Kasumi selection to the first fight (previously 25), **FMVs playing fine**,
+and remaining slowdown during the first **seven seconds** of combat.
+The return photo confirms batching: 5,355/6,762 reading steps enlarged
+(79.19%), 21,872 sectors (3.23455 per step), zero spin steps and guard fault.
+Latest period/vblank is **525/260**, the geometry mishandled by the old code.
+Keep this as the current DOA2 comparison build. See the
+[console evidence and limits](evidence/sci-pacing-period-console-2026-10-01.md).
+
+**Earlier build — initial console result:** the owner reports about **25 seconds** from Kasumi
+selection to match start on `8d930310f79d` (earlier 29 seconds), noticeably
+smoother combat and only slight slowdown during the first roughly ten seconds.
+The earlier severe slowdown lasted about ten seconds too; severity improved
+while that interval stayed similar. Audio remains smooth.
+Storage throughput remains unchanged. The later matching photo shows **zero
+paced/spin steps**, 5,970 read steps and 11,880 sectors (1.989950 per step).
+Normal title-screen resets preserve the cumulative counters. Thus larger
+batches did not activate; the reported improvement's cause remains unknown.
+FMV acceptance was not reported for that build. See the
+[report and photo transcription](evidence/sci-game-pacing-result-2026-10-01.md).
+
+**Correction tested above:** the [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+uses `SPG_LOAD`'s actual scanline counter period instead of inferring it from
+the vblank interrupt position. Measurement epochs discard samples spanning
+invalid or changed geometry; return diagnostics expose the timing inputs.
+The latest capture confirms activation and 525/260 geometry, while the old
+photograph lacked the inputs to identify its exact rejection reason.
+
+The owner's build `6cc2abb460b5` counter photograph shows zero enlarged
+steps and approximately two game sectors per successful step. The prior
+29-second Kasumi-to-first-fight observation remains the timed baseline;
+the photograph contains launch-wide counters, not that load alone. See the
+[grouped-CRC results and counter evidence](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md).
+
+The policy introduced in **8d930310f79d** permits up to **four sectors even when framebuffer
+addresses change**, provided the measured cost predicts they fit within half
+a video frame (about 8.3 ms at 60 Hz or 10 ms at 50 Hz). Unknown, invalid or
+slow timing retains two sectors. The existing still-screen allowance of up
+to eight sectors is unchanged. The estimate includes the previous step's
+storage acquisition, transfer and cleanup; it follows slower measurements
+immediately and faster measurements gradually.
+
+This is a predicted allowance, not a deadline: an unexpected card stall can
+overrun it, and the baseline two-sector floor can itself take longer. Reads
+still mask interrupts while working, so gameplay, speech and FMVs require
+console comparison. CRC, stream cleanup, memory/stack limits and the caller's
+status restoration remain unchanged. Host models are not console speed results.
+
+For this build, test the same DOA2 sequence: time Kasumi selection to the first
+fight, check the first ten seconds of combat and an FMV, then photograph the
+return counters. Another Storage soak is not needed for this pacing-only change.
+`PACED STEPS` now includes the short allowance as well as still-screen steps.
+
+Validation of **8d930310f79d**: 201 focused pacing checks pass with ASan/UBSan, plus an independent
+optimized host build. Native normal/benchmark layout, stack and instruction
+audits pass: SCI payload 11,168 bytes, end `0x8c00bae8` (24 bytes free),
+stack 1,180/1,232 bytes. SCIF/IDE conservative stack bounds are 1,076/996
+bytes. The menu-return heading is shortened to `GAME MENU RETURN` to fit the
+policy within the unchanged resident reservation. No guard limit was changed.
+
+The remainder describes the original, accepted SCIF pacing baseline; its
+statement that changing buffers always retain two sectors is historical.
 
 After 1.5 the retail game reader was reviewed again for speed, without the
 2048-byte track conversion. The serial SD transfer is at its hardware limit;
@@ -78,14 +152,17 @@ intercepts that and shows counters since launch (hexadecimal):
 | GD CALLS / EXEC CALLS | All calls into the reader / calls to `EXEC` |
 | READ STEPS / SECTORS READ | Steps that read / game sectors delivered |
 | FRAMES SEEN | Frames counted from the scanline register |
-| PACED STEPS | Steps longer than two sectors (still screen) |
+| PACED STEPS | Steps granted a budget above two sectors; short request tails may read fewer |
 | SPIN STEPS | Steps run because the game spun on `CHECK` |
 | STEP CALLER SR | Caller's status register at the last read; bits 4–7 nonzero means interrupts were masked (usually a handler) |
 
-EXEC CALLS close to FRAMES SEEN means the game calls once per frame. PACED
-STEPS of zero after a black-screen load would mean the game kept flipping
-frames, so no pacing applied. The screen stops the game: power off and on
-afterwards.
+FRAMES SEEN can miss wraps between samples, so these cumulative counters do
+not establish an exact EXEC rate. Zero PACED STEPS means no successful read
+was granted an enlarged budget; framebuffer changes are only one possible
+reason, alongside timing validity and estimated cost. The screen stops the game and stays visible for
+about 15 seconds at 60 Hz (18 seconds at 50 Hz), then reboots to K-UI. Start
+recording before pressing the combination. Some games handle it as an internal
+restart; the counter screen appears only when the game requests the BIOS menu.
 
 ## Original console test
 

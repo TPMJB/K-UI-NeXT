@@ -1,5 +1,454 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI stress: 559 verified reads, then incomplete receive (2026-10-02 UTC)
+
+The owner confirms Quick passes on **c0c285482dac**. Its JSON verifies all
+16 slow + 64 fast reads and normal recovery. The sustained run fails both
+after Quick and when run first after reboot. The photo shows 559 verified
+reads/IRQs/resets, then attempt 560 stops with an SCI overrun, 363 DMA bytes
+remaining and no completion bit. Prior handoffs/resets all passed. No normal
+recovery read or report write followed unsafe cleanup. See the
+[exact evidence and next isolation experiment](evidence/sci-async-stress-overrun-2026-10-02.md).
+
+Next X candidate pauses shell framebuffer writes only after the UI finishes
+its last frame and explicitly drains store queues. It retains full-speed
+SCI, timer IRQs, scheduling, controller cancellation and all data/ownership
+checks. It also captures the first failed DMA state before cleanup writes.
+Periodic rendering contention is a hypothesis, not a confirmed cause; even
+a quiet-screen pass would not establish game-rendering coexistence.
+
+Candidate **9e8fd8372705** passed independent source review and full host/Dreamcast
+CI run 201. Delivered as `K-UI-SCI-Async-Quiet-9e8fd8372705.zip` (789,218 bytes).
+All 96 source-manifest hashes, runtime CRCs and both build labels are verified;
+native game payload is unchanged except its four build labels. The
+[completed CI audit](evidence/sci-async-quiet-ci-9e8fd8372705.json) confirms unchanged
+resident layout/stack bounds. Replace both included files, keep the current CD,
+reboot, run A Quick then X 60s. The display intentionally stays still during X;
+return JSON and a result photo. Hardware confirmation is pending. Native game
+and CE integration are not enabled by this experiment.
+
+## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)
+
+The successful short probe now backs a reusable bounded
+`open/begin/poll/finish/cancel/close` API. Diagnostics adds **X: 60s stress**
+beside **A: Quick**: 16 prevalidated sectors, full CRC/data/guard checks,
+independent CPU work, actual timer IRQs during DMA, safe cancellation and
+ordinary-reader recovery. Schema 2 records per-LBA counts, API durations and
+heartbeat ownership/restoration as well as existing fault/reset evidence.
+See the [implementation and console gate](evidence/sci-async-runtime-reader-2026-10-02.md).
+
+Candidate **c0c285482dac** passes targeted sanitizer tests, independent lifecycle
+review and full host/Dreamcast CI run 200. Delivered as
+`K-UI-SCI-Async-Reader-c0c285482dac.zip`; all 96 source-manifest hashes, both
+build IDs/runtime CRCs and native instruction/layout/stack checks pass.
+The game payload is byte-identical to 0e9 after normalizing its four build
+labels. SCI resident remains 11,156 bytes, end `8c00baec`, stack 1,172/1,232.
+Replace both included files, keep the current CD and reboot. Console validation
+is pending. Next run A, then X if A passes, and return both JSON files plus
+the stress result photo. Native
+game reads and CE launch remain unchanged. The
+[native integration plan](evidence/sci-native-async-integration-plan-2026-10-02.md)
+records the resumable image/GD contracts, actual resident budgets and game-call
+cadence risk; that implementation follows this sustained hardware gate.
+
+## SCI repeated autonomous reads pass on console (2026-10-02 UTC)
+
+**0e9a2f814231 passes the full isolated async probe:** 16/16 slow and 64/64
+fast reads, all 80 DMA completion interrupts, CRC/data/guard checks, and CPU
+work during reception. All 64 fast trailing overruns took the new SCI-only
+reset successfully, STBCR `02 -> 03 -> 02`; slow reads required no reset.
+Zero bus faults, timeouts, premature errors or handoff/reset failures.
+Normal checked storage recovery succeeded **without card reinitialization**.
+See the [exact report, interpretation and next gate](evidence/sci-async-repeat-read-pass-2026-10-02.md).
+
+This resolves the repeat-read framing failure in the supplied run and is the
+known successful autonomous-transfer baseline. Mean fast receive time is
+339.5625 us; the advance is repeatability and handoff, not a throughput claim.
+One short LBA-0 CMD17 run does not establish sustained/multi-sector reliability,
+filesystem speed, timer/scheduler responsiveness, game integration or CE support.
+Next develop bounded start/poll/finish runtime stress with varied prevalidated
+sectors and an independent heartbeat, then design the native game integration
+within its measured code/stack limits. No new binary is needed for this record.
+
+## SCI first fault localized; module-reset experiment (2026-10-02 UTC)
+
+Build **c25c1f6c2190** again verified 16 slow and one fast autonomous read.
+The new first-fault capture identifies a 10,000-poll **RDRF timeout on the
+first CS-high idle byte**, before selecting the card or issuing the next
+CMD17. Pre-stop SSR/SCR were `86/30`, BRR=0, SMR=80, SCMR=0; no SCI error
+flags were set. All handoff checks passed; normal recovery succeeded.
+See the [exact report and bounded next experiment](evidence/sci-async-module-reset-2026-10-02.md).
+
+The next candidate conditionally pulses only SCI's STBCR.MSTP0 after completed,
+CRC/data/guard-verified DMA with trailing overrun. It checks reset defaults,
+restores the current framing configuration and retains first-fault reporting.
+This tests retained receiver state; the internal cause remains unproven.
+The subsequent console run passes, as recorded above. No reset is allowed for foreign or quarantined DMA or failed payload
+checks. Unconfirmed module resume blocks all further SCI/storage access and
+requires restart. Ordinary game reads and CE launch remain unchanged.
+Run this candidate's SCI async probe once and return JSON/photo; no soak or CD.
+Targeted sanitizer tests and independent review pass. Candidate **0e9a2f814231**
+passed full host and Dreamcast CI run 199 and is delivered as
+`K-UI-SCI-Async-Probe-0e9a2f814231.zip`. All 96 source-manifest hashes, both
+build IDs/runtime CRCs and linked native instruction/layout/stack audits pass.
+SCI resident remains 11,156 bytes, end `8c00baec`, stack 1,172/1,232. Retail
+payload is identical to c25c after normalizing its four build labels. Replace
+both included files, retain boot CD 6af5e11, reboot and run the probe once.
+The subsequent console report confirms all 80 probe reads and ordinary recovery;
+see the newer successful-run record above.
+
+## SCI repeat-read failure narrowed to framing (2026-10-02 UTC)
+
+The owner tested **0d400a471601**: 16 slow and one fast autonomous read passed
+CRC/data/guards and DMA completion with CPU overlap. Every handoff readback
+passed without a retry. The second fast attempt failed in READY with a latched
+normal-bus fault before its command or DMA. Recovery succeeded. See the
+[exact report and interpretation](evidence/sci-async-framing-fault-2026-10-02.md).
+
+The current candidate captures the first failed normal SCI wait before SCR=0
+changes the peripheral state and identifies the exact framing operation/byte.
+The previous clean SSR snapshot was taken after the normal driver stopped SCI.
+No register-reset or timing change is justified yet; this is a diagnostic
+follow-up, not an established repeat-read fix. Capture is excluded from native
+resident builds. Next run this candidate's SCI async probe once and return
+JSON/photo; no new soak or CD. Candidate **c25c1f6c2190** passed full host and
+Dreamcast CI run 198 and is delivered as `K-UI-SCI-Async-Probe-c25c1f6c2190.zip`.
+Both packaged files, runtime CRCs and all 96 source manifest hashes verified.
+Console validation is pending; a repeat framing fault is still a useful result
+because the report now preserves the original failed wait.
+
+## SCI autonomous transfers verified; repeat-read handoff next (2026-10-02 UTC)
+
+The owner's **38693a0de68e** JSON verifies 16/16 slow and 1/2 fast reads,
+with 17 DMA completion interrupts, CRC/data/guard checks and CPU overlap at
+both speeds. Fast reception took 338 us. The next CMD17 got `0xff` before
+another DMA began. Normal storage reinitialized and recovered; no quarantine.
+This demonstrates autonomous payload reception, not reliable repeated reads,
+filesystem throughput, independent timer responsiveness or a game async reader.
+See [the exact report and interpretation](evidence/sci-async-second-console-2026-10-02.md).
+
+The next candidate explicitly checks the stopped receiver, performs bounded
+status cleanup and reinitializes ordinary full-duplex framing while CS is high.
+It records handoff state and distinguishes a latched SCI bus failure from an
+SD response. The observed trailing overrun is not proven to be the sole cause.
+Normal game reads, CRC policy, native resident limits and quarantine remain.
+Candidate **0d400a471601** passed full host and Dreamcast CI (run 197) and is
+delivered as `K-UI-SCI-Async-Probe-0d400a471601.zip`. Both packaged build IDs,
+runtime CRCs, all 96 source-manifest hashes and native layout/stack checks pass.
+Install both included files, retain the current boot CD, reboot into SCI and
+run Diagnostics → Storage tests → SCI async probe once. Return its JSON and
+full result photo; photograph and reboot if recovery requires restart. No new
+soak or game timing is needed. Console validation is pending.
+
+The supplied Claude CE analysis suggests polling `wsegacd.dll` interrupt
+threads. The owner subsequently supplied ARMADA's original `0WINCEOS.BIN`:
+its SHA-256, header, module layout and proposed patch contexts match the report.
+Independent review also finds current resident SR.BL and caller-stack accesses
+incompatible with unhandled CE TLB misses, and a progress loop that calls
+`Sleep(5)` for K-UI's current pending status. See the
+[CE polling review](evidence/windows-ce-polling-review-2026-10-02.md) and
+[read-only structural metadata](evidence/armada-ce-structure-2026-10-02.json).
+A read-only CE load-header planner now tests the reported one-section format,
+arithmetic, aliases and live-memory overlaps; it is host-only groundwork and
+does not patch kernels or enable CE Launch. Its synthetic tests reject the
+current high-stage/prefix conflict, including when exercised with ARMADA's real
+header. Next implement a separately identified placement-only probe; the
+temporary high stage and stack must be retired before CE claims that RAM.
+Claude's re-review is also recorded there: ARMADA confirms TMU1 ownership,
+virtual parameter blocks containing physical DMA destinations, and a BIOS
+disc-check/metadata path that needs an explicit image service. Kernel DMA
+handlers clear IE rather than TE. These findings do not change this runtime
+diagnostic or establish that four polling patches are sufficient for CE.
+
+## SCI autonomous probe: first console failure (2026-10-02 UTC)
+
+Candidate **a3f02d2b0dc5** reached slow trial 1 but verified no data, delivered
+no DMA interrupt and recorded no CPU overlap; fast trials never started.
+The screen says card reinitialization failed and storage requires restart.
+No report was written, as intended after unverified recovery. A confirmed
+probe defect tested SCSPTR's RxD input bit as if it read the TxD output latch;
+a low MISO signal can reject the setup before DMA. The correction and richer
+failure photo details are implemented; corrected console validation is pending. See
+[photo, source defect and limits](evidence/sci-async-first-console-2026-10-02.md).
+This result does not establish that receive-only DMA is impossible.
+
+Corrected candidate **38693a0de68e** is delivered after full host and Dreamcast
+CI (run 196). The corrected pin model passes 16 slow + 64 fast trials with
+RxD held either low or high, and recovery failures now preserve original phase,
+DMA-start/count/IRQ and register evidence on screen. Install both files from
+`K-UI-SCI-Async-Probe-38693a0de68e.zip`, reboot and run the same probe once.
+Send JSON and photo, or just the photo if restart is required. No new CD or
+soak. Corrected console validation is pending; normal game reads are unchanged.
+
+## New priority: asynchronous reads and CE IRQ contract (2026-10-02 UTC)
+
+The owner relayed SWAT's explanation that DOA2's remaining slowdown involves
+CPU-blocking reads and that CE needs DMA plus the original GD interrupt.
+K-UI's physical SCI DMA still requires synchronous CPU dummy-byte feeding;
+the resident masks interrupts through each read and supplies no original
+Holly GD-DMA completion. K-UI's IDE resident is currently PIO too. Faster CRC
+does not create asynchronous game I/O. ARMADA's actual IRQ requirements remain
+untraced, and its separate boot-layout conflict still exists.
+
+Candidate **93794e47df59** passed host and Dreamcast CI and now passes
+console Soak run 18: 160 MiB/ten cycles, zero errors, write/read
+**1,201.16/1,068.10 KiB/s**, effectively unchanged (+0.31%/+0.29%) from run 13.
+The owner says **"Gameplay was largely unchanged."** The runtime already
+inlined CRC: its payload is byte-identical to `ce7006087f20` after normalizing
+build metadata, so no runtime speed gain was expected. The forced annotation
+changes the detached resident's assembly, with no measured gameplay benefit.
+Its return photo reports 3.82609 sectors per step and 91.03% enlarged steps,
+zero guard fault and zero spin steps, and latest period/vblank 525/260 with cost 1104;
+these session-wide counters do not isolate fight startup.
+See the [reports, binary comparison and console limits](evidence/sci-inline-crc-result-2026-10-01.md).
+The next experiment is the implemented runtime-only **SCI async probe** under
+Diagnostics → Storage tests, delivered as **a3f02d2b0dc5** after full host and
+Dreamcast CI passed (run 195). It tests 16 slow and 64 fast receive-only CMD17
+reads of 514 bytes, checking CRC/data/guards, CPU overlap, completion IRQs and
+ordinary-read recovery. Console validation remains pending; incomplete DMA
+aborts quarantine storage until restart. Reports use
+`/KUI/tests/sci-async-NNNN/sci-async-probe.json` after verified recovery.
+Independent timer IRQ responsiveness is not instrumented in this first probe.
+See [implementation, tests and evidence limits](evidence/sci-async-probe-2026-10-02.md).
+Install both files from `K-UI-SCI-Async-Probe-a3f02d2b0dc5.zip`, keep the current
+CD, and run the probe once. Return its saved JSON and photo; a restart case
+deliberately does not save a report. Game behavior is unchanged. The owner's
+later throughput analysis is recorded with
+[next experiments and the existing 64 KiB stream cap](evidence/sci-throughput-next-2026-10-02.md).
+It may trade throughput for CPU availability. Validate the probe GPIO/EIO controls
+independently: Linux corroborates the SH7091 port address despite a different
+label in pinned KOS. This is not an established accepted-driver defect. Do not
+unmask the existing private-stack reader or assume channel 3 can service SCI.
+Broaden native titles, then pursue CE placement and explicit asynchronous
+completion/IRQ milestones. See the
+[source evidence, constraints and proposed sequence](evidence/sci-async-and-ce-irq-2026-10-02.md).
+
+## Current game-loading experiment (2026-10-01)
+
+**CRC result — 93794e47df59:** forcing the unchanged SCI CRC16 helper inline
+removes per-byte calls/spills in the detached resident. The runtime had already
+inlined it, correcting the earlier expectation of runtime gain. Host/native
+checks and the console soak pass, but the owner reports largely unchanged
+gameplay. The `FRAMES SEEN` and `PACE LINE` display fields are removed to fit;
+their timing state and all guards remain. See the
+[candidate and validation](evidence/sci-inline-crc-2026-10-01.md) and
+[console result](evidence/sci-inline-crc-result-2026-10-01.md). No repeat soak
+is needed to seek a gain from unchanged runtime code. Broaden native-game
+coverage and keep the asynchronous diagnostic and ARMADA CE probe separate.
+
+**Console result — ce7006087f20:** the owner reports **18 seconds** from
+Kasumi selection to the first fight (previously 25), **FMVs playing fine**,
+and remaining slowdown during the first **seven seconds** of combat.
+The return photo confirms batching: 5,355/6,762 reading steps enlarged
+(79.19%), 21,872 sectors (3.23455 per step), zero spin steps and guard fault.
+Latest period/vblank is **525/260**, the geometry mishandled by the old code.
+Keep this as the current DOA2 comparison build. See the
+[console evidence and limits](evidence/sci-pacing-period-console-2026-10-01.md).
+
+**Prior build — counter follow-up:** the **8d930310f79d** return photo shows **zero paced
+and spin steps**, 5,970 read steps and 11,880 game sectors (1.989950 per step),
+with no guard fault. The owner went through DOA2's title screen and several
+more reset attempts before capturing it; normal soft resets preserve these
+session counters. Larger batches did not activate in this captured session.
+The owner's **about 25 seconds** Kasumi-to-match observation (earlier 29),
+noticeably smoother first ten seconds and smooth audio remain observations;
+their cause cannot be attributed to larger read batches. Storage Soak run 13
+passes 160 MiB/ten cycles with zero errors, write/read
+**1,197.40/1,064.98 KiB/s**, effectively unchanged. The later period-corrected build above supersedes
+this comparison; broad compatibility remains pending. See the
+[reports, photo transcription and limits](evidence/sci-game-pacing-result-2026-10-01.md).
+
+The tested [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+reads actual scanline geometry from `SPG_LOAD`, invalidates measurements across
+mode changes or invalid samples, and displays the pacing inputs. The earlier
+policy inferred counter length from the vblank interrupt position, which is
+not valid for all video modes. This is a code defect independent of the
+unknown exact rejection reason in the old DOA2 photograph. Its first console
+result is recorded above; the two-sector fallback, CRC and guards remain.
+
+Grouped CRC build **6cc2abb460b5** previously passed Quick run 9 and five-minute
+Soak run 10 with zero errors. Soak write/read **1,198.32/1,064.87 KiB/s**;
+RX check **68.48 us**, down 12.4% from run 8. Its DOA2 photograph also showed
+zero enlarged/spin steps and roughly two sectors per read. That earlier
+launch-wide capture does not isolate the **29-second Kasumi-to-first-fight**
+baseline. See [evidence](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md)
+and [policy/test instructions](games-read-pacing.md). No repeat Storage soak
+is needed before the DOA2 timing, fight-start/audio and FMV comparison.
+
+The owner also requested Windows CE support. The
+[CE loader audit](evidence/windows-ce-loader-audit-2026-10-01.md) finds a
+separate boot-layout requirement, not a SCIF speed threshold: the CE prefix
+destination overlaps the live high stage. Normal CE Launch remains blocked.
+The next development target is a separately identified CE boot probe for the
+already inspected ARMADA image, preserving the accepted native path. Its
+prefix/body placement and resident/kernel interaction need validation before
+a playable CE claim.
+
+## Standalone storage development (2026-09-30)
+
+The owner approved the first testing features under main-menu Diagnostics on
+2026-10-01. R opens Storage tests: Quick/Compare/Soak, optional repeats and card
+nickname, persistent history/baseline, complete-run latency statistics and
+transport error details. Tests use the boot-selected device and their own
+scratch file; every complete cycle flushes, remounts and verifies its contents.
+Result JSON/CSV and validated history records remain in `/KUI/tests/tNNNNNN/`.
+The older `bench.cfg` workflow is under Advanced benchmarks; Diagnostics A/X/Y
+retain their existing actions. See [storage testing](storage-testing.md).
+This is an SD runtime update; the `6af5e11` boot CD and existing card format stay
+compatible. FAT32/exFAT host fixtures cover failures and interrupted saves.
+The owner's first SCIF soak is now the accepted comparison baseline: runtime
+`3a368ddcfaff`, exFAT/128 KiB clusters, 21 cycles and 336 MiB verified in 15 min
+7 s, zero reported errors, write/read 1,079.94/612.32 KiB/s. See the
+[original reports and baseline record](evidence/scif-soak-baseline-2026-10-01.md).
+The first SCI soak also passed: same build and recipe, 15 cycles and 240 MiB
+verified in 15 min 56 s, zero reported errors. Write/read rates were
+521.75/528.75 KiB/s, respectively 51.69%/13.65% lower than SCIF. See the
+[SCI report and comparison](evidence/sci-soak-baseline-2026-10-01.md). This accepts
+runtime SCI integrity for that run. The owner subsequently tried DOA2 and
+reported it was largely the same as SCIF; this qualitative check does not
+establish the exact retail payload build or complete gameplay/FMVs/VMU coverage.
+The owner requested a performance fix and explicitly prohibited copying SWAT's
+implementation. The [original SCI DMA candidate](evidence/sci-dma-design-2026-10-01.md)
+uses bounded sector DMA, an aligned existing game-reader cache and block polling
+when DMA cannot be borrowed. Diagnostics records actual DMA and fallback counts.
+Install matching `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui`; a
+runtime-only update does not replace the game reader. Console results below
+distinguish the accepted builds from subsequent candidates.
+
+Those results have now arrived for **cf8e7ea7866b**: run 4 passed 26 cycles,
+416 MiB verified, zero errors/DMA faults, and write/read
+**1,004.62/926.11 KiB/s**. Reads are 75.15% faster than initial SCI and 51.25%
+faster than SCIF. The owner reports DOA2 is "much better" with a tiny amount of
+lag remaining. See the [DMA soak evidence](evidence/sci-dma-soak-2026-10-01.md).
+The cached reversal/CRC and overlapped write-CRC build **a6cb21895c37** then
+passed run 5, a **4 MiB Quick** check, at write/read **1,104.35/1,052.72 KiB/s**,
+zero errors/DMA faults. These are +9.93%/+13.67% versus the earlier soak, but
+different presets prevent a controlled sustained comparison. See the
+[Quick report and optimization review](evidence/sci-dma-cached-quick-2026-10-01.md).
+The feed/profile build **65fcaafadb98** then passed run 6 Quick (4 MiB) and
+run 7 five-minute Soak (10 cycles/160 MiB), with zero errors/DMA faults.
+Write/read rates were **1,097.42/1,037.03 KiB/s** for Quick and
+**1,132.60/1,044.27 KiB/s** for Soak. Quick is slightly slower than a6cb218's
+single Quick result; instrumentation and run variation prevent a regression
+conclusion. The Soak is 12.74%/12.76% above cf8e7ea, but differs in duration
+and spans two changes. RX phase means are 331.02 microseconds transfer and
+77.18 microseconds reversal/CRC; remaining file-call time includes work outside
+those phases. See the [profile evidence](evidence/sci-dma-profile-2026-10-01.md).
+The four-byte reversal and wake-correction build **499bcb53c2d4** passed run 8,
+the same five-minute Soak recipe: 10 cycles/160 MiB, zero errors/DMA faults,
+write/read **1,196.64/1,048.89 KiB/s**. That is +5.65%/+0.44% versus run 7.
+TX setup fell from 35.96 to 20.21 microseconds per sector; RX reversal/CRC
+did not improve (78.18 versus 77.18 microseconds). See the
+[new soak and game observation](evidence/sci-dma-word-soak-2026-10-01.md).
+Native guards retain 24 bytes resident space and 52 bytes conservative stack
+headroom. Active-DMA processing remains a separate experiment. Game pacing
+remains unchanged; do not attribute all remaining game lag to storage or
+promise disc equivalence.
+The SCI correction removes the undocumented 200,000-iteration module-
+wake delay, which could repeat on every retail read step when MSTP0 was set.
+The BRR wait, register restoration and pacing remain. See the
+[reference review, DOA2 comparison and hardware rationale](evidence/sci-game-loading-review-2026-10-01.md);
+the actual game standby state and speed effect remain unmeasured by the
+runtime soak. The owner reports **29 seconds from selecting Kasumi to the first
+fight** on the current game test. A+B+X+Y+Start usually restarted the game;
+the return path eventually triggered, but its brief counter screen was not
+captured. A repeat was deferred until that display is easier to capture.
+Do not infer game DMA eligibility, batch sizes or a matched speed improvement.
+The following candidate checks four CRC bytes directly from each reversed word
+and extends the return counters to 900 video frames. Native and focused
+sanitizer checks pass; console gain and capture usability remain pending.
+
+The owner reported on 2026-10-01 that setting the clock in K-UI triggers the
+Dreamcast BIOS date/time dialog on the next boot. The runtime clock setter now
+synchronizes the BIOS last-set timestamp as well as the RTC and KOS cached time.
+It preserves the full system configuration record, appends with CRC/readback,
+and never erases flash. Invalid/full flash is refused before setting the RTC;
+later failures direct the user to the BIOS clock editor. Focused host checks
+cover preservation and interrupted writes; console reboot acceptance is still
+pending. See [clock details](clock-and-file-dates.md). This is an SD-runtime-only
+fix, retaining version 1.5.1 and the `6af5e11` boot CD.
+
+The owner confirmed the final red Card tools menu from `6af5e11a8612` works
+(2026-10-01); an initial old-artwork report was resolved after correcting which
+file was copied. The `6af5e11` boot CD is ready to burn. Its optional CD-origin
+`boot.kui` override and IDE still await hardware testing. SCI runtime soak
+evidence above does not independently validate that override. The owner also
+requested the identical red image for the SD runtime startup. That artwork-only
+card update keeps version 1.5.1, startup sound/timing and the existing CD contract;
+it does not require another CD image or burn.
+
+The owner confirmed that the `82984` CD boots normally through SCIF, but loads
+slowly. The `18dd87d457fc` corrected bootstrap has now been tested through Card
+tools and **Start K-UI from that new menu boots substantially faster**. Its
+read-only measurement of runtime `82984d3d2388` (1,546,484 bytes) reported 60 ms
+initialization, 2,771 ms load/check (544.8 KiB/s), and three redraws totaling
+818 ms. Drawing overlaps the load measurement. The initial Card tools load
+still uses the old CD and remains slow. No further timing tests are requested
+for that correction; installing the corrected CD removes that initial old
+loader step.
+
+The next CD refresh adds optional `/KUI/boot.kui` on unattended **CD-origin**
+startup, allowing later boot-menu fixes to arrive on the card. It is deliberately
+not installed by default, avoiding an extra image load during normal startup.
+Per source, autoboot tries boot → runtime → recovery; manual Start K-UI bypasses
+boot, and explicit Recovery/Tools keep their fixed paths. Card-loaded bootstrap
+startup skips the override, using the validated transport marker to prevent
+self-loading loops. The header distinguishes CD/card origin. Existing v1 image
+validation remains in force, with a mandatory marker for automatic overrides
+even on SCIF. Hold B on CD startup to bypass a checksum-valid override that
+hangs. This new optional path and red artwork still need hardware validation.
+
+The CD interface is now settled around [independent boot/recovery images](boot-recovery.md):
+the graphical Dáinsleif menu auto-starts after three seconds without input;
+any input pauses it. Manual Start K-UI tries `/KUI/runtime.kui` then
+`/KUI/recovery.kui` on the same device, bypassing the optional loader override. Recovery or X on Home selects recovery only; Card tools
+selects `/KUI/tools.kui` (optional bootstrap utility supplied separately in the
+bootstrap-cd artifact). Home Left/Right chooses a
+session-only Auto/SCIF/SCI/IDE source. B backs out/stops, Y opens logs, and failed
+attempts return Home for retry after idle SD insertion. Diagnostics exposes
+optical checks and confirms every write/read, save-log or benchmark action.
+Wiring/adapter/IDE changes still require power off. Graphical controls and
+insertion retry remain hardware validation work. The recommended future
+card layout is 128 MiB FAT32 boot/recovery plus ext4 data. A validated FAT boot
+partition takes precedence and can load without mounting dirty ext4 data;
+failure there never redirects loading to the Linux data partition. Keep a
+known-working recovery image untouched during normal updates. Current exFAT
+cards work unchanged; **do not repartition for normal use yet**. Current app
+mounting still rejects two partitions intentionally. Ext4 app access, writes,
+journal replay and a repair UI are future card development, not bundled tools.
+
+The refreshed CD now also contains a read-only ext4 `/KUI/runtime.kui` loader;
+see [ext4-bootstrap.md](ext4-bootstrap.md). It accepts supported clean 1/2/4 KiB
+ext4 volumes on raw media, a Linux MBR partition, or strictly validated GPT
+when no authoritative FAT boot candidate exists.
+The pinned real-image fixture uses 4 KiB blocks. No journal replay, repair or
+device writes occur. **Apps and Games preparation still use FatFs/exFAT/FAT32;
+keep the working card format until a later runtime adds ext4 app access.** This
+CD prepares compatible future runtime updates to arrive on the card, while
+bootstrap defects or incompatible format changes may still require a reburn.
+Console validation of ext4 boot remains pending.
+
+The owner requested a single-card boot and Games path for SCIF, SCI and IDE/CF,
+without sharing SCI between storage and network boards. See
+[storage-transports.md](storage-transports.md) for the matching boot-CD/runtime
+installation, source selection and first hardware check. This is a development
+build: SCI runtime storage has the initial passing soak above and a qualitative
+DOA2 report. The first SCI DMA paths also passed the later soak and improved
+DOA2; their cached processing follow-up passed the short runtime check above.
+The feed/profile follow-up also passed runtime Quick and five-minute Soak
+checks above; separate retail performance acceptance and CF hardware/driver
+validation remain pending.
+Full ext4 application support and shared SCI-bus operation remain outside this
+change. Development is
+in [PR #6](https://github.com/TPMJB/K-UI-NeXT/pull/6). The Games package embeds
+three separately linked readers and installs only the selected one; all three
+retain the existing low-memory, stack, instruction and embedded-byte audits.
+
+The preceding FTP correction was confirmed on hardware and merged to main in
+[PR #5](https://github.com/TPMJB/K-UI-NeXT/pull/5); that PR records the approved
+timing and throughput results. Keep that known-good W5500/SCIF build as the
+comparison point while bringing up new storage.
+
 ## FTP packet-capture follow-up (2026-09-30)
 
 The full owner capture ties slow upload starts to ten-second ACK/RST storms
@@ -12,8 +461,8 @@ the `1A` socket was force-closed at the old ten-second deadline. The correction
 bounds CLOSING to 250 ms in that state, only for unowned data sockets whose
 application payload is already complete. TIME_WAIT cleanup stays immediate;
 FIN_WAIT/LAST_ACK keep the original deadline. Failed register operations retain
-cleanup tracking, and logs include state duration. Hardware confirmation of
-this correction is pending. When porting to the Wi-Fi branch, keep this
+cleanup tracking, and logs include state duration. Hardware confirmation is
+recorded in PR #5. When porting to the Wi-Fi branch, keep this
 cleanup W5500-specific.
 
 Where the project stands, what the hardware needs next, and a brief for the
@@ -289,9 +738,9 @@ piece of artwork goes, the technical limits, and what would help most.
 - **Brand:** the startup splash ([startup.png](../resources/branding/startup.png))
   shows the K-UI character: a woman in a large futuristic visor, drawn in
   neon outlines, with chrome "K-UI" lettering and a perspective grid, in a
-  1980s retro-futuristic style. For Dáinsleif it is crimson neon with
-  restrained cyan. The request that produced it is kept word for word in
-  [startup-dainsleif-prompt.txt](../resources/branding/startup-dainsleif-prompt.txt).
+  1980s retro-futuristic style. The CD and SD runtime now share the approved
+  crimson portrait. The request that produced it is kept word for word in
+  [boot-red-prompt.txt](../resources/branding/boot-red-prompt.txt).
   The header brand and the boot-disc badge are older K-UI artwork in cyan
   and magenta.
 
@@ -299,7 +748,7 @@ piece of artwork goes, the technical limits, and what would help most.
 
 | Piece | Files | Size and format | How it gets into the build |
 | --- | --- | --- | --- |
-| Startup splash | `resources/branding/startup.png` | 640×480 RGB. The artwork fills 592×444, centred on `#030913`, with lettering inside TV-safe margins (7%). Keep the large source too | `tools/build_splash.py` converts it at build time. It checks the PNG's pinned Git blob, so a new splash updates `PNG_BLOB` and `startup-README.md` |
+| Startup splash | `resources/branding/startup.png` | 640×480 RGB. Same approved image as `boot-red.png`: 576×432, centred on `#090102`, with TV-safe margins. The large source is retained separately | `tools/build_splash.py` converts it at build time. It checks the PNG's pinned Git blob, so a new splash updates `PNG_BLOB` and `startup-README.md` |
 | Header brand | `resources/branding/launcher-brand.png` | 256×128 source, shown at 128×64, opaque on navy | `tools/generate_shell_art.py` writes `src/dreamcast/shell_art.inc`; it checks pinned SHA-256s |
 | Home icons (3 drawn so far) | `resources/icons/<name>.svg` and `.png` | 64×64 PNG with transparency; shown at 128×128 and 24×24 | `tools/generate_shell_art.py` (the `SOURCES` and `ICONS` lists), and `home_apps[].art` in `src/dreamcast/shell_draw.c` |
 | Home icons (7 placeholders) | none yet | see below | The same, once art exists |

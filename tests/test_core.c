@@ -171,7 +171,7 @@ static void test_disc_data(void) {
     sector[18] = sector[22] = 0x20; assert(kui_data_offset(sector) == -1);
     sector[15] = 1; sector[0] = 1; assert(kui_data_offset(sector) == -1);
 }
-struct fake_media { uint8_t mbr[512]; bool fail, fail_sync; unsigned reads, writes;
+struct fake_media { uint8_t mbr[512]; bool fail, fail_sync; unsigned reads, writes, syncs;
                     uint32_t last; };
 static uint64_t blocks(void *p) { (void)p; return 8192; }
 static int read_media(void *p, uint32_t block, size_t count, uint8_t *data) {
@@ -186,7 +186,9 @@ static int write_media(void *p, uint32_t block, size_t count, const uint8_t *dat
     struct fake_media *f = p; ++f->writes; f->last = block;
     return f->fail ? -1 : 0;
 }
-static int sync_media(void *p) { return ((struct fake_media *)p)->fail_sync ? -1 : 0; }
+static int sync_media(void *p) {
+    struct fake_media *f=p;++f->syncs;return f->fail_sync?-1:0;
+}
 static void test_diskio(void) {
     struct fake_media f = {0}; make_mbr(f.mbr);
     struct kui_media_ops ops = {&f, blocks, read_media, write_media, sync_media};
@@ -210,6 +212,39 @@ static void test_diskio(void) {
     kui_media_set(&ops); f.fail = false; f.mbr[450] = 0xee;
     assert(disk_initialize(0) & STA_NOINIT);
     assert(strstr(kui_media_problem(), "layout") != NULL);
+
+    /* The CD can read an explicitly selected boot partition on a split
+     * card without granting ordinary runtime operations access to it. */
+    struct kui_volume boot={2048,4096,true};
+    unsigned writes=f.writes,syncs=f.syncs;
+    assert(kui_media_boot_view(&ops,&boot));
+    assert(disk_initialize(0)==STA_PROTECT && disk_status(0)==STA_PROTECT);
+    assert(disk_read(0,data,0,1)==RES_OK && f.last==2048);
+    assert(disk_read(0,data,4095,1)==RES_OK && f.last==6143);
+    reads=f.reads;
+    assert(disk_read(0,data,4095,2)==RES_PARERR && reads==f.reads);
+    assert(disk_write(0,data,0,1)==RES_WRPRT && f.writes==writes);
+    assert(disk_ioctl(0,CTRL_SYNC,NULL)==RES_OK && f.syncs==syncs);
+    LBA_t count=0;assert(disk_ioctl(0,GET_SECTOR_COUNT,&count)==RES_OK && count==4096);
+    f.fail=true;
+    assert(disk_read(0,data,0,1)==RES_ERROR && (disk_status(0)&STA_NOINIT));
+    assert(disk_initialize(0)&STA_NOINIT); /* no implicit retry after I/O failure */
+    f.fail=false;
+    struct kui_media_ops read_only={.ctx=&f,.blocks=blocks,.read=read_media};
+    assert(kui_media_boot_view(&read_only,&boot) && disk_initialize(0)==STA_PROTECT);
+    assert(disk_read(0,data,0,1)==RES_OK);
+    struct kui_volume invalid={8191,2,true};
+    assert(!kui_media_boot_view(&ops,&invalid) && (disk_status(0)&STA_NOINIT));
+    assert(disk_read(0,data,0,1)!=RES_OK);
+    make_mbr(f.mbr);
+    /* Normal reset removes both the explicit partition and write protection. */
+    kui_media_set(&ops);assert(disk_initialize(0)==0);
+    assert(disk_write(0,data,0,1)==RES_OK && f.writes==writes+1);
+    /* A second partition is still rejected by the runtime selector. */
+    f.mbr[466]=0x83;f.mbr[470]=0x00;f.mbr[471]=0x18; /* start 6144 */
+    f.mbr[474]=0x00;f.mbr[475]=0x08; /* 2048 sectors */
+    kui_media_set(&ops);assert(disk_initialize(0)&STA_NOINIT);
+    assert(disk_write(0,data,0,1)!=RES_OK && f.writes==writes+1);
 }
 int main(void) {
     test_commands();

@@ -12,6 +12,12 @@ module=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class StartupAssets(unittest.TestCase):
+    def test_matching_boot_and_runtime_art(self):
+        data=(ROOT/"resources/branding/boot-red.png").read_bytes()
+        self.assertEqual(hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest(),module.BOOT_PNG_BLOB)
+        self.assertEqual(len(module.decode_png(data)),640*480)
+        self.assertEqual(data,(ROOT/"resources/branding/startup.png").read_bytes())
+        self.assertEqual(module.BOOT_PNG_BLOB,module.PNG_BLOB)
     def test_dainsleif_asset_and_bounds(self):
         data=(ROOT/"resources/branding/startup.png").read_bytes()
         self.assertEqual(hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest(),module.PNG_BLOB)

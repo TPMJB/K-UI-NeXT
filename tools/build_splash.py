@@ -12,7 +12,8 @@ import wave
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
-PNG_BLOB = "b08c8ee03362b6775403e1bd50f8609f1c522f40"
+PNG_BLOB = "f2b9132613a527f90759fdb0fd70d47a6eb07563"
+BOOT_PNG_BLOB = "f2b9132613a527f90759fdb0fd70d47a6eb07563"
 STARTUP_RATE = 44100
 STARTUP_FRAMES = STARTUP_RATE * 265 // 100
 # The runtime embeds this Ogg Vorbis encoding of startup_samples() instead of
@@ -143,6 +144,10 @@ def main():
     if hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()!=PNG_BLOB:
         raise SystemExit("Startup artwork differs from the pinned Dainsleif asset")
     array_file(args.directory/"splash_pixels.inc","kui_splash_pixels","uint16_t",decode_png(data))
+    boot=(ROOT/"resources/branding/boot-red.png").read_bytes()
+    if hashlib.sha1(b"blob "+str(len(boot)).encode()+b"\0"+boot).hexdigest()!=BOOT_PNG_BLOB:
+        raise SystemExit("Boot artwork differs from the pinned crimson asset")
+    array_file(args.directory/"boot_splash_pixels.inc","kui_boot_splash_pixels","uint16_t",decode_png(boot))
     chime=CHIME.read_bytes()
     if hashlib.sha256(chime).hexdigest()!=CHIME_SHA256:
         raise SystemExit("Startup chime differs from the pinned Ogg encoding")

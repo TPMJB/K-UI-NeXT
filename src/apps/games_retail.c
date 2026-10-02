@@ -111,7 +111,8 @@ static bool map_track(struct files *files,FATFS *fs,const struct kui_volume *vol
     if(stopped(files) || !join(files,track->name,path) || f_open(&file,path,FA_READ)!=FR_OK) return false;
     bool ok=f_size(&file)==track->file_bytes && fs->csize;
     struct kui_retail_track *t=&map->tracks[index];
-    *t=(struct kui_retail_track){track->number,track->start_lba,track->end_lba,track->control,map->extent_count,0};
+    *t=(struct kui_retail_track){.gd={.number=track->number,.start_lba=track->start_lba,
+        .end_lba=track->end_lba,.control=track->control},.first_extent=map->extent_count};
     uint32_t total=(uint32_t)((track->file_bytes+511u)/512u);
     /* The allocation table alone lists the file's contiguous cluster runs:
      * no track data is read (one data read per cluster took seconds). */
@@ -162,8 +163,8 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
     if(!log || !cancel) return false;
     struct files files={.cancel=cancel};char name[KUI_GAME_NAME_CAP];
     if(!split(path,&files,name) || stopped(&files)) {log("Retail boot: invalid path or cancelled");return false;}
-    if(!kui_sd_connect()) {log("Retail boot: SD unavailable");return false;}
-    FATFS fs;bool ok=false;const char *problem="cannot mount SD";
+    if(!kui_sd_connect()) {log("Retail boot: storage unavailable");return false;}
+    FATFS fs;bool ok=false;const char *problem="cannot mount storage";
     struct kui_retail_manifest *map=NULL;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;
     if(!kui_mount(&fs,log)) goto done;
     enum kui_runtime_result rr=kui_runtime_read(KUI_GAMES_RETAIL_PACKAGE,package,log,cancel);
@@ -184,6 +185,10 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
         goto done;
     }
     if(image->count>KUI_RETAIL_IMAGE_TRACKS) {problem="launch map supports at most 16 tracks";goto done;}
+    map->storage_transport=kui_storage_active();
+    if(map->storage_transport>KUI_STORAGE_IDE) {problem="storage transport not selected";goto done;}
+    log("Retail boot storage: %s",map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":
+        map->storage_transport==KUI_STORAGE_SCI?"SCI microSD":"IDE / CF");
     map->track_count=image->count;map->gdi_crc32=kui_retail_crc32(0,gdi,(size_t)size);
     for(unsigned i=0;i<image->count;i++) if(image->tracks[i].control==4 && image->tracks[i].start_lba>=45000) {
         map->session_lba=image->tracks[i].start_lba;break;

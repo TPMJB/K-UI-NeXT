@@ -5,7 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 
-_Static_assert(sizeof(struct kui_retail_image) <= 560, "one physical block cache only");
+_Static_assert(sizeof(struct kui_retail_image) <= 576, "one aligned physical block cache only");
+_Static_assert(_Alignof(struct kui_retail_image) >= 32, "DMA sector cache alignment");
 static struct kui_retail_manifest manifest, decoded, backup, empty;
 static struct kui_retail_image image;
 static uint8_t card[2048u * 512u], wire[KUI_RETAIL_IMAGE_WIRE_BYTES];
@@ -26,6 +27,7 @@ static uint8_t source(uint32_t track, uint32_t file_byte) {
     return (uint8_t)(track * 91u + sector * 53u + inside * 11u + (inside >> 8));
 }
 static int read_block(void *context, uint32_t lba, uint8_t out[512]) {
+    CHECK(((uintptr_t)out & 31u) == 0);
     CHECK(context == card);
     CHECK(lba >= manifest.partition_start && lba < manifest.partition_end);
     bool allocated = false;
@@ -75,9 +77,9 @@ static void fixture(bool fragmented) {
     uint32_t physical_index = 0;
     for(unsigned i = 0; i < 4; ++i) {
         struct kui_retail_track *t = &manifest.tracks[i];
-        *t = (struct kui_retail_track){i + 1, starts[i], ends[i], i == 1 ? 0u : 4u,
-                                      manifest.extent_count, 0};
-        uint32_t bytes = (t->end_lba - t->start_lba) * 2352u;
+        *t = (struct kui_retail_track){.gd={.number=i + 1, .start_lba=starts[i],
+            .end_lba=ends[i], .control=i == 1 ? 0u : 4u}, .first_extent=manifest.extent_count};
+        uint32_t bytes = (t->gd.end_lba - t->gd.start_lba) * 2352u;
         uint32_t blocks = (bytes + 511u) / 512u;
         for(uint32_t n = 0; n < blocks;) {
             uint32_t take = fragmented && blocks - n > 3 ? 3 : blocks - n;
@@ -112,8 +114,29 @@ static void wire_tests(void) {
     CHECK(wire[8] == 1 && wire[12] == 0 && wire[13] == 16 && wire[14] == 0);
     CHECK(wire[20] == 4 && wire[32] == 0 && wire[33] == 8 && wire[68] == 0xef);
     CHECK(wire[256] == 0x47 && wire[259] == 0x10 && wire[260] == 0x30 && wire[263] == 0x67);
+    /* The manifest's GD-compatible memory prefix does not alter the public
+     * track wire order: number, start, end, control, first extent, count. */
+    const uint8_t third_track_prefix[16] = {
+        3,0,0,0, 0xc8,0xaf,0,0, 0x0e,0xb0,0,0, 4,0,0,0
+    };
+    CHECK(!memcmp(wire + 320 + 2 * 32, third_track_prefix, sizeof(third_track_prefix)));
     CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
     CHECK(!memcmp(&decoded, &manifest, sizeof(manifest)));
+    /* Preserve old SCIF wire maps, carry SCI/IDE, reject discovery/unknown IDs
+     * even when the wire CRC is valid. Encode errors leave output unchanged. */
+    for(uint32_t transport = KUI_STORAGE_SCIF; transport <= KUI_STORAGE_IDE; ++transport) {
+        manifest.storage_transport = transport;
+        CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+        CHECK(wire[28] == transport);
+        CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
+        CHECK(decoded.storage_transport == transport);
+    }
+    manifest.storage_transport = KUI_STORAGE_SCIF;
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+    put32(wire + 28, KUI_STORAGE_AUTO); refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    CHECK(!memcmp(&decoded, &empty, sizeof(decoded)));
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
     memcpy(clean_wire, wire, sizeof(wire));
     /* Every byte is covered by the CRC, including unused space. */
     for(unsigned i = 0; i < sizeof(wire); ++i) {
@@ -123,7 +146,7 @@ static void wire_tests(void) {
         wire[i] ^= 1;
     }
     /* Valid CRC cannot bless noncanonical fields, unused entries or text tails. */
-    const unsigned reserved[] = {28, 31, 264, 319, 344, 351, 320 + 4 * 32,
+    const unsigned reserved[] = {31, 264, 319, 344, 351, 320 + 4 * 32,
         832 + manifest.extent_count * 12, 2368, 4095,
         72 + sizeof("Original retail image test"), 200 + sizeof("KUITEST"),
         216 + sizeof("1ST_READ.BIN"), 240 + sizeof("JUE")};
@@ -157,16 +180,21 @@ static void wire_tests(void) {
 }
 static void invalid_map_tests(void) {
     fixture(true); backup = manifest;
+    /* A track cannot cross the low/high-density boundary. The high stage
+     * proves this once before the resident adopts the GD service state. */
+    manifest.tracks[2].gd.start_lba = 44999;
+    CHECK(kui_retail_image_check(&manifest, 44999, 1, KUI_GAME_SECTOR_RAW) == KUI_GAME_INVALID);
+    manifest = backup;
 #define BAD(field, value) do { manifest = backup; manifest.field = (value); \
     CHECK(kui_retail_manifest_validate(&manifest) != KUI_GAME_OK); } while(0)
     BAD(track_count, 0); BAD(track_count, 17); BAD(extent_count, 0);
     BAD(extent_count, 129); BAD(card_sectors, 0);
     BAD(card_sectors, UINT64_C(0x100000001)); BAD(partition_start, 2000);
     BAD(partition_start, UINT64_MAX); BAD(partition_end, 2049); BAD(partition_end, 101);
-    BAD(tracks[0].number, 2); BAD(tracks[1].start_lba, 2);
-    BAD(tracks[1].control, 1); BAD(tracks[0].end_lba, 0);
-    BAD(tracks[3].end_lba, KUI_GAME_LBA_LIMIT + 1);
-    BAD(tracks[3].end_lba, UINT32_MAX);
+    BAD(tracks[0].gd.number, 2); BAD(tracks[1].gd.start_lba, 2);
+    BAD(tracks[1].gd.control, 1); BAD(tracks[0].gd.end_lba, 0);
+    BAD(tracks[3].gd.end_lba, KUI_GAME_LBA_LIMIT + 1);
+    BAD(tracks[3].gd.end_lba, UINT32_MAX);
     BAD(tracks[2].first_extent, 0); BAD(tracks[2].first_extent, UINT32_MAX);
     BAD(tracks[2].extent_count, UINT32_MAX); BAD(tracks[3].extent_count, 0);
     BAD(extents[0].file_block, 1); BAD(extents[0].blocks, 0);
@@ -202,8 +230,8 @@ static void compare(uint32_t lba, uint32_t count, enum kui_game_sector_format fo
     unsigned stride = format == KUI_GAME_SECTOR_RAW ? 2352u : 2048u;
     for(uint32_t n = 0; n < count; ++n) {
         unsigned t = 0;
-        while(manifest.tracks[t].end_lba <= lba + n) ++t;
-        uint32_t base = (lba + n - manifest.tracks[t].start_lba) * 2352u;
+        while(manifest.tracks[t].gd.end_lba <= lba + n) ++t;
+        uint32_t base = (lba + n - manifest.tracks[t].gd.start_lba) * 2352u;
         if(format == KUI_GAME_SECTOR_MODE1) base += 16;
         for(unsigned j = 0; j < stride; ++j) CHECK(output[n * stride + j] == source(t, base + j));
     }
@@ -420,7 +448,8 @@ static void maximum_map_tests(void) {
     manifest.session_lba = manifest.boot_lba = 45000; manifest.boot_bytes = 2048;
     for(uint32_t i = 0; i < KUI_RETAIL_IMAGE_TRACKS; ++i) {
         uint32_t start = i < 2 ? i : 45000 + i - 2;
-        manifest.tracks[i] = (struct kui_retail_track){i + 1, start, start + 1, 4, i, 1};
+        manifest.tracks[i] = (struct kui_retail_track){.gd={.number=i + 1, .start_lba=start,
+            .end_lba=start + 1, .control=4}, .first_extent=i, .extent_count=1};
         manifest.extents[i] = (struct kui_retail_extent){0, 100 + i * 7, 5};
     }
     manifest.extent_count = KUI_RETAIL_IMAGE_TRACKS;
@@ -431,7 +460,8 @@ static void maximum_map_tests(void) {
     memset(manifest.tracks, 0, sizeof(manifest.tracks));
     memset(manifest.extents, 0, sizeof(manifest.extents));
     manifest.track_count = 1;
-    manifest.tracks[0] = (struct kui_retail_track){1, 45000, 46000, 4, 0, 128};
+    manifest.tracks[0] = (struct kui_retail_track){.gd={.number=1, .start_lba=45000,
+        .end_lba=46000, .control=4}, .first_extent=0, .extent_count=128};
     manifest.extent_count = 128;
     uint32_t total = (1000u * 2352u + 511u) / 512u, file_block = 0;
     for(uint32_t i = 0; i < 128; ++i) {
@@ -443,7 +473,7 @@ static void maximum_map_tests(void) {
     CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
     CHECK(!memcmp(&manifest, &decoded, sizeof(manifest)));
     /* Entire bounded disc / 12MiB boot exercise arithmetic without huge files. */
-    manifest.tracks[0].end_lba = KUI_GAME_LBA_LIMIT;
+    manifest.tracks[0].gd.end_lba = KUI_GAME_LBA_LIMIT;
     manifest.tracks[0].extent_count = manifest.extent_count = 1;
     memset(manifest.extents, 0, sizeof(manifest.extents));
     total = ((KUI_GAME_LBA_LIMIT - 45000) * 2352u + 511u) / 512u;

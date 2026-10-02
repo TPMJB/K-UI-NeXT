@@ -1,8 +1,18 @@
 # SD and IDE/CF filesystem support
 
-**Future work; not implemented.** This assessment covers direct serial SD and
-IDE/CF storage. K-UI currently uses FatFs for FAT32/exFAT. It has no lwext4
-backend or implemented IDE/CF adapter.
+**The CD bootstrap can now read a runtime from clean, supported ext4.** Normal
+apps and Games preparation still use FatFs for FAT32/exFAT. Keep the working
+card's filesystem until a later runtime implements ext4 application access.
+The [ext4 bootstrap guide](ext4-bootstrap.md) defines the pinned format, partition
+layouts and read-only limits. SCI and IDE/CF still need console validation;
+see [installation and test scope](storage-transports.md).
+
+The agreed future same-card layout is **128 MiB FAT32 boot/recovery plus ext4
+data**, documented in [boot-recovery.md](boot-recovery.md). The boot volume
+stores `/KUI/runtime.kui` and a retained `/KUI/recovery.kui`, allowing startup
+independently of dirty ext4 data. This fixes the CD interface now; do not format
+the working card yet. Current app mounting intentionally keeps its original
+single-volume policy, and no ext4 repair program is bundled.
 
 ## Current boundaries
 
@@ -14,6 +24,18 @@ and synchronization from the hardware. However,
 operations call FatFs directly. The Games preparation code also extracts physical
 file locations through `FATFS.csize`, `FATFS.database` and `FIL.sect` in
 [games_retail.c](../src/apps/games_retail.c).
+
+The new [boot-only ext4 reader](../src/core/ext4_boot.c) uses a separate validated
+partition view and does not replace these application APIs. It loads normal,
+recovery or optional card-tools images, with no writes or journal replay.
+The graphical CD menu can retry these fixed paths or select a transport;
+The bootstrap-cd package supplies `tools.kui` for read-only load measurement;
+it does not implement filesystem repair.
+The FAT boot reader
+has its own explicit read-only extent view; it does not relax normal app
+mounting. Compatible future ext4
+runtimes can therefore be installed as card updates under the new CD; changes
+to the CD's supported format or fixes to its own reader may still need a reburn.
 
 ## Proposed architecture
 
@@ -29,14 +51,16 @@ file locations through `FATFS.csize`, `FATFS.database` and `FIL.sect` in
    extent exporter. Replace direct FatFs dependencies progressively, starting
    with Games browsing and preparation. Do not reuse the existing globals for
    concurrent mounts.
+5. For split media, bind ordinary apps to the validated ext4 data partition.
+   Never retry a failed data operation on the FAT boot partition. Boot-image
+   updates must be explicit, and preserve the working recovery image until a
+   replacement has passed hardware checks.
 
-Upstream [lwext4](https://github.com/gkostka/lwext4) provides ext2/3/4 support
-with configurable features and a
-[block-device callback interface](https://github.com/gkostka/lwext4/blob/master/include/ext4_blockdev.h).
-It still needs a pinned configuration, SH4 integration and testing. Its published
-memory estimates are for Cortex-M4, not Dreamcast measurements. Initial ext
-support should be read-only, with an explicit supported-feature set; writable
-operations and recovery need their own validation.
+Upstream [lwext4](https://github.com/gkostka/lwext4) is now pinned and configured
+for the read-only CD bootstrap. Application integration, writable operations,
+recovery and game extent export still need their own implementation and
+validation. Bootstrap host fixtures do not establish application behavior or
+Dreamcast memory/performance measurements.
 
 Pinned KOS supplies a
 [generic block-device interface](https://github.com/KallistiOS/KallistiOS/blob/fcfa7d869471591ca1c777543261a7bfea7cb726/include/kos/blockdev.h)
@@ -52,8 +76,9 @@ An ext backend must convert filesystem blocks to device sectors and initially
 reject sparse or unwritten image mappings that the manifest cannot represent.
 Files and their allocation must remain stable through handoff. The filesystem
 libraries stay outside the game resident; it reads the prepared physical runs
-through the selected device transport. IDE/CF additionally needs its own
-independent resident transport.
+through the selected device transport. The standalone storage build supplies
+independent SCIF, SCI and IDE/CF resident readers; the latter two still need
+hardware validation.
 
 Adding lwext4 does not inherently slow existing FAT32/exFAT SD reads: those
 volumes would continue using FatFs. Detection adds mount-time work, while code,

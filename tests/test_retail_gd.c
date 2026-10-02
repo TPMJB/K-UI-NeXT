@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_gd.h"
+#include "kui/retail_image.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,6 +19,13 @@ static struct {
 static const struct kui_gd_track tracks[] = {
     {1,4,0,8}, {2,0,16,24}, {3,4,45000,60000}
 };
+/* Deliberately non-GD trailing fields expose incorrect plain-array strides. */
+static const struct kui_retail_track image_tracks[] = {
+    {.gd={1,4,0,8}, .first_extent=91, .extent_count=11},
+    {.gd={2,0,16,24}, .first_extent=92, .extent_count=12},
+    {.gd={3,4,45000,60000}, .first_extent=93, .extent_count=13}
+};
+static unsigned use_manifest_tracks;
 static unsigned assertions;
 #define CHECK(x) do { ++assertions; assert(x); } while(0)
 static void put(uint32_t a, uint32_t n) {
@@ -83,6 +91,16 @@ static void reset(void) {
     memset(&ctx, 0, sizeof(ctx)); memset(ram, 0xa5, sizeof(ram));
     CHECK(kui_retail_gd_init(&service, tracks, 3, &ops, BEGIN, END) == 0);
     CHECK(service.tracks == tracks && sizeof(service) < 512);
+    struct kui_retail_gd expected = service;
+    memset(&service, 0xa5, sizeof(service));
+    kui_retail_gd_init_validated(&service, tracks, 3, &ops, BEGIN, END);
+    CHECK(!memcmp(&service, &expected, sizeof(service)));
+    if(use_manifest_tracks) {
+        kui_retail_gd_init_manifest_validated(&service, image_tracks, 3, &ops, BEGIN, END);
+        expected.image_tracks = image_tracks;
+        expected.image_track_layout = 1;
+        CHECK(!memcmp(&service, &expected, sizeof(service)));
+    }
 }
 static void read_params(uint32_t lba, uint32_t count, uint32_t dest) {
     put(PARAM, lba + 150); put(PARAM + 4, count); put(PARAM + 8, dest); put(PARAM + 12, 0);
@@ -385,7 +403,9 @@ static void bounds_and_modes(void) {
     CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
 }
 int main(void) {
-    large_reads(); paced_steps(); cancel_failures(); metadata(); silent_cd_audio(); version_query(); subcode_query(); bounds_and_modes();
+    for(use_manifest_tracks=0;use_manifest_tracks<2;use_manifest_tracks++) {
+        large_reads(); paced_steps(); cancel_failures(); metadata(); silent_cd_audio(); version_query(); subcode_query(); bounds_and_modes();
+    }
     printf("retail GD service: %u checks passed\n", assertions);
     return 0;
 }

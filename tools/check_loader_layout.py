@@ -69,7 +69,7 @@ def inspect_elf(data, base, limit):
         region(data, offset, size, "symbol table")
         strings = region(data, sections[link][4], sections[link][5], "symbol strings")
         for at in range(offset, offset + size, stride):
-            name, value, _, _, _, index = SYM.unpack_from(data, at)
+            name, value, symbol_size, info, other, index = SYM.unpack_from(data, at)
             if name >= len(strings):
                 raise ValueError("Invalid symbol name")
             end = strings.find(b"\0", name)
@@ -84,6 +84,18 @@ def inspect_elf(data, base, limit):
                 raise ValueError(f"Unallocated common symbol: {label}")
             if index < 0xFF00 and index >= sn:
                 raise ValueError("Symbol refers to a missing section")
+            if info & 15 == 4:  # STT_FILE: source-file metadata, not code/data.
+                if info >> 4 or index != 0xFFF1 or value or symbol_size:
+                    raise ValueError("Invalid file metadata symbol")
+                continue
+            # GCC LTO also emits hidden weak NOTYPE source-unit anchors into
+            # non-allocated debug PROGBITS. Their offsets are not executable
+            # addresses. Preserve all function symbols and every allocated
+            # symbol, including local/assembly entries with the same name.
+            if (info == 0x20 and other == 2 and not symbol_size and index < sn and
+                    sections[index][1] == 1 and sections[index][2] == 0 and
+                    sections[index][3] == 0 and value < sections[index][5]):
+                continue
             symbols[label] = value
     if not found_symbols or symbols.get("_start") != base:
         raise ValueError("Missing fixed entry symbol")

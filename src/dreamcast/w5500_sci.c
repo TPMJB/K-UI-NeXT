@@ -5,6 +5,7 @@
  * GPIO on a retail console. The SD card stays on SCIF, which nothing here
  * touches. */
 #include "kui/network_w5500.h"
+#include "platform.h"
 #include <arch/dmac.h>
 #include <arch/irq.h>
 #include <arch/timer.h>
@@ -374,6 +375,12 @@ static const struct kui_w5500_bus bus = {.frame = frame, .now_ms = now_ms, .paus
                                          .idle_async = idle_async};
 
 static bool open_level(unsigned level) {
+    /* SCI storage and W5500 use the same pins/PA7. This check must precede
+     * async cleanup, SCI shutdown, GPIO writes, or any peripheral access. */
+    if(kui_storage_sci_reserved()) {
+        kui_log("W5500 unavailable: SCI is reserved for the storage card");
+        return false;
+    }
     if(level >= sizeof(rates) / sizeof(rates[0])) return false;
     async_on(false);
     if(running) { sci_shutdown(); running = false; }

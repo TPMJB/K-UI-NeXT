@@ -3,7 +3,7 @@
 #include "kui/retail_gd.h"
 #include "kui/retail_image.h"
 #include "kui/retail_pace.h"
-#include "retail_sd.h"
+#include "retail_storage.h"
 #include "retail_display.h"
 #include <stddef.h>
 #include <string.h>
@@ -11,14 +11,11 @@
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
 static struct kui_retail_gd service;
-static struct kui_loader_sd card;
-static struct kui_loader_sd_stream stream;
-static struct kui_gd_track tracks[KUI_RETAIL_IMAGE_TRACKS];
+static struct kui_retail_storage card;
 static struct retail_display_state display;
 static struct kui_retail_pace pace;
-/* Menu-return diagnostics: steps longer than two sectors, steps run for a
- * game spinning on CHECK, and the caller SR of the last step that read. */
-static struct { uint32_t paced, spun, sr; } pacing;
+/* Cumulative menu-return diagnostics; game GD resets do not clear them. */
+static struct { uint32_t paced, spun; } pacing;
 uint32_t kui_retail_original_menu;
 extern void kui_retail_menu_hook(void);
 extern void kui_retail_gd_c0_hook(void);
@@ -55,16 +52,17 @@ static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
     if(writing != KUI_RETAIL_MAP_VALIDATE) purge(address, bytes);
     return (uint8_t *)(uintptr_t)((address & 0x1fffffffu) | 0xa0000000u);
 }
-/* Read-only PowerVR SPG_STATUS, SPG_VBLANK_INT and FB_R_SOF1: scanline,
- * vblank-in line and the displayed framebuffer. No video state is changed. */
+/* Read-only PowerVR status, vblank-in, counter period and framebuffer.
+ * No video state is changed. */
 static void video_sample(void) {
     volatile const uint32_t *pvr = (volatile const uint32_t *)(uintptr_t)0xa05f8000u;
-    kui_retail_pace_sample(&pace, pvr[0x10c / 4], pvr[0xcc / 4], pvr[0x50 / 4]);
+    kui_retail_pace_sample(&pace, pvr[0x10c / 4], pvr[0xcc / 4],
+                           pvr[0xd8 / 4], pvr[0x50 / 4]);
 }
 static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t output[512]) {
     (void)unused;
     video_sample(); /* Each block is ~1 ms: long steps still count wraps. */
-    card_result = kui_retail_sd_read_run(&card, &stream, lba, available, output);
+    card_result = kui_retail_storage_read_run(&card, lba, available, output);
     return card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
 /* The image API requires this fallback; with read_run bound it is unused. */
@@ -77,20 +75,20 @@ static enum kui_game_sector_format sector_format(uint32_t bytes) {
 static int check_sectors(void *unused, uint32_t lba, uint32_t count, uint32_t bytes) {
     (void)unused;
     if(bytes != 2048 && bytes != 2352) return -1;
-    return kui_retail_image_check(&manifest, lba, count, sector_format(bytes)) == KUI_GAME_OK ? 0 : -1;
+    return kui_retail_image_check_validated(&manifest, lba, count, sector_format(bytes)) == KUI_GAME_OK ? 0 : -1;
 }
 static int read_sectors(void *unused, uint32_t lba, uint32_t count,
                         uint32_t bytes, void *out) {
     (void)unused;
     if(bytes != 2048 && bytes != 2352) return -1;
-    card_result = kui_retail_sd_acquire();
+    card_result = kui_retail_storage_acquire(&card);
     if(card_result != KUI_LOADER_SD_OK) return -1;
     enum kui_game_result result = kui_retail_image_read(&image, lba, count,
         sector_format(bytes), out, (size_t)count * bytes);
-    enum kui_loader_sd_result stopped = kui_loader_sd_stream_stop(&card, &stream);
+    enum kui_loader_sd_result stopped = kui_retail_storage_stop(&card);
     if(card_result == KUI_LOADER_SD_OK) card_result = stopped;
     if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
-    kui_retail_sd_release();
+    kui_retail_storage_release(&card);
     return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
 static void redirect_entry(uint32_t address,void (*target)(void)) {
@@ -122,38 +120,38 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_restore(&display);
     retail_display_line("K-UI GAME READER");
     retail_display_line(manifest.title);
+    retail_display_line(kui_retail_storage_name(card.transport));
     retail_display_line(reason);
     retail_display_hex("GD function", function);
-    retail_display_hex("Command", service.diag.last_command);
+    retail_display_hex("GD COMMAND", service.diag.last_command);
     retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Format" : "LBA", service.diag.last_lba);
     retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Bytes" : "Sectors", service.diag.last_count);
     retail_display_hex("Destination", service.diag.last_destination);
-    retail_display_hex("SD result", (uint32_t)card_result);
-    retail_display_hex("SD blocks read", image.blocks_read);
-    retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
-    retail_display_line("POWER OFF AND ON TO RETURN");
+    retail_display_hex("IO RESULT", (uint32_t)card_result);
+    retail_display_hex("BLOCKS READ", image.blocks_read);
+    retail_display_line("STOPPED - PHOTOGRAPH THIS SCREEN");
+    retail_display_line("POWER CYCLE TO RETURN");
     for(;;) __asm__ volatile("nop");
 }
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
+    (void)caller; (void)stack;
     retail_display_restore(&display);
-    retail_display_line("GAME REQUESTED BIOS MENU RETURN");
-    retail_display_hex("CALLER PR",caller);
-    retail_display_hex("CALLER STACK",stack);
-    retail_display_hex("HOOK GUARD FAULT",kui_retail_hook_fault);
-    retail_display_hex("LAST GD COMMAND",service.diag.last_command);
-    retail_display_hex("SD BLOCKS READ",image.blocks_read);
+    retail_display_line("GAME MENU RETURN");
+    retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
     /* How the game drives reads: ABXY+Start after a load shows these. */
-    retail_display_hex("GD CALLS",service.diag.calls);
-    retail_display_hex("EXEC CALLS",service.diag.exec_calls);
     retail_display_hex("READ STEPS",service.diag.read_steps);
     retail_display_hex("SECTORS READ",service.diag.sectors_read);
-    retail_display_hex("FRAMES SEEN",pace.frames);
     retail_display_hex("PACED STEPS",pacing.paced);
     retail_display_hex("SPIN STEPS",pacing.spun);
-    retail_display_hex("STEP CALLER SR",pacing.sr);
-    retail_display_line("RESTARTING K-UI FROM THE BOOT DISC");
-    retail_display_pause(120u); /* about two seconds for a photograph */
+    /* Latest sampled geometry/cost, possibly changed by a title-screen
+     * reset. Unlike PACED STEPS, these are not a history of the fight. */
+    retail_display_hex("PACE PERIOD",pace.period);
+    retail_display_hex("PACE VBI",pace.vbi);
+    retail_display_hex("PACE COST16",pace.per);
+    retail_display_hex("PACE STILL",pace.still);
+    retail_display_line("RESTARTING K-UI");
+    retail_display_pause(900u); /* ~15 seconds at 60 Hz to capture the counters */
     /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts
      * still masked: the console restarts and boots the K-UI disc in the drive.
      * No game, reader or vector state is relied on afterwards. */
@@ -161,7 +159,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     for(;;) __asm__ volatile("nop");
 }
 int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
-    const struct kui_loader_sd *prepared_card, uint32_t original_gd_vector,
+    const struct kui_retail_storage *prepared_card, uint32_t original_gd_vector,
     const struct retail_display_state *saved_display) {
     uint32_t area = original_gd_vector & 0xff000000u;
     uint32_t p1 = (original_gd_vector & 0x00ffffffu) | 0x8c000000u;
@@ -177,21 +175,17 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
      * owner IP/executable. Copy it and rebind initialized card state to local
      * callbacks. No second SD reset or manifest parser remains in low RAM. */
     manifest = *prepared;
-    card_result = kui_retail_sd_adopt(&card, prepared_card);
-    if(card_result != KUI_LOADER_SD_OK || card.blocks < manifest.card_sectors)
+    card_result = kui_retail_storage_adopt(&card, prepared_card);
+    if(card_result != KUI_LOADER_SD_OK || kui_retail_storage_blocks(&card) < manifest.card_sectors ||
+       card.transport != manifest.storage_transport)
         return KUI_RETAIL_RESIDENT_SD;
     /* _start cleared all resident BSS, including image/cache/stream/counters. */
     image.manifest = &manifest;
     image.read_block = read_block;
     image.read_run = read_run;
-    for(uint32_t i = 0; i < manifest.track_count; ++i) {
-        const struct kui_retail_track *t = &manifest.tracks[i];
-        tracks[i] = (struct kui_gd_track){t->number, t->control, t->start_lba, t->end_lba};
-    }
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, read_sectors};
-    if(kui_retail_gd_init(&service, tracks, manifest.track_count, &ops,
-                         KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END))
-        return KUI_RETAIL_RESIDENT_SERVICE;
+    kui_retail_gd_init_manifest_validated(&service, manifest.tracks,
+        manifest.track_count, &ops, KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
     volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
     for(unsigned i = 0; i < 4; ++i) guard[i] = 0x4b554947u;
     kui_retail_original_menu=*(volatile uint32_t *)(uintptr_t)0x8c0000e0u;
@@ -206,6 +200,7 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
 /* One EXEC, sized by the pacing policy and timed for the next estimate. */
 static int32_t step(uint32_t r4, uint32_t r5) {
     uint32_t frames = pace.frames, line = pace.line, before = service.diag.sectors_read;
+    uint32_t epoch = pace.epoch;
     pace.spin = 0;
     service.step = kui_retail_pace_budget(&pace, KUI_RETAIL_GD_STEP_SECTORS,
                                           KUI_RETAIL_GD_STEP_MAX);
@@ -215,9 +210,8 @@ static int32_t step(uint32_t r4, uint32_t r5) {
     uint32_t sectors = service.diag.sectors_read - before;
     if(sectors) {
         video_sample();
-        kui_retail_pace_measure(&pace, frames, line, sectors);
+        kui_retail_pace_measure(&pace, frames, line, epoch, sectors);
         if(service.step > KUI_RETAIL_GD_STEP_SECTORS) ++pacing.paced;
-        pacing.sr = kui_retail_hook_sr;
     }
     return result;
 }

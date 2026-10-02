@@ -2,6 +2,8 @@
 #ifndef KUI_RETAIL_IMAGE_H
 #define KUI_RETAIL_IMAGE_H
 #include "kui/game_image.h"
+#include "kui/gd_service.h"
+#include "kui/storage.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -16,12 +18,18 @@
  * may contain allocation padding, which is never exposed as file data.
  * Extents exactly cover ceil(file_bytes/512), in file order, without aliases. */
 struct kui_retail_track {
-    uint32_t number, start_lba, end_lba, control, first_extent, extent_count;
+    /* The GD service borrows this actual subobject, avoiding a second track
+     * table and any type-punning. Named wire fields retain their existing
+     * encoding, independent of this memory layout. */
+    struct kui_gd_track gd;
+    uint32_t first_extent, extent_count;
 };
+_Static_assert(sizeof(struct kui_retail_track) == 24u, "retail track memory size");
 struct kui_retail_extent { uint32_t file_block, card_lba, blocks; };
 struct kui_retail_manifest {
     uint64_t card_sectors, partition_start, partition_end; /* End exclusive. */
     uint32_t track_count, extent_count, session_lba, boot_lba, boot_bytes;
+    uint32_t storage_transport; /* Wire offset28; old zero field means SCIF. */
     /* boot_crc32 is zero from K-UI: the stage checks each boot sector's
      * header instead of re-reading the file before launch. */
     uint32_t boot_crc32, ip_crc32, gdi_crc32;
@@ -64,11 +72,20 @@ struct kui_retail_image {
     kui_retail_read_run read_run; /* Optional; init clears it. read_block required. */
     void *context;
     uint32_t blocks_read, cached_lba, cache_valid;
-    uint8_t block[512];
+    /* An isolated cache-line-aligned sector permits direct SCI receive DMA
+     * without a second resident buffer or touching neighbouring state. */
+    _Alignas(32) uint8_t block[512];
 };
+_Static_assert(offsetof(struct kui_retail_image, block) % 32u == 0,
+               "retail sector must begin on its own cache line");
 enum kui_game_result kui_retail_image_init(struct kui_retail_image *,
     const struct kui_retail_manifest *, kui_retail_read_block, void *);
 enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *,
+    uint32_t lba, uint32_t count, enum kui_game_sector_format);
+/* Same request bounds/type checks with a map that was fully validated once
+ * and remains immutable. Used by initialized image readers and the resident;
+ * externally supplied maps must use the full check/validate APIs above. */
+enum kui_game_result kui_retail_image_check_validated(const struct kui_retail_manifest *,
     uint32_t lba, uint32_t count, enum kui_game_sector_format);
 /* Preflight range/type/capacity before any IO or output changes. Count <=64.
  * MODE1 checks a 16-byte sync/mode header and copies only 2048 user bytes;

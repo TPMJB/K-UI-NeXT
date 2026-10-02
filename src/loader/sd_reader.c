@@ -105,6 +105,25 @@ static enum kui_loader_sd_result command(struct kui_loader_sd *card,
     return KUI_LOADER_SD_TIMEOUT;
 }
 
+static enum kui_loader_sd_result read_payload(struct kui_loader_sd *card,
+                                             uint8_t *data, size_t count) {
+    uint16_t crc = 0;
+    if(!card->slow && card->bus.transfer_block) {
+        if(!card->bus.transfer_block(card->bus.ctx, NULL, data, count, false, &crc)) {
+            card->ready = false;
+            return KUI_LOADER_SD_TIMEOUT;
+        }
+    } else {
+        for(size_t i = 0; i < count; ++i) {
+            data[i] = transfer(card, 0xff);
+            crc = data_crc(crc, data[i]);
+        }
+    }
+    uint16_t expected = (uint16_t)transfer(card, 0xff) << 8;
+    expected |= transfer(card, 0xff);
+    return crc == expected ? KUI_LOADER_SD_OK : KUI_LOADER_SD_CRC;
+}
+
 static enum kui_loader_sd_result read_data(struct kui_loader_sd *card,
                                           uint8_t *data, size_t count) {
     uint32_t start = ticks(card);
@@ -119,14 +138,7 @@ static enum kui_loader_sd_result read_data(struct kui_loader_sd *card,
     } while(true);
     if(token != 0xfe)
         return KUI_LOADER_SD_TOKEN;
-    uint16_t crc = 0;
-    for(size_t i = 0; i < count; ++i) {
-        data[i] = transfer(card, 0xff);
-        crc = data_crc(crc, data[i]);
-    }
-    uint16_t expected = (uint16_t)transfer(card, 0xff) << 8;
-    expected |= transfer(card, 0xff);
-    return crc == expected ? KUI_LOADER_SD_OK : KUI_LOADER_SD_CRC;
+    return read_payload(card, data, count);
 }
 
 static enum kui_loader_sd_result capacity(struct kui_loader_sd *card,
@@ -378,17 +390,11 @@ static enum kui_loader_sd_result multi_data(struct kui_loader_sd *card,
     if(token != 0xfe) return KUI_LOADER_SD_TOKEN;
     if(stream->budget < 514 || !multi_active(card, stream))
         return KUI_LOADER_SD_TIMEOUT;
-    uint16_t crc = 0;
     /* Charge the fixed block once; keep its byte loop equivalent to CMD17.
      * Complete one bounded block before checking elapsed time again. */
     stream->budget -= 514;
-    for(unsigned i = 0; i < 512; ++i) {
-        output[i] = transfer(card, 0xff);
-        crc = data_crc(crc, output[i]);
-    }
-    uint16_t expected = (uint16_t)transfer(card, 0xff) << 8;
-    expected |= transfer(card, 0xff);
-    if(crc != expected) return KUI_LOADER_SD_CRC;
+    enum kui_loader_sd_result result = read_payload(card, output, 512);
+    if(result != KUI_LOADER_SD_OK) return result;
     return multi_active(card, stream) ? KUI_LOADER_SD_OK : KUI_LOADER_SD_TIMEOUT;
 }
 
@@ -589,7 +595,8 @@ static uint8_t native_transfer(void *ctx, uint8_t data, bool slow) {
 
 enum kui_loader_sd_result kui_loader_sd_init(struct kui_loader_sd *card) {
     const struct kui_loader_sd_bus bus = {
-        NULL, native_begin, native_end, native_select, native_transfer, native_ticks
+        .ctx = NULL, .begin = native_begin, .end = native_end,
+        .select = native_select, .transfer = native_transfer, .ticks = native_ticks
     };
     return kui_loader_sd_init_bus(card, &bus);
 }

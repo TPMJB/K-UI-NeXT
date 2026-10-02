@@ -17,7 +17,9 @@ def main():
     for mode in ("home","home-games","games","games-list-art","games-compact","games-gallery","games-scan","games-detail-art","games-detail","games-error","games-advanced","games-probe","games-probe-loading","games-image-probe","games-image-probe-loading","games-retail","games-retail-loading","games-retail-invalid","home-music","music","gd-play","gd-confirm","quick-resume","settings","clock","clock-confirm","defaults","vmu","vmu-restore","vmu-restore-confirm","scan-folder","crc-scan","retry","vmu-actions","vmu-delete","vmu-copy","music-clear","safe-area","system-tools","restart","salvage","salvage-confirm","salvage-working","audio-cd",
                  "home-files","files","files-root","files-actions","files-actions-locked","files-pick","files-copy",
                  "files-delete","files-refused","files-info","files-info-file","files-view","files-copying","files-keyboard",
-                 "home-network","network","ftp-starting","ftp-ready","ftp-busy","ftp-stopped","ftp-failed"):
+                 "home-network","network","ftp-starting","ftp-ready","ftp-busy","ftp-stopped","ftp-failed",
+                 "storage-tests","storage-test-confirm","storage-test-busy","storage-test-result",
+                 "storage-test-details","storage-test-mismatch","storage-test-history"):
         path=args.output/(mode+".ppm")
         subprocess.run(["build/render-shell",mode,str(path)],check=True)
         data=path.read_bytes()

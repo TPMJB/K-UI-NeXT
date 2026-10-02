@@ -5,11 +5,16 @@ endif
 
 TARGET := build/kui-diagnostic.elf
 RUNTIME := build/kui-runtime.elf
-SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
+SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_error.c src/core/storage_probe.c \
+           src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
+           src/loader/sd_reader.c src/loader/sci_sd_bus.c src/dreamcast/sci_sd_storage.c \
            src/core/report.c \
            src/dreamcast/main.c src/dreamcast/clock.c src/dreamcast/disc.c src/dreamcast/drive_bus.c src/dreamcast/sd.c
 OBJECTS := $(patsubst %.c,build/dc/%.o,$(SOURCES)) build/dc/ff.o build/dc/ffunicode.o
+include config/lwext4.mk
+LWEXT4_OBJECTS := $(patsubst %.c,build/dc/%.o,$(LWEXT4_SOURCES))
 LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/dreamcast/bootstrap.o
+LOADER_OBJECTS += build/dc/src/core/boot_volume.o build/dc/src/core/boot_image.o build/dc/src/core/ext4_boot.o $(LWEXT4_OBJECTS)
 # The CD recovery menu uses the same benchmark runner as SD Diagnostics.
 BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o \
     build/dc/src/core/timing.o build/dc/src/core/destination.o build/dc/src/core/destination_file.o \
@@ -17,8 +22,12 @@ BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build
     build/dc/src/core/settings.o build/dc/src/core/settings_file.o \
     build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
 LOADER_OBJECTS += $(BENCH_OBJECTS)
-RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o,$(OBJECTS)) build/dc/main-runtime.o
+LOADER_OBJECTS += build/dc/src/core/boot_ui.o build/dc/src/dreamcast/boot_draw.o \
+    build/dc/src/dreamcast/shell_font.o build/dc/src/apps/boot_splash.o
+RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o build/dc/src/dreamcast/sd.o,$(OBJECTS)) build/dc/main-runtime.o build/dc/sd-runtime.o
+RUNTIME_OBJECTS += build/dc/src/dreamcast/sci_async_probe.o build/dc/src/dreamcast/sci_async_heartbeat.o
 RUNTIME_OBJECTS += $(BENCH_OBJECTS)
+RUNTIME_OBJECTS += build/dc/src/core/storage_test_model.o build/dc/src/core/storage_test.o build/dc/src/core/storage_test_store.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
@@ -31,7 +40,7 @@ RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
 RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewport.o build/dc/src/core/salvage.o build/dc/src/core/recovery_crc.o
-APP_SOURCES := $(wildcard src/apps/*.c)
+APP_SOURCES := $(filter-out src/apps/boot_splash.c,$(wildcard src/apps/*.c))
 RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
@@ -39,7 +48,11 @@ BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf
 include $(KOS_BASE)/Makefile.rules
 
-CPPFLAGS += -Iinclude -Isrc/dreamcast -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
+CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
+# Shared freestanding buses also serve the CD bootstrap/runtime. Keep the
+# console guard explicit here rather than importing KOS into their headers.
+build/dc/src/dreamcast/ata_bus.o build/dc/src/loader/sci_sd_bus.o: CPPFLAGS += -DKUI_ON_CONSOLE=1
+build/dc/src/loader/sd_reader.o: CPPFLAGS += -DKUI_RETAIL_FAST_IO=1
 # Experimental, never-run-on-hardware code (the GD-ROM DMA probe and its competing thread) is NOT in
 # the default build. Opt in with: make diagnostic KUI_EXPERIMENTAL=1
 ifdef KUI_EXPERIMENTAL
@@ -54,9 +67,16 @@ force-build-id:
 build/dc/%.o: %.c
 	@mkdir -p $(@D)
 	kos-cc -std=c11 -Wall -Wextra -Werror -MMD -MP $(CPPFLAGS) -c $< -o $@
+build/dc/src/core/ext4_boot.o: CPPFLAGS += $(LWEXT4_CPPFLAGS)
+build/dc/third_party/lwext4/src/%.o: third_party/lwext4/src/%.c $(LWEXT4_HEADERS)
+	@mkdir -p $(@D)
+	kos-cc -std=c11 -Os -Wall -Wextra -ffunction-sections -fdata-sections -MMD -MP $(CPPFLAGS) $(LWEXT4_CPPFLAGS) -c $< -o $@
 build/dc/main-runtime.o: src/dreamcast/main.c
 	@mkdir -p $(@D)
 	kos-cc -std=c11 -Wall -Wextra -Werror -MMD -MP $(CPPFLAGS) -DKUI_SD_RUNTIME=1 -c $< -o $@
+build/dc/sd-runtime.o: src/dreamcast/sd.c
+	@mkdir -p $(@D)
+	kos-cc -std=c11 -Wall -Wextra -Werror -MMD -MP $(CPPFLAGS) -DKUI_SCI_ASYNC_RUNTIME=1 -c $< -o $@
 build/dc/ff.o: .deps/fatfs/source/ff.c .deps/fatfs/source/ffconf.h
 	@mkdir -p $(@D)
 	kos-cc -std=c11 -Wall -Wextra -MMD -MP $(CPPFLAGS) -c $< -o $@
@@ -72,10 +92,11 @@ $(RUNTIME): $(RUNTIME_OBJECTS)
 
 -include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)
 
-build/splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/startup-chime.ogg
+build/splash_pixels.inc build/boot_splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/boot-red.png resources/branding/startup-chime.ogg
 	python3 tools/build_splash.py
 
 build/dc/src/apps/splash.o: build/splash_pixels.inc
+build/dc/src/apps/boot_splash.o: build/boot_splash_pixels.inc
 build/dc/src/apps/startup_sound.o: build/startup_ogg.inc
 
 # G3 contains no KOS/newlib runtime. The entry image packs a high resident
@@ -146,12 +167,33 @@ RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(RETAIL_CPU) -DKUI_RETAIL
     -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections -fno-jump-tables \
     -fstack-usage -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
 RETAIL_LINK := $(RETAIL_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+# SCI's DMA reader shares the original protected low-memory reservation.
+# Cross-unit optimization and SH call relaxation recover code space without
+# changing the stack boundary. Keep audited entry points and compiler-emitted
+# memory helpers visible; audit the actual LTO-generated stack frames below.
+RETAIL_SCI_FLAGS := -flto -mrelax
+RETAIL_SCI_LINK := $(RETAIL_SCI_FLAGS) -Os -fstack-usage -save-temps=obj -Wl,--relax \
+    -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
+    -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
+    -Wl,-u,_kui_retail_image_read -Wl,-u,_kui_loader_sd_stream_next \
+    -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release
 RETAIL_COMMON := build/retail/src/loader/sd_reader.o build/retail/src/loader/retail_sd.o \
+    build/retail/src/loader/retail_storage.o build/retail/src/loader/sci_sd_bus.o \
+    build/retail/src/core/ata.o build/retail/src/dreamcast/ata_bus.o \
     build/retail/src/loader/minic.o build/retail/src/core/retail_image.o \
     build/retail/src/loader/retail_display.o
-RETAIL_RESIDENT := build/retail/src/loader/retail_resident_asm.o \
-    build/retail/src/loader/retail_resident.o build/retail/src/core/retail_gd.o \
-    build/retail/src/core/retail_pace.o $(RETAIL_COMMON)
+# Each resident carries one physical transport. All retain the same low-RAM
+# linker bounds; the temporary high stage embeds/selects the matching image.
+RETAIL_RESIDENT_COMMON_SRC := src/loader/retail_resident.c src/core/retail_gd.c \
+    src/core/retail_pace.c src/loader/minic.c src/core/retail_image.c \
+    src/loader/retail_display.c
+RETAIL_SCIF_SRC := $(RETAIL_RESIDENT_COMMON_SRC) src/loader/sd_reader.c src/loader/retail_sd.c
+RETAIL_SCI_SRC := $(RETAIL_SCIF_SRC) src/loader/sci_sd_bus.c
+RETAIL_IDE_SRC := $(RETAIL_RESIDENT_COMMON_SRC) src/core/ata.c src/dreamcast/ata_bus.c
+RETAIL_SCIF := $(patsubst %.c,build/retail/scif/%.o,$(RETAIL_SCIF_SRC)) build/retail/scif/src/loader/retail_resident_asm.o
+RETAIL_SCI := $(patsubst %.c,build/retail/sci/%.o,$(RETAIL_SCI_SRC)) build/retail/sci/src/loader/retail_resident_asm.o
+RETAIL_IDE := $(patsubst %.c,build/retail/ide/%.o,$(RETAIL_IDE_SRC)) build/retail/ide/src/loader/retail_resident_asm.o
+RETAIL_RESIDENT_BINS := build/retail/resident-scif.bin build/retail/resident-sci.bin build/retail/resident-ide.bin
 RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
     build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
 RETAIL_BENCH_STAGE := build/retail/src/loader/retail_stage_asm.o \
@@ -164,11 +206,43 @@ build/retail/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
 build/retail/src/loader/retail_display.o: force-build-id
-build/retail/resident.elf: $(RETAIL_RESIDENT) src/loader/retail_resident.ld
-	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident.map -o $@ $(RETAIL_RESIDENT) -lgcc
-build/retail/resident.bin: build/retail/resident.elf
+build/retail/scif/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
+build/retail/scif/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
+build/retail/scif/src/loader/retail_display.o: force-build-id
+build/retail/resident-scif.elf: $(RETAIL_SCIF) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-scif.map -o $@ $(RETAIL_SCIF) -lgcc
+build/retail/resident-scif.bin: build/retail/resident-scif.elf
 	sh-elf-objcopy -O binary $< $@
-build/retail/src/loader/retail_stage_asm.o: build/retail/resident.bin
+build/retail/sci/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
+build/retail/sci/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
+build/retail/sci/src/loader/retail_display.o: force-build-id
+build/retail/resident-sci.elf: $(RETAIL_SCI) src/loader/retail_resident.ld
+	@mkdir -p build/retail/sci/lto
+	rm -f build/retail/resident-sci.elf.ltrans*.su build/retail/sci/lto/*.su
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-sci.map -o $@ $(RETAIL_SCI) -lgcc
+	cp build/retail/resident-sci.elf.ltrans*.su build/retail/sci/lto/
+build/retail/resident-sci.bin: build/retail/resident-sci.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail/ide/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
+build/retail/ide/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
+build/retail/ide/src/loader/retail_display.o: force-build-id
+build/retail/resident-ide.elf: $(RETAIL_IDE) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-ide.map -o $@ $(RETAIL_IDE) -lgcc
+build/retail/resident-ide.bin: build/retail/resident-ide.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail/src/loader/retail_stage_asm.o: $(RETAIL_RESIDENT_BINS)
 build/retail/stage.elf: $(RETAIL_STAGE) src/loader/retail_stage.ld
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,build/retail/stage.map -o $@ $(RETAIL_STAGE) -lgcc
 build/retail/stage.bin: build/retail/stage.elf
@@ -194,11 +268,11 @@ build/retail-bench/retail_entry_asm.o: src/loader/retail_entry.S build/retail-be
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_STAGE_BIN='"build/retail-bench/stage.bin"' -MMD -MP -c $< -o $@
 build/retail-bench/entry.elf: build/retail-bench/retail_entry_asm.o src/loader/retail_entry.ld build/retail/entry.elf
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail-bench/entry.map -o $@ $<
-	cp build/retail/resident.elf build/retail/resident.bin build/retail/resident.map build/retail-bench/
-	cp -r build/retail/src build/retail-bench/
+	cp build/retail/resident-*.elf build/retail/resident-*.bin build/retail/resident-*.map build/retail-bench/
+	cp -r build/retail/src build/retail/scif build/retail/sci build/retail/ide build/retail-bench/
 	python3 tools/check_retail_instructions.py build/retail-bench
 	python3 tools/check_retail_loader_layout.py build/retail-bench
 	python3 tools/record_build.py $@
 
--include $(RETAIL_RESIDENT:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
+-include $(RETAIL_SCIF:.o=.d) $(RETAIL_SCI:.o=.d) $(RETAIL_IDE:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
 -include $(RETAIL_BENCH_STAGE:.o=.d) build/retail-bench/retail_entry_asm.d
