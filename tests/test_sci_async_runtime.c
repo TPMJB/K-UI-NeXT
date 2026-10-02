@@ -30,6 +30,8 @@ static unsigned capture_calls,resume_calls;
 static uint32_t capture_lba,resume_lba;
 static enum kui_sci_async_status capture_result;
 static bool capture_corrupt;
+/* Streaming pass mock: blocks left in the current stream and its runs. */
+static uint32_t stream_left,stream_runs,stream_corrupt_lba;
 static unsigned async_opens,async_begins,async_polls,async_finishes,async_cancels,async_closes;
 static unsigned yield_calls,work_calls,cancel_at_poll,cancel_at_baseline;
 static uint64_t mock_now,card_blocks=10000;
@@ -159,15 +161,31 @@ enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reade
     ++engine_result->fast.attempted;++engine_result->fast.dma_started;
     return KUI_SCI_ASYNC_OK;
 }
+enum kui_sci_async_status kui_sci_async_begin_stream(struct kui_sci_async_reader *reader,
+        uint32_t lba,uint32_t count) {
+    assert(reader->generation && speed_mode && !stream_left && resume_calls==1);
+    assert(count && count<=KUI_LOADER_SD_MAX_READ_BLOCKS && (uint64_t)lba+count<=card_blocks);
+    current_lba=lba;stream_left=count;polled=0;++stream_runs;
+    return KUI_SCI_ASYNC_OK;
+}
 enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader) {
     assert(reader->generation);++async_polls;
     if(probe_status!=KUI_SCI_ASYNC_OK) return probe_status;
     if(++polled<3u) return KUI_SCI_ASYNC_PENDING;
-    ++engine_result->fast.dma_irqs;return KUI_SCI_ASYNC_OK;
+    if(stream_left) ++engine_result->streaming.dma_irqs;
+    else ++engine_result->fast.dma_irqs;
+    return KUI_SCI_ASYNC_OK;
 }
 enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *reader,
         uint8_t dst[512],const uint8_t expected[512]) {
-    assert(reader->generation && polled==3 && dst && (expected || speed_mode));++async_finishes;
+    assert(reader->generation && polled==3 && dst && (expected || speed_mode));
+    if(stream_left) {
+        assert(!expected);
+        memset(dst,sector_byte(current_lba)^(current_lba==stream_corrupt_lba?1u:0u),512);
+        ++engine_result->streaming.passed;++current_lba;--stream_left;polled=0;mock_now+=400;
+        return KUI_SCI_ASYNC_OK;
+    }
+    ++async_finishes;
     if(speed_mode) {
         assert(!expected);memset(dst,sector_byte(current_lba),512);
         ++engine_result->fast.passed;mock_now+=500;return KUI_SCI_ASYNC_OK;
@@ -258,6 +276,7 @@ static void prepare(void) {
     speed_mode=speed_file=false;quantum_calls=multi_blocks=read_calls=0;
     capture_calls=resume_calls=capture_lba=resume_lba=0;
     capture_result=KUI_SCI_ASYNC_OK;capture_corrupt=false;
+    stream_left=stream_runs=stream_corrupt_lba=0;
 }
 /* The same blocks through both readers: the file's first cluster when found,
  * otherwise the data area. Matching CRCs are required for a pass. */
@@ -278,6 +297,17 @@ static void test_speed(void) {
     assert(capture_calls==1 && resume_calls==1 && capture_lba==164);
     assert(resume_lba==164+KUI_SD_ASYNC_RESUME_OFFSET && out.stream.blocks==30);
     assert(out.resume.blocks==KUI_SD_ASYNC_RESUME_BLOCKS);
+    /* Then the same 2048 blocks as CMD18 streams of 128, matching the
+     * ordinary pass's CRC32. */
+    assert(out.speed_stream_match && out.speed_stream_blocks==KUI_SD_ASYNC_SPEED_BLOCKS);
+    assert(out.speed_stream_crc==out.speed_normal_crc && stream_runs==KUI_SD_ASYNC_SPEED_BLOCKS/128u);
+    assert(out.speed_stream_us==UINT64_C(400)*KUI_SD_ASYNC_SPEED_BLOCKS && !stream_left);
+
+    /* A streamed block that differs from the ordinary pass is reported. */
+    prepare();speed_mode=speed_file=true;stream_corrupt_lba=164+700;
+    kui_sd_async_speed(&out,cancelled,NULL);
+    assert(out.speed_match && !out.speed_stream_match && out.speed_stream_blocks==KUI_SD_ASYNC_SPEED_BLOCKS);
+    assert(out.probe.status==KUI_SCI_ASYNC_OK && out.recovery_verified);
 
     /* A captured block that differs from the async copy is reported. */
     prepare();speed_mode=speed_file=true;capture_corrupt=true;
@@ -289,7 +319,7 @@ static void test_speed(void) {
      * the resume pass is not attempted after it. */
     prepare();speed_mode=speed_file=true;capture_result=KUI_SCI_ASYNC_COMMAND;
     kui_sd_async_speed(&out,cancelled,NULL);
-    assert(out.speed_match && out.stream_ran && !out.resume_ran && !resume_calls);
+    assert(out.speed_match && out.stream_ran && !out.resume_ran && !resume_calls && !stream_runs);
     assert(out.probe.status==KUI_SCI_ASYNC_COMMAND && out.recovery_reinitialized && out.recovery_verified);
     kui_sd_disconnect();prepare();assert(kui_sd_connect());
 

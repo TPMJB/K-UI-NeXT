@@ -58,7 +58,9 @@ enum kui_sci_async_framing_step {
     KUI_SCI_ASYNC_FRAMING_TOKEN,
     KUI_SCI_ASYNC_FRAMING_HANDOFF,
     /* Clocking out the rest of a block interrupted by a receive overrun. */
-    KUI_SCI_ASYNC_FRAMING_DRAIN
+    KUI_SCI_ASYNC_FRAMING_DRAIN,
+    /* Selecting the card again between blocks of a CMD18 stream. */
+    KUI_SCI_ASYNC_FRAMING_RESELECT
 };
 
 enum kui_sci_async_module_reset_state {
@@ -107,14 +109,17 @@ struct kui_sci_async_stage {
      * KUI_SCI_ASYNC_OVERRUN_RETRIES times per request; one that cannot be
      * proven idle still quarantines the channel (undrained_overruns). */
     uint32_t payload_overruns, overrun_retries, undrained_overruns;
-    /* Card access time: 0xff bytes clocked between R1 and the data token,
-     * and the wall-clock time they took. Byte counts depend on how fast the
-     * bytes were clocked; token_us does not. */
+    /* Card access time: 0xff bytes clocked between R1 and the data token.
+     * Byte counts depend on how fast they were clocked; token_us does not. */
     uint32_t token_bytes, max_token_bytes;
-    uint64_t token_us, max_token_us;
     /* Summed time from each attempt's start to its DMA start (command and
      * card access time), and time spent in finish (checks and handoff). */
     uint64_t framing_us, finish_us;
+    /* Token wait time; for a stream, after each reselection (see below). */
+    uint64_t token_us, max_token_us;
+    /* CMD18 streams: CMD12 + CMD18 re-issued after a lost data token or a
+     * retried overrun, and blocks whose second CRC byte was missing. */
+    uint32_t stream_restarts, missing_tail_bytes;
 };
 
 /* First failed request's exceptional-stop evidence, before SCR/CHCR writes.
@@ -140,6 +145,8 @@ struct kui_sci_async_probe_result {
     struct kui_sci_async_stage slow, fast;
     /* Counters of the CMD18 measurements (stream_capture/stream_resume). */
     struct kui_sci_async_stage cmd18;
+    /* Counters of CMD18 streams read through begin_stream. */
+    struct kui_sci_async_stage streaming;
     struct kui_sci_async_fault fault;
     /* Pre-stop evidence of the first payload overrun, even when its retry
      * succeeded. fault above still describes only a failed request. */
@@ -192,6 +199,20 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
     const struct kui_loader_sd *card, struct kui_sci_async_probe_result *out);
 enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reader,
     uint32_t lba, bool slow);
+/* CMD18 stream of `count` blocks at the fast clock. Each block is then
+ * polled and finished exactly like a single request; finish of a block that
+ * is not the last returns OK and starts the next block's framing, and the
+ * last block's finish stops the card with CMD12 before publishing. Each
+ * block is received by a 513-byte DMA: the receiver's trailing overrun
+ * leaves the second CRC byte in RDR and drops only the byte after it, the
+ * card's gap before the next data token. The card is deselected for the SCI
+ * reset and selected again for the token search. A lost token or a retried
+ * overrun stops the card and re-issues CMD18 at the current block (at most
+ * KUI_SCI_ASYNC_OVERRUN_RETRIES per block). Cancellation and failures send
+ * CMD12 when the ordinary bus is usable; otherwise the caller's normal
+ * recovery must reinitialize the card. */
+enum kui_sci_async_status kui_sci_async_begin_stream(struct kui_sci_async_reader *reader,
+    uint32_t lba, uint32_t count);
 enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader);
 enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *reader,
     uint8_t dst[512], const uint8_t expected[512]);
@@ -224,10 +245,10 @@ void kui_sci_async_work_record(struct kui_sci_async_reader *reader,
  * buffer[512*i] for the caller to compare.
  *
  * resume: `count` (1..KUI_SCI_ASYNC_RESUME_BLOCKS) blocks of one CMD18, each
- * received by its own 514-byte DMA, then deselect, SCI module reset,
- * reselect and a polled search for the next token. This is the per-block
- * cycle a receive-only streaming reader would need; dst receives count*512
- * bytes. A terminal status leaves the reader failed, as for a request. */
+ * received by its own 513-byte DMA with the second CRC byte taken from RDR
+ * (as in begin_stream), then deselect, SCI module reset, reselect and a polled
+ * search for the next token. dst receives count*512 bytes. A terminal status
+ * leaves the reader failed, as for a request. */
 #define KUI_SCI_ASYNC_STREAM_GAPS 32u
 #define KUI_SCI_ASYNC_RESUME_BLOCKS 256u
 struct kui_sci_async_stream {
@@ -244,6 +265,8 @@ struct kui_sci_async_stream {
 struct kui_sci_async_resume {
     enum kui_sci_async_status status;
     uint32_t lba, requested, blocks, crc_errors, token_errors, guard_errors;
+    /* Blocks whose stop left no byte in RDR (second CRC byte missing). */
+    uint32_t missing_tail_bytes;
     uint32_t command_response, first_token_bytes, last_token;
     /* Token search after each reselection: bytes and time. */
     uint32_t token_bytes, max_token_bytes;

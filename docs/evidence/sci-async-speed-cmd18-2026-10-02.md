@@ -145,4 +145,5 @@ and the reader stayed usable.
 byte) is then the one held in RDR when the overrun stops reception, and only
 the 1-byte gap is lost, so the next data token is the first byte after
 reselection. The following build checks this with the resume measurement and
-uses it for an interrupt-driven streaming reader.
+uses it for an interrupt-driven streaming reader
+([change record](sci-async-cmd18-stream-2026-10-02.md)).

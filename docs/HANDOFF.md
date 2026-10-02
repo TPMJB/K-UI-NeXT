@@ -1,5 +1,19 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI async: CMD18 streaming reader (2026-10-02 UTC)
+
+Console results for `97b590137b9b`: async CMD17 634 KiB/s (card access about
+280 us per block), ordinary reader 1,095 KiB/s; the card streams CMD18 blocks
+with exactly one 0xff byte between them; the per-block resume lost the next
+token because stopping the SCI after 514 bytes drops two bytes. The new build
+receives 513 bytes per block and takes the second CRC byte from RDR, so only
+the gap byte is lost. `kui_sci_async_begin_stream` reads CMD18 streams through
+`poll`/`finish` (reset and reselection between blocks, CMD12 after the last,
+CMD12 + CMD18 again after a lost token or overrun), and **R** reads the same
+1 MiB a fourth time through it. See
+[the change record](evidence/sci-async-cmd18-stream-2026-10-02.md). Build and
+console results are pending; run R and return the JSON.
+
 ## SCI async: leaner reader and CMD18 measurements (2026-10-02 UTC)
 
 Speed build on `claude/modest-galileo-hpjv79`. The single-block reader no
