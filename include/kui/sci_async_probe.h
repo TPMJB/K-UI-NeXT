@@ -145,15 +145,15 @@ struct kui_sci_async_fault {
  * stalls. site: 1 lease, 2 release, 3 module reset, 4 DMA start, 5 DMA poll,
  * 6 open (interrupt-masked windows of 500 us or more), 7 an API call of
  * 1,500 us or more, 8 a gap of 1,500 us or more between polls of one request.
- * stage: 0 slow, 1 fast, 2 cmd18, 3 streaming, 4 none, 5 reset loop. at_us
- * is the uptime at the window's start. */
+ * stage: 0 slow, 1 fast, 2 cmd18, 3 streaming, 4 none. at_us is the uptime
+ * at the window's start. Times count TMU2 ticks at their real length (80.2
+ * ns): KOS's timer_us_gettime64() jumps 2.5 ms at every whole second. */
 #define KUI_SCI_ASYNC_PAUSES 8u
 struct kui_sci_async_pause { uint32_t site, stage, us; uint64_t at_us; };
-/* One SCI module reset (interrupts masked) timed by the uptime counter, 80 ns
- * resolution: in total, as CPU cycles (5 ns each; 0 when KOS's PRFC0 is not
- * counting elapsed cycles), and per step: checks, stop and confirm, standby
- * wait, restart and confirm, wait, register checks. */
-struct kui_sci_async_reset_time { uint32_t stage, ns, cpu_ns, steps_ns[6]; };
+/* One SCI module reset (interrupts masked) timed by raw TMU2 reads, in ns:
+ * in total and per step: checks, stop and confirm, standby wait, restart and
+ * confirm, wait, register checks. */
+struct kui_sci_async_reset_time { uint32_t stage, ns, steps_ns[6]; };
 struct kui_sci_async_probe_result {
     enum kui_sci_async_status status;
     enum kui_sci_async_status operation_status; /* Before cleanup classification. */
@@ -175,9 +175,6 @@ struct kui_sci_async_probe_result {
     struct kui_sci_async_pause pauses[KUI_SCI_ASYNC_PAUSES];
     /* The slowest successful SCI module reset of the requests. */
     struct kui_sci_async_reset_time reset_worst;
-    /* PRFC0's control register at open: 0xc023 when it counts elapsed CPU
-     * cycles, as KOS sets it up; cpu_ns values need that. */
-    uint32_t cpu_counter_config;
     /* Foreground API duration, including IRQ preemption; not wire time.
      * No API waits for an in-flight DMA to complete. */
     uint64_t max_open_us, max_begin_us, max_poll_us, max_finish_us;
@@ -308,38 +305,6 @@ enum kui_sci_async_status kui_sci_async_stream_capture(struct kui_sci_async_read
     uint32_t lba, void *buffer, uint32_t bytes, struct kui_sci_async_stream *out);
 enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reader *reader,
     uint32_t lba, uint32_t count, uint8_t *dst, struct kui_sci_async_resume *out);
-
-/* Reset loop: the between-block handoff (deselect, SCI module reset with
- * interrupts masked, re-initialization) back to back for about total_us,
- * with the card deselected and no DMA. Its masked windows of 500 us or more
- * are counted here instead of in the request pause log, and its slowest reset
- * is kept here. The reader must be idle after a fast request; a failed
- * handoff fails the reader as a request would. */
-#define KUI_SCI_ASYNC_LOOP_PAUSES 8u
-struct kui_sci_async_reset_loop {
-    enum kui_sci_async_status status;
-    uint32_t resets, pauses, module_reset_state;
-    uint64_t elapsed_us, max_masked_us;
-    uint64_t pause_at_us[KUI_SCI_ASYNC_LOOP_PAUSES];
-    struct kui_sci_async_reset_time worst;
-};
-enum kui_sci_async_status kui_sci_async_reset_loop(struct kui_sci_async_reader *reader,
-    uint32_t total_us, struct kui_sci_async_reset_loop *out);
-
-/* Idle CPU test: no SCI or DMA activity. Spin reading the uptime counter for
- * about total_us, in windows of window_us, with interrupts masked inside each
- * window or not. With bus, every read also reads main RAM uncached, so a
- * held external bus stalls the loop too. Keeps the longest gap between
- * consecutive reads (ns, and the CPU cycles in it as ns), when it happened,
- * and the uptime of the first gaps of 500 us or more. */
-#define KUI_SCI_ASYNC_SPIN_PAUSES 8u
-struct kui_sci_async_spin {
-    uint32_t windows, max_gap_ns, max_gap_cpu_ns, gaps_over_500us;
-    uint64_t spun_us, max_gap_at_us;
-    uint64_t pause_at_us[KUI_SCI_ASYNC_SPIN_PAUSES];
-};
-void kui_sci_async_spin(bool masked, bool bus, uint32_t total_us, uint32_t window_us,
-    struct kui_sci_async_spin *out);
 
 /* Original 16-slow/64-fast diagnostic client of the same reader API. */
 enum kui_sci_async_status kui_sci_async_probe_run(

@@ -1,18 +1,16 @@
 # K-UI NeXT handoff (2026-09-28)
 
-## SCI async: hunting the 2.5 ms pause (2026-10-02 UTC)
+## SCI async: the 2.5 ms pause is KOS's clock (2026-10-02 UTC)
 
-`bac1b152b4ac` on the console: streaming 1,202 KiB/s with all data matching
-(1,323 without the test's CRC32; ordinary reader 1,095). About once per R run
-the CPU is held for 2.5 ms, once inside an SCI module reset with interrupts
-masked, which a game would feel. The next build logs every long masked
-window, call and gap between polls; times the slowest module reset's steps on
-TMU2 and in CPU cycles; then runs 1 s of back-to-back module resets and three
-1 s idle CPU tests (masked, masked with RAM reads, unmasked) to tell whether
-the reset, the console or other code holds the CPU. See
-[the change record](evidence/sci-async-pause-hunt-2026-10-02.md). Build
-**ad0340e18528** passed [Diagnostic run 207](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37061143973);
-install its two files from the `sd-update` artifact, run R and return the JSON.
+`ad0340e18528` on the console: the logged pauses fall exactly at whole seconds
+of uptime, and nothing timed with raw counters stalled (73,273 back-to-back
+module resets, longest 9 us; idle CPU gaps 1.4 us masked). KOS's
+`timer_us_gettime64()` counts TMU2's 80.2 ns ticks as 80 ns, so each second
+reads 997,498 us and then jumps 2.5 ms; every "pause" was an interval across
+that jump. The reader needs no change. The next build times the probe with
+TMU2 ticks at their real length, drops the one-off reset loop and idle tests,
+and shows the longest interrupt-masked window on R's screen. See
+[the change record](evidence/sci-async-pause-hunt-2026-10-02.md).
 
 ## SCI async: streaming with overlapped checks (2026-10-02 UTC)
 

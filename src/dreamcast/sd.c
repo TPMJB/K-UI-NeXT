@@ -526,23 +526,11 @@ static void async_speed(struct kui_sd_async_result *out,
     }
     if(status==KUI_SCI_ASYNC_OK && out->speed_match)
         status=async_stream_pass(out,&reader,chunk,cancelled,cancel_ctx);
-    /* Do module resets alone stall the CPU? */
-    if(status==KUI_SCI_ASYNC_OK && out->speed_match && !(cancelled && cancelled(cancel_ctx))) {
-        out->reset_loop_ran=true;
-        status=kui_sci_async_reset_loop(&reader,KUI_SD_ASYNC_RESET_LOOP_US,&out->reset_loop);
-    }
     if(status==KUI_SCI_ASYNC_OK && cancelled && cancelled(cancel_ctx)) status=KUI_SCI_ASYNC_CANCELLED;
     enum kui_sci_async_status closed=kui_sci_async_close(&reader);
     if(closed!=KUI_SCI_ASYNC_OK) status=closed;
     if(out->probe.status!=KUI_SCI_ASYNC_RESTORE) out->probe.status=status;
     if(out->probe.operation_status==KUI_SCI_ASYNC_OK) out->probe.operation_status=status;
-    /* Idle CPU, no SCI activity: are rare pauses there too, with the
-     * external bus in use, and with interrupts and other threads? */
-    if(status==KUI_SCI_ASYNC_OK) {
-        kui_sci_async_spin(true,false,KUI_SD_ASYNC_SPIN_US,KUI_SD_ASYNC_SPIN_WINDOW_US,&out->spin_masked);
-        kui_sci_async_spin(true,true,KUI_SD_ASYNC_SPIN_US,KUI_SD_ASYNC_SPIN_WINDOW_US,&out->spin_bus);
-        kui_sci_async_spin(false,false,KUI_SD_ASYNC_SPIN_US,KUI_SD_ASYNC_SPIN_WINDOW_US,&out->spin_unmasked);
-    }
 }
 
 enum async_mode {ASYNC_QUICK, ASYNC_STRESS, ASYNC_SPEED};

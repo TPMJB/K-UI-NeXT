@@ -201,3 +201,7 @@ again shows one block whose receive took 2,843 us (2,845 us in the previous
 run). These are rare (about one per R run) but not explained by the code's
 own loops; the next build looks for their source
 ([pause hunt](sci-async-pause-hunt-2026-10-02.md)).
+
+**Correction.** Neither was a pause: KOS's microsecond clock jumps 2.5 ms at
+every whole second of uptime, and both intervals crossed one
+([pause hunt](sci-async-pause-hunt-2026-10-02.md#console-results-ad0340e18528)).

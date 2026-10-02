@@ -31,15 +31,11 @@
 #define TCR UINT32_C(0xffa00018)
 #define CHCR UINT32_C(0xffa0001c)
 #define DMAOR UINT32_C(0xffa00040)
-/* TMU2: KallistiOS's uptime counter, counting down at Pphi/4 (12.5 MHz) and
- * reloading from TCOR2 once a second. Raw reads time short steps cheaply. */
+/* TMU2: KallistiOS's uptime counter, counting down at Pck/4 (12,468,720 Hz,
+ * 80.2 ns) and reloading from TCOR2 once a second. Raw reads time short
+ * steps cheaply. */
 #define TCOR2 UINT32_C(0xffd80020)
 #define TCNT2 UINT32_C(0xffd80024)
-/* Performance counter 1 (KOS's PRFC0), which KOS keeps counting elapsed CPU
- * cycles, 5 ns each at 200 MHz: its control register and low count word. */
-#define PMCR1 UINT32_C(0xff000084)
-#define PMCTR1L UINT32_C(0xff100008)
-#define CPU_CYCLES_CONFIG 0xc023u
 #define RX_DMA UINT32_C(0x4915)
 #define FLAGS 0x38u
 #define ORER 0x20u
@@ -71,6 +67,26 @@ static void wr(uint32_t a, uint32_t v, unsigned w) {
     else *(volatile uint32_t *)(uintptr_t)a=v;
 }
 #endif
+/* KOS's timer_us_gettime64() counts each TMU2 tick as 80 ns, so its reading
+ * reaches only 997,498 us within a second and then jumps 2.5 ms when the
+ * second ends. The probe scales the ticks by their real length instead. */
+static uint64_t us_scale,ns_scale; /* us and ns per tick, times 2^32 */
+static void clock_init(void) {
+    const uint64_t period=(uint64_t)rd(TCOR2,4)+1u;
+    us_scale=(UINT64_C(1000000)<<32)/period;
+    ns_scale=(UINT64_C(1000000000)<<32)/period;
+}
+static uint64_t now_us(void) {
+#ifdef KUI_SCI_ASYNC_PROBE_TEST
+    timer_val_t t=kui_sci_async_test_ticks();
+#else
+    timer_val_t t=__dreamcast_get_ticks();
+#endif
+    return (uint64_t)t.secs*1000000u+(((uint64_t)t.ticks*us_scale)>>32);
+}
+static uint32_t ticks_ns(uint32_t ticks) {
+    return (uint32_t)(((uint64_t)ticks*ns_scale)>>32);
+}
 static void settle(unsigned n) {
 #ifdef KUI_SCI_ASYNC_PROBE_TEST
     kui_sci_async_test_delay(n);
@@ -178,13 +194,10 @@ struct probe {
     struct receive_area srx[2];
     uint32_t srx_address[2];
     struct stream_slot {uint32_t block; uint8_t rdr; bool rdr_valid, full;} slot[2];
-    /* Pause tracing: TMU2 period in ticks, whether PRFC0 counts elapsed CPU
-     * cycles, the end of the last poll of the current request (0: none yet)
-     * and the reset loop in progress, if any. */
+    /* Pause tracing: TMU2 period in ticks and the end of the last poll of
+     * the current request (0: none yet). */
     uint32_t tick_period;
-    bool cpu_cycles;
     uint64_t last_poll_end, last_call_end;
-    struct kui_sci_async_reset_loop *loop;
     volatile uint32_t end_chcr,end_count,end_ssr,event;
     uint64_t start_us;
     struct kui_sci_async_fault fault_candidate;
@@ -205,7 +218,7 @@ static bool active_dma_owned(const struct probe *p) {
 }
 
 static void max_time(uint64_t *max, uint64_t start) {
-    uint64_t n=timer_us_gettime64()-start; if(n>*max) *max=n;
+    uint64_t n=now_us()-start; if(n>*max) *max=n;
 }
 /* Where the longest interrupt-masked window was, and in which stage; and a
  * log of pauses (see kui_sci_async_pause). */
@@ -215,7 +228,6 @@ enum masked_site { MASKED_LEASE=1, MASKED_RELEASE, MASKED_MODULE_RESET, MASKED_A
 #define PAUSE_CALL_US 1500u
 static uint32_t stage_index(const struct probe *p) {
     const struct kui_sci_async_probe_result *o=p->out;
-    if(p->loop) return 5u;
     return p->stage==&o->slow?0u:p->stage==&o->fast?1u:p->stage==&o->cmd18?2u:
         p->stage==&o->streaming?3u:4u;
 }
@@ -231,16 +243,7 @@ static uint32_t ticks_between(uint32_t earlier,uint32_t later,uint32_t period) {
     return earlier>=later?earlier-later:earlier+(period-later);
 }
 static void masked_record(struct probe *p, uint64_t start, unsigned site) {
-    uint64_t n=timer_us_gettime64()-start;
-    if(p->loop) {
-        struct kui_sci_async_reset_loop *l=p->loop;
-        if(n>l->max_masked_us) l->max_masked_us=n;
-        if(n>=PAUSE_MASKED_US) {
-            if(l->pauses<KUI_SCI_ASYNC_LOOP_PAUSES) l->pause_at_us[l->pauses]=start;
-            ++l->pauses;
-        }
-        return;
-    }
+    uint64_t n=now_us()-start;
     if(n>=PAUSE_MASKED_US) pause_add(p,site,n,start);
     if(n<=p->out->max_irq_masked_us) return;
     p->out->max_irq_masked_us=n;p->out->max_irq_masked_site=site;
@@ -353,7 +356,7 @@ static void interrupt(irq_t code, irq_context_t *context, void *data) {
     struct probe *p=data;
     /* A stale invocation must not touch a restored/foreign channel. */
     if(!p->armed) return;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     p->armed=false;
     freeze(p,code,context,start);
     p->event=(uint32_t)code;
@@ -365,7 +368,7 @@ static void interrupt(irq_t code, irq_context_t *context, void *data) {
 }
 
 static enum kui_sci_async_status lease(struct probe *p) {
-    irq_mask_t mask=irq_disable(); uint64_t start=timer_us_gettime64();
+    irq_mask_t mask=irq_disable(); uint64_t start=now_us();
     enum kui_sci_async_status status=KUI_SCI_ASYNC_OK;
     unsigned priority=irq_get_priority(IRQ_SRC_DMAC);
     uint32_t dma=rd(DMAOR,4), control=rd(CHCR,4), ssr=rd(SSR,1);
@@ -416,7 +419,7 @@ static bool dma_unchanged(const struct probe *p) {
 }
 static void release(struct probe *p) {
     if(!p->leased) return;
-    irq_mask_t mask=irq_disable(); uint64_t start=timer_us_gettime64();
+    irq_mask_t mask=irq_disable(); uint64_t start=now_us();
     if(p->armed) {p->armed=false;freeze(p,0,NULL,start);}
     if(!p->quarantined && !dma_unchanged(p)) p->foreign_dma=true;
     /* No source is enabled when the prior callback becomes visible again. */
@@ -473,8 +476,8 @@ static enum kui_sci_async_status module_reset(struct probe *p) {
     struct kui_sci_async_stage *s=p->stage;
     ++s->module_reset_attempts;
     s->module_reset_state=KUI_SCI_ASYNC_MODULE_RESET_PRECONDITION;
-    irq_mask_t mask=irq_disable();uint64_t start=timer_us_gettime64();
-    uint32_t t[7],cycles=rd(PMCTR1L,4);t[0]=rd(TCNT2,4);
+    irq_mask_t mask=irq_disable();uint64_t start=now_us();
+    uint32_t t[7];t[0]=rd(TCNT2,4);
     enum kui_sci_async_status result=KUI_SCI_ASYNC_HANDOFF;
     s->module_stb_before=rd(STBCR,1);
     if(s->module_stb_before&1u) {p->module_unavailable=true;goto failed;}
@@ -530,13 +533,13 @@ static enum kui_sci_async_status module_reset(struct probe *p) {
     }
     s->module_reset_state=KUI_SCI_ASYNC_MODULE_RESET_OK;
     ++s->module_resets;
-    t[6]=rd(TCNT2,4);cycles=rd(PMCTR1L,4)-cycles;
-    struct kui_sci_async_reset_time *worst=p->loop?&p->loop->worst:&p->out->reset_worst;
-    uint32_t total=ticks_between(t[0],t[6],p->tick_period)*80u;
+    t[6]=rd(TCNT2,4);
+    struct kui_sci_async_reset_time *worst=&p->out->reset_worst;
+    uint32_t total=ticks_ns(ticks_between(t[0],t[6],p->tick_period));
     if(total>worst->ns) {
-        worst->stage=stage_index(p);worst->ns=total;worst->cpu_ns=p->cpu_cycles?cycles*5u:0u;
+        worst->stage=stage_index(p);worst->ns=total;
         for(unsigned i=0;i<6;++i)
-            worst->steps_ns[i]=ticks_between(t[i],t[i+1],p->tick_period)*80u;
+            worst->steps_ns[i]=ticks_ns(ticks_between(t[i],t[i+1],p->tick_period));
     }
     unmask(p,mask,start,MASKED_MODULE_RESET);return KUI_SCI_ASYNC_OK;
 failed:
@@ -576,7 +579,7 @@ static enum kui_sci_async_status frame_poll(struct probe *p) {
             if(ssr&FLAGS) return KUI_SCI_ASYNC_RECEIVE_ERROR;
             if(ssr&4u) return KUI_SCI_ASYNC_OK;
             if(++p->frame_count>=10000u || (!(p->frame_count&31u) &&
-               timer_us_gettime64()-p->frame_us>=FRAME_TIMEOUT_US))
+               now_us()-p->frame_us>=FRAME_TIMEOUT_US))
                 return KUI_SCI_ASYNC_TIMEOUT;
             continue;
         }
@@ -594,7 +597,7 @@ static enum kui_sci_async_status frame_poll(struct probe *p) {
                 c->bus.select(c->bus.ctx,true);
                 if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
                 s->framing_step=KUI_SCI_ASYNC_FRAMING_READY;
-                p->frame_count=0;p->frame_us=timer_us_gettime64();break;
+                p->frame_count=0;p->frame_us=now_us();break;
             case KUI_SCI_ASYNC_FRAMING_READY:
                 value=byte(c,0xff,p->slow);
                 if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
@@ -602,7 +605,7 @@ static enum kui_sci_async_status frame_poll(struct probe *p) {
                     s->last_phase=KUI_SCI_ASYNC_PHASE_COMMAND;
                     s->framing_step=KUI_SCI_ASYNC_FRAMING_COMMAND;p->frame_count=0;
                 } else if(++p->frame_count>=4096u || (!(p->frame_count&31u) &&
-                          timer_us_gettime64()-p->frame_us>=FRAME_TIMEOUT_US))
+                          now_us()-p->frame_us>=FRAME_TIMEOUT_US))
                     return KUI_SCI_ASYNC_TIMEOUT;
                 break;
             case KUI_SCI_ASYNC_FRAMING_COMMAND:
@@ -619,14 +622,14 @@ static enum kui_sci_async_status frame_poll(struct probe *p) {
                     if(value) return KUI_SCI_ASYNC_COMMAND;
                     s->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN;
                     s->framing_step=KUI_SCI_ASYNC_FRAMING_TOKEN;
-                    p->frame_count=0;p->frame_us=timer_us_gettime64();
+                    p->frame_count=0;p->frame_us=now_us();
                 } else if(++p->frame_count>=16u) return KUI_SCI_ASYNC_COMMAND;
                 break;
             case KUI_SCI_ASYNC_FRAMING_TOKEN:
                 value=byte(c,0xff,p->slow);s->last_token=value;
                 if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
                 if(value==0xfe) {
-                    uint64_t now=timer_us_gettime64(),waited=now-p->frame_us;
+                    uint64_t now=now_us(),waited=now-p->frame_us;
                     s->token_bytes+=p->frame_count;
                     if(p->frame_count>s->max_token_bytes) s->max_token_bytes=p->frame_count;
                     s->token_us+=waited;
@@ -635,7 +638,7 @@ static enum kui_sci_async_status frame_poll(struct probe *p) {
                     p->frame_count=0;p->frame_us=now;
                 } else if(value!=0xff) return KUI_SCI_ASYNC_TOKEN;
                 else if(++p->frame_count>=8192u || (!(p->frame_count&31u) &&
-                        timer_us_gettime64()-p->frame_us>=FRAME_TIMEOUT_US))
+                        now_us()-p->frame_us>=FRAME_TIMEOUT_US))
                     return KUI_SCI_ASYNC_TIMEOUT;
                 break;
             case KUI_SCI_ASYNC_FRAMING_DRAIN:
@@ -658,7 +661,7 @@ static enum kui_sci_async_status frame_poll(struct probe *p) {
                 if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
                 s->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN;
                 s->framing_step=KUI_SCI_ASYNC_FRAMING_TOKEN;
-                p->frame_count=0;p->frame_us=timer_us_gettime64();break;
+                p->frame_count=0;p->frame_us=now_us();break;
             default: return KUI_SCI_ASYNC_ARGUMENT;
         }
     }
@@ -731,7 +734,7 @@ static struct probe *reader_state(const struct kui_sci_async_reader *reader) {
 }
 static enum kui_sci_async_status measured(struct probe *p,uint64_t *max,
         uint64_t start,enum kui_sci_async_status status) {
-    p->last_call_end=timer_us_gettime64();
+    p->last_call_end=now_us();
     uint64_t elapsed=p->last_call_end-start;
     if(elapsed>=PAUSE_CALL_US) pause_add(p,PAUSE_CALL,elapsed,start);
     if(elapsed>*max) *max=elapsed;
@@ -769,7 +772,7 @@ static enum kui_sci_async_status failed(struct probe *p,enum kui_sci_async_statu
 static enum kui_sci_async_status arm(struct probe *p) {
     struct kui_sci_async_stage *s=p->stage;
     settle(p->slow?1024u:64u);
-    irq_mask_t mask=irq_disable();uint64_t masked_start=timer_us_gettime64();
+    irq_mask_t mask=irq_disable();uint64_t masked_start=now_us();
     s->last_phase=KUI_SCI_ASYNC_PHASE_OWNERSHIP;
     if(!dma_unchanged(p)) {
         p->foreign_dma=true;unmask(p,mask,masked_start,MASKED_ARM);return KUI_SCI_ASYNC_BUSY;
@@ -788,7 +791,7 @@ static enum kui_sci_async_status arm(struct probe *p) {
     p->start_address=p->buffer_address;
     p->done=false;p->event=0;p->end_count=p->dma_bytes;p->end_chcr=0;p->end_ssr=0;
     p->rdr_valid=false;
-    p->start_us=timer_us_gettime64();p->armed=true;
+    p->start_us=now_us();p->armed=true;
     s->framing_us+=p->start_us-p->attempt_us;
     s->last_phase=KUI_SCI_ASYNC_PHASE_DMA;++s->dma_started;
     wr(CHCR,RX_DMA,4);
@@ -800,7 +803,7 @@ static enum kui_sci_async_status arm(struct probe *p) {
 static void completion(struct probe *p) {
     if(p->completion_recorded) return;
     p->completion_recorded=true;
-    uint64_t receive=timer_us_gettime64()-p->start_us;
+    uint64_t receive=now_us()-p->start_us;
     p->stage->receive_us+=receive;
     if(receive>p->stage->max_receive_us) p->stage->max_receive_us=receive;
     p->stage->last_remaining=p->end_count;p->stage->last_chcr=p->end_chcr;
@@ -845,7 +848,7 @@ static enum kui_sci_async_status stream_reissue(struct probe *p,uint32_t block,
     p->restart_pending=p->continuing=false;
     p->stream_next=block;
     stream_prepare(p);
-    p->attempt_us=timer_us_gettime64();
+    p->attempt_us=now_us();
     set_command(p,0x52,p->lba);
     s->last_phase=KUI_SCI_ASYNC_PHASE_READY;
     s->framing_step=KUI_SCI_ASYNC_FRAMING_DESELECT;s->framing_index=0;
@@ -859,7 +862,7 @@ static enum kui_sci_async_status stream_check(struct probe *p) {
     struct kui_sci_async_stage *s=p->stage;
     struct stream_slot *slot=&p->slot[p->stream_checked&1u];
     if(!slot->full || slot->block!=p->stream_checked) return KUI_SCI_ASYNC_PENDING;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     struct receive_area *r=&p->srx[slot->block&1u];
     enum kui_sci_async_status result=KUI_SCI_ASYNC_OK;
     slot->full=false;
@@ -879,7 +882,7 @@ static enum kui_sci_async_status stream_check(struct probe *p) {
             if(crc!=wire) result=KUI_SCI_ASYNC_CRC;
         }
     }
-    s->finish_us+=timer_us_gettime64()-start;
+    s->finish_us+=now_us()-start;
     if(result!=KUI_SCI_ASYNC_OK) {
         if(p->phase==READER_DMA) {
             p->restart_pending=true;p->restart_block=slot->block;p->restart_cause=result;
@@ -891,7 +894,7 @@ static enum kui_sci_async_status stream_check(struct probe *p) {
     p->out->guards_ok=p->out->crc_ok=true;
     if(p->stream_checked<p->stream_count) return KUI_SCI_ASYNC_PENDING;
     s->last_phase=KUI_SCI_ASYNC_PHASE_COMPLETE;
-    s->elapsed_us+=timer_us_gettime64()-p->request_us;
+    s->elapsed_us+=now_us()-p->request_us;
     p->streaming=false;p->phase=READER_IDLE;p->request_status=KUI_SCI_ASYNC_OK;
     return KUI_SCI_ASYNC_OK;
 }
@@ -901,7 +904,7 @@ static enum kui_sci_async_status stream_check(struct probe *p) {
 static enum kui_sci_async_status stream_block_done(struct probe *p) {
     struct kui_sci_async_stage *s=p->stage;
     uint32_t block=p->stream_next;
-    uint64_t serial_start=timer_us_gettime64();
+    uint64_t serial_start=now_us();
     if(p->end_ssr&ORER) ++s->trailing_overruns;
     p->capture_stop=true;
     enum kui_sci_async_status result=handoff(p,p->card,false);
@@ -967,7 +970,7 @@ static enum kui_sci_async_status overrun_retry(struct probe *p) {
     p->fault_candidate=(struct kui_sci_async_fault){0};
     p->polls=p->frame_count=0;p->done=false;p->event=0;
     p->completion_recorded=p->payload_validated=false;
-    p->attempt_us=timer_us_gettime64();
+    p->attempt_us=now_us();
     memset(&p->rx,SENTINEL,sizeof(p->rx));
     cache(&p->rx,sizeof(p->rx),false);
     s->last_phase=KUI_SCI_ASYNC_PHASE_READY;
@@ -1007,7 +1010,7 @@ static enum kui_sci_async_status finish_request(struct probe *p,uint8_t *dst,con
     enum kui_sci_async_status result=handoff(p,p->card,p->slow);
     if(result!=KUI_SCI_ASYNC_OK) return failed(p,result);
     s->last_phase=KUI_SCI_ASYNC_PHASE_COMPLETE;
-    s->elapsed_us+=timer_us_gettime64()-p->request_us;
+    s->elapsed_us+=now_us()-p->request_us;
     if(p->cancel_requested) return failed(p,KUI_SCI_ASYNC_CANCELLED);
     if(dst) memcpy(dst,p->rx.bytes,512);
     /* A valid trailing ERI belongs to this successful request, not a later
@@ -1027,8 +1030,9 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
     reader->generation=0;
     if(!c || !c->ready || c->slow || !c->bus.select || !c->bus.transfer || !c->blocks)
         return out->status;
-    uint64_t start=timer_us_gettime64();
-    irq_mask_t mask=irq_disable();uint64_t reservation_start=timer_us_gettime64();
+    if(!us_scale) clock_init();
+    uint64_t start=now_us();
+    irq_mask_t mask=irq_disable();uint64_t reservation_start=now_us();
     if(occupied || poisoned) {
         irq_restore(mask);out->status=out->operation_status=KUI_SCI_ASYNC_BUSY;return out->status;
     }
@@ -1038,8 +1042,6 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
     reader->generation=p->generation=next_generation;
     p->opened_us=start;p->phase=READER_IDLE;p->quantum=FRAMING_QUANTUM;
     p->tick_period=rd(TCOR2,4)+1u;
-    out->cpu_counter_config=rd(PMCR1,2);
-    p->cpu_cycles=(out->cpu_counter_config&0xc13fu)==CPU_CYCLES_CONFIG;
     build_tables();
     masked_record(p,reservation_start,MASKED_OPEN);irq_restore(mask);
     out->slow.clock_hz=390625;
@@ -1054,7 +1056,7 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
         if(out->status!=KUI_SCI_ASYNC_RESTORE)
             out->safe_restored=out->handlers_restored=out->registers_restored=true;
         mask=irq_disable();occupied=false;reader->generation=0;irq_restore(mask);
-        out->elapsed_us=timer_us_gettime64()-start;
+        out->elapsed_us=now_us()-start;
     } else out->started=true;
     return measured(p,&out->max_open_us,start,out->status);
 }
@@ -1109,20 +1111,20 @@ static enum kui_sci_async_status start_request(struct probe *p,uint32_t lba,bool
 }
 enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reader,uint32_t lba,bool slow) {
     struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     return measured(p,&p->out->max_begin_us,start,start_request(p,lba,slow,0,NULL,start));
 }
 enum kui_sci_async_status kui_sci_async_begin_stream(struct kui_sci_async_reader *reader,
         uint32_t lba,uint32_t count,uint8_t *dst) {
     struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     enum kui_sci_async_status result=count && dst?start_request(p,lba,false,count,dst,start):
         KUI_SCI_ASYNC_ARGUMENT;
     return measured(p,&p->out->max_begin_us,start,result);
 }
 enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader) {
     struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     /* Polls of one request follow each other directly in the diagnostics. */
     if(p->last_poll_end && start-p->last_poll_end>=PAUSE_CALL_US)
         pause_add(p,PAUSE_BETWEEN_POLLS,start-p->last_poll_end,p->last_poll_end);
@@ -1135,7 +1137,7 @@ enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader
         if(result!=KUI_SCI_ASYNC_PENDING) result=failed(p,result);
     } else if(p->phase==READER_DMA) {
         bool timeout=false,dma_error=false;
-        irq_mask_t mask=irq_disable();uint64_t masked_start=timer_us_gettime64();
+        irq_mask_t mask=irq_disable();uint64_t masked_start=now_us();
         dma_error=(rd(DMAOR,4)&7u)!=1u;
         if(!p->done) {
             timeout=++p->polls>=MAX_POLLS || start-p->start_us>=TRIAL_TIMEOUT_US;
@@ -1168,20 +1170,20 @@ enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader
 enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *reader,
         uint8_t dst[512],const uint8_t expected[512]) {
     struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
-    uint64_t start=timer_us_gettime64();enum kui_sci_async_status result;
+    uint64_t start=now_us();enum kui_sci_async_status result;
     if(!dst && !p->cancel_requested) result=KUI_SCI_ASYNC_ARGUMENT;
     else if(p->phase==READER_FRAMING || p->phase==READER_DMA) result=KUI_SCI_ASYNC_PENDING;
     else if(p->phase==READER_READY) {
         struct kui_sci_async_stage *s=p->stage;
         result=finish_request(p,dst,expected);
-        s->finish_us+=timer_us_gettime64()-start;
+        s->finish_us+=now_us()-start;
     }
     else result=p->phase==READER_FAILED?p->request_status:KUI_SCI_ASYNC_ARGUMENT;
     return measured(p,&p->out->max_finish_us,start,result);
 }
 enum kui_sci_async_status kui_sci_async_cancel(struct kui_sci_async_reader *reader) {
     struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
-    uint64_t start=timer_us_gettime64();enum kui_sci_async_status result;
+    uint64_t start=now_us();enum kui_sci_async_status result;
     p->cancel_requested=true;
     if(p->phase==READER_DMA) result=KUI_SCI_ASYNC_PENDING;
     else if(p->phase==READER_READY) result=KUI_SCI_ASYNC_OK;
@@ -1191,7 +1193,7 @@ enum kui_sci_async_status kui_sci_async_cancel(struct kui_sci_async_reader *read
 }
 enum kui_sci_async_status kui_sci_async_close(struct kui_sci_async_reader *reader) {
     struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     if(p->phase==READER_FRAMING || p->phase==READER_DMA)
         return measured(p,&p->out->max_close_us,start,KUI_SCI_ASYNC_PENDING);
     if(p->phase==READER_READY) (void)finish_request(p,NULL,NULL);
@@ -1202,7 +1204,7 @@ enum kui_sci_async_status kui_sci_async_close(struct kui_sci_async_reader *reade
     p->out->status=p->out->operation_status=p->request_status;
     release(p);
     if(!p->out->safe_restored) p->out->status=KUI_SCI_ASYNC_RESTORE;
-    p->out->elapsed_us=timer_us_gettime64()-p->opened_us;
+    p->out->elapsed_us=now_us()-p->opened_us;
     irq_mask_t mask=irq_disable();occupied=false;reader->generation=0;irq_restore(mask);
     return measured(p,&p->out->max_close_us,start,p->out->status);
 }
@@ -1223,7 +1225,7 @@ static enum kui_sci_async_status masked_receive(struct probe *p,uint32_t address
     struct kui_sci_async_stage *s=p->stage;
     /* As in arm(): let the last polled byte's final edge pass first. */
     settle(64);
-    irq_mask_t mask=irq_disable();uint64_t masked_start=timer_us_gettime64();
+    irq_mask_t mask=irq_disable();uint64_t masked_start=now_us();
     s->last_phase=KUI_SCI_ASYNC_PHASE_OWNERSHIP;
     if(!dma_unchanged(p)) {
         p->foreign_dma=true;irq_restore(mask);return KUI_SCI_ASYNC_DMA_ERROR;
@@ -1237,19 +1239,19 @@ static enum kui_sci_async_status masked_receive(struct probe *p,uint32_t address
     p->start_address=address;p->end_count=bytes;p->end_chcr=0;p->end_ssr=0;
     p->rdr_valid=false;
     s->last_phase=KUI_SCI_ASYNC_PHASE_DMA;++s->dma_started;
-    uint64_t start=timer_us_gettime64(),limit=(uint64_t)bytes*64u/100u+2000u;
+    uint64_t start=now_us(),limit=(uint64_t)bytes*64u/100u+2000u;
     wr(CHCR,RX_DMA&~UINT32_C(4),4);
     wr(SCR,0x50u,1);
     bool complete=false;
     for(uint32_t polls=1;;++polls) {
         if(rd(CHCR,4)&2u) {complete=true;break;}
         if((rd(SSR,1)&FLAGS) || (rd(DMAOR,4)&7u)!=1u) break;
-        if(!(polls&63u) && timer_us_gettime64()-start>=limit) {++s->timeouts;break;}
+        if(!(polls&63u) && now_us()-start>=limit) {++s->timeouts;break;}
     }
     /* Continuous clocking ends with the overrun, as after a request's IRQ. */
     if(complete) for(unsigned n=0;n<512u && !(rd(SSR,1)&ORER);++n) {}
     wr(SCR,0,1);
-    *receive_us=timer_us_gettime64()-start;
+    *receive_us=now_us()-start;
     uint32_t control=rd(CHCR,4);
     wr(CHCR,control&~UINT32_C(5),4);
     (void)rd(CHCR,4);
@@ -1273,7 +1275,7 @@ static enum kui_sci_async_status masked_receive(struct probe *p,uint32_t address
     if(p->end_ssr&RDRF) {p->rdr_byte=(uint8_t)rd(RDR,1);p->rdr_valid=true;}
     wr(SSR,p->end_ssr&~(RDRF|FLAGS),1);
     (void)rd(SSR,1);
-    uint64_t masked=timer_us_gettime64()-masked_start;
+    uint64_t masked=now_us()-masked_start;
     if(masked>*max_masked_us) *max_masked_us=masked;
     irq_restore(mask);
     return result;
@@ -1289,18 +1291,18 @@ static enum kui_sci_async_status stream_handoff(struct probe *p,uint32_t *reset_
 /* Polled ordinary-bus byte operations at the fast clock. */
 static enum kui_sci_async_status sync_token(struct probe *p,uint32_t *count,
         uint64_t *us,uint32_t *token) {
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     p->stage->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN;
     p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_TOKEN;
     for(uint32_t n=0;;++n) {
         uint8_t value=byte(p->card,0xff,false);
         if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
         if(value!=0xffu) {
-            *count=n;*us=timer_us_gettime64()-start;*token=p->stage->last_token=value;
+            *count=n;*us=now_us()-start;*token=p->stage->last_token=value;
             return value==0xfeu?KUI_SCI_ASYNC_OK:KUI_SCI_ASYNC_TOKEN;
         }
-        if(n>=65535u || (!(n&31u) && timer_us_gettime64()-start>=FRAME_TIMEOUT_US)) {
-            *count=n;*us=timer_us_gettime64()-start;
+        if(n>=65535u || (!(n&31u) && now_us()-start>=FRAME_TIMEOUT_US)) {
+            *count=n;*us=now_us()-start;
             return KUI_SCI_ASYNC_TIMEOUT;
         }
     }
@@ -1322,10 +1324,10 @@ static enum kui_sci_async_status sync_cmd18(struct probe *p,uint32_t lba,
     c->bus.select(c->bus.ctx,true);
     if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
     s->framing_step=KUI_SCI_ASYNC_FRAMING_READY;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     for(uint32_t n=1;byte(c,0xff,false)!=0xffu;++n) {
         if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
-        if(n>=65535u || (!(n&31u) && timer_us_gettime64()-start>=FRAME_TIMEOUT_US))
+        if(n>=65535u || (!(n&31u) && now_us()-start>=FRAME_TIMEOUT_US))
             return KUI_SCI_ASYNC_TIMEOUT;
     }
     if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
@@ -1351,7 +1353,7 @@ static enum kui_sci_async_status sync_stop(struct probe *p,uint32_t *response,
     static const uint8_t stop[6]={0x4c,0,0,0,0,0x61};
     const struct kui_loader_sd *c=p->card;
     struct kui_sci_async_stage *s=p->stage;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     enum kui_sci_async_status result=KUI_SCI_ASYNC_OK;
     s->last_phase=KUI_SCI_ASYNC_PHASE_COMMAND;
     s->framing_step=KUI_SCI_ASYNC_FRAMING_COMMAND;
@@ -1370,7 +1372,7 @@ static enum kui_sci_async_status sync_stop(struct probe *p,uint32_t *response,
          * returns 0xff and ends this loop; it is reported below. */
         for(uint32_t n=0;byte(c,0xff,false)!=0xffu;) {
             *busy=++n;
-            if(n>=1000000u || (!(n&31u) && timer_us_gettime64()-start>=FRAME_TIMEOUT_US)) {
+            if(n>=1000000u || (!(n&31u) && now_us()-start>=FRAME_TIMEOUT_US)) {
                 result=KUI_SCI_ASYNC_TIMEOUT;break;
             }
         }
@@ -1379,7 +1381,7 @@ static enum kui_sci_async_status sync_stop(struct probe *p,uint32_t *response,
     s->framing_step=KUI_SCI_ASYNC_FRAMING_DESELECT;
     c->bus.select(c->bus.ctx,false);
     (void)byte(c,0xff,false);
-    *us=timer_us_gettime64()-start;
+    *us=now_us()-start;
     s->framing_step=KUI_SCI_ASYNC_FRAMING_NONE;
     return bus_healthy(p)?result:KUI_SCI_ASYNC_BUS_FAULT;
 }
@@ -1454,7 +1456,7 @@ enum kui_sci_async_status kui_sci_async_stream_capture(struct kui_sci_async_read
     if(buffer && !((uintptr_t)buffer&31u) && !(bytes&31u) && bytes>=1056u &&
        bytes<=32768u && block_range(p,lba,bytes/514u+1u)) address=physical(buffer,bytes);
     if(!address) return out->status;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     struct kui_sci_async_stage *saved=p->stage;
     p->stage=&p->out->cmd18;++p->stage->attempted;
     p->capture_stop=false;out->status=KUI_SCI_ASYNC_OK;
@@ -1485,7 +1487,7 @@ enum kui_sci_async_status kui_sci_async_stream_capture(struct kui_sci_async_read
         if(out->status==KUI_SCI_ASYNC_OK && (out->crc_errors || out->token_errors))
             out->status=out->crc_errors?KUI_SCI_ASYNC_CRC:KUI_SCI_ASYNC_TOKEN;
     }
-    out->elapsed_us=timer_us_gettime64()-start;
+    out->elapsed_us=now_us()-start;
     return result;
 }
 
@@ -1500,7 +1502,7 @@ enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reade
         return out->status;
     p->buffer_address=physical(p->rx.bytes,sizeof(p->rx.bytes));
     if(!p->buffer_address) return out->status=KUI_SCI_ASYNC_UNSUPPORTED;
-    uint64_t start=timer_us_gettime64();
+    uint64_t start=now_us();
     struct kui_sci_async_stage *saved=p->stage;
     p->stage=&p->out->cmd18;++p->stage->attempted;
     p->capture_stop=false;out->status=KUI_SCI_ASYNC_OK;
@@ -1519,9 +1521,9 @@ enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reade
         out->receive_us+=received_us;
         if(result!=KUI_SCI_ASYNC_OK && result!=KUI_SCI_ASYNC_RECEIVE_ERROR) break;
         cache(&p->rx,sizeof(p->rx),true);
-        uint64_t reset_start=timer_us_gettime64();
+        uint64_t reset_start=now_us();
         enum kui_sci_async_status handed=stream_handoff(p,&out->reset_state);
-        uint64_t check_start=timer_us_gettime64();
+        uint64_t check_start=now_us();
         out->reset_us+=check_start-reset_start;
         if(handed!=KUI_SCI_ASYNC_OK) {result=handed;break;}
         if(result!=KUI_SCI_ASYNC_OK) break;
@@ -1536,7 +1538,7 @@ enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reade
             block[j]=value;crc=(uint16_t)((crc<<8)^crc_table[(uint8_t)(crc>>8)^value]);
         }
         uint16_t wire=(uint16_t)((uint16_t)reverse_table[bytes[512]]<<8)|reverse_table[bytes[513]];
-        out->check_us+=timer_us_gettime64()-check_start;
+        out->check_us+=now_us()-check_start;
         if(crc!=wire) {++out->crc_errors;result=KUI_SCI_ASYNC_CRC;break;}
         ++out->blocks;
         if(i+1u<count) {
@@ -1551,7 +1553,7 @@ enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reade
     }
     result=stream_end(p,saved,issued,streaming,result,&out->stop_response,&out->stop_busy_bytes,
         &out->stop_us,&out->status);
-    out->elapsed_us=timer_us_gettime64()-start;
+    out->elapsed_us=now_us()-start;
     return result;
 }
 uint32_t kui_sci_async_work_sample(struct kui_sci_async_reader *reader) {
@@ -1572,81 +1574,6 @@ void kui_sci_async_work_record(struct kui_sci_async_reader *reader,
         p->stage->work_checksum=(p->stage->work_checksum<<1)|(p->stage->work_checksum>>31);
         p->stage->work_checksum^=checksum;
     }
-}
-
-/* Back-to-back handoffs, each leaving the SCI as a received stream block
- * does: TxD latched high, SCR cleared after a trailing overrun. */
-enum kui_sci_async_status kui_sci_async_reset_loop(struct kui_sci_async_reader *reader,
-        uint32_t total_us,struct kui_sci_async_reset_loop *out) {
-    struct probe *p=reader_state(reader);
-    if(!p || !out) return KUI_SCI_ASYNC_ARGUMENT;
-    *out=(struct kui_sci_async_reset_loop){.status=KUI_SCI_ASYNC_ARGUMENT};
-    if(p->phase!=READER_IDLE || p->armed || p->quarantined || p->foreign_dma ||
-       p->module_unavailable || p->stream_issued || p->cancel_requested ||
-       rd(SCR,1)!=0x30u || rd(BRR,1)!=0) return out->status;
-    struct kui_sci_async_stage *stage=p->stage,scratch={0};
-    p->stage=&scratch;p->loop=out;
-    uint64_t start=timer_us_gettime64();
-    enum kui_sci_async_status result=KUI_SCI_ASYNC_OK;
-    while(timer_us_gettime64()-start<total_us) {
-        wr(SPTR,0x83u,1);wr(SCR,0,1);
-        p->end_ssr=ORER;p->capture_stop=true;
-        result=handoff(p,p->card,false);
-        p->capture_stop=false;
-        if(result!=KUI_SCI_ASYNC_OK) break;
-        ++out->resets;
-    }
-    out->elapsed_us=timer_us_gettime64()-start;
-    out->module_reset_state=scratch.module_reset_state;
-    p->end_ssr=0;p->loop=NULL;p->stage=stage;
-    out->status=result;
-    return result==KUI_SCI_ASYNC_OK?result:failed(p,result);
-}
-
-/* One uncached read of main RAM: an access on the external bus. */
-#ifndef KUI_SCI_ASYNC_PROBE_TEST
-static uint32_t ram_word;
-#endif
-static void touch_ram(void) {
-#ifdef KUI_SCI_ASYNC_PROBE_TEST
-    kui_sci_async_test_touch_ram();
-#else
-    (void)*(volatile uint32_t *)((((uintptr_t)&ram_word)&UINT32_C(0x1fffffff))|UINT32_C(0xa0000000));
-#endif
-}
-void kui_sci_async_spin(bool masked,bool bus,uint32_t total_us,uint32_t window_us,
-        struct kui_sci_async_spin *out) {
-    if(!out) return;
-    *out=(struct kui_sci_async_spin){0};
-    if(!window_us) return;
-    const uint32_t period=rd(TCOR2,4)+1u,window=window_us*25u/2u,pause=PAUSE_MASKED_US*25u/2u;
-    const bool cycles=(rd(PMCR1,2)&0xc13fu)==CPU_CYCLES_CONFIG;
-    uint64_t begin=timer_us_gettime64();
-    while(timer_us_gettime64()-begin<total_us) {
-        irq_mask_t mask=0;
-        if(masked) mask=irq_disable();
-        /* Cycle counts are read on both sides of each uptime read, so a
-         * gap's cycles cover at least the gap. */
-        uint32_t before=rd(PMCTR1L,4),previous=rd(TCNT2,4),spent=0;
-        while(spent<window) {
-            if(bus) touch_ram();
-            uint32_t now_before=rd(PMCTR1L,4),now=rd(TCNT2,4),after=rd(PMCTR1L,4);
-            uint32_t gap=ticks_between(previous,now,period);
-            if(gap>=pause) {
-                if(out->gaps_over_500us<KUI_SCI_ASYNC_SPIN_PAUSES)
-                    out->pause_at_us[out->gaps_over_500us]=timer_us_gettime64();
-                ++out->gaps_over_500us;
-            }
-            if(gap*80u>out->max_gap_ns) {
-                out->max_gap_ns=gap*80u;out->max_gap_at_us=timer_us_gettime64();
-                out->max_gap_cpu_ns=cycles?(after-before)*5u:0u;
-            }
-            previous=now;before=now_before;spent+=gap;
-        }
-        if(masked) irq_restore(mask);
-        ++out->windows;
-    }
-    out->spun_us=timer_us_gettime64()-begin;
 }
 
 enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *c,

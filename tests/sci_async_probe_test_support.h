@@ -23,6 +23,10 @@ int irq_set_handler(irq_t source, irq_hdl_t handler, void *data);
 unsigned irq_get_priority(irq_src_t source);
 void irq_set_priority(irq_src_t source, unsigned priority);
 uint64_t timer_us_gettime64(void);
+/* KOS's uptime as seconds and TMU2 ticks (arch/timer.h); the model's TMU2
+ * runs at 2 MHz. */
+typedef struct { uint32_t secs, ticks; } timer_val_t;
+timer_val_t kui_sci_async_test_ticks(void);
 
 uint32_t kui_sci_async_test_read(uint32_t address, unsigned width);
 void kui_sci_async_test_write(uint32_t address, uint32_t value, unsigned width);
@@ -32,5 +36,4 @@ void kui_sci_async_test_cache_purge(void *buffer, size_t count);
 void kui_sci_async_test_cache_invalidate(void *buffer, size_t count);
 void kui_sci_async_test_work_tick(void);
 void kui_sci_async_test_bus_fence(void);
-void kui_sci_async_test_touch_ram(void);
 #endif

@@ -26,13 +26,6 @@ enum kui_sd_async_recovery_phase {
 #define KUI_SD_ASYNC_RESUME_OFFSET 64u
 #define KUI_SD_ASYNC_RESUME_BLOCKS 64u
 #define KUI_SD_ASYNC_COMPARE_BLOCKS (KUI_SD_ASYNC_RESUME_OFFSET+KUI_SD_ASYNC_RESUME_BLOCKS)
-/* Pause hunt, after the streaming pass: 1 s of back-to-back SCI module
- * resets (kui_sci_async_reset_loop), then idle CPU tests without SCI
- * activity, 1 s each: interrupts masked in 20 ms windows, the same while
- * reading main RAM, and unmasked (kui_sci_async_spin). */
-#define KUI_SD_ASYNC_RESET_LOOP_US 1000000u
-#define KUI_SD_ASYNC_SPIN_US 1000000u
-#define KUI_SD_ASYNC_SPIN_WINDOW_US 20000u
 struct kui_sd_async_result {
     struct kui_sci_async_probe_result probe;
     bool baseline_verified, recovery_verified, recovery_reinitialized, restart_required;
@@ -72,9 +65,6 @@ struct kui_sd_async_result {
     bool stream_ran, resume_ran, stream_match, resume_match;
     struct kui_sci_async_stream stream;
     struct kui_sci_async_resume resume;
-    bool reset_loop_ran;
-    struct kui_sci_async_reset_loop reset_loop;
-    struct kui_sci_async_spin spin_masked, spin_bus, spin_unmasked;
     char message[128];
 };
 const char *kui_sd_async_recovery_name(enum kui_sd_async_recovery_phase phase);

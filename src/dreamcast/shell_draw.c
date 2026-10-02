@@ -1022,7 +1022,7 @@ static void sci_async_probe(struct paint *p,const struct kui_shell_view *v) {
         label(p,48,216,MUTED,"A Quick: the same sector at slow and fast speeds.");
         label(p,48,238,MUTED,"X 60-second stress: 16 sectors spread across the card.");
         label(p,48,260,MUTED,"Y The same stress with the screen updating.");
-        label(p,48,282,MUTED,"R Speed: all readers, then a 4-second CPU pause hunt.");
+        label(p,48,282,MUTED,"R Speed: ordinary vs async readers, and the CMD18 stream.");
         label(p,48,304,MUTED,"X and R pause screen updates; hold B to stop safely.");
         label(p,48,326,MUTED,"Only the final JSON report writes to /KUI/tests.");
         label(p,48,348,MUTED,"Normal game reads are unchanged by this experiment.");

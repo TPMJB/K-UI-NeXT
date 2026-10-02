@@ -235,29 +235,6 @@ enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reade
     for(uint32_t i=0;i<count;++i) memset(dst+(size_t)i*512u,sector_byte(lba+i),512);
     return KUI_SCI_ASYNC_OK;
 }
-static unsigned spin_calls,loop_calls;
-static enum kui_sci_async_status loop_result;
-/* After the streaming pass, with the reader still open. */
-enum kui_sci_async_status kui_sci_async_reset_loop(struct kui_sci_async_reader *reader,
-        uint32_t total_us,struct kui_sci_async_reset_loop *out) {
-    assert(reader->generation && speed_mode && total_us==KUI_SD_ASYNC_RESET_LOOP_US);
-    assert(stream_runs && !stream_left && !async_closes);
-    ++loop_calls;
-    *out=(struct kui_sci_async_reset_loop){.status=loop_result,.resets=100000u,.elapsed_us=total_us};
-    if(loop_result!=KUI_SCI_ASYNC_OK) {
-        engine_result->status=engine_result->operation_status=loop_result;
-        probe_status=loop_result;
-    }
-    return loop_result;
-}
-/* Then, closed: masked, masked reading RAM, unmasked. */
-void kui_sci_async_spin(bool masked,bool bus,uint32_t total_us,uint32_t window_us,struct kui_sci_async_spin *out) {
-    assert(speed_mode && async_closes && loop_calls && total_us==KUI_SD_ASYNC_SPIN_US);
-    assert(window_us==KUI_SD_ASYNC_SPIN_WINDOW_US);
-    assert(masked==(spin_calls<2u) && bus==(spin_calls==1u));
-    ++spin_calls;
-    *out=(struct kui_sci_async_spin){.windows=50,.max_gap_ns=masked?(bus?3000u:2000u):9000000u,.spun_us=total_us};
-}
 void kui_sci_async_set_framing_quantum(struct kui_sci_async_reader *reader,unsigned bytes) {
     assert(reader->generation && speed_mode && bytes==4096u);++quantum_calls;
 }
@@ -302,7 +279,6 @@ static void prepare(void) {
     capture_calls=resume_calls=capture_lba=resume_lba=0;
     capture_result=KUI_SCI_ASYNC_OK;capture_corrupt=false;
     stream_left=stream_index=stream_runs=stream_corrupt_lba=0;stream_dst=NULL;
-    spin_calls=loop_calls=0;loop_result=KUI_SCI_ASYNC_OK;
 }
 /* The same blocks through both readers: the file's first cluster when found,
  * otherwise the data area. Matching CRCs are required for a pass. */
@@ -328,10 +304,6 @@ static void test_speed(void) {
     assert(out.speed_stream_match && out.speed_stream_blocks==KUI_SD_ASYNC_SPEED_BLOCKS);
     assert(out.speed_stream_crc==out.speed_normal_crc && stream_runs==KUI_SD_ASYNC_SPEED_BLOCKS/128u);
     assert(out.speed_stream_us==UINT64_C(400)*KUI_SD_ASYNC_SPEED_BLOCKS && !stream_left);
-    /* Then the reset loop before closing, and the idle CPU tests after. */
-    assert(loop_calls==1 && out.reset_loop_ran && out.reset_loop.resets==100000u);
-    assert(spin_calls==3 && out.spin_masked.windows==50 && out.spin_masked.max_gap_ns==2000u);
-    assert(out.spin_bus.max_gap_ns==3000u && out.spin_unmasked.max_gap_ns==9000000u);
 
     /* A streamed block that differs from the ordinary pass is reported. */
     prepare();speed_mode=speed_file=true;stream_corrupt_lba=164+700;
@@ -350,17 +322,7 @@ static void test_speed(void) {
     prepare();speed_mode=speed_file=true;capture_result=KUI_SCI_ASYNC_COMMAND;
     kui_sd_async_speed(&out,cancelled,NULL);
     assert(out.speed_match && out.stream_ran && !out.resume_ran && !resume_calls && !stream_runs);
-    assert(!loop_calls && !spin_calls); /* a failed run skips the pause hunt */
     assert(out.probe.status==KUI_SCI_ASYNC_COMMAND && out.recovery_reinitialized && out.recovery_verified);
-    kui_sd_disconnect();prepare();assert(kui_sd_connect());
-
-    /* A module reset that fails in the reset loop fails the run the same
-     * way, with the streaming result kept and no idle tests. */
-    prepare();speed_mode=speed_file=true;loop_result=KUI_SCI_ASYNC_HANDOFF;
-    kui_sd_async_speed(&out,cancelled,NULL);
-    assert(out.speed_stream_match && out.reset_loop_ran && loop_calls==1 && !spin_calls);
-    assert(out.reset_loop.status==KUI_SCI_ASYNC_HANDOFF);
-    assert(out.probe.status==KUI_SCI_ASYNC_HANDOFF && out.recovery_reinitialized && out.recovery_verified);
     kui_sd_disconnect();prepare();assert(kui_sd_connect());
 
     prepare();speed_mode=true;kui_sd_async_speed(&out,cancelled,NULL);

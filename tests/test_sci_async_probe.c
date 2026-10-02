@@ -98,11 +98,9 @@ static struct {
     uint8_t stop_r1, stream_payload[514];
     uint32_t stream_bad_lba;
     unsigned stream_budget; /* streamed bytes per model step; 0 means 256 */
-    /* Uptime counter reads, and one injected 2.5 ms CPU stall at stall_at;
-     * cycle counter reads (200 per us; pmcr_off: not counting cycles); RAM
-     * reads, and one 2.5 ms stall of the external bus at ram_stall_at. */
-    uint64_t tick_reads, stall_at, cycle_reads, ram_touches, ram_stall_at;
-    bool stall_done, pmcr_off, ram_stall_done;
+    /* Uptime counter reads, and one injected 2.5 ms CPU stall at stall_at. */
+    uint64_t tick_reads, stall_at;
+    bool stall_done;
 } hw;
 static int handler_data[3];
 static int foreign_data;
@@ -345,7 +343,15 @@ void irq_set_priority(irq_src_t source,unsigned priority) {
     assert(source!=IRQ_SRC_DMAC);
     hw.priorities[source]=priority; ++hw.priority_writes;
 }
-uint64_t timer_us_gettime64(void) { if(!hw.timer_stopped) hw.now+=37; advance(); return hw.now; }
+/* The model's clock: each reading lets 37 us pass. */
+static uint64_t model_now(void) { if(!hw.timer_stopped) hw.now+=37; advance(); return hw.now; }
+/* KOS's timer_us_gettime64() as on the console: it counts TMU2's 80.2 ns ticks
+ * as 80 ns, so a second reads only 997,498 us and the next one starts 2.5 ms
+ * later. The probe must not time with it. */
+uint64_t timer_us_gettime64(void) {
+    uint64_t now=model_now();
+    return now/1000000u*1000000u+now%1000000u*997498u/1000000u;
+}
 void kui_sci_async_test_work_tick(void) { ++hw.work_ticks; hw.now+=11; advance(); }
 /* A transfer accepted before DE was cleared may still complete late: once for
  * LATE_BYTE_AFTER_STOP, and on every fence for LATE_DMA_AFTER_STOP. */
@@ -360,11 +366,9 @@ void kui_sci_async_test_bus_fence(void) {
         ++hw.dar; ++hw.transferred; ++hw.total_bytes; --hw.tcr; ++hw.late_writes;
     }
 }
-void kui_sci_async_test_touch_ram(void) {
-    ++hw.ram_touches;
-    if(hw.ram_stall_at && hw.now>=hw.ram_stall_at && !hw.ram_stall_done) {
-        hw.now+=2500;hw.ram_stall_done=true;
-    }
+timer_val_t kui_sci_async_test_ticks(void) {
+    uint64_t now=model_now();
+    return (timer_val_t){(uint32_t)(now/1000000u),(uint32_t)(now%1000000u*2u)};
 }
 void kui_sci_async_test_delay(uint32_t count) {
     assert(count);
@@ -422,17 +426,15 @@ uint32_t kui_sci_async_test_read(uint32_t address,unsigned width) {
         case TCR: assert(width==4); return hw.tcr;
         case CHCR: assert(width==4); return hw.chcr;
         case DMAOR: assert(width==4); return hw.dmaor;
-        /* TMU2 uptime counter: 12.5 MHz down-counter reloading each second.
-         * Each read lets a little time pass so spins make progress. */
-        case 0xffd80020u: assert(width==4); return 12499999u;
+        /* TMU2 uptime counter: a 2 MHz down-counter reloading each second.
+         * Each read lets one tick pass. */
+        case 0xffd80020u: assert(width==4); return 1999999u;
         case 0xffd80024u: {
             assert(width==4);
-            uint64_t ticks=hw.now*25u/2u+hw.tick_reads++;
+            uint64_t ticks=hw.now*2u+hw.tick_reads++;
             if(hw.stall_at && hw.now>=hw.stall_at && !hw.stall_done) {hw.now+=2500;hw.stall_done=true;}
-            return 12499999u-(uint32_t)(ticks%12500000u);
+            return 1999999u-(uint32_t)(ticks%2000000u);
         }
-        case 0xff000084u: assert(width==2); return hw.pmcr_off?0x0000u:0xc023u;
-        case 0xff100008u: assert(width==4); return (uint32_t)(hw.now*200u+hw.cycle_reads++);
         default: assert(!"Unexpected MMIO read"); return 0;
     }
 }
@@ -1916,9 +1918,9 @@ static void test_pause_in_module_reset(void) {
         assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
         assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
     }
-    assert(result.fast.module_resets==3 && !result.pause_count && result.cpu_counter_config==0xc023u);
+    assert(result.fast.module_resets==3 && !result.pause_count);
     const struct kui_sci_async_reset_time *worst=&result.reset_worst;
-    assert(worst->stage==1 && worst->ns && worst->ns<1000000u && worst->cpu_ns && worst->cpu_ns<1000000u);
+    assert(worst->stage==1 && worst->ns && worst->ns<1000000u);
     hw.stall_at=hw.now; /* the next uptime-counter read stalls */
     assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
     assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
@@ -1927,99 +1929,33 @@ static void test_pause_in_module_reset(void) {
     const struct kui_sci_async_pause *pause=&result.pauses[0];
     assert(pause->site==3 && pause->stage==1 && pause->us>=2500 && pause->at_us);
     assert(result.max_irq_masked_site==3 && result.max_irq_masked_stage==1);
-    assert(result.max_irq_masked_us>=2500 && worst->ns>=2500000u && worst->cpu_ns>=2500000u);
+    assert(result.max_irq_masked_us>=2500 && worst->ns>=2500000u && worst->ns<2600000u);
     /* The stall shows in the first step (between the first two reads). */
     assert(worst->steps_ns[0]>=2500000u);
     for(unsigned i=1;i<6;++i) assert(worst->steps_ns[i]<1000000u);
     assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);
 }
-static void test_spin(void) {
-    reset();
-    struct kui_sci_async_spin spin;
-    kui_sci_async_spin(true,false,20000,2000,&spin);
-    assert(spin.windows>=2 && spin.spun_us>=20000 && !spin.gaps_over_500us);
-    assert(spin.max_gap_ns && spin.max_gap_ns<500000u && hw.irq_mask==0 && !hw.ram_touches);
-    hw.stall_at=hw.now+5000;
-    kui_sci_async_spin(true,false,20000,2000,&spin);
-    assert(hw.stall_done && spin.gaps_over_500us==1 && spin.max_gap_ns>=2500000u);
-    assert(spin.max_gap_cpu_ns>=2500000u && spin.max_gap_cpu_ns<3000000u);
-    assert(spin.pause_at_us[0]>=5000 && spin.max_gap_at_us && hw.irq_mask==0);
-    /* A held external bus: only the spin that reads RAM sees it. */
-    hw.ram_stall_at=hw.now;
-    kui_sci_async_spin(true,false,20000,2000,&spin);
-    assert(!hw.ram_stall_done && !hw.ram_touches && !spin.gaps_over_500us);
-    kui_sci_async_spin(true,true,20000,2000,&spin);
-    assert(hw.ram_stall_done && hw.ram_touches && spin.gaps_over_500us==1 && spin.max_gap_ns>=2500000u);
-    /* Without the elapsed-cycle configuration no CPU time is claimed. */
-    hw.pmcr_off=true;hw.stall_done=false;hw.stall_at=hw.now;
-    kui_sci_async_spin(false,false,20000,2000,&spin);
-    assert(hw.stall_done && spin.max_gap_ns>=2500000u && !spin.max_gap_cpu_ns);
-    kui_sci_async_spin(false,false,0,2000,&spin);
-    assert(!spin.windows && !spin.max_gap_ns);
-    kui_sci_async_spin(true,true,1000,0,&spin);
-    assert(!spin.windows);
-}
-/* Back-to-back handoffs with module resets: counted apart from the request
- * pause log, a stall located in its step, and the reader still usable. */
-static void test_reset_loop(void) {
+/* Reads across a whole second, where KOS's clock jumps 2.5 ms: the probe's
+ * own clock does not, so nothing is logged as a pause. */
+static void test_second_boundary(void) {
     struct kui_loader_sd card=reset();hw.force_tail_overrun=true;
+    hw.now=999900u;
+    uint64_t before=timer_us_gettime64();
+    hw.now=999963u;
+    assert(timer_us_gettime64()-before>2500u); /* 63 us later on the model */
+    hw.now=998000u;
     struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
-    struct kui_sci_async_reset_loop loop;uint8_t payload[512];
-    assert(kui_sci_async_reset_loop(&reader,1000,&loop)==KUI_SCI_ASYNC_ARGUMENT);
+    uint8_t payload[512];
     assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_reset_loop(&reader,1000,NULL)==KUI_SCI_ASYNC_ARGUMENT);
-    /* Not before a fast request has left the bus at the fast rate. */
-    assert(kui_sci_async_begin(&reader,123,true)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_reset_loop(&reader,1000,&loop)==KUI_SCI_ASYNC_ARGUMENT);
-    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_reset_loop(&reader,1000,&loop)==KUI_SCI_ASYNC_ARGUMENT);
-    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
-    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
-    const uint32_t resets=result.fast.module_resets,pauses=result.pause_count;
-    const uint64_t masked=result.max_irq_masked_us;
-    const struct kui_sci_async_reset_time worst=result.reset_worst;
-    const unsigned asserts=hw.module_asserts;
-    assert(kui_sci_async_reset_loop(&reader,20000,&loop)==KUI_SCI_ASYNC_OK);
-    assert(loop.status==KUI_SCI_ASYNC_OK && loop.resets>=10 && loop.elapsed_us>=20000);
-    assert(hw.module_asserts==asserts+loop.resets && !loop.pauses && loop.max_masked_us<500);
-    assert(loop.module_reset_state==KUI_SCI_ASYNC_MODULE_RESET_OK);
-    assert(loop.worst.stage==5 && loop.worst.ns && loop.worst.ns<1000000u && loop.worst.cpu_ns);
-    /* The requests' counters and pause log are untouched. */
-    assert(result.fast.module_resets==resets && result.pause_count==pauses);
-    assert(result.max_irq_masked_us==masked && !memcmp(&result.reset_worst,&worst,sizeof(worst)));
-    assert(!hw.selected && hw.scr==0x30 && hw.brr==0 && !(hw.stbcr&1u));
-    /* A stall inside one of the loop's resets. */
-    hw.stall_at=hw.now+3000;
-    assert(kui_sci_async_reset_loop(&reader,20000,&loop)==KUI_SCI_ASYNC_OK);
-    assert(hw.stall_done && loop.pauses==1 && loop.pause_at_us[0] && loop.max_masked_us>=2500);
-    assert(loop.worst.ns>=2500000u && loop.worst.cpu_ns>=2500000u && loop.worst.steps_ns[0]>=2500000u);
-    assert(result.pause_count==pauses && result.max_irq_masked_us==masked);
-    assert(!memcmp(&result.reset_worst,&worst,sizeof(worst)));
-    /* The reader still reads. */
-    assert(kui_sci_async_begin(&reader,124,false)==KUI_SCI_ASYNC_OK);
-    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_finish(&reader,payload,NULL)==KUI_SCI_ASYNC_OK);
+    for(unsigned i=0;i<100 && hw.now<1003000u;++i) {
+        assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
+        assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+        assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
+    }
+    assert(hw.now>=1003000u && result.fast.passed>=2);
+    assert(!result.pause_count && result.max_irq_masked_us<500 && result.max_call_us<1500);
+    assert(result.fast.max_receive_us<1500 && result.reset_worst.ns<1000000u);
     assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
-    assert(kui_sci_async_reset_loop(&reader,1000,&loop)==KUI_SCI_ASYNC_ARGUMENT);
-}
-/* A module that does not come back during the loop fails the reader. */
-static void test_reset_loop_failure(void) {
-    struct kui_loader_sd card=reset();hw.force_tail_overrun=true;
-    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
-    struct kui_sci_async_reset_loop loop;uint8_t payload[512];
-    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
-    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
-    hw.module_resume_failure=true;
-    enum kui_sci_async_status status=kui_sci_async_reset_loop(&reader,20000,&loop);
-    assert(status!=KUI_SCI_ASYNC_OK && loop.status==status && !loop.resets);
-    assert(loop.module_reset_state==KUI_SCI_ASYNC_MODULE_RESET_RESUME_FAILED);
-    assert(result.status==status);
-    assert(kui_sci_async_begin(&reader,123,false)!=KUI_SCI_ASYNC_OK);
-    (void)kui_sci_async_close(&reader);
 }
 static void isolated(void (*test)(void)) {
     /* The production API deliberately has no reset for a poisoned session. */
@@ -2113,10 +2049,8 @@ int main(void) {
     isolated(test_stream_reader_missing_tail);
     test_stream_reader_arguments();
     test_pause_in_module_reset();
-    test_spin();
-    test_reset_loop();
-    isolated(test_reset_loop_failure);
-    puts("SCI pause tracing: masked pause, module reset steps, reset loop and idle spins passed");
+    test_second_boundary();
+    puts("SCI pause tracing: masked pause, module reset steps and the whole-second jump passed");
     puts("SCI CMD18 streaming reader: overlapped checks, RDR byte, lost token, overrun, bad block, cancel passed");
     puts("SCI CMD18 capture and per-block resume: gaps, findings, CMD12 stop and reuse passed");
     puts("SCI module reset: bounded gates, restoration and modeled RX recovery passed; console proof still required");
