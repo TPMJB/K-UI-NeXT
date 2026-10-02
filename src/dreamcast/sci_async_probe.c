@@ -24,6 +24,7 @@
 #define RDR UINT32_C(0xffe00014)
 #define SCMR UINT32_C(0xffe00018)
 #define SPTR UINT32_C(0xffe0001c)
+#define STBCR UINT32_C(0xffc00004)
 #define PDTR UINT32_C(0xff800030)
 #define SAR UINT32_C(0xffa00010)
 #define DAR UINT32_C(0xffa00014)
@@ -113,7 +114,7 @@ struct probe {
     uint32_t sar,dar,tcr,chcr;
     uint8_t smr,brr,scr,scmr,sptr;
     unsigned sci_priority;
-    bool leased;
+    bool leased, module_unavailable;
     uint32_t expected_sar,expected_dar,expected_tcr,expected_chcr,start_address;
     volatile bool armed,done,foreign_dma,quarantined;
     volatile uint32_t end_chcr,end_count,end_ssr,event;
@@ -240,16 +241,20 @@ static void release(struct probe *p) {
     if(p->armed) {p->armed=false;freeze(p);}
     if(!p->quarantined && !dma_unchanged(p)) p->foreign_dma=true;
     /* No source is enabled when the prior callback becomes visible again. */
-    wr(SCR,0,1);
+    if(!p->module_unavailable) wr(SCR,0,1);
     if(!p->foreign_dma && !p->quarantined) {wr(CHCR,0,4);(void)rd(CHCR,4);settle(64);}
-    uint8_t status=(uint8_t)rd(SSR,1);
-    if(status&RDRF) (void)rd(RDR,1);
-    wr(SSR,status&~(RDRF|FLAGS),1);
+    if(!p->module_unavailable) {
+        uint8_t status=(uint8_t)rd(SSR,1);
+        if(status&RDRF) (void)rd(RDR,1);
+        wr(SSR,status&~(RDRF|FLAGS),1);
+    }
     if(!p->foreign_dma && !p->quarantined) {
         wr(SAR,p->sar,4);wr(DAR,p->dar,4);wr(TCR,p->tcr,4);wr(CHCR,p->chcr,4);
     }
-    wr(SMR,p->smr,1);wr(BRR,p->brr,1);wr(SCMR,p->scmr,1);wr(SPTR,p->sptr,1);
-    settle(1024);
+    if(!p->module_unavailable) {
+        wr(SMR,p->smr,1);wr(BRR,p->brr,1);wr(SCMR,p->scmr,1);wr(SPTR,p->sptr,1);
+        settle(1024);
+    }
     bool handlers=true;
     for(unsigned i=0;i<3;++i) {
         irq_cb_t current=irq_get_handler(events[i]);
@@ -259,8 +264,8 @@ static void release(struct probe *p) {
     }
     irq_set_priority(IRQ_SRC_SCI1,p->sci_priority);
     handlers=handlers && irq_get_priority(IRQ_SRC_SCI1)==p->sci_priority;
-    wr(SCR,p->scr,1);
-    bool registers=!p->foreign_dma && !p->quarantined && rd(SAR,4)==p->sar && rd(DAR,4)==p->dar && rd(TCR,4)==p->tcr &&
+    if(!p->module_unavailable) wr(SCR,p->scr,1);
+    bool registers=!p->module_unavailable && !p->foreign_dma && !p->quarantined && rd(SAR,4)==p->sar && rd(DAR,4)==p->dar && rd(TCR,4)==p->tcr &&
         rd(CHCR,4)==p->chcr && rd(SMR,1)==p->smr && rd(BRR,1)==p->brr &&
         rd(SCR,1)==p->scr && rd(SCMR,1)==p->scmr &&
         (rd(SPTR,1)&0x8au)==(p->sptr&0x8au);
@@ -270,6 +275,72 @@ static void release(struct probe *p) {
         !(rd(SSR,1)&(RDRF|FLAGS)) && (rd(DMAOR,4)&7u)==1u;
     poisoned=!p->out->safe_restored;p->leased=false;
     unmask(p,mask,start);
+}
+
+/* A completed, validated CMD17 with trailing overrun is the only reset
+ * candidate. Renesas 9.2.1/9.6 and 15.1.4 document MSTP0 as SCI-only module
+ * standby and initialization of SCI registers except SPTR. This experiment
+ * tests whether that stronger reset restores the receiver after ORER; the
+ * console has not established its internal cause. No DMA abort is inferred.
+ */
+static enum kui_sci_async_status module_reset(struct probe *p) {
+    struct kui_sci_async_stage *s=p->stage;
+    ++s->module_reset_attempts;
+    s->module_reset_state=KUI_SCI_ASYNC_MODULE_RESET_PRECONDITION;
+    uint64_t start=timer_us_gettime64();irq_mask_t mask=irq_disable();
+    enum kui_sci_async_status result=KUI_SCI_ASYNC_HANDOFF;
+    s->module_stb_before=rd(STBCR,1);
+    if(s->module_stb_before&1u) {p->module_unavailable=true;goto failed;}
+    if(p->armed || p->quarantined || p->foreign_dma || !dma_unchanged(p)) {
+        p->foreign_dma=true;result=KUI_SCI_ASYNC_DMA_ERROR;goto failed;
+    }
+    if(p->end_count || !(p->end_chcr&2u) || !(p->end_ssr&ORER) ||
+       !p->out->guards_ok || !p->out->crc_ok || !p->out->baseline_ok ||
+       !kui_sci_sd_healthy() || !(rd(PDTR,2)&0x80u) || rd(SCR,1)!=0 ||
+       (rd(SSR,1)&(RDRF|FLAGS)) || (rd(SPTR,1)&0x8au)!=0x82u) goto failed;
+    /* Only the SCI bit changes. The short mask protects these RMWs and the
+     * ownership check; DMAC, SCIF, timers and the CPU keep their clocks. */
+    p->module_unavailable=true;
+    wr(STBCR,s->module_stb_before|1u,1);
+    bool stopped=false;
+    for(unsigned n=0;n<HANDOFF_POLLS;++n) {
+        s->module_stb_stopped=rd(STBCR,1);
+        if(s->module_stb_stopped&1u) {stopped=true;break;}
+    }
+    settle(64);
+    /* Always attempt the bounded resume, including an unconfirmed assert.
+     * There is no SCI MMIO between gating and confirming this clear. */
+    wr(STBCR,rd(STBCR,1)&~1u,1);
+    for(unsigned n=0;n<HANDOFF_POLLS;++n) {
+        s->module_stb_after=rd(STBCR,1);
+        if(!(s->module_stb_after&1u)) {p->module_unavailable=false;break;}
+    }
+    if(p->module_unavailable) {
+        s->module_reset_state=KUI_SCI_ASYNC_MODULE_RESET_RESUME_FAILED;goto failed;
+    }
+    if(!stopped) {
+        s->module_reset_state=KUI_SCI_ASYNC_MODULE_RESET_ASSERT_FAILED;goto failed;
+    }
+    settle(64);
+    uint32_t bad=0;
+    if(rd(SCR,1)!=0) bad|=KUI_SCI_ASYNC_MODULE_RESET_BAD_SCR;
+    if(rd(SMR,1)!=0) bad|=KUI_SCI_ASYNC_MODULE_RESET_BAD_SMR;
+    if(rd(BRR,1)!=0xffu) bad|=KUI_SCI_ASYNC_MODULE_RESET_BAD_BRR;
+    if(rd(SCMR,1)!=0) bad|=KUI_SCI_ASYNC_MODULE_RESET_BAD_SCMR;
+    if((rd(SSR,1)&0xfcu)!=0x84u) bad|=KUI_SCI_ASYNC_MODULE_RESET_BAD_SSR;
+    if((rd(SPTR,1)&0x8au)!=0x82u) bad|=KUI_SCI_ASYNC_MODULE_RESET_BAD_SPTR;
+    if(bad) {
+        /* Resume is proven, so SCI writes are safe again. Do not expose an
+         * unexpected enabled interrupt source before cleanup can run. */
+        wr(SCR,0,1);
+        s->module_reset_state=KUI_SCI_ASYNC_MODULE_RESET_SIGNATURE|bad;goto failed;
+    }
+    s->module_reset_state=KUI_SCI_ASYNC_MODULE_RESET_OK;
+    ++s->module_resets;
+    unmask(p,mask,start);return KUI_SCI_ASYNC_OK;
+failed:
+    ++s->module_reset_failures;
+    unmask(p,mask,start);return result;
 }
 
 static uint8_t byte(const struct kui_loader_sd *c, uint8_t v, bool slow) {
@@ -379,14 +450,18 @@ static enum kui_sci_async_status handoff(struct probe *p,
     c->bus.select(c->bus.ctx,false);
     if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
     if(!(rd(PDTR,2)&0x80u)) {++s->handoff_failures;return KUI_SCI_ASYNC_HANDOFF;}
+    if(p->end_ssr&ORER) {
+        enum kui_sci_async_status reset=module_reset(p);
+        if(reset!=KUI_SCI_ASYNC_OK) {++s->handoff_failures;return reset;}
+    }
     /* Re-establish the documented synchronous initialization while CS is
      * high. Keep the current BRR so the normal bus's speed cache agrees.
      * TE and RE are enabled together; no transmit data is queued here.
      * Reinitializing at this boundary is experimental, not proof that the
      * previous console's unresponsive CMD17 was caused by the receiver. */
-    wr(SCR,0,1);wr(SMR,p->smr,1);wr(BRR,slow?31u:0u,1);
-    wr(SPTR,p->sptr,1);
+    wr(SCR,0,1);wr(SCMR,p->scmr,1);wr(SMR,p->smr,1);wr(BRR,slow?31u:0u,1);
     settle(1024);
+    wr(SPTR,p->sptr,1);
     wr(SCR,0x30u,1);
     s->handoff_scr=rd(SCR,1);s->handoff_ssr=rd(SSR,1);
     s->handoff_sptr=rd(SPTR,1);
@@ -548,18 +623,19 @@ enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *c,
         for(unsigned n=0;n<count;++n) {
             if(cancelled && cancelled(ctx)) {out->status=KUI_SCI_ASYNC_CANCELLED;break;}
             out->status=trial(p,c,lba,baseline,speed==0);
-            if(p->stage->last_phase<KUI_SCI_ASYNC_PHASE_DMA &&
+            if(!p->module_unavailable && p->stage->last_phase<KUI_SCI_ASYNC_PHASE_DMA &&
                p->stage->last_phase!=KUI_SCI_ASYNC_PHASE_GPIO) {
                 p->stage->snapshot_ssr=rd(SSR,1);
                 p->stage->snapshot_sptr=rd(SPTR,1);
             }
             if(out->status!=KUI_SCI_ASYNC_OK) {
-                c->bus.select(c->bus.ctx,false);break;
+                if(!p->module_unavailable) c->bus.select(c->bus.ctx,false);
+                break;
             }
         }
         p->stage->elapsed_us=timer_us_gettime64()-stage_start;
     }
-    if(!(rd(PDTR,2)&0x80u)) c->bus.select(c->bus.ctx,false);
+    if(!p->module_unavailable && !(rd(PDTR,2)&0x80u)) c->bus.select(c->bus.ctx,false);
     out->operation_status=out->status;
     release(p);
     if(!out->safe_restored) out->status=KUI_SCI_ASYNC_RESTORE;

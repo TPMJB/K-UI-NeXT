@@ -619,7 +619,7 @@ static bool sci_async_passed(const struct kui_sd_async_result *result) {
         sci_async_completion(r) && r->fast.overlap_batches;
 }
 static bool sci_async_save(const struct kui_sd_async_result *result,char path[96]) {
-    static char stage[2][1536],json[4608];
+    static char stage[2][2048],json[6144];
     const struct kui_sci_async_probe_result *r=&result->probe;
     const struct kui_sci_async_stage *stages[]={&r->slow,&r->fast};
     path[0]=0;
@@ -635,6 +635,8 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
             "\"command_response\":%lu,\"last_token\":%lu,\"snapshot_ssr\":%lu,\"snapshot_sptr\":%lu,"
             "\"handoff_checks\":%lu,\"handoff_retries\":%lu,\"handoff_failures\":%lu,"
             "\"handoff_ssr\":%lu,\"handoff_scr\":%lu,\"handoff_sptr\":%lu,\"bus_faults\":%lu,"
+            "\"module_reset_attempts\":%lu,\"module_resets\":%lu,\"module_reset_failures\":%lu,"
+            "\"module_reset_state\":%lu,\"module_stb_before\":%lu,\"module_stb_stopped\":%lu,\"module_stb_after\":%lu,"
             "\"framing_step\":%u,\"framing_name\":\"%s\",\"framing_index\":%lu,"
             "\"bus_fault_valid\":%lu,\"bus_wait_flag\":%lu,\"bus_fault_ssr\":%lu,\"bus_fault_scr\":%lu,"
             "\"bus_fault_smr\":%lu,\"bus_fault_brr\":%lu,\"bus_fault_scmr\":%lu,\"bus_fault_sptr\":%lu,"
@@ -651,6 +653,9 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
             (unsigned long)s->handoff_checks,(unsigned long)s->handoff_retries,(unsigned long)s->handoff_failures,
             (unsigned long)s->handoff_ssr,(unsigned long)s->handoff_scr,(unsigned long)s->handoff_sptr,
             (unsigned long)s->bus_faults,
+            (unsigned long)s->module_reset_attempts,(unsigned long)s->module_resets,
+            (unsigned long)s->module_reset_failures,(unsigned long)s->module_reset_state,
+            (unsigned long)s->module_stb_before,(unsigned long)s->module_stb_stopped,(unsigned long)s->module_stb_after,
             (unsigned)s->framing_step,kui_sci_async_framing_name(s->framing_step),(unsigned long)s->framing_index,
             (unsigned long)s->bus_fault_valid,(unsigned long)s->bus_wait_flag,
             (unsigned long)s->bus_fault_ssr,(unsigned long)s->bus_fault_scr,
@@ -781,6 +786,29 @@ static void sci_async_operation(void) {
                             (unsigned long)(stage->bus_wait_flag&255u),(unsigned long)(stage->bus_fault_ssr&255u),
                             (unsigned long)(stage->bus_fault_scr&255u),(unsigned long)(stage->bus_fault_sptr&255u));
                     else snprintf(status.lines[2],KUI_APP_LINE_CAP,"First bus fault snapshot unavailable.");
+                }
+                if(stage->module_reset_attempts || stage->module_reset_failures) {
+                    char reset_line[160];
+                    snprintf(reset_line,sizeof(reset_line),"Slow%lu/%lu IRQ%lu Fast%lu/%lu IRQ%lu Reset%lu/%lu fail%lu state%03lX",
+                        (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs,
+                        (unsigned long)r->fast.passed,(unsigned long)r->fast.attempted,(unsigned long)r->fast.dma_irqs,
+                        (unsigned long)stage->module_resets,(unsigned long)stage->module_reset_attempts,
+                        (unsigned long)stage->module_reset_failures,(unsigned long)stage->module_reset_state);
+                    snprintf(status.lines[0],KUI_APP_LINE_CAP,"%.79s",reset_line);
+                    if(stage->bus_fault_valid)
+                        snprintf(status.lines[2],KUI_APP_LINE_CAP,"Before stop: wait%02lX SSR%02lX SCR%02lX SPTR%02lX STB%02lX/%02lX/%02lX",
+                            (unsigned long)(stage->bus_wait_flag&255u),(unsigned long)(stage->bus_fault_ssr&255u),
+                            (unsigned long)(stage->bus_fault_scr&255u),(unsigned long)(stage->bus_fault_sptr&255u),
+                            (unsigned long)(stage->module_stb_before&255u),(unsigned long)(stage->module_stb_stopped&255u),
+                            (unsigned long)(stage->module_stb_after&255u));
+                    else if(stage->bus_faults)
+                        snprintf(status.lines[2],KUI_APP_LINE_CAP,"No bus snapshot; STB%02lX/%02lX/%02lX",
+                            (unsigned long)(stage->module_stb_before&255u),(unsigned long)(stage->module_stb_stopped&255u),
+                            (unsigned long)(stage->module_stb_after&255u));
+                    else snprintf(status.lines[2],KUI_APP_LINE_CAP,"Handoff SSR%02lX SCR%02lX SPTR%02lX STB%02lX/%02lX/%02lX",
+                        (unsigned long)(stage->handoff_ssr&255u),(unsigned long)(stage->handoff_scr&255u),
+                        (unsigned long)(stage->handoff_sptr&255u),(unsigned long)(stage->module_stb_before&255u),
+                        (unsigned long)(stage->module_stb_stopped&255u),(unsigned long)(stage->module_stb_after&255u));
                 }
                 if(stage->dma_started)
                     snprintf(status.lines[3],KUI_APP_LINE_CAP,"DMA left %lu CHCR%08lX ERI%lu RXI%lu",

@@ -16,7 +16,8 @@
  * ftp-busy, ftp-stopped, ftp-failed, storage-tests, storage-test-confirm,
  * storage-test-busy, storage-test-result, storage-test-details,
  * storage-test-mismatch, storage-test-history, sci-async-probe, sci-async-result,
- * sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure, sci-async-bus-failure. */
+ * sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure, sci-async-bus-failure,
+ * sci-async-reset-failure. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -439,7 +440,7 @@ int main(int argc,char **argv) {
     } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=home_row(KUI_SHELL_VMU);
     else if(!strcmp(argv[1],"home-memory")) shell.home_selected=home_row(KUI_SHELL_MEMORY);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
-    else if(!strcmp(argv[1],"sci-async-probe") || !strcmp(argv[1],"sci-async-result") || !strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure") || !strcmp(argv[1],"sci-async-bus-failure")) {
+    else if(!strcmp(argv[1],"sci-async-probe") || !strcmp(argv[1],"sci-async-result") || !strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure") || !strcmp(argv[1],"sci-async-bus-failure") || !strcmp(argv[1],"sci-async-reset-failure")) {
         shell.page=KUI_SHELL_SCI_ASYNC_PROBE;view.app_status=&status;
         status=(struct kui_app_status){0};view.busy=false;
         if(!strcmp(argv[1],"sci-async-result")) {
@@ -450,7 +451,7 @@ int main(int argc,char **argv) {
                 "CRC OK  Data OK  Buffer guards OK","Normal read recovery: verified","Saved independent report:",
                 "/KUI/tests/sci-async-0001/sci-async-probe.json","Normal game reads are unchanged by this experiment."};
             for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",probe_lines[i]);
-        } else if(!strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure") || !strcmp(argv[1],"sci-async-bus-failure")) {
+        } else if(!strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure") || !strcmp(argv[1],"sci-async-bus-failure") || !strcmp(argv[1],"sci-async-reset-failure")) {
             status.complete=true;status.errors=1;status.line_count=8;
             snprintf(status.message,sizeof(status.message),"SCI unsupported state; reinit init failed. Restart required.");
             const char *probe_lines[]={"Slow: 0/1 reads verified; 0 DMA interrupts",
@@ -473,7 +474,7 @@ int main(int argc,char **argv) {
                     "Saved independent report:","/KUI/tests/sci-async-0002/sci-async-probe.json",
                     "handoff: DMA1 SSR86 SPTR05 R1FF TKFF"};
                 for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",handoff_lines[i]);
-            } else if(!strcmp(argv[1],"sci-async-bus-failure")) {
+            } else if(!strcmp(argv[1],"sci-async-bus-failure") || !strcmp(argv[1],"sci-async-reset-failure")) {
                 snprintf(status.message,sizeof(status.message),"SCI framing bus fault; reinit init failed. Restart required.");
                 const char *bus_lines[]={"Slow 16/16 IRQ16  Fast 1/2 IRQ1",
                     "Framing ready poll index 0; faults 1",
@@ -482,6 +483,12 @@ int main(int argc,char **argv) {
                     "Report not saved; photograph this result.","Recover init: card timeout; CMD0 R1FF",
                     "ready: DMA1 SSR84 SPTR05 R1FF TKFF"};
                 for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",bus_lines[i]);
+                if(!strcmp(argv[1],"sci-async-reset-failure")) {
+                    snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow16/16 IRQ16 Fast127/128 IRQ127 Reset128/128 fail0 state001");
+                    snprintf(status.lines[1],KUI_APP_LINE_CAP,"Framing idle clock index 0; faults 1");
+                    snprintf(status.lines[2],KUI_APP_LINE_CAP,"Before stop: wait40 SSR86 SCR30 SPTR05 STB00/01/00");
+                    snprintf(status.lines[7],KUI_APP_LINE_CAP,"ready: DMA127 SSR84 SPTR05 R1FF TKFF");
+                }
             }
         }
     }

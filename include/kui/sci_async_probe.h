@@ -58,6 +58,22 @@ enum kui_sci_async_framing_step {
     KUI_SCI_ASYNC_FRAMING_HANDOFF
 };
 
+enum kui_sci_async_module_reset_state {
+    KUI_SCI_ASYNC_MODULE_RESET_NONE = 0,
+    KUI_SCI_ASYNC_MODULE_RESET_OK,
+    KUI_SCI_ASYNC_MODULE_RESET_PRECONDITION,
+    KUI_SCI_ASYNC_MODULE_RESET_ASSERT_FAILED,
+    KUI_SCI_ASYNC_MODULE_RESET_RESUME_FAILED,
+    /* Signature failures OR this marker with the mismatching registers. */
+    KUI_SCI_ASYNC_MODULE_RESET_SIGNATURE = 0x100,
+    KUI_SCI_ASYNC_MODULE_RESET_BAD_SCR = 1,
+    KUI_SCI_ASYNC_MODULE_RESET_BAD_SMR = 2,
+    KUI_SCI_ASYNC_MODULE_RESET_BAD_BRR = 4,
+    KUI_SCI_ASYNC_MODULE_RESET_BAD_SCMR = 8,
+    KUI_SCI_ASYNC_MODULE_RESET_BAD_SSR = 16,
+    KUI_SCI_ASYNC_MODULE_RESET_BAD_SPTR = 32
+};
+
 struct kui_sci_async_stage {
     uint32_t clock_hz, attempted, passed;
     enum kui_sci_async_phase last_phase;
@@ -70,6 +86,8 @@ struct kui_sci_async_stage {
     uint32_t last_remaining, last_chcr, last_ssr;
     uint32_t handoff_checks, handoff_retries, handoff_failures;
     uint32_t handoff_ssr, handoff_scr, handoff_sptr;
+    uint32_t module_reset_attempts, module_resets, module_reset_failures;
+    uint32_t module_reset_state, module_stb_before, module_stb_stopped, module_stb_after;
     uint32_t bus_faults;
     enum kui_sci_async_framing_step framing_step;
     uint32_t framing_index;

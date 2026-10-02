@@ -17,6 +17,7 @@
 #define RDR 0xffe00014u
 #define SCMR 0xffe00018u
 #define SPTR 0xffe0001cu
+#define STBCR 0xffc00004u
 #define PDTR 0xff800030u
 #define SAR 0xffa00010u
 #define DAR 0xffa00014u
@@ -42,7 +43,7 @@ enum fault { NO_FAULT, EARLY_ERROR, BAD_CRC, WRONG_DATA, STALLED,
              BUS_FAULT_ON_COMMAND, BUS_FAULT_ON_READY_DESELECT,
              BUS_FAULT_ON_IDLE_CLOCK, BUS_FAULT_ON_READY_POLL };
 static struct {
-    uint8_t smr, brr, scr, ssr, rdr, scmr, sptr;
+    uint8_t smr, brr, scr, ssr, rdr, scmr, sptr, stbcr;
     uint16_t pdtr;
     uint32_t sar, dar, tcr, chcr, dmaor;
     irq_cb_t handlers[3], probe_handlers[3];
@@ -55,6 +56,8 @@ static struct {
     unsigned install_attempts, fail_install_at;
     unsigned monitored_gpio_reads, failed_handler_restores;
     unsigned flag_clears, faulty_framing_calls;
+    unsigned module_asserts, module_resumes, module_polls;
+    unsigned module_signature_bad, reinit_stage;
     uint32_t command_argument;
     uint64_t now;
     uint8_t baseline[512], command_bytes[5], *dma_buffer;
@@ -64,6 +67,9 @@ static struct {
     bool dynamic_sptr_inputs, no_overlap, fail_handler_restore;
     bool rxd_pin, sck_pin, token_rx_high;
     bool bus_fault, reassert_once;
+    bool force_tail_overrun, tail_fast_only, receiver_stalled;
+    bool module_assert_failure, module_resume_failure, module_reinitializing;
+    bool bus_fault_on_tail_deselect, foreign_on_tail_deselect;
     struct kui_sci_sd_fault first_bus_fault;
     enum fault fault;
 } hw;
@@ -172,6 +178,10 @@ static void advance(void) {
                 hw.chcr|=END; hw.pending_dma=true;
                 if(hw.fault==TRAILING_ERROR || hw.fault==HANDOFF_REASSERTED_ERROR ||
                    hw.fault==HANDOFF_STUCK_ERROR) hw.ssr|=ORER|RDRF;
+                if(hw.force_tail_overrun && (!hw.tail_fast_only || hw.brr==0)) {
+                    hw.ssr|=ORER|RDRF;
+                    hw.receiver_stalled=true;
+                }
                 if(hw.fault==HANDOFF_REASSERTED_ERROR) hw.reassert_once=true;
                 if(hw.fault==TRAILING_FRAME_ERROR) hw.ssr|=0x10u;
                 if(hw.fault==TRAILING_PARITY_ERROR) hw.ssr|=0x08u;
@@ -199,7 +209,10 @@ static void advance(void) {
 irq_mask_t irq_disable(void) {
     unsigned old=hw.irq_mask; hw.irq_mask|=0xf0u; return old;
 }
-void irq_restore(irq_mask_t mask) { hw.irq_mask=mask; }
+void irq_restore(irq_mask_t mask) {
+    if(hw.module_signature_bad && hw.module_resumes) assert(!(hw.scr&0xc4u));
+    hw.irq_mask=mask;
+}
 bool irq_inside_int(void) { return hw.inside_irq; }
 irq_cb_t irq_get_handler(irq_t source) { return hw.handlers[handler_index(source)]; }
 int irq_set_handler(irq_t source,irq_hdl_t handler,void *data) {
@@ -225,7 +238,10 @@ void irq_set_priority(irq_src_t source,unsigned priority) {
 }
 uint64_t timer_us_gettime64(void) { hw.now+=37; advance(); return hw.now; }
 void kui_sci_async_test_work_tick(void) { ++hw.work_ticks; hw.now+=11; advance(); }
-void kui_sci_async_test_delay(uint32_t count) { assert(count); }
+void kui_sci_async_test_delay(uint32_t count) {
+    assert(count);
+    if(hw.module_reinitializing && hw.reinit_stage==3 && count>=1024) hw.reinit_stage=4;
+}
 uint32_t kui_sci_async_test_dma_address(const void *buffer,size_t count) {
     assert(buffer && count>=514 && count<=1024);
     assert(!((uintptr_t)buffer&31u));
@@ -241,7 +257,10 @@ void kui_sci_async_test_cache_invalidate(void *buffer,size_t count) {
     if(hw.fault==FOREIGN_AFTER_DMA) install_foreign_dma();
 }
 uint32_t kui_sci_async_test_read(uint32_t address,unsigned width) {
+    /* SCI has no usable register interface while its module clock is gated. */
+    if(address>=SMR && address<=SPTR) assert(!(hw.stbcr&1u));
     switch(address) {
+        case STBCR: assert(width==1); ++hw.module_polls; return hw.stbcr;
         case SMR: assert(width==1); return hw.smr;
         case BRR: assert(width==1); return hw.brr;
         case SCR: assert(width==1); return hw.scr;
@@ -266,13 +285,54 @@ uint32_t kui_sci_async_test_read(uint32_t address,unsigned width) {
 }
 void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
     ++hw.writes;
+    if(address>=SMR && address<=SPTR) assert(!(hw.stbcr&1u));
     if(hw.foreign_active)
         assert(address!=SAR && address!=DAR && address!=TCR && address!=CHCR);
     switch(address) {
-        case SMR: assert(width==1 && !hw.selected); hw.smr=value; break;
-        case BRR: assert(width==1 && !hw.selected); hw.brr=value; break;
+        case STBCR: {
+            assert(width==1 && (hw.irq_mask&0xf0u)==0xf0u);
+            assert(!hw.selected && !hw.scr && !hw.chcr && hw.tcr==0);
+            assert((value&~1u)==(hw.stbcr&~1u));
+            if(value&1u) {
+                ++hw.module_asserts;
+                assert(hw.transferred==514 && (hw.sptr&0x8bu)==0x83u);
+                if(!hw.module_assert_failure) hw.stbcr=value;
+            } else {
+                ++hw.module_resumes;
+                if(hw.module_resume_failure && (hw.stbcr&1u)) break;
+                bool stopped=(hw.stbcr&1u)!=0;hw.stbcr=value;
+                if(stopped) {
+                    /* Documented SCI register defaults, not a claim that
+                     * the console's hidden fault is reproduced by a mock. */
+                    hw.smr=hw.scr=hw.scmr=hw.rdr=0;hw.brr=0xff;hw.ssr=TDRE|TEND;
+                    hw.receiver_stalled=false;
+                    if(hw.module_signature_bad&KUI_SCI_ASYNC_MODULE_RESET_BAD_SCR) hw.scr=0x50;
+                    if(hw.module_signature_bad&KUI_SCI_ASYNC_MODULE_RESET_BAD_SMR) hw.smr=0x80;
+                    if(hw.module_signature_bad&KUI_SCI_ASYNC_MODULE_RESET_BAD_BRR) hw.brr=0;
+                    if(hw.module_signature_bad&KUI_SCI_ASYNC_MODULE_RESET_BAD_SCMR) hw.scmr=1;
+                    if(hw.module_signature_bad&KUI_SCI_ASYNC_MODULE_RESET_BAD_SSR) hw.ssr|=ORER;
+                    if(hw.module_signature_bad&KUI_SCI_ASYNC_MODULE_RESET_BAD_SPTR) hw.sptr&=(uint8_t)~0x80u;
+                    hw.module_reinitializing=!hw.module_signature_bad;
+                    hw.reinit_stage=0;
+                }
+            }
+            break;
+        }
+        case SMR:
+            assert(width==1 && !hw.selected);
+            if(hw.module_reinitializing) {assert(hw.reinit_stage==1 && !hw.scr);hw.reinit_stage=2;}
+            hw.smr=value;break;
+        case BRR:
+            assert(width==1 && !hw.selected);
+            if(hw.module_reinitializing) {assert(hw.reinit_stage==2 && !hw.scr);hw.reinit_stage=3;}
+            hw.brr=value;break;
         case SCR:
             assert(width==1);
+            if(hw.module_reinitializing && value==0x30) {
+                assert(hw.reinit_stage==5 && hw.smr==0x80 && !hw.scmr);
+                assert(hw.brr==0 || hw.brr==31);
+                hw.module_reinitializing=false;
+            }
             if((value&0x70u)==0x50u && !(hw.scr&0x10u)) {
                 assert(hw.selected && hw.token_sent && hw.smr==0x80);
                 assert(hw.tcr==514 && hw.sar==0x1fe00014u);
@@ -298,9 +358,13 @@ void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
                 hw.ssr|=ORER|RDRF;hw.reassert_once=false;
             }
             break;
-        case SCMR: assert(width==1); hw.scmr=value; break;
+        case SCMR:
+            assert(width==1);
+            if(hw.module_reinitializing) {assert(hw.reinit_stage==0 && !hw.scr);hw.reinit_stage=1;}
+            hw.scmr=value;break;
         case SPTR:
             assert(width==1);
+            if(hw.module_reinitializing) {assert(hw.reinit_stage==4);hw.reinit_stage=5;}
             if(!(hw.fail_restore_register && value==0x04)) {
                 hw.sptr=value;
                 if(hw.fault==BAD_GPIO_CONTROL && value==0x83) hw.sptr&=(uint8_t)~0x80u;
@@ -326,7 +390,7 @@ static void latch_bus_fault(uint32_t flag) {
     hw.scr=0;
 }
 static void bus_select(void *ctx,bool selected) {
-    assert(ctx==&hw);
+    assert(ctx==&hw && !(hw.stbcr&1u));
     if(selected) {
         assert(!hw.selected); ++hw.selects;
         hw.command_position=0; hw.command_argument=0;
@@ -342,6 +406,8 @@ static void bus_select(void *ctx,bool selected) {
         if(!hw.bus_fault && ((hw.ssr&0x38u) || !(hw.ssr&TEND))) {
             latch_bus_fault(TEND);
         }
+        if(hw.receiver_stalled && hw.bus_fault_on_tail_deselect) latch_bus_fault(TEND);
+        if(hw.receiver_stalled && hw.foreign_on_tail_deselect) install_foreign_dma();
     }
     hw.selected=selected;
     if(selected) hw.pdtr&=(uint16_t)~0x80u;
@@ -353,8 +419,9 @@ static void bus_select(void *ctx,bool selected) {
     }
 }
 static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
-    assert(ctx==&hw && (hw.scr&0x70u)!=0x50u);
+    assert(ctx==&hw && (hw.scr&0x70u)!=0x50u && !(hw.stbcr&1u));
     if(hw.bus_fault) {++hw.faulty_framing_calls;return 0xff;}
+    if(hw.receiver_stalled) {latch_bus_fault(RDRF);return 0xff;}
     if(hw.fault==BUS_FAULT_ON_COMMAND && hw.dma_starts==17 && byte==0x51) {
         latch_bus_fault(RDRF);return 0xff;
     }
@@ -438,6 +505,8 @@ static void test_success(bool high_miso) {
     assert(!result.slow.handoff_failures && !result.fast.handoff_failures);
     assert(result.slow.handoff_scr==0x30 && result.fast.handoff_scr==0x30);
     assert(!result.slow.bus_faults && !result.fast.bus_faults);
+    assert(!result.slow.module_reset_attempts && !result.fast.module_reset_attempts);
+    assert(!hw.module_asserts && !hw.module_resumes);
     assert(result.slow.last_phase==KUI_SCI_ASYNC_PHASE_COMPLETE);
     assert(result.fast.last_phase==KUI_SCI_ASYNC_PHASE_COMPLETE);
     assert(result.slow.command_response==0 && result.fast.command_response==0);
@@ -486,6 +555,7 @@ static void quarantined_fault(enum fault fault,enum kui_sci_async_status cause) 
     assert(!result.guards_ok && !result.crc_ok && !result.baseline_ok);
     assert(result.slow.attempted==1 && !result.slow.passed && !result.fast.attempted);
     assert(!hw.cache_invalidates && !hw.selected && !hw.pending_dma);
+    assert(!result.slow.module_reset_attempts && !hw.module_asserts && !hw.module_resumes);
     assert(hw.chcr==0x4910 && !(hw.chcr&(DE|IE)) && (hw.scr&0x70u)!=0x50u);
     assert(hw.sar==0x1fe00014 && hw.dar==DMA_BASE+hw.total_bytes);
     assert(hw.tcr==514u-hw.total_bytes);
@@ -590,12 +660,114 @@ static void test_trailing_overrun(enum fault fault) {
     assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_OK);
     assert(result.slow.passed==16 && result.fast.passed==64);
     assert(result.slow.trailing_overruns==16 && result.fast.trailing_overruns==64);
+    assert(result.slow.module_reset_attempts==16 && result.fast.module_reset_attempts==64);
+    assert(result.slow.module_resets==16 && result.fast.module_resets==64);
+    assert(!result.slow.module_reset_failures && !result.fast.module_reset_failures);
     assert(result.guards_ok && result.crc_ok && result.baseline_ok);
     if(fault==TRAILING_ERI) {
         assert(result.slow.sci_error_irqs==16 && result.fast.sci_error_irqs==64);
         assert(!result.slow.dma_irqs && !result.fast.dma_irqs);
     }
     restored(&result);
+}
+static void test_fast_tail_module_reset(void) {
+    struct kui_loader_sd card=reset();
+    hw.force_tail_overrun=hw.tail_fast_only=true;
+    hw.stbcr=0x6eu;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_OK);
+    assert(result.slow.passed==16 && result.fast.passed==64);
+    assert(!result.slow.trailing_overruns && !result.slow.module_reset_attempts);
+    assert(result.fast.trailing_overruns==64 && result.fast.module_reset_attempts==64);
+    assert(result.fast.module_resets==64 && !result.fast.module_reset_failures);
+    assert(result.fast.module_reset_state==KUI_SCI_ASYNC_MODULE_RESET_OK);
+    assert(result.fast.module_stb_before==0x6e && result.fast.module_stb_stopped==0x6f);
+    assert(result.fast.module_stb_after==0x6e && hw.stbcr==0x6e);
+    assert(hw.module_asserts==64 && hw.module_resumes==64 && hw.module_polls==64u*4u);
+    assert(!hw.receiver_stalled && !hw.module_reinitializing && !hw.bus_fault);
+    assert(hw.command_count==80 && hw.dma_starts==80);
+    restored(&result);
+}
+static void test_module_assert_failure(void) {
+    struct kui_loader_sd card=reset();hw.force_tail_overrun=true;hw.module_assert_failure=true;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_HANDOFF);
+    assert(result.slow.module_reset_attempts==1 && !result.slow.module_resets);
+    assert(result.slow.module_reset_failures==1 && result.slow.handoff_failures==1);
+    assert(result.slow.module_reset_state==KUI_SCI_ASYNC_MODULE_RESET_ASSERT_FAILED);
+    assert(hw.module_asserts==1 && hw.module_resumes==1 && hw.module_polls==11);
+    assert(hw.stbcr==0 && hw.command_count==1 && hw.dma_starts==1);
+    assert(result.guards_ok && result.crc_ok && result.baseline_ok);
+    restored(&result);
+}
+static void test_module_resume_failure(void) {
+    struct kui_loader_sd card=reset();hw.force_tail_overrun=true;hw.module_resume_failure=true;
+    hw.stbcr=0x2eu;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_RESTORE);
+    assert(result.operation_status==KUI_SCI_ASYNC_HANDOFF && !result.safe_restored);
+    assert(!result.registers_restored && result.handlers_restored && !result.dma_quarantined);
+    assert(!result.foreign_dma && result.guards_ok && result.crc_ok && result.baseline_ok);
+    assert(result.slow.module_reset_attempts==1 && !result.slow.module_resets);
+    assert(result.slow.module_reset_failures==1 && result.slow.handoff_failures==1);
+    assert(result.slow.module_reset_state==KUI_SCI_ASYNC_MODULE_RESET_RESUME_FAILED);
+    assert(result.slow.module_stb_before==0x2e && result.slow.module_stb_stopped==0x2f);
+    assert(result.slow.module_stb_after==0x2f && hw.stbcr==0x2f);
+    assert(hw.module_asserts==1 && hw.module_resumes==1 && hw.module_polls==11);
+    assert(hw.command_count==1 && hw.dma_starts==1 && !hw.selected && !hw.pending_dma);
+    /* Source is gated; the owned DMA registers and callbacks are still
+     * restored, with no attempted SCI MMIO or bus callback after the stop. */
+    assert(hw.sar==0x0c002000 && hw.dar==0x0c004000 && hw.tcr==19 && hw.chcr==0x4000);
+    assert(hw.priorities[IRQ_SRC_SCI1]==2 && hw.priorities[IRQ_SRC_DMAC]==5 && !hw.irq_mask);
+    for(unsigned i=0;i<3;++i) {
+        assert(hw.handlers[i].hdl==original_handler && hw.handlers[i].data==&handler_data[i]);
+    }
+    unsigned writes=hw.writes, polls=hw.module_polls;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_BUSY);
+    assert(!result.started && hw.writes==writes && hw.module_polls==polls);
+}
+static void test_module_reset_signature(void) {
+    for(unsigned bad=1;bad<=32;bad<<=1) {
+        struct kui_loader_sd card=reset();hw.force_tail_overrun=true;hw.module_signature_bad=bad;
+        struct kui_sci_async_probe_result result;
+        assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_HANDOFF);
+        assert(result.slow.module_reset_attempts==1 && !result.slow.module_resets);
+        assert(result.slow.module_reset_failures==1 && result.slow.handoff_failures==1);
+        assert(result.slow.module_reset_state==(KUI_SCI_ASYNC_MODULE_RESET_SIGNATURE|bad));
+        assert(hw.module_asserts==1 && hw.module_resumes==1 && hw.module_polls==4);
+        assert(!hw.stbcr && hw.command_count==1 && hw.dma_starts==1);
+        restored(&result);
+    }
+}
+static void test_module_reset_validation_gates(void) {
+    const enum fault faults[]={BAD_CRC,WRONG_DATA,BAD_GUARD,BAD_PADDING};
+    const enum kui_sci_async_status statuses[]={KUI_SCI_ASYNC_CRC,KUI_SCI_ASYNC_MISMATCH,
+        KUI_SCI_ASYNC_GUARD,KUI_SCI_ASYNC_GUARD};
+    for(unsigned i=0;i<sizeof(faults)/sizeof(faults[0]);++i) {
+        struct kui_loader_sd card=reset();hw.force_tail_overrun=true;hw.fault=faults[i];
+        struct kui_sci_async_probe_result result;
+        assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==statuses[i]);
+        assert(!result.slow.module_reset_attempts && !hw.module_asserts && !hw.module_resumes);
+        assert(hw.command_count==1 && hw.dma_starts==1);
+        restored(&result);
+    }
+    struct kui_loader_sd card=reset();hw.force_tail_overrun=true;hw.bus_fault_on_tail_deselect=true;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_BUS_FAULT);
+    assert(result.slow.bus_faults==1 && !result.slow.module_reset_attempts);
+    assert(!hw.module_asserts && !hw.module_resumes && hw.command_count==1);
+    restored(&result);
+}
+static void test_module_reset_rechecks_dma_owner(void) {
+    struct kui_loader_sd card=reset();hw.force_tail_overrun=true;hw.foreign_on_tail_deselect=true;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_RESTORE);
+    assert(result.operation_status==KUI_SCI_ASYNC_DMA_ERROR && result.foreign_dma);
+    assert(!result.safe_restored && result.slow.module_reset_attempts==1);
+    assert(result.slow.module_reset_state==KUI_SCI_ASYNC_MODULE_RESET_PRECONDITION);
+    assert(result.slow.module_reset_failures==1 && !hw.module_asserts && !hw.module_resumes);
+    assert(hw.sar==0x0c080000 && hw.dar==0x0c090000 && hw.tcr==64 && hw.chcr==0x1025);
+    assert(hw.handlers[0].hdl==foreign_handler && hw.handlers[0].data==&foreign_data);
 }
 static void test_handoff_rechecks_receive_flags(void) {
     struct kui_loader_sd card=reset();hw.fault=HANDOFF_REASSERTED_ERROR;
@@ -729,6 +901,7 @@ static void foreign_preserved(enum fault fault) {
     assert(hw.handlers[0].hdl==foreign_handler && hw.handlers[0].data==&foreign_data);
     assert(!hw.selected && !hw.original_calls);
     assert(hw.dma_starts==(fault==FOREIGN_DURING_FRAMING?0u:1u));
+    assert(!result.slow.module_reset_attempts && !hw.module_asserts && !hw.module_resumes);
     if(fault==FOREIGN_DURING_DMA) {
         assert(hw.total_bytes==64 && !hw.cache_invalidates);
         assert(!result.guards_ok && !result.crc_ok && !result.baseline_ok);
@@ -776,6 +949,12 @@ int main(void) {
     isolated(test_missing_end_quarantined);
     test_trailing_overrun(TRAILING_ERROR);
     test_trailing_overrun(TRAILING_ERI);
+    test_fast_tail_module_reset();
+    test_module_assert_failure();
+    isolated(test_module_resume_failure);
+    test_module_reset_signature();
+    test_module_reset_validation_gates();
+    isolated(test_module_reset_rechecks_dma_owner);
     test_handoff_rechecks_receive_flags();
     isolated(test_handoff_stuck_receive_flags);
     test_handoff_requires_idle();
@@ -790,6 +969,7 @@ int main(void) {
     isolated(test_foreign_after_dma);
     isolated(test_foreign_during_dma);
     test_cancellation();
+    puts("SCI module reset: bounded gates, restoration and modeled RX recovery passed; console proof still required");
     puts("SCI async probe host tests passed");
     return 0;
 }

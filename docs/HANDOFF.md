@@ -1,5 +1,25 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI first fault localized; module-reset experiment (2026-10-02 UTC)
+
+Build **c25c1f6c2190** again verified 16 slow and one fast autonomous read.
+The new first-fault capture identifies a 10,000-poll **RDRF timeout on the
+first CS-high idle byte**, before selecting the card or issuing the next
+CMD17. Pre-stop SSR/SCR were `86/30`, BRR=0, SMR=80, SCMR=0; no SCI error
+flags were set. All handoff checks passed; normal recovery succeeded.
+See the [exact report and bounded next experiment](evidence/sci-async-module-reset-2026-10-02.md).
+
+The next candidate conditionally pulses only SCI's STBCR.MSTP0 after completed,
+CRC/data/guard-verified DMA with trailing overrun. It checks reset defaults,
+restores the current framing configuration and retains first-fault reporting.
+This tests retained receiver state; the internal cause and console success are
+unproven. No reset is allowed for foreign or quarantined DMA or failed payload
+checks. Unconfirmed module resume blocks all further SCI/storage access and
+requires restart. Ordinary game reads and CE launch remain unchanged.
+Run this candidate's SCI async probe once and return JSON/photo; no soak or CD.
+Targeted sanitizer tests and independent review pass. Full CI and console
+validation are pending.
+
 ## SCI repeat-read failure narrowed to framing (2026-10-02 UTC)
 
 The owner tested **0d400a471601**: 16 slow and one fast autonomous read passed
