@@ -30,6 +30,10 @@ at most three times); any other incomplete stop still quarantines. The probe
 page adds **Y** (60-second stress with the screen updating) and **R** (1 MiB
 speed comparison, ordinary CMD18 reader versus one async CMD17 per block).
 See [the change record](evidence/sci-async-overrun-retry-2026-10-02.md).
+Build **8daab44490f5** passed [Diagnostic run 202](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37017797243)
+(host and Dreamcast jobs). Install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `sd-update` artifact, keep the current
+boot CD, then run Y and R and return both JSON reports and result photos.
 Console results pending; native game reads and the CE gate are unchanged.
 
 ## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)

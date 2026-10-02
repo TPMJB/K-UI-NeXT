@@ -60,6 +60,14 @@ counting and the framing quantum. The runtime wrapper test covers the speed
 pass, its fallback range and a card smaller than the range. Shell tests cover
 the Y and R buttons.
 
+## Delivery
+
+Source `8daab44490f5ec196b816288d7ad9fc2b0013190` passed
+[Diagnostic run 202](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37017797243):
+host tests (including the new overrun and speed cases) and the Dreamcast build.
+The update is the run's `kui-1.5.1-dainsleif-sd-update` artifact; only
+`KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` need replacing.
+
 ## What to look for on the console
 
 1. **Y**: how many overruns occur in 60 s with the screen updating, and whether
