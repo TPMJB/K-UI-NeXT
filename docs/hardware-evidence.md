@@ -1,5 +1,21 @@
 # Hardware evidence
 
+## SCI batching: DOA2 load and fight-start improvement — 2026-10-01
+
+The owner reports **about 25 seconds from selecting Kasumi to match start**
+on **8d930310f79d**, versus the earlier 29 seconds, and noticeably smoother
+combat with only slight slowdown in the first roughly ten seconds. The old
+severe slowdown also resolved after about ten seconds; its severity improved,
+not its duration. Audio remains pretty smooth. This is
+an initial timing/qualitative result; no new return-counter photo or FMV
+acceptance accompanies it.
+
+Storage Soak run **13** passes 160 MiB/ten cycles in 303.722145 seconds,
+with zero errors/DMA faults and successful remount verification/cleanup.
+Write/read **1,197.40/1,064.98 KiB/s** is effectively unchanged versus run 10,
+consistent with this change being confined to game pacing. See the
+[raw reports, exact comparison and scope](evidence/sci-game-pacing-result-2026-10-01.md).
+
 ## SCI grouped CRC passed; game counter capture obtained — 2026-10-01
 
 Build **6cc2abb460b5** passed Quick run **9** (4 MiB) and Soak run **10**

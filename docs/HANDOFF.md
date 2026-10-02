@@ -2,6 +2,17 @@
 
 ## Current game-loading experiment (2026-10-01)
 
+**First batching result:** build **8d930310f79d** reduces the owner's DOA2
+Kasumi-to-match observation from 29 seconds to **about 25 seconds**, with
+noticeably smoother combat and only slight slowdown in the first roughly
+ten seconds. The former severe slowdown lasted about ten seconds too; the
+improvement is severity, not that interval's duration. Audio remains smooth.
+Storage Soak run 13 passes 160 MiB/ten cycles with zero errors;
+write/read **1,197.40/1,064.98 KiB/s** is effectively unchanged, as expected
+for a resident-pacing change. Keep this as the current comparison build;
+new pacing counters, FMV and broader compatibility acceptance are pending.
+See the [original report and game observation](evidence/sci-game-pacing-result-2026-10-01.md).
+
 Grouped CRC build **6cc2abb460b5** passed Quick run 9 and five-minute Soak
 run 10 with zero errors. Soak write/read **1,198.32/1,064.87 KiB/s**;
 RX check **68.48 us**, down 12.4% from run 8. A matching DOA2 menu-return

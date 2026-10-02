@@ -2,6 +2,15 @@
 
 ## SCI follow-up experiment — 2026-10-01
 
+**Initial console result:** the owner reports about **25 seconds** from Kasumi
+selection to match start on `8d930310f79d` (earlier 29 seconds), noticeably
+smoother combat and only slight slowdown during the first roughly ten seconds.
+The earlier severe slowdown lasted about ten seconds too; severity improved
+while that interval stayed similar. Audio remains smooth.
+Storage throughput remains unchanged. A new return-counter photo and FMV
+check remain outstanding; see the
+[first batching result](evidence/sci-game-pacing-result-2026-10-01.md).
+
 The owner's build `6cc2abb460b5` counter photograph shows zero enlarged
 steps and approximately two game sectors per successful step. The prior
 29-second Kasumi-to-first-fight observation remains the timed baseline;
