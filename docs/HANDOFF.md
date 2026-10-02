@@ -14,7 +14,11 @@ The previous clean SSR snapshot was taken after the normal driver stopped SCI.
 No register-reset or timing change is justified yet; this is a diagnostic
 follow-up, not an established repeat-read fix. Capture is excluded from native
 resident builds. Next run this candidate's SCI async probe once and return
-JSON/photo; no new soak or CD. Build/console validation are pending.
+JSON/photo; no new soak or CD. Candidate **c25c1f6c2190** passed full host and
+Dreamcast CI run 198 and is delivered as `K-UI-SCI-Async-Probe-c25c1f6c2190.zip`.
+Both packaged files, runtime CRCs and all 96 source manifest hashes verified.
+Console validation is pending; a repeat framing fault is still a useful result
+because the report now preserves the original failed wait.
 
 ## SCI autonomous transfers verified; repeat-read handoff next (2026-10-02 UTC)
 

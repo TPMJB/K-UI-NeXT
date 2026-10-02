@@ -61,7 +61,8 @@ clear it only when a fresh SCI acquisition succeeds. The probe copies it into
 its result before card recovery can reset the driver. Capture exact framing
 operation and zero-based byte index alongside it.
 
-The snapshot is runtime-only, excluded from the freestanding resident build.
+The snapshot is excluded from the freestanding resident build. The runtime
+and prelaunch stage both link the shared bus with its diagnostic support.
 It adds no successful-byte MMIO reads and does not change waits, deadlines,
 reset policy or error acceptance. The full JSON retains handoff and DMA
 evidence; failure photos prioritize the original failed wait and framing step.
@@ -94,3 +95,30 @@ identical before and after telemetry changes. The actual JSON formatter stress
 check fits 1,290/1,536 bytes per stage and 3,916/4,608 overall with maximum
 integer values and 40-character names. The failure screen was rendered and
 visually inspected. Console cause and repeat-read recovery remain unproven.
+
+## Build and delivery
+
+Source `c25c1f6c2190ff07ae1816e7fbdc6a38b7d29df5` passed full host and Dreamcast
+jobs in [CI run 198](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36965098538).
+Linked instruction, memory and stack audits pass. The SCI resident still ends
+at `0x8c00baec` and uses a conservative 1,172/1,232 stack bytes; its payload is
+11,156 bytes. The prelaunch stage grows from 48,456 to 48,576 bytes because it
+also includes the shared non-resident bus diagnostic. No CE launch is enabled.
+
+SD-update artifact `11210360162`, 4,562,543 bytes, SHA-256:
+`603bc581158e45318076bf82dd228b92f7b824d0f08b218809996eff4e287753`.
+Archive integrity, all 96 manifest hashes, matching build IDs, runtime CRCs
+and retail package layout were independently verified after download.
+
+Delivered `K-UI-SCI-Async-Probe-c25c1f6c2190.zip`, 780,628 bytes, SHA-256:
+`a44ee40d15078eb8326a43dabe8561c34d6a5562e0772ca657f7959161397ba0`.
+
+| Installed file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `KUI/runtime.kui` | 1,616,440 | `a7086356bbc9d7fdee410a2af525a83d83daf7f26c5f685c3744197873425f74` |
+| `KUI/apps/games/retail-boot.kui` | 56,832 | `c004564bc0bad246857ac9e9d8f40b55748f216004f490aecb880540138abfc1` |
+
+Replace both files, keep boot CD `6af5e11`, reboot and run the SCI async probe
+once. Send JSON and a complete result photograph; if restart is required,
+photograph and reboot. The same framing failure remains a useful outcome for
+this diagnostic because its first-fault fields identify the next experiment.
