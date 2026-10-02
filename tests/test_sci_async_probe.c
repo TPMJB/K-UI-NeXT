@@ -51,6 +51,7 @@ static struct {
     unsigned writes, handler_writes, priority_writes, dma_starts;
     unsigned cache_purges, cache_invalidates, work_ticks, transferred, total_bytes;
     unsigned command_position, command_count, selects, deselects;
+    unsigned bus_bytes, ready_delay, token_delay;
     unsigned original_calls, dispatches;
     unsigned slow_starts, fast_starts;
     unsigned install_attempts, fail_install_at;
@@ -70,6 +71,8 @@ static struct {
     bool force_tail_overrun, tail_fast_only, receiver_stalled;
     bool module_assert_failure, module_resume_failure, module_reinitializing;
     bool bus_fault_on_tail_deselect, foreign_on_tail_deselect;
+    bool timer_stopped;
+    bool bus_slow, speed_resync_failure;
     struct kui_sci_sd_fault first_bus_fault;
     enum fault fault;
 } hw;
@@ -236,7 +239,7 @@ void irq_set_priority(irq_src_t source,unsigned priority) {
     assert(source!=IRQ_SRC_DMAC);
     hw.priorities[source]=priority; ++hw.priority_writes;
 }
-uint64_t timer_us_gettime64(void) { hw.now+=37; advance(); return hw.now; }
+uint64_t timer_us_gettime64(void) { if(!hw.timer_stopped) hw.now+=37; advance(); return hw.now; }
 void kui_sci_async_test_work_tick(void) { ++hw.work_ticks; hw.now+=11; advance(); }
 void kui_sci_async_test_delay(uint32_t count) {
     assert(count);
@@ -420,6 +423,7 @@ static void bus_select(void *ctx,bool selected) {
 }
 static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
     assert(ctx==&hw && (hw.scr&0x70u)!=0x50u && !(hw.stbcr&1u));
+    ++hw.bus_bytes;
     if(hw.bus_fault) {++hw.faulty_framing_calls;return 0xff;}
     if(hw.receiver_stalled) {latch_bus_fault(RDRF);return 0xff;}
     if(hw.fault==BUS_FAULT_ON_COMMAND && hw.dma_starts==17 && byte==0x51) {
@@ -433,9 +437,13 @@ static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
         latch_bus_fault(RDRF);return 0xff;
     }
     /* The existing synchronous bus owns framing and its clock-state cache. */
-    hw.brr=slow?31:0; hw.scr=0x30;
+    if(slow!=hw.bus_slow) {hw.brr=slow?31:0;hw.bus_slow=slow;}
+    assert(hw.brr==(slow?31u:0u));hw.scr=0x30;
     if(!hw.selected) { assert(byte==0xff); return 0xff; }
-    if(!hw.command_position && byte==0xff) return 0xff;
+    if(!hw.command_position && byte==0xff) {
+        if(hw.ready_delay) {--hw.ready_delay;return 0;}
+        return 0xff;
+    }
     if(hw.command_position<6) {
         unsigned pos=hw.command_position++;
         if(pos<5) hw.command_bytes[pos]=byte;
@@ -449,6 +457,7 @@ static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
         hw.response_sent=true; return hw.fault==BAD_RESPONSE?0x04:0x00;
     }
     if(!hw.token_sent) {
+        if(hw.token_delay) {--hw.token_delay;return 0xff;}
         hw.token_sent=true;
         /* The last bit of a successful 0xfe token is zero. Outputting a
          * high TxD latch must not turn this independent RxD input high. */
@@ -460,6 +469,12 @@ static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
     return 0xff;
 }
 bool kui_sci_sd_healthy(void) { return !hw.bus_fault; }
+bool kui_sci_sd_resync_speed(void) {
+    assert((hw.irq_mask&0xf0u)==0xf0u && !hw.bus_fault && !(hw.stbcr&1u));
+    assert(!hw.selected && hw.smr==0x80 && !hw.scmr && !(hw.scr&0xc4u));
+    if(hw.speed_resync_failure) return false;
+    hw.bus_slow=hw.brr!=0;return true;
+}
 void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) {
     if(out) *out=hw.first_bus_fault;
 }
@@ -486,6 +501,7 @@ static void restored(const struct kui_sci_async_probe_result *result) {
     assert(hw.sar==0x0c002000 && hw.dar==0x0c004000 && hw.tcr==19 && hw.chcr==0x4000);
     assert(hw.priorities[IRQ_SRC_SCI1]==2 && hw.priorities[IRQ_SRC_DMAC]==5);
     assert(hw.irq_mask==0 && !hw.inside_irq && !hw.original_calls);
+    if(!hw.bus_fault) assert(!hw.bus_slow);
     for(unsigned i=0;i<3;++i) {
         assert(hw.handlers[i].hdl==original_handler);
         assert(hw.handlers[i].data==&handler_data[i]);
@@ -918,6 +934,246 @@ static void foreign_preserved(enum fault fault) {
 static void test_foreign_during_framing(void) { foreign_preserved(FOREIGN_DURING_FRAMING); }
 static void test_foreign_after_dma(void) { foreign_preserved(FOREIGN_AFTER_DMA); }
 static void test_foreign_during_dma(void) { foreign_preserved(FOREIGN_DURING_DMA); }
+static enum kui_sci_async_status poll_complete(struct kui_sci_async_reader *reader) {
+    enum kui_sci_async_status status;
+    unsigned calls=0;
+    do {status=kui_sci_async_poll(reader);assert(++calls<210000u);}
+    while(status==KUI_SCI_ASYNC_PENDING);
+    return status;
+}
+static void begin_active(struct kui_sci_async_reader *reader) {
+    assert(kui_sci_async_begin(reader,123,false)==KUI_SCI_ASYNC_OK);
+    for(unsigned i=0;i<100 && !hw.dma_starts;++i)
+        assert(kui_sci_async_poll(reader)==KUI_SCI_ASYNC_PENDING);
+    assert(hw.dma_starts==1 && receiving());
+}
+static void test_reader_bounded_framing_and_publish(void) {
+    struct kui_loader_sd card=reset();hw.ready_delay=29;hw.token_delay=37;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    uint8_t payload[512];memset(payload,0x39,sizeof(payload));
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
+    assert(!hw.bus_bytes && !hw.dma_starts);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_PENDING);
+    unsigned calls=0;enum kui_sci_async_status status;
+    do {
+        unsigned before=hw.bus_bytes,work=hw.work_ticks;
+        status=kui_sci_async_poll(&reader);
+        assert(hw.bus_bytes-before<=8 && hw.work_ticks==work);
+        assert(!hw.cache_invalidates && !result.fast.passed);
+        for(unsigned i=0;i<512;++i) assert(payload[i]==0x39);
+        assert(++calls<100);
+    } while(status==KUI_SCI_ASYNC_PENDING);
+    assert(status==KUI_SCI_ASYNC_OK && calls>10 && hw.total_bytes==514);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
+    assert(!memcmp(payload,hw.baseline,512) && result.baseline_checked && result.baseline_ok);
+    assert(result.fast.passed==1 && hw.cache_invalidates==1);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);
+    assert(!reader.generation && result.max_open_us && result.max_begin_us && result.max_poll_us);
+    assert(result.max_finish_us && result.max_close_us && result.max_call_us>=result.max_finish_us);
+    restored(&result);
+}
+static void test_reader_pending_cancel_drains(void) {
+    struct kui_loader_sd card=reset();hw.fault=STALLED;hw.force_tail_overrun=true;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    uint8_t payload[512];memset(payload,0x5e,sizeof(payload));
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    begin_active(&reader);
+    unsigned writes=hw.writes;
+    for(unsigned i=0;i<5;++i) {
+        assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_PENDING);
+        assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_PENDING);
+    }
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_PENDING);
+    assert(kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_PENDING);
+    assert(hw.writes==writes && receiving() && !result.dma_quarantined);
+    hw.fault=NO_FAULT;
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_CANCELLED);
+    for(unsigned i=0;i<512;++i) assert(payload[i]==0x5e);
+    assert(result.fast.module_resets==1 && !result.fast.passed && result.baseline_ok);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_CANCELLED);
+    assert(result.max_cancel_us && !result.dma_quarantined);restored(&result);
+}
+static void test_reader_generic_crc_and_reuse(void) {
+    struct kui_loader_sd card=reset();hw.force_tail_overrun=true;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    uint8_t payload[512];
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    for(unsigned n=0;n<4;++n) {
+        for(unsigned i=0;i<512;++i) hw.baseline[i]=(uint8_t)(i*23u+n*47u);
+        assert(kui_sci_async_begin(&reader,120+n,false)==KUI_SCI_ASYNC_OK);
+        assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+        assert(kui_sci_async_finish(&reader,payload,NULL)==KUI_SCI_ASYNC_OK);
+        assert(!memcmp(payload,hw.baseline,512) && !result.baseline_checked && !result.baseline_ok);
+        assert(result.crc_ok && result.guards_ok && hw.command_argument==120+n);
+    }
+    assert(result.fast.passed==4 && result.fast.module_resets==4);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
+}
+static void test_reader_failed_crc_never_publishes(void) {
+    struct kui_loader_sd card=reset();hw.fault=BAD_CRC;hw.force_tail_overrun=true;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    uint8_t payload[512];memset(payload,0x9b,sizeof(payload));
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_CRC);
+    for(unsigned i=0;i<512;++i) assert(payload[i]==0x9b);
+    assert(!result.fast.module_reset_attempts && !result.fast.passed);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_CRC);restored(&result);
+}
+static void test_reader_handles_and_framing_cancel(void) {
+    struct kui_loader_sd card=reset();struct kui_sci_async_reader reader={0};
+    struct kui_sci_async_probe_result result,other_result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    struct kui_sci_async_reader copy=reader,other={0};
+    unsigned writes=hw.writes;
+    assert(kui_sci_async_begin(&copy,123,false)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_cancel(&copy)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_close(&copy)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_open(&reader,&card,&other_result)==KUI_SCI_ASYNC_BUSY);
+    assert(kui_sci_async_open(&other,&card,&result)==KUI_SCI_ASYNC_BUSY);
+    assert(hw.writes==writes && reader.generation && result.started);
+    assert(kui_sci_async_begin(&reader,123,true)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_PENDING && !hw.dma_starts);
+    assert(kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_CANCELLED);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_CANCELLED);restored(&result);
+    assert(kui_sci_async_poll(&copy)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_open(&other,&card,&other_result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_close(&other)==KUI_SCI_ASYNC_OK);restored(&other_result);
+}
+static void test_reader_cancel_stalled_deadline(void) {
+    struct kui_loader_sd card=reset();hw.fault=STALLED;hw.timer_stopped=true;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    begin_active(&reader);
+    assert(kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_PENDING);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_TIMEOUT);
+    assert(!hw.cache_invalidates);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
+    assert(result.dma_quarantined && !result.safe_restored && result.operation_status==KUI_SCI_ASYNC_TIMEOUT);
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_BUSY);
+}
+static void test_reader_foreign_between_calls(void) {
+    struct kui_loader_sd card=reset();struct kui_sci_async_reader reader={0};
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_PENDING);
+    unsigned bytes=hw.bus_bytes;install_foreign_dma();
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_DMA_ERROR && hw.bus_bytes==bytes);
+    assert(kui_sci_async_work_sample(&reader)==0);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
+    assert(result.foreign_dma && !result.safe_restored);
+}
+static void test_reader_active_observer_rejects_foreign(void) {
+    struct kui_loader_sd card=reset();struct kui_sci_async_reader reader={0};
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    begin_active(&reader);
+    uint32_t before=kui_sci_async_work_sample(&reader);
+    assert(before>0 && before<514);
+    unsigned writes=hw.writes;uint64_t time=hw.now;
+    hw.inside_irq=true;
+    assert(kui_sci_async_work_sample(&reader)==before);
+    hw.inside_irq=false;assert(hw.writes==writes && hw.now==time);
+    install_foreign_dma();
+    assert(kui_sci_async_work_sample(&reader)==0);
+    kui_sci_async_work_record(&reader,before,16,123);
+    assert(!result.fast.overlap_batches);
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_DMA_ERROR);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
+}
+static void test_reader_ready_close_discards(void) {
+    struct kui_loader_sd card=reset();hw.force_tail_overrun=true;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    assert(!hw.cache_invalidates && !result.crc_ok);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);
+    assert(result.crc_ok && result.guards_ok && !result.baseline_checked && !result.baseline_ok);
+    assert(result.fast.module_resets==1);restored(&result);
+}
+static void test_reader_argument_preserves_session(void) {
+    struct kui_loader_sd card=reset();struct kui_sci_async_reader reader={0};
+    struct kui_sci_async_probe_result result;uint8_t payload[512];
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    unsigned purges=hw.cache_purges,writes=hw.writes;
+    assert(kui_sci_async_begin(&reader,10000,false)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(hw.cache_purges==purges && hw.writes==writes && !result.fast.attempted);
+    assert(kui_sci_async_begin(&reader,456,false)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_begin(&reader,789,true)==KUI_SCI_ASYNC_BUSY);
+    assert(result.lba==456 && result.fast.attempted==1 && !result.slow.attempted);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
+    assert(hw.command_argument==456 && result.baseline_ok);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
+}
+static void test_reader_framing_fixed_budget(void) {
+    struct kui_loader_sd card=reset();hw.timer_stopped=true;hw.token_delay=9000;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
+    unsigned calls=0;enum kui_sci_async_status status;
+    do {
+        unsigned bytes=hw.bus_bytes;status=kui_sci_async_poll(&reader);
+        assert(hw.bus_bytes-bytes<=8);assert(++calls<1100);
+    } while(status==KUI_SCI_ASYNC_PENDING);
+    assert(status==KUI_SCI_ASYNC_TIMEOUT && !hw.dma_starts && hw.token_delay==808);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_TIMEOUT);restored(&result);
+}
+static void test_reader_foreign_before_begin(void) {
+    struct kui_loader_sd card=reset();struct kui_sci_async_reader reader={0};
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    install_foreign_dma();unsigned purges=hw.cache_purges;
+    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_DMA_ERROR);
+    assert(hw.cache_purges==purges && !result.fast.attempted && !hw.bus_bytes);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
+}
+static void test_reader_foreign_before_finish(void) {
+    struct kui_loader_sd card=reset();struct kui_sci_async_reader reader={0};
+    struct kui_sci_async_probe_result result;uint8_t payload[512];memset(payload,0xf4,sizeof(payload));
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_begin(&reader,123,false)==KUI_SCI_ASYNC_OK);
+    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+    install_foreign_dma();
+    assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_DMA_ERROR);
+    for(unsigned i=0;i<512;++i) assert(payload[i]==0xf4);
+    assert(!hw.cache_invalidates);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
+}
+static void test_reader_slow_close_resyncs_bus(void) {
+    for(unsigned failure=0;failure<2;++failure) {
+        struct kui_loader_sd card=reset();if(failure) hw.fault=BAD_CRC;
+        struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+        uint8_t payload[512];
+        assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+        assert(kui_sci_async_begin(&reader,123,true)==KUI_SCI_ASYNC_OK);
+        assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
+        enum kui_sci_async_status expected=failure?KUI_SCI_ASYNC_CRC:KUI_SCI_ASYNC_OK;
+        assert(kui_sci_async_finish(&reader,payload,hw.baseline)==expected);
+        assert(hw.bus_slow && hw.brr==31);
+        unsigned bytes=hw.bus_bytes;
+        assert(kui_sci_async_close(&reader)==expected);
+        assert(hw.bus_bytes==bytes && !hw.bus_slow && hw.brr==0);restored(&result);
+        /* The ordinary callback models cached speed: unchanged fast requests
+         * skip BRR writes, so a stale cache would fail its mode assertion. */
+        assert(card.bus.transfer(card.bus.ctx,0xff,false)==0xff && hw.brr==0);
+    }
+}
+static void test_reader_speed_resync_failure(void) {
+    struct kui_loader_sd card=reset();hw.speed_resync_failure=true;
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RESTORE);
+    assert(result.registers_restored && result.handlers_restored && !result.safe_restored);
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_BUSY);
+}
 static void isolated(void (*test)(void)) {
     /* The production API deliberately has no reset for a poisoned session. */
     pid_t child=fork(); assert(child>=0);
@@ -926,6 +1182,21 @@ static void isolated(void (*test)(void)) {
     assert(WIFEXITED(status) && WEXITSTATUS(status)==0);
 }
 int main(void) {
+    test_reader_slow_close_resyncs_bus();
+    isolated(test_reader_speed_resync_failure);
+    test_reader_ready_close_discards();
+    test_reader_argument_preserves_session();
+    test_reader_framing_fixed_budget();
+    isolated(test_reader_foreign_before_begin);
+    isolated(test_reader_foreign_before_finish);
+    test_reader_bounded_framing_and_publish();
+    test_reader_pending_cancel_drains();
+    test_reader_generic_crc_and_reuse();
+    test_reader_failed_crc_never_publishes();
+    test_reader_handles_and_framing_cancel();
+    isolated(test_reader_cancel_stalled_deadline);
+    isolated(test_reader_foreign_between_calls);
+    isolated(test_reader_active_observer_rejects_foreign);
     test_success(false);
     test_success(true);
     test_standard_capacity_address();
@@ -970,6 +1241,7 @@ int main(void) {
     isolated(test_foreign_during_dma);
     test_cancellation();
     puts("SCI module reset: bounded gates, restoration and modeled RX recovery passed; console proof still required");
+    puts("SCI reader lifecycle: bounded polling, cancel/drain, no early publish and ownership passed");
     puts("SCI async probe host tests passed");
     return 0;
 }

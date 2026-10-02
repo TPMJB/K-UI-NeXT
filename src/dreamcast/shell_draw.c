@@ -157,7 +157,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
                 (s->storage_test_details?"X Summary   Y Baseline   B Back":"X Details   Y Baseline   B Back"):
                 (s->storage_test_details?"X Summary   B Back":"X Details   B Back")):
             "D-pad Select/change   A Open   B Diagnostics") :
-        s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Run probe   B Storage tests" :
+        s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Quick   X 60s stress   B Back" :
         s->page==KUI_SHELL_STORAGE_TEST_HISTORY ? "A View   Y Baseline   X Refresh   B Back" :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
@@ -1018,13 +1018,13 @@ static void sci_async_probe(struct paint *p,const struct kui_shell_view *v) {
     bool result=r && r->complete;
     if(!result && !v->busy) {
         panel(p,32,174,576,225,PANEL);
-        label(p,48,194,WHITE,"Experimental read test for the selected SCI card");
-        label(p,48,226,MUTED,"Reads the same existing sector at slow and fast speeds.");
-        label(p,48,250,MUTED,"Checks data, interrupts, CPU work and normal read recovery.");
-        label(p,48,274,MUTED,"Music pauses; other storage actions wait until it finishes.");
+        label(p,48,194,WHITE,"Read-only tests of existing sectors on the SCI card");
+        label(p,48,226,MUTED,"A Quick: the same sector at slow and fast speeds.");
+        label(p,48,250,MUTED,"X 60-second stress: 16 sectors spread across the card.");
+        label(p,48,274,MUTED,"Checks data, CPU work, interrupts and read recovery.");
         label(p,48,306,MUTED,"Only the final JSON report writes to /KUI/tests.");
         label(p,48,330,MUTED,"Normal game reads are unchanged by this experiment.");
-        label(p,48,369,CYAN,"A Run probe   B Back");
+        label(p,48,369,CYAN,"A Quick test   X 60s stress   B Back");
         return;
     }
     words(p,40,172,604,r && r->errors?AMBER:WHITE,v->cancel_requested?
@@ -1034,8 +1034,8 @@ static void sci_async_probe(struct paint *p,const struct kui_shell_view *v) {
         unsigned count=r->line_count<8?r->line_count:8;
         for(unsigned i=0;i<count;i++) label(p,40,220+i*23,i==6?CYAN:MUTED,r->lines[i]);
     } else {
-        label(p,40,246,MUTED,"Reading a baseline, then checking autonomous transfers.");
-        label(p,40,278,MUTED,"B stops between bounded trials and checks recovery.");
+        label(p,40,246,MUTED,"Reading baselines, then checking autonomous transfers.");
+        label(p,40,278,MUTED,"Hold B to stop safely between reads and check recovery.");
         label(p,40,310,MUTED,"Keep the card connected until the result appears.");
     }
 }

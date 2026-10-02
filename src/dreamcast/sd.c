@@ -315,17 +315,115 @@ const char *kui_sd_async_recovery_name(enum kui_sd_async_recovery_phase phase) {
 static enum kui_sci_async_status async_reason(const struct kui_sci_async_probe_result *p) {
     return p->operation_status==KUI_SCI_ASYNC_OK?p->status:p->operation_status;
 }
-void kui_sd_async_probe(struct kui_sd_async_result *out,
+/* Eight front-of-card sectors exercise ordinary metadata; the remaining
+ * samples cover the rest of the addressable card, including its final LBA.
+ * Fewer than 16 sectors are supported without duplicates or zero divisors. */
+static uint32_t async_sample_lbas(uint64_t blocks,uint32_t lbas[KUI_SD_ASYNC_STRESS_SECTORS]) {
+    uint64_t addressable=blocks;
+    if(addressable>UINT64_C(0x100000000)) addressable=UINT64_C(0x100000000);
+    uint32_t count=addressable<KUI_SD_ASYNC_STRESS_SECTORS?
+        (uint32_t)addressable:KUI_SD_ASYNC_STRESS_SECTORS;
+    uint32_t front=count<8u?count:8u;
+    for(uint32_t i=0;i<front;++i) lbas[i]=i;
+    uint32_t spread=count-front;
+    for(uint32_t i=0;i<spread;++i)
+        lbas[front+i]=spread==1u?8u:8u+(uint32_t)((addressable-9u)*i/(spread-1u));
+    return count;
+}
+
+static bool async_dma_active(void *ctx) {
+    return kui_sci_async_work_sample(ctx)>0;
+}
+
+static void async_sustained(uint8_t baseline[KUI_SD_ASYNC_STRESS_SECTORS][512],
+        uint8_t verify[512],struct kui_sd_async_result *out,
         bool (*cancelled)(void *),void *cancel_ctx) {
-    /* Dedicated storage, never a guest destination or the bus DMA buffer. */
-    static uint8_t baseline[512] __attribute__((aligned(32)));
+    struct kui_sci_async_reader reader={0};
+    enum kui_sci_async_status status=kui_sci_async_open(&reader,&sci,&out->probe);
+    if(status!=KUI_SCI_ASYNC_OK) return;
+    uint64_t started=timer_us_gettime64();
+    bool heartbeat_started=kui_sci_async_heartbeat_start(async_dma_active,&reader);
+    if(!heartbeat_started) {
+        status=KUI_SCI_ASYNC_BUSY;goto close;
+    }
+    uint32_t seen=0,work=UINT32_C(0x6b756973);
+    for(uint32_t trial=0;trial<KUI_SD_ASYNC_STRESS_READ_LIMIT;++trial) {
+        if(cancelled && cancelled(cancel_ctx)) {status=KUI_SCI_ASYNC_CANCELLED;break;}
+        if(timer_us_gettime64()-started>=out->target_us) {
+            out->duration_complete=true;break;
+        }
+        /* Alternate ascending and descending passes through the bounded
+         * sample set; every sample is used once before any is repeated. */
+        uint32_t index=trial%out->baseline_sectors;
+        if((trial/out->baseline_sectors)&1u) index=out->baseline_sectors-1u-index;
+        uint64_t read_start=timer_us_gettime64();
+        status=kui_sci_async_begin(&reader,out->baseline_lbas[index],false);
+        bool stopping=false;
+        if(status==KUI_SCI_ASYNC_OK) status=KUI_SCI_ASYNC_PENDING;
+        while(status==KUI_SCI_ASYNC_PENDING) {
+            if(!stopping && cancelled && cancelled(cancel_ctx)) {
+                stopping=true;status=kui_sci_async_cancel(&reader);
+                if(status!=KUI_SCI_ASYNC_PENDING) break;
+            }
+            status=kui_sci_async_poll(&reader);++out->poll_calls;
+            if(status==KUI_SCI_ASYNC_PENDING) {
+                /* Only DMA count progress during this work is credited by
+                 * the engine. Completion between sample and record cannot
+                 * become a false overlap measurement. */
+                uint32_t before=kui_sci_async_work_sample(&reader);
+                for(unsigned j=0;j<16u;++j) {
+                    work^=work<<13;work^=work>>17;work^=work<<5;
+                }
+                kui_sci_async_work_record(&reader,before,16u,work);
+            }
+        }
+        if(status==KUI_SCI_ASYNC_OK)
+            status=kui_sci_async_finish(&reader,verify,baseline[index]);
+        uint64_t elapsed=timer_us_gettime64()-read_start;
+        out->read_elapsed_us+=elapsed;
+        if(elapsed>out->max_read_us) out->max_read_us=elapsed;
+        if(status!=KUI_SCI_ASYNC_OK) break;
+        ++out->read_cycles;++out->baseline_reads[index];
+        if(!(seen&(UINT32_C(1)<<index))) {
+            seen|=UINT32_C(1)<<index;++out->distinct_lbas_verified;
+        }
+        /* Leave natural timer preemption enabled across a bounded burst.
+         * Yielding after every short poll can align DMA windows between
+         * scheduler ticks and weaken the interrupt-during-DMA observation.
+         * The engine bounds every read and cancellation remains checked in
+         * every pending poll; this does not mask IRQs or change timer rates. */
+        if((out->read_cycles%64u)==0) {thd_pass();++out->worker_yields;}
+    }
+    out->stress_elapsed_us=timer_us_gettime64()-started;
+    if(status==KUI_SCI_ASYNC_OK && out->stress_elapsed_us>=out->target_us)
+        out->duration_complete=true;
+    out->iteration_limit=out->read_cycles==KUI_SD_ASYNC_STRESS_READ_LIMIT && !out->duration_complete;
+    /* A failed close takes priority over cancellation or a data failure.
+     * The wrapper's recovery/poison policy uses the engine's ownership proof. */
+close:
+    if(heartbeat_started) kui_sci_async_heartbeat_end(&out->heartbeat);
+    enum kui_sci_async_status closed=kui_sci_async_close(&reader);
+    out->probe.timer_irq_instrumented=out->heartbeat.installed;
+    if(closed!=KUI_SCI_ASYNC_OK) status=closed;
+    if(out->probe.status!=KUI_SCI_ASYNC_RESTORE) out->probe.status=status;
+    if(out->probe.operation_status==KUI_SCI_ASYNC_OK)
+        out->probe.operation_status=status;
+}
+
+static void async_run(struct kui_sd_async_result *out,
+        bool (*cancelled)(void *),void *cancel_ctx,bool sustained) {
+    /* Dedicated storage, never a guest destination or the bus DMA buffer.
+     * Only the serialized storage worker may call either diagnostic. */
+    static uint8_t baseline[KUI_SD_ASYNC_STRESS_SECTORS][512] __attribute__((aligned(32)));
     static uint8_t verify[512] __attribute__((aligned(32)));
     if(!out) return;
     *out=(struct kui_sd_async_result){0};
+    out->sustained=sustained;
+    out->target_us=sustained?KUI_SD_ASYNC_STRESS_US:0;
     out->recovery_command=out->recovery_response=0xff;
     out->probe.status=KUI_SCI_ASYNC_UNSUPPORTED;
     if(!connected || active!=KUI_STORAGE_SCI || selected!=KUI_STORAGE_SCI ||
-       !sci.ready || sci.slow || !kui_sci_sd_healthy()) {
+       !sci.ready || sci.slow || !sci.blocks || !kui_sci_sd_healthy()) {
         snprintf(out->message,sizeof(out->message),"Requires the boot-selected SCI card; no device switch attempted.");
         return;
     }
@@ -339,18 +437,33 @@ void kui_sd_async_probe(struct kui_sd_async_result *out,
         snprintf(out->message,sizeof(out->message),"Volume could not be unmounted; probe did not start.");
         return;
     }
-    /* Read-only CMD17, including ordinary CRC verification, twice before
-     * experimenting. Only this worker can access the card during this lease. */
-    enum kui_loader_sd_result read=kui_loader_sd_read(&sci,0,1,baseline);
-    if(read==KUI_LOADER_SD_OK) read=kui_loader_sd_read(&sci,0,1,verify);
-    if(read!=KUI_LOADER_SD_OK || !kui_sci_sd_healthy() || memcmp(baseline,verify,512)) {
-        out->probe.status=KUI_SCI_ASYNC_MISMATCH;
-        snprintf(out->message,sizeof(out->message),"Baseline read not verified; no async transfer attempted.");
-        goto unsafe;
+    uint32_t samples=sustained?async_sample_lbas(sci.blocks,out->baseline_lbas):1u;
+    enum kui_loader_sd_result read=KUI_LOADER_SD_OK;
+    for(uint32_t i=0;i<samples;++i) {
+        /* Read-only CMD17, including ordinary CRC verification, twice before
+         * experimenting. No DMA experiment starts with a partial baseline. */
+        if(i && cancelled && cancelled(cancel_ctx)) {
+            out->probe.status=KUI_SCI_ASYNC_CANCELLED;goto recovery;
+        }
+        uint32_t lba=out->baseline_lbas[i];
+        read=kui_loader_sd_read(&sci,lba,1,baseline[i]);
+        if(read==KUI_LOADER_SD_OK) read=kui_loader_sd_read(&sci,lba,1,verify);
+        if(read!=KUI_LOADER_SD_OK || !kui_sci_sd_healthy() || memcmp(baseline[i],verify,512)) {
+            out->probe.status=KUI_SCI_ASYNC_MISMATCH;
+            snprintf(out->message,sizeof(out->message),"Baseline read not verified; no async transfer attempted.");
+            goto unsafe;
+        }
+        ++out->baseline_sectors;
+        out->baseline_crcs[i]=kui_crc32(0,baseline[i],512);
+        out->baseline_crc32=kui_crc32(out->baseline_crc32,baseline[i],512);
+        bool unique=true;
+        for(uint32_t j=0;j<i;++j)
+            if(!memcmp(baseline[i],baseline[j],512)) {unique=false;break;}
+        if(unique) ++out->distinct_payloads;
     }
     out->baseline_verified=true;
-    out->baseline_crc32=kui_crc32(0,baseline,sizeof(baseline));
-    (void)kui_sci_async_probe_run(&sci,0,baseline,cancelled,cancel_ctx,&out->probe);
+    if(sustained) async_sustained(baseline,verify,out,cancelled,cancel_ctx);
+    else (void)kui_sci_async_probe_run(&sci,0,baseline[0],cancelled,cancel_ctx,&out->probe);
     if(out->probe.status==KUI_SCI_ASYNC_RESTORE ||
        (out->probe.started && !out->probe.safe_restored)) {
         enum kui_sci_async_status reason=async_reason(&out->probe);
@@ -359,8 +472,7 @@ void kui_sd_async_probe(struct kui_sd_async_result *out,
             kui_sci_async_status_name(reason));
         goto unsafe;
     }
-    if(out->probe.started && out->probe.status!=KUI_SCI_ASYNC_OK &&
-       out->probe.status!=KUI_SCI_ASYNC_CRC && out->probe.status!=KUI_SCI_ASYNC_MISMATCH) {
+    if(out->probe.started && out->probe.status!=KUI_SCI_ASYNC_OK) {
         /* Local register restoration cannot establish the protocol state of
          * an interrupted sector. Discard it, release, then initialize anew. */
         sci.ready=false;kui_sd_disconnect();
@@ -377,6 +489,7 @@ void kui_sd_async_probe(struct kui_sd_async_result *out,
             goto unsafe;
         }
     }
+recovery:
     /* Cancellation never skips the recovery proof. It precedes all report
      * writes and uses the unmodified normal reader with CRC enabled. */
     read=kui_loader_sd_read(&sci,0,1,verify);
@@ -384,14 +497,19 @@ void kui_sd_async_probe(struct kui_sd_async_result *out,
     out->recovery_command=sci.last_command;out->recovery_response=sci.last_response;
     out->recovery_command_valid=sci.last_command!=0xff;
     out->recovery_bus_healthy=kui_sci_sd_healthy();
-    out->recovery_data_match=read==KUI_LOADER_SD_OK && !memcmp(baseline,verify,sizeof(baseline));
+    out->recovery_data_match=read==KUI_LOADER_SD_OK && !memcmp(baseline[0],verify,512);
     out->recovery_verified=read==KUI_LOADER_SD_OK && out->recovery_bus_healthy && out->recovery_data_match;
     if(!out->recovery_verified) {
         snprintf(out->message,sizeof(out->message),"SCI %s; normal read recovery failed. Restart required.",
             kui_sci_async_status_name(async_reason(&out->probe)));
         goto unsafe;
     }
-    snprintf(out->message,sizeof(out->message),"%s; normal read recovery verified.",
+    if(out->sustained && (out->heartbeat.ownership_lost ||
+       (out->heartbeat.installed && !out->heartbeat.restored)))
+        snprintf(out->message,sizeof(out->message),"Timer observer restoration unconfirmed; normal read recovery verified.");
+    else if(out->iteration_limit)
+        snprintf(out->message,sizeof(out->message),"Read limit reached before 60 seconds; normal read recovery verified.");
+    else snprintf(out->message,sizeof(out->message),"%s; normal read recovery verified.",
         kui_sci_async_status_name(out->probe.status));
     return;
 unsafe:
@@ -399,5 +517,13 @@ unsafe:
      * uncertain cleanup. Restart is required to rebuild ownership safely. */
     out->restart_required=true;
     sci_probe_poisoned=true;sci.ready=false;kui_media_set(NULL);connected=false;
+}
+void kui_sd_async_probe(struct kui_sd_async_result *out,
+        bool (*cancelled)(void *),void *cancel_ctx) {
+    async_run(out,cancelled,cancel_ctx,false);
+}
+void kui_sd_async_stress(struct kui_sd_async_result *out,
+        bool (*cancelled)(void *),void *cancel_ctx) {
+    async_run(out,cancelled,cancel_ctx,true);
 }
 #endif

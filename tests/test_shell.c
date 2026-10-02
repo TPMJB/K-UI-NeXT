@@ -1612,7 +1612,11 @@ static void storage_test_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SCI_ASYNC_PROBE);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_SCI_ASYNC_RUN);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_SCI_ASYNC_STRESS);
+    assert(press(KUI_SHELL_X,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_SCI_ASYNC_RUN);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_SCI_ASYNC_PROBE);
+    assert(press(KUI_SHELL_X|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_SCI_ASYNC_PROBE);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_STORAGE_TESTS);
     assert(s.storage_test_selected==8);
     puts("PASS storage tests controls: Diagnostics entry, presets, labels, confirmation, Stop, repeat, history and baseline guards");
@@ -1646,6 +1650,7 @@ static void storage_test_rendering(void) {
     assert(strstr(drawn,"Newest eight results") && strstr(drawn,"Samsung 128GB") && strstr(drawn,"Baseline #9"));
     s.page=KUI_SHELL_SCI_ASYNC_PROBE;v.app_status=NULL;v.busy=false;render(&v);
     assert(strstr(drawn,"SCI async probe") && strstr(drawn,"CPU can work") && strstr(drawn,"/KUI/tests"));
+    assert(strstr(drawn,"16 sectors") && strstr(drawn,"X 60s stress") && strstr(drawn,"Read-only"));
     struct kui_app_status probe={.complete=true,.line_count=2};
     snprintf(probe.message,sizeof(probe.message),"Read test finished; async proof is incomplete.");
     snprintf(probe.lines[0],KUI_APP_LINE_CAP,"CPU overlap batches: slow 0 / fast 0");

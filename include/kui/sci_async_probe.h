@@ -25,7 +25,8 @@ enum kui_sci_async_status {
     KUI_SCI_ASYNC_RESTORE,
     KUI_SCI_ASYNC_NO_OVERLAP,
     KUI_SCI_ASYNC_HANDOFF,
-    KUI_SCI_ASYNC_BUS_FAULT
+    KUI_SCI_ASYNC_BUS_FAULT,
+    KUI_SCI_ASYNC_PENDING
 };
 
 enum kui_sci_async_phase {
@@ -107,25 +108,60 @@ struct kui_sci_async_probe_result {
     uint32_t lba;
     struct kui_sci_async_stage slow, fast;
     uint64_t elapsed_us, max_irq_masked_us, max_irq_handler_us;
+    /* Foreground API duration, including IRQ preemption; not wire time.
+     * No API waits for an in-flight DMA to complete. */
+    uint64_t max_open_us, max_begin_us, max_poll_us, max_finish_us;
+    uint64_t max_cancel_us, max_close_us, max_call_us;
     bool started, safe_restored, guards_ok, crc_ok, baseline_ok;
+    bool baseline_checked;
     bool handlers_restored, registers_restored;
     bool dma_quarantined, foreign_dma;
     /* This probe measures work during DMA and its own IRQ delivery only. */
     bool timer_irq_instrumented;
 };
 
-/* Isolated runtime diagnostic, never a filesystem or resident reader.
- * Caller owns and serializes the existing SCI session, supplies a CRC-checked
- * baseline, and verifies recovery with a normal read before saving a report.
+/* One serialized runtime reader, backed by a persistent DMA destination.
+ * Initialize the handle to zero. The card and result must outlive close().
+ * Callers retain exclusive ownership of the existing SCI storage session and
+ * channel lease, and must not use ordinary storage until close completes.
  * Requires ready/fast card, interrupts enabled, an idle channel 1 and an
  * already-enabled DMAC interrupt priority. Both SCI GPIO directions must be
  * inputs because sampled pin reads cannot preserve foreign output latches.
  * Does not change global DMAOR or
- * the shared DMAC priority. Cancellation is checked between bounded trials.
- * safe_restored describes local hardware/IRQ cleanup, not card recovery.
+ * the shared DMAC priority. Each poll performs at most eight framing bytes,
+ * or a single DMA-state observation; it never waits for DMA completion.
+ * begin returns OK for an accepted request. poll returns PENDING until finish
+ * is available, OK when ready, or a terminal error. finish copies exactly
+ * 512 bytes only after guards, CRC, optional expected data, and handoff pass.
+ * expected==NULL means baseline_checked=false, not a verified baseline.
+ * cancel requests discard; active DMA drains through poll's bounded deadline.
+ * finish after cancellation validates/hands off but never publishes data.
+ * close returns PENDING while a request runs; it never silently aborts DMA.
+ * Once ready, close can validate/discard the payload and release the lease.
+ * safe_restored describes local hardware/IRQ cleanup, not card recovery;
+ * callers still perform an ordinary verified read before trusting recovery.
  * An incomplete DMA has no documented abort-drain acknowledgement: its static
  * destination and channel are quarantined, safe_restored=false, until restart.
- * The selected card is deselected on every started exit. */
+ * A stale/copied handle cannot operate another lease. No game integration is
+ * implied by this runtime API. Foreground calls are not reentrant. */
+struct kui_sci_async_reader { uint32_t generation; };
+enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader,
+    const struct kui_loader_sd *card, struct kui_sci_async_probe_result *out);
+enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reader,
+    uint32_t lba, bool slow);
+enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader);
+enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *reader,
+    uint8_t dst[512], const uint8_t expected[512]);
+enum kui_sci_async_status kui_sci_async_cancel(struct kui_sci_async_reader *reader);
+enum kui_sci_async_status kui_sci_async_close(struct kui_sci_async_reader *reader);
+/* Surround actual caller CPU work. work_sample is read-only and IRQ-safe.
+ * Zero sample means no actively owned DMA. Credit
+ * requires count progress with bytes still outstanding after the work. */
+uint32_t kui_sci_async_work_sample(struct kui_sci_async_reader *reader);
+void kui_sci_async_work_record(struct kui_sci_async_reader *reader,
+    uint32_t before, uint32_t iterations, uint32_t checksum);
+
+/* Original 16-slow/64-fast diagnostic client of the same reader API. */
 enum kui_sci_async_status kui_sci_async_probe_run(
     const struct kui_loader_sd *card, uint32_t lba,
     const uint8_t baseline[512], bool (*cancelled)(void *), void *cancel_ctx,

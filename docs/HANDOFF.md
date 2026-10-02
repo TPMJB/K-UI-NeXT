@@ -1,5 +1,23 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)
+
+The successful short probe now backs a reusable bounded
+`open/begin/poll/finish/cancel/close` API. Diagnostics adds **X: 60s stress**
+beside **A: Quick**: 16 prevalidated sectors, full CRC/data/guard checks,
+independent CPU work, actual timer IRQs during DMA, safe cancellation and
+ordinary-reader recovery. Schema 2 records per-LBA counts, API durations and
+heartbeat ownership/restoration as well as existing fault/reset evidence.
+See the [implementation and console gate](evidence/sci-async-runtime-reader-2026-10-02.md).
+
+Targeted sanitizer tests and independent lifecycle review pass. Full CI,
+package verification and console validation are pending. Next run A, then X
+if A passes, and return both JSON files plus the stress result photo. Native
+game reads and CE launch remain unchanged. The
+[native integration plan](evidence/sci-native-async-integration-plan-2026-10-02.md)
+records the resumable image/GD contracts, actual resident budgets and game-call
+cadence risk; that implementation follows this sustained hardware gate.
+
 ## SCI repeated autonomous reads pass on console (2026-10-02 UTC)
 
 **0e9a2f814231 passes the full isolated async probe:** 16/16 slow and 64/64

@@ -755,6 +755,55 @@ static void test_dma_grouped_rx(const struct kui_loader_sd_bus *bus) {
     puts("Grouped RX: every byte value in every word position and 36 mixed patterns passed");
 }
 
+static void test_borrower_baud_cache(const struct kui_loader_sd_bus *bus) {
+    reset();
+    unsigned writes=hw.writes,reads=hw.reads;
+    assert(!kui_sci_sd_resync_speed() && hw.writes==writes && hw.reads==reads);
+    assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+    /* Simulate a borrower restoring fast hardware while the bus still caches
+     * its previous slow transfer. The next fast byte must need no baud reset. */
+    hw.brr=0;
+    writes=hw.writes;
+    hw.irq_disabled=true;
+    assert(kui_sci_sd_resync_speed() && hw.writes==writes);
+    hw.irq_disabled=false;
+    unsigned delays=hw.delays;
+    (void)bus->transfer(NULL,0xff,false);
+    assert(hw.brr==0 && hw.delays==delays);
+    /* Check the inverse transition too; no transmitted bytes are added by
+     * the bookkeeping helper itself. */
+    hw.brr=31;
+    writes=hw.writes;unsigned bytes=hw.bytes;
+    hw.irq_disabled=true;
+    assert(kui_sci_sd_resync_speed() && hw.writes==writes && hw.bytes==bytes);
+    hw.irq_disabled=false;
+    delays=hw.delays;(void)bus->transfer(NULL,0xff,true);
+    assert(hw.brr==31 && hw.delays==delays);
+    writes=hw.writes;reads=hw.reads;
+    hw.stb|=1u;
+    assert(!kui_sci_sd_resync_speed() && hw.reads==reads+1 && hw.writes==writes);
+    hw.stb&=(uint8_t)~1u;
+    for(unsigned fault=0;fault<5;++fault) {
+        uint8_t scr=hw.scr,ssr=hw.ssr,brr=hw.brr,ptr=hw.ptr;
+        uint16_t pdtr=hw.pdtr;
+        if(fault==0) hw.ssr|=ORER;
+        else if(fault==1) hw.brr=7;
+        else if(fault==2) hw.pdtr&=(uint16_t)~0x80u;
+        else if(fault==3) hw.scr|=0x40u;
+        else hw.ptr=1;
+        assert(!kui_sci_sd_resync_speed() && hw.writes==writes);
+        hw.scr=scr;hw.ssr=ssr;hw.brr=brr;hw.ptr=ptr;hw.pdtr=pdtr;
+    }
+    /* A sticky driver error is never cleared by cache synchronization. */
+    hw.missing_flags=TDRE;
+    (void)bus->transfer(NULL,0xff,true);
+    assert(!kui_sci_sd_healthy());
+    writes=hw.writes;reads=hw.reads;
+    assert(!kui_sci_sd_resync_speed() && hw.writes==writes && hw.reads==reads);
+    hw.missing_flags=0;
+    kui_sci_sd_release();restored();
+}
+
 int main(void) {
     const struct kui_loader_sd_bus *bus=kui_sci_sd_bus(); assert(bus);
     assert(crc16_reference((const uint8_t *)"123456789",9)==0x31c3);
@@ -773,5 +822,6 @@ int main(void) {
     test_dma_unavailable(bus);
     test_dma_failures(bus);
     test_dma_profile(bus);
+    test_borrower_baud_cache(bus);
     puts("SCI SD bus: polled/DMA data, CRC, profiling, bounded faults and ownership restoration passed");
 }

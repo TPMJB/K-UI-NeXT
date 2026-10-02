@@ -17,6 +17,11 @@ void kui_sci_sd_release(void);
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void);
 bool kui_sci_sd_healthy(void);
 #ifndef KUI_RETAIL_TRANSPORT
+/* Resynchronize this lease's cached baud choice after a serialized runtime
+ * borrower restores SCI registers. Caller holds IRQ masking and has verified
+ * ownership/restoration. Read-only hardware validation, no wire traffic or
+ * fault clearing; a stopped module is rejected before accessing SCI. */
+bool kui_sci_sd_resync_speed(void);
 /* First failed programmed flag wait in the current lease. Hardware values
  * are captured before stopping SCI; ssr is the failing loop's final sample,
  * not a later read. polls counts that sample (1..10000). Release and failed

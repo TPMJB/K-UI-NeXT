@@ -604,22 +604,41 @@ static void storage_test_operation(unsigned action) {
     mutex_unlock(&lock);
 }
 /* Independent experiment report: never added to the soak history/baseline. */
-static bool sci_async_integrity(const struct kui_sci_async_probe_result *r) {
-    return r->crc_ok && r->baseline_ok && r->guards_ok &&
+static bool sci_async_integrity(const struct kui_sd_async_result *result) {
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    if(!r->crc_ok || !r->baseline_ok || !r->guards_ok) return false;
+    if(result->sustained) {
+        if(!result->baseline_verified || !r->baseline_checked || result->baseline_sectors<2 ||
+           result->baseline_sectors>KUI_SD_ASYNC_STRESS_SECTORS ||
+           result->distinct_lbas_verified!=result->baseline_sectors) return false;
+        uint64_t reads=0;
+        for(unsigned i=0;i<result->baseline_sectors;i++) {
+            if(!result->baseline_reads[i]) return false;
+            reads+=result->baseline_reads[i];
+        }
+        return result->read_cycles && reads==result->read_cycles && result->read_cycles==r->fast.passed &&
+            r->fast.attempted==r->fast.passed;
+    }
+    return
         r->slow.passed==KUI_SCI_ASYNC_SLOW_TRIALS && r->slow.attempted==r->slow.passed &&
         r->fast.passed==KUI_SCI_ASYNC_FAST_TRIALS && r->fast.attempted==r->fast.passed;
 }
-static bool sci_async_completion(const struct kui_sci_async_probe_result *r) {
-    return sci_async_integrity(r) && r->slow.dma_irqs==r->slow.passed && r->fast.dma_irqs==r->fast.passed;
+static bool sci_async_completion(const struct kui_sd_async_result *result) {
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    return sci_async_integrity(result) && r->slow.dma_irqs==r->slow.passed && r->fast.dma_irqs==r->fast.passed;
 }
 static bool sci_async_passed(const struct kui_sd_async_result *result) {
     const struct kui_sci_async_probe_result *r=&result->probe;
     return r->status==KUI_SCI_ASYNC_OK && result->baseline_verified && result->recovery_verified &&
         r->safe_restored && r->handlers_restored && r->registers_restored &&
-        sci_async_completion(r) && r->fast.overlap_batches;
+        sci_async_completion(result) && r->fast.overlap_batches &&
+        (!result->sustained || (result->duration_complete && !result->iteration_limit &&
+            result->stress_elapsed_us>=result->target_us && result->target_us>=KUI_SD_ASYNC_STRESS_US &&
+            result->heartbeat.installed && result->heartbeat.restored && !result->heartbeat.ownership_lost &&
+            result->heartbeat.dma_ticks));
 }
 static bool sci_async_save(const struct kui_sd_async_result *result,char path[96]) {
-    static char stage[2][2048],json[6144];
+    static char stage[2][2048],json[8192],baseline[3][192];
     const struct kui_sci_async_probe_result *r=&result->probe;
     const struct kui_sci_async_stage *stages[]={&r->slow,&r->fast};
     path[0]=0;
@@ -665,16 +684,42 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
             (unsigned long long)s->elapsed_us,(unsigned long long)s->receive_us,(unsigned long long)s->max_receive_us);
         if(n<0 || (size_t)n>=sizeof(stage[i])) return false;
     }
+    const uint32_t *baseline_values[]={result->baseline_lbas,result->baseline_crcs,result->baseline_reads};
+    unsigned baseline_count=result->baseline_sectors;
+    if(baseline_count>KUI_SD_ASYNC_STRESS_SECTORS) return false;
+    for(unsigned a=0;a<3;a++) {
+        size_t used=0;
+        baseline[a][used++]='[';
+        for(unsigned i=0;i<baseline_count;i++) {
+            int written=snprintf(baseline[a]+used,sizeof(baseline[a])-used,"%s%lu",i?",":"",
+                (unsigned long)baseline_values[a][i]);
+            if(written<0 || (size_t)written>=sizeof(baseline[a])-used) return false;
+            used+=(size_t)written;
+        }
+        if(used+2>sizeof(baseline[a])) return false;
+        baseline[a][used++]=']';baseline[a][used]=0;
+    }
     struct kui_datetime clock;int64_t local_seconds=0;
     if(kui_clock_now(&clock)) (void)kui_clock_to_seconds(&clock,&local_seconds);
     int n=snprintf(json,sizeof(json),
-        "{\n  \"schema\":1,\n  \"kind\":\"SCI async probe\",\n  \"build\":\"%.15s\",\n"
+        "{\n  \"schema\":2,\n  \"kind\":\"SCI async probe\",\n  \"build\":\"%.15s\",\n"
+        "  \"mode\":\"%s\",\n  \"target_us\":%llu,\n  \"stress_elapsed_us\":%llu,\n"
+        "  \"duration_complete\":%s,\n  \"iteration_limit\":%s,\n"
+        "  \"baseline_sectors\":%lu,\n  \"distinct_lbas_verified\":%lu,\n  \"distinct_payloads\":%lu,\n"
+        "  \"baseline_lbas\":%s,\n  \"baseline_crcs\":%s,\n  \"baseline_reads\":%s,\n"
+        "  \"read_cycles\":%lu,\n  \"poll_calls\":%lu,\n  \"worker_yields\":%lu,\n"
+        "  \"read_elapsed_us\":%llu,\n  \"max_read_us\":%llu,\n"
+        "  \"heartbeat_installed\":%s,\n  \"heartbeat_restored\":%s,\n  \"heartbeat_ownership_lost\":%s,\n"
+        "  \"heartbeat_ticks\":%lu,\n  \"heartbeat_dma_ticks\":%lu,\n  \"heartbeat_max_gap_us\":%llu,\n"
+        "  \"max_open_us\":%llu,\n  \"max_begin_us\":%llu,\n  \"max_poll_us\":%llu,\n"
+        "  \"max_finish_us\":%llu,\n  \"max_cancel_us\":%llu,\n  \"max_close_us\":%llu,\n  \"max_call_us\":%llu,\n"
         "  \"local_seconds\":%lld,\n  \"transport\":\"SCI\",\n  \"lba\":%lu,\n"
         "  \"status\":%u,\n  \"status_name\":\"%s\",\n  \"started\":%s,\n"
         "  \"operation_status\":%u,\n  \"operation_status_name\":\"%s\",\n"
         "  \"dma_quarantined\":%s,\n  \"foreign_dma\":%s,\n"
         "  \"baseline_verified\":%s,\n  \"baseline_crc32\":%lu,\n"
         "  \"safe_restored\":%s,\n  \"guards_ok\":%s,\n  \"crc_ok\":%s,\n  \"baseline_ok\":%s,\n"
+        "  \"baseline_checked\":%s,\n"
         "  \"handlers_restored\":%s,\n  \"registers_restored\":%s,\n"
         "  \"recovery_verified\":%s,\n  \"recovery_reinitialized\":%s,\n  \"elapsed_us\":%llu,\n"
         "  \"recovery_phase\":%u,\n  \"recovery_phase_name\":\"%s\",\n"
@@ -685,12 +730,26 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         "  \"max_irq_masked_us\":%llu,\n  \"max_irq_handler_us\":%llu,\n"
         "  \"probe_passed\":%s,\n  \"read_integrity_verified\":%s,\n  \"completion_irq_verified\":%s,\n"
         "  \"cpu_overlap_observed\":%s,\n  \"slow\":%s,\n  \"fast\":%s\n}\n",
-        KUI_BUILD_ID,(long long)local_seconds,(unsigned long)r->lba,(unsigned)r->status,
+        KUI_BUILD_ID,result->sustained?"sustained":"quick",
+        (unsigned long long)result->target_us,(unsigned long long)result->stress_elapsed_us,
+        result->duration_complete?"true":"false",result->iteration_limit?"true":"false",
+        (unsigned long)result->baseline_sectors,(unsigned long)result->distinct_lbas_verified,(unsigned long)result->distinct_payloads,
+        baseline[0],baseline[1],baseline[2],
+        (unsigned long)result->read_cycles,(unsigned long)result->poll_calls,(unsigned long)result->worker_yields,
+        (unsigned long long)result->read_elapsed_us,(unsigned long long)result->max_read_us,
+        result->heartbeat.installed?"true":"false",result->heartbeat.restored?"true":"false",
+        result->heartbeat.ownership_lost?"true":"false",(unsigned long)result->heartbeat.total_ticks,
+        (unsigned long)result->heartbeat.dma_ticks,(unsigned long long)result->heartbeat.max_gap_us,
+        (unsigned long long)r->max_open_us,(unsigned long long)r->max_begin_us,(unsigned long long)r->max_poll_us,
+        (unsigned long long)r->max_finish_us,(unsigned long long)r->max_cancel_us,
+        (unsigned long long)r->max_close_us,(unsigned long long)r->max_call_us,
+        (long long)local_seconds,(unsigned long)r->lba,(unsigned)r->status,
         kui_sci_async_status_name(r->status),r->started?"true":"false",
         (unsigned)r->operation_status,kui_sci_async_status_name(r->operation_status),
         r->dma_quarantined?"true":"false",r->foreign_dma?"true":"false",
         result->baseline_verified?"true":"false",(unsigned long)result->baseline_crc32,
         r->safe_restored?"true":"false",r->guards_ok?"true":"false",r->crc_ok?"true":"false",r->baseline_ok?"true":"false",
+        r->baseline_checked?"true":"false",
         r->handlers_restored?"true":"false",r->registers_restored?"true":"false",
         result->recovery_verified?"true":"false",result->recovery_reinitialized?"true":"false",
         (unsigned long long)r->elapsed_us,
@@ -700,7 +759,7 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         result->recovery_bus_healthy?"true":"false",result->recovery_data_match?"true":"false",
         r->timer_irq_instrumented?"true":"false",
         (unsigned long long)r->max_irq_masked_us,(unsigned long long)r->max_irq_handler_us,
-        sci_async_passed(result)?"true":"false",sci_async_integrity(r)?"true":"false",sci_async_completion(r)?"true":"false",
+        sci_async_passed(result)?"true":"false",sci_async_integrity(result)?"true":"false",sci_async_completion(result)?"true":"false",
         r->fast.overlap_batches?"true":"false",stage[0],stage[1]);
     if(n<0 || (size_t)n>=sizeof(json)) return false;
     FATFS fs;bool saved=false;
@@ -726,7 +785,7 @@ done:
     if(!saved) path[0]=0;
     return saved;
 }
-static void sci_async_operation(void) {
+static void sci_async_operation(bool sustained) {
     static struct kui_sd_async_result result;
     struct kui_app_status status={.complete=true};
     struct kui_music_status music={0};char path[96]={0};
@@ -741,15 +800,19 @@ static void sci_async_operation(void) {
         kui_sd_set_params(KUI_STORAGE_SCI,true);
         connected=kui_sd_connect();
         if(connected) {
-            kui_sd_async_probe(&result,storage_test_cancelled,NULL);
+            if(sustained) kui_sd_async_stress(&result,storage_test_cancelled,NULL);
+            else kui_sd_async_probe(&result,storage_test_cancelled,NULL);
             if(result.recovery_verified) saved=sci_async_save(&result,path);
             const struct kui_sci_async_probe_result *r=&result.probe;
+            bool heartbeat_fault=result.sustained && (result.heartbeat.ownership_lost ||
+                (result.heartbeat.installed && !result.heartbeat.restored));
             status.stopped=r->status==KUI_SCI_ASYNC_CANCELLED;
             status.passed=sci_async_passed(&result);
-            status.errors=result.restart_required || (r->status!=KUI_SCI_ASYNC_OK && !status.stopped);
+            status.errors=result.restart_required || heartbeat_fault || (r->status!=KUI_SCI_ASYNC_OK && !status.stopped);
             snprintf(status.message,sizeof(status.message),"%s",result.message);
-            if(r->status==KUI_SCI_ASYNC_OK && result.recovery_verified)
+            if(r->status==KUI_SCI_ASYNC_OK && result.recovery_verified && !heartbeat_fault)
                 snprintf(status.message,sizeof(status.message),"%s",status.passed?
+                    result.sustained?"60-second stress passed with timer IRQs during DMA.":
                     "Verified reads with CPU work during DMA.":"Read test finished; async proof is incomplete.");
             status.line_count=8;
             snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow: %lu/%lu reads verified; %lu DMA interrupts",
@@ -764,7 +827,22 @@ static void sci_async_operation(void) {
             snprintf(status.lines[5],KUI_APP_LINE_CAP,"%s",saved?"Saved independent report:":"Report not saved; photograph this result.");
             snprintf(status.lines[6],KUI_APP_LINE_CAP,"%.79s",path[0]?path+2:"No saved path");
             snprintf(status.lines[7],KUI_APP_LINE_CAP,"Normal game reads are unchanged by this experiment.");
-            if(!status.passed) {
+            if(result.sustained) {
+                char api_line[160];
+                snprintf(status.lines[0],KUI_APP_LINE_CAP,"60s stress: %lu reads; %lu/%lu sectors verified",
+                    (unsigned long)result.read_cycles,(unsigned long)result.distinct_lbas_verified,
+                    (unsigned long)result.baseline_sectors);
+                snprintf(status.lines[1],KUI_APP_LINE_CAP,"CRC/data/guards %s; DMA interrupts %lu",
+                    sci_async_integrity(&result)?"OK":"unconfirmed",(unsigned long)r->fast.dma_irqs);
+                snprintf(status.lines[2],KUI_APP_LINE_CAP,"CPU batches %lu; timer during DMA %lu",
+                    (unsigned long)r->fast.overlap_batches,(unsigned long)result.heartbeat.dma_ticks);
+                snprintf(api_line,sizeof(api_line),"API max us: begin %llu poll %llu finish %llu",
+                    (unsigned long long)r->max_begin_us,(unsigned long long)r->max_poll_us,(unsigned long long)r->max_finish_us);
+                snprintf(status.lines[3],KUI_APP_LINE_CAP,"%.79s",api_line);
+                snprintf(status.lines[7],KUI_APP_LINE_CAP,"Timer max gap %llu us; total ticks %lu",
+                    (unsigned long long)result.heartbeat.max_gap_us,(unsigned long)result.heartbeat.total_ticks);
+            }
+            if(!status.passed && r->status!=KUI_SCI_ASYNC_OK) {
                 const struct kui_sci_async_stage *stage=r->fast.attempted?&r->fast:&r->slow;
                 if(stage->handoff_checks || stage->bus_faults || stage->bus_fault_valid) {
                     snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow %lu/%lu IRQ%lu  Fast %lu/%lu IRQ%lu",
@@ -789,11 +867,16 @@ static void sci_async_operation(void) {
                 }
                 if(stage->module_reset_attempts || stage->module_reset_failures) {
                     char reset_line[160];
-                    snprintf(reset_line,sizeof(reset_line),"Slow%lu/%lu IRQ%lu Fast%lu/%lu IRQ%lu Reset%lu/%lu fail%lu state%03lX",
-                        (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs,
-                        (unsigned long)r->fast.passed,(unsigned long)r->fast.attempted,(unsigned long)r->fast.dma_irqs,
-                        (unsigned long)stage->module_resets,(unsigned long)stage->module_reset_attempts,
-                        (unsigned long)stage->module_reset_failures,(unsigned long)stage->module_reset_state);
+                    if(result.sustained)
+                        snprintf(reset_line,sizeof(reset_line),"Reads%lu IRQ%lu Reset%lu/%lu F%lu S%03lX",
+                            (unsigned long)result.read_cycles,(unsigned long)stage->dma_irqs,
+                            (unsigned long)stage->module_resets,(unsigned long)stage->module_reset_attempts,
+                            (unsigned long)stage->module_reset_failures,(unsigned long)stage->module_reset_state);
+                    else snprintf(reset_line,sizeof(reset_line),"Slow%lu/%lu IRQ%lu Fast%lu/%lu IRQ%lu Reset%lu/%lu fail%lu state%03lX",
+                            (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs,
+                            (unsigned long)r->fast.passed,(unsigned long)r->fast.attempted,(unsigned long)r->fast.dma_irqs,
+                            (unsigned long)stage->module_resets,(unsigned long)stage->module_reset_attempts,
+                            (unsigned long)stage->module_reset_failures,(unsigned long)stage->module_reset_state);
                     snprintf(status.lines[0],KUI_APP_LINE_CAP,"%.79s",reset_line);
                     if(stage->bus_fault_valid)
                         snprintf(status.lines[2],KUI_APP_LINE_CAP,"Before stop: wait%02lX SSR%02lX SCR%02lX SPTR%02lX STB%02lX/%02lX/%02lX",
@@ -1025,7 +1108,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==68 || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==68 || action==69 || (action>=46 && action<=48);
 }
 #endif
 static void *worker(void *unused) {
@@ -1083,7 +1166,7 @@ static void *worker(void *unused) {
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
             if(action==56 || action==57 || action==58) probe_launch_failed=true;
-            if(action==68) {
+            if(action==68 || action==69) {
                 sci_async_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Audio CD stop failed; probe did not start.");
             }
@@ -1215,7 +1298,7 @@ static void *worker(void *unused) {
                 clock_valid=false;++clock_generation;
                 snprintf(clock_note,sizeof(clock_note),"Clock operation stopped before starting.");
             }
-            if(action==68) {
+            if(action==68 || action==69) {
                 sci_async_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Stopped before starting.");
             }
@@ -1254,7 +1337,7 @@ static void *worker(void *unused) {
             }
 #ifdef KUI_SD_RUNTIME
             if(action>=65 && action<=67) storage_test_operation(action);
-            if(action==68) sci_async_operation();
+            if(action==68 || action==69) sci_async_operation(action==69);
             if(action == 8 || action == 9) {
                 settings_operation(action == 9);
                 if(!system_loaded) system_operation(false);
@@ -1851,6 +1934,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_TEST_HISTORY: return 66;
         case KUI_SHELL_TEST_BASELINE: return 67;
         case KUI_SHELL_SCI_ASYNC_RUN: return 68;
+        case KUI_SHELL_SCI_ASYNC_STRESS: return 69;
         default: return 0;
     }
 }
@@ -2187,9 +2271,11 @@ int main(void) {
             action = 0;
         }
         if(action && !busy) {
-            if(action==68) {
+            if(action==68 || action==69) {
                 sci_async_status=(struct kui_app_status){0};
-                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Preparing baseline, then slow and fast read trials...");
+                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"%s",action==69?
+                    "Preparing 16 baselines, then 60 seconds of varied reads...":
+                    "Preparing baseline, then slow and fast read trials...");
             }
             if(action==65) {
                 storage_test_running=true;

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Original isolated receive-only SCI experiment. Hardware register meanings:
+ * Original runtime receive-only SCI reader and diagnostic client. Register meanings:
  * Renesas SH7750 Hardware Manual Rev7.02, sections 14, 15 and 17; SH7091
  * SCSPTR mapping also corroborated by Linux v2.6.32 drivers/serial/sh-sci.h.
  * No external driver implementation is incorporated here.
@@ -40,6 +40,7 @@
 #define FRAME_TIMEOUT_US UINT64_C(100000)
 #define MAX_POLLS 200000u
 #define HANDOFF_POLLS 8u
+#define FRAMING_QUANTUM 8u
 
 #ifdef KUI_SCI_ASYNC_PROBE_TEST
 #define rd(a,w) kui_sci_async_test_read(a,w)
@@ -106,6 +107,7 @@ static const irq_t events[3]={EXC_DMAC_DMTE1,EXC_SCI_ERI,EXC_SCI_RXI};
 struct receive_area {
     uint8_t before[32], bytes[544], after[32];
 } __attribute__((aligned(32)));
+enum reader_phase { READER_IDLE, READER_FRAMING, READER_DMA, READER_READY, READER_FAILED };
 struct probe {
     struct receive_area rx;
     struct kui_sci_async_probe_result *out;
@@ -115,6 +117,14 @@ struct probe {
     uint8_t smr,brr,scr,scmr,sptr;
     unsigned sci_priority;
     bool leased, module_unavailable;
+    struct kui_sci_async_reader *owner;
+    const struct kui_loader_sd *card;
+    uint32_t generation, lba, polls, frame_count, buffer_address;
+    uint8_t command[6];
+    enum reader_phase phase;
+    enum kui_sci_async_status request_status;
+    bool slow, cancel_requested, payload_validated, completion_recorded;
+    uint64_t opened_us, request_us, frame_us;
     uint32_t expected_sar,expected_dar,expected_tcr,expected_chcr,start_address;
     volatile bool armed,done,foreign_dma,quarantined;
     volatile uint32_t end_chcr,end_count,end_ssr,event;
@@ -122,6 +132,7 @@ struct probe {
 };
 static bool occupied;
 static bool poisoned;
+static uint32_t next_generation;
 static struct probe state;
 static void interrupt(irq_t code, irq_context_t *context, void *data);
 
@@ -271,7 +282,12 @@ static void release(struct probe *p) {
         (rd(SPTR,1)&0x8au)==(p->sptr&0x8au);
     p->out->handlers_restored=handlers;p->out->registers_restored=registers;
     p->out->dma_quarantined=p->quarantined;p->out->foreign_dma=p->foreign_dma;
-    p->out->safe_restored=handlers && registers && !(rd(CHCR,4)&7u) &&
+    /* The ordinary bus also caches BRR's speed. A slow-only session must
+     * reconcile that software state after restoring the saved fast BRR.
+     * An already faulted bus remains latched until its normal reacquire. */
+    bool speed_synced=true;
+    if(handlers && registers && kui_sci_sd_healthy()) speed_synced=kui_sci_sd_resync_speed();
+    p->out->safe_restored=handlers && registers && speed_synced && !(rd(CHCR,4)&7u) &&
         !(rd(SSR,1)&(RDRF|FLAGS)) && (rd(DMAOR,4)&7u)==1u;
     poisoned=!p->out->safe_restored;p->leased=false;
     unmask(p,mask,start);
@@ -295,7 +311,7 @@ static enum kui_sci_async_status module_reset(struct probe *p) {
         p->foreign_dma=true;result=KUI_SCI_ASYNC_DMA_ERROR;goto failed;
     }
     if(p->end_count || !(p->end_chcr&2u) || !(p->end_ssr&ORER) ||
-       !p->out->guards_ok || !p->out->crc_ok || !p->out->baseline_ok ||
+       !p->payload_validated || !p->out->guards_ok || !p->out->crc_ok ||
        !kui_sci_sd_healthy() || !(rd(PDTR,2)&0x80u) || rd(SCR,1)!=0 ||
        (rd(SSR,1)&(RDRF|FLAGS)) || (rd(SPTR,1)&0x8au)!=0x82u) goto failed;
     /* Only the SCI bit changes. The short mask protects these RMWs and the
@@ -361,62 +377,76 @@ static bool bus_healthy(struct probe *p) {
     p->stage->snapshot_sptr=rd(SPTR,1);
     return false;
 }
-static enum kui_sci_async_status token(struct probe *p,const struct kui_loader_sd *c,uint32_t lba,bool slow) {
-    uint32_t address=c->high_capacity?lba:lba*512u;
-    uint8_t cmd[6]={0x51,(uint8_t)(address>>24),(uint8_t)(address>>16),
-        (uint8_t)(address>>8),(uint8_t)address,0};
-    cmd[5]=command_crc(cmd,5);
-    p->stage->last_phase=KUI_SCI_ASYNC_PHASE_READY;
-    p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_DESELECT;
-    p->stage->framing_index=0;
-    c->bus.select(c->bus.ctx,false);
-    if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
-    p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_IDLE_CLOCK;
-    (void)byte(c,0xff,slow);
-    if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
-    p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_SELECT;
-    c->bus.select(c->bus.ctx,true);
-    if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
-    uint64_t start=timer_us_gettime64(); bool ready=false;
-    for(unsigned i=0;i<4096;++i) {
-        p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_READY;
-        p->stage->framing_index=i;
-        uint8_t value=byte(c,0xff,slow);
-        if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
-        if(value==0xff) {ready=true;break;}
-        if(timer_us_gettime64()-start>=FRAME_TIMEOUT_US) break;
+/* Each call spends at most FRAMING_QUANTUM byte operations. The ordinary
+ * bus already bounds a byte's hardware waits; card-ready and token budgets
+ * persist across calls, so a caller can yield between every quantum. */
+static enum kui_sci_async_status frame_poll(struct probe *p) {
+    const struct kui_loader_sd *c=p->card;
+    struct kui_sci_async_stage *s=p->stage;
+    if(!dma_unchanged(p)) {p->foreign_dma=true;return KUI_SCI_ASYNC_DMA_ERROR;}
+    for(unsigned budget=0;budget<FRAMING_QUANTUM;++budget) {
+        s->framing_index=p->frame_count;
+        if(s->last_phase==KUI_SCI_ASYNC_PHASE_TOKEN_END) {
+            uint32_t ssr=rd(SSR,1);
+            if(ssr&FLAGS) return KUI_SCI_ASYNC_RECEIVE_ERROR;
+            if(ssr&4u) return KUI_SCI_ASYNC_OK;
+            if(++p->frame_count>=10000u || timer_us_gettime64()-p->frame_us>=FRAME_TIMEOUT_US)
+                return KUI_SCI_ASYNC_TIMEOUT;
+            continue;
+        }
+        uint8_t value=0xff;
+        switch(s->framing_step) {
+            case KUI_SCI_ASYNC_FRAMING_DESELECT:
+                c->bus.select(c->bus.ctx,false);
+                if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                s->framing_step=KUI_SCI_ASYNC_FRAMING_IDLE_CLOCK;break;
+            case KUI_SCI_ASYNC_FRAMING_IDLE_CLOCK:
+                (void)byte(c,0xff,p->slow);
+                if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                s->framing_step=KUI_SCI_ASYNC_FRAMING_SELECT;break;
+            case KUI_SCI_ASYNC_FRAMING_SELECT:
+                c->bus.select(c->bus.ctx,true);
+                if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                s->framing_step=KUI_SCI_ASYNC_FRAMING_READY;
+                p->frame_count=0;p->frame_us=timer_us_gettime64();break;
+            case KUI_SCI_ASYNC_FRAMING_READY:
+                value=byte(c,0xff,p->slow);
+                if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                if(value==0xff) {
+                    s->last_phase=KUI_SCI_ASYNC_PHASE_COMMAND;
+                    s->framing_step=KUI_SCI_ASYNC_FRAMING_COMMAND;p->frame_count=0;
+                } else if(++p->frame_count>=4096u || timer_us_gettime64()-p->frame_us>=FRAME_TIMEOUT_US)
+                    return KUI_SCI_ASYNC_TIMEOUT;
+                break;
+            case KUI_SCI_ASYNC_FRAMING_COMMAND:
+                (void)byte(c,p->command[p->frame_count],p->slow);
+                if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                if(++p->frame_count==6) {s->framing_step=KUI_SCI_ASYNC_FRAMING_RESPONSE;p->frame_count=0;}
+                break;
+            case KUI_SCI_ASYNC_FRAMING_RESPONSE:
+                value=byte(c,0xff,p->slow);s->command_response=value;
+                if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                if(!(value&0x80u)) {
+                    if(value) return KUI_SCI_ASYNC_COMMAND;
+                    s->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN;
+                    s->framing_step=KUI_SCI_ASYNC_FRAMING_TOKEN;
+                    p->frame_count=0;p->frame_us=timer_us_gettime64();
+                } else if(++p->frame_count>=16u) return KUI_SCI_ASYNC_COMMAND;
+                break;
+            case KUI_SCI_ASYNC_FRAMING_TOKEN:
+                value=byte(c,0xff,p->slow);s->last_token=value;
+                if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+                if(value==0xfe) {
+                    s->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN_END;
+                    p->frame_count=0;p->frame_us=timer_us_gettime64();
+                } else if(value!=0xff) return KUI_SCI_ASYNC_TOKEN;
+                else if(++p->frame_count>=8192u || timer_us_gettime64()-p->frame_us>=FRAME_TIMEOUT_US)
+                    return KUI_SCI_ASYNC_TIMEOUT;
+                break;
+            default: return KUI_SCI_ASYNC_ARGUMENT;
+        }
     }
-    if(!ready) return KUI_SCI_ASYNC_TIMEOUT;
-    p->stage->last_phase=KUI_SCI_ASYNC_PHASE_COMMAND;
-    for(unsigned i=0;i<6;++i) {
-        p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_COMMAND;
-        p->stage->framing_index=i;
-        (void)byte(c,cmd[i],slow);
-        if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
-    }
-    uint8_t response=0xff;
-    for(unsigned i=0;i<16 && (response&0x80u);++i) {
-        p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_RESPONSE;
-        p->stage->framing_index=i;
-        response=byte(c,0xff,slow);
-        p->stage->command_response=response;
-        if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
-    }
-    p->stage->command_response=response;
-    if(response) return KUI_SCI_ASYNC_COMMAND;
-    p->stage->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN;
-    start=timer_us_gettime64();
-    for(unsigned i=0;i<8192;++i) {
-        p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_TOKEN;
-        p->stage->framing_index=i;
-        uint8_t v=byte(c,0xff,slow);
-        p->stage->last_token=v;
-        if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
-        if(v==0xfe) return KUI_SCI_ASYNC_OK;
-        if(v!=0xff) return KUI_SCI_ASYNC_TOKEN;
-        if(timer_us_gettime64()-start>=FRAME_TIMEOUT_US) break;
-    }
-    return KUI_SCI_ASYNC_TIMEOUT;
+    return KUI_SCI_ASYNC_PENDING;
 }
 /* The normal bus latches errors even in select(false)'s TEND wait. Establish
  * a clean, stopped SCI before invoking it: a completed RX DMA does not by
@@ -478,31 +508,29 @@ static bool guards(const struct receive_area *r) {
     return true;
 }
 
-static enum kui_sci_async_status trial(struct probe *p,const struct kui_loader_sd *c,
-        uint32_t lba,const uint8_t *baseline,bool slow) {
-    struct kui_sci_async_stage *s=p->stage;
-    ++s->attempted;
-    s->last_phase=KUI_SCI_ASYNC_PHASE_BUFFER;
-    s->framing_step=KUI_SCI_ASYNC_FRAMING_NONE;s->framing_index=0;
-    s->command_response=s->last_token=0xffu;
-    p->out->guards_ok=p->out->crc_ok=p->out->baseline_ok=false;
-    memset(&p->rx,SENTINEL,sizeof(p->rx));
-    uint32_t address=physical(p->rx.bytes,sizeof(p->rx.bytes));
-    if(!address) return KUI_SCI_ASYNC_UNSUPPORTED;
-    cache(&p->rx,sizeof(p->rx),false);
-    enum kui_sci_async_status result=token(p,c,lba,slow);
-    if(result!=KUI_SCI_ASYNC_OK) return result;
-    s->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN_END;
-    /* transfer() returns at RDRF. Wait for the token's final wire edge before
-     * replacing full-duplex clocking; don't turn its last bit into payload. */
-    bool ended=false;
-    for(unsigned i=0;i<10000;++i) {
-        uint32_t ssr=rd(SSR,1);
-        if(ssr&FLAGS) return KUI_SCI_ASYNC_RECEIVE_ERROR;
-        if(ssr&4u) {ended=true;break;}
+static struct probe *reader_state(const struct kui_sci_async_reader *reader) {
+    return reader && occupied && state.leased && state.owner==reader &&
+        reader->generation && reader->generation==state.generation?&state:NULL;
+}
+static enum kui_sci_async_status measured(struct probe *p,uint64_t *max,
+        uint64_t start,enum kui_sci_async_status status) {
+    uint64_t elapsed=timer_us_gettime64()-start;
+    if(elapsed>*max) *max=elapsed;
+    if(elapsed>p->out->max_call_us) p->out->max_call_us=elapsed;
+    return status;
+}
+static enum kui_sci_async_status failed(struct probe *p,enum kui_sci_async_status status) {
+    if(!p->module_unavailable && p->stage->last_phase<KUI_SCI_ASYNC_PHASE_DMA &&
+       p->stage->last_phase!=KUI_SCI_ASYNC_PHASE_GPIO) {
+        p->stage->snapshot_ssr=rd(SSR,1);p->stage->snapshot_sptr=rd(SPTR,1);
     }
-    if(!ended) return KUI_SCI_ASYNC_TIMEOUT;
-    settle(slow?1024u:64u);
+    p->phase=READER_FAILED;p->request_status=status;
+    p->out->status=p->out->operation_status=status;
+    return status;
+}
+static enum kui_sci_async_status arm(struct probe *p) {
+    struct kui_sci_async_stage *s=p->stage;
+    settle(p->slow?1024u:64u);
     uint64_t masked_start=timer_us_gettime64();irq_mask_t mask=irq_disable();
     s->last_phase=KUI_SCI_ASYNC_PHASE_OWNERSHIP;
     if(!dma_unchanged(p)) {
@@ -517,141 +545,267 @@ static enum kui_sci_async_status trial(struct probe *p,const struct kui_loader_s
     s->snapshot_sptr=port_value;s->snapshot_ssr=rd(SSR,1);
     if((port_value&0x8au)!=0x82u) {unmask(p,mask,masked_start);return KUI_SCI_ASYNC_UNSUPPORTED;}
     wr(SCR,0,1);
-    wr(CHCR,0,4);wr(SAR,RDR&UINT32_C(0x1fffffff),4);wr(DAR,address,4);wr(TCR,514,4);
-    p->start_address=address;
+    wr(CHCR,0,4);wr(SAR,RDR&UINT32_C(0x1fffffff),4);wr(DAR,p->buffer_address,4);wr(TCR,514,4);
+    p->start_address=p->buffer_address;
     p->done=false;p->event=0;p->end_count=514;p->end_chcr=0;p->end_ssr=0;
     p->start_us=timer_us_gettime64();p->armed=true;
     s->last_phase=KUI_SCI_ASYNC_PHASE_DMA;++s->dma_started;
     wr(CHCR,RX_DMA,4);
     wr(SCR,0x50u,1); /* RIE + RE, no transmitter/dummy-byte CPU loop. */
     unmask(p,mask,masked_start);
-    uint32_t work=UINT32_C(0x6d2b79f5);
-    bool timeout=false,dma_error=false;
-    for(unsigned polls=0;!p->done && polls<MAX_POLLS;++polls) {
-        uint32_t before=rd(TCR,4);
-        for(unsigned i=0;i<16;++i) {work^=work<<13;work^=work>>17;work^=work<<5;}
-#ifdef KUI_SCI_ASYNC_PROBE_TEST
-        kui_sci_async_test_work_tick();
-#endif
-        __asm__ __volatile__("" : "+r"(work) : : "memory");
-        uint32_t after=rd(TCR,4);
-        if(before>after && after>0 && before<=514) {
-            ++s->overlap_batches;s->overlap_iterations+=16;
-        }
-        if((rd(DMAOR,4)&7u)!=1u) {dma_error=true;break;}
-        if(timer_us_gettime64()-p->start_us>=TRIAL_TIMEOUT_US) {timeout=true;break;}
-    }
-    masked_start=timer_us_gettime64();mask=irq_disable();
-    bool delivered=p->done;
-    if(p->armed) {p->armed=false;freeze(p);}
+    p->phase=READER_DMA;
+    return KUI_SCI_ASYNC_PENDING;
+}
+static void completion(struct probe *p) {
+    if(p->completion_recorded) return;
+    p->completion_recorded=true;
     uint64_t receive=timer_us_gettime64()-p->start_us;
-    unmask(p,mask,masked_start);
-    s->work_checksum=(s->work_checksum<<1)|(s->work_checksum>>31);
-    s->work_checksum^=work^s->attempted;s->receive_us+=receive;
-    if(receive>s->max_receive_us) s->max_receive_us=receive;
-    s->last_remaining=p->end_count;s->last_chcr=p->end_chcr;s->last_ssr=p->end_ssr;
-    /* A foreign owner may still be transferring; do not invalidate or inspect
-     * the receive area when we could not establish that our transfer stopped. */
-    if(p->foreign_dma) return KUI_SCI_ASYNC_DMA_ERROR;
-    if(p->quarantined) {
-        if(dma_error) return KUI_SCI_ASYNC_DMA_ERROR;
-        if(timeout || !delivered) {++s->timeouts;return KUI_SCI_ASYNC_TIMEOUT;}
-        ++s->premature_errors;return KUI_SCI_ASYNC_RECEIVE_ERROR;
-    }
+    p->stage->receive_us+=receive;
+    if(receive>p->stage->max_receive_us) p->stage->max_receive_us=receive;
+    p->stage->last_remaining=p->end_count;p->stage->last_chcr=p->end_chcr;
+    p->stage->last_ssr=p->end_ssr;
+}
+static enum kui_sci_async_status finish_request(struct probe *p,uint8_t *dst,const uint8_t *expected) {
+    struct kui_sci_async_stage *s=p->stage;
+    if(!dma_unchanged(p)) {p->foreign_dma=true;return failed(p,KUI_SCI_ASYNC_DMA_ERROR);}
     s->last_phase=KUI_SCI_ASYNC_PHASE_VALIDATE;
     cache(&p->rx,sizeof(p->rx),true);
-    if(!guards(&p->rx)) {p->out->guards_ok=false;return KUI_SCI_ASYNC_GUARD;}
+    if(!guards(&p->rx)) return failed(p,KUI_SCI_ASYNC_GUARD);
     p->out->guards_ok=true;
-    if(dma_error) return KUI_SCI_ASYNC_DMA_ERROR;
-    if(timeout || !delivered) {++s->timeouts;return KUI_SCI_ASYNC_TIMEOUT;}
-    bool complete=p->end_count==0 && (p->end_chcr&2u);
-    if(!complete || p->event==EXC_SCI_RXI || (p->end_ssr&(FLAGS&~ORER))) {
-        ++s->premature_errors;return KUI_SCI_ASYNC_RECEIVE_ERROR;
-    }
     uint16_t crc=0;bool equal=true;
     for(unsigned i=0;i<512;++i) {
-        uint8_t v=reverse_byte(p->rx.bytes[i]);crc=crc_byte(crc,v);
-        if(v!=baseline[i]) equal=false;
+        uint8_t value=reverse_byte(p->rx.bytes[i]);
+        p->rx.bytes[i]=value;crc=crc_byte(crc,value);
+        if(expected && value!=expected[i]) equal=false;
     }
-    uint16_t expected=(uint16_t)((uint16_t)reverse_byte(p->rx.bytes[512])<<8)|reverse_byte(p->rx.bytes[513]);
-    if(crc!=expected) {p->out->crc_ok=false;return KUI_SCI_ASYNC_CRC;}
+    uint16_t wire_crc=(uint16_t)((uint16_t)reverse_byte(p->rx.bytes[512])<<8)|reverse_byte(p->rx.bytes[513]);
+    if(crc!=wire_crc) return failed(p,KUI_SCI_ASYNC_CRC);
     p->out->crc_ok=true;
-    if(!equal) {p->out->baseline_ok=false;return KUI_SCI_ASYNC_MISMATCH;}
-    p->out->baseline_ok=true;
+    p->out->baseline_checked=expected!=NULL;
+    p->out->baseline_ok=expected && equal;
+    if(!equal) return failed(p,KUI_SCI_ASYNC_MISMATCH);
+    p->payload_validated=true;
     if(p->end_ssr&ORER) ++s->trailing_overruns;
-    result=handoff(p,c,slow);
-    if(result!=KUI_SCI_ASYNC_OK) return result;
+    enum kui_sci_async_status result=handoff(p,p->card,p->slow);
+    if(result!=KUI_SCI_ASYNC_OK) return failed(p,result);
     s->last_phase=KUI_SCI_ASYNC_PHASE_COMPLETE;
-    ++s->passed;return KUI_SCI_ASYNC_OK;
+    s->elapsed_us+=timer_us_gettime64()-p->request_us;
+    if(p->cancel_requested) return failed(p,KUI_SCI_ASYNC_CANCELLED);
+    if(dst) memcpy(dst,p->rx.bytes,512);
+    ++s->passed;p->phase=READER_IDLE;p->request_status=KUI_SCI_ASYNC_OK;
+    return KUI_SCI_ASYNC_OK;
+}
+
+enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader,
+        const struct kui_loader_sd *c,struct kui_sci_async_probe_result *out) {
+    if(!reader || !out) return KUI_SCI_ASYNC_ARGUMENT;
+    /* Never overwrite the result or handle of a currently live lease. */
+    if(occupied && (reader==state.owner || out==state.out)) return KUI_SCI_ASYNC_BUSY;
+    *out=(struct kui_sci_async_probe_result){.status=KUI_SCI_ASYNC_ARGUMENT,
+        .operation_status=KUI_SCI_ASYNC_ARGUMENT};
+    reader->generation=0;
+    if(!c || !c->ready || c->slow || !c->bus.select || !c->bus.transfer || !c->blocks)
+        return out->status;
+    uint64_t start=timer_us_gettime64();
+    uint64_t reservation_start=timer_us_gettime64();irq_mask_t mask=irq_disable();
+    if(occupied || poisoned) {
+        irq_restore(mask);out->status=out->operation_status=KUI_SCI_ASYNC_BUSY;return out->status;
+    }
+    occupied=true;memset(&state,0,sizeof(state));
+    struct probe *p=&state;p->out=out;p->card=c;p->owner=reader;
+    if(!++next_generation) ++next_generation;
+    reader->generation=p->generation=next_generation;
+    p->opened_us=start;p->phase=READER_IDLE;
+    max_time(&out->max_irq_masked_us,reservation_start);irq_restore(mask);
+    out->slow.clock_hz=390625;out->fast.clock_hz=12500000;
+    out->slow.command_response=out->slow.last_token=0xffu;
+    out->fast.command_response=out->fast.last_token=0xffu;
+    p->stage=&out->slow;
+    out->status=lease(p);out->operation_status=out->status;
+    if(out->status!=KUI_SCI_ASYNC_OK) {
+        if(out->status!=KUI_SCI_ASYNC_RESTORE)
+            out->safe_restored=out->handlers_restored=out->registers_restored=true;
+        mask=irq_disable();occupied=false;reader->generation=0;irq_restore(mask);
+        out->elapsed_us=timer_us_gettime64()-start;
+    } else out->started=true;
+    return measured(p,&out->max_open_us,start,out->status);
+}
+enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reader,uint32_t lba,bool slow) {
+    struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
+    uint64_t start=timer_us_gettime64();
+    enum kui_sci_async_status result=KUI_SCI_ASYNC_OK;
+    if(p->phase!=READER_IDLE) result=KUI_SCI_ASYNC_BUSY;
+    else if((uint64_t)lba>=p->card->blocks || (!p->card->high_capacity && lba>UINT32_MAX/512u))
+        result=KUI_SCI_ASYNC_ARGUMENT;
+    else if(!dma_unchanged(p)) {p->foreign_dma=true;result=failed(p,KUI_SCI_ASYNC_DMA_ERROR);}
+    else {
+        p->stage=slow?&p->out->slow:&p->out->fast;
+        struct kui_sci_async_stage *s=p->stage;
+        p->lba=lba;p->slow=slow;p->out->lba=lba;p->request_us=start;
+        p->polls=p->frame_count=0;p->cancel_requested=false;
+        p->payload_validated=p->completion_recorded=false;
+        p->out->guards_ok=p->out->crc_ok=p->out->baseline_ok=p->out->baseline_checked=false;
+        s->last_phase=KUI_SCI_ASYNC_PHASE_BUFFER;++s->attempted;
+        s->command_response=s->last_token=0xff;
+        memset(&p->rx,SENTINEL,sizeof(p->rx));
+        p->buffer_address=physical(p->rx.bytes,sizeof(p->rx.bytes));
+        if(!p->buffer_address) result=failed(p,KUI_SCI_ASYNC_UNSUPPORTED);
+        else {
+            cache(&p->rx,sizeof(p->rx),false);
+            uint32_t address=p->card->high_capacity?lba:lba*512u;
+            p->command[0]=0x51;p->command[1]=(uint8_t)(address>>24);
+            p->command[2]=(uint8_t)(address>>16);p->command[3]=(uint8_t)(address>>8);
+            p->command[4]=(uint8_t)address;p->command[5]=command_crc(p->command,5);
+            s->last_phase=KUI_SCI_ASYNC_PHASE_READY;
+            s->framing_step=KUI_SCI_ASYNC_FRAMING_DESELECT;s->framing_index=0;
+            p->phase=READER_FRAMING;p->request_status=KUI_SCI_ASYNC_PENDING;
+        }
+    }
+    return measured(p,&p->out->max_begin_us,start,result);
+}
+enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader) {
+    struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
+    uint64_t start=timer_us_gettime64();
+    enum kui_sci_async_status result=KUI_SCI_ASYNC_PENDING;
+    if(p->phase==READER_FRAMING) {
+        result=frame_poll(p);
+        if(result==KUI_SCI_ASYNC_OK) result=arm(p);
+        if(result!=KUI_SCI_ASYNC_PENDING) result=failed(p,result);
+    } else if(p->phase==READER_DMA) {
+        bool timeout=false,dma_error=false;
+        uint64_t masked_start=timer_us_gettime64();irq_mask_t mask=irq_disable();
+        dma_error=(rd(DMAOR,4)&7u)!=1u;
+        if(!p->done) {
+            timeout=++p->polls>=MAX_POLLS || start-p->start_us>=TRIAL_TIMEOUT_US;
+            if(dma_error || timeout || !active_dma_owned(p)) {
+                p->armed=false;freeze(p);p->done=true;
+            }
+        }
+        unmask(p,mask,masked_start);
+        if(p->done) {
+            completion(p);
+            if(p->foreign_dma) result=KUI_SCI_ASYNC_DMA_ERROR;
+            else if(dma_error) result=KUI_SCI_ASYNC_DMA_ERROR;
+            else if(timeout || !p->event) {++p->stage->timeouts;result=KUI_SCI_ASYNC_TIMEOUT;}
+            else if(p->quarantined || p->end_count || !(p->end_chcr&2u) ||
+                    p->event==EXC_SCI_RXI || (p->end_ssr&(FLAGS&~ORER))) {
+                ++p->stage->premature_errors;result=KUI_SCI_ASYNC_RECEIVE_ERROR;
+            } else {p->phase=READER_READY;result=KUI_SCI_ASYNC_OK;}
+            if(result!=KUI_SCI_ASYNC_OK) result=failed(p,result);
+        }
+    } else if(p->phase==READER_READY) result=KUI_SCI_ASYNC_OK;
+    else if(p->phase==READER_FAILED) result=p->request_status;
+    else result=KUI_SCI_ASYNC_ARGUMENT;
+    return measured(p,&p->out->max_poll_us,start,result);
+}
+enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *reader,
+        uint8_t dst[512],const uint8_t expected[512]) {
+    struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
+    uint64_t start=timer_us_gettime64();enum kui_sci_async_status result;
+    if(!dst && !p->cancel_requested) result=KUI_SCI_ASYNC_ARGUMENT;
+    else if(p->phase==READER_FRAMING || p->phase==READER_DMA) result=KUI_SCI_ASYNC_PENDING;
+    else if(p->phase==READER_READY) result=finish_request(p,dst,expected);
+    else result=p->phase==READER_FAILED?p->request_status:KUI_SCI_ASYNC_ARGUMENT;
+    return measured(p,&p->out->max_finish_us,start,result);
+}
+enum kui_sci_async_status kui_sci_async_cancel(struct kui_sci_async_reader *reader) {
+    struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
+    uint64_t start=timer_us_gettime64();enum kui_sci_async_status result;
+    p->cancel_requested=true;
+    if(p->phase==READER_DMA) result=KUI_SCI_ASYNC_PENDING;
+    else if(p->phase==READER_READY) result=KUI_SCI_ASYNC_OK;
+    else if(p->phase==READER_FAILED) result=p->request_status;
+    else result=failed(p,KUI_SCI_ASYNC_CANCELLED);
+    return measured(p,&p->out->max_cancel_us,start,result);
+}
+enum kui_sci_async_status kui_sci_async_close(struct kui_sci_async_reader *reader) {
+    struct probe *p=reader_state(reader);if(!p) return KUI_SCI_ASYNC_ARGUMENT;
+    uint64_t start=timer_us_gettime64();
+    if(p->phase==READER_FRAMING || p->phase==READER_DMA)
+        return measured(p,&p->out->max_close_us,start,KUI_SCI_ASYNC_PENDING);
+    if(p->phase==READER_READY) (void)finish_request(p,NULL,NULL);
+    if(!p->module_unavailable && !(rd(PDTR,2)&0x80u)) {
+        p->card->bus.select(p->card->bus.ctx,false);
+        if(!p->stage->bus_faults) (void)bus_healthy(p);
+    }
+    p->out->status=p->out->operation_status=p->request_status;
+    release(p);
+    if(!p->out->safe_restored) p->out->status=KUI_SCI_ASYNC_RESTORE;
+    p->out->elapsed_us=timer_us_gettime64()-p->opened_us;
+    irq_mask_t mask=irq_disable();occupied=false;reader->generation=0;irq_restore(mask);
+    return measured(p,&p->out->max_close_us,start,p->out->status);
+}
+uint32_t kui_sci_async_work_sample(struct kui_sci_async_reader *reader) {
+    struct probe *p=reader_state(reader);
+    if(!p || !p->armed || p->phase!=READER_DMA) return 0;
+    if(!active_dma_owned(p)) return 0;
+    uint32_t chcr=rd(CHCR,4),remaining=rd(TCR,4);
+    if((chcr&3u)!=1u || chcr!=rd(CHCR,4) || !remaining || remaining>=514u || !p->armed)
+        return 0;
+    return remaining;
+}
+void kui_sci_async_work_record(struct kui_sci_async_reader *reader,
+        uint32_t before,uint32_t iterations,uint32_t checksum) {
+    struct probe *p=reader_state(reader);if(!p) return;
+    uint32_t after=kui_sci_async_work_sample(reader);
+    if(before>after && after>0 && before<514u) {
+        ++p->stage->overlap_batches;p->stage->overlap_iterations+=iterations;
+        p->stage->work_checksum=(p->stage->work_checksum<<1)|(p->stage->work_checksum>>31);
+        p->stage->work_checksum^=checksum;
+    }
 }
 
 enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *c,
         uint32_t lba,const uint8_t baseline[512],bool (*cancelled)(void *),void *ctx,
         struct kui_sci_async_probe_result *out) {
     if(!out) return KUI_SCI_ASYNC_ARGUMENT;
-    *out=(struct kui_sci_async_probe_result){.status=KUI_SCI_ASYNC_ARGUMENT,
-        .operation_status=KUI_SCI_ASYNC_ARGUMENT,.lba=lba};
-    if(!c || !baseline || !c->ready || c->slow || !c->bus.select || !c->bus.transfer ||
-       (uint64_t)lba>=c->blocks || (!c->high_capacity && lba>UINT32_MAX/512u)) return out->status;
-    uint64_t start=timer_us_gettime64();
-    uint64_t reservation_start=timer_us_gettime64();irq_mask_t initial_mask=irq_disable();
-    if(occupied || poisoned) {
-        irq_restore(initial_mask);out->status=out->operation_status=KUI_SCI_ASYNC_BUSY;return out->status;
+    if(!baseline || !c || (uint64_t)lba>=c->blocks || (!c->high_capacity && lba>UINT32_MAX/512u)) {
+        *out=(struct kui_sci_async_probe_result){.status=KUI_SCI_ASYNC_ARGUMENT,
+            .operation_status=KUI_SCI_ASYNC_ARGUMENT,.lba=lba};
+        return out->status;
     }
-    occupied=true;
-    memset(&state,0,sizeof(state));state.out=out;
-    struct probe *p=&state;
-    max_time(&out->max_irq_masked_us,reservation_start);
-    irq_restore(initial_mask);
-    out->slow.clock_hz=390625;out->fast.clock_hz=12500000;
-    out->slow.command_response=out->slow.last_token=0xffu;
-    out->fast.command_response=out->fast.last_token=0xffu;
-    p->stage=&out->slow;
-    out->status=lease(p);
-    out->operation_status=out->status;
-    if(out->status!=KUI_SCI_ASYNC_OK) {
-        if(out->status!=KUI_SCI_ASYNC_RESTORE)
-            out->safe_restored=out->handlers_restored=out->registers_restored=true;
-        initial_mask=irq_disable();occupied=false;irq_restore(initial_mask);
-        out->elapsed_us=timer_us_gettime64()-start;return out->status;
-    }
-    out->started=true;
-    for(unsigned speed=0;speed<2 && out->status==KUI_SCI_ASYNC_OK;++speed) {
-        p->stage=speed?&out->fast:&out->slow;
-        uint64_t stage_start=timer_us_gettime64();
+    struct kui_sci_async_reader reader={0};
+    enum kui_sci_async_status result=kui_sci_async_open(&reader,c,out);
+    out->lba=lba;
+    if(result!=KUI_SCI_ASYNC_OK) return result;
+    uint8_t payload[512];uint32_t work=UINT32_C(0x6d2b79f5);
+    bool cancel_latched=false;
+    for(unsigned speed=0;speed<2 && result==KUI_SCI_ASYNC_OK;++speed) {
         unsigned count=speed?KUI_SCI_ASYNC_FAST_TRIALS:KUI_SCI_ASYNC_SLOW_TRIALS;
-        for(unsigned n=0;n<count;++n) {
-            if(cancelled && cancelled(ctx)) {out->status=KUI_SCI_ASYNC_CANCELLED;break;}
-            out->status=trial(p,c,lba,baseline,speed==0);
-            if(!p->module_unavailable && p->stage->last_phase<KUI_SCI_ASYNC_PHASE_DMA &&
-               p->stage->last_phase!=KUI_SCI_ASYNC_PHASE_GPIO) {
-                p->stage->snapshot_ssr=rd(SSR,1);
-                p->stage->snapshot_sptr=rd(SPTR,1);
-            }
-            if(out->status!=KUI_SCI_ASYNC_OK) {
-                if(!p->module_unavailable) c->bus.select(c->bus.ctx,false);
-                break;
-            }
+        for(unsigned n=0;n<count && result==KUI_SCI_ASYNC_OK;++n) {
+            if(cancelled && cancelled(ctx)) {result=kui_sci_async_cancel(&reader);break;}
+            result=kui_sci_async_begin(&reader,lba,speed==0);
+            if(result!=KUI_SCI_ASYNC_OK) break;
+            do {
+                if(!cancel_latched && cancelled && cancelled(ctx)) {
+                    cancel_latched=true;
+                    (void)kui_sci_async_cancel(&reader);
+                }
+                result=kui_sci_async_poll(&reader);
+                if(result==KUI_SCI_ASYNC_PENDING) {
+                    uint32_t before=kui_sci_async_work_sample(&reader);
+                    for(unsigned i=0;i<16;++i) {work^=work<<13;work^=work>>17;work^=work<<5;}
+#ifdef KUI_SCI_ASYNC_PROBE_TEST
+                    kui_sci_async_test_work_tick();
+#endif
+                    __asm__ __volatile__("" : "+r"(work) : : "memory");
+                    kui_sci_async_work_record(&reader,before,16,work);
+                }
+            } while(result==KUI_SCI_ASYNC_PENDING);
+            if(result==KUI_SCI_ASYNC_OK) result=kui_sci_async_finish(&reader,payload,baseline);
         }
-        p->stage->elapsed_us=timer_us_gettime64()-stage_start;
     }
-    if(!p->module_unavailable && !(rd(PDTR,2)&0x80u)) c->bus.select(c->bus.ctx,false);
-    out->operation_status=out->status;
-    release(p);
-    if(!out->safe_restored) out->status=KUI_SCI_ASYNC_RESTORE;
-    else if(out->status==KUI_SCI_ASYNC_OK &&
-            (!out->slow.overlap_batches || !out->fast.overlap_batches))
-        out->status=KUI_SCI_ASYNC_NO_OVERLAP;
-    out->elapsed_us=timer_us_gettime64()-start;
-    initial_mask=irq_disable();occupied=false;irq_restore(initial_mask);
-    return out->status;
+    result=kui_sci_async_close(&reader);
+    if(result==KUI_SCI_ASYNC_OK && (!out->slow.overlap_batches || !out->fast.overlap_batches))
+        out->status=result=KUI_SCI_ASYNC_NO_OVERLAP;
+    return result;
 }
 
 const char *kui_sci_async_status_name(enum kui_sci_async_status s) {
     static const char *const names[]={"pass","invalid argument","DMA busy","unsupported state",
         "cancelled","CMD17 rejected","data token error","timeout","receive error","DMA error",
         "buffer guard changed","CRC mismatch","baseline mismatch","restore failed","no CPU overlap measured",
-        "handoff failed","framing bus fault"};
+        "handoff failed","framing bus fault","pending"};
     return (unsigned)s<sizeof(names)/sizeof(names[0])?names[s]:"unknown";
 }
 

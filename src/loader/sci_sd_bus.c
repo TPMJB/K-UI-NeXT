@@ -71,6 +71,15 @@ static struct kui_sci_sd_stats stats;
 static uint64_t (*profile_clock)(void *);
 static void *profile_context;
 #define COUNT(field) (++stats.field)
+bool kui_sci_sd_resync_speed(void) {
+    if(!port.acquired || port.fault || (rd8(STB)&1u)) return false;
+    uint8_t status=rd8(SSR), rate=rd8(BRR);
+    if(!(rd16(PDTR)&CS) || rd8(SMR)!=0x80u || rd8(PTR)!=0 ||
+       (rd8(SCR)&0xc4u) || (status&(RDRF|ERRORS)) ||
+       (status&(TDRE|TEND))!=(TDRE|TEND) || (rate!=0 && rate!=31)) return false;
+    port.slow=rate==31;
+    return true;
+}
 void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) { if(out) *out = first_fault; }
 static void record_wait_fault(uint8_t flag, uint8_t status, unsigned polls) {
     if(first_fault.valid) return;
@@ -469,6 +478,7 @@ void kui_sci_sd_release(void) {}
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return NULL; }
 bool kui_sci_sd_healthy(void) { return false; }
 #ifndef KUI_RETAIL_TRANSPORT
+bool kui_sci_sd_resync_speed(void) { return false; }
 void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) {
     if(out) *out = (struct kui_sci_sd_fault){0};
 }

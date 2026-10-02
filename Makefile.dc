@@ -25,7 +25,7 @@ LOADER_OBJECTS += $(BENCH_OBJECTS)
 LOADER_OBJECTS += build/dc/src/core/boot_ui.o build/dc/src/dreamcast/boot_draw.o \
     build/dc/src/dreamcast/shell_font.o build/dc/src/apps/boot_splash.o
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o build/dc/src/dreamcast/sd.o,$(OBJECTS)) build/dc/main-runtime.o build/dc/sd-runtime.o
-RUNTIME_OBJECTS += build/dc/src/dreamcast/sci_async_probe.o
+RUNTIME_OBJECTS += build/dc/src/dreamcast/sci_async_probe.o build/dc/src/dreamcast/sci_async_heartbeat.o
 RUNTIME_OBJECTS += $(BENCH_OBJECTS)
 RUNTIME_OBJECTS += build/dc/src/core/storage_test_model.o build/dc/src/core/storage_test.o build/dc/src/core/storage_test_store.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
