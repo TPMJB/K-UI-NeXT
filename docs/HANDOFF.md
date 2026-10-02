@@ -12,6 +12,14 @@ failure photo details are implemented; corrected console validation is pending. 
 [photo, source defect and limits](evidence/sci-async-first-console-2026-10-02.md).
 This result does not establish that receive-only DMA is impossible.
 
+Corrected candidate **38693a0de68e** is delivered after full host and Dreamcast
+CI (run 196). The corrected pin model passes 16 slow + 64 fast trials with
+RxD held either low or high, and recovery failures now preserve original phase,
+DMA-start/count/IRQ and register evidence on screen. Install both files from
+`K-UI-SCI-Async-Probe-38693a0de68e.zip`, reboot and run the same probe once.
+Send JSON and photo, or just the photo if restart is required. No new CD or
+soak. Corrected console validation is pending; normal game reads are unchanged.
+
 ## New priority: asynchronous reads and CE IRQ contract (2026-10-02 UTC)
 
 The owner relayed SWAT's explanation that DOA2's remaining slowdown involves

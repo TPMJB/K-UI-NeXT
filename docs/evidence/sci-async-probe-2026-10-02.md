@@ -3,6 +3,10 @@
 Implemented 2026-10-02 UTC. Console validation is pending. This is an original
 runtime diagnostic, not an asynchronous game reader or Windows CE unlock.
 
+Update: the [first console run failed and exposed a pin-check defect](sci-async-first-console-2026-10-02.md).
+The corrected candidate **38693a0de68e** passed full CI and is delivered for
+retest. The original candidate record below is retained as historical evidence.
+
 The latest [CRC result](sci-inline-crc-result-2026-10-01.md) is effectively
 unchanged: run 18 write/read 1,201.16/1,068.10 KiB/s, zero errors, and the owner
 reports largely unchanged gameplay. The next question is whether the CPU can

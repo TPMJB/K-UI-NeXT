@@ -63,3 +63,47 @@ Primary source: [Renesas SH7750 Hardware Manual Rev. 7.02](https://www.renesas.c
 section 15.2.8, printed pp. 671–675 (including the separate RxD read and TxD
 write signal paths). The failed [candidate and original validation](sci-async-probe-2026-10-02.md)
 remain part of the record; host validation did not establish console success.
+
+## Corrected candidate and delivery
+
+**38693a0de68e61a0c01769308277444d9fbcb6e0** implements the correction and
+failure evidence. [Diagnostic run 196](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36959829276)
+passed full host/filesystem and Dreamcast jobs. Strict ASan/UBSan regressions
+model RxD/SCK independently of written output latches; both low and high RxD
+complete all 80 trials, and the old assertion demonstrably rejects low RxD.
+Preexisting GPIO output ownership is rejected without writes. Earlier DMA
+quarantine, foreign-owner and integrity cases still pass. Eight runtime wrapper
+modes include failed reinitialization and reacquisition while retaining the
+original probe cause. Both failure layouts fit 640×480; JSON formatting passes.
+
+The failed screen now shows phase, DMA starts, SSR/SPTR, response/token and
+separate recovery detail. If DMA started, it additionally shows remaining count,
+CHCR and SCI ERI/RXI counts. Unsafe storage still cannot save a report. No normal
+reader, CRC policy or CE eligibility change is included.
+
+Native normal/benchmark instruction audits remain 18,999/19,862 instructions.
+SCI/SCIF/IDE resident payloads remain 11,156/10,608/9,832 bytes, memory ends
+`0x8c00baec`/`0x8c00b8c8`/`0x8c00b5b8`, and conservative stacks remain
+1,172/1,080/1,000 bytes within 1,232. No unresolved symbols.
+
+The 4,561,088-byte source artifact `11207742375` has SHA-256
+`b617c71fde5dd97072a2e480af11183e47bf582789b855bc59f5a4c2751d0c8b`.
+All 96 manifest file hashes, ZIP integrity, both build IDs and package CRCs
+were verified before producing the update:
+
+| Install file | File size | Package CRC32 | SHA-256 |
+| --- | ---: | --- | --- |
+| `KUI/runtime.kui` | 1,615,616 B | `33ebd3f7` | `375f05cf67d1b9ad46cbcedcf9ebbe6744d18ce47433d8163e98792724e3e3ef` |
+| `KUI/apps/games/retail-boot.kui` | 56,712 B | `96138e8e` | `8f486b54caac35499c37e5f4bfb6ef45e1fe78e6e57b14adbb413c3b886913dd` |
+
+Both identify **38693a0de68e**. Runtime payload/memory are
+1,615,552/5,273,424 bytes. Delivered
+`K-UI-SCI-Async-Probe-38693a0de68e.zip`: 778,714 bytes, SHA-256
+`865b51cb3c6c5489b30dd7dea84624d157c63e25e8e35f1aa6d7fc9ce23c090a`.
+It contains both files, instructions, hashes and the source build record.
+
+Install both files, reboot with SCI selected, and run
+**Diagnostics → Storage tests → SCI async probe → A** once. Return the JSON
+and photograph, or just a photograph if it requires restart. Keep the existing
+CD/card format. No repeat soak or game timing is needed. Corrected console
+validation remains pending.
