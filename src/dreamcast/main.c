@@ -890,7 +890,8 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         "  \"recovery_command_valid\":%s,\n  \"recovery_command\":%u,\n  \"recovery_response\":%u,\n"
         "  \"recovery_bus_healthy\":%s,\n  \"recovery_data_match\":%s,\n"
         "  \"timer_irq_instrumented\":%s,\n"
-        "  \"max_irq_masked_us\":%llu,\n  \"max_irq_handler_us\":%llu,\n"
+        "  \"max_irq_masked_us\":%llu,\n  \"max_irq_masked_site\":%lu,\n  \"max_irq_masked_stage\":%lu,\n"
+        "  \"max_irq_handler_us\":%llu,\n"
         "  \"probe_passed\":%s,\n  \"read_integrity_verified\":%s,\n  \"completion_irq_verified\":%s,\n"
         "  \"cpu_overlap_observed\":%s,\n  \"fault\":%s,\n  \"first_overrun\":%s,\n"
         "  \"screen_redraws\":%s,\n  \"speed\":%s,\n  \"stream\":%s,\n  \"resume\":%s,\n"
@@ -926,7 +927,8 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         result->recovery_command_valid?"true":"false",(unsigned)result->recovery_command,(unsigned)result->recovery_response,
         result->recovery_bus_healthy?"true":"false",result->recovery_data_match?"true":"false",
         r->timer_irq_instrumented?"true":"false",
-        (unsigned long long)r->max_irq_masked_us,(unsigned long long)r->max_irq_handler_us,
+        (unsigned long long)r->max_irq_masked_us,(unsigned long)r->max_irq_masked_site,
+        (unsigned long)r->max_irq_masked_stage,(unsigned long long)r->max_irq_handler_us,
         sci_async_passed(result)?"true":"false",sci_async_integrity(result)?"true":"false",sci_async_completion(result)?"true":"false",
         r->fast.overlap_batches?"true":"false",fault,first_overrun,
         result->screen_active?"true":"false",speed,stream,resume,stage[0],stage[1],stage[2],stage[3]);
@@ -1068,9 +1070,9 @@ static void sci_async_operation(unsigned mode) {
                 else snprintf(stream_rate,sizeof(stream_rate),"not run");
                 snprintf(status.lines[2],KUI_APP_LINE_CAP,"Async: CMD17 per block %lu KiB/s, CMD18 stream %s",
                     (unsigned long)sci_async_kib_s(result.speed_async_blocks,result.speed_async_us),stream_rate);
-                snprintf(line,sizeof(line),"Stream per block us: receive %lu finish %lu next %lu; restarts %lu",
-                    (unsigned long)(t->receive_us/k),(unsigned long)(t->finish_us/k),
-                    (unsigned long)(t->framing_us/k),(unsigned long)t->stream_restarts);
+                snprintf(line,sizeof(line),"Stream per block us: receive %lu gap %lu check %lu overlapped; restarts %lu",
+                    (unsigned long)(t->receive_us/k),(unsigned long)(t->framing_us/k),
+                    (unsigned long)(t->finish_us/k),(unsigned long)t->stream_restarts);
                 snprintf(status.lines[3],KUI_APP_LINE_CAP,"%.79s",line);
                 snprintf(line,sizeof(line),"CMD17 per block us: setup %lu receive %lu finish %lu; wait %lu",
                     (unsigned long)(f->framing_us/n),(unsigned long)(f->receive_us/n),

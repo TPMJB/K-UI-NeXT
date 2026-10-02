@@ -30,8 +30,9 @@ static unsigned capture_calls,resume_calls;
 static uint32_t capture_lba,resume_lba;
 static enum kui_sci_async_status capture_result;
 static bool capture_corrupt;
-/* Streaming pass mock: blocks left in the current stream and its runs. */
-static uint32_t stream_left,stream_runs,stream_corrupt_lba;
+/* Streaming pass mock: the current run, its next block and destination. */
+static uint32_t stream_left,stream_index,stream_runs,stream_corrupt_lba;
+static uint8_t *stream_dst;
 static unsigned async_opens,async_begins,async_polls,async_finishes,async_cancels,async_closes;
 static unsigned yield_calls,work_calls,cancel_at_poll,cancel_at_baseline;
 static uint64_t mock_now,card_blocks=10000;
@@ -162,29 +163,30 @@ enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reade
     return KUI_SCI_ASYNC_OK;
 }
 enum kui_sci_async_status kui_sci_async_begin_stream(struct kui_sci_async_reader *reader,
-        uint32_t lba,uint32_t count) {
-    assert(reader->generation && speed_mode && !stream_left && resume_calls==1);
+        uint32_t lba,uint32_t count,uint8_t *dst) {
+    assert(reader->generation && speed_mode && !stream_left && resume_calls==1 && dst);
     assert(count && count<=KUI_LOADER_SD_MAX_READ_BLOCKS && (uint64_t)lba+count<=card_blocks);
-    current_lba=lba;stream_left=count;polled=0;++stream_runs;
+    current_lba=lba;stream_left=count;stream_index=0;stream_dst=dst;polled=0;++stream_runs;
     return KUI_SCI_ASYNC_OK;
 }
 enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader) {
     assert(reader->generation);++async_polls;
     if(probe_status!=KUI_SCI_ASYNC_OK) return probe_status;
+    if(stream_left) {
+        /* One checked block per poll; the poll with the last ends the run. */
+        uint32_t lba=current_lba+stream_index;
+        memset(stream_dst+(size_t)stream_index*512u,sector_byte(lba)^(lba==stream_corrupt_lba?1u:0u),512);
+        ++stream_index;++engine_result->streaming.passed;++engine_result->streaming.dma_irqs;
+        mock_now+=400;
+        return --stream_left?KUI_SCI_ASYNC_PENDING:KUI_SCI_ASYNC_OK;
+    }
     if(++polled<3u) return KUI_SCI_ASYNC_PENDING;
-    if(stream_left) ++engine_result->streaming.dma_irqs;
-    else ++engine_result->fast.dma_irqs;
+    ++engine_result->fast.dma_irqs;
     return KUI_SCI_ASYNC_OK;
 }
 enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *reader,
         uint8_t dst[512],const uint8_t expected[512]) {
     assert(reader->generation && polled==3 && dst && (expected || speed_mode));
-    if(stream_left) {
-        assert(!expected);
-        memset(dst,sector_byte(current_lba)^(current_lba==stream_corrupt_lba?1u:0u),512);
-        ++engine_result->streaming.passed;++current_lba;--stream_left;polled=0;mock_now+=400;
-        return KUI_SCI_ASYNC_OK;
-    }
     ++async_finishes;
     if(speed_mode) {
         assert(!expected);memset(dst,sector_byte(current_lba),512);
@@ -276,7 +278,7 @@ static void prepare(void) {
     speed_mode=speed_file=false;quantum_calls=multi_blocks=read_calls=0;
     capture_calls=resume_calls=capture_lba=resume_lba=0;
     capture_result=KUI_SCI_ASYNC_OK;capture_corrupt=false;
-    stream_left=stream_runs=stream_corrupt_lba=0;
+    stream_left=stream_index=stream_runs=stream_corrupt_lba=0;stream_dst=NULL;
 }
 /* The same blocks through both readers: the file's first cluster when found,
  * otherwise the data area. Matching CRCs are required for a pass. */

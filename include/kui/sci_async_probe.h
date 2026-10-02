@@ -117,8 +117,11 @@ struct kui_sci_async_stage {
     uint64_t framing_us, finish_us;
     /* Token wait time; for a stream, after each reselection (see below). */
     uint64_t token_us, max_token_us;
-    /* CMD18 streams: CMD12 + CMD18 re-issued after a lost data token or a
-     * retried overrun, and blocks whose second CRC byte was missing. */
+    /* CMD18 streams: CMD12 + CMD18 re-issued after a lost data token, a
+     * retried overrun or a failed check, and blocks whose second CRC byte was
+     * missing. For streams framing_us is the serial gap between blocks (SCI
+     * reset, reselection, token search, DMA start) and finish_us the check
+     * and copy, done while the next block is received. */
     uint32_t stream_restarts, missing_tail_bytes;
 };
 
@@ -152,6 +155,10 @@ struct kui_sci_async_probe_result {
      * succeeded. fault above still describes only a failed request. */
     struct kui_sci_async_fault first_overrun;
     uint64_t elapsed_us, max_irq_masked_us, max_irq_handler_us;
+    /* Where the longest masked window was: 1 lease, 2 release, 3 module
+     * reset, 4 DMA start, 5 DMA poll, 6 open; and the stage it belonged to:
+     * 0 slow, 1 fast, 2 cmd18, 3 streaming, 4 none. */
+    uint32_t max_irq_masked_site, max_irq_masked_stage;
     /* Foreground API duration, including IRQ preemption; not wire time.
      * No API waits for an in-flight DMA to complete. */
     uint64_t max_open_us, max_begin_us, max_poll_us, max_finish_us;
@@ -199,20 +206,22 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
     const struct kui_loader_sd *card, struct kui_sci_async_probe_result *out);
 enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reader,
     uint32_t lba, bool slow);
-/* CMD18 stream of `count` blocks at the fast clock. Each block is then
- * polled and finished exactly like a single request; finish of a block that
- * is not the last returns OK and starts the next block's framing, and the
- * last block's finish stops the card with CMD12 before publishing. Each
- * block is received by a 513-byte DMA: the receiver's trailing overrun
- * leaves the second CRC byte in RDR and drops only the byte after it, the
- * card's gap before the next data token. The card is deselected for the SCI
- * reset and selected again for the token search. A lost token or a retried
- * overrun stops the card and re-issues CMD18 at the current block (at most
- * KUI_SCI_ASYNC_OVERRUN_RETRIES per block). Cancellation and failures send
- * CMD12 when the ordinary bus is usable; otherwise the caller's normal
- * recovery must reinitialize the card. */
+/* CMD18 stream of `count` blocks into dst (count*512 bytes) at the fast
+ * clock. poll drives the whole run and returns PENDING until every block has
+ * been received, checked and copied, then OK (the reader is idle again);
+ * finish is not used. Each block is received by a 513-byte DMA: the
+ * receiver's trailing overrun leaves the second CRC byte in RDR and drops
+ * only the byte after it, the card's gap before the next data token. After
+ * each block the card is deselected for the SCI reset, selected again and the
+ * next block's DMA started; the received block is then checked (CRC16) and
+ * copied while the next one arrives. A lost token, a retried overrun or a
+ * block that fails its check stops the card (CMD12) and re-issues CMD18 at
+ * that block, at most KUI_SCI_ASYNC_OVERRUN_RETRIES times per block.
+ * Cancellation and failures send CMD12 when the ordinary bus is usable;
+ * otherwise the caller's normal recovery must reinitialize the card. dst may
+ * hold checked blocks after a failure but is complete only after OK. */
 enum kui_sci_async_status kui_sci_async_begin_stream(struct kui_sci_async_reader *reader,
-    uint32_t lba, uint32_t count);
+    uint32_t lba, uint32_t count, uint8_t *dst);
 enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader);
 enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *reader,
     uint8_t dst[512], const uint8_t expected[512]);

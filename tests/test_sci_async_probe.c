@@ -43,7 +43,7 @@ enum fault { NO_FAULT, EARLY_ERROR, BAD_CRC, WRONG_DATA, STALLED,
              BUS_FAULT_ON_COMMAND, BUS_FAULT_ON_READY_DESELECT,
              BUS_FAULT_ON_IDLE_CLOCK, BUS_FAULT_ON_READY_POLL,
              PERSISTENT_OVERRUN, LATE_DMA_AFTER_STOP, LATE_BYTE_AFTER_STOP,
-             STREAM_OVERRUN, STREAM_NO_TAIL };
+             STREAM_OVERRUN, STREAM_NO_TAIL, STREAM_BAD_CRC };
 /* CMD18 card model: token wait, block, fill gap, token, block... until CMD12,
  * then a stuff byte, R1 and the busy interval. */
 enum stream_state { STREAM_OFF, STREAM_TOKEN, STREAM_DATA, STREAM_STUFF,
@@ -70,6 +70,11 @@ static struct {
     uint64_t now;
     uint8_t baseline[512], command_bytes[5], *dma_buffer;
     size_t dma_size;
+    /* Registered DMA destinations, each at its own physical base (the first
+     * at DMA_BASE); a transfer uses the one its start address falls in. */
+    struct {uint8_t *host; size_t size; uint32_t base;} regions[8];
+    unsigned region_count;
+    uint32_t dma_base;
     bool selected, token_sent, response_sent, inside_irq, pending_dma;
     bool fault_fired, advancing, fail_restore_register, foreign_active;
     bool dynamic_sptr_inputs, no_overlap, fail_handler_restore;
@@ -91,6 +96,8 @@ static struct {
     unsigned stream_gap_every, stream_gap_extra, stop_position, stop_count;
     unsigned stop_busy, busy_left, dma_total, stream_tail_lost;
     uint8_t stop_r1, stream_payload[514];
+    uint32_t stream_bad_lba;
+    unsigned stream_budget; /* streamed bytes per model step; 0 means 256 */
 } hw;
 static int handler_data[3];
 static int foreign_data;
@@ -184,6 +191,10 @@ static uint8_t stream_byte(void) {
         if(hw.stream_wait) {--hw.stream_wait;return 0xff;}
         hw.stream=STREAM_DATA;hw.stream_pos=0;
         stream_block_bytes(hw.command_argument+hw.stream_block,hw.stream_payload);
+        if(hw.fault==STREAM_BAD_CRC && !hw.fault_fired &&
+           hw.command_argument+hw.stream_block==hw.stream_bad_lba) {
+            hw.stream_payload[100]^=0x10u;hw.fault_fired=true; /* once, after its CRC */
+        }
         return 0xfe;
     }
     if(hw.stream==STREAM_DATA) {
@@ -251,10 +262,10 @@ static void advance(void) {
         }
         if(receiving() && !(hw.ssr&ORER) && !(hw.dmaor&6u)) {
             bool stream=hw.stream!=STREAM_OFF;
-            unsigned budget=stream?256u:hw.no_overlap?514u:32u;
+            unsigned budget=stream?(hw.stream_budget?hw.stream_budget:256u):hw.no_overlap?514u:32u;
             for(unsigned bytes=0;bytes<budget && hw.tcr;++bytes) {
-                assert(hw.dma_buffer && hw.dar>=DMA_BASE);
-                size_t offset=hw.dar-DMA_BASE;
+                assert(hw.dma_buffer && hw.dar>=hw.dma_base);
+                size_t offset=hw.dar-hw.dma_base;
                 assert(offset<hw.dma_size && hw.transferred<hw.dma_total);
                 if(stream && hw.fault==STREAM_OVERRUN && hw.transferred==1000 && !hw.fault_fired) {
                     /* The DMA fell behind: one byte waits in RDR, the next
@@ -338,7 +349,7 @@ void kui_sci_async_test_bus_fence(void) {
     bool late=hw.fault==LATE_DMA_AFTER_STOP ||
         (hw.fault==LATE_BYTE_AFTER_STOP && !hw.late_writes);
     if(late && hw.aborted_dma && hw.tcr && hw.dma_buffer && !(hw.chcr&DE)) {
-        size_t offset=hw.dar-DMA_BASE;
+        size_t offset=hw.dar-hw.dma_base;
         assert(offset<hw.dma_size);
         hw.dma_buffer[offset]=reverse_byte(logical_byte(hw.transferred));
         ++hw.dar; ++hw.transferred; ++hw.total_bytes; --hw.tcr; ++hw.late_writes;
@@ -351,7 +362,15 @@ void kui_sci_async_test_delay(uint32_t count) {
 uint32_t kui_sci_async_test_dma_address(const void *buffer,size_t count) {
     assert(buffer && count>=514 && count<=32768);
     assert(!((uintptr_t)buffer&31u));
-    hw.dma_buffer=(uint8_t *)buffer; hw.dma_size=count; return DMA_BASE;
+    for(unsigned i=0;i<hw.region_count;++i) if(hw.regions[i].host==buffer) {
+        if(count>hw.regions[i].size) hw.regions[i].size=count;
+        return hw.regions[i].base;
+    }
+    assert(hw.region_count<8u);
+    unsigned i=hw.region_count++;
+    hw.regions[i].host=(uint8_t *)buffer;hw.regions[i].size=count;
+    hw.regions[i].base=DMA_BASE+0x10000u*i;
+    return hw.regions[i].base;
 }
 void kui_sci_async_test_cache_purge(void *buffer,size_t count) {
     assert(buffer && !((uintptr_t)buffer&31u)); assert(count && !(count&31u));
@@ -359,7 +378,13 @@ void kui_sci_async_test_cache_purge(void *buffer,size_t count) {
 }
 void kui_sci_async_test_cache_invalidate(void *buffer,size_t count) {
     assert(buffer && !((uintptr_t)buffer&31u)); assert(count && !(count&31u));
-    assert(!(hw.scr&0x50u) && !(hw.chcr&DE)); ++hw.cache_invalidates;
+    /* Never under a transfer that may still write: a streamed block is
+     * checked while the next one goes to the other receive area. */
+    if((hw.chcr&(DE|END))==DE)
+        assert(!hw.dma_buffer || (uint8_t *)buffer+count<=hw.dma_buffer ||
+               (uint8_t *)buffer>=hw.dma_buffer+hw.dma_size);
+    else assert(!(hw.scr&0x40u)); /* no receive request enabled without a channel */
+    ++hw.cache_invalidates;
     if(hw.fault==FOREIGN_AFTER_DMA) install_foreign_dma();
 }
 uint32_t kui_sci_async_test_read(uint32_t address,unsigned width) {
@@ -457,6 +482,13 @@ void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
                 assert(hw.brr==0 || hw.brr==31);
                 if(hw.brr) ++hw.slow_starts; else ++hw.fast_starts;
                 hw.transferred=0; ++hw.dma_starts; hw.dma_total=hw.tcr;
+                hw.dma_buffer=NULL;
+                for(unsigned i=0;i<hw.region_count;++i)
+                    if(hw.dar>=hw.regions[i].base && hw.dar+hw.tcr<=hw.regions[i].base+hw.regions[i].size) {
+                        hw.dma_buffer=hw.regions[i].host;hw.dma_size=hw.regions[i].size;
+                        hw.dma_base=hw.regions[i].base;
+                    }
+                assert(hw.dma_buffer);
                 hw.aborted_dma=hw.overrun_this_dma=false;
             }
             hw.scr=value;
@@ -1668,16 +1700,11 @@ static void test_stream_arguments(void) {
     assert(result.cmd18.attempted==0);
     assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
 }
-/* Read `count` streamed blocks through the public reader API. */
+/* One stream run through the public reader API. */
 static enum kui_sci_async_status stream_read(struct kui_sci_async_reader *reader,
-        uint32_t lba,uint32_t count,uint8_t *dst,uint32_t *done) {
-    enum kui_sci_async_status status=kui_sci_async_begin_stream(reader,lba,count);
-    *done=0;
-    while(status==KUI_SCI_ASYNC_OK && *done<count) {
-        status=poll_complete(reader);
-        if(status==KUI_SCI_ASYNC_OK) status=kui_sci_async_finish(reader,dst+(size_t)*done*512u,NULL);
-        if(status==KUI_SCI_ASYNC_OK) ++*done;
-    }
+        uint32_t lba,uint32_t count,uint8_t *dst) {
+    enum kui_sci_async_status status=kui_sci_async_begin_stream(reader,lba,count,dst);
+    if(status==KUI_SCI_ASYNC_OK) status=poll_complete(reader);
     return status;
 }
 static void stream_blocks_match(const uint8_t *dst,uint32_t lba,uint32_t count) {
@@ -1689,10 +1716,10 @@ static void stream_blocks_match(const uint8_t *dst,uint32_t lba,uint32_t count) 
 static void test_stream_reader(void) {
     struct kui_loader_sd card=reset();
     hw.token_delay=7;hw.stream_gap=1;hw.stream_gap_every=4;hw.stream_gap_extra=30;hw.stop_busy=2;
-    static uint8_t dst[10*512];uint32_t done=0;
+    static uint8_t dst[10*512];
     struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
     assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
-    assert(stream_read(&reader,700,10,dst,&done)==KUI_SCI_ASYNC_OK && done==10);
+    assert(stream_read(&reader,700,10,dst)==KUI_SCI_ASYNC_OK);
     stream_blocks_match(dst,700,10);
     const struct kui_sci_async_stage *s=&result.streaming;
     assert(s->attempted==10 && s->passed==10 && s->dma_started==10 && s->dma_irqs==10);
@@ -1703,20 +1730,48 @@ static void test_stream_reader(void) {
     assert(hw.multi_count==1 && hw.stop_count==1 && !hw.command_count && hw.stream==STREAM_OFF);
     unsigned waited=7;
     for(unsigned k=1;k<10;++k) waited+=stream_gap_for(700+k)-1u;
-    assert(s->token_bytes==waited && s->max_token_bytes==30 && s->token_us && s->framing_us);
+    assert(s->token_bytes==waited && s->max_token_bytes==30 && s->token_us);
+    assert(s->framing_us && s->finish_us && s->receive_us);
     assert(hw.dma_starts==10 && hw.total_bytes==10u*513u && hw.stream_tail_lost==20 && !hw.selected);
     assert(!result.fast.attempted && !result.slow.attempted && result.lba==709);
+    /* The run is over: the reader is idle and takes ordinary requests. */
+    assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_ARGUMENT);
     read_after_stream(&reader);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
+}
+static void test_stream_reader_overlap(void) {
+    /* While block k+1 is received, block k has already been checked: after
+     * the poll that starts a DMA, the previous block is in dst. */
+    struct kui_loader_sd card=reset();hw.token_delay=2;hw.stream_gap=1;
+    static uint8_t dst[4*512];memset(dst,0x5a,sizeof(dst));
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    kui_sci_async_set_framing_quantum(&reader,4096);
+    assert(kui_sci_async_begin_stream(&reader,30,4,dst)==KUI_SCI_ASYNC_OK);
+    unsigned seen=0;enum kui_sci_async_status status;
+    do {
+        unsigned starts=hw.dma_starts;
+        status=kui_sci_async_poll(&reader);
+        if(status==KUI_SCI_ASYNC_PENDING && hw.dma_starts>starts && starts) {
+            /* This poll started block `starts`; block starts-1 is checked. */
+            assert(result.streaming.passed==starts);
+            uint8_t block[514];stream_block_bytes(30+starts-1u,block);
+            assert(!memcmp(dst+512u*(starts-1u),block,512));
+            ++seen;
+        }
+    } while(status==KUI_SCI_ASYNC_PENDING);
+    assert(status==KUI_SCI_ASYNC_OK && seen==3);
+    stream_blocks_match(dst,30,4);
     assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
 }
 static void test_stream_reader_lost_token(void) {
     /* A card without a fill byte: every stop loses the next token, so each
      * later block is fetched with CMD12 and a fresh CMD18. */
     struct kui_loader_sd card=reset();hw.token_delay=3;hw.stream_gap=0;
-    static uint8_t dst[6*512];uint32_t done=0;
+    static uint8_t dst[6*512];
     struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
     assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
-    assert(stream_read(&reader,900,6,dst,&done)==KUI_SCI_ASYNC_OK && done==6);
+    assert(stream_read(&reader,900,6,dst)==KUI_SCI_ASYNC_OK);
     stream_blocks_match(dst,900,6);
     assert(result.streaming.passed==6 && result.streaming.stream_restarts==5);
     assert(hw.multi_count==6 && hw.stop_count==6 && hw.stream==STREAM_OFF);
@@ -1726,10 +1781,10 @@ static void test_stream_reader_overrun(void) {
     /* A mid-block overrun: proven idle, SCI reset, CMD12 and CMD18 again at
      * the same block; the stream then continues normally. */
     struct kui_loader_sd card=reset();hw.fault=EARLY_ERROR;hw.token_delay=2;hw.stream_gap=1;
-    static uint8_t dst[5*512];uint32_t done=0;
+    static uint8_t dst[5*512];
     struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
     assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
-    assert(stream_read(&reader,40,5,dst,&done)==KUI_SCI_ASYNC_OK && done==5);
+    assert(stream_read(&reader,40,5,dst)==KUI_SCI_ASYNC_OK);
     stream_blocks_match(dst,40,5);
     const struct kui_sci_async_stage *s=&result.streaming;
     assert(s->payload_overruns==1 && s->overrun_retries==1 && s->stream_restarts==1);
@@ -1739,23 +1794,45 @@ static void test_stream_reader_overrun(void) {
     assert(hw.multi_count==2 && hw.stop_count==2 && !result.dma_quarantined);
     assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
 }
+static void stream_bad_block(uint32_t bad,unsigned dma_starts,unsigned stops) {
+    /* A block that fails its CRC check is read again: the card is stopped
+     * (once the in-flight block, which is dropped, has arrived) and CMD18 is
+     * re-issued at the bad block. */
+    struct kui_loader_sd card=reset();hw.fault=STREAM_BAD_CRC;hw.stream_bad_lba=bad;
+    hw.token_delay=2;hw.stream_gap=1;
+    static uint8_t dst[6*512];
+    struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
+    assert(stream_read(&reader,50,6,dst)==KUI_SCI_ASYNC_OK);
+    stream_blocks_match(dst,50,6);
+    const struct kui_sci_async_stage *s=&result.streaming;
+    assert(hw.fault_fired && s->passed==6 && s->stream_restarts==1 && s->dma_started==dma_starts);
+    assert(hw.multi_count==2 && hw.stop_count==stops && hw.stream==STREAM_OFF);
+    assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
+}
+static void test_stream_reader_bad_block(void) {
+    stream_bad_block(53,8,2); /* block 54 in flight is dropped; 53..55 read again */
+    stream_bad_block(55,7,2); /* last block: the card was already stopped */
+}
 static void stream_cancel(bool during_dma) {
-    struct kui_loader_sd card=reset();hw.token_delay=2;hw.stream_gap=1;
+    /* A long gap keeps the token search going past one poll's 8 bytes. */
+    struct kui_loader_sd card=reset();hw.token_delay=2;hw.stream_gap=during_dma?1u:20u;
+    hw.stream_budget=16; /* a block spans many model steps */
     static uint8_t dst[8*512];
     struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
     assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_begin_stream(&reader,60,8)==KUI_SCI_ASYNC_OK);
-    for(unsigned k=0;k<2;++k) {
-        assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
-        assert(kui_sci_async_finish(&reader,dst+512u*k,NULL)==KUI_SCI_ASYNC_OK);
-    }
-    /* Between blocks a stream must be finished or cancelled before close. */
+    assert(kui_sci_async_begin_stream(&reader,60,8,dst)==KUI_SCI_ASYNC_OK);
+    unsigned calls=0;
+    while(result.streaming.passed<2) {assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_PENDING);assert(++calls<100000u);}
+    /* With the long gap the next block is still being framed; otherwise its
+     * DMA was started by the same poll (the model may already have finished it). */
+    if(!during_dma) assert(!receiving() && !(hw.chcr&DE));
+    else assert(hw.chcr&DE);
+    /* A running stream must be cancelled (or finished) before close. */
     assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_PENDING);
     if(during_dma) {
-        for(unsigned i=0;i<100 && !receiving();++i) assert(kui_sci_async_poll(&reader)==KUI_SCI_ASYNC_PENDING);
-        assert(receiving() && kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_PENDING);
-        assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
-        assert(kui_sci_async_finish(&reader,NULL,NULL)==KUI_SCI_ASYNC_CANCELLED);
+        assert(kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_PENDING);
+        assert(poll_complete(&reader)==KUI_SCI_ASYNC_CANCELLED);
     } else assert(kui_sci_async_cancel(&reader)==KUI_SCI_ASYNC_CANCELLED);
     /* CMD12 still stops the card before the session ends. */
     assert(hw.stop_count==1 && hw.stream==STREAM_OFF && result.streaming.passed==2);
@@ -1765,41 +1842,44 @@ static void stream_cancel(bool during_dma) {
 }
 static void test_stream_reader_cancel(void) {stream_cancel(false);stream_cancel(true);}
 static void test_stream_reader_missing_tail(void) {
-    /* No byte left in RDR after a block: its CRC cannot be checked, so the
-     * request fails before publishing. The SCI is stopped, so no CMD12 is
-     * attempted; the caller's recovery reinitializes the card. */
+    /* Reception stops exactly at the count: nothing is left in RDR and the
+     * card is not clocked past the second CRC byte, so the next token is
+     * missing too. The token and the failed check both restart the run, and
+     * with no block checked in between the budget of three ends it. */
     struct kui_loader_sd card=reset();hw.fault=STREAM_NO_TAIL;hw.token_delay=1;hw.stream_gap=1;
-    uint8_t payload[512];memset(payload,0x5a,sizeof(payload));
+    static uint8_t dst[4*512];memset(dst,0x5a,sizeof(dst));
     struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
     assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_begin_stream(&reader,80,4)==KUI_SCI_ASYNC_OK);
-    assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
-    assert(kui_sci_async_finish(&reader,payload,NULL)==KUI_SCI_ASYNC_RECEIVE_ERROR);
-    assert(payload[0]==0x5a && payload[511]==0x5a);
-    assert(result.streaming.missing_tail_bytes==1 && !result.streaming.passed && !hw.stop_count);
+    assert(stream_read(&reader,80,4,dst)==KUI_SCI_ASYNC_RECEIVE_ERROR);
+    assert(result.streaming.missing_tail_bytes==2 && result.streaming.stream_restarts==3);
+    assert(!result.streaming.passed && hw.multi_count==2 && hw.stop_count==2);
+    assert(dst[0]==0x5a && dst[511]==0x5a);
     assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_RECEIVE_ERROR && result.safe_restored);
-    assert(!hw.selected && !result.dma_quarantined);
+    assert(!hw.selected && !result.dma_quarantined && hw.stream==STREAM_OFF);
 }
 static void test_stream_reader_arguments(void) {
     struct kui_loader_sd card=reset();
+    static uint8_t dst[3*512];
     struct kui_sci_async_reader reader={0};struct kui_sci_async_probe_result result;
     assert(kui_sci_async_open(&reader,&card,&result)==KUI_SCI_ASYNC_OK);
     unsigned writes=hw.writes;
-    assert(kui_sci_async_begin_stream(&reader,0,0)==KUI_SCI_ASYNC_ARGUMENT);
-    assert(kui_sci_async_begin_stream(&reader,9990,11)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_begin_stream(&reader,0,0,dst)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_begin_stream(&reader,0,2,NULL)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_begin_stream(&reader,9990,11,dst)==KUI_SCI_ASYNC_ARGUMENT);
     struct kui_sci_async_reader stale={reader.generation+1u};
-    assert(kui_sci_async_begin_stream(&stale,0,2)==KUI_SCI_ASYNC_ARGUMENT);
+    assert(kui_sci_async_begin_stream(&stale,0,2,dst)==KUI_SCI_ASYNC_ARGUMENT);
     assert(hw.writes==writes && !hw.bus_bytes && !result.streaming.attempted);
     begin_active(&reader);
-    assert(kui_sci_async_begin_stream(&reader,0,2)==KUI_SCI_ASYNC_BUSY);
+    assert(kui_sci_async_begin_stream(&reader,0,2,dst)==KUI_SCI_ASYNC_BUSY);
     uint8_t payload[512];
     assert(poll_complete(&reader)==KUI_SCI_ASYNC_OK);
     assert(kui_sci_async_finish(&reader,payload,hw.baseline)==KUI_SCI_ASYNC_OK);
     /* A stream right up to the card's last block is accepted. */
-    static uint8_t dst[3*512];uint32_t done=0;
     hw.token_delay=1;hw.stream_gap=1;
-    assert(stream_read(&reader,9997,3,dst,&done)==KUI_SCI_ASYNC_OK && done==3);
+    assert(stream_read(&reader,9997,3,dst)==KUI_SCI_ASYNC_OK);
     stream_blocks_match(dst,9997,3);
+    /* finish is not part of a stream. */
+    assert(kui_sci_async_finish(&reader,payload,NULL)==KUI_SCI_ASYNC_ARGUMENT);
     assert(kui_sci_async_close(&reader)==KUI_SCI_ASYNC_OK);restored(&result);
 }
 static void isolated(void (*test)(void)) {
@@ -1886,12 +1966,14 @@ int main(void) {
     isolated(test_stream_stop_unanswered);
     test_stream_arguments();
     test_stream_reader();
+    test_stream_reader_overlap();
     test_stream_reader_lost_token();
     isolated(test_stream_reader_overrun);
+    test_stream_reader_bad_block();
     test_stream_reader_cancel();
     isolated(test_stream_reader_missing_tail);
     test_stream_reader_arguments();
-    puts("SCI CMD18 streaming reader: 513-byte blocks with RDR byte, lost token, overrun, cancel passed");
+    puts("SCI CMD18 streaming reader: overlapped checks, RDR byte, lost token, overrun, bad block, cancel passed");
     puts("SCI CMD18 capture and per-block resume: gaps, findings, CMD12 stop and reuse passed");
     puts("SCI module reset: bounded gates, restoration and modeled RX recovery passed; console proof still required");
     puts("SCI reader lifecycle: bounded polling, cancel/drain, no early publish and ownership passed");

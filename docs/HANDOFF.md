@@ -1,5 +1,17 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI async: streaming with overlapped checks (2026-10-02 UTC)
+
+`3aa4554c44d9` on the console: the streaming reader read all 2,048 blocks
+with matching data and no restart at 1,059 KiB/s (ordinary reader 1,095); the
+resume measurement passed 64/64 with every token found at once. Per block:
+receive 343 us, check 69 us, next-block framing 62 us. The next build checks
+each block while the next one is received (two receive areas, whole-run
+`begin_stream(lba, count, dst)` driven by `poll`), restarts the run at a block
+that fails its check, and records where the longest masked window (2.5 ms in
+that run) happened. See the end of
+[the change record](evidence/sci-async-cmd18-stream-2026-10-02.md).
+
 ## SCI async: CMD18 streaming reader (2026-10-02 UTC)
 
 Console results for `97b590137b9b`: async CMD17 634 KiB/s (card access about

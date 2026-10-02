@@ -430,9 +430,10 @@ static void async_speed_range(struct kui_sd_async_result *out) {
     (void)f_mount(NULL,"0:",0);
 }
 /* The async reader's CMD18 streams over the same blocks, in runs as long as
- * the ordinary reader's. Cancellation is checked between runs. */
+ * the ordinary reader's and into the same kind of buffer, each run then
+ * CRC32'd like the ordinary pass's. Cancellation is checked between runs. */
 static enum kui_sci_async_status async_stream_pass(struct kui_sd_async_result *out,
-        struct kui_sci_async_reader *reader,uint8_t block[512],
+        struct kui_sci_async_reader *reader,uint8_t *chunk,
         bool (*cancelled)(void *),void *cancel_ctx) {
     const uint32_t lba=out->speed_lba,total=out->speed_blocks;
     enum kui_sci_async_status status=KUI_SCI_ASYNC_OK;
@@ -441,14 +442,12 @@ static enum kui_sci_async_status async_stream_pass(struct kui_sd_async_result *o
         if(cancelled && cancelled(cancel_ctx)) {status=KUI_SCI_ASYNC_CANCELLED;break;}
         uint32_t n=total-done;
         if(n>KUI_LOADER_SD_MAX_READ_BLOCKS) n=KUI_LOADER_SD_MAX_READ_BLOCKS;
-        status=kui_sci_async_begin_stream(reader,lba+done,n);
-        for(uint32_t i=0;i<n && status==KUI_SCI_ASYNC_OK;++i) {
+        status=kui_sci_async_begin_stream(reader,lba+done,n,chunk);
+        if(status==KUI_SCI_ASYNC_OK)
             do status=kui_sci_async_poll(reader); while(status==KUI_SCI_ASYNC_PENDING);
-            if(status==KUI_SCI_ASYNC_OK) status=kui_sci_async_finish(reader,block,NULL);
-            if(status==KUI_SCI_ASYNC_OK) {
-                out->speed_stream_crc=kui_crc32(out->speed_stream_crc,block,512);
-                ++out->speed_stream_blocks;
-            }
+        if(status==KUI_SCI_ASYNC_OK) {
+            out->speed_stream_crc=kui_crc32(out->speed_stream_crc,chunk,(size_t)n*512u);
+            out->speed_stream_blocks+=n;
         }
         done+=n;
     }
@@ -526,7 +525,7 @@ static void async_speed(struct kui_sd_async_result *out,
         out->resume_match=async_speed_same(chunk,out->resume.blocks,compare+KUI_SD_ASYNC_RESUME_OFFSET);
     }
     if(status==KUI_SCI_ASYNC_OK && out->speed_match)
-        status=async_stream_pass(out,&reader,block,cancelled,cancel_ctx);
+        status=async_stream_pass(out,&reader,chunk,cancelled,cancel_ctx);
     if(status==KUI_SCI_ASYNC_OK && cancelled && cancelled(cancel_ctx)) status=KUI_SCI_ASYNC_CANCELLED;
     enum kui_sci_async_status closed=kui_sci_async_close(&reader);
     if(closed!=KUI_SCI_ASYNC_OK) status=closed;

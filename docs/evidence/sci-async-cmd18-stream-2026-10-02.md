@@ -133,3 +133,34 @@ framing on the serial path, about 370 us per block.
 It matches one streamed block whose receive took 2,845 us instead of about
 343 us (2,845 - 341 = 2,504). No masked section in the reader is that long by
 design; the next build records which section set the maximum.
+
+## Overlapped checks (next build)
+
+`kui_sci_async_begin_stream(reader, lba, count, dst)` now reads a whole run
+into `dst`, and `poll` drives it; `finish` is no longer used for streams.
+Blocks alternate between two receive areas. When a block's DMA completes,
+the same poll resets the SCI, reselects the card, finds the next token and
+starts the next DMA, and only then checks the completed block (CRC16 with its
+RDR byte) and copies it into `dst`. The check now runs while the next block
+is on the wire. For streams, `framing_us` is the serial gap between blocks
+(reset, reselection, token search, DMA start) and `finish_us` the overlapped
+check.
+
+A block that fails its check is read again: if the next block is already in
+flight, that block is dropped when it arrives, then CMD12 and CMD18 at the
+failed block; after the final stop, CMD18 alone. Restarts (lost token,
+overrun, failed check) are limited to three until another block has been
+checked, so a block that keeps failing ends the run instead of looping.
+
+The R stream pass now reads each 128-block run into one buffer and CRC32s it
+afterwards, like the ordinary pass, so the comparison is like for like. The
+JSON adds `max_irq_masked_site` (1 lease, 2 release, 3 module reset, 4 DMA
+start, 5 DMA poll, 6 open) and `max_irq_masked_stage` (0 slow, 1 fast,
+2 cmd18, 3 streaming, 4 none) to locate the 2.5 ms masked window. Screen line
+3 reads: receive, gap (serial) and check (overlapped) per block, restarts.
+
+Host tests add: the previous block is in `dst` after each poll that starts a
+DMA; a bad CRC in the middle of a run (the in-flight block dropped, 8 DMAs for
+6 blocks) and on the last block (CMD18 again without CMD12); cancellation
+while a token search spans polls and while a DMA runs; the run-wide restart
+limit with a card that leaves nothing in RDR.
