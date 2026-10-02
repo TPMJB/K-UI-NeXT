@@ -98,3 +98,38 @@ Source `3aa4554c44d9ab34b2d2ee9dc4a253e800f61f69` passed
 host tests and the Dreamcast build. The update is the run's
 `kui-1.5.1-dainsleif-sd-update` artifact; only `KUI/runtime.kui` and
 `KUI/apps/games/retail-boot.kui` need replacing. Run R and return the JSON.
+
+## Console results (3aa4554c44d9)
+
+The owner ran R; it passed with all four passes returning the same data and
+normal recovery verified ([report](sci-async-console-3aa4554c44d9-speed.json)).
+1 MiB of `/KUI/runtime.kui` from LBA 88,453,632.
+
+| Pass | KiB/s | us per block |
+| --- | ---: | ---: |
+| Ordinary reader (CMD18 runs) | 1,095 | 456.2 |
+| Async CMD17 per block | 656 | 762.2 |
+| Async CMD18 stream (128-block runs) | 1,059 | 472.1 |
+
+**The 513-byte block works.** The resume measurement read 64 of 64 blocks with
+every token found at the first byte after reselection (0 bytes waited) and no
+missing RDR byte; the capture again showed a 1-byte gap after every one of 31
+blocks. The streaming pass read all 2,048 blocks with no restart, no overrun
+and no missing RDR byte.
+
+**Where the stream's time goes**, per block: receive 343.0 us (513 bytes on the
+wire is 328.3 us), finish 68.9 us (CRC check, copy, deselect, SCI reset and
+re-initialization), next-block framing 61.6 us (from finish to the next DMA
+start: the test loop's own CRC32 of the block, about 30 us, reselection, the
+token search, 7.8 us on average, and the DMA start). The CPU is free for the
+343 us of each block; the rest is serial.
+
+**Next.** Check each block during the next block's DMA rather than before it:
+the receive area alternates, the next DMA starts right after the SCI reset,
+and the check and copy follow. That leaves receive, reset and next-block
+framing on the serial path, about 370 us per block.
+
+**Open question.** `max_irq_masked_us` was 2,504 us (53 us in the previous run).
+It matches one streamed block whose receive took 2,845 us instead of about
+343 us (2,845 - 341 = 2,504). No masked section in the reader is that long by
+design; the next build records which section set the maximum.
