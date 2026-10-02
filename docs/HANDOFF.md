@@ -10,7 +10,9 @@ each block while the next one is received (two receive areas, whole-run
 `begin_stream(lba, count, dst)` driven by `poll`), restarts the run at a block
 that fails its check, and records where the longest masked window (2.5 ms in
 that run) happened. See the end of
-[the change record](evidence/sci-async-cmd18-stream-2026-10-02.md).
+[the change record](evidence/sci-async-cmd18-stream-2026-10-02.md). Build
+**bac1b152b4ac** passed [Diagnostic run 206](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37048656141);
+install its two files from the `sd-update` artifact, run R and return the JSON.
 
 ## SCI async: CMD18 streaming reader (2026-10-02 UTC)
 

@@ -164,3 +164,9 @@ DMA; a bad CRC in the middle of a run (the in-flight block dropped, 8 DMAs for
 6 blocks) and on the last block (CMD18 again without CMD12); cancellation
 while a token search spans polls and while a DMA runs; the run-wide restart
 limit with a card that leaves nothing in RDR.
+
+Source `bac1b152b4ac7ce5814160e53a51b167e322c74c` passed
+[Diagnostic run 206](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37048656141):
+host tests and the Dreamcast build. Install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `kui-1.5.1-dainsleif-sd-update`
+artifact, run R and return the JSON.
