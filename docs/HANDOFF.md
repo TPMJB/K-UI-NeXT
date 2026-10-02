@@ -10,7 +10,9 @@ window, call and gap between polls; times the slowest module reset's steps on
 TMU2 and in CPU cycles; then runs 1 s of back-to-back module resets and three
 1 s idle CPU tests (masked, masked with RAM reads, unmasked) to tell whether
 the reset, the console or other code holds the CPU. See
-[the change record](evidence/sci-async-pause-hunt-2026-10-02.md).
+[the change record](evidence/sci-async-pause-hunt-2026-10-02.md). Build
+**ad0340e18528** passed [Diagnostic run 207](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37061143973);
+install its two files from the `sd-update` artifact, run R and return the JSON.
 
 ## SCI async: streaming with overlapped checks (2026-10-02 UTC)
 

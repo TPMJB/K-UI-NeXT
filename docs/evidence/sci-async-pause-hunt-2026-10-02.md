@@ -120,3 +120,11 @@ injected at an uptime read and a 2.5 ms bus stall at a RAM read. Tests:
 Report and screen code were compiled on the host with every field at its
 widest: the report is at most 15,279 of 16,384 bytes and every screen line
 fits.
+
+## Delivery
+
+Source `ad0340e185285bb46af3154e60da83906e33d6b5` passed
+[Diagnostic run 207](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37061143973):
+host tests and the Dreamcast build. Install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `kui-1.5.1-dainsleif-sd-update`
+artifact, run R and return the JSON and a photo of the result screen.
