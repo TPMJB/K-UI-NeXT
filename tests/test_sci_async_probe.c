@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/sci_async_probe.h"
 #include "sd_reader.h"
+#include "sci_sd_bus.h"
 #include "sci_async_probe_test_support.h"
 #include <assert.h>
 #include <stdbool.h>
@@ -38,7 +39,8 @@ enum fault { NO_FAULT, EARLY_ERROR, BAD_CRC, WRONG_DATA, STALLED,
              FOREIGN_DURING_FRAMING, FOREIGN_AFTER_DMA, FOREIGN_DURING_DMA,
              TOKEN_NOT_ENDED, BAD_GPIO_CONTROL, HANDOFF_REASSERTED_ERROR,
              HANDOFF_STUCK_ERROR, HANDOFF_NO_TEND, BUS_FAULT_ON_DESELECT,
-             BUS_FAULT_ON_COMMAND };
+             BUS_FAULT_ON_COMMAND, BUS_FAULT_ON_READY_DESELECT,
+             BUS_FAULT_ON_IDLE_CLOCK, BUS_FAULT_ON_READY_POLL };
 static struct {
     uint8_t smr, brr, scr, ssr, rdr, scmr, sptr;
     uint16_t pdtr;
@@ -62,6 +64,7 @@ static struct {
     bool dynamic_sptr_inputs, no_overlap, fail_handler_restore;
     bool rxd_pin, sck_pin, token_rx_high;
     bool bus_fault, reassert_once;
+    struct kui_sci_sd_fault first_bus_fault;
     enum fault fault;
 } hw;
 static int handler_data[3];
@@ -313,6 +316,15 @@ void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
         default: assert(!"Unexpected MMIO write (global DMAOR is never owned)");
     }
 }
+static void latch_bus_fault(uint32_t flag) {
+    if(!hw.bus_fault) {
+        hw.first_bus_fault=(struct kui_sci_sd_fault){.valid=1,.wait_flag=flag,
+            .ssr=hw.ssr,.scr=hw.scr,.smr=hw.smr,.brr=hw.brr,.scmr=hw.scmr,
+            .sptr=hw.sptr,.pdtr=hw.pdtr,.polls=10000};
+        hw.bus_fault=true;
+    }
+    hw.scr=0;
+}
 static void bus_select(void *ctx,bool selected) {
     assert(ctx==&hw);
     if(selected) {
@@ -324,9 +336,11 @@ static void bus_select(void *ctx,bool selected) {
         ++hw.deselects;
         /* Production select(false) invokes wait_flag(TEND), which latches
          * an error permanently even though this callback cannot report it. */
-        if(hw.fault==BUS_FAULT_ON_DESELECT && hw.dma_starts) hw.bus_fault=true;
+        if((hw.fault==BUS_FAULT_ON_DESELECT && hw.dma_starts) ||
+           (hw.fault==BUS_FAULT_ON_READY_DESELECT && hw.dma_starts==17 && hw.scr==0x30))
+            latch_bus_fault(TEND);
         if(!hw.bus_fault && ((hw.ssr&0x38u) || !(hw.ssr&TEND))) {
-            hw.bus_fault=true;hw.scr=0;
+            latch_bus_fault(TEND);
         }
     }
     hw.selected=selected;
@@ -342,7 +356,14 @@ static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
     assert(ctx==&hw && (hw.scr&0x70u)!=0x50u);
     if(hw.bus_fault) {++hw.faulty_framing_calls;return 0xff;}
     if(hw.fault==BUS_FAULT_ON_COMMAND && hw.dma_starts==17 && byte==0x51) {
-        hw.bus_fault=true;hw.scr=0;return 0xff;
+        latch_bus_fault(RDRF);return 0xff;
+    }
+    if(hw.dma_starts==17 && byte==0xff &&
+       ((hw.fault==BUS_FAULT_ON_IDLE_CLOCK && !hw.selected) ||
+        (hw.fault==BUS_FAULT_ON_READY_POLL && hw.selected && !hw.command_position))) {
+        /* A modeled wait timeout is sampled before stopping SCR. This tests
+         * report propagation, not a claim about the console's failing flag. */
+        latch_bus_fault(RDRF);return 0xff;
     }
     /* The existing synchronous bus owns framing and its clock-state cache. */
     hw.brr=slow?31:0; hw.scr=0x30;
@@ -372,6 +393,9 @@ static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
     return 0xff;
 }
 bool kui_sci_sd_healthy(void) { return !hw.bus_fault; }
+void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) {
+    if(out) *out=hw.first_bus_fault;
+}
 static uint32_t bus_ticks(void *ctx) { assert(ctx==&hw); return (uint32_t)(hw.now++); }
 static struct kui_loader_sd reset(void) {
     memset(&hw,0,sizeof(hw));
@@ -607,20 +631,35 @@ static void test_handoff_requires_idle(void) {
     restored(&result);
 }
 static void test_bus_fault_has_distinct_status(void) {
-    const enum fault faults[]={BUS_FAULT_ON_DESELECT,BUS_FAULT_ON_COMMAND};
+    const enum fault faults[]={BUS_FAULT_ON_DESELECT,BUS_FAULT_ON_COMMAND,
+        BUS_FAULT_ON_READY_DESELECT,BUS_FAULT_ON_IDLE_CLOCK,BUS_FAULT_ON_READY_POLL};
+    const enum kui_sci_async_framing_step steps[]={KUI_SCI_ASYNC_FRAMING_HANDOFF,
+        KUI_SCI_ASYNC_FRAMING_COMMAND,KUI_SCI_ASYNC_FRAMING_DESELECT,
+        KUI_SCI_ASYNC_FRAMING_IDLE_CLOCK,KUI_SCI_ASYNC_FRAMING_READY};
     for(unsigned i=0;i<sizeof(faults)/sizeof(faults[0]);++i) {
         struct kui_loader_sd card=reset();hw.fault=faults[i];
         struct kui_sci_async_probe_result result;
         assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_BUS_FAULT);
         assert(result.operation_status==KUI_SCI_ASYNC_BUS_FAULT);
         assert(hw.bus_fault && !hw.faulty_framing_calls);
+        const struct kui_sci_async_stage *s=faults[i]==BUS_FAULT_ON_DESELECT?&result.slow:&result.fast;
+        assert(s->framing_step==steps[i] && s->framing_index==0);
+        assert(s->bus_fault_valid==1 && s->bus_fault_polls==10000);
+        assert(s->bus_wait_flag==hw.first_bus_fault.wait_flag);
+        assert(s->bus_fault_ssr==hw.first_bus_fault.ssr && s->bus_fault_scr==hw.first_bus_fault.scr);
+        assert(s->bus_fault_smr==hw.first_bus_fault.smr && s->bus_fault_brr==hw.first_bus_fault.brr);
+        assert(s->bus_fault_scmr==hw.first_bus_fault.scmr && s->bus_fault_sptr==hw.first_bus_fault.sptr);
+        assert(s->bus_fault_pdtr==hw.first_bus_fault.pdtr);
         if(faults[i]==BUS_FAULT_ON_DESELECT) {
             assert(result.slow.bus_faults==1 && !result.fast.attempted);
             assert(result.slow.last_phase==KUI_SCI_ASYNC_PHASE_HANDOFF);
             assert(hw.command_count==1 && hw.dma_starts==1);
         } else {
             assert(result.slow.passed==16 && result.fast.passed==1 && result.fast.attempted==2);
-            assert(result.fast.bus_faults==1 && result.fast.last_phase==KUI_SCI_ASYNC_PHASE_COMMAND);
+            assert(result.fast.bus_faults==1);
+            assert(result.fast.last_phase==(faults[i]==BUS_FAULT_ON_COMMAND?
+                KUI_SCI_ASYNC_PHASE_COMMAND:KUI_SCI_ASYNC_PHASE_READY));
+            assert(result.fast.bus_fault_scr==0x30 && result.fast.bus_fault_brr==0);
             assert(result.fast.dma_started==1 && result.fast.dma_irqs==1);
             assert(result.fast.command_response==0xff && result.fast.snapshot_ssr==(TDRE|TEND));
         }

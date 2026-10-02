@@ -15,7 +15,8 @@
  * files-view, files-copying, files-keyboard, network, ftp-starting, ftp-ready,
  * ftp-busy, ftp-stopped, ftp-failed, storage-tests, storage-test-confirm,
  * storage-test-busy, storage-test-result, storage-test-details,
- * storage-test-mismatch, storage-test-history, sci-async-probe, sci-async-result, sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure. */
+ * storage-test-mismatch, storage-test-history, sci-async-probe, sci-async-result,
+ * sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure, sci-async-bus-failure. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -438,7 +439,7 @@ int main(int argc,char **argv) {
     } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=home_row(KUI_SHELL_VMU);
     else if(!strcmp(argv[1],"home-memory")) shell.home_selected=home_row(KUI_SHELL_MEMORY);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
-    else if(!strcmp(argv[1],"sci-async-probe") || !strcmp(argv[1],"sci-async-result") || !strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure")) {
+    else if(!strcmp(argv[1],"sci-async-probe") || !strcmp(argv[1],"sci-async-result") || !strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure") || !strcmp(argv[1],"sci-async-bus-failure")) {
         shell.page=KUI_SHELL_SCI_ASYNC_PROBE;view.app_status=&status;
         status=(struct kui_app_status){0};view.busy=false;
         if(!strcmp(argv[1],"sci-async-result")) {
@@ -449,7 +450,7 @@ int main(int argc,char **argv) {
                 "CRC OK  Data OK  Buffer guards OK","Normal read recovery: verified","Saved independent report:",
                 "/KUI/tests/sci-async-0001/sci-async-probe.json","Normal game reads are unchanged by this experiment."};
             for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",probe_lines[i]);
-        } else if(!strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure")) {
+        } else if(!strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure") || !strcmp(argv[1],"sci-async-handoff-failure") || !strcmp(argv[1],"sci-async-bus-failure")) {
             status.complete=true;status.errors=1;status.line_count=8;
             snprintf(status.message,sizeof(status.message),"SCI unsupported state; reinit init failed. Restart required.");
             const char *probe_lines[]={"Slow: 0/1 reads verified; 0 DMA interrupts",
@@ -472,6 +473,15 @@ int main(int argc,char **argv) {
                     "Saved independent report:","/KUI/tests/sci-async-0002/sci-async-probe.json",
                     "handoff: DMA1 SSR86 SPTR05 R1FF TKFF"};
                 for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",handoff_lines[i]);
+            } else if(!strcmp(argv[1],"sci-async-bus-failure")) {
+                snprintf(status.message,sizeof(status.message),"SCI framing bus fault; reinit init failed. Restart required.");
+                const char *bus_lines[]={"Slow 16/16 IRQ16  Fast 1/2 IRQ1",
+                    "Framing ready poll index 0; faults 1",
+                    "Before stop: wait40 SSR84 SCR30 SPTR05",
+                    "DMA left 0 CHCR00004912 ERI0 RXI0","Normal read recovery: FAILED - restart required",
+                    "Report not saved; photograph this result.","Recover init: card timeout; CMD0 R1FF",
+                    "ready: DMA1 SSR84 SPTR05 R1FF TKFF"};
+                for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",bus_lines[i]);
             }
         }
     }

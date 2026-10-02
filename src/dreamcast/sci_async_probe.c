@@ -278,6 +278,14 @@ static uint8_t byte(const struct kui_loader_sd *c, uint8_t v, bool slow) {
 static bool bus_healthy(struct probe *p) {
     if(kui_sci_sd_healthy()) return true;
     ++p->stage->bus_faults;
+    struct kui_sci_sd_fault fault={0};
+    kui_sci_sd_fault_get(&fault);
+    p->stage->bus_fault_valid=fault.valid;
+    p->stage->bus_wait_flag=fault.wait_flag;
+    p->stage->bus_fault_ssr=fault.ssr;p->stage->bus_fault_scr=fault.scr;
+    p->stage->bus_fault_smr=fault.smr;p->stage->bus_fault_brr=fault.brr;
+    p->stage->bus_fault_scmr=fault.scmr;p->stage->bus_fault_sptr=fault.sptr;
+    p->stage->bus_fault_pdtr=fault.pdtr;p->stage->bus_fault_polls=fault.polls;
     p->stage->snapshot_ssr=rd(SSR,1);
     p->stage->snapshot_sptr=rd(SPTR,1);
     return false;
@@ -288,13 +296,20 @@ static enum kui_sci_async_status token(struct probe *p,const struct kui_loader_s
         (uint8_t)(address>>8),(uint8_t)address,0};
     cmd[5]=command_crc(cmd,5);
     p->stage->last_phase=KUI_SCI_ASYNC_PHASE_READY;
+    p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_DESELECT;
+    p->stage->framing_index=0;
     c->bus.select(c->bus.ctx,false);
     if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+    p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_IDLE_CLOCK;
     (void)byte(c,0xff,slow);
     if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+    p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_SELECT;
     c->bus.select(c->bus.ctx,true);
+    if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
     uint64_t start=timer_us_gettime64(); bool ready=false;
     for(unsigned i=0;i<4096;++i) {
+        p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_READY;
+        p->stage->framing_index=i;
         uint8_t value=byte(c,0xff,slow);
         if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
         if(value==0xff) {ready=true;break;}
@@ -303,11 +318,15 @@ static enum kui_sci_async_status token(struct probe *p,const struct kui_loader_s
     if(!ready) return KUI_SCI_ASYNC_TIMEOUT;
     p->stage->last_phase=KUI_SCI_ASYNC_PHASE_COMMAND;
     for(unsigned i=0;i<6;++i) {
+        p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_COMMAND;
+        p->stage->framing_index=i;
         (void)byte(c,cmd[i],slow);
         if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
     }
     uint8_t response=0xff;
     for(unsigned i=0;i<16 && (response&0x80u);++i) {
+        p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_RESPONSE;
+        p->stage->framing_index=i;
         response=byte(c,0xff,slow);
         p->stage->command_response=response;
         if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
@@ -317,6 +336,8 @@ static enum kui_sci_async_status token(struct probe *p,const struct kui_loader_s
     p->stage->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN;
     start=timer_us_gettime64();
     for(unsigned i=0;i<8192;++i) {
+        p->stage->framing_step=KUI_SCI_ASYNC_FRAMING_TOKEN;
+        p->stage->framing_index=i;
         uint8_t v=byte(c,0xff,slow);
         p->stage->last_token=v;
         if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
@@ -354,6 +375,7 @@ static enum kui_sci_async_status handoff(struct probe *p,
         settle(64);
     }
     if(!clean) {++s->handoff_failures;return KUI_SCI_ASYNC_HANDOFF;}
+    s->framing_step=KUI_SCI_ASYNC_FRAMING_HANDOFF;s->framing_index=0;
     c->bus.select(c->bus.ctx,false);
     if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
     if(!(rd(PDTR,2)&0x80u)) {++s->handoff_failures;return KUI_SCI_ASYNC_HANDOFF;}
@@ -386,6 +408,7 @@ static enum kui_sci_async_status trial(struct probe *p,const struct kui_loader_s
     struct kui_sci_async_stage *s=p->stage;
     ++s->attempted;
     s->last_phase=KUI_SCI_ASYNC_PHASE_BUFFER;
+    s->framing_step=KUI_SCI_ASYNC_FRAMING_NONE;s->framing_index=0;
     s->command_response=s->last_token=0xffu;
     p->out->guards_ok=p->out->crc_ok=p->out->baseline_ok=false;
     memset(&p->rx,SENTINEL,sizeof(p->rx));
@@ -560,4 +583,10 @@ const char *kui_sci_async_phase_name(enum kui_sci_async_phase p) {
     static const char *const names[]={"none","lease","buffer","ready","command","token",
         "token end","ownership","GPIO","DMA","validate","complete","handoff"};
     return (unsigned)p<sizeof(names)/sizeof(names[0])?names[p]:"unknown";
+}
+
+const char *kui_sci_async_framing_name(enum kui_sci_async_framing_step s) {
+    static const char *const names[]={"none","deselect","idle clock","select",
+        "ready poll","command","response","token","handoff deselect"};
+    return (unsigned)s<sizeof(names)/sizeof(names[0])?names[s]:"unknown";
 }

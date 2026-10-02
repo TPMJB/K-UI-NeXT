@@ -1,5 +1,21 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI repeat-read failure narrowed to framing (2026-10-02 UTC)
+
+The owner tested **0d400a471601**: 16 slow and one fast autonomous read passed
+CRC/data/guards and DMA completion with CPU overlap. Every handoff readback
+passed without a retry. The second fast attempt failed in READY with a latched
+normal-bus fault before its command or DMA. Recovery succeeded. See the
+[exact report and interpretation](evidence/sci-async-framing-fault-2026-10-02.md).
+
+The current candidate captures the first failed normal SCI wait before SCR=0
+changes the peripheral state and identifies the exact framing operation/byte.
+The previous clean SSR snapshot was taken after the normal driver stopped SCI.
+No register-reset or timing change is justified yet; this is a diagnostic
+follow-up, not an established repeat-read fix. Capture is excluded from native
+resident builds. Next run this candidate's SCI async probe once and return
+JSON/photo; no new soak or CD. Build/console validation are pending.
+
 ## SCI autonomous transfers verified; repeat-read handoff next (2026-10-02 UTC)
 
 The owner's **38693a0de68e** JSON verifies 16/16 slow and 1/2 fast reads,

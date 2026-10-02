@@ -17,6 +17,15 @@ void kui_sci_sd_release(void);
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void);
 bool kui_sci_sd_healthy(void);
 #ifndef KUI_RETAIL_TRANSPORT
+/* First failed programmed flag wait in the current lease. Hardware values
+ * are captured before stopping SCI; ssr is the failing loop's final sample,
+ * not a later read. polls counts that sample (1..10000). Release and failed
+ * acquire leave this evidence intact; successful acquire clears it. This
+ * records wait_flag failures only, not every possible DMA/block failure. */
+struct kui_sci_sd_fault {
+    uint32_t valid, wait_flag, ssr, scr, smr, brr, scmr, sptr, pdtr, polls;
+};
+void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out);
 struct kui_sci_sd_stats {
     uint32_t rx_blocks, tx_blocks, polled_blocks, failures;
     uint32_t profiled_rx_blocks, profiled_tx_blocks;

@@ -11,6 +11,7 @@
 #define SSR 0xffe00010u
 #define RDR 0xffe00014u
 #define PTR 0xffe00018u
+#define SPTR 0xffe0001cu
 #define STB 0xffc00004u
 #define PCTR 0xff80002cu
 #define PDTR 0xff800030u
@@ -29,7 +30,7 @@
 #define DMA_BASE 0x0c100000u
 
 static struct {
-    uint8_t smr,brr,scr,tdr,ssr,rdr,ptr,stb;
+    uint8_t smr,brr,scr,tdr,ssr,rdr,ptr,sptr,stb,missing_flags;
     uint32_t pctr;
     uint16_t pdtr;
     unsigned writes, reads, polls, bytes, delays, received, tdr_writes;
@@ -189,10 +190,12 @@ uint32_t kui_sci_sd_test_read(uint32_t address, unsigned width) {
         case BRR: assert(width==1); return hw.brr;
         case SCR: assert(width==1); return hw.scr;
         case SSR:
-            assert(width==1); ++hw.polls; progress_byte(); return hw.ssr;
+            assert(width==1); ++hw.polls; progress_byte();
+            hw.ssr&=(uint8_t)~hw.missing_flags; return hw.ssr;
         case RDR:
             assert(width==1 && (hw.ssr&RDRF)); ++hw.received; return hw.rdr;
         case PTR: assert(width==1); return hw.ptr;
+        case SPTR: assert(width==1); return hw.sptr;
         case STB: assert(width==1); return hw.stb;
         case PCTR: assert(width==4); return hw.pctr;
         case PDTR: assert(width==2); return hw.pdtr;
@@ -267,6 +270,7 @@ void kui_sci_sd_test_delay(uint32_t count) { assert(count>=32); ++hw.delays; }
 static void reset(void) {
     kui_sci_sd_release(); memset(&hw,0,sizeof(hw));
     hw.smr=0x21; hw.brr=7; hw.scr=3; hw.ssr=TDRE|TEND; hw.ptr=0x0a;
+    hw.sptr=0x05;
     hw.stb=0x81; hw.pctr=0xabcd1234; hw.pdtr=0x1256;
     hw.byte_polls=3;
     hw.sar=0x0c002000; hw.dar=0x0c004000; hw.tcr=7;
@@ -323,6 +327,105 @@ static void test_scalar_failures(const struct kui_loader_sd_bus *bus) {
         assert(bus->transfer(NULL,0xff,true)==0xff && hw.polls==polls && hw.writes==writes);
         kui_sci_sd_release(); restored();
     }
+}
+static struct kui_sci_sd_fault fault_snapshot(void) {
+    struct kui_sci_sd_fault fault;
+    unsigned reads=hw.reads, writes=hw.writes;
+    kui_sci_sd_fault_get(&fault);
+    kui_sci_sd_fault_get(NULL);
+    assert(hw.reads==reads && hw.writes==writes);
+    return fault;
+}
+static void no_fault_snapshot(void) {
+    const struct kui_sci_sd_fault empty={0};
+    struct kui_sci_sd_fault fault=fault_snapshot();
+    assert(!memcmp(&fault,&empty,sizeof(fault)));
+}
+static void test_wait_fault_snapshot(const struct kui_loader_sd_bus *bus) {
+    const uint8_t flags[]={TEND,TDRE,RDRF,RDRF|TDRE};
+    for(unsigned which=0;which<sizeof(flags);++which) {
+        reset(); assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+        no_fault_snapshot();
+        bus->select(NULL,true);
+        hw.sptr=0x86; /* Report pin samples independently of SCMR. */
+        if(flags[which]==TEND) {
+            assert(bus->transfer(NULL,0xff,true)==0);
+            hw.missing_flags=TEND;
+            bus->select(NULL,false);
+        } else if(flags[which]==TDRE) {
+            hw.missing_flags=TDRE;
+            assert(bus->transfer(NULL,0xff,true)==0xff);
+        } else {
+            hw.timeout=true;hw.fault_byte=1;
+            if(flags[which]==RDRF) assert(bus->transfer(NULL,0xff,true)==0xff);
+            else {
+                uint8_t value=0x5a;
+                assert(!bus->transfer_block(NULL,NULL,&value,1,true,NULL));
+                assert(value==0x5a);
+            }
+        }
+        assert(!kui_sci_sd_healthy() && hw.scr==0);
+        struct kui_sci_sd_fault first=fault_snapshot();
+        assert(first.valid==1 && first.wait_flag==flags[which] && first.polls==10000);
+        assert(first.scr==(TE|RE) && first.smr==0x80 && first.brr==31);
+        assert(first.scmr==0 && first.sptr==0x86 && first.pdtr==0x1256);
+        assert(first.ssr==(flags[which]==TDRE?TEND:TDRE));
+        if(flags[which]&(RDRF)) {
+            /* Stopping the timed-out byte changes SSR in this model. The
+             * report must retain the failing sample, before that write. */
+            assert(hw.ssr==(TDRE|TEND) && first.ssr!=hw.ssr);
+        }
+        unsigned reads=hw.reads,writes=hw.writes;
+        assert(bus->transfer(NULL,0xff,true)==0xff);
+        assert(hw.reads==reads && hw.writes==writes);
+        assert(kui_sci_sd_acquire()==KUI_LOADER_SD_NOT_READY);
+        struct kui_sci_sd_fault after=fault_snapshot();
+        assert(!memcmp(&first,&after,sizeof(first)));
+        kui_sci_sd_release();restored();
+        after=fault_snapshot();
+        assert(!memcmp(&first,&after,sizeof(first)));
+        /* A failed acquisition must not erase the only fault evidence. */
+        hw.ssr|=ORER;
+        assert(kui_sci_sd_acquire()==KUI_LOADER_SD_UNSUPPORTED);
+        after=fault_snapshot();
+        assert(!memcmp(&first,&after,sizeof(first)));
+        hw.ssr=TDRE|TEND;hw.missing_flags=0;hw.timeout=false;hw.fault_byte=0;
+        assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+        no_fault_snapshot();
+        assert(bus->transfer(NULL,0xff,true)==0);
+        no_fault_snapshot();
+        kui_sci_sd_release();restored();
+    }
+}
+static void test_wait_error_snapshot(const struct kui_loader_sd_bus *bus) {
+    reset(); assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+    bus->select(NULL,true);
+    hw.overrun=true;hw.fault_byte=1;
+    assert(bus->transfer(NULL,0xff,true)==0xff);
+    struct kui_sci_sd_fault first=fault_snapshot();
+    assert(first.valid==1 && first.wait_flag==RDRF && first.polls==hw.byte_polls);
+    assert(first.ssr==(TDRE|TEND|ORER) && first.scr==(TE|RE));
+    assert(first.smr==0x80 && first.brr==31 && first.scmr==0);
+    assert(first.sptr==0x05 && first.pdtr==0x1256 && hw.scr==0);
+    /* Later status changes, inert calls and release must not replace it. */
+    hw.ssr|=0x18u;
+    bus->select(NULL,false);
+    assert(bus->transfer(NULL,0xff,false)==0xff);
+    struct kui_sci_sd_fault after=fault_snapshot();
+    assert(!memcmp(&first,&after,sizeof(first)));
+    kui_sci_sd_release();restored();
+    after=fault_snapshot();
+    assert(!memcmp(&first,&after,sizeof(first)));
+}
+static void test_success_has_no_extra_register_reads(const struct kui_loader_sd_bus *bus) {
+    reset(); assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+    unsigned reads=hw.reads;
+    assert(bus->transfer(NULL,0xff,true)==0);
+    /* One TDRE check, three RDRF polls and one RDR read. Telemetry must
+     * not sample any extra peripheral registers on a successful byte. */
+    assert(hw.reads-reads==hw.byte_polls+2u);
+    no_fault_snapshot();
+    kui_sci_sd_release();restored();
 }
 static void test_blocks(const struct kui_loader_sd_bus *bus) {
     uint8_t tx[512], rx[514];
@@ -657,6 +760,9 @@ int main(void) {
     assert(crc16_reference((const uint8_t *)"123456789",9)==0x31c3);
     test_ownership(bus);
     test_scalar_failures(bus);
+    test_wait_fault_snapshot(bus);
+    test_wait_error_snapshot(bus);
+    test_success_has_no_extra_register_reads(bus);
     test_blocks(bus);
     test_block_arguments(bus);
     test_block_failures(bus);

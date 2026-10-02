@@ -44,6 +44,20 @@ enum kui_sci_async_phase {
     KUI_SCI_ASYNC_PHASE_HANDOFF
 };
 
+/* Exact ordinary-bus operation underway when a sticky framing fault occurs.
+ * The index is zero-based within command/response/token/ready byte loops. */
+enum kui_sci_async_framing_step {
+    KUI_SCI_ASYNC_FRAMING_NONE = 0,
+    KUI_SCI_ASYNC_FRAMING_DESELECT,
+    KUI_SCI_ASYNC_FRAMING_IDLE_CLOCK,
+    KUI_SCI_ASYNC_FRAMING_SELECT,
+    KUI_SCI_ASYNC_FRAMING_READY,
+    KUI_SCI_ASYNC_FRAMING_COMMAND,
+    KUI_SCI_ASYNC_FRAMING_RESPONSE,
+    KUI_SCI_ASYNC_FRAMING_TOKEN,
+    KUI_SCI_ASYNC_FRAMING_HANDOFF
+};
+
 struct kui_sci_async_stage {
     uint32_t clock_hz, attempted, passed;
     enum kui_sci_async_phase last_phase;
@@ -57,6 +71,13 @@ struct kui_sci_async_stage {
     uint32_t handoff_checks, handoff_retries, handoff_failures;
     uint32_t handoff_ssr, handoff_scr, handoff_sptr;
     uint32_t bus_faults;
+    enum kui_sci_async_framing_step framing_step;
+    uint32_t framing_index;
+    /* The normal bus's first failed wait, sampled before it disables SCI.
+     * Independent from snapshot_ssr, which may show the later stopped state. */
+    uint32_t bus_fault_valid, bus_wait_flag, bus_fault_ssr, bus_fault_scr;
+    uint32_t bus_fault_smr, bus_fault_brr, bus_fault_scmr, bus_fault_sptr;
+    uint32_t bus_fault_pdtr, bus_fault_polls;
     /* receive_us includes start-to-worker-observation/cleanup overhead;
      * it is not payload wire time or maximum CPU blocking time. */
     uint64_t elapsed_us, receive_us, max_receive_us;
@@ -93,4 +114,5 @@ enum kui_sci_async_status kui_sci_async_probe_run(
     struct kui_sci_async_probe_result *out);
 const char *kui_sci_async_status_name(enum kui_sci_async_status status);
 const char *kui_sci_async_phase_name(enum kui_sci_async_phase phase);
+const char *kui_sci_async_framing_name(enum kui_sci_async_framing_step step);
 #endif

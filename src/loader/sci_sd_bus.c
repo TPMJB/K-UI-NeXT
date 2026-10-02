@@ -66,10 +66,27 @@ static struct {
 } port;
 static bool wait_flag(uint8_t flag);
 #ifndef KUI_RETAIL_TRANSPORT
+static struct kui_sci_sd_fault first_fault;
 static struct kui_sci_sd_stats stats;
 static uint64_t (*profile_clock)(void *);
 static void *profile_context;
 #define COUNT(field) (++stats.field)
+void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) { if(out) *out = first_fault; }
+static void record_wait_fault(uint8_t flag, uint8_t status, unsigned polls) {
+    if(first_fault.valid) return;
+    first_fault.wait_flag = flag;
+    first_fault.ssr = status;
+    first_fault.scr = rd8(SCR);
+    first_fault.smr = rd8(SMR);
+    first_fault.brr = rd8(BRR);
+    first_fault.scmr = rd8(PTR);
+    /* SH7091 SCSPTR is distinct from SCMR at offset 0x18. Pin data bits
+     * report sampled inputs; they are not GPIO output-latch readbacks. */
+    first_fault.sptr = rd8(UINT32_C(0xffe0001c));
+    first_fault.pdtr = rd16(PDTR);
+    first_fault.polls = polls;
+    first_fault.valid = 1;
+}
 void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out) { if(out) *out = stats; }
 void kui_sci_sd_profile_timer(uint64_t (*now_us)(void *), void *ctx) {
     profile_clock = now_us; profile_context = ctx;
@@ -111,6 +128,9 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) {
     wr8(BRR, 31); /* 50 MHz / (4 * 32) = 390625 Hz during card setup. */
     delay(1024u); /* >= one slow bit after BRR changes. */
     port.slow = true; port.fault = false; port.acquired = true;
+#ifndef KUI_RETAIL_TRANSPORT
+    first_fault = (struct kui_sci_sd_fault){0};
+#endif
     return KUI_LOADER_SD_OK;
 }
 
@@ -162,11 +182,22 @@ static inline __attribute__((always_inline)) uint16_t data_crc(uint16_t crc, uin
     return (uint16_t)((crc << 8) ^ (x << 12) ^ (x << 5) ^ x);
 }
 static bool wait_flag(uint8_t flag) {
+#ifndef KUI_RETAIL_TRANSPORT
+    uint8_t last_status = 0;
+    unsigned samples = 0;
+#endif
     for(unsigned n = 0; n < POLLS; ++n) {
         uint8_t status = rd8(SSR);
+#ifndef KUI_RETAIL_TRANSPORT
+        last_status = status;
+        samples = n + 1;
+#endif
         if(status & ERRORS) break;
         if((status & flag) == flag) return true;
     }
+#ifndef KUI_RETAIL_TRANSPORT
+    record_wait_fault(flag, last_status, samples);
+#endif
     port.fault = true;
     wr8(SCR, 0);
     return false;
@@ -438,6 +469,9 @@ void kui_sci_sd_release(void) {}
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return NULL; }
 bool kui_sci_sd_healthy(void) { return false; }
 #ifndef KUI_RETAIL_TRANSPORT
+void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) {
+    if(out) *out = (struct kui_sci_sd_fault){0};
+}
 void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out) {
     if(out) *out = (struct kui_sci_sd_stats){0};
 }
