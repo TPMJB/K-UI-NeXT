@@ -768,9 +768,81 @@ static bool sci_async_resume_json(char *out,size_t size,const struct kui_sd_asyn
         result->resume_match?"true":"false");
     return n>=0 && (size_t)n<size;
 }
+static const char *sci_async_pause_site(uint32_t site) {
+    static const char *const names[]={"none","lease","release","module reset","DMA start",
+        "DMA poll","open","long call","between polls"};
+    return site<sizeof(names)/sizeof(names[0])?names[site]:"unknown";
+}
+static const char *sci_async_pause_stage(uint32_t stage) {
+    static const char *const names[]={"slow","CMD17","CMD18 test","stream","none","reset loop"};
+    return stage<sizeof(names)/sizeof(names[0])?names[stage]:"unknown";
+}
+static bool __attribute__((format(printf,4,5))) sci_async_append(char *out,size_t size,
+        size_t *used,const char *format,...) {
+    va_list args;va_start(args,format);
+    int n=vsnprintf(out+*used,size-*used,format,args);
+    va_end(args);
+    if(n<0 || (size_t)n>=size-*used) return false;
+    *used+=(size_t)n;return true;
+}
+static bool sci_async_reset_time_json(char *out,size_t size,size_t *used,
+        const struct kui_sci_async_reset_time *t) {
+    return sci_async_append(out,size,used,
+        "{\"stage\":%lu,\"ns\":%lu,\"cpu_ns\":%lu,\"steps_ns\":[%lu,%lu,%lu,%lu,%lu,%lu]}",
+        (unsigned long)t->stage,(unsigned long)t->ns,(unsigned long)t->cpu_ns,
+        (unsigned long)t->steps_ns[0],(unsigned long)t->steps_ns[1],(unsigned long)t->steps_ns[2],
+        (unsigned long)t->steps_ns[3],(unsigned long)t->steps_ns[4],(unsigned long)t->steps_ns[5]);
+}
+static bool sci_async_at_json(char *out,size_t size,size_t *used,const uint64_t *at,uint32_t count,
+        uint32_t cap) {
+    if(!sci_async_append(out,size,used,"[")) return false;
+    for(uint32_t i=0;i<count && i<cap;i++)
+        if(!sci_async_append(out,size,used,"%s%llu",i?",":"",(unsigned long long)at[i])) return false;
+    return sci_async_append(out,size,used,"]");
+}
+/* Pause log, slowest module reset, the reset loop and the idle CPU tests. */
+static bool sci_async_pause_json(char *out,size_t size,const struct kui_sd_async_result *result) {
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    size_t used=0;
+    if(!sci_async_append(out,size,&used,"\"pause_count\":%lu,\n  \"pauses\":[",
+        (unsigned long)r->pause_count)) return false;
+    for(uint32_t i=0;i<r->pause_count && i<KUI_SCI_ASYNC_PAUSES;i++) {
+        const struct kui_sci_async_pause *e=&r->pauses[i];
+        if(!sci_async_append(out,size,&used,"%s{\"site\":%lu,\"site_name\":\"%s\",\"stage\":%lu,"
+            "\"us\":%lu,\"at_us\":%llu}",i?",":"",(unsigned long)e->site,sci_async_pause_site(e->site),
+            (unsigned long)e->stage,(unsigned long)e->us,(unsigned long long)e->at_us)) return false;
+    }
+    if(!sci_async_append(out,size,&used,"],\n  \"cpu_counter_config\":%lu,\n  \"reset_worst\":",
+        (unsigned long)r->cpu_counter_config) ||
+       !sci_async_reset_time_json(out,size,&used,&r->reset_worst)) return false;
+    const struct kui_sci_async_reset_loop *l=&result->reset_loop;
+    if(!sci_async_append(out,size,&used,",\n  \"reset_loop\":{\"ran\":%s,\"status\":%d,"
+        "\"status_name\":\"%s\",\"resets\":%lu,\"elapsed_us\":%llu,\"module_reset_state\":%lu,"
+        "\"max_masked_us\":%llu,\"over_500us\":%lu,\"at_us\":",result->reset_loop_ran?"true":"false",
+        (int)l->status,kui_sci_async_status_name(l->status),(unsigned long)l->resets,
+        (unsigned long long)l->elapsed_us,(unsigned long)l->module_reset_state,
+        (unsigned long long)l->max_masked_us,(unsigned long)l->pauses) ||
+       !sci_async_at_json(out,size,&used,l->pause_at_us,l->pauses,KUI_SCI_ASYNC_LOOP_PAUSES) ||
+       !sci_async_append(out,size,&used,",\"worst\":") ||
+       !sci_async_reset_time_json(out,size,&used,&l->worst) ||
+       !sci_async_append(out,size,&used,"}")) return false;
+    const struct kui_sci_async_spin *spins[]={&result->spin_masked,&result->spin_bus,&result->spin_unmasked};
+    const char *names[]={"spin_masked","spin_bus","spin_unmasked"};
+    for(unsigned k=0;k<3;k++) {
+        const struct kui_sci_async_spin *v=spins[k];
+        if(!sci_async_append(out,size,&used,",\n  \"%s\":{\"windows\":%lu,\"spun_us\":%llu,"
+            "\"max_gap_ns\":%lu,\"max_gap_cpu_ns\":%lu,\"max_gap_at_us\":%llu,\"over_500us\":%lu,\"at_us\":",
+            names[k],(unsigned long)v->windows,(unsigned long long)v->spun_us,(unsigned long)v->max_gap_ns,
+            (unsigned long)v->max_gap_cpu_ns,(unsigned long long)v->max_gap_at_us,
+            (unsigned long)v->gaps_over_500us) ||
+           !sci_async_at_json(out,size,&used,v->pause_at_us,v->gaps_over_500us,KUI_SCI_ASYNC_SPIN_PAUSES) ||
+           !sci_async_append(out,size,&used,"}")) return false;
+    }
+    return true;
+}
 static bool sci_async_save(const struct kui_sd_async_result *result,char path[96]) {
     static char stage[4][2048],json[16384],baseline[3][192],fault[640],first_overrun[640],speed[768];
-    static char stream[1536],resume[1024];
+    static char stream[1536],resume[1024],pauses[3072];
     const struct kui_sci_async_probe_result *r=&result->probe;
     const struct kui_sci_async_stage *stages[]={&r->slow,&r->fast,&r->cmd18,&r->streaming};
     path[0]=0;
@@ -859,7 +931,8 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         (unsigned long)result->speed_stream_crc,result->speed_stream_match?"true":"false");
     if(speed_size<0 || (size_t)speed_size>=sizeof(speed)) return false;
     if(!sci_async_stream_json(stream,sizeof(stream),result) ||
-       !sci_async_resume_json(resume,sizeof(resume),result)) return false;
+       !sci_async_resume_json(resume,sizeof(resume),result) ||
+       !sci_async_pause_json(pauses,sizeof(pauses),result)) return false;
     struct kui_datetime clock;int64_t local_seconds=0;
     if(kui_clock_now(&clock)) (void)kui_clock_to_seconds(&clock,&local_seconds);
     int n=snprintf(json,sizeof(json),
@@ -891,7 +964,7 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         "  \"recovery_bus_healthy\":%s,\n  \"recovery_data_match\":%s,\n"
         "  \"timer_irq_instrumented\":%s,\n"
         "  \"max_irq_masked_us\":%llu,\n  \"max_irq_masked_site\":%lu,\n  \"max_irq_masked_stage\":%lu,\n"
-        "  \"max_irq_handler_us\":%llu,\n"
+        "  \"max_irq_handler_us\":%llu,\n  %s,\n"
         "  \"probe_passed\":%s,\n  \"read_integrity_verified\":%s,\n  \"completion_irq_verified\":%s,\n"
         "  \"cpu_overlap_observed\":%s,\n  \"fault\":%s,\n  \"first_overrun\":%s,\n"
         "  \"screen_redraws\":%s,\n  \"speed\":%s,\n  \"stream\":%s,\n  \"resume\":%s,\n"
@@ -928,7 +1001,7 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         result->recovery_bus_healthy?"true":"false",result->recovery_data_match?"true":"false",
         r->timer_irq_instrumented?"true":"false",
         (unsigned long long)r->max_irq_masked_us,(unsigned long)r->max_irq_masked_site,
-        (unsigned long)r->max_irq_masked_stage,(unsigned long long)r->max_irq_handler_us,
+        (unsigned long)r->max_irq_masked_stage,(unsigned long long)r->max_irq_handler_us,pauses,
         sci_async_passed(result)?"true":"false",sci_async_integrity(result)?"true":"false",sci_async_completion(result)?"true":"false",
         r->fast.overlap_batches?"true":"false",fault,first_overrun,
         result->screen_active?"true":"false",speed,stream,resume,stage[0],stage[1],stage[2],stage[3]);
@@ -1054,10 +1127,6 @@ static void sci_async_operation(unsigned mode) {
                     (unsigned long)result.video_frames_during,(unsigned long)result.video_redraws_skipped);
             }
             if(result.speed) {
-                const struct kui_sci_async_stage *f=&r->fast,*t=&r->streaming;
-                uint64_t n=f->passed?f->passed:1u,k=t->passed?t->passed:1u;
-                const struct kui_sci_async_stream *c=&result.stream;
-                const struct kui_sci_async_resume *m=&result.resume;
                 char line[160],stream_rate[24];
                 snprintf(status.lines[0],KUI_APP_LINE_CAP,"Speed: %lu blocks from LBA %lu (%s)",
                     (unsigned long)result.speed_blocks,(unsigned long)result.speed_lba,
@@ -1070,25 +1139,29 @@ static void sci_async_operation(unsigned mode) {
                 else snprintf(stream_rate,sizeof(stream_rate),"not run");
                 snprintf(status.lines[2],KUI_APP_LINE_CAP,"Async: CMD17 per block %lu KiB/s, CMD18 stream %s",
                     (unsigned long)sci_async_kib_s(result.speed_async_blocks,result.speed_async_us),stream_rate);
-                snprintf(line,sizeof(line),"Stream per block us: receive %lu gap %lu check %lu overlapped; restarts %lu",
-                    (unsigned long)(t->receive_us/k),(unsigned long)(t->framing_us/k),
-                    (unsigned long)(t->finish_us/k),(unsigned long)t->stream_restarts);
+                /* The pause hunt; per-block times and the CMD18 measurements
+                 * are in the report. */
+                const struct kui_sci_async_pause *worst=NULL;
+                for(uint32_t i=0;i<r->pause_count && i<KUI_SCI_ASYNC_PAUSES;i++)
+                    if(!worst || r->pauses[i].us>worst->us) worst=&r->pauses[i];
+                if(worst) snprintf(line,sizeof(line),"Read pauses %lu, longest %lu us (%s, %s)",
+                    (unsigned long)r->pause_count,(unsigned long)worst->us,
+                    sci_async_pause_site(worst->site),sci_async_pause_stage(worst->stage));
+                else snprintf(line,sizeof(line),"Read pauses: none over 0.5 ms");
                 snprintf(status.lines[3],KUI_APP_LINE_CAP,"%.79s",line);
-                snprintf(line,sizeof(line),"CMD17 per block us: setup %lu receive %lu finish %lu; wait %lu",
-                    (unsigned long)(f->framing_us/n),(unsigned long)(f->receive_us/n),
-                    (unsigned long)(f->finish_us/n),(unsigned long)(f->token_us/n));
+                const struct kui_sci_async_reset_loop *l=&result.reset_loop;
+                if(!result.reset_loop_ran) snprintf(line,sizeof(line),"Reset loop: not run");
+                else if(l->status!=KUI_SCI_ASYNC_OK)
+                    snprintf(line,sizeof(line),"Reset loop failed after %lu resets: %s",
+                        (unsigned long)l->resets,kui_sci_async_status_name(l->status));
+                else snprintf(line,sizeof(line),"Reset loop: %lu resets, %lu over 0.5 ms, longest %llu us",
+                    (unsigned long)l->resets,(unsigned long)l->pauses,(unsigned long long)l->max_masked_us);
                 snprintf(status.lines[4],KUI_APP_LINE_CAP,"%.79s",line);
-                char gap[24];
-                if(c->gap_min==c->gap_max) snprintf(gap,sizeof(gap),"%lu",(unsigned long)c->gap_min);
-                else snprintf(gap,sizeof(gap),"%lu-%lu",(unsigned long)c->gap_min,(unsigned long)c->gap_max);
-                if(!result.stream_ran) snprintf(line,sizeof(line),"CMD18 measurements: not run");
-                else snprintf(line,sizeof(line),"CMD18 gap %s byte%s; resume %lu/%lu blocks%s%s%s%s",gap,
-                    c->gap_min==1u && c->gap_max==1u?"":"s",
-                    (unsigned long)m->blocks,(unsigned long)m->requested,
-                    c->status==KUI_SCI_ASYNC_OK?"":"; capture ",
-                    c->status==KUI_SCI_ASYNC_OK?"":kui_sci_async_status_name(c->status),
-                    m->status==KUI_SCI_ASYNC_OK?"":"; ",
-                    m->status==KUI_SCI_ASYNC_OK?"":kui_sci_async_status_name(m->status));
+                if(!result.spin_masked.windows) snprintf(line,sizeof(line),"Idle CPU test: not run");
+                else snprintf(line,sizeof(line),"Idle CPU longest gap us: masked %lu, RAM %lu, unmasked %lu",
+                    (unsigned long)(result.spin_masked.max_gap_ns/1000u),
+                    (unsigned long)(result.spin_bus.max_gap_ns/1000u),
+                    (unsigned long)(result.spin_unmasked.max_gap_ns/1000u));
                 snprintf(status.lines[5],KUI_APP_LINE_CAP,"%.79s",line);
                 if(!saved) snprintf(status.lines[6],KUI_APP_LINE_CAP,"Report not saved; photograph this result.");
                 snprintf(status.lines[7],KUI_APP_LINE_CAP,"Data match %s/%s/%s/%s; recovery %s",

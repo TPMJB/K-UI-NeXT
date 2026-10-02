@@ -32,4 +32,5 @@ void kui_sci_async_test_cache_purge(void *buffer, size_t count);
 void kui_sci_async_test_cache_invalidate(void *buffer, size_t count);
 void kui_sci_async_test_work_tick(void);
 void kui_sci_async_test_bus_fence(void);
+void kui_sci_async_test_touch_ram(void);
 #endif

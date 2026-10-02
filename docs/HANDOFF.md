@@ -1,5 +1,17 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI async: hunting the 2.5 ms pause (2026-10-02 UTC)
+
+`bac1b152b4ac` on the console: streaming 1,202 KiB/s with all data matching
+(1,323 without the test's CRC32; ordinary reader 1,095). About once per R run
+the CPU is held for 2.5 ms, once inside an SCI module reset with interrupts
+masked, which a game would feel. The next build logs every long masked
+window, call and gap between polls; times the slowest module reset's steps on
+TMU2 and in CPU cycles; then runs 1 s of back-to-back module resets and three
+1 s idle CPU tests (masked, masked with RAM reads, unmasked) to tell whether
+the reset, the console or other code holds the CPU. See
+[the change record](evidence/sci-async-pause-hunt-2026-10-02.md).
+
 ## SCI async: streaming with overlapped checks (2026-10-02 UTC)
 
 `3aa4554c44d9` on the console: the streaming reader read all 2,048 blocks

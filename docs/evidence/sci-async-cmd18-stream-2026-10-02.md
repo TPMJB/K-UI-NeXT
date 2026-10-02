@@ -199,4 +199,5 @@ reset) in stage 1 (the CMD17 pass): one SCI module reset, with interrupts
 masked, took about 2.5 ms instead of a few microseconds. The streaming stage
 again shows one block whose receive took 2,843 us (2,845 us in the previous
 run). These are rare (about one per R run) but not explained by the code's
-own loops; the next step is to time the module reset's steps.
+own loops; the next build looks for their source
+([pause hunt](sci-async-pause-hunt-2026-10-02.md)).
