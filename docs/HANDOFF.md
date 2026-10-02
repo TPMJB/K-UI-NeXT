@@ -10,9 +10,15 @@ ordinary-reader recovery. Schema 2 records per-LBA counts, API durations and
 heartbeat ownership/restoration as well as existing fault/reset evidence.
 See the [implementation and console gate](evidence/sci-async-runtime-reader-2026-10-02.md).
 
-Targeted sanitizer tests and independent lifecycle review pass. Full CI,
-package verification and console validation are pending. Next run A, then X
-if A passes, and return both JSON files plus the stress result photo. Native
+Candidate **c0c285482dac** passes targeted sanitizer tests, independent lifecycle
+review and full host/Dreamcast CI run 200. Delivered as
+`K-UI-SCI-Async-Reader-c0c285482dac.zip`; all 96 source-manifest hashes, both
+build IDs/runtime CRCs and native instruction/layout/stack checks pass.
+The game payload is byte-identical to 0e9 after normalizing its four build
+labels. SCI resident remains 11,156 bytes, end `8c00baec`, stack 1,172/1,232.
+Replace both included files, keep the current CD and reboot. Console validation
+is pending. Next run A, then X if A passes, and return both JSON files plus
+the stress result photo. Native
 game reads and CE launch remain unchanged. The
 [native integration plan](evidence/sci-native-async-integration-plan-2026-10-02.md)
 records the resumable image/GD contracts, actual resident budgets and game-call

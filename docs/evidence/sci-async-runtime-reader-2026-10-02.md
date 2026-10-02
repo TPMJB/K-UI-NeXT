@@ -107,3 +107,31 @@ If restart is required, photograph the failure and reboot. A new CD, another
 filesystem soak or a DOA2 timing run is not needed for this runtime gate.
 Successful console stress will permit the separately reviewed native async
 integration candidate; it does not establish game scheduling or CE support.
+
+## Verified delivery
+
+- Source: `c0c285482dac1aea555335e2eacb9c8d5f6b3867` on `codex/storage-transports`.
+- [Full CI run 200](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37005779437):
+  host and Dreamcast jobs both successful. All 12 runtime wrapper executions,
+  reader lifecycle and timer-observer tests pass without sanitizer findings.
+- Linked instruction audits: 19,039 normal and 19,908 benchmark instructions;
+  no relay/resident FPU use or unresolved symbols. Native layout and stack
+  audits are unchanged from the previous successful candidate. SCI resident:
+  11,156 bytes, end `0x8c00baec`, stack 1,172/1,232.
+- Source SD-update artifact: `11226142051`, 4,571,784 bytes, SHA-256
+  `f4f05fc6f51fe3baf0cc831fef1aa9c1c1a62f0570f721efe65338cf731f19e9`.
+  ZIP integrity and all 96 source-manifest hashes checked.
+- Delivered `K-UI-SCI-Async-Reader-c0c285482dac.zip`: 787,200 bytes, SHA-256
+  `2fa0c10ccfb0fdda066f0112d6b4cba6095dd6d11a4c595607d20aee8b97a7dc`.
+  Includes only the two update binaries, instructions, hashes and build record.
+- `KUI/runtime.kui`: 1,626,308 bytes, SHA-256
+  `27ab7a34ec887ccc72287d7a13cce82071e2cfd97e5ac617aa9aaf9e729b5acc`.
+- `KUI/apps/games/retail-boot.kui`: 56,832 bytes, SHA-256
+  `dade25c0ff67eeeb1871064208c447508d205ce1be9e2803dba4d84a248c2b62`.
+  Both packages have verified header/payload CRCs and build `c0c285482dac`.
+  The entire retail payload matches 0e9 byte-for-byte after replacing its
+  four build-label strings; no game-reader code or layout changed.
+
+The [CI audit record](sci-async-runtime-ci-c0c285482dac.json) preserves the
+layout/stack measurements, executed host cases and exact downloaded log
+hashes. These checks validate the build, not the new console test result.
