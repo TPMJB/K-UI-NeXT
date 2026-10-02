@@ -14,9 +14,8 @@ static struct kui_retail_gd service;
 static struct kui_retail_storage card;
 static struct retail_display_state display;
 static struct kui_retail_pace pace;
-/* Menu-return diagnostics: steps longer than two sectors, steps run for a
- * game spinning on CHECK, and the caller SR of the last step that read. */
-static struct { uint32_t paced, spun, sr; } pacing;
+/* Cumulative menu-return diagnostics; game GD resets do not clear them. */
+static struct { uint32_t paced, spun; } pacing;
 uint32_t kui_retail_original_menu;
 extern void kui_retail_menu_hook(void);
 extern void kui_retail_gd_c0_hook(void);
@@ -53,11 +52,12 @@ static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
     if(writing != KUI_RETAIL_MAP_VALIDATE) purge(address, bytes);
     return (uint8_t *)(uintptr_t)((address & 0x1fffffffu) | 0xa0000000u);
 }
-/* Read-only PowerVR SPG_STATUS, SPG_VBLANK_INT and FB_R_SOF1: scanline,
- * vblank-in line and the displayed framebuffer. No video state is changed. */
+/* Read-only PowerVR status, vblank-in, counter period and framebuffer.
+ * No video state is changed. */
 static void video_sample(void) {
     volatile const uint32_t *pvr = (volatile const uint32_t *)(uintptr_t)0xa05f8000u;
-    kui_retail_pace_sample(&pace, pvr[0x10c / 4], pvr[0xcc / 4], pvr[0x50 / 4]);
+    kui_retail_pace_sample(&pace, pvr[0x10c / 4], pvr[0xcc / 4],
+                           pvr[0xd8 / 4], pvr[0x50 / 4]);
 }
 static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t output[512]) {
     (void)unused;
@@ -135,22 +135,23 @@ static void report_fault(const char *reason, uint32_t function) {
 }
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
+    (void)caller; (void)stack;
     retail_display_restore(&display);
     retail_display_line("GAME MENU RETURN");
-    retail_display_hex("CALLER PR",caller);
-    retail_display_hex("CALLER STACK",stack);
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
-    retail_display_hex("GD COMMAND",service.diag.last_command);
-    retail_display_hex("BLOCKS READ",image.blocks_read);
     /* How the game drives reads: ABXY+Start after a load shows these. */
-    retail_display_hex("GD CALLS",service.diag.calls);
-    retail_display_hex("EXEC CALLS",service.diag.exec_calls);
     retail_display_hex("READ STEPS",service.diag.read_steps);
     retail_display_hex("SECTORS READ",service.diag.sectors_read);
     retail_display_hex("FRAMES SEEN",pace.frames);
     retail_display_hex("PACED STEPS",pacing.paced);
     retail_display_hex("SPIN STEPS",pacing.spun);
-    retail_display_hex("STEP CALLER SR",pacing.sr);
+    /* Latest sampled geometry/cost, possibly changed by a title-screen
+     * reset. Unlike PACED STEPS, these are not a history of the fight. */
+    retail_display_hex("PACE PERIOD",pace.period);
+    retail_display_hex("PACE VBI",pace.vbi);
+    retail_display_hex("PACE COST16",pace.per);
+    retail_display_hex("PACE STILL",pace.still);
+    retail_display_hex("PACE LINE",pace.line);
     retail_display_line("RESTARTING K-UI");
     retail_display_pause(900u); /* ~15 seconds at 60 Hz to capture the counters */
     /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts
@@ -201,6 +202,7 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
 /* One EXEC, sized by the pacing policy and timed for the next estimate. */
 static int32_t step(uint32_t r4, uint32_t r5) {
     uint32_t frames = pace.frames, line = pace.line, before = service.diag.sectors_read;
+    uint32_t epoch = pace.epoch;
     pace.spin = 0;
     service.step = kui_retail_pace_budget(&pace, KUI_RETAIL_GD_STEP_SECTORS,
                                           KUI_RETAIL_GD_STEP_MAX);
@@ -210,9 +212,8 @@ static int32_t step(uint32_t r4, uint32_t r5) {
     uint32_t sectors = service.diag.sectors_read - before;
     if(sectors) {
         video_sample();
-        kui_retail_pace_measure(&pace, frames, line, sectors);
+        kui_retail_pace_measure(&pace, frames, line, epoch, sectors);
         if(service.step > KUI_RETAIL_GD_STEP_SECTORS) ++pacing.paced;
-        pacing.sr = kui_retail_hook_sr;
     }
     return result;
 }

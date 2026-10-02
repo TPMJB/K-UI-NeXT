@@ -1,20 +1,29 @@
 # Hardware evidence
 
-## SCI batching: DOA2 load and fight-start improvement — 2026-10-01
+## SCI batching: reported improvement, zero enlarged steps — 2026-10-01
 
 The owner reports **about 25 seconds from selecting Kasumi to match start**
 on **8d930310f79d**, versus the earlier 29 seconds, and noticeably smoother
 combat with only slight slowdown in the first roughly ten seconds. The old
-severe slowdown also resolved after about ten seconds; its severity improved,
-not its duration. Audio remains pretty smooth. This is
-an initial timing/qualitative result; no new return-counter photo or FMV
-acceptance accompanies it.
+severe slowdown also resolved after about ten seconds; severity improved,
+not duration. Audio remains pretty smooth. These are initial timing and
+qualitative observations, with no explicit FMV acceptance.
+
+The matching return photograph now shows **zero paced and spin steps**,
+5,970 read steps, 11,880 game sectors (1.989950 per step) and no guard fault.
+The owner passed through DOA2's title screen and retried the combination
+several times; normal soft resets do not clear these session counters.
+Larger batches did not activate, so the reported improvement cannot be
+attributed to more sectors per call. Its cause remains unestablished.
 
 Storage Soak run **13** passes 160 MiB/ten cycles in 303.722145 seconds,
 with zero errors/DMA faults and successful remount verification/cleanup.
-Write/read **1,197.40/1,064.98 KiB/s** is effectively unchanged versus run 10,
-consistent with this change being confined to game pacing. See the
-[raw reports, exact comparison and scope](evidence/sci-game-pacing-result-2026-10-01.md).
+Write/read **1,197.40/1,064.98 KiB/s** is effectively unchanged versus run 10.
+See the [reports, photo transcription and scope](evidence/sci-game-pacing-result-2026-10-01.md).
+The next [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+uses actual `SPG_LOAD` geometry and adds timing diagnostics. It has no console
+performance result yet; the old photograph does not identify the precise
+condition that prevented larger batches.
 
 ## SCI grouped CRC passed; game counter capture obtained — 2026-10-01
 
@@ -30,8 +39,9 @@ or spin-triggered steps and approximately two sectors per successful read step.
 It does not identify physical SCI DMA use or isolate the previously reported
 29-second character-to-fight load. See the
 [raw reports, photo transcription and limits](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md).
-The resulting half-frame/max-four batching candidate requires console testing;
-these results validate its parent, not the new pacing policy.
+The resulting half-frame/max-four candidate was subsequently tested as
+8d930310f79d; its separate report above shows no enlarged steps. These grouped
+CRC results belong to its parent and do not validate batching activation.
 
 ## SCI word-reversal build soak passed; write setup improved — 2026-10-01
 

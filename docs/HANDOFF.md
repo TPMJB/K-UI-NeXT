@@ -2,29 +2,35 @@
 
 ## Current game-loading experiment (2026-10-01)
 
-**First batching result:** build **8d930310f79d** reduces the owner's DOA2
-Kasumi-to-match observation from 29 seconds to **about 25 seconds**, with
-noticeably smoother combat and only slight slowdown in the first roughly
-ten seconds. The former severe slowdown lasted about ten seconds too; the
-improvement is severity, not that interval's duration. Audio remains smooth.
-Storage Soak run 13 passes 160 MiB/ten cycles with zero errors;
-write/read **1,197.40/1,064.98 KiB/s** is effectively unchanged, as expected
-for a resident-pacing change. Keep this as the current comparison build;
-new pacing counters, FMV and broader compatibility acceptance are pending.
-See the [original report and game observation](evidence/sci-game-pacing-result-2026-10-01.md).
+**Counter follow-up:** the **8d930310f79d** return photo shows **zero paced
+and spin steps**, 5,970 read steps and 11,880 game sectors (1.989950 per step),
+with no guard fault. The owner went through DOA2's title screen and several
+more reset attempts before capturing it; normal soft resets preserve these
+session counters. Larger batches did not activate in this captured session.
+The owner's **about 25 seconds** Kasumi-to-match observation (earlier 29),
+noticeably smoother first ten seconds and smooth audio remain observations;
+their cause cannot be attributed to larger read batches. Storage Soak run 13
+passes 160 MiB/ten cycles with zero errors, write/read
+**1,197.40/1,064.98 KiB/s**, effectively unchanged. Keep this as the comparison
+build; FMV and broader compatibility acceptance remain pending. See the
+[reports, photo transcription and limits](evidence/sci-game-pacing-result-2026-10-01.md).
 
-Grouped CRC build **6cc2abb460b5** passed Quick run 9 and five-minute Soak
-run 10 with zero errors. Soak write/read **1,198.32/1,064.87 KiB/s**;
-RX check **68.48 us**, down 12.4% from run 8. A matching DOA2 menu-return
-photo now shows zero enlarged/spin steps and roughly two sectors per read
-step. Launch-wide counters do not isolate the owner's earlier **29-second
-Kasumi-selection-to-first-fight** timing. The next candidate changes only
-game pacing: measured moving-buffer steps can grow to four within a predicted
-half-frame allowance; two-sector fallback and the existing still-screen path
-remain. Console speed/gameplay acceptance is pending. See
-[evidence](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md) and
-[policy/test instructions](games-read-pacing.md). No repeat Storage soak is
-needed before the DOA2 timing, fight-start/audio and FMV comparison.
+The next [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+reads actual scanline geometry from `SPG_LOAD`, invalidates measurements across
+mode changes or invalid samples, and displays the pacing inputs. The earlier
+policy inferred counter length from the vblank interrupt position, which is
+not valid for all video modes. This is a code defect independent of the
+unknown exact rejection reason in the old DOA2 photograph. Console performance
+of the correction is pending; the two-sector fallback, CRC and guards remain.
+
+Grouped CRC build **6cc2abb460b5** previously passed Quick run 9 and five-minute
+Soak run 10 with zero errors. Soak write/read **1,198.32/1,064.87 KiB/s**;
+RX check **68.48 us**, down 12.4% from run 8. Its DOA2 photograph also showed
+zero enlarged/spin steps and roughly two sectors per read. That earlier
+launch-wide capture does not isolate the **29-second Kasumi-to-first-fight**
+baseline. See [evidence](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md)
+and [policy/test instructions](games-read-pacing.md). No repeat Storage soak
+is needed before the DOA2 timing, fight-start/audio and FMV comparison.
 
 The owner also requested Windows CE support. The
 [CE loader audit](evidence/windows-ce-loader-audit-2026-10-01.md) finds a

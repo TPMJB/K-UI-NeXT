@@ -7,9 +7,19 @@ selection to match start on `8d930310f79d` (earlier 29 seconds), noticeably
 smoother combat and only slight slowdown during the first roughly ten seconds.
 The earlier severe slowdown lasted about ten seconds too; severity improved
 while that interval stayed similar. Audio remains smooth.
-Storage throughput remains unchanged. A new return-counter photo and FMV
-check remain outstanding; see the
-[first batching result](evidence/sci-game-pacing-result-2026-10-01.md).
+Storage throughput remains unchanged. The later matching photo shows **zero
+paced/spin steps**, 5,970 read steps and 11,880 sectors (1.989950 per step).
+Normal title-screen resets preserve the cumulative counters. Thus larger
+batches did not activate; the reported improvement's cause remains unknown.
+FMV acceptance is outstanding. See the
+[report and photo transcription](evidence/sci-game-pacing-result-2026-10-01.md).
+
+**Next candidate:** the [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+uses `SPG_LOAD`'s actual scanline counter period instead of inferring it from
+the vblank interrupt position. Measurement epochs discard samples spanning
+invalid or changed geometry; return diagnostics expose the timing inputs.
+Console performance is pending. This source-level defect does not prove the
+exact reason DOA2 rejected enlargement in the old photograph.
 
 The owner's build `6cc2abb460b5` counter photograph shows zero enlarged
 steps and approximately two game sectors per successful step. The prior
@@ -17,7 +27,7 @@ steps and approximately two game sectors per successful step. The prior
 the photograph contains launch-wide counters, not that load alone. See the
 [grouped-CRC results and counter evidence](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md).
 
-The new experiment permits up to **four sectors even when framebuffer
+The policy introduced in **8d930310f79d** permits up to **four sectors even when framebuffer
 addresses change**, provided the measured cost predicts they fit within half
 a video frame (about 8.3 ms at 60 Hz or 10 ms at 50 Hz). Unknown, invalid or
 slow timing retains two sectors. The existing still-screen allowance of up
@@ -36,7 +46,7 @@ fight, check the first ten seconds of combat and an FMV, then photograph the
 return counters. Another Storage soak is not needed for this pacing-only change.
 `PACED STEPS` now includes the short allowance as well as still-screen steps.
 
-Validation: 201 focused pacing checks pass with ASan/UBSan, plus an independent
+Validation of **8d930310f79d**: 201 focused pacing checks pass with ASan/UBSan, plus an independent
 optimized host build. Native normal/benchmark layout, stack and instruction
 audits pass: SCI payload 11,168 bytes, end `0x8c00bae8` (24 bytes free),
 stack 1,180/1,232 bytes. SCIF/IDE conservative stack bounds are 1,076/996

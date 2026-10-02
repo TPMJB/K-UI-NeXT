@@ -2,31 +2,29 @@
 #include "kui/retail_pace.h"
 
 void kui_retail_pace_sample(struct kui_retail_pace *p, uint32_t status,
-                            uint32_t vblank, uint32_t fb) {
+                            uint32_t vblank, uint32_t load, uint32_t fb) {
     uint32_t line = status & 0x3ffu, vbi = vblank & 0x3ffu;
-    /* The counter only increases within a frame, so a smaller value means
-     * at least one wrap. Samples a whole frame apart can hide one: counts
-     * are then low, which only delays pacing. */
-    if(line < p->line) { ++p->frames; ++p->still; }
+    uint32_t period = ((load >> 16) & 0x3ffu) + 1u;
+    /* Vblank-in is an interrupt position, not the counter period: interlaced
+     * modes can have vbi=260 with a 525- or 625-tick counter. Invalidate any
+     * measurement spanning changed or inconsistent geometry. */
+    if(period != p->period || vbi != p->vbi || line >= period ||
+       p->line >= period || period < 64u || vbi >= period) {
+        ++p->epoch;
+        p->per = p->still = p->spin = 0;
+    /* Count only wraps within unchanged, valid geometry. Samples a whole
+     * period apart can hide wraps; reads therefore sample every SD block. */
+    } else if(line < p->line) { ++p->frames; ++p->still; }
     if(fb != p->fb) { p->fb = fb; p->still = 0; }
-    if(vbi != p->vbi) { p->vbi = vbi; p->top = 0; p->per = 0; }
-    if(line > p->top) p->top = line;
+    p->period = period;
+    p->vbi = vbi;
     p->line = line;
-}
-
-/* Frame length in scanlines. Until a sample at or after the vblank line is
- * seen, vbi+1 underestimates it, which only shortens a step. Standard modes
- * wrap within a few lines of vblank-in; the cap keeps one stray reading (for
- * example during a mode change) from inflating every later budget. */
-static uint32_t frame_lines(const struct kui_retail_pace *p) {
-    uint32_t cap = p->vbi + p->vbi / 8u, top = p->top > cap ? cap : p->top;
-    return (top > p->vbi ? top : p->vbi) + 1u;
 }
 
 uint32_t kui_retail_pace_budget(const struct kui_retail_pace *p, uint32_t normal,
                                 uint32_t maximum) {
-    uint32_t vbi = p->vbi, line = p->line, frame = frame_lines(p);
-    if(!p->per || vbi < 64u || line >= frame)
+    uint32_t vbi = p->vbi, line = p->line, frame = p->period;
+    if(!p->per || frame < 64u || vbi >= frame || line >= frame)
         return normal;
     /* Moving buffers do not prove the game is busy: loading screens may
      * flip too. Permit a small batch when its measured cost fits half a
@@ -47,10 +45,14 @@ uint32_t kui_retail_pace_budget(const struct kui_retail_pace *p, uint32_t normal
 }
 
 void kui_retail_pace_measure(struct kui_retail_pace *p, uint32_t frames,
-                             uint32_t line, uint32_t sectors) {
+                             uint32_t line, uint32_t epoch, uint32_t sectors) {
     uint32_t wraps = p->frames - frames;
-    if(!sectors || wraps > 3u || (!wraps && p->line < line)) return;
-    uint32_t per = (wraps * frame_lines(p) + p->line - line) * 16u / sectors;
+    if(!sectors || epoch != p->epoch || wraps > 3u || line >= p->period ||
+       p->line >= p->period || p->period < 64u || p->vbi >= p->period ||
+       (!wraps && p->line < line)) return;
+    /* Each line is below the actual period (at most 1024). With at most
+     * three wraps this subtraction cannot underflow or overflow. */
+    uint32_t per = (wraps * p->period + p->line - line) * 16u / sectors;
     /* Follow slower steps at once and faster ones gradually. */
     p->per = per >= p->per ? per : p->per - (p->per - per) / 8u;
 }
