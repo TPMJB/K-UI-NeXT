@@ -183,3 +183,9 @@ whole second.
 
 Expected on the console: "No pauses" and a longest masked window of tens of
 microseconds.
+
+Source `9e6ccca3dd9e16edacd981830d6887c99372eca2` passed
+[Diagnostic run 208](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37074912372):
+host tests and the Dreamcast build. Install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `kui-1.5.1-dainsleif-sd-update`
+artifact, run R and return the JSON and a photo of the result screen.

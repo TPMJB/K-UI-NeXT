@@ -10,7 +10,9 @@ reads 997,498 us and then jumps 2.5 ms; every "pause" was an interval across
 that jump. The reader needs no change. The next build times the probe with
 TMU2 ticks at their real length, drops the one-off reset loop and idle tests,
 and shows the longest interrupt-masked window on R's screen. See
-[the change record](evidence/sci-async-pause-hunt-2026-10-02.md).
+[the change record](evidence/sci-async-pause-hunt-2026-10-02.md). Build
+**9e6ccca3dd9e** passed [Diagnostic run 208](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37074912372);
+install its two files from the `sd-update` artifact, run R and return the JSON.
 
 ## SCI async: streaming with overlapped checks (2026-10-02 UTC)
 
