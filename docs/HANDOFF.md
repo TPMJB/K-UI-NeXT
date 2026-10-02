@@ -17,8 +17,14 @@ unproven. No reset is allowed for foreign or quarantined DMA or failed payload
 checks. Unconfirmed module resume blocks all further SCI/storage access and
 requires restart. Ordinary game reads and CE launch remain unchanged.
 Run this candidate's SCI async probe once and return JSON/photo; no soak or CD.
-Targeted sanitizer tests and independent review pass. Full CI and console
-validation are pending.
+Targeted sanitizer tests and independent review pass. Candidate **0e9a2f814231**
+passed full host and Dreamcast CI run 199 and is delivered as
+`K-UI-SCI-Async-Probe-0e9a2f814231.zip`. All 96 source-manifest hashes, both
+build IDs/runtime CRCs and linked native instruction/layout/stack audits pass.
+SCI resident remains 11,156 bytes, end `8c00baec`, stack 1,172/1,232. Retail
+payload is identical to c25c after normalizing its four build labels. Replace
+both included files, retain boot CD 6af5e11, reboot and run the probe once.
+Console validation remains pending.
 
 ## SCI repeat-read failure narrowed to framing (2026-10-02 UTC)
 

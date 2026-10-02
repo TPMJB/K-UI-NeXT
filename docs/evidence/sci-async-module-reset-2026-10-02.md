@@ -91,8 +91,40 @@ The actual JSON formatter fits 1,512 bytes per stage and 4,360 total with
 full-width integer values and 40-character names. Buffers are now 2,048/6,144
 bytes to retain margin. The production reset-row formatter passes strict
 compilation with 128-trial and signature-failure examples. The failure-screen
-preview was rendered and visually inspected. Full host and Dreamcast CI remain
-pending.
+preview was rendered and visually inspected. Full host and Dreamcast CI pass
+as recorded below.
 The next console action is one SCI async probe and its JSON/full result photo.
 If restart is required, photograph and reboot. No new soak, game timing or
 boot CD is needed for this experiment.
+
+## Verified build and delivered update
+
+Source `0e9a2f8142315a8bf830e162e0b497b2b718f7e1` passed full host and Dreamcast
+jobs in [CI run 199](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37000741088).
+The completed host log confirms execution of the reset regression, SCI bus
+and probe tests, and all eight async runtime-wrapper cases.
+
+Linked instruction/layout/stack audits pass with zero unresolved symbols.
+The SCI resident remains 11,156 bytes, end `0x8c00baec`, conservative stack
+1,172/1,232. SCIF remains 10,608 bytes, stack 1,080; IDE 9,832 bytes, stack
+1,000. Normal prelaunch stage is 48,576 bytes. The retail payload is exactly
+identical to c25c after normalizing its four embedded build labels.
+
+Downloaded SD-update artifact `11223884222`: 4,563,814 bytes.
+SHA-256: `d775bb672ad3a745512cd2baaf0e3c9855584d1ad6cefa8ead6dd6f3219cb0cf`.
+ZIP integrity, all 96 manifest hashes, both build IDs, envelope CRCs and
+retail package structure verified.
+
+Delivered `K-UI-SCI-Async-Probe-0e9a2f814231.zip`: 781,757 bytes.
+SHA-256: `c0c8b8a09ad1532158d829399f80a8c3bc503b25e41043f586369d55dd127df4`.
+
+| Installed file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `KUI/runtime.kui` | 1,616,856 | `9fca4cd72fdfa12ccb16c91e8997f20885817319f335403b04d1bf16cd153c02` |
+| `KUI/apps/games/retail-boot.kui` | 56,832 | `7cb4f34177fd47fcbe4381acec0072d7f62fd70044e61c1e49e9c7d32b86f16f` |
+
+Replace both files, retain boot CD `6af5e11`, reboot into SCI and run
+Diagnostics → Storage tests → SCI async probe once. Return the saved JSON
+and full result photo; photograph and reboot if restart is required.
+This package is validated for the next experiment, not a console-confirmed
+fix or a change to ordinary game reads. Console validation is pending.
