@@ -15,17 +15,33 @@ status cleanup and reinitializes ordinary full-duplex framing while CS is high.
 It records handoff state and distinguishes a latched SCI bus failure from an
 SD response. The observed trailing overrun is not proven to be the sole cause.
 Normal game reads, CRC policy, native resident limits and quarantine remain.
-Console validation of this next candidate is pending.
+Candidate **0d400a471601** passed full host and Dreamcast CI (run 197) and is
+delivered as `K-UI-SCI-Async-Probe-0d400a471601.zip`. Both packaged build IDs,
+runtime CRCs, all 96 source-manifest hashes and native layout/stack checks pass.
+Install both included files, retain the current boot CD, reboot into SCI and
+run Diagnostics → Storage tests → SCI async probe once. Return its JSON and
+full result photo; photograph and reboot if recovery requires restart. No new
+soak or game timing is needed. Console validation is pending.
 
 The supplied Claude CE analysis suggests polling `wsegacd.dll` interrupt
-threads, but original kernels were not attached. Independent source review
-also finds current resident SR.BL and caller-stack accesses incompatible with
-unhandled CE TLB misses. See the [CE polling review](evidence/windows-ce-polling-review-2026-10-02.md).
+threads. The owner subsequently supplied ARMADA's original `0WINCEOS.BIN`:
+its SHA-256, header, module layout and proposed patch contexts match the report.
+Independent review also finds current resident SR.BL and caller-stack accesses
+incompatible with unhandled CE TLB misses, and a progress loop that calls
+`Sleep(5)` for K-UI's current pending status. See the
+[CE polling review](evidence/windows-ce-polling-review-2026-10-02.md) and
+[read-only structural metadata](evidence/armada-ce-structure-2026-10-02.json).
 A read-only CE load-header planner now tests the reported one-section format,
 arithmetic, aliases and live-memory overlaps; it is host-only groundwork and
 does not patch kernels or enable CE Launch. Its synthetic tests reject the
-current high-stage/prefix conflict. Next verify the owner's original ARMADA
-`0WINCEOS.BIN` and then implement a separately identified placement-only probe.
+current high-stage/prefix conflict, including when exercised with ARMADA's real
+header. Next implement a separately identified placement-only probe; the
+temporary high stage and stack must be retired before CE claims that RAM.
+Claude's re-review is also recorded there: ARMADA confirms TMU1 ownership,
+virtual parameter blocks containing physical DMA destinations, and a BIOS
+disc-check/metadata path that needs an explicit image service. Kernel DMA
+handlers clear IE rather than TE. These findings do not change this runtime
+diagnostic or establish that four polling patches are sufficient for CE.
 
 ## SCI autonomous probe: first console failure (2026-10-02 UTC)
 

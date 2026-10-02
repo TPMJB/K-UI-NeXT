@@ -91,3 +91,32 @@ Normal game reads and Windows CE eligibility are unchanged. The next console
 test remains one run of Diagnostics → Storage tests → SCI async probe, with
 the JSON and a full result photograph. No repeat soak is needed for this
 isolated experiment.
+
+## Build and delivery
+
+Source commit `0d400a47160182fa27b07b13c7767588886765b3` passed full host and
+Dreamcast jobs in [CI run 197](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36962662071).
+The linked instruction audit found no relay/resident FPU use and no unresolved
+symbols. SCI resident ends at `0x8c00baec`, inside the `0x8c00bb00` limit;
+conservative stack usage is 1,172 of 1,232 available bytes. Normal resident
+source and behavior are unchanged by this runtime experiment.
+
+Downloaded SD-update artifact `11208892506`, 4,561,842 bytes, SHA-256:
+`a85350e759087b14f67c363cfd20cfab8b21b590abf4d3cdda1b03decfb25d06`.
+Its archive integrity, all 96 manifest hashes, both runtime envelopes/CRCs,
+matching build IDs and retail package layout were independently checked.
+
+Delivered minimal package `K-UI-SCI-Async-Probe-0d400a471601.zip`, 779,789
+bytes, SHA-256:
+`2d4b0bc213a24b51a2ea69ae1a707fe8475b5e02f0e5185d00657c4bcb2168d5`.
+
+| Installed file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `KUI/runtime.kui` | 1,615,944 | `098c6053b1d7e85012c07320c148ccc2214b2ea271518bb4ecf59001450c4f4f` |
+| `KUI/apps/games/retail-boot.kui` | 56,712 | `cf4ae95cd5bc204a0e25e713640721c4b4bfa626b575c9ac645ebe6d7c506e7b` |
+
+Keep boot CD `6af5e11`, the current card format and game images. Replace both
+files, reboot, then run the SCI async probe once. Console acceptance requires
+all 16 slow and 64 fast trials, verified CRC/data/guards, completion interrupts,
+CPU overlap and ordinary-read recovery. The build has not yet met that console
+gate; native games and CE support retain their previous status.
