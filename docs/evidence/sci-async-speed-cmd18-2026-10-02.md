@@ -104,3 +104,45 @@ host tests and the Dreamcast build. The update is the run's
 `kui-1.5.1-dainsleif-sd-update` artifact; only `KUI/runtime.kui` and
 `KUI/apps/games/retail-boot.kui` need replacing. Run R (and optionally Y, to
 confirm the masked-time reading) and return the JSON reports.
+
+## Console results (97b590137b9b)
+
+The owner ran R; it passed with matching data in all three passes and normal
+recovery verified ([report](sci-async-console-97b590137b9b-speed.json)).
+1 MiB of `/KUI/runtime.kui` from LBA 83,701,248.
+
+**Readers.** Ordinary reader 1,095 KiB/s. Async CMD17 reader 634 KiB/s (was
+587), 787.8 us per block:
+
+| Phase | us per block | 8daab44 |
+| --- | ---: | ---: |
+| Setup (command, card wait, DMA start) | 331.2 | 312.2 |
+| of which card wait (R1 to data token) | 279.7 | not measured |
+| Receive | 345.4 | 345.4 |
+| Finish (checks, handoff, SCI reset) | 64.1 | 148.1 |
+
+The card wait is time, not bytes: 127.5 polled bytes on average now (max 398,
+longest 873 us) against 58.3 before, when each byte also paid a clock read.
+About 280 us of card access per CMD17 caps single-block reads near
+700 KiB/s whatever the reader does. Longest interrupt-masked window 53 us.
+
+**Continuous capture.** CMD18's first data token came after 209 us. The
+16 KiB DMA took 10,488 us (0.640 us per byte, 12.5 MHz) and held 31 complete
+blocks, every CRC correct and every payload equal to the async pass's copy.
+Every gap was exactly 1 byte: under continuous clocking the card sends block,
+CRC, one 0xff, token, next block. Streaming is therefore wire-limited: 516
+bytes, 330 us, per block, about 1,510 KiB/s. CMD12 then stopped the card
+(R1 0, no busy) after the SCI reset.
+
+**Per-block resume.** The first block verified (its first token after 216 us);
+the cycle measured receive 331 us, deselect/reset/reselect 15 us and check
+39 us. The search for the second block's token read 0x00 first: stopping the
+SCI after the 514-byte DMA loses two bytes (RDR fills, the next byte
+overruns), here the 1-byte gap and the data token. CMD12 stopped the card
+and the reader stayed usable.
+
+**Next.** Receive 513 bytes per block instead: the 514th (the second CRC
+byte) is then the one held in RDR when the overrun stops reception, and only
+the 1-byte gap is lost, so the next data token is the first byte after
+reselection. The following build checks this with the resume measurement and
+uses it for an interrupt-driven streaming reader.
