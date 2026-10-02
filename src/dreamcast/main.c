@@ -631,12 +631,17 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
             "\"trailing_overruns\":%lu,\"premature_errors\":%lu,\"timeouts\":%lu,"
             "\"overlap_batches\":%lu,\"overlap_iterations\":%lu,\"work_checksum\":%lu,"
             "\"last_remaining\":%lu,\"last_chcr\":%lu,\"last_ssr\":%lu,"
+            "\"last_phase\":%u,\"last_phase_name\":\"%s\",\"dma_started\":%lu,"
+            "\"command_response\":%lu,\"last_token\":%lu,\"snapshot_ssr\":%lu,\"snapshot_sptr\":%lu,"
             "\"elapsed_us\":%llu,\"receive_us\":%llu,\"max_receive_us\":%llu}",
             (unsigned long)s->clock_hz,(unsigned long)s->attempted,(unsigned long)s->passed,
             (unsigned long)s->dma_irqs,(unsigned long)s->sci_error_irqs,(unsigned long)s->unexpected_rx_irqs,
             (unsigned long)s->trailing_overruns,(unsigned long)s->premature_errors,(unsigned long)s->timeouts,
             (unsigned long)s->overlap_batches,(unsigned long)s->overlap_iterations,(unsigned long)s->work_checksum,
             (unsigned long)s->last_remaining,(unsigned long)s->last_chcr,(unsigned long)s->last_ssr,
+            (unsigned)s->last_phase,kui_sci_async_phase_name(s->last_phase),(unsigned long)s->dma_started,
+            (unsigned long)s->command_response,(unsigned long)s->last_token,
+            (unsigned long)s->snapshot_ssr,(unsigned long)s->snapshot_sptr,
             (unsigned long long)s->elapsed_us,(unsigned long long)s->receive_us,(unsigned long long)s->max_receive_us);
         if(n<0 || (size_t)n>=sizeof(stage[i])) return false;
     }
@@ -652,6 +657,10 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         "  \"safe_restored\":%s,\n  \"guards_ok\":%s,\n  \"crc_ok\":%s,\n  \"baseline_ok\":%s,\n"
         "  \"handlers_restored\":%s,\n  \"registers_restored\":%s,\n"
         "  \"recovery_verified\":%s,\n  \"recovery_reinitialized\":%s,\n  \"elapsed_us\":%llu,\n"
+        "  \"recovery_phase\":%u,\n  \"recovery_phase_name\":\"%s\",\n"
+        "  \"recovery_result\":%u,\n  \"recovery_result_name\":\"%s\",\n"
+        "  \"recovery_command_valid\":%s,\n  \"recovery_command\":%u,\n  \"recovery_response\":%u,\n"
+        "  \"recovery_bus_healthy\":%s,\n  \"recovery_data_match\":%s,\n"
         "  \"timer_irq_instrumented\":%s,\n"
         "  \"max_irq_masked_us\":%llu,\n  \"max_irq_handler_us\":%llu,\n"
         "  \"probe_passed\":%s,\n  \"read_integrity_verified\":%s,\n  \"completion_irq_verified\":%s,\n"
@@ -664,7 +673,12 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
         r->safe_restored?"true":"false",r->guards_ok?"true":"false",r->crc_ok?"true":"false",r->baseline_ok?"true":"false",
         r->handlers_restored?"true":"false",r->registers_restored?"true":"false",
         result->recovery_verified?"true":"false",result->recovery_reinitialized?"true":"false",
-        (unsigned long long)r->elapsed_us,r->timer_irq_instrumented?"true":"false",
+        (unsigned long long)r->elapsed_us,
+        (unsigned)result->recovery_phase,kui_sd_async_recovery_name(result->recovery_phase),
+        (unsigned)result->recovery_result,kui_loader_sd_result_name(result->recovery_result),
+        result->recovery_command_valid?"true":"false",(unsigned)result->recovery_command,(unsigned)result->recovery_response,
+        result->recovery_bus_healthy?"true":"false",result->recovery_data_match?"true":"false",
+        r->timer_irq_instrumented?"true":"false",
         (unsigned long long)r->max_irq_masked_us,(unsigned long long)r->max_irq_handler_us,
         sci_async_passed(result)?"true":"false",sci_async_integrity(r)?"true":"false",sci_async_completion(r)?"true":"false",
         r->fast.overlap_batches?"true":"false",stage[0],stage[1]);
@@ -730,6 +744,28 @@ static void sci_async_operation(void) {
             snprintf(status.lines[5],KUI_APP_LINE_CAP,"%s",saved?"Saved independent report:":"Report not saved; photograph this result.");
             snprintf(status.lines[6],KUI_APP_LINE_CAP,"%.79s",path[0]?path+2:"No saved path");
             snprintf(status.lines[7],KUI_APP_LINE_CAP,"Normal game reads are unchanged by this experiment.");
+            if(!status.passed) {
+                const struct kui_sci_async_stage *stage=r->fast.attempted?&r->fast:&r->slow;
+                if(stage->dma_started)
+                    snprintf(status.lines[3],KUI_APP_LINE_CAP,"DMA left %lu CHCR%08lX ERI%lu RXI%lu",
+                        (unsigned long)stage->last_remaining,(unsigned long)stage->last_chcr,
+                        (unsigned long)stage->sci_error_irqs,(unsigned long)stage->unexpected_rx_irqs);
+                snprintf(status.lines[7],KUI_APP_LINE_CAP,"%.9s: DMA%lu SSR%02lX SPTR%02lX R1%02lX TK%02lX",
+                    kui_sci_async_phase_name(stage->last_phase),(unsigned long)stage->dma_started,
+                    (unsigned long)(stage->snapshot_ssr&255u),(unsigned long)(stage->snapshot_sptr&255u),
+                    (unsigned long)(stage->command_response&255u),(unsigned long)(stage->last_token&255u));
+                if(!saved && result.recovery_phase!=KUI_SD_ASYNC_RECOVERY_NONE) {
+                    const char *detail=result.recovery_result!=KUI_LOADER_SD_OK?
+                        kui_loader_sd_result_name(result.recovery_result):!result.recovery_bus_healthy?"bus fault":
+                        result.recovery_phase==KUI_SD_ASYNC_RECOVERY_READ && !result.recovery_data_match?"data mismatch":"OK";
+                    if(result.recovery_command_valid)
+                        snprintf(status.lines[6],KUI_APP_LINE_CAP,"Recover %s: %.24s; CMD%u R1%02X",
+                            kui_sd_async_recovery_name(result.recovery_phase),detail,
+                            (unsigned)result.recovery_command,(unsigned)result.recovery_response);
+                    else snprintf(status.lines[6],KUI_APP_LINE_CAP,"Recover %s: %.24s; no command",
+                        kui_sd_async_recovery_name(result.recovery_phase),detail);
+                }
+            }
             kui_log("SCI async probe: %s; report %s",result.message,saved?path:"not saved");
             kui_sd_disconnect();
         } else {

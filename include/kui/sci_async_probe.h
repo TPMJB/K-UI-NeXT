@@ -26,8 +26,27 @@ enum kui_sci_async_status {
     KUI_SCI_ASYNC_NO_OVERLAP
 };
 
+enum kui_sci_async_phase {
+    KUI_SCI_ASYNC_PHASE_NONE = 0,
+    KUI_SCI_ASYNC_PHASE_LEASE,
+    KUI_SCI_ASYNC_PHASE_BUFFER,
+    KUI_SCI_ASYNC_PHASE_READY,
+    KUI_SCI_ASYNC_PHASE_COMMAND,
+    KUI_SCI_ASYNC_PHASE_TOKEN,
+    KUI_SCI_ASYNC_PHASE_TOKEN_END,
+    KUI_SCI_ASYNC_PHASE_OWNERSHIP,
+    KUI_SCI_ASYNC_PHASE_GPIO,
+    KUI_SCI_ASYNC_PHASE_DMA,
+    KUI_SCI_ASYNC_PHASE_VALIDATE,
+    KUI_SCI_ASYNC_PHASE_COMPLETE
+};
+
 struct kui_sci_async_stage {
     uint32_t clock_hz, attempted, passed;
+    enum kui_sci_async_phase last_phase;
+    uint32_t dma_started, command_response, last_token;
+    /* Pin samples and status captured before cleanup, not output-latch reads. */
+    uint32_t snapshot_ssr, snapshot_sptr;
     uint32_t dma_irqs, sci_error_irqs, unexpected_rx_irqs;
     uint32_t trailing_overruns, premature_errors, timeouts;
     uint32_t overlap_batches, overlap_iterations, work_checksum;
@@ -54,7 +73,9 @@ struct kui_sci_async_probe_result {
  * Caller owns and serializes the existing SCI session, supplies a CRC-checked
  * baseline, and verifies recovery with a normal read before saving a report.
  * Requires ready/fast card, interrupts enabled, an idle channel 1 and an
- * already-enabled DMAC interrupt priority. Does not change global DMAOR or
+ * already-enabled DMAC interrupt priority. Both SCI GPIO directions must be
+ * inputs because sampled pin reads cannot preserve foreign output latches.
+ * Does not change global DMAOR or
  * the shared DMAC priority. Cancellation is checked between bounded trials.
  * safe_restored describes local hardware/IRQ cleanup, not card recovery.
  * An incomplete DMA has no documented abort-drain acknowledgement: its static
@@ -65,4 +86,5 @@ enum kui_sci_async_status kui_sci_async_probe_run(
     const uint8_t baseline[512], bool (*cancelled)(void *), void *cancel_ctx,
     struct kui_sci_async_probe_result *out);
 const char *kui_sci_async_status_name(enum kui_sci_async_status status);
+const char *kui_sci_async_phase_name(enum kui_sci_async_phase phase);
 #endif

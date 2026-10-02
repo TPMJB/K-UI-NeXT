@@ -18,7 +18,7 @@ static const struct kui_ata_bus ata_bus={0};
 static enum kui_loader_sd_result init_result,read_result,write_result,sync_result;
 static unsigned read_calls,fail_read_call,init_calls,single_calls,probe_calls,fail_single,mismatch_single,unmounts;
 static enum kui_sci_async_status probe_status,operation_status;
-static bool quarantined;
+static bool quarantined,fail_reinit,fail_reacquire;
 static bool stop,probe_started=true,probe_restored=true;
 static int scif_result;
 static bool healthy=true,disc_busy;
@@ -48,17 +48,18 @@ int sd_write_blocks(uint32_t block,size_t count,const uint8_t *data) {
 }
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) {return &bus;}
 bool kui_sci_sd_healthy(void) {return healthy;}
-enum kui_loader_sd_result kui_sci_sd_acquire(void) {return KUI_LOADER_SD_OK;}
+enum kui_loader_sd_result kui_sci_sd_acquire(void) {return fail_reacquire?KUI_LOADER_SD_UNSUPPORTED:KUI_LOADER_SD_OK;}
 void kui_sci_sd_release(void) {}
 enum kui_loader_sd_result kui_loader_sd_init_bus(struct kui_loader_sd *card,
                                                 const struct kui_loader_sd_bus *ops) {
     ++init_calls;
+    if(fail_reinit) init_result=KUI_LOADER_SD_TIMEOUT;
     *card=(struct kui_loader_sd){.bus=*ops,.blocks=10000,.high_capacity=true,
         .ready=init_result==KUI_LOADER_SD_OK,.last_command=41,.last_response=0xff};
     return init_result;
 }
 void kui_loader_sd_shutdown(struct kui_loader_sd *card) {card->ready=false;}
-const char *kui_loader_sd_result_name(enum kui_loader_sd_result result) {(void)result;return "test";}
+const char *kui_loader_sd_result_name(enum kui_loader_sd_result result) {return result==KUI_LOADER_SD_TIMEOUT?"card timeout":"test";}
 enum kui_loader_sd_result kui_loader_sd_read_multi(struct kui_loader_sd *card,
     uint32_t block,uint32_t count,void *out) {
     (void)block;(void)count;(void)out;
@@ -91,7 +92,7 @@ void kui_ata_shutdown(struct kui_ata *ata) {ata->ready=false;}
 enum kui_loader_sd_result kui_loader_sd_read(struct kui_loader_sd *card,
         uint32_t lba,uint32_t count,void *out) {
     assert(card->ready && lba==0 && count==1 && out && unmounts);
-    ++single_calls;
+    ++single_calls;card->last_command=17;card->last_response=0;
     if(single_calls==fail_single) return KUI_LOADER_SD_CRC;
     memset(out,single_calls==mismatch_single?0x82:0x81,512);
     return KUI_LOADER_SD_OK;
@@ -106,12 +107,14 @@ enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *ca
     return probe_status;
 }
 const char *kui_sci_async_status_name(enum kui_sci_async_status status) {
-    return status==KUI_SCI_ASYNC_TIMEOUT?"timeout":status==KUI_SCI_ASYNC_RESTORE?"restore failed":"mock result";
+    return status==KUI_SCI_ASYNC_TIMEOUT?"timeout":status==KUI_SCI_ASYNC_RESTORE?"restore failed":
+        status==KUI_SCI_ASYNC_UNSUPPORTED?"unsupported state":"mock result";
 }
 static bool cancelled(void *ctx) {(void)ctx;return stop;}
 static void prepare(void) {
     single_calls=probe_calls=fail_single=mismatch_single=0;
-    probe_started=probe_restored=true;probe_status=operation_status=KUI_SCI_ASYNC_OK;quarantined=stop=false;
+    probe_started=probe_restored=true;probe_status=operation_status=KUI_SCI_ASYNC_OK;
+    quarantined=stop=fail_reinit=fail_reacquire=false;init_result=KUI_LOADER_SD_OK;
 }
 int main(int argc,char **argv) {
     /* Discover SCI once, then ensure wrapper/recovery never falls back. */
@@ -144,6 +147,10 @@ int main(int argc,char **argv) {
         probe_status=KUI_SCI_ASYNC_RESTORE;operation_status=KUI_SCI_ASYNC_TIMEOUT;
         quarantined=true;probe_restored=false;
     }
+    else if(!strcmp(mode,"reinit") || !strcmp(mode,"reacquire")) {
+        probe_status=operation_status=KUI_SCI_ASYNC_UNSUPPORTED;
+        fail_reinit=!strcmp(mode,"reinit");fail_reacquire=!strcmp(mode,"reacquire");
+    }
     else if(!strcmp(mode,"recovery")) fail_single=3;
     else if(!strcmp(mode,"baseline")) fail_single=1;
     else if(!strcmp(mode,"baseline-mismatch")) mismatch_single=2;
@@ -151,7 +158,23 @@ int main(int argc,char **argv) {
     kui_sd_async_probe(&out,cancelled,NULL);
     assert(out.restart_required && !out.recovery_verified);
     assert(!media.read && !media.write && !kui_sd_connect());
-    if(!strcmp(mode,"restore") || !strcmp(mode,"quarantine")) assert(single_calls==2 && probe_calls==1);
+    if(!strcmp(mode,"restore") || !strcmp(mode,"quarantine") || !strcmp(mode,"reinit") || !strcmp(mode,"reacquire"))
+        assert(single_calls==2 && probe_calls==1);
+    if(!strcmp(mode,"reinit") || !strcmp(mode,"reacquire")) {
+        assert(out.probe.operation_status==KUI_SCI_ASYNC_UNSUPPORTED && out.recovery_reinitialized);
+        assert(strstr(out.message,"unsupported state") && strstr(out.message,"Restart required"));
+        if(fail_reinit) {
+            assert(out.recovery_phase==KUI_SD_ASYNC_RECOVERY_INITIALIZE);
+            assert(out.recovery_result==KUI_LOADER_SD_TIMEOUT && out.recovery_command_valid);
+            assert(out.recovery_command==41 && out.recovery_response==0xff);
+            assert(strstr(out.message,"reinit init failed"));
+        } else {
+            assert(out.recovery_phase==KUI_SD_ASYNC_RECOVERY_ACQUIRE);
+            assert(out.recovery_result==KUI_LOADER_SD_UNSUPPORTED && !out.recovery_command_valid);
+            assert(out.recovery_command==0xff && out.recovery_response==0xff);
+            assert(strstr(out.message,"reinit acquire failed"));
+        }
+    }
     if(!strcmp(mode,"quarantine")) assert(strstr(out.message,"timeout") && strstr(out.message,"restart"));
     if(!strcmp(mode,"restore")) assert(strstr(out.message,"restore failed"));
     if(!strcmp(mode,"baseline") || !strcmp(mode,"baseline-mismatch")) assert(!probe_calls);

@@ -143,6 +143,8 @@ static void unmask(struct probe *p, irq_mask_t mask, uint64_t start) {
  * that evidence, quarantine the persistent buffer and channel until restart.
  */
 static void freeze(struct probe *p) {
+    p->stage->snapshot_ssr=rd(SSR,1);
+    p->stage->snapshot_sptr=rd(SPTR,1);
     wr(SCR,0,1);
     if(!active_dma_owned(p)) {p->foreign_dma=true;return;}
     uint32_t control=rd(CHCR,4);
@@ -152,6 +154,8 @@ static void freeze(struct probe *p) {
     p->end_chcr=rd(CHCR,4);
     p->end_count=rd(TCR,4);
     p->end_ssr=rd(SSR,1);
+    p->stage->snapshot_ssr=p->end_ssr;
+    p->stage->snapshot_sptr=rd(SPTR,1);
     if(p->end_count || !(p->end_chcr&2u)) p->quarantined=true;
     if(!p->quarantined) {
         wr(CHCR,0,4);
@@ -184,17 +188,21 @@ static enum kui_sci_async_status lease(struct probe *p) {
     unsigned priority=irq_get_priority(IRQ_SRC_DMAC);
     uint32_t dma=rd(DMAOR,4), control=rd(CHCR,4), ssr=rd(SSR,1);
     uint8_t scr=(uint8_t)rd(SCR,1);
+    uint8_t sptr=(uint8_t)rd(SPTR,1);
+    p->stage->last_phase=KUI_SCI_ASYNC_PHASE_LEASE;
+    p->stage->snapshot_ssr=ssr;p->stage->snapshot_sptr=sptr;
     if(control&7u) status=KUI_SCI_ASYNC_BUSY;
     else if((mask&UINT32_C(0x100000f0)) || irq_inside_int() || !priority ||
             (dma&7u)!=1u || (scr&0xc4u) || (ssr&(RDRF|FLAGS)) ||
             (ssr&0x84u)!=0x84u || !(rd(PDTR,2)&0x80u) ||
-            rd(SMR,1)!=0x80u || rd(SCMR,1)!=0 || rd(BRR,1)!=0)
+            /* SPTR pin reads cannot recover another owner's output latches. */
+            rd(SMR,1)!=0x80u || rd(SCMR,1)!=0 || rd(BRR,1)!=0 || (sptr&0x0au))
         status=KUI_SCI_ASYNC_UNSUPPORTED;
     if(status!=KUI_SCI_ASYNC_OK) {unmask(p,mask,start);return status;}
     p->sar=rd(SAR,4);p->dar=rd(DAR,4);p->tcr=rd(TCR,4);p->chcr=control;
     p->expected_sar=p->sar;p->expected_dar=p->dar;p->expected_tcr=p->tcr;p->expected_chcr=p->chcr;
     p->smr=(uint8_t)rd(SMR,1);p->brr=(uint8_t)rd(BRR,1);p->scr=scr;
-    p->scmr=(uint8_t)rd(SCMR,1);p->sptr=(uint8_t)rd(SPTR,1);
+    p->scmr=(uint8_t)rd(SCMR,1);p->sptr=sptr;
     p->sci_priority=irq_get_priority(IRQ_SRC_SCI1);
     for(unsigned i=0;i<3;++i) p->previous[i]=irq_get_handler(events[i]);
     unsigned installed=0;
@@ -223,11 +231,6 @@ static bool dma_unchanged(const struct probe *p) {
     return current.hdl==interrupt && current.data==p &&
         rd(CHCR,4)==p->expected_chcr && rd(SAR,4)==p->expected_sar &&
         rd(DAR,4)==p->expected_dar && rd(TCR,4)==p->expected_tcr;
-}
-static unsigned port_mask(unsigned v) {
-    /* Input-data bits reflect pin levels; restoring their sampled value is
-     * neither possible nor necessary. Compare direction/EIO and output latches. */
-    return 0x8au|((v&2u)?1u:0u)|((v&8u)?4u:0u);
 }
 static void release(struct probe *p) {
     if(!p->leased) return;
@@ -258,7 +261,7 @@ static void release(struct probe *p) {
     bool registers=!p->foreign_dma && !p->quarantined && rd(SAR,4)==p->sar && rd(DAR,4)==p->dar && rd(TCR,4)==p->tcr &&
         rd(CHCR,4)==p->chcr && rd(SMR,1)==p->smr && rd(BRR,1)==p->brr &&
         rd(SCR,1)==p->scr && rd(SCMR,1)==p->scmr &&
-        (rd(SPTR,1)&port_mask(p->sptr))==(p->sptr&port_mask(p->sptr));
+        (rd(SPTR,1)&0x8au)==(p->sptr&0x8au);
     p->out->handlers_restored=handlers;p->out->registers_restored=registers;
     p->out->dma_quarantined=p->quarantined;p->out->foreign_dma=p->foreign_dma;
     p->out->safe_restored=handlers && registers && !(rd(CHCR,4)&7u) &&
@@ -270,11 +273,12 @@ static void release(struct probe *p) {
 static uint8_t byte(const struct kui_loader_sd *c, uint8_t v, bool slow) {
     return c->bus.transfer(c->bus.ctx,v,slow);
 }
-static enum kui_sci_async_status token(const struct kui_loader_sd *c,uint32_t lba,bool slow) {
+static enum kui_sci_async_status token(struct probe *p,const struct kui_loader_sd *c,uint32_t lba,bool slow) {
     uint32_t address=c->high_capacity?lba:lba*512u;
     uint8_t cmd[6]={0x51,(uint8_t)(address>>24),(uint8_t)(address>>16),
         (uint8_t)(address>>8),(uint8_t)address,0};
     cmd[5]=command_crc(cmd,5);
+    p->stage->last_phase=KUI_SCI_ASYNC_PHASE_READY;
     c->bus.select(c->bus.ctx,false);(void)byte(c,0xff,slow);
     c->bus.select(c->bus.ctx,true);
     uint64_t start=timer_us_gettime64(); bool ready=false;
@@ -283,13 +287,17 @@ static enum kui_sci_async_status token(const struct kui_loader_sd *c,uint32_t lb
         if(timer_us_gettime64()-start>=FRAME_TIMEOUT_US) break;
     }
     if(!ready) return KUI_SCI_ASYNC_TIMEOUT;
+    p->stage->last_phase=KUI_SCI_ASYNC_PHASE_COMMAND;
     for(unsigned i=0;i<6;++i) (void)byte(c,cmd[i],slow);
     uint8_t response=0xff;
     for(unsigned i=0;i<16 && (response&0x80u);++i) response=byte(c,0xff,slow);
+    p->stage->command_response=response;
     if(response) return KUI_SCI_ASYNC_COMMAND;
+    p->stage->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN;
     start=timer_us_gettime64();
     for(unsigned i=0;i<8192;++i) {
         uint8_t v=byte(c,0xff,slow);
+        p->stage->last_token=v;
         if(v==0xfe) return KUI_SCI_ASYNC_OK;
         if(v!=0xff) return KUI_SCI_ASYNC_TOKEN;
         if(timer_us_gettime64()-start>=FRAME_TIMEOUT_US) break;
@@ -306,13 +314,16 @@ static enum kui_sci_async_status trial(struct probe *p,const struct kui_loader_s
         uint32_t lba,const uint8_t *baseline,bool slow) {
     struct kui_sci_async_stage *s=p->stage;
     ++s->attempted;
+    s->last_phase=KUI_SCI_ASYNC_PHASE_BUFFER;
+    s->command_response=s->last_token=0xffu;
     p->out->guards_ok=p->out->crc_ok=p->out->baseline_ok=false;
     memset(&p->rx,SENTINEL,sizeof(p->rx));
     uint32_t address=physical(p->rx.bytes,sizeof(p->rx.bytes));
     if(!address) return KUI_SCI_ASYNC_UNSUPPORTED;
     cache(&p->rx,sizeof(p->rx),false);
-    enum kui_sci_async_status result=token(c,lba,slow);
+    enum kui_sci_async_status result=token(p,c,lba,slow);
     if(result!=KUI_SCI_ASYNC_OK) return result;
+    s->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN_END;
     /* transfer() returns at RDRF. Wait for the token's final wire edge before
      * replacing full-duplex clocking; don't turn its last bit into payload. */
     bool ended=false;
@@ -324,18 +335,24 @@ static enum kui_sci_async_status trial(struct probe *p,const struct kui_loader_s
     if(!ended) return KUI_SCI_ASYNC_TIMEOUT;
     settle(slow?1024u:64u);
     uint64_t masked_start=timer_us_gettime64();irq_mask_t mask=irq_disable();
+    s->last_phase=KUI_SCI_ASYNC_PHASE_OWNERSHIP;
     if(!dma_unchanged(p)) {
         p->foreign_dma=true;unmask(p,mask,masked_start);return KUI_SCI_ASYNC_BUSY;
     }
-    /* Preload TxD's GPIO latch high before TE is cleared. SPB1IO remains zero
-     * so SCK is owned by the receiver, not a GPIO output. */
+    /* Preload TxD's GPIO latch high before TE is cleared. SPTR reads return
+     * RxD/SCK pin levels even when output is selected (manual 15.2.8), so only
+     * EIO and direction controls can be verified. SPB1IO remains zero. */
+    s->last_phase=KUI_SCI_ASYNC_PHASE_GPIO;
     wr(SPTR,0x83u,1);
-    if((rd(SPTR,1)&0x8bu)!=0x83u) {unmask(p,mask,masked_start);return KUI_SCI_ASYNC_UNSUPPORTED;}
+    uint32_t port_value=rd(SPTR,1);
+    s->snapshot_sptr=port_value;s->snapshot_ssr=rd(SSR,1);
+    if((port_value&0x8au)!=0x82u) {unmask(p,mask,masked_start);return KUI_SCI_ASYNC_UNSUPPORTED;}
     wr(SCR,0,1);
     wr(CHCR,0,4);wr(SAR,RDR&UINT32_C(0x1fffffff),4);wr(DAR,address,4);wr(TCR,514,4);
     p->start_address=address;
     p->done=false;p->event=0;p->end_count=514;p->end_chcr=0;p->end_ssr=0;
     p->start_us=timer_us_gettime64();p->armed=true;
+    s->last_phase=KUI_SCI_ASYNC_PHASE_DMA;++s->dma_started;
     wr(CHCR,RX_DMA,4);
     wr(SCR,0x50u,1); /* RIE + RE, no transmitter/dummy-byte CPU loop. */
     unmask(p,mask,masked_start);
@@ -372,6 +389,7 @@ static enum kui_sci_async_status trial(struct probe *p,const struct kui_loader_s
         if(timeout || !delivered) {++s->timeouts;return KUI_SCI_ASYNC_TIMEOUT;}
         ++s->premature_errors;return KUI_SCI_ASYNC_RECEIVE_ERROR;
     }
+    s->last_phase=KUI_SCI_ASYNC_PHASE_VALIDATE;
     cache(&p->rx,sizeof(p->rx),true);
     if(!guards(&p->rx)) {p->out->guards_ok=false;return KUI_SCI_ASYNC_GUARD;}
     p->out->guards_ok=true;
@@ -392,6 +410,7 @@ static enum kui_sci_async_status trial(struct probe *p,const struct kui_loader_s
     if(!equal) {p->out->baseline_ok=false;return KUI_SCI_ASYNC_MISMATCH;}
     p->out->baseline_ok=true;
     if(p->end_ssr&ORER) ++s->trailing_overruns;
+    s->last_phase=KUI_SCI_ASYNC_PHASE_COMPLETE;
     ++s->passed;return KUI_SCI_ASYNC_OK;
 }
 
@@ -414,6 +433,9 @@ enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *c,
     max_time(&out->max_irq_masked_us,reservation_start);
     irq_restore(initial_mask);
     out->slow.clock_hz=390625;out->fast.clock_hz=12500000;
+    out->slow.command_response=out->slow.last_token=0xffu;
+    out->fast.command_response=out->fast.last_token=0xffu;
+    p->stage=&out->slow;
     out->status=lease(p);
     out->operation_status=out->status;
     if(out->status!=KUI_SCI_ASYNC_OK) {
@@ -430,6 +452,11 @@ enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *c,
         for(unsigned n=0;n<count;++n) {
             if(cancelled && cancelled(ctx)) {out->status=KUI_SCI_ASYNC_CANCELLED;break;}
             out->status=trial(p,c,lba,baseline,speed==0);
+            if(p->stage->last_phase<KUI_SCI_ASYNC_PHASE_DMA &&
+               p->stage->last_phase!=KUI_SCI_ASYNC_PHASE_GPIO) {
+                p->stage->snapshot_ssr=rd(SSR,1);
+                p->stage->snapshot_sptr=rd(SPTR,1);
+            }
             c->bus.select(c->bus.ctx,false);
             if(out->status!=KUI_SCI_ASYNC_OK) break;
             /* Return GPIO ownership before normal command framing. The next
@@ -455,4 +482,10 @@ const char *kui_sci_async_status_name(enum kui_sci_async_status s) {
         "cancelled","CMD17 rejected","data token error","timeout","receive error","DMA error",
         "buffer guard changed","CRC mismatch","baseline mismatch","restore failed","no CPU overlap measured"};
     return (unsigned)s<sizeof(names)/sizeof(names[0])?names[s]:"unknown";
+}
+
+const char *kui_sci_async_phase_name(enum kui_sci_async_phase p) {
+    static const char *const names[]={"none","lease","buffer","ready","command","token",
+        "token end","ownership","GPIO","DMA","validate","complete"};
+    return (unsigned)p<sizeof(names)/sizeof(names[0])?names[p]:"unknown";
 }

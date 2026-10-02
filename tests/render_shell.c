@@ -15,7 +15,7 @@
  * files-view, files-copying, files-keyboard, network, ftp-starting, ftp-ready,
  * ftp-busy, ftp-stopped, ftp-failed, storage-tests, storage-test-confirm,
  * storage-test-busy, storage-test-result, storage-test-details,
- * storage-test-mismatch, storage-test-history, sci-async-probe, sci-async-result. */
+ * storage-test-mismatch, storage-test-history, sci-async-probe, sci-async-result, sci-async-failure, sci-async-dma-failure. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <string.h>
@@ -438,7 +438,7 @@ int main(int argc,char **argv) {
     } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=home_row(KUI_SHELL_VMU);
     else if(!strcmp(argv[1],"home-memory")) shell.home_selected=home_row(KUI_SHELL_MEMORY);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
-    else if(!strcmp(argv[1],"sci-async-probe") || !strcmp(argv[1],"sci-async-result")) {
+    else if(!strcmp(argv[1],"sci-async-probe") || !strcmp(argv[1],"sci-async-result") || !strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure")) {
         shell.page=KUI_SHELL_SCI_ASYNC_PROBE;view.app_status=&status;
         status=(struct kui_app_status){0};view.busy=false;
         if(!strcmp(argv[1],"sci-async-result")) {
@@ -449,6 +449,21 @@ int main(int argc,char **argv) {
                 "CRC OK  Data OK  Buffer guards OK","Normal read recovery: verified","Saved independent report:",
                 "/KUI/tests/sci-async-0001/sci-async-probe.json","Normal game reads are unchanged by this experiment."};
             for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",probe_lines[i]);
+        } else if(!strcmp(argv[1],"sci-async-failure") || !strcmp(argv[1],"sci-async-dma-failure")) {
+            status.complete=true;status.errors=1;status.line_count=8;
+            snprintf(status.message,sizeof(status.message),"SCI unsupported state; reinit init failed. Restart required.");
+            const char *probe_lines[]={"Slow: 0/1 reads verified; 0 DMA interrupts",
+                "Fast: 0/0 reads verified; 0 DMA interrupts","CPU overlap batches: slow 0 / fast 0",
+                "CRC unconfirmed  Data unconfirmed  Buffer guards unconfirmed",
+                "Normal read recovery: FAILED - restart required","Report not saved; photograph this result.",
+                "Recover init: card timeout; CMD0 R1FF","GPIO: DMA0 SSR84 SPTR82 R100 TKFE"};
+            for(unsigned i=0;i<8;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",probe_lines[i]);
+            if(!strcmp(argv[1],"sci-async-dma-failure")) {
+                snprintf(status.message,sizeof(status.message),"SCI receive error. Storage locked until restart.");
+                snprintf(status.lines[3],KUI_APP_LINE_CAP,"DMA left 513 CHCR00004911 ERI1 RXI0");
+                snprintf(status.lines[6],KUI_APP_LINE_CAP,"No saved path");
+                snprintf(status.lines[7],KUI_APP_LINE_CAP,"DMA: DMA1 SSR20 SPTR84 R100 TKFE");
+            }
         }
     }
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;

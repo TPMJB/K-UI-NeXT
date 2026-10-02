@@ -35,7 +35,8 @@ enum fault { NO_FAULT, EARLY_ERROR, BAD_CRC, WRONG_DATA, STALLED,
              BAD_GUARD, DMA_FAULT, TRAILING_ERROR, BAD_RESPONSE, BAD_TOKEN,
              TRAILING_FRAME_ERROR, TRAILING_PARITY_ERROR, TRAILING_ERI,
              EARLY_RX_IRQ, TRAILING_WITHOUT_END, BAD_PADDING,
-             FOREIGN_DURING_FRAMING, FOREIGN_AFTER_DMA, FOREIGN_DURING_DMA };
+             FOREIGN_DURING_FRAMING, FOREIGN_AFTER_DMA, FOREIGN_DURING_DMA,
+             TOKEN_NOT_ENDED, BAD_GPIO_CONTROL };
 static struct {
     uint8_t smr, brr, scr, ssr, rdr, scmr, sptr;
     uint16_t pdtr;
@@ -56,6 +57,7 @@ static struct {
     bool selected, token_sent, response_sent, inside_irq, pending_dma;
     bool fault_fired, advancing, fail_restore_register, foreign_active;
     bool dynamic_sptr_inputs, no_overlap, fail_handler_restore;
+    bool rxd_pin, sck_pin, token_rx_high;
     enum fault fault;
 } hw;
 static int handler_data[3];
@@ -239,17 +241,10 @@ uint32_t kui_sci_async_test_read(uint32_t address,unsigned width) {
         case SCMR: assert(width==1); return hw.scmr;
         case SPTR: {
             assert(width==1);
-            uint8_t value=hw.sptr;
-            if(hw.dynamic_sptr_inputs) {
-                if((value&2u) && !(value&8u)) {
-                    /* SCK input monitor is high while TxD is held high. */
-                    value|=4u; ++hw.monitored_gpio_reads;
-                } else if(!(value&0x0au) && hw.command_count) {
-                    /* Both inputs changed since the original snapshot. */
-                    value=(uint8_t)((value&~4u)|1u);
-                }
-            }
-            return value;
+            /* Reads expose RxD/SCK pins, never the output data latches,
+             * regardless of output directions or the transmitter state. */
+            if(hw.sptr&2u) ++hw.monitored_gpio_reads;
+            return (hw.sptr&~5u)|(hw.rxd_pin?1u:0u)|(hw.sck_pin?4u:0u);
         }
         case PDTR: assert(width==2); return hw.pdtr;
         case SAR: assert(width==4); return hw.sar;
@@ -278,12 +273,17 @@ void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
                 if(hw.brr) ++hw.slow_starts; else ++hw.fast_starts;
                 hw.transferred=0; ++hw.dma_starts;
             }
-            hw.scr=value; break;
+            hw.scr=value;
+            if(!(value&0x20u)) hw.ssr|=TEND;
+            break;
         case SSR: assert(width==1); hw.ssr&=value; break;
         case SCMR: assert(width==1); hw.scmr=value; break;
         case SPTR:
             assert(width==1);
-            if(!(hw.fail_restore_register && value==0x04)) hw.sptr=value;
+            if(!(hw.fail_restore_register && value==0x04)) {
+                hw.sptr=value;
+                if(hw.fault==BAD_GPIO_CONTROL && value==0x83) hw.sptr&=(uint8_t)~0x80u;
+            }
             break;
         case SAR: assert(width==4); hw.sar=value; break;
         case DAR: assert(width==4); hw.dar=value; break;
@@ -307,7 +307,12 @@ static void bus_select(void *ctx,bool selected) {
     }
     hw.selected=selected;
     if(selected) hw.pdtr&=(uint16_t)~0x80u;
-    else hw.pdtr|=0x80u;
+    else {
+        hw.pdtr|=0x80u;
+        if(hw.dynamic_sptr_inputs && hw.command_count) {
+            hw.rxd_pin=true; hw.sck_pin=false;
+        }
+    }
 }
 static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
     assert(ctx==&hw && (hw.scr&0x70u)!=0x50u);
@@ -329,6 +334,10 @@ static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
     }
     if(!hw.token_sent) {
         hw.token_sent=true;
+        /* The last bit of a successful 0xfe token is zero. Outputting a
+         * high TxD latch must not turn this independent RxD input high. */
+        hw.rxd_pin=hw.token_rx_high; hw.sck_pin=true;
+        if(hw.fault==TOKEN_NOT_ENDED) hw.ssr&=(uint8_t)~TEND;
         if(hw.fault==FOREIGN_DURING_FRAMING) install_foreign_dma();
         return hw.fault==BAD_TOKEN?0x0b:0xfe;
     }
@@ -338,6 +347,7 @@ static uint32_t bus_ticks(void *ctx) { assert(ctx==&hw); return (uint32_t)(hw.no
 static struct kui_loader_sd reset(void) {
     memset(&hw,0,sizeof(hw));
     hw.smr=0x80; hw.brr=0; hw.scr=0x30; hw.ssr=TDRE|TEND; hw.sptr=0x04;
+    hw.sck_pin=true;
     hw.pdtr=0x1280;
     hw.sar=0x0c002000; hw.dar=0x0c004000; hw.tcr=19;
     hw.chcr=0x4000; hw.dmaor=0x0301;
@@ -361,14 +371,25 @@ static void restored(const struct kui_sci_async_probe_result *result) {
         assert(hw.handlers[i].data==&handler_data[i]);
     }
 }
-static void test_success(void) {
-    struct kui_loader_sd card=reset();
+static void test_success(bool high_miso) {
+    struct kui_loader_sd card=reset(); hw.token_rx_high=high_miso;
     struct kui_sci_async_probe_result result;
     assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_OK);
     assert(result.status==KUI_SCI_ASYNC_OK && result.started && result.lba==123);
     assert(result.slow.attempted==16 && result.slow.passed==16);
     assert(result.fast.attempted==64 && result.fast.passed==64);
     assert(result.slow.dma_irqs==16 && result.fast.dma_irqs==64);
+    assert(result.slow.dma_started==16 && result.fast.dma_started==64);
+    assert(result.slow.last_phase==KUI_SCI_ASYNC_PHASE_COMPLETE);
+    assert(result.fast.last_phase==KUI_SCI_ASYNC_PHASE_COMPLETE);
+    assert(result.slow.command_response==0 && result.fast.command_response==0);
+    assert(result.slow.last_token==0xfe && result.fast.last_token==0xfe);
+    /* Both pin states complete all 80 transfers with the same high TxD latch.
+     * The former gate would incorrectly reject the low-input case. */
+    uint32_t sampled=0x86u|(high_miso?1u:0u);
+    assert(result.slow.snapshot_sptr==sampled && result.fast.snapshot_sptr==sampled);
+    assert(((sampled&0x8bu)==0x83u)==high_miso);
+    assert((sampled&0x8au)==0x82u);
     assert(result.slow.overlap_iterations && result.fast.overlap_iterations && hw.work_ticks);
     assert(result.guards_ok && result.crc_ok && result.baseline_ok);
     assert(hw.command_count==80 && hw.dma_starts==80 && hw.command_argument==123);
@@ -382,6 +403,19 @@ static void test_fault(enum fault fault,enum kui_sci_async_status expected) {
     assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==expected);
     assert(result.status==expected && result.started && result.slow.passed==0);
     assert(result.fast.attempted==0);
+    if(fault==BAD_RESPONSE || fault==BAD_TOKEN || fault==TOKEN_NOT_ENDED || fault==BAD_GPIO_CONTROL) {
+        enum kui_sci_async_phase phase=fault==BAD_RESPONSE?KUI_SCI_ASYNC_PHASE_COMMAND:
+            fault==BAD_TOKEN?KUI_SCI_ASYNC_PHASE_TOKEN:
+            fault==TOKEN_NOT_ENDED?KUI_SCI_ASYNC_PHASE_TOKEN_END:KUI_SCI_ASYNC_PHASE_GPIO;
+        assert(result.slow.last_phase==phase && !result.slow.dma_started);
+        assert(!hw.dma_starts && !result.slow.dma_irqs && !result.slow.overlap_batches);
+        assert(!result.guards_ok && !result.crc_ok && !result.baseline_ok);
+        assert(result.slow.command_response==(fault==BAD_RESPONSE?0x04u:0u));
+        assert(result.slow.last_token==(fault==BAD_RESPONSE?0xffu:fault==BAD_TOKEN?0x0bu:0xfeu));
+        assert(result.slow.snapshot_ssr==(fault==TOKEN_NOT_ENDED?TDRE:TDRE|TEND));
+        assert(result.slow.snapshot_sptr==(fault==BAD_GPIO_CONTROL?0x06u:0x04u));
+        assert(result.operation_status==expected && !result.dma_quarantined);
+    }
     restored(&result);
 }
 static void quarantined_fault(enum fault fault,enum kui_sci_async_status cause) {
@@ -448,10 +482,36 @@ static void test_sptr_input_monitors(void) {
     struct kui_sci_async_probe_result result;
     assert(kui_sci_async_test_read(SPTR,1)==0x04);
     assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_OK);
-    assert(hw.monitored_gpio_reads==80);
+    assert(hw.monitored_gpio_reads>=80);
     assert(kui_sci_async_test_read(SPTR,1)==0x01);
     assert(result.slow.passed==16 && result.fast.passed==64);
     restored(&result);
+}
+static void test_sptr_reads_pins_with_transmitter_on_or_off(void) {
+    (void)reset();
+    hw.sptr=0x83; /* High TxD output latch, EIO and SPB0IO enabled. */
+    assert(hw.scr&0x20u);
+    assert(kui_sci_async_test_read(SPTR,1)==0x86); /* RxD remains low. */
+    hw.scr=0;
+    assert(kui_sci_async_test_read(SPTR,1)==0x86);
+    hw.rxd_pin=true; hw.sck_pin=false;
+    assert(kui_sci_async_test_read(SPTR,1)==0x83);
+    hw.sptr=0; /* Changing direction still does not change which pins read. */
+    assert(kui_sci_async_test_read(SPTR,1)==0x01);
+}
+static void test_preexisting_gpio_output_no_touch(void) {
+    const uint8_t directions[]={2,8,10};
+    for(unsigned i=0;i<sizeof(directions);++i) {
+        struct kui_loader_sd card=reset(); hw.sptr|=directions[i];
+        uint8_t before=hw.sptr;
+        struct kui_sci_async_probe_result result;
+        assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_UNSUPPORTED);
+        assert(!result.started && !hw.writes && !hw.handler_writes && !hw.priority_writes);
+        assert(!hw.command_count && hw.sptr==before);
+        assert(result.slow.last_phase==KUI_SCI_ASYNC_PHASE_LEASE);
+        assert(!result.slow.attempted && !result.slow.dma_started);
+        assert((result.slow.snapshot_sptr&0x0au)==directions[i]);
+    }
 }
 static void test_no_foreground_overlap(void) {
     struct kui_loader_sd card=reset(); hw.no_overlap=true;
@@ -566,9 +626,12 @@ static void isolated(void (*test)(void)) {
     assert(WIFEXITED(status) && WEXITSTATUS(status)==0);
 }
 int main(void) {
-    test_success();
+    test_success(false);
+    test_success(true);
     test_standard_capacity_address();
     test_sptr_input_monitors();
+    test_sptr_reads_pins_with_transmitter_on_or_off();
+    test_preexisting_gpio_output_no_touch();
     test_no_foreground_overlap();
     isolated(test_early_error_quarantined);
     test_fault(BAD_CRC,KUI_SCI_ASYNC_CRC);
@@ -576,6 +639,8 @@ int main(void) {
     isolated(test_timeout_quarantined);
     test_fault(BAD_RESPONSE,KUI_SCI_ASYNC_COMMAND);
     test_fault(BAD_TOKEN,KUI_SCI_ASYNC_TOKEN);
+    test_fault(TOKEN_NOT_ENDED,KUI_SCI_ASYNC_TIMEOUT);
+    test_fault(BAD_GPIO_CONTROL,KUI_SCI_ASYNC_UNSUPPORTED);
     test_fault(BAD_GUARD,KUI_SCI_ASYNC_GUARD);
     test_fault(BAD_PADDING,KUI_SCI_ASYNC_GUARD);
     test_fault(TRAILING_FRAME_ERROR,KUI_SCI_ASYNC_RECEIVE_ERROR);

@@ -17,6 +17,11 @@
 #include <stdio.h>
 #include <string.h>
 static bool sci_probe_poisoned;
+/* Diagnostic observations only; the shared reader's control flow is unchanged. */
+static enum kui_sd_async_recovery_phase sci_connect_phase;
+static enum kui_loader_sd_result sci_connect_result;
+static uint8_t sci_connect_command, sci_connect_response;
+static bool sci_connect_healthy;
 #endif
 
 /* One filesystem owner, one selected device per boot. Explicit benchmark
@@ -233,9 +238,18 @@ static bool open_device(unsigned transport) {
         irq_mask_t mask=irq_disable();
         enum kui_loader_sd_result result=kui_sci_sd_acquire();
         irq_restore(mask);
+#ifdef KUI_SCI_ASYNC_RUNTIME
+        sci_connect_phase=KUI_SD_ASYNC_RECOVERY_ACQUIRE;sci_connect_result=result;
+        sci_connect_command=sci_connect_response=0xff;sci_connect_healthy=false;
+#endif
         if(result==KUI_LOADER_SD_OK) {
             sci_bus=*kui_sci_sd_bus();sci_bus.ticks=sci_ticks;sci_bus.end=sci_end;
             result=kui_loader_sd_init_bus(&sci,&sci_bus);
+#ifdef KUI_SCI_ASYNC_RUNTIME
+            sci_connect_phase=KUI_SD_ASYNC_RECOVERY_INITIALIZE;sci_connect_result=result;
+            sci_connect_command=sci.last_command;sci_connect_response=sci.last_response;
+            sci_connect_healthy=kui_sci_sd_healthy();
+#endif
             ok=result==KUI_LOADER_SD_OK && kui_sci_sd_healthy();
             if(ok) sci_detected=true;
             if(!ok) {
@@ -290,6 +304,17 @@ bool kui_sd_connect(void) {
 }
 
 #ifdef KUI_SCI_ASYNC_RUNTIME
+const char *kui_sd_async_recovery_name(enum kui_sd_async_recovery_phase phase) {
+    switch(phase) {
+        case KUI_SD_ASYNC_RECOVERY_ACQUIRE:return "acquire";
+        case KUI_SD_ASYNC_RECOVERY_INITIALIZE:return "init";
+        case KUI_SD_ASYNC_RECOVERY_READ:return "read";
+        default:return "not attempted";
+    }
+}
+static enum kui_sci_async_status async_reason(const struct kui_sci_async_probe_result *p) {
+    return p->operation_status==KUI_SCI_ASYNC_OK?p->status:p->operation_status;
+}
 void kui_sd_async_probe(struct kui_sd_async_result *out,
         bool (*cancelled)(void *),void *cancel_ctx) {
     /* Dedicated storage, never a guest destination or the bus DMA buffer. */
@@ -297,6 +322,7 @@ void kui_sd_async_probe(struct kui_sd_async_result *out,
     static uint8_t verify[512] __attribute__((aligned(32)));
     if(!out) return;
     *out=(struct kui_sd_async_result){0};
+    out->recovery_command=out->recovery_response=0xff;
     out->probe.status=KUI_SCI_ASYNC_UNSUPPORTED;
     if(!connected || active!=KUI_STORAGE_SCI || selected!=KUI_STORAGE_SCI ||
        !sci.ready || sci.slow || !kui_sci_sd_healthy()) {
@@ -327,7 +353,7 @@ void kui_sd_async_probe(struct kui_sd_async_result *out,
     (void)kui_sci_async_probe_run(&sci,0,baseline,cancelled,cancel_ctx,&out->probe);
     if(out->probe.status==KUI_SCI_ASYNC_RESTORE ||
        (out->probe.started && !out->probe.safe_restored)) {
-        enum kui_sci_async_status reason=out->probe.operation_status;
+        enum kui_sci_async_status reason=async_reason(&out->probe);
         if(reason==KUI_SCI_ASYNC_OK) reason=KUI_SCI_ASYNC_RESTORE;
         snprintf(out->message,sizeof(out->message),"SCI %s. Storage locked until restart.",
             kui_sci_async_status_name(reason));
@@ -339,18 +365,30 @@ void kui_sd_async_probe(struct kui_sd_async_result *out,
          * an interrupted sector. Discard it, release, then initialize anew. */
         sci.ready=false;kui_sd_disconnect();
         out->recovery_reinitialized=true;
-        if(!kui_sd_connect()) {
-            snprintf(out->message,sizeof(out->message),"Card reinitialization failed. Restart before using storage.");
+        bool reopened=kui_sd_connect();
+        out->recovery_phase=sci_connect_phase;out->recovery_result=sci_connect_result;
+        out->recovery_bus_healthy=sci_connect_healthy;
+        out->recovery_command=sci_connect_command;out->recovery_response=sci_connect_response;
+        out->recovery_command_valid=sci_connect_phase==KUI_SD_ASYNC_RECOVERY_INITIALIZE && sci_connect_command!=0xff;
+        if(!reopened) {
+            snprintf(out->message,sizeof(out->message),"SCI %s; reinit %s failed. Restart required.",
+                kui_sci_async_status_name(async_reason(&out->probe)),
+                kui_sd_async_recovery_name(out->recovery_phase));
             goto unsafe;
         }
     }
     /* Cancellation never skips the recovery proof. It precedes all report
      * writes and uses the unmodified normal reader with CRC enabled. */
     read=kui_loader_sd_read(&sci,0,1,verify);
-    out->recovery_verified=read==KUI_LOADER_SD_OK && kui_sci_sd_healthy() &&
-        !memcmp(baseline,verify,sizeof(baseline));
+    out->recovery_phase=KUI_SD_ASYNC_RECOVERY_READ;out->recovery_result=read;
+    out->recovery_command=sci.last_command;out->recovery_response=sci.last_response;
+    out->recovery_command_valid=sci.last_command!=0xff;
+    out->recovery_bus_healthy=kui_sci_sd_healthy();
+    out->recovery_data_match=read==KUI_LOADER_SD_OK && !memcmp(baseline,verify,sizeof(baseline));
+    out->recovery_verified=read==KUI_LOADER_SD_OK && out->recovery_bus_healthy && out->recovery_data_match;
     if(!out->recovery_verified) {
-        snprintf(out->message,sizeof(out->message),"Normal read recovery failed. Restart before using storage.");
+        snprintf(out->message,sizeof(out->message),"SCI %s; normal read recovery failed. Restart required.",
+            kui_sci_async_status_name(async_reason(&out->probe)));
         goto unsafe;
     }
     snprintf(out->message,sizeof(out->message),"%s; normal read recovery verified.",

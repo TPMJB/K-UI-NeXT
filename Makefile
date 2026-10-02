@@ -56,6 +56,8 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-sci-async-runtime restore
 	./build/test-sci-async-runtime quarantine
 	./build/test-sci-async-runtime recovery
+	./build/test-sci-async-runtime reinit
+	./build/test-sci-async-runtime reacquire
 	./build/test-sci-async-runtime baseline
 	./build/test-sci-async-runtime baseline-mismatch
 	./build/test-cd-audio guard

@@ -1652,6 +1652,16 @@ static void storage_test_rendering(void) {
     snprintf(probe.lines[1],KUI_APP_LINE_CAP,"Normal read recovery: verified");
     v.app_status=&probe;render(&v);
     assert(strstr(drawn,"proof is incomplete") && strstr(drawn,"slow 0 / fast 0") && strstr(drawn,"recovery: verified"));
+    probe.errors=1;probe.line_count=8;
+    snprintf(probe.message,sizeof(probe.message),"SCI unsupported state; reinit init failed. Restart required.");
+    snprintf(probe.lines[6],KUI_APP_LINE_CAP,"Recover init: card timeout; CMD0 R1FF");
+    snprintf(probe.lines[7],KUI_APP_LINE_CAP,"GPIO: DMA0 SSR84 SPTR82 R100 TKFE");
+    render(&v);
+    assert(strstr(drawn,"unsupported state") && strstr(drawn,"CMD0 R1FF") && strstr(drawn,"SPTR82"));
+    snprintf(probe.lines[3],KUI_APP_LINE_CAP,"DMA left 513 CHCR00004911 ERI1 RXI0");
+    snprintf(probe.lines[7],KUI_APP_LINE_CAP,"DMA: DMA1 SSR20 SPTR84 R100 TKFE");
+    render(&v);
+    assert(strstr(drawn,"DMA left 513") && strstr(drawn,"CHCR00004911") && strstr(drawn,"ERI1 RXI0"));
     v.busy=true;probe.complete=false;v.cancel_requested=true;render(&v);
     assert(strstr(drawn,"Stopping safely") && strstr(drawn,"Keep the card connected"));
     puts("PASS storage tests rendering: progress, rates, safe baseline comparison, metadata, errors and persistence warnings");

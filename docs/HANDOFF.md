@@ -1,5 +1,17 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI autonomous probe: first console failure (2026-10-02 UTC)
+
+Candidate **a3f02d2b0dc5** reached slow trial 1 but verified no data, delivered
+no DMA interrupt and recorded no CPU overlap; fast trials never started.
+The screen says card reinitialization failed and storage requires restart.
+No report was written, as intended after unverified recovery. A confirmed
+probe defect tested SCSPTR's RxD input bit as if it read the TxD output latch;
+a low MISO signal can reject the setup before DMA. The correction and richer
+failure photo details are implemented; corrected console validation is pending. See
+[photo, source defect and limits](evidence/sci-async-first-console-2026-10-02.md).
+This result does not establish that receive-only DMA is impossible.
+
 ## New priority: asynchronous reads and CE IRQ contract (2026-10-02 UTC)
 
 The owner relayed SWAT's explanation that DOA2's remaining slowdown involves
