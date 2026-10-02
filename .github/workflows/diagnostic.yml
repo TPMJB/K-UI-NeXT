@@ -42,7 +42,8 @@ jobs:
       (github.event_name != 'push' || !endsWith(github.ref_name, '-shell')) &&
       (github.event_name != 'pull_request' || endsWith(github.head_ref, '-shell') || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository) }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Full real-filesystem coverage can exceed 15 minutes on hosted runners.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -91,7 +92,8 @@ jobs:
                        'src/dreamcast/main.c', 'src/dreamcast/shell_draw.c',
                        'src/loader/retail_stage.c', 'src/loader/retail_display.c',
                        'tests/games_retail.c', 'tests/render_shell.c', 'tests/test_game_metadata.c',
-                       'tests/test_games_retail.py', 'tests/test_shell.c', 'tests/test_splash_assets.py',
+                       'tests/test_games_retail.py', 'tests/test_shell.c', 'tests/test_splash.c', 'tests/test_splash_assets.py',
+                       'resources/branding/boot-red-README.md',
                        'tests/test_retail_package.py', 'tests/test_workflow_hygiene.py',
                        'tools/build_splash.py', 'tools/render_app_previews.py',
                        'tools/package.py', 'tools/retail_package.py'}
@@ -104,7 +106,7 @@ jobs:
           PY
       - name: Install filesystem test utilities
         if: steps.scope.outputs.console_only != 'true'
-        run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools
+        run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools e2fsprogs
       - name: Restore pinned FatFs downloads
         if: steps.scope.outputs.console_only != 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4

@@ -31,7 +31,7 @@ bool kui_mount(FATFS *fs, kui_log_fn log) {
         fs->fs_type == FS_EXFAT ? "exFAT" : "FAT32", v->count,
         (unsigned long)fs->csize * 512);
     log("Volume start=%" PRIu32 " (%s)", v->start,
-        v->partitioned ? "MBR" : "superfloppy");
+        v->partitioned ? "partition" : "superfloppy");
     return true;
 }
 

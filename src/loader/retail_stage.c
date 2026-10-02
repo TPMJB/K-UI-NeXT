@@ -2,7 +2,7 @@
 #include "kui/retail_loader_layout.h"
 #include "kui/retail_image.h"
 #include "kui/retail_resident.h"
-#include "retail_sd.h"
+#include "retail_storage.h"
 #include "retail_display.h"
 #ifdef KUI_RETAIL_SD_BENCH
 #include "retail_sd_bench.h"
@@ -11,8 +11,12 @@
 #include <stdint.h>
 #include <string.h>
 
-extern const uint8_t __retail_resident_blob_start[] __asm__("__retail_resident_blob_start");
-extern const uint8_t __retail_resident_blob_end[] __asm__("__retail_resident_blob_end");
+extern const uint8_t __retail_resident_scif_blob_start[] __asm__("__retail_resident_scif_blob_start");
+extern const uint8_t __retail_resident_scif_blob_end[] __asm__("__retail_resident_scif_blob_end");
+extern const uint8_t __retail_resident_sci_blob_start[] __asm__("__retail_resident_sci_blob_start");
+extern const uint8_t __retail_resident_sci_blob_end[] __asm__("__retail_resident_sci_blob_end");
+extern const uint8_t __retail_resident_ide_blob_start[] __asm__("__retail_resident_ide_blob_start");
+extern const uint8_t __retail_resident_ide_blob_end[] __asm__("__retail_resident_ide_blob_end");
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
@@ -29,8 +33,7 @@ static uint8_t wire_copy[KUI_RETAIL_MAP_BYTES];
 static uint8_t original_entry[KUI_RETAIL_TRAMPOLINE_BYTES];
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
-static struct kui_loader_sd card;
-static struct kui_loader_sd_stream stream;
+static struct kui_retail_storage card;
 static struct retail_display_state display;
 static enum kui_loader_sd_result last_card_result;
 /* Raw boot sectors are checked, then their 2048 data bytes copied into place.
@@ -39,6 +42,27 @@ static enum kui_loader_sd_result last_card_result;
 #define BOOT_CHUNK_SECTORS 16u
 static uint8_t raw_boot[BOOT_CHUNK_SECTORS*KUI_GAME_RAW_BYTES];
 static uint32_t boot_crc;
+static const uint8_t *resident_blob;
+static size_t resident_bytes;
+
+static void select_resident(void) {
+    const uint8_t *end;
+    switch(manifest.storage_transport) {
+        case KUI_STORAGE_SCIF:
+            resident_blob=__retail_resident_scif_blob_start;
+            end=__retail_resident_scif_blob_end;
+            break;
+        case KUI_STORAGE_SCI:
+            resident_blob=__retail_resident_sci_blob_start;
+            end=__retail_resident_sci_blob_end;
+            break;
+        default: /* Manifest decoding has already rejected every other ID. */
+            resident_blob=__retail_resident_ide_blob_start;
+            end=__retail_resident_ide_blob_end;
+            break;
+    }
+    resident_bytes=(size_t)(end-resident_blob);
+}
 
 static void retire_launcher_serial(void) {
     /* KOS scif_spi_shutdown() calls scif_init(), leaving TE/RE enabled; its
@@ -58,33 +82,35 @@ static void stopped(const char *message,uint32_t detail) {
     retail_display_hex("DETAIL",detail);
     retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
-    retail_display_line("SD CARD WAS READ ONLY");
+    retail_display_line("STORAGE WAS READ ONLY");
     for(;;) __asm__ volatile("nop");
 }
 static int physical_read(void *context,uint32_t lba,uint8_t out[512]) {
-    last_card_result=kui_loader_sd_read(context,lba,1,out);
+    last_card_result=kui_retail_storage_read_run(context,lba,1,out);
     return last_card_result==KUI_LOADER_SD_OK?0:-1;
 }
 static int physical_run(void *context,uint32_t lba,uint32_t available,uint8_t out[512]) {
-    last_card_result=kui_retail_sd_read_run(context,&stream,lba,available,out);
+    last_card_result=kui_retail_storage_read_run(context,lba,available,out);
     return last_card_result==KUI_LOADER_SD_OK?0:-1;
 }
 static void read_sectors(uint32_t lba,uint32_t count,enum kui_game_sector_format format,void *out) {
-    last_card_result=kui_retail_sd_acquire();
+    last_card_result=kui_retail_storage_acquire(&card);
     if(last_card_result!=KUI_LOADER_SD_OK)
-        stopped("SERIAL SD PINS NOT AVAILABLE",(uint32_t)last_card_result);
+        stopped("STORAGE BUS NOT AVAILABLE",(uint32_t)last_card_result);
     size_t bytes=format==KUI_GAME_SECTOR_RAW?KUI_GAME_RAW_BYTES:KUI_GAME_DATA_BYTES;
     enum kui_game_result result=kui_retail_image_read(&image,lba,count,
         format,out,(size_t)count*bytes);
-    enum kui_loader_sd_result stop_result=kui_loader_sd_stream_stop(&card,&stream);
+    enum kui_loader_sd_result stop_result=kui_retail_storage_stop(&card);
     if(last_card_result==KUI_LOADER_SD_OK) last_card_result=stop_result;
     if(stop_result!=KUI_LOADER_SD_OK) image.cache_valid=0;
-    kui_retail_sd_release();
+    kui_retail_storage_release(&card);
     if(result!=KUI_GAME_OK || last_card_result!=KUI_LOADER_SD_OK) {
         retail_display_hex("IMAGE LBA",lba);
-        retail_display_hex("SD RESULT",(uint32_t)last_card_result);
-        retail_display_hex("SD COMMAND",card.last_command);
-        retail_display_hex("SD RESPONSE",card.last_response);
+        retail_display_hex("STORAGE RESULT",(uint32_t)last_card_result);
+        if(card.transport!=KUI_STORAGE_IDE) {
+            retail_display_hex("SD COMMAND",card.device.sd.last_command);
+            retail_display_hex("SD RESPONSE",card.device.sd.last_response);
+        }
         stopped("IMAGE READ FAILED",(uint32_t)result);
     }
 }
@@ -94,7 +120,7 @@ void kui_retail_boot_returned(void) {
 }
 
 static void install_resident(void) {
-    size_t bytes=(size_t)(__retail_resident_blob_end-__retail_resident_blob_start);
+    size_t bytes=resident_bytes;
     if(!bytes || bytes>KUI_RETAIL_RESIDENT_LIMIT-KUI_RETAIL_RESIDENT_ADDRESS)
         stopped("RESIDENT BOUNDS FAILED",(uint32_t)bytes);
     uint32_t firmware=*(volatile uint32_t *)(uintptr_t)0x8c0000bcu;
@@ -102,7 +128,7 @@ static void install_resident(void) {
     if((firmware&1u) || canonical<0x8c000100u || canonical>=KUI_RETAIL_IP_ADDRESS)
         stopped("UNSUPPORTED FIRMWARE GD VECTOR",firmware);
     memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,
-           __retail_resident_blob_start,bytes);
+           resident_blob,bytes);
     kui_retail_stage_sync();
     kui_retail_resident_entry init=(kui_retail_resident_entry)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     int initialized=init(&manifest,&card,firmware,&display);
@@ -115,23 +141,29 @@ void kui_retail_stage_main(const uint8_t *wire) {
     memcpy(wire_copy,wire,sizeof(wire_copy));
     enum kui_game_result result=kui_retail_manifest_decode(wire_copy,&manifest);
     if(result!=KUI_GAME_OK) stopped("INVALID RETAIL MAP",(uint32_t)result);
+    select_resident();
     if(manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
        manifest.session_lba<45000)
         stopped("UNSUPPORTED BOOT LAYOUT",manifest.boot_bytes);
-    retire_launcher_serial();
-    last_card_result=kui_retail_sd_init(&card);
+    if(manifest.storage_transport==KUI_STORAGE_SCIF) retire_launcher_serial();
+    retail_display_line(kui_retail_storage_name(manifest.storage_transport));
+    last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {
-        retail_display_hex("SD COMMAND",card.last_command);
-        retail_display_hex("SD RESPONSE",card.last_response);
-        stopped("READ ONLY SD INIT FAILED",(uint32_t)last_card_result);
+        if(card.transport!=KUI_STORAGE_IDE) {
+            retail_display_hex("SD COMMAND",card.device.sd.last_command);
+            retail_display_hex("SD RESPONSE",card.device.sd.last_response);
+        }
+        stopped("READ ONLY STORAGE INIT FAILED",(uint32_t)last_card_result);
     }
     /* Preparation knows the validated partition end, a lower bound on the
      * physical card size. Trailing unpartitioned sectors are legitimate. */
-    if(card.blocks<manifest.card_sectors)
-        stopped("SD CARD TOO SMALL FOR IMAGE MAP",(uint32_t)card.blocks);
+    if(kui_retail_storage_blocks(&card)<manifest.card_sectors)
+        stopped("STORAGE TOO SMALL FOR IMAGE MAP",(uint32_t)kui_retail_storage_blocks(&card));
 #ifdef KUI_RETAIL_SD_BENCH
-    kui_retail_sd_benchmark(&card,&manifest,&display);
+    if(manifest.storage_transport!=KUI_STORAGE_SCIF)
+        stopped("THIS COMPARISON BENCHMARK REQUIRES SCIF",manifest.storage_transport);
+    kui_retail_sd_benchmark(&card.device.sd,&manifest,&display);
 #endif
     result=kui_retail_image_init(&image,&manifest,physical_read,&card);
     if(result!=KUI_GAME_OK) stopped("IMAGE READER INIT FAILED",(uint32_t)result);
@@ -171,7 +203,7 @@ void kui_retail_stage_main(const uint8_t *wire) {
     memcpy(boot,__retail_trampoline_start,sizeof(original_entry));
     retail_display_line("IP CHECKSUM AND BOOT SECTOR HEADERS PASSED");
     retail_display_hex("BOOT BYTES",manifest.boot_bytes);
-    retail_display_hex("SD BLOCKS READ",image.blocks_read);
+    retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
     /* DreamShell's native Katana path clears this IP bootstrap flag before
      * entering bootstrap2, including its truncated-IP mode. Only this RAM
      * copy changes; the original IP checksum was checked above. */
@@ -207,8 +239,8 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     uint32_t crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
     if(crc!=boot_crc) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
-    size_t bytes=(size_t)(__retail_resident_blob_end-__retail_resident_blob_start);
-    if(memcmp(resident,__retail_resident_blob_start,bytes))
+    size_t bytes=resident_bytes;
+    if(memcmp(resident,resident_blob,bytes))
         stopped("BOOTSTRAP ALTERED RESIDENT",0);
     retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
     retail_display_line("ENTERING GAME");

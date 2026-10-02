@@ -59,7 +59,7 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_FTP;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_SCI_ASYNC_PROBE;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -297,7 +297,8 @@ static void diagnostics(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_PROBE);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_STORAGE_PROBE);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_SAVE_LOG);
-    assert(press(KUI_SHELL_R,false)==KUI_SHELL_BENCH);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_TEST_HISTORY && s.page==KUI_SHELL_STORAGE_TESTS);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DIAGNOSTICS);
     press(KUI_SHELL_UP,true); assert(s.scroll==3);
     press(KUI_SHELL_UP,false); assert(s.scroll==6);
     press(KUI_SHELL_DOWN,false); assert(s.scroll==3);
@@ -1542,9 +1543,143 @@ static void ftp_rendering(void) {
     assert(strstr(drawn,"The FTP server stopped") && strstr(drawn,"No W5500 answered"));
     puts("PASS shell FTP rendering: starting, ready, clients and transfers, stopped, failed");
 }
+static struct kui_storage_test_history test_history;
+static void storage_test_fixture(void) {
+    memset(&test_history,0,sizeof(test_history));test_history.count=2;
+    for(unsigned i=0;i<2;i++) {
+        struct kui_storage_test_result *r=&test_history.rows[i];
+        r->id=12-i;kui_storage_test_defaults(&r->request);r->request.repeats=3;
+        r->outcome=i?KUI_STORAGE_TEST_STOPPED:KUI_STORAGE_TEST_PASSED;
+        r->saved=true;r->sample_count=3;r->cycles=3;r->verified_bytes=12u*1048576;
+        r->elapsed_us=40000000;
+        snprintf(r->request.card_label,sizeof(r->request.card_label),"Samsung 128GB");
+        snprintf(r->metadata.build,sizeof(r->metadata.build),"a1b2c3d4e5f6");
+        snprintf(r->metadata.filesystem,sizeof(r->metadata.filesystem),"exFAT");
+        r->metadata.transport=1;r->metadata.cluster_bytes=131072;r->metadata.ui_hz=2;
+        snprintf(r->path,sizeof(r->path),"/KUI/tests/t0012/result.txt");
+        snprintf(r->message,sizeof(r->message),"Every byte matched after remount.");
+        r->write_latency.max_us=84201;r->write_latency.p95_upper_us=20000;
+        r->read_latency.max_us=19425;r->read_latency.p95_upper_us=20000;
+        for(unsigned j=0;j<3;j++) r->samples[j]=(struct kui_storage_test_sample){
+            .chunk_bytes=65536,.repeat=j+1,.bytes=4u*1048576,
+            .write_us=5000000+j*100000,.read_us=4000000+j*100000,.verified=true};
+    }
+    test_history.baseline=test_history.rows[0];test_history.baseline.id=9;
+    test_history.baseline.metadata.transport=0;test_history.baseline_valid=true;
+    snprintf(test_history.baseline.metadata.build,sizeof(test_history.baseline.metadata.build),"112233445566");
+    for(unsigned i=0;i<3;i++) {test_history.baseline.samples[i].write_us*=2;test_history.baseline.samples[i].read_us*=2;}
+}
+static void storage_test_controls(void) {
+    reset(KUI_SHELL_DIAGNOSTICS);storage_test_fixture();
+    assert(press(KUI_SHELL_R,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_DIAGNOSTICS);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_TEST_HISTORY && s.page==KUI_SHELL_STORAGE_TESTS);
+    kui_shell_set_storage_test_history(&s,&test_history);
+    assert(s.storage_test_last_valid && s.storage_test_last_request.repeats==3);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.storage_test_request.preset==KUI_STORAGE_TEST_COMPARE);
+    press(KUI_SHELL_RIGHT,false);assert(s.storage_test_request.preset==KUI_STORAGE_TEST_SOAK);
+    s.storage_test_selected=2;press(KUI_SHELL_RIGHT,false);assert(s.storage_test_request.soak_minutes==30);
+    press(KUI_SHELL_LEFT,false);assert(s.storage_test_request.soak_minutes==15);
+    s.storage_test_selected=3;press(KUI_SHELL_A,false);assert(s.storage_test_keyboard && s.page==KUI_SHELL_KEYBOARD);
+    strcpy(s.keyboard,"Kingston 64GB");press(KUI_SHELL_START,false);
+    assert(s.page==KUI_SHELL_STORAGE_TESTS && !strcmp(s.storage_test_request.card_label,"Kingston 64GB"));
+    press(KUI_SHELL_A,false);strcpy(s.keyboard,"discarded");press(KUI_SHELL_B,false);
+    assert(!strcmp(s.storage_test_request.card_label,"Kingston 64GB"));
+    s.storage_test_selected=4;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_storage_test);
+    assert(press(KUI_SHELL_L|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R,false)==KUI_SHELL_NONE && s.confirm_storage_test);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_storage_test);
+    press(KUI_SHELL_A,false);assert(press(KUI_SHELL_A,false)==KUI_SHELL_TEST_RUN && !s.confirm_storage_test);
+    assert(press(KUI_SHELL_A|KUI_SHELL_Y|KUI_SHELL_X,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    kui_shell_set_storage_test_result(&s,&test_history.rows[0]);assert(s.storage_test_show_result);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_TEST_BASELINE && s.storage_test_baseline_id==12);
+    press(KUI_SHELL_B,false);s.storage_test_selected=5;
+    s.storage_test_request.repeats=5;press(KUI_SHELL_A,false);
+    assert(s.confirm_storage_test && s.storage_test_request.repeats==3);
+    press(KUI_SHELL_B,false);s.storage_test_selected=6;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_TEST_HISTORY && s.page==KUI_SHELL_STORAGE_TEST_HISTORY);
+    press(KUI_SHELL_DOWN,false);assert(s.storage_history_selected==1);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE); /* stopped is not a baseline */
+    press(KUI_SHELL_A,false);assert(s.storage_test_show_result && s.storage_test_from_history);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE);
+    press(KUI_SHELL_X,false);assert(s.storage_test_details);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_STORAGE_TEST_HISTORY);
+    press(KUI_SHELL_UP,false);test_history.rows[0].saved=false;kui_shell_set_storage_test_history(&s,&test_history);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE); /* failed persistence is not a baseline */
+    press(KUI_SHELL_B,false);s.storage_test_selected=7;assert(press(KUI_SHELL_A,false)==KUI_SHELL_BENCH);
+    assert(s.page==KUI_SHELL_DIAGNOSTICS);
+    press(KUI_SHELL_R,false);s.storage_test_selected=8;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_STORAGE_TESTS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SCI_ASYNC_PROBE);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SCI_ASYNC_RUN);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_SCI_ASYNC_STRESS);
+    assert(press(KUI_SHELL_X,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_SCI_ASYNC_RUN);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_SCI_ASYNC_PROBE);
+    assert(press(KUI_SHELL_X|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_SCI_ASYNC_PROBE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_STORAGE_TESTS);
+    assert(s.storage_test_selected==8);
+    puts("PASS storage tests controls: Diagnostics entry, presets, labels, confirmation, Stop, repeat, history and baseline guards");
+}
+static void storage_test_rendering(void) {
+    reset(KUI_SHELL_STORAGE_TESTS);storage_test_fixture();
+    struct kui_shell_view v={.build="a1b2c3d4e5f6",.storage_test_target="SCI SD"};
+    render(&v);assert(strstr(drawn,"Storage tests") && strstr(drawn,"Target: SCI SD") && strstr(drawn,"Advanced benchmarks"));
+    v.busy=true;render(&v);assert(strstr(drawn,"Working...") && !strstr(drawn,"Preparing tests..."));v.busy=false;
+    s.confirm_storage_test=true;render(&v);
+    assert(strstr(drawn,"dedicated temporary test file") && strstr(drawn,"Music pauses") && strstr(drawn,"A Start test"));
+    s.confirm_storage_test=false;
+    struct kui_storage_test_progress progress={.preset=KUI_STORAGE_TEST_SOAK,.repeat=12,
+        .done=2097152,.total=16777216,.elapsed_us=420000000,.target_us=900000000};
+    strcpy(progress.phase,"Verifying");v.storage_test_progress=&progress;v.busy=true;render(&v);
+    assert(strstr(drawn,"Verifying") && strstr(drawn,"Cycle 12") && strstr(drawn,"7:00") && strstr(drawn,"15 min target"));
+    v.cancel_requested=true;render(&v);assert(strstr(drawn,"Stopping safely"));
+    v.busy=v.cancel_requested=false;
+    kui_shell_set_storage_test_history(&s,&test_history);kui_shell_set_storage_test_result(&s,&test_history.rows[0]);
+    render(&v);assert(strstr(drawn,"Verification: PASSED") && strstr(drawn,"p95 upper bound") && strstr(drawn,"Baseline #9"));
+    assert(strstr(drawn,"+100.") && strstr(drawn,"Range: write"));
+    s.storage_test_history.baseline.metadata.cluster_bytes=65536;render(&v);
+    assert(strstr(drawn,"No comparison:") && !strstr(drawn,"+100."));
+    s.storage_test_result.saved=false;render(&v);assert(strstr(drawn,"Not saved: keep a photo"));
+    s.storage_test_details=true;s.storage_test_result.errors.total=1;
+    s.storage_test_result.errors.last_lba=12345;s.storage_test_result.errors.last_count=4;
+    s.storage_test_result.errors.sd_detail_valid=true;s.storage_test_result.errors.sd_command=24;
+    s.storage_test_result.errors.sd_response=0x0b;s.storage_test_result.cleanup_failed=true;
+    render(&v);assert(strstr(drawn,"Sector 12345 +4") && strstr(drawn,"CMD24") && strstr(drawn,"cleanup failed"));
+    s.page=KUI_SHELL_STORAGE_TEST_HISTORY;render(&v);
+    assert(strstr(drawn,"Newest eight results") && strstr(drawn,"Samsung 128GB") && strstr(drawn,"Baseline #9"));
+    s.page=KUI_SHELL_SCI_ASYNC_PROBE;v.app_status=NULL;v.busy=false;render(&v);
+    assert(strstr(drawn,"SCI async probe") && strstr(drawn,"CPU can work") && strstr(drawn,"/KUI/tests"));
+    assert(strstr(drawn,"16 sectors") && strstr(drawn,"X 60s stress") && strstr(drawn,"Read-only"));
+    struct kui_app_status probe={.complete=true,.line_count=2};
+    snprintf(probe.message,sizeof(probe.message),"Read test finished; async proof is incomplete.");
+    snprintf(probe.lines[0],KUI_APP_LINE_CAP,"CPU overlap batches: slow 0 / fast 0");
+    snprintf(probe.lines[1],KUI_APP_LINE_CAP,"Normal read recovery: verified");
+    v.app_status=&probe;render(&v);
+    assert(strstr(drawn,"proof is incomplete") && strstr(drawn,"slow 0 / fast 0") && strstr(drawn,"recovery: verified"));
+    probe.errors=1;probe.line_count=8;
+    snprintf(probe.message,sizeof(probe.message),"SCI unsupported state; reinit init failed. Restart required.");
+    snprintf(probe.lines[6],KUI_APP_LINE_CAP,"Recover init: card timeout; CMD0 R1FF");
+    snprintf(probe.lines[7],KUI_APP_LINE_CAP,"GPIO: DMA0 SSR84 SPTR82 R100 TKFE");
+    render(&v);
+    assert(strstr(drawn,"unsupported state") && strstr(drawn,"CMD0 R1FF") && strstr(drawn,"SPTR82"));
+    snprintf(probe.lines[3],KUI_APP_LINE_CAP,"DMA left 513 CHCR00004911 ERI1 RXI0");
+    snprintf(probe.lines[7],KUI_APP_LINE_CAP,"DMA: DMA1 SSR20 SPTR84 R100 TKFE");
+    render(&v);
+    assert(strstr(drawn,"DMA left 513") && strstr(drawn,"CHCR00004911") && strstr(drawn,"ERI1 RXI0"));
+    v.busy=true;probe.complete=false;v.cancel_requested=true;render(&v);
+    assert(strstr(drawn,"Stopping safely") && strstr(drawn,"Keep the card connected"));
+    v.cancel_requested=false;v.sci_video_quiet=true;render(&v);
+    assert(strstr(drawn,"screen stays still") && strstr(drawn,"controller input stay active") && strstr(drawn,"Hold B"));
+    puts("PASS storage tests rendering: progress, rates, safe baseline comparison, metadata, errors and persistence warnings");
+}
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--storage-tests")) {
+        storage_test_controls();storage_test_rendering();return 0;
+    }
     games_controls(); games_views(); games_retail_controls(); games_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
+    storage_test_controls();storage_test_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();
     system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();

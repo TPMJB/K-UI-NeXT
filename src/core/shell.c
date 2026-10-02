@@ -18,6 +18,7 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     if(!s) return;
     memset(s, 0, sizeof(*s));
     s->salvage_passes=1;
+    kui_storage_test_defaults(&s->storage_test_request);
     const struct kui_settings initial = {true, false, true};
     kui_shell_set_preferences(s, p ? p : &initial);
     kui_system_settings_default(&s->system_saved);
@@ -622,6 +623,45 @@ void kui_shell_set_files_picture(struct kui_shell *s,const struct kui_files_pict
     if(!s->files_picture.format) s->files_picture.format="";
 }
 static const char keyboard_keys[]="qwertyuiopasdfghjkl/zxcvbnm-_.0123456789";
+void kui_shell_set_storage_test_result(struct kui_shell *s,const struct kui_storage_test_result *result) {
+    if(!s || !result) return;
+    s->storage_test_result=*result;
+    s->storage_test_result.sample_count=result->sample_count>KUI_STORAGE_TEST_SAMPLES?
+        KUI_STORAGE_TEST_SAMPLES:result->sample_count;
+    s->storage_test_result.message[sizeof(result->message)-1]=0;
+    s->storage_test_result.path[sizeof(result->path)-1]=0;
+    s->storage_test_last_request=result->request;
+    s->storage_test_last_valid=kui_storage_test_request_valid(&result->request);
+    s->storage_test_show_result=true;s->storage_test_from_history=false;
+    s->storage_test_details=false;s->storage_test_chunk=1;
+}
+void kui_shell_set_storage_test_history(struct kui_shell *s,const struct kui_storage_test_history *history) {
+    if(!s || !history) return;
+    uint32_t selected=s->storage_history_selected<s->storage_test_history.count?
+        s->storage_test_history.rows[s->storage_history_selected].id:0;
+    s->storage_test_history=*history;
+    if(s->storage_test_history.count>KUI_STORAGE_TEST_HISTORY)
+        s->storage_test_history.count=KUI_STORAGE_TEST_HISTORY;
+    s->storage_test_history.message[sizeof(history->message)-1]=0;
+    s->storage_history_selected=0;
+    for(unsigned i=0;i<s->storage_test_history.count;i++)
+        if(s->storage_test_history.rows[i].id==selected) s->storage_history_selected=i;
+    if(!s->storage_test_last_valid && s->storage_test_history.count &&
+       kui_storage_test_request_valid(&s->storage_test_history.rows[0].request)) {
+        s->storage_test_last_request=s->storage_test_history.rows[0].request;
+        s->storage_test_last_valid=true;
+    }
+}
+static enum kui_shell_action keyboard_done(struct kui_shell *s) {
+    if(s->storage_test_keyboard) {
+        snprintf(s->storage_test_request.card_label,sizeof(s->storage_test_request.card_label),
+            "%.23s",s->keyboard);
+        s->storage_test_keyboard=false;s->page=KUI_SHELL_STORAGE_TESTS;
+        s->destination_notice[0]=0;
+        return KUI_SHELL_NONE;
+    }
+    return s->files_keyboard?files_name_done(s):save_destination(s,s->keyboard);
+}
 const char *kui_shell_key_label(unsigned key, bool uppercase) {
     static char character[2];
     if(key>=KUI_SHELL_KEY_COUNT) return "";
@@ -663,17 +703,19 @@ static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons
     s->keyboard_selected=keyboard_move(s->keyboard_selected,buttons);
     if(buttons&KUI_SHELL_X) keyboard_backspace(s);
     else if(buttons&KUI_SHELL_Y) s->keyboard_upper=!s->keyboard_upper;
-    else if(buttons&KUI_SHELL_START) return s->files_keyboard?files_name_done(s):save_destination(s,s->keyboard);
+    else if(buttons&KUI_SHELL_START) return keyboard_done(s);
     else if(buttons&KUI_SHELL_A) {
-        if(s->keyboard_selected==42) return s->files_keyboard?files_name_done(s):save_destination(s,s->keyboard);
+        if(s->keyboard_selected==42) return keyboard_done(s);
         if(s->keyboard_selected==41) keyboard_backspace(s);
         else {
             size_t n=strlen(s->keyboard);
-            if(n+1<sizeof(s->keyboard)) {
+            size_t limit=s->storage_test_keyboard?sizeof(s->storage_test_request.card_label):sizeof(s->keyboard);
+            if(n+1<limit) {
                 s->keyboard[n]=s->keyboard_selected==40?' ':
                     *kui_shell_key_label(s->keyboard_selected,s->keyboard_upper);
                 s->keyboard[n+1]=0; s->destination_notice[0]=0;
-            } else kui_shell_destination_error(s,s->files_keyboard?"This name is too long.":"This folder path is too long.");
+            } else kui_shell_destination_error(s,s->storage_test_keyboard?"Card labels allow 23 characters.":
+                s->files_keyboard?"This name is too long.":"This folder path is too long.");
         }
     }
     return KUI_SHELL_NONE;
@@ -732,10 +774,30 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     /* Stop/back wins even over a simultaneous confirmation or launch. */
     if(buttons & KUI_SHELL_B) {
         if(busy) {
+            s->confirm_storage_test=false;
             s->confirm_new=false; s->confirm_quick_resume=false; s->confirm_gd_boot=false;
             s->confirm_clock=false;s->confirm_defaults=false;s->confirm_vmu_restore=false;
             s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_music_clear=false;s->confirm_restart=false;s->confirm_salvage=false;
             return KUI_SHELL_STOP;
+        }
+        if(s->confirm_storage_test) {s->confirm_storage_test=false;return KUI_SHELL_NONE;}
+        if(s->storage_test_keyboard && s->page==KUI_SHELL_KEYBOARD) {
+            s->storage_test_keyboard=false;s->page=KUI_SHELL_STORAGE_TESTS;
+            s->destination_notice[0]=0;return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_STORAGE_TESTS) {
+            if(s->storage_test_show_result) {
+                s->storage_test_show_result=false;
+                if(s->storage_test_from_history) s->page=KUI_SHELL_STORAGE_TEST_HISTORY;
+            } else s->page=KUI_SHELL_DIAGNOSTICS;
+            return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_SCI_ASYNC_PROBE) {
+            s->page=KUI_SHELL_STORAGE_TESTS;return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_STORAGE_TEST_HISTORY) {
+            s->page=KUI_SHELL_STORAGE_TESTS;s->storage_test_show_result=false;
+            return KUI_SHELL_NONE;
         }
         if(s->confirm_salvage) {s->confirm_salvage=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_SALVAGE) {s->page=KUI_SHELL_ADVANCED;return KUI_SHELL_NONE;}
@@ -851,7 +913,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
      * priority, and simultaneous triggers do not choose an arbitrary song. */
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
-        s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
+        s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_FILES_CONFIRM;
@@ -864,6 +926,13 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
        (busy || (s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_MUSIC)) && !confirming) return KUI_SHELL_MSTATS;
     if(busy) {
         if(s->page == KUI_SHELL_DIAGNOSTICS) scroll(s, buttons);
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_storage_test) {
+        if(buttons&KUI_SHELL_A) {
+            s->confirm_storage_test=false;s->storage_test_show_result=false;
+            return KUI_SHELL_TEST_RUN;
+        }
         return KUI_SHELL_NONE;
     }
     if(s->confirm_salvage) {
@@ -1329,7 +1398,80 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) return KUI_SHELL_DISC_PROBE;
         if(buttons & KUI_SHELL_X) return KUI_SHELL_STORAGE_PROBE;
         if(buttons & KUI_SHELL_Y) return KUI_SHELL_SAVE_LOG;
-        if(buttons & KUI_SHELL_R) return KUI_SHELL_BENCH;
+        if(buttons & KUI_SHELL_R) {
+            s->page=KUI_SHELL_STORAGE_TESTS;s->storage_test_show_result=false;
+            return KUI_SHELL_TEST_HISTORY;
+        }
+        break;
+    case KUI_SHELL_STORAGE_TESTS: {
+        if(s->storage_test_show_result) {
+            if(buttons&KUI_SHELL_X) s->storage_test_details=!s->storage_test_details;
+            unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+            if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)
+                s->storage_test_chunk=(s->storage_test_chunk+(horizontal==KUI_SHELL_LEFT?2:1))%3;
+            if((buttons&KUI_SHELL_Y) && s->storage_test_result.saved &&
+               s->storage_test_result.outcome==KUI_STORAGE_TEST_PASSED) {
+                s->storage_test_baseline_id=s->storage_test_result.id;
+                return KUI_SHELL_TEST_BASELINE;
+            }
+            break;
+        }
+        s->storage_test_selected=move_count(s->storage_test_selected,buttons,9);
+        unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+        if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
+            unsigned add=horizontal==KUI_SHELL_LEFT?2:1;
+            struct kui_storage_test_request *r=&s->storage_test_request;
+            if(s->storage_test_selected==0) r->preset=(r->preset+add)%3;
+            if(s->storage_test_selected==1 && r->preset!=KUI_STORAGE_TEST_SOAK) {
+                static const unsigned repeats[]={1,3,5};
+                unsigned i=r->repeats==3?1:r->repeats==5?2:0;
+                r->repeats=repeats[(i+add)%3];
+            }
+            if(s->storage_test_selected==2 && r->preset==KUI_STORAGE_TEST_SOAK) {
+                static const unsigned minutes[]={5,15,30,60};
+                unsigned i=r->soak_minutes==15?1:r->soak_minutes==30?2:r->soak_minutes==60?3:0;
+                r->soak_minutes=minutes[(i+(horizontal==KUI_SHELL_LEFT?3:1))%4];
+            }
+        }
+        if(buttons&KUI_SHELL_A) switch(s->storage_test_selected) {
+        case 3:
+            s->storage_test_keyboard=true;s->files_keyboard=false;
+            s->keyboard_selected=0;s->keyboard_upper=false;
+            snprintf(s->keyboard,sizeof(s->keyboard),"%s",s->storage_test_request.card_label);
+            s->destination_notice[0]=0;s->page=KUI_SHELL_KEYBOARD;break;
+        case 4: s->confirm_storage_test=true;break;
+        case 5:
+            if(s->storage_test_last_valid) {
+                s->storage_test_request=s->storage_test_last_request;
+                s->confirm_storage_test=true;
+            }
+            break;
+        case 6:
+            s->page=KUI_SHELL_STORAGE_TEST_HISTORY;s->storage_history_selected=0;
+            return KUI_SHELL_TEST_HISTORY;
+        case 7: s->page=KUI_SHELL_DIAGNOSTICS;return KUI_SHELL_BENCH;
+        case 8: s->page=KUI_SHELL_SCI_ASYNC_PROBE;break;
+        default: break;
+        }
+        break;
+    }
+    case KUI_SHELL_SCI_ASYNC_PROBE:
+        if(buttons&KUI_SHELL_A) return KUI_SHELL_SCI_ASYNC_RUN;
+        if(buttons&KUI_SHELL_X) return KUI_SHELL_SCI_ASYNC_STRESS;
+        break;
+    case KUI_SHELL_STORAGE_TEST_HISTORY:
+        s->storage_history_selected=move_count(s->storage_history_selected,buttons,s->storage_test_history.count);
+        if(s->storage_test_history.count) {
+            const struct kui_storage_test_result *r=&s->storage_test_history.rows[s->storage_history_selected];
+            if(buttons&KUI_SHELL_A) {
+                s->storage_test_result=*r;s->storage_test_show_result=true;
+                s->storage_test_from_history=true;s->storage_test_details=false;
+                s->storage_test_chunk=1;s->page=KUI_SHELL_STORAGE_TESTS;
+            } else if((buttons&KUI_SHELL_Y) && r->saved && r->outcome==KUI_STORAGE_TEST_PASSED) {
+                s->storage_test_baseline_id=r->id;return KUI_SHELL_TEST_BASELINE;
+            }
+        }
+        if(buttons&KUI_SHELL_X) return KUI_SHELL_TEST_HISTORY;
         break;
     }
     return KUI_SHELL_NONE;

@@ -306,8 +306,22 @@ C(kui_retail_game_resume):
 .Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
     .section .resident_blob,"a"
     .align 2
-    .global __retail_resident_blob_start,__retail_resident_blob_end
-__retail_resident_blob_start:
-    .incbin "build/retail/resident.bin"
+    .global __retail_resident_scif_blob_start,__retail_resident_scif_blob_end
+__retail_resident_scif_blob_start:
+    .incbin "build/retail/resident-scif.bin"
     .align 2
-__retail_resident_blob_end:
+__retail_resident_scif_blob_end:
+    .section .resident_blob,"a"
+    .align 2
+    .global __retail_resident_sci_blob_start,__retail_resident_sci_blob_end
+__retail_resident_sci_blob_start:
+    .incbin "build/retail/resident-sci.bin"
+    .align 2
+__retail_resident_sci_blob_end:
+    .section .resident_blob,"a"
+    .align 2
+    .global __retail_resident_ide_blob_start,__retail_resident_ide_blob_end
+__retail_resident_ide_blob_start:
+    .incbin "build/retail/resident-ide.bin"
+    .align 2
+__retail_resident_ide_blob_end:

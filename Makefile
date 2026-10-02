@@ -4,6 +4,7 @@ HOST_FLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
 SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
 INCLUDES = -Iinclude -I.deps/fatfs/source
 CORE = src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c
+STORAGE_TEST_MODEL = src/core/storage_test_model.c src/core/storage_error.c
 LOADER_PROBE = src/core/loader_probe.c
 RESIDENT_IMAGE = src/core/resident_image.c
 GD_SERVICE = src/core/gd_service.c
@@ -11,14 +12,20 @@ DESTINATION = src/core/destination.c src/core/destination_file.c
 CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
+include config/lwext4.mk
+LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
+
 .PHONY: test test-recovery test-images deps diagnostic clean
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
-test: build/test-w5500 build/test-network-w5500 build/test-ftp
+test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
-test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd
-test: build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan
+test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
+test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
+test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+	./build/test-storage-errors
 	./build/test-cd-audio
 	./build/test-game-image
 	./build/test-game-metadata
@@ -35,12 +42,38 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 	./build/test-retail-gd
 	./build/test-retail-pace
 	./build/test-retail-sd
+	./build/test-ce-load-plan
+	./build/test-boot-volume
+	./build/test-boot-ui
+	python3 tests/test_ext4_boot.py
+	python3 tests/test_boot_recovery.py
+	./build/test-ata
+	./build/test-storage-policy
+	./build/test-sci-sd-bus
+	./build/test-retail-storage
+	./build/test-sci-sd-storage
+	./build/test-sci-async-probe
+	./build/test-sci-async-heartbeat
+	./build/test-sci-video-quiet
+	./build/test-sci-async-runtime
+	./build/test-sci-async-runtime restore
+	./build/test-sci-async-runtime quarantine
+	./build/test-sci-async-runtime recovery
+	./build/test-sci-async-runtime reinit
+	./build/test-sci-async-runtime reacquire
+	./build/test-sci-async-runtime baseline
+	./build/test-sci-async-runtime baseline-mismatch
+	./build/test-sci-async-runtime stress-quarantine
+	./build/test-sci-async-runtime stress-recovery
+	./build/test-sci-async-runtime stress-baseline
+	./build/test-sci-async-runtime stress-baseline-mismatch
 	./build/test-cd-audio guard
 	./build/test-network-probe
 	./build/test-network-connect
 	./build/test-w5500
 	./build/test-network-w5500
 	./build/test-ftp
+	./build/test-ftp-cleanup
 	./build/test-menu-sound
 	./build/test-music-ogg
 	./build/test-music-ogg-seek
@@ -91,6 +124,42 @@ test: build/test-cd-audio build/test-network-probe build/test-network-connect bu
 
 deps:
 	python3 tools/fetch_deps.py
+
+build/test-ata: tests/test_ata.c src/core/ata.c include/kui/ata.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude src/core/ata.c tests/test_ata.c -o $@
+
+build/test-storage-policy: tests/test_storage_policy.c src/core/storage_policy.c include/kui/storage_policy.h include/kui/storage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude src/core/storage_policy.c tests/test_storage_policy.c -o $@
+
+build/test-sci-sd-bus: tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $@
+
+build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage.c src/loader/retail_storage.h src/loader/retail_storage_impl.h src/loader/sci_sd_bus.h include/kui/ata.h include/kui/storage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/loader/retail_storage.c tests/test_retail_storage.c -o $@
+
+build/test-sci-sd-storage: tests/test_sci_sd_storage.c src/dreamcast/sci_sd_storage.c src/dreamcast/sci_sd_storage.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader -Isrc/dreamcast src/dreamcast/sci_sd_storage.c tests/test_sci_sd_storage.c -o $@
+
+build/test-sci-async-probe: tests/test_sci_async_probe.c tests/sci_async_probe_test_support.h src/dreamcast/sci_async_probe.c include/kui/sci_async_probe.h src/loader/sd_reader.h src/loader/sci_sd_bus.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_ASYNC_PROBE_TEST=1 -Iinclude -Isrc/loader src/dreamcast/sci_async_probe.c tests/test_sci_async_probe.c -o $@
+
+build/test-sci-video-quiet: tests/test_sci_video_quiet.c include/kui/sci_video_quiet.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude tests/test_sci_video_quiet.c -o $@
+
+build/test-sci-async-heartbeat: tests/test_sci_async_heartbeat.c tests/sci_async_heartbeat_test_support.h src/dreamcast/sci_async_heartbeat.c src/dreamcast/sci_async_heartbeat.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_ASYNC_HEARTBEAT_TEST=1 -Iinclude -Isrc/dreamcast src/dreamcast/sci_async_heartbeat.c tests/test_sci_async_heartbeat.c -o $@
+
+build/test-sci-async-runtime: tests/test_sci_async_runtime.c src/dreamcast/sd.c src/dreamcast/sd.h src/dreamcast/sci_async_heartbeat.h include/kui/sci_async_probe.h src/core/storage_error.c src/core/storage_policy.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_ASYNC_RUNTIME=1 -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c src/core/data.c tests/test_sci_async_runtime.c -o $@
 
 build/test-loader-probe: tests/test_loader_probe.c $(LOADER_PROBE) src/loader/client.c include/kui/loader_probe.h
 	@mkdir -p $(@D)
@@ -145,6 +214,10 @@ build/test-retail-image: tests/test_retail_image.c src/core/retail_image.c inclu
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_image.c tests/test_retail_image.c -o $@
 
+build/test-ce-load-plan: tests/test_ce_load_plan.c src/core/ce_load_plan.c include/kui/ce_load_plan.h include/kui/retail_loader_layout.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude src/core/ce_load_plan.c tests/test_ce_load_plan.c -o $@
+
 build/test-retail-gd: tests/test_retail_gd.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_gd.c tests/test_retail_gd.c -o $@
@@ -188,7 +261,7 @@ build/test-clock: tests/test_clock.c src/core/clock.c include/kui/clock.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/clock.c tests/test_clock.c -o $@
 
-build/test-clock-platform: tests/test_clock_platform.c src/core/clock.c src/dreamcast/clock.c include/kui/clock.h include/kui/clock_platform.h tests/clock_stubs/arch/rtc.h
+build/test-clock-platform: tests/test_clock_platform.c src/core/clock.c src/dreamcast/clock.c include/kui/clock.h include/kui/clock_platform.h tests/clock_stubs/arch/rtc.h tests/clock_stubs/dc/flashrom.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/clock_stubs src/core/clock.c src/dreamcast/clock.c tests/test_clock_platform.c -o $@
 
@@ -216,17 +289,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+build/test-shell: $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/destination.c src/core/files_path.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
+build/render-shell: $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) src/core/destination.c src/core/files_path.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/destination.c src/core/files_path.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -272,7 +345,19 @@ build/settings-image: tests/settings_image.c $(CORE) $(FATFS) src/core/storage_p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/settings.c src/core/settings_file.c src/core/options.c src/core/options_file.c tests/settings_image.c -o $@
 
-test-images: build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+STORAGE_TEST = $(STORAGE_TEST_MODEL) src/core/storage_test.c src/core/storage_test_store.c
+STORAGE_TEST_HEADERS = include/kui/storage_test.h include/kui/storage_error.h
+build/storage-test-image: tests/storage_test_image.c $(CORE) $(STORAGE_TEST) src/core/storage_probe.c $(FATFS) $(STORAGE_TEST_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(STORAGE_TEST) src/core/storage_probe.c $(FATFS) tests/storage_test_image.c -Wl,--wrap=f_open -Wl,--wrap=f_read -Wl,--wrap=f_write -Wl,--wrap=f_sync -Wl,--wrap=f_close -Wl,--wrap=f_mount -Wl,--wrap=f_unlink -Wl,--wrap=f_getfree -o $@
+
+build/storage-test-store-image: tests/storage_test_store_image.c $(CORE) $(STORAGE_TEST_MODEL) src/core/storage_test_store.c $(FATFS) $(STORAGE_TEST_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(STORAGE_TEST_MODEL) src/core/storage_test_store.c $(FATFS) tests/storage_test_store_image.c -o $@
+
+test-images: build/storage-test-image build/storage-test-store-image build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+	python3 tests/test_storage_test_images.py
+	python3 tests/test_storage_test_store_images.py
 	python3 tests/test_games_retail.py
 	python3 tests/test_games_image_probe.py
 	python3 tests/test_loader_probe_images.py
@@ -359,12 +444,12 @@ build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c tests/test_vmu_app.c -o $@
 
 # Original startup assets are encoded on the host, never decoded during ripping.
-build/splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/startup-chime.ogg
+build/splash_pixels.inc build/boot_splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/boot-red.png resources/branding/startup-chime.ogg
 	python3 tools/build_splash.py
 
-build/test-splash: tests/test_splash.c src/apps/splash.c include/kui/splash.h build/splash_pixels.inc
+build/test-splash: tests/test_splash.c src/apps/splash.c src/apps/boot_splash.c include/kui/splash.h build/splash_pixels.inc build/boot_splash_pixels.inc
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/splash.c tests/test_splash.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/apps/splash.c src/apps/boot_splash.c tests/test_splash.c -o $@
 
 build/test-gd-play: tests/test_gd_play.c src/apps/gd_play.c include/kui/gd_play.h tests/gd_play_stubs/arch/arch.h
 	@mkdir -p $(@D)
@@ -498,9 +583,43 @@ FTP_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,-
 build/test-ftp: tests/test_ftp.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c include/kui/ftp.h include/kui/files.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c tests/test_ftp.c -o $@
+build/test-ftp-cleanup: tests/test_ftp_cleanup.c src/apps/ftp_server.c include/kui/ftp.h include/kui/w5500.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_ftp_cleanup.c -Wl,--gc-sections -o $@
 build/ftp-image: tests/ftp_image.c $(FTP) $(CORE) $(FATFS) $(W5500_MODEL) include/kui/ftp.h include/kui/w5500.h include/kui/network_w5500.h include/kui/files.h config/ffconf.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -Itests $(FTP) $(CORE) $(FATFS) tests/w5500_model.c tests/ftp_image.c $(FTP_WRAP) -o $@
 build/games-covers-image: tests/games_covers_image.c $(GAMES_COVERS) $(CORE) $(FATFS) include/kui/games_covers.h include/kui/games.h include/kui/game_cover.h include/kui/pvr_texture.h include/kui/cover_image.h third_party/stb/stb_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(CORE) $(FATFS) tests/games_covers_image.c $(GAMES_COVERS_WRAP) -lm -o $@
+
+# Read-only ext4 bootstrap: upstream warnings remain visible, as for FatFs.
+build/host/third_party/lwext4/src/%.o: third_party/lwext4/src/%.c $(LWEXT4_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) -std=c11 -Os -g -Wall -Wextra $(SANITIZERS) $(LWEXT4_CPPFLAGS) -c $< -o $@
+
+build/test-boot-volume: tests/test_boot_volume.c src/core/boot_volume.c src/core/data.c include/kui/boot_volume.h include/kui/media.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_boot_volume.c src/core/boot_volume.c src/core/data.c -o $@
+
+build/test-boot-ui: tests/test_boot_ui.c src/core/boot_ui.c include/kui/boot_ui.h include/kui/storage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_boot_ui.c src/core/boot_ui.c -o $@
+
+build/render-boot: tests/render_boot.c src/core/boot_ui.c src/dreamcast/boot_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/apps/boot_splash.c build/boot_splash_pixels.inc include/kui/boot_ui.h include/kui/version.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(INCLUDES) tests/render_boot.c src/core/boot_ui.c src/dreamcast/boot_draw.c src/dreamcast/shell_font.c src/apps/boot_splash.c -o $@
+
+build/ext4-boot: tests/ext4_boot.c src/core/ext4_boot.c src/core/boot_volume.c src/core/runtime_image.c src/core/data.c include/kui/ext4_boot.h include/kui/boot_volume.h include/kui/runtime.h $(LWEXT4_HOST_OBJECTS) $(LWEXT4_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(LWEXT4_CPPFLAGS) tests/ext4_boot.c src/core/ext4_boot.c src/core/boot_volume.c src/core/runtime_image.c src/core/data.c $(LWEXT4_HOST_OBJECTS) -o $@
+
+BOOT_RECOVERY_SOURCES := src/core/boot_image.c src/core/boot_volume.c src/core/ext4_boot.c src/core/runtime_image.c src/core/runtime_file.c src/core/storage_policy.c src/core/storage_probe.c
+build/boot-recovery: tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FATFS) $(LWEXT4_HOST_OBJECTS) $(LWEXT4_HEADERS) include/kui/boot_image.h include/kui/boot_volume.h include/kui/ext4_boot.h include/kui/media.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(LWEXT4_CPPFLAGS) tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FATFS) $(LWEXT4_HOST_OBJECTS) -o $@
+
+# Runtime storage failure snapshots, with fake hardware below the real adapter.
+build/test-storage-errors: tests/test_storage_errors.c src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c include/kui/storage_error.h src/dreamcast/sci_sd_storage.h src/loader/sci_sd_bus.h tests/storage_stubs/dc/sd.h tests/storage_stubs/kos/sem.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c tests/test_storage_errors.c -o $@

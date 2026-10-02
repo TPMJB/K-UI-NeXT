@@ -4,6 +4,9 @@
 #include "kui/ui_rate.h"
 #include "kui/report.h"
 #include "kui/clock_platform.h"
+#ifndef KUI_SD_RUNTIME
+#include "kui/boot_ui.h"
+#endif
 #ifdef KUI_SD_RUNTIME
 #include "kui/shell.h"
 #include "kui/settings.h"
@@ -30,6 +33,11 @@
 #include "kui/maintenance.h"
 #include "kui/menu_sound.h"
 #include "kui/cd_audio.h"
+#include "kui/storage_test.h"
+#include "sd.h"
+#include "sci_sd_bus.h"
+#include "kui/sci_video_quiet.h"
+#include <dc/sq.h>
 #endif
 #include <kos.h>
 #include <dc/minifont.h>
@@ -47,6 +55,9 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #define KUI_BUILD_ID "local-unversioned"
 #endif
 #define KUI_BUTTON_BENCH (1u<<29)
+#ifndef KUI_SD_RUNTIME
+#define KUI_BUTTON_BOOT_LEFT (1u<<30)
+#endif
 #ifdef KUI_SD_RUNTIME
 #define KUI_BUTTON_MSTATS (1u<<30)
 static struct kui_memory_stats memory_status;
@@ -90,6 +101,17 @@ static struct kui_datetime clock_pending,clock_snapshot;
 static bool clock_valid;
 static unsigned clock_generation;
 static char clock_note[128];
+static struct kui_storage_test_request storage_test_pending;
+static uint32_t storage_baseline_pending;
+static struct kui_storage_test_result storage_test_result;
+static struct kui_storage_test_history storage_test_history;
+static struct kui_storage_test_progress storage_test_progress;
+static unsigned storage_test_generation, storage_history_generation;
+static bool storage_test_running;
+static struct kui_app_status sci_async_status;
+/* Only the UI thread draws. A fresh request is acknowledged by that thread
+ * after its final frame and SQ drain, never merely by the worker setting a flag. */
+static struct kui_sci_video_quiet sci_video_quiet;
 static struct kui_app_status scan_status,salvage_status;
 static char salvage_path_pending[KUI_DEST_JOB_CAP];
 static unsigned salvage_passes_pending;
@@ -156,6 +178,15 @@ static unsigned line_count;
 static bool log_truncated, busy, cancel_requested, saving_report;
 static unsigned pending;
 static char report[LOG_LINES * LINE_BYTES + 256];
+#ifndef KUI_SD_RUNTIME
+static struct kui_boot_ui boot_ui;
+static bool boot_worker_available,boot_attempt_cancelled;
+static unsigned boot_attempt_previous,boot_held_navigation;
+static uint64_t boot_last_draw,boot_repeat_at;
+static uint64_t boot_draw_us;
+static unsigned boot_draw_count;
+static char boot_notice[128]="Ready to load K-UI. Choose a source or insert your card.";
+#endif
 /* The UI thread is main(). It shares the one CPU with the I/O worker, and a
  * full-screen software redraw plus vid_waitvbl (a busy-wait in this KOS) is a
  * lot of CPU. The cap below lets an operation trade screen updates for speed;
@@ -281,7 +312,7 @@ static void settings_operation(bool save) {
     bool ok = false, destination_ok = false;
     char root[KUI_DEST_ROOT_CAP];
     kui_destination_default(root);
-    kui_sd_set_params(0, true);
+    kui_sd_set_params(KUI_STORAGE_AUTO, true);
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs, kui_log)) {
@@ -303,7 +334,7 @@ static void settings_operation(bool save) {
         ++destination_generation;
     }
     snprintf(settings_note, sizeof(settings_note), "%s", ok ?
-        (save ? "Preferences saved to SD." : "Preferences loaded; bench.cfg may override capture.") :
+        (save ? "Preferences saved to storage." : "Preferences loaded; bench.cfg may override capture.") :
         (save ? "Save not confirmed; reopen Settings to check the card." :
                 "Could not load preferences. See Diagnostics."));
     mutex_unlock(&lock);
@@ -408,7 +439,7 @@ static void system_operation(bool save) {
     mutex_lock(&lock); value=system_pending; legacy_memory=settings_current.show_memory; mutex_unlock(&lock);
     if(!save) kui_system_settings_default(&value);
     bool ok=false;
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs,kui_log)) {
@@ -451,15 +482,562 @@ static void clock_operation(bool write) {
     mutex_lock(&lock);
     clock_valid=valid;clock_snapshot=now;++clock_generation;
     snprintf(clock_note,sizeof(clock_note),"%s",!written?
-        "Clock write not confirmed. Check the displayed time before retrying.":
+        "Clock update not confirmed. Set the time in the Dreamcast BIOS.":
         !valid?"Clock unavailable. Set a valid local date and time.":
-        write?"Console clock updated and read back.":"Local console time; no timezone conversion.");
+        write?"Console clock and BIOS timestamp updated.":"Local console time; no timezone conversion.");
     mutex_unlock(&lock);
-    if(write) kui_log("Clock edit: %s",written?"RTC and system time confirmed":"not confirmed");
+    if(write) kui_log("Clock edit: %s",written?"RTC, system time and BIOS timestamp confirmed":
+        "not confirmed; use the Dreamcast BIOS clock editor");
     if(valid) kui_log("Clock now: %04u-%02u-%02u %02u:%02u:%02u local",
         (unsigned)now.year,(unsigned)now.month,(unsigned)now.day,
         (unsigned)now.hour,(unsigned)now.minute,(unsigned)now.second);
 }
+static uint64_t storage_test_now(void *ctx) {(void)ctx;return timer_us_gettime64();}
+static bool storage_test_cancelled(void *ctx) {(void)ctx;return kui_cancelled();}
+static void storage_test_errors(void *ctx,struct kui_storage_errors *out) {
+    (void)ctx;kui_storage_errors_get(out);
+}
+static void storage_test_publish(void *ctx,const struct kui_storage_test_progress *progress) {
+    (void)ctx;
+    mutex_lock(&lock);storage_test_progress=*progress;mutex_unlock(&lock);
+}
+/* Only the existing filesystem worker executes tests or accesses result files.
+ * Keep the larger snapshots out of the worker stack. None of these operations
+ * consult bench.cfg or redirect I/O to a device other than the selected one. */
+static void storage_test_operation(unsigned action) {
+    static struct kui_storage_test_result result;
+    static struct kui_storage_test_history history;
+    struct kui_music_status music={0};
+    bool resume_music=false;
+    result=(struct kui_storage_test_result){0};
+    history=(struct kui_storage_test_history){0};
+    /* Profiling is scoped to the engine call below, never connection,
+     * History/report writes, normal runtime I/O or the separate game reader. */
+    kui_sci_sd_profile_timer(NULL,NULL);
+    if(action==65) {
+        result.request=storage_test_pending;
+        snprintf(result.metadata.build,sizeof(result.metadata.build),"%.15s",KUI_BUILD_ID);
+        result.metadata.transport=kui_storage_selected();
+        result.metadata.ui_hz=2;
+        struct kui_datetime clock;
+        if(kui_clock_now(&clock)) (void)kui_clock_to_seconds(&clock,&result.metadata.local_seconds);
+        kui_music_status_copy(&music);resume_music=music.playing;
+        if(resume_music) kui_music_pause();
+        kui_storage_errors_reset();
+    }
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    bool connected=kui_sd_connect();
+    if(connected) {
+        if(action==65) {
+            struct kui_storage_test_metadata metadata=result.metadata;
+            metadata.transport=kui_storage_active();
+            const struct kui_storage_test_ops ops={NULL,storage_test_now,storage_test_cancelled,
+                storage_test_publish,storage_test_errors,kui_log};
+            struct kui_sci_sd_stats dma_before, dma_after;
+            kui_sci_sd_stats_get(&dma_before);
+            if(metadata.transport==KUI_STORAGE_SCI)
+                kui_sci_sd_profile_timer(storage_test_now,NULL);
+            kui_storage_test_run(&storage_test_pending,&metadata,&ops,&result);
+            /* Engine returns here for Pass, Stop and every failure. Disable
+             * before the final snapshot and all persistence/history I/O. */
+            kui_sci_sd_profile_timer(NULL,NULL);
+            if(metadata.transport==KUI_STORAGE_SCI) {
+                kui_sci_sd_stats_get(&dma_after);
+                uint32_t reads=dma_after.rx_blocks-dma_before.rx_blocks;
+                uint32_t writes=dma_after.tx_blocks-dma_before.tx_blocks;
+                uint32_t polled=dma_after.polled_blocks-dma_before.polled_blocks;
+                uint32_t failures=dma_after.failures-dma_before.failures;
+                result.sci_profile=(struct kui_storage_test_sci_profile){
+                    .present=true,.rx_dma_blocks=reads,.tx_dma_blocks=writes,
+                    .polled_blocks=polled,.dma_failures=failures,
+                    .profiled_rx_blocks=dma_after.profiled_rx_blocks-dma_before.profiled_rx_blocks,
+                    .profiled_tx_blocks=dma_after.profiled_tx_blocks-dma_before.profiled_tx_blocks,
+                    .rx_setup_us=dma_after.rx_setup_us-dma_before.rx_setup_us,
+                    .rx_transfer_us=dma_after.rx_transfer_us-dma_before.rx_transfer_us,
+                    .rx_check_us=dma_after.rx_check_us-dma_before.rx_check_us,
+                    .tx_setup_us=dma_after.tx_setup_us-dma_before.tx_setup_us,
+                    .tx_transfer_us=dma_after.tx_transfer_us-dma_before.tx_transfer_us
+                };
+                kui_log("SCI test DMA: read=%lu write=%lu polled=%lu failures=%lu",
+                    (unsigned long)reads,(unsigned long)writes,
+                    (unsigned long)polled,(unsigned long)failures);
+                const struct kui_storage_test_sci_profile *profile=&result.sci_profile;
+                kui_log("SCI profile RX %lu blocks: setup=%llu transfer=%llu check=%llu us",
+                    (unsigned long)profile->profiled_rx_blocks,
+                    (unsigned long long)profile->rx_setup_us,
+                    (unsigned long long)profile->rx_transfer_us,
+                    (unsigned long long)profile->rx_check_us);
+                kui_log("SCI profile TX %lu blocks: setup=%llu transfer=%llu us",
+                    (unsigned long)profile->profiled_tx_blocks,
+                    (unsigned long long)profile->tx_setup_us,
+                    (unsigned long long)profile->tx_transfer_us);
+                /* Reuse the versioned result's existing message field so
+                 * JSON and History retain proof of DMA use without changing
+                 * the binary format or hiding a failure's original cause. */
+                if(result.outcome==KUI_STORAGE_TEST_PASSED)
+                    snprintf(result.message,sizeof(result.message),
+                        "Verified after remount; DMA R/W %lu/%lu; PIO %lu; faults %lu",
+                        (unsigned long)reads,(unsigned long)writes,
+                        (unsigned long)polled,(unsigned long)failures);
+            }
+            /* Persist a small final result even after Stop. The sample loop
+             * has already finished; do not lose its outcome to a latched B. */
+            if(result.id && !kui_storage_test_save(&result,kui_log))
+                kui_log("Storage test result could not be saved; keep the results screen.");
+            kui_log("Storage test %u: %s; result %s",(unsigned)result.id,
+                kui_storage_test_outcome_name(result.outcome),result.saved?"saved":"not saved");
+        }
+        bool baseline_ok=true;
+        if(action==67) baseline_ok=kui_storage_test_set_baseline(storage_baseline_pending,kui_log);
+        (void)kui_storage_test_load_history(&history,kui_log);
+        if(action==67) snprintf(history.message,sizeof(history.message),"%s",baseline_ok?
+            "Baseline saved. Matching tests show comparisons.":"Baseline save could not be confirmed. See Diagnostics log.");
+        kui_sd_disconnect();
+    } else {
+        snprintf(history.message,sizeof(history.message),"Storage unavailable; no device switch was attempted.");
+        if(action==65) {
+            result.outcome=KUI_STORAGE_TEST_FAILED;
+            snprintf(result.failure_phase,sizeof(result.failure_phase),"connect");
+            snprintf(result.message,sizeof(result.message),"Selected storage unavailable. Check Diagnostics log.");
+            kui_storage_errors_get(&result.errors);
+        }
+    }
+    if(resume_music) kui_music_resume();
+    mutex_lock(&lock);
+    if(action==65) {storage_test_result=result;++storage_test_generation;}
+    storage_test_history=history;++storage_history_generation;
+    mutex_unlock(&lock);
+}
+/* Independent experiment report: never added to the soak history/baseline. */
+static bool sci_video_quiet_begin(uint32_t *generation) {
+    mutex_lock(&lock);
+    *generation=kui_sci_video_quiet_request(&sci_video_quiet);
+    snprintf(sci_async_status.message,sizeof(sci_async_status.message),"60-second stress: display updates paused.");
+    mutex_unlock(&lock);
+    uint64_t started=timer_ms_gettime64();
+    for(unsigned polls=0;polls<200;polls++) {
+        mutex_lock(&lock);
+        bool cancelled=cancel_requested;
+        bool acknowledged=sci_video_quiet.requested && sci_video_quiet.generation==*generation &&
+            sci_video_quiet.acknowledged;
+        mutex_unlock(&lock);
+        if(cancelled) break;
+        if(acknowledged) return true;
+        if(timer_ms_gettime64()-started>=2000u) break;
+        thd_sleep(10);
+    }
+    mutex_lock(&lock);
+    kui_sci_video_quiet_withdraw(&sci_video_quiet,*generation);
+    mutex_unlock(&lock);
+    return false;
+}
+static void sci_video_quiet_end(uint32_t generation,struct kui_sd_async_result *result) {
+    mutex_lock(&lock);
+    result->video_quiet_requested=true;
+    if(sci_video_quiet.generation==generation) {
+        result->video_quiet_acknowledged=sci_video_quiet.acknowledged;
+        result->video_sq_drained=sci_video_quiet.acknowledged;
+        result->video_frames_during=sci_video_quiet.acknowledged?
+            sci_video_quiet.total_frames-sci_video_quiet.first_frame:0;
+        result->video_redraws_skipped=sci_video_quiet.skipped;
+        kui_sci_video_quiet_withdraw(&sci_video_quiet,generation);
+        snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Reads ended; preparing the result...");
+    }
+    mutex_unlock(&lock);
+}
+static bool sci_async_integrity(const struct kui_sd_async_result *result) {
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    if(!r->crc_ok || !r->baseline_ok || !r->guards_ok) return false;
+    if(result->sustained) {
+        if(!result->baseline_verified || !r->baseline_checked || result->baseline_sectors<2 ||
+           result->baseline_sectors>KUI_SD_ASYNC_STRESS_SECTORS ||
+           result->distinct_lbas_verified!=result->baseline_sectors) return false;
+        uint64_t reads=0;
+        for(unsigned i=0;i<result->baseline_sectors;i++) {
+            if(!result->baseline_reads[i]) return false;
+            reads+=result->baseline_reads[i];
+        }
+        return result->read_cycles && reads==result->read_cycles && result->read_cycles==r->fast.passed &&
+            r->fast.attempted==r->fast.passed;
+    }
+    return
+        r->slow.passed==KUI_SCI_ASYNC_SLOW_TRIALS && r->slow.attempted==r->slow.passed &&
+        r->fast.passed==KUI_SCI_ASYNC_FAST_TRIALS && r->fast.attempted==r->fast.passed;
+}
+static bool sci_async_completion(const struct kui_sd_async_result *result) {
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    return sci_async_integrity(result) && r->slow.dma_irqs==r->slow.passed && r->fast.dma_irqs==r->fast.passed;
+}
+static bool sci_async_passed(const struct kui_sd_async_result *result) {
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    return r->status==KUI_SCI_ASYNC_OK && result->baseline_verified && result->recovery_verified &&
+        r->safe_restored && r->handlers_restored && r->registers_restored &&
+        sci_async_completion(result) && r->fast.overlap_batches &&
+        (!result->sustained || (result->duration_complete && !result->iteration_limit &&
+            result->video_quiet_requested && result->video_quiet_acknowledged && result->video_sq_drained &&
+            !result->video_frames_during &&
+            result->stress_elapsed_us>=result->target_us && result->target_us>=KUI_SD_ASYNC_STRESS_US &&
+            result->heartbeat.installed && result->heartbeat.restored && !result->heartbeat.ownership_lost &&
+            result->heartbeat.dma_ticks));
+}
+static bool sci_async_save(const struct kui_sd_async_result *result,char path[96]) {
+    static char stage[2][2048],json[8192],baseline[3][192],fault[640];
+    const struct kui_sci_async_probe_result *r=&result->probe;
+    const struct kui_sci_async_stage *stages[]={&r->slow,&r->fast};
+    path[0]=0;
+    for(unsigned i=0;i<2;i++) {
+        const struct kui_sci_async_stage *s=stages[i];
+        int n=snprintf(stage[i],sizeof(stage[i]),
+            "{\"clock_hz\":%lu,\"attempted\":%lu,\"passed\":%lu,"
+            "\"dma_irqs\":%lu,\"sci_error_irqs\":%lu,\"unexpected_rx_irqs\":%lu,"
+            "\"trailing_overruns\":%lu,\"premature_errors\":%lu,\"timeouts\":%lu,"
+            "\"overlap_batches\":%lu,\"overlap_iterations\":%lu,\"work_checksum\":%lu,"
+            "\"last_remaining\":%lu,\"last_chcr\":%lu,\"last_ssr\":%lu,"
+            "\"last_phase\":%u,\"last_phase_name\":\"%s\",\"dma_started\":%lu,"
+            "\"command_response\":%lu,\"last_token\":%lu,\"snapshot_ssr\":%lu,\"snapshot_sptr\":%lu,"
+            "\"handoff_checks\":%lu,\"handoff_retries\":%lu,\"handoff_failures\":%lu,"
+            "\"handoff_ssr\":%lu,\"handoff_scr\":%lu,\"handoff_sptr\":%lu,\"bus_faults\":%lu,"
+            "\"module_reset_attempts\":%lu,\"module_resets\":%lu,\"module_reset_failures\":%lu,"
+            "\"module_reset_state\":%lu,\"module_stb_before\":%lu,\"module_stb_stopped\":%lu,\"module_stb_after\":%lu,"
+            "\"framing_step\":%u,\"framing_name\":\"%s\",\"framing_index\":%lu,"
+            "\"bus_fault_valid\":%lu,\"bus_wait_flag\":%lu,\"bus_fault_ssr\":%lu,\"bus_fault_scr\":%lu,"
+            "\"bus_fault_smr\":%lu,\"bus_fault_brr\":%lu,\"bus_fault_scmr\":%lu,\"bus_fault_sptr\":%lu,"
+            "\"bus_fault_pdtr\":%lu,\"bus_fault_polls\":%lu,"
+            "\"elapsed_us\":%llu,\"receive_us\":%llu,\"max_receive_us\":%llu}",
+            (unsigned long)s->clock_hz,(unsigned long)s->attempted,(unsigned long)s->passed,
+            (unsigned long)s->dma_irqs,(unsigned long)s->sci_error_irqs,(unsigned long)s->unexpected_rx_irqs,
+            (unsigned long)s->trailing_overruns,(unsigned long)s->premature_errors,(unsigned long)s->timeouts,
+            (unsigned long)s->overlap_batches,(unsigned long)s->overlap_iterations,(unsigned long)s->work_checksum,
+            (unsigned long)s->last_remaining,(unsigned long)s->last_chcr,(unsigned long)s->last_ssr,
+            (unsigned)s->last_phase,kui_sci_async_phase_name(s->last_phase),(unsigned long)s->dma_started,
+            (unsigned long)s->command_response,(unsigned long)s->last_token,
+            (unsigned long)s->snapshot_ssr,(unsigned long)s->snapshot_sptr,
+            (unsigned long)s->handoff_checks,(unsigned long)s->handoff_retries,(unsigned long)s->handoff_failures,
+            (unsigned long)s->handoff_ssr,(unsigned long)s->handoff_scr,(unsigned long)s->handoff_sptr,
+            (unsigned long)s->bus_faults,
+            (unsigned long)s->module_reset_attempts,(unsigned long)s->module_resets,
+            (unsigned long)s->module_reset_failures,(unsigned long)s->module_reset_state,
+            (unsigned long)s->module_stb_before,(unsigned long)s->module_stb_stopped,(unsigned long)s->module_stb_after,
+            (unsigned)s->framing_step,kui_sci_async_framing_name(s->framing_step),(unsigned long)s->framing_index,
+            (unsigned long)s->bus_fault_valid,(unsigned long)s->bus_wait_flag,
+            (unsigned long)s->bus_fault_ssr,(unsigned long)s->bus_fault_scr,
+            (unsigned long)s->bus_fault_smr,(unsigned long)s->bus_fault_brr,
+            (unsigned long)s->bus_fault_scmr,(unsigned long)s->bus_fault_sptr,
+            (unsigned long)s->bus_fault_pdtr,(unsigned long)s->bus_fault_polls,
+            (unsigned long long)s->elapsed_us,(unsigned long long)s->receive_us,(unsigned long long)s->max_receive_us);
+        if(n<0 || (size_t)n>=sizeof(stage[i])) return false;
+    }
+    const uint32_t *baseline_values[]={result->baseline_lbas,result->baseline_crcs,result->baseline_reads};
+    unsigned baseline_count=result->baseline_sectors;
+    if(baseline_count>KUI_SD_ASYNC_STRESS_SECTORS) return false;
+    for(unsigned a=0;a<3;a++) {
+        size_t used=0;
+        baseline[a][used++]='[';
+        for(unsigned i=0;i<baseline_count;i++) {
+            int written=snprintf(baseline[a]+used,sizeof(baseline[a])-used,"%s%lu",i?",":"",
+                (unsigned long)baseline_values[a][i]);
+            if(written<0 || (size_t)written>=sizeof(baseline[a])-used) return false;
+            used+=(size_t)written;
+        }
+        if(used+2>sizeof(baseline[a])) return false;
+        baseline[a][used++]=']';baseline[a][used]=0;
+    }
+    const struct kui_sci_async_fault *f=&r->fault;
+    int fault_size=snprintf(fault,sizeof(fault),
+        "{\"valid\":%lu,\"event\":%lu,\"ssr\":%lu,\"scr\":%lu,\"dmaor\":%lu,"
+        "\"sar\":%lu,\"dar\":%lu,\"tcr\":%lu,\"chcr\":%lu,\"lba\":%lu,"
+        "\"start_address\":%lu,\"context_valid\":%lu,\"pc\":%lu,\"sr\":%lu,\"request_elapsed_us\":%llu}",
+        (unsigned long)f->valid,(unsigned long)f->event,(unsigned long)f->ssr,(unsigned long)f->scr,
+        (unsigned long)f->dmaor,(unsigned long)f->sar,(unsigned long)f->dar,(unsigned long)f->tcr,
+        (unsigned long)f->chcr,(unsigned long)f->lba,(unsigned long)f->start_address,
+        (unsigned long)f->context_valid,(unsigned long)f->pc,(unsigned long)f->sr,
+        (unsigned long long)f->request_elapsed_us);
+    if(fault_size<0 || (size_t)fault_size>=sizeof(fault)) return false;
+    struct kui_datetime clock;int64_t local_seconds=0;
+    if(kui_clock_now(&clock)) (void)kui_clock_to_seconds(&clock,&local_seconds);
+    int n=snprintf(json,sizeof(json),
+        "{\n  \"schema\":2,\n  \"kind\":\"SCI async probe\",\n  \"build\":\"%.15s\",\n"
+        "  \"mode\":\"%s\",\n  \"target_us\":%llu,\n  \"stress_elapsed_us\":%llu,\n"
+        "  \"duration_complete\":%s,\n  \"iteration_limit\":%s,\n"
+        "  \"video_quiet_requested\":%s,\n  \"video_quiet_acknowledged\":%s,\n  \"video_sq_drained\":%s,\n"
+        "  \"video_frames_during\":%lu,\n  \"video_redraws_skipped\":%lu,\n"
+        "  \"baseline_sectors\":%lu,\n  \"distinct_lbas_verified\":%lu,\n  \"distinct_payloads\":%lu,\n"
+        "  \"baseline_lbas\":%s,\n  \"baseline_crcs\":%s,\n  \"baseline_reads\":%s,\n"
+        "  \"read_cycles\":%lu,\n  \"poll_calls\":%lu,\n  \"worker_yields\":%lu,\n"
+        "  \"read_elapsed_us\":%llu,\n  \"max_read_us\":%llu,\n"
+        "  \"heartbeat_installed\":%s,\n  \"heartbeat_restored\":%s,\n  \"heartbeat_ownership_lost\":%s,\n"
+        "  \"heartbeat_ticks\":%lu,\n  \"heartbeat_dma_ticks\":%lu,\n  \"heartbeat_max_gap_us\":%llu,\n"
+        "  \"max_open_us\":%llu,\n  \"max_begin_us\":%llu,\n  \"max_poll_us\":%llu,\n"
+        "  \"max_finish_us\":%llu,\n  \"max_cancel_us\":%llu,\n  \"max_close_us\":%llu,\n  \"max_call_us\":%llu,\n"
+        "  \"local_seconds\":%lld,\n  \"transport\":\"SCI\",\n  \"lba\":%lu,\n"
+        "  \"status\":%u,\n  \"status_name\":\"%s\",\n  \"started\":%s,\n"
+        "  \"operation_status\":%u,\n  \"operation_status_name\":\"%s\",\n"
+        "  \"dma_quarantined\":%s,\n  \"foreign_dma\":%s,\n"
+        "  \"baseline_verified\":%s,\n  \"baseline_crc32\":%lu,\n"
+        "  \"safe_restored\":%s,\n  \"guards_ok\":%s,\n  \"crc_ok\":%s,\n  \"baseline_ok\":%s,\n"
+        "  \"baseline_checked\":%s,\n"
+        "  \"handlers_restored\":%s,\n  \"registers_restored\":%s,\n"
+        "  \"recovery_verified\":%s,\n  \"recovery_reinitialized\":%s,\n  \"elapsed_us\":%llu,\n"
+        "  \"recovery_phase\":%u,\n  \"recovery_phase_name\":\"%s\",\n"
+        "  \"recovery_result\":%u,\n  \"recovery_result_name\":\"%s\",\n"
+        "  \"recovery_command_valid\":%s,\n  \"recovery_command\":%u,\n  \"recovery_response\":%u,\n"
+        "  \"recovery_bus_healthy\":%s,\n  \"recovery_data_match\":%s,\n"
+        "  \"timer_irq_instrumented\":%s,\n"
+        "  \"max_irq_masked_us\":%llu,\n  \"max_irq_handler_us\":%llu,\n"
+        "  \"probe_passed\":%s,\n  \"read_integrity_verified\":%s,\n  \"completion_irq_verified\":%s,\n"
+        "  \"cpu_overlap_observed\":%s,\n  \"fault\":%s,\n  \"slow\":%s,\n  \"fast\":%s\n}\n",
+        KUI_BUILD_ID,result->sustained?"sustained":"quick",
+        (unsigned long long)result->target_us,(unsigned long long)result->stress_elapsed_us,
+        result->duration_complete?"true":"false",result->iteration_limit?"true":"false",
+        result->video_quiet_requested?"true":"false",result->video_quiet_acknowledged?"true":"false",
+        result->video_sq_drained?"true":"false",(unsigned long)result->video_frames_during,
+        (unsigned long)result->video_redraws_skipped,
+        (unsigned long)result->baseline_sectors,(unsigned long)result->distinct_lbas_verified,(unsigned long)result->distinct_payloads,
+        baseline[0],baseline[1],baseline[2],
+        (unsigned long)result->read_cycles,(unsigned long)result->poll_calls,(unsigned long)result->worker_yields,
+        (unsigned long long)result->read_elapsed_us,(unsigned long long)result->max_read_us,
+        result->heartbeat.installed?"true":"false",result->heartbeat.restored?"true":"false",
+        result->heartbeat.ownership_lost?"true":"false",(unsigned long)result->heartbeat.total_ticks,
+        (unsigned long)result->heartbeat.dma_ticks,(unsigned long long)result->heartbeat.max_gap_us,
+        (unsigned long long)r->max_open_us,(unsigned long long)r->max_begin_us,(unsigned long long)r->max_poll_us,
+        (unsigned long long)r->max_finish_us,(unsigned long long)r->max_cancel_us,
+        (unsigned long long)r->max_close_us,(unsigned long long)r->max_call_us,
+        (long long)local_seconds,(unsigned long)r->lba,(unsigned)r->status,
+        kui_sci_async_status_name(r->status),r->started?"true":"false",
+        (unsigned)r->operation_status,kui_sci_async_status_name(r->operation_status),
+        r->dma_quarantined?"true":"false",r->foreign_dma?"true":"false",
+        result->baseline_verified?"true":"false",(unsigned long)result->baseline_crc32,
+        r->safe_restored?"true":"false",r->guards_ok?"true":"false",r->crc_ok?"true":"false",r->baseline_ok?"true":"false",
+        r->baseline_checked?"true":"false",
+        r->handlers_restored?"true":"false",r->registers_restored?"true":"false",
+        result->recovery_verified?"true":"false",result->recovery_reinitialized?"true":"false",
+        (unsigned long long)r->elapsed_us,
+        (unsigned)result->recovery_phase,kui_sd_async_recovery_name(result->recovery_phase),
+        (unsigned)result->recovery_result,kui_loader_sd_result_name(result->recovery_result),
+        result->recovery_command_valid?"true":"false",(unsigned)result->recovery_command,(unsigned)result->recovery_response,
+        result->recovery_bus_healthy?"true":"false",result->recovery_data_match?"true":"false",
+        r->timer_irq_instrumented?"true":"false",
+        (unsigned long long)r->max_irq_masked_us,(unsigned long long)r->max_irq_handler_us,
+        sci_async_passed(result)?"true":"false",sci_async_integrity(result)?"true":"false",sci_async_completion(result)?"true":"false",
+        r->fast.overlap_batches?"true":"false",fault,stage[0],stage[1]);
+    if(n<0 || (size_t)n>=sizeof(json)) return false;
+    FATFS fs;bool saved=false;
+    if(!kui_mount(&fs,kui_log)) return false;
+    const char *parents[]={"0:/KUI","0:/KUI/tests"};
+    for(unsigned i=0;i<2;i++) {
+        FRESULT f=f_mkdir(parents[i]);
+        if(f!=FR_OK && f!=FR_EXIST) goto done;
+    }
+    char dir[64],temp[96];bool created=false;
+    for(unsigned id=1;id<=9999;id++) {
+        snprintf(dir,sizeof(dir),"0:/KUI/tests/sci-async-%04u",id);
+        FRESULT f=f_mkdir(dir);
+        if(f==FR_OK) {created=true;break;}
+        if(f!=FR_EXIST) goto done;
+    }
+    if(!created) goto done;
+    snprintf(temp,sizeof(temp),"%s/report.tmp",dir);
+    snprintf(path,96,"%s/sci-async-probe.json",dir);
+    saved=kui_write_new_file(temp,json,(size_t)n,kui_log) && f_rename(temp,path)==FR_OK;
+done:
+    if(f_mount(NULL,"0:",0)!=FR_OK) saved=false;
+    if(!saved) path[0]=0;
+    return saved;
+}
+static void sci_async_operation(bool sustained) {
+    static struct kui_sd_async_result result;
+    struct kui_app_status status={.complete=true};
+    struct kui_music_status music={0};char path[96]={0};
+    kui_music_status_copy(&music);
+    if(music.playing) kui_music_pause();
+    result=(struct kui_sd_async_result){0};
+    bool connected=false,saved=false;
+    if(kui_storage_selected()!=KUI_STORAGE_SCI) {
+        snprintf(status.message,sizeof(status.message),"Requires SCI storage. Current device was not changed.");
+        status.errors=1;
+    } else {
+        kui_sd_set_params(KUI_STORAGE_SCI,true);
+        connected=kui_sd_connect();
+        if(connected) {
+            if(sustained) {
+                uint32_t quiet_generation;
+                if(sci_video_quiet_begin(&quiet_generation))
+                    kui_sd_async_stress(&result,storage_test_cancelled,NULL);
+                else {
+                    result.sustained=true;
+                    result.probe.status=kui_cancelled()?KUI_SCI_ASYNC_CANCELLED:KUI_SCI_ASYNC_BUSY;
+                    snprintf(result.message,sizeof(result.message),"%s",result.probe.status==KUI_SCI_ASYNC_CANCELLED?
+                        "Stopped before stress reads started.":"Display pause not acknowledged; stress did not start.");
+                }
+                /* The wrapper zeroes result and returns only after closing the
+                 * reader and attempting safe recovery. Preserve the handshake
+                 * separately until then, including all early failure paths. */
+                sci_video_quiet_end(quiet_generation,&result);
+            }
+            else kui_sd_async_probe(&result,storage_test_cancelled,NULL);
+            if(result.recovery_verified) saved=sci_async_save(&result,path);
+            const struct kui_sci_async_probe_result *r=&result.probe;
+            bool heartbeat_fault=result.sustained && (result.heartbeat.ownership_lost ||
+                (result.heartbeat.installed && !result.heartbeat.restored));
+            bool video_fault=result.sustained && r->status==KUI_SCI_ASYNC_OK &&
+                (!result.video_quiet_acknowledged || !result.video_sq_drained || result.video_frames_during);
+            status.stopped=r->status==KUI_SCI_ASYNC_CANCELLED;
+            status.passed=sci_async_passed(&result);
+            status.errors=result.restart_required || heartbeat_fault || video_fault || (r->status!=KUI_SCI_ASYNC_OK && !status.stopped);
+            snprintf(status.message,sizeof(status.message),"%s",result.message);
+            if(video_fault)
+                snprintf(status.message,sizeof(status.message),"Display pause not verified; stress proof is incomplete.");
+            else if(r->status==KUI_SCI_ASYNC_OK && result.recovery_verified && !heartbeat_fault)
+                snprintf(status.message,sizeof(status.message),"%s",status.passed?
+                    result.sustained?"60-second stress passed with timer IRQs during DMA.":
+                    "Verified reads with CPU work during DMA.":"Read test finished; async proof is incomplete.");
+            status.line_count=8;
+            snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow: %lu/%lu reads verified; %lu DMA interrupts",
+                (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs);
+            snprintf(status.lines[1],KUI_APP_LINE_CAP,"Fast: %lu/%lu reads verified; %lu DMA interrupts",
+                (unsigned long)r->fast.passed,(unsigned long)r->fast.attempted,(unsigned long)r->fast.dma_irqs);
+            snprintf(status.lines[2],KUI_APP_LINE_CAP,"CPU overlap batches: slow %lu / fast %lu",
+                (unsigned long)r->slow.overlap_batches,(unsigned long)r->fast.overlap_batches);
+            snprintf(status.lines[3],KUI_APP_LINE_CAP,"CRC %s  Data %s  Buffer guards %s",
+                r->crc_ok?"OK":"unconfirmed",r->baseline_ok?"OK":"unconfirmed",r->guards_ok?"OK":"unconfirmed");
+            snprintf(status.lines[4],KUI_APP_LINE_CAP,"Normal read recovery: %s",result.recovery_verified?"verified":
+                result.recovery_phase==KUI_SD_ASYNC_RECOVERY_NONE?
+                    (result.restart_required?"not attempted; restart required":"not attempted"):
+                    (result.restart_required?"FAILED - restart required":"not verified"));
+            snprintf(status.lines[5],KUI_APP_LINE_CAP,"%s",saved?"Saved independent report:":"Report not saved; photograph this result.");
+            snprintf(status.lines[6],KUI_APP_LINE_CAP,"%.79s",path[0]?path+2:"No saved path");
+            snprintf(status.lines[7],KUI_APP_LINE_CAP,"Normal game reads are unchanged by this experiment.");
+            if(result.sustained) {
+                char api_line[160];
+                snprintf(status.lines[0],KUI_APP_LINE_CAP,"60s stress: %lu reads; %lu/%lu sectors verified",
+                    (unsigned long)result.read_cycles,(unsigned long)result.distinct_lbas_verified,
+                    (unsigned long)result.baseline_sectors);
+                snprintf(status.lines[1],KUI_APP_LINE_CAP,"CRC/data/guards %s; DMA interrupts %lu",
+                    sci_async_integrity(&result)?"OK":"unconfirmed",(unsigned long)r->fast.dma_irqs);
+                snprintf(status.lines[2],KUI_APP_LINE_CAP,"CPU batches %lu; timer during DMA %lu",
+                    (unsigned long)r->fast.overlap_batches,(unsigned long)result.heartbeat.dma_ticks);
+                snprintf(api_line,sizeof(api_line),"API max us: begin %llu poll %llu finish %llu",
+                    (unsigned long long)r->max_begin_us,(unsigned long long)r->max_poll_us,(unsigned long long)r->max_finish_us);
+                snprintf(status.lines[3],KUI_APP_LINE_CAP,"%.79s",api_line);
+                snprintf(status.lines[7],KUI_APP_LINE_CAP,"Display quiet %s; frames %lu; skipped %lu",
+                    result.video_quiet_acknowledged && result.video_sq_drained?"verified":"unconfirmed",
+                    (unsigned long)result.video_frames_during,(unsigned long)result.video_redraws_skipped);
+            }
+            if(!status.passed && r->status!=KUI_SCI_ASYNC_OK) {
+                const struct kui_sci_async_stage *stage=r->fast.attempted?&r->fast:&r->slow;
+                if(stage->handoff_checks || stage->bus_faults || stage->bus_fault_valid) {
+                    snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow %lu/%lu IRQ%lu  Fast %lu/%lu IRQ%lu",
+                        (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs,
+                        (unsigned long)r->fast.passed,(unsigned long)r->fast.attempted,(unsigned long)r->fast.dma_irqs);
+                    snprintf(status.lines[1],KUI_APP_LINE_CAP,"Handoff checks %lu retries %lu failures %lu faults %lu",
+                        (unsigned long)stage->handoff_checks,(unsigned long)stage->handoff_retries,
+                        (unsigned long)stage->handoff_failures,(unsigned long)stage->bus_faults);
+                    snprintf(status.lines[2],KUI_APP_LINE_CAP,"Handoff SSR%02lX SCR%02lX SPTR%02lX; CPU batches %lu",
+                        (unsigned long)(stage->handoff_ssr&255u),(unsigned long)(stage->handoff_scr&255u),
+                        (unsigned long)(stage->handoff_sptr&255u),(unsigned long)stage->overlap_batches);
+                }
+                if(stage->bus_faults || stage->bus_fault_valid) {
+                    snprintf(status.lines[1],KUI_APP_LINE_CAP,"Framing %.18s index %lu; faults %lu",
+                        kui_sci_async_framing_name(stage->framing_step),(unsigned long)stage->framing_index,
+                        (unsigned long)stage->bus_faults);
+                    if(stage->bus_fault_valid)
+                        snprintf(status.lines[2],KUI_APP_LINE_CAP,"Before stop: wait%02lX SSR%02lX SCR%02lX SPTR%02lX",
+                            (unsigned long)(stage->bus_wait_flag&255u),(unsigned long)(stage->bus_fault_ssr&255u),
+                            (unsigned long)(stage->bus_fault_scr&255u),(unsigned long)(stage->bus_fault_sptr&255u));
+                    else snprintf(status.lines[2],KUI_APP_LINE_CAP,"First bus fault snapshot unavailable.");
+                }
+                if(stage->module_reset_attempts || stage->module_reset_failures) {
+                    char reset_line[160];
+                    if(result.sustained)
+                        snprintf(reset_line,sizeof(reset_line),"Reads%lu IRQ%lu Reset%lu/%lu F%lu S%03lX",
+                            (unsigned long)result.read_cycles,(unsigned long)stage->dma_irqs,
+                            (unsigned long)stage->module_resets,(unsigned long)stage->module_reset_attempts,
+                            (unsigned long)stage->module_reset_failures,(unsigned long)stage->module_reset_state);
+                    else snprintf(reset_line,sizeof(reset_line),"Slow%lu/%lu IRQ%lu Fast%lu/%lu IRQ%lu Reset%lu/%lu fail%lu state%03lX",
+                            (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs,
+                            (unsigned long)r->fast.passed,(unsigned long)r->fast.attempted,(unsigned long)r->fast.dma_irqs,
+                            (unsigned long)stage->module_resets,(unsigned long)stage->module_reset_attempts,
+                            (unsigned long)stage->module_reset_failures,(unsigned long)stage->module_reset_state);
+                    snprintf(status.lines[0],KUI_APP_LINE_CAP,"%.79s",reset_line);
+                    if(stage->bus_fault_valid)
+                        snprintf(status.lines[2],KUI_APP_LINE_CAP,"Before stop: wait%02lX SSR%02lX SCR%02lX SPTR%02lX STB%02lX/%02lX/%02lX",
+                            (unsigned long)(stage->bus_wait_flag&255u),(unsigned long)(stage->bus_fault_ssr&255u),
+                            (unsigned long)(stage->bus_fault_scr&255u),(unsigned long)(stage->bus_fault_sptr&255u),
+                            (unsigned long)(stage->module_stb_before&255u),(unsigned long)(stage->module_stb_stopped&255u),
+                            (unsigned long)(stage->module_stb_after&255u));
+                    else if(stage->bus_faults)
+                        snprintf(status.lines[2],KUI_APP_LINE_CAP,"No bus snapshot; STB%02lX/%02lX/%02lX",
+                            (unsigned long)(stage->module_stb_before&255u),(unsigned long)(stage->module_stb_stopped&255u),
+                            (unsigned long)(stage->module_stb_after&255u));
+                    else snprintf(status.lines[2],KUI_APP_LINE_CAP,"Handoff SSR%02lX SCR%02lX SPTR%02lX STB%02lX/%02lX/%02lX",
+                        (unsigned long)(stage->handoff_ssr&255u),(unsigned long)(stage->handoff_scr&255u),
+                        (unsigned long)(stage->handoff_sptr&255u),(unsigned long)(stage->module_stb_before&255u),
+                        (unsigned long)(stage->module_stb_stopped&255u),(unsigned long)(stage->module_stb_after&255u));
+                }
+                if(stage->dma_started)
+                    snprintf(status.lines[3],KUI_APP_LINE_CAP,"DMA left %lu CHCR%08lX ERI%lu RXI%lu",
+                        (unsigned long)stage->last_remaining,(unsigned long)stage->last_chcr,
+                        (unsigned long)stage->sci_error_irqs,(unsigned long)stage->unexpected_rx_irqs);
+                snprintf(status.lines[7],KUI_APP_LINE_CAP,"%.9s: DMA%lu SSR%02lX SPTR%02lX R1%02lX TK%02lX",
+                    kui_sci_async_phase_name(stage->last_phase),(unsigned long)stage->dma_started,
+                    (unsigned long)(stage->snapshot_ssr&255u),(unsigned long)(stage->snapshot_sptr&255u),
+                    (unsigned long)(stage->command_response&255u),(unsigned long)(stage->last_token&255u));
+                if(!saved && result.recovery_phase!=KUI_SD_ASYNC_RECOVERY_NONE) {
+                    const char *detail=result.recovery_result!=KUI_LOADER_SD_OK?
+                        kui_loader_sd_result_name(result.recovery_result):!result.recovery_bus_healthy?"bus fault":
+                        result.recovery_phase==KUI_SD_ASYNC_RECOVERY_READ && !result.recovery_data_match?"data mismatch":"OK";
+                    if(result.recovery_command_valid)
+                        snprintf(status.lines[6],KUI_APP_LINE_CAP,"Recover %s: %.24s; CMD%u R1%02X",
+                            kui_sd_async_recovery_name(result.recovery_phase),detail,
+                            (unsigned)result.recovery_command,(unsigned)result.recovery_response);
+                    else snprintf(status.lines[6],KUI_APP_LINE_CAP,"Recover %s: %.24s; no command",
+                            kui_sd_async_recovery_name(result.recovery_phase),detail);
+                }
+                if(result.sustained) {
+                    char run_line[160];
+                    uint32_t lba=r->fault.valid?r->fault.lba:r->lba;
+                    snprintf(run_line,sizeof(run_line),"Elapsed %llu.%03llu s; reads %lu; LBA %lu",
+                        (unsigned long long)(result.stress_elapsed_us/1000000u),
+                        (unsigned long long)((result.stress_elapsed_us/1000u)%1000u),
+                        (unsigned long)result.read_cycles,(unsigned long)lba);
+                    snprintf(status.lines[0],KUI_APP_LINE_CAP,"%.79s",run_line);
+                    /* Keep framing/reset failures intact. A pure receive/DMA
+                     * failure instead needs the active-window and pre-stop
+                     * evidence on screen, since quarantine prevents a file. */
+                    if(r->fault.valid && !stage->bus_faults && !stage->handoff_failures && !stage->module_reset_failures) {
+                        const struct kui_sci_async_fault *f=&r->fault;
+                        snprintf(status.lines[1],KUI_APP_LINE_CAP,"Timer%lu DMA%lu Quiet%s SQ%s frames%lu",
+                            (unsigned long)result.heartbeat.total_ticks,(unsigned long)result.heartbeat.dma_ticks,
+                            result.video_quiet_acknowledged?"ACK":"NO",result.video_sq_drained?"OK":"NO",
+                            (unsigned long)result.video_frames_during);
+                        snprintf(status.lines[2],KUI_APP_LINE_CAP,"Pre SSR%02lX SCR%02lX OR%08lX event%03lX",
+                            (unsigned long)(f->ssr&255u),(unsigned long)(f->scr&255u),
+                            (unsigned long)f->dmaor,(unsigned long)f->event);
+                        snprintf(status.lines[3],KUI_APP_LINE_CAP,"DMA left %lu CHCR%08lX ERI%lu RXI%lu",
+                            (unsigned long)f->tcr,(unsigned long)f->chcr,
+                            (unsigned long)stage->sci_error_irqs,(unsigned long)stage->unexpected_rx_irqs);
+                        if(!saved && result.recovery_phase==KUI_SD_ASYNC_RECOVERY_NONE) {
+                            if(f->context_valid)
+                                snprintf(status.lines[6],KUI_APP_LINE_CAP,"PC%08lX SR%08lX request %llu us",
+                                    (unsigned long)f->pc,(unsigned long)f->sr,(unsigned long long)f->request_elapsed_us);
+                            else snprintf(status.lines[6],KUI_APP_LINE_CAP,"No IRQ context; request %llu us",
+                                (unsigned long long)f->request_elapsed_us);
+                        }
+                    }
+                }
+            }
+            kui_log("SCI async probe: %s; report %s",result.message,saved?path:"not saved");
+            kui_sd_disconnect();
+        } else {
+            snprintf(status.message,sizeof(status.message),"SCI unavailable; probe did not start. See Diagnostics.");
+            status.errors=1;
+        }
+    }
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(music.playing && !result.restart_required) kui_music_resume();
+    mutex_lock(&lock);sci_async_status=status;mutex_unlock(&lock);
+}
+
 static bool scan_cancel(void *ctx) { (void)ctx;return kui_cancelled(); }
 static uint64_t scan_now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static void scan_progress(void *ctx,const struct kui_scan_status *status) {
@@ -496,7 +1074,7 @@ static void scan_operation(void) {
     snprintf(result.message,sizeof(result.message),"Could not connect SD for Advanced CRC scan.");
     const struct kui_scan_ops ops={.cancelled=scan_cancel,.now_ms=scan_now,
         .progress=scan_progress,.log=kui_log};
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(kui_sd_connect()) {
         kui_recovery_scan(scan_path_pending,&ops,&result);
         kui_sd_disconnect();
@@ -547,7 +1125,7 @@ static void salvage_operation(unsigned action) {
         .passes=salvage_passes_pending,.job=salvage_path_pending,.progress=salvage_progress};
     const struct kui_capture_ops ops={.read=salvage_read,.cancelled=scan_cancel,
         .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID};
-    kui_sd_set_params(0,true);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(kui_disc_prepare(sessions) && kui_plan_tracks(sessions,&plan) && !kui_cancelled() && kui_sd_connect()) {
         kui_disc_timing_phase(NULL,true);
         if(action==46 || kui_salvage_latest(&plan,&ops,salvage_path_pending))
@@ -586,7 +1164,7 @@ static void destination_operation(bool save) {
     mutex_unlock(&lock);
     struct kui_destination_page listing = {0};
     bool ok = false;
-    kui_sd_set_params(0, true);
+    kui_sd_set_params(KUI_STORAGE_AUTO, true);
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs, kui_log)) {
@@ -643,7 +1221,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==68 || action==69 || (action>=46 && action<=48);
 }
 #endif
 static void *worker(void *unused) {
@@ -701,6 +1279,18 @@ static void *worker(void *unused) {
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
             if(action==56 || action==57 || action==58) probe_launch_failed=true;
+            if(action==68 || action==69) {
+                sci_async_status=(struct kui_app_status){.complete=true,.errors=1};
+                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Audio CD stop failed; probe did not start.");
+            }
+            if(action==65) {
+                storage_test_result=(struct kui_storage_test_result){0};
+                storage_test_result.request=storage_test_pending;
+                storage_test_result.outcome=KUI_STORAGE_TEST_FAILED;
+                snprintf(storage_test_result.message,sizeof(storage_test_result.message),
+                    "Audio CD stop failed; storage test did not start.");
+                ++storage_test_generation;
+            }
             mutex_unlock(&lock);action=0;
         } else if(action && needs_cd_handoff(action)) publish_cd_audio();
 #endif
@@ -821,6 +1411,17 @@ static void *worker(void *unused) {
                 clock_valid=false;++clock_generation;
                 snprintf(clock_note,sizeof(clock_note),"Clock operation stopped before starting.");
             }
+            if(action==68 || action==69) {
+                sci_async_status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"Stopped before starting.");
+            }
+            if(action==65) {
+                storage_test_result=(struct kui_storage_test_result){0};
+                storage_test_result.request=storage_test_pending;
+                storage_test_result.outcome=KUI_STORAGE_TEST_STOPPED;
+                snprintf(storage_test_result.message,sizeof(storage_test_result.message),"Stopped before starting.");
+                ++storage_test_generation;
+            }
             if(action == 8 || action == 9)
                 snprintf(settings_note, sizeof(settings_note), "Settings operation stopped before starting.");
             mutex_unlock(&lock);
@@ -848,6 +1449,8 @@ static void *worker(void *unused) {
                 save_report("auto bench",outcome,true);
             }
 #ifdef KUI_SD_RUNTIME
+            if(action>=65 && action<=67) storage_test_operation(action);
+            if(action==68 || action==69) sci_async_operation(action==69);
             if(action == 8 || action == 9) {
                 settings_operation(action == 9);
                 if(!system_loaded) system_operation(false);
@@ -890,7 +1493,7 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(action==23) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_music_player_page page;
                 bool ok=kui_music_player_list(music_path_pending,music_offset_pending,&page,kui_log,kui_cancelled);
                 mutex_lock(&lock);
@@ -900,7 +1503,7 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(action==24) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status result;
                 active_app=24;
                 kui_music_player_run(music_path_pending,system_current.music_volume,&result,
@@ -917,7 +1520,7 @@ static void *worker(void *unused) {
                 publish_music();
             }
             if(action==54) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_games_page page;
                 kui_games_list_covers(games_path_pending,games_offset_pending,games_view_pending,&page,
                     games_covers,kui_log,kui_cancelled);
@@ -925,7 +1528,7 @@ static void *worker(void *unused) {
                 ++games_listing_generation;mutex_unlock(&lock);
             }
             if(action==59) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status status;struct kui_games_scan_counts counts;
                 kui_games_scan(&status,&counts,games_scan_progress,kui_log,kui_cancelled);
                 /* Show the library either way: finished covers are kept, and
@@ -937,19 +1540,19 @@ static void *worker(void *unused) {
                 ++games_listing_generation;mutex_unlock(&lock);
             }
             if(action==60) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_files_page page;
                 kui_files_list(&files_request_pending,&page,kui_log,kui_cancelled);
                 mutex_lock(&lock);files_listing_result=page;++files_listing_generation;mutex_unlock(&lock);
             }
             if(action==61) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_files_preview preview;
                 kui_files_preview(&files_job_pending,&preview,kui_log,kui_cancelled,files_progress);
                 mutex_lock(&lock);files_preview_result=preview;++files_preview_generation;mutex_unlock(&lock);
             }
             if(action==62) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status status;
                 kui_files_commit(&files_job_pending,&files_totals_pending,&status,kui_log,kui_cancelled,files_progress);
                 /* The folder is listed again even after Stop, which ended the run itself. */
@@ -961,14 +1564,14 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(action==63) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_files_picture picture;
                 kui_files_picture(files_picture_pending,files_picture_pixels,&picture,kui_log,kui_cancelled);
                 mutex_lock(&lock);files_picture_result=picture;++files_picture_generation;mutex_unlock(&lock);
             }
             if(action==64) {
                 /* The card stays on SCIF; the W5500 has the SCI port. */
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_ftp_options options={0};
                 options.seed=(uint32_t)timer_us_gettime64();
                 struct kui_ftp_status result;
@@ -983,13 +1586,13 @@ static void *worker(void *unused) {
                 mutex_lock(&lock);ftp_status=result;ftp_seen=true;mutex_unlock(&lock);
             }
             if(action==55) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_games_detail detail;
                 kui_games_inspect_cover(games_path_pending,&detail,games_detail_cover,kui_log,kui_cancelled);
                 mutex_lock(&lock);games_detail=detail;++games_detail_generation;mutex_unlock(&lock);
             }
             if(action==56 || action==57 || action==58) {
-                kui_sd_set_params(0,true);
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 bool prepared=action==58?
                     kui_games_retail_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
@@ -1066,13 +1669,13 @@ static void *worker(void *unused) {
             if(action==30) scan_operation();
             if(action==31) {
                 struct kui_vmu_backup_view result;
-                active_app=31;kui_sd_set_params(0,true);
+                active_app=31;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 kui_vmu_backups_run(vmu_backup_page_pending,&result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);vmu_backups=result;++vmu_backups_generation;mutex_unlock(&lock);
             }
             if(action==32 || action==33) {
                 struct kui_vmu_view result;
-                active_app=action;kui_sd_set_params(0,true);
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 kui_vmu_restore_run(vmu_restore_path_pending,vmu_slot_pending,action==33,
                     &result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);vmu_snapshot=result;++vmu_restore_generation;mutex_unlock(&lock);
@@ -1092,7 +1695,7 @@ static void *worker(void *unused) {
             }
             if(action>=37 && action<=40) {
                 struct kui_vmu_view result;
-                active_app=action;kui_sd_set_params(0,true);
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 if(action<=38) kui_vmu_delete_run(vmu_slot_pending,vmu_page_pending,vmu_selected_pending,
                     action==38,&result,kui_log,kui_cancelled,app_progress);
                 else kui_vmu_copy_run(vmu_slot_pending,vmu_page_pending,vmu_selected_pending,
@@ -1120,7 +1723,7 @@ static void *worker(void *unused) {
             }
             if(action>=41 && action<=43) {
                 struct kui_app_status result;
-                active_app=action;kui_sd_set_params(0,true);
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 kui_maintenance_run(action-41,&result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);maintenance_status=result;mutex_unlock(&lock);
                 if(action!=41) {
@@ -1195,10 +1798,13 @@ static void *worker(void *unused) {
         if(action!=12 && action!=27 && action!=60) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
         if(action==1 || (action>=4 && action<=7) || action==22 || (action>=46 && action<=48)) kui_disc_identity_invalidate(&disc_identity);
 #else
-        kui_log("Operation ended. Y saves the current log to SD.");
+        kui_log("Operation ended. View Log; saving a report is a separate write action.");
 #endif
         mutex_lock(&lock);
         busy = false;
+#ifdef KUI_SD_RUNTIME
+        storage_test_running=false;
+#endif
         cancel_requested = false;
         ui_hz_busy = KUI_OPT_UI_FULL;   /* no operation leaves its cap behind for the next */
         mutex_unlock(&lock);
@@ -1207,45 +1813,64 @@ static void *worker(void *unused) {
 }
 
 #ifndef KUI_SD_RUNTIME
-static void draw(unsigned scroll) {
-    char visible[VISIBLE_LINES][LINE_BYTES] = {{0}};
-    char status[LINE_BYTES];
+static void draw_boot(void) {
+    /* Keep the displayed frame until something visible changes. In particular,
+     * reading another 32 KiB must not copy/dim 600 KiB of VRAM and wait for
+     * vertical blank again. Each changed frame fully repaints the back buffer. */
+    static bool drawn;
+    static struct kui_boot_ui last_ui;
+    static struct kui_boot_view last_view;
+    static char last_lines[KUI_BOOT_LOG_ROWS][LINE_BYTES],last_status[128];
+    char visible[KUI_BOOT_LOG_ROWS][LINE_BYTES]={{0}},status[128];
+    struct kui_boot_view view={.build=KUI_BUILD_ID,.worker_available=boot_worker_available,
+        .from_card=kui_storage_boot_from_card()};
     mutex_lock(&lock);
-    unsigned end = line_count > scroll ? line_count - scroll : 0;
-    unsigned first = end > VISIBLE_LINES ? end - VISIBLE_LINES : 0;
-    unsigned actual=end-first;
-    for(unsigned i = first; i < end; ++i) strcpy(visible[i - first], lines[i]);
-    snprintf(status, sizeof(status), "%s  |  %u log lines%s",
-        busy ? (saving_report ? (cancel_requested?"STOPPING LOG SAVE":"SAVING LOG") :
-            (cancel_requested ? "STOP REQUESTED" : "WORKING")) : "READY",
-        line_count, log_truncated ? " (earlier lines truncated)" : "");
+    unsigned maximum=line_count>KUI_BOOT_LOG_ROWS?line_count-KUI_BOOT_LOG_ROWS:0;
+    if(boot_ui.scroll>maximum) boot_ui.scroll=maximum;
+    unsigned end=line_count-boot_ui.scroll;
+    unsigned first=end>KUI_BOOT_LOG_ROWS?end-KUI_BOOT_LOG_ROWS:0;
+    view.line_count=end-first;view.total_lines=line_count;
+    for(unsigned i=0;i<view.line_count;i++) {
+        strcpy(visible[i],lines[first+i]);view.lines[i]=visible[i];
+    }
+    view.busy=busy;view.cancelled=cancel_requested;
+    if(busy) snprintf(status,sizeof(status),"%s",cancel_requested?"Stopping safely...":
+        saving_report?"Saving diagnostic report...":line_count?lines[line_count-1]:"Working...");
+    else snprintf(status,sizeof(status),"%s",boot_notice);
     mutex_unlock(&lock);
-    /* Multibuffer mode keeps this drawing area separate from the displayed
-     * frame. Clearing the displayed frame exposes blank/partial redraws. */
-    vid_clear(8, 16, 24);
-    minifont_set_color(100, 220, 220);
-    minifont_draw_str(vram_s + 20 * 640 + 16, 640, KUI_RELEASE_SHORT " | " KUI_ROLE);
-    minifont_set_color(220, 230, 235);
-    minifont_draw_str(vram_s + 44 * 640 + 16, 640, "Build " KUI_BUILD_ID);
-    minifont_draw_str(vram_s + 44*640+440,640,"R: Bench");
-    minifont_draw_str(vram_s + 68 * 640 + 16, 640,
-        "A Disc probe   X Write/read SD test   Y Save log");
-    minifont_draw_str(vram_s + 88 * 640 + 16, 640,
-        "B Stop   Up/Down scroll   Start latest");
-    minifont_draw_str(vram_s + 116 * 640 + 16, 640, status);
-    unsigned top=144,shown=VISIBLE_LINES;
-    unsigned first_visible=actual>shown?actual-shown:0;
-    for(unsigned i = 0; i < shown && i+first_visible<actual; ++i)
-        minifont_draw_str(vram_s + (top + i * 16) * 640 + 16, 640, visible[i+first_visible]);
-    /* Publish the completed frame, then let KOS select the next drawing area. */
-    vid_waitvbl();
-    vid_flip(-1);
+    uint64_t now=timer_ms_gettime64();
+    if(boot_ui.autoboot_until>now)
+        view.countdown=(unsigned)((boot_ui.autoboot_until-now+999u)/1000u);
+    view.status=status;
+    bool same=drawn && boot_ui.page==last_ui.page && boot_ui.selected==last_ui.selected &&
+        boot_ui.transport==last_ui.transport && boot_ui.confirm==last_ui.confirm &&
+        boot_ui.scroll==last_ui.scroll && boot_ui.log_column==last_ui.log_column &&
+        view.busy==last_view.busy && view.cancelled==last_view.cancelled &&
+        view.worker_available==last_view.worker_available && view.from_card==last_view.from_card &&
+        view.countdown==last_view.countdown &&
+        view.line_count==last_view.line_count && view.total_lines==last_view.total_lines &&
+        !strcmp(status,last_status) && !memcmp(visible,last_lines,sizeof(visible));
+    if(same) return;
+    uint64_t started=timer_us_gettime64();
+    kui_boot_ui_draw(vram_s,&boot_ui,&view);
+    vid_waitvbl();vid_flip(-1);
+    boot_draw_us+=timer_us_gettime64()-started;++boot_draw_count;
+    boot_last_draw=timer_ms_gettime64();
+    last_ui=boot_ui;
+    /* Only retain scalar fields: the snapshot's text pointers are stack-local. */
+    last_view=(struct kui_boot_view){.busy=view.busy,.cancelled=view.cancelled,
+        .worker_available=view.worker_available,.from_card=view.from_card,.countdown=view.countdown,
+        .line_count=view.line_count,.total_lines=view.total_lines};
+    strcpy(last_status,status);memcpy(last_lines,visible,sizeof(visible));drawn=true;
 }
 #endif
 
 #ifdef KUI_SD_RUNTIME
 static void draw_shell(void) {
-    mutex_lock(&lock);bool startup=splash_active;mutex_unlock(&lock);
+    mutex_lock(&lock);
+    if(!kui_sci_video_quiet_draw_begin(&sci_video_quiet)) {mutex_unlock(&lock);return;}
+    bool startup=splash_active;
+    mutex_unlock(&lock);
     if(startup) {
         kui_splash_draw(vram_s);vid_waitvbl();vid_flip(-1);return;
     }
@@ -1255,6 +1880,7 @@ static void draw_shell(void) {
     char inserted[129],music_title[40],music_notice[128],message[128];
     struct kui_app_status app_status;
     static struct kui_ftp_status ftp_view;
+    struct kui_storage_test_progress test_progress;
     struct kui_shell_view view = {.build = KUI_BUILD_ID, .job_dir = path,
         .disc_title = title, .gdi_name = gdi, .settings_notice = notice, .message = message, .log_lines = log_rows,
         .inserted_title=inserted,.music_title=music_title,.music_notice=music_notice,.app_status=&app_status,
@@ -1270,7 +1896,11 @@ static void draw_shell(void) {
     }
     view.log_count = end - first; view.total_log_lines = line_count;
     view.log_truncated = log_truncated;
+    test_progress=storage_test_progress;
+    view.storage_test_progress=storage_test_running?&test_progress:NULL;
+    view.storage_test_target=kui_storage_name(kui_storage_selected());
     view.busy = busy; view.saving = saving_report; view.cancel_requested = cancel_requested;
+    view.sci_video_quiet=sci_video_quiet.requested;
     view.outcome = capture_outcome; view.saved_verified = capture_summary.verified;
     snprintf(path, sizeof(path), "%s", capture_summary.job_dir);
     snprintf(title, sizeof(title), "%s", capture_summary.disc_title[0]?
@@ -1310,7 +1940,8 @@ static void draw_shell(void) {
     bool files_page=shell.page==KUI_SHELL_FILES || shell.page==KUI_SHELL_FILES_ACTIONS ||
         shell.page==KUI_SHELL_FILES_PICK || shell.page==KUI_SHELL_FILES_CONFIRM ||
         shell.page==KUI_SHELL_FILES_INFO || shell.page==KUI_SHELL_FILES_VIEW;
-    app_status=files_page?files_status:
+    app_status=shell.page==KUI_SHELL_SCI_ASYNC_PROBE?sci_async_status:
+        files_page?files_status:
         shell.page==KUI_SHELL_GAMES?games_scan_status:
         shell.page==KUI_SHELL_MEMORY?memory_test_status:
         (shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM || shell.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
@@ -1416,6 +2047,11 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_FILES_RUN: return 62;
         case KUI_SHELL_FILES_PICTURE: return 63;
         case KUI_SHELL_FTP_START: return 64;
+        case KUI_SHELL_TEST_RUN: return 65;
+        case KUI_SHELL_TEST_HISTORY: return 66;
+        case KUI_SHELL_TEST_BASELINE: return 67;
+        case KUI_SHELL_SCI_ASYNC_RUN: return 68;
+        case KUI_SHELL_SCI_ASYNC_STRESS: return 69;
         default: return 0;
     }
 }
@@ -1432,22 +2068,58 @@ static unsigned controller_buttons(void) {
     if(state->joyy>48) buttons|=CONT_DPAD_DOWN;
 #ifdef KUI_SD_RUNTIME
     if(state->ltrig>128) buttons|=KUI_BUTTON_MSTATS;
+#else
+    if(state->ltrig>128) buttons|=KUI_BUTTON_BOOT_LEFT;
 #endif
     if(state->rtrig>128) buttons|=KUI_BUTTON_BENCH;
     return buttons;
 }
 
 #ifndef KUI_SD_RUNTIME
+static unsigned boot_buttons(unsigned buttons) {
+    unsigned out=0;
+    if(buttons&CONT_DPAD_UP) out|=KUI_BOOT_UP;
+    if(buttons&CONT_DPAD_DOWN) out|=KUI_BOOT_DOWN;
+    if(buttons&(CONT_DPAD_LEFT|KUI_BUTTON_BOOT_LEFT)) out|=KUI_BOOT_LEFT;
+    if(buttons&(CONT_DPAD_RIGHT|KUI_BUTTON_BENCH)) out|=KUI_BOOT_RIGHT;
+    if(buttons&CONT_A) out|=KUI_BOOT_A;
+    if(buttons&CONT_B) out|=KUI_BOOT_B;
+    if(buttons&CONT_X) out|=KUI_BOOT_X;
+    if(buttons&CONT_Y) out|=KUI_BOOT_Y;
+    if(buttons&CONT_START) out|=KUI_BOOT_START;
+    return out;
+}
+static unsigned boot_input_events(unsigned buttons,unsigned pressed,uint64_t now) {
+    /* Repeat only vertical log navigation; boot and write actions remain
+     * edge-triggered. This also runs while the synchronous loader owns main. */
+    unsigned held=boot_ui.page==KUI_BOOT_LOG?
+        buttons&(CONT_DPAD_UP|CONT_DPAD_DOWN):0;
+    if(held!=boot_held_navigation) {
+        boot_held_navigation=held;boot_repeat_at=now+400u;
+    } else if(held && now>=boot_repeat_at) {
+        pressed|=held;boot_repeat_at=now+80u;
+    }
+    if(pressed && (buttons&CONT_B)) pressed|=CONT_B;
+    return boot_buttons(pressed);
+}
 static bool boot_cancelled(void) {
-    /* Once observed, B keeps this boot on CD even if released during SD cleanup. */
-    static bool fallback;
-    fallback = fallback || (controller_buttons() & CONT_B) != 0;
-    draw(0);
-    return fallback;
+    unsigned buttons=controller_buttons();
+    uint64_t now=timer_ms_gettime64();
+    unsigned pressed=boot_input_events(buttons,buttons&~boot_attempt_previous,now);
+    boot_attempt_previous=buttons;
+    /* Busy input can only open/scroll the log or request Stop. It cannot
+     * change transport, queue a worker, or start a second boot attempt. */
+    (void)kui_boot_ui_input(&boot_ui,pressed,now,true,boot_worker_available);
+    /* Sticky only for this attempt; retry resets it after B is released. */
+    boot_attempt_cancelled=boot_attempt_cancelled || (buttons&CONT_B)!=0;
+    mutex_lock(&lock);cancel_requested=boot_attempt_cancelled;mutex_unlock(&lock);
+    if(now-boot_last_draw>=125u) draw_boot();
+    return boot_attempt_cancelled;
 }
 #endif
 
 int main(void) {
+    kui_storage_boot_begin();
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
     kui_log("Running " KUI_RELEASE_SHORT " " KUI_ROLE " build " KUI_BUILD_ID);
@@ -1458,21 +2130,21 @@ int main(void) {
             (vid_mode->flags & VID_PAL ? "PAL" : "NTSC"),
         vid_mode->flags & VID_INTERLACE ? "interlaced" : "progressive");
 #ifndef KUI_SD_RUNTIME
-    kui_log("Hold B during startup for built-in diagnostics.");
-    kui_log("Otherwise load /KUI/runtime.kui from SD.");
-    uint64_t until = timer_ms_gettime64() + 1500;
-    bool fallback = false;
-    while(timer_ms_gettime64() < until) {
-        if(boot_cancelled()) { fallback = true; break; }
-        thd_sleep(16);
-    }
-    if(!fallback) kui_bootstrap_load(boot_cancelled);
-    kui_log("Using built-in CD diagnostics; SD runtime is not running.");
+    kui_boot_ui_init(&boot_ui,timer_ms_gettime64());
+    kui_log("CD menu: B stays here; X opens recovery; startup boot begins after 3 seconds.");
+    kui_log(kui_storage_boot_from_card()?"Card boot: automatic loader override bypassed.":
+        "CD autoboot: optional /KUI/boot.kui first; Start K-UI bypasses it.");
+    kui_log("Choose Auto, SCIF, SCI or IDE/CF. A retries after inserting an SD card.");
+    kui_log("Boot images are read-only. Built-in diagnostics label and confirm writes.");
 #endif
     kui_log("Diagnostic code and fonts are loaded entirely in RAM.");
     kui_log("Replace boot CD with a known-good retail GD-ROM; close lid.");
+#ifdef KUI_SD_RUNTIME
     kui_log("Diagnostics page: A disc samples; X SD test; Y save log.");
-    kui_log("Use a spare test card. No formatting; existing files preserved.");
+#else
+    kui_log("Open Diagnostics for disc samples, storage write/read checks, or log saving.");
+#endif
+    kui_log("Use a spare test card for write tests. No formatting; existing files preserved.");
 #ifdef KUI_SD_RUNTIME
     kui_system_settings_default(&system_current);system_pending=system_current;
     kui_music_init(kui_log);kui_disc_identity_init(&disc_identity);disc_snapshot=disc_identity;
@@ -1482,7 +2154,7 @@ int main(void) {
     kui_shell_init(&shell, &settings_current);
     kui_shell_set_system_preferences(&shell,&system_current);
     kui_destination_default(destination_current);
-    snprintf(settings_note,sizeof(settings_note),"Loading preferences from SD...");
+    snprintf(settings_note,sizeof(settings_note),"Loading preferences from storage...");
     pending = 27; busy = true; splash_active=true;
     splash_deadline=timer_ms_gettime64()+3000;
     kui_log("K-UI launcher: Disc Ripper, VMU, Memory, Network, Settings, Diagnostics, GD Play and Music.");
@@ -1500,21 +2172,23 @@ int main(void) {
     kui_log("Diagnostics R trigger: isolated benchmarks from /KUI/bench.cfg.");
     kui_log("The screen redraws 2x a second while working, which frees CPU (ui_hz=full: off).");
 #else
-    kui_log("R trigger: benchmarks from /KUI/bench.cfg; B stops safely.");
+    kui_log("Configured benchmarks use /KUI/bench.cfg; B stops safely.");
     kui_log("Bench SD sections write temporary test files; results auto-save to SD.");
     kui_log("Full capture is available in the updated SD runtime.");
 #endif
     kthread_attr_t attrs = {.stack_size = 64 * 1024, .label = "kui-io"};
-    if(!thd_create_ex(&attrs, worker, NULL)) {
-        kui_log("Unable to start I/O worker; reset console");
-        for(;;) {
-#ifdef KUI_SD_RUNTIME
-            draw_shell();
-#else
-            draw(0);
+    kthread_t *io_worker=thd_create_ex(&attrs,worker,NULL);
+#ifndef KUI_SD_RUNTIME
+    boot_worker_available=io_worker!=NULL;
 #endif
-            thd_sleep(100);
-        }
+    if(!io_worker) {
+#ifdef KUI_SD_RUNTIME
+        kui_log("Unable to start I/O worker; reset console");
+        for(;;) {draw_shell();thd_sleep(100);}
+#else
+        kui_log("Diagnostic worker unavailable; boot, recovery, tools and log viewing remain available.");
+        snprintf(boot_notice,sizeof(boot_notice),"Diagnostics unavailable; boot and recovery still work.");
+#endif
     }
 #ifdef KUI_SD_RUNTIME
     kui_memory_log("runtime ready");
@@ -1528,14 +2202,13 @@ int main(void) {
     unsigned seen_settings_generation = 0, seen_destination_generation = 0;
     unsigned seen_system_generation=0,seen_vmu_generation=0,seen_music_listing=0;
     unsigned seen_clock_generation=0,seen_vmu_backups=0,seen_vmu_restore=0;
+    unsigned seen_storage_test=0,seen_storage_history=0;
     unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0;
     unsigned seen_games_listing=0,seen_games_detail=0;
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
-#else
-    unsigned scroll = 0;
 #endif
     for(;;) {
         unsigned buttons = controller_buttons();
@@ -1604,6 +2277,14 @@ int main(void) {
         if(seen_clock_generation!=clock_generation) {
             kui_shell_set_clock(&shell,clock_valid?&clock_snapshot:NULL,clock_note);
             seen_clock_generation=clock_generation;
+        }
+        if(seen_storage_test!=storage_test_generation) {
+            kui_shell_set_storage_test_result(&shell,&storage_test_result);
+            seen_storage_test=storage_test_generation;
+        }
+        if(seen_storage_history!=storage_history_generation) {
+            kui_shell_set_storage_test_history(&shell,&storage_test_history);
+            seen_storage_history=storage_history_generation;
         }
         if(seen_vmu_backups!=vmu_backups_generation) {
             kui_shell_set_vmu_backups(&shell,&vmu_backups);
@@ -1707,6 +2388,19 @@ int main(void) {
             action = 0;
         }
         if(action && !busy) {
+            if(action==68 || action==69) {
+                sci_async_status=(struct kui_app_status){0};
+                snprintf(sci_async_status.message,sizeof(sci_async_status.message),"%s",action==69?
+                    "Preparing 16 baselines, then 60 seconds of varied reads...":
+                    "Preparing baseline, then slow and fast read trials...");
+            }
+            if(action==65) {
+                storage_test_running=true;
+                storage_test_pending=shell.storage_test_request;
+                storage_test_progress=(struct kui_storage_test_progress){.preset=storage_test_pending.preset};
+                snprintf(storage_test_progress.phase,sizeof(storage_test_progress.phase),"Preparing");
+            }
+            if(action==67) storage_baseline_pending=shell.storage_test_baseline_id;
             if(action == 10 || action == 11) {
                 strcpy(destination_pending, shell.browse_path);
                 destination_offset = shell.browser_page * KUI_DEST_PAGE_SIZE;
@@ -1789,7 +2483,7 @@ int main(void) {
             if(action==20 || action==45) network_test_status=(struct kui_app_status){0};
             if(action == 8 || action == 9)
                 snprintf(settings_note, sizeof(settings_note), "%s", action == 8 ?
-                    "Loading preferences from SD..." : "Saving preferences to SD...");
+                    "Loading preferences from storage..." : "Saving preferences to SD...");
             pending = action; busy = true; cancel_requested = false; shell.scroll = 0;
             ui_hz_busy = 2;
             if(is_capture_action(action)) {
@@ -1843,20 +2537,77 @@ int main(void) {
             memory_valid = kui_memory_snapshot(&memory_status); next_memory_sample = timer_ms_gettime64() + 1000;
         }
 #else
-        mutex_lock(&lock);
-        if(pressed & CONT_B) cancel_requested = true;
-        if(!busy && !(buttons & CONT_B)) {
-            unsigned action = pressed & CONT_A ? 1 : pressed & CONT_X ? 2 : pressed & CONT_Y ? 3 :
-                pressed & KUI_BUTTON_BENCH ? 7 : 0;
-            if(action) {
-                pending = action; busy = true; cancel_requested = false; scroll = 0;
+        /* Only the main thread updates menu state. A CD worker has no idle
+         * peripheral activity, and busy remains set until its cleanup ends. */
+        uint64_t input_at=timer_ms_gettime64();
+        unsigned menu_input=boot_input_events(buttons,pressed,input_at);
+        mutex_lock(&lock);bool working=busy;mutex_unlock(&lock);
+        if(was_busy && !working)
+            snprintf(boot_notice,sizeof(boot_notice),"Operation finished. View Log for the result.");
+        enum kui_boot_action requested=kui_boot_ui_input(&boot_ui,menu_input,
+            input_at,working,boot_worker_available);
+        if(requested==KUI_BOOT_STOP) {
+            mutex_lock(&lock);if(busy) cancel_requested=true;mutex_unlock(&lock);
+        } else if(requested==KUI_BOOT_RUNTIME || requested==KUI_BOOT_RECOVERY ||
+                  requested==KUI_BOOT_TOOLS || requested==KUI_BOOT_MEASURE ||
+                  requested==KUI_BOOT_AUTOBOOT) {
+            mutex_lock(&lock);
+            bool claimed=!busy && !pending && !(buttons&CONT_B);
+            if(claimed) {busy=true;cancel_requested=false;ui_hz_busy=2;}
+            mutex_unlock(&lock);
+            if(claimed) {
+                enum kui_boot_mode mode=requested==KUI_BOOT_RECOVERY?KUI_BOOT_MODE_RECOVERY:
+                    requested==KUI_BOOT_TOOLS?KUI_BOOT_MODE_TOOLS:
+                    requested==KUI_BOOT_AUTOBOOT?kui_boot_autostart_mode(kui_storage_boot_from_card()):
+                    KUI_BOOT_MODE_NORMAL;
+                boot_ui.autoboot_until=0;boot_attempt_cancelled=false;
+                boot_attempt_previous=controller_buttons();boot_held_navigation=0;
+                bool measure=requested==KUI_BOOT_MEASURE;
+                boot_draw_us=0;boot_draw_count=0;
+                if(measure) {
+                    boot_ui.page=KUI_BOOT_LOG;boot_ui.return_page=KUI_BOOT_DIAGNOSTICS;
+                    boot_ui.scroll=boot_ui.log_column=0;
+                }
+                snprintf(boot_notice,sizeof(boot_notice),"Reading selected boot image...");
+                kui_log("%s boot: %s from %s",kui_storage_boot_from_card()?"Card":"CD",
+                    requested==KUI_BOOT_RECOVERY?"recovery":requested==KUI_BOOT_TOOLS?"card tools":
+                    measure?"measure runtime":mode==KUI_BOOT_MODE_AUTOBOOT?"optional loader/runtime":"runtime",
+                    kui_storage_name(boot_ui.transport));
+                draw_boot();
+                enum kui_runtime_result result=measure?kui_bootstrap_measure(boot_ui.transport,boot_cancelled):
+                    kui_bootstrap_start(boot_ui.transport,mode,boot_cancelled);
+                /* Successful handoff never returns. Failed/cancelled attempts
+                 * release storage before the menu permits another action. */
+                mutex_lock(&lock);busy=false;cancel_requested=false;ui_hz_busy=KUI_OPT_UI_FULL;mutex_unlock(&lock);
+                if(measure) {
+                    kui_log("Boot screen: %u redraws, %" PRIu64 " ms drawing/waiting",boot_draw_count,boot_draw_us/1000u);
+                    kui_log("Load measurement: %s; runtime was not started",kui_runtime_result_name(result));
+                    snprintf(boot_notice,sizeof(boot_notice),"Measurement finished. B returns to Diagnostics.");
+                    boot_ui.page=KUI_BOOT_LOG;boot_ui.return_page=KUI_BOOT_DIAGNOSTICS;
+                    boot_ui.selected=4;boot_ui.scroll=boot_ui.log_column=0;
+                } else {
+                    snprintf(boot_notice,sizeof(boot_notice),"%s. Insert/check the card, then press A to retry.",
+                        kui_runtime_result_name(result));
+                    boot_ui.page=KUI_BOOT_HOME;boot_ui.selected=requested==KUI_BOOT_AUTOBOOT?0u:
+                        (unsigned)requested-(unsigned)KUI_BOOT_RUNTIME;
+                }
+                previous=controller_buttons();boot_held_navigation=0;last_draw=0;was_busy=false;
+            }
+        } else {
+            unsigned action=requested==KUI_BOOT_PROBE?1u:requested==KUI_BOOT_WRITE_TEST?2u:
+                requested==KUI_BOOT_SAVE_LOG?3u:requested==KUI_BOOT_BENCH?7u:0u;
+            if(action && boot_worker_available) {
+                mutex_lock(&lock);
+                if(!busy && !pending && !(buttons&CONT_B)) {
+                    kui_sd_set_params(boot_ui.transport,true);
+                    pending=action;busy=true;cancel_requested=false;ui_hz_busy=2;
+                    boot_ui.scroll=boot_ui.log_column=0;
+                    boot_ui.return_page=KUI_BOOT_DIAGNOSTICS;boot_ui.page=KUI_BOOT_LOG;
+                }
+                mutex_unlock(&lock);
             }
         }
-        if((pressed & CONT_DPAD_UP) && scroll + VISIBLE_LINES < line_count) ++scroll;
-        if((pressed & CONT_DPAD_DOWN) && scroll) --scroll;
-        if(pressed & CONT_START) scroll = 0;
-        bool is_busy = busy;
-        mutex_unlock(&lock);
+        mutex_lock(&lock);bool is_busy=busy;mutex_unlock(&lock);
 #endif
         /* Idle: always redraw, as before. Busy: at most ui_hz_busy redraws per
          * second, plus one at each start and end so the screen is never stale
@@ -1869,11 +2620,27 @@ int main(void) {
         uint64_t t = timer_ms_gettime64();
         bool due = kui_ui_redraw_due(is_busy, was_busy, hz, t, last_draw);
         was_busy = is_busy;
+#ifdef KUI_SD_RUNTIME
+        mutex_lock(&lock);
+        uint32_t quiet_generation;bool quiet_pending,quiet_skipped;
+        due=kui_sci_video_quiet_draw_due(&sci_video_quiet,due,&quiet_generation,&quiet_pending,&quiet_skipped);
+        if(quiet_skipped) last_draw=t;
+        mutex_unlock(&lock);
+#endif
         if(due) {
 #ifdef KUI_SD_RUNTIME
             draw_shell();
+            if(quiet_pending) {
+                /* This is the sole drawing thread. Complete every store queue
+                 * write from this and prior frames before releasing the worker.
+                 * This handoff adds no IRQ mask around drawing or sq_wait. */
+                sq_wait();
+                mutex_lock(&lock);
+                (void)kui_sci_video_quiet_ack(&sci_video_quiet,quiet_generation);
+                mutex_unlock(&lock);
+            }
 #else
-            draw(scroll);
+            draw_boot();
 #endif
             last_draw = t;
         }

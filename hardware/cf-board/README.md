@@ -8,10 +8,11 @@ second device, inside the console. The GD-ROM drive stays the first
 device on the chain, but you can hook up a hard drive or some other device
 as a slave" (`dc/g1ata.h`).
 
-K-UI cannot use the card yet. The storage rework and a G1 ATA path come
-next on the software side (see [the handoff](../../docs/HANDOFF.md)). The
-board can be made and fitted before then: at power-up the console should
-behave exactly as before.
+The [standalone storage development build](../../docs/storage-transports.md)
+adds a G1 ATA slave path, including the independent Games reader. Both this
+board and the new IDE/CF driver still need hardware validation. See
+[the handoff](../../docs/HANDOFF.md) for the current software state. Fitting
+the board alone should not change the console's ordinary boot behavior.
 
 | Top (card side) | Underside |
 | --- | --- |

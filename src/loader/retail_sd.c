@@ -173,7 +173,8 @@ enum kui_loader_sd_result kui_retail_sd_adopt(struct kui_loader_sd *card,
     if(port.acquired || !prepared->ready || prepared->slow || !prepared->blocks)
         return KUI_LOADER_SD_NOT_READY;
     *card = (struct kui_loader_sd){
-        .bus = {NULL, bus_begin, bus_end, bus_select, bus_transfer, bus_ticks},
+        .bus = {.ctx = NULL, .begin = bus_begin, .end = bus_end,
+                .select = bus_select, .transfer = bus_transfer, .ticks = bus_ticks},
         .blocks = prepared->blocks, .high_capacity = prepared->high_capacity,
         .ready = true, .slow = false,
         .last_command = prepared->last_command, .last_response = prepared->last_response
@@ -189,7 +190,8 @@ enum kui_loader_sd_result kui_retail_sd_init(struct kui_loader_sd *card) {
     if(result != KUI_LOADER_SD_OK)
         return result;
     const struct kui_loader_sd_bus bus = {
-        NULL, bus_begin, bus_end, bus_select, bus_transfer, bus_ticks
+        .ctx = NULL, .begin = bus_begin, .end = bus_end,
+        .select = bus_select, .transfer = bus_transfer, .ticks = bus_ticks
     };
     result = kui_loader_sd_init_bus(card, &bus);
     /* Failure may have called bus.end already; release is idempotent. Success

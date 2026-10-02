@@ -14,10 +14,21 @@
 
 /* The split DMA read is in every build (the pipeline section uses it). The blocking probe and
  * its competing thread are research tools and stay in the opt-in experimental build only. */
+/* IDE and the GD-ROM share G1. Preserve GD DMA, but finish it here
+ * before the engine can write the preceding chunk to the ATA slave. */
+static bool serialized_read;
+static enum kui_read_result serialized_result;
 static bool read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
-    return kui_disc_read_begin(ctx,fad,sectors,out);
+    if(!kui_disc_read_begin(ctx,fad,sectors,out)) return false;
+    if(kui_storage_active()==KUI_STORAGE_IDE) {
+        serialized_result=kui_disc_read_end(ctx);serialized_read=true;
+    }
+    return true;
 }
-static enum kui_read_result read_end(void *ctx) { return kui_disc_read_end(ctx); }
+static enum kui_read_result read_end(void *ctx) {
+    if(serialized_read) {serialized_read=false;return serialized_result;}
+    return kui_disc_read_end(ctx);
+}
 #ifdef KUI_EXPERIMENTAL_DMA
 #define KUI_DMA_OPS(disc) ((disc) ? kui_disc_read_probe_dma : NULL), spin, spin_count, sleep_ms, \
                           ((disc) ? read_begin : NULL), ((disc) ? read_end : NULL)
@@ -29,12 +40,15 @@ struct kui_options kui_options;   /* last loaded /KUI/bench.cfg; defaults until 
 
 static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
 
-/* Drop the SD link and reopen it on the requested transport. kui_sd_connect
- * falls back to SCIF when SCI will not initialise, so report what it actually
- * opened rather than what was asked for. */
+/* Explicit benchmark transports fail independently; never silently benchmark
+ * a different card than the requested one. The normal boot choice is kept. */
 static int reconnect(void *ctx, unsigned use_sci, bool crc) {
     (void)ctx;
     kui_sd_disconnect();
+    if(use_sci==KUI_STORAGE_SCI && !crc) {
+        kui_log("SCI benchmark skipped: this transport always verifies read CRCs");
+        return -1;
+    }
     kui_sd_set_params(use_sci, crc);
     if(!kui_sd_connect()) return -1;
     return (int)kui_sd_active_sci();
@@ -109,10 +123,8 @@ static enum kui_capture_result capture_run(void *ctx, uint32_t fad, unsigned sec
  * applied to disc.c here because it affects captures, not just benches. */
 bool kui_options_refresh(void) {
     kui_options_default(&kui_options);
-    /* Read the file over the transport KOS itself defaults to. If a previous
-     * run left sd_if=sci set and that adapter cannot do SCI, this is what
-     * guarantees bench.cfg is still readable to change the value back. */
-    kui_sd_set_params(0, true);
+    /* A benchmark's explicit transport never changes the normal card. */
+    kui_sd_set_params(KUI_STORAGE_AUTO, true);
     bool ok = false;
     if(kui_sd_connect()) {
         FATFS fs;
@@ -169,6 +181,7 @@ enum kui_bench_result kui_bench_start(void) {
                                 crc16_kos, KUI_DMA_OPS(disc)};
     enum kui_bench_result result = kui_bench(&ops, &kui_options);
     kui_sd_disconnect();
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
     /* Prints the OPTICAL capture subtimers (submit/poll/wait) for the bench
      * reads, the same breakdown a capture report shows. */
     if(disc) kui_disc_timing_report();

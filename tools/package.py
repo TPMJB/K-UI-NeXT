@@ -49,12 +49,28 @@ def release_metadata(path=ROOT / "include/kui/version.h"):
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
+    for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery"):
+        # Preserve section anchors while matching the packaged uppercase names.
+        text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
+                      "(" + name.upper() + ".md", text)
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
     text = text.replace("(release-v1.5.1.md)", "(START-HERE.md)")
     text = text.replace("(../resources/music/README.md)", "(MUSIC.md)")
     text = text.replace("(release-v1.5.1-notes.md)", "(RELEASE-NOTES.md)")
     return text
+
+
+def storage_image(elf_data, build, label):
+    """Validate an executable and its initialized transport handoff before saving."""
+    payload, memory = flatten_elf(elf_data)
+    storage_marker = bytes.fromhex("4b554953424f4f540100000003000000fcffffff")
+    locations = [offset for offset in range(0, len(payload) - 19, 4)
+                 if payload[offset:offset + 20] == storage_marker]
+    if len(locations) != 1:
+        raise SystemExit(f"{label} must contain exactly one storage source handoff marker")
+    package = envelope(payload, memory, build)
+    return package, verify(package)
 
 
 def main():
@@ -105,8 +121,11 @@ def main():
         shutil.copyfile(ROOT / "build" / name, dist / name)
     for name in ("kui-runtime.elf", "kui-runtime.map"):
         shutil.copyfile(ROOT / "build" / name, dist / name)
-    payload, memory = flatten_elf(runtime.read_bytes())
-    package = envelope(payload, memory, commit[:12])
+    package, runtime_info = storage_image(runtime.read_bytes(), commit[:12], "Runtime")
+    # The exact CD bootstrap also runs through an existing compatible CD's
+    # Card tools entry. The same ELF/envelope/unique-marker checks apply; no
+    # alternate load address, enlarged limits, or normal-runtime replacement.
+    tools_package, tools_info = storage_image(elf.read_bytes(), commit[:12], "Bootstrap utility")
     sd = dist / "sd/KUI"
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "runtime.kui").write_bytes(package)
@@ -161,6 +180,10 @@ def main():
     shutil.copyfile(ROOT / "THIRD_PARTY.md", dist / "THIRD_PARTY.md")
     (dist / "HARDWARE-TEST.md").write_text(guide("hardware-test.md"))
     (dist / "SD-BOOTSTRAP.md").write_text(guide("sd-bootstrap.md"))
+    (dist / "STORAGE-TRANSPORTS.md").write_text(guide("storage-transports.md"))
+    (dist / "STORAGE-TESTING.md").write_text(guide("storage-testing.md"))
+    (dist / "EXT4-BOOTSTRAP.md").write_text(guide("ext4-bootstrap.md"))
+    (dist / "BOOT-RECOVERY.md").write_text(guide("boot-recovery.md"))
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
@@ -193,6 +216,10 @@ def main():
     # Include the actual third-party source inputs for these test artifacts,
     # including build scripts, local adaptations, and toolchain license texts.
     lock = json.loads((ROOT / "dependencies.json").read_text())
+    for name, expected in lock["lwext4"]["files_sha256"].items():
+        path = ROOT / lock["lwext4"]["path"] / name
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise SystemExit(f"{path.relative_to(ROOT)} differs from its dependency record")
     source = dist / "source"
     source.mkdir(exist_ok=True)
     run("git", "archive", "--format=tar.gz", "--prefix=K-UI-NeXT/", "-o", str(source / "kui-source.tar.gz"), "HEAD")
@@ -207,7 +234,7 @@ def main():
             shutil.copyfile(path, source / path.name)
     compiler = subprocess.check_output(["sh-elf-gcc", "--version"], text=True).splitlines()[0]
     record = {"commit": commit, "release": release, "compiler": compiler, "dependencies": lock,
-              "runtime": verify(package), "loader_probe": probe_info,
+              "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
               "retail_boot": retail_info,
               "hardware_tested": False,
@@ -217,6 +244,9 @@ def main():
     # dependency archives remain available in this run's diagnostic artifact.
     update = dist / "sd-update"
     (update / "KUI").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", update / "STORAGE-TRANSPORTS.md")
+    shutil.copyfile(dist / "EXT4-BOOTSTRAP.md", update / "EXT4-BOOTSTRAP.md")
+    shutil.copyfile(dist / "BOOT-RECOVERY.md", update / "BOOT-RECOVERY.md")
     shutil.copyfile(sd / "runtime.kui", update / "KUI/runtime.kui")
     shutil.copytree(sd / "apps", update / "KUI/apps", dirs_exist_ok=True)
     shutil.copytree(sd / "tests/scan", update / "KUI/tests/scan", dirs_exist_ok=True)
@@ -236,9 +266,18 @@ def main():
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
-        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
-        "Install KUI/runtime.kui on the SD card. Keep your existing boot CD.\n"
+        "Install KUI/runtime.kui and the matching Games payload on your storage card.\n"
+        "SCIF can keep its existing boot CD; SCI/IDE boot requires this run's new bootstrap CD.\n"
+        "Read STORAGE-TRANSPORTS.md before testing standalone SCI microSD or IDE/CF.\n"
+        "The CD can read compatible ext4, but this runtime still needs FAT32/exFAT.\n"
+        "Keep your card's filesystem; EXT4-BOOTSTRAP.md explains future runtime updates.\n"
+        "Preserve any known-working KUI/recovery.kui during updates. BOOT-RECOVERY.md\n"
+        "describes the new CD's fallback and future independent FAT32 boot partition.\n"
+        "The new graphical CD menu supports idle SD retry and a manual source choice.\n"
+        "The bootstrap-cd artifact supplies optional KUI/tools.kui for measurement\n"
+        "through an existing CD's Card tools entry; no ext4 repair image is bundled.\n"
         "Copy KUI/apps/music too for optional menu music; enable it in System Settings.\n"
         "The six menu songs, now including Harbor Lights, are Ogg Vorbis.\n"
         "Older menu WAVs in that folder are only a fallback.\n"
@@ -250,7 +289,7 @@ def main():
         "Update both KUI/runtime.kui and KUI/apps/games/retail-boot.kui from this package.\n"
         "DOA2 has confirmed gameplay; Evolution 2 boots with severe slowdown.\n"
         "Other titles and VMU save/load compatibility remain under community testing.\n"
-        "Games reads SD only; games may write VMU saves. Power cycle to return.\n"
+        "Games reads the selected storage device; games may write VMU saves. Power cycle to return.\n"
         "Keep existing preferences and dumps. No repeated read probe or benchmark is requested.\n"
         "APPS-ROUND-FIVE.md covers the other apps. See RIPPER-CONTROLS.md for destinations, named dumps and CRC results.\n"
         "Also copy KUI/redump.db and KUI/tosec.db if you want each finished capture\n"
@@ -279,7 +318,7 @@ def main():
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
-        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n"
         "The benchmark ELF, link maps, disassembly and stack reports are under retail-bench-build/.\n\n"
         "Copy this package's KUI/runtime.kui and KUI/apps/games/retail-boot.kui to the SD card.\n"
@@ -292,35 +331,76 @@ def main():
             bench_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(benchmark)}")
     (benchmark / "SHA256SUMS").write_text("\n".join(bench_hashes) + "\n")
     # A boot-disc refresh is separate from SD/runtime updates and the large
-    # source/diagnostic download. It contains only the CDI and its records.
+    # source/diagnostic download. Its optional card utility allows testing the
+    # identical bootstrap code without reburning or replacing runtime/recovery.
     boot = dist / "bootstrap-cd"
     if boot.exists():
         shutil.rmtree(boot)
     boot.mkdir()
+    (boot / "KUI").mkdir()
+    (boot / "KUI/tools.kui").write_bytes(tools_package)
     shutil.copyfile(cdi, boot / "kui-bootstrap.cdi")
+    shutil.copyfile(dist / "STORAGE-TRANSPORTS.md", boot / "STORAGE-TRANSPORTS.md")
+    shutil.copyfile(dist / "EXT4-BOOTSTRAP.md", boot / "EXT4-BOOTSTRAP.md")
+    shutil.copyfile(dist / "BOOT-RECOVERY.md", boot / "BOOT-RECOVERY.md")
     (boot / "BOOTLOADER-REFRESH.md").write_text(guide("bootloader-refresh.md"))
     shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.png", boot / "boot-disc-badge.png")
     shutil.copyfile(ROOT / "resources/branding/boot-disc-badge.md", boot / "BADGE-PROVENANCE.md")
     for name in ("LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, boot / name)
     shutil.copytree(dist / "LICENSES", boot / "LICENSES")
+    for name in ("boot-red.png", "boot-red-README.md", "boot-red-prompt.txt"):
+        shutil.copyfile(ROOT / "resources/branding" / name, boot / name)
     boot_record = {"kind": "bootstrap-cd", "commit": commit, "release": release,
                    "compiler": compiler, "dependencies": lock,
                    "bootstrap": {
                        "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
                        "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                        "cdi_sha256": hashlib.sha256(cdi.read_bytes()).hexdigest(),
-                       "cdi_bytes": cdi.stat().st_size, "badge": badge_info},
+                       "cdi_bytes": cdi.stat().st_size, "badge": badge_info,
+                       "artwork_sha256": hashlib.sha256((ROOT / "resources/branding/boot-red.png").read_bytes()).hexdigest()},
+                   "card_utility": {**tools_info, "path": "KUI/tools.kui",
+                       "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
+                       "package_sha256": hashlib.sha256(tools_package).hexdigest(),
+                       "purpose": "same bootstrap menu and read-only runtime-load measurement"},
                    "hardware_tested": False}
     (boot / "build.json").write_text(json.dumps(boot_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (boot / "SOURCE.txt").write_text(
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
-        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
-        "This package refreshes only the boot CD. Burn kui-bootstrap.cdi as a disc image.\n"
-        "Keep the existing SD card and its KUI/runtime.kui and Games payloads unchanged.\n"
+        "CARD PREVIEW: no CD reburn. Copy only KUI/tools.kui onto the card; leave\n"
+        "KUI/runtime.kui and KUI/recovery.kui unchanged. On the existing compatible\n"
+        "CD choose Card tools. Check the red artwork, press B, and confirm the\n"
+        "Card boot / recovery header and this package's build ID. Choose Start K-UI\n"
+        "to confirm normal launch. No repeat timing measurement is requested.\n"
+        "This preview does not exercise CD-origin boot.kui selection. The old CD loads\n"
+        "tools.kui at its old speed; this utility does not patch the burned disc.\n"
+        "The same bootstrap is included as kui-bootstrap.cdi for a later CD refresh.\n"
+        "For SCI/IDE boot, also install this run's matching runtime and Games payloads.\n"
+        "Read STORAGE-TRANSPORTS.md; one storage card is sufficient.\n"
+        "This CD also loads runtime.kui from clean, compatible ext4 volumes read-only.\n"
+        "The supplied runtime still uses FAT32/exFAT; keep your card as-is for now.\n"
+        "Read EXT4-BOOTSTRAP.md for the fixed format and future card-only development.\n"
+        "Crimson Dainsleif artwork shows a three-second countdown; any input pauses it.\n"
+        "CD autoboot first tries optional KUI/boot.kui, then runtime/recovery on the same\n"
+        "source. This optional update file is not installed by the package. Manual Start\n"
+        "and Recovery bypass it; card-loaded bootstrap menus skip it to avoid loops.\n"
+        "The header identifies CD boot versus Card boot. Read BOOTLOADER-REFRESH.md.\n"
+        "Up/Down selects; A opens; B returns/stops; X on Home selects recovery; Y opens logs.\n"
+        "Left/Right on Home chooses Auto, SCIF, SCI or IDE/CF for this session.\n"
+        "Failed loading returns Home for retry after SD insertion while idle. Power off\n"
+        "before changing adapters, wiring, boards or IDE/CF hardware.\n"
+        "Diagnostics confirms write/read, save-log and benchmark actions before writing.\n"
+        "BOOT-RECOVERY.md covers independent FAT32 boot/ext4 data and recovery.kui.\n"
+        "Card tools loads KUI/tools.kui only; the supplied file is this exact bootstrap\n"
+        "as a version-1 card utility, not an ext4 repair program. Future compatible\n"
+        "tools/recovery programs can arrive as card updates.\n"
+        "SCIF measurement and faster full launch were confirmed on 18dd87d. This final\n"
+        "artwork/update-hook revision still needs a card test before burning.\n"
+        "STORAGE-TRANSPORTS.md records SCI/IDE hardware boundaries.\n"
         "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
     boot_hashes = []
     for path in sorted(boot.rglob("*")):
@@ -349,7 +429,7 @@ def main():
     shutil.copyfile(cdi, bundle / "boot-cd/kui-v1.5.1.cdi")
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
     shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
     bundle_record = {**record, "kind": "release",
@@ -363,12 +443,20 @@ def main():
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         f"The accompanying {release['artifact_prefix']}-source.zip contains exact K-UI, KOS,\n"
-        "FatFs and compiler runtime source records under source/. Dependency pins and\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n"
         "Original badge and splash provenance are in resources/branding/ in that source.\n\n"
         "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
         "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
-        "Your current working boot CD can load this runtime; the CDI in boot-cd/ is optional.\n"
+        "Existing boot CDs work with SCIF; SCI/IDE boot needs the new CDI in boot-cd/.\n"
+        "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
+        "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
+        "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
+        "Preserve any working recovery.kui; BOOT-RECOVERY.md describes boot fallback\n"
+        "and the future split-card layout. No ext4 repair program is bundled yet.\n"
+        "The graphical CD menu offers manual source selection and idle SD retry; B\n"
+        "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
+        "artifact supplies optional tools.kui for read-only load measurement.\n"
         "The normal retail game reader is installed; no SD benchmark payload is included.\n",
         encoding="utf-8")
     bundle_hashes = []

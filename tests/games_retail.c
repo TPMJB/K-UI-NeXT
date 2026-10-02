@@ -53,6 +53,7 @@ static int sync_image(void *ctx) {
     (void)ctx; return fflush(test.image) || fsync(fileno(test.image)) ? -1 : 0;
 }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
+unsigned kui_storage_active(void) { return KUI_STORAGE_SCIF; }
 bool kui_sd_connect(void) {
     assert(!test.connected); ++test.connects;
     test.connected = true; kui_media_set(&media); return true;
@@ -251,8 +252,8 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     for(unsigned i = 0; i < track_count(); ++i) {
         expected[i] = host_file(directory, names[i], &sizes[i]);
         assert(sizes[i] == (size_t)counts[i] * KUI_GAME_RAW_BYTES);
-        assert(map->tracks[i].number == i + 1 && map->tracks[i].start_lba == starts[i]);
-        assert(map->tracks[i].end_lba == starts[i] + counts[i]);
+        assert(map->tracks[i].gd.number == i + 1 && map->tracks[i].gd.start_lba == starts[i]);
+        assert(map->tracks[i].gd.end_lba == starts[i] + counts[i]);
         assert(kui_retail_image_read(&reader, starts[i], counts[i], KUI_GAME_SECTOR_RAW,
             actual, sizes[i]) == KUI_GAME_OK && !memcmp(actual, expected[i], sizes[i]));
         if(i == 0 || i == 2) {

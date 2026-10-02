@@ -26,13 +26,16 @@ FORBIDDEN_SYMBOLS = {
 # is counted separately; the guard and top alignment gap are unavailable.
 INIT_ONLY = {
     "kui_retail_resident_init", "kui_retail_manifest_decode",
-    "kui_retail_image_init", "kui_retail_gd_init", "kui_retail_sd_init",
+    "kui_retail_image_init", "kui_retail_gd_init", "kui_retail_gd_init_validated", "kui_retail_sd_init",
+    "kui_retail_gd_init_manifest_validated", "init_validated",
     "kui_loader_sd_init_bus", "capacity",
     "kui_retail_sd_adopt",  # Called only by resident_init on the high stage stack.
+    "kui_retail_storage_adopt",  # Rebinds the prepared transport before game entry.
 }
 ASSEMBLY_STACK_BYTES = 256
 STACK_GUARD_BYTES = 16
 STACK_ALIGNMENT_GAP = 32
+TRANSPORTS = ("scif", "sci", "ide")
 
 
 def code_symbol(image, name, base):
@@ -54,18 +57,24 @@ def check_bss(image, base, prefix):
         raise ValueError(f"Invalid {prefix} BSS bounds")
 
 
-def check_stack_usage(directory, symbols):
-    reports = list(Path(directory).rglob("*.su"))
+def check_stack_usage(directory, symbols, transport="scif"):
+    # LTO may rename clones differently in .su and ELF, and distinct local
+    # functions can share a name. Count every emitted row, including init,
+    # instead of filtering by symbols or collapsing names. Only these final
+    # reports describe the linked SCI code; pre-LTO reports are not a fallback.
+    lto = transport == "sci"
+    reports = list((Path(directory) / "lto").glob("*.ltrans*.su")) if lto else list(Path(directory).rglob("*.su"))
     if not reports:
         raise ValueError("Missing compiler stack-usage reports")
     frames = {}
+    emitted_frames = []
     for report in reports:
         for line in report.read_text().splitlines():
             fields = line.split("\t")
             if len(fields) != 3:
                 raise ValueError(f"Malformed stack-usage report: {report.name}")
             name = fields[0].rsplit(":", 1)[-1]
-            if "_" + name not in symbols or name in INIT_ONLY:
+            if not lto and ("_" + name not in symbols or name in INIT_ONLY):
                 continue
             if fields[2] != "static":
                 raise ValueError(f"Unbounded/dynamic resident stack frame: {name}")
@@ -73,24 +82,25 @@ def check_stack_usage(directory, symbols):
             if frame < 0:
                 raise ValueError(f"Invalid resident stack frame: {name}")
             frames[name] = max(frames.get(name, 0), frame)
+            emitted_frames.append(frame)
     for name in ("kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
-                 "kui_retail_image_read", "kui_loader_sd_stream_next"):
-        if name not in frames:
+                 "kui_retail_image_read",
+                 "kui_ata_read" if transport == "ide" else "kui_loader_sd_stream_next"):
+        if name not in frames or "_" + name not in symbols:
             raise ValueError(f"Missing runtime stack-usage frame: {name}")
     available = (layout.HOOK_STACK - layout.HOOK_STACK_BOTTOM -
                  STACK_GUARD_BYTES - STACK_ALIGNMENT_GAP)
-    maximum = sum(frames.values()) + ASSEMBLY_STACK_BYTES
+    maximum = sum(emitted_frames if lto else frames.values()) + ASSEMBLY_STACK_BYTES
     if maximum > available:
         raise ValueError(f"Resident conservative stack sum {maximum} exceeds {available}")
     return {"conservative_bytes": maximum, "available_bytes": available,
-            "assembly_allowance": ASSEMBLY_STACK_BYTES, "retained_c_frames": len(frames)}
+            "assembly_allowance": ASSEMBLY_STACK_BYTES,
+            "retained_c_frames": len(emitted_frames) if lto else len(frames)}
 
 
 def check_directory(directory):
     directory = Path(directory)
     images = {
-        "resident": inspect_elf((directory / "resident.elf").read_bytes(),
-                                layout.RESIDENT_ADDRESS, layout.RESIDENT_LIMIT),
         "stage": inspect_elf((directory / "stage.elf").read_bytes(),
                              layout.STAGE_ADDRESS, layout.STAGE_MEMORY_END),
         "entry": inspect_elf((directory / "entry.elf").read_bytes(),
@@ -98,43 +108,57 @@ def check_directory(directory):
                              layout.EXEC_ADDRESS + layout.STAGE_BLOB_OFFSET +
                              layout.STAGE_MAX_BYTES),
     }
+    for transport in TRANSPORTS:
+        name = "resident-" + transport
+        images[name] = inspect_elf((directory / (name + ".elf")).read_bytes(),
+                                  layout.RESIDENT_ADDRESS, layout.RESIDENT_LIMIT)
     for name, image in images.items():
         forbidden = [s for s in image["symbols"] if
                      s.startswith(FORBIDDEN_PREFIXES) or s in FORBIDDEN_SYMBOLS]
         if forbidden:
             raise ValueError(f"Forbidden runtime/device symbol in {name}: {forbidden[0]}")
-    resident, stage, entry = (images[name] for name in ("resident", "stage", "entry"))
-    for name, base, prefix in (
-        ("resident", layout.RESIDENT_ADDRESS, "__retail_resident"),
-        ("stage", layout.STAGE_ADDRESS, "__retail_stage"),
-    ):
-        image = images[name]
-        if padded((directory / f"{name}.bin").read_bytes()) != padded(image["payload"]):
+    stage, entry = images["stage"], images["entry"]
+    if padded((directory / "stage.bin").read_bytes()) != padded(stage["payload"]):
+        raise ValueError("stage.bin differs from linked ELF bytes")
+    check_bss(stage, layout.STAGE_ADDRESS, "__retail_stage")
+    ss, es = stage["symbols"], entry["symbols"]
+    stacks = {}
+    for transport in TRANSPORTS:
+        name = "resident-" + transport
+        resident = images[name]
+        low_blob = padded((directory / (name + ".bin")).read_bytes())
+        if low_blob != padded(resident["payload"]):
             raise ValueError(f"{name}.bin differs from linked ELF bytes")
-        check_bss(image, base, prefix)
-
-    for name in ("_kui_retail_resident_init", "_kui_retail_resident_hook",
-                 "_kui_retail_resident_dispatch", "_kui_retail_gd_dispatch",
-                 "_kui_retail_image_read", "_kui_loader_sd_stream_next",
-                 "_kui_retail_sd_acquire", "_kui_retail_sd_release"):
-        code_symbol(resident, name, layout.RESIDENT_ADDRESS)
-    rs, ss, es = (image["symbols"] for image in (resident, stage, entry))
-    if (rs.get("__retail_hook_stack") != layout.HOOK_STACK or
-            rs.get("__retail_hook_stack_bottom") != layout.HOOK_STACK_BOTTOM):
-        raise ValueError("Resident hook stack is outside the reserved retired IP area")
-    for name in ("_kui_retail_hook_active", "_kui_retail_hook_fault"):
-        if not layout.RESIDENT_ADDRESS <= rs.get(name, 0) < resident["memory_end"]:
-            raise ValueError(f"Missing resident-owned hook guard: {name}")
+        check_bss(resident, layout.RESIDENT_ADDRESS, "__retail_resident")
+        required = ["_kui_retail_resident_init", "_kui_retail_resident_hook",
+                    "_kui_retail_resident_dispatch", "_kui_retail_gd_dispatch",
+                    "_kui_retail_image_read"]
+        if transport == "ide":
+            required += ["_kui_ata_read"]
+        else:
+            required += ["_kui_loader_sd_stream_next"]
+            prefix = "_kui_retail_sd_" if transport == "scif" else "_kui_sci_sd_"
+            required += [prefix + "acquire", prefix + "release"]
+        for symbol in required:
+            code_symbol(resident, symbol, layout.RESIDENT_ADDRESS)
+        rs = resident["symbols"]
+        if (rs.get("__retail_hook_stack") != layout.HOOK_STACK or
+                rs.get("__retail_hook_stack_bottom") != layout.HOOK_STACK_BOTTOM):
+            raise ValueError(f"{name} hook stack is outside the reserved retired IP area")
+        for symbol in ("_kui_retail_hook_active", "_kui_retail_hook_fault"):
+            if not layout.RESIDENT_ADDRESS <= rs.get(symbol, 0) < resident["memory_end"]:
+                raise ValueError(f"Missing resident-owned hook guard: {symbol}")
+        blob = "__retail_resident_" + transport + "_blob_"
+        begin, end = ss.get(blob + "start", 0), ss.get(blob + "end", 0)
+        if (begin % 4 or begin < layout.STAGE_ADDRESS or end - begin != len(low_blob) or
+                region(stage["payload"], begin - layout.STAGE_ADDRESS,
+                       len(low_blob), "embedded low resident") != low_blob):
+            raise ValueError(f"Stage contains a different/invalid low resident: {transport}")
+        stacks[transport] = check_stack_usage(directory / transport, rs, transport)
 
     for name in ("_kui_retail_stage_main", "_kui_retail_stage_relay",
                  "_kui_retail_bootstrap_enter", "_kui_retail_game_resume"):
         code_symbol(stage, name, layout.STAGE_ADDRESS)
-    low_blob = padded((directory / "resident.bin").read_bytes())
-    begin, end = ss.get("__retail_resident_blob_start", 0), ss.get("__retail_resident_blob_end", 0)
-    if (begin < layout.STAGE_ADDRESS or end - begin != len(low_blob) or
-            region(stage["payload"], begin - layout.STAGE_ADDRESS,
-                   len(low_blob), "embedded low resident") != low_blob):
-        raise ValueError("Stage contains a different/invalid low resident")
     begin, end = ss.get("__retail_trampoline_start", 0), ss.get("__retail_trampoline_end", 0)
     if begin % 4 or end - begin != layout.TRAMPOLINE_BYTES:
         raise ValueError("Invalid bounded executable-entry trampoline")
@@ -163,7 +187,7 @@ def check_directory(directory):
     result = {name: {"payload_bytes": len(image["payload"]),
                      "memory_end": f"0x{image['memory_end']:08x}",
                      "unresolved_symbols": 0} for name, image in images.items()}
-    result["resident_stack"] = check_stack_usage(directory, rs)
+    result["resident_stacks"] = stacks
     return result
 
 

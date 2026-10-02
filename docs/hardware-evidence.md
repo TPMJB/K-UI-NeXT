@@ -1,5 +1,155 @@
 # Hardware evidence
 
+## SCI period correction: batching active and FMVs improved — 2026-10-01
+
+**Console result — ce7006087f20:** the owner reports **18 seconds** from
+Kasumi selection to the first fight (previously 25), **FMVs playing fine**,
+and remaining slowdown during the first **seven seconds** of combat.
+The return photo confirms batching: 5,355/6,762 reading steps enlarged
+(79.19%), 21,872 sectors (3.23455 per step), zero spin steps and guard fault.
+Latest period/vblank is **525/260**, the geometry mishandled by the old code.
+Keep this as the current DOA2 comparison build. See the
+[console evidence and limits](evidence/sci-pacing-period-console-2026-10-01.md).
+
+## SCI batching: reported improvement, zero enlarged steps — 2026-10-01
+
+The owner reports **about 25 seconds from selecting Kasumi to match start**
+on **8d930310f79d**, versus the earlier 29 seconds, and noticeably smoother
+combat with only slight slowdown in the first roughly ten seconds. The old
+severe slowdown also resolved after about ten seconds; severity improved,
+not duration. Audio remains pretty smooth. These are initial timing and
+qualitative observations, with no explicit FMV acceptance.
+
+The matching return photograph now shows **zero paced and spin steps**,
+5,970 read steps, 11,880 game sectors (1.989950 per step) and no guard fault.
+The owner passed through DOA2's title screen and retried the combination
+several times; normal soft resets do not clear these session counters.
+Larger batches did not activate, so the reported improvement cannot be
+attributed to more sectors per call. Its cause remains unestablished.
+
+Storage Soak run **13** passes 160 MiB/ten cycles in 303.722145 seconds,
+with zero errors/DMA faults and successful remount verification/cleanup.
+Write/read **1,197.40/1,064.98 KiB/s** is effectively unchanged versus run 10.
+See the [reports, photo transcription and scope](evidence/sci-game-pacing-result-2026-10-01.md).
+The subsequent [period correction](evidence/sci-pacing-period-fix-2026-10-01.md)
+uses actual `SPG_LOAD` geometry and adds timing diagnostics. Its positive
+console result is recorded above; this older photograph did not identify
+the precise condition that prevented larger batches.
+
+## SCI grouped CRC passed; game counter capture obtained — 2026-10-01
+
+Build **6cc2abb460b5** passed Quick run **9** (4 MiB) and Soak run **10**
+(160 MiB, ten cycles), with zero errors/DMA faults and successful remount
+verification and cleanup. Soak write/read rates are **1,198.32/1,064.87 KiB/s**,
+respectively +0.14%/+1.52% versus run 8. RX checking fell from 78.18 to
+68.48 microseconds per sector, a 12.4% reduction; Quick independently reports
+68.57 microseconds. Overall read gains remain modest and run variation applies.
+
+The matching game counter photograph shows no guard fault, zero enlarged
+or spin-triggered steps and approximately two sectors per successful read step.
+It does not identify physical SCI DMA use or isolate the previously reported
+29-second character-to-fight load. See the
+[raw reports, photo transcription and limits](evidence/sci-grouped-crc-and-game-pacing-2026-10-01.md).
+The resulting half-frame/max-four candidate was subsequently tested as
+8d930310f79d; its separate report above shows no enlarged steps. These grouped
+CRC results belong to its parent and do not validate batching activation.
+
+## SCI word-reversal build soak passed; write setup improved — 2026-10-01
+
+Runtime **499bcb53c2d4**, run **8**, passed the same five-minute Soak recipe
+as run 7: 10 cycles/160 MiB verified in 306.434992 seconds, zero errors/DMA
+faults and successful cleanup. Write/read rates were **1,196.64/1,048.89 KiB/s**,
+respectively 5.65%/0.44% above run 7. TX setup fell from 35.96 to
+20.21 microseconds per sector. RX reversal/CRC did not improve: 78.18 versus
+77.18 microseconds, with transfer still near 331 microseconds. The small
+read-rate change does not establish a repeatable read gain.
+
+The owner timed the current DOA2 test at **29 seconds from selecting Kasumi
+to the first fight**. The brief return-counter display could not be captured;
+no game DMA, batch-size or standby-state values are available. A retry was
+deferred until the display is easier to capture. See the
+[original soak reports and separate game observation](evidence/sci-dma-word-soak-2026-10-01.md).
+The runtime pass does not prove a game speed change or the module-wake hypothesis.
+
+## SCI DMA Quick and five-minute profile soak passed — 2026-10-01
+
+Runtime **65fcaafadb98** passed run **6**, a 4 MiB Quick check, and run **7**,
+a five-minute Soak completing 10 cycles/160 MiB in 315.049953 seconds. Both
+verified after remount with zero errors/DMA faults and successful cleanup.
+Write/read rates were **1,097.42/1,037.03 KiB/s** for Quick and
+**1,132.60/1,044.27 KiB/s** for Soak. Quick is slightly slower than a6cb218's
+single Quick run (0.63%/1.49%); instrumentation and run variation prevent a
+regression conclusion. Soak is 12.74%/12.76% above cf8e7ea, but five versus
+fifteen minutes and two intervening changes prevent a controlled comparison.
+
+Soak averages **331.02 microseconds for RX transfer** and **77.18 microseconds
+for reversal/CRC** per DMA sector. A further 68.88 microseconds per sector of
+timed file reads lies outside measured RX phases; it is not solely card time.
+See the [original reports, exact comparisons and phase analysis](evidence/sci-dma-profile-2026-10-01.md).
+This is runtime evidence; no new retail-game timing accompanies the reports.
+
+## SCI cached processing Quick passed — 2026-10-01
+
+Runtime **a6cb21895c37**, run **5**, passed a **4 MiB Quick** check with zero
+errors/DMA faults. Write/read rates were **1,104.35/1,052.72 KiB/s**, respectively
+9.93%/13.67% above the first DMA soak. This is preliminary run-to-run evidence:
+Quick is much shorter than Soak and does not establish a sustained gain.
+DMA reads exactly match the 8,192 verified sectors. See the
+[original reports and review](evidence/sci-dma-cached-quick-2026-10-01.md).
+
+## SCI DMA soak passed; DOA2 substantially improved — 2026-10-01
+
+Runtime **cf8e7ea7866b**, run **4**, passed 26 cycles and 416 MiB written and
+verified after remount, with zero errors or DMA faults. Write/read throughput
+was **1,004.62/926.11 KiB/s**: 92.55%/75.15% faster than the first SCI run.
+Reads are 51.25% faster than SCIF; writes remain 6.97% lower. Recorded DMA
+reads exactly match the verified payload's sector count. See the
+[original reports, conditions and comparison](evidence/sci-dma-soak-2026-10-01.md).
+
+The owner reports DOA2 is now "much better", with a tiny amount of lag remaining
+in some areas. This is qualitative title-specific evidence; it does not prove
+the cause of that lag or accept other games, VMU and FMV behavior. The next
+original optimization combines receive processing and overlaps transmit CRC
+work while retaining integrity checks and the existing game pacing.
+
+## Initial SCI DOA2 play check — 2026-10-01
+
+After the passing SCI soak below, the owner tried Dead or Alive 2 and reported
+that it was "largely the same" as SCIF. This is an initial qualitative play
+observation, with no measured load-time improvement or separate acceptance of
+FMV, return-to-menu and VMU operations. It does not establish the exact retail
+payload build from a report. The owner requested an original SCI performance
+fix, including DMA investigation, before broader testing. Reference projects
+may inform the design; their implementation is not to be copied.
+
+## SCI storage soak passed; slower than SCIF — 2026-10-01
+
+The owner's SCI microSD run **2**, runtime **3a368ddcfaff**, passed the same
+15-minute exFAT/128 KiB-cluster recipe as the SCIF baseline. It completed in
+**15 min 56 s**, verifying **240 MiB across 15 cycles**, with zero reported
+transport/FatFs errors and successful cleanup. Write/read throughput was
+**521.75 / 528.75 KiB/s**, **51.69% / 13.65% lower** than SCIF. The report
+establishes runtime integrity for this run, not a performance improvement.
+
+See the [SCI baseline and original reports](evidence/sci-soak-baseline-2026-10-01.md)
+for the complete comparison and latency interpretation. Runtime storage is
+ready for Games compatibility checks; the initial DOA2 observation above does
+not complete that coverage. Use the same image and a matching SCI-capable
+`/KUI/apps/games/retail-boot.kui`. IDE/CF remains hardware pending.
+
+## SCIF storage soak baseline passed — 2026-10-01
+
+The owner designates run **1** from runtime **3a368ddcfaff** as the SCIF baseline
+for SCI comparison. The 15-minute exFAT soak finished in **15 min 7 s**:
+**21 cycles**, **336 MiB written and verified**, zero reported transport/FatFs
+errors and successful cleanup. Across 64 KiB requests, aggregate write/read
+rates were **1,079.94 / 612.32 KiB/s**; maximum call durations were
+**141.026 / 173.527 ms**. Music was off and UI refresh was 2 Hz.
+
+See the [baseline record and original reports](evidence/scif-soak-baseline-2026-10-01.md)
+for exact settings and latency interpretation. The SCI comparison above uses
+matching reported settings. No repeat of this accepted SCIF run is requested.
+
 ## Selected-image GD request test: hardware pending — 2026-09-24
 
 The next Games increment implements selected-GDI allocation mapping and a

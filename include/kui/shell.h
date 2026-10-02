@@ -13,6 +13,7 @@
 #include "kui/games_covers.h"
 #include "kui/files.h"
 #include "kui/ftp.h"
+#include "kui/storage_test.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -38,7 +39,8 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_RETAIL_CONFIRM,
     KUI_SHELL_FILES, KUI_SHELL_FILES_ACTIONS, KUI_SHELL_FILES_PICK,
     KUI_SHELL_FILES_CONFIRM, KUI_SHELL_FILES_INFO, KUI_SHELL_FILES_VIEW,
-    KUI_SHELL_FTP };
+    KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
+    KUI_SHELL_SCI_ASYNC_PROBE };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -63,7 +65,8 @@ enum kui_shell_action {
     KUI_SHELL_GAMES_LIST, KUI_SHELL_GAMES_INSPECT, KUI_SHELL_GAMES_PROBE,
     KUI_SHELL_GAMES_IMAGE_PROBE, KUI_SHELL_GAMES_RETAIL, KUI_SHELL_GAMES_SCAN,
     KUI_SHELL_FILES_LIST, KUI_SHELL_FILES_CHECK, KUI_SHELL_FILES_RUN, KUI_SHELL_FILES_PICTURE,
-    KUI_SHELL_FTP_START
+    KUI_SHELL_FTP_START, KUI_SHELL_TEST_RUN, KUI_SHELL_TEST_HISTORY,
+    KUI_SHELL_TEST_BASELINE, KUI_SHELL_SCI_ASYNC_RUN, KUI_SHELL_SCI_ASYNC_STRESS
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -130,6 +133,15 @@ struct kui_shell {
     /* A copy, move, delete, rename or new folder runs until its status is
      * installed; the browser shows its progress meanwhile. */
     bool files_running;
+    /* Diagnostics' storage tests use worker-published copies only. The last
+     * request stays independent of whichever historical result is displayed. */
+    struct kui_storage_test_request storage_test_request, storage_test_last_request;
+    struct kui_storage_test_result storage_test_result;
+    struct kui_storage_test_history storage_test_history;
+    unsigned storage_test_selected, storage_history_selected, storage_test_chunk;
+    uint32_t storage_test_baseline_id;
+    bool storage_test_last_valid, storage_test_show_result, storage_test_details;
+    bool storage_test_from_history, storage_test_keyboard, confirm_storage_test;
 };
 /* Home's apps, top to bottom: A on row home_selected opens
  * kui_shell_home_pages[home_selected]. Drawing looks each app up by page. */
@@ -186,6 +198,13 @@ void kui_shell_set_files_listing(struct kui_shell *shell, const struct kui_files
 void kui_shell_set_files_preview(struct kui_shell *shell, const struct kui_files_preview *preview);
 void kui_shell_set_files_status(struct kui_shell *shell, const struct kui_app_status *status);
 void kui_shell_set_files_picture(struct kui_shell *shell, const struct kui_files_picture *picture);
+/* TEST_RUN consumes storage_test_request; TEST_BASELINE consumes the selected
+ * saved passing storage_test_baseline_id. Publications contain no borrowed
+ * pointers and are installed on main's reducer thread after worker completion. */
+void kui_shell_set_storage_test_result(struct kui_shell *shell,
+    const struct kui_storage_test_result *result);
+void kui_shell_set_storage_test_history(struct kui_shell *shell,
+    const struct kui_storage_test_history *history);
 /* The job may be confirmed: its check succeeded and still matches. */
 bool kui_shell_files_ready(const struct kui_shell *shell);
 /* DEST_LIST reads browse_path and browser_page (offset = page * PAGE_SIZE).
@@ -206,6 +225,7 @@ const char *kui_shell_key_label(unsigned key, bool uppercase);
  * phase uses the existing kui_capture_phase numeric values (0..4); phase 4 is
  * completed, never an assertion that saved bytes were verified. */
 struct kui_shell_view {
+    bool sci_video_quiet;
     const char *build, *job_dir, *message, *settings_notice;
     const char *disc_title, *inserted_title, *gdi_name;
     const char *music_title, *music_notice;
@@ -238,6 +258,8 @@ struct kui_shell_view {
     /* The FTP server's last published status, on its page; NULL before the
      * first start. */
     const struct kui_ftp_status *ftp;
+    const struct kui_storage_test_progress *storage_test_progress;
+    const char *storage_test_target;
 };
 /* Estimate only the current moving phase after a 2s warmup; do not imply the
  * later verification duration. A stalled (>3s old) rate is not an estimate. */

@@ -4,6 +4,8 @@
 #include "kui/probe.h"
 #include "kui/capture.h"
 #include "kui/bench.h"
+#include "kui/storage.h"
+#include "kui/boot_image.h"
 
 /* True when compiling for the Dreamcast's SH-4. GCC defines a DIFFERENT macro for each SH-4 mode:
  * __SH4__ only for plain -m4, __SH4_SINGLE__ for -m4-single (which is how KOS builds), plus
@@ -17,17 +19,37 @@
 #endif
 void kui_log(const char *format, ...);
 bool kui_cancelled(void);
-/* Transport for the NEXT kui_sd_connect(): use_sci picks KOS SD_IF_SCI
- * (synchronous serial, DMA capable) over the SD_IF_SCIF bit-bang default;
- * check_crc verifies the data-block CRC16 on reads. */
-void kui_sd_set_params(unsigned use_sci, bool check_crc);
-/* Which transport the last successful connect opened, after any fallback. */
+/* AUTO reopens the boot-selected device; the first call discovers a usable
+ * SCIF, SCI or IDE/CF volume. Explicit IDs are benchmark/bootstrap only and
+ * fail without switching devices. SCI always verifies data CRCs. */
+void kui_sd_set_params(unsigned transport, bool check_crc);
+unsigned kui_storage_active(void);
+/* Stable boot-selected device; an explicit legacy benchmark cannot change it. */
+unsigned kui_storage_selected(void);
+const char *kui_storage_name(unsigned transport);
+bool kui_storage_sci_reserved(void);
+void kui_storage_boot_begin(void);
+/* Latched before consuming the transport marker; unchanged by later probes. */
+bool kui_storage_boot_from_card(void);
+/* Benchmark compatibility: returns the full transport ID, not a bool. */
 unsigned kui_sd_active_sci(void);
 bool kui_sd_connect(void);
 void kui_sd_disconnect(void);
+/* Bootstrap-only raw view, obtained while connected and FatFs is unmounted.
+ * Contains no write/sync callbacks; invalid immediately after disconnect. */
+struct kui_media_ops;
+bool kui_sd_raw_read_ops(struct kui_media_ops *out);
 void kui_disc_probe(void);
 void kui_drive_init_bus(void);
-void kui_bootstrap_load(kui_cancel_fn cancelled);
+void kui_bootstrap_load(kui_cancel_fn cancelled,bool recovery_only);
+/* Caller owns storage exclusively; no diagnostic job may be running. */
+enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
+    enum kui_boot_mode mode,kui_cancel_fn cancelled);
+/* Same exclusive/read-only boot path and normal/recovery fallback, timed.
+ * Releases the validated image and returns; never executes it or waits for
+ * the boot handoff delay. The rate includes validation and UI callback work. */
+enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
+    kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
 /* Normal capture uses a normalized card-root destination (for example /Games)
