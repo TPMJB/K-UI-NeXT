@@ -1,5 +1,18 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI async: leaner reader and CMD18 measurements (2026-10-02 UTC)
+
+Speed build on `claude/modest-galileo-hpjv79`. The single-block reader no
+longer reads the wall clock on every framing byte, checks blocks by table
+lookup, waits one bit time (not 1,024 loops) after each re-initialization,
+times masked windows from after the mask and reports the card wait in
+microseconds. **R** now also runs two read-only CMD18 measurements: a 16 KiB
+continuous capture that records the card's gap between blocks, and 64 blocks
+read one DMA at a time with an SCI reset and reselection between them (the
+cycle a receive-only streaming reader needs). See
+[the change record](evidence/sci-async-speed-cmd18-2026-10-02.md). Build and
+console results are pending; run R (Y optional) and return the JSON.
+
 ## SCI stress: 559 verified reads, then incomplete receive (2026-10-02 UTC)
 
 The owner confirms Quick passes on **c0c285482dac**. Its JSON verifies all
@@ -37,8 +50,8 @@ boot CD, then run Y and R and return both JSON reports and result photos.
 **Console: both passed.** Y: 65,422 reads verified with the screen updating,
 51 overruns all retried, no restart. R: same data; ordinary reader 1,089 KiB/s,
 async single-block reader 587 KiB/s (setup 312 us, receive 345 us, finish 148 us
-per block; card wait only about 37 us). Native game reads and the CE gate are
-unchanged.
+per block; card wait 58 polled bytes, time not measured). Native game reads and
+the CE gate are unchanged.
 
 ## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)
 

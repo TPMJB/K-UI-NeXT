@@ -25,6 +25,11 @@ static bool healthy=true,disc_busy;
 static bool stress_mode,stress_cancel,heartbeat_available=true,heartbeat_lost;
 static bool speed_mode,speed_file;
 static unsigned quantum_calls,multi_blocks;
+/* CMD18 measurement mocks: calls, injected outcome and one corrupt block. */
+static unsigned capture_calls,resume_calls;
+static uint32_t capture_lba,resume_lba;
+static enum kui_sci_async_status capture_result;
+static bool capture_corrupt;
 static unsigned async_opens,async_begins,async_polls,async_finishes,async_cancels,async_closes;
 static unsigned yield_calls,work_calls,cancel_at_poll,cancel_at_baseline;
 static uint64_t mock_now,card_blocks=10000;
@@ -185,6 +190,31 @@ enum kui_sci_async_status kui_sci_async_close(struct kui_sci_async_reader *reade
     engine_result->handlers_restored=engine_result->registers_restored=probe_restored;
     return probe_restored?KUI_SCI_ASYNC_OK:KUI_SCI_ASYNC_RESTORE;
 }
+enum kui_sci_async_status kui_sci_async_stream_capture(struct kui_sci_async_reader *reader,
+        uint32_t lba,void *buffer,uint32_t bytes,struct kui_sci_async_stream *out) {
+    assert(reader->generation && speed_mode && buffer && !((uintptr_t)buffer&31u));
+    assert(bytes==KUI_SD_ASYNC_CAPTURE_BYTES && async_finishes>=KUI_SD_ASYNC_COMPARE_BLOCKS);
+    ++capture_calls;capture_lba=lba;
+    *out=(struct kui_sci_async_stream){.status=capture_result,.lba=lba,.bytes=bytes,
+        .received=bytes,.complete=1,.blocks=30,.gaps=30,.gap_min=3,.gap_max=9,.gap_total=150};
+    for(uint32_t i=0;i<out->blocks;++i)
+        memset((uint8_t *)buffer+(size_t)i*512u,sector_byte(lba+i),512);
+    if(capture_corrupt) ((uint8_t *)buffer)[512*7+100]^=1u;
+    if(capture_result!=KUI_SCI_ASYNC_OK) {
+        engine_result->status=engine_result->operation_status=capture_result;
+        probe_status=capture_result;
+    }
+    return capture_result;
+}
+enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reader *reader,
+        uint32_t lba,uint32_t count,uint8_t *dst,struct kui_sci_async_resume *out) {
+    assert(reader->generation && speed_mode && capture_calls && dst);
+    assert(count==KUI_SD_ASYNC_RESUME_BLOCKS);
+    ++resume_calls;resume_lba=lba;
+    *out=(struct kui_sci_async_resume){.status=KUI_SCI_ASYNC_OK,.lba=lba,.requested=count,.blocks=count};
+    for(uint32_t i=0;i<count;++i) memset(dst+(size_t)i*512u,sector_byte(lba+i),512);
+    return KUI_SCI_ASYNC_OK;
+}
 void kui_sci_async_set_framing_quantum(struct kui_sci_async_reader *reader,unsigned bytes) {
     assert(reader->generation && speed_mode && bytes==4096u);++quantum_calls;
 }
@@ -226,6 +256,8 @@ static void prepare(void) {
     heartbeat_available=true;async_opens=async_begins=async_polls=async_finishes=async_cancels=async_closes=0;
     yield_calls=work_calls=cancel_at_poll=cancel_at_baseline=baseline_seen=0;mock_now=0;
     speed_mode=speed_file=false;quantum_calls=multi_blocks=read_calls=0;
+    capture_calls=resume_calls=capture_lba=resume_lba=0;
+    capture_result=KUI_SCI_ASYNC_OK;capture_corrupt=false;
 }
 /* The same blocks through both readers: the file's first cluster when found,
  * otherwise the data area. Matching CRCs are required for a pass. */
@@ -241,6 +273,25 @@ static void test_speed(void) {
     assert(out.speed_async_us==UINT64_C(500)*KUI_SD_ASYNC_SPEED_BLOCKS);
     assert(out.probe.status==KUI_SCI_ASYNC_OK && out.recovery_verified && !out.restart_required);
     assert(single_calls==3 && !probe_calls && !out.recovery_reinitialized);
+    /* CMD18 measurements on the same, already verified blocks. */
+    assert(out.stream_ran && out.resume_ran && out.stream_match && out.resume_match);
+    assert(capture_calls==1 && resume_calls==1 && capture_lba==164);
+    assert(resume_lba==164+KUI_SD_ASYNC_RESUME_OFFSET && out.stream.blocks==30);
+    assert(out.resume.blocks==KUI_SD_ASYNC_RESUME_BLOCKS);
+
+    /* A captured block that differs from the async copy is reported. */
+    prepare();speed_mode=speed_file=true;capture_corrupt=true;
+    kui_sd_async_speed(&out,cancelled,NULL);
+    assert(out.speed_match && out.stream_ran && !out.stream_match && out.resume_match);
+    assert(out.probe.status==KUI_SCI_ASYNC_OK && out.recovery_verified);
+
+    /* A failed measurement fails the run and goes through reinitialization;
+     * the resume pass is not attempted after it. */
+    prepare();speed_mode=speed_file=true;capture_result=KUI_SCI_ASYNC_COMMAND;
+    kui_sd_async_speed(&out,cancelled,NULL);
+    assert(out.speed_match && out.stream_ran && !out.resume_ran && !resume_calls);
+    assert(out.probe.status==KUI_SCI_ASYNC_COMMAND && out.recovery_reinitialized && out.recovery_verified);
+    kui_sd_disconnect();prepare();assert(kui_sd_connect());
 
     prepare();speed_mode=true;kui_sd_async_speed(&out,cancelled,NULL);
     assert(!out.speed_file_found && out.speed_lba==0 && out.speed_match && out.recovery_verified);

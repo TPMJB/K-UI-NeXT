@@ -18,6 +18,13 @@ enum kui_sd_async_recovery_phase {
  * reader (CMD18 runs, CPU-fed) and then by the async reader (one CMD17 per
  * block, polled with no other work). */
 #define KUI_SD_ASYNC_SPEED_BLOCKS 2048u
+/* CMD18 measurements after the async pass, on the same blocks: a continuous
+ * 16 KiB capture from the first block and a 64-block per-block resume run
+ * from block 64. Each CRC-valid block must equal the async pass's copy. */
+#define KUI_SD_ASYNC_CAPTURE_BYTES 16384u
+#define KUI_SD_ASYNC_RESUME_OFFSET 64u
+#define KUI_SD_ASYNC_RESUME_BLOCKS 64u
+#define KUI_SD_ASYNC_COMPARE_BLOCKS (KUI_SD_ASYNC_RESUME_OFFSET+KUI_SD_ASYNC_RESUME_BLOCKS)
 struct kui_sd_async_result {
     struct kui_sci_async_probe_result probe;
     bool baseline_verified, recovery_verified, recovery_reinitialized, restart_required;
@@ -49,6 +56,9 @@ struct kui_sd_async_result {
     uint32_t speed_lba, speed_blocks, speed_async_blocks;
     uint32_t speed_normal_crc, speed_async_crc;
     uint64_t speed_normal_us, speed_async_us;
+    bool stream_ran, resume_ran, stream_match, resume_match;
+    struct kui_sci_async_stream stream;
+    struct kui_sci_async_resume resume;
     char message[128];
 };
 const char *kui_sd_async_recovery_name(enum kui_sd_async_recovery_phase phase);

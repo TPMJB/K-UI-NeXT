@@ -107,8 +107,11 @@ struct kui_sci_async_stage {
      * KUI_SCI_ASYNC_OVERRUN_RETRIES times per request; one that cannot be
      * proven idle still quarantines the channel (undrained_overruns). */
     uint32_t payload_overruns, overrun_retries, undrained_overruns;
-    /* Card access time: 0xff bytes clocked between R1 and the data token. */
+    /* Card access time: 0xff bytes clocked between R1 and the data token,
+     * and the wall-clock time they took. Byte counts depend on how fast the
+     * bytes were clocked; token_us does not. */
     uint32_t token_bytes, max_token_bytes;
+    uint64_t token_us, max_token_us;
     /* Summed time from each attempt's start to its DMA start (command and
      * card access time), and time spent in finish (checks and handoff). */
     uint64_t framing_us, finish_us;
@@ -135,6 +138,8 @@ struct kui_sci_async_probe_result {
     enum kui_sci_async_status operation_status; /* Before cleanup classification. */
     uint32_t lba;
     struct kui_sci_async_stage slow, fast;
+    /* Counters of the CMD18 measurements (stream_capture/stream_resume). */
+    struct kui_sci_async_stage cmd18;
     struct kui_sci_async_fault fault;
     /* Pre-stop evidence of the first payload overrun, even when its retry
      * succeeded. fault above still describes only a failed request. */
@@ -202,6 +207,56 @@ void kui_sci_async_set_framing_quantum(struct kui_sci_async_reader *reader, unsi
 uint32_t kui_sci_async_work_sample(struct kui_sci_async_reader *reader);
 void kui_sci_async_work_record(struct kui_sci_async_reader *reader,
     uint32_t before, uint32_t iterations, uint32_t checksum);
+
+/* CMD18 measurements for the speed test. Both run synchronously between
+ * requests of an open, idle reader, read only, and always stop the card with
+ * CMD12 (after deselection, an SCI module reset and reselection). Each block
+ * is received by a receive-only DMA with CPU interrupts masked and without a
+ * completion IRQ; the SCI is stopped only after the trailing overrun that ends
+ * its continuous clocking, as after an interrupt-driven request.
+ *
+ * capture: one DMA of `bytes` (multiple of 32, 1056..32768) into `buffer`
+ * starting with the first block's payload, so the card is clocked
+ * continuously at 12.5 MHz across block boundaries. Every complete block's
+ * CRC16 is checked and the 0xff bytes between its CRC and the next data token
+ * are counted: the card's inter-block gap under continuous clocking. Parsing
+ * stops at the first CRC or token error. Valid payloads are compacted to
+ * buffer[512*i] for the caller to compare.
+ *
+ * resume: `count` (1..KUI_SCI_ASYNC_RESUME_BLOCKS) blocks of one CMD18, each
+ * received by its own 514-byte DMA, then deselect, SCI module reset,
+ * reselect and a polled search for the next token. This is the per-block
+ * cycle a receive-only streaming reader would need; dst receives count*512
+ * bytes. A terminal status leaves the reader failed, as for a request. */
+#define KUI_SCI_ASYNC_STREAM_GAPS 32u
+#define KUI_SCI_ASYNC_RESUME_BLOCKS 256u
+struct kui_sci_async_stream {
+    enum kui_sci_async_status status;
+    uint32_t lba, bytes, received, complete;
+    uint32_t command_response, first_token_bytes, last_token;
+    uint32_t blocks, crc_errors, token_errors;
+    /* Gaps in bytes at 12.5 MHz (0.64 us each); gap[] keeps the first ones. */
+    uint32_t gaps, gap_min, gap_max, gap_total;
+    uint16_t gap[KUI_SCI_ASYNC_STREAM_GAPS];
+    uint32_t end_ssr, end_count, reset_state, stop_response, stop_busy_bytes;
+    uint64_t first_token_us, capture_us, masked_us, stop_us, elapsed_us;
+};
+struct kui_sci_async_resume {
+    enum kui_sci_async_status status;
+    uint32_t lba, requested, blocks, crc_errors, token_errors, guard_errors;
+    uint32_t command_response, first_token_bytes, last_token;
+    /* Token search after each reselection: bytes and time. */
+    uint32_t token_bytes, max_token_bytes;
+    uint64_t first_token_us, token_us, max_token_us;
+    /* Summed per block: masked DMA, deselect+reset+reinit, CRC check. */
+    uint64_t receive_us, reset_us, check_us, max_masked_us;
+    uint32_t reset_state, stop_response, stop_busy_bytes;
+    uint64_t stop_us, elapsed_us;
+};
+enum kui_sci_async_status kui_sci_async_stream_capture(struct kui_sci_async_reader *reader,
+    uint32_t lba, void *buffer, uint32_t bytes, struct kui_sci_async_stream *out);
+enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reader *reader,
+    uint32_t lba, uint32_t count, uint8_t *dst, struct kui_sci_async_resume *out);
 
 /* Original 16-slow/64-fast diagnostic client of the same reader API. */
 enum kui_sci_async_status kui_sci_async_probe_run(

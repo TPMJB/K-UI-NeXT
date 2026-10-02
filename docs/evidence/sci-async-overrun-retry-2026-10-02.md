@@ -103,7 +103,9 @@ per block): 587 KiB/s, 850.8 us per block:
 | Finish: reverse, CRC, handoff and SCI reset | 148.1 |
 | Loop and API overhead | 45.1 |
 
-The card's own wait averaged 58.3 bytes (max 63), about 37 us at 12.5 MHz, so
-most of the 312 us setup is per-byte software cost in the diagnostic framing
-loop (a wall-clock timeout read on every byte), not card latency. Finish uses
-bit-by-bit reversal and CRC rather than the reader's optimized routines.
+The card's own wait averaged 58.3 polled bytes (max 63). An earlier reading
+of this as about 37 us assumed back-to-back bytes at 12.5 MHz; the framing loop
+clocked each byte separately and read the wall clock on every byte, so the wait
+in time is unknown and may be most of the 312 us setup. The next build measures
+it directly ([follow-up](sci-async-speed-cmd18-2026-10-02.md)). Finish used
+bit-by-bit reversal and CRC rather than table lookups.

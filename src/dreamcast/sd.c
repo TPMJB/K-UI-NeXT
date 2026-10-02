@@ -429,10 +429,19 @@ static void async_speed_range(struct kui_sd_async_result *out) {
     else out->speed_file_found=false;
     (void)f_mount(NULL,"0:",0);
 }
+/* Every block a CMD18 measurement validated must equal the async pass's. */
+static bool async_speed_same(const uint8_t *blocks,uint32_t count,const uint32_t *expected) {
+    for(uint32_t i=0;i<count;++i)
+        if(kui_crc32(0,blocks+(size_t)i*512u,512)!=expected[i]) return false;
+    return true;
+}
 static void async_speed(struct kui_sd_async_result *out,
         bool (*cancelled)(void *),void *cancel_ctx) {
     static uint8_t chunk[KUI_LOADER_SD_MAX_READ_BLOCKS*512u] __attribute__((aligned(32)));
     static uint8_t block[512] __attribute__((aligned(32)));
+    static uint32_t compare[KUI_SD_ASYNC_COMPARE_BLOCKS];
+    _Static_assert(KUI_SD_ASYNC_CAPTURE_BYTES<=sizeof(chunk) &&
+        KUI_SD_ASYNC_RESUME_BLOCKS*512u<=sizeof(chunk),"CMD18 measurements fit the chunk");
     const uint32_t lba=out->speed_lba,total=out->speed_blocks;
     enum kui_sci_async_status status=KUI_SCI_ASYNC_OK;
     uint64_t started=timer_us_gettime64();
@@ -464,16 +473,35 @@ static void async_speed(struct kui_sd_async_result *out,
         if(status==KUI_SCI_ASYNC_OK) status=kui_sci_async_finish(&reader,block,NULL);
         if(status==KUI_SCI_ASYNC_OK) {
             out->speed_async_crc=kui_crc32(out->speed_async_crc,block,512);
+            if(i<KUI_SD_ASYNC_COMPARE_BLOCKS) {
+                /* Kept for the CMD18 check; not part of the timed pass. */
+                uint64_t excluded=timer_us_gettime64();
+                compare[i]=kui_crc32(0,block,512);
+                started+=timer_us_gettime64()-excluded;
+            }
             ++out->speed_async_blocks;
         }
     }
     out->speed_async_us=timer_us_gettime64()-started;
+    out->speed_match=status==KUI_SCI_ASYNC_OK && out->speed_async_blocks==total &&
+        out->speed_async_crc==out->speed_normal_crc;
+    /* CMD18 measurements on blocks the async pass has just verified. */
+    if(out->speed_match && total>=KUI_SD_ASYNC_COMPARE_BLOCKS && !(cancelled && cancelled(cancel_ctx))) {
+        out->stream_ran=true;
+        status=kui_sci_async_stream_capture(&reader,lba,chunk,KUI_SD_ASYNC_CAPTURE_BYTES,&out->stream);
+        out->stream_match=async_speed_same(chunk,out->stream.blocks,compare);
+    }
+    if(status==KUI_SCI_ASYNC_OK && out->stream_ran && !(cancelled && cancelled(cancel_ctx))) {
+        out->resume_ran=true;
+        status=kui_sci_async_stream_resume(&reader,lba+KUI_SD_ASYNC_RESUME_OFFSET,
+            KUI_SD_ASYNC_RESUME_BLOCKS,chunk,&out->resume);
+        out->resume_match=async_speed_same(chunk,out->resume.blocks,compare+KUI_SD_ASYNC_RESUME_OFFSET);
+    }
+    if(status==KUI_SCI_ASYNC_OK && cancelled && cancelled(cancel_ctx)) status=KUI_SCI_ASYNC_CANCELLED;
     enum kui_sci_async_status closed=kui_sci_async_close(&reader);
     if(closed!=KUI_SCI_ASYNC_OK) status=closed;
     if(out->probe.status!=KUI_SCI_ASYNC_RESTORE) out->probe.status=status;
     if(out->probe.operation_status==KUI_SCI_ASYNC_OK) out->probe.operation_status=status;
-    out->speed_match=status==KUI_SCI_ASYNC_OK && out->speed_async_blocks==total &&
-        out->speed_async_crc==out->speed_normal_crc;
 }
 
 enum async_mode {ASYNC_QUICK, ASYNC_STRESS, ASYNC_SPEED};
