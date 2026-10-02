@@ -633,6 +633,8 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
             "\"last_remaining\":%lu,\"last_chcr\":%lu,\"last_ssr\":%lu,"
             "\"last_phase\":%u,\"last_phase_name\":\"%s\",\"dma_started\":%lu,"
             "\"command_response\":%lu,\"last_token\":%lu,\"snapshot_ssr\":%lu,\"snapshot_sptr\":%lu,"
+            "\"handoff_checks\":%lu,\"handoff_retries\":%lu,\"handoff_failures\":%lu,"
+            "\"handoff_ssr\":%lu,\"handoff_scr\":%lu,\"handoff_sptr\":%lu,\"bus_faults\":%lu,"
             "\"elapsed_us\":%llu,\"receive_us\":%llu,\"max_receive_us\":%llu}",
             (unsigned long)s->clock_hz,(unsigned long)s->attempted,(unsigned long)s->passed,
             (unsigned long)s->dma_irqs,(unsigned long)s->sci_error_irqs,(unsigned long)s->unexpected_rx_irqs,
@@ -642,6 +644,9 @@ static bool sci_async_save(const struct kui_sd_async_result *result,char path[96
             (unsigned)s->last_phase,kui_sci_async_phase_name(s->last_phase),(unsigned long)s->dma_started,
             (unsigned long)s->command_response,(unsigned long)s->last_token,
             (unsigned long)s->snapshot_ssr,(unsigned long)s->snapshot_sptr,
+            (unsigned long)s->handoff_checks,(unsigned long)s->handoff_retries,(unsigned long)s->handoff_failures,
+            (unsigned long)s->handoff_ssr,(unsigned long)s->handoff_scr,(unsigned long)s->handoff_sptr,
+            (unsigned long)s->bus_faults,
             (unsigned long long)s->elapsed_us,(unsigned long long)s->receive_us,(unsigned long long)s->max_receive_us);
         if(n<0 || (size_t)n>=sizeof(stage[i])) return false;
     }
@@ -746,6 +751,17 @@ static void sci_async_operation(void) {
             snprintf(status.lines[7],KUI_APP_LINE_CAP,"Normal game reads are unchanged by this experiment.");
             if(!status.passed) {
                 const struct kui_sci_async_stage *stage=r->fast.attempted?&r->fast:&r->slow;
+                if(stage->handoff_checks || stage->bus_faults) {
+                    snprintf(status.lines[0],KUI_APP_LINE_CAP,"Slow %lu/%lu IRQ%lu  Fast %lu/%lu IRQ%lu",
+                        (unsigned long)r->slow.passed,(unsigned long)r->slow.attempted,(unsigned long)r->slow.dma_irqs,
+                        (unsigned long)r->fast.passed,(unsigned long)r->fast.attempted,(unsigned long)r->fast.dma_irqs);
+                    snprintf(status.lines[1],KUI_APP_LINE_CAP,"Handoff checks %lu retries %lu failures %lu faults %lu",
+                        (unsigned long)stage->handoff_checks,(unsigned long)stage->handoff_retries,
+                        (unsigned long)stage->handoff_failures,(unsigned long)stage->bus_faults);
+                    snprintf(status.lines[2],KUI_APP_LINE_CAP,"Handoff SSR%02lX SCR%02lX SPTR%02lX; CPU batches %lu",
+                        (unsigned long)(stage->handoff_ssr&255u),(unsigned long)(stage->handoff_scr&255u),
+                        (unsigned long)(stage->handoff_sptr&255u),(unsigned long)stage->overlap_batches);
+                }
                 if(stage->dma_started)
                     snprintf(status.lines[3],KUI_APP_LINE_CAP,"DMA left %lu CHCR%08lX ERI%lu RXI%lu",
                         (unsigned long)stage->last_remaining,(unsigned long)stage->last_chcr,

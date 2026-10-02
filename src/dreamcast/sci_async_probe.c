@@ -6,6 +6,7 @@
  */
 #include "kui/sci_async_probe.h"
 #include "../loader/sd_reader.h"
+#include "../loader/sci_sd_bus.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -37,6 +38,7 @@
 #define TRIAL_TIMEOUT_US UINT64_C(50000)
 #define FRAME_TIMEOUT_US UINT64_C(100000)
 #define MAX_POLLS 200000u
+#define HANDOFF_POLLS 8u
 
 #ifdef KUI_SCI_ASYNC_PROBE_TEST
 #define rd(a,w) kui_sci_async_test_read(a,w)
@@ -273,24 +275,43 @@ static void release(struct probe *p) {
 static uint8_t byte(const struct kui_loader_sd *c, uint8_t v, bool slow) {
     return c->bus.transfer(c->bus.ctx,v,slow);
 }
+static bool bus_healthy(struct probe *p) {
+    if(kui_sci_sd_healthy()) return true;
+    ++p->stage->bus_faults;
+    p->stage->snapshot_ssr=rd(SSR,1);
+    p->stage->snapshot_sptr=rd(SPTR,1);
+    return false;
+}
 static enum kui_sci_async_status token(struct probe *p,const struct kui_loader_sd *c,uint32_t lba,bool slow) {
     uint32_t address=c->high_capacity?lba:lba*512u;
     uint8_t cmd[6]={0x51,(uint8_t)(address>>24),(uint8_t)(address>>16),
         (uint8_t)(address>>8),(uint8_t)address,0};
     cmd[5]=command_crc(cmd,5);
     p->stage->last_phase=KUI_SCI_ASYNC_PHASE_READY;
-    c->bus.select(c->bus.ctx,false);(void)byte(c,0xff,slow);
+    c->bus.select(c->bus.ctx,false);
+    if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+    (void)byte(c,0xff,slow);
+    if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
     c->bus.select(c->bus.ctx,true);
     uint64_t start=timer_us_gettime64(); bool ready=false;
     for(unsigned i=0;i<4096;++i) {
-        if(byte(c,0xff,slow)==0xff) {ready=true;break;}
+        uint8_t value=byte(c,0xff,slow);
+        if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+        if(value==0xff) {ready=true;break;}
         if(timer_us_gettime64()-start>=FRAME_TIMEOUT_US) break;
     }
     if(!ready) return KUI_SCI_ASYNC_TIMEOUT;
     p->stage->last_phase=KUI_SCI_ASYNC_PHASE_COMMAND;
-    for(unsigned i=0;i<6;++i) (void)byte(c,cmd[i],slow);
+    for(unsigned i=0;i<6;++i) {
+        (void)byte(c,cmd[i],slow);
+        if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+    }
     uint8_t response=0xff;
-    for(unsigned i=0;i<16 && (response&0x80u);++i) response=byte(c,0xff,slow);
+    for(unsigned i=0;i<16 && (response&0x80u);++i) {
+        response=byte(c,0xff,slow);
+        p->stage->command_response=response;
+        if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+    }
     p->stage->command_response=response;
     if(response) return KUI_SCI_ASYNC_COMMAND;
     p->stage->last_phase=KUI_SCI_ASYNC_PHASE_TOKEN;
@@ -298,11 +319,61 @@ static enum kui_sci_async_status token(struct probe *p,const struct kui_loader_s
     for(unsigned i=0;i<8192;++i) {
         uint8_t v=byte(c,0xff,slow);
         p->stage->last_token=v;
+        if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
         if(v==0xfe) return KUI_SCI_ASYNC_OK;
         if(v!=0xff) return KUI_SCI_ASYNC_TOKEN;
         if(timer_us_gettime64()-start>=FRAME_TIMEOUT_US) break;
     }
     return KUI_SCI_ASYNC_TIMEOUT;
+}
+/* The normal bus latches errors even in select(false)'s TEND wait. Establish
+ * a clean, stopped SCI before invoking it: a completed RX DMA does not by
+ * itself establish that its trailing RDRF/ORER was cleared. The manual's
+ * synchronous error flow (15.3.4) checks ORER again after clearing it.
+ * This bounded foreground step is not an incomplete-DMA drain or recovery.
+ */
+static enum kui_sci_async_status handoff(struct probe *p,
+        const struct kui_loader_sd *c, bool slow) {
+    struct kui_sci_async_stage *s=p->stage;
+    s->last_phase=KUI_SCI_ASYNC_PHASE_HANDOFF;
+    ++s->handoff_checks;
+    if(p->armed || p->quarantined || p->foreign_dma || !dma_unchanged(p)) {
+        p->foreign_dma=true;return KUI_SCI_ASYNC_DMA_ERROR;
+    }
+    bool clean=false;
+    for(unsigned n=0;n<HANDOFF_POLLS;++n) {
+        s->handoff_scr=rd(SCR,1);s->handoff_ssr=rd(SSR,1);
+        s->handoff_sptr=rd(SPTR,1);
+        if(s->handoff_scr&0xf4u) break;
+        if(!(s->handoff_ssr&(RDRF|FLAGS)) && (s->handoff_ssr&0x84u)==0x84u) {
+            clean=true;break;
+        }
+        ++s->handoff_retries;
+        if(s->handoff_ssr&RDRF) (void)rd(RDR,1);
+        wr(SSR,s->handoff_ssr&~(RDRF|FLAGS),1);
+        settle(64);
+    }
+    if(!clean) {++s->handoff_failures;return KUI_SCI_ASYNC_HANDOFF;}
+    c->bus.select(c->bus.ctx,false);
+    if(!bus_healthy(p)) return KUI_SCI_ASYNC_BUS_FAULT;
+    if(!(rd(PDTR,2)&0x80u)) {++s->handoff_failures;return KUI_SCI_ASYNC_HANDOFF;}
+    /* Re-establish the documented synchronous initialization while CS is
+     * high. Keep the current BRR so the normal bus's speed cache agrees.
+     * TE and RE are enabled together; no transmit data is queued here.
+     * Reinitializing at this boundary is experimental, not proof that the
+     * previous console's unresponsive CMD17 was caused by the receiver. */
+    wr(SCR,0,1);wr(SMR,p->smr,1);wr(BRR,slow?31u:0u,1);
+    wr(SPTR,p->sptr,1);
+    settle(1024);
+    wr(SCR,0x30u,1);
+    s->handoff_scr=rd(SCR,1);s->handoff_ssr=rd(SSR,1);
+    s->handoff_sptr=rd(SPTR,1);
+    if(s->handoff_scr!=0x30u || rd(SMR,1)!=p->smr || rd(BRR,1)!=(slow?31u:0u) ||
+       (s->handoff_sptr&0x8au)!=(p->sptr&0x8au) ||
+       (s->handoff_ssr&(RDRF|FLAGS)) || (s->handoff_ssr&0x84u)!=0x84u) {
+        ++s->handoff_failures;return KUI_SCI_ASYNC_HANDOFF;
+    }
+    return KUI_SCI_ASYNC_OK;
 }
 static bool guards(const struct receive_area *r) {
     for(unsigned i=0;i<32;++i) if(r->before[i]!=SENTINEL || r->after[i]!=SENTINEL) return false;
@@ -410,6 +481,8 @@ static enum kui_sci_async_status trial(struct probe *p,const struct kui_loader_s
     if(!equal) {p->out->baseline_ok=false;return KUI_SCI_ASYNC_MISMATCH;}
     p->out->baseline_ok=true;
     if(p->end_ssr&ORER) ++s->trailing_overruns;
+    result=handoff(p,c,slow);
+    if(result!=KUI_SCI_ASYNC_OK) return result;
     s->last_phase=KUI_SCI_ASYNC_PHASE_COMPLETE;
     ++s->passed;return KUI_SCI_ASYNC_OK;
 }
@@ -457,15 +530,13 @@ enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *c,
                 p->stage->snapshot_ssr=rd(SSR,1);
                 p->stage->snapshot_sptr=rd(SPTR,1);
             }
-            c->bus.select(c->bus.ctx,false);
-            if(out->status!=KUI_SCI_ASYNC_OK) break;
-            /* Return GPIO ownership before normal command framing. The next
-             * transfer updates the existing bus's slow-clock state normally. */
-            wr(SPTR,p->sptr,1);
+            if(out->status!=KUI_SCI_ASYNC_OK) {
+                c->bus.select(c->bus.ctx,false);break;
+            }
         }
         p->stage->elapsed_us=timer_us_gettime64()-stage_start;
     }
-    c->bus.select(c->bus.ctx,false);
+    if(!(rd(PDTR,2)&0x80u)) c->bus.select(c->bus.ctx,false);
     out->operation_status=out->status;
     release(p);
     if(!out->safe_restored) out->status=KUI_SCI_ASYNC_RESTORE;
@@ -480,12 +551,13 @@ enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *c,
 const char *kui_sci_async_status_name(enum kui_sci_async_status s) {
     static const char *const names[]={"pass","invalid argument","DMA busy","unsupported state",
         "cancelled","CMD17 rejected","data token error","timeout","receive error","DMA error",
-        "buffer guard changed","CRC mismatch","baseline mismatch","restore failed","no CPU overlap measured"};
+        "buffer guard changed","CRC mismatch","baseline mismatch","restore failed","no CPU overlap measured",
+        "handoff failed","framing bus fault"};
     return (unsigned)s<sizeof(names)/sizeof(names[0])?names[s]:"unknown";
 }
 
 const char *kui_sci_async_phase_name(enum kui_sci_async_phase p) {
     static const char *const names[]={"none","lease","buffer","ready","command","token",
-        "token end","ownership","GPIO","DMA","validate","complete"};
+        "token end","ownership","GPIO","DMA","validate","complete","handoff"};
     return (unsigned)p<sizeof(names)/sizeof(names[0])?names[p]:"unknown";
 }

@@ -23,7 +23,9 @@ enum kui_sci_async_status {
     KUI_SCI_ASYNC_CRC,
     KUI_SCI_ASYNC_MISMATCH,
     KUI_SCI_ASYNC_RESTORE,
-    KUI_SCI_ASYNC_NO_OVERLAP
+    KUI_SCI_ASYNC_NO_OVERLAP,
+    KUI_SCI_ASYNC_HANDOFF,
+    KUI_SCI_ASYNC_BUS_FAULT
 };
 
 enum kui_sci_async_phase {
@@ -38,7 +40,8 @@ enum kui_sci_async_phase {
     KUI_SCI_ASYNC_PHASE_GPIO,
     KUI_SCI_ASYNC_PHASE_DMA,
     KUI_SCI_ASYNC_PHASE_VALIDATE,
-    KUI_SCI_ASYNC_PHASE_COMPLETE
+    KUI_SCI_ASYNC_PHASE_COMPLETE,
+    KUI_SCI_ASYNC_PHASE_HANDOFF
 };
 
 struct kui_sci_async_stage {
@@ -51,6 +54,9 @@ struct kui_sci_async_stage {
     uint32_t trailing_overruns, premature_errors, timeouts;
     uint32_t overlap_batches, overlap_iterations, work_checksum;
     uint32_t last_remaining, last_chcr, last_ssr;
+    uint32_t handoff_checks, handoff_retries, handoff_failures;
+    uint32_t handoff_ssr, handoff_scr, handoff_sptr;
+    uint32_t bus_faults;
     /* receive_us includes start-to-worker-observation/cleanup overhead;
      * it is not payload wire time or maximum CPU blocking time. */
     uint64_t elapsed_us, receive_us, max_receive_us;

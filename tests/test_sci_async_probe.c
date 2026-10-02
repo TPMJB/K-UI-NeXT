@@ -36,7 +36,9 @@ enum fault { NO_FAULT, EARLY_ERROR, BAD_CRC, WRONG_DATA, STALLED,
              TRAILING_FRAME_ERROR, TRAILING_PARITY_ERROR, TRAILING_ERI,
              EARLY_RX_IRQ, TRAILING_WITHOUT_END, BAD_PADDING,
              FOREIGN_DURING_FRAMING, FOREIGN_AFTER_DMA, FOREIGN_DURING_DMA,
-             TOKEN_NOT_ENDED, BAD_GPIO_CONTROL };
+             TOKEN_NOT_ENDED, BAD_GPIO_CONTROL, HANDOFF_REASSERTED_ERROR,
+             HANDOFF_STUCK_ERROR, HANDOFF_NO_TEND, BUS_FAULT_ON_DESELECT,
+             BUS_FAULT_ON_COMMAND };
 static struct {
     uint8_t smr, brr, scr, ssr, rdr, scmr, sptr;
     uint16_t pdtr;
@@ -50,6 +52,7 @@ static struct {
     unsigned slow_starts, fast_starts;
     unsigned install_attempts, fail_install_at;
     unsigned monitored_gpio_reads, failed_handler_restores;
+    unsigned flag_clears, faulty_framing_calls;
     uint32_t command_argument;
     uint64_t now;
     uint8_t baseline[512], command_bytes[5], *dma_buffer;
@@ -58,6 +61,7 @@ static struct {
     bool fault_fired, advancing, fail_restore_register, foreign_active;
     bool dynamic_sptr_inputs, no_overlap, fail_handler_restore;
     bool rxd_pin, sck_pin, token_rx_high;
+    bool bus_fault, reassert_once;
     enum fault fault;
 } hw;
 static int handler_data[3];
@@ -163,7 +167,9 @@ static void advance(void) {
             }
             if(!hw.tcr) {
                 hw.chcr|=END; hw.pending_dma=true;
-                if(hw.fault==TRAILING_ERROR) hw.ssr|=ORER|RDRF;
+                if(hw.fault==TRAILING_ERROR || hw.fault==HANDOFF_REASSERTED_ERROR ||
+                   hw.fault==HANDOFF_STUCK_ERROR) hw.ssr|=ORER|RDRF;
+                if(hw.fault==HANDOFF_REASSERTED_ERROR) hw.reassert_once=true;
                 if(hw.fault==TRAILING_FRAME_ERROR) hw.ssr|=0x10u;
                 if(hw.fault==TRAILING_PARITY_ERROR) hw.ssr|=0x08u;
                 if(hw.fault==TRAILING_ERI || hw.fault==TRAILING_WITHOUT_END) {
@@ -260,8 +266,8 @@ void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
     if(hw.foreign_active)
         assert(address!=SAR && address!=DAR && address!=TCR && address!=CHCR);
     switch(address) {
-        case SMR: assert(width==1); hw.smr=value; break;
-        case BRR: assert(width==1); hw.brr=value; break;
+        case SMR: assert(width==1 && !hw.selected); hw.smr=value; break;
+        case BRR: assert(width==1 && !hw.selected); hw.brr=value; break;
         case SCR:
             assert(width==1);
             if((value&0x70u)==0x50u && !(hw.scr&0x10u)) {
@@ -275,8 +281,20 @@ void kui_sci_async_test_write(uint32_t address,uint32_t value,unsigned width) {
             }
             hw.scr=value;
             if(!(value&0x20u)) hw.ssr|=TEND;
+            if(hw.fault==HANDOFF_NO_TEND && hw.dma_starts) hw.ssr&=(uint8_t)~TEND;
             break;
-        case SSR: assert(width==1); hw.ssr&=value; break;
+        case SSR:
+            assert(width==1);
+            if((hw.ssr&(ORER|RDRF)) && !(value&(ORER|RDRF))) ++hw.flag_clears;
+            hw.ssr&=value;
+            /* A receive flag still visible after the first cleanup write
+             * must be checked again before the sticky-fault bus is called.
+             * This fault injection tests the handoff contract, not a claim
+             * that the console report proved this exact peripheral timing. */
+            if(hw.reassert_once || (hw.fault==HANDOFF_STUCK_ERROR && hw.dma_starts)) {
+                hw.ssr|=ORER|RDRF;hw.reassert_once=false;
+            }
+            break;
         case SCMR: assert(width==1); hw.scmr=value; break;
         case SPTR:
             assert(width==1);
@@ -304,6 +322,12 @@ static void bus_select(void *ctx,bool selected) {
     } else {
         assert((hw.scr&0x70u)!=0x50u && (!(hw.chcr&DE) || hw.foreign_active));
         ++hw.deselects;
+        /* Production select(false) invokes wait_flag(TEND), which latches
+         * an error permanently even though this callback cannot report it. */
+        if(hw.fault==BUS_FAULT_ON_DESELECT && hw.dma_starts) hw.bus_fault=true;
+        if(!hw.bus_fault && ((hw.ssr&0x38u) || !(hw.ssr&TEND))) {
+            hw.bus_fault=true;hw.scr=0;
+        }
     }
     hw.selected=selected;
     if(selected) hw.pdtr&=(uint16_t)~0x80u;
@@ -316,6 +340,10 @@ static void bus_select(void *ctx,bool selected) {
 }
 static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
     assert(ctx==&hw && (hw.scr&0x70u)!=0x50u);
+    if(hw.bus_fault) {++hw.faulty_framing_calls;return 0xff;}
+    if(hw.fault==BUS_FAULT_ON_COMMAND && hw.dma_starts==17 && byte==0x51) {
+        hw.bus_fault=true;hw.scr=0;return 0xff;
+    }
     /* The existing synchronous bus owns framing and its clock-state cache. */
     hw.brr=slow?31:0; hw.scr=0x30;
     if(!hw.selected) { assert(byte==0xff); return 0xff; }
@@ -343,6 +371,7 @@ static uint8_t bus_transfer(void *ctx,uint8_t byte,bool slow) {
     }
     return 0xff;
 }
+bool kui_sci_sd_healthy(void) { return !hw.bus_fault; }
 static uint32_t bus_ticks(void *ctx) { assert(ctx==&hw); return (uint32_t)(hw.now++); }
 static struct kui_loader_sd reset(void) {
     memset(&hw,0,sizeof(hw));
@@ -380,6 +409,11 @@ static void test_success(bool high_miso) {
     assert(result.fast.attempted==64 && result.fast.passed==64);
     assert(result.slow.dma_irqs==16 && result.fast.dma_irqs==64);
     assert(result.slow.dma_started==16 && result.fast.dma_started==64);
+    assert(result.slow.handoff_checks==16 && result.fast.handoff_checks==64);
+    assert(!result.slow.handoff_retries && !result.fast.handoff_retries);
+    assert(!result.slow.handoff_failures && !result.fast.handoff_failures);
+    assert(result.slow.handoff_scr==0x30 && result.fast.handoff_scr==0x30);
+    assert(!result.slow.bus_faults && !result.fast.bus_faults);
     assert(result.slow.last_phase==KUI_SCI_ASYNC_PHASE_COMPLETE);
     assert(result.fast.last_phase==KUI_SCI_ASYNC_PHASE_COMPLETE);
     assert(result.slow.command_response==0 && result.fast.command_response==0);
@@ -539,6 +573,60 @@ static void test_trailing_overrun(enum fault fault) {
     }
     restored(&result);
 }
+static void test_handoff_rechecks_receive_flags(void) {
+    struct kui_loader_sd card=reset();hw.fault=HANDOFF_REASSERTED_ERROR;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_OK);
+    assert(result.slow.passed==16 && result.fast.passed==64);
+    assert(result.slow.trailing_overruns==16 && result.fast.trailing_overruns==64);
+    assert(result.slow.handoff_retries==16 && result.fast.handoff_retries==64);
+    assert(!result.slow.handoff_failures && !result.fast.handoff_failures);
+    assert(!hw.bus_fault && !hw.faulty_framing_calls && hw.flag_clears==160);
+    restored(&result);
+}
+static void test_handoff_stuck_receive_flags(void) {
+    struct kui_loader_sd card=reset();hw.fault=HANDOFF_STUCK_ERROR;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_RESTORE);
+    assert(result.operation_status==KUI_SCI_ASYNC_HANDOFF && !result.safe_restored);
+    assert(!result.dma_quarantined && result.handlers_restored && result.registers_restored);
+    assert(result.slow.handoff_checks==1 && result.slow.handoff_failures==1);
+    assert(result.slow.handoff_retries==8 && result.slow.last_phase==KUI_SCI_ASYNC_PHASE_HANDOFF);
+    assert(result.slow.handoff_ssr&(ORER|RDRF));
+    assert(result.guards_ok && result.crc_ok && result.baseline_ok);
+    assert(hw.command_count==1 && hw.dma_starts==1 && !hw.faulty_framing_calls);
+}
+static void test_handoff_requires_idle(void) {
+    struct kui_loader_sd card=reset();hw.fault=HANDOFF_NO_TEND;
+    struct kui_sci_async_probe_result result;
+    assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_HANDOFF);
+    assert(result.slow.handoff_checks==1 && result.slow.handoff_failures==1);
+    assert(result.slow.handoff_retries==8 && !(result.slow.handoff_ssr&TEND));
+    assert(result.slow.last_phase==KUI_SCI_ASYNC_PHASE_HANDOFF);
+    assert(hw.command_count==1 && hw.dma_starts==1 && !hw.faulty_framing_calls);
+    restored(&result);
+}
+static void test_bus_fault_has_distinct_status(void) {
+    const enum fault faults[]={BUS_FAULT_ON_DESELECT,BUS_FAULT_ON_COMMAND};
+    for(unsigned i=0;i<sizeof(faults)/sizeof(faults[0]);++i) {
+        struct kui_loader_sd card=reset();hw.fault=faults[i];
+        struct kui_sci_async_probe_result result;
+        assert(kui_sci_async_probe_run(&card,123,hw.baseline,NULL,NULL,&result)==KUI_SCI_ASYNC_BUS_FAULT);
+        assert(result.operation_status==KUI_SCI_ASYNC_BUS_FAULT);
+        assert(hw.bus_fault && !hw.faulty_framing_calls);
+        if(faults[i]==BUS_FAULT_ON_DESELECT) {
+            assert(result.slow.bus_faults==1 && !result.fast.attempted);
+            assert(result.slow.last_phase==KUI_SCI_ASYNC_PHASE_HANDOFF);
+            assert(hw.command_count==1 && hw.dma_starts==1);
+        } else {
+            assert(result.slow.passed==16 && result.fast.passed==1 && result.fast.attempted==2);
+            assert(result.fast.bus_faults==1 && result.fast.last_phase==KUI_SCI_ASYNC_PHASE_COMMAND);
+            assert(result.fast.dma_started==1 && result.fast.dma_irqs==1);
+            assert(result.fast.command_response==0xff && result.fast.snapshot_ssr==(TDRE|TEND));
+        }
+        restored(&result);
+    }
+}
 static void test_unsupported_no_writes(void) {
     for(unsigned which=0;which<8;++which) {
         struct kui_loader_sd card=reset();
@@ -649,6 +737,10 @@ int main(void) {
     isolated(test_missing_end_quarantined);
     test_trailing_overrun(TRAILING_ERROR);
     test_trailing_overrun(TRAILING_ERI);
+    test_handoff_rechecks_receive_flags();
+    isolated(test_handoff_stuck_receive_flags);
+    test_handoff_requires_idle();
+    test_bus_fault_has_distinct_status();
     test_busy_no_writes();
     test_unsupported_no_writes();
     test_partial_install_restore();

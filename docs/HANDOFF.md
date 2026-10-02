@@ -1,5 +1,32 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI autonomous transfers verified; repeat-read handoff next (2026-10-02 UTC)
+
+The owner's **38693a0de68e** JSON verifies 16/16 slow and 1/2 fast reads,
+with 17 DMA completion interrupts, CRC/data/guard checks and CPU overlap at
+both speeds. Fast reception took 338 us. The next CMD17 got `0xff` before
+another DMA began. Normal storage reinitialized and recovered; no quarantine.
+This demonstrates autonomous payload reception, not reliable repeated reads,
+filesystem throughput, independent timer responsiveness or a game async reader.
+See [the exact report and interpretation](evidence/sci-async-second-console-2026-10-02.md).
+
+The next candidate explicitly checks the stopped receiver, performs bounded
+status cleanup and reinitializes ordinary full-duplex framing while CS is high.
+It records handoff state and distinguishes a latched SCI bus failure from an
+SD response. The observed trailing overrun is not proven to be the sole cause.
+Normal game reads, CRC policy, native resident limits and quarantine remain.
+Console validation of this next candidate is pending.
+
+The supplied Claude CE analysis suggests polling `wsegacd.dll` interrupt
+threads, but original kernels were not attached. Independent source review
+also finds current resident SR.BL and caller-stack accesses incompatible with
+unhandled CE TLB misses. See the [CE polling review](evidence/windows-ce-polling-review-2026-10-02.md).
+A read-only CE load-header planner now tests the reported one-section format,
+arithmetic, aliases and live-memory overlaps; it is host-only groundwork and
+does not patch kernels or enable CE Launch. Its synthetic tests reject the
+current high-stage/prefix conflict. Next verify the owner's original ARMADA
+`0WINCEOS.BIN` and then implement a separately identified placement-only probe.
+
 ## SCI autonomous probe: first console failure (2026-10-02 UTC)
 
 Candidate **a3f02d2b0dc5** reached slow trial 1 but verified no data, delivered
