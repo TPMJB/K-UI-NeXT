@@ -79,12 +79,47 @@ rollback and poisoned retry rejection. Runtime tests cover baseline failures,
 safe recovery/reinitialization, unsafe cleanup and blocked later I/O. Shell
 tests cover entry/action/result behavior; 640×480 menu/idle/result renders fit.
 Strict compiler warnings, ASan/UBSan and existing SCI/retail-storage tests pass.
-Target compilation and packaged build IDs are required before delivery;
+Target compilation and packaged build IDs now pass as recorded below;
 electrical clock behavior and on-console recovery remain unvalidated.
 
 The diagnostic object and wrapper exist only in the SD runtime link. The
 bootstrap and resident retain their existing build graph and memory/stack
 guards. The existing `6af5e11` boot CD and card format remain compatible.
+
+## Delivered candidate
+
+Source **a3f02d2b0dc566c6b4e50f4ac0598336f122f396**, Diagnostic build
+[run 195](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36957378557), passed
+both full host/filesystem and Dreamcast jobs. The new probe and all six runtime
+wrapper modes ran in hosted CI. Normal/benchmark instruction audits checked
+18,999/19,862 instructions; no unresolved symbols. Resident limits are unchanged:
+
+| Backend | Payload | Memory end | Conservative stack / available |
+| --- | ---: | --- | ---: |
+| SCI | 11,156 B | `0x8c00baec` | 1,172 / 1,232 B |
+| SCIF | 10,608 B | `0x8c00b8c8` | 1,080 / 1,232 B |
+| IDE | 9,832 B | `0x8c00b5b8` | 1,000 / 1,232 B |
+
+The 4,559,631-byte SD source artifact `11206572864` has SHA-256
+`6845efa3c80eeb4a74f0bf05d74bf2152c717292c580620341c83f2190fca015`.
+All 96 manifest file hashes, ZIP integrity, both package CRCs and both build IDs
+were checked before preparing the two-file update:
+
+| Install file | File size | Package CRC32 | SHA-256 |
+| --- | ---: | --- | --- |
+| `KUI/runtime.kui` | 1,614,952 B | `580a700c` | `9053a22b7457f5cd8c637603b0b70f0f0bfcb9ad22852bbeb8fb88c6d936a107` |
+| `KUI/apps/games/retail-boot.kui` | 56,712 B | `a1640355` | `acae9467a67931bee419075782b5a8772fa1399a7b5300bc48a3569453cabe84` |
+
+Both identify **a3f02d2b0dc5**. Runtime payload/memory are
+1,614,888/5,272,720 bytes. The delivered
+`K-UI-SCI-Async-Probe-a3f02d2b0dc5.zip` is 776,761 bytes, SHA-256
+`584d3912946a420db894e447a20b5de425075c802f37e7e4f8fbba37327fc495`.
+It contains both install files, instructions, hashes and the source build record.
+The normal game reader remains unchanged. Run the new probe once; return its
+JSON and photo, or only a photo if it requires restart. No repeat soak or DOA2
+timing is needed for this diagnostic. The owner's later Claude comparison and
+[next throughput experiments](sci-throughput-next-2026-10-02.md) are recorded
+separately, including the existing Compare preset and 64 KiB physical-stream cap.
 
 ## Primary hardware basis
 

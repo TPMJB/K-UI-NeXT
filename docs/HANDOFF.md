@@ -22,13 +22,19 @@ zero guard fault and zero spin steps, and latest period/vblank 525/260 with cost
 these session-wide counters do not isolate fight startup.
 See the [reports, binary comparison and console limits](evidence/sci-inline-crc-result-2026-10-01.md).
 The next experiment is the implemented runtime-only **SCI async probe** under
-Diagnostics → Storage tests. It tests 16 slow and 64 fast receive-only CMD17
+Diagnostics → Storage tests, delivered as **a3f02d2b0dc5** after full host and
+Dreamcast CI passed (run 195). It tests 16 slow and 64 fast receive-only CMD17
 reads of 514 bytes, checking CRC/data/guards, CPU overlap, completion IRQs and
 ordinary-read recovery. Console validation remains pending; incomplete DMA
 aborts quarantine storage until restart. Reports use
 `/KUI/tests/sci-async-NNNN/sci-async-probe.json` after verified recovery.
 Independent timer IRQ responsiveness is not instrumented in this first probe.
 See [implementation, tests and evidence limits](evidence/sci-async-probe-2026-10-02.md).
+Install both files from `K-UI-SCI-Async-Probe-a3f02d2b0dc5.zip`, keep the current
+CD, and run the probe once. Return its saved JSON and photo; a restart case
+deliberately does not save a report. Game behavior is unchanged. The owner's
+later throughput analysis is recorded with
+[next experiments and the existing 64 KiB stream cap](evidence/sci-throughput-next-2026-10-02.md).
 It may trade throughput for CPU availability. Validate the probe GPIO/EIO controls
 independently: Linux corroborates the SH7091 port address despite a different
 label in pinned KOS. This is not an established accepted-driver defect. Do not
