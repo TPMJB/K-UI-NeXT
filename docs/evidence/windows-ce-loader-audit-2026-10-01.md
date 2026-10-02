@@ -203,3 +203,17 @@ rounding/overflow, package/profile mismatches, every live-range collision
 entry-state preservation. Audit the CE ELF, BSS, stack and instructions while
 retaining native checks. Faster SCI and successful placement alone do not
 establish Windows CE boot or gameplay compatibility.
+
+## Newer priority: asynchronous completion and original IRQ (2026-10-02 UTC)
+
+The owner subsequently relayed SWAT's explanation that CE needs DMA and the
+original interrupt, provided by his IDE path. KOS confirms G1 ATA DMA uses
+the original Holly GD-DMA event; SCI receive DMA does not generate that event.
+K-UI currently exposes polling/CPU-copy GD completion, and its IDE resident
+is also PIO. Correct prefix/body placement therefore addresses only one
+prerequisite. After placement, treat background transfer and the game's
+completion/register/IRQ contract as explicit milestones, not incidental work
+after enabling Launch. ARMADA's actual calls and interrupt expectations remain
+untraced. Supporting SCI CE would require separately proven adaptation; no
+universal impossibility or compatibility claim is made here. See the newer
+[asynchronous-read and CE IRQ evidence](sci-async-and-ce-irq-2026-10-02.md).

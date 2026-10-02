@@ -1,5 +1,29 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## New priority: asynchronous reads and CE IRQ contract (2026-10-02 UTC)
+
+The owner relayed SWAT's explanation that DOA2's remaining slowdown involves
+CPU-blocking reads and that CE needs DMA plus the original GD interrupt.
+K-UI's physical SCI DMA still requires synchronous CPU dummy-byte feeding;
+the resident masks interrupts through each read and supplies no original
+Holly GD-DMA completion. K-UI's IDE resident is currently PIO too. Faster CRC
+does not create asynchronous game I/O. ARMADA's actual IRQ requirements remain
+untraced, and its separate boot-layout conflict still exists.
+
+Candidate **93794e47df59** passed host and Dreamcast CI; the matching
+runtime/game update and all artifact hashes are verified. It is ready for
+the next Storage Quick/DOA2 comparison; console results remain pending. The next design experiment is a
+**receive-only CMD17 diagnostic**, DMA-reading 514 bytes with bounded cleanup,
+to test useful CPU work during reception. This is unimplemented and may trade
+throughput for CPU availability. Measure maximum blocked span as well as
+KiB/s and timer/IRQ responsiveness. Validate the probe GPIO/EIO controls
+independently: Linux corroborates the SH7091 port address despite a different
+label in pinned KOS. This is not an established accepted-driver defect. Do not
+unmask the existing private-stack reader or assume channel 3 can service SCI.
+Broaden native titles, then pursue CE placement and explicit asynchronous
+completion/IRQ milestones. See the
+[source evidence, constraints and proposed sequence](evidence/sci-async-and-ce-irq-2026-10-02.md).
+
 ## Current game-loading experiment (2026-10-01)
 
 **Next candidate — CRC overhead:** force-inline the unchanged SCI CRC16

@@ -103,3 +103,46 @@ After the native compatibility pass, proceed to the separate
 The first probe verifies prefix/body placement without entering CE; the next
 traces bootstrap handoff and actual GD requests. Faster storage alone does
 not provide the missing boot layout or establish kernel/resident coexistence.
+
+## Newer priority: reduce CPU blocking (2026-10-02 UTC)
+
+The owner's later SWAT report identifies synchronous CPU occupation as a
+remaining game limitation and original GD DMA/IRQ behavior as a CE concern.
+The CRC candidate **93794e47df59** is unchanged: it reduces work but still
+blocks during reads. The next hypothesis is a separate receive-only CMD17
+diagnostic that DMA-reads 514 bytes and measures useful CPU work during
+reception, maximum blocked span and timer/IRQ responsiveness. Primary SH7091
+code corroborates the SCI port-register mapping; independently validate the
+probe GPIO/EIO behavior before relying on it. The diagnostic is unimplemented,
+may cost command overhead and must not be enabled in the existing resident by simply unmasking
+interrupts. Prioritize these measurements before further blind throughput
+tuning; do not assume channel 3 provides a second SCI DMA channel. Broaden
+native coverage and keep CE boot placement, asynchronous transfer and original
+completion/IRQ behavior as separate requirements. The
+[newer evidence and proposal](sci-async-and-ce-irq-2026-10-02.md) records primary
+sources and unknowns, including the still-pending ARMADA trace.
+
+## Built candidate and package verification (2026-10-02 UTC)
+
+Commit `93794e47df5940ca3b048dd8e8feee0fa2ce52c3` passed both host and
+Dreamcast jobs in [Diagnostic run 194](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36951309887).
+Normal/benchmark instruction audits count 18,999/19,862 instructions. Native
+layout matches the local exact-build audit: SCI 11,156 bytes ending at
+`0x8c00baec`, conservative stack 1,172/1,232 bytes; SCIF 10,608 bytes and
+1,080 stack bytes; IDE 9,832 bytes and 1,000 stack bytes. No guards enlarged.
+
+The SD update artifact `11203884443` is 4,549,113 bytes, SHA-256
+`183ba5b8dafaa141050fac3c88c07f74bd7d535c17952a1fdae2ee324f1a1eaa`.
+All 96 source-manifest file hashes and both package CRCs/build identities
+verified. The user update `K-UI-SCI-CRC-93794e47df59.zip` contains the matching
+runtime and retail loader, README, build record and checksums. It is 766,078
+bytes, SHA-256 `1c4db2cd7063d412d90ffecd2a1d72fcb4f9e7dd4955e17c244cbac41c86bec5`.
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `KUI/runtime.kui` | 1,595,396 | `e7b0559d98f9b2f036fc2a5ad117d009252676317428770328320f057ae3bbe6` |
+| `KUI/apps/games/retail-boot.kui` | 56,712 | `7b0e5b0897f0052728fd9c17b67bec9e211e78f8672d382c6092efb7a6427410` |
+
+Both display build `93794e47df59`. Console measurements remain pending. Keep
+the existing `6af5e11` boot CD and `ce7006087f20` comparison package. This is
+an incremental CRC-cost experiment, not an asynchronous-reader or CE build.
