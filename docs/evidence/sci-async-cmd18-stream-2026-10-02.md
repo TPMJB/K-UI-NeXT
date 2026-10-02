@@ -170,3 +170,33 @@ Source `bac1b152b4ac7ce5814160e53a51b167e322c74c` passed
 host tests and the Dreamcast build. Install `KUI/runtime.kui` and
 `KUI/apps/games/retail-boot.kui` from its `kui-1.5.1-dainsleif-sd-update`
 artifact, run R and return the JSON.
+
+## Console results (bac1b152b4ac)
+
+The owner ran R; it passed with all four passes returning the same data and
+normal recovery verified ([report](sci-async-console-bac1b152b4ac-speed.json)).
+1 MiB of `/KUI/runtime.kui` from LBA 83,702,784.
+
+| Pass | KiB/s | us per block |
+| --- | ---: | ---: |
+| Ordinary reader (CMD18 runs) | 1,095 | 456.5 |
+| Async CMD17 per block | 654 | 763.6 |
+| Async CMD18 stream, overlapped checks | 1,202 | 415.9 |
+
+Both CMD18 passes include the test's own CRC32 of each 128-block run, about
+38 us per block (16 runs of 64 KiB in 77.8 ms). Without it the stream runs at
+377.9 us per block (1,323 KiB/s) and the ordinary reader at about 418.5 us
+(about 1,195 KiB/s).
+
+Streaming per block: receive 344.6 us (513 bytes on the wire is 328.3 us),
+serial gap 30.4 us (SCI reset, reselection, token search of 0.6 bytes on
+average, DMA start) and the overlapped check 54.5 us. No restart, overrun or
+missing RDR byte in 2,048 blocks; the resume measurement passed 64/64 again.
+The stream now reaches 88% of the wire limit (516 bytes per block, 330 us).
+
+**The 2.5 ms masked window.** `max_irq_masked_us` 2,508 us at site 3 (module
+reset) in stage 1 (the CMD17 pass): one SCI module reset, with interrupts
+masked, took about 2.5 ms instead of a few microseconds. The streaming stage
+again shows one block whose receive took 2,843 us (2,845 us in the previous
+run). These are rare (about one per R run) but not explained by the code's
+own loops; the next step is to time the module reset's steps.
