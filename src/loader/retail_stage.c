@@ -53,7 +53,7 @@ static void select_resident(void) {
     resident_limit=KUI_RETAIL_STANDARD_LIMIT;
     /* Decoding accepted the background reader only for SCI with at most
      * KUI_RETAIL_ASYNC_EXTENTS extents, the most its resident holds. */
-    if(manifest.reader==KUI_RETAIL_READER_ASYNC) {
+    if(manifest.reader!=KUI_RETAIL_READER_STANDARD) {
         resident_blob=__retail_resident_scia_blob_start;
         resident_bytes=(size_t)(__retail_resident_scia_blob_end-resident_blob);
         resident_limit=KUI_RETAIL_ASYNC_LIMIT;
@@ -160,8 +160,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
         stopped("UNSUPPORTED BOOT LAYOUT",manifest.boot_bytes);
     if(manifest.storage_transport==KUI_STORAGE_SCIF) retire_launcher_serial();
     retail_display_line(kui_retail_storage_name(manifest.storage_transport));
-    if(manifest.reader==KUI_RETAIL_READER_ASYNC)
-        retail_display_line("BACKGROUND READER - SCI TEST BUILD");
+    if(manifest.reader!=KUI_RETAIL_READER_STANDARD)
+        retail_display_line(manifest.reader==KUI_RETAIL_READER_ASYNC_KEEP?
+            "BACKGROUND READER Y - KEEPS HOOK":"BACKGROUND READER X - RELEASES HOOK");
     last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {
         if(card.transport!=KUI_STORAGE_IDE) {

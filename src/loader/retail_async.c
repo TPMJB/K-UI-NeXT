@@ -7,13 +7,15 @@
 #include <string.h>
 
 #define IPRB UINT32_C(0xffd00008)
-#define IPRC UINT32_C(0xffd0000c)
+/* IPRB bits 7..4: the SCI's level. The reader's is the lowest. */
+#define SCI_FIELD 0x00f0u
+#define SCI_LEVEL 0x0010u
 /* A fresh CMD18's token can take the card's whole access time. */
 #define TOKEN_LIMIT 65536u
 /* Consecutive failures at one block before the read is reported failed. */
 #define RETRIES 8u
-/* An EXEC with no interrupt delivering: about the ordinary reader's
- * two-sector step. */
+/* Blocks an EXEC makes sure of since the previous one: about the ordinary
+ * reader's two-sector step. */
 #define WAIT_BLOCKS 10u
 
 #ifdef KUI_RETAIL_ASYNC_TEST
@@ -40,55 +42,58 @@ struct kui_retail_async_region kui_retail_async_region __attribute__((aligned(32
 #define R kui_retail_async_region
 #define e kui_retail_async_region.engine
 /* Assembly templates: a forwarding vector whose word 3 names its target's
- * slot, and the interrupt vector whose word 11 names the game's (the
+ * slot, and the interrupt vector whose word 10 names the 0x600 slot (the
  * handler's own forwarding reads it there too). */
 extern const uint32_t kui_retail_vector_forward[4];
-extern const uint32_t kui_retail_vector_interrupt[13];
+extern const uint32_t kui_retail_vector_interrupt[12];
 
 static uint32_t our_vbr(void) { return (uint32_t)(uintptr_t)&R - 0x100u; }
+static const uint16_t offsets[3] = {0x100u, 0x400u, 0x600u};
+static void (*const releasing[3])(void) = {
+    kui_retail_release_100, kui_retail_release_400, kui_retail_release_600};
 
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
+    e.keep = manifest->reader == KUI_RETAIL_READER_ASYNC_KEEP;
     memcpy(R.vector100, kui_retail_vector_forward, sizeof(kui_retail_vector_forward));
     R.vector100[3] = (uint32_t)(uintptr_t)&e.forward[0];
     memcpy(R.vector400, kui_retail_vector_forward, sizeof(kui_retail_vector_forward));
     R.vector400[3] = (uint32_t)(uintptr_t)&e.forward[1];
     memcpy(R.vector600, kui_retail_vector_interrupt, sizeof(kui_retail_vector_interrupt));
-    R.vector600[11] = (uint32_t)(uintptr_t)&e.forward[2];
+    R.vector600[10] = (uint32_t)(uintptr_t)&e.forward[2];
 }
 
-/* Put our vectors in front of the game's and give the stream's sources an
- * interrupt level: the game's DMAC level if it set one, else the lowest.
+/* Put our vectors in front of the game's and give the SCI the lowest level.
+ * Nothing else changes: the game's DMAC and other levels stay as they are.
  * Games may keep the bootstrap's VBR for good (DOA2 does), so it is hooked
- * like any other; boot_vbr counts those hooks. */
+ * like any other; boot_vbr counts those hooks. Found released (the game's
+ * VBR again while hooked), the vectors are simply installed again. */
 static void hook(void) {
     uint32_t vbr = vbr_get();
-    if(vbr != our_vbr()) {
-        if(vbr == KUI_RETAIL_BOOT_VBR) ++e.stats.boot_vbr;
-        if(e.hooked) ++e.stats.vbr_changes;
-        e.game_vbr = vbr;
-        e.forward[0] = vbr + 0x100u; e.forward[1] = vbr + 0x400u; e.forward[2] = vbr + 0x600u;
-        vbr_set(our_vbr());
+    if(vbr == our_vbr()) return;
+    if(vbr == KUI_RETAIL_BOOT_VBR) ++e.stats.boot_vbr;
+    uint16_t b = rd16(IPRB);
+    if(e.hooked) {
+        if(vbr == e.release.vbr) ++e.stats.releases;
+        else ++e.stats.vbr_changes;
     }
-    if(e.hooked) return;
-    uint16_t b = rd16(IPRB), c = rd16(IPRC);
-    e.iprb = b; e.iprc = c;
-    e.level = (c >> 8) & 15u;
-    if(!e.level) {
-        e.level = 1;
-        wr16(IPRC, (uint16_t)((c & ~0x0f00u) | 0x0100u));
-    }
-    wr16(IPRB, (uint16_t)((b & ~0x00f0u) | e.level << 4));
-    e.hooked = 1;
-    ++e.stats.hooks;
+    /* The game's own field, unless ours is still there (a game that set its
+     * VBR again itself). */
+    if(!e.hooked || (b & SCI_FIELD) != SCI_LEVEL) e.release.sci = b & SCI_FIELD;
+    e.release.vbr = vbr;
+    for(unsigned i = 0; i < 3; ++i)
+        e.forward[i] = e.keep ? vbr + offsets[i] : (uint32_t)(uintptr_t)releasing[i];
+    vbr_set(our_vbr());
+    wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
+    if(!e.hooked) {e.hooked = 1; ++e.stats.hooks;}
 }
-/* The game's vectors and levels again, unless it changed them meanwhile. */
+/* The game's vectors and SCI level again, unless it changed them meanwhile
+ * (or a releasing entry already gave them back). */
 static void unhook(void) {
     if(!e.hooked) return;
-    if(vbr_get() == our_vbr()) vbr_set(e.game_vbr);
-    uint16_t b = rd16(IPRB), c = rd16(IPRC);
-    if(((b >> 4) & 15u) == e.level) wr16(IPRB, (uint16_t)((b & ~0x00f0u) | (e.iprb & 0x00f0u)));
-    if(((c >> 8) & 15u) == e.level && !(e.iprc & 0x0f00u)) wr16(IPRC, (uint16_t)(c & ~0x0f00u));
+    if(vbr_get() == our_vbr()) vbr_set(e.release.vbr);
+    uint16_t b = rd16(IPRB);
+    if((b & SCI_FIELD) == SCI_LEVEL) wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | e.release.sci));
     e.hooked = 0;
 }
 
@@ -136,11 +141,12 @@ static void deliver(uint32_t wait) {
         if(block) {
             e.retries = 0;
             if(e.cursor.run > 1u) {
-                r = kui_sci_stream_fetch(lba + 1u, TOKEN_LIMIT, e.hooked);
+                r = kui_sci_stream_fetch(lba + 1u, TOKEN_LIMIT);
                 if(r != KUI_SCI_STREAM_OK) failure(r);
             }
             if(kui_retail_cursor_feed(&e.cursor, block) != KUI_GAME_OK) e.failed = KUI_GD_ERROR_IO;
             ++delivered;
+            ++e.since_exec;
             if(e.in_irq) ++e.stats.irq_blocks;
             else ++e.stats.call_blocks;
             if(e.cursor.done == e.cursor.count) e.active = 0;
@@ -150,7 +156,7 @@ static void deliver(uint32_t wait) {
             failure(r);
             if(e.failed) return;
         }
-        r = kui_sci_stream_fetch(lba, TOKEN_LIMIT, e.hooked);
+        r = kui_sci_stream_fetch(lba, TOKEN_LIMIT);
         if(r != KUI_SCI_STREAM_OK) failure(r);
     }
 }
@@ -178,13 +184,11 @@ void kui_retail_async_call(uint32_t function) {
     uint32_t wait = 0;
     if(e.active) {
         hook();
-        /* An EXEC waits for blocks itself, as the ordinary reader reads
-         * them, when no interrupt can deliver (no hook) or none came since
-         * the last EXEC although a block was in flight with its interrupt:
-         * a game is then never slower than with the ordinary reader. */
-        if(function == KUI_GD_EXEC &&
-           (!e.hooked || (e.exec_armed && e.stats.irqs == e.exec_irqs))) {
-            wait = WAIT_BLOCKS;
+        /* An EXEC waits for the blocks the interrupt did not deliver since
+         * the previous EXEC, up to the ordinary reader's step: a game is
+         * never slower than with the ordinary reader, and masked no longer. */
+        if(function == KUI_GD_EXEC && e.since_exec < WAIT_BLOCKS) {
+            wait = WAIT_BLOCKS - e.since_exec;
             ++e.stats.waits;
         }
     }
@@ -202,14 +206,11 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
         e.active = 0; /* aborted or reset: nothing more is written */
     }
     if(!kui_sci_stream_busy()) unhook();
-    if(function == KUI_GD_EXEC) {
-        e.exec_irqs = e.stats.irqs;
-        e.exec_armed = e.hooked && kui_sci_stream_busy();
-    }
+    if(function == KUI_GD_EXEC) e.since_exec = 0;
 }
 uint32_t kui_retail_async_irq(void) {
     ++e.stats.irqs;
-    /* Channel 1 or the SCI used by the game itself: its event, not ours. */
+    /* An SCI event without a reception: not ours, passed on as any other. */
     if(!kui_sci_stream_busy()) {++e.stats.forwarded; return 1;}
     e.in_irq = 1;
     deliver(0);

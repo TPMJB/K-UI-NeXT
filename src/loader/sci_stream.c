@@ -20,7 +20,9 @@
 #define CHCR UINT32_C(0xffa0001c)
 #define DMAOR UINT32_C(0xffa00040)
 /* Channel 1: SCI receive request, byte units, destination incrementing; no
- * completion interrupt. RIE+RE then clock the card without a transmitter. */
+ * completion interrupt (the game's DMAC level stays as it is). RIE+RE then
+ * clock the card without a transmitter; with SPTR.EIO only the receiver's
+ * error (ERI) reaches the CPU, at the overrun that ends every reception. */
 #define RX_DMA UINT32_C(0x4911)
 #define RDRF 0x40u
 #define ORER 0x20u
@@ -215,7 +217,7 @@ static enum kui_sci_stream_result start_dma(uint32_t area, uint32_t offset) {
     wr32(SAR, RDR & UINT32_C(0x1fffffff));
     wr32(DAR, physical(s.area[area]) + offset);
     wr32(TCR, DMA_BYTES - offset);
-    wr32(CHCR, s.irq ? RX_DMA | 4u : RX_DMA);
+    wr32(CHCR, RX_DMA);
     wr8(SCR, 0x50u);
     s.state = DMA;
     return KUI_SCI_STREAM_OK;
@@ -224,7 +226,7 @@ static enum kui_sci_stream_result start_dma(uint32_t area, uint32_t offset) {
  * block taken (an untaken block there is dropped): by DMA when channel 1 is
  * idle, otherwise by programmed transfers (514 bytes, so the card's gap byte
  * is left for the next token search). */
-static enum kui_sci_stream_result receive(bool irq) {
+static enum kui_sci_stream_result receive(void) {
     uint32_t area = s.fill ^ 1u;
     if(s.kept == area + 1u) area ^= 1u;
     uint8_t *p = s.area[area];
@@ -247,10 +249,9 @@ static enum kui_sci_stream_result receive(bool irq) {
     purge(p, AREA_BYTES);
     for(unsigned i = 0; i < 4; ++i) s.saved[i] = rd32(SAR + 4u * i);
     s.wire[area] = 1;
-    s.irq = irq;
     return start_dma(area, 0);
 }
-enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit, bool irq) {
+enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit) {
     if(s.state == DMA) return KUI_SCI_STREAM_BUSY;
     enum kui_sci_stream_result result;
     if(s.state == PAUSED && s.position == lba) {
@@ -264,7 +265,7 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
         if(result != KUI_SCI_STREAM_OK) return result;
     }
     s.position = lba;
-    result = receive(irq);
+    result = receive();
     if(result != KUI_SCI_STREAM_OK) s.state = LOST;
     return result;
 }

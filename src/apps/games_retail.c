@@ -242,15 +242,16 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         }
         log("Retail map T%02u: %u extents",image->tracks[i].number,map->tracks[i].extent_count);
     }
-    if(reader==KUI_RETAIL_READER_ASYNC) {
+    if(reader!=KUI_RETAIL_READER_STANDARD) {
         if(map->storage_transport!=KUI_STORAGE_SCI)
             log("Retail boot: the background reader needs SCI microSD; using the standard reader");
         else if(map->extent_count>KUI_RETAIL_ASYNC_EXTENTS)
             log("Retail boot: %u extents exceed the background reader's %u; using the standard reader",
                 map->extent_count,KUI_RETAIL_ASYNC_EXTENTS);
         else {
-            map->reader=KUI_RETAIL_READER_ASYNC;
-            log("Retail boot reader: background SCI stream (test)");
+            map->reader=reader;
+            log("Retail boot reader: background SCI stream (test, %s)",
+                reader==KUI_RETAIL_READER_ASYNC_KEEP?"keeping its hook":"releasing its hook");
         }
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);

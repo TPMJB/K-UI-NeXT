@@ -135,13 +135,15 @@ static void wire_tests(void) {
      * KUI_RETAIL_ASYNC_EXTENTS extents (this map has more; the reader's own
      * test round-trips a small one); old maps carry zero there. */
     CHECK(manifest.extent_count > KUI_RETAIL_ASYNC_EXTENTS);
-    manifest.reader = KUI_RETAIL_READER_ASYNC;
-    for(uint32_t transport = KUI_STORAGE_SCIF; transport <= KUI_STORAGE_IDE; ++transport) {
-        manifest.storage_transport = transport;
-        CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
-        CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_INVALID);
+    for(uint32_t reader = KUI_RETAIL_READER_ASYNC; reader <= KUI_RETAIL_READER_ASYNC_KEEP; ++reader) {
+        manifest.reader = reader;
+        for(uint32_t transport = KUI_STORAGE_SCIF; transport <= KUI_STORAGE_IDE; ++transport) {
+            manifest.storage_transport = transport;
+            CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+            CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_INVALID);
+        }
     }
-    manifest.reader = 2;
+    manifest.reader = 3;
     manifest.storage_transport = KUI_STORAGE_SCIF;
     CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
     manifest.reader = KUI_RETAIL_READER_STANDARD;

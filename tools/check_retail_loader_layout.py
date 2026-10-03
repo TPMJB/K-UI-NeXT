@@ -156,7 +156,9 @@ def check_directory(directory):
             # Its SCI bus claim is inlined into the reader: the interrupt
             # entry, vectors and handler identify this resident instead.
             required += ["_kui_retail_async_irq", "_kui_retail_irq_entry",
-                         "_kui_retail_vector_forward", "_kui_retail_vector_interrupt"]
+                         "_kui_retail_vector_forward", "_kui_retail_vector_interrupt",
+                         "_kui_retail_release_100", "_kui_retail_release_400",
+                         "_kui_retail_release_600"]
         else:
             required += ["_kui_retail_image_read"]
         if transport == ASYNC:

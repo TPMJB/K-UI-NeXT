@@ -34,7 +34,7 @@ static void check_channel_restored(void) {
 
 /* A consumer as the resident uses it: take the next block, fetch the one
  * after it before copying, refetch after any failure. */
-static unsigned drive(uint32_t first, uint32_t count, uint8_t *out, bool overlap, bool irq) {
+static unsigned drive(uint32_t first, uint32_t count, uint8_t *out, bool overlap) {
     unsigned failures = 0;
     uint32_t want = first;
     while(want < first + count) {
@@ -47,18 +47,18 @@ static unsigned drive(uint32_t first, uint32_t count, uint8_t *out, bool overlap
         const uint8_t *p = kui_sci_stream_take(want, &r);
         if(r == KUI_SCI_STREAM_CRC) {
             ++failures;
-            if(kui_sci_stream_fetch(want, LIMIT, irq) != KUI_SCI_STREAM_OK) ++failures;
+            if(kui_sci_stream_fetch(want, LIMIT) != KUI_SCI_STREAM_OK) ++failures;
             continue;
         }
         if(p) {
             if(overlap && want + 1u < first + count &&
-               kui_sci_stream_fetch(want + 1u, LIMIT, irq) != KUI_SCI_STREAM_OK) ++failures;
+               kui_sci_stream_fetch(want + 1u, LIMIT) != KUI_SCI_STREAM_OK) ++failures;
             memcpy(out + (size_t)(want - first) * 512u, p, 512);
             ++want;
             continue;
         }
         assert(r == KUI_SCI_STREAM_PENDING);
-        if(kui_sci_stream_fetch(want, LIMIT, irq) != KUI_SCI_STREAM_OK) ++failures;
+        if(kui_sci_stream_fetch(want, LIMIT) != KUI_SCI_STREAM_OK) ++failures;
     }
     return failures;
 }
@@ -72,7 +72,7 @@ static void test_sequential(void) {
     open_stream(false);
     const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
     struct kui_sci_stream_stats before = *st;
-    assert(drive(100, 64, out, true, false) == 0);
+    assert(drive(100, 64, out, true) == 0);
     check_range(100, 64, out);
     assert(st->starts - before.starts == 1 && st->continued - before.continued == 63);
     assert(st->blocks - before.blocks == 64 && st->stops == before.stops && !st->polled);
@@ -81,11 +81,11 @@ static void test_sequential(void) {
     assert(st->max_token_bytes == 40);
     check_restored(); check_channel_restored();
     /* The stream continues where it paused, without another CMD18. */
-    assert(drive(164, 10, out, false, true) == 0);
+    assert(drive(164, 10, out, false) == 0);
     check_range(164, 10, out);
-    assert(card.cmd18 == 1 && m.irq_starts == 10 && m.armed_chcr == 0x4915u);
+    assert(card.cmd18 == 1 && !m.irq_starts && m.armed_chcr == 0x4911u);
     /* Elsewhere: CMD12 with its busy interval, then a new CMD18. */
-    assert(drive(5000, 3, out, true, false) == 0);
+    assert(drive(5000, 3, out, true) == 0);
     check_range(5000, 3, out);
     assert(card.cmd18 == 2 && card.cmd12 == 1 && !card.idle_cmd12 && st->stops == 1);
     assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
@@ -97,10 +97,10 @@ static void test_pending_and_kept(void) {
     open_stream(false);
     m.delay = 3;
     enum kui_sci_stream_result r;
-    assert(kui_sci_stream_fetch(7, LIMIT, true) == KUI_SCI_STREAM_OK && kui_sci_stream_busy());
+    assert(kui_sci_stream_fetch(7, LIMIT) == KUI_SCI_STREAM_OK && kui_sci_stream_busy());
     assert(!kui_sci_stream_take(7, &r) && r == KUI_SCI_STREAM_PENDING);
     assert(kui_sci_stream_poll() == KUI_SCI_STREAM_PENDING);
-    assert(kui_sci_stream_fetch(8, LIMIT, true) == KUI_SCI_STREAM_BUSY);
+    assert(kui_sci_stream_fetch(8, LIMIT) == KUI_SCI_STREAM_BUSY);
     unsigned polls = 1;
     while((r = kui_sci_stream_poll()) == KUI_SCI_STREAM_PENDING) ++polls;
     assert(r == KUI_SCI_STREAM_OK && !kui_sci_stream_busy() && polls <= 4);
@@ -108,7 +108,7 @@ static void test_pending_and_kept(void) {
     check_block(7, p);
     /* The next block arrives in the other area while block 7 stays usable;
      * a request that starts in block 7 again gets it without a second read. */
-    assert(kui_sci_stream_fetch(8, LIMIT, true) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_fetch(8, LIMIT) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
     const uint8_t *again = kui_sci_stream_take(7, &r);
     assert(again == p && r == KUI_SCI_STREAM_OK);
@@ -116,7 +116,7 @@ static void test_pending_and_kept(void) {
     assert(kui_sci_stream_stats()->kept);
     /* Re-fetching the block after the kept one never overwrites the kept
      * area, even when the other area still holds an untaken block. */
-    assert(kui_sci_stream_fetch(9, LIMIT, true) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_fetch(9, LIMIT) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
     check_block(7, again);
     check_block(9, kui_sci_stream_take(9, &r));
@@ -132,7 +132,7 @@ static void test_crc_and_token(void) {
     struct kui_sci_stream_stats before = *st;
     card.corrupt_lba = 205; card.corrupt_count = 1;
     card.bad_token_lba = 210; card.bad_token_count = 1;
-    assert(drive(200, 20, out, true, true) == 2);
+    assert(drive(200, 20, out, true) == 2);
     check_range(200, 20, out);
     assert(st->crc_errors - before.crc_errors == 1 && st->token_errors - before.token_errors == 1);
     assert(card.cmd18 == 3 && card.cmd12 == 2);
@@ -152,7 +152,7 @@ static void test_overrun_and_stall(void) {
     for(unsigned i = 0; i < sizeof(positions) / sizeof(*positions); ++i, ++lba) {
         unsigned resets = m.module_resets;
         m.overrun_after = positions[i];
-        assert(kui_sci_stream_fetch(lba, LIMIT, true) == KUI_SCI_STREAM_OK);
+        assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
         assert(kui_sci_stream_poll() == KUI_SCI_STREAM_PENDING && kui_sci_stream_busy());
         assert(m.chcr & 1u && m.dar == AREA_BASE + (m.dar & 0x1000u) + positions[i] + 2u);
         assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK && m.module_resets == resets + 2u);
@@ -166,37 +166,37 @@ static void test_overrun_and_stall(void) {
     static const unsigned late[] = {511, 512};
     for(unsigned i = 0; i < 2; ++i, ++lba) {
         m.overrun_after = late[i];
-        assert(kui_sci_stream_fetch(lba, LIMIT, true) == KUI_SCI_STREAM_OK);
+        assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
         assert(kui_sci_stream_poll() == KUI_SCI_STREAM_OVERRUN && !kui_sci_stream_busy());
         check_restored(); check_channel_restored();
-        assert(kui_sci_stream_fetch(lba, LIMIT, true) == KUI_SCI_STREAM_OK);
+        assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
         assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
         check_block(lba, kui_sci_stream_take(lba, &r));
     }
     m.overrun_after = 100; m.overrun_again = 200;
-    assert(kui_sci_stream_fetch(lba, LIMIT, true) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_poll() == KUI_SCI_STREAM_PENDING);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OVERRUN);
     assert(st->overruns - before.overruns == 3 && card.cmd12 == 2);
-    assert(drive(lba, 2, out, true, true) == 0);
+    assert(drive(lba, 2, out, true) == 0);
     check_range(lba, 2, out);
     lba += 2;
     /* Another fault in a repaired block is detected, not "rebuilt" away. */
     card.corrupt_lba = lba; card.corrupt_count = 1;
     m.overrun_after = 300;
-    assert(kui_sci_stream_fetch(lba, LIMIT, true) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
     assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
-    assert(drive(lba, 3, out, true, true) == 0);
+    assert(drive(lba, 3, out, true) == 0);
     check_range(lba, 3, out);
     lba += 3;
     /* A receiver that never finishes ends as an overrun after the bound. */
     m.stall = true;
-    assert(kui_sci_stream_fetch(lba, LIMIT, true) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OVERRUN);
     check_restored(); check_channel_restored();
     m.stall = false;
-    assert(drive(lba, 5, out, true, true) == 0);
+    assert(drive(lba, 5, out, true) == 0);
     check_range(lba, 5, out);
 }
 static void test_channel_busy_and_foreign(void) {
@@ -208,22 +208,22 @@ static void test_channel_busy_and_foreign(void) {
     /* Someone else's transfer on channel 1: programmed reception instead. */
     m.chcr = 1u;
     unsigned bytes_before = bus_bytes;
-    assert(kui_sci_stream_fetch(300, LIMIT, true) == KUI_SCI_STREAM_OK && !kui_sci_stream_busy());
+    assert(kui_sci_stream_fetch(300, LIMIT) == KUI_SCI_STREAM_OK && !kui_sci_stream_busy());
     assert(st->polled - before.polled == 1 && m.chcr == 1u && !m.dma_starts);
     assert(bus_bytes - bytes_before >= 514u + 40u);
     check_block(300, kui_sci_stream_take(300, &r));
-    assert(kui_sci_stream_fetch(301, LIMIT, true) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_fetch(301, LIMIT) == KUI_SCI_STREAM_OK);
     check_block(301, kui_sci_stream_take(301, &r));
     assert(card.cmd18 == 1 && st->continued - before.continued == 1);
     m.chcr = 0;
     /* The channel taken over mid-block: the SCI is still handed back. */
     m.foreign_during_rx = true;
-    assert(kui_sci_stream_fetch(302, LIMIT, true) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_fetch(302, LIMIT) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_poll() == KUI_SCI_STREAM_BUSY);
     assert(st->foreign - before.foreign == 1 && m.sar == 0x0c200000u);
     check_restored();
     m.sar = 0x11111111u; m.dar = 0x22222222u; m.tcr = 0x33u; m.chcr = 0;
-    assert(drive(302, 4, out, true, true) == 0);
+    assert(drive(302, 4, out, true) == 0);
     check_range(302, 4, out);
     check_channel_restored();
 }
@@ -232,13 +232,13 @@ static void test_unknown_and_gapless(void) {
     reset_model();
     card.streaming = true; card.lba = 77; card.gap = 3;
     open_stream(true);
-    assert(drive(90, 3, out, true, false) == 0);
+    assert(drive(90, 3, out, true) == 0);
     check_range(90, 3, out);
     assert(card.cmd12 == 1 && !card.idle_cmd12 && card.cmd18 == 1);
     /* An idle card answers CMD12 with "illegal command": still stopped. */
     reset_model();
     open_stream(true);
-    assert(drive(91, 2, out, true, false) == 0);
+    assert(drive(91, 2, out, true) == 0);
     check_range(91, 2, out);
     assert(card.idle_cmd12 == 1 && card.cmd18 == 1);
     /* A card with no gap between blocks loses each next token to the
@@ -246,7 +246,7 @@ static void test_unknown_and_gapless(void) {
     reset_model();
     card.nac = 0;
     open_stream(false);
-    unsigned failures = drive(500, 8, out, true, false);
+    unsigned failures = drive(500, 8, out, true);
     check_range(500, 8, out);
     assert(failures == 7 && card.cmd18 == 8);
 }
@@ -254,7 +254,7 @@ static void test_byte_addressed(void) {
     reset_model();
     card.high_capacity = false; sd.high_capacity = false;
     open_stream(false);
-    assert(drive(1234, 3, out, true, true) == 0);
+    assert(drive(1234, 3, out, true) == 0);
     check_range(1234, 3, out);
 }
 static void test_random_faults(void) {
@@ -271,8 +271,7 @@ static void test_random_faults(void) {
         if(fault == 3) m.chcr = 1u;
         m.delay = (unsigned)rand() % 4u;
         card.nac = 1u + (unsigned)rand() % 3u;
-        bool irq = rand() & 1;
-        (void)drive(lba, count, out, rand() % 4 != 0, irq);
+        (void)drive(lba, count, out, rand() % 4 != 0);
         check_range(lba, count, out);
         if(fault == 3) m.chcr = 0;
         m.overrun_after = 0;
@@ -299,9 +298,9 @@ static void test_bus_fault(void) {
     reset_model();
     open_stream(false);
     /* Beyond the card: CMD18 is rejected. */
-    assert(kui_sci_stream_fetch(card.blocks, LIMIT, true) == KUI_SCI_STREAM_COMMAND);
+    assert(kui_sci_stream_fetch(card.blocks, LIMIT) == KUI_SCI_STREAM_COMMAND);
     m.healthy = false;
-    assert(kui_sci_stream_fetch(3, LIMIT, true) == KUI_SCI_STREAM_RESET);
+    assert(kui_sci_stream_fetch(3, LIMIT) == KUI_SCI_STREAM_RESET);
 }
 
 int main(void) {

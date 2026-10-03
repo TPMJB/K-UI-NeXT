@@ -1093,8 +1093,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             return KUI_SHELL_GAMES_IMAGE_PROBE;
         break;
     case KUI_SHELL_GAMES_RETAIL_CONFIRM:
-        if((buttons&(KUI_SHELL_A|KUI_SHELL_X)) && kui_shell_games_retail_ready(s)) {
-            s->games_retail_reader=buttons&KUI_SHELL_A?KUI_RETAIL_READER_STANDARD:KUI_RETAIL_READER_ASYNC;
+        if((buttons&(KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y)) && kui_shell_games_retail_ready(s)) {
+            /* X: background reader handing the game its vectors back at once;
+             * Y: background reader keeping its vectors while it streams. */
+            s->games_retail_reader=buttons&KUI_SHELL_A?KUI_RETAIL_READER_STANDARD:
+                buttons&KUI_SHELL_X?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_ASYNC_KEEP;
             return KUI_SHELL_GAMES_RETAIL;
         }
         break;

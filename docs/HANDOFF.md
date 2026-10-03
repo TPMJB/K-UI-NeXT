@@ -1,5 +1,20 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background reader, third build (2026-10-03 UTC)
+
+`da60895201d3` crashed and rebooted the console right after the bootstrap
+with the background reader (X). Its first hook had raised the DMAC's
+interrupt level (IPRC) from 0 to 1 and armed channel 1's completion
+interrupt, and passed the game's events on under the reader's VBR. This
+build never touches IPRC or the DMA interrupt (every block ends on the SCI's
+receive error interrupt, ERI, at the lowest level) and makes the VBR
+question the launch choice: **X** hands the game its VBR and SCI level back
+at the first event that is not the reader's (re-installed at the next GD
+call; `RELEASES`), **Y** keeps its vectors while it streams. An EXEC now
+tops up to 10 blocks since the previous EXEC instead of waiting whenever no
+interrupt came. See [games-background-reader.md](games-background-reader.md).
+Build ID and CI run: pending.
+
 ## Games: background reader, second build (2026-10-03 UTC)
 
 `80687b46fde8` on the console with DOA2: no faster and no smoother (25 s

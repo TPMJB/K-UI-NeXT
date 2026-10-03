@@ -42,7 +42,7 @@ struct kui_sci_stream_state {
     uint16_t lost[2];
     /* kept: 1 + the area holding the last block taken, or 0. wire: the
      * area holds bit-reversed DMA bytes rather than programmed-read bytes. */
-    uint8_t ready[2], wire[2], rdr[2], held[2], kept, sptr, irq;
+    uint8_t ready[2], wire[2], rdr[2], held[2], kept, sptr;
     struct kui_sci_stream_stats stats;
 };
 /* Adopt the bus (acquired, card ready) and two 32-byte-aligned receive areas
@@ -53,10 +53,11 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
     uint8_t *area0, uint8_t *area1, bool unknown);
 /* Start receiving card block lba: continue the open stream when it is at lba,
  * otherwise stop it (CMD12) and issue CMD18 there. No DMA may be in flight.
- * token_limit bounds the token search in bytes. irq: the channel raises its
- * completion interrupt. OK: the DMA runs, or the block was received by
- * programmed transfers and is ready. */
-enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit, bool irq);
+ * token_limit bounds the token search in bytes. The channel raises no
+ * interrupt; a reception ends on the receiver's overrun, which raises the
+ * SCI's ERI wherever its level allows. OK: the DMA runs, or the block was
+ * received by programmed transfers and is ready. */
+enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit);
 /* Whether a DMA is in flight. */
 bool kui_sci_stream_busy(void);
 /* If the in-flight block has arrived (or reception stopped), end it and hand

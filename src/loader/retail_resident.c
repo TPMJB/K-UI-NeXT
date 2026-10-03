@@ -132,7 +132,7 @@ static void install_hook(void) {
 #ifdef KUI_RETAIL_ASYNC
 /* Counter rows for both screens; every counter is a uint32_t in order. */
 _Static_assert(sizeof(struct kui_sci_stream_stats) == 12u * 4u, "stream counters");
-_Static_assert(sizeof(struct kui_retail_async_stats) == 10u * 4u, "reader counters");
+_Static_assert(sizeof(struct kui_retail_async_stats) == 11u * 4u, "reader counters");
 static void stream_lines(void) {
     const uint32_t *st = (const uint32_t *)kui_sci_stream_stats();
     retail_display_values("DMA BLKS POLLED   STARTS   STOPS", st, 4);
@@ -181,7 +181,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("SECTORS READ",service.diag.sectors_read);
     retail_display_values("IRQ BLKS CALLBLKS EXECWAIT IRQS",st,4);
     retail_display_values("FORWARDS FAILURES MAXRETRY HOOKS",st+4,4);
-    retail_display_values("VBR CHGS BOOT VBR",st+8,2);
+    retail_display_values("VBR CHGS BOOT VBR RELEASES",st+8,3);
     stream_lines();
 #else
     /* How the game drives reads: ABXY+Start after a load shows these. */

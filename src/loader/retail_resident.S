@@ -187,8 +187,9 @@ C_SYMBOL(kui_retail_menu_hook):
  * exception state (BL=1, RB=1) and leave every register, SSR, SPC and SGR as
  * the hardware set them for the game's handler: R0 is parked in DBR and put
  * back in the jump's delay slot. DBR serves only H-UDI/user-break debugging,
- * which games do not use. Word 3 of the forwarding template and word 11 of
- * the interrupt template name the slot holding the game's vector address. */
+ * which games do not use. Word 3 of the forwarding template and word 10 of
+ * the interrupt template name the slot (engine.forward) holding where events
+ * go: the game's vector, or a releasing entry below. */
     .section .text.retail_vectors,"ax"
     .align 2
     .global C_SYMBOL(kui_retail_vector_forward)
@@ -209,9 +210,7 @@ C_SYMBOL(kui_retail_vector_interrupt):
     shlr2 r0
     shlr2 r0
     shlr r0
-    cmp/eq #0x33,r0 /* DMTE1, INTEVT 0x660: channel 1 complete */
-    bt 1f
-    cmp/eq #0x27,r0 /* ERI, 0x4e0: SCI receive error */
+    cmp/eq #0x27,r0 /* ERI, INTEVT 0x4e0: SCI receive error */
     bt 1f
     cmp/eq #0x28,r0 /* RXI, 0x500: SCI receive (masked by EIO during DMA) */
     bt 1f
@@ -288,6 +287,66 @@ C_SYMBOL(kui_retail_irq_entry):
 .Lirq_guard: .long KUI_RETAIL_HOOK_STACK_BOTTOM
 .Lirq_guard_value: .long 0x4b554947
 .Lirq_fault: .long C_SYMBOL(kui_retail_hook_fault)
-/* Word 11 of the copied interrupt vector: the game's 0x600 slot. */
-.Lirq_slot: .long C_SYMBOL(kui_retail_async_region)+0x500+44
+/* Word 10 of the copied interrupt vector: the 0x600 slot. */
+.Lirq_slot: .long C_SYMBOL(kui_retail_async_region)+0x500+40
+
+/* Releasing entries (launch X): an event that is not the reader's gives the
+ * game its VBR and its SCI level back before entering the game's vector, so
+ * the game's handler never runs under the reader's VBR and the reader's
+ * interrupt cannot reach the game; the next GD call installs them again.
+ * Entered like the game's vector (R0 restored from DBR); R0 is parked in
+ * DBR again and R1..R3 in the engine's release frame (region + 0x240:
+ * game VBR, SCI field, R1..R3, target), so every register reaches the game
+ * unchanged. BL=1 throughout, so the frame is never shared. */
+    .align 2
+    .global C_SYMBOL(kui_retail_release_100)
+C_SYMBOL(kui_retail_release_100):
+    ldc r0,dbr
+    mov.l .Lrelease_frame,r0
+    mov.l r1,@(8,r0)
+    mov.w .Lrelease_100,r1
+    bra .Lrelease
+    nop
+    .global C_SYMBOL(kui_retail_release_400)
+C_SYMBOL(kui_retail_release_400):
+    ldc r0,dbr
+    mov.l .Lrelease_frame,r0
+    mov.l r1,@(8,r0)
+    mov.w .Lrelease_400,r1
+    bra .Lrelease
+    nop
+    .global C_SYMBOL(kui_retail_release_600)
+C_SYMBOL(kui_retail_release_600):
+    ldc r0,dbr
+    mov.l .Lrelease_frame,r0
+    mov.l r1,@(8,r0)
+    mov.w .Lrelease_600,r1
+.Lrelease:
+    mov.l r2,@(12,r0)
+    mov.l r3,@(16,r0)
+    mov.l @r0,r2
+    add r2,r1
+    mov.l r1,@(20,r0)
+    ldc r2,vbr
+    mov.l .Lrelease_iprb,r1
+    mov.w @r1,r2
+    mov.l .Lrelease_mask,r3
+    and r3,r2
+    mov.l @(4,r0),r3
+    or r3,r2
+    mov.w r2,@r1
+    mov.w @r1,r2 /* the level is down before the game's handler runs */
+    mov.l @(16,r0),r3
+    mov.l @(12,r0),r2
+    mov.l @(8,r0),r1
+    mov.l @(20,r0),r0
+    jmp @r0
+    stc dbr,r0
+.Lrelease_100: .word 0x100
+.Lrelease_400: .word 0x400
+.Lrelease_600: .word 0x600
+    .align 2
+.Lrelease_frame: .long C_SYMBOL(kui_retail_async_region)+0x240
+.Lrelease_iprb: .long 0xffd00008
+.Lrelease_mask: .long 0xffffff0f
 #endif
