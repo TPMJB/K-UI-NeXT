@@ -17,6 +17,12 @@ and the expected values for ARMADA, Bust-A-Move 4 and Worms Armageddon.
   then requires a CE image and the CE package. The stage checks the IP's CE
   flag again, plans with `kui_ce_load_plan_build`, loads the body to
   `0x8c010000` with header checks and the prefix to `0x8ce01000`.
+- Build `79f065b4ea88` ([Diagnostic run
+  37152435648](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37152435648),
+  host and Dreamcast passed, including the CE stage's layout and instruction
+  checks). Test: copy the `sd-update` artifact's `KUI/runtime.kui` and
+  `KUI/apps/games/` (now with `ce-probe.kui`), run the test on ARMADA and
+  photograph the result screen.
 - Next: enter CE (keep the stage alive through the relay), then trace CE's
   first GD calls and IRQ waits before implementing anything.
 
