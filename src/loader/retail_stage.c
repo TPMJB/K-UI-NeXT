@@ -162,7 +162,7 @@ void kui_retail_stage_main(const uint8_t *wire) {
     retail_display_line(kui_retail_storage_name(manifest.storage_transport));
     if(manifest.reader!=KUI_RETAIL_READER_STANDARD)
         retail_display_line(manifest.reader==KUI_RETAIL_READER_ASYNC_EAGER?
-            "BACKGROUND READER Y - 20 PER CALL":"BACKGROUND READER X - 10 PER CALL");
+            "BACKGROUND READER Y - 30 PER CALL":"BACKGROUND READER X - 20 PER CALL");
     last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {
         if(card.transport!=KUI_STORAGE_IDE) {

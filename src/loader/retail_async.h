@@ -16,8 +16,9 @@
  * destination. The channel raises no interrupt and the game's DMAC level is
  * never touched. The game's own GD calls also deliver whatever has arrived.
  * An EXEC or CHECK tops the blocks delivered since the previous one up to a
- * target, waiting for the rest itself: 10 blocks (about the ordinary
- * reader's step) with launch X, 20 with Y (manifest reader ASYNC_EAGER).
+ * target, waiting for the rest itself: 20 blocks (about twice the ordinary
+ * reader's step) with launch X, 30 with Y (manifest reader ASYNC_EAGER).
+ * Each block of a run is checked and copied while the next one arrives.
  *
  * The interrupt reaches the reader through its own vector table placed in
  * front of the game's while a block is in flight: VBR+0x600 takes the SCI's
@@ -32,7 +33,7 @@
  * the game's calls alone whenever no interrupt is delivering. */
 struct kui_retail_async_stats {
     uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
-    uint32_t stalled, hooks, releases;
+    uint32_t hooks, releases;
 };
 /* Returns the trampoline can hold pending: interrupts released while an
  * earlier released one's handler still runs. */

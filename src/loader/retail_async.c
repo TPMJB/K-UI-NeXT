@@ -18,9 +18,9 @@
 #define RETRIES 8u
 #define POLLED 2u
 /* Blocks each EXEC or CHECK makes sure of since the previous one: X about
- * the ordinary reader's two-sector step, Y twice that. */
-#define TARGET_X 10u
-#define TARGET_Y 20u
+ * twice the ordinary reader's two-sector step, Y three times. */
+#define TARGET_X 20u
+#define TARGET_Y 30u
 /* The GD caller's SR, published by the resident's hook entry. */
 extern volatile uint32_t kui_retail_hook_sr;
 
@@ -124,7 +124,7 @@ static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint3
     else e.failed = KUI_GD_ERROR_MEMORY;
 }
 /* Finish an arrived block, then deliver blocks in order: the next one of the
- * run is started before each block is copied. Returns while a block is in
+ * run is started before each block is checked and copied. Returns while a block is in
  * flight, after up to wait blocks have been waited for. Without an active
  * read, only a finished reception is ended (its interrupt cleared). */
 static void deliver(uint32_t wait) {
@@ -133,8 +133,6 @@ static void deliver(uint32_t wait) {
         enum kui_sci_stream_result r = KUI_SCI_STREAM_OK;
         if(kui_sci_stream_busy()) {
             r = kui_sci_stream_poll();
-            /* Ended before this GD call looked: its interrupt was held off. */
-            if(r != KUI_SCI_STREAM_PENDING && !delivered && !e.in_irq) ++e.stats.stalled;
             if(r == KUI_SCI_STREAM_PENDING) {
                 if(!e.active || e.failed || delivered >= wait) return;
                 r = kui_sci_stream_wait();
@@ -143,13 +141,14 @@ static void deliver(uint32_t wait) {
         if(!e.active || e.failed) return;
         if(r != KUI_SCI_STREAM_OK) {failure(r); continue;}
         uint32_t lba = e.cursor.block;
+        /* The run's next block starts before this one is checked and
+         * copied: the card streams while the CPU works. If it cannot start,
+         * its own fetch later retries it and counts the failure. */
+        if(e.cursor.run > 1u && kui_sci_stream_ready(lba))
+            (void)kui_sci_stream_fetch(lba + 1u, TOKEN_LIMIT, false);
         const uint8_t *block = kui_sci_stream_take(lba, &r);
         if(block) {
             e.retries = 0;
-            if(e.cursor.run > 1u) {
-                r = kui_sci_stream_fetch(lba + 1u, TOKEN_LIMIT, false);
-                if(r != KUI_SCI_STREAM_OK) failure(r);
-            }
             if(kui_retail_cursor_feed(&e.cursor, block) != KUI_GAME_OK) e.failed = KUI_GD_ERROR_IO;
             ++delivered;
             ++e.since;
@@ -162,8 +161,10 @@ static void deliver(uint32_t wait) {
             failure(r);
             if(e.failed) return;
         }
+        /* BUSY: the next block, started early, still arrives; this one is
+         * fetched again after it (not a failure of its own). */
         r = kui_sci_stream_fetch(lba, TOKEN_LIMIT, e.retries >= POLLED);
-        if(r != KUI_SCI_STREAM_OK) failure(r);
+        if(r > KUI_SCI_STREAM_BUSY) failure(r);
     }
 }
 static void report(void) {

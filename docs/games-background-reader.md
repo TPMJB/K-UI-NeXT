@@ -7,12 +7,12 @@ reader streams the request from the card while the game runs instead.
 
 It is chosen per launch: on the **Launch game** confirmation, **A** launches
 with the standard reader, **X** with the background reader whose EXEC and
-CHECK calls each top reading up to 10 card blocks (about the standard
-reader's step), and **Y** with the same reader topping up to 20 (see *How
+CHECK calls each top reading up to 20 card blocks (about twice the standard
+reader's step), and **Y** with the same reader topping up to 30 (see *How
 long a GD call waits*). It needs SCI microSD and a launch map of at most 32
 file extents (a freshly copied game has a handful); otherwise the launch
 uses the standard reader and the log says why. The stage screen shows
-`BACKGROUND READER X - 10 PER CALL` or `BACKGROUND READER Y - 20 PER CALL`
+`BACKGROUND READER X - 20 PER CALL` or `BACKGROUND READER Y - 30 PER CALL`
 when it is installed.
 
 ## How it works
@@ -33,6 +33,11 @@ when it is installed.
   produces.
 * The game's GD calls also deliver whatever has arrived, and may wait for
   more (see below).
+* Within a run, the next block's reception starts as soon as a block has
+  arrived, before that one is checked (bit order, CRC) and copied, so the
+  card streams while the CPU works (`src/loader/retail_async.c`, `deliver`).
+  The two receive areas then hold the block being checked and the one
+  arriving; the block kept for a following request gives way.
 * The stream stays open between requests (the card waits, deselected), so
   sequential requests continue without a new CMD18; a block two requests
   share is kept rather than read again. An extent or track change, or a
@@ -81,16 +86,14 @@ Whatever the interrupt has not delivered, the game's own GD calls must, and
 a call that waits keeps the game's interrupts masked meanwhile: that is what
 shows as lag.
 
-* **X:** an EXEC or a CHECK makes sure of 10 blocks (about the standard
-  reader's step) since the previous one of either: it waits for the ones the
-  interrupt did not deliver, and not at all when the interrupt delivered 10
-  or more. This is the sixth build's Y, the best so far in DOA2. (Through the
-  sixth build, X topped up on EXEC only.)
-* **Y:** the same with 20 blocks, up to about 8 ms per call: twice the data
-  per frame while the interrupt is held off, and that much less time for the
-  game. DOA2's lag is the game waiting for data (the fifth build, which
-  waited for at most one block per call, loaded far slower), so Y may load
-  faster still; where a game reads while it plays (FMV), it may cost frames.
+* **X:** an EXEC or a CHECK makes sure of 20 blocks since the previous one
+  of either: it waits for the ones the interrupt did not deliver, and not at
+  all when the interrupt delivered 20 or more. This is the seventh build's
+  Y, the best so far in DOA2 (10 blocks lagged more: seventh run).
+* **Y:** the same with 30 blocks, up to about 11 ms per call: more data per
+  frame while the interrupt is held off, and that much less time for the
+  game. DOA2's lag is the game waiting for data, so Y may load faster still;
+  where a game reads while it plays (FMV), it may cost frames.
 
 ### The interrupt
 
@@ -294,19 +297,31 @@ counters:
   cure them; the other 352 overruns restarted the card (about half a second
   in all). `POLLED` 7, `STARTS` 464, `KEPT` 83, `MAXTOKEN` 3,222.
 
-X: pending.
+X (10 blocks per call) was "largely the same" as before: smoother in some
+ways, more lag in others, and a rough three seconds of lag as the textures
+appeared when a fight started. Its counters: 60,951 blocks, 17,197 (28%) by
+interrupt; `WAITS` 4,456 at 9.8 blocks; `EXECS` 2,733, `EXEC INT` 1,806
+(66%); `STALLED` 648; overruns 1.26% (767 of 60,804), `REPAIRED` 36 with
+`CRC ERRS` 2 and `AHEAD` 0 (repair off again), `OVERRUNS` 731, `POLLED` 74,
+`STARTS` 844. So the larger target wins twice: more data per call, and
+fewer overruns (the game's DMA meets the stream less often). 4 of 49
+repairs failed in the two runs, none a byte ahead.
+
+The eighth build makes 20 blocks the new X and tries 30 as Y, and starts
+each next block before checking and copying the one that arrived (the
+check took the card's time before). `STALLED` is gone to make room.
 
 ## Console test (DOA2)
 
 1. Install `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` from the
    build's `sd-update` artifact. Storage must be SCI microSD.
 2. Games, select DOA2, A to inspect, A again for the confirmation, then **X**.
-3. The stage screen should say `BACKGROUND READER X - 10 PER CALL`.
+3. The stage screen should say `BACKGROUND READER X - 20 PER CALL`.
 4. Time character select to fight start (standard reader: about 25 s) and
    note smoothness in the first seconds of the fight, as before.
 5. Play a fight or two. Then A+B+X+Y+Start for the counters screen (about
    15 seconds) and photograph it.
-6. The same with **Y** (`BACKGROUND READER Y - 20 PER CALL`) to compare load
+6. The same with **Y** (`BACKGROUND READER Y - 30 PER CALL`) to compare load
    time and lag.
 7. For comparison, launch again with **A** (standard reader).
 
@@ -319,9 +334,8 @@ request, the card block and the stream's error counters.
 | --- | --- |
 | `SECTORS READ` | Sectors delivered to the game |
 | `IRQ BLKS` / `CALLBLKS` | Blocks delivered by the reader's interrupt / by the game's GD calls |
-| `WAITS` | EXEC and CHECK calls that waited for blocks (short of 10, or with Y 20, since the previous one) |
+| `WAITS` | EXEC and CHECK calls that waited for blocks (short of 20, or with Y 30, since the previous one) |
 | `EXECS` / `EXEC INT` | EXEC calls during reads; those made from an interrupt handler (caller IMASK above 0) |
-| `STALLED` | GD calls that found a block already ended: its interrupt was held off |
 | `HOOKS` / `RELEASES` | Vector installs per read; installs again by a GD call after a release |
 | `REHOOKS` | Installs again by the trampoline as an interrupt handler returned |
 | `REL 100` / `REL 400` / `REL 600` | Events released at VBR+0x100 (exceptions), +0x400 (TLB misses), +0x600 (interrupts) |

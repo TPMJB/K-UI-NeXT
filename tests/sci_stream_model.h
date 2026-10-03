@@ -151,6 +151,7 @@ static struct {
     uint8_t *areas[2];
     unsigned purges, module_resets, dma_starts, irq_starts, settles, fences;
     uint32_t armed_chcr;
+    void (*on_dma_start)(void); /* a test's look at the engine as a DMA starts */
 } m;
 static uint8_t *memory(uint32_t address) {
     for(unsigned i = 0; i < 2; ++i) {
@@ -241,6 +242,7 @@ void kui_sci_stream_test_write(uint32_t address, uint32_t value, unsigned width)
                 (void)card_clock(0xff);
             }
             m.rx = true; m.rx_delay = m.delay; ++m.dma_starts;
+            if(m.on_dma_start) m.on_dma_start();
             m.armed_chcr = m.chcr;
             if(m.chcr & 4u) ++m.irq_starts;
         }

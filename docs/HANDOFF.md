@@ -1,5 +1,20 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background reader, eighth build (2026-10-03 UTC)
+
+The seventh build on the console: Y (20 blocks per call) had "a lot less
+lag. Reasonable even."; X (10) was largely as before, with about 3 s of lag
+as a fight's textures appeared. A larger target also meant fewer overruns
+(0.56% against 1.26%). Repair still failed 4 times in 49, never a byte ahead,
+so its cause is still open; with fewer overruns it costs about half a second
+a session. This build: 20 blocks per call is the new X, Y tries 30; within a
+run the next block starts as soon as one has arrived, before that one is
+checked and copied (the CRC check and bit reversal used to idle the card);
+the block kept for a following request gives way to the one being checked.
+`STALLED` is gone (it made room; the interrupt's hold-offs are established).
+See [games-background-reader.md](games-background-reader.md). Build ID and CI
+run: pending.
+
 ## Games: background reader, seventh build (2026-10-03 UTC)
 
 `5136651bba37` with Y (eager) on the console: about 10 s from selecting
@@ -27,8 +42,9 @@ under the limit. See [games-background-reader.md](games-background-reader.md).
 Build **cbfa8f74f05b** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37133001235)
 (36 bytes free, call-graph stack 224 of 336). Console, Y: "A lot less lag.
 Reasonable even." Overruns fell to 0.56% of blocks (1.9% before), but repair
-still stopped after 2 of 13 failed, neither a byte ahead (`AHEAD` 0). X:
-pending.
+still stopped after 2 of 13 failed, neither a byte ahead (`AHEAD` 0). X (10
+blocks per call): "largely the same", about 3 s of lag as the fight's
+textures appeared; overruns 1.26%, repair off after 2 of 36.
 
 ## Games: background reader, sixth build (2026-10-03 UTC)
 

@@ -1095,7 +1095,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_GAMES_RETAIL_CONFIRM:
         if((buttons&(KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y)) && kui_shell_games_retail_ready(s)) {
             /* X: background reader whose EXEC and CHECK top reading up to
-             * about the standard reader's step; Y: up to twice that. */
+             * about twice the standard reader's step; Y: three times. */
             s->games_retail_reader=buttons&KUI_SHELL_A?KUI_RETAIL_READER_STANDARD:
                 buttons&KUI_SHELL_X?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_ASYNC_EAGER;
             return KUI_SHELL_GAMES_RETAIL;

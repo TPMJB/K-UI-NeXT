@@ -114,7 +114,7 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
     s.card = card;
     s.area[0] = area0; s.area[1] = area1;
     s.state = unknown ? LOST : CLOSED;
-    s.ready[0] = s.ready[1] = 0; s.kept = 0; s.unrepaired = 0;
+    s.ready[0] = s.ready[1] = 0; s.kept = 0; s.unrepaired = 0; s.arrived = 0;
     s.sptr = rd8(SPTR);
     /* A deselected idle byte at the fast rate: the bus leaves its slow
      * acquisition rate and the card sees whole bytes. */
@@ -125,8 +125,9 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
     return KUI_SCI_STREAM_OK;
 }
 bool kui_sci_stream_busy(void) { return s.state == DMA; }
+bool kui_sci_stream_ready(uint32_t lba) { return s.arrived == lba + 1u; }
 const struct kui_sci_stream_stats *kui_sci_stream_stats(void) { return &s.stats; }
-void kui_sci_stream_discard(void) { s.ready[0] = s.ready[1] = 0; s.kept = 0; }
+void kui_sci_stream_discard(void) { s.ready[0] = s.ready[1] = 0; s.kept = 0; s.arrived = 0; }
 
 /* Data token after the card's wait (0xff); TEND before the DMA starts. */
 static enum kui_sci_stream_result token(uint32_t limit) {
@@ -232,15 +233,20 @@ static enum kui_sci_stream_result start_dma(uint32_t area, uint32_t offset) {
     return KUI_SCI_STREAM_OK;
 }
 /* The block whose token was just read, into the area not holding the last
- * block taken (an untaken block there is dropped): by DMA when channel 1 is
- * idle and polled is false, otherwise by programmed transfers (514 bytes, so
- * the card's gap byte is left for the next token search), which cannot
- * overrun. */
+ * block taken (an untaken block there is dropped), unless the last block
+ * received still awaits taking: then into the other area, the kept block
+ * giving way. By DMA when channel 1 is idle and polled is false, otherwise
+ * by programmed transfers (514 bytes, so the card's gap byte is left for
+ * the next token search), which cannot overrun. */
 static enum kui_sci_stream_result receive(bool polled) {
     uint32_t area = s.fill ^ 1u;
-    if(s.kept == area + 1u) area ^= 1u;
+    if(s.kept == area + 1u) {
+        if(s.arrived) s.kept = 0;
+        else area ^= 1u;
+    }
     uint8_t *p = s.area[area];
     s.fill = area;
+    s.arrived = 0;
     s.ready[area] = 0;
     s.lost[area] = 0;
     settle(64); /* the token byte's last edge */
@@ -252,6 +258,7 @@ static enum kui_sci_stream_result receive(bool polled) {
         s.wire[area] = 0;
         s.ready[area] = 1;
         s.ready_lba[area] = s.position++;
+        s.arrived = s.position;
         s.state = PAUSED;
         ++s.stats.polled;
         return KUI_SCI_STREAM_OK;
@@ -338,6 +345,7 @@ static enum kui_sci_stream_result finish(void) {
     }
     s.ready[area] = 1;
     s.ready_lba[area] = s.position++;
+    s.arrived = s.position;
     s.rdr[area] = tail;
     s.state = PAUSED;
     ++s.stats.blocks;
@@ -429,6 +437,6 @@ enum kui_sci_stream_result kui_sci_stream_stop(void) {
     if(s.state == DMA) result = kui_sci_stream_wait();
     if(result == KUI_SCI_STREAM_BUSY || result == KUI_SCI_STREAM_RESET) return result;
     s.ready[0] = s.ready[1] = 0;
-    s.kept = 0;
+    s.kept = 0; s.arrived = 0;
     return s.state == CLOSED ? KUI_SCI_STREAM_OK : stop_card();
 }

@@ -39,7 +39,9 @@ struct kui_sci_stream_stats {
 struct kui_sci_stream_state {
     const struct kui_loader_sd *card;
     uint8_t *area[2];
-    uint32_t state, position, fill, ready_lba[2], kept_lba, saved[4];
+    /* arrived: 1 + the block last received, ready, while no other reception
+     * has started since (0: none). */
+    uint32_t state, position, fill, ready_lba[2], kept_lba, saved[4], arrived;
     /* lost: 1 + the index of a byte an overrun lost (0: none); hold: the
      * receiver still held the byte before it (held), which the channel
      * never took. */
@@ -68,6 +70,10 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
 enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit, bool polled);
 /* Whether a DMA is in flight. */
 bool kui_sci_stream_busy(void);
+/* Whether the block last received is lba, arrived and not yet taken (nothing
+ * in flight): the next one may be fetched before it is taken, and goes into
+ * the other area. */
+bool kui_sci_stream_ready(uint32_t lba);
 /* If the in-flight block has arrived (or reception stopped), end it and hand
  * the SCI back: OK (the block is ready: kui_sci_stream_take), PENDING (still
  * arriving, or resumed after a mid-block overrun) or an error (the next
@@ -84,8 +90,9 @@ enum kui_sci_stream_result kui_sci_stream_wait(void);
  * byte ahead and the block is refetched without a rebuild, which could
  * otherwise accept it 1 time in 256. A ready block is checked
  * once. The last block taken stays available, its bytes untouched by any
- * fetch, until another block is taken: a block shared by two requests is
- * not read twice, and a caller may fetch the next block before copying. */
+ * fetch, until another block is taken (or a block received before it is
+ * taken needs its area): a block shared by two requests is not read twice,
+ * and a caller may fetch the next block before copying. */
 const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *result);
 /* Forget ready and kept blocks. */
 void kui_sci_stream_discard(void);

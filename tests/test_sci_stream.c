@@ -115,16 +115,27 @@ static void test_pending_and_kept(void) {
     assert(again == p && r == KUI_SCI_STREAM_OK);
     check_block(7, again);
     assert(kui_sci_stream_stats()->kept);
-    /* Re-fetching the block after the kept one never overwrites the kept
-     * area, even when the other area still holds an untaken block. */
-    assert(kui_sci_stream_fetch(9, LIMIT, false) == KUI_SCI_STREAM_OK);
-    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
-    check_block(7, again);
+    /* A block fetched while an arrived one awaits taking goes into the kept
+     * block's area: the arrived block stays, the kept one gives way. */
+    assert(kui_sci_stream_ready(8) && !kui_sci_stream_ready(7));
+    assert(kui_sci_stream_fetch(9, LIMIT, false) == KUI_SCI_STREAM_OK && !kui_sci_stream_ready(8));
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK && kui_sci_stream_ready(9));
+    check_block(8, kui_sci_stream_take(8, &r));
     check_block(9, kui_sci_stream_take(9, &r));
     check_block(9, kui_sci_stream_take(9, &r));
     assert(!kui_sci_stream_take(7, &r) && r == KUI_SCI_STREAM_PENDING);
     kui_sci_stream_discard();
     assert(!kui_sci_stream_take(9, &r) && r == KUI_SCI_STREAM_PENDING);
+    /* Overlapped: each next block starts before the arrived one is taken. */
+    assert(kui_sci_stream_fetch(10, LIMIT, false) == KUI_SCI_STREAM_OK);
+    for(uint32_t lba = 10; lba < 16; ++lba) {
+        assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK && kui_sci_stream_ready(lba));
+        assert(kui_sci_stream_fetch(lba + 1u, LIMIT, false) == KUI_SCI_STREAM_OK && kui_sci_stream_busy());
+        assert(!kui_sci_stream_ready(lba));
+        check_block(lba, kui_sci_stream_take(lba, &r));
+    }
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    check_block(16, kui_sci_stream_take(16, &r));
 }
 static void test_crc_and_token(void) {
     reset_model();
