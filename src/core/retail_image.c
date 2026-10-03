@@ -106,7 +106,7 @@ enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *m,
 #if KUI_RETAIL_MANIFEST_EXTENTS == KUI_RETAIL_IMAGE_EXTENTS
 enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manifest *m) {
     if(!tracks_valid(m) || m->storage_transport > KUI_STORAGE_IDE || !m->card_sectors || m->card_sectors > UINT64_C(0x100000000) ||
-       m->reader > KUI_RETAIL_READER_ASYNC_REHOOK || (m->reader != KUI_RETAIL_READER_STANDARD &&
+       m->reader > KUI_RETAIL_READER_ASYNC_SMOOTH || (m->reader != KUI_RETAIL_READER_STANDARD &&
            (m->storage_transport != KUI_STORAGE_SCI || m->extent_count > KUI_RETAIL_ASYNC_EXTENTS)) ||
        m->partition_start >= m->partition_end || m->partition_end > m->card_sectors ||
        !m->extent_count || m->extent_count > KUI_RETAIL_IMAGE_EXTENTS ||

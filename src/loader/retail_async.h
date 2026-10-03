@@ -13,25 +13,28 @@
  * interrupt (ERI) reaches the CPU at the lowest level, and the handler checks
  * the block, starts the next one and copies the data into the game's
  * destination. The channel raises no interrupt and the game's DMAC level is
- * never touched. The game's own GD calls also deliver whatever has arrived,
- * and an EXEC tops the blocks delivered since the previous EXEC up to the
- * ordinary reader's step, waiting itself where the interrupt did not.
+ * never touched. The game's own GD calls also deliver whatever has arrived.
+ * How long a call may wait for blocks is the launch's choice (manifest
+ * reader): X (ASYNC) makes an EXEC top up the blocks delivered since the
+ * previous EXEC to the ordinary reader's step; Y (ASYNC_SMOOTH) lets an
+ * EXEC or CHECK wait for at most the block in flight, and only when nothing
+ * arrived since the previous GD call, so a game spinning on a read still
+ * reads at the card's speed while a busy game loses little time.
  *
  * The interrupt reaches the reader through its own vector table placed in
  * front of the game's while a block is in flight: VBR+0x600 takes the SCI's
  * ERI/RXI; every other event, there or at VBR+0x100 and +0x400, first gives
  * the game its VBR and SCI level back and then enters the game's vector (the
  * releasing entries in retail_resident.S), so a game's handler never runs
- * under the reader's VBR (DOA2 crashes if it does). The next GD call installs
- * them again; with launch Y (manifest reader ASYNC_REHOOK) a released
- * interrupt's handler also returns through a trampoline that installs them
- * again at once. The game's VBR and level are put back whenever the stream
- * is idle. Games may keep the bootstrap's VBR (0x8C00F400) throughout; it is
- * hooked the same way. Reads complete from the game's calls alone whenever
- * no interrupt is delivering. */
+ * under the reader's VBR (DOA2 crashes if it does). An interrupt's handler
+ * also returns through a trampoline that installs them again at once; the
+ * next GD call does so after an exception. The game's VBR and level are put
+ * back whenever the stream is idle. Games may keep the bootstrap's VBR
+ * (0x8C00F400) throughout; it is hooked the same way. Reads complete from
+ * the game's calls alone whenever no interrupt is delivering. */
 struct kui_retail_async_stats {
     uint32_t irq_blocks, call_blocks, waits, irqs, failures;
-    uint32_t max_retries, hooks, releases, vbr_changes;
+    uint32_t execs, exec_int, stalled, hooks, releases;
 };
 /* Returns the trampoline can hold pending: interrupts released while an
  * earlier released one's handler still runs. */
@@ -41,21 +44,23 @@ struct kui_retail_async_stats {
 struct kui_retail_async_release {
     uint32_t vbr;    /* +0: the game's VBR the reader displaced */
     uint32_t sci;    /* +4: the game's IPRB SCI field (bits 7..4) */
-    uint32_t armed;  /* +8: launch Y and streaming: re-hook on return */
+    uint32_t armed;  /* +8: streaming: a return installs the reader again */
     uint32_t depth;  /* +12: returns pending */
     /* +16: each pending return, oldest first: the interrupted PC (SPC)
      * and stack (SGR). */
     uint32_t pending[KUI_RETAIL_ASYNC_RETURNS][2];
     /* +40: shown as one row: returns that installed the reader again,
-     * and events released at VBR+0x100, +0x400 and +0x600. */
-    uint32_t rehooks, released[3];
+     * events released at VBR+0x100, +0x400 and +0x600, and (C only) GD
+     * calls that found the game had moved to other vectors. */
+    uint32_t rehooks, released[3], vbr_changes;
 };
 struct kui_retail_async {
     struct kui_retail_async_release release; /* first: at region + 0x240 */
     const struct kui_retail_manifest *manifest;
     struct kui_retail_cursor cursor;
-    uint32_t token, active, failed, destination, opened, retries, in_irq;
-    uint32_t hooked, rehook, since_exec;
+    /* since: blocks delivered since the previous EXEC (X) or GD call (Y). */
+    uint32_t token, destination, since;
+    uint32_t active, failed, opened, retries, in_irq, hooked, smooth;
     struct kui_retail_async_stats stats;
 };
 /* State the resident shares with the reader, kept between the vectors. */
@@ -103,7 +108,7 @@ _Static_assert(sizeof(struct kui_retail_async_shared) <= 0x1e0u, "shared fits ga
 extern struct kui_retail_async_region kui_retail_async_region;
 
 /* Once, at resident init: install nothing yet, copy the vectors; the
- * manifest's reader chooses whether released interrupts re-hook on return. */
+ * manifest's reader chooses how long GD calls may wait for blocks. */
 void kui_retail_async_init(const struct kui_retail_manifest *);
 /* Every GD call, masked on the private stack, before the service runs it. */
 void kui_retail_async_call(uint32_t function);
@@ -114,7 +119,7 @@ void kui_retail_async_after(uint32_t function, int32_t result);
 uint32_t kui_retail_async_irq(void);
 /* The releasing entries (retail_resident.S): VBR and SCI level back to the
  * game's, then its vector at +0x100, +0x400 or +0x600; and the trampoline a
- * released interrupt's handler returns through with launch Y. */
+ * released interrupt's handler returns through. */
 void kui_retail_release_100(void);
 void kui_retail_release_400(void);
 void kui_retail_release_600(void);

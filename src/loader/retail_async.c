@@ -14,9 +14,11 @@
 #define TOKEN_LIMIT 65536u
 /* Consecutive failures at one block before the read is reported failed. */
 #define RETRIES 8u
-/* Blocks an EXEC makes sure of since the previous one: about the ordinary
- * reader's two-sector step. */
+/* Blocks an EXEC makes sure of since the previous one (X): about the
+ * ordinary reader's two-sector step. */
 #define WAIT_BLOCKS 10u
+/* The GD caller's SR, published by the resident's hook entry. */
+extern volatile uint32_t kui_retail_hook_sr;
 
 #ifdef KUI_RETAIL_ASYNC_TEST
 extern uint32_t kui_retail_async_test_vbr(void);
@@ -55,7 +57,7 @@ static void copy_words(volatile uint32_t *to, const uint32_t *from, unsigned wor
 }
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
-    e.rehook = manifest->reader == KUI_RETAIL_READER_ASYNC_REHOOK;
+    e.smooth = manifest->reader == KUI_RETAIL_READER_ASYNC_SMOOTH;
     copy_words(R.vector100, kui_retail_vector_forward, 3);
     R.vector100[2] = (uint32_t)(uintptr_t)kui_retail_release_100;
     copy_words(R.vector400, kui_retail_vector_forward, 3);
@@ -74,7 +76,7 @@ static void hook(void) {
     uint16_t b = rd16(IPRB);
     if(e.hooked) {
         if(vbr == e.release.vbr) ++e.stats.releases;
-        else ++e.stats.vbr_changes;
+        else ++e.release.vbr_changes;
     }
     /* The game's own field, unless ours is still there (a game that set its
      * VBR again itself). */
@@ -82,7 +84,7 @@ static void hook(void) {
     e.release.vbr = vbr;
     vbr_set(our_vbr());
     wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
-    e.release.armed = e.rehook;
+    e.release.armed = 1;
     if(!e.hooked) {e.hooked = 1; ++e.stats.hooks;}
 }
 /* The game's vectors and SCI level again, unless it changed them meanwhile
@@ -109,8 +111,7 @@ static bool open_bus(void) {
  * ends the read, as it does for the ordinary reader. */
 static void failure(enum kui_sci_stream_result result) {
     ++e.stats.failures;
-    if(++e.retries > e.stats.max_retries) e.stats.max_retries = e.retries;
-    if(e.retries > RETRIES || result == KUI_SCI_STREAM_RESET) e.failed = KUI_GD_ERROR_IO;
+    if(++e.retries > RETRIES || result == KUI_SCI_STREAM_RESET) e.failed = KUI_GD_ERROR_IO;
 }
 static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint32_t count) {
     (void)unused;
@@ -129,6 +130,8 @@ static void deliver(uint32_t wait) {
         enum kui_sci_stream_result r = KUI_SCI_STREAM_OK;
         if(kui_sci_stream_busy()) {
             r = kui_sci_stream_poll();
+            /* Ended before this GD call looked: its interrupt was held off. */
+            if(r != KUI_SCI_STREAM_PENDING && !delivered && !e.in_irq) ++e.stats.stalled;
             if(r == KUI_SCI_STREAM_PENDING) {
                 if(!e.active || e.failed || delivered >= wait) return;
                 r = kui_sci_stream_wait();
@@ -146,7 +149,7 @@ static void deliver(uint32_t wait) {
             }
             if(kui_retail_cursor_feed(&e.cursor, block) != KUI_GAME_OK) e.failed = KUI_GD_ERROR_IO;
             ++delivered;
-            ++e.since_exec;
+            ++e.since;
             if(e.in_irq) ++e.stats.irq_blocks;
             else ++e.stats.call_blocks;
             if(e.cursor.done == e.cursor.count) e.active = 0;
@@ -184,13 +187,23 @@ void kui_retail_async_call(uint32_t function) {
     uint32_t wait = 0;
     if(e.active) {
         hook();
-        /* An EXEC waits for the blocks the interrupt did not deliver since
-         * the previous EXEC, up to the ordinary reader's step: a game is
-         * never slower than with the ordinary reader, and masked no longer. */
-        if(function == KUI_GD_EXEC && e.since_exec < WAIT_BLOCKS) {
-            wait = WAIT_BLOCKS - e.since_exec;
-            ++e.stats.waits;
+        if(function == KUI_GD_EXEC) {
+            ++e.stats.execs;
+            if(kui_retail_hook_sr & 0xf0u) ++e.stats.exec_int; /* IMASK: a handler */
         }
+        /* X: an EXEC waits for the blocks nothing delivered since the
+         * previous EXEC, up to the ordinary reader's step, so a game is never
+         * slower than with the ordinary reader. Y: an EXEC or CHECK waits
+         * for at most the block in flight, and only if nothing arrived since
+         * the previous GD call: a game spinning on its read still reads at
+         * the card's speed, a busy one loses little time. */
+        if(e.smooth) {
+            /* CHECK (1) or EXEC (2) */
+            if(!e.since && function - KUI_GD_CHECK <= KUI_GD_EXEC - KUI_GD_CHECK) wait = 1;
+        } else if(function == KUI_GD_EXEC && e.since < WAIT_BLOCKS) {
+            wait = WAIT_BLOCKS - e.since;
+        }
+        if(wait) ++e.stats.waits;
     }
     deliver(wait);
     report();
@@ -206,7 +219,7 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
         e.active = 0; /* aborted or reset: nothing more is written */
     }
     if(!kui_sci_stream_busy()) unhook();
-    if(function == KUI_GD_EXEC) e.since_exec = 0;
+    if(e.smooth || function == KUI_GD_EXEC) e.since = 0;
 }
 uint32_t kui_retail_async_irq(void) {
     ++e.stats.irqs;

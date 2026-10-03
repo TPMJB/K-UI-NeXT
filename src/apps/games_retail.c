@@ -251,7 +251,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         else {
             map->reader=reader;
             log("Retail boot reader: background SCI stream (test, %s)",
-                reader==KUI_RETAIL_READER_ASYNC_REHOOK?"re-hooking after game interrupts":"releasing its hook");
+                reader==KUI_RETAIL_READER_ASYNC_SMOOTH?"smooth":"EXEC top-up");
         }
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);

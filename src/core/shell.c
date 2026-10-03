@@ -1094,11 +1094,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_GAMES_RETAIL_CONFIRM:
         if((buttons&(KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y)) && kui_shell_games_retail_ready(s)) {
-            /* X: background reader handing the game its vectors back at its
-             * first event; Y: the same, installing them again as soon as the
-             * game's interrupt handler returns. */
+            /* X: background reader whose EXEC tops reading up to the
+             * standard reader's step; Y: the same, a GD call waiting for at
+             * most one block (smoother, may load slower). */
             s->games_retail_reader=buttons&KUI_SHELL_A?KUI_RETAIL_READER_STANDARD:
-                buttons&KUI_SHELL_X?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_ASYNC_REHOOK;
+                buttons&KUI_SHELL_X?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_ASYNC_SMOOTH;
             return KUI_SHELL_GAMES_RETAIL;
         }
         break;

@@ -132,14 +132,14 @@ static void install_hook(void) {
 #ifdef KUI_RETAIL_ASYNC
 /* Counter rows for both screens; every counter is a uint32_t in order. */
 _Static_assert(sizeof(struct kui_sci_stream_stats) == 12u * 4u, "stream counters");
-_Static_assert(sizeof(struct kui_retail_async_stats) == 9u * 4u, "reader counters");
-_Static_assert(offsetof(struct kui_retail_async_release, released) ==
-               offsetof(struct kui_retail_async_release, rehooks) + 4u, "release counters");
+_Static_assert(sizeof(struct kui_retail_async_stats) == 10u * 4u, "reader counters");
+_Static_assert(offsetof(struct kui_retail_async_release, vbr_changes) ==
+               offsetof(struct kui_retail_async_release, rehooks) + 16u, "release counters");
 static void stream_lines(void) {
     const uint32_t *st = (const uint32_t *)kui_sci_stream_stats();
-    retail_display_values("DMA BLKS POLLED   STARTS   STOPS", st, 4);
-    retail_display_values("CONTINUE KEPT     OVERRUNS CRC ERRS", st + 4, 4);
-    retail_display_values("TOKENERR FOREIGN  MAXTOKEN REPAIRED", st + 8, 4);
+    retail_display_values("DMA BLKS POLLED   STARTS   STOPS    CONTINUE", st, 5);
+    retail_display_values("KEPT     OVERRUNS CRC ERRS TOKENERR FOREIGN", st + 5, 5);
+    retail_display_values("MAXTOKEN REPAIRED", st + 10, 2);
 }
 #endif
 static void report_fault(const char *reason, uint32_t function) {
@@ -182,9 +182,9 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
      * back and installed again, and the stream's errors. */
     const uint32_t *st=(const uint32_t *)&reader.stats;
     retail_display_hex("SECTORS READ",service.diag.sectors_read);
-    retail_display_values("IRQ BLKS CALLBLKS EXECWAIT IRQS     FAILURES",st,5);
-    retail_display_values("MAXRETRY HOOKS    RELEASES VBR CHGS",st+5,4);
-    retail_display_values("REHOOKS  REL 100  REL 400  REL 600",&reader.release.rehooks,4);
+    retail_display_values("IRQ BLKS CALLBLKS WAITS    IRQS     FAILURES",st,5);
+    retail_display_values("EXECS    EXEC INT STALLED  HOOKS    RELEASES",st+5,5);
+    retail_display_values("REHOOKS  REL 100  REL 400  REL 600  VBR CHGS",&reader.release.rehooks,5);
     stream_lines();
 #else
     /* How the game drives reads: ABXY+Start after a load shows these. */

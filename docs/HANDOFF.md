@@ -1,5 +1,23 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background reader, fifth build (2026-10-03 UTC)
+
+`c86877c0dbb9` on the console with Y: character select to fight in under
+ten seconds (about 25 before), textures in faster; still 6 to 7 s of lag
+after the first line of the intro, a slight FMV stutter and lag in the
+second fight's first section. 41% of blocks by interrupt (`REHOOKS` 6,025
+of `REL 600` 6,034, no exceptions); the lag is EXEC's masked top-up
+(`EXECWAIT` 4,611 of about 10 blocks). 36 repairs worked before one failed
+CRC switched repair off. This build: both launches release and re-hook;
+**X** keeps the top-up, **Y** (`ASYNC_SMOOTH`, manifest reader 2) lets an
+EXEC or CHECK wait for at most the block in flight, only when nothing
+arrived since the previous GD call. Repair now stops after two failed
+blocks. New counters: `EXECS`, `EXEC INT` (EXEC from a handler), `STALLED`
+(a call found a block ended with its interrupt held off). `MAXRETRY` is gone,
+`VBR CHGS` moved to the release row. See
+[games-background-reader.md](games-background-reader.md). Build ID and CI
+run: pending.
+
 ## Games: background reader, fourth build (2026-10-03 UTC)
 
 `7462d64cec22` on the console: X ran DOA2, Y crashed, so DOA2's handlers must
@@ -20,7 +38,7 @@ private stack is 384 bytes (call-graph worst 220 + 64 against 336) to make
 room. Counters: `REL 100/400/600` and `REHOOKS` replace `FORWARDS` and
 `BOOT VBR`. See [games-background-reader.md](games-background-reader.md).
 Build **c86877c0dbb9** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37102296675)
-(112 bytes free, call-graph stack 220 of 336); console results are pending.
+(112 bytes free, call-graph stack 220 of 336); console: see the fifth build.
 
 ## Games: background reader, third build (2026-10-03 UTC)
 

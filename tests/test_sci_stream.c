@@ -190,17 +190,28 @@ static void test_overrun_and_stall(void) {
     assert(drive(lba, 2, out, true) == 0);
     check_range(lba, 2, out);
     lba += 2;
-    /* Another fault in a repaired block is detected, not "rebuilt" away;
-     * the card is then taken not to resume mid-block as expected, so later
-     * overruns restart the stream (until it is opened again). */
-    card.corrupt_lba = lba; card.corrupt_count = 1;
-    m.overrun_after = 300;
-    assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
-    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
-    assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
-    assert(drive(lba, 3, out, true) == 0);
-    check_range(lba, 3, out);
-    lba += 3;
+    /* Another fault in a repaired block is detected, not "rebuilt" away.
+     * After a second such block the card is taken not to resume mid-block
+     * as expected, so later overruns restart the stream (until it is opened
+     * again); one alone (a stray bit error) leaves repair on. */
+    for(unsigned fault = 0; fault < 2u; ++fault) {
+        card.corrupt_lba = lba; card.corrupt_count = 1;
+        m.overrun_after = 300;
+        assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
+        assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+        assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
+        assert(drive(lba, 3, out, true) == 0);
+        check_range(lba, 3, out);
+        lba += 3;
+        if(fault) break;
+        unsigned still = st->repaired;
+        m.overrun_after = 40;
+        assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);
+        assert(kui_sci_stream_poll() == KUI_SCI_STREAM_PENDING && st->repaired == still + 1u);
+        assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+        check_block(lba, kui_sci_stream_take(lba, &r));
+        lba += 1;
+    }
     unsigned repaired = st->repaired, overruns = st->overruns;
     m.overrun_after = 40;
     assert(kui_sci_stream_fetch(lba, LIMIT) == KUI_SCI_STREAM_OK);

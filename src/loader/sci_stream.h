@@ -43,8 +43,8 @@ struct kui_sci_stream_state {
     uint16_t lost[2];
     /* kept: 1 + the area holding the last block taken, or 0. wire: the
      * area holds bit-reversed DMA bytes rather than programmed-read bytes.
-     * unrepaired: a repaired block failed its CRC, so the card does not
-     * resume mid-block as expected and overruns restart from then on. */
+     * unrepaired: repaired blocks that failed their CRC; after two the card
+     * is taken not to resume mid-block as expected, and overruns restart. */
     uint8_t ready[2], wire[2], rdr[2], held[2], hold[2], kept, sptr, unrepaired;
     struct kui_sci_stream_stats stats;
 };

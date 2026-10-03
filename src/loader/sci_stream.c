@@ -313,7 +313,7 @@ static enum kui_sci_stream_result finish(void) {
          * waited, deselected) and rebuild the lost one from the CRC when
          * the block is taken. */
         uint32_t at = DMA_BYTES - count, held = status & RDRF ? 1u : 0u, lost = at + held;
-        if((status & ORER) && lost < 512u && !s.lost[area] && !s.unrepaired) {
+        if((status & ORER) && lost < 512u && !s.lost[area] && s.unrepaired < 2u) {
             s.lost[area] = (uint16_t)(lost + 1u);
             s.hold[area] = (uint8_t)held;
             s.held[area] = tail;
@@ -388,7 +388,7 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
         if(crc != sent && lost) {
             int x = rebuild((uint32_t)(crc ^ sent), 512u - lost);
             if(x >= 0) {area[lost - 1u] = (uint8_t)x; crc = sent;}
-            else s.unrepaired = 1;
+            else ++s.unrepaired;
         }
         if(crc != sent) {
             ++s.stats.crc_errors;
