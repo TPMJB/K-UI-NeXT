@@ -19,38 +19,43 @@
  *
  * The interrupt reaches the reader through its own vector table placed in
  * front of the game's while a block is in flight: VBR+0x600 takes the SCI's
- * ERI/RXI and passes every other event on, as do VBR+0x100 and +0x400. How
- * it passes them on is the launch's choice (manifest reader):
- *   ASYNC: the first event that is not the reader's gives the game its VBR
- *     and SCI level back before entering the game's vector (the releasing
- *     entries in retail_resident.S), so a game's handler never runs under
- *     the reader's VBR; the next GD call installs them again.
- *   ASYNC_KEEP: events jump straight to the game's vectors and the reader
- *     keeps its vectors until the stream is idle.
- * The game's VBR and level are put back whenever the stream is idle. Games
- * may keep the bootstrap's VBR (0x8C00F400) throughout; it is hooked the
- * same way. Reads complete from the game's calls alone whenever no interrupt
- * is delivering. */
+ * ERI/RXI; every other event, there or at VBR+0x100 and +0x400, first gives
+ * the game its VBR and SCI level back and then enters the game's vector (the
+ * releasing entries in retail_resident.S), so a game's handler never runs
+ * under the reader's VBR (DOA2 crashes if it does). The next GD call installs
+ * them again; with launch Y (manifest reader ASYNC_REHOOK) a released
+ * interrupt's handler also returns through a trampoline that installs them
+ * again at once. The game's VBR and level are put back whenever the stream
+ * is idle. Games may keep the bootstrap's VBR (0x8C00F400) throughout; it is
+ * hooked the same way. Reads complete from the game's calls alone whenever
+ * no interrupt is delivering. */
 struct kui_retail_async_stats {
-    uint32_t irq_blocks, call_blocks, waits, irqs, forwarded;
-    uint32_t failures, max_retries, hooks, vbr_changes, boot_vbr, releases;
+    uint32_t irq_blocks, call_blocks, waits, irqs, failures;
+    uint32_t max_retries, hooks, releases, vbr_changes;
 };
-/* What the releasing entries read and use (offsets fixed for the assembly). */
+/* Returns the trampoline can hold pending: interrupts released while an
+ * earlier released one's handler still runs. */
+#define KUI_RETAIL_ASYNC_RETURNS 3u
+/* The releasing entries' and trampoline's state, at region + 0x240 with
+ * these offsets (retail_resident.S). */
 struct kui_retail_async_release {
-    uint32_t vbr;      /* +0: the game's VBR */
-    uint32_t sci;      /* +4: the game's IPRB SCI field (bits 7..4) */
-    uint32_t saved[3]; /* +8: R1..R3 while releasing */
-    uint32_t target;   /* +20: the game's vector being entered */
+    uint32_t vbr;    /* +0: the game's VBR the reader displaced */
+    uint32_t sci;    /* +4: the game's IPRB SCI field (bits 7..4) */
+    uint32_t armed;  /* +8: launch Y and streaming: re-hook on return */
+    uint32_t depth;  /* +12: returns pending */
+    /* +16: each pending return, oldest first: the interrupted PC (SPC)
+     * and stack (SGR). */
+    uint32_t pending[KUI_RETAIL_ASYNC_RETURNS][2];
+    /* +40: shown as one row: returns that installed the reader again,
+     * and events released at VBR+0x100, +0x400 and +0x600. */
+    uint32_t rehooks, released[3];
 };
 struct kui_retail_async {
     struct kui_retail_async_release release; /* first: at region + 0x240 */
     const struct kui_retail_manifest *manifest;
     struct kui_retail_cursor cursor;
     uint32_t token, active, failed, destination, opened, retries, in_irq;
-    uint32_t hooked, keep, since_exec;
-    /* Where VBR+0x100, 0x400 and 0x600 pass events: the game's vectors
-     * (ASYNC_KEEP) or the releasing entries (ASYNC). Read by the vectors. */
-    uint32_t forward[3];
+    uint32_t hooked, rehook, since_exec;
     struct kui_retail_async_stats stats;
 };
 /* State the resident shares with the reader, kept between the vectors. */
@@ -87,26 +92,31 @@ _Static_assert(offsetof(struct kui_retail_async_region, vector600) == 0x500u, "v
 _Static_assert(offsetof(struct kui_retail_async_region, area1) == 0x540u, "area1");
 _Static_assert(sizeof(struct kui_retail_async) <= 0xc0u, "engine fits gap A");
 _Static_assert(offsetof(struct kui_retail_async, release) == 0 &&
-               offsetof(struct kui_retail_async_release, sci) == 4u &&
-               offsetof(struct kui_retail_async_release, saved) == 8u &&
-               offsetof(struct kui_retail_async_release, target) == 20u, "releasing entries' frame");
+               offsetof(struct kui_retail_async_release, armed) == 8u &&
+               offsetof(struct kui_retail_async_release, depth) == 12u &&
+               offsetof(struct kui_retail_async_release, pending) == 16u &&
+               offsetof(struct kui_retail_async_release, rehooks) == 40u &&
+               offsetof(struct kui_retail_async_release, released) == 44u,
+               "release frame offsets used by retail_resident.S");
 _Static_assert(sizeof(struct kui_retail_async_shared) <= 0x1e0u, "shared fits gap B");
 #endif
 extern struct kui_retail_async_region kui_retail_async_region;
 
 /* Once, at resident init: install nothing yet, copy the vectors; the
- * manifest's reader chooses releasing or keeping vectors. */
+ * manifest's reader chooses whether released interrupts re-hook on return. */
 void kui_retail_async_init(const struct kui_retail_manifest *);
 /* Every GD call, masked on the private stack, before the service runs it. */
 void kui_retail_async_call(uint32_t function);
 /* After the service ran it: start a new read, or stop an abandoned one. */
 void kui_retail_async_after(uint32_t function, int32_t result);
 /* The handler behind VBR+0x600 for the stream's events: zero when handled,
- * nonzero to pass the event on as any other (forward[2]). */
+ * nonzero to pass the event on as any other (kui_retail_release_600). */
 uint32_t kui_retail_async_irq(void);
 /* The releasing entries (retail_resident.S): VBR and SCI level back to the
- * game's, then its vector at +0x100, +0x400 or +0x600. */
+ * game's, then its vector at +0x100, +0x400 or +0x600; and the trampoline a
+ * released interrupt's handler returns through with launch Y. */
 void kui_retail_release_100(void);
 void kui_retail_release_400(void);
 void kui_retail_release_600(void);
+void kui_retail_rehook(void);
 #endif

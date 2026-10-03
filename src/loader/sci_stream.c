@@ -104,7 +104,7 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
     s.card = card;
     s.area[0] = area0; s.area[1] = area1;
     s.state = unknown ? LOST : CLOSED;
-    s.ready[0] = s.ready[1] = 0; s.kept = 0;
+    s.ready[0] = s.ready[1] = 0; s.kept = 0; s.unrepaired = 0;
     s.sptr = rd8(SPTR);
     /* A deselected idle byte at the fast rate: the bus leaves its slow
      * acquisition rate and the card sees whole bytes. */
@@ -303,19 +303,23 @@ static enum kui_sci_stream_result finish(void) {
         return KUI_SCI_STREAM_BUSY;
     }
     if(count || !(control & 2u) || !(status & RDRF)) {
-        /* The channel was held off the bus (the game's own DMA): RDR kept
-         * byte `at` and the overrun lost the next one, where the card now
-         * stands. Once per block, if that byte was data, carry on from the
-         * byte after it (the card simply waited, deselected) and rebuild the
-         * lost one from the CRC when the block is taken. */
-        uint32_t at = DMA_BYTES - count;
-        if(count && !(control & 2u) && (status & (RDRF | ORER)) == (RDRF | ORER) &&
-           !s.lost[area] && at + 1u < 512u) {
-            s.lost[area] = (uint16_t)(at + 1u);
+        /* The channel was held off the bus (the game's own DMA) and the
+         * receiver overran mid-block: the byte that overran is lost and the
+         * card stopped after it. The channel has `at` bytes; usually it
+         * also took the byte RDR held when it got the bus back, so byte
+         * `at` is the lost one. If it had not yet (RDRF), RDR still holds
+         * byte `at` and `at + 1` is lost. Once per block, if the lost byte
+         * was data, carry on from the byte after it (the card simply
+         * waited, deselected) and rebuild the lost one from the CRC when
+         * the block is taken. */
+        uint32_t at = DMA_BYTES - count, held = status & RDRF ? 1u : 0u, lost = at + held;
+        if((status & ORER) && lost < 512u && !s.lost[area] && !s.unrepaired) {
+            s.lost[area] = (uint16_t)(lost + 1u);
+            s.hold[area] = (uint8_t)held;
             s.held[area] = tail;
             ++s.stats.repaired;
             select(true);
-            result = start_dma(area, at + 2u);
+            result = start_dma(area, lost + 1u);
             return result == KUI_SCI_STREAM_OK ? KUI_SCI_STREAM_PENDING : result;
         }
         ++s.stats.overruns;
@@ -361,7 +365,10 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
         s.ready[i] = 0;
         uint8_t *area = s.area[i];
         uint32_t lost = s.lost[i];
-        if(lost) {area[lost - 1u] = s.held[i]; area[lost] = 0;}
+        if(lost) {
+            if(s.hold[i]) area[lost - 2u] = s.held[i];
+            area[lost - 1u] = 0;
+        }
         uint8_t high = area[512], low = s.rdr[i];
         bool wire = s.wire[i];
         uint16_t crc = 0;
@@ -379,8 +386,9 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
         if(wire) {high = (uint8_t)reverse(high); low = (uint8_t)reverse(low);}
         uint16_t sent = (uint16_t)(high << 8 | low);
         if(crc != sent && lost) {
-            int x = rebuild((uint32_t)(crc ^ sent), 511u - lost);
-            if(x >= 0) {area[lost] = (uint8_t)x; crc = sent;}
+            int x = rebuild((uint32_t)(crc ^ sent), 512u - lost);
+            if(x >= 0) {area[lost - 1u] = (uint8_t)x; crc = sent;}
+            else s.unrepaired = 1;
         }
         if(crc != sent) {
             ++s.stats.crc_errors;

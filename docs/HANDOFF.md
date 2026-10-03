@@ -1,5 +1,26 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background reader, fourth build (2026-10-03 UTC)
+
+`7462d64cec22` on the console: X ran DOA2, Y crashed, so DOA2's handlers must
+not start under the reader's VBR. X still lagged before character select and
+at the fight's start: only 3% of blocks came by interrupt (`RELEASES` 6,243,
+DOA2's own interrupts hand the vectors back almost at once), and all 1,676
+mid-block overruns restarted the card (`REPAIRED` 0: the channel takes the
+byte RDR held once it gets the bus back, so RDR is empty). This build:
+**Y** now releases like X but points each released interrupt's SPC at a
+trampoline (`kui_retail_rehook`) that installs the reader's VBR and SCI level
+again when the game's handler returns, then RTEs to the interrupted code
+(`REHOOKS`; up to three pending, newest first); exceptions are only
+released. Overrun repair handles an empty RDR (lost byte = channel count) and
+switches itself off if a repaired block ever fails its CRC. The release
+frame sits at the engine's start (`region + 0x240`); the releasing entries
+and trampoline keep registers on the interrupted stack. The resident's
+private stack is 384 bytes (call-graph worst 220 + 64 against 336) to make
+room. Counters: `REL 100/400/600` and `REHOOKS` replace `FORWARDS` and
+`BOOT VBR`. See [games-background-reader.md](games-background-reader.md).
+Build ID and CI run: pending.
+
 ## Games: background reader, third build (2026-10-03 UTC)
 
 `da60895201d3` crashed and rebooted the console right after the bootstrap
@@ -14,7 +35,8 @@ call; `RELEASES`), **Y** keeps its vectors while it streams. An EXEC now
 tops up to 10 blocks since the previous EXEC instead of waiting whenever no
 interrupt came. See [games-background-reader.md](games-background-reader.md).
 Build **7462d64cec22** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37099593981)
-(176 bytes free, call-graph stack 220 of 464); console results are pending.
+(176 bytes free, call-graph stack 220 of 464); console: X ran, Y crashed
+(fourth build above).
 
 ## Games: background reader, second build (2026-10-03 UTC)
 

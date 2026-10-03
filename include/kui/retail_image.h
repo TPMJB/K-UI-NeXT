@@ -13,11 +13,12 @@
 #define KUI_RETAIL_IMAGE_EXTENTS 128u
 /* Which low resident the stage installs (wire offset 264). The background
  * reader streams SCI microSD from its own interrupt and holds at most
- * KUI_RETAIL_ASYNC_EXTENTS extents; validation enforces both. ASYNC hands
- * the game its own vectors back at the first event not the reader's;
- * ASYNC_KEEP keeps the reader's vectors while a block is in flight. */
+ * KUI_RETAIL_ASYNC_EXTENTS extents; validation enforces both. Both hand the
+ * game its own vectors back at the first event not the reader's; with
+ * ASYNC_REHOOK an interrupt's handler returns through a trampoline that
+ * installs the reader's again. */
 enum kui_retail_reader { KUI_RETAIL_READER_STANDARD, KUI_RETAIL_READER_ASYNC,
-    KUI_RETAIL_READER_ASYNC_KEEP };
+    KUI_RETAIL_READER_ASYNC_REHOOK };
 #define KUI_RETAIL_ASYNC_EXTENTS 32u
 /* Extents a manifest holds in memory. The background game reader's resident
  * is built with fewer (KUI_RETAIL_ASYNC_EXTENTS) to fit its receive areas;

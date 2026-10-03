@@ -46,17 +46,13 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) {
     ++hw.acquires;
     return hw.busy_bus ? KUI_LOADER_SD_UNSUPPORTED : KUI_LOADER_SD_OK;
 }
-const uint32_t kui_retail_vector_forward[4] = {0x11111111u, 0x22222222u, 0x33333333u, 0};
-const uint32_t kui_retail_vector_interrupt[12] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0xff000028u, 0, 12};
-/* The releasing entries' work (retail_resident.S), as the hardware runs it
- * when an event that is not the reader's arrives while it is hooked. */
-static void releasing(void) {
-    hw.vbr = R.engine.release.vbr;
-    hw.iprb = (uint16_t)((hw.iprb & ~0x00f0u) | R.engine.release.sci);
-}
-void kui_retail_release_100(void) { releasing(); }
-void kui_retail_release_400(void) { releasing(); }
-void kui_retail_release_600(void) { releasing(); }
+const uint32_t kui_retail_vector_forward[3] = {0x11111111u, 0x22222222u, 0};
+const uint32_t kui_retail_vector_interrupt[11] = {1, 2, 3, 4, 5, 6, 7, 8, 0xff000028u, 10, 11};
+/* Only their addresses are used in C; retail_resident.S does their work,
+ * modelled by foreign_event below. */
+void kui_retail_release_100(void) {}
+void kui_retail_release_400(void) {}
+void kui_retail_release_600(void) {}
 static uint32_t our_vbr(void) { return (uint32_t)(uintptr_t)&R - 0x100u; }
 
 /* ---- Image: the cursor test's track bytes, mapped onto the model card ---- */
@@ -143,22 +139,28 @@ static int32_t gd(uint32_t function, uint32_t r4, uint32_t r5) {
     return result;
 }
 static bool hooked(void) { return hw.vbr == our_vbr(); }
-/* Any other interrupt or exception: VBR+0x600 (or +0x100/+0x400) passes it
- * through its slot, to a releasing entry or straight to the game's vector. */
+/* Another event while the reader is hooked (retail_resident.S): the vector
+ * (0: +0x100, 1: +0x400, 2: +0x600) releases, giving the game its VBR and
+ * SCI level; the game's handler runs (handler, if any: GD calls it makes);
+ * with launch Y an interrupt's handler then returns through the trampoline,
+ * which installs the reader again if it still streams and the VBR is still
+ * the one released to. */
 static unsigned foreign;
-static void foreign_event(void) {
+static void foreign_event_with(unsigned vector, void (*handler)(void)) {
     if(!hooked()) return;
-    ++foreign;
-    /* Slots are 32-bit (console addresses): compare, then call by name. */
-    static void (*const entries[3])(void) = {
-        kui_retail_release_100, kui_retail_release_400, kui_retail_release_600};
-    uint32_t slot = R.engine.forward[foreign % 3u];
-    if(slot == (uint32_t)(uintptr_t)entries[foreign % 3u]) entries[foreign % 3u]();
-    else {
-        static const uint32_t offsets[3] = {0x100u, 0x400u, 0x600u};
-        CHECK(slot == R.engine.release.vbr + offsets[foreign % 3u]);
+    struct kui_retail_async_release *f = &R.engine.release;
+    ++f->released[vector];
+    bool returns = vector == 2 && f->armed && f->depth < KUI_RETAIL_ASYNC_RETURNS;
+    hw.vbr = f->vbr;
+    hw.iprb = (uint16_t)((hw.iprb & ~0x00f0u) | f->sci);
+    if(handler) handler();
+    if(returns && f->armed && hw.vbr == f->vbr) {
+        ++f->rehooks;
+        hw.vbr = our_vbr();
+        hw.iprb = (uint16_t)((hw.iprb & ~0x00f0u) | 0x10u);
     }
 }
+static void foreign_event(void) { foreign_event_with(++foreign % 3u, NULL); }
 /* Time passing: a block in flight arrives. A reception otherwise takes
  * RECEIVE_POLLS register reads, so a GD call that only polls finds it still
  * arriving, while a waiting EXEC sees it finish. */
@@ -178,17 +180,17 @@ static unsigned interrupts(unsigned limit) {
     return n;
 }
 
-enum { RELEASE, KEEP };
+enum { RELEASE, REHOOK };
 static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scattered) {
     fixture(take_max, scattered);
-    manifest.reader = how == KEEP ? KUI_RETAIL_READER_ASYNC_KEEP : KUI_RETAIL_READER_ASYNC;
+    manifest.reader = how == REHOOK ? KUI_RETAIL_READER_ASYNC_REHOOK : KUI_RETAIL_READER_ASYNC;
     memset(&card, 0, sizeof(card));
     card.nac = 1; card.nac_first = 30; card.busy = 4; card.blocks = 2048; card.high_capacity = true;
     card_content = content;
     memset(&m, 0, sizeof(m));
     m.smr = 0x80u; m.brr = 0; m.scr = 0x30u; m.ssr = 0x84u; m.sptr = 0; m.cs_high = true; m.healthy = true;
     m.sar = 0x11111111u; m.dar = 0x22222222u; m.tcr = 0x33u; m.chcr = 0; m.dmaor = 0x8201u;
-    m.delay = RECEIVE_POLLS;
+    m.delay = RECEIVE_POLLS; m.late_take = true;
     memset(&R, 0, sizeof(R)); /* _start clears resident BSS */
     m.areas[0] = R.area0; m.areas[1] = R.area1;
     struct kui_loader_sd *sd = &R.shared.card.device.sd;
@@ -202,9 +204,10 @@ static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scatt
     memset(&hw, 0, sizeof(hw));
     hw.vbr = game_vbr; hw.iprb = 0x5a0f;
     memset(ram, 0xa5, sizeof(ram));
-    CHECK(R.vector100[3] == (uint32_t)(uintptr_t)&R.engine.forward[0]);
-    CHECK(R.vector400[3] == (uint32_t)(uintptr_t)&R.engine.forward[1]);
-    CHECK(R.vector600[10] == (uint32_t)(uintptr_t)&R.engine.forward[2] && R.vector600[9] == 0xff000028u);
+    CHECK(R.vector100[2] == (uint32_t)(uintptr_t)kui_retail_release_100 && R.vector100[0] == 0x11111111u);
+    CHECK(R.vector400[2] == (uint32_t)(uintptr_t)kui_retail_release_400 && R.vector400[1] == 0x22222222u);
+    CHECK(R.vector600[8] == 0xff000028u && R.vector600[10] == 11u);
+    CHECK(R.engine.rehook == (how == REHOOK) && !R.engine.release.armed);
 }
 static void mode(uint32_t bytes) {
     put(PARAM, 0); put(PARAM + 4, bytes == 2048 ? 0x2000 : 0x1000);
@@ -274,35 +277,21 @@ static void test_interrupt_reads(void) {
     read_and_compare(45298, 4, true, 0); /* across into the last track */
     mode(2048);
     read_and_compare(45001, 64, true, 0);
-    CHECK(R.engine.stats.forwarded == 0);
     /* Not ours while idle: the event goes to the game's vector. */
-    CHECK(kui_retail_async_irq() == 1 && R.engine.stats.forwarded == 1);
+    CHECK(kui_retail_async_irq() == 1);
 }
 static void test_levels_while_streaming(void) {
     /* Only the SCI's level changes, to the lowest; the channel raises no
-     * interrupt (IPRC is never touched: the model asserts it). Events that
-     * are not the reader's go to the releasing entries. */
+     * interrupt (IPRC is never touched: the model asserts it), and a level
+     * the game gave the SCI comes back afterwards. */
     setup(GAME_VBR, RELEASE, 2000, false);
+    hw.iprb = 0x5a3f;
     int32_t token = request(45010, 20, OUTPUT);
     CHECK(hooked() && hw.iprb == 0x5a1f && m.armed_chcr == 0x4911u);
-    CHECK(R.engine.forward[0] == (uint32_t)(uintptr_t)kui_retail_release_100 &&
-          R.engine.forward[1] == (uint32_t)(uintptr_t)kui_retail_release_400 &&
-          R.engine.forward[2] == (uint32_t)(uintptr_t)kui_retail_release_600);
-    CHECK(R.engine.release.vbr == GAME_VBR && R.engine.release.sci == 0);
+    CHECK(R.engine.release.vbr == GAME_VBR && R.engine.release.sci == 0x30u && !R.engine.release.armed);
     CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
     compare(45010, 20, OUTPUT);
-    CHECK(hw.vbr == GAME_VBR && hw.iprb == 0x5a0f);
-    /* Keeping its hook: events go straight to the game's vectors, and a
-     * level the game gave the SCI comes back afterwards. */
-    setup(GAME_VBR, KEEP, 2000, false);
-    hw.iprb = 0x5a3f;
-    token = request(45010, 3, OUTPUT);
-    CHECK(hooked() && hw.iprb == 0x5a1f && R.engine.release.sci == 0x30u);
-    CHECK(R.engine.forward[0] == GAME_VBR + 0x100u && R.engine.forward[1] == GAME_VBR + 0x400u &&
-          R.engine.forward[2] == GAME_VBR + 0x600u);
-    CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
-    compare(45010, 3, OUTPUT);
-    CHECK(hw.vbr == GAME_VBR && hw.iprb == 0x5a3f && !R.engine.stats.releases);
+    CHECK(hw.vbr == GAME_VBR && hw.iprb == 0x5a3f);
 }
 static void test_release_and_rehook(void) {
     /* The first foreign event gives the game its VBR and SCI level: the
@@ -331,18 +320,64 @@ static void test_release_and_rehook(void) {
 }
 static void test_boot_vbr_hooked(void) {
     /* DOA2 keeps the bootstrap's VBR for good: it is hooked like any other,
-     * and events still pass to the bootstrap's vectors. */
-    setup(KUI_RETAIL_BOOT_VBR, KEEP, 49, true);
+     * and events are released to the bootstrap's vectors. */
+    setup(KUI_RETAIL_BOOT_VBR, REHOOK, 49, true);
     int32_t token = request(45000, 30, OUTPUT);
-    CHECK(hooked() && R.engine.forward[2] == KUI_RETAIL_BOOT_VBR + 0x600u);
+    CHECK(hooked() && R.engine.release.vbr == KUI_RETAIL_BOOT_VBR && R.engine.release.armed);
     /* An EXEC every eight rounds: the interrupt delivers its step. */
     CHECK(finish(token, true, 8) == KUI_GD_COMPLETED);
     compare(45000, 30, OUTPUT);
     const struct kui_retail_async_stats *st = &R.engine.stats;
-    CHECK(st->hooks && st->boot_vbr == st->hooks && st->irq_blocks > st->call_blocks);
-    CHECK(hw.vbr == KUI_RETAIL_BOOT_VBR && m.armed_chcr == 0x4911u);
+    CHECK(st->hooks && st->irq_blocks > st->call_blocks);
+    CHECK(hw.vbr == KUI_RETAIL_BOOT_VBR && m.armed_chcr == 0x4911u && !R.engine.release.armed);
     /* Without EXEC calls, CHECK alone still completes a read. */
     read_and_compare(45030, 9, false, 0);
+}
+static void game_exec(void) { CHECK(gd(KUI_GD_EXEC, 0, 0) == 0); }
+static int32_t rehook_token;
+static void game_check(void) { (void)gd(KUI_GD_CHECK, (uint32_t)rehook_token, STATUS); }
+static void test_rehook_on_return(void) {
+    /* Launch Y: an interrupt's handler returns through the trampoline, which
+     * installs the reader again at once; an exception's does not, and the
+     * next GD call does. */
+    setup(GAME_VBR, REHOOK, 2000, false);
+    hw.iprb = 0x5a2f;
+    int32_t token = rehook_token = request(45000, 60, OUTPUT);
+    const struct kui_retail_async_release *f = &R.engine.release;
+    const struct kui_retail_async_stats *st = &R.engine.stats;
+    CHECK(hooked() && f->armed && hw.iprb == 0x5a1f && f->sci == 0x20u);
+    CHECK(interrupts(3) == 3);
+    foreign_event_with(2, NULL);
+    CHECK(hooked() && hw.iprb == 0x5a1f && f->released[2] == 1 && f->rehooks == 1);
+    CHECK(interrupts(3) == 3);
+    foreign_event_with(0, NULL); /* an exception: released until a GD call */
+    CHECK(!hooked() && hw.iprb == 0x5a2f && f->released[0] == 1 && f->rehooks == 1);
+    elapse();
+    CHECK(interrupts(3) == 0);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
+    CHECK(hooked() && st->releases == 1 && st->hooks == 1 && f->armed);
+    /* A handler that makes GD calls itself (DOA2's EXEC from its vertical
+     * blank): the call installs the reader; the return finds it installed. */
+    CHECK(interrupts(2) == 2);
+    foreign_event_with(2, game_exec);
+    CHECK(hooked() && f->rehooks == 1 && st->releases == 2);
+    foreign_event_with(2, game_check);
+    CHECK(hooked() && f->rehooks == 1 && st->releases == 3);
+    CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
+    compare(45000, 60, OUTPUT);
+    CHECK(hw.vbr == GAME_VBR && hw.iprb == 0x5a2f && !f->armed);
+    /* A handler whose GD call ends the stream: nothing to install on return. */
+    memset(ram + (OUTPUT - BEGIN), 0xa5, 64u * 2352u + 16u);
+    token = rehook_token = request(45060, 2, OUTPUT);
+    int32_t status = KUI_GD_PROCESSING;
+    unsigned rehooks = f->rehooks;
+    for(unsigned n = 0; status == KUI_GD_PROCESSING && n < 100u; ++n) {
+        foreign_event_with(2, game_exec);
+        status = gd(KUI_GD_CHECK, (uint32_t)token, STATUS);
+    }
+    CHECK(status == KUI_GD_COMPLETED && f->rehooks == rehooks);
+    CHECK(!hooked() && hw.vbr == GAME_VBR && hw.iprb == 0x5a2f && !f->armed);
+    compare(45060, 2, OUTPUT);
 }
 static void test_exec_tops_up(void) {
     /* Hooked, but the interrupt never arrives (masked by the game): each
@@ -400,13 +435,13 @@ static void test_cancel_writes_nothing_more(void) {
     }
 }
 static void test_game_moves_vbr(void) {
-    setup(GAME_VBR, KEEP, 2000, false);
+    setup(GAME_VBR, REHOOK, 2000, false);
     int32_t token = request(45000, 40, OUTPUT);
     (void)interrupts(5);
     hw.vbr = 0x8c0e0000u; /* the game installs other vectors mid-read */
     CHECK(interrupts(5) == 0);
     CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
-    CHECK(hooked() && R.engine.stats.vbr_changes == 1 && R.engine.forward[2] == 0x8c0e0600u);
+    CHECK(hooked() && R.engine.stats.vbr_changes == 1 && R.engine.release.vbr == 0x8c0e0000u);
     CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
     compare(45000, 40, OUTPUT);
     CHECK(hw.vbr == 0x8c0e0000u);
@@ -438,27 +473,32 @@ static void test_read_fails_after_retries(void) {
     CHECK(finish(token, true, 1) == KUI_GD_FAILED && R.shared.service.error == KUI_GD_ERROR_IO);
 }
 static void test_stress(void) {
-    setup(GAME_VBR, RELEASE, 48, true);
-    srand(4242);
-    for(unsigned round = 0; round < 300; ++round) {
-        uint32_t count = 1u + (uint32_t)rand() % 30u;
-        uint32_t lba = 45000u + (uint32_t)rand() % (300u - count);
-        int fault = rand() % 8;
-        if(fault == 0) {card.corrupt_lba = 100u + (uint32_t)rand() % 1800u; card.corrupt_count = 1;}
-        if(fault == 1) m.overrun_after = 1u + (unsigned)rand() % 512u;
-        if(fault == 2) m.chcr = 1;
-        card.nac = 1u + (unsigned)rand() % 3u;
-        bool irqs = rand() % 4 != 0;
-        unsigned exec_every = (unsigned)rand() % 4u;
-        if(!irqs && !exec_every) exec_every = 1;
-        read_and_compare(lba, count, irqs, exec_every);
-        m.chcr = 0; m.overrun_after = 0; card.corrupt_count = 0;
+    for(unsigned how = RELEASE; how <= REHOOK; ++how) {
+        setup(GAME_VBR, how, 48, true);
+        srand(4242);
+        for(unsigned round = 0; round < 300; ++round) {
+            uint32_t count = 1u + (uint32_t)rand() % 30u;
+            uint32_t lba = 45000u + (uint32_t)rand() % (300u - count);
+            int fault = rand() % 8;
+            if(fault == 0) {card.corrupt_lba = 100u + (uint32_t)rand() % 1800u; card.corrupt_count = 1;}
+            if(fault == 1) m.overrun_after = 1u + (unsigned)rand() % 512u;
+            if(fault == 2) m.chcr = 1;
+            m.late_take = rand() % 4 != 0;
+            card.nac = 1u + (unsigned)rand() % 3u;
+            bool irqs = rand() % 4 != 0;
+            unsigned exec_every = (unsigned)rand() % 4u;
+            if(!irqs && !exec_every) exec_every = 1;
+            read_and_compare(lba, count, irqs, exec_every);
+            m.chcr = 0; m.overrun_after = 0; card.corrupt_count = 0;
+        }
+        const struct kui_retail_async_stats *st = &R.engine.stats;
+        const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
+        printf("stress %s: irq %u call %u waits %u irqs %u failures %u rehooks %u releases %u | "
+            "dma %u polled %u starts %u kept %u repaired %u\n", how == REHOOK ? "Y" : "X",
+            st->irq_blocks, st->call_blocks, st->waits, st->irqs, st->failures,
+            R.engine.release.rehooks, st->releases, ss->blocks, ss->polled, ss->starts, ss->kept,
+            ss->repaired);
     }
-    const struct kui_retail_async_stats *st = &R.engine.stats;
-    const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
-    printf("stress: irq %u call %u waits %u irqs %u failures %u | dma %u polled %u starts %u kept %u repaired %u\n",
-        st->irq_blocks, st->call_blocks, st->waits, st->irqs, st->failures,
-        ss->blocks, ss->polled, ss->starts, ss->kept, ss->repaired);
 }
 
 int main(void) {
@@ -466,6 +506,7 @@ int main(void) {
     test_levels_while_streaming();
     test_release_and_rehook();
     test_boot_vbr_hooked();
+    test_rehook_on_return();
     test_exec_tops_up();
     test_faults_retried();
     test_cancel_writes_nothing_more();

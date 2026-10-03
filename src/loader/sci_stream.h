@@ -37,12 +37,15 @@ struct kui_sci_stream_state {
     const struct kui_loader_sd *card;
     uint8_t *area[2];
     uint32_t state, position, fill, ready_lba[2], kept_lba, saved[4];
-    /* lost: the index of a byte an overrun lost (0: none), and the byte
-     * the receiver held just before it. */
+    /* lost: 1 + the index of a byte an overrun lost (0: none); hold: the
+     * receiver still held the byte before it (held), which the channel
+     * never took. */
     uint16_t lost[2];
     /* kept: 1 + the area holding the last block taken, or 0. wire: the
-     * area holds bit-reversed DMA bytes rather than programmed-read bytes. */
-    uint8_t ready[2], wire[2], rdr[2], held[2], kept, sptr;
+     * area holds bit-reversed DMA bytes rather than programmed-read bytes.
+     * unrepaired: a repaired block failed its CRC, so the card does not
+     * resume mid-block as expected and overruns restart from then on. */
+    uint8_t ready[2], wire[2], rdr[2], held[2], hold[2], kept, sptr, unrepaired;
     struct kui_sci_stream_stats stats;
 };
 /* Adopt the bus (acquired, card ready) and two 32-byte-aligned receive areas

@@ -161,8 +161,8 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(manifest.storage_transport==KUI_STORAGE_SCIF) retire_launcher_serial();
     retail_display_line(kui_retail_storage_name(manifest.storage_transport));
     if(manifest.reader!=KUI_RETAIL_READER_STANDARD)
-        retail_display_line(manifest.reader==KUI_RETAIL_READER_ASYNC_KEEP?
-            "BACKGROUND READER Y - KEEPS HOOK":"BACKGROUND READER X - RELEASES HOOK");
+        retail_display_line(manifest.reader==KUI_RETAIL_READER_ASYNC_REHOOK?
+            "BACKGROUND READER Y - REHOOKS":"BACKGROUND READER X - RELEASES HOOK");
     last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {
         if(card.transport!=KUI_STORAGE_IDE) {

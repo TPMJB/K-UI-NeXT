@@ -977,7 +977,7 @@ static void games_retail_controls(void) {
      * its vectors), A with the standard one. */
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC);
     assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC_KEEP);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC_REHOOK);
     assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
     press(KUI_SHELL_A,false);

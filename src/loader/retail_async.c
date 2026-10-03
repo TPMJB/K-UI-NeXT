@@ -41,37 +41,36 @@ static void wr16(uint32_t a, uint16_t v) { *(volatile uint16_t *)(uintptr_t)a = 
 struct kui_retail_async_region kui_retail_async_region __attribute__((aligned(32)));
 #define R kui_retail_async_region
 #define e kui_retail_async_region.engine
-/* Assembly templates: a forwarding vector whose word 3 names its target's
- * slot, and the interrupt vector whose word 10 names the 0x600 slot (the
- * handler's own forwarding reads it there too). */
-extern const uint32_t kui_retail_vector_forward[4];
-extern const uint32_t kui_retail_vector_interrupt[12];
+/* Assembly templates: a forwarding vector whose word 2 names its releasing
+ * entry, and the interrupt vector (its targets are fixed). */
+extern const uint32_t kui_retail_vector_forward[3];
+extern const uint32_t kui_retail_vector_interrupt[11];
 
 static uint32_t our_vbr(void) { return (uint32_t)(uintptr_t)&R - 0x100u; }
-static const uint16_t offsets[3] = {0x100u, 0x400u, 0x600u};
-static void (*const releasing[3])(void) = {
-    kui_retail_release_100, kui_retail_release_400, kui_retail_release_600};
 
+/* Word by word: a constant-size copy here would pull in libgcc's block
+ * moves, which the resident has no room for. */
+static void copy_words(volatile uint32_t *to, const uint32_t *from, unsigned words) {
+    while(words--) *to++ = *from++;
+}
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
-    e.keep = manifest->reader == KUI_RETAIL_READER_ASYNC_KEEP;
-    memcpy(R.vector100, kui_retail_vector_forward, sizeof(kui_retail_vector_forward));
-    R.vector100[3] = (uint32_t)(uintptr_t)&e.forward[0];
-    memcpy(R.vector400, kui_retail_vector_forward, sizeof(kui_retail_vector_forward));
-    R.vector400[3] = (uint32_t)(uintptr_t)&e.forward[1];
-    memcpy(R.vector600, kui_retail_vector_interrupt, sizeof(kui_retail_vector_interrupt));
-    R.vector600[10] = (uint32_t)(uintptr_t)&e.forward[2];
+    e.rehook = manifest->reader == KUI_RETAIL_READER_ASYNC_REHOOK;
+    copy_words(R.vector100, kui_retail_vector_forward, 3);
+    R.vector100[2] = (uint32_t)(uintptr_t)kui_retail_release_100;
+    copy_words(R.vector400, kui_retail_vector_forward, 3);
+    R.vector400[2] = (uint32_t)(uintptr_t)kui_retail_release_400;
+    copy_words(R.vector600, kui_retail_vector_interrupt, 11);
 }
 
 /* Put our vectors in front of the game's and give the SCI the lowest level.
  * Nothing else changes: the game's DMAC and other levels stay as they are.
  * Games may keep the bootstrap's VBR for good (DOA2 does), so it is hooked
- * like any other; boot_vbr counts those hooks. Found released (the game's
- * VBR again while hooked), the vectors are simply installed again. */
+ * like any other. Found released (the game's VBR again while hooked), the
+ * vectors are simply installed again. */
 static void hook(void) {
     uint32_t vbr = vbr_get();
     if(vbr == our_vbr()) return;
-    if(vbr == KUI_RETAIL_BOOT_VBR) ++e.stats.boot_vbr;
     uint16_t b = rd16(IPRB);
     if(e.hooked) {
         if(vbr == e.release.vbr) ++e.stats.releases;
@@ -81,15 +80,16 @@ static void hook(void) {
      * VBR again itself). */
     if(!e.hooked || (b & SCI_FIELD) != SCI_LEVEL) e.release.sci = b & SCI_FIELD;
     e.release.vbr = vbr;
-    for(unsigned i = 0; i < 3; ++i)
-        e.forward[i] = e.keep ? vbr + offsets[i] : (uint32_t)(uintptr_t)releasing[i];
     vbr_set(our_vbr());
     wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
+    e.release.armed = e.rehook;
     if(!e.hooked) {e.hooked = 1; ++e.stats.hooks;}
 }
 /* The game's vectors and SCI level again, unless it changed them meanwhile
- * (or a releasing entry already gave them back). */
+ * (or a releasing entry already gave them back). Returns still pending
+ * complete normally, without installing anything. */
 static void unhook(void) {
+    e.release.armed = 0;
     if(!e.hooked) return;
     if(vbr_get() == our_vbr()) vbr_set(e.release.vbr);
     uint16_t b = rd16(IPRB);
@@ -211,7 +211,7 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
 uint32_t kui_retail_async_irq(void) {
     ++e.stats.irqs;
     /* An SCI event without a reception: not ours, passed on as any other. */
-    if(!kui_sci_stream_busy()) {++e.stats.forwarded; return 1;}
+    if(!kui_sci_stream_busy()) return 1;
     e.in_irq = 1;
     deliver(0);
     e.in_irq = 0;

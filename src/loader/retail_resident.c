@@ -132,7 +132,9 @@ static void install_hook(void) {
 #ifdef KUI_RETAIL_ASYNC
 /* Counter rows for both screens; every counter is a uint32_t in order. */
 _Static_assert(sizeof(struct kui_sci_stream_stats) == 12u * 4u, "stream counters");
-_Static_assert(sizeof(struct kui_retail_async_stats) == 11u * 4u, "reader counters");
+_Static_assert(sizeof(struct kui_retail_async_stats) == 9u * 4u, "reader counters");
+_Static_assert(offsetof(struct kui_retail_async_release, released) ==
+               offsetof(struct kui_retail_async_release, rehooks) + 4u, "release counters");
 static void stream_lines(void) {
     const uint32_t *st = (const uint32_t *)kui_sci_stream_stats();
     retail_display_values("DMA BLKS POLLED   STARTS   STOPS", st, 4);
@@ -176,12 +178,13 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
 #ifdef KUI_RETAIL_ASYNC
     /* Background reader: where blocks were delivered (its interrupt or the
-     * game's calls), how often an EXEC waited, and the stream's errors. */
+     * game's calls), how often an EXEC waited, how the vectors were handed
+     * back and installed again, and the stream's errors. */
     const uint32_t *st=(const uint32_t *)&reader.stats;
     retail_display_hex("SECTORS READ",service.diag.sectors_read);
-    retail_display_values("IRQ BLKS CALLBLKS EXECWAIT IRQS",st,4);
-    retail_display_values("FORWARDS FAILURES MAXRETRY HOOKS",st+4,4);
-    retail_display_values("VBR CHGS BOOT VBR RELEASES",st+8,3);
+    retail_display_values("IRQ BLKS CALLBLKS EXECWAIT IRQS     FAILURES",st,5);
+    retail_display_values("MAXRETRY HOOKS    RELEASES VBR CHGS",st+5,4);
+    retail_display_values("REHOOKS  REL 100  REL 400  REL 600",&reader.release.rehooks,4);
     stream_lines();
 #else
     /* How the game drives reads: ABXY+Start after a load shows these. */

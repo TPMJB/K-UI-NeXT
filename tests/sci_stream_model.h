@@ -134,6 +134,10 @@ static struct {
     bool cs_high, healthy, rx, stall;
     uint32_t sar, dar, tcr, chcr, dmaor;
     unsigned rx_delay, delay, overrun_after, overrun_again, received;
+    /* After an overrun the channel, back on the bus, takes the byte RDR
+     * still held (as the console does); false: it stays held off until the
+     * reception is stopped, and RDR keeps that byte. */
+    bool late_take;
     bool foreign_during_rx;
     uint8_t *areas[2];
     unsigned purges, module_resets, dma_starts, irq_starts, settles;
@@ -164,6 +168,11 @@ static void receive(void) {
         } else {
             m.ssr |= ORER;
             if(m.overrun_after) {m.overrun_after = m.overrun_again; m.overrun_again = 0;}
+            if(m.late_take && (m.chcr & 1u) && m.tcr && m.sar == (RDR & 0x1fffffffu)) {
+                *memory(m.dar++) = m.rdr;
+                m.ssr &= (uint8_t)~RDRF;
+                if(!--m.tcr) m.chcr |= 2u;
+            }
             return;
         }
     }
