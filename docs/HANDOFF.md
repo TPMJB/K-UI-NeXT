@@ -10,6 +10,9 @@ a stage exception table (`__retail_ce_vbr`: exceptions reported, an
 interrupt left pending as SR.BL would) instead of a reset; relay restores VBR
 and BL; handoff screens held two seconds. Asked the owner for ARMADA's
 IP.BIN (analysis only, never committed) to read what its bootstrap 2 does.
+Build `15b912ccfff5` ([Diagnostic run
+37156416922](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37156416922)):
+host and Dreamcast passed; native resident sizes unchanged.
 
 ## Windows CE: boot test, second step (2026-10-03 UTC)
 
