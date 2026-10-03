@@ -11,6 +11,19 @@ goes". Compare any rework against it before replacing it. Source: commit
 could not push a tag (`pin/background-reader-x20`, refused with HTTP 403);
 create one on that commit from GitHub to rebuild it by name later.
 
+## Games: background reader, ninth build (2026-10-03 UTC)
+
+Built on the pinned build. An overrun the reader's interrupt finds is no
+longer resumed there: the block waits (card deselected, nothing in flight)
+until the next GD call's fetch resumes it in place (`DEFERRED`), since every
+repair a GD call started succeeded in the eighth run. X stays 20 blocks per
+call; Y tries 25. To make room, `CONTINUE` and `MAXTOKEN` are gone (stream
+rows: `DMA BLKS POLLED STARTS KEPT OVERRUNS`, `CRC ERRS TOKENERR FOREIGN
+REPAIRED AHEAD`, `DEFERRED`) and the reader's private stack is 352 bytes
+(call graph 224 plus the 64-byte allowance against 304). See
+[games-background-reader.md](games-background-reader.md). Build ID and CI
+run: pending.
+
 ## Games: background reader, eighth build (2026-10-03 UTC)
 
 The seventh build on the console: Y (20 blocks per call) had "a lot less

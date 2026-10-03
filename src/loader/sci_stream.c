@@ -72,7 +72,8 @@ static void fence(const void *area) {
 #endif
 
 typedef uint32_t alias_word __attribute__((__may_alias__));
-enum { CLOSED, PAUSED, DMA, LOST };
+/* RESUME: stopped mid-block by an overrun in an interrupt, to be resumed. */
+enum { CLOSED, PAUSED, DMA, LOST, RESUME };
 #ifdef KUI_RETAIL_ASYNC
 /* The game reader keeps this state between its interrupt vectors. */
 #include "retail_async.h"
@@ -134,7 +135,6 @@ static enum kui_sci_stream_result token(uint32_t limit) {
     for(uint32_t n = 0; n < limit; ++n) {
         uint8_t value = byte(0xff);
         if(value == 0xfe) {
-            if(n > s.stats.max_token_bytes) s.stats.max_token_bytes = n;
             for(unsigned k = 0; k < 64u && !(rd8(SSR) & TEND); ++k) {}
             return KUI_SCI_STREAM_OK;
         }
@@ -271,11 +271,16 @@ static enum kui_sci_stream_result receive(bool polled) {
 enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit, bool polled) {
     if(s.state == DMA) return KUI_SCI_STREAM_BUSY;
     enum kui_sci_stream_result result;
+    if(s.state == RESUME && s.position == lba) {
+        /* Resumed where an overrun in an interrupt stopped it. */
+        select(true);
+        if((result = start_dma(s.fill, s.lost[s.fill])) != KUI_SCI_STREAM_OK) s.state = LOST;
+        return result;
+    }
     if(s.state == PAUSED && s.position == lba) {
         select(true);
         result = token(token_limit);
         if(result != KUI_SCI_STREAM_OK) {s.state = LOST; return result;}
-        ++s.stats.continued;
     } else {
         if(s.state != CLOSED && (result = stop_card()) != KUI_SCI_STREAM_OK) return result;
         result = start(lba, token_limit);
@@ -289,8 +294,9 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
 /* End a reception: let the receiver take the second CRC byte and stop on the
  * next byte's overrun, stop the SCI and channel, restore the channel, keep
  * the RDR byte, then hand the SCI back to command bytes. A channel someone
- * else reprogrammed is left alone; the SCI is handed back in every case. */
-static enum kui_sci_stream_result finish(void) {
+ * else reprogrammed is left alone; the SCI is handed back in every case.
+ * later: a mid-block overrun is resumed by the next fetch, not now. */
+static enum kui_sci_stream_result finish(bool later) {
     uint32_t area = s.fill, start = physical(s.area[area]), control = 0, count = 1;
     s.state = LOST;
     if(rd32(CHCR) & 2u)
@@ -336,6 +342,11 @@ static enum kui_sci_stream_result finish(void) {
             s.hold[area] = (uint8_t)held;
             s.held[area] = tail;
             ++s.stats.repaired;
+            if(later) {
+                ++s.stats.deferred;
+                s.state = RESUME;
+                return KUI_SCI_STREAM_PENDING;
+            }
             select(true);
             result = start_dma(area, lost + 1u);
             return result == KUI_SCI_STREAM_OK ? KUI_SCI_STREAM_PENDING : result;
@@ -351,20 +362,20 @@ static enum kui_sci_stream_result finish(void) {
     ++s.stats.blocks;
     return KUI_SCI_STREAM_OK;
 }
-enum kui_sci_stream_result kui_sci_stream_poll(void) {
+enum kui_sci_stream_result kui_sci_stream_poll(bool interrupt) {
     if(s.state != DMA) return KUI_SCI_STREAM_OK;
     uint32_t control = rd32(CHCR);
     /* Still receiving, unless the channel stopped or the receiver overran. */
     if(!(control & 2u) && (control & 1u) && !(rd8(SSR) & ORER) &&
        (rd32(DMAOR) & 7u) == 1u) return KUI_SCI_STREAM_PENDING;
-    return finish();
+    return finish(interrupt);
 }
 enum kui_sci_stream_result kui_sci_stream_wait(void) {
     for(uint32_t n = 0; n < 200000u; ++n) {
-        enum kui_sci_stream_result result = kui_sci_stream_poll();
+        enum kui_sci_stream_result result = kui_sci_stream_poll(false);
         if(result != KUI_SCI_STREAM_PENDING) return result;
     }
-    return finish(); /* a stalled receiver ends as an overrun */
+    return finish(false); /* a stalled receiver ends as an overrun */
 }
 /* The byte whose loss leaves this CRC16 syndrome when it stands as zero
  * with `after` bytes behind it, or -1 if no single byte explains it. The

@@ -131,15 +131,15 @@ static void install_hook(void) {
 }
 #ifdef KUI_RETAIL_ASYNC
 /* Counter rows for both screens; every counter is a uint32_t in order. */
-_Static_assert(sizeof(struct kui_sci_stream_stats) == 12u * 4u, "stream counters");
+_Static_assert(sizeof(struct kui_sci_stream_stats) == 11u * 4u, "stream counters");
 _Static_assert(sizeof(struct kui_retail_async_stats) == 7u * 4u, "reader counters");
 _Static_assert(offsetof(struct kui_retail_async_release, vbr_changes) ==
                offsetof(struct kui_retail_async_release, rehooks) + 16u, "release counters");
 static void stream_lines(void) {
     const uint32_t *st = (const uint32_t *)kui_sci_stream_stats();
-    retail_display_values("DMA BLKS POLLED   STARTS   CONTINUE KEPT", st, 5);
-    retail_display_values("OVERRUNS CRC ERRS TOKENERR FOREIGN  MAXTOKEN", st + 5, 5);
-    retail_display_values("REPAIRED AHEAD", st + 10, 2);
+    retail_display_values("DMA BLKS POLLED   STARTS   KEPT     OVERRUNS", st, 5);
+    retail_display_values("CRC ERRS TOKENERR FOREIGN  REPAIRED AHEAD", st + 5, 5);
+    retail_display_values("DEFERRED", st + 10, 1);
 }
 #endif
 static void report_fault(const char *reason, uint32_t function) {

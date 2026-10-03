@@ -28,12 +28,13 @@ enum kui_sci_stream_result {
     KUI_SCI_STREAM_RESET     /* SCI or bus did not return to a known state */
 };
 struct kui_sci_stream_stats {
-    uint32_t blocks, polled, starts, continued, kept;
-    uint32_t overruns, crc_errors, token_errors, foreign, max_token_bytes;
+    uint32_t blocks, polled, starts, kept, overruns;
+    uint32_t crc_errors, token_errors, foreign;
     uint32_t repaired; /* overruns resumed in place, the lost byte rebuilt from the CRC */
     /* ahead: repaired blocks whose last byte was the card's gap or next
      * token: the resumed reception ran a byte ahead (fetched again). */
     uint32_t ahead;
+    uint32_t deferred; /* of those repaired, resumed by a later fetch (interrupt) */
 };
 /* Engine state, placed by the resident (sci_stream.c owns it otherwise). */
 struct kui_sci_stream_state {
@@ -77,8 +78,11 @@ bool kui_sci_stream_ready(uint32_t lba);
 /* If the in-flight block has arrived (or reception stopped), end it and hand
  * the SCI back: OK (the block is ready: kui_sci_stream_take), PENDING (still
  * arriving, or resumed after a mid-block overrun) or an error (the next
- * fetch restarts the stream). */
-enum kui_sci_stream_result kui_sci_stream_poll(void);
+ * fetch restarts the stream). interrupt: a mid-block overrun is not resumed
+ * now but left for the next fetch of that block (PENDING, not busy): repairs
+ * resumed from the game reader's interrupt, at the overrun, failed on the
+ * console where those resumed later did not. */
+enum kui_sci_stream_result kui_sci_stream_poll(bool interrupt);
 /* Wait for the in-flight block (bounded; a stalled one ends as OVERRUN). */
 enum kui_sci_stream_result kui_sci_stream_wait(void);
 /* The 512 checked bytes of block lba, or NULL: *result is PENDING (not here)

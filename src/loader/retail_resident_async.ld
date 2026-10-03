@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The background SCI reader's resident: as retail_resident.ld, with the
- * 384-byte guarded stack its call-graph check allows (retail_loader_layout.h). */
+ * 352-byte guarded stack its call-graph check allows (retail_loader_layout.h). */
 OUTPUT_FORMAT("elf32-shl")
 OUTPUT_ARCH(sh)
 ENTRY(_start)
@@ -20,10 +20,10 @@ SECTIONS
         . = ALIGN(4);
         __retail_resident_bss_end = .;
     } :resident
-    __retail_hook_stack_bottom = 0x8c00be80;
+    __retail_hook_stack_bottom = 0x8c00bea0;
     __retail_hook_stack = 0x8c00c000;
     ASSERT(_start == 0x8c008300, "resident entry moved")
-    ASSERT(__retail_resident_bss_end <= 0x8c00be80,
+    ASSERT(__retail_resident_bss_end <= 0x8c00bea0,
            "retail resident overlaps its guarded service stack")
     /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }

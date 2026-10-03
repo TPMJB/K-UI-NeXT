@@ -18,9 +18,10 @@
 #define RETRIES 8u
 #define POLLED 2u
 /* Blocks each EXEC or CHECK makes sure of since the previous one: X about
- * twice the ordinary reader's two-sector step, Y three times. */
+ * twice the ordinary reader's two-sector step (the pinned build's), Y a
+ * quarter more. */
 #define TARGET_X 20u
-#define TARGET_Y 30u
+#define TARGET_Y 25u
 /* The GD caller's SR, published by the resident's hook entry. */
 extern volatile uint32_t kui_retail_hook_sr;
 
@@ -132,7 +133,7 @@ static void deliver(uint32_t wait) {
     for(;;) {
         enum kui_sci_stream_result r = KUI_SCI_STREAM_OK;
         if(kui_sci_stream_busy()) {
-            r = kui_sci_stream_poll();
+            r = kui_sci_stream_poll(e.in_irq != 0);
             if(r == KUI_SCI_STREAM_PENDING) {
                 if(!e.active || e.failed || delivered >= wait) return;
                 r = kui_sci_stream_wait();

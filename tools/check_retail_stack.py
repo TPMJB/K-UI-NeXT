@@ -137,7 +137,7 @@ def check(directory, available):
 def main():
     import json
     directory = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("build/retail/scia")
-    available = int(sys.argv[2], 0) if len(sys.argv) > 2 else 384 - 48
+    available = int(sys.argv[2], 0) if len(sys.argv) > 2 else 352 - 48
     print(json.dumps(check(directory, available), indent=1))
 
 

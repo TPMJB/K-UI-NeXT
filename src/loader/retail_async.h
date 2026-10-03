@@ -17,7 +17,7 @@
  * never touched. The game's own GD calls also deliver whatever has arrived.
  * An EXEC or CHECK tops the blocks delivered since the previous one up to a
  * target, waiting for the rest itself: 20 blocks (about twice the ordinary
- * reader's step) with launch X, 30 with Y (manifest reader ASYNC_EAGER).
+ * reader's step) with launch X, 25 with Y (manifest reader ASYNC_EAGER).
  * Each block of a run is checked and copied while the next one arrives.
  *
  * The interrupt reaches the reader through its own vector table placed in

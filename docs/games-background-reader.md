@@ -8,11 +8,11 @@ reader streams the request from the card while the game runs instead.
 It is chosen per launch: on the **Launch game** confirmation, **A** launches
 with the standard reader, **X** with the background reader whose EXEC and
 CHECK calls each top reading up to 20 card blocks (about twice the standard
-reader's step), and **Y** with the same reader topping up to 30 (see *How
+reader's step), and **Y** with the same reader topping up to 25 (see *How
 long a GD call waits*). It needs SCI microSD and a launch map of at most 32
 file extents (a freshly copied game has a handful); otherwise the launch
 uses the standard reader and the log says why. The stage screen shows
-`BACKGROUND READER X - 20 PER CALL` or `BACKGROUND READER Y - 30 PER CALL`
+`BACKGROUND READER X - 20 PER CALL` or `BACKGROUND READER Y - 25 PER CALL`
 when it is installed.
 
 ## How it works
@@ -73,6 +73,12 @@ when it is installed.
   count against repair. If two repaired blocks fail their CRC for any other
   reason, repair is switched off for the session and overruns restart the
   stream as before; one alone leaves it on.
+* An overrun the reader's interrupt finds is not resumed there: the SCI is
+  handed back, the card waits deselected with nothing in flight, and the
+  next GD call's fetch of that block resumes it in place (`DEFERRED`). In
+  the eighth run every repair a GD call started succeeded (43 of 43 with
+  Y), while those started from the interrupt are the likeliest source of
+  the failures that kept switching repair off.
 * CRC errors, other overruns, missing tokens and a busy DMA channel are
   retried at the same block (a busy channel is read by programmed
   transfers). From the second failure in a row at a block, it is read by
@@ -90,10 +96,9 @@ shows as lag.
   of either: it waits for the ones the interrupt did not deliver, and not at
   all when the interrupt delivered 20 or more. This is the seventh build's
   Y, the best so far in DOA2 (10 blocks lagged more: seventh run).
-* **Y:** the same with 30 blocks, up to about 11 ms per call: more data per
-  frame while the interrupt is held off, and that much less time for the
-  game. DOA2's lag is the game waiting for data, so Y may load faster still;
-  where a game reads while it plays (FMV), it may cost frames.
+* **Y:** the same with 25 blocks, up to about 9 ms per call. 30 (the
+  eighth build's Y) read faster but stalled DOA2's frames more: its waits
+  sit in the game's vertical-blank handler.
 
 ### The interrupt
 
@@ -137,11 +142,11 @@ included (`src/loader/retail_async.h`).
 
 The background resident is a fourth low resident (`resident-scia`). To fit
 the receive areas it holds 32 extents instead of 128, has no ordinary block
-reader, and keeps a 384-byte private stack instead of 1,280: its worst-case
+reader, and keeps a 352-byte private stack instead of 1,280: its worst-case
 stack depth comes from GCC's call graph (`-fcallgraph-info=su`,
 `tools/check_retail_stack.py`) rather than a sum of every frame. The worst
-path is a GD call into the service core at about 220 bytes (CI compiler),
-plus a 64-byte allowance, against 336 available. The releasing entries and
+path is a GD call into the service core at about 224 bytes (CI compiler),
+plus a 64-byte allowance, against 304 available. The releasing entries and
 the trampoline use the interrupted stack instead (12 and 16 bytes). The
 standard residents are unchanged.
 
@@ -331,7 +336,8 @@ sooner, but each of its waits is longer and nearly all of them run inside
 DOA2's vertical-blank handler: the game's frames stall more. Around 20
 blocks per call is the balance for DOA2.
 
-The repairs are the new lead. In every run with interrupt deliveries, two
+The repairs are the new lead (acted on in the ninth build: see the bullet
+on interrupt overruns under *How it works*). In every run with interrupt deliveries, two
 repairs failed early and switched repair off; in Y, where the reader's
 interrupt delivered almost nothing and so nearly every repair started inside
 a GD call, all 43 succeeded. The likely cause is a repair started from the
@@ -350,7 +356,7 @@ later. (0 failures in 43 at the earlier rate would happen about 1 time in
    note smoothness in the first seconds of the fight, as before.
 5. Play a fight or two. Then A+B+X+Y+Start for the counters screen (about
    15 seconds) and photograph it.
-6. The same with **Y** (`BACKGROUND READER Y - 30 PER CALL`) to compare load
+6. The same with **Y** (`BACKGROUND READER Y - 25 PER CALL`) to compare load
    time and lag.
 7. For comparison, launch again with **A** (standard reader).
 
@@ -371,10 +377,10 @@ request, the card block and the stream's error counters.
 | `VBR CHGS` | GD calls that found the game had moved to other vectors |
 | `DMA BLKS` / `POLLED` | Blocks received by DMA / by programmed transfers (channel busy, or a block's second failure in a row) |
 | `STARTS` | CMD18 starts (each but the first after a CMD12) |
-| `CONTINUE` / `KEPT` | Blocks that continued the stream / shared blocks reused |
+| `KEPT` | Shared blocks reused rather than read again |
 | `OVERRUNS` / `CRC ERRS` / `TOKENERR` / `FOREIGN` | Stream errors, all retried (`OVERRUNS`: those that restarted the card) |
-| `MAXTOKEN` | Longest wait for a data token, in bytes |
 | `REPAIRED` | Mid-block overruns resumed in place, the lost byte rebuilt |
 | `AHEAD` | Repaired blocks that ran a byte ahead: fetched again (also in `CRC ERRS`) |
+| `DEFERRED` | Of the repaired, those found by the interrupt and resumed by the next GD call |
 
 Values are hexadecimal.

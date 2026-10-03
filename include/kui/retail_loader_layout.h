@@ -35,8 +35,8 @@
 /* The background SCI reader's resident (built with KUI_RETAIL_ASYNC) has its
  * worst-case stack proven from the compiler's call graph
  * (tools/check_retail_stack.py) instead of summing every frame, so its
- * guarded stack is 384 bytes and its image may extend to here. */
-#define KUI_RETAIL_ASYNC_LIMIT 0x8c00be80
+ * guarded stack is 352 bytes and its image may extend to here. */
+#define KUI_RETAIL_ASYNC_LIMIT 0x8c00bea0
 #ifdef KUI_RETAIL_ASYNC
 #define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_ASYNC_LIMIT
 #else

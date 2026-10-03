@@ -181,7 +181,7 @@ static unsigned interrupts(unsigned limit) {
     return n;
 }
 
-enum { X, Y }; /* launch X: 20 blocks per EXEC or CHECK; Y: 30 */
+enum { X, Y }; /* launch X: 20 blocks per EXEC or CHECK; Y: 25 */
 static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scattered) {
     fixture(take_max, scattered);
     manifest.reader = how == Y ? KUI_RETAIL_READER_ASYNC_EAGER : KUI_RETAIL_READER_ASYNC;
@@ -208,7 +208,7 @@ static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scatt
     CHECK(R.vector100[2] == (uint32_t)(uintptr_t)kui_retail_release_100 && R.vector100[0] == 0x11111111u);
     CHECK(R.vector400[2] == (uint32_t)(uintptr_t)kui_retail_release_400 && R.vector400[1] == 0x22222222u);
     CHECK(R.vector600[8] == 0xff000028u && R.vector600[10] == 11u);
-    CHECK(R.engine.target == (how == Y ? 30u : 20u) && !R.engine.release.armed);
+    CHECK(R.engine.target == (how == Y ? 25u : 20u) && !R.engine.release.armed);
     kui_retail_hook_sr = 0;
 }
 static void mode(uint32_t bytes) {
@@ -420,9 +420,9 @@ static void count_early_start(void) {
 }
 static void test_check_tops_up(void) {
     /* A CHECK tops reading up like an EXEC, counting since either: 20 blocks
-     * with X, 30 with Y. */
+     * with X, 25 with Y. */
     for(unsigned how = X; how <= Y; ++how) {
-        unsigned target = how == Y ? 30u : 20u;
+        unsigned target = how == Y ? 25u : 20u;
         setup(GAME_VBR, how, 2000, false);
         int32_t token = request(45000, 60, OUTPUT);
         const struct kui_retail_async_stats *st = &R.engine.stats;
@@ -580,11 +580,11 @@ static void test_stress(void) {
         const struct kui_retail_async_stats *st = &R.engine.stats;
         const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
         printf("stress %s: irq %u call %u waits %u rehooks %u releases %u | "
-            "dma %u polled %u starts %u kept %u repaired %u ahead %u\n", how == Y ? "Y" : "X",
+            "dma %u polled %u starts %u kept %u repaired %u deferred %u ahead %u\n", how == Y ? "Y" : "X",
             st->irq_blocks, st->call_blocks, st->waits,
             R.engine.release.rehooks, st->releases, ss->blocks, ss->polled, ss->starts, ss->kept,
-            ss->repaired, ss->ahead);
-        CHECK(ss->repaired && ss->ahead);
+            ss->repaired, ss->deferred, ss->ahead);
+        CHECK(ss->repaired && ss->deferred && ss->ahead);
     }
 }
 

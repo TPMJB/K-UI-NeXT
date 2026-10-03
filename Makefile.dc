@@ -192,7 +192,7 @@ RETAIL_SCI_SRC := $(RETAIL_SCIF_SRC) src/loader/sci_sd_bus.c
 RETAIL_IDE_SRC := $(RETAIL_RESIDENT_COMMON_SRC) src/core/ata.c src/dreamcast/ata_bus.c
 # The background SCI reader (manifest readers 1 and 2): its own CMD18 stream
 # engine and interrupt vectors replace the ordinary block reader. It holds at
-# most 32 extents and runs on a 384-byte stack whose worst case is taken from
+# most 32 extents and runs on a 352-byte stack whose worst case is taken from
 # the compiler's call graph (tools/check_retail_stack.py), not a frame sum.
 RETAIL_SCIA_DEFS := -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 \
     -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_RETAIL_MANIFEST_EXTENTS=32
