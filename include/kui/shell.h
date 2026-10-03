@@ -195,8 +195,8 @@ bool kui_shell_games_image_ready(const struct kui_shell *shell);
 unsigned kui_shell_games_view(const struct kui_shell *shell);
 /* Exact initial test profile only; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
-/* A Windows CE image the CE placement test can take: it loads and checks the
- * CE kernel on the console, then stops; the game does not start. */
+/* A Windows CE image the CE boot test can take: it loads the CE kernel,
+ * starts it, and stops at the first disc request K-UI cannot serve. */
 bool kui_shell_games_ce_probe_ready(const struct kui_shell *shell);
 /* File Manager results. A listing is kept only for the folder it was asked
  * for; a check only for the job and page that asked; a picture only while

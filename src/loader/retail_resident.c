@@ -21,9 +21,11 @@ static struct kui_retail_image image;
 static struct kui_retail_gd service;
 static struct kui_retail_storage card;
 static struct retail_display_state display;
+#ifndef KUI_RETAIL_CE
 static struct kui_retail_pace pace;
 /* Cumulative menu-return diagnostics; game GD resets do not clear them. */
 static struct { uint32_t paced, spun; } pacing;
+#endif
 static enum kui_loader_sd_result card_result;
 #endif
 uint32_t kui_retail_original_menu;
@@ -34,6 +36,12 @@ extern void kui_retail_gd_10f0_hook(void);
 /* Source: 0=BC supervisor vector, 1=C0 raw GD vector, 2/3=direct firmware
  * entries. Assembly publishes this only after acquiring the resident lock. */
 volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
+#ifdef KUI_RETAIL_CE
+/* Windows CE boot test: the caller's PR and stack (set by the entry), and
+ * the last four calls' R7, R4, R5 and R6, shown if a call fails. */
+volatile uint32_t kui_retail_hook_caller[2];
+static uint32_t ce_calls[4][4], ce_count;
+#endif
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
 extern uint8_t __retail_resident_bss_end[] __asm__("__retail_resident_bss_end");
@@ -62,6 +70,10 @@ static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
     return (uint8_t *)(uintptr_t)((address & 0x1fffffffu) | 0xa0000000u);
 }
 #ifndef KUI_RETAIL_ASYNC
+#ifdef KUI_RETAIL_CE
+/* The Windows CE boot test reads a fixed step per call: no pacing. */
+static void video_sample(void) {}
+#else
 /* Read-only PowerVR status, vblank-in, counter period and framebuffer.
  * No video state is changed. */
 static void video_sample(void) {
@@ -69,6 +81,7 @@ static void video_sample(void) {
     kui_retail_pace_sample(&pace, pvr[0x10c / 4], pvr[0xcc / 4],
                            pvr[0xd8 / 4], pvr[0x50 / 4]);
 }
+#endif
 static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t output[512]) {
     (void)unused;
     video_sample(); /* Each block is ~1 ms: long steps still count wraps. */
@@ -155,6 +168,20 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_values("COMMAND  LBA      SECTORS  DEST", &service.diag.last_command, 4);
     retail_display_hex("CARD BLOCK", reader.cursor.block);
     stream_lines();
+#elif defined(KUI_RETAIL_CE)
+    /* Who called (CE's address, stack, SR, MMU state) and what it asked:
+     * value rows only, as this build has no single-value printer. */
+    (void)function;
+    retail_display_line(reason);
+    static uint32_t caller[5], row[5]; /* Static: the stack budget is full. */
+    caller[0]=kui_retail_hook_caller[0]; caller[1]=kui_retail_hook_caller[1];
+    caller[2]=kui_retail_hook_sr; caller[3]=*(volatile uint32_t *)(uintptr_t)0xff000010u;
+    __asm__ __volatile__("stc vbr,%0" : "=r"(caller[4]));
+    retail_display_values("CALLER   STACK    SR       MMUCR    VBR",caller,5);
+    memcpy(row,ce_calls[(ce_count-1u)&3u],16); row[4]=ce_count;
+    retail_display_values("R7       R4       R5       R6       CALLS",row,5);
+    for(unsigned i=1;i<4;i++)
+        retail_display_values("EARLIER",ce_calls[(ce_count-1u-i)&3u],4);
 #else
     retail_display_line(kui_retail_storage_name(card.transport));
     retail_display_line(reason);
@@ -175,7 +202,15 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)caller; (void)stack;
     retail_display_restore(&display);
     retail_display_line("GAME MENU RETURN");
+#ifdef KUI_RETAIL_CE
+    /* One value row: this build has no single-value printer (stack budget). */
+    static uint32_t counts[3]; /* Static: the stack budget is full. */
+    counts[0]=kui_retail_hook_fault; counts[1]=service.diag.read_steps;
+    counts[2]=service.diag.sectors_read;
+    retail_display_values("GUARD    STEPS    SECTORS",counts,3);
+#else
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
+#endif
 #ifdef KUI_RETAIL_ASYNC
     /* Background reader: where blocks were delivered (its interrupt or the
      * game's calls), how often an EXEC waited, how the vectors were handed
@@ -186,7 +221,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_values("HOOKS    RELEASES",st+5,2);
     retail_display_values("REHOOKS  REL 100  REL 400  REL 600  VBR CHGS",&reader.release.rehooks,5);
     stream_lines();
-#else
+#elif !defined(KUI_RETAIL_CE)
     /* How the game drives reads: ABXY+Start after a load shows these. */
     retail_display_hex("READ STEPS",service.diag.read_steps);
     retail_display_hex("SECTORS READ",service.diag.sectors_read);
@@ -273,6 +308,16 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     return result;
 }
 #else
+#ifdef KUI_RETAIL_CE
+/* One EXEC of the standard step. */
+static int32_t step(uint32_t r4, uint32_t r5) {
+    service.step = KUI_RETAIL_GD_STEP_SECTORS;
+    int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, KUI_GD_EXEC);
+    if(service.error == KUI_GD_ERROR_IO)
+        report_fault("IMAGE READ FAILED", KUI_GD_EXEC);
+    return result;
+}
+#else
 /* One EXEC, sized by the pacing policy and timed for the next estimate. */
 static int32_t step(uint32_t r4, uint32_t r5) {
     uint32_t frames = pace.frames, line = pace.line, before = service.diag.sectors_read;
@@ -291,6 +336,7 @@ static int32_t step(uint32_t r4, uint32_t r5) {
     }
     return result;
 }
+#endif
 int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
                                     uint32_t r6, uint32_t r7) {
     /* All paths arrive with the resident entry lock held and interrupts
@@ -301,6 +347,10 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * No original GD forwarding remains: those entries now lead back here.
      * Font/flash/system BIOS vectors are independent and unchanged. */
     uint32_t source=kui_retail_hook_source;
+#ifdef KUI_RETAIL_CE
+    uint32_t *call=ce_calls[ce_count++&3u];
+    call[0]=r7; call[1]=r4; call[2]=r5; call[3]=r6;
+#endif
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) {
         return 0;
@@ -309,11 +359,18 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     uint32_t pending = service.pending;
     /* A game polling CHECK in a tight loop is idle until the read finishes;
      * give it a step, as its EXEC would. The CHECK itself still never reads. */
+#ifdef KUI_RETAIL_CE
+    /* CE's driver polls CHECK between short sleeps: each one reads a step. */
+    if(r7 == KUI_GD_CHECK && pending && (service.command == KUI_GD_PIOREAD ||
+       service.command == KUI_GD_DMAREAD))
+        (void)step(0, 0);
+#else
     if(r7 == KUI_GD_CHECK && pending && (service.command == KUI_GD_PIOREAD ||
        service.command == KUI_GD_DMAREAD) && kui_retail_pace_spin(&pace)) {
         ++pacing.spun;
         (void)step(0, 0);
     }
+#endif
     int32_t result = r7 == KUI_GD_EXEC ? step(r4, r5) :
         kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
     if(r7 == KUI_GD_REQUEST && !pending && result == 0)

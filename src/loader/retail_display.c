@@ -73,7 +73,7 @@ void retail_display_restore(const struct retail_display_state *s) {
     retail_display_line("K-UI V1.5 GAME LAUNCH");
     retail_display_line("BUILD " KUI_BUILD_ID);
 #ifdef KUI_RETAIL_CE
-    retail_display_line("WINDOWS CE PLACEMENT TEST");
+    retail_display_line("WINDOWS CE BOOT TEST");
 #else
     retail_display_line("NATIVE GD IMAGE");
 #endif

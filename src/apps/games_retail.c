@@ -213,9 +213,11 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     /* The owner's IP/ISO metadata selects the executable. Titles and boot
      * filenames are not compatibility gates; native GD bytes stay verbatim. */
     if(ce) {
-        /* The CE placement test: the boot file is a 2048-byte load prefix
+        /* The CE boot test: the boot file is a 2048-byte load prefix
          * followed by the kernel body. The stage checks the rest. */
-        if(!metadata.windows_ce) {problem="the Windows CE placement test needs a Windows CE image";goto done;}
+        if(!metadata.windows_ce) {problem="the Windows CE boot test needs a Windows CE image";goto done;}
+        /* Only the SCI resident is built CE-safe (see Makefile.dc). */
+        if(map->storage_transport!=KUI_STORAGE_SCI) {problem="the Windows CE boot test needs SCI microSD";goto done;}
         if(metadata.boot_bytes<=KUI_CE_LOAD_PREFIX_BYTES) {
             problem="Windows CE boot file must be larger than its 2048-byte prefix";goto done;
         }
@@ -275,7 +277,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     log("%s prepared: %u tracks, %u extents; IP CRC32=%08x, %s=%u bytes checked at load",
-        ce?"Windows CE placement test":"Retail boot",
+        ce?"Windows CE boot test":"Retail boot",
         map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes);
     ok=true;
 done:

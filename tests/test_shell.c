@@ -1019,8 +1019,8 @@ static void games_retail_controls(void) {
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
     press(KUI_SHELL_B,false);s.games_detail=detail;
-    /* A Windows CE image offers only the placement test, which stops before
-     * CE runs; X and Y do nothing on its confirmation. */
+    /* A Windows CE image offers only the boot test; X and Y do nothing on
+     * its confirmation. */
     s.games_detail.windows_ce=true;s.games_detail.native_gd=false;
     strcpy(s.games_detail.boot_file,"0WINCEOS.BIN");s.games_detail.boot_bytes=1253376;
     assert(!kui_shell_games_retail_ready(&s) && kui_shell_games_ce_probe_ready(&s));
@@ -1161,13 +1161,13 @@ static void games_rendering(void) {
     s.games_detail.high_density_audio=true;render(&view);assert(strstr(drawn,"CD audio is unavailable"));
     s.games_detail.high_density_audio=false;s.games_detail.windows_ce=true;render(&view);
     assert(strstr(drawn,"Windows CE games cannot be launched yet") && !strstr(drawn,"A Launch"));
-    assert(!strstr(drawn,"placement test"));
+    assert(!strstr(drawn,"boot test"));
     s.games_detail.native_gd=false;strcpy(s.games_detail.boot_file,"0WINCEOS.BIN");
     s.games_detail.boot_bytes=1253376;render(&view);
-    assert(strstr(drawn,"A Windows CE placement test") && strstr(drawn,"cannot be launched yet"));
+    assert(strstr(drawn,"A Windows CE boot test") && strstr(drawn,"cannot be launched yet"));
     assert(!strstr(drawn,"A Launch"));
     s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
-    assert(strstr(drawn,"Games / Windows CE placement test") && strstr(drawn,"does not start the game"));
+    assert(strstr(drawn,"Games / Windows CE boot test") && strstr(drawn,"not expected to start"));
     assert(strstr(drawn,"A Start test") && !strstr(drawn,"Background reader"));
     s.page=KUI_SHELL_GAMES_DETAIL;s.games_detail.native_gd=true;
     strcpy(s.games_detail.boot_file,"1ST_READ.BIN");s.games_detail.boot_bytes=123456;

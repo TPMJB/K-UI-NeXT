@@ -1288,7 +1288,7 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
                 "CD audio is unavailable; this game may not run.":
                 "V1.5: game compatibility varies.",false);
         } else if(kui_shell_games_ce_probe_ready(s)) {
-            words(p,44,337,right,CYAN,"A Windows CE placement test   Y Advanced read test",false);
+            words(p,44,337,right,CYAN,"A Windows CE boot test   Y Advanced read test",false);
             words(p,44,365,right,AMBER,"Windows CE games cannot be launched yet.",false);
         } else {
             words(p,44,337,right,AMBER,d->windows_ce?"Windows CE games cannot be launched yet.":
@@ -1357,15 +1357,15 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         const struct kui_shell_view *v) {
     words(p,40,140,608,CYAN,s->games_selected_path,false);
     if(kui_shell_games_ce_probe_ready(s)) {
-        title(p,40,108,"Games / Windows CE placement test");
+        title(p,40,108,"Games / Windows CE boot test");
         panel(p,32,168,576,234,PANEL);
         label(p,48,186,CYAN,v->busy?"Preparing the test...":
             s->games_detail.title[0]?s->games_detail.title:"Test the selected image?");
-        label(p,48,218,AMBER,"This test does not start the game.");
-        label(p,48,244,WHITE,"It loads the Windows CE kernel from SD,");
-        label(p,48,270,WHITE,"checks where it goes, then stops.");
-        label(p,48,302,WHITE,"SD access remains read-only.");
-        label(p,48,328,WHITE,"Photograph the result screen.");
+        label(p,48,218,AMBER,"The game is not expected to start yet.");
+        label(p,48,244,WHITE,"Loads Windows CE from SD and starts it,");
+        label(p,48,270,WHITE,"then stops at a disc request K-UI can't serve.");
+        label(p,48,302,WHITE,"Needs SCI microSD. SD stays read-only.");
+        label(p,48,328,WHITE,"Photograph the last screen shown.");
         label(p,48,354,AMBER,"Power cycle to return to the launcher.");
         if(v->busy && v->app_status && v->app_status->message[0])
             label(p,48,380,CYAN,v->app_status->message);

@@ -48,6 +48,9 @@ static enum kui_loader_sd_result last_card_result;
 #define BOOT_CHUNK_SECTORS 16u
 static uint8_t raw_boot[BOOT_CHUNK_SECTORS*KUI_GAME_RAW_BYTES];
 static uint32_t boot_crc;
+/* Bytes of the executable at KUI_RETAIL_EXEC_ADDRESS: the boot file, or for
+ * Windows CE its body (the file less its 2048-byte load prefix). */
+static uint32_t exec_bytes;
 static const uint8_t *resident_blob;
 static size_t resident_bytes;
 static uint32_t resident_limit;
@@ -152,11 +155,12 @@ static void load_sectors(uint32_t lba,uint32_t sectors,uint8_t *out) {
     }
 }
 #ifdef KUI_RETAIL_CE
-/* Windows CE placement probe. The IP's peripheral field (seven hexadecimal
- * digits at 0x38, read as game_metadata.c does) must select Windows CE. The
- * boot file's first sector is CE's load prefix, the rest its body. Both are
- * loaded where the CE layout puts them, checked, reported, and left there:
- * the probe stops before running any of it. */
+/* Windows CE boot test. The IP's peripheral field (seven hexadecimal digits
+ * at 0x38, read as game_metadata.c does) must select Windows CE. The boot
+ * file's first sector is CE's load prefix, the rest its body. Both are loaded
+ * where the CE layout puts them and checked; the stage then enters bootstrap 2
+ * as for a native game, whose jump to the body start reaches the relay.
+ * Returns the body's byte count. */
 static uint8_t ce_prefix[KUI_CE_LOAD_PREFIX_BYTES];
 static bool ip_windows_ce(const uint8_t *ip) {
     if(memcmp(ip+37,"GD-ROM",6) || ip[63]!=' ') return false;
@@ -174,8 +178,7 @@ static bool ip_windows_ce(const uint8_t *ip) {
 static uint32_t word(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
-static void ce_placement_probe(const uint8_t *ip) __attribute__((noreturn));
-static void ce_placement_probe(const uint8_t *ip) {
+static uint32_t ce_load(const uint8_t *ip) {
     if(!ip_windows_ce(ip)) stopped("IP DOES NOT SELECT WINDOWS CE",word(ip+56));
     load_sectors(manifest.boot_lba,1,ce_prefix);
     /* Everything still in use: firmware, IP, the bootstrap area below the
@@ -213,7 +216,6 @@ static void ce_placement_probe(const uint8_t *ip) {
         rom[0]=header;rom[1]=word(h+8);rom[2]=word(h+12);rom[3]=word(h+20);rom[4]=word(h+28);
     }
     uint32_t placed[4]={plan.body.address,plan.body.bytes,plan.body.sector_count,plan.entry_address};
-    uint32_t boot_info[4]={word(ip+0xf0),word(ip+0xf4),word(ip+0xf8),word(ip+0xfc)};
     retail_display_restore(&display);
     retail_display_line(manifest.title);
     retail_display_hex("PREFIX CRC32",prefix_crc);
@@ -223,12 +225,15 @@ static void ce_placement_probe(const uint8_t *ip) {
     if(rom_header)
         retail_display_values("ROMHDR   PHYSFRST PHYSLAST RAMSTART RAMEND",rom,5);
     else retail_display_line("NO CE ROM HEADER AT BODY OFFSET 40");
-    retail_display_values("IP F0    IP F4    IP F8    IP FC",boot_info,4);
-    retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
-    retail_display_line("PLACEMENT CHECKED - CE WAS NOT STARTED");
-    retail_display_line("PHOTOGRAPH THIS SCREEN");
-    retail_display_line("POWER OFF AND ON TO RETURN");
-    for(;;) __asm__ volatile("nop");
+    /* Bootstrap 2 jumps to the body start, where the relay's trampoline
+     * goes; a CE entry elsewhere has no known handoff yet. Only the SCI
+     * resident is built CE-safe: it touches CE's stack (a virtual address)
+     * only with exceptions enabled. */
+    if(plan.entry_address!=plan.body.address)
+        stopped("CE ENTRY IS NOT THE BODY START",plan.entry_address);
+    if(manifest.storage_transport!=KUI_STORAGE_SCI)
+        stopped("THE CE BOOT TEST NEEDS SCI MICROSD",manifest.storage_transport);
+    return plan.body.bytes;
 }
 #endif
 void kui_retail_boot_returned(void) {
@@ -293,27 +298,32 @@ void kui_retail_stage_main(const uint8_t *wire) {
     read_sectors(manifest.session_lba,16,KUI_GAME_SECTOR_MODE1,ip);
     uint32_t crc=kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES);
     if(crc!=manifest.ip_crc32) stopped("IP CHECKSUM CHANGED",crc);
-#ifdef KUI_RETAIL_CE
-    ce_placement_probe(ip);
-#endif
     /* K-UI no longer reads the executable before launch. Every boot sector's
      * sync, mode and address must match its LBA, proving the file map; SD
      * CRCs cover the transfer. EDC is not required: patched executables
      * commonly leave it stale, and they launch as before. */
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
+#ifdef KUI_RETAIL_CE
+    exec_bytes=ce_load(ip);
+#else
+    exec_bytes=manifest.boot_bytes;
     load_sectors(manifest.boot_lba,(manifest.boot_bytes+2047u)/2048u,boot);
-    boot_crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
+#endif
+    boot_crc=kui_retail_crc32(0,boot,exec_bytes);
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);
     memcpy(original_entry,boot,sizeof(original_entry));
     memcpy(boot,__retail_trampoline_start,sizeof(original_entry));
     retail_display_line("IP CHECKSUM AND BOOT SECTOR HEADERS PASSED");
-    retail_display_hex("BOOT BYTES",manifest.boot_bytes);
+    retail_display_hex("BOOT BYTES",exec_bytes);
     retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
+#ifndef KUI_RETAIL_CE
     /* DreamShell's native Katana path clears this IP bootstrap flag before
      * entering bootstrap2, including its truncated-IP mode. Only this RAM
-     * copy changes; the original IP checksum was checked above. */
+     * copy changes; the original IP checksum was checked above. Windows CE
+     * keeps its IP unchanged: 0xFC lies in its title field. */
     ip[0xfcu]&=(uint8_t)~0x20u;
+#endif
     install_resident();
     retail_display_line("READER INSTALLED BEFORE BOOTSTRAP 2");
     retail_display_line("ENTERING OWNER BOOTSTRAP 2");
@@ -342,14 +352,19 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_hex("BOOT CACHE",ccr);
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     memcpy(boot,original_entry,sizeof(original_entry));
-    uint32_t crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
+    uint32_t crc=kui_retail_crc32(0,boot,exec_bytes);
     if(crc!=boot_crc) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     size_t bytes=resident_bytes;
     if(memcmp(resident,resident_blob,bytes))
         stopped("BOOTSTRAP ALTERED RESIDENT",0);
     retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
+#ifdef KUI_RETAIL_CE
+    retail_display_hex("BODY CRC32",crc);
+    retail_display_line("ENTERING WINDOWS CE");
+#else
     retail_display_line("ENTERING GAME");
+#endif
     retail_display_line(manifest.title);
     retail_display_line("IF IT STOPS PHOTOGRAPH THE LAST SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");

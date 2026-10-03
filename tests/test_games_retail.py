@@ -22,7 +22,7 @@ CASES = (
     "sector-beforedata", "sector-aftercard", "sector-repeat", "seek-fail",
     "read-fail", "close-fail", "unmount-fail", "cancel-before", "cancel-map",
     "cancel-ip", "size-change", "async-on-sci", "async-on-scif",
-    "ce-probe", "ce-probe-native", "ce-probe-package", "ce-probe-small",
+    "ce-probe", "ce-probe-native", "ce-probe-package", "ce-probe-small", "ce-probe-scif",
 )
 RC_CASES = ("valid", "other-title", "alternate-bootfile", "cdda-warning",
             "windows-ce", "bad-flags", "bad-media", "bad-bootfile", "unsupported-2048",
@@ -35,7 +35,7 @@ SUCCESS_CASES = ("valid", "boot-tail", "fragmented", "other-title",
 def synthetic_package(ce=False):
     # Structural preparation fixture. The stage is original data, never code
     # executed on the host; every retail-looking IP field is generated here.
-    # ce: the Windows CE placement test's package, with its higher stage.
+    # ce: the Windows CE boot test's package, with its higher stage.
     payload = bytearray(0x2010)
     payload[0x100:0x108] = b"KUIRCE01" if ce else b"KUIRBT01"
     stage = 0x8CE10000 if ce else 0x8CE00000
@@ -135,13 +135,15 @@ def main():
                     if case == "windows-ce":
                         assert "Windows CE game launching is not supported" in output
                     if case == "ce-probe":
-                        assert "Windows CE placement test prepared" in output
+                        assert "Windows CE boot test prepared" in output
                     if case == "ce-probe-native":
-                        assert "the Windows CE placement test needs a Windows CE image" in output
+                        assert "the Windows CE boot test needs a Windows CE image" in output
                     if case == "ce-probe-package":
                         assert "unsupported Windows CE probe package layout" in output
                     if case == "ce-probe-small":
                         assert "larger than its 2048-byte prefix" in output
+                    if case == "ce-probe-scif":
+                        assert "the Windows CE boot test needs SCI microSD" in output
                     if case == "unsupported-2048":
                         assert "raw 2352-byte GDI tracks with zero file offsets required" in output
                     if case == "track-limit":

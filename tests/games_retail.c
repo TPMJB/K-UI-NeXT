@@ -55,7 +55,9 @@ static int sync_image(void *ctx) {
 }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
 unsigned kui_storage_active(void) {
-    return !strcmp(test.fault, "async-on-sci") ? KUI_STORAGE_SCI : KUI_STORAGE_SCIF;
+    /* The CE boot test needs SCI; ce-probe-scif checks the refusal. */
+    return !strcmp(test.fault, "async-on-sci") || (!strncmp(test.fault, "ce-probe", 8) &&
+        strcmp(test.fault, "ce-probe-scif")) ? KUI_STORAGE_SCI : KUI_STORAGE_SCIF;
 }
 bool kui_sd_connect(void) {
     assert(!test.connected); ++test.connects;
@@ -187,7 +189,7 @@ static void seed(const char *directory) {
     }
     if(!strcmp(test.fault, "payload-checksum")) data[size - 1] ^= 1;
     write_file(package, data, size);
-    /* The CE placement test reads its own package; ce-probe-package gives it
+    /* The CE boot test reads its own package; ce-probe-package gives it
      * the native one instead. */
     if(!strcmp(test.fault, "ce-probe-package")) write_file(ce_package, data, size);
     free(data);

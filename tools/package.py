@@ -149,7 +149,7 @@ def main():
     bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
     bench_package = envelope(bench_payload, bench_memory, commit[:12])
     bench_info = inspect_retail(bench_package)
-    # The Windows CE placement test: loads and checks a CE kernel, then stops.
+    # The Windows CE boot test: loads and starts a CE kernel, tracing its disc calls.
     ce_payload, ce_memory = flatten_elf(retail_ce.read_bytes())
     ce_package = envelope(ce_payload, ce_memory, commit[:12])
     ce_info = inspect_retail(ce_package, ce=True)
@@ -298,7 +298,7 @@ def main():
         "START-HERE.md and RELEASE-NOTES.md describe installation and compatibility limits.\n"
         "Games: A inspects a GDI; A on its detail opens confirmation; A confirms launch.\n"
         "Update both KUI/runtime.kui and KUI/apps/games/retail-boot.kui from this package.\n"
-        "KUI/apps/games/ce-probe.kui is the Windows CE placement test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
+        "KUI/apps/games/ce-probe.kui is the Windows CE boot test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
         "DOA2 has confirmed gameplay; Evolution 2 boots with severe slowdown.\n"
         "Other titles and VMU save/load compatibility remain under community testing.\n"
         "Games reads the selected storage device; games may write VMU saves. Power cycle to return.\n"

@@ -34,7 +34,11 @@ _start:
  * entry lock or touching the single resident stack. This also rejects direct
  * recursion without replacing an active service frame. No FPU instruction or
  * register-bank change occurs. PR and all ABI callee-saved GPRs are preserved.
- * Synchronous SD chunks run masked; the caller's exact SR is restored. */
+ * Synchronous SD chunks run masked; the caller's exact SR is restored.
+ * KUI_RETAIL_CE (the Windows CE boot test): CE calls with its MMU on and its
+ * stack at a virtual address, where a TLB miss with BL set resets the
+ * console. That build touches the caller's stack only with the caller's own
+ * SR: it masks after the pushes and restores SR before the pops. */
     .section .text.retail_hook,"ax"
     .align 2
     .global C_SYMBOL(kui_retail_resident_hook)
@@ -58,9 +62,11 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Lgd_common:
     stc sr,r1
     mov.l r1,@-r15
+#ifndef KUI_RETAIL_CE
     mov.l .Lirq_mask,r2
     or r2,r1
     ldc r1,sr
+#endif
     sts.l pr,@-r15
     mov.l r8,@-r15
     mov.l r9,@-r15
@@ -69,6 +75,11 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov.l r12,@-r15
     mov.l r13,@-r15
     mov.l r14,@-r15
+#ifdef KUI_RETAIL_CE
+    mov.l .Lirq_mask,r2
+    or r2,r1
+    ldc r1,sr
+#endif
     mov r0,r9
     mov r15,r8
     mov.l .Lactive,r0
@@ -89,6 +100,15 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov.l @(32,r8),r1
     mov.l .Lcaller_sr,r0
     mov.l r1,@r0
+#ifdef KUI_RETAIL_CE
+    /* The caller's return address and stack, for the CE trace. */
+    mov.l @(28,r8),r1
+    mov.l .Lcaller,r0
+    mov.l r1,@r0
+    mov r8,r1
+    add #36,r1
+    mov.l r1,@(4,r0)
+#endif
     mov.l .Lprivate_stack,r15
     mov.l .Ldispatch,r0
     jsr @r0
@@ -127,6 +147,10 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov #-1,r0
 .Lreturn:
     mov r8,r15
+#ifdef KUI_RETAIL_CE
+    mov.l @(32,r15),r1
+    ldc r1,sr
+#endif
     mov.l @r15+,r14
     mov.l @r15+,r13
     mov.l @r15+,r12
@@ -136,7 +160,9 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov.l @r15+,r8
     lds.l @r15+,pr
     mov.l @r15+,r1
+#ifndef KUI_RETAIL_CE
     ldc r1,sr
+#endif
     rts
     nop
     .align 2
@@ -149,6 +175,9 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Ldispatch: .long C_SYMBOL(kui_retail_resident_dispatch)
 .Lsource: .long C_SYMBOL(kui_retail_hook_source)
 .Lcaller_sr: .long C_SYMBOL(kui_retail_hook_sr)
+#ifdef KUI_RETAIL_CE
+.Lcaller: .long C_SYMBOL(kui_retail_hook_caller)
+#endif
 
 /* Menu command 1 (return to the BIOS menu; A+B+X+Y+Start in most games)
  * shows the reader's counters, then restarts the console so the boot disc

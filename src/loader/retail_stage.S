@@ -315,7 +315,12 @@ __retail_resident_scif_blob_end:
     .align 2
     .global __retail_resident_sci_blob_start,__retail_resident_sci_blob_end
 __retail_resident_sci_blob_start:
+#ifdef KUI_RETAIL_CE
+    /* The Windows CE boot test's CE-safe SCI resident. */
+    .incbin "build/retail-ce/resident-sci.bin"
+#else
     .incbin "build/retail/resident-sci.bin"
+#endif
     .align 2
 __retail_resident_sci_blob_end:
     .section .resident_blob,"a"

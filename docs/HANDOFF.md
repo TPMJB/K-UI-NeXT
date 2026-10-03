@@ -1,5 +1,24 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: boot test, second step (2026-10-03 UTC)
+
+The CE test now **starts Windows CE** after placement and stops at the first
+disc request K-UI cannot serve, with a trace (caller, stack, SR, MMUCR, VBR,
+last four GD calls). SCI microSD only. Guide:
+[windows-ce-placement-test.md](windows-ce-placement-test.md) (now titled
+"Windows CE boot test"), including what each outcome means.
+
+- Stage (`KUI_RETAIL_CE`): after placement, trampoline at the body start,
+  CE-safe SCI resident, bootstrap 2 entered with the IP unchanged; the relay
+  checks the body's CRC32 and enters `0x8c010000`.
+- Resident (`KUI_RETAIL_CE`, `build/retail-ce/resident-sci.*`, embedded only
+  in `ce-probe.kui`): saves/restores the caller's registers without SR.BL
+  set, no pacing (fixed step; a step on each CHECK while reading), trace on
+  failure using value rows only (the conservative stack sum stays within
+  1232). Native residents are unchanged (proxy sizes identical).
+- ARMADA's `wsegacd.dll` calls `0x8c0010f0` directly; the resident's existing
+  redirection of that entry covers it.
+
 ## Windows CE: placement test, first step (2026-10-03 UTC)
 
 New: a **Windows CE placement test** for CE images (first target ARMADA). On

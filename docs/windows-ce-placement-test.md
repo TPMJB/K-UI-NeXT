@@ -1,24 +1,28 @@
-# Windows CE placement test
+# Windows CE boot test
 
-This is the first step toward running Windows CE games. It does **not** start the
-game. It loads the Windows CE kernel from the card into the places the Dreamcast
-BIOS would put it, checks it, shows what it found, and stops. Nothing runs
-Windows CE yet.
+Windows CE games are being brought up in steps, with ARMADA first. The test
+from the Games detail screen of a CE image is now the **boot test**: it loads
+the Windows CE kernel exactly as the placement test below did, then starts it
+and stops at the first disc request K-UI cannot serve, showing what CE asked
+for. The game is not expected to run yet.
 
 ## What it needs
 
 - `KUI/apps/games/ce-probe.kui` and `KUI/runtime.kui` from the same build.
 - A raw GDI (2352-byte tracks) whose IP selects Windows CE, for example ARMADA.
-- Any storage transport. SCI microSD is the planned one for CE.
+- **SCI microSD.** Only the SCI reader is built CE-safe (below); preparation
+  refuses other storage.
 
 ## How to run it
 
 1. Games, select the CE game, A to inspect it.
-2. The detail screen says `A Windows CE placement test`. Press A.
-3. The confirmation says the test does not start the game. Press A.
+2. The detail screen says `A Windows CE boot test`. Press A.
+3. The confirmation says the game is not expected to start. Press A.
 4. The launcher closes. The stage loads IP.BIN, then the kernel file
    (`0WINCEOS.BIN`), checking every sector's header and every SD block's CRC.
-5. Photograph the final screen, then power cycle.
+5. Photograph the last screen shown, then power cycle.
+
+## Step 1: placement (passed on ARMADA)
 
 ## What it does
 
@@ -96,11 +100,62 @@ through the `0x8c0000bc` vector. The resident already redirects that entry
   afterwards. The low resident (`0x8c008300`) sits below the kernel image;
   whether CE leaves it alone is the next step's question.
 
+## Step 2: the boot test
+
+After placement the stage carries on as for a native game:
+
+1. It puts the relay's 128-byte trampoline at the body start (`0x8c010000`),
+   installs the CE-safe SCI reader in the low IP area and enters the IP's
+   bootstrap 2. Unlike native games, the IP is left unchanged (its byte 0xFC
+   is in the title field).
+2. Bootstrap 2 jumps to the body start and reaches the relay, which checks
+   the boot stack and CPU state, restores the body's first 128 bytes, checks
+   the body's CRC32 and the reader's bytes, shows `ENTERING WINDOWS CE` and
+   jumps to `0x8c010000`.
+3. Windows CE starts. Its CD driver calls the BIOS GD entry `0x8c0010f0`
+   directly; the reader has redirected that entry (and the others) to itself.
+
+The CE-safe reader (`KUI_RETAIL_CE`, built only into `ce-probe.kui`):
+
+- **Stack:** CE calls with its MMU on and its stack at a virtual address. A
+  TLB miss while exceptions are blocked (SR.BL) resets the console, so this
+  reader writes and reads the caller's stack only with the caller's own SR:
+  it masks after saving registers and unmasks before restoring them. Its
+  private stack and all its data are physical addresses.
+- **Addresses:** every buffer and parameter address goes through the existing
+  check, which refuses anything that is not main RAM (`0x0c`/`0x8c`/`0xac`)
+  without touching it. A CE virtual address therefore makes a request fail
+  cleanly instead of crashing.
+- **Reads:** a fixed step per EXEC, and a step on each CHECK while a read is
+  pending (CE's driver polls CHECK between short sleeps). No pacing.
+- **Trace:** it records the last four calls and, when one fails, stops with:
+
+| Line | Meaning |
+| --- | --- |
+| reason | `GD REQUEST REJECTED`, `GD FUNCTION UNSUPPORTED` or `IMAGE READ FAILED` |
+| `CALLER / STACK / SR / MMUCR / VBR` | CE's return address (PR), its stack, its SR at the call, the MMU control register and CE's vector base |
+| `R7 / R4 / R5 / R6 / CALLS` | The failing call: function, first and second arguments, R6, and how many calls came before |
+| `EARLIER` (three rows) | The three calls before it, newest first, as R7 R4 R5 R6 |
+
+## What each outcome means
+
+- **`UNSUPPORTED BOOT STACK` or `UNSUPPORTED BOOT CPU STATE`** before
+  `ENTERING WINDOWS CE`: ARMADA's bootstrap 2 leaves a different state from
+  native games; the values shown say how.
+- **`ENTERING WINDOWS CE` stays on screen** (or the screen changes to CE's
+  own output and stops): CE started but never reached a failing disc call.
+  It may be waiting for a disc interrupt (IDs 20/21) that K-UI does not raise
+  yet, or may have overwritten the reader.
+- **The console resets to the BIOS:** an exception CE could not handle,
+  possibly inside the reader; note when it happened.
+- **The reader's stop screen:** the expected result. R5 (the request's
+  parameter address) and the caller's stack show whether CE passes virtual
+  addresses, which the next step maps.
+
 ## Next steps
 
-1. Enter CE: keep the stage alive until its relay finishes, enter the
-   bootstrap the way the BIOS would for a CE disc, and report the entry state.
-2. Trace CE's first GD calls (wsegacd.dll calls the BIOS GD vector) with their
-   addresses before mapping them, and the interrupt waits (IDs 20/21).
-3. Implement only what that trace shows: address mapping, the CHECK contract,
-   completion for the IRQ waits, and the missing commands.
+1. From the trace: map CE's virtual parameter and buffer addresses to
+   physical RAM (with the MMU state shown), or whatever the first failure is.
+2. Raise the completion CE's driver waits for (Holly GD interrupt, IDs 20/21)
+   if it never polls to completion.
+3. Then the remaining GD functions CE uses, and a working title screen.
