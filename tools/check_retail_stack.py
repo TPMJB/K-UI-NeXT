@@ -29,6 +29,8 @@ INDIRECT = {
 }
 CALLBACKS = tuple(sorted({c for targets in INDIRECT.values() for c in targets}))
 REBOOT = ("kui_retail_menu_return", "retail_resident.c")
+# Covers the compiler's library calls, which the call graph does not list:
+# the resident links only __udivsi3, which pushes PR (4 bytes).
 MARGIN = 64
 
 NODE = re.compile(r'node: \{ title: "([^"]+)" label: "([^"]*)"')
