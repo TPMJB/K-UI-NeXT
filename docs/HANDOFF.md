@@ -18,6 +18,11 @@ last four GD calls). SCI microSD only. Guide:
   1232). Native residents are unchanged (proxy sizes identical).
 - ARMADA's `wsegacd.dll` calls `0x8c0010f0` directly; the resident's existing
   redirection of that entry covers it.
+- Build `64f30e3f8ce4` ([Diagnostic run
+  37154394933](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37154394933)):
+  host and Dreamcast passed, including the CE package's layout, stack and
+  instruction checks; native resident sizes unchanged (SCI 48 bytes free).
+  Test: `sd-update` artifact's `KUI/runtime.kui` and `KUI/apps/games/`.
 
 ## Windows CE: placement test, first step (2026-10-03 UTC)
 
