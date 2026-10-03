@@ -21,8 +21,9 @@ call; Y tries 25. To make room, `CONTINUE` and `MAXTOKEN` are gone (stream
 rows: `DMA BLKS POLLED STARTS KEPT OVERRUNS`, `CRC ERRS TOKENERR FOREIGN
 REPAIRED AHEAD`, `DEFERRED`) and the reader's private stack is 352 bytes
 (call graph 224 plus the 64-byte allowance against 304). See
-[games-background-reader.md](games-background-reader.md). Build ID and CI
-run: pending.
+[games-background-reader.md](games-background-reader.md). Build
+**90f22512c808** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37149233706)
+(36 bytes free, call-graph stack 224 of 304); console test pending.
 
 ## Games: background reader, eighth build (2026-10-03 UTC)
 
