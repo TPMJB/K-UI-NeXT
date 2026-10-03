@@ -37,15 +37,23 @@ static const uint8_t glyphs[36][7] = {
  {14,17,17,14,17,17,14},{14,17,17,15,1,1,14}
 };
 static unsigned row;
+#ifdef KUI_RETAIL_CE
+/* The live status line draws on the frame Windows CE shows; every other
+ * line uses K-UI's captured 640-pixel frame at the start of video RAM. */
+static uint32_t base = 0xa5000000u, stride = 640u;
+#else
+#define base 0xa5000000u
+#define stride 640u
+#endif
 void retail_display_capture(struct retail_display_state *s) {
     for(unsigned i=0;i<14;i++) s->regs[i]=*reg(i);
 }
 void retail_display_line(const char *text) {
-    volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)0xa5000000u;
+    volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)base;
     unsigned x=20;
     if(row>444) row=124;
     for(unsigned y=row;y<row+22;y++)
-        for(unsigned a=16;a<624;a++) frame[y*640+a]=0x0864;
+        for(unsigned a=16;a<624;a++) frame[y*stride+a]=0x0864;
     while(*text && x<612) {
         unsigned char c=(unsigned char)*text++;
         if(c>='a' && c<='z') c-=32;
@@ -57,7 +65,7 @@ void retail_display_line(const char *text) {
             for(unsigned a=0;a<5;a++) if(bits&(16u>>a))
                 for(unsigned dy=0;dy<2;dy++)
                     for(unsigned dx=0;dx<2;dx++)
-                        frame[(row+y*2+dy)*640+x+a*2+dx]=0xffff;
+                        frame[(row+y*2+dy)*stride+x+a*2+dx]=0xffff;
         }
         x+=12;
     }
@@ -96,6 +104,20 @@ void retail_display_values(const char *legend,const uint32_t *values,unsigned co
     }
     out[n]=0; retail_display_line(out);
 }
+#ifdef KUI_RETAIL_CE
+/* Two lines near the top of the frame CE is showing, without changing any
+ * video register: FB_R_SOF1 is its start and FB_R_SIZE its line pitch
+ * (32-bit units per line plus modulo, minus one). 16-bit pixels assumed. */
+void retail_display_status(const char *legend,const uint32_t *values,unsigned count) {
+    volatile const uint32_t *pvr=(volatile const uint32_t *)(uintptr_t)0xa05f8000u;
+    uint32_t size=pvr[0x5c/4], saved=row;
+    base=0xa5000000u|(pvr[0x50/4]&0x007ffffcu);
+    stride=((size&0x3ffu)+((size>>20)&0x3ffu))*2u;
+    row=40;
+    retail_display_values(legend,values,count);
+    base=0xa5000000u; stride=640u; row=saved;
+}
+#endif
 void retail_display_progress(uint32_t done,uint32_t total) {
     /* Fixed bottom bar, independent of scrolling diagnostic rows. */
     if(!total || done>total) return;

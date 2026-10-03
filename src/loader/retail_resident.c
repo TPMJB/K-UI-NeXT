@@ -171,6 +171,21 @@ static void stream_lines(void) {
     retail_display_values("DEFERRED", st + 10, 1);
 }
 #endif
+#ifdef KUI_RETAIL_CE
+/* Who called last (CE's address, stack, SR, MMU state) and the last four
+ * calls: value rows only, as this build has no single-value printer. */
+static void ce_trace(void) {
+    static uint32_t caller[5], row[5]; /* Static: the stack budget is full. */
+    caller[0]=kui_retail_hook_caller[0]; caller[1]=kui_retail_hook_caller[1];
+    caller[2]=kui_retail_hook_sr; caller[3]=*(volatile uint32_t *)(uintptr_t)0xff000010u;
+    __asm__ __volatile__("stc vbr,%0" : "=r"(caller[4]));
+    retail_display_values("CALLER   STACK    SR       MMUCR    VBR",caller,5);
+    memcpy(row,ce_calls[(ce_count-1u)&3u],16); row[4]=ce_count;
+    retail_display_values("R7       R4       R5       R6       CALLS",row,5);
+    for(unsigned i=1;i<4;i++)
+        retail_display_values("EARLIER",ce_calls[(ce_count-1u-i)&3u],4);
+}
+#endif
 static void report_fault(const char *reason, uint32_t function) {
     retail_display_restore(&display);
     retail_display_line("K-UI GAME READER");
@@ -189,15 +204,7 @@ static void report_fault(const char *reason, uint32_t function) {
      * value rows only, as this build has no single-value printer. */
     (void)function;
     retail_display_line(reason);
-    static uint32_t caller[5], row[5]; /* Static: the stack budget is full. */
-    caller[0]=kui_retail_hook_caller[0]; caller[1]=kui_retail_hook_caller[1];
-    caller[2]=kui_retail_hook_sr; caller[3]=*(volatile uint32_t *)(uintptr_t)0xff000010u;
-    __asm__ __volatile__("stc vbr,%0" : "=r"(caller[4]));
-    retail_display_values("CALLER   STACK    SR       MMUCR    VBR",caller,5);
-    memcpy(row,ce_calls[(ce_count-1u)&3u],16); row[4]=ce_count;
-    retail_display_values("R7       R4       R5       R6       CALLS",row,5);
-    for(unsigned i=1;i<4;i++)
-        retail_display_values("EARLIER",ce_calls[(ce_count-1u-i)&3u],4);
+    ce_trace();
 #else
     retail_display_line(kui_retail_storage_name(card.transport));
     retail_display_line(reason);
@@ -224,6 +231,11 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     counts[0]=kui_retail_hook_fault; counts[1]=service.diag.read_steps;
     counts[2]=service.diag.sectors_read;
     retail_display_values("GUARD    STEPS    SECTORS",counts,3);
+    /* Where CE was when it was reset: its last calls and disc command. */
+    ce_trace();
+    _Static_assert(offsetof(struct kui_retail_gd_diagnostics, last_destination) ==
+                   offsetof(struct kui_retail_gd_diagnostics, last_command) + 12u, "GD row");
+    retail_display_values("COMMAND  LBA      SECTORS  DEST", &service.diag.last_command, 4);
 #else
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
 #endif
@@ -397,6 +409,15 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
         report_fault("GD FUNCTION UNSUPPORTED", r7);
+#ifdef KUI_RETAIL_CE
+    /* Live status on CE's own screen: every request and every 16th call. */
+    if(r7 == KUI_GD_REQUEST || !(ce_count & 15u)) {
+        static uint32_t status[5]; /* Static: the stack budget is full. */
+        status[0]=ce_count; status[1]=r7; status[2]=service.diag.last_command;
+        status[3]=service.diag.sectors_read; status[4]=service.diag.last_lba;
+        retail_display_status("CALLS    FUNCTION COMMAND  SECTORS  LBA",status,5);
+    }
+#endif
     return result;
 }
 #endif

@@ -1,5 +1,18 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: black screen, then a hang; status line next (2026-10-03 UTC)
+
+Build `6eb4736083b8` on ARMADA: past `ENTERING WINDOWS CE`, the screen went
+black (CE's display driver) and stayed so, with no stop screen or reset.
+`wsegacd.dll` runs requests synchronously while CHECK's word 3 is not 1
+(K-UI writes 4), so the disc interrupt is not needed for reads;
+`ResetToFirmware` calls the BIOS menu vector, which the reader catches.
+Next build (CE reader only): a live status line on CE's own frame
+(`retail_display_status`, FB_R_SOF1/FB_R_SIZE, 16-bit pixels) on every
+REQUEST and every 16th call, and the CE trace plus the last command on the
+A+B+X+Y+Start screen. Native residents unchanged (proxy sizes identical).
+Details: [windows-ce-placement-test.md](windows-ce-placement-test.md).
+
 ## Windows CE: first stop inside CE; virtual addresses next (2026-10-03 UTC)
 
 Build `21c31ca296bf` on ARMADA stopped with `CE PASSED A VIRTUAL ADDRESS`:

@@ -225,6 +225,32 @@ interrupts but leaves SR.BL clear, so CE's own TLB-miss handler maps each
 page as the service reads or writes it; the service passes U0/P3 addresses
 (only while the MMU is on) to the CE reader instead of refusing them.
 
+## Console result: virtual-address build 6eb4736083b8 (2026-10-03)
+
+ARMADA went past `ENTERING WINDOWS CE`; the screen went black (CE's display
+driver taking over the video) and stayed black: no stop screen, no reset. So
+CE accepted the virtual-address answers and asked for nothing K-UI refuses,
+but it is waiting on something not yet visible.
+
+Reading `wsegacd.dll` further: a request runs synchronously (EXEC and CHECK
+with 5 ms sleeps) unless CHECK reports word 3 = 1, which K-UI never writes;
+only then does its interrupt thread wait for the disc interrupt (SYSINTR 20,
+15 s timeout, then ABORT). The platform's `ResetToFirmware` (`platutil.dll`)
+calls the BIOS menu vector (`0x8c0000e0`, R4=1), which K-UI's reader catches.
+
+Next build: two ways to see the hang.
+
+- **Live status line** near the top of the frame CE is showing (its start
+  and line pitch read from the video registers, nothing changed), redrawn on
+  every disc request and every 16th call: `CALLS FUNCTION COMMAND SECTORS
+  LBA` (calls so far, the last GD function, the last command, sectors read
+  so far, the last sector address). If it keeps changing, CE is still
+  reading; if it stops, the last values say where.
+- **A+B+X+Y+Start** during the hang: if CE's controller handling still runs,
+  K-UI's exit screen shows the guard, steps and sectors, CE's last caller
+  and four calls, and the last command (`COMMAND LBA SECTORS DEST`), held
+  for about 15 seconds before K-UI restarts.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the
@@ -246,6 +272,11 @@ page as the service reads or writes it; the service passes U0/P3 addresses
   the next thing to implement.
 - **Windows CE's own screens, then a stop or freeze:** CE got further; a
   freeze may be CE waiting for a disc interrupt K-UI does not raise yet.
+- **The status line stays still:** CE stopped calling the disc; the values
+  are its last call. **It keeps counting:** CE is still reading (sectors and
+  LBA show how far).
+- **No status line at all over the black screen:** CE never called the disc
+  after its display came up, or its video output is blanked.
 - **The reader's stop screen:** the expected result. R5 (the request's
   parameter address) and the caller's stack show whether CE passes virtual
   addresses, which the next step maps.
