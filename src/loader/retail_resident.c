@@ -63,6 +63,18 @@ static void purge(uint32_t address, uint32_t bytes) {
 static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
                           int writing) {
     (void)unused;
+#ifdef KUI_RETAIL_CE
+    /* Windows CE's virtual addresses (U0 or P3, with its MMU on) are used
+     * as they are: the resident runs with SR.BL clear, so CE's own TLB-miss
+     * handler maps each page as it is touched, through CE's cache. */
+    if(!ram_alias(address)) {
+        uint32_t end = address + bytes;
+        if(!(*(volatile const uint32_t *)(uintptr_t)0xff000010u & 1u) || end < address)
+            return NULL;
+        return end <= 0x80000000u || (address >= 0xc0000000u && end <= 0xe0000000u) ?
+            (uint8_t *)(uintptr_t)address : NULL;
+    }
+#endif
     if(address < KUI_RETAIL_IP_ADDRESS || address >= KUI_RETAIL_RAM_END ||
        !bytes || bytes > KUI_RETAIL_RAM_END - address) return NULL;
     uint32_t end = address + bytes;
@@ -357,13 +369,6 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     uint32_t *call=ce_calls[ce_count++&3u];
     call[0]=source==4u?0xe0u:r7; call[1]=r4; call[2]=r5; call[3]=r6;
     if(source==4u) return 0;
-    /* Stop at the first pointer CE passes that is not a main-RAM alias: the
-     * service would refuse it, and the trace shows what CE asked for. */
-    uint32_t pointer=r7==KUI_GD_REQUEST || r7==KUI_GD_CHECK ? r5 :
-        r7==KUI_GD_DRIVE || r7==KUI_GD_DATATYPE ? r4 : 0u;
-    if(source!=1u && r6==UINT32_MAX) pointer=0;
-    if(pointer && !ram_alias(pointer))
-        report_fault("CE PASSED A VIRTUAL ADDRESS", r7);
 #endif
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) {

@@ -1,5 +1,16 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: first stop inside CE; virtual addresses next (2026-10-03 UTC)
+
+Build `21c31ca296bf` on ARMADA stopped with `CE PASSED A VIRTUAL ADDRESS`:
+`wsegacd.dll` INIT, REQUEST 0x18, EXEC, then CHECK with its status buffer on
+its stack (`080DFCF0`, MMU on). Refusing it made CHECK fail, which sent the
+driver into its disc check: the earlier resets. Next build: the CE reader
+leaves SR.BL clear (interrupts still masked) and uses U0/P3 addresses
+directly, CE's TLB-miss handler mapping pages (`KUI_RETAIL_CE` in
+`retail_gd.c` guest() and the resident's map). Missing for ARMADA after that:
+commands 26, 38, 39 and functions 6, 7, 12, 13.
+
 ## Windows CE: the reset is CE's disc check reaching the real BIOS (2026-10-03 UTC)
 
 Second boot test (`15b912ccfff5`): reset again, now clearly after the relay

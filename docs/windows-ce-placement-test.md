@@ -197,6 +197,34 @@ unchanged), records it in the trace as `E0`, and stops with
 `CE PASSED A VIRTUAL ADDRESS` at the first GD pointer argument (R5 of
 REQUEST/CHECK, R4 of DRIVE/DATATYPE) that is not a main-RAM alias.
 
+## Console result: disc-check build 21c31ca296bf (2026-10-03)
+
+The first stop screen from inside Windows CE: `CE PASSED A VIRTUAL ADDRESS`
+after 4 calls, from `wsegacd.dll` (caller `01DE1F8A`), SR `40008000` (kernel
+mode, interrupts enabled), MMUCR `5800B801` (MMU on), VBR `8C0120F0` (CE's
+table). The calls: GD INIT; REQUEST command `0x18` (drive init, no
+parameters); EXEC; CHECK of token 1 with its status buffer at `080DFCF0` on
+CE's stack (`080DFCDC`), a virtual address in the CD driver's process.
+
+The driver's init (`0x8c0aaf20`) is REQUEST `0x18`, then EXEC and CHECK in a
+loop: CHECK 2 (done) continues, 1 (busy) sleeps 10 ms and polls again, -1
+(failed) reads the error code and runs its disc check (BIOS system function
+2). The earlier builds refused the status buffer, so CHECK failed and the
+disc check reached the real BIOS: that was the reset. After a command
+completes it polls its disc interrupt event (SYSINTR 20) with a zero timeout,
+so it does not depend on the interrupt to make progress.
+
+ARMADA's driver uses GD functions INIT, REQUEST, EXEC, CHECK, ABORT, DRIVE,
+DMA/PIO transfer and check (6, 7, 12, 13) and the PIO callback (11), and
+commands 16, 17, 19, 20–23, 24, 26, 27, 30, 31, 33, 34, 36, 38 and 39. K-UI's
+service lacks commands 26, 38, 39 and functions 6, 7, 12, 13 (11 only with
+no callback).
+
+Next build: the CE reader uses CE's virtual addresses directly. It masks
+interrupts but leaves SR.BL clear, so CE's own TLB-miss handler maps each
+page as the service reads or writes it; the service passes U0/P3 addresses
+(only while the MMU is on) to the CE reader instead of refusing them.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the
@@ -213,8 +241,11 @@ REQUEST/CHECK, R4 of DRIVE/DATATYPE) that is not a main-RAM alias.
   yet, or may have overwritten the reader.
 - **The console resets to the BIOS:** an exception CE could not handle,
   possibly inside the reader; note when it happened.
-- **`CE PASSED A VIRTUAL ADDRESS`:** the expected result. The newest row is
-  the call (R4/R5 the address), CALLER/STACK where CE called from.
+- **`GD REQUEST REJECTED` or `GD FUNCTION UNSUPPORTED`:** CE asked for a
+  command (R4 of a REQUEST row) or function (R7) K-UI does not provide yet:
+  the next thing to implement.
+- **Windows CE's own screens, then a stop or freeze:** CE got further; a
+  freeze may be CE waiting for a disc interrupt K-UI does not raise yet.
 - **The reader's stop screen:** the expected result. R5 (the request's
   parameter address) and the caller's stack show whether CE passes virtual
   addresses, which the next step maps.

@@ -38,7 +38,8 @@ _start:
  * KUI_RETAIL_CE (the Windows CE boot test): CE calls with its MMU on and its
  * stack at a virtual address, where a TLB miss with BL set resets the
  * console. That build touches the caller's stack only with the caller's own
- * SR: it masks after the pushes and restores SR before the pops. */
+ * SR: it masks after the pushes and restores SR before the pops. It masks
+ * interrupts only, leaving SR.BL clear throughout (see .Lirq_mask). */
     .section .text.retail_hook,"ax"
     .align 2
     .global C_SYMBOL(kui_retail_resident_hook)
@@ -166,7 +167,14 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     rts
     nop
     .align 2
+#ifdef KUI_RETAIL_CE
+/* Windows CE: interrupts masked, SR.BL left clear, so a TLB miss on CE's
+ * virtual memory (the service reads and writes it directly) goes to CE's own
+ * handler instead of resetting the console. */
+.Lirq_mask: .long 0x000000f0
+#else
 .Lirq_mask: .long 0x100000f0
+#endif
 .Lactive: .long C_SYMBOL(kui_retail_hook_active)
 .Lfault: .long C_SYMBOL(kui_retail_hook_fault)
 .Lprivate_stack: .long KUI_RETAIL_HOOK_STACK-16

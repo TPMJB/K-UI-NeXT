@@ -27,8 +27,16 @@ static void put32(uint8_t *p, uint32_t n) {
 static uint8_t *guest(struct kui_retail_gd *s, uint32_t address,
                       uint32_t bytes, uint32_t align, int writing) {
     uint32_t area = address & 0xff000000u;
-    if(area != 0x0c000000u && area != 0x8c000000u && area != 0xac000000u)
+    if(area != 0x0c000000u && area != 0x8c000000u && area != 0xac000000u) {
+#ifdef KUI_RETAIL_CE
+        /* Windows CE runs with its MMU on and passes virtual addresses: its
+         * resident's map decides whether one is usable (it is not RAM). */
+        if(!bytes || (address & (align - 1u))) return NULL;
+        return s->ops.map(s->ops.context, address, bytes, writing);
+#else
         return NULL;
+#endif
+    }
     uint32_t p1 = (address & 0x00ffffffu) | 0x8c000000u;
     if(!bytes || (p1 & (align - 1u)) || p1 < s->guest_begin ||
        p1 >= s->guest_end || bytes > s->guest_end - p1) return NULL;
