@@ -207,8 +207,7 @@ static void seed(const char *directory) {
         if(i == 2 && !strcmp(test.fault, "bad-ip")) data[16] ^= 1;
         if(i == 2 && !strcmp(test.fault, "bad-bootfile")) data[16 + 96] = 'X';
         if(i == 2 && !strcmp(test.fault, "bad-media")) data[16 + 37] = 'C';
-        if(i == 2 && (!strcmp(test.fault, "windows-ce") || (!strncmp(test.fault, "ce-probe", 8) &&
-            strcmp(test.fault, "ce-probe-native")))) data[16 + 62] = '1';
+        if(i == 2 && !strcmp(test.fault, "windows-ce")) data[16 + 62] = '1';
         if(i == 2 && !strcmp(test.fault, "bad-flags")) data[16 + 60] = 'G';
         if(i == 2 && !strcmp(test.fault, "fragment-limit")) {
             size_t prior = size;

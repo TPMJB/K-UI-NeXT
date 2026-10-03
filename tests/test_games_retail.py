@@ -56,6 +56,10 @@ def make_retail_fixture(folder, case):
         data[16 + 128:16 + 256] = b"Independent Native Game".ljust(128)
     if case == "blank-title":
         data[16 + 128:16 + 256] = b" " * 128
+    if case.startswith("ce-probe") and case != "ce-probe-native":
+        # The IP's peripheral field selects Windows CE (bit zero of its last
+        # digit). Set in the fixture so the mapped tracks still match it.
+        data[16 + 62] = ord("1")
     if case == "alternate-bootfile":
         data[16 + 96:16 + 112] = b"ALT_BOOT.BIN".ljust(16)
         data[20 * 2352 + 16 + 68 + 33:20 * 2352 + 16 + 68 + 47] = b"ALT_BOOT.BIN;1"
