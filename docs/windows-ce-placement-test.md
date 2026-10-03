@@ -70,6 +70,22 @@ Expected values, from the kernel files the owner supplied:
 All three have body and entry at `8C010000`, and physfirst `8C010000` where a
 ROM header exists.
 
+## Console result: ARMADA, build 79f065b4ea88 (2026-10-03)
+
+Passed on the owner's console over SCI microSD. Every value matched the
+table above: prefix `6200729C`, body `B9F755BC`, prefix at `8CE01000`, body at
+`8C010000` (`00131800` bytes, `00000263` sectors, entry `8C010000`), ROM header
+`8C141420` with physfirst `8C010000`, physlast `8C141778`, RAM `8C142000` to
+`8CFD0000`. `STORAGE BLOCKS READ 00000B45` (2885: 74 for the IP, 2811 for
+the file's 612 raw sectors). The IP words at 0xF0–0xFF read `20202020`: that
+range is the end of the IP's 128-byte title field (0x80–0xFF), padding spaces,
+not boot information.
+
+Found while planning the next step: ARMADA's CD driver (`wsegacd.dll`) calls
+the BIOS GD entry `0x8c0010f0` directly, after `SetKMode(1)`, rather than
+through the `0x8c0000bc` vector. The resident already redirects that entry
+(and `0x8c001000`) to itself, so those calls reach K-UI.
+
 ## What it tells us
 
 - That the prefix/body split, the higher stage and the sector checks work on

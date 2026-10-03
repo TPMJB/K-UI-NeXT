@@ -23,6 +23,8 @@ and the expected values for ARMADA, Bust-A-Move 4 and Worms Armageddon.
   checks). Test: copy the `sd-update` artifact's `KUI/runtime.kui` and
   `KUI/apps/games/` (now with `ce-probe.kui`), run the test on ARMADA and
   photograph the result screen.
+- **Console result: passed on ARMADA** (every checksum and address matched;
+  details in the guide). Placement is settled.
 - Next: enter CE (keep the stage alive through the relay), then trace CE's
   first GD calls and IRQ waits before implementing anything.
 
