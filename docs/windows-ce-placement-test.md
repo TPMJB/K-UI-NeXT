@@ -163,6 +163,40 @@ ARMADA's kernel itself (`nk.exe` StartUp at `0x8c0120c0`, reached through a
 jump at the body start) sets its own SR, stack and VBR at once and does not
 read the bootstrap's state, so the reset is most likely inside bootstrap 2.
 
+## Console result: second boot test, build 15b912ccfff5 (2026-10-03)
+
+The same reset, but now clearly after `BOOTSTRAP 2 REACHED GAME ENTRY` and
+the relay's screen: bootstrap 2 completed and the reset happened inside
+Windows CE. The owner supplied ARMADA's IP.BIN (analysis only, not
+committed). Its bootstrap 2 is SEGA's standard one ("IP Ver 1.03", January
+1999): it disables the caches, clears 0x8c00fc00–0x8c010000, sets SR
+`0x700000f0`, R15 and VBR `0x8c00f400`, FPSCR `0x40001`, and jumps to the
+address stored at `0x8c00e004` (`0xac010000`). It never reads IP byte `0xFC`.
+
+Reading ARMADA's kernel image for what CE expects of the BIOS:
+
+- `wsegacd.dll` (the CD driver) reads IP bytes `0xF0`–`0xFB` (a 12-character
+  string) and `0xFD` (4–99) only when byte `0xFC` is 1, so the real BIOS
+  writes boot information there; with `0xFC` not 1 (as on disc, or cleared)
+  the driver takes its "not available" path. It copies 256 bytes from IP
+  `0x100`, the high-density TOC stored on the disc (`TOC1`, tracks 3–5).
+- Its initialization loops on **BIOS system function 2** (`0x8c0000e0`,
+  R4=2) until it is not negative; 0 means the disc is present and unchanged
+  (it then copies the TOC), above 0 clears its TOC. That is the BIOS's
+  check of the disc in the physical drive. K-UI forwarded it to the BIOS,
+  which saw K-UI's own disc or none: the most likely reset.
+- `platutil.dll` calls the BIOS sysinfo, font and flash vectors directly
+  (unchanged by K-UI) and system function 1 (exit to menu, which K-UI already
+  turns into its counters screen and restart).
+- CE's debug output is enabled only on SEGA development hardware (it probes
+  `0xa05f68a0` and looks for a monitor at `0xac008000`/`0xac004000`), so a
+  retail console shows none.
+
+The next build's CE reader answers function 2 itself (0: disc present and
+unchanged), records it in the trace as `E0`, and stops with
+`CE PASSED A VIRTUAL ADDRESS` at the first GD pointer argument (R5 of
+REQUEST/CHECK, R4 of DRIVE/DATATYPE) that is not a main-RAM alias.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the
@@ -179,6 +213,8 @@ read the bootstrap's state, so the reset is most likely inside bootstrap 2.
   yet, or may have overwritten the reader.
 - **The console resets to the BIOS:** an exception CE could not handle,
   possibly inside the reader; note when it happened.
+- **`CE PASSED A VIRTUAL ADDRESS`:** the expected result. The newest row is
+  the call (R4/R5 the address), CALLER/STACK where CE called from.
 - **The reader's stop screen:** the expected result. R5 (the request's
   parameter address) and the caller's stack show whether CE passes virtual
   addresses, which the next step maps.

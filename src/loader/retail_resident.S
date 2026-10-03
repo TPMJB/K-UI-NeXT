@@ -189,6 +189,17 @@ C_SYMBOL(kui_retail_menu_hook):
     mov r4,r0
     cmp/eq #1,r0
     bt .Lmenu_stop
+#ifdef KUI_RETAIL_CE
+    /* Windows CE's CD driver calls function 2, the BIOS check that the disc
+     * in the drive is still the one that booted. The BIOS would ask the
+     * physical drive, holding K-UI's own disc or none: the reader answers
+     * for the image instead, through the common entry as source 4. */
+    cmp/eq #2,r0
+    bf .Lmenu_forward
+    bra .Lgd_common
+    mov #4,r0
+.Lmenu_forward:
+#endif
     mov.l .Lmenu_original,r0
     mov.l @r0,r0
     jmp @r0

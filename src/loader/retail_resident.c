@@ -41,6 +41,10 @@ volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
  * the last four calls' R7, R4, R5 and R6, shown if a call fails. */
 volatile uint32_t kui_retail_hook_caller[2];
 static uint32_t ce_calls[4][4], ce_count;
+static int ram_alias(uint32_t address) {
+    uint32_t area = address & 0xff000000u;
+    return area == 0x0c000000u || area == 0x8c000000u || area == 0xac000000u;
+}
 #endif
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
@@ -348,8 +352,18 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * Font/flash/system BIOS vectors are independent and unchanged. */
     uint32_t source=kui_retail_hook_source;
 #ifdef KUI_RETAIL_CE
+    /* Source 4 is BIOS system function 2, the disc check (recorded as E0):
+     * the image is in the virtual drive, unchanged. */
     uint32_t *call=ce_calls[ce_count++&3u];
-    call[0]=r7; call[1]=r4; call[2]=r5; call[3]=r6;
+    call[0]=source==4u?0xe0u:r7; call[1]=r4; call[2]=r5; call[3]=r6;
+    if(source==4u) return 0;
+    /* Stop at the first pointer CE passes that is not a main-RAM alias: the
+     * service would refuse it, and the trace shows what CE asked for. */
+    uint32_t pointer=r7==KUI_GD_REQUEST || r7==KUI_GD_CHECK ? r5 :
+        r7==KUI_GD_DRIVE || r7==KUI_GD_DATATYPE ? r4 : 0u;
+    if(source!=1u && r6==UINT32_MAX) pointer=0;
+    if(pointer && !ram_alias(pointer))
+        report_fault("CE PASSED A VIRTUAL ADDRESS", r7);
 #endif
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) {

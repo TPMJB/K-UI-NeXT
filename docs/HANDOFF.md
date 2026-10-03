@@ -1,5 +1,16 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: the reset is CE's disc check reaching the real BIOS (2026-10-03 UTC)
+
+Second boot test (`15b912ccfff5`): reset again, now clearly after the relay
+screen, inside Windows CE. ARMADA's IP.BIN (owner-supplied, analysis only)
+has SEGA's standard bootstrap 2, which works. ARMADA's `wsegacd.dll` init
+loops on BIOS system function 2 (`0x8c0000e0`, R4=2), the check of the disc
+in the physical drive, which K-UI forwarded to the BIOS. Next build: the CE
+reader answers it (0, disc present) via the common entry as source 4,
+records it (`E0`), and stops at CE's first non-RAM GD pointer with the
+trace. Details: [windows-ce-placement-test.md](windows-ce-placement-test.md).
+
 ## Windows CE: boot test reset in bootstrap 2; fixes (2026-10-03 UTC)
 
 First boot test (`64f30e3f8ce4`) on ARMADA: `ENTERING OWNER BOOTSTRAP 2`,
