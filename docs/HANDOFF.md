@@ -13,7 +13,8 @@ at the first event that is not the reader's (re-installed at the next GD
 call; `RELEASES`), **Y** keeps its vectors while it streams. An EXEC now
 tops up to 10 blocks since the previous EXEC instead of waiting whenever no
 interrupt came. See [games-background-reader.md](games-background-reader.md).
-Build ID and CI run: pending.
+Build **7462d64cec22** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37099593981)
+(176 bytes free, call-graph stack 220 of 464); console results are pending.
 
 ## Games: background reader, second build (2026-10-03 UTC)
 
