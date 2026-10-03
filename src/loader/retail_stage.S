@@ -325,3 +325,10 @@ __retail_resident_ide_blob_start:
     .incbin "build/retail/resident-ide.bin"
     .align 2
 __retail_resident_ide_blob_end:
+    .section .resident_blob,"a"
+    .align 2
+    .global __retail_resident_scia_blob_start,__retail_resident_scia_blob_end
+__retail_resident_scia_blob_start:
+    .incbin "build/retail/resident-scia.bin"
+    .align 2
+__retail_resident_scia_blob_end:

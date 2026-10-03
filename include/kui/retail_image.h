@@ -11,6 +11,11 @@
 #define KUI_RETAIL_IMAGE_WIRE_BYTES 4096u
 #define KUI_RETAIL_IMAGE_TRACKS 16u
 #define KUI_RETAIL_IMAGE_EXTENTS 128u
+/* Which low resident the stage installs (wire offset 264). The background
+ * reader streams SCI microSD from its own interrupt and holds at most
+ * KUI_RETAIL_ASYNC_EXTENTS extents; validation enforces both. */
+enum kui_retail_reader { KUI_RETAIL_READER_STANDARD, KUI_RETAIL_READER_ASYNC };
+#define KUI_RETAIL_ASYNC_EXTENTS 32u
 /* Extents a manifest holds in memory. The background game reader's resident
  * is built with fewer (KUI_RETAIL_ASYNC_EXTENTS) to fit its receive areas;
  * the layout is otherwise identical, so a prefix copy of a full manifest
@@ -38,6 +43,7 @@ struct kui_retail_manifest {
     uint64_t card_sectors, partition_start, partition_end; /* End exclusive. */
     uint32_t track_count, extent_count, session_lba, boot_lba, boot_bytes;
     uint32_t storage_transport; /* Wire offset28; old zero field means SCIF. */
+    uint32_t reader; /* enum kui_retail_reader; wire offset 264, formerly reserved zero */
     /* boot_crc32 is zero from K-UI: the stage checks each boot sector's
      * header instead of re-reading the file before launch. */
     uint32_t boot_crc32, ip_crc32, gdi_crc32;

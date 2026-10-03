@@ -7,7 +7,8 @@ from pathlib import Path
 import subprocess
 import sys
 
-from check_retail_loader_layout import TRANSPORTS, check_stack_usage
+from check_retail_loader_layout import (ASYNC, RESIDENTS, check_async_stack,
+                                        check_stack_usage, resident_limit)
 import retail_package as layout
 
 
@@ -25,7 +26,7 @@ def symbols(elf):
 def main():
     directory = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("build/retail")
     report = {}
-    for transport in TRANSPORTS:
+    for transport in RESIDENTS:
         elf = directory / f"resident-{transport}.elf"
         nm = subprocess.run(["sh-elf-nm", str(elf)], capture_output=True, text=True,
                             check=True).stdout
@@ -34,16 +35,20 @@ def main():
         end = values["__retail_resident_bss_end"]
         binary = values["__retail_resident_binary_end"]
         try:
-            stack = check_stack_usage(directory / transport, set(values), transport)
+            if transport == ASYNC:
+                stack = check_async_stack(directory / transport)
+                stack["conservative_bytes"] = stack["worst_bytes"]
+            else:
+                stack = check_stack_usage(directory / transport, set(values), transport)
         except ValueError as error:
             stack = {"conservative_bytes": str(error), "available_bytes": None}
         rows = symbols(elf)
         report[transport] = {
             "code_data": binary - layout.RESIDENT_ADDRESS,
             "bss": end - values["__retail_resident_bss_begin"],
-            "free": layout.RESIDENT_LIMIT - end,
+            "free": resident_limit(transport) - end,
             "stack": stack["conservative_bytes"], "stack_limit": stack["available_bytes"],
-            "top": [[n, s, k] for n, s, k in rows[-24:]] if transport == "sci" else [],
+            "top": [[n, s, k] for n, s, k in rows[-16:]] if transport in ("sci", ASYNC) else [],
         }
     print(json.dumps(report, separators=(",", ":")))
 

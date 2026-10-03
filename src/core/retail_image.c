@@ -106,6 +106,8 @@ enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *m,
 #if KUI_RETAIL_MANIFEST_EXTENTS == KUI_RETAIL_IMAGE_EXTENTS
 enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manifest *m) {
     if(!tracks_valid(m) || m->storage_transport > KUI_STORAGE_IDE || !m->card_sectors || m->card_sectors > UINT64_C(0x100000000) ||
+       m->reader > KUI_RETAIL_READER_ASYNC || (m->reader == KUI_RETAIL_READER_ASYNC &&
+           (m->storage_transport != KUI_STORAGE_SCI || m->extent_count > KUI_RETAIL_ASYNC_EXTENTS)) ||
        m->partition_start >= m->partition_end || m->partition_end > m->card_sectors ||
        !m->extent_count || m->extent_count > KUI_RETAIL_IMAGE_EXTENTS ||
        !text_valid(m->title, sizeof(m->title), true) ||
@@ -170,6 +172,7 @@ enum kui_game_result kui_retail_manifest_encode(const struct kui_retail_manifest
     memcpy(out + 72, m->title, 128); memcpy(out + 200, m->product, 16);
     memcpy(out + 216, m->bootfile, 24); memcpy(out + 240, m->region, 16);
     put32(out + 256, m->boot_crc32); put32(out + 260, m->ip_crc32);
+    put32(out + 264, m->reader);
     for(uint32_t i = 0; i < m->track_count; ++i) {
         uint8_t *p = out + TRACK_BASE + i * TRACK_BYTES;
         const struct kui_retail_track *t = &m->tracks[i];
@@ -193,7 +196,7 @@ enum kui_game_result kui_retail_manifest_decode(
        get32(wire + 8) != KUI_RETAIL_IMAGE_VERSION ||
        get32(wire + 12) != KUI_RETAIL_IMAGE_WIRE_BYTES ||
        get32(wire + 16) != wire_crc(wire) ||
-       !zeroes(wire + 264, 56) ||
+       !zeroes(wire + 268, 52) ||
        !zeroes(wire + USED_BYTES, KUI_RETAIL_IMAGE_WIRE_BYTES - USED_BYTES))
         return KUI_GAME_INVALID;
     m->track_count = get32(wire + 20); m->extent_count = get32(wire + 24);
@@ -205,6 +208,7 @@ enum kui_game_result kui_retail_manifest_decode(
     m->boot_lba = get32(wire + 60); m->boot_bytes = get32(wire + 64);
     m->gdi_crc32 = get32(wire + 68);
     m->boot_crc32 = get32(wire + 256); m->ip_crc32 = get32(wire + 260);
+    m->reader = get32(wire + 264);
     memcpy(m->title, wire + 72, 128); memcpy(m->product, wire + 200, 16);
     memcpy(m->bootfile, wire + 216, 24); memcpy(m->region, wire + 240, 16);
     for(uint32_t i = 0; i < KUI_RETAIL_IMAGE_TRACKS; ++i) {

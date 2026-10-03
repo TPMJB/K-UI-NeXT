@@ -7,6 +7,7 @@ from pathlib import Path
 import struct
 
 from check_loader_layout import inspect_elf, padded, region
+import check_retail_stack
 import retail_package as layout
 
 FORBIDDEN_PREFIXES = (
@@ -36,6 +37,25 @@ ASSEMBLY_STACK_BYTES = 256
 STACK_GUARD_BYTES = 16
 STACK_ALIGNMENT_GAP = 32
 TRANSPORTS = ("scif", "sci", "ide")
+# The background SCI reader's resident (manifest reader 1).
+ASYNC = "scia"
+RESIDENTS = TRANSPORTS + (ASYNC,)
+
+
+def resident_limit(transport):
+    return layout.ASYNC_RESIDENT_LIMIT if transport == ASYNC else layout.RESIDENT_LIMIT
+
+
+def stack_bottom(transport):
+    return layout.ASYNC_HOOK_STACK_BOTTOM if transport == ASYNC else layout.HOOK_STACK_BOTTOM
+
+
+def check_async_stack(directory):
+    available = (layout.HOOK_STACK - layout.ASYNC_HOOK_STACK_BOTTOM -
+                 STACK_GUARD_BYTES - STACK_ALIGNMENT_GAP)
+    result = check_retail_stack.check(Path(directory), available)
+    return {"worst_bytes": result["worst_bytes"], "available_bytes": available,
+            "margin": result["margin"], "call_graph": True}
 
 
 def code_symbol(image, name, base):
@@ -108,10 +128,10 @@ def check_directory(directory):
                              layout.EXEC_ADDRESS + layout.STAGE_BLOB_OFFSET +
                              layout.STAGE_MAX_BYTES),
     }
-    for transport in TRANSPORTS:
+    for transport in RESIDENTS:
         name = "resident-" + transport
         images[name] = inspect_elf((directory / (name + ".elf")).read_bytes(),
-                                  layout.RESIDENT_ADDRESS, layout.RESIDENT_LIMIT)
+                                  layout.RESIDENT_ADDRESS, resident_limit(transport))
     for name, image in images.items():
         forbidden = [s for s in image["symbols"] if
                      s.startswith(FORBIDDEN_PREFIXES) or s in FORBIDDEN_SYMBOLS]
@@ -123,7 +143,7 @@ def check_directory(directory):
     check_bss(stage, layout.STAGE_ADDRESS, "__retail_stage")
     ss, es = stage["symbols"], entry["symbols"]
     stacks = {}
-    for transport in TRANSPORTS:
+    for transport in RESIDENTS:
         name = "resident-" + transport
         resident = images[name]
         low_blob = padded((directory / (name + ".bin")).read_bytes())
@@ -131,9 +151,16 @@ def check_directory(directory):
             raise ValueError(f"{name}.bin differs from linked ELF bytes")
         check_bss(resident, layout.RESIDENT_ADDRESS, "__retail_resident")
         required = ["_kui_retail_resident_init", "_kui_retail_resident_hook",
-                    "_kui_retail_resident_dispatch", "_kui_retail_gd_dispatch",
-                    "_kui_retail_image_read"]
-        if transport == "ide":
+                    "_kui_retail_resident_dispatch", "_kui_retail_gd_dispatch"]
+        if transport == ASYNC:
+            required += ["_kui_retail_async_irq", "_kui_retail_irq_entry",
+                         "_kui_retail_vector_forward", "_kui_retail_vector_interrupt",
+                         "_kui_sci_sd_acquire"]
+        else:
+            required += ["_kui_retail_image_read"]
+        if transport == ASYNC:
+            pass
+        elif transport == "ide":
             required += ["_kui_ata_read"]
         else:
             required += ["_kui_loader_sd_stream_next"]
@@ -143,7 +170,7 @@ def check_directory(directory):
             code_symbol(resident, symbol, layout.RESIDENT_ADDRESS)
         rs = resident["symbols"]
         if (rs.get("__retail_hook_stack") != layout.HOOK_STACK or
-                rs.get("__retail_hook_stack_bottom") != layout.HOOK_STACK_BOTTOM):
+                rs.get("__retail_hook_stack_bottom") != stack_bottom(transport)):
             raise ValueError(f"{name} hook stack is outside the reserved retired IP area")
         for symbol in ("_kui_retail_hook_active", "_kui_retail_hook_fault"):
             if not layout.RESIDENT_ADDRESS <= rs.get(symbol, 0) < resident["memory_end"]:
@@ -154,7 +181,14 @@ def check_directory(directory):
                 region(stage["payload"], begin - layout.STAGE_ADDRESS,
                        len(low_blob), "embedded low resident") != low_blob):
             raise ValueError(f"Stage contains a different/invalid low resident: {transport}")
-        stacks[transport] = check_stack_usage(directory / transport, rs, transport)
+        if transport == ASYNC:
+            region_symbol = rs.get("_kui_retail_async_region", 0)
+            if region_symbol % 32 or not (layout.RESIDENT_ADDRESS + 0x100 <= region_symbol and
+                                          region_symbol + 0x760 <= resident["memory_end"]):
+                raise ValueError("Background reader's vector region is misplaced")
+            stacks[transport] = check_async_stack(directory / transport)
+        else:
+            stacks[transport] = check_stack_usage(directory / transport, rs, transport)
 
     for name in ("_kui_retail_stage_main", "_kui_retail_stage_relay",
                  "_kui_retail_bootstrap_enter", "_kui_retail_game_resume"):

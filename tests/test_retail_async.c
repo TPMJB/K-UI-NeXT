@@ -96,6 +96,14 @@ static void fixture(unsigned take_max, bool scattered) {
     }
     CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_OK);
     CHECK(kui_retail_image_init(&reference, &manifest, read_block, NULL) == KUI_GAME_OK);
+    /* The launch map selecting this reader round-trips (SCI, <= 32 extents). */
+    static uint8_t wire[KUI_RETAIL_IMAGE_WIRE_BYTES];
+    static struct kui_retail_manifest decoded;
+    struct kui_retail_manifest async = manifest;
+    async.storage_transport = KUI_STORAGE_SCI; async.reader = KUI_RETAIL_READER_ASYNC;
+    CHECK(kui_retail_manifest_encode(&async, wire) == KUI_GAME_OK && wire[264] == 1);
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
+    CHECK(!memcmp(&decoded, &async, sizeof(async)));
 }
 
 /* ---- Guest memory and GD calls, as the resident makes them ---- */

@@ -190,10 +190,24 @@ RETAIL_RESIDENT_COMMON_SRC := src/loader/retail_resident.c src/core/retail_gd.c 
 RETAIL_SCIF_SRC := $(RETAIL_RESIDENT_COMMON_SRC) src/loader/sd_reader.c src/loader/retail_sd.c
 RETAIL_SCI_SRC := $(RETAIL_SCIF_SRC) src/loader/sci_sd_bus.c
 RETAIL_IDE_SRC := $(RETAIL_RESIDENT_COMMON_SRC) src/core/ata.c src/dreamcast/ata_bus.c
+# The background SCI reader (manifest reader 1): its own CMD18 stream engine
+# and interrupt vectors replace the ordinary block reader. It holds at most
+# 32 extents and runs on a 512-byte stack whose worst case is taken from the
+# compiler's call graph (tools/check_retail_stack.py), not a frame sum.
+RETAIL_SCIA_DEFS := -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 \
+    -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_RETAIL_MANIFEST_EXTENTS=32
+RETAIL_SCIA_SRC := src/loader/retail_resident.c src/core/retail_gd.c src/loader/minic.c \
+    src/core/retail_image.c src/loader/retail_display.c src/loader/sci_sd_bus.c \
+    src/core/retail_cursor.c src/loader/sci_stream.c src/loader/retail_async.c
+RETAIL_SCIA_LINK := $(RETAIL_SCI_FLAGS) -Os -fstack-usage -fcallgraph-info=su -save-temps=obj -Wl,--relax \
+    -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
+    -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch -Wl,-u,_kui_retail_async_irq
 RETAIL_SCIF := $(patsubst %.c,build/retail/scif/%.o,$(RETAIL_SCIF_SRC)) build/retail/scif/src/loader/retail_resident_asm.o
 RETAIL_SCI := $(patsubst %.c,build/retail/sci/%.o,$(RETAIL_SCI_SRC)) build/retail/sci/src/loader/retail_resident_asm.o
 RETAIL_IDE := $(patsubst %.c,build/retail/ide/%.o,$(RETAIL_IDE_SRC)) build/retail/ide/src/loader/retail_resident_asm.o
-RETAIL_RESIDENT_BINS := build/retail/resident-scif.bin build/retail/resident-sci.bin build/retail/resident-ide.bin
+RETAIL_SCIA := $(patsubst %.c,build/retail/scia/%.o,$(RETAIL_SCIA_SRC)) build/retail/scia/src/loader/retail_resident_asm.o
+RETAIL_RESIDENT_BINS := build/retail/resident-scif.bin build/retail/resident-sci.bin build/retail/resident-ide.bin \
+    build/retail/resident-scia.bin
 RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
     build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
 RETAIL_BENCH_STAGE := build/retail/src/loader/retail_stage_asm.o \
@@ -242,6 +256,20 @@ build/retail/resident-ide.elf: $(RETAIL_IDE) src/loader/retail_resident.ld
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-ide.map -o $@ $(RETAIL_IDE) -lgcc
 build/retail/resident-ide.bin: build/retail/resident-ide.elf
 	sh-elf-objcopy -O binary $< $@
+build/retail/scia/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -MMD -MP -c $< -o $@
+build/retail/scia/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -MMD -MP -c $< -o $@
+build/retail/scia/src/loader/retail_display.o: force-build-id
+build/retail/resident-scia.elf: $(RETAIL_SCIA) src/loader/retail_resident_async.ld
+	@mkdir -p build/retail/scia/lto
+	rm -f build/retail/resident-scia.elf.ltrans* build/retail/scia/lto/*
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCIA_LINK) -Tsrc/loader/retail_resident_async.ld -Wl,-Map,build/retail/resident-scia.map -o $@ $(RETAIL_SCIA) -lgcc
+	cp build/retail/resident-scia.elf.ltrans*.su build/retail/resident-scia.elf.ltrans*.ci build/retail/scia/lto/
+build/retail/resident-scia.bin: build/retail/resident-scia.elf
+	sh-elf-objcopy -O binary $< $@
 build/retail/src/loader/retail_stage_asm.o: $(RETAIL_RESIDENT_BINS)
 build/retail/stage.elf: $(RETAIL_STAGE) src/loader/retail_stage.ld
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,build/retail/stage.map -o $@ $(RETAIL_STAGE) -lgcc
@@ -269,10 +297,10 @@ build/retail-bench/retail_entry_asm.o: src/loader/retail_entry.S build/retail-be
 build/retail-bench/entry.elf: build/retail-bench/retail_entry_asm.o src/loader/retail_entry.ld build/retail/entry.elf
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail-bench/entry.map -o $@ $<
 	cp build/retail/resident-*.elf build/retail/resident-*.bin build/retail/resident-*.map build/retail-bench/
-	cp -r build/retail/src build/retail/scif build/retail/sci build/retail/ide build/retail-bench/
+	cp -r build/retail/src build/retail/scif build/retail/sci build/retail/ide build/retail/scia build/retail-bench/
 	python3 tools/check_retail_instructions.py build/retail-bench
 	python3 tools/check_retail_loader_layout.py build/retail-bench
 	python3 tools/record_build.py $@
 
--include $(RETAIL_SCIF:.o=.d) $(RETAIL_SCI:.o=.d) $(RETAIL_IDE:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
+-include $(RETAIL_SCIF:.o=.d) $(RETAIL_SCI:.o=.d) $(RETAIL_IDE:.o=.d) $(RETAIL_SCIA:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
 -include $(RETAIL_BENCH_STAGE:.o=.d) build/retail-bench/retail_entry_asm.d

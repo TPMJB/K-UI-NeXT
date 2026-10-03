@@ -31,12 +31,19 @@
 /* DOA2 T3601N V1.100 fills C000..F3FF with its startup stack marker.
  * Both resident state and the guarded service stack must stay below C000.
  * The native build checks the linked end and conservative .su stack sum. */
-#define KUI_RETAIL_RESIDENT_LIMIT 0x8c00bb00
-#define KUI_RETAIL_HOOK_STACK_BOTTOM 0x8c00bb00
+#define KUI_RETAIL_STANDARD_LIMIT 0x8c00bb00
+/* The background SCI reader's resident (built with KUI_RETAIL_ASYNC) has its
+ * worst-case stack proven from the compiler's call graph
+ * (tools/check_retail_stack.py) instead of summing every frame, so its
+ * guarded stack is 512 bytes and its image may extend to here. */
+#define KUI_RETAIL_ASYNC_LIMIT 0x8c00be00
+#ifdef KUI_RETAIL_ASYNC
+#define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_ASYNC_LIMIT
+#else
+#define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_STANDARD_LIMIT
+#endif
+#define KUI_RETAIL_HOOK_STACK_BOTTOM KUI_RETAIL_RESIDENT_LIMIT
 #define KUI_RETAIL_HOOK_STACK 0x8c00c000
 #define KUI_RETAIL_RAM_END 0x8d000000
-/* The background SCI reader's resident holds this many file extents (its
- * receive areas take the rest); a map with more uses the ordinary reader. */
-#define KUI_RETAIL_ASYNC_EXTENTS 32u
 
 #endif

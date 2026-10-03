@@ -17,6 +17,8 @@ extern const uint8_t __retail_resident_sci_blob_start[] __asm__("__retail_reside
 extern const uint8_t __retail_resident_sci_blob_end[] __asm__("__retail_resident_sci_blob_end");
 extern const uint8_t __retail_resident_ide_blob_start[] __asm__("__retail_resident_ide_blob_start");
 extern const uint8_t __retail_resident_ide_blob_end[] __asm__("__retail_resident_ide_blob_end");
+extern const uint8_t __retail_resident_scia_blob_start[] __asm__("__retail_resident_scia_blob_start");
+extern const uint8_t __retail_resident_scia_blob_end[] __asm__("__retail_resident_scia_blob_end");
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
@@ -44,9 +46,19 @@ static uint8_t raw_boot[BOOT_CHUNK_SECTORS*KUI_GAME_RAW_BYTES];
 static uint32_t boot_crc;
 static const uint8_t *resident_blob;
 static size_t resident_bytes;
+static uint32_t resident_limit;
 
 static void select_resident(void) {
     const uint8_t *end;
+    resident_limit=KUI_RETAIL_STANDARD_LIMIT;
+    /* Decoding accepted the background reader only for SCI with at most
+     * KUI_RETAIL_ASYNC_EXTENTS extents, the most its resident holds. */
+    if(manifest.reader==KUI_RETAIL_READER_ASYNC) {
+        resident_blob=__retail_resident_scia_blob_start;
+        resident_bytes=(size_t)(__retail_resident_scia_blob_end-resident_blob);
+        resident_limit=KUI_RETAIL_ASYNC_LIMIT;
+        return;
+    }
     switch(manifest.storage_transport) {
         case KUI_STORAGE_SCIF:
             resident_blob=__retail_resident_scif_blob_start;
@@ -121,7 +133,7 @@ void kui_retail_boot_returned(void) {
 
 static void install_resident(void) {
     size_t bytes=resident_bytes;
-    if(!bytes || bytes>KUI_RETAIL_RESIDENT_LIMIT-KUI_RETAIL_RESIDENT_ADDRESS)
+    if(!bytes || bytes>resident_limit-KUI_RETAIL_RESIDENT_ADDRESS)
         stopped("RESIDENT BOUNDS FAILED",(uint32_t)bytes);
     uint32_t firmware=*(volatile uint32_t *)(uintptr_t)0x8c0000bcu;
     uintptr_t canonical=(firmware&0x1fffffffu)|0x80000000u;
@@ -148,6 +160,8 @@ void kui_retail_stage_main(const uint8_t *wire) {
         stopped("UNSUPPORTED BOOT LAYOUT",manifest.boot_bytes);
     if(manifest.storage_transport==KUI_STORAGE_SCIF) retire_launcher_serial();
     retail_display_line(kui_retail_storage_name(manifest.storage_transport));
+    if(manifest.reader==KUI_RETAIL_READER_ASYNC)
+        retail_display_line("BACKGROUND READER - SCI TEST BUILD");
     last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {
         if(card.transport!=KUI_STORAGE_IDE) {

@@ -131,6 +131,20 @@ static void wire_tests(void) {
         CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
         CHECK(decoded.storage_transport == transport);
     }
+    /* The background reader (wire offset 264) needs SCI and at most
+     * KUI_RETAIL_ASYNC_EXTENTS extents (this map has more; the reader's own
+     * test round-trips a small one); old maps carry zero there. */
+    CHECK(manifest.extent_count > KUI_RETAIL_ASYNC_EXTENTS);
+    manifest.reader = KUI_RETAIL_READER_ASYNC;
+    for(uint32_t transport = KUI_STORAGE_SCIF; transport <= KUI_STORAGE_IDE; ++transport) {
+        manifest.storage_transport = transport;
+        CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+        CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_INVALID);
+    }
+    manifest.reader = 2;
+    manifest.storage_transport = KUI_STORAGE_SCIF;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+    manifest.reader = KUI_RETAIL_READER_STANDARD;
     manifest.storage_transport = KUI_STORAGE_SCIF;
     CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
     put32(wire + 28, KUI_STORAGE_AUTO); refresh_crc();
@@ -146,7 +160,7 @@ static void wire_tests(void) {
         wire[i] ^= 1;
     }
     /* Valid CRC cannot bless noncanonical fields, unused entries or text tails. */
-    const unsigned reserved[] = {31, 264, 319, 344, 351, 320 + 4 * 32,
+    const unsigned reserved[] = {31, 265, 268, 319, 344, 351, 320 + 4 * 32,
         832 + manifest.extent_count * 12, 2368, 4095,
         72 + sizeof("Original retail image test"), 200 + sizeof("KUITEST"),
         216 + sizeof("1ST_READ.BIN"), 240 + sizeof("JUE")};

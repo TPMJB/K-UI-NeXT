@@ -9,7 +9,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import retail_package as layout
-from check_retail_loader_layout import check_directory, check_stack_usage, TRANSPORTS
+from check_retail_loader_layout import check_directory, check_stack_usage, RESIDENTS, TRANSPORTS
+import check_retail_stack
 from image_probe_package import inspect_image_probe
 from loader_package import inspect_probe
 from package import release_metadata
@@ -37,8 +38,8 @@ class RetailPackage(unittest.TestCase):
             "STAGE_ADDRESS": layout.STAGE_ADDRESS, "STAGE_MAX_BYTES": layout.STAGE_MAX_BYTES,
             "STAGE_MEMORY_END": layout.STAGE_MEMORY_END, "STAGE_STACK": layout.STAGE_STACK,
             "EXEC_ADDRESS": layout.EXEC_ADDRESS, "EXEC_MAX_BYTES": layout.EXEC_MAX_BYTES,
-            "RESIDENT_ADDRESS": layout.RESIDENT_ADDRESS, "RESIDENT_LIMIT": layout.RESIDENT_LIMIT,
-            "HOOK_STACK_BOTTOM": layout.HOOK_STACK_BOTTOM, "HOOK_STACK": layout.HOOK_STACK,
+            "RESIDENT_ADDRESS": layout.RESIDENT_ADDRESS, "STANDARD_LIMIT": layout.RESIDENT_LIMIT,
+            "ASYNC_LIMIT": layout.ASYNC_RESIDENT_LIMIT, "HOOK_STACK": layout.HOOK_STACK,
             "TRAMPOLINE_BYTES": layout.TRAMPOLINE_BYTES,
         }
         for suffix, value in names.items():
@@ -47,6 +48,13 @@ class RetailPackage(unittest.TestCase):
                 self.assertIsNotNone(found)
                 self.assertEqual(int(found.group(1), 0), value)
         self.assertIn('#define KUI_RETAIL_PACKAGE_MAGIC "KUIRBT01"', source)
+        # Each resident's stack sits directly above its image limit.
+        self.assertIn("#define KUI_RETAIL_HOOK_STACK_BOTTOM KUI_RETAIL_RESIDENT_LIMIT", source)
+        self.assertEqual(layout.HOOK_STACK_BOTTOM, layout.RESIDENT_LIMIT)
+        self.assertEqual(layout.ASYNC_HOOK_STACK_BOTTOM, layout.ASYNC_RESIDENT_LIMIT)
+        script = (ROOT / "src/loader/retail_resident_async.ld").read_text()
+        self.assertIn(f"__retail_hook_stack_bottom = 0x{layout.ASYNC_HOOK_STACK_BOTTOM:08x};", script)
+        self.assertIn(f"__retail_resident_bss_end <= 0x{layout.ASYNC_RESIDENT_LIMIT:08x},", script)
 
     def test_valid_minimum_normal_and_maximum(self):
         for size in (4, 16, layout.STAGE_MAX_BYTES):
@@ -210,6 +218,78 @@ class ResidentStackReports(unittest.TestCase):
                 check_stack_usage(tmp, symbols, "sci")
 
 
+class CallGraphStack(unittest.TestCase):
+    """The background reader's stack bound from GCC -fcallgraph-info=su."""
+    frames = {"kui_retail_resident_dispatch": 48, "kui_retail_gd_dispatch": 172,
+              "guest": 0, "kui_retail_async_irq": 16, "deliver": 64,
+              "kui_sci_stream_fetch.constprop.0": 40, "byte": 0, "kui_retail_menu_return": 12,
+              "retail_display_line": 48, "map_guest": 8, "check_sectors": 4,
+              "transfer": 24, "select_card": 16, "write_out": 12, "reverse.lto_priv.0": 0}
+    calls = [("kui_retail_resident_dispatch", "kui_retail_gd_dispatch", ""),
+             ("kui_retail_resident_dispatch", "deliver", ""),
+             ("kui_retail_gd_dispatch", "guest", ""),
+             ("guest", "__indirect_call", "retail_gd.c:35:12"),
+             ("kui_retail_gd_dispatch", "__indirect_call", "retail_gd.c:131:16"),
+             ("kui_retail_async_irq", "deliver", ""),
+             ("deliver", "kui_sci_stream_fetch.constprop.0", ""),
+             ("deliver", "__indirect_call", "retail_cursor.c:57:9"),
+             ("deliver", "reverse.lto_priv.1", ""),
+             ("write_out", "__indirect_call", "retail_async.c:111:20"),
+             ("kui_sci_stream_fetch.constprop.0", "byte", ""),
+             ("byte", "__indirect_call", "sci_stream.c:72:45"),
+             ("kui_retail_menu_return", "retail_display_line", ""),
+             ("kui_retail_menu_return", "__indirect_call", "retail_resident.c:214:5"),
+             ("deliver", "__udivsi3", "")]
+
+    @staticmethod
+    def graph(frames, calls, kind="static"):
+        prefix = "/tmp/x/resident.elf.ltrans0.o:"
+        title = lambda f: f if f.startswith("__") or f.startswith("kui_retail_") else prefix + f
+        lines = ['graph: { title: "x"']
+        for function, frame in frames.items():
+            lines.append(f'node: {{ title: "{title(function)}" label: "{function.split(".")[0]}'
+                         f'\\n../src/x.c:1:1\\n{frame} bytes ({kind})" }}')
+        lines.append('node: { title: "__indirect_call" label: "Indirect Call Placeholder" shape : ellipse }')
+        for source, target, label in calls:
+            lines.append(f'edge: {{ sourcename: "{title(source)}" targetname: "{title(target)}" '
+                         f'label: "../../src/loader/{label or "x.c:1:1"}" }}')
+        return "\n".join(lines) + "\n}\n"
+
+    def check(self, frames=None, calls=None, kind="static", available=464):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "lto").mkdir()
+            (Path(tmp) / "lto/r.ltrans0.ltrans.ci").write_text(
+                self.graph(frames or self.frames, calls or self.calls, kind))
+            return check_retail_stack.check(tmp, available)
+
+    def test_deepest_path_per_entry_with_callbacks(self):
+        result = self.check()
+        # dispatch 48 + gd 172 + guest 0 + deepest GD callback (map 8, check 4).
+        self.assertEqual(result["paths"]["kui_retail_resident_dispatch"]["bytes"], 228)
+        # entry 44 + irq 16 + deliver 64 + fetch 40 + byte 0 + transfer 24.
+        self.assertEqual(result["paths"]["kui_retail_async_irq"]["bytes"], 188)
+        self.assertEqual(result["paths"]["kui_retail_menu_return"]["bytes"], 60)
+        self.assertEqual(result["worst_bytes"], 228)
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            self.check(available=228 + 63)
+
+    def test_unknown_indirect_recursion_dynamic_and_missing_reject(self):
+        with self.assertRaisesRegex(ValueError, "Unexpected indirect"):
+            self.check(calls=self.calls + [("deliver", "__indirect_call", "other.c:1:1")])
+        with self.assertRaisesRegex(ValueError, "Recursion"):
+            self.check(calls=self.calls + [("transfer", "deliver", "")])
+        with self.assertRaisesRegex(ValueError, "Dynamic"):
+            self.check(kind="dynamic")
+        frames = dict(self.frames); del frames["write_out"]
+        with self.assertRaisesRegex(ValueError, "Missing callback"):
+            self.check(frames=frames)
+        with self.assertRaisesRegex(ValueError, "without a frame"):
+            self.check(calls=self.calls + [("deliver", "unknown_function", "")])
+        with self.assertRaisesRegex(ValueError, "Missing compiler call-graph"):
+            with tempfile.TemporaryDirectory() as tmp:
+                check_retail_stack.check(tmp, 464)
+
+
 class RetailLinkedLayout(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -219,18 +299,25 @@ class RetailLinkedLayout(unittest.TestCase):
         self.symbols = {"stage": {}, "entry": {}}
         self.memory = {"stage": 1024}
         ss, es = self.symbols["stage"], self.symbols["entry"]
-        for transport in TRANSPORTS:
+        for transport in RESIDENTS:
             name = "resident-" + transport
             self.bases[name] = layout.RESIDENT_ADDRESS
             self.payload[name] = bytearray(128)
             # Distinct bytes expose accidentally swapped transport blobs.
-            self.payload[name][0] = TRANSPORTS.index(transport)
-            self.memory[name] = 512
+            self.payload[name][0] = RESIDENTS.index(transport)
+            self.memory[name] = 0x900 if transport == "scia" else 512
             rs = self.symbols[name] = {}
             required = ["kui_retail_resident_init", "kui_retail_resident_hook",
-                        "kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
-                        "kui_retail_image_read"]
-            if transport == "ide":
+                        "kui_retail_resident_dispatch", "kui_retail_gd_dispatch"]
+            if transport == "scia":
+                required += ["kui_retail_async_irq", "kui_retail_irq_entry",
+                             "kui_retail_vector_forward", "kui_retail_vector_interrupt",
+                             "kui_sci_sd_acquire"]
+            else:
+                required += ["kui_retail_image_read"]
+            if transport == "scia":
+                pass
+            elif transport == "ide":
                 required += ["kui_ata_read"]
             else:
                 required += ["kui_loader_sd_stream_next"]
@@ -239,7 +326,8 @@ class RetailLinkedLayout(unittest.TestCase):
             for index, symbol in enumerate(required):
                 rs["_" + symbol] = layout.RESIDENT_ADDRESS + 4 + index * 4
             rs.update({"__retail_hook_stack": layout.HOOK_STACK,
-                       "__retail_hook_stack_bottom": layout.HOOK_STACK_BOTTOM,
+                       "__retail_hook_stack_bottom": layout.ASYNC_HOOK_STACK_BOTTOM
+                       if transport == "scia" else layout.HOOK_STACK_BOTTOM,
                        "_kui_retail_hook_active": layout.RESIDENT_ADDRESS + 128,
                        "_kui_retail_hook_fault": layout.RESIDENT_ADDRESS + 132})
             frames = list(ResidentStackReports.required)
@@ -247,6 +335,12 @@ class RetailLinkedLayout(unittest.TestCase):
                 frames[-1] = "kui_ata_read"
             report = "\n".join(f"test.c:1:1:{frame}\t32\tstatic" for frame in frames)
             (self.directory / transport).mkdir()
+            if transport == "scia":
+                rs["_kui_retail_async_region"] = layout.RESIDENT_ADDRESS + 0x100
+                (self.directory / transport / "lto").mkdir()
+                (self.directory / transport / "lto/resident-scia.elf.ltrans0.ltrans.ci").write_text(
+                    CallGraphStack.graph(CallGraphStack.frames, CallGraphStack.calls))
+                continue
             if transport == "sci":
                 (self.directory / transport / "lto").mkdir()
                 report_path = self.directory / transport / "lto/resident-sci.elf.ltrans0.ltrans.su"
@@ -260,7 +354,7 @@ class RetailLinkedLayout(unittest.TestCase):
         ss["__retail_trampoline_end"] = layout.STAGE_ADDRESS + 256
         struct.pack_into("<I", self.payload["stage"], 240,
                          ss["_kui_retail_game_resume"] | 0x20000000)
-        for transport in TRANSPORTS:
+        for transport in RESIDENTS:
             label = "__retail_resident_" + transport + "_blob_"
             ss[label + "start"] = layout.STAGE_ADDRESS + len(self.payload["stage"])
             self.payload["stage"] += self.payload["resident-" + transport]
@@ -294,6 +388,28 @@ class RetailLinkedLayout(unittest.TestCase):
         for transport in TRANSPORTS:
             self.assertEqual(result["resident-" + transport]["payload_bytes"], 128)
             self.assertEqual(result["resident_stacks"][transport]["conservative_bytes"], 384)
+        self.assertEqual(result["resident-scia"]["payload_bytes"], 128)
+        self.assertEqual(result["resident_stacks"]["scia"]["worst_bytes"], 48 + 172 + 8)
+
+    def test_background_reader_stack_region_and_symbols(self):
+        rs = self.symbols["resident-scia"]
+        rs["__retail_hook_stack_bottom"] = layout.HOOK_STACK_BOTTOM; self.write()
+        with self.assertRaisesRegex(ValueError, "hook stack"):
+            check_directory(self.directory)
+        rs["__retail_hook_stack_bottom"] = layout.ASYNC_HOOK_STACK_BOTTOM
+        rs["_kui_retail_async_region"] += 4; self.write()
+        with self.assertRaisesRegex(ValueError, "vector region"):
+            check_directory(self.directory)
+        rs["_kui_retail_async_region"] -= 4
+        del rs["_kui_retail_irq_entry"]; self.write()
+        with self.assertRaisesRegex(ValueError, "Missing retail executable symbol"):
+            check_directory(self.directory)
+        rs["_kui_retail_irq_entry"] = layout.RESIDENT_ADDRESS + 8
+        report = self.directory / "scia/lto/resident-scia.elf.ltrans0.ltrans.ci"
+        frames = dict(CallGraphStack.frames, deliver=400)
+        report.write_text(CallGraphStack.graph(frames, CallGraphStack.calls)); self.write()
+        with self.assertRaisesRegex(ValueError, "worst-case stack"):
+            check_directory(self.directory)
 
     def test_embedded_identity_timer_import_and_guard(self):
         self.payload["resident-scif"][0] = 1; self.write()

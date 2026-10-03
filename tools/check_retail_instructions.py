@@ -17,7 +17,7 @@ import sys
 def main():
     directory = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('build/retail')
     instructions = 0
-    for name in ('resident-scif', 'resident-sci', 'resident-ide', 'stage', 'entry'):
+    for name in ('resident-scif', 'resident-sci', 'resident-ide', 'resident-scia', 'stage', 'entry'):
         disassembly = subprocess.check_output(
             ['sh-elf-objdump', '-d',
              str(directory / (name + '.elf'))], text=True)
