@@ -1,5 +1,19 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background SCI reader, first test build (2026-10-03 UTC)
+
+The owner asked for the asynchronous game loader. On the Launch game
+confirmation, **X** now launches with a background SCI reader (A keeps the
+standard one): a CMD18 stream received by DMA, each block finished by the
+reader's own interrupt (DMTE1/SCI ERI through a vector table it places in
+front of the game's only while a block is in flight), with EXEC waiting for
+blocks itself whenever no interrupt is delivering. It is a fourth low
+resident (`resident-scia`, 32 extents, 512-byte stack proven from GCC's call
+graph). Design, risks, the counters screen and the DOA2 test steps:
+[games-background-reader.md](games-background-reader.md). Host tests:
+`test-sci-stream`, `test-retail-cursor`, `test-retail-async`,
+`test-retail-gd-async`. Console results are pending.
+
 ## SCI async: reader final; game loader next (2026-10-03 UTC)
 
 `9e6ccca3dd9e` on the console: no pauses, longest call 371 us, longest

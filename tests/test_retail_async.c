@@ -31,6 +31,7 @@ static struct {
     uint16_t iprb, iprc;
     unsigned acquires, writes, vbr_sets;
     bool frozen; /* a cancelled read must write nothing more */
+    bool busy_bus; /* the SCI cannot be claimed */
 } hw;
 uint32_t kui_retail_async_test_vbr(void) { return hw.vbr; }
 void kui_retail_async_test_set_vbr(uint32_t value) { hw.vbr = value; ++hw.vbr_sets; }
@@ -43,7 +44,10 @@ void kui_retail_async_test_write16(uint32_t address, uint16_t value) {
     if(address == IPRB) hw.iprb = value;
     else {assert(address == IPRC); hw.iprc = value;}
 }
-enum kui_loader_sd_result kui_sci_sd_acquire(void) { ++hw.acquires; return KUI_LOADER_SD_OK; }
+enum kui_loader_sd_result kui_sci_sd_acquire(void) {
+    ++hw.acquires;
+    return hw.busy_bus ? KUI_LOADER_SD_UNSUPPORTED : KUI_LOADER_SD_OK;
+}
 const uint32_t kui_retail_vector_forward[4] = {0x11111111u, 0x22222222u, 0x33333333u, 0};
 const uint32_t kui_retail_vector_interrupt[13] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0xff000028u, 0, 12, 13};
 static uint32_t our_vbr(void) { return (uint32_t)(uintptr_t)&R - 0x100u; }
@@ -336,6 +340,18 @@ static void test_read_fails_after_retries(void) {
     CHECK(finish(token, true, 1) == KUI_GD_FAILED);
     CHECK(get(STATUS + 4) == KUI_GD_ERROR_IO && R.shared.service.error == KUI_GD_ERROR_IO);
     CHECK(R.engine.stats.max_retries == 9 && hw.vbr == GAME_VBR);
+    /* A bus that cannot be claimed fails the read with nothing delivered,
+     * even after an earlier read completed. */
+    setup(GAME_VBR, 0, 2000, false);
+    hw.busy_bus = true;
+    token = request(45000, 5, OUTPUT);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_IO && get(STATUS + 8) == 0 && hw.vbr == GAME_VBR);
+    setup(GAME_VBR, 0, 2000, false);
+    read_and_compare(45000, 7, true, 0);
+    R.engine.opened = 0; hw.busy_bus = true;
+    token = request(45010, 5, OUTPUT);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED && get(STATUS + 8) == 0);
     /* A latched bus fault ends the read at once. */
     setup(GAME_VBR, 0, 2000, false);
     token = request(45000, 20, OUTPUT);

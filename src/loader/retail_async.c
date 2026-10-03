@@ -161,6 +161,7 @@ static void start(void) {
     struct kui_retail_gd *s = &R.shared.service;
     e.token = s->token;
     e.failed = 0; e.retries = 0; e.active = 0;
+    e.cursor.done = 0; /* a read that fails here delivered nothing */
     e.destination = (s->destination & 0x00ffffffu) | 0x8c000000u;
     if((!e.opened && !open_bus()) ||
        kui_retail_cursor_begin(&e.cursor, e.manifest, s->lba, s->count,
