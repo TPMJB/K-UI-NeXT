@@ -134,13 +134,14 @@ static struct {
     bool cs_high, healthy, rx, stall;
     uint32_t sar, dar, tcr, chcr, dmaor;
     unsigned rx_delay, delay, overrun_after, overrun_again, received;
+    unsigned overrun_every; /* every DMA reception overruns at this byte */
     /* After an overrun the channel, back on the bus, takes the byte RDR
      * still held (as the console does); false: it stays held off until the
      * reception is stopped, and RDR keeps that byte. */
     bool late_take;
     bool foreign_during_rx;
     uint8_t *areas[2];
-    unsigned purges, module_resets, dma_starts, irq_starts, settles;
+    unsigned purges, module_resets, dma_starts, irq_starts, settles, fences;
     uint32_t armed_chcr;
 } m;
 static uint8_t *memory(uint32_t address) {
@@ -158,8 +159,9 @@ static void receive(void) {
     for(;;) {
         uint8_t wire = rev8(card_clock(0xff));
         ++m.received;
+        unsigned at = m.overrun_every ? m.overrun_every : m.overrun_after;
         bool dma = (m.chcr & 1u) && m.tcr && m.sar == (RDR & 0x1fffffffu) && (m.dmaor & 7u) == 1u &&
-            !(m.overrun_after && 513u - m.tcr == m.overrun_after);
+            !(at && 513u - m.tcr == at);
         if(dma) {
             *memory(m.dar++) = wire;
             if(!--m.tcr) m.chcr |= 2u;
@@ -237,6 +239,7 @@ void kui_sci_stream_test_write(uint32_t address, uint32_t value, unsigned width)
     }
 }
 void kui_sci_stream_test_settle(unsigned count) { (void)count; ++m.settles; }
+void kui_sci_stream_test_fence(void) { ++m.fences; }
 uint32_t kui_sci_stream_test_physical(const void *area) {
     for(unsigned i = 0; i < 2; ++i) if(area == m.areas[i]) return AREA_BASE + i * 0x1000u;
     assert(!"unknown area");

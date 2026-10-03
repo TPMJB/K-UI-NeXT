@@ -8,11 +8,10 @@ reader streams the request from the card while the game runs instead.
 It is chosen per launch: on the **Launch game** confirmation, **A** launches
 with the standard reader, **X** with the background reader whose EXEC tops
 reading up to the standard reader's step, and **Y** with the background
-reader whose GD calls wait for at most one block (see *How long a GD call
-waits*). It needs SCI microSD and a launch map of at most 32 file extents (a
+reader whose CHECK does so too (see *How long a GD call waits*). It needs SCI microSD and a launch map of at most 32 file extents (a
 freshly copied game has a handful); otherwise the launch uses the standard
 reader and the log says why. The stage screen shows
-`BACKGROUND READER X - EXEC TOP UP` or `BACKGROUND READER Y - SMOOTH` when it
+`BACKGROUND READER X - EXEC TOP UP` or `BACKGROUND READER Y - EAGER` when it
 is installed.
 
 ## How it works
@@ -49,13 +48,18 @@ is installed.
   is still detected 255 times in 256. Only a lost CRC byte or a second
   overrun in one block restarts the stream. Resuming relies on the card
   continuing mid-block after a deselection, which DOA2's fourth run showed
-  working (36 repairs). If two repaired blocks fail their CRC, repair is
-  switched off for the session and overruns restart the stream as before;
-  one alone (a stray bit error) leaves it on.
+  working (36 repairs). About 5% of repairs failed their CRC on the console;
+  the likeliest cause, the channel's last write still held off the bus when
+  the reception is stopped, is now ruled out by an uncached read of main
+  memory first (the DMAC goes before the CPU on the bus). If two repaired
+  blocks fail their CRC, repair is switched off for the session and
+  overruns restart the stream as before; one alone leaves it on.
 * CRC errors, other overruns, missing tokens and a busy DMA channel are
   retried at the same block (a busy channel is read by programmed
-  transfers). Eight failures in a row at one block, or a bus fault, end the
-  read with the usual `IMAGE READ FAILED` screen.
+  transfers). From the second failure in a row at a block, it is read by
+  programmed transfers (masked, about 0.7 ms), which cannot overrun however
+  long the game holds the bus. Nine failures in a row at one block, or a bus
+  fault, end the read with the usual `IMAGE READ FAILED` screen.
 
 ### How long a GD call waits
 
@@ -68,11 +72,11 @@ shows as lag.
   not at all when the interrupt delivered 10 or more. A game is never slower
   than with the standard reader. In DOA2's fourth run 4,611 EXECs still
   waited, about 10 blocks (4.4 ms) each.
-* **Y:** an EXEC or CHECK waits for at most the block in flight (about
-  0.4 ms), and only when nothing arrived since the previous GD call. A game
-  spinning on CHECK for its read still reads at the card's speed; a game busy
-  drawing loses little time, but its reads may take longer when the
-  interrupt cannot deliver.
+* **Y (eager):** a CHECK tops up like an EXEC, counting blocks since either.
+  More data per frame while the interrupt is held off, and more masked time.
+  (The fifth build's Y waited for at most one block per call instead; DOA2's
+  loads and intro took far longer, so the lag there is the game waiting for
+  data, not the waits themselves.)
 
 ### The interrupt
 
@@ -134,9 +138,7 @@ standard residents are unchanged.
   interrupt or GD call, as the standard reader always does (usually 1-2 ms).
 * The interrupt waits whenever the game masks interrupts or runs its own
   handlers (the reader's vectors are released then): in DOA2's fourth run it
-  delivered 41% of blocks. Y gives up the rest of X's guarantee to avoid
-  long waits, so with Y a read can take longer than with the standard reader
-  where the interrupt cannot deliver; untested on hardware.
+  delivered 41% of blocks, during boot almost none (the fifth run).
 * Game code that reads VBR (rather than its own handlers) while a block is
   in flight sees the reader's. DOA2 has not minded.
 
@@ -217,18 +219,33 @@ Y waits for at most one block per call, repair survives one failure, and new
 counters show when and from where EXEC is called and when the interrupt was
 held off.
 
+## Fifth console run (40e7e2b71c61)
+
+Y (at most one block per call) was much slower: the first try still had not
+reached the title screen after 20 seconds (counters then: 101 of 13,141
+blocks by interrupt, `IRQS` 120, `WAITS` 13,021 single blocks, `EXECS`
+6,548 of which `EXEC INT` 2,172 from interrupt handlers, `STALLED` 1,987).
+The second try took 30 s to the title, 10 s from Kasumi to the fight, then
+30 s of intro lag before the fight started (6 to 7 s with the fourth
+build). So during boot DOA2 keeps interrupts masked and only its GD calls
+move data, and the intro lag is the game waiting for data. That run later
+stopped with `IMAGE READ FAILED` during an EXEC: 1,941 overruns (4%), 61
+repairs before two failed, and nine failures in a row at one block. The
+sixth build reads a block by programmed transfers from its second failure,
+fences the channel's last write before counting, and makes Y an eager X.
+
 ## Console test (DOA2)
 
 1. Install `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` from the
    build's `sd-update` artifact. Storage must be SCI microSD.
-2. Games, select DOA2, A to inspect, A again for the confirmation, then **Y**.
-3. The stage screen should say `BACKGROUND READER Y - SMOOTH`.
+2. Games, select DOA2, A to inspect, A again for the confirmation, then **X**.
+3. The stage screen should say `BACKGROUND READER X - EXEC TOP UP`.
 4. Time character select to fight start (standard reader: about 25 s) and
    note smoothness in the first seconds of the fight, as before.
 5. Play a fight or two. Then A+B+X+Y+Start for the counters screen (about
    15 seconds) and photograph it.
-6. The same with **X** (`BACKGROUND READER X - EXEC TOP UP`, the last build's
-   reader) to compare load time and lag.
+6. The same with **Y** (`BACKGROUND READER Y - EAGER`) to compare load time
+   and lag.
 7. For comparison, launch again with **A** (standard reader).
 
 If it stops, photograph the last screen: `IMAGE READ FAILED` shows the GD
@@ -240,7 +257,7 @@ request, the card block and the stream's error counters.
 | --- | --- |
 | `SECTORS READ` | Sectors delivered to the game |
 | `IRQ BLKS` / `CALLBLKS` | Blocks delivered by the reader's interrupt / by the game's GD calls |
-| `WAITS` | GD calls that waited for blocks (X: EXECs short of 10 since the previous EXEC; Y: EXECs and CHECKs with nothing new since the previous call) |
+| `WAITS` | GD calls that waited for blocks (EXECs, and with Y CHECKs, short of 10 since the previous one) |
 | `IRQS` / `FAILURES` | Interrupt entries; retried stream failures |
 | `EXECS` / `EXEC INT` | EXEC calls during reads; those made from an interrupt handler (caller IMASK above 0) |
 | `STALLED` | GD calls that found a block already ended: its interrupt was held off |

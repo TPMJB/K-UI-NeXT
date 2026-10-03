@@ -1095,10 +1095,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_GAMES_RETAIL_CONFIRM:
         if((buttons&(KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y)) && kui_shell_games_retail_ready(s)) {
             /* X: background reader whose EXEC tops reading up to the
-             * standard reader's step; Y: the same, a GD call waiting for at
-             * most one block (smoother, may load slower). */
+             * standard reader's step; Y: CHECK does so too (eager). */
             s->games_retail_reader=buttons&KUI_SHELL_A?KUI_RETAIL_READER_STANDARD:
-                buttons&KUI_SHELL_X?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_ASYNC_SMOOTH;
+                buttons&KUI_SHELL_X?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_ASYNC_EAGER;
             return KUI_SHELL_GAMES_RETAIL;
         }
         break;

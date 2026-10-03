@@ -37,6 +37,7 @@ extern void kui_sci_stream_test_write(uint32_t address, uint32_t value, unsigned
 extern void kui_sci_stream_test_settle(unsigned count);
 extern uint32_t kui_sci_stream_test_physical(const void *area);
 extern void kui_sci_stream_test_purge(const void *area, unsigned bytes);
+extern void kui_sci_stream_test_fence(void);
 #define rd8(a) ((uint8_t)kui_sci_stream_test_read(a, 1))
 #define rd16(a) ((uint16_t)kui_sci_stream_test_read(a, 2))
 #define rd32(a) kui_sci_stream_test_read(a, 4)
@@ -45,6 +46,7 @@ extern void kui_sci_stream_test_purge(const void *area, unsigned bytes);
 #define settle kui_sci_stream_test_settle
 #define physical kui_sci_stream_test_physical
 #define purge kui_sci_stream_test_purge
+#define fence(area) kui_sci_stream_test_fence()
 #else
 #define rd8(a) (*(volatile uint8_t *)(uintptr_t)(a))
 #define rd16(a) (*(volatile uint16_t *)(uintptr_t)(a))
@@ -58,6 +60,12 @@ static uint32_t physical(const void *area) { return (uint32_t)(uintptr_t)area & 
 static void purge(const void *area, unsigned bytes) {
     for(uintptr_t p = (uintptr_t)area; p < (uintptr_t)area + bytes; p += 32u)
         __asm__ __volatile__("ocbp @%0" : : "r"(p) : "memory");
+}
+/* An uncached read of main memory waits for the external bus, and the DMAC
+ * goes before the CPU there: a transfer the channel had begun (RDR read, the
+ * write held off by the game's own DMA) has landed when it returns. */
+static void fence(const void *area) {
+    (void)*(volatile uint32_t *)(((uintptr_t)area & UINT32_C(0x1fffffff)) | UINT32_C(0xa0000000));
 }
 #endif
 
@@ -224,9 +232,10 @@ static enum kui_sci_stream_result start_dma(uint32_t area, uint32_t offset) {
 }
 /* The block whose token was just read, into the area not holding the last
  * block taken (an untaken block there is dropped): by DMA when channel 1 is
- * idle, otherwise by programmed transfers (514 bytes, so the card's gap byte
- * is left for the next token search). */
-static enum kui_sci_stream_result receive(void) {
+ * idle and polled is false, otherwise by programmed transfers (514 bytes, so
+ * the card's gap byte is left for the next token search), which cannot
+ * overrun. */
+static enum kui_sci_stream_result receive(bool polled) {
     uint32_t area = s.fill ^ 1u;
     if(s.kept == area + 1u) area ^= 1u;
     uint8_t *p = s.area[area];
@@ -234,7 +243,7 @@ static enum kui_sci_stream_result receive(void) {
     s.ready[area] = 0;
     s.lost[area] = 0;
     settle(64); /* the token byte's last edge */
-    if(!channel_idle()) {
+    if(polled || !channel_idle()) {
         for(unsigned i = 0; i < DMA_BYTES; ++i) p[i] = byte(0xff);
         s.rdr[area] = byte(0xff);
         select(false);
@@ -251,7 +260,7 @@ static enum kui_sci_stream_result receive(void) {
     s.wire[area] = 1;
     return start_dma(area, 0);
 }
-enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit) {
+enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit, bool polled) {
     if(s.state == DMA) return KUI_SCI_STREAM_BUSY;
     enum kui_sci_stream_result result;
     if(s.state == PAUSED && s.position == lba) {
@@ -265,7 +274,7 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
         if(result != KUI_SCI_STREAM_OK) return result;
     }
     s.position = lba;
-    result = receive();
+    result = receive(polled);
     if(result != KUI_SCI_STREAM_OK) s.state = LOST;
     return result;
 }
@@ -279,6 +288,7 @@ static enum kui_sci_stream_result finish(void) {
     if(rd32(CHCR) & 2u)
         for(unsigned n = 0; n < 512u && !(rd8(SSR) & ORER); ++n) {}
     wr8(SCR, 0);
+    fence(s.area[area]);
     uint32_t address = rd32(DAR);
     bool ours = rd32(SAR) == (RDR & UINT32_C(0x1fffffff)) && address >= start &&
         address <= start + DMA_BYTES;

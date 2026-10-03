@@ -135,7 +135,7 @@ static void wire_tests(void) {
      * KUI_RETAIL_ASYNC_EXTENTS extents (this map has more; the reader's own
      * test round-trips a small one); old maps carry zero there. */
     CHECK(manifest.extent_count > KUI_RETAIL_ASYNC_EXTENTS);
-    for(uint32_t reader = KUI_RETAIL_READER_ASYNC; reader <= KUI_RETAIL_READER_ASYNC_SMOOTH; ++reader) {
+    for(uint32_t reader = KUI_RETAIL_READER_ASYNC; reader <= KUI_RETAIL_READER_ASYNC_EAGER; ++reader) {
         manifest.reader = reader;
         for(uint32_t transport = KUI_STORAGE_SCIF; transport <= KUI_STORAGE_IDE; ++transport) {
             manifest.storage_transport = transport;

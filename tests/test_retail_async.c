@@ -181,10 +181,10 @@ static unsigned interrupts(unsigned limit) {
     return n;
 }
 
-enum { TOPUP, SMOOTH };
+enum { TOPUP, EAGER };
 static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scattered) {
     fixture(take_max, scattered);
-    manifest.reader = how == SMOOTH ? KUI_RETAIL_READER_ASYNC_SMOOTH : KUI_RETAIL_READER_ASYNC;
+    manifest.reader = how == EAGER ? KUI_RETAIL_READER_ASYNC_EAGER : KUI_RETAIL_READER_ASYNC;
     memset(&card, 0, sizeof(card));
     card.nac = 1; card.nac_first = 30; card.busy = 4; card.blocks = 2048; card.high_capacity = true;
     card_content = content;
@@ -208,7 +208,7 @@ static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scatt
     CHECK(R.vector100[2] == (uint32_t)(uintptr_t)kui_retail_release_100 && R.vector100[0] == 0x11111111u);
     CHECK(R.vector400[2] == (uint32_t)(uintptr_t)kui_retail_release_400 && R.vector400[1] == 0x22222222u);
     CHECK(R.vector600[8] == 0xff000028u && R.vector600[10] == 11u);
-    CHECK(R.engine.smooth == (how == SMOOTH) && !R.engine.release.armed);
+    CHECK(R.engine.eager == (how == EAGER) && !R.engine.release.armed);
     kui_retail_hook_sr = 0;
 }
 static void mode(uint32_t bytes) {
@@ -402,31 +402,37 @@ static void test_exec_tops_up(void) {
     CHECK(finish(token, false, 1) == KUI_GD_COMPLETED);
     compare(45000, 60, OUTPUT);
 }
-static void test_smooth_waits_one_block(void) {
-    /* Y: a CHECK or EXEC waits for at most the block in flight, and only
-     * when nothing arrived since the previous GD call. */
-    setup(GAME_VBR, SMOOTH, 2000, false);
+static void test_eager_check_tops_up(void) {
+    /* Y: a CHECK tops reading up like an EXEC, counting since either. */
+    setup(GAME_VBR, EAGER, 2000, false);
     int32_t token = request(45000, 60, OUTPUT);
     const struct kui_retail_async_stats *st = &R.engine.stats;
     unsigned before = st->call_blocks;
-    CHECK(gd(KUI_GD_EXEC, 0, 0) == 0 && st->waits == 1 && st->call_blocks - before == 1u);
-    before = st->call_blocks;
     CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
-    CHECK(st->waits == 2 && st->call_blocks - before == 1u);
-    /* A block arrived by interrupt since the previous call: no wait. */
-    elapse();
-    CHECK(kui_retail_async_irq() == 0 && st->irq_blocks == 1u);
+    CHECK(st->waits == 1 && st->call_blocks - before >= 10u);
     before = st->call_blocks;
-    CHECK(gd(KUI_GD_EXEC, 0, 0) == 0 && st->waits == 2 && st->call_blocks == before);
-    /* Other functions never wait. */
-    CHECK(gd(KUI_GD_DATATYPE + 100u, 0, 0) <= 0 && st->waits == 2);
-    /* A game spinning on CHECK still completes its read, a block a call. */
-    int32_t status = KUI_GD_PROCESSING;
-    for(unsigned calls = 0; status == KUI_GD_PROCESSING && calls < 1000u; ++calls)
-        status = gd(KUI_GD_CHECK, (uint32_t)token, STATUS);
-    CHECK(status == KUI_GD_COMPLETED);
+    CHECK(gd(KUI_GD_EXEC, 0, 0) == 0 && st->waits == 2 && st->call_blocks - before == 10u);
+    /* Enough by interrupt since the previous one: no wait. */
+    CHECK(interrupts(16) == 16 && st->irq_blocks >= 10u);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING && st->waits == 2);
+    /* X: a CHECK never waits. */
+    setup(GAME_VBR, TOPUP, 2000, false);
+    token = request(45000, 60, OUTPUT);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING && !st->waits);
+    CHECK(finish(token, true, 2) == KUI_GD_COMPLETED);
     compare(45000, 60, OUTPUT);
-    CHECK(hw.vbr == GAME_VBR && !R.engine.release.armed);
+}
+static void test_overruns_fall_back_to_polled(void) {
+    /* A block that overruns on every DMA attempt (the game holding the bus,
+     * the CRC byte lost so it cannot be repaired) is read by programmed
+     * transfers from the second failure on; the read completes. */
+    setup(GAME_VBR, TOPUP, 2000, false);
+    m.overrun_every = 512;
+    read_and_compare(45000, 4, true, 1);
+    const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
+    CHECK(ss->polled >= 1u && ss->overruns >= 2u && R.engine.stats.failures >= 2u);
+    CHECK(!R.shared.service.error);
+    m.overrun_every = 0;
 }
 static void test_diagnostic_counters(void) {
     setup(GAME_VBR, TOPUP, 2000, false);
@@ -523,7 +529,7 @@ static void test_read_fails_after_retries(void) {
     CHECK(finish(token, true, 1) == KUI_GD_FAILED && R.shared.service.error == KUI_GD_ERROR_IO);
 }
 static void test_stress(void) {
-    for(unsigned how = TOPUP; how <= SMOOTH; ++how) {
+    for(unsigned how = TOPUP; how <= EAGER; ++how) {
         setup(GAME_VBR, how, 48, true);
         srand(4242);
         for(unsigned round = 0; round < 300; ++round) {
@@ -544,7 +550,7 @@ static void test_stress(void) {
         const struct kui_retail_async_stats *st = &R.engine.stats;
         const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
         printf("stress %s: irq %u call %u waits %u irqs %u failures %u rehooks %u releases %u | "
-            "dma %u polled %u starts %u kept %u repaired %u\n", how == SMOOTH ? "Y" : "X",
+            "dma %u polled %u starts %u kept %u repaired %u\n", how == EAGER ? "Y" : "X",
             st->irq_blocks, st->call_blocks, st->waits, st->irqs, st->failures,
             R.engine.release.rehooks, st->releases, ss->blocks, ss->polled, ss->starts, ss->kept,
             ss->repaired);
@@ -558,7 +564,8 @@ int main(void) {
     test_boot_vbr_hooked();
     test_rehook_on_return();
     test_exec_tops_up();
-    test_smooth_waits_one_block();
+    test_eager_check_tops_up();
+    test_overruns_fall_back_to_polled();
     test_diagnostic_counters();
     test_faults_retried();
     test_cancel_writes_nothing_more();

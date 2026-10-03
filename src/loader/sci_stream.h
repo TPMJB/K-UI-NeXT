@@ -58,9 +58,10 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
  * otherwise stop it (CMD12) and issue CMD18 there. No DMA may be in flight.
  * token_limit bounds the token search in bytes. The channel raises no
  * interrupt; a reception ends on the receiver's overrun, which raises the
- * SCI's ERI wherever its level allows. OK: the DMA runs, or the block was
- * received by programmed transfers and is ready. */
-enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit);
+ * SCI's ERI wherever its level allows. polled: receive by programmed
+ * transfers (masked, about 0.7 ms, cannot overrun) instead of DMA. OK: the
+ * DMA runs, or the block was received by programmed transfers and is ready. */
+enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit, bool polled);
 /* Whether a DMA is in flight. */
 bool kui_sci_stream_busy(void);
 /* If the in-flight block has arrived (or reception stopped), end it and hand

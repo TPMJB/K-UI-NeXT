@@ -1,5 +1,20 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background reader, sixth build (2026-10-03 UTC)
+
+`40e7e2b71c61` Y (one block per call) was far slower: boot past 20 to 30 s,
+30 s of intro lag (6 to 7 with the fourth build), so the lag is DOA2 waiting
+for data. During boot almost nothing came by interrupt (`IRQS` 120;
+`EXEC INT` 2,172 of 6,548 EXECs from handlers, `STALLED` 1,987). It then
+stopped with `IMAGE READ FAILED` after nine failures in a row at one block
+(4% overruns; repair off after two of 63 failed). This build: from the
+second failure in a row a block is read by programmed transfers (cannot
+overrun); `finish` does an uncached read of main memory before stopping the
+channel so a held-off last write lands before the count is read; Y is now
+`ASYNC_EAGER` (CHECK tops up like EXEC). See
+[games-background-reader.md](games-background-reader.md). Build ID and CI
+run: pending.
+
 ## Games: background reader, fifth build (2026-10-03 UTC)
 
 `c86877c0dbb9` on the console with Y: character select to fight in under
@@ -17,7 +32,7 @@ blocks. New counters: `EXECS`, `EXEC INT` (EXEC from a handler), `STALLED`
 `VBR CHGS` moved to the release row. See
 [games-background-reader.md](games-background-reader.md). Build
 **40e7e2b71c61** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37126914530)
-(48 bytes free, call-graph stack 220 of 336); console results are pending.
+(48 bytes free, call-graph stack 220 of 336); console: see the sixth build.
 
 ## Games: background reader, fourth build (2026-10-03 UTC)
 

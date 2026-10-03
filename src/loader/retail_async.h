@@ -14,12 +14,9 @@
  * the block, starts the next one and copies the data into the game's
  * destination. The channel raises no interrupt and the game's DMAC level is
  * never touched. The game's own GD calls also deliver whatever has arrived.
- * How long a call may wait for blocks is the launch's choice (manifest
- * reader): X (ASYNC) makes an EXEC top up the blocks delivered since the
- * previous EXEC to the ordinary reader's step; Y (ASYNC_SMOOTH) lets an
- * EXEC or CHECK wait for at most the block in flight, and only when nothing
- * arrived since the previous GD call, so a game spinning on a read still
- * reads at the card's speed while a busy game loses little time.
+ * An EXEC tops the blocks delivered since the previous EXEC up to the
+ * ordinary reader's step, waiting for the rest itself; with launch Y
+ * (manifest reader ASYNC_EAGER) a CHECK does the same.
  *
  * The interrupt reaches the reader through its own vector table placed in
  * front of the game's while a block is in flight: VBR+0x600 takes the SCI's
@@ -58,9 +55,9 @@ struct kui_retail_async {
     struct kui_retail_async_release release; /* first: at region + 0x240 */
     const struct kui_retail_manifest *manifest;
     struct kui_retail_cursor cursor;
-    /* since: blocks delivered since the previous EXEC (X) or GD call (Y). */
+    /* since: blocks delivered since the previous EXEC (or, with Y, CHECK). */
     uint32_t token, destination, since;
-    uint32_t active, failed, opened, retries, in_irq, hooked, smooth;
+    uint32_t active, failed, opened, retries, in_irq, hooked, eager;
     struct kui_retail_async_stats stats;
 };
 /* State the resident shares with the reader, kept between the vectors. */
