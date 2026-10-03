@@ -14,6 +14,15 @@
  * the runtime and the freestanding game reader, linked independently. */
 enum kui_loader_sd_result kui_sci_sd_acquire(void);
 void kui_sci_sd_release(void);
+/* The bus's own state. The background game reader's resident keeps it in
+ * its interrupt region (KUI_RETAIL_ASYNC), whose gaps have room its BSS
+ * lacks; elsewhere it is private to sci_sd_bus.c. */
+struct kui_sci_sd_port {
+    uint32_t work, mode;
+    uint16_t data;
+    uint8_t smr, brr, scr, ptr, standby;
+    bool acquired, fault, slow;
+};
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void);
 bool kui_sci_sd_healthy(void);
 #ifndef KUI_RETAIL_TRANSPORT

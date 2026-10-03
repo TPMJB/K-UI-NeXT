@@ -127,8 +127,8 @@ the stream is idle:
   token and DMA start, and the copy.
 
 The vectors sit in the resident's BSS: the gaps between VBR+0x100, +0x400 and
-+0x600 hold the receive areas and the reader's state
-(`src/loader/retail_async.h`).
++0x600 hold the receive areas and the reader's state, the SCI bus's own state
+included (`src/loader/retail_async.h`).
 
 ### Memory
 
@@ -273,7 +273,9 @@ and without repair every overrun cost a card restart, most in the heavy-DMA
 phases (texture uploads, FMV) where the remaining lag is. The seventh build
 fences after the stop as well, refetches byte-ahead blocks without
 switching repair off, makes the sixth build's Y the new X and tries 20
-blocks per call as Y.
+blocks per call as Y. To fit, it drops `IRQS` and `FAILURES` (they repeated
+`IRQ BLKS` and the stream's error counters) and `STOPS`, and keeps the SCI
+bus's state in the reader's region.
 
 ## Console test (DOA2)
 
@@ -299,7 +301,6 @@ request, the card block and the stream's error counters.
 | `SECTORS READ` | Sectors delivered to the game |
 | `IRQ BLKS` / `CALLBLKS` | Blocks delivered by the reader's interrupt / by the game's GD calls |
 | `WAITS` | EXEC and CHECK calls that waited for blocks (short of 10, or with Y 20, since the previous one) |
-| `IRQS` / `FAILURES` | Interrupt entries; retried stream failures |
 | `EXECS` / `EXEC INT` | EXEC calls during reads; those made from an interrupt handler (caller IMASK above 0) |
 | `STALLED` | GD calls that found a block already ended: its interrupt was held off |
 | `HOOKS` / `RELEASES` | Vector installs per read; installs again by a GD call after a release |

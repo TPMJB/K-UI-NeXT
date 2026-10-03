@@ -6,6 +6,7 @@
 #include "retail_storage.h"
 #include "retail_display.h"
 #include "sci_stream.h"
+#include "sci_sd_bus.h"
 #include <stddef.h>
 
 /* Background game reader for SCI microSD. A read REQUEST starts a CMD18
@@ -30,8 +31,8 @@
  * (0x8C00F400) throughout; it is hooked the same way. Reads complete from
  * the game's calls alone whenever no interrupt is delivering. */
 struct kui_retail_async_stats {
-    uint32_t irq_blocks, call_blocks, waits, irqs, failures;
-    uint32_t execs, exec_int, stalled, hooks, releases;
+    uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
+    uint32_t stalled, hooks, releases;
 };
 /* Returns the trampoline can hold pending: interrupts released while an
  * earlier released one's handler still runs. */
@@ -61,12 +62,14 @@ struct kui_retail_async {
     uint32_t active, failed, opened, retries, in_irq, hooked, target;
     struct kui_retail_async_stats stats;
 };
-/* State the resident shares with the reader, kept between the vectors. */
+/* State the resident shares with the reader, kept between the vectors (the
+ * SCI bus's own state too: the resident's BSS has no room for it). */
 struct kui_retail_async_shared {
     struct kui_retail_gd service;
     struct kui_retail_storage card;
     struct retail_display_state display;
     struct kui_sci_stream_state stream;
+    struct kui_sci_sd_port port;
 };
 /* VBR is this region's address minus 0x100; the hardware uses only its
  * three vector offsets, so the gaps between them hold the receive areas and

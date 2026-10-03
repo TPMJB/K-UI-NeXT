@@ -263,7 +263,7 @@ static void test_interrupt_reads(void) {
     /* The interrupt delivered most blocks; each CHECK waited only for what
      * it had not delivered of the 10 since the previous call. */
     CHECK(st->irq_blocks > 150u && st->irq_blocks > st->call_blocks && st->waits);
-    CHECK(st->hooks == 10 && !st->failures);
+    CHECK(st->hooks == 10 && !kui_sci_stream_stats()->overruns && !kui_sci_stream_stats()->crc_errors);
     /* Events that were not the reader's handed the game its vectors back;
      * an interrupt's handler returned through the trampoline, which
      * installed them again; after an exception the next GD call did (and
@@ -290,7 +290,7 @@ static void test_interrupt_reads(void) {
      * nothing to wait for. */
     setup(GAME_VBR, X, 48, true);
     for(uint32_t lba = 45000; lba < 45060; lba += 6) read_and_compare(lba, 6, 20, 0);
-    CHECK(st->irq_blocks > 250u && st->call_blocks < 20u && !st->waits && !st->failures);
+    CHECK(st->irq_blocks > 250u && st->call_blocks < 20u && !st->waits);
 }
 static void test_levels_while_streaming(void) {
     /* Only the SCI's level changes, to the lowest; the channel raises no
@@ -445,7 +445,7 @@ static void test_overruns_fall_back_to_polled(void) {
     m.overrun_every = 512;
     read_and_compare(45000, 4, true, 1);
     const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
-    CHECK(ss->polled >= 1u && ss->overruns >= 2u && R.engine.stats.failures >= 2u);
+    CHECK(ss->polled >= 1u && ss->overruns >= 2u);
     CHECK(!R.shared.service.error);
     m.overrun_every = 0;
 }
@@ -486,7 +486,6 @@ static void test_faults_retried(void) {
     read_and_compare(45050, 8, true, 0);
     CHECK(kui_sci_stream_stats()->polled);
     m.chcr = 0;
-    CHECK(R.engine.stats.failures >= 2);
 }
 static void test_cancel_writes_nothing_more(void) {
     for(unsigned how = 0; how < 3; ++how) {
@@ -566,9 +565,9 @@ static void test_stress(void) {
         }
         const struct kui_retail_async_stats *st = &R.engine.stats;
         const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
-        printf("stress %s: irq %u call %u waits %u irqs %u failures %u rehooks %u releases %u | "
+        printf("stress %s: irq %u call %u waits %u rehooks %u releases %u | "
             "dma %u polled %u starts %u kept %u repaired %u ahead %u\n", how == Y ? "Y" : "X",
-            st->irq_blocks, st->call_blocks, st->waits, st->irqs, st->failures,
+            st->irq_blocks, st->call_blocks, st->waits,
             R.engine.release.rehooks, st->releases, ss->blocks, ss->polled, ss->starts, ss->kept,
             ss->repaired, ss->ahead);
         CHECK(ss->repaired && ss->ahead);

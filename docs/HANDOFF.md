@@ -14,9 +14,16 @@ repaired block that ran a byte ahead (the card's gap or token as its last
 byte) is fetched again without a rebuild and counted as `AHEAD`, not against
 repair; the rebuild computes the lost byte directly. Launches: X is the
 sixth build's Y (EXEC and CHECK top up to 10 blocks), Y tops up to 20.
-`STOPS` gave its place to `AHEAD`: the stream rows read `DMA BLKS POLLED
-STARTS CONTINUE KEPT`, `OVERRUNS CRC ERRS TOKENERR FOREIGN MAXTOKEN`,
-`REPAIRED AHEAD`. See [games-background-reader.md](games-background-reader.md).
+`STOPS` gave its place to `AHEAD`, and `IRQS` and `FAILURES` (repeats of
+`IRQ BLKS` and the stream's errors) are gone: the rows read `IRQ BLKS
+CALLBLKS WAITS EXECS EXEC INT`, `STALLED HOOKS RELEASES`, the release row,
+`DMA BLKS POLLED STARTS CONTINUE KEPT`, `OVERRUNS CRC ERRS TOKENERR FOREIGN
+MAXTOKEN`, `REPAIRED AHEAD`. The first CI run (`c6cf6571b25c`) failed to
+link: the resident was over its limit with CI's GCC 15 although a local GCC
+13 build was 20 bytes smaller (GCC 14, now installed locally as a closer
+proxy, showed +4). So the SCI bus's 20-byte state moved into the reader
+region's spare gap and the two counters went: GCC 14 now ends 36 bytes
+under the limit. See [games-background-reader.md](games-background-reader.md).
 Build ID and CI run: pending.
 
 ## Games: background reader, sixth build (2026-10-03 UTC)

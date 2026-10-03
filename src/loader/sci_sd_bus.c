@@ -58,12 +58,12 @@ extern void kui_sci_sd_test_cache_purge(void *buffer, size_t count);
 #define wr32(a,v) (rd32(a) = (uint32_t)(v))
 #endif
 
-static struct {
-    uint32_t work, mode;
-    uint16_t data;
-    uint8_t smr, brr, scr, ptr, standby;
-    bool acquired, fault, slow;
-} port;
+#ifdef KUI_RETAIL_ASYNC
+#include "retail_async.h"
+#define port (kui_retail_async_region.shared.port)
+#else
+static struct kui_sci_sd_port port;
+#endif
 static bool wait_flag(uint8_t flag);
 #ifndef KUI_RETAIL_TRANSPORT
 static struct kui_sci_sd_fault first_fault;

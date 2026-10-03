@@ -114,7 +114,6 @@ static bool open_bus(void) {
  * same block. A latched bus fault or an SCI that did not come back (RESET)
  * ends the read, as it does for the ordinary reader. */
 static void failure(enum kui_sci_stream_result result) {
-    ++e.stats.failures;
     if(++e.retries > RETRIES || result == KUI_SCI_STREAM_RESET) e.failed = KUI_GD_ERROR_IO;
 }
 static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint32_t count) {
@@ -220,7 +219,6 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
     if(function == KUI_GD_EXEC || function == KUI_GD_CHECK) e.since = 0;
 }
 uint32_t kui_retail_async_irq(void) {
-    ++e.stats.irqs;
     /* An SCI event without a reception: not ours, passed on as any other. */
     if(!kui_sci_stream_busy()) return 1;
     e.in_irq = 1;

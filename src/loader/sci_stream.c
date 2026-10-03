@@ -399,10 +399,12 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
         if(crc != sent && lost) {
             /* The gap byte (0xff) or the next token (0xfe) where the second
              * CRC byte belongs: the resumed reception ran a byte ahead. */
-            int x = -1;
             if((low | 1u) == 0xffu) ++s.stats.ahead;
-            else if((x = rebuild((uint32_t)(crc ^ sent), 512u - lost)) < 0) ++s.unrepaired;
-            if(x >= 0) {area[lost - 1u] = (uint8_t)x; crc = sent;}
+            else {
+                int x = rebuild((uint32_t)(crc ^ sent), 512u - lost);
+                if(x >= 0) {area[lost - 1u] = (uint8_t)x; crc = sent;}
+                else ++s.unrepaired;
+            }
         }
         if(crc != sent) {
             ++s.stats.crc_errors;
