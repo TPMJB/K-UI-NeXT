@@ -139,6 +139,14 @@ static struct {
      * still held (as the console does); false: it stays held off until the
      * reception is stopped, and RDR keeps that byte. */
     bool late_take;
+    /* in_flight: that take reads RDR but its write (and the count) stays
+     * held off the bus until a fence after the channel is stopped, or until
+     * its registers are written. flight: the byte in flight. */
+    bool in_flight, flying;
+    uint8_t flight;
+    /* A reception resumed mid-block first loses this many more card bytes:
+     * it runs ahead of where the reader resumes it. */
+    unsigned ahead_on_resume;
     bool foreign_during_rx;
     uint8_t *areas[2];
     unsigned purges, module_resets, dma_starts, irq_starts, settles, fences;
@@ -171,13 +179,23 @@ static void receive(void) {
             m.ssr |= ORER;
             if(m.overrun_after) {m.overrun_after = m.overrun_again; m.overrun_again = 0;}
             if(m.late_take && (m.chcr & 1u) && m.tcr && m.sar == (RDR & 0x1fffffffu)) {
-                *memory(m.dar++) = m.rdr;
+                if(m.in_flight) {m.flight = m.rdr; m.flying = true; m.in_flight = false;}
+                else {
+                    *memory(m.dar++) = m.rdr;
+                    if(!--m.tcr) m.chcr |= 2u;
+                }
                 m.ssr &= (uint8_t)~RDRF;
-                if(!--m.tcr) m.chcr |= 2u;
             }
             return;
         }
     }
+}
+/* The channel's transfer in flight gets the bus and lands. */
+static void land(void) {
+    if(!m.flying) return;
+    m.flying = false;
+    *memory(m.dar++) = m.flight;
+    if(!--m.tcr) m.chcr |= 2u;
 }
 static void advance(void) {
     if(!m.rx) return;
@@ -217,7 +235,11 @@ void kui_sci_stream_test_write(uint32_t address, uint32_t value, unsigned width)
         m.scr = (uint8_t)value;
         if(!(value & 0x10u)) m.rx = false;
         else if(value == 0x50u) {
-            assert(m.sptr == 0x83u && m.cs_high == false);
+            assert(m.sptr == 0x83u && m.cs_high == false && !m.flying);
+            if(m.ahead_on_resume && (m.dar & 0xfffu)) {
+                --m.ahead_on_resume;
+                (void)card_clock(0xff);
+            }
             m.rx = true; m.rx_delay = m.delay; ++m.dma_starts;
             m.armed_chcr = m.chcr;
             if(m.chcr & 4u) ++m.irq_starts;
@@ -231,15 +253,18 @@ void kui_sci_stream_test_write(uint32_t address, uint32_t value, unsigned width)
         if((value & 1u) && !(m.stbcr & 1u)) module_reset();
         m.stbcr = (uint8_t)value;
         break;
-    case SAR: assert(width == 4); m.sar = value; break;
-    case DAR: assert(width == 4); m.dar = value; break;
-    case TCR: assert(width == 4); m.tcr = value; break;
+    case SAR: assert(width == 4); land(); m.sar = value; break;
+    case DAR: assert(width == 4); land(); m.dar = value; break;
+    case TCR: assert(width == 4); land(); m.tcr = value; break;
     case CHCR: assert(width == 4); m.chcr = (value & ~2u) | (m.chcr & value & 2u); break;
     default: assert(!"unexpected write");
     }
 }
 void kui_sci_stream_test_settle(unsigned count) { (void)count; ++m.settles; }
-void kui_sci_stream_test_fence(void) { ++m.fences; }
+void kui_sci_stream_test_fence(void) {
+    ++m.fences;
+    if(!(m.chcr & 1u)) land(); /* only once the channel is stopped */
+}
 uint32_t kui_sci_stream_test_physical(const void *area) {
     for(unsigned i = 0; i < 2; ++i) if(area == m.areas[i]) return AREA_BASE + i * 0x1000u;
     assert(!"unknown area");

@@ -17,9 +17,10 @@
  * cannot overrun however long the game holds the bus. */
 #define RETRIES 8u
 #define POLLED 2u
-/* Blocks an EXEC makes sure of since the previous one (X): about the
- * ordinary reader's two-sector step. */
-#define WAIT_BLOCKS 10u
+/* Blocks each EXEC or CHECK makes sure of since the previous one: X about
+ * the ordinary reader's two-sector step, Y twice that. */
+#define TARGET_X 10u
+#define TARGET_Y 20u
 /* The GD caller's SR, published by the resident's hook entry. */
 extern volatile uint32_t kui_retail_hook_sr;
 
@@ -60,7 +61,7 @@ static void copy_words(volatile uint32_t *to, const uint32_t *from, unsigned wor
 }
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
-    e.eager = manifest->reader == KUI_RETAIL_READER_ASYNC_EAGER;
+    e.target = manifest->reader == KUI_RETAIL_READER_ASYNC_EAGER ? TARGET_Y : TARGET_X;
     copy_words(R.vector100, kui_retail_vector_forward, 3);
     R.vector100[2] = (uint32_t)(uintptr_t)kui_retail_release_100;
     copy_words(R.vector400, kui_retail_vector_forward, 3);
@@ -194,13 +195,11 @@ void kui_retail_async_call(uint32_t function) {
             ++e.stats.execs;
             if(kui_retail_hook_sr & 0xf0u) ++e.stats.exec_int; /* IMASK: a handler */
         }
-        /* An EXEC waits for the blocks nothing delivered since the previous
-         * EXEC, up to the ordinary reader's step, so a game is never slower
-         * than with the ordinary reader. Y (eager) treats a CHECK the same,
-         * for more data per frame while the interrupt is held off. */
-        if((function == KUI_GD_EXEC || (e.eager && function == KUI_GD_CHECK)) &&
-           e.since < WAIT_BLOCKS) {
-            wait = WAIT_BLOCKS - e.since;
+        /* An EXEC or CHECK waits for the blocks nothing delivered since the
+         * previous one, up to the target: the data a game waits for keeps
+         * coming while the interrupt is held off. */
+        if((function == KUI_GD_EXEC || function == KUI_GD_CHECK) && e.since < e.target) {
+            wait = e.target - e.since;
             ++e.stats.waits;
         }
     }
@@ -218,7 +217,7 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
         e.active = 0; /* aborted or reset: nothing more is written */
     }
     if(!kui_sci_stream_busy()) unhook();
-    if(function == KUI_GD_EXEC || (e.eager && function == KUI_GD_CHECK)) e.since = 0;
+    if(function == KUI_GD_EXEC || function == KUI_GD_CHECK) e.since = 0;
 }
 uint32_t kui_retail_async_irq(void) {
     ++e.stats.irqs;

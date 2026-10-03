@@ -28,9 +28,12 @@ enum kui_sci_stream_result {
     KUI_SCI_STREAM_RESET     /* SCI or bus did not return to a known state */
 };
 struct kui_sci_stream_stats {
-    uint32_t blocks, polled, starts, stops, continued, kept;
+    uint32_t blocks, polled, starts, continued, kept;
     uint32_t overruns, crc_errors, token_errors, foreign, max_token_bytes;
     uint32_t repaired; /* overruns resumed in place, the lost byte rebuilt from the CRC */
+    /* ahead: repaired blocks whose last byte was the card's gap or next
+     * token: the resumed reception ran a byte ahead (fetched again). */
+    uint32_t ahead;
 };
 /* Engine state, placed by the resident (sci_stream.c owns it otherwise). */
 struct kui_sci_stream_state {
@@ -43,8 +46,9 @@ struct kui_sci_stream_state {
     uint16_t lost[2];
     /* kept: 1 + the area holding the last block taken, or 0. wire: the
      * area holds bit-reversed DMA bytes rather than programmed-read bytes.
-     * unrepaired: repaired blocks that failed their CRC; after two the card
-     * is taken not to resume mid-block as expected, and overruns restart. */
+     * unrepaired: repaired blocks that failed their CRC for an unknown reason
+     * (not a byte ahead); after two the card is taken not to resume
+     * mid-block as expected, and overruns restart. */
     uint8_t ready[2], wire[2], rdr[2], held[2], hold[2], kept, sptr, unrepaired;
     struct kui_sci_stream_stats stats;
 };
@@ -75,7 +79,10 @@ enum kui_sci_stream_result kui_sci_stream_wait(void);
  * or CRC (failed; the block must be fetched again). A block whose reception
  * overran once mid-block was resumed in place: exactly one byte was lost,
  * and it is rebuilt from the block's CRC16 (a second fault there is still
- * detected 255 times in 256 and refetched). A ready block is checked
+ * detected 255 times in 256 and refetched). If its last byte is the card's
+ * gap or next token instead of the second CRC byte, the reception ran a
+ * byte ahead and the block is refetched without a rebuild, which could
+ * otherwise accept it 1 time in 256. A ready block is checked
  * once. The last block taken stays available, its bytes untouched by any
  * fetch, until another block is taken: a block shared by two requests is
  * not read twice, and a caller may fetch the next block before copying. */

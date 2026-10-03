@@ -63,7 +63,9 @@ static void purge(const void *area, unsigned bytes) {
 }
 /* An uncached read of main memory waits for the external bus, and the DMAC
  * goes before the CPU there: a transfer the channel had begun (RDR read, the
- * write held off by the game's own DMA) has landed when it returns. */
+ * write held off by the game's own DMA) has landed when it returns. Stopping
+ * the channel does not cancel such a transfer, so finish fences both before
+ * the stop (requests it still takes) and after it (before counting). */
 static void fence(const void *area) {
     (void)*(volatile uint32_t *)(((uintptr_t)area & UINT32_C(0x1fffffff)) | UINT32_C(0xa0000000));
 }
@@ -160,7 +162,6 @@ static enum kui_sci_stream_result stop_card(void) {
     select(false);
     (void)byte(0xff);
     s.state = result == KUI_SCI_STREAM_OK ? CLOSED : LOST;
-    ++s.stats.stops;
     return healthy() ? result : KUI_SCI_STREAM_RESET;
 }
 static enum kui_sci_stream_result start(uint32_t lba, uint32_t limit) {
@@ -295,7 +296,7 @@ static enum kui_sci_stream_result finish(void) {
     if(ours) {
         wr32(CHCR, rd32(CHCR) & ~UINT32_C(5));
         (void)rd32(CHCR);
-        settle(64);
+        fence(s.area[area]);
         control = rd32(CHCR); count = rd32(TCR);
         ours = rd32(DAR) == start + DMA_BYTES - count;
         if(ours) {
@@ -360,14 +361,14 @@ enum kui_sci_stream_result kui_sci_stream_wait(void) {
 /* The byte whose loss leaves this CRC16 syndrome when it stands as zero
  * with `after` bytes behind it, or -1 if no single byte explains it. The
  * CRC (zero start) is linear: undo the `after` zero-byte shifts, bit by bit
- * (x^16+x^12+x^5+1 has its constant term, so each step is invertible), and
- * find the one byte whose first step gives what remains. */
+ * (x^16+x^12+x^5+1 has its constant term, so each step is invertible). What
+ * remains is one byte's own step, t ^ t << 5 ^ t << 12 with t = x ^ x >> 4:
+ * its low byte gives t, t gives x, and the whole step must match. */
 static int rebuild(uint32_t syndrome, uint32_t after) {
     for(uint32_t n = after * 8u; n; --n)
         syndrome = syndrome & 1u ? ((syndrome ^ 0x1021u) >> 1) | 0x8000u : syndrome >> 1;
-    for(unsigned x = 0; x < 256u; ++x)
-        if(crc16(0, (uint8_t)x) == syndrome) return (int)x;
-    return -1;
+    uint32_t t = (syndrome ^ syndrome << 5) & 0xffu, x = t ^ t >> 4;
+    return crc16(0, (uint8_t)x) == syndrome ? (int)x : -1;
 }
 const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *result) {
     for(unsigned i = 0; i < 2; ++i) {
@@ -396,9 +397,12 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
         if(wire) {high = (uint8_t)reverse(high); low = (uint8_t)reverse(low);}
         uint16_t sent = (uint16_t)(high << 8 | low);
         if(crc != sent && lost) {
-            int x = rebuild((uint32_t)(crc ^ sent), 512u - lost);
+            /* The gap byte (0xff) or the next token (0xfe) where the second
+             * CRC byte belongs: the resumed reception ran a byte ahead. */
+            int x = -1;
+            if((low | 1u) == 0xffu) ++s.stats.ahead;
+            else if((x = rebuild((uint32_t)(crc ^ sent), 512u - lost)) < 0) ++s.unrepaired;
             if(x >= 0) {area[lost - 1u] = (uint8_t)x; crc = sent;}
-            else ++s.unrepaired;
         }
         if(crc != sent) {
             ++s.stats.crc_errors;

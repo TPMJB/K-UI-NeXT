@@ -76,7 +76,7 @@ static void test_sequential(void) {
     assert(drive(100, 64, out, true) == 0);
     check_range(100, 64, out);
     assert(st->starts - before.starts == 1 && st->continued - before.continued == 63);
-    assert(st->blocks - before.blocks == 64 && st->stops == before.stops && !st->polled);
+    assert(st->blocks - before.blocks == 64 && !st->polled);
     assert(card.cmd18 == 1 && !card.cmd12 && m.dma_starts == 64 && m.module_resets == 64);
     assert(m.purges == 64 && !m.irq_starts && m.armed_chcr == 0x4911u);
     assert(st->max_token_bytes == 40);
@@ -88,7 +88,7 @@ static void test_sequential(void) {
     /* Elsewhere: CMD12 with its busy interval, then a new CMD18. */
     assert(drive(5000, 3, out, true) == 0);
     check_range(5000, 3, out);
-    assert(card.cmd18 == 2 && card.cmd12 == 1 && !card.idle_cmd12 && st->stops == 1);
+    assert(card.cmd18 == 2 && card.cmd12 == 1 && !card.idle_cmd12 && st->starts - before.starts == 2);
     assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
     assert(card.cmd12 == 2 && !card.streaming && m.cs_high);
     check_restored(); check_channel_restored();
@@ -170,6 +170,50 @@ static void test_overrun_and_stall(void) {
     m.late_take = true;
     assert(st->repaired - before.repaired == 2u * count && st->overruns == before.overruns);
     assert(card.cmd18 == 1 && !card.cmd12 && st->crc_errors == before.crc_errors);
+    /* The channel's take of that byte still in flight when the reception is
+     * stopped (RDR read, the write held off the bus): stopping the channel
+     * does not cancel it, and the fence after the stop lets it land before
+     * the count is read, so the lost byte is still the one after it. */
+    static const unsigned flights[] = {1, 77, 300, 509};
+    for(unsigned i = 0; i < 4; ++i, ++lba) {
+        unsigned fences = m.fences;
+        m.overrun_after = flights[i]; m.in_flight = true;
+        assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
+        assert(kui_sci_stream_poll() == KUI_SCI_STREAM_PENDING && !m.flying && !m.in_flight);
+        assert(m.fences - fences == 2u); /* before and after the stop */
+        assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+        check_block(lba, kui_sci_stream_take(lba, &r));
+        check_restored(); check_channel_restored();
+    }
+    assert(st->repaired - before.repaired == 2u * count + 4u && !st->ahead);
+    assert(card.cmd18 == 1 && !card.cmd12 && st->crc_errors == before.crc_errors);
+    /* A resumed reception that runs a byte ahead ends with the card's gap
+     * byte where the second CRC byte belongs (or the next token, with no
+     * gap): the block is fetched again without a rebuild, which would accept
+     * the wrong bytes 1 time in 256, and repair stays on however often it
+     * happens. */
+    for(unsigned gap = 0; gap < 4u; ++gap, lba += 2) {
+        card.nac = gap ? gap : 0;
+        m.overrun_after = 50u + gap * 100u; m.ahead_on_resume = 1;
+        assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
+        assert(kui_sci_stream_poll() == KUI_SCI_STREAM_PENDING);
+        assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK && !m.ahead_on_resume);
+        assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
+        assert(st->ahead == gap + 1u && st->crc_errors - before.crc_errors == gap + 1u);
+        card.nac = 1;
+        assert(drive(lba, 2, out, true) == 0);
+        check_range(lba, 2, out);
+    }
+    unsigned cmd12 = card.cmd12;
+    m.overrun_after = 123;
+    assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_poll() == KUI_SCI_STREAM_PENDING);
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    check_block(lba, kui_sci_stream_take(lba, &r));
+    assert(card.cmd12 == cmd12 && st->repaired - before.repaired == 2u * count + 9u);
+    ++lba;
+    before = *st;
+    cmd12 = card.cmd12;
     /* Too late to rebuild (a CRC byte lost), or a second loss in the same
      * block: the stream restarts at that block. */
     static const unsigned late[] = {511, 512};
@@ -186,7 +230,7 @@ static void test_overrun_and_stall(void) {
     assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_poll() == KUI_SCI_STREAM_PENDING);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OVERRUN);
-    assert(st->overruns - before.overruns == 3 && card.cmd12 == 2);
+    assert(st->overruns - before.overruns == 3 && card.cmd12 - cmd12 == 2);
     assert(drive(lba, 2, out, true) == 0);
     check_range(lba, 2, out);
     lba += 2;
@@ -303,25 +347,26 @@ static void test_random_faults(void) {
         unsigned count = 1u + (unsigned)rand() % 40u;
         int fault = rand() % 10;
         if(fault == 0) {card.corrupt_lba = lba + (unsigned)rand() % count; card.corrupt_count = 1;}
-        if(fault == 1) m.overrun_after = 1u + (unsigned)rand() % 512u;
+        if(fault == 1) {m.overrun_after = 1u + (unsigned)rand() % 512u; m.in_flight = rand() % 2;}
         if(fault == 2) {card.bad_token_lba = lba + (unsigned)rand() % count; card.bad_token_count = 1;}
         if(fault == 3) m.chcr = 1u;
+        if(fault == 4) {m.overrun_after = 1u + (unsigned)rand() % 500u; m.ahead_on_resume = 1;}
         m.delay = (unsigned)rand() % 4u;
         card.nac = 1u + (unsigned)rand() % 3u;
         (void)drive(lba, count, out, rand() % 4 != 0);
         check_range(lba, count, out);
         if(fault == 3) m.chcr = 0;
-        m.overrun_after = 0;
+        m.overrun_after = 0; m.in_flight = false; m.ahead_on_resume = 0;
         check_restored();
         if(!(rand() % 5)) lba += 1000u + (unsigned)rand() % 5000u;
         else lba += count;
         if(lba > 90000u) lba = (unsigned)rand() % 1000u;
     }
     const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
-    printf("random: blocks %u polled %u starts %u continued %u kept %u overruns %u repaired %u crc %u token %u\n",
+    printf("random: blocks %u polled %u starts %u continued %u kept %u overruns %u repaired %u ahead %u crc %u token %u\n",
         st->blocks, st->polled, st->starts, st->continued, st->kept, st->overruns, st->repaired,
-        st->crc_errors, st->token_errors);
-    assert(st->crc_errors && st->repaired && st->token_errors && st->polled);
+        st->ahead, st->crc_errors, st->token_errors);
+    assert(st->crc_errors && st->repaired && st->ahead && st->token_errors && st->polled);
     assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
     check_restored(); check_channel_restored();
 }

@@ -6,13 +6,14 @@ EXEC, and DOA2 calls EXEC from its vertical-blank interrupt. The background
 reader streams the request from the card while the game runs instead.
 
 It is chosen per launch: on the **Launch game** confirmation, **A** launches
-with the standard reader, **X** with the background reader whose EXEC tops
-reading up to the standard reader's step, and **Y** with the background
-reader whose CHECK does so too (see *How long a GD call waits*). It needs SCI microSD and a launch map of at most 32 file extents (a
-freshly copied game has a handful); otherwise the launch uses the standard
-reader and the log says why. The stage screen shows
-`BACKGROUND READER X - EXEC TOP UP` or `BACKGROUND READER Y - EAGER` when it
-is installed.
+with the standard reader, **X** with the background reader whose EXEC and
+CHECK calls each top reading up to 10 card blocks (about the standard
+reader's step), and **Y** with the same reader topping up to 20 (see *How
+long a GD call waits*). It needs SCI microSD and a launch map of at most 32
+file extents (a freshly copied game has a handful); otherwise the launch
+uses the standard reader and the log says why. The stage screen shows
+`BACKGROUND READER X - 10 PER CALL` or `BACKGROUND READER Y - 20 PER CALL`
+when it is installed.
 
 ## How it works
 
@@ -48,12 +49,25 @@ is installed.
   is still detected 255 times in 256. Only a lost CRC byte or a second
   overrun in one block restarts the stream. Resuming relies on the card
   continuing mid-block after a deselection, which DOA2's fourth run showed
-  working (36 repairs). About 5% of repairs failed their CRC on the console;
-  the likeliest cause, the channel's last write still held off the bus when
-  the reception is stopped, is now ruled out by an uncached read of main
-  memory first (the DMAC goes before the CPU on the bus). If two repaired
-  blocks fail their CRC, repair is switched off for the session and
-  overruns restart the stream as before; one alone leaves it on.
+  working (36 repairs).
+* About 4% of repairs failed their CRC on the console (2 of 55 in the sixth
+  run, which then switched repair off: its other 1,869 overruns each
+  restarted the card). The likeliest cause is a transfer the channel had
+  begun when the reception was stopped (RDR read, its write held off the
+  bus by the game's DMA): stopping the channel does not cancel it, so the
+  count was a byte short while RDR was already empty, the lost byte was
+  taken to be one early, and the resumed bytes landed one place early. The
+  reader now waits for the bus (an uncached read of main memory; the DMAC
+  goes before the CPU there) both before stopping the channel and after it,
+  before counting; the sixth build waited only before. The host model
+  reproduces that failure with the old order and repairs it with the new.
+* Whatever the cause, a resumed reception that ran a byte ahead ends with
+  the card's gap byte (or next token) where the block's second CRC byte
+  belongs. Such a block is fetched again without a rebuild (a rebuild of
+  shifted bytes would pass 1 time in 256) and counted as `AHEAD`; it does not
+  count against repair. If two repaired blocks fail their CRC for any other
+  reason, repair is switched off for the session and overruns restart the
+  stream as before; one alone leaves it on.
 * CRC errors, other overruns, missing tokens and a busy DMA channel are
   retried at the same block (a busy channel is read by programmed
   transfers). From the second failure in a row at a block, it is read by
@@ -67,16 +81,16 @@ Whatever the interrupt has not delivered, the game's own GD calls must, and
 a call that waits keeps the game's interrupts masked meanwhile: that is what
 shows as lag.
 
-* **X:** an EXEC makes sure of 10 blocks (the standard reader's step) since
-  the previous EXEC: it waits for the ones the interrupt did not deliver, and
-  not at all when the interrupt delivered 10 or more. A game is never slower
-  than with the standard reader. In DOA2's fourth run 4,611 EXECs still
-  waited, about 10 blocks (4.4 ms) each.
-* **Y (eager):** a CHECK tops up like an EXEC, counting blocks since either.
-  More data per frame while the interrupt is held off, and more masked time.
-  (The fifth build's Y waited for at most one block per call instead; DOA2's
-  loads and intro took far longer, so the lag there is the game waiting for
-  data, not the waits themselves.)
+* **X:** an EXEC or a CHECK makes sure of 10 blocks (about the standard
+  reader's step) since the previous one of either: it waits for the ones the
+  interrupt did not deliver, and not at all when the interrupt delivered 10
+  or more. This is the sixth build's Y, the best so far in DOA2. (Through the
+  sixth build, X topped up on EXEC only.)
+* **Y:** the same with 20 blocks, up to about 8 ms per call: twice the data
+  per frame while the interrupt is held off, and that much less time for the
+  game. DOA2's lag is the game waiting for data (the fifth build, which
+  waited for at most one block per call, loaded far slower), so Y may load
+  faster still; where a game reads while it plays (FMV), it may cost frames.
 
 ### The interrupt
 
@@ -234,18 +248,45 @@ repairs before two failed, and nine failures in a row at one block. The
 sixth build reads a block by programmed transfers from its second failure,
 fences the channel's last write before counting, and makes Y an eager X.
 
+## Sixth console run (5136651bba37)
+
+Y (eager, 10 blocks per EXEC or CHECK) was "substantially better": about
+ten seconds from selecting Kasumi until the textures loaded, then at most
+five seconds until the first fight started (six to seven of intro lag with
+the fourth build), the fight without lag. The second fight's FMV, then a
+second or two of lag as that battle was about to start; the third fight's
+FMV lagged a second or two at its start, and skipping it with Start choked
+for two to three seconds. "Pretty damned close to parity." The counters:
+
+* 99,307 blocks delivered, 27,736 (28%) by interrupt; `WAITS` 7,318 at
+  9.8 blocks each (each waiting call waited for nearly all of its 10).
+  `EXECS` 4,560, `EXEC INT` 3,630 of them (80%) from interrupt handlers;
+  `STALLED` 1,800. `REHOOKS` 5,993 of `REL 600` 6,031, no exceptions, `HOOKS`
+  716, `RELEASES` 3,271.
+* `OVERRUNS` 1,869 (1.9% of 98,951 DMA blocks), all restarts: repair stopped
+  after 55 (`REPAIRED` 55, `CRC ERRS` 2: both failed repairs) early in the
+  run. `POLLED` 194 (a block's second failure in a row), `FAILURES` 1,871,
+  no read failure. `STARTS` 2,074, `KEPT` 164, `MAXTOKEN` 3,086.
+
+So the fence before stopping the channel did not fix the failed repairs,
+and without repair every overrun cost a card restart, most in the heavy-DMA
+phases (texture uploads, FMV) where the remaining lag is. The seventh build
+fences after the stop as well, refetches byte-ahead blocks without
+switching repair off, makes the sixth build's Y the new X and tries 20
+blocks per call as Y.
+
 ## Console test (DOA2)
 
 1. Install `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` from the
    build's `sd-update` artifact. Storage must be SCI microSD.
 2. Games, select DOA2, A to inspect, A again for the confirmation, then **X**.
-3. The stage screen should say `BACKGROUND READER X - EXEC TOP UP`.
+3. The stage screen should say `BACKGROUND READER X - 10 PER CALL`.
 4. Time character select to fight start (standard reader: about 25 s) and
    note smoothness in the first seconds of the fight, as before.
 5. Play a fight or two. Then A+B+X+Y+Start for the counters screen (about
    15 seconds) and photograph it.
-6. The same with **Y** (`BACKGROUND READER Y - EAGER`) to compare load time
-   and lag.
+6. The same with **Y** (`BACKGROUND READER Y - 20 PER CALL`) to compare load
+   time and lag.
 7. For comparison, launch again with **A** (standard reader).
 
 If it stops, photograph the last screen: `IMAGE READ FAILED` shows the GD
@@ -257,7 +298,7 @@ request, the card block and the stream's error counters.
 | --- | --- |
 | `SECTORS READ` | Sectors delivered to the game |
 | `IRQ BLKS` / `CALLBLKS` | Blocks delivered by the reader's interrupt / by the game's GD calls |
-| `WAITS` | GD calls that waited for blocks (EXECs, and with Y CHECKs, short of 10 since the previous one) |
+| `WAITS` | EXEC and CHECK calls that waited for blocks (short of 10, or with Y 20, since the previous one) |
 | `IRQS` / `FAILURES` | Interrupt entries; retried stream failures |
 | `EXECS` / `EXEC INT` | EXEC calls during reads; those made from an interrupt handler (caller IMASK above 0) |
 | `STALLED` | GD calls that found a block already ended: its interrupt was held off |
@@ -265,11 +306,12 @@ request, the card block and the stream's error counters.
 | `REHOOKS` | Installs again by the trampoline as an interrupt handler returned |
 | `REL 100` / `REL 400` / `REL 600` | Events released at VBR+0x100 (exceptions), +0x400 (TLB misses), +0x600 (interrupts) |
 | `VBR CHGS` | GD calls that found the game had moved to other vectors |
-| `DMA BLKS` / `POLLED` | Blocks received by DMA / by programmed transfers (channel busy) |
-| `STARTS` / `STOPS` | CMD18 starts and CMD12 stops |
+| `DMA BLKS` / `POLLED` | Blocks received by DMA / by programmed transfers (channel busy, or a block's second failure in a row) |
+| `STARTS` | CMD18 starts (each but the first after a CMD12) |
 | `CONTINUE` / `KEPT` | Blocks that continued the stream / shared blocks reused |
-| `OVERRUNS` / `CRC ERRS` / `TOKENERR` / `FOREIGN` | Stream errors, all retried |
+| `OVERRUNS` / `CRC ERRS` / `TOKENERR` / `FOREIGN` | Stream errors, all retried (`OVERRUNS`: those that restarted the card) |
 | `MAXTOKEN` | Longest wait for a data token, in bytes |
 | `REPAIRED` | Mid-block overruns resumed in place, the lost byte rebuilt |
+| `AHEAD` | Repaired blocks that ran a byte ahead: fetched again (also in `CRC ERRS`) |
 
 Values are hexadecimal.

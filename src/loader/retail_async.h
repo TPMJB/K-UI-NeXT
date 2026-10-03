@@ -14,9 +14,9 @@
  * the block, starts the next one and copies the data into the game's
  * destination. The channel raises no interrupt and the game's DMAC level is
  * never touched. The game's own GD calls also deliver whatever has arrived.
- * An EXEC tops the blocks delivered since the previous EXEC up to the
- * ordinary reader's step, waiting for the rest itself; with launch Y
- * (manifest reader ASYNC_EAGER) a CHECK does the same.
+ * An EXEC or CHECK tops the blocks delivered since the previous one up to a
+ * target, waiting for the rest itself: 10 blocks (about the ordinary
+ * reader's step) with launch X, 20 with Y (manifest reader ASYNC_EAGER).
  *
  * The interrupt reaches the reader through its own vector table placed in
  * front of the game's while a block is in flight: VBR+0x600 takes the SCI's
@@ -55,9 +55,10 @@ struct kui_retail_async {
     struct kui_retail_async_release release; /* first: at region + 0x240 */
     const struct kui_retail_manifest *manifest;
     struct kui_retail_cursor cursor;
-    /* since: blocks delivered since the previous EXEC (or, with Y, CHECK). */
+    /* since: blocks delivered since the previous EXEC or CHECK; target: the
+     * blocks each of them makes sure of. */
     uint32_t token, destination, since;
-    uint32_t active, failed, opened, retries, in_irq, hooked, eager;
+    uint32_t active, failed, opened, retries, in_irq, hooked, target;
     struct kui_retail_async_stats stats;
 };
 /* State the resident shares with the reader, kept between the vectors. */

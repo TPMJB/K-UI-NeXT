@@ -13,9 +13,9 @@
 #define KUI_RETAIL_IMAGE_EXTENTS 128u
 /* Which low resident the stage installs (wire offset 264). The background
  * reader streams SCI microSD from its own interrupt and holds at most
- * KUI_RETAIL_ASYNC_EXTENTS extents; validation enforces both. ASYNC lets an
- * EXEC top reading up to the standard reader's step; ASYNC_EAGER lets a
- * CHECK do so too. */
+ * KUI_RETAIL_ASYNC_EXTENTS extents; validation enforces both. Its EXEC and
+ * CHECK top reading up to 10 card blocks each (ASYNC, about the standard
+ * reader's step) or 20 (ASYNC_EAGER). */
 enum kui_retail_reader { KUI_RETAIL_READER_STANDARD, KUI_RETAIL_READER_ASYNC,
     KUI_RETAIL_READER_ASYNC_EAGER };
 #define KUI_RETAIL_ASYNC_EXTENTS 32u

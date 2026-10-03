@@ -251,7 +251,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         else {
             map->reader=reader;
             log("Retail boot reader: background SCI stream (test, %s)",
-                reader==KUI_RETAIL_READER_ASYNC_EAGER?"EXEC and CHECK top-up":"EXEC top-up");
+                reader==KUI_RETAIL_READER_ASYNC_EAGER?"20 blocks per call":"10 blocks per call");
         }
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);

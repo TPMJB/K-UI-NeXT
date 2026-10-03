@@ -1,5 +1,24 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background reader, seventh build (2026-10-03 UTC)
+
+`5136651bba37` with Y (eager) on the console: about 10 s from selecting
+Kasumi to the textures, then at most 5 s to the first fight (no lag in it),
+short lags around the next fights' FMVs (skipping one choked 2 to 3 s):
+"pretty damned close to parity". But repair stopped early, after 2 of 55
+failed, so its other 1,869 overruns (1.9%) each restarted the card. This
+build: `finish` also waits for the bus after stopping the channel, before
+counting (a transfer the channel had begun still lands then; the host model
+shows the old order resuming a byte early and the new one repairing it); a
+repaired block that ran a byte ahead (the card's gap or token as its last
+byte) is fetched again without a rebuild and counted as `AHEAD`, not against
+repair; the rebuild computes the lost byte directly. Launches: X is the
+sixth build's Y (EXEC and CHECK top up to 10 blocks), Y tops up to 20.
+`STOPS` gave its place to `AHEAD`: the stream rows read `DMA BLKS POLLED
+STARTS CONTINUE KEPT`, `OVERRUNS CRC ERRS TOKENERR FOREIGN MAXTOKEN`,
+`REPAIRED AHEAD`. See [games-background-reader.md](games-background-reader.md).
+Build ID and CI run: pending.
+
 ## Games: background reader, sixth build (2026-10-03 UTC)
 
 `40e7e2b71c61` Y (one block per call) was far slower: boot past 20 to 30 s,
@@ -14,7 +33,7 @@ channel so a held-off last write lands before the count is read; Y is now
 `ASYNC_EAGER` (CHECK tops up like EXEC). See
 [games-background-reader.md](games-background-reader.md). Build
 **5136651bba37** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37128672324)
-(16 bytes free, call-graph stack 220 of 336); console test pending.
+(16 bytes free, call-graph stack 220 of 336); console: see the seventh build.
 
 ## Games: background reader, fifth build (2026-10-03 UTC)
 

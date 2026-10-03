@@ -137,9 +137,9 @@ _Static_assert(offsetof(struct kui_retail_async_release, vbr_changes) ==
                offsetof(struct kui_retail_async_release, rehooks) + 16u, "release counters");
 static void stream_lines(void) {
     const uint32_t *st = (const uint32_t *)kui_sci_stream_stats();
-    retail_display_values("DMA BLKS POLLED   STARTS   STOPS    CONTINUE", st, 5);
-    retail_display_values("KEPT     OVERRUNS CRC ERRS TOKENERR FOREIGN", st + 5, 5);
-    retail_display_values("MAXTOKEN REPAIRED", st + 10, 2);
+    retail_display_values("DMA BLKS POLLED   STARTS   CONTINUE KEPT", st, 5);
+    retail_display_values("OVERRUNS CRC ERRS TOKENERR FOREIGN  MAXTOKEN", st + 5, 5);
+    retail_display_values("REPAIRED AHEAD", st + 10, 2);
 }
 #endif
 static void report_fault(const char *reason, uint32_t function) {
