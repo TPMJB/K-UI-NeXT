@@ -24,7 +24,8 @@ link: the resident was over its limit with CI's GCC 15 although a local GCC
 proxy, showed +4). So the SCI bus's 20-byte state moved into the reader
 region's spare gap and the two counters went: GCC 14 now ends 36 bytes
 under the limit. See [games-background-reader.md](games-background-reader.md).
-Build ID and CI run: pending.
+Build **cbfa8f74f05b** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37133001235)
+(36 bytes free, call-graph stack 224 of 336); console test pending.
 
 ## Games: background reader, sixth build (2026-10-03 UTC)
 
