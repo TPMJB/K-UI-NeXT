@@ -12,7 +12,11 @@ resident (`resident-scia`, 32 extents, 512-byte stack proven from GCC's call
 graph). Design, risks, the counters screen and the DOA2 test steps:
 [games-background-reader.md](games-background-reader.md). Host tests:
 `test-sci-stream`, `test-retail-cursor`, `test-retail-async`,
-`test-retail-gd-async`. Console results are pending.
+`test-retail-gd-async`. Build **80687b46fde8** passed
+[Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37095699048)
+(host and Dreamcast): the background resident has 496 bytes free and a
+call-graph worst-case stack of 220 of 464 bytes; the standard SCI resident
+now has 48 bytes free. Console results are pending.
 
 ## SCI async: reader final; game loader next (2026-10-03 UTC)
 
