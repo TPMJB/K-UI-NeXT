@@ -346,6 +346,28 @@ that caused it is still going on; a repair started from a GD call comes
 later. (0 failures in 43 at the earlier rate would happen about 1 time in
 9 by chance.)
 
+## Ninth console run (90f22512c808)
+
+"I think the Y build was the most fluid." It is pinned (see
+`docs/HANDOFF.md`).
+
+* **Y (25 per call):** 68,044 blocks, 13 by interrupt; `WAITS` 2,828 at 24.1
+  blocks; `EXECS` 1,776 (1,758 from interrupt handlers). Repair stayed on all
+  session: `REPAIRED` 142, none deferred; `CRC ERRS` 2, both `AHEAD` (fetched
+  again, not counted against repair). `OVERRUNS` 4, `STARTS` 116 (the fewest
+  yet), `POLLED` 0.
+* **X (20 per call):** 68,308 blocks, 5,483 (8%) by interrupt; `WAITS` 3,477 at
+  18.1. `REPAIRED` 6, all `DEFERRED`, and `CRC ERRS` 2 (not ahead): repair
+  switched off and 268 overruns restarted the card.
+
+So resuming later from a GD call did not save a repair the interrupt had
+started: what goes wrong is captured when the interrupt finds the overrun
+(its count or held byte), not the resumption. Repairs a GD call starts
+succeed (142 here, 43 in the eighth run), with the byte-ahead check catching
+the rare exception. A next step, parked: treat an overrun the interrupt
+finds as a restart rather than a repair, which keeps repair on whatever the
+mix, and make 25 blocks per call the default.
+
 ## Console test (DOA2)
 
 1. Install `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` from the

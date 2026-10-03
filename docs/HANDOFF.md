@@ -1,10 +1,17 @@
 # K-UI NeXT handoff (2026-09-28)
 
-## Games: background reader, pinned known-good build (2026-10-03 UTC)
+## Games: background reader, pinned known-good builds (2026-10-03 UTC)
 
-**effc7b43fe5d, launch X (20 blocks per call)** is the owner's known-good
-background reader for DOA2 on SCI microSD: "very doable as far as gameplay
-goes". Compare any rework against it before replacing it. Source: commit
+**90f22512c808, launch Y (25 blocks per call)** is now the best background
+reader for DOA2 on SCI microSD: "the most fluid" of all runs. Its repair
+stayed on for the whole session (142 repairs; the only 2 CRC errors were
+byte-ahead blocks, fetched again) and only 4 overruns restarted the card.
+Source: commit `90f22512c808`; build: [Diagnostic run
+37149233706](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37149233706).
+Background-reader work is parked here while Windows CE is investigated.
+
+The earlier pin, **effc7b43fe5d, launch X (20 blocks per call)**: "very
+doable as far as gameplay goes". Source: commit
 `effc7b43fe5d` on `claude/modest-galileo-hpjv79`; build: [Diagnostic run
 37143988592](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37143988592)
 (artifacts kept until 2026-11-02; the owner keeps the SD update). The session
@@ -23,7 +30,12 @@ REPAIRED AHEAD`, `DEFERRED`) and the reader's private stack is 352 bytes
 (call graph 224 plus the 64-byte allowance against 304). See
 [games-background-reader.md](games-background-reader.md). Build
 **90f22512c808** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37149233706)
-(36 bytes free, call-graph stack 224 of 304); console test pending.
+(36 bytes free, call-graph stack 224 of 304). Console: Y (25) was "the most
+fluid" and is pinned above. X (20): its 6 repairs were all overruns found by
+the interrupt and resumed later by a GD call (`DEFERRED` 6), and 2 still
+failed, so the fault lies in what is captured when the interrupt finds the
+overrun, not in when the block is resumed. Y's repairs all started inside
+GD calls (142, none deferred).
 
 ## Games: background reader, eighth build (2026-10-03 UTC)
 
