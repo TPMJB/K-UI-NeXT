@@ -277,6 +277,25 @@ blocks per call as Y. To fit, it drops `IRQS` and `FAILURES` (they repeated
 `IRQ BLKS` and the stream's error counters) and `STOPS`, and keeps the SCI
 bus's state in the reader's region.
 
+## Seventh console run (cbfa8f74f05b)
+
+Y (20 blocks per EXEC or CHECK): "A lot less lag. Reasonable even." The
+counters:
+
+* 65,063 blocks delivered, 7,860 (12%) by interrupt; `WAITS` 3,322 at 17.2
+  blocks each. `EXECS` 2,002, `EXEC INT` 1,976 of them (99%) from interrupt
+  handlers; `STALLED` 458. `REHOOKS` 2,701 of `REL 600` 2,802, no
+  exceptions, `HOOKS` 384, `RELEASES` 1,760.
+* Overruns fell to 0.56% of DMA blocks (365 of 64,975; 1.9% in the sixth
+  run): with the game held in its GD calls longer, its own DMA met the
+  stream less often.
+* Repair still stopped early: `REPAIRED` 13, `CRC ERRS` 2, `AHEAD` 0. So the
+  failed repairs are not a byte ahead, and the fence after the stop did not
+  cure them; the other 352 overruns restarted the card (about half a second
+  in all). `POLLED` 7, `STARTS` 464, `KEPT` 83, `MAXTOKEN` 3,222.
+
+X: pending.
+
 ## Console test (DOA2)
 
 1. Install `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` from the

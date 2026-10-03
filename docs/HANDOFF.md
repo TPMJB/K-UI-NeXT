@@ -25,7 +25,10 @@ proxy, showed +4). So the SCI bus's 20-byte state moved into the reader
 region's spare gap and the two counters went: GCC 14 now ends 36 bytes
 under the limit. See [games-background-reader.md](games-background-reader.md).
 Build **cbfa8f74f05b** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37133001235)
-(36 bytes free, call-graph stack 224 of 336); console test pending.
+(36 bytes free, call-graph stack 224 of 336). Console, Y: "A lot less lag.
+Reasonable even." Overruns fell to 0.56% of blocks (1.9% before), but repair
+still stopped after 2 of 13 failed, neither a byte ahead (`AHEAD` 0). X:
+pending.
 
 ## Games: background reader, sixth build (2026-10-03 UTC)
 
