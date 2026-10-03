@@ -189,3 +189,17 @@ Source `9e6ccca3dd9e16edacd981830d6887c99372eca2` passed
 host tests and the Dreamcast build. Install `KUI/runtime.kui` and
 `KUI/apps/games/retail-boot.kui` from its `kui-1.5.1-dainsleif-sd-update`
 artifact, run R and return the JSON and a photo of the result screen.
+
+## Console results (9e6ccca3dd9e)
+
+The owner ran R; it passed with all four passes returning the same data and
+normal recovery verified ([report](sci-async-console-9e6ccca3dd9e-speed.json)).
+Ordinary reader 1,096 KiB/s, async CMD17 646, CMD18 stream 1,191; stream per
+block: receive 345 us, gap 33 us, check 43 us overlapped, no restarts.
+
+**No pauses.** No masked window reached 0.5 ms and no call 1.5 ms. With a
+uniform clock the true maxima are small: longest call 371 us (a stream poll),
+longest receive 395 us (CMD17) and 407 us (stream), longest card wait 318 us,
+slowest module reset 7.5 us. The longest interrupt-masked window, 61 us, was
+the reader's open (building its two lookup tables, once per boot); the next
+build builds them before masking. The SCI reader is final for the loader work.

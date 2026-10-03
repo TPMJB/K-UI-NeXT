@@ -1031,6 +1031,7 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
     if(!c || !c->ready || c->slow || !c->bus.select || !c->bus.transfer || !c->blocks)
         return out->status;
     if(!us_scale) clock_init();
+    build_tables(); /* once, before interrupts are masked */
     uint64_t start=now_us();
     irq_mask_t mask=irq_disable();uint64_t reservation_start=now_us();
     if(occupied || poisoned) {
@@ -1042,7 +1043,6 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
     reader->generation=p->generation=next_generation;
     p->opened_us=start;p->phase=READER_IDLE;p->quantum=FRAMING_QUANTUM;
     p->tick_period=rd(TCOR2,4)+1u;
-    build_tables();
     masked_record(p,reservation_start,MASKED_OPEN);irq_restore(mask);
     out->slow.clock_hz=390625;
     out->fast.clock_hz=out->cmd18.clock_hz=out->streaming.clock_hz=12500000;

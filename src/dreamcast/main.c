@@ -1109,13 +1109,14 @@ static void sci_async_operation(unsigned mode) {
                     (unsigned long)sci_async_kib_s(result.speed_async_blocks,result.speed_async_us),stream_rate);
                 const struct kui_sci_async_stage *t=&r->streaming;
                 uint64_t k=t->passed?t->passed:1u;
-                snprintf(line,sizeof(line),"Stream per block us: receive %lu gap %lu check %lu overlapped; restarts %lu",
+                snprintf(line,sizeof(line),"Stream us/block: receive %lu, gap %lu, check %lu; restarts %lu",
                     (unsigned long)(t->receive_us/k),(unsigned long)(t->framing_us/k),
                     (unsigned long)(t->finish_us/k),(unsigned long)t->stream_restarts);
                 snprintf(status.lines[3],KUI_APP_LINE_CAP,"%.79s",line);
-                snprintf(line,sizeof(line),"Longest interrupt-masked window %llu us (%s, %s)",
+                snprintf(line,sizeof(line),"Longest interrupt-masked window %llu us (%s%s%s)",
                     (unsigned long long)r->max_irq_masked_us,sci_async_pause_site(r->max_irq_masked_site),
-                    sci_async_pause_stage(r->max_irq_masked_stage));
+                    r->max_irq_masked_stage<4u?", ":"",
+                    r->max_irq_masked_stage<4u?sci_async_pause_stage(r->max_irq_masked_stage):"");
                 snprintf(status.lines[4],KUI_APP_LINE_CAP,"%.79s",line);
                 const struct kui_sci_async_pause *worst=NULL;
                 for(uint32_t i=0;i<r->pause_count && i<KUI_SCI_ASYNC_PAUSES;i++)

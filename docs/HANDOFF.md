@@ -1,5 +1,14 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## SCI async: reader final; game loader next (2026-10-03 UTC)
+
+`9e6ccca3dd9e` on the console: no pauses, longest call 371 us, longest
+interrupt-masked window 61 us (the reader's one-time table build at open,
+now moved before masking), stream 1,191 KiB/s with all data matching. See
+[the change record](evidence/sci-async-pause-hunt-2026-10-02.md). The owner
+asked for the asynchronous game loader next. CI now annotates each run with
+the low residents' sizes (`tools/report_retail_sizes.py`).
+
 ## SCI async: the 2.5 ms pause is KOS's clock (2026-10-02 UTC)
 
 `ad0340e18528` on the console: the logged pauses fall exactly at whole seconds
