@@ -12,8 +12,11 @@ run the next block starts as soon as one has arrived, before that one is
 checked and copied (the CRC check and bit reversal used to idle the card);
 the block kept for a following request gives way to the one being checked.
 `STALLED` is gone (it made room; the interrupt's hold-offs are established).
-See [games-background-reader.md](games-background-reader.md). Build ID and CI
-run: pending.
+See [games-background-reader.md](games-background-reader.md). Build
+**effc7b43fe5d** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37143988592)
+(4 bytes free, call-graph stack 224 of 336: GCC 15 came out within 8 bytes of
+the local GCC 14 this time, so any further growth needs room made first);
+console test pending.
 
 ## Games: background reader, seventh build (2026-10-03 UTC)
 
