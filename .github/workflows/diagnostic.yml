@@ -171,8 +171,11 @@ jobs:
           if [ "$status" -ne 0 ]; then
             echo
             echo "=============== BUILD FAILED: THE ERRORS, IN ONE PLACE ==============="
-            grep -nE "error:|Error [0-9]+|undefined reference|multiple definition|\*\*\*" "$LOG" | head -60
+            grep -nE "error:|Error [0-9]+|undefined reference|multiple definition|\*\*\*|check failed|[Ff]ailed:" "$LOG" | head -60
             echo "======================================================================"
+            # The same lines as annotations, readable without the job log.
+            grep -E "error:|undefined reference|multiple definition|check failed|[Ff]ailed:" "$LOG" | head -20 |
+              while IFS= read -r line; do echo "::error title=Build error::${line}"; done
           fi
           exit "$status"
       - name: Report low resident sizes

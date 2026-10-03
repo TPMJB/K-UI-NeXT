@@ -311,8 +311,7 @@ class RetailLinkedLayout(unittest.TestCase):
                         "kui_retail_resident_dispatch", "kui_retail_gd_dispatch"]
             if transport == "scia":
                 required += ["kui_retail_async_irq", "kui_retail_irq_entry",
-                             "kui_retail_vector_forward", "kui_retail_vector_interrupt",
-                             "kui_sci_sd_acquire"]
+                             "kui_retail_vector_forward", "kui_retail_vector_interrupt"]
             else:
                 required += ["kui_retail_image_read"]
             if transport == "scia":
