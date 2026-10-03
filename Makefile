@@ -22,6 +22,7 @@ test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/
 test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan
+test: build/test-retail-cursor build/test-sci-stream
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
 test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
@@ -39,6 +40,8 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-gd-service
 	./build/test-image-client
 	./build/test-retail-image
+	./build/test-retail-cursor
+	./build/test-sci-stream
 	./build/test-retail-gd
 	./build/test-retail-pace
 	./build/test-retail-sd
@@ -213,6 +216,14 @@ build/test-retail-minic: tests/test_retail_minic.c build/retail-minic-test.o
 build/test-retail-image: tests/test_retail_image.c src/core/retail_image.c include/kui/retail_image.h include/kui/game_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_image.c tests/test_retail_image.c -o $@
+
+build/test-retail-cursor: tests/test_retail_cursor.c src/core/retail_cursor.c src/core/retail_image.c include/kui/retail_cursor.h include/kui/retail_image.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_cursor.c src/core/retail_image.c tests/test_retail_cursor.c -o $@
+
+build/test-sci-stream: tests/test_sci_stream.c src/loader/sci_stream.c src/loader/sci_stream.h src/loader/sd_reader.h src/loader/sci_sd_bus.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_STREAM_TEST=1 -Iinclude -Isrc/loader src/loader/sci_stream.c tests/test_sci_stream.c -o $@
 
 build/test-ce-load-plan: tests/test_ce_load_plan.c src/core/ce_load_plan.c include/kui/ce_load_plan.h include/kui/retail_loader_layout.h
 	@mkdir -p $(@D)
