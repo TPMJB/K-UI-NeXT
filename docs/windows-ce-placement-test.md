@@ -104,15 +104,24 @@ through the `0x8c0000bc` vector. The resident already redirects that entry
 
 After placement the stage carries on as for a native game:
 
-1. It puts the relay's 128-byte trampoline at the body start (`0x8c010000`),
-   installs the CE-safe SCI reader in the low IP area and enters the IP's
-   bootstrap 2. Unlike native games, the IP is left unchanged (its byte 0xFC
-   is in the title field).
-2. Bootstrap 2 jumps to the body start and reaches the relay, which checks
-   the boot stack and CPU state, restores the body's first 128 bytes, checks
-   the body's CRC32 and the reader's bytes, shows `ENTERING WINDOWS CE` and
-   jumps to `0x8c010000`.
-3. Windows CE starts. Its CD driver calls the BIOS GD entry `0x8c0010f0`
+1. It puts the relay's trampoline at the body start (`0x8c010000`), installs
+   the CE-safe SCI reader in the low IP area, clears IP byte `0xFC` bit
+   `0x20` exactly as native launches do, and enters the IP's bootstrap 2.
+   Only the trampoline's first 64 bytes (all of its code) are placed, so the
+   body keeps its `ECEC` signature and ROM header pointer at offset `0x40`
+   while bootstrap 2 runs.
+2. Bootstrap 2 runs under a K-UI exception table with SR.BL clear, which
+   otherwise matches the native entry (SR.BL set): any exception, which would
+   have reset the console, stops with `EXCEPTION WHILE BOOTSTRAP 2 RAN`, its
+   vector, EXPEVT, TEA, SPC, SSR, R15, PR and the code at SPC; an interrupt
+   (only if bootstrap 2 lowers IMASK) is left pending, as SR.BL would have
+   left it, without changing any of bootstrap 2's registers.
+3. Bootstrap 2 jumps to the body start and reaches the relay, which restores
+   the boot VBR and SR.BL, checks the boot stack and CPU state, restores the
+   body's first 64 bytes, checks the body's CRC32 and the reader's bytes,
+   shows `ENTERING WINDOWS CE` (held two seconds, as is the screen before
+   bootstrap 2) and jumps to `0x8c010000`.
+4. Windows CE starts. Its CD driver calls the BIOS GD entry `0x8c0010f0`
    directly; the reader has redirected that entry (and the others) to itself.
 
 The CE-safe reader (`KUI_RETAIL_CE`, built only into `ce-probe.kui`):
@@ -137,8 +146,30 @@ The CE-safe reader (`KUI_RETAIL_CE`, built only into `ce-probe.kui`):
 | `R7 / R4 / R5 / R6 / CALLS` | The failing call: function, first and second arguments, R6, and how many calls came before |
 | `EARLIER` (three rows) | The three calls before it, newest first, as R7 R4 R5 R6 |
 
+## Console result: first boot test, build 64f30e3f8ce4 (2026-10-03)
+
+ARMADA reached `ENTERING OWNER BOOTSTRAP 2`, then the console reset to the
+BIOS. That build entered bootstrap 2 with SR.BL set (as for native games), so
+any exception there resets the console. Two differences from native launches
+were found and removed in the next build:
+
+- It left IP byte `0xFC` unchanged. Native launches clear its bit `0x20`
+  before entering bootstrap 2, which skips bootstrap 1; every working launch
+  has had it cleared.
+- Its 128-byte trampoline covered body offset `0x40`, where the CE image
+  keeps `ECEC` and its ROM header pointer, while bootstrap 2 ran.
+
+ARMADA's kernel itself (`nk.exe` StartUp at `0x8c0120c0`, reached through a
+jump at the body start) sets its own SR, stack and VBR at once and does not
+read the bootstrap's state, so the reset is most likely inside bootstrap 2.
+
 ## What each outcome means
 
+- **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the
+  code at SPC say where (an address in `0x8c00e000`–`0x8c010000` is
+  bootstrap 2 itself).
+- **A reset while `ENTERING OWNER BOOTSTRAP 2` is shown**: bootstrap 2 set
+  SR.BL itself before faulting, or overwrote the stage.
 - **`UNSUPPORTED BOOT STACK` or `UNSUPPORTED BOOT CPU STATE`** before
   `ENTERING WINDOWS CE`: ARMADA's bootstrap 2 leaves a different state from
   native games; the values shown say how.

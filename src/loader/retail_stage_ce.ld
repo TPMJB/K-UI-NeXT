@@ -13,6 +13,7 @@ SECTIONS {
  .data : { *(.data .data.*) } :image
  .trampoline : { KEEP(*(.trampoline)) } :image
  ASSERT(SIZEOF(.trampoline)==128,"retail trampoline must be 128 bytes")
+ ASSERT(__retail_trampoline_code_end-__retail_trampoline_start<=64,"CE entry trampoline code must fit in 64 bytes")
  .resident_blob : { KEEP(*(.resident_blob)) } :image
  . = ALIGN(4);
  __retail_stage_binary_end = .;

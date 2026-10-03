@@ -29,6 +29,19 @@ extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
 /* Handoff screens stay up about half a second: long enough to see, while a
  * failure still leaves its last screen for a photograph. */
 #define HANDOFF_PAUSE_FRAMES 30u
+#ifdef KUI_RETAIL_CE
+/* The Windows CE boot test holds each handoff screen for two seconds, so a
+ * reset right afterwards still leaves the last step in a photograph. It
+ * places only the trampoline's first 64 bytes (all of its code): the CE body
+ * keeps its "ECEC" signature and ROM header pointer at offset 0x40 while
+ * bootstrap 2 runs. */
+#define STEP_PAUSE_FRAMES 120u
+#define ENTRY_PATCH_BYTES 64u
+extern const uint8_t __retail_ce_vbr[] __asm__("__retail_ce_vbr");
+#else
+#define STEP_PAUSE_FRAMES HANDOFF_PAUSE_FRAMES
+#define ENTRY_PATCH_BYTES KUI_RETAIL_TRAMPOLINE_BYTES
+#endif
 extern void kui_retail_stage_sync(void);
 
 /* High storage is temporary: no pointer to it survives the final handoff.
@@ -312,22 +325,21 @@ void kui_retail_stage_main(const uint8_t *wire) {
     boot_crc=kui_retail_crc32(0,boot,exec_bytes);
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);
-    memcpy(original_entry,boot,sizeof(original_entry));
-    memcpy(boot,__retail_trampoline_start,sizeof(original_entry));
+    memcpy(original_entry,boot,ENTRY_PATCH_BYTES);
+    memcpy(boot,__retail_trampoline_start,ENTRY_PATCH_BYTES);
     retail_display_line("IP CHECKSUM AND BOOT SECTOR HEADERS PASSED");
     retail_display_hex("BOOT BYTES",exec_bytes);
     retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
-#ifndef KUI_RETAIL_CE
     /* DreamShell's native Katana path clears this IP bootstrap flag before
      * entering bootstrap2, including its truncated-IP mode. Only this RAM
-     * copy changes; the original IP checksum was checked above. Windows CE
-     * keeps its IP unchanged: 0xFC lies in its title field. */
+     * copy changes; the original IP checksum was checked above. Every
+     * working launch has had it cleared; Windows CE gets the same (its
+     * first boot test, with the flag left set, reset during bootstrap 2). */
     ip[0xfcu]&=(uint8_t)~0x20u;
-#endif
     install_resident();
     retail_display_line("READER INSTALLED BEFORE BOOTSTRAP 2");
     retail_display_line("ENTERING OWNER BOOTSTRAP 2");
-    retail_display_pause(HANDOFF_PAUSE_FRAMES);
+    retail_display_pause(STEP_PAUSE_FRAMES);
     kui_retail_bootstrap_enter();
 }
 
@@ -345,13 +357,22 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     if((address&3u) || address<KUI_RETAIL_BOOT2_ADDRESS ||
        address>KUI_RETAIL_EXEC_ADDRESS-21u*4u)
         stopped("UNSUPPORTED BOOT STACK",(uint32_t)(uintptr_t)frame);
+#ifdef KUI_RETAIL_CE
+    /* Bootstrap 2 ran under the stage's exception table with SR.BL clear;
+     * the entry gets the conventional boot VBR and BL back. */
+    if(frame[3]==(uint32_t)(uintptr_t)__retail_ce_vbr) {
+        uint32_t *state=(uint32_t *)(uintptr_t)frame;
+        state[3]=KUI_RETAIL_BOOT_VBR;
+        state[4]|=0x10000000u;
+    }
+#endif
     if(frame[3]!=KUI_RETAIL_BOOT_VBR || !(frame[4]&0x40000000u))
         stopped("UNSUPPORTED BOOT CPU STATE",frame[3]);
     retail_display_hex("BOOT STACK",(uint32_t)address+21u*4u);
     retail_display_hex("BOOT SR",frame[4]);
     retail_display_hex("BOOT CACHE",ccr);
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
-    memcpy(boot,original_entry,sizeof(original_entry));
+    memcpy(boot,original_entry,ENTRY_PATCH_BYTES);
     uint32_t crc=kui_retail_crc32(0,boot,exec_bytes);
     if(crc!=boot_crc) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
@@ -368,5 +389,33 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_line(manifest.title);
     retail_display_line("IF IT STOPS PHOTOGRAPH THE LAST SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
-    retail_display_pause(HANDOFF_PAUSE_FRAMES);
+#ifdef KUI_RETAIL_CE
+    retail_display_line("A RESET NOW MEANS WINDOWS CE ITSELF FAILED");
+#endif
+    retail_display_pause(STEP_PAUSE_FRAMES);
 }
+#ifdef KUI_RETAIL_CE
+/* Set by the exception table in retail_stage.S: vector (1 general, 4 TLB
+ * miss), then SPC, SSR, R15 (SGR) and PR when the exception was taken. */
+uint32_t kui_retail_ce_fault[5];
+void kui_retail_stage_exception(void) __attribute__((noreturn));
+/* Entered from that table on the stage's stack while bootstrap 2 ran: show
+ * where it faulted instead of letting the console reset. */
+void kui_retail_stage_exception(void) {
+    retail_display_restore(&display);
+    retail_display_line("EXCEPTION WHILE BOOTSTRAP 2 RAN");
+    uint32_t spc=kui_retail_ce_fault[1];
+    uint32_t regs[5]={kui_retail_ce_fault[0],*(volatile uint32_t *)(uintptr_t)0xff000024u,
+        *(volatile uint32_t *)(uintptr_t)0xff00000cu,spc,kui_retail_ce_fault[2]};
+    retail_display_values("VECTOR   EXPEVT   TEA      SPC      SSR",regs,5);
+    retail_display_values("R15      PR",kui_retail_ce_fault+3,2);
+    /* The instructions around SPC, when it is in main RAM (MMU off). */
+    uint32_t phys=spc&0x1fffffffu, area=spc>>29;
+    if((area==0u || area==4u || area==5u) && phys>=0x0c000004u && phys<0x0cfffff0u) {
+        const volatile uint32_t *at=(const volatile uint32_t *)(uintptr_t)(((phys&~3u)-4u)|0xa0000000u);
+        uint32_t code[4]={at[0],at[1],at[2],at[3]};
+        retail_display_values("CODE FROM SPC-4",code,4);
+    }
+    stopped("STOPPED IN BOOTSTRAP 2",spc);
+}
+#endif

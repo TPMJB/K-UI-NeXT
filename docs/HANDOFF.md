@@ -1,5 +1,16 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: boot test reset in bootstrap 2; fixes (2026-10-03 UTC)
+
+First boot test (`64f30e3f8ce4`) on ARMADA: `ENTERING OWNER BOOTSTRAP 2`,
+then a console reset. Next build: IP `0xFC` bit `0x20` cleared as for native
+games; only the trampoline's first 64 bytes placed (CE keeps `ECEC` and its
+ROM header pointer at body `0x40`); bootstrap 2 entered with SR.BL clear and
+a stage exception table (`__retail_ce_vbr`: exceptions reported, an
+interrupt left pending as SR.BL would) instead of a reset; relay restores VBR
+and BL; handoff screens held two seconds. Asked the owner for ARMADA's
+IP.BIN (analysis only, never committed) to read what its bootstrap 2 does.
+
 ## Windows CE: boot test, second step (2026-10-03 UTC)
 
 The CE test now **starts Windows CE** after placement and stops at the first

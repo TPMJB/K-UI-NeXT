@@ -87,13 +87,22 @@ C(kui_retail_bootstrap_enter):
     nop
     nop
     nop
+#ifdef KUI_RETAIL_CE
+    /* Windows CE boot test: bootstrap 2 runs under the stage's exception
+     * table (below) with SR.BL clear, so a fault there is reported instead
+     * of resetting the console. The relay restores the boot VBR. */
+    mov.l .Lce_vbr,r0
+    ldc r0,vbr
+#endif
     mov.l .Lbootsr,r0
     ldc r0,ssr
     ldc r0,sr
     mov.l .Lbootgbr,r0
     ldc r0,gbr
     mov.l .Lbootstack,r15
+#ifndef KUI_RETAIL_CE
     ldc r15,vbr
+#endif
     mov.l .Lbootfpscr,r0
     .global __retail_boot_fpscr_init
 __retail_boot_fpscr_init:
@@ -131,7 +140,12 @@ __retail_boot_fpscr_init:
 .Lbootramend: .long KUI_RETAIL_RAM_END
 .Lbootccr: .long 0xff00001c
 .Lbootcache: .long 0x00000909
+#ifdef KUI_RETAIL_CE
+.Lbootsr: .long 0x600000f0 /* MD, RB, IMASK 15; BL clear (see above) */
+.Lce_vbr: .long __retail_ce_vbr
+#else
 .Lbootsr: .long 0x700000f0
+#endif
 .Lbootgbr: .long 0x8c000000
 .Lbootfpscr: .long 0x00040001
 .Lbootstack: .long KUI_RETAIL_BOOT_VBR
@@ -213,6 +227,12 @@ __retail_trampoline_start:
     nop
     .align 2
 .Lrelay: .long C(kui_retail_game_resume)+0x20000000
+/* Windows CE keeps its body's "ECEC" signature and ROM header pointer at
+ * offset 0x40 while bootstrap 2 runs: that stage places only the first 64
+ * bytes, so all of the code and its literal must fit in them (checked by
+ * retail_stage_ce.ld). */
+    .global __retail_trampoline_code_end
+__retail_trampoline_code_end:
     .space 128-(.-__retail_trampoline_start)
 __retail_trampoline_end:
 
@@ -337,3 +357,53 @@ __retail_resident_scia_blob_start:
     .incbin "build/retail/resident-scia.bin"
     .align 2
 __retail_resident_scia_blob_end:
+
+#ifdef KUI_RETAIL_CE
+/* Windows CE boot test: the exception table bootstrap 2 runs under, matching
+ * the native entry's SR.BL=1 except that a fault is reported instead of
+ * resetting the console. Bootstrap 2 runs in register bank 1, the same bank
+ * an exception selects, so no stub that returns may change a general
+ * register: an interrupt (possible only if bootstrap 2 lowers IMASK; BL=1
+ * would have held it) parks R0 in DBR (used only by H-UDI/user-break
+ * debugging), raises the interrupted IMASK back to 15 and returns, leaving
+ * the interrupt pending as BL=1 would. Any exception (vector 1 general, 4 TLB
+ * miss) records its vector, SPC, SSR, R15 (SGR) and PR and reports from the
+ * stage's stack: kui_retail_stage_exception. */
+    .section .text.retail_ce_vectors,"ax"
+    .balign 32
+    .global __retail_ce_vbr
+__retail_ce_vbr:
+    .org 0x100
+    bra .Lce_catch
+    mov #1,r4
+    .org 0x400
+    bra .Lce_catch
+    mov #4,r4
+    .org 0x600
+    ldc r0,dbr
+    stc ssr,r0
+    or #0xf0,r0
+    ldc r0,ssr
+    stc dbr,r0
+    rte
+    nop
+.Lce_catch:
+    mov.l .Lce_fault,r0
+    mov.l r4,@r0
+    stc spc,r1
+    mov.l r1,@(4,r0)
+    stc ssr,r1
+    mov.l r1,@(8,r0)
+    stc sgr,r1
+    mov.l r1,@(12,r0)
+    sts pr,r1
+    mov.l r1,@(16,r0)
+    mov.l .Lce_stack,r15
+    mov.l .Lce_report,r0
+    jmp @r0
+    nop
+    .align 2
+.Lce_fault: .long C(kui_retail_ce_fault)
+.Lce_stack: .long KUI_RETAIL_STAGE_STACK
+.Lce_report: .long C(kui_retail_stage_exception)
+#endif
