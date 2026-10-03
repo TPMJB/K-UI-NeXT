@@ -12,8 +12,9 @@ second failure in a row a block is read by programmed transfers (cannot
 overrun); `finish` does an uncached read of main memory before stopping the
 channel so a held-off last write lands before the count is read; Y is now
 `ASYNC_EAGER` (CHECK tops up like EXEC). See
-[games-background-reader.md](games-background-reader.md). Build ID and CI
-run: pending.
+[games-background-reader.md](games-background-reader.md). Build
+**5136651bba37** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37128672324)
+(16 bytes free, call-graph stack 220 of 336); console test pending.
 
 ## Games: background reader, fifth build (2026-10-03 UTC)
 
