@@ -9,4 +9,9 @@
  * Cancellation/failure releases the package and leaves image empty. */
 bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled);
+/* As above, asking for a reader (enum kui_retail_reader). The background
+ * reader needs SCI microSD and at most KUI_RETAIL_ASYNC_EXTENTS extents;
+ * otherwise the launch uses the standard reader and says why in the log. */
+bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
+    struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled);
 #endif

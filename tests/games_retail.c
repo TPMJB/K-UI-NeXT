@@ -53,7 +53,9 @@ static int sync_image(void *ctx) {
     (void)ctx; return fflush(test.image) || fsync(fileno(test.image)) ? -1 : 0;
 }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
-unsigned kui_storage_active(void) { return KUI_STORAGE_SCIF; }
+unsigned kui_storage_active(void) {
+    return !strcmp(test.fault, "async-on-sci") ? KUI_STORAGE_SCI : KUI_STORAGE_SCIF;
+}
 bool kui_sd_connect(void) {
     assert(!test.connected); ++test.connects;
     test.connected = true; kui_media_set(&media); return true;
@@ -243,6 +245,10 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
         !strcmp(test.fault, "blank-title") ? "Untitled game" : "DEAD OR ALIVE 2"));
     assert(!strcmp(map->bootfile, !strcmp(test.fault, "alternate-bootfile") ? "ALT_BOOT.BIN" : "1ST_READ.BIN"));
     if(!strcmp(test.fault, "fragmented")) assert(map->tracks[2].extent_count > 1);
+    /* The background reader is granted only on SCI; SCIF falls back. */
+    assert(map->reader == (!strcmp(test.fault, "async-on-sci") ? KUI_RETAIL_READER_ASYNC :
+                           KUI_RETAIL_READER_STANDARD));
+    assert(map->storage_transport == kui_storage_active());
     size_t size; uint8_t *gdi = host_file(directory, "disc.gdi", &size);
     assert(map->gdi_crc32 == kui_crc32(0, gdi, size)); free(gdi);
     struct kui_retail_image reader;
@@ -298,8 +304,9 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
 }
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
-    bool result = kui_games_retail_prepare(selected, &image, log_line, cancel);
-    bool valid = !strcmp(test.fault, "valid") || !strcmp(test.fault, "fragmented") ||
+    bool result = strncmp(test.fault, "async-", 6) ? kui_games_retail_prepare(selected, &image, log_line, cancel) :
+        kui_games_retail_prepare_reader(selected, KUI_RETAIL_READER_ASYNC, &image, log_line, cancel);
+    bool valid = !strncmp(test.fault, "async-", 6) || !strcmp(test.fault, "valid") || !strcmp(test.fault, "fragmented") ||
         !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "other-title") ||
         !strcmp(test.fault, "alternate-bootfile") || !strcmp(test.fault, "cdda-warning") ||
         !strcmp(test.fault, "blank-title");

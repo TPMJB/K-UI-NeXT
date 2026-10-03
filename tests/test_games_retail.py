@@ -21,13 +21,14 @@ CASES = (
     "bad-bootfile", "bad-media", "windows-ce", "bad-flags", "boot-small", "boot-large",
     "sector-beforedata", "sector-aftercard", "sector-repeat", "seek-fail",
     "read-fail", "close-fail", "unmount-fail", "cancel-before", "cancel-map",
-    "cancel-ip", "size-change",
+    "cancel-ip", "size-change", "async-on-sci", "async-on-scif",
 )
 RC_CASES = ("valid", "other-title", "alternate-bootfile", "cdda-warning",
             "windows-ce", "bad-flags", "bad-media", "bad-bootfile", "unsupported-2048",
             "track-limit", "boot-low-density", "boot-overlap-ip", "blank-title")
 SUCCESS_CASES = ("valid", "boot-tail", "fragmented", "other-title",
-                 "alternate-bootfile", "cdda-warning", "blank-title")
+                 "alternate-bootfile", "cdda-warning", "blank-title",
+                 "async-on-sci", "async-on-scif")
 
 
 def synthetic_package():
@@ -119,6 +120,10 @@ def main():
                         check_fs(image, base / "check-volume.img", kind, partitioned)
                     if case == "cdda-warning":
                         assert "CD audio playback is unsupported" in output
+                    if case == "async-on-sci":
+                        assert "Retail boot reader: background SCI stream" in output
+                    if case == "async-on-scif":
+                        assert "background reader needs SCI microSD; using the standard reader" in output
                     if case == "windows-ce":
                         assert "Windows CE game launching is not supported" in output
                     if case == "unsupported-2048":

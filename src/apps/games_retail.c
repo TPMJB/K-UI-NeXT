@@ -158,6 +158,10 @@ static enum kui_game_result extent_crc(const struct kui_game_image *image,
 }
 bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package,
     kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_games_retail_prepare_reader(path,KUI_RETAIL_READER_STANDARD,package,log,cancel);
+}
+bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
+    struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
     if(!package) return false;
     *package=(struct kui_runtime_image){0};
     if(!log || !cancel) return false;
@@ -237,6 +241,17 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
             problem="track map failed: changed file, I/O, bounds or fragmentation limit (128 extents)";goto done;
         }
         log("Retail map T%02u: %u extents",image->tracks[i].number,map->tracks[i].extent_count);
+    }
+    if(reader==KUI_RETAIL_READER_ASYNC) {
+        if(map->storage_transport!=KUI_STORAGE_SCI)
+            log("Retail boot: the background reader needs SCI microSD; using the standard reader");
+        else if(map->extent_count>KUI_RETAIL_ASYNC_EXTENTS)
+            log("Retail boot: %u extents exceed the background reader's %u; using the standard reader",
+                map->extent_count,KUI_RETAIL_ASYNC_EXTENTS);
+        else {
+            map->reader=KUI_RETAIL_READER_ASYNC;
+            log("Retail boot reader: background SCI stream (test)");
+        }
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}

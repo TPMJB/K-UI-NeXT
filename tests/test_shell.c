@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
+#include "kui/retail_image.h"
 #include "kui/shell_font.h"
 #include <assert.h>
 #include <limits.h>
@@ -970,17 +971,21 @@ static void games_retail_controls(void) {
     assert(kui_shell_games_retail_ready(&s));
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    assert(press(KUI_SHELL_Y|KUI_SHELL_X|KUI_SHELL_START|KUI_SHELL_L,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_Y|KUI_SHELL_START|KUI_SHELL_L,false)==KUI_SHELL_NONE);
+    assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    /* X launches with the background SCI reader, A with the standard one. */
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC);
     assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
     press(KUI_SHELL_A,false);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
     assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_STANDARD);
     /* The confirmation rechecks eligibility, including the selected identity. */
     strcpy(s.games_detail.path,"/Games/Other.gdi");
     assert(!kui_shell_games_retail_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE);
     strcpy(s.games_detail.path,detail.path);s.games_detail.valid=false;
     assert(!kui_shell_games_retail_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
     s.games_detail=detail;
@@ -1170,7 +1175,8 @@ static void games_rendering(void) {
     strcpy(s.games_detail.title,"DEAD OR ALIVE 2");strcpy(s.games_detail.boot_file,"1ST_READ.BIN");
     s.games_detail.tracks=3;s.games_detail.boot_lba=45166;s.games_detail.boot_bytes=123456;
     render(&view);
-    assert(strstr(drawn,"Launch game") && strstr(drawn,"A Launch") && strstr(drawn,"B Image details"));
+    assert(strstr(drawn,"Launch game") && strstr(drawn,"A Launch") && strstr(drawn,"B Details"));
+    assert(strstr(drawn,"X Background reader") && strstr(drawn,"background reader test (SCI microSD)"));
     assert(strstr(drawn,"compatibility varies") && strstr(drawn,"SD access remains read-only"));
     assert(strstr(drawn,"Power cycle to return") && !strstr(drawn,"L Memory"));
     view.busy=true;strcpy(status.message,"Preparing selected game launch...");render(&view);

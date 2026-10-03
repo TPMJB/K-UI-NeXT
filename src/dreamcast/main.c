@@ -134,6 +134,7 @@ static struct kui_games_detail games_detail;
 static unsigned games_listing_generation,games_detail_generation;
 static unsigned games_offset_pending,games_result_offset;
 static char games_path_pending[KUI_GAMES_FILE_CAP];
+static unsigned games_reader_pending;
 static unsigned games_view_pending;
 static struct kui_app_status games_scan_status;
 /* Box art for the Games page and image details. Only the worker writes them,
@@ -1807,7 +1808,8 @@ static void *worker(void *unused) {
             if(action==56 || action==57 || action==58) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 bool prepared=action==58?
-                    kui_games_retail_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):action==57?
+                    kui_games_retail_prepare_reader(games_path_pending,games_reader_pending,&probe_image,
+                        kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
                     kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
                 if(prepared && kui_cancelled()) {kui_runtime_free(&probe_image);prepared=false;}
@@ -2669,6 +2671,7 @@ int main(void) {
                 snprintf(games_path_pending,sizeof(games_path_pending),"%s",
                     action==54?shell.games_path:shell.games_selected_path);
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
+                games_reader_pending=shell.games_retail_reader;
             }
             if(action==54 || action==59) games_view_pending=shell.games_view;
             if(action>=60 && action<=63) {

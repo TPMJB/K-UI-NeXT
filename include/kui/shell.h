@@ -104,6 +104,9 @@ struct kui_shell {
     /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
     unsigned games_view;
     bool games_scanning; /* The box art scan runs; a listing ends it. */
+    /* The launch's reader (enum kui_retail_reader): A launches with the
+     * standard one, X with the background SCI reader under test. */
+    unsigned games_retail_reader;
     struct kui_games_page games_listing;
     struct kui_games_detail games_detail;
     /* Destination is committed only by a successful worker load/save. Browsing
