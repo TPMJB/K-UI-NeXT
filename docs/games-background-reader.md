@@ -311,6 +311,35 @@ The eighth build makes 20 blocks the new X and tries 30 as Y, and starts
 each next block before checking and copying the one that arrived (the
 check took the card's time before). `STALLED` is gone to make room.
 
+## Eighth console run (effc7b43fe5d)
+
+The owner: "I think X was superior to Y this time", and X "was very doable
+as far as gameplay goes"; it is pinned as the known-good build (see
+`docs/HANDOFF.md`). The counters:
+
+* **X (20 per call):** 106,071 blocks, 7,938 (7.5%) by interrupt; `WAITS`
+  5,474 at 17.9 blocks; `EXECS` 3,436, `EXEC INT` 3,081 (90%); overruns 0.50%
+  (534 of 105,846), `REPAIRED` 24 with `CRC ERRS` 2 and `AHEAD` 0 (repair off
+  again), `OVERRUNS` 510 restarts, `POLLED` 40, `STARTS` 719, `KEPT` 189.
+* **Y (30 per call):** 91,726 blocks, only 20 by interrupt; `WAITS` 3,262 at
+  28.1 blocks; `EXECS` 1,997, `EXEC INT` 1,985 (99%); `REPAIRED` 43 with no
+  failure, so no overrun restarted the card (`OVERRUNS` 0, `STARTS` 152,
+  `POLLED` 0).
+
+Y moved more data per EXEC (19.9 KB against 13.4), so its reads ended
+sooner, but each of its waits is longer and nearly all of them run inside
+DOA2's vertical-blank handler: the game's frames stall more. Around 20
+blocks per call is the balance for DOA2.
+
+The repairs are the new lead. In every run with interrupt deliveries, two
+repairs failed early and switched repair off; in Y, where the reader's
+interrupt delivered almost nothing and so nearly every repair started inside
+a GD call, all 43 succeeded. The likely cause is a repair started from the
+reader's interrupt, at the overrun itself, while the game's bus traffic
+that caused it is still going on; a repair started from a GD call comes
+later. (0 failures in 43 at the earlier rate would happen about 1 time in
+9 by chance.)
+
 ## Console test (DOA2)
 
 1. Install `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` from the

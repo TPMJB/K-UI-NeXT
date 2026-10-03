@@ -1,5 +1,16 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background reader, pinned known-good build (2026-10-03 UTC)
+
+**effc7b43fe5d, launch X (20 blocks per call)** is the owner's known-good
+background reader for DOA2 on SCI microSD: "very doable as far as gameplay
+goes". Compare any rework against it before replacing it. Source: commit
+`effc7b43fe5d` on `claude/modest-galileo-hpjv79`; build: [Diagnostic run
+37143988592](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37143988592)
+(artifacts kept until 2026-11-02; the owner keeps the SD update). The session
+could not push a tag (`pin/background-reader-x20`, refused with HTTP 403);
+create one on that commit from GitHub to rebuild it by name later.
+
 ## Games: background reader, eighth build (2026-10-03 UTC)
 
 The seventh build on the console: Y (20 blocks per call) had "a lot less
@@ -15,8 +26,13 @@ the block kept for a following request gives way to the one being checked.
 See [games-background-reader.md](games-background-reader.md). Build
 **effc7b43fe5d** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37143988592)
 (4 bytes free, call-graph stack 224 of 336: GCC 15 came out within 8 bytes of
-the local GCC 14 this time, so any further growth needs room made first);
-console test pending.
+the local GCC 14 this time, so any further growth needs room made first).
+Console: X (20) was better than Y (30) and is pinned above. Y read faster
+(about 20 KB per EXEC against 13) but its longer waits sit in DOA2's
+vertical-blank handler (99% of EXECs). Y also delivered almost nothing by
+interrupt (20 blocks) and repaired all 43 overruns with no failure, while X
+(7.5% by interrupt) failed 2 of 24: repairs may fail only when started
+from the reader's interrupt.
 
 ## Games: background reader, seventh build (2026-10-03 UTC)
 
