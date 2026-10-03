@@ -10,6 +10,9 @@ leaves SR.BL clear (interrupts still masked) and uses U0/P3 addresses
 directly, CE's TLB-miss handler mapping pages (`KUI_RETAIL_CE` in
 `retail_gd.c` guest() and the resident's map). Missing for ARMADA after that:
 commands 26, 38, 39 and functions 6, 7, 12, 13.
+Build `6eb4736083b8` ([Diagnostic run
+37161291909](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37161291909)):
+host and Dreamcast passed; native resident sizes unchanged.
 
 ## Windows CE: the reset is CE's disc check reaching the real BIOS (2026-10-03 UTC)
 
