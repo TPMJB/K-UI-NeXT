@@ -48,6 +48,17 @@ class RetailPackage(unittest.TestCase):
                 self.assertIsNotNone(found)
                 self.assertEqual(int(found.group(1), 0), value)
         self.assertIn('#define KUI_RETAIL_PACKAGE_MAGIC "KUIRBT01"', source)
+        self.assertIn('#define KUI_RETAIL_CE_PACKAGE_MAGIC "KUIRCE01"', source)
+        self.assertEqual(layout.CE_MAGIC, b"KUIRCE01")
+        found = re.search(r"^#define KUI_RETAIL_CE_STAGE_ADDRESS\s+(\w+)\s*$", source, re.M)
+        self.assertEqual(int(found.group(1), 0), layout.CE_STAGE_ADDRESS)
+        # The CE probe stage clears CE's 2 KiB boot prefix at 0x8ce01000.
+        plan = (ROOT / "include/kui/ce_load_plan.h").read_text()
+        prefix = int(re.search(r"^#define KUI_CE_LOAD_PREFIX_ADDRESS\s+(\w+)u\s*$", plan, re.M).group(1), 0)
+        self.assertLessEqual(layout.STAGE_ADDRESS, prefix)
+        self.assertLessEqual(prefix + 0x800, layout.CE_STAGE_ADDRESS)
+        script = (ROOT / "src/loader/retail_stage_ce.ld").read_text()
+        self.assertIn(f". = 0x{layout.CE_STAGE_ADDRESS:08x};", script)
         # Each resident's stack sits directly above its image limit.
         self.assertIn("#define KUI_RETAIL_HOOK_STACK_BOTTOM KUI_RETAIL_RESIDENT_LIMIT", source)
         self.assertEqual(layout.HOOK_STACK_BOTTOM, layout.RESIDENT_LIMIT)
@@ -64,6 +75,18 @@ class RetailPackage(unittest.TestCase):
                 self.assertEqual(result["resident_address"], "0x8c008300")
                 self.assertEqual(result["resident_limit"], "0x8c00bb00")
                 self.assertIn("title compatibility requires console testing", result["abi"])
+
+    def test_ce_probe_package_needs_its_own_header(self):
+        data = bytearray(layout.STAGE_BLOB_OFFSET + 16)
+        data[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = \
+            layout.relocation_header(16, ce=True)
+        result = layout.inspect_retail(self.packaged(data), ce=True)
+        self.assertEqual(result["stage_address"], "0x8ce10000")
+        self.assertIn("stops before CE runs", result["abi"])
+        with self.assertRaisesRegex(ValueError, "relocation header"):
+            layout.inspect_retail(self.packaged(data))
+        with self.assertRaisesRegex(ValueError, "relocation header"):
+            layout.inspect_retail(self.packaged(self.payload()), ce=True)
 
     def test_every_inner_header_byte_is_checked(self):
         clean = self.payload()
@@ -391,6 +414,24 @@ class RetailLinkedLayout(unittest.TestCase):
             self.assertEqual(result["resident_stacks"][transport]["conservative_bytes"], 384)
         self.assertEqual(result["resident-scia"]["payload_bytes"], 128)
         self.assertEqual(result["resident_stacks"]["scia"]["worst_bytes"], 48 + 172 + 8)
+
+    def test_ce_probe_stage_is_checked_at_its_own_address(self):
+        shift = layout.CE_STAGE_ADDRESS - layout.STAGE_ADDRESS
+        self.bases["stage"] += shift
+        ss = self.symbols["stage"]
+        for name in ss:
+            ss[name] += shift
+        struct.pack_into("<I", self.payload["stage"], 240, ss["_kui_retail_game_resume"] | 0x20000000)
+        self.payload["entry"][layout.STAGE_BLOB_OFFSET:] = self.payload["stage"]
+        self.write()
+        with self.assertRaisesRegex(ValueError, "relocation header mismatch"):
+            check_directory(self.directory, ce=True)
+        self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]), ce=True)
+        self.write()
+        result = check_directory(self.directory, ce=True)
+        self.assertEqual(result["stage"]["payload_bytes"], len(self.payload["stage"]))
+        with self.assertRaises(ValueError):
+            check_directory(self.directory)
 
     def test_background_reader_stack_region_and_symbols(self):
         rs = self.symbols["resident-scia"]

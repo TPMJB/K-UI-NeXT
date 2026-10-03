@@ -6,6 +6,10 @@ import struct
 from runtime_package import verify
 
 MAGIC = b"KUIRBT01"
+# The Windows CE placement probe package (ce-probe.kui): the same envelope with
+# its own magic and a stage linked 64 KiB higher, clear of CE's boot prefix.
+CE_MAGIC = b"KUIRCE01"
+CE_STAGE_ADDRESS = 0x8CE10000
 VERSION = 1
 HEADER_OFFSET = 0x100
 HEADER_BYTES = 64
@@ -29,15 +33,20 @@ TRAMPOLINE_BYTES = 128
 HEADER = struct.Struct("<8s14I")
 
 
-def relocation_header(stage_bytes):
+def stage_address(ce=False):
+    return CE_STAGE_ADDRESS if ce else STAGE_ADDRESS
+
+
+def relocation_header(stage_bytes, ce=False):
+    stage = stage_address(ce)
     return HEADER.pack(
-        MAGIC, VERSION, HEADER_BYTES, MAP_OFFSET, MAP_BYTES, STAGE_ADDRESS,
-        stage_bytes, STAGE_ADDRESS, EXEC_ADDRESS, EXEC_MAX_BYTES, STAGE_STACK,
+        CE_MAGIC if ce else MAGIC, VERSION, HEADER_BYTES, MAP_OFFSET, MAP_BYTES, stage,
+        stage_bytes, stage, EXEC_ADDRESS, EXEC_MAX_BYTES, STAGE_STACK,
         STAGE_BLOB_OFFSET, RESIDENT_ADDRESS, RESIDENT_LIMIT, 0,
     )
 
 
-def inspect_retail(package):
+def inspect_retail(package, ce=False):
     """Validate shipped bytes, not title compatibility or console acceptance.
 
     Only the console fills the card-specific manifest and reads the owner's
@@ -54,16 +63,17 @@ def inspect_retail(package):
     stage_bytes = HEADER.unpack(header)[6]
     if (not 4 <= stage_bytes <= STAGE_MAX_BYTES or stage_bytes % 4 or
             stage_bytes + STAGE_BLOB_OFFSET != len(payload) or
-            header != relocation_header(stage_bytes)):
+            header != relocation_header(stage_bytes, ce)):
         raise ValueError("Invalid retail relocation header")
     if any(payload[MAP_OFFSET:MAP_OFFSET + MAP_BYTES]):
         raise ValueError("Retail package must ship with a blank card-specific manifest")
     return {
         **info,
         "stage_bytes": stage_bytes,
-        "stage_address": f"0x{STAGE_ADDRESS:08x}",
+        "stage_address": f"0x{stage_address(ce):08x}",
         "resident_address": f"0x{RESIDENT_ADDRESS:08x}",
         "resident_limit": f"0x{RESIDENT_LIMIT:08x}",
         "manifest_bytes": MAP_BYTES,
-        "abi": "Native GD-ROM GDI launch; title compatibility requires console testing",
+        "abi": ("Windows CE placement probe; stops before CE runs" if ce else
+                "Native GD-ROM GDI launch; title compatibility requires console testing"),
     }

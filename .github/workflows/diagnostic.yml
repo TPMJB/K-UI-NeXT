@@ -200,6 +200,8 @@ jobs:
             build/retail-bench/*.dis
             build/retail-bench/*.su
             build/retail-bench/**/*.su
+            build/retail-ce/*.elf
+            build/retail-ce/*.map
           if-no-files-found: ignore
           retention-days: 7
       - name: Package reusable CDI, SD runtime, loader tests and source records

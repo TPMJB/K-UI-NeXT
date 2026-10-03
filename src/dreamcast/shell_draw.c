@@ -164,7 +164,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
             "A Start test   B Image details":"B Image details") :
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM ? (kui_shell_games_retail_ready(s)?
-            "A Launch   X/Y Background reader   B Details":"B Image details") :
+            "A Launch   X/Y Background reader   B Details":kui_shell_games_ce_probe_ready(s)?
+            "A Start test   B Details":"B Image details") :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
@@ -1286,8 +1287,11 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
             words(p,44,365,right,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
                 "CD audio is unavailable; this game may not run.":
                 "V1.5: game compatibility varies.",false);
+        } else if(kui_shell_games_ce_probe_ready(s)) {
+            words(p,44,337,right,CYAN,"A Windows CE placement test   Y Advanced read test",false);
+            words(p,44,365,right,AMBER,"Windows CE games cannot be launched yet.",false);
         } else {
-            words(p,44,337,right,AMBER,d->windows_ce?"Windows CE games are not supported.":
+            words(p,44,337,right,AMBER,d->windows_ce?"Windows CE games cannot be launched yet.":
                 !d->native_gd?"This image has no supported native GD boot header.":
                 d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 16 tracks in V1.5.":
                 "This image exceeds the current launch limits.",false);
@@ -1351,8 +1355,23 @@ static void games_image_probe_confirmation(struct paint *p,const struct kui_shel
 }
 static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         const struct kui_shell_view *v) {
-    title(p,40,108,"Games / Launch game");
     words(p,40,140,608,CYAN,s->games_selected_path,false);
+    if(kui_shell_games_ce_probe_ready(s)) {
+        title(p,40,108,"Games / Windows CE placement test");
+        panel(p,32,168,576,234,PANEL);
+        label(p,48,186,CYAN,v->busy?"Preparing the test...":
+            s->games_detail.title[0]?s->games_detail.title:"Test the selected image?");
+        label(p,48,218,AMBER,"This test does not start the game.");
+        label(p,48,244,WHITE,"It loads the Windows CE kernel from SD,");
+        label(p,48,270,WHITE,"checks where it goes, then stops.");
+        label(p,48,302,WHITE,"SD access remains read-only.");
+        label(p,48,328,WHITE,"Photograph the result screen.");
+        label(p,48,354,AMBER,"Power cycle to return to the launcher.");
+        if(v->busy && v->app_status && v->app_status->message[0])
+            label(p,48,380,CYAN,v->app_status->message);
+        return;
+    }
+    title(p,40,108,"Games / Launch game");
     panel(p,32,168,576,234,PANEL);
     if(!kui_shell_games_retail_ready(s)) {
         label(p,48,186,AMBER,"This image is not ready for native GD launch.");

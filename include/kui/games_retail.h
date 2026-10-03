@@ -3,6 +3,11 @@
 #define KUI_GAMES_RETAIL_H
 #include "kui/runtime.h"
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
+#define KUI_GAMES_RETAIL_CE_PACKAGE "0:/KUI/apps/games/ce-probe.kui"
+/* Not a manifest reader: prepare_reader given this prepares the Windows CE
+ * placement test instead of a launch. It needs a Windows CE image and the CE
+ * probe package, whose stage loads and checks the CE kernel, then stops. */
+#define KUI_GAMES_RETAIL_CE_PROBE 0x100u
 /* Single storage worker only. Prepare one native GD-ROM launch;
  * complete IP/boot CRCs and bounded physical extent map are read-only. Success
  * owns a patched stage package with all files closed and SD disconnected.

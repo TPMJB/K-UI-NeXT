@@ -27,6 +27,7 @@ static struct {
 static FATFS fs;
 static const char *const selected = "/Games/Reader Test/disc.gdi";
 static const char *const package = "0:/KUI/apps/games/retail-boot.kui";
+static const char *const ce_package = "0:/KUI/apps/games/ce-probe.kui";
 static const char *const names[] = {"track01.bin", "music track02.raw", "track03.bin", "music track04.raw"};
 static const uint32_t starts[] = {0, 4, 45000, 45064};
 static const uint32_t counts[] = {4, 4, 64, 4};
@@ -185,7 +186,15 @@ static void seed(const char *directory) {
         put32(data + 60, kui_crc32(0, data, 60));
     }
     if(!strcmp(test.fault, "payload-checksum")) data[size - 1] ^= 1;
-    write_file(package, data, size); free(data);
+    write_file(package, data, size);
+    /* The CE placement test reads its own package; ce-probe-package gives it
+     * the native one instead. */
+    if(!strcmp(test.fault, "ce-probe-package")) write_file(ce_package, data, size);
+    free(data);
+    if(strcmp(test.fault, "ce-probe-package")) {
+        data = host_file(directory, "ce-probe.kui", &size);
+        write_file(ce_package, data, size); free(data);
+    }
     data = host_file(directory, "disc.gdi", &size);
     write_file("0:/Games/Reader Test/disc.gdi", data, size); free(data);
     for(unsigned i = 0; i < track_count(); ++i) {
@@ -198,7 +207,8 @@ static void seed(const char *directory) {
         if(i == 2 && !strcmp(test.fault, "bad-ip")) data[16] ^= 1;
         if(i == 2 && !strcmp(test.fault, "bad-bootfile")) data[16 + 96] = 'X';
         if(i == 2 && !strcmp(test.fault, "bad-media")) data[16 + 37] = 'C';
-        if(i == 2 && !strcmp(test.fault, "windows-ce")) data[16 + 62] = '1';
+        if(i == 2 && (!strcmp(test.fault, "windows-ce") || (!strncmp(test.fault, "ce-probe", 8) &&
+            strcmp(test.fault, "ce-probe-native")))) data[16 + 62] = '1';
         if(i == 2 && !strcmp(test.fault, "bad-flags")) data[16 + 60] = 'G';
         if(i == 2 && !strcmp(test.fault, "fragment-limit")) {
             size_t prior = size;
@@ -304,9 +314,12 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
 }
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
-    bool result = strncmp(test.fault, "async-", 6) ? kui_games_retail_prepare(selected, &image, log_line, cancel) :
+    bool result = !strncmp(test.fault, "ce-probe", 8) ?
+        kui_games_retail_prepare_reader(selected, KUI_GAMES_RETAIL_CE_PROBE, &image, log_line, cancel) :
+        strncmp(test.fault, "async-", 6) ? kui_games_retail_prepare(selected, &image, log_line, cancel) :
         kui_games_retail_prepare_reader(selected, KUI_RETAIL_READER_ASYNC, &image, log_line, cancel);
     bool valid = !strncmp(test.fault, "async-", 6) || !strcmp(test.fault, "valid") || !strcmp(test.fault, "fragmented") ||
+        !strcmp(test.fault, "ce-probe") ||
         !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "other-title") ||
         !strcmp(test.fault, "alternate-bootfile") || !strcmp(test.fault, "cdda-warning") ||
         !strcmp(test.fault, "blank-title");

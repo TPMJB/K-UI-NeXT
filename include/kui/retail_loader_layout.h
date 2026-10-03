@@ -15,6 +15,11 @@
 #define KUI_RETAIL_MAP_BYTES 0x1000
 #define KUI_RETAIL_STAGE_BLOB_OFFSET 0x2000
 #define KUI_RETAIL_STAGE_ADDRESS 0x8ce00000
+/* The Windows CE placement probe package: the same stage built with
+ * KUI_RETAIL_CE and linked 64 KiB higher, leaving CE's 2 KiB boot prefix
+ * destination (KUI_CE_LOAD_PREFIX_ADDRESS, 0x8ce01000) outside it. */
+#define KUI_RETAIL_CE_PACKAGE_MAGIC "KUIRCE01"
+#define KUI_RETAIL_CE_STAGE_ADDRESS 0x8ce10000
 #define KUI_RETAIL_STAGE_MAX_BYTES 0x100000
 #define KUI_RETAIL_STAGE_MEMORY_END 0x8cfe0000
 #define KUI_RETAIL_STAGE_STACK 0x8cff0000

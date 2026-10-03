@@ -8,7 +8,7 @@
  * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder, home-games,
  * games, games-detail, games-error, games-advanced, games-probe,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
- * games-retail, games-retail-loading, games-retail-invalid, games-list-art,
+ * games-retail, games-retail-loading, games-retail-invalid, games-ce-probe, games-list-art,
  * games-compact, games-gallery, games-scan, games-detail-art, home-files, home-ripper,
  * files, files-root, files-actions, files-actions-locked, files-pick,
  * files-copy, files-delete, files-refused, files-info, files-info-file,
@@ -320,7 +320,7 @@ int main(int argc,char **argv) {
         }
     }
     else if(!strcmp(argv[1],"games-retail") || !strcmp(argv[1],"games-retail-loading") ||
-            !strcmp(argv[1],"games-retail-invalid")) {
+            !strcmp(argv[1],"games-retail-invalid") || !strcmp(argv[1],"games-ce-probe")) {
         shell.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
@@ -331,7 +331,12 @@ int main(int argc,char **argv) {
             view.busy=true;view.app_status=&status;status.complete=false;
             strcpy(status.message,"Preparing selected game launch...");
         }
-        if(!strcmp(argv[1],"games-retail-invalid")) { d->native_gd=false; d->windows_ce=true; }
+        if(!strcmp(argv[1],"games-retail-invalid")) d->native_gd=false;
+        if(!strcmp(argv[1],"games-ce-probe")) {
+            strcpy(shell.games_selected_path,"/Games/ARMADA/ARMADA.gdi");strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,"ARMADA");strcpy(d->boot_file,"0WINCEOS.BIN");
+            d->boot_bytes=1253376;d->boot_lba=548388;d->native_gd=false;d->windows_ce=true;d->tracks=5;
+        }
     }
     else if(!strcmp(argv[1],"audio-cd")) {
         shell.page=KUI_SHELL_CD_AUDIO;shell.cd_audio.loaded=true;shell.cd_audio.count=12;

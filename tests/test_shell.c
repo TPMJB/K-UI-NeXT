@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
+#include "kui/games_retail.h"
 #include "kui/retail_image.h"
 #include "kui/shell_font.h"
 #include <assert.h>
@@ -1018,6 +1019,24 @@ static void games_retail_controls(void) {
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
     press(KUI_SHELL_B,false);s.games_detail=detail;
+    /* A Windows CE image offers only the placement test, which stops before
+     * CE runs; X and Y do nothing on its confirmation. */
+    s.games_detail.windows_ce=true;s.games_detail.native_gd=false;
+    strcpy(s.games_detail.boot_file,"0WINCEOS.BIN");s.games_detail.boot_bytes=1253376;
+    assert(!kui_shell_games_retail_ready(&s) && kui_shell_games_ce_probe_ready(&s));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && press(KUI_SHELL_Y,false)==KUI_SHELL_NONE);
+    s.games_retail_reader=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_GAMES_RETAIL_CE_PROBE);
+    s.games_detail.boot_bytes=2048;assert(!kui_shell_games_ce_probe_ready(&s));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    s.games_detail.boot_bytes=12u*1024u*1024u+1;assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail.boot_bytes=1253376;s.games_detail.native_gd=true;assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail.native_gd=false;s.games_detail.tracks=17;assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail.tracks=3;s.games_detail.boot_lba=44999;assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail.boot_lba=45166;strcpy(s.games_detail.path,"/Games/Other.gdi");
+    assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail=detail;press(KUI_SHELL_B,false);
     /* A is the primary launch action; inspection still takes priority. */
     assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     press(KUI_SHELL_B,false);
@@ -1141,7 +1160,17 @@ static void games_rendering(void) {
     assert(strstr(drawn,"A Launch"));
     s.games_detail.high_density_audio=true;render(&view);assert(strstr(drawn,"CD audio is unavailable"));
     s.games_detail.high_density_audio=false;s.games_detail.windows_ce=true;render(&view);
-    assert(strstr(drawn,"Windows CE games are not supported") && !strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"Windows CE games cannot be launched yet") && !strstr(drawn,"A Launch"));
+    assert(!strstr(drawn,"placement test"));
+    s.games_detail.native_gd=false;strcpy(s.games_detail.boot_file,"0WINCEOS.BIN");
+    s.games_detail.boot_bytes=1253376;render(&view);
+    assert(strstr(drawn,"A Windows CE placement test") && strstr(drawn,"cannot be launched yet"));
+    assert(!strstr(drawn,"A Launch"));
+    s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
+    assert(strstr(drawn,"Games / Windows CE placement test") && strstr(drawn,"does not start the game"));
+    assert(strstr(drawn,"A Start test") && !strstr(drawn,"Background reader"));
+    s.page=KUI_SHELL_GAMES_DETAIL;s.games_detail.native_gd=true;
+    strcpy(s.games_detail.boot_file,"1ST_READ.BIN");s.games_detail.boot_bytes=123456;
     s.games_detail.windows_ce=false;
     s.games_detail.valid=false;strcpy(s.games_detail.message,"Track file missing");render(&view);
     assert(strstr(drawn,"Could not inspect image") && strstr(drawn,"Track file missing"));

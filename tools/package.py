@@ -89,13 +89,16 @@ def main():
     image_probe = ROOT / "build/loader/image_entry.elf"
     retail = ROOT / "build/retail/entry.elf"
     retail_bench = ROOT / "build/retail-bench/entry.elf"
+    retail_ce = ROOT / "build/retail-ce/entry.elf"
     run("python3", "tools/check_loader_layout.py")
     run("python3", "tools/check_image_loader_layout.py")
     run("python3", "tools/check_retail_loader_layout.py")
     run("python3", "tools/check_retail_instructions.py")
     run("python3", "tools/check_retail_loader_layout.py", "build/retail-bench")
     run("python3", "tools/check_retail_instructions.py", "build/retail-bench")
-    for image in (elf, runtime, probe, image_probe, retail, retail_bench):
+    run("python3", "tools/check_retail_loader_layout.py", "--ce", "build/retail-ce")
+    run("python3", "tools/check_retail_instructions.py", "build/retail-ce")
+    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
@@ -146,6 +149,11 @@ def main():
     bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
     bench_package = envelope(bench_payload, bench_memory, commit[:12])
     bench_info = inspect_retail(bench_package)
+    # The Windows CE placement test: loads and checks a CE kernel, then stops.
+    ce_payload, ce_memory = flatten_elf(retail_ce.read_bytes())
+    ce_package = envelope(ce_payload, ce_memory, commit[:12])
+    ce_info = inspect_retail(ce_package, ce=True)
+    (games / "ce-probe.kui").write_bytes(ce_package)
     run("python3", "tools/make_loader_probe.py", str(games / "probe.dat"))
     # Keep link maps and exact standalone ELFs in the full diagnostic download.
     shutil.copytree(ROOT / "build/loader", dist / "loader-build",
@@ -153,6 +161,8 @@ def main():
     shutil.copytree(ROOT / "build/retail", dist / "retail-build",
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     shutil.copytree(ROOT / "build/retail-bench", dist / "retail-bench-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    shutil.copytree(ROOT / "build/retail-ce", dist / "retail-ce-build",
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     # Menu music ships as the committed Ogg encodings recorded in the manifest.
     # A fresh folder cannot carry WAVs from an earlier local package.
@@ -189,7 +199,7 @@ def main():
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
     (dist / "START-HERE.md").write_text(guide("release-v1.5.1.md"), encoding="utf-8")
     (dist / "RELEASE-NOTES.md").write_text(guide("release-v1.5.1-notes.md"), encoding="utf-8")
-    for name in ("games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -236,7 +246,7 @@ def main():
     record = {"commit": commit, "release": release, "compiler": compiler, "dependencies": lock,
               "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
-              "retail_boot": retail_info,
+              "retail_boot": retail_info, "ce_probe": ce_info,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
     (dist / "build.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -254,6 +264,7 @@ def main():
     shutil.copyfile(dist / "MUSIC-DEMO.md", update / "MUSIC-DEMO.md")
     shutil.copyfile(dist / "GAMES-LOADER-PROBE.md", update / "GAMES-LOADER-PROBE.md")
     shutil.copyfile(dist / "GAMES-RETAIL-TEST.md", update / "GAMES-RETAIL-TEST.md")
+    shutil.copyfile(dist / "WINDOWS-CE-PLACEMENT-TEST.md", update / "WINDOWS-CE-PLACEMENT-TEST.md")
     shutil.copyfile(dist / "GAMES-COVERS.md", update / "GAMES-COVERS.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
@@ -287,6 +298,7 @@ def main():
         "START-HERE.md and RELEASE-NOTES.md describe installation and compatibility limits.\n"
         "Games: A inspects a GDI; A on its detail opens confirmation; A confirms launch.\n"
         "Update both KUI/runtime.kui and KUI/apps/games/retail-boot.kui from this package.\n"
+        "KUI/apps/games/ce-probe.kui is the Windows CE placement test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
         "DOA2 has confirmed gameplay; Evolution 2 boots with severe slowdown.\n"
         "Other titles and VMU save/load compatibility remain under community testing.\n"
         "Games reads the selected storage device; games may write VMU saves. Power cycle to return.\n"

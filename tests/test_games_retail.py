@@ -22,23 +22,26 @@ CASES = (
     "sector-beforedata", "sector-aftercard", "sector-repeat", "seek-fail",
     "read-fail", "close-fail", "unmount-fail", "cancel-before", "cancel-map",
     "cancel-ip", "size-change", "async-on-sci", "async-on-scif",
+    "ce-probe", "ce-probe-native", "ce-probe-package", "ce-probe-small",
 )
 RC_CASES = ("valid", "other-title", "alternate-bootfile", "cdda-warning",
             "windows-ce", "bad-flags", "bad-media", "bad-bootfile", "unsupported-2048",
-            "track-limit", "boot-low-density", "boot-overlap-ip", "blank-title")
+            "track-limit", "boot-low-density", "boot-overlap-ip", "blank-title", "ce-probe")
 SUCCESS_CASES = ("valid", "boot-tail", "fragmented", "other-title",
                  "alternate-bootfile", "cdda-warning", "blank-title",
-                 "async-on-sci", "async-on-scif")
+                 "async-on-sci", "async-on-scif", "ce-probe")
 
 
-def synthetic_package():
+def synthetic_package(ce=False):
     # Structural preparation fixture. The stage is original data, never code
     # executed on the host; every retail-looking IP field is generated here.
+    # ce: the Windows CE placement test's package, with its higher stage.
     payload = bytearray(0x2010)
-    payload[0x100:0x108] = b"KUIRBT01"
+    payload[0x100:0x108] = b"KUIRCE01" if ce else b"KUIRBT01"
+    stage = 0x8CE10000 if ce else 0x8CE00000
     struct.pack_into("<14I", payload, 0x108,
-                     1, 64, 0x1000, 4096, 0x8CE00000, 16,
-                     0x8CE00000, 0x8C010000, 0xC00000, 0x8CFF0000,
+                     1, 64, 0x1000, 4096, stage, 16,
+                     stage, 0x8C010000, 0xC00000, 0x8CFF0000,
                      0x2000, 0x8C008300, 0x8C00BB00, 0)
     payload[0x2000:] = b"ORIGINALSTAGE123"
     return envelope(payload, len(payload), "0123456789ab")
@@ -56,7 +59,7 @@ def make_retail_fixture(folder, case):
     if case == "alternate-bootfile":
         data[16 + 96:16 + 112] = b"ALT_BOOT.BIN".ljust(16)
         data[20 * 2352 + 16 + 68 + 33:20 * 2352 + 16 + 68 + 47] = b"ALT_BOOT.BIN;1"
-    boot_bytes = {"boot-tail": 3001, "boot-small": 127,
+    boot_bytes = {"boot-tail": 3001, "boot-small": 127, "ce-probe-small": 2048,
                   "boot-large": 0xC00001}.get(case, 4096)
     # The third root record describes our generated random test bytes.
     dual32(data, 20 * 2352 + 16 + 68 + 10, boot_bytes)
@@ -81,6 +84,7 @@ def make_retail_fixture(folder, case):
             text += f'{number} {45064 + (number - 4) * 4} 0 2352 "{name}" 0\n'
         gdi.write_text(text, encoding="ascii")
     (folder / "retail-boot.kui").write_bytes(synthetic_package())
+    (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
 
 
 def main():
@@ -126,6 +130,14 @@ def main():
                         assert "background reader needs SCI microSD; using the standard reader" in output
                     if case == "windows-ce":
                         assert "Windows CE game launching is not supported" in output
+                    if case == "ce-probe":
+                        assert "Windows CE placement test prepared" in output
+                    if case == "ce-probe-native":
+                        assert "the Windows CE placement test needs a Windows CE image" in output
+                    if case == "ce-probe-package":
+                        assert "unsupported Windows CE probe package layout" in output
+                    if case == "ce-probe-small":
+                        assert "larger than its 2048-byte prefix" in output
                     if case == "unsupported-2048":
                         assert "raw 2352-byte GDI tracks with zero file offsets required" in output
                     if case == "track-limit":

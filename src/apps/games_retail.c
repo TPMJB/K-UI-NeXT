@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/games_retail.h"
+#include "kui/ce_load_plan.h"
 #include "kui/games.h"
 #include "kui/game_metadata.h"
 #include "kui/retail_image.h"
@@ -82,17 +83,20 @@ static bool metadata_range(void *ctx,uint32_t lba,uint32_t count) {
 static uint32_t le32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
-static bool layout(const struct kui_runtime_image *image) {
+/* ce: the Windows CE probe package, with its own magic and higher stage. */
+static bool layout(const struct kui_runtime_image *image,bool ce) {
+    const uint32_t stage=ce?KUI_RETAIL_CE_STAGE_ADDRESS:KUI_RETAIL_STAGE_ADDRESS;
     const uint32_t begin=KUI_RETAIL_STAGE_BLOB_OFFSET,max=KUI_RETAIL_STAGE_MAX_BYTES;
     if(!image->data || image->info.payload_bytes<begin+4 || image->info.payload_bytes>begin+max ||
         image->info.memory_bytes!=image->info.payload_bytes) return false;
     const uint8_t *h=(const uint8_t *)image->data+KUI_RETAIL_HEADER_OFFSET;
     uint32_t n=le32(h+28);
-    if(memcmp(h,KUI_RETAIL_PACKAGE_MAGIC,8) || le32(h+8)!=KUI_RETAIL_PACKAGE_VERSION ||
+    if(memcmp(h,ce?KUI_RETAIL_CE_PACKAGE_MAGIC:KUI_RETAIL_PACKAGE_MAGIC,8) ||
+        le32(h+8)!=KUI_RETAIL_PACKAGE_VERSION ||
         le32(h+12)!=KUI_RETAIL_HEADER_BYTES || le32(h+16)!=KUI_RETAIL_MAP_OFFSET ||
-        le32(h+20)!=KUI_RETAIL_IMAGE_WIRE_BYTES || le32(h+24)!=KUI_RETAIL_STAGE_ADDRESS ||
+        le32(h+20)!=KUI_RETAIL_IMAGE_WIRE_BYTES || le32(h+24)!=stage ||
         !n || n%4 || n>max || begin+n!=image->info.payload_bytes ||
-        le32(h+32)!=KUI_RETAIL_STAGE_ADDRESS || le32(h+36)!=KUI_RETAIL_EXEC_ADDRESS ||
+        le32(h+32)!=stage || le32(h+36)!=KUI_RETAIL_EXEC_ADDRESS ||
         le32(h+40)!=KUI_RETAIL_EXEC_MAX_BYTES || le32(h+44)!=KUI_RETAIL_STAGE_STACK ||
         le32(h+48)!=begin || le32(h+52)!=KUI_RETAIL_RESIDENT_ADDRESS ||
         le32(h+56)!=KUI_RETAIL_RESIDENT_LIMIT || le32(h+60)) return false;
@@ -165,15 +169,20 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     if(!package) return false;
     *package=(struct kui_runtime_image){0};
     if(!log || !cancel) return false;
+    const bool ce=reader==KUI_GAMES_RETAIL_CE_PROBE;
     struct files files={.cancel=cancel};char name[KUI_GAME_NAME_CAP];
     if(!split(path,&files,name) || stopped(&files)) {log("Retail boot: invalid path or cancelled");return false;}
     if(!kui_sd_connect()) {log("Retail boot: storage unavailable");return false;}
     FATFS fs;bool ok=false;const char *problem="cannot mount storage";
     struct kui_retail_manifest *map=NULL;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;
     if(!kui_mount(&fs,log)) goto done;
-    enum kui_runtime_result rr=kui_runtime_read(KUI_GAMES_RETAIL_PACKAGE,package,log,cancel);
+    enum kui_runtime_result rr=kui_runtime_read(ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE,
+        package,log,cancel);
     if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
-    if(!layout(package)) {problem="unsupported retail-boot package layout";goto done;}
+    if(!layout(package,ce)) {
+        problem=ce?"unsupported Windows CE probe package layout":"unsupported retail-boot package layout";
+        goto done;
+    }
     uint64_t size=0;
     if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size || size>KUI_GAME_GDI_LIMIT) {
         problem="GDI missing, unreadable or too large";goto done;
@@ -203,8 +212,17 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     if(ms!=KUI_GAME_METADATA_OK) {problem=kui_game_metadata_status_text(ms);goto done;}
     /* The owner's IP/ISO metadata selects the executable. Titles and boot
      * filenames are not compatibility gates; native GD bytes stay verbatim. */
-    if(metadata.windows_ce) {problem="Windows CE game launching is not supported";goto done;}
-    if(!metadata.native_gd) {problem="native GD-ROM with valid IP peripheral flags required";goto done;}
+    if(ce) {
+        /* The CE placement test: the boot file is a 2048-byte load prefix
+         * followed by the kernel body. The stage checks the rest. */
+        if(!metadata.windows_ce) {problem="the Windows CE placement test needs a Windows CE image";goto done;}
+        if(metadata.boot_bytes<=KUI_CE_LOAD_PREFIX_BYTES) {
+            problem="Windows CE boot file must be larger than its 2048-byte prefix";goto done;
+        }
+    } else {
+        if(metadata.windows_ce) {problem="Windows CE game launching is not supported";goto done;}
+        if(!metadata.native_gd) {problem="native GD-ROM with valid IP peripheral flags required";goto done;}
+    }
     if(metadata.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
         metadata.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
         metadata.boot_bytes>KUI_RETAIL_IMAGE_BOOT_MAX) {
@@ -242,7 +260,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         }
         log("Retail map T%02u: %u extents",image->tracks[i].number,map->tracks[i].extent_count);
     }
-    if(reader!=KUI_RETAIL_READER_STANDARD) {
+    if(!ce && reader!=KUI_RETAIL_READER_STANDARD) {
         if(map->storage_transport!=KUI_STORAGE_SCI)
             log("Retail boot: the background reader needs SCI microSD; using the standard reader");
         else if(map->extent_count>KUI_RETAIL_ASYNC_EXTENTS)
@@ -256,7 +274,8 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
-    log("Retail boot prepared: %u tracks, %u extents; IP CRC32=%08x, %s=%u bytes checked at load",
+    log("%s prepared: %u tracks, %u extents; IP CRC32=%08x, %s=%u bytes checked at load",
+        ce?"Windows CE placement test":"Retail boot",
         map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes);
     ok=true;
 done:

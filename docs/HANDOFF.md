@@ -1,5 +1,25 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: placement test, first step (2026-10-03 UTC)
+
+New: a **Windows CE placement test** for CE images (first target ARMADA). On
+a CE game's detail screen, A opens the test; it loads the CE kernel
+(`0WINCEOS.BIN`) where the BIOS would put it, checks it, shows checksums and
+layout, and stops. It does not start the game. See
+[windows-ce-placement-test.md](windows-ce-placement-test.md) for the screen
+and the expected values for ARMADA, Bust-A-Move 4 and Worms Armageddon.
+
+- Separate package `KUI/apps/games/ce-probe.kui` (magic `KUIRCE01`): the same
+  stage built with `KUI_RETAIL_CE` and linked at `0x8ce10000`
+  (`src/loader/retail_stage_ce.ld`), so CE's prefix slot `0x8ce01000` is free.
+  The native package, stage and residents are unchanged.
+- The launcher passes `KUI_GAMES_RETAIL_CE_PROBE` as the reader; preparation
+  then requires a CE image and the CE package. The stage checks the IP's CE
+  flag again, plans with `kui_ce_load_plan_build`, loads the body to
+  `0x8c010000` with header checks and the prefix to `0x8ce01000`.
+- Next: enter CE (keep the stage alive through the relay), then trace CE's
+  first GD calls and IRQ waits before implementing anything.
+
 ## Games: background reader, pinned known-good builds (2026-10-03 UTC)
 
 **90f22512c808, launch Y (25 blocks per call)** is now the best background

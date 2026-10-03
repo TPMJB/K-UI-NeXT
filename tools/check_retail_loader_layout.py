@@ -118,11 +118,13 @@ def check_stack_usage(directory, symbols, transport="scif"):
             "retained_c_frames": len(emitted_frames) if lto else len(frames)}
 
 
-def check_directory(directory):
+def check_directory(directory, ce=False):
+    """ce: the Windows CE probe package, whose stage is linked higher."""
     directory = Path(directory)
+    stage_address = layout.stage_address(ce)
     images = {
         "stage": inspect_elf((directory / "stage.elf").read_bytes(),
-                             layout.STAGE_ADDRESS, layout.STAGE_MEMORY_END),
+                             stage_address, layout.STAGE_MEMORY_END),
         "entry": inspect_elf((directory / "entry.elf").read_bytes(),
                              layout.EXEC_ADDRESS,
                              layout.EXEC_ADDRESS + layout.STAGE_BLOB_OFFSET +
@@ -140,7 +142,7 @@ def check_directory(directory):
     stage, entry = images["stage"], images["entry"]
     if padded((directory / "stage.bin").read_bytes()) != padded(stage["payload"]):
         raise ValueError("stage.bin differs from linked ELF bytes")
-    check_bss(stage, layout.STAGE_ADDRESS, "__retail_stage")
+    check_bss(stage, stage_address, "__retail_stage")
     ss, es = stage["symbols"], entry["symbols"]
     stacks = {}
     for transport in RESIDENTS:
@@ -180,8 +182,8 @@ def check_directory(directory):
                 raise ValueError(f"Missing resident-owned hook guard: {symbol}")
         blob = "__retail_resident_" + transport + "_blob_"
         begin, end = ss.get(blob + "start", 0), ss.get(blob + "end", 0)
-        if (begin % 4 or begin < layout.STAGE_ADDRESS or end - begin != len(low_blob) or
-                region(stage["payload"], begin - layout.STAGE_ADDRESS,
+        if (begin % 4 or begin < stage_address or end - begin != len(low_blob) or
+                region(stage["payload"], begin - stage_address,
                        len(low_blob), "embedded low resident") != low_blob):
             raise ValueError(f"Stage contains a different/invalid low resident: {transport}")
         if transport == ASYNC:
@@ -195,11 +197,11 @@ def check_directory(directory):
 
     for name in ("_kui_retail_stage_main", "_kui_retail_stage_relay",
                  "_kui_retail_bootstrap_enter", "_kui_retail_game_resume"):
-        code_symbol(stage, name, layout.STAGE_ADDRESS)
+        code_symbol(stage, name, stage_address)
     begin, end = ss.get("__retail_trampoline_start", 0), ss.get("__retail_trampoline_end", 0)
     if begin % 4 or end - begin != layout.TRAMPOLINE_BYTES:
         raise ValueError("Invalid bounded executable-entry trampoline")
-    trampoline = region(stage["payload"], begin - layout.STAGE_ADDRESS,
+    trampoline = region(stage["payload"], begin - stage_address,
                         layout.TRAMPOLINE_BYTES, "entry trampoline")
     # The assembly relay saves CPU state before entering the C relay body.
     relay = ss["_kui_retail_game_resume"] | 0x20000000
@@ -219,7 +221,7 @@ def check_directory(directory):
     if any(region(entry["payload"], layout.MAP_OFFSET, layout.MAP_BYTES, "manifest")):
         raise ValueError("Packaged retail manifest must be blank")
     if (region(entry["payload"], layout.HEADER_OFFSET, layout.HEADER_BYTES, "header") !=
-            layout.relocation_header(len(high_blob))):
+            layout.relocation_header(len(high_blob), ce)):
         raise ValueError("Retail relocation header mismatch")
     result = {name: {"payload_bytes": len(image["payload"]),
                      "memory_end": f"0x{image['memory_end']:08x}",
@@ -232,9 +234,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", nargs="?", type=Path,
                         default=Path(__file__).resolve().parents[1] / "build/retail")
+    parser.add_argument("--ce", action="store_true",
+                        help="Check the Windows CE probe package's higher stage")
     args = parser.parse_args()
     try:
-        print(json.dumps(check_directory(args.directory), sort_keys=True))
+        print(json.dumps(check_directory(args.directory, args.ce), sort_keys=True))
     except (ValueError, OSError, UnicodeError, struct.error) as error:
         raise SystemExit(f"Retail loader layout check failed: {error}") from error
 

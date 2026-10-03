@@ -72,7 +72,11 @@ void retail_display_restore(const struct retail_display_state *s) {
     row=20;
     retail_display_line("K-UI V1.5 GAME LAUNCH");
     retail_display_line("BUILD " KUI_BUILD_ID);
+#ifdef KUI_RETAIL_CE
+    retail_display_line("WINDOWS CE PLACEMENT TEST");
+#else
     retail_display_line("NATIVE GD IMAGE");
+#endif
     row=108;
 }
 void retail_display_hex(const char *label,uint32_t value) {

@@ -7,6 +7,10 @@
 #ifdef KUI_RETAIL_SD_BENCH
 #include "retail_sd_bench.h"
 #endif
+#ifdef KUI_RETAIL_CE
+#include "kui/ce_load_plan.h"
+#include <stdbool.h>
+#endif
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -126,6 +130,107 @@ static void read_sectors(uint32_t lba,uint32_t count,enum kui_game_sector_format
         stopped("IMAGE READ FAILED",(uint32_t)result);
     }
 }
+/* Loads whole raw sectors from lba, checking each one's header, and copies
+ * their 2048 data bytes to out. */
+static void load_sectors(uint32_t lba,uint32_t sectors,uint8_t *out) {
+    for(uint32_t done=0;done<sectors;) {
+        uint32_t count=sectors-done;
+        if(count>BOOT_CHUNK_SECTORS) count=BOOT_CHUNK_SECTORS;
+        read_sectors(lba+done,count,KUI_GAME_SECTOR_RAW,raw_boot);
+        for(uint32_t i=0;i<count;i++) {
+            const uint8_t *sector=raw_boot+(size_t)i*KUI_GAME_RAW_BYTES;
+            enum kui_retail_header header=kui_retail_sector_header(sector,lba+done+i);
+            if(header!=KUI_RETAIL_HEADER_OK) {
+                retail_display_hex("BOOT SECTOR LBA",lba+done+i);
+                stopped(header==KUI_RETAIL_HEADER_ADDRESS?"BOOT SECTOR ADDRESS MISMATCH":
+                    "BOOT SECTOR IS NOT MODE 1 DATA",(uint32_t)header);
+            }
+            memcpy(out+(size_t)(done+i)*2048u,sector+16,2048);
+        }
+        done+=count;
+        retail_display_progress(done,sectors);
+    }
+}
+#ifdef KUI_RETAIL_CE
+/* Windows CE placement probe. The IP's peripheral field (seven hexadecimal
+ * digits at 0x38, read as game_metadata.c does) must select Windows CE. The
+ * boot file's first sector is CE's load prefix, the rest its body. Both are
+ * loaded where the CE layout puts them, checked, reported, and left there:
+ * the probe stops before running any of it. */
+static uint8_t ce_prefix[KUI_CE_LOAD_PREFIX_BYTES];
+static bool ip_windows_ce(const uint8_t *ip) {
+    if(memcmp(ip+37,"GD-ROM",6) || ip[63]!=' ') return false;
+    uint32_t flags=0;
+    for(unsigned i=56;i<63;i++) {
+        unsigned digit=ip[i];
+        if(digit>='0' && digit<='9') digit-='0';
+        else if(digit>='A' && digit<='F') digit-='A'-10u;
+        else if(digit>='a' && digit<='f') digit-='a'-10u;
+        else return false;
+        flags=flags<<4|digit;
+    }
+    return flags&1u;
+}
+static uint32_t word(const uint8_t *p) {
+    return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
+}
+static void ce_placement_probe(const uint8_t *ip) __attribute__((noreturn));
+static void ce_placement_probe(const uint8_t *ip) {
+    if(!ip_windows_ce(ip)) stopped("IP DOES NOT SELECT WINDOWS CE",word(ip+56));
+    load_sectors(manifest.boot_lba,1,ce_prefix);
+    /* Everything still in use: firmware, IP, the bootstrap area below the
+     * body, and this stage with its BSS and stack. */
+    const struct kui_ce_live_range live[]={
+        {0x8c000000u,KUI_RETAIL_EXEC_ADDRESS-0x8c000000u},
+        {KUI_RETAIL_CE_STAGE_ADDRESS,KUI_RETAIL_STAGE_STACK-KUI_RETAIL_CE_STAGE_ADDRESS},
+    };
+    struct kui_ce_load_plan plan;
+    enum kui_ce_load_result planned=kui_ce_load_plan_build(true,ce_prefix,sizeof(ce_prefix),
+        manifest.boot_bytes,live,sizeof(live)/sizeof(live[0]),&plan);
+    if(planned!=KUI_CE_LOAD_OK) {
+        uint32_t fields[5]={word(ce_prefix+0x10),word(ce_prefix+0x14),word(ce_prefix+0x18),
+            word(ce_prefix+0x1c),word(ce_prefix+0x20)};
+        retail_display_values("COUNT    ADDRESS  OFFSET   BYTES    ENTRY",fields,5);
+        stopped("CE LOAD PLAN REJECTED",(uint32_t)planned);
+    }
+    uint8_t *body=(uint8_t *)(uintptr_t)plan.body.address;
+    retail_display_line("LOADING WINDOWS CE BODY");
+    load_sectors(manifest.boot_lba+1u,plan.body.sector_count,body);
+    uint8_t *prefix=(uint8_t *)(uintptr_t)plan.prefix.address;
+    memcpy(prefix,ce_prefix,sizeof(ce_prefix));
+    uint32_t prefix_crc=kui_retail_crc32(0,prefix,plan.prefix.bytes);
+    uint32_t body_crc=kui_retail_crc32(0,body,plan.body.bytes);
+    if(prefix_crc!=kui_retail_crc32(0,ce_prefix,sizeof(ce_prefix)))
+        stopped("CE PREFIX CHANGED IN PLACE",prefix_crc);
+    /* A CE ROM image normally carries "ECEC" and its ROM header's address at
+     * offset 0x40. Shown for the record; not every title's body has one. */
+    uint32_t rom[5]={0};
+    uint32_t header=word(body+0x44);
+    bool rom_header=plan.body.bytes>=0x48u && word(body+0x40)==0x43454345u && !(header&3u) &&
+        header>=plan.body.address && header-plan.body.address<=plan.body.bytes-32u;
+    if(rom_header) {
+        const uint8_t *h=(const uint8_t *)(uintptr_t)header;
+        rom[0]=header;rom[1]=word(h+8);rom[2]=word(h+12);rom[3]=word(h+20);rom[4]=word(h+28);
+    }
+    uint32_t placed[4]={plan.body.address,plan.body.bytes,plan.body.sector_count,plan.entry_address};
+    uint32_t boot_info[4]={word(ip+0xf0),word(ip+0xf4),word(ip+0xf8),word(ip+0xfc)};
+    retail_display_restore(&display);
+    retail_display_line(manifest.title);
+    retail_display_hex("PREFIX CRC32",prefix_crc);
+    retail_display_hex("BODY CRC32",body_crc);
+    retail_display_hex("PREFIX AT",plan.prefix.address);
+    retail_display_values("BODY AT  BYTES    SECTORS  ENTRY",placed,4);
+    if(rom_header)
+        retail_display_values("ROMHDR   PHYSFRST PHYSLAST RAMSTART RAMEND",rom,5);
+    else retail_display_line("NO CE ROM HEADER AT BODY OFFSET 40");
+    retail_display_values("IP F0    IP F4    IP F8    IP FC",boot_info,4);
+    retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
+    retail_display_line("PLACEMENT CHECKED - CE WAS NOT STARTED");
+    retail_display_line("PHOTOGRAPH THIS SCREEN");
+    retail_display_line("POWER OFF AND ON TO RETURN");
+    for(;;) __asm__ volatile("nop");
+}
+#endif
 void kui_retail_boot_returned(void) {
     retail_display_restore(&display);
     stopped("OWNER BOOTSTRAP RETURNED",KUI_RETAIL_BOOT2_ADDRESS);
@@ -188,29 +293,15 @@ void kui_retail_stage_main(const uint8_t *wire) {
     read_sectors(manifest.session_lba,16,KUI_GAME_SECTOR_MODE1,ip);
     uint32_t crc=kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES);
     if(crc!=manifest.ip_crc32) stopped("IP CHECKSUM CHANGED",crc);
+#ifdef KUI_RETAIL_CE
+    ce_placement_probe(ip);
+#endif
     /* K-UI no longer reads the executable before launch. Every boot sector's
      * sync, mode and address must match its LBA, proving the file map; SD
      * CRCs cover the transfer. EDC is not required: patched executables
      * commonly leave it stale, and they launch as before. */
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
-    uint32_t sectors=(manifest.boot_bytes+2047u)/2048u;
-    for(uint32_t done=0;done<sectors;) {
-        uint32_t count=sectors-done;
-        if(count>BOOT_CHUNK_SECTORS) count=BOOT_CHUNK_SECTORS;
-        read_sectors(manifest.boot_lba+done,count,KUI_GAME_SECTOR_RAW,raw_boot);
-        for(uint32_t i=0;i<count;i++) {
-            const uint8_t *sector=raw_boot+(size_t)i*KUI_GAME_RAW_BYTES;
-            enum kui_retail_header header=kui_retail_sector_header(sector,manifest.boot_lba+done+i);
-            if(header!=KUI_RETAIL_HEADER_OK) {
-                retail_display_hex("BOOT SECTOR LBA",manifest.boot_lba+done+i);
-                stopped(header==KUI_RETAIL_HEADER_ADDRESS?"BOOT SECTOR ADDRESS MISMATCH":
-                    "BOOT SECTOR IS NOT MODE 1 DATA",(uint32_t)header);
-            }
-            memcpy(boot+(size_t)(done+i)*2048u,sector+16,2048);
-        }
-        done+=count;
-        retail_display_progress(done,sectors);
-    }
+    load_sectors(manifest.boot_lba,(manifest.boot_bytes+2047u)/2048u,boot);
     boot_crc=kui_retail_crc32(0,boot,manifest.boot_bytes);
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);

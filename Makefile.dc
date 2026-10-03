@@ -45,7 +45,7 @@ RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id
-all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf
+all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf build/retail-ce/entry.elf
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -212,6 +212,11 @@ RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
     build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
 RETAIL_BENCH_STAGE := build/retail/src/loader/retail_stage_asm.o \
     build/retail-bench/retail_stage.o build/retail/src/loader/retail_sd_bench.o $(RETAIL_COMMON)
+# The Windows CE placement probe: the same stage built with KUI_RETAIL_CE and
+# its CE load planner, linked at KUI_RETAIL_CE_STAGE_ADDRESS.
+RETAIL_CE_STAGE := build/retail/src/loader/retail_stage_asm.o build/retail-ce/retail_stage.o \
+    build/retail-ce/ce_load_plan.o build/retail-ce/retail_display.o \
+    $(filter-out build/retail/src/loader/retail_display.o,$(RETAIL_COMMON))
 
 build/retail/%.o: %.c
 	@mkdir -p $(@D)
@@ -302,5 +307,31 @@ build/retail-bench/entry.elf: build/retail-bench/retail_entry_asm.o src/loader/r
 	python3 tools/check_retail_loader_layout.py build/retail-bench
 	python3 tools/record_build.py $@
 
+# The Windows CE placement probe package (ce-probe.kui). It shares the ordinary
+# residents and stage assembly; only the stage C code and link address differ.
+build/retail-ce/retail_stage.o: src/loader/retail_stage.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
+build/retail-ce/ce_load_plan.o: src/core/ce_load_plan.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+build/retail-ce/retail_display.o: src/loader/retail_display.c force-build-id
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
+build/retail-ce/stage.elf: $(RETAIL_CE_STAGE) src/loader/retail_stage_ce.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage_ce.ld -Wl,-Map,build/retail-ce/stage.map -o $@ $(RETAIL_CE_STAGE) -lgcc
+build/retail-ce/stage.bin: build/retail-ce/stage.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail-ce/retail_entry_asm.o: src/loader/retail_entry.S build/retail-ce/stage.bin
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_RETAIL_STAGE_BIN='"build/retail-ce/stage.bin"' -MMD -MP -c $< -o $@
+build/retail-ce/entry.elf: build/retail-ce/retail_entry_asm.o src/loader/retail_entry.ld build/retail/entry.elf
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail-ce/entry.map -o $@ $<
+	cp build/retail/resident-*.elf build/retail/resident-*.bin build/retail/resident-*.map build/retail-ce/
+	cp -r build/retail/src build/retail/scif build/retail/sci build/retail/ide build/retail/scia build/retail-ce/
+	python3 tools/check_retail_instructions.py build/retail-ce
+	python3 tools/check_retail_loader_layout.py --ce build/retail-ce
+	python3 tools/record_build.py $@
+
 -include $(RETAIL_SCIF:.o=.d) $(RETAIL_SCI:.o=.d) $(RETAIL_IDE:.o=.d) $(RETAIL_SCIA:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
 -include $(RETAIL_BENCH_STAGE:.o=.d) build/retail-bench/retail_entry_asm.d
+-include $(RETAIL_CE_STAGE:.o=.d) build/retail-ce/retail_entry_asm.d
