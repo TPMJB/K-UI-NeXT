@@ -161,8 +161,10 @@ void kui_sci_sd_release(void) {
     port.acquired = false;
 }
 
+#ifndef KUI_SCI_SD_NO_BLOCK
 static void begin(void *ctx) { (void)ctx; }
 static void end(void *ctx) { (void)ctx; kui_sci_sd_release(); }
+#endif
 static void select_card(void *ctx, bool selected) {
     (void)ctx;
     if(port.acquired) {
@@ -237,6 +239,7 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
     return reverse(received);
 }
 
+#ifndef KUI_SCI_SD_NO_BLOCK
 static uint32_t mask_interrupts(void) {
 #ifdef KUI_SCI_SD_TEST
     return kui_sci_sd_test_irq_disable();
@@ -466,10 +469,20 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
     if(crc_out) *crc_out = crc;
     return true;
 }
+#endif
+#ifdef KUI_SCI_SD_NO_BLOCK
+/* The background game reader streams by its own DMA (sci_stream.c) and uses
+ * this bus only to select the card and move command bytes: no block
+ * transfer, work clock or end-of-use release is linked. */
+static const struct kui_loader_sd_bus bus = {
+    NULL, NULL, NULL, select_card, transfer, NULL, NULL
+};
+#else
 static uint32_t ticks(void *ctx) { (void)ctx; return port.work; }
 static const struct kui_loader_sd_bus bus = {
     NULL, begin, end, select_card, transfer, ticks, transfer_block
 };
+#endif
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return &bus; }
 bool kui_sci_sd_healthy(void) { return port.acquired && !port.fault; }
 #else

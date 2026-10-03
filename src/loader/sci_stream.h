@@ -31,6 +31,16 @@ struct kui_sci_stream_stats {
     uint32_t blocks, polled, starts, stops, continued, kept;
     uint32_t overruns, crc_errors, token_errors, foreign, max_token_bytes;
 };
+/* Engine state, placed by the resident (sci_stream.c owns it otherwise). */
+struct kui_sci_stream_state {
+    const struct kui_loader_sd *card;
+    uint8_t *area[2];
+    uint32_t state, position, fill, ready_lba[2], kept_lba, saved[4];
+    /* kept: 1 + the area holding the last block taken, or 0. wire: the
+     * area holds bit-reversed DMA bytes rather than programmed-read bytes. */
+    uint8_t ready[2], wire[2], rdr[2], kept, sptr;
+    struct kui_sci_stream_stats stats;
+};
 /* Adopt the bus (acquired, card ready) and two 32-byte-aligned receive areas
  * of KUI_SCI_STREAM_AREA_BYTES that nothing else writes. unknown: the card
  * may still be streaming (after a bus fault), so the first fetch stops it

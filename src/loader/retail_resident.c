@@ -9,6 +9,14 @@
 #include <string.h>
 
 static struct kui_retail_manifest manifest;
+#ifdef KUI_RETAIL_ASYNC
+/* The background reader keeps these between its interrupt vectors. */
+#include "retail_async.h"
+#define service (kui_retail_async_region.shared.service)
+#define card (kui_retail_async_region.shared.card)
+#define display (kui_retail_async_region.shared.display)
+#define reader (kui_retail_async_region.engine)
+#else
 static struct kui_retail_image image;
 static struct kui_retail_gd service;
 static struct kui_retail_storage card;
@@ -16,6 +24,8 @@ static struct retail_display_state display;
 static struct kui_retail_pace pace;
 /* Cumulative menu-return diagnostics; game GD resets do not clear them. */
 static struct { uint32_t paced, spun; } pacing;
+static enum kui_loader_sd_result card_result;
+#endif
 uint32_t kui_retail_original_menu;
 extern void kui_retail_menu_hook(void);
 extern void kui_retail_gd_c0_hook(void);
@@ -24,7 +34,6 @@ extern void kui_retail_gd_10f0_hook(void);
 /* Source: 0=BC supervisor vector, 1=C0 raw GD vector, 2/3=direct firmware
  * entries. Assembly publishes this only after acquiring the resident lock. */
 volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
-static enum kui_loader_sd_result card_result;
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
 extern uint8_t __retail_resident_bss_end[] __asm__("__retail_resident_bss_end");
@@ -52,6 +61,7 @@ static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
     if(writing != KUI_RETAIL_MAP_VALIDATE) purge(address, bytes);
     return (uint8_t *)(uintptr_t)((address & 0x1fffffffu) | 0xa0000000u);
 }
+#ifndef KUI_RETAIL_ASYNC
 /* Read-only PowerVR status, vblank-in, counter period and framebuffer.
  * No video state is changed. */
 static void video_sample(void) {
@@ -69,6 +79,7 @@ static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t outp
 static int read_block(void *unused, uint32_t lba, uint8_t output[512]) {
     return read_run(unused, lba, 1, output);
 }
+#endif
 static enum kui_game_sector_format sector_format(uint32_t bytes) {
     return bytes == 2352 ? KUI_GAME_SECTOR_RAW : KUI_GAME_SECTOR_MODE1;
 }
@@ -77,6 +88,7 @@ static int check_sectors(void *unused, uint32_t lba, uint32_t count, uint32_t by
     if(bytes != 2048 && bytes != 2352) return -1;
     return kui_retail_image_check_validated(&manifest, lba, count, sector_format(bytes)) == KUI_GAME_OK ? 0 : -1;
 }
+#ifndef KUI_RETAIL_ASYNC
 static int read_sectors(void *unused, uint32_t lba, uint32_t count,
                         uint32_t bytes, void *out) {
     (void)unused;
@@ -91,6 +103,7 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     kui_retail_storage_release(&card);
     return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
+#endif
 static void redirect_entry(uint32_t address,void (*target)(void)) {
     /* Aligned SH-4 tail jump: MOV.L @(1,PC),R0; JMP @R0; NOP; NOP;
      * target. All addresses are fixed firmware RAM entries, not game code.
@@ -116,10 +129,31 @@ static void install_hook(void) {
     *(volatile uint32_t *)(uintptr_t)0xac0000e0u=(uint32_t)(uintptr_t)kui_retail_menu_hook;
     __asm__ __volatile__("" : : : "memory");
 }
+#ifdef KUI_RETAIL_ASYNC
+/* Counter rows for both screens; every counter is a uint32_t in order. */
+_Static_assert(sizeof(struct kui_sci_stream_stats) == 11u * 4u, "stream counters");
+_Static_assert(sizeof(struct kui_retail_async_stats) == 10u * 4u, "reader counters");
+static void stream_lines(void) {
+    const uint32_t *st = (const uint32_t *)kui_sci_stream_stats();
+    retail_display_values("DMA BLKS POLLED   STARTS   STOPS", st, 4);
+    retail_display_values("CONTINUE KEPT     OVERRUNS CRC ERRS", st + 4, 4);
+    retail_display_values("TOKENERR FOREIGN  MAXTOKEN", st + 8, 3);
+}
+#endif
 static void report_fault(const char *reason, uint32_t function) {
     retail_display_restore(&display);
     retail_display_line("K-UI GAME READER");
     retail_display_line(manifest.title);
+#ifdef KUI_RETAIL_ASYNC
+    /* Fifteen rows fit: command, LBA (GETSCD: format), sectors (bytes). */
+    retail_display_line(reason);
+    retail_display_hex("GD FUNCTION", function);
+    _Static_assert(offsetof(struct kui_retail_gd_diagnostics, last_destination) ==
+                   offsetof(struct kui_retail_gd_diagnostics, last_command) + 12u, "GD row");
+    retail_display_values("COMMAND  LBA      SECTORS  DEST", &service.diag.last_command, 4);
+    retail_display_hex("CARD BLOCK", reader.cursor.block);
+    stream_lines();
+#else
     retail_display_line(kui_retail_storage_name(card.transport));
     retail_display_line(reason);
     retail_display_hex("GD function", function);
@@ -129,6 +163,7 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_hex("Destination", service.diag.last_destination);
     retail_display_hex("IO RESULT", (uint32_t)card_result);
     retail_display_hex("BLOCKS READ", image.blocks_read);
+#endif
     retail_display_line("STOPPED - PHOTOGRAPH THIS SCREEN");
     retail_display_line("POWER CYCLE TO RETURN");
     for(;;) __asm__ volatile("nop");
@@ -139,6 +174,16 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_restore(&display);
     retail_display_line("GAME MENU RETURN");
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
+#ifdef KUI_RETAIL_ASYNC
+    /* Background reader: where blocks were delivered (its interrupt or the
+     * game's calls), how often an EXEC waited, and the stream's errors. */
+    const uint32_t *st=(const uint32_t *)&reader.stats;
+    retail_display_hex("SECTORS READ",service.diag.sectors_read);
+    retail_display_values("IRQ BLKS CALLBLKS EXECWAIT IRQS",st,4);
+    retail_display_values("FORWARDS FAILURES MAXRETRY HOOKS",st+4,4);
+    retail_display_values("VBR CHGS BOOT VBR",st+8,2);
+    stream_lines();
+#else
     /* How the game drives reads: ABXY+Start after a load shows these. */
     retail_display_hex("READ STEPS",service.diag.read_steps);
     retail_display_hex("SECTORS READ",service.diag.sectors_read);
@@ -150,6 +195,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("PACE VBI",pace.vbi);
     retail_display_hex("PACE COST16",pace.per);
     retail_display_hex("PACE STILL",pace.still);
+#endif
     retail_display_line("RESTARTING K-UI");
     retail_display_pause(900u); /* ~15 seconds at 60 Hz to capture the counters */
     /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts
@@ -169,21 +215,26 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
         return KUI_RETAIL_RESIDENT_ARGUMENT;
     display = *saved_display;
     if(!prepared->track_count || prepared->track_count > KUI_RETAIL_IMAGE_TRACKS ||
-       !prepared->extent_count || prepared->extent_count > KUI_RETAIL_IMAGE_EXTENTS)
+       !prepared->extent_count || prepared->extent_count > KUI_RETAIL_MANIFEST_EXTENTS)
         return KUI_RETAIL_RESIDENT_MAP;
     /* The high stage already decoded/validated this map and CRC-checked the
      * owner IP/executable. Copy it and rebind initialized card state to local
      * callbacks. No second SD reset or manifest parser remains in low RAM. */
     manifest = *prepared;
-    card_result = kui_retail_storage_adopt(&card, prepared_card);
-    if(card_result != KUI_LOADER_SD_OK || kui_retail_storage_blocks(&card) < manifest.card_sectors ||
+    if(kui_retail_storage_adopt(&card, prepared_card) != KUI_LOADER_SD_OK ||
+       kui_retail_storage_blocks(&card) < manifest.card_sectors ||
        card.transport != manifest.storage_transport)
         return KUI_RETAIL_RESIDENT_SD;
     /* _start cleared all resident BSS, including image/cache/stream/counters. */
+#ifdef KUI_RETAIL_ASYNC
+    kui_retail_async_init(&manifest);
+    const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, NULL};
+#else
     image.manifest = &manifest;
     image.read_block = read_block;
     image.read_run = read_run;
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, read_sectors};
+#endif
     kui_retail_gd_init_manifest_validated(&service, manifest.tracks,
         manifest.track_count, &ops, KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
     volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
@@ -197,6 +248,28 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     install_hook();
     return KUI_RETAIL_RESIDENT_OK;
 }
+#ifdef KUI_RETAIL_ASYNC
+int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
+                                    uint32_t r6, uint32_t r7) {
+    /* Entry contract as below. The reader delivers what has arrived before
+     * the service answers, and starts or stops a read after it. */
+    uint32_t source=kui_retail_hook_source;
+    if(source>3) return -1;
+    if(source!=1 && r6==UINT32_MAX) return 0;
+    uint32_t pending = service.pending;
+    kui_retail_async_call(r7);
+    int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
+    kui_retail_async_after(r7, result);
+    if(service.error == KUI_GD_ERROR_IO)
+        report_fault("IMAGE READ FAILED", r7);
+    if(r7 == KUI_GD_REQUEST && !pending && result == 0)
+        report_fault("GD REQUEST REJECTED", r7);
+    else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
+            r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
+        report_fault("GD FUNCTION UNSUPPORTED", r7);
+    return result;
+}
+#else
 /* One EXEC, sized by the pacing policy and timed for the next estimate. */
 static int32_t step(uint32_t r4, uint32_t r5) {
     uint32_t frames = pace.frames, line = pace.line, before = service.diag.sectors_read;
@@ -247,3 +320,4 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
         report_fault("GD FUNCTION UNSUPPORTED", r7);
     return result;
 }
+#endif

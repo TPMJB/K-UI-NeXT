@@ -237,6 +237,12 @@ static int32_t execute(struct kui_retail_gd *s) {
     if(!s->pending) return 0;
     s->executing = 1;
     if(s->command == KUI_GD_PIOREAD || s->command == KUI_GD_DMAREAD) {
+#ifdef KUI_RETAIL_GD_ASYNC
+        /* The adapter's reader delivers in the background and reports
+         * through kui_retail_gd_progress. */
+        s->executing = 0;
+        return 0;
+#endif
         uint32_t done = s->completed_bytes / s->sector_bytes;
         uint32_t n = step_count(s, s->count - done), bytes = n * s->sector_bytes;
         uint8_t *out = guest(s, s->destination + s->completed_bytes, bytes, 2, 1);
@@ -322,6 +328,24 @@ static int32_t datatype(struct kui_retail_gd *s, uint32_t address) {
     s->sector_part = part; s->track_type = type; s->sector_bytes = bytes;
     return 0;
 }
+#ifdef KUI_RETAIL_GD_ASYNC
+void kui_retail_gd_progress(struct kui_retail_gd *s, uint32_t sectors, uint32_t error) {
+    if(!s->pending || (s->command != KUI_GD_PIOREAD && s->command != KUI_GD_DMAREAD)) return;
+    uint32_t done = s->completed_bytes / s->sector_bytes;
+    if(sectors > s->count) sectors = s->count;
+    if(sectors > done) {
+        s->completed_bytes = sectors * s->sector_bytes;
+        s->diag.sectors_read += sectors - done;
+        ++s->diag.read_steps;
+        s->position_lba = s->lba + sectors - 1u; s->drive_status = 1;
+    }
+    if(error) s->error = error;
+    else if(sectors < s->count) return;
+    s->status = s->error ? KUI_GD_FAILED : KUI_GD_COMPLETED;
+    s->pending = 0;
+    s->diag.last_error = s->error;
+}
+#endif
 int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
                               uint32_t r5, uint32_t r6, uint32_t r7) {
     if(!s || !s->initialized) return -1;

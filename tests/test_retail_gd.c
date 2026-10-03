@@ -110,6 +110,7 @@ static void mode(uint32_t bytes, uint32_t type) {
     put(PARAM + 8, type); put(PARAM + 12, bytes);
     CHECK(call(KUI_GD_DATATYPE, PARAM, 0) == 0);
 }
+#ifndef KUI_RETAIL_GD_ASYNC
 static void large_reads(void) {
     reset();
     const uint32_t aliases[] = {0,0x80000000u,0xa0000000u};
@@ -155,6 +156,8 @@ static void large_reads(void) {
     CHECK(service.request_bytes == count * 2048 && ctx.reads == 195);
     CHECK(call(KUI_GD_ABORT, service.token, 0) == 0);
 }
+#endif
+#ifndef KUI_RETAIL_GD_ASYNC
 static void cancel_failures(void) {
     reset(); read_params(45000, 20, OUTPUT);
     int32_t token = call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM);
@@ -183,6 +186,8 @@ static void cancel_failures(void) {
     CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && ctx.reads == 3);
 }
+#endif
+#ifndef KUI_RETAIL_GD_ASYNC
 static void paced_steps(void) {
     /* The adapter may change the EXEC size between calls; each chunk stays
      * contiguous, and invalid values fall back to the two-sector default. */
@@ -213,6 +218,7 @@ static void paced_steps(void) {
     /* Protocol resets restore drive state, not the adapter's pacing choice. */
     service.step = 5; CHECK(call(KUI_GD_INIT, 0, 0) == 0 && service.step == 5);
 }
+#endif
 static void metadata(void) {
     reset();
     for(uint32_t area = 0; area < 2; ++area) {
@@ -312,6 +318,7 @@ static void version_query(void) {
     CHECK(get(STATUS + 4) == KUI_GD_ERROR_MEMORY);
     CHECK(ctx.reads == 0 && ctx.checks == 0);
 }
+#ifndef KUI_RETAIL_GD_ASYNC
 static void subcode_query(void) {
     /* Expected raw Q generated independently from the 45035-LBA position:
      * track 3, relative 00:00:35, absolute 10:02:35; CRC-CCITT complemented.
@@ -363,6 +370,8 @@ static void subcode_query(void) {
     CHECK(get(STATUS+4)==KUI_GD_ERROR_MEMORY);ctx.deny=0;
     CHECK(ctx.reads==reads && ctx.checks==checks);
 }
+#endif
+#ifndef KUI_RETAIL_GD_ASYNC
 static void bounds_and_modes(void) {
     reset(); mode(2048, 0); mode(2048, 1024); mode(2352, 0);
     read_params(16, 2, OUTPUT);
@@ -402,9 +411,67 @@ static void bounds_and_modes(void) {
     invalid[2].end_lba = 720000;
     CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
 }
+#endif
+#ifdef KUI_RETAIL_GD_ASYNC
+/* A background reader: EXEC never reads, the adapter reports progress, and
+ * CHECK shows each step until the request completes or fails. */
+static void async_reads(void) {
+    reset();
+    read_params(45000, 20, OUTPUT);
+    int32_t token = call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM);
+    CHECK(token > 0 && service.pending);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && !ctx.reads && service.pending);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
+    CHECK(get(STATUS + 8) == 0 && get(STATUS + 12) == 4);
+    kui_retail_gd_progress(&service, 3, 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
+    CHECK(get(STATUS + 8) == 3 * 2048 && service.position_lba == 45002);
+    CHECK(service.diag.sectors_read == 3 && service.diag.read_steps == 1);
+    kui_retail_gd_progress(&service, 2, 0); /* never backwards */
+    kui_retail_gd_progress(&service, 3, 0); /* no new sectors, no new step */
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
+    CHECK(get(STATUS + 8) == 3 * 2048 && service.diag.read_steps == 1);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_NOP, 0) == 0);
+    kui_retail_gd_progress(&service, 99, 0); /* clamped to the request */
+    CHECK(!service.pending && service.diag.sectors_read == 20);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(get(STATUS + 8) == 20 * 2048 && get(STATUS + 12) == 0 && get(STATUS + 4) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
+    kui_retail_gd_progress(&service, 5, KUI_GD_ERROR_IO); /* nothing pending */
+    CHECK(!service.error && service.diag.sectors_read == 20);
+    /* A failure keeps the sectors already delivered. */
+    mode(2352, 0);
+    read_params(45100, 6, OUTPUT);
+    token = call(KUI_GD_REQUEST, KUI_GD_PIOREAD, PARAM);
+    CHECK(token > 0);
+    kui_retail_gd_progress(&service, 4, KUI_GD_ERROR_IO);
+    CHECK(!service.pending && service.diag.last_error == KUI_GD_ERROR_IO);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_IO && get(STATUS + 8) == 4 * 2352);
+    /* Abort ends the request; later progress is ignored. */
+    token = call(KUI_GD_REQUEST, KUI_GD_PIOREAD, PARAM);
+    CHECK(token > 0 && call(KUI_GD_ABORT, (uint32_t)token, 0) == 0);
+    kui_retail_gd_progress(&service, 6, 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_CANCELLED && get(STATUS + 8) == 0);
+    /* Other commands still complete on EXEC and ignore read progress. */
+    put(PARAM, 0); put(PARAM + 4, OUTPUT);
+    token = call(KUI_GD_REQUEST, KUI_GD_GETTOC2, PARAM);
+    CHECK(token > 0);
+    kui_retail_gd_progress(&service, 1, KUI_GD_ERROR_IO);
+    CHECK(service.pending && !service.error);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && !service.pending);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(!ctx.reads);
+}
+#endif
 int main(void) {
     for(use_manifest_tracks=0;use_manifest_tracks<2;use_manifest_tracks++) {
+#ifdef KUI_RETAIL_GD_ASYNC
+        async_reads(); metadata(); silent_cd_audio(); version_query();
+#else
         large_reads(); paced_steps(); cancel_failures(); metadata(); silent_cd_audio(); version_query(); subcode_query(); bounds_and_modes();
+#endif
     }
     printf("retail GD service: %u checks passed\n", assertions);
     return 0;

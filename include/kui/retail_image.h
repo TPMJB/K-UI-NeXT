@@ -11,6 +11,14 @@
 #define KUI_RETAIL_IMAGE_WIRE_BYTES 4096u
 #define KUI_RETAIL_IMAGE_TRACKS 16u
 #define KUI_RETAIL_IMAGE_EXTENTS 128u
+/* Extents a manifest holds in memory. The background game reader's resident
+ * is built with fewer (KUI_RETAIL_ASYNC_EXTENTS) to fit its receive areas;
+ * the layout is otherwise identical, so a prefix copy of a full manifest
+ * with no more extents than that is valid. Such a build has no wire
+ * encode/decode/validate. */
+#ifndef KUI_RETAIL_MANIFEST_EXTENTS
+#define KUI_RETAIL_MANIFEST_EXTENTS KUI_RETAIL_IMAGE_EXTENTS
+#endif
 #define KUI_RETAIL_IMAGE_MAX_SECTORS 64u
 #define KUI_RETAIL_IMAGE_BOOT_MAX (12u * 1024u * 1024u)
 
@@ -35,7 +43,7 @@ struct kui_retail_manifest {
     uint32_t boot_crc32, ip_crc32, gdi_crc32;
     char title[128], product[16], bootfile[24], region[16];
     struct kui_retail_track tracks[KUI_RETAIL_IMAGE_TRACKS];
-    struct kui_retail_extent extents[KUI_RETAIL_IMAGE_EXTENTS];
+    struct kui_retail_extent extents[KUI_RETAIL_MANIFEST_EXTENTS]; /* last member */
 };
 /* Canonical fixed-size LE wire form with magic KUIRTI01 and CRC32 at byte16
  * covering all 4096 bytes with bytes16..19 zeroed. Reserved and unused bytes

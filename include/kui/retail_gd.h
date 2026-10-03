@@ -95,5 +95,14 @@ void kui_retail_gd_init_manifest_validated(struct kui_retail_gd *,
  */
 int32_t kui_retail_gd_dispatch(struct kui_retail_gd *, uint32_t r4,
     uint32_t r5, uint32_t r6, uint32_t r7);
+#ifdef KUI_RETAIL_GD_ASYNC
+/* Background readers (built with KUI_RETAIL_GD_ASYNC): EXEC leaves a pending
+ * PIOREAD/DMAREAD to the adapter, which writes the destination itself and
+ * reports here: sectors is the request's total of complete sectors so far,
+ * error a nonzero KUI_GD_ERROR_* that ends it. The request completes when
+ * every sector is delivered; CHECK then reports it as usual. Calls for
+ * anything but a pending read are ignored. ops.read is never called. */
+void kui_retail_gd_progress(struct kui_retail_gd *, uint32_t sectors, uint32_t error);
+#endif
 
 #endif

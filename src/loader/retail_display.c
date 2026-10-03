@@ -82,6 +82,16 @@ void retail_display_hex(const char *label,uint32_t value) {
     for(unsigned i=0;i<8;i++) out[n++]="0123456789ABCDEF"[(value>>(28-4*i))&15];
     out[n]=0; retail_display_line(out);
 }
+/* A legend line, then up to five values in nine-character columns under it. */
+void retail_display_values(const char *legend,const uint32_t *values,unsigned count) {
+    char out[50]; unsigned n=0;
+    retail_display_line(legend);
+    for(unsigned v=0;v<count && v<5;v++) {
+        for(unsigned i=0;i<8;i++) out[n++]="0123456789ABCDEF"[(values[v]>>(28-4*i))&15];
+        out[n++]=' ';
+    }
+    out[n]=0; retail_display_line(out);
+}
 void retail_display_progress(uint32_t done,uint32_t total) {
     /* Fixed bottom bar, independent of scrolling diagnostic rows. */
     if(!total || done>total) return;

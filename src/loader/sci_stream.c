@@ -61,15 +61,13 @@ static void purge(const void *area, unsigned bytes) {
 
 typedef uint32_t alias_word __attribute__((__may_alias__));
 enum { CLOSED, PAUSED, DMA, LOST };
-static struct {
-    const struct kui_loader_sd *card;
-    uint8_t *area[2];
-    uint32_t state, position, fill, ready_lba[2], kept_lba, saved[4];
-    /* kept: 1 + the area holding the last block taken, or 0. wire: the
-     * area holds bit-reversed DMA bytes rather than programmed-read bytes. */
-    uint8_t ready[2], wire[2], rdr[2], kept, sptr;
-    struct kui_sci_stream_stats stats;
-} s;
+#ifdef KUI_RETAIL_ASYNC
+/* The game reader keeps this state between its interrupt vectors. */
+#include "retail_async.h"
+#define s (kui_retail_async_region.shared.stream)
+#else
+static struct kui_sci_stream_state s;
+#endif
 
 static uint8_t byte(uint8_t value) { return s.card->bus.transfer(s.card->bus.ctx, value, false); }
 static void select(bool selected) { s.card->bus.select(s.card->bus.ctx, selected); }

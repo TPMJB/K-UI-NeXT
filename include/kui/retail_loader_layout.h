@@ -35,5 +35,8 @@
 #define KUI_RETAIL_HOOK_STACK_BOTTOM 0x8c00bb00
 #define KUI_RETAIL_HOOK_STACK 0x8c00c000
 #define KUI_RETAIL_RAM_END 0x8d000000
+/* The background SCI reader's resident holds this many file extents (its
+ * receive areas take the rest); a map with more uses the ordinary reader. */
+#define KUI_RETAIL_ASYNC_EXTENTS 32u
 
 #endif

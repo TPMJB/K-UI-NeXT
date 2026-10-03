@@ -10,6 +10,7 @@
 _Static_assert(USED_BYTES <= KUI_RETAIL_IMAGE_WIRE_BYTES, "manifest wire capacity");
 _Static_assert(sizeof(struct kui_retail_manifest) < 4096u, "bounded manifest");
 
+#if KUI_RETAIL_MANIFEST_EXTENTS == KUI_RETAIL_IMAGE_EXTENTS
 static uint32_t get32(const uint8_t *p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
            (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
@@ -23,6 +24,7 @@ static void put32(uint8_t *p, uint32_t v) {
 static void put64(uint8_t *p, uint64_t v) {
     put32(p, (uint32_t)v); put32(p + 4, (uint32_t)(v >> 32));
 }
+#endif
 uint32_t kui_retail_crc32(uint32_t previous, const void *data, size_t bytes) {
     static const uint32_t table[16] = {
         0x00000000u, 0x1db71064u, 0x3b6e20c8u, 0x26d930acu,
@@ -39,6 +41,7 @@ uint32_t kui_retail_crc32(uint32_t previous, const void *data, size_t bytes) {
     }
     return crc ^ UINT32_MAX;
 }
+#if KUI_RETAIL_MANIFEST_EXTENTS == KUI_RETAIL_IMAGE_EXTENTS
 static uint32_t wire_crc(const uint8_t *wire) {
     static const uint8_t zero[4];
     uint32_t crc = kui_retail_crc32(0, wire, 16);
@@ -59,6 +62,7 @@ static bool text_valid(const char *p, size_t n, bool required) {
     }
     return false;
 }
+#endif
 static bool tracks_valid(const struct kui_retail_manifest *m) {
     if(!m || !m->track_count || m->track_count > KUI_RETAIL_IMAGE_TRACKS)
         return false;
@@ -99,6 +103,7 @@ enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *m,
     if(!tracks_valid(m)) return KUI_GAME_INVALID;
     return kui_retail_image_check_validated(m, lba, count, format);
 }
+#if KUI_RETAIL_MANIFEST_EXTENTS == KUI_RETAIL_IMAGE_EXTENTS
 enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manifest *m) {
     if(!tracks_valid(m) || m->storage_transport > KUI_STORAGE_IDE || !m->card_sectors || m->card_sectors > UINT64_C(0x100000000) ||
        m->partition_start >= m->partition_end || m->partition_end > m->card_sectors ||
@@ -234,6 +239,7 @@ enum kui_game_result kui_retail_image_init(struct kui_retail_image *image,
     image->manifest = manifest; image->read_block = read; image->context = context;
     return KUI_GAME_OK;
 }
+#endif
 static enum kui_game_result file_read(struct kui_retail_image *image,
     const struct kui_retail_track *track, uint32_t offset, uint8_t *out,
     uint32_t bytes, uint32_t limit) {

@@ -180,3 +180,114 @@ C_SYMBOL(kui_retail_menu_hook):
 .Lmenu_mask: .long 0x100000f0
 .Lmenu_stack: .long KUI_RETAIL_HOOK_STACK-16
 .Lmenu_report: .long C_SYMBOL(kui_retail_menu_return)
+
+#ifdef KUI_RETAIL_ASYNC
+/* Vector templates for the background reader, copied by
+ * kui_retail_async_init into its region (VBR = region - 0x100). They run in
+ * exception state (BL=1, RB=1) and leave every register, SSR, SPC and SGR as
+ * the hardware set them for the game's handler: R0 is parked in DBR and put
+ * back in the jump's delay slot. DBR serves only H-UDI/user-break debugging,
+ * which games do not use. Word 3 of the forwarding template and word 11 of
+ * the interrupt template name the slot holding the game's vector address. */
+    .section .text.retail_vectors,"ax"
+    .align 2
+    .global C_SYMBOL(kui_retail_vector_forward)
+C_SYMBOL(kui_retail_vector_forward):
+    ldc r0,dbr
+    mov.l 1f,r0
+    mov.l @r0,r0
+    jmp @r0
+    stc dbr,r0
+    nop
+1:  .long 0
+    .align 2
+    .global C_SYMBOL(kui_retail_vector_interrupt)
+C_SYMBOL(kui_retail_vector_interrupt):
+    ldc r0,dbr
+    mov.l 2f,r0
+    mov.l @r0,r0
+    shlr2 r0
+    shlr2 r0
+    shlr r0
+    cmp/eq #0x33,r0 /* DMTE1, INTEVT 0x660: channel 1 complete */
+    bt 1f
+    cmp/eq #0x27,r0 /* ERI, 0x4e0: SCI receive error */
+    bt 1f
+    cmp/eq #0x28,r0 /* RXI, 0x500: SCI receive (masked by EIO during DMA) */
+    bt 1f
+    mov.l 3f,r0
+    mov.l @r0,r0
+    jmp @r0
+    stc dbr,r0
+1:  mov.l 4f,r0
+    jmp @r0
+    stc dbr,r0
+    .align 2
+2:  .long 0xff000028 /* INTEVT */
+3:  .long 0
+4:  .long C_SYMBOL(kui_retail_irq_entry)
+
+/* The stream's interrupt. GD calls run with BL set, so the private stack is
+ * free here; the interrupted R15 is in SGR. Bank-1 R0..R7, PR and MAC are
+ * the game's and are saved; R8..R14 are preserved by the C handler. A
+ * nonzero result passes the event to the game's vector unchanged. */
+    .section .text.retail_irq,"ax"
+    .align 2
+    .global C_SYMBOL(kui_retail_irq_entry)
+C_SYMBOL(kui_retail_irq_entry):
+    mov.l .Lirq_stack,r15
+    mov.l r0,@-r15
+    mov.l r1,@-r15
+    mov.l r2,@-r15
+    mov.l r3,@-r15
+    mov.l r4,@-r15
+    mov.l r5,@-r15
+    mov.l r6,@-r15
+    mov.l r7,@-r15
+    sts.l pr,@-r15
+    sts.l mach,@-r15
+    sts.l macl,@-r15
+    mov.l .Lirq_handler,r0
+    jsr @r0
+    nop
+    mov.l .Lirq_guard,r1
+    mov.l @r1,r2
+    mov.l .Lirq_guard_value,r3
+    cmp/eq r2,r3
+    bt .Lirq_guarded
+    mov.l .Lirq_fault,r1
+    mov #1,r2
+    mov.l r2,@r1
+.Lirq_guarded:
+    tst r0,r0
+    lds.l @r15+,macl
+    lds.l @r15+,mach
+    lds.l @r15+,pr
+    mov.l @r15+,r7
+    mov.l @r15+,r6
+    mov.l @r15+,r5
+    mov.l @r15+,r4
+    mov.l @r15+,r3
+    mov.l @r15+,r2
+    mov.l @r15+,r1
+    mov.l @r15+,r0
+    stc sgr,r15
+    bf .Lirq_forward
+    rte
+    nop
+.Lirq_forward:
+    ldc r0,dbr
+    mov.l .Lirq_slot,r0
+    mov.l @r0,r0
+    mov.l @r0,r0
+    jmp @r0
+    stc dbr,r0
+    .align 2
+.Lirq_stack: .long KUI_RETAIL_HOOK_STACK-16
+.Lirq_handler: .long C_SYMBOL(kui_retail_async_irq)
+.Lirq_guard: .long KUI_RETAIL_HOOK_STACK_BOTTOM
+.Lirq_guard_value: .long 0x4b554947
+.Lirq_fault: .long C_SYMBOL(kui_retail_hook_fault)
+/* Word 11 of the copied interrupt vector: the game's 0x600 slot. */
+.Lirq_slot: .long C_SYMBOL(kui_retail_async_region)+0x500+44
+#endif
