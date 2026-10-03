@@ -9,7 +9,9 @@ bootstrap's VBR (0x8C00F400) for good and that build never hooked it
 per EXEC; and 4% of blocks overran mid-block, each restarting the card for
 up to 3 ms. The next build hooks the boot VBR, and resumes an overrun block
 in place, rebuilding its one lost byte from the CRC16 instead of restarting.
-See [games-background-reader.md](games-background-reader.md).
+See [games-background-reader.md](games-background-reader.md). Build
+**da60895201d3** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37097485011)
+(144 bytes free, call-graph stack 220 of 464); console results are pending.
 
 ## Games: background SCI reader, first test build (2026-10-03 UTC)
 
