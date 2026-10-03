@@ -203,6 +203,23 @@ static enum kui_sci_stream_result handoff(bool overrun) {
        (status & (RDRF | FLAGS)) || (status & 0x84u) != 0x84u) return KUI_SCI_STREAM_RESET;
     return KUI_SCI_STREAM_OK;
 }
+/* Receive the area's bytes from offset on by DMA: RIE+RE clock the card
+ * without a transmitter, the channel takes each byte, and the receiver keeps
+ * the one after the last in RDR and stops on the next one's overrun. */
+static enum kui_sci_stream_result start_dma(uint32_t area, uint32_t offset) {
+    /* TxD latched high as GPIO before the transmitter is turned off. */
+    wr8(SPTR, 0x83u);
+    if((rd8(SPTR) & 0x8au) != 0x82u) return KUI_SCI_STREAM_RESET;
+    wr8(SCR, 0);
+    wr32(CHCR, 0);
+    wr32(SAR, RDR & UINT32_C(0x1fffffff));
+    wr32(DAR, physical(s.area[area]) + offset);
+    wr32(TCR, DMA_BYTES - offset);
+    wr32(CHCR, s.irq ? RX_DMA | 4u : RX_DMA);
+    wr8(SCR, 0x50u);
+    s.state = DMA;
+    return KUI_SCI_STREAM_OK;
+}
 /* The block whose token was just read, into the area not holding the last
  * block taken (an untaken block there is dropped): by DMA when channel 1 is
  * idle, otherwise by programmed transfers (514 bytes, so the card's gap byte
@@ -213,6 +230,7 @@ static enum kui_sci_stream_result receive(bool irq) {
     uint8_t *p = s.area[area];
     s.fill = area;
     s.ready[area] = 0;
+    s.lost[area] = 0;
     settle(64); /* the token byte's last edge */
     if(!channel_idle()) {
         for(unsigned i = 0; i < DMA_BYTES; ++i) p[i] = byte(0xff);
@@ -228,19 +246,9 @@ static enum kui_sci_stream_result receive(bool irq) {
     }
     purge(p, AREA_BYTES);
     for(unsigned i = 0; i < 4; ++i) s.saved[i] = rd32(SAR + 4u * i);
-    /* TxD latched high as GPIO before the transmitter is turned off. */
-    wr8(SPTR, 0x83u);
-    if((rd8(SPTR) & 0x8au) != 0x82u) return KUI_SCI_STREAM_RESET;
-    wr8(SCR, 0);
-    wr32(CHCR, 0);
-    wr32(SAR, RDR & UINT32_C(0x1fffffff));
-    wr32(DAR, physical(p));
-    wr32(TCR, DMA_BYTES);
-    wr32(CHCR, irq ? RX_DMA | 4u : RX_DMA);
-    wr8(SCR, 0x50u);
     s.wire[area] = 1;
-    s.state = DMA;
-    return KUI_SCI_STREAM_OK;
+    s.irq = irq;
+    return start_dma(area, 0);
 }
 enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit, bool irq) {
     if(s.state == DMA) return KUI_SCI_STREAM_BUSY;
@@ -294,6 +302,21 @@ static enum kui_sci_stream_result finish(void) {
         return KUI_SCI_STREAM_BUSY;
     }
     if(count || !(control & 2u) || !(status & RDRF)) {
+        /* The channel was held off the bus (the game's own DMA): RDR kept
+         * byte `at` and the overrun lost the next one, where the card now
+         * stands. Once per block, if that byte was data, carry on from the
+         * byte after it (the card simply waited, deselected) and rebuild the
+         * lost one from the CRC when the block is taken. */
+        uint32_t at = DMA_BYTES - count;
+        if(count && !(control & 2u) && (status & (RDRF | ORER)) == (RDRF | ORER) &&
+           !s.lost[area] && at + 1u < 512u) {
+            s.lost[area] = (uint16_t)(at + 1u);
+            s.held[area] = tail;
+            ++s.stats.repaired;
+            select(true);
+            result = start_dma(area, at + 2u);
+            return result == KUI_SCI_STREAM_OK ? KUI_SCI_STREAM_PENDING : result;
+        }
         ++s.stats.overruns;
         return KUI_SCI_STREAM_OVERRUN;
     }
@@ -319,11 +342,25 @@ enum kui_sci_stream_result kui_sci_stream_wait(void) {
     }
     return finish(); /* a stalled receiver ends as an overrun */
 }
+/* The byte whose loss leaves this CRC16 syndrome when it stands as zero
+ * with `after` bytes behind it, or -1 if no single byte explains it. The
+ * CRC (zero start) is linear: undo the `after` zero-byte shifts, bit by bit
+ * (x^16+x^12+x^5+1 has its constant term, so each step is invertible), and
+ * find the one byte whose first step gives what remains. */
+static int rebuild(uint32_t syndrome, uint32_t after) {
+    for(uint32_t n = after * 8u; n; --n)
+        syndrome = syndrome & 1u ? ((syndrome ^ 0x1021u) >> 1) | 0x8000u : syndrome >> 1;
+    for(unsigned x = 0; x < 256u; ++x)
+        if(crc16(0, (uint8_t)x) == syndrome) return (int)x;
+    return -1;
+}
 const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *result) {
     for(unsigned i = 0; i < 2; ++i) {
         if(!s.ready[i] || s.ready_lba[i] != lba) continue;
         s.ready[i] = 0;
         uint8_t *area = s.area[i];
+        uint32_t lost = s.lost[i];
+        if(lost) {area[lost - 1u] = s.held[i]; area[lost] = 0;}
         uint8_t high = area[512], low = s.rdr[i];
         bool wire = s.wire[i];
         uint16_t crc = 0;
@@ -339,7 +376,12 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
             }
         }
         if(wire) {high = (uint8_t)reverse(high); low = (uint8_t)reverse(low);}
-        if(crc != (uint16_t)(high << 8 | low)) {
+        uint16_t sent = (uint16_t)(high << 8 | low);
+        if(crc != sent && lost) {
+            int x = rebuild((uint32_t)(crc ^ sent), 511u - lost);
+            if(x >= 0) {area[lost] = (uint8_t)x; crc = sent;}
+        }
+        if(crc != sent) {
             ++s.stats.crc_errors;
             *result = KUI_SCI_STREAM_CRC;
             return NULL;

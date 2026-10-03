@@ -35,10 +35,18 @@ is installed.
   sequential requests continue without a new CMD18; a block two requests
   share is kept rather than read again. An extent or track change, or a
   non-sequential request, stops the stream (CMD12) and starts a new one.
-* CRC errors, overruns, missing tokens and a busy DMA channel are retried at
-  the same block (a busy channel is read by programmed transfers). Eight
-  failures in a row at one block, or a bus fault, end the read with the
-  usual `IMAGE READ FAILED` screen.
+* When the game's own DMA holds the bus long enough for the receiver to
+  overrun mid-block (about 4% of blocks in DOA2), exactly one byte is lost:
+  RDR still holds the byte before it, and the card stops where the clock
+  stopped. The reader resumes the block from the byte after the lost one and
+  rebuilds that byte from the block's CRC16 (the CRC is linear, so undoing
+  the shifts of the bytes after it leaves the lost byte's own contribution).
+  A second fault in that block is still detected 255 times in 256. Only a
+  lost CRC byte or a second overrun in one block restarts the stream.
+* CRC errors, other overruns, missing tokens and a busy DMA channel are
+  retried at the same block (a busy channel is read by programmed
+  transfers). Eight failures in a row at one block, or a bus fault, end the
+  read with the usual `IMAGE READ FAILED` screen.
 
 ### The interrupt
 
@@ -51,8 +59,8 @@ interrupt levels back whenever the stream is idle:
   masked by SPTR.EIO during DMA) and passes every other interrupt to the
   game's vector unchanged; R0 is parked in DBR, which games do not use.
 * The interrupt level is the game's own DMAC level if it set one, otherwise
-  the lowest (1), for both the DMAC and the SCI. No hook is made while the
-  boot VBR (0x8C00F400) is still in use.
+  the lowest (1), for both the DMAC and the SCI. DOA2 keeps the bootstrap's
+  VBR (0x8C00F400) for the whole game; it is hooked like any other.
 * The handler runs with SR.BL set on the reader's private stack (GD calls run
   masked, so the two never meet), saves bank-1 R0..R7, PR and MAC, and ends
   with RTE. It typically runs about 50 us per block: CRC, the next block's
@@ -83,6 +91,18 @@ available. The standard residents are unchanged.
 * Untested on hardware: whether DOA2's main loop runs with interrupts open
   enough for the interrupt to deliver most blocks (`IRQ BLKS` against
   `CALLBLKS` on the menu-return screen answers this).
+
+## First console run (80687b46fde8)
+
+DOA2 loaded in about 25 seconds with lag for about 7 seconds into the fight,
+no better than the standard reader. The counters explained it: `HOOKS 0`,
+`IRQS 0` and `BOOT VBR` 43,241: DOA2 never leaves the bootstrap's VBR, and
+that build did not hook it, so every block (149,307) was read inside the
+game's calls, ten per EXEC (`EXECWAIT` 15,050), as the standard reader does.
+6,073 blocks (4%) also overran mid-block, each costing a CMD12, a new CMD18
+and a token wait of up to 3,085 bytes (about 3 ms) masked. No CRC or token
+errors; 32,400 sectors delivered correctly. The next build hooks the boot
+VBR and repairs overruns in place.
 
 ## Console test (DOA2)
 
@@ -115,5 +135,6 @@ request, the card block and the stream's error counters.
 | `CONTINUE` / `KEPT` | Blocks that continued the stream / shared blocks reused |
 | `OVERRUNS` / `CRC ERRS` / `TOKENERR` / `FOREIGN` | Stream errors, all retried |
 | `MAXTOKEN` | Longest wait for a data token, in bytes |
+| `REPAIRED` | Mid-block overruns resumed in place, the lost byte rebuilt |
 
 Values are hexadecimal.

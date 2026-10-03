@@ -265,14 +265,17 @@ static void test_levels_while_streaming(void) {
     CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
     CHECK(hw.iprc == 0x1034 && hw.iprb == 0x5a0f);
 }
-static void test_boot_vbr_polled(void) {
-    /* The game has not taken its exceptions over: no hook, and an EXEC
-     * waits for blocks as the ordinary reader reads them. */
+static void test_boot_vbr_hooked(void) {
+    /* DOA2 keeps the bootstrap's VBR for good: it is hooked like any other,
+     * and events still pass to the bootstrap's vectors. */
     setup(KUI_RETAIL_BOOT_VBR, 0, 49, true);
-    read_and_compare(45000, 30, true, 1);
+    int32_t token = request(45000, 30, OUTPUT);
+    CHECK(hooked() && R.engine.forward[2] == KUI_RETAIL_BOOT_VBR + 0x600u);
+    CHECK(finish(token, true, 1) == KUI_GD_COMPLETED);
+    compare(45000, 30, OUTPUT);
     const struct kui_retail_async_stats *st = &R.engine.stats;
-    CHECK(!st->hooks && st->boot_vbr && !st->irq_blocks && st->call_blocks && st->waits);
-    CHECK(hw.vbr == KUI_RETAIL_BOOT_VBR && !hw.vbr_sets && hw.iprc == 0 && m.armed_chcr == 0x4911u);
+    CHECK(st->hooks && st->boot_vbr == st->hooks && st->irq_blocks > st->call_blocks);
+    CHECK(hw.vbr == KUI_RETAIL_BOOT_VBR && hw.iprc == 0 && m.armed_chcr == 0x4915u);
     /* Without EXEC calls, CHECK alone still completes a read. */
     read_and_compare(45030, 9, false, 0);
 }
@@ -293,16 +296,17 @@ static void test_faults_retried(void) {
     card.corrupt_lba = manifest.extents[3].card_lba + 1; card.corrupt_count = 2;
     read_and_compare(45000, 40, true, 3);
     CHECK(kui_sci_stream_stats()->crc_errors == 2);
+    /* Held off the bus mid-block: resumed in place, the byte rebuilt. */
     m.overrun_after = 200;
     read_and_compare(45040, 10, true, 0);
-    CHECK(kui_sci_stream_stats()->overruns == 1);
+    CHECK(kui_sci_stream_stats()->repaired == 1 && !kui_sci_stream_stats()->overruns);
     card.bad_token_lba = 0; card.bad_token_count = 0;
     /* A busy channel: programmed reception for those blocks. */
     m.chcr = 1;
     read_and_compare(45050, 8, true, 0);
     CHECK(kui_sci_stream_stats()->polled);
     m.chcr = 0;
-    CHECK(R.engine.stats.failures >= 3 && R.engine.stats.max_retries >= 1);
+    CHECK(R.engine.stats.failures >= 2 && R.engine.stats.max_retries >= 1);
 }
 static void test_cancel_writes_nothing_more(void) {
     for(unsigned how = 0; how < 3; ++how) {
@@ -378,15 +382,15 @@ static void test_stress(void) {
     }
     const struct kui_retail_async_stats *st = &R.engine.stats;
     const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
-    printf("stress: irq %u call %u waits %u irqs %u failures %u | dma %u polled %u starts %u kept %u\n",
+    printf("stress: irq %u call %u waits %u irqs %u failures %u | dma %u polled %u starts %u kept %u repaired %u\n",
         st->irq_blocks, st->call_blocks, st->waits, st->irqs, st->failures,
-        ss->blocks, ss->polled, ss->starts, ss->kept);
+        ss->blocks, ss->polled, ss->starts, ss->kept, ss->repaired);
 }
 
 int main(void) {
     test_interrupt_reads();
     test_levels_while_streaming();
-    test_boot_vbr_polled();
+    test_boot_vbr_hooked();
     test_dead_interrupt();
     test_faults_retried();
     test_cancel_writes_nothing_more();

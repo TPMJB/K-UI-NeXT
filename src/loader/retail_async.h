@@ -19,9 +19,10 @@
  * front of the game's while a block is in flight: VBR+0x100 and +0x400 jump
  * straight to the game's vectors, and VBR+0x600 takes channel 1's DMTE1 and
  * the SCI's ERI/RXI, passing every other event to the game. The game's VBR
- * and interrupt levels are put back whenever the stream is idle. No hook is
- * made while the boot VBR is still in use (the game has not taken over its
- * exceptions yet); reads then complete from the game's calls alone. */
+ * and interrupt levels are put back whenever the stream is idle. Games may
+ * keep the bootstrap's VBR (0x8C00F400) throughout; it is hooked the same
+ * way. Reads complete from the game's calls alone whenever no interrupt is
+ * delivering. */
 struct kui_retail_async_stats {
     uint32_t irq_blocks, call_blocks, waits, irqs, forwarded;
     uint32_t failures, max_retries, hooks, vbr_changes, boot_vbr;
@@ -46,7 +47,7 @@ struct kui_retail_async_shared {
  * state. The vectors are copied from assembly templates at init. */
 struct kui_retail_async_region {
     uint32_t vector100[8];                            /* VBR+0x100 */
-    uint8_t area0[KUI_SCI_STREAM_AREA_BYTES];
+    uint8_t area0[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
 #ifdef KUI_RETAIL_ASYNC_TEST
     struct kui_retail_async engine;
     uint32_t vector400[8];
@@ -57,7 +58,7 @@ struct kui_retail_async_region {
     union { struct kui_retail_async_shared shared; uint8_t gap_b[0x500u - 0x320u]; };
 #endif
     uint32_t vector600[16];                           /* VBR+0x600 */
-    uint8_t area1[KUI_SCI_STREAM_AREA_BYTES];
+    uint8_t area1[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
 };
 #ifndef KUI_RETAIL_ASYNC_TEST /* host pointers are wider; the layout is the console's */
 _Static_assert(offsetof(struct kui_retail_async_region, area0) == 0x20u, "area0");

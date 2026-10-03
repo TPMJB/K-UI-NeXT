@@ -58,11 +58,13 @@ void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
 }
 
 /* Put our vectors in front of the game's and give the stream's sources an
- * interrupt level: the game's DMAC level if it set one, else the lowest. */
+ * interrupt level: the game's DMAC level if it set one, else the lowest.
+ * Games may keep the bootstrap's VBR for good (DOA2 does), so it is hooked
+ * like any other; boot_vbr counts those hooks. */
 static void hook(void) {
     uint32_t vbr = vbr_get();
     if(vbr != our_vbr()) {
-        if(vbr == KUI_RETAIL_BOOT_VBR) {++e.stats.boot_vbr; return;}
+        if(vbr == KUI_RETAIL_BOOT_VBR) ++e.stats.boot_vbr;
         if(e.hooked) ++e.stats.vbr_changes;
         e.game_vbr = vbr;
         e.forward[0] = vbr + 0x100u; e.forward[1] = vbr + 0x400u; e.forward[2] = vbr + 0x600u;

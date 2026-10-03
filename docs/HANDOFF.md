@@ -1,5 +1,16 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: background reader, second build (2026-10-03 UTC)
+
+`80687b46fde8` on the console with DOA2: no faster and no smoother (25 s
+load, 7 s of lag into the fight). Its counters show why: DOA2 keeps the
+bootstrap's VBR (0x8C00F400) for good and that build never hooked it
+(`HOOKS 0`, `IRQS 0`), so every block was read in the game's own calls, ten
+per EXEC; and 4% of blocks overran mid-block, each restarting the card for
+up to 3 ms. The next build hooks the boot VBR, and resumes an overrun block
+in place, rebuilding its one lost byte from the CRC16 instead of restarting.
+See [games-background-reader.md](games-background-reader.md).
+
 ## Games: background SCI reader, first test build (2026-10-03 UTC)
 
 The owner asked for the asynchronous game loader. On the Launch game

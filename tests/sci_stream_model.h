@@ -133,7 +133,7 @@ static struct {
     uint8_t smr, brr, scr, ssr, rdr, scmr, sptr, stbcr;
     bool cs_high, healthy, rx, stall;
     uint32_t sar, dar, tcr, chcr, dmaor;
-    unsigned rx_delay, delay, overrun_after, received;
+    unsigned rx_delay, delay, overrun_after, overrun_again, received;
     bool foreign_during_rx;
     uint8_t *areas[2];
     unsigned purges, module_resets, dma_starts, irq_starts, settles;
@@ -163,7 +163,7 @@ static void receive(void) {
             m.rdr = wire; m.ssr |= RDRF;
         } else {
             m.ssr |= ORER;
-            if(m.overrun_after) m.overrun_after = 0;
+            if(m.overrun_after) {m.overrun_after = m.overrun_again; m.overrun_again = 0;}
             return;
         }
     }
