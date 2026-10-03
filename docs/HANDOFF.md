@@ -15,8 +15,9 @@ arrived since the previous GD call. Repair now stops after two failed
 blocks. New counters: `EXECS`, `EXEC INT` (EXEC from a handler), `STALLED`
 (a call found a block ended with its interrupt held off). `MAXRETRY` is gone,
 `VBR CHGS` moved to the release row. See
-[games-background-reader.md](games-background-reader.md). Build ID and CI
-run: pending.
+[games-background-reader.md](games-background-reader.md). Build
+**40e7e2b71c61** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37126914530)
+(48 bytes free, call-graph stack 220 of 336); console results are pending.
 
 ## Games: background reader, fourth build (2026-10-03 UTC)
 
