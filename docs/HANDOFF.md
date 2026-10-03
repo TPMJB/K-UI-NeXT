@@ -19,7 +19,8 @@ and trampoline keep registers on the interrupted stack. The resident's
 private stack is 384 bytes (call-graph worst 220 + 64 against 336) to make
 room. Counters: `REL 100/400/600` and `REHOOKS` replace `FORWARDS` and
 `BOOT VBR`. See [games-background-reader.md](games-background-reader.md).
-Build ID and CI run: pending.
+Build **c86877c0dbb9** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37102296675)
+(112 bytes free, call-graph stack 220 of 336); console results are pending.
 
 ## Games: background reader, third build (2026-10-03 UTC)
 
