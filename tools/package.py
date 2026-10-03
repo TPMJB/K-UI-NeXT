@@ -189,7 +189,7 @@ def main():
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
     (dist / "START-HERE.md").write_text(guide("release-v1.5.1.md"), encoding="utf-8")
     (dist / "RELEASE-NOTES.md").write_text(guide("release-v1.5.1-notes.md"), encoding="utf-8")
-    for name in ("games-sd-benchmark", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
