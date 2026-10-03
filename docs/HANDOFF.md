@@ -10,6 +10,9 @@ in the physical drive, which K-UI forwarded to the BIOS. Next build: the CE
 reader answers it (0, disc present) via the common entry as source 4,
 records it (`E0`), and stops at CE's first non-RAM GD pointer with the
 trace. Details: [windows-ce-placement-test.md](windows-ce-placement-test.md).
+Build `21c31ca296bf` ([Diagnostic run
+37158249080](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37158249080)):
+host and Dreamcast passed; native resident sizes unchanged.
 
 ## Windows CE: boot test reset in bootstrap 2; fixes (2026-10-03 UTC)
 
