@@ -243,13 +243,13 @@ static bool writable(void) {
 }
 /* Whether the interrupt fills the current read: its handlers installed and
  * its piece physical. */
-static bool irq_fills(void) { return e.isr && e.piece_set && e.piece_physical; }
+static bool interrupt_fills(void) { return e.isr && e.piece_set && e.piece_physical; }
 /* GD calls top up what the interrupt does not fill (EXEC, CHECK, and a DMA
  * stream's DMA_CHECK). */
 static bool topping(uint32_t function) {
     return function == KUI_GD_EXEC || function == KUI_GD_CHECK || function == KUI_GD_DMA_CHECK;
 }
-static bool tops_up(uint32_t function) { return topping(function) && !irq_fills(); }
+static bool tops_up(uint32_t function) { return topping(function) && !interrupt_fills(); }
 /* CE's driver waits for an interrupt: for an ordinary read the drive's, for
  * a DMA stream's transfer its DMA end. Wake it to call for what no
  * interrupt will deliver, as the standard reader does after each step: the
@@ -430,7 +430,7 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
     if(topping(function)) e.since = 0;
 #ifdef KUI_RETAIL_CE
     /* What the interrupt does not fill, CE's driver calls for again at once. */
-    if(!irq_fills() && (topping(function) || function == KUI_GD_DMA_TRANSFER)) wake();
+    if(!interrupt_fills() && (topping(function) || function == KUI_GD_DMA_TRANSFER)) wake();
 #endif
 }
 uint32_t kui_retail_async_irq(void) {
