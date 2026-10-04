@@ -457,9 +457,6 @@ static void test_polled_on_request(void) {
     assert(kui_sci_stream_fetch(60, LIMIT, true) == KUI_SCI_STREAM_OK && !kui_sci_stream_busy());
     check_block(60, kui_sci_stream_take(60, &r));
     assert(st->polled - before.polled == 1 && m.dma_starts == dma && st->overruns == before.overruns);
-#if defined(KUI_RETAIL_CE) && defined(KUI_SCI_SD_NO_BLOCK)
-    assert(m.raw_batches == 1u);
-#endif
     /* The stream continues by DMA from there. */
     m.overrun_every = 0;
     assert(kui_sci_stream_fetch(61, LIMIT, false) == KUI_SCI_STREAM_OK && kui_sci_stream_busy());

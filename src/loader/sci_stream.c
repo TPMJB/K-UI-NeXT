@@ -302,23 +302,11 @@ static enum kui_sci_stream_result receive(bool polled) {
     s.lost[area] = 0;
     settle(64); /* the token byte's last edge */
     if(polled || !channel_idle()) {
-#if defined(KUI_RETAIL_CE) && defined(KUI_SCI_SD_NO_BLOCK)
-        _Static_assert(KUI_SCI_SD_RAW_BLOCK_BYTES == DMA_BYTES + 1u, "payload and CRC bytes");
-        _Static_assert(KUI_SCI_SD_RAW_BLOCK_BYTES <= AREA_BYTES, "raw block fits receive area");
-        bool received = kui_sci_sd_receive_polled_raw(p);
-        select(false);
-        if(!received || !healthy()) return KUI_SCI_STREAM_RESET;
-        s.rdr[area] = p[DMA_BYTES];
-        /* The shared word reversal and CRC pass checks these raw bytes in
-         * take(), exactly as it checks bytes received through DMA. */
-        s.wire[area] = 1;
-#else
         for(unsigned i = 0; i < DMA_BYTES; ++i) p[i] = byte(0xff);
         s.rdr[area] = byte(0xff);
         select(false);
         if(!healthy()) return KUI_SCI_STREAM_RESET;
         s.wire[area] = 0;
-#endif
         s.ready[area] = 1;
         s.ready_lba[area] = s.position++;
         s.arrived = s.position;

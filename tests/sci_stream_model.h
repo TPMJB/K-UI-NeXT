@@ -150,7 +150,6 @@ static struct {
     bool foreign_during_rx;
     uint8_t *areas[2];
     unsigned purges, module_resets, dma_starts, irq_starts, settles, fences;
-    unsigned raw_batches, raw_fault_after;
     uint32_t armed_chcr;
     void (*on_dma_start)(void); /* a test's look at the engine as a DMA starts */
 } m;
@@ -290,23 +289,6 @@ static uint8_t bus_transfer(void *ctx, uint8_t data, bool slow) {
     ++bus_bytes;
     return m.cs_high ? 0xffu : card_clock(data);
 }
-#if defined(KUI_RETAIL_CE) && defined(KUI_SCI_SD_NO_BLOCK)
-#include "sci_sd_bus.h"
-/* Contract adapter for the logical card model. The real helper's register
- * sequencing, exact clocks and fault latch are tested by test-sci-sd-raw-ce. */
-bool kui_sci_sd_receive_polled_raw(uint8_t out[KUI_SCI_SD_RAW_BLOCK_BYTES]) {
-    if(!out || !m.healthy) return false;
-    assert(!m.rx && !m.cs_high);
-    ++m.raw_batches;
-    for(unsigned i=0;i<KUI_SCI_SD_RAW_BLOCK_BYTES;++i) {
-        if(m.raw_fault_after && i==m.raw_fault_after) {
-            m.healthy=false; m.scr=0; return false;
-        }
-        out[i]=rev8(bus_transfer(NULL,0xff,false));
-    }
-    return true;
-}
-#endif
 static void bus_select(void *ctx, bool selected) {
     (void)ctx;
     /* The bus waits for TEND before deselecting; a pending error would

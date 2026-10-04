@@ -1,5 +1,28 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: batched recovery rejected, restore CRC baseline (2026-10-04)
+
+Owner reports `bd2b7fb7424b` made ARMADA worse and Worms Armageddon no
+longer boots. Reject this experiment. Restore all source, test and Makefile
+changes from that commit to `e9ff2353c3cd`, the last owner-confirmed build
+that improved both titles. Retain the original verified e9 SD ZIP as the
+immediate recovery artifact; a freshly compiled rollback is not needed
+for the owner's next run.
+
+Photo `image(7).png` confirms the rejected build and records a menu return:
+guard 0, DMA blocks `0x143C2` (82,882), polled/overruns `0x5FF8` (24,568),
+starts `0x6144` (24,900), kept `0x273` (627), CRC errors 4, token/foreign 0,
+and repair attempts/deferred `0xA2` (162). The polled fraction is 22.86%,
+essentially unchanged from 22.84% previously. This does not measure stall
+duration or identify the boot-failure cause. The image does not show the
+Worms boot failure itself, and no exact failed stage is yet established.
+
+The host register model covered the intended byte sequence; it did not
+establish real SCI timing or CE compatibility. Passing checks and zero
+guard faults did not predict the console result. No root cause is claimed,
+and no new optimization or audio/video timing workaround accompanies this
+rollback. Previous experiment details below remain as the rejected record.
+
 ## Windows CE: batched polled recovery experiment (2026-10-04)
 
 Owner reports `e9ff2353c3cd` is quite a bit better. ARMADA still needs

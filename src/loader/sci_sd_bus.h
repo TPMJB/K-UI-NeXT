@@ -25,15 +25,6 @@ struct kui_sci_sd_port {
 };
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void);
 bool kui_sci_sd_healthy(void);
-#if defined(KUI_RETAIL_CE) && defined(KUI_SCI_SD_NO_BLOCK)
-#define KUI_SCI_SD_RAW_BLOCK_BYTES 514u
-/* CE background-reader fallback after the data token: exactly 512 payload
- * bytes and two CRC bytes, in raw SCI bit order. The caller owns the bus,
- * masks interrupts, supplies this much writable storage and handles CS and
- * final TEND. One transmitted byte at a time; no DMA or IRQ-state changes.
- * False leaves no usable block; flag-wait errors latch the bus fault. */
-bool kui_sci_sd_receive_polled_raw(uint8_t out[KUI_SCI_SD_RAW_BLOCK_BYTES]);
-#endif
 #ifndef KUI_RETAIL_TRANSPORT
 /* Resynchronize this lease's cached baud choice after a serialized runtime
  * borrower restores SCI registers. Caller holds IRQ masking and has verified
