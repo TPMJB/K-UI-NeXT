@@ -8,7 +8,16 @@ service `pio_check`/`pio_transfer` and PIO_CALLBACK storage
 callback on EXEC (`kui_retail_ce_deferred`) and `retail_resident.S`
 `.Ldeferred_call` makes it after unlocking, in the caller's restored
 context (16-byte home area, GBR kept). Host: `pio_stream_reads`. Bust-a-Move
-4 was refused by the launcher; message pending.
+4 was refused by the launcher: it has 25 tracks (mostly CD audio) and the
+launch map holds 16. Options given to the owner: a 32-track map for the CE
+reader only (it has about 1 KiB free; native SCI has 48 bytes), or TOC-only
+audio tracks for all readers.
+Builds: `ab76385707ad` ([run
+37170930329](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37170930329)) and
+`e349bdc5457a` ([run
+37171394153](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37171394153), speed
+and PIO stream together): host and Dreamcast passed; native resident sizes
+unchanged.
 
 ## Windows CE: no 25 ms sleeps between reads; rate readout (2026-10-04 UTC)
 
