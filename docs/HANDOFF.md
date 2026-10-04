@@ -9,6 +9,9 @@ parameters were at `0C3BF4EC`, a slot-6 stack address. K-UI treated
 P1/P2 are virtual including `0x0c`; DMA destinations stay physical
 (`dma_guest` in `retail_gd.c`; the CE reader's map takes only P1/P2 as
 RAM). Native readers byte-identical (proxy).
+Build `fc08d071ed7d` ([Diagnostic run
+37169338751](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37169338751)):
+host and Dreamcast passed; native resident sizes unchanged.
 
 ## Windows CE: large stream transfers, stepped (2026-10-04 UTC)
 
