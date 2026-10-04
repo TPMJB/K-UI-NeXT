@@ -181,9 +181,16 @@ static bool open_bus(void) {
  * same block. A latched bus fault or an SCI that did not come back (RESET)
  * ends the read, as it does for the ordinary reader. */
 static void failure(enum kui_sci_stream_result result) {
+#ifdef KUI_RETAIL_CE
+    /* An unrecovered overrun already failed this DMA block. Avoid
+     * repeating that attempt before the existing polled
+     * fallback. Repaired overruns return PENDING and do not reach here. */
+    if(result == KUI_SCI_STREAM_OVERRUN) e.early_polled = 1;
+#endif
     if(++e.retries > RETRIES || result == KUI_SCI_STREAM_RESET) e.failed = KUI_GD_ERROR_IO;
 }
 #ifdef KUI_RETAIL_CE
+static bool retry_polled(void) { return e.early_polled || e.retries >= POLLED; }
 /* count more bytes of the current piece. P1 destinations are written
  * through P2 (the resident's map); a virtual one as it is, only in CE's own
  * GD calls (writable). */
@@ -285,6 +292,7 @@ static void wake(void) {
         s->interrupts |= KUI_RETAIL_GD_IRQ_DMA_END | KUI_RETAIL_GD_IRQ_DRIVE;
 }
 #else
+#define retry_polled() (e.retries >= POLLED)
 static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint32_t count) {
     (void)unused;
     struct kui_retail_gd *s = &R.shared.service;
@@ -333,7 +341,7 @@ static void deliver(uint32_t wait) {
         if(!writable()) {
             /* The queue is full: keep at most one more card block ready. */
             if(!kui_sci_stream_ready(lba)) {
-                r = kui_sci_stream_fetch(lba, TOKEN_LIMIT, e.retries >= POLLED);
+                r = kui_sci_stream_fetch(lba, TOKEN_LIMIT, retry_polled());
                 if(r > KUI_SCI_STREAM_BUSY) failure(r);
             }
             return;
@@ -347,6 +355,9 @@ static void deliver(uint32_t wait) {
         const uint8_t *block = kui_sci_stream_take(lba, &r);
         if(block) {
             e.retries = 0;
+#ifdef KUI_RETAIL_CE
+            e.early_polled = 0;
+#endif
             if(kui_retail_cursor_feed(&e.cursor, block) != KUI_GAME_OK) e.failed = KUI_GD_ERROR_IO;
             ++delivered;
             ++e.since;
@@ -361,7 +372,7 @@ static void deliver(uint32_t wait) {
         }
         /* BUSY: the next block, started early, still arrives; this one is
          * fetched again after it (not a failure of its own). */
-        r = kui_sci_stream_fetch(lba, TOKEN_LIMIT, e.retries >= POLLED);
+        r = kui_sci_stream_fetch(lba, TOKEN_LIMIT, retry_polled());
         if(r > KUI_SCI_STREAM_BUSY) failure(r);
     }
 }
@@ -410,6 +421,7 @@ static void start(void) {
 #ifdef KUI_RETAIL_CE
     e.piece_set = 0; e.piece_begin = e.piece_bytes = e.piece_filled = 0;
     e.spill_from = e.spill_bytes = 0;
+    e.early_polled = 0;
 #else
     e.destination = (s->destination & 0x00ffffffu) | 0x8c000000u;
 #endif
@@ -474,6 +486,7 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
         e.active = 0; /* aborted or reset: nothing more is written */
 #ifdef KUI_RETAIL_CE
         e.piece_set = 0; e.spill_from = e.spill_bytes = 0; e.piece_direct = NULL;
+        e.early_polled = 0;
 #endif
     }
 #ifdef KUI_RETAIL_CE

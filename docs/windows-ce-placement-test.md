@@ -26,22 +26,28 @@ history of that implementation, not a statement that games still cannot run.
 
 ## CE prefetch experiment (2026-10-04)
 
-**Current recovery comparison:** full overlay-removal build `b3d9ee49f9b7`
-stopped at the bootstrap 2 screen on the owner's console. The precise last
-line is not yet available, so the cause remains unconfirmed. The current
-change restores the last working `90b0456391fe` timer/accounting and display
-paths, suppressing only `retail_display_status` while MMUCR.AT is set
-(Windows CE active). Thus normal CE gameplay has no live rate/call overlay,
-while bootstrap, failure and menu-return diagnostics remain. Timer reads
-and accounting are intentionally retained to isolate the drawing change.
-This is not yet a console-verified boot fix.
+**Current comparison: first-overrun fallback.** Recovery build
+`68cbe37aa95e` boots with the live overlay hidden. The owner reports steady
+FMV progression with persistent echo/repetition-like audio and no clear
+improvement. Its whole-session report showed 5,891 overruns, 6,188 stream
+starts and 2,925 polled blocks. Roughly two overruns per polled block is
+consistent with the existing retry threshold; it does not establish the
+cause of the audio symptom. The full counters and interpretation are in
+[the handoff](HANDOFF.md#windows-ce-first-overrun-fallback-experiment-2026-10-04).
 
-First repeat the same title and reader choice that regressed; photograph
-any stop screen, including its last line and hexadecimal detail. Once boot
-works, use the same ARMADA intro with X and compare pacing, audio sync and
-skips. The owner saw roughly 620 KiB/s initially with `90b0456391fe`, then
-about 420 with dips to 300. Those delivery rates do not establish a card
-throughput limit. The prefetch mechanism and exit counters below are unchanged.
+The next experiment changes only the CE background reader: after an
+unrecovered overrun, reread that block by polled transfers immediately,
+then return to DMA for following blocks. Other failure thresholds, the
+retry limit, CRC, in-place repair safeguards and interrupt iteration bound
+remain unchanged. Cold boot and use X on the same title; play the same
+intro segment for the same duration, then photograph the return counters.
+Compare pacing/audio and overruns/starts per completed card block. There
+is no live rate overlay and no measured improvement for this change yet.
+
+Earlier full overlay removal (`b3d9ee49f9b7`) stopped at bootstrap 2.
+`68cbe37aa95e` restored the last working timer/accounting and display paths,
+suppressing only status drawing while MMUCR.AT is set (CE active). Boot,
+failure and menu-return screens remain. That guard is retained here.
 
 The background reader now has a 2 KiB ring of CRC-checked output instead of
 a single 512-byte spill. It can read ahead within the current request while

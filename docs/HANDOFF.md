@@ -1,12 +1,71 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: first-overrun fallback experiment (2026-10-04)
+
+Owner confirmed `68cbe37aa95e` boots. The FMV advanced steadily, but audio
+had a consistent echo/repetition effect and no clear playback improvement
+was reported. Photo `61827.jpg` identifies that build and records the
+whole-session counters below; clip `61826.mp4` accompanies it. Audio could
+not be auditioned by this agent, so the description is the owner's.
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 000060E8 | 24808 |
+| Call blocks | 00000C22 | 3106 |
+| DMA blocks | 00006110 | 24848 |
+| Polled blocks | 00000B6D | 2925 |
+| Stream starts | 0000182C | 6188 |
+| Overruns | 00001703 | 5891 |
+| CRC errors | 00000002 | 2 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 000000C7 | 199 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+`OVERRUNS` counts failed/incomplete receptions, not the intentional stop at
+successful block ends. `REPAIRED` is incremented when an in-place repair is
+attempted, before its CRC is known. These totals do not prove that the two
+CRC errors disabled repairs, nor isolate the FMV interval. Roughly two
+overruns per polled block is consistent with the existing two-failure
+fallback threshold; it motivates the following controlled test.
+
+Only the CE background reader changes: an unrecovered `OVERRUN` marks the
+current block for a polled reread immediately. Other failures retain the
+two-failure fallback rule, and the eight-retry failure budget is unchanged.
+The flag clears after successful block delivery, on new requests and abort.
+Following blocks resume normal DMA. CRC checks, the existing two-failed-
+repair cutoff, the two-iteration interrupt limit, queue size and live-overlay
+guard remain intact. This is an attempt to reduce wasted retries/restarts;
+no improvement is claimed before the console comparison.
+
+Validation: the CE model passes 97,636 checks under ASan/UBSan, including
+first-overrun reread at the same LBA before delivery, return to DMA for the
+next block, repairable-overrun continuation, other error thresholds and
+terminal CRC failure. The first-overrun case fails against `68cbe37aa95e`
+as expected. Native async (119,928 checks) and GD (847) pass. Local SH
+instruction/layout/stack audits pass; CE async has 1,540 bytes free and its
+stack remains 404 + 64 bytes within 2,000 usable. At a fixed build ID,
+native images and CE standard are byte-identical; CE stage instructions
+are unchanged, with relocated pointers adjusted. Full pinned CI is required
+because the committed CE test file is outside the existing console-only
+scope. Console performance remains unmeasured.
+
+Console comparison: cold boot, launch the same CE title with X, play the
+same intro segment for the same duration, then photograph the menu-return
+counters. Compare audio/video smoothness and overruns/starts relative to
+completed DMA plus polled blocks; absolute counts alone depend on run length.
+
 ## Windows CE: restore boot paths, suppress only the live redraw (2026-10-04)
 
 Owner reports that no-overlay build `b3d9ee49f9b7` stops at the bootstrap 2
 screen. The precise last line/fault is not yet available; no root cause is
 confirmed. That build passed compile/layout/stack audits, which did not
-establish console boot compatibility. Use `90b0456391fe` as the last
-owner-confirmed booting prefetch build.
+establish console boot compatibility. Recovery build `68cbe37aa95e` subsequently booted on the owner's console;
+its FMV results are recorded above.
 
 The recovery comparison restores the timer/accounting and display code
 from `90b0456391fe`. Its only production-code difference from that build is
@@ -18,10 +77,8 @@ no change to the prefetch queue, CRC, DMA handoff or interrupt priority.
 
 This isolates live drawing from the earlier wholesale removal. Timer
 sampling and accounting remain deliberately, and compiled resident addresses
-can still move. It is a recovery experiment, not a proven boot fix or speed
-gain. Test the same title and reader selection first; if it stops, capture
-the exact last line and fault detail. Once boot is confirmed, compare the
-same intro's pacing, audio sync and skips without the live overlay.
+can still move. Build `68cbe37aa95e` passed its console boot test. No clear playback gain
+was reported; the root cause of the earlier regression remains unconfirmed.
 
 ## Windows CE: earlier full overlay-removal experiment (regressed, 2026-10-04)
 

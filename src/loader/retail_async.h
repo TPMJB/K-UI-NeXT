@@ -93,7 +93,9 @@ struct kui_retail_async {
     uint32_t spill_from, spill_bytes;
     uint32_t queue_highwater, prefetched_bytes, queue_blocked;
     uint8_t *piece_direct;
-    uint8_t piece_set, piece_physical, isr;
+    /* A failed overrun uses a polled reread of this block only. Other
+     * faults retain the ordinary retry threshold; no session-wide mode. */
+    uint8_t piece_set, piece_physical, isr, early_polled;
 #endif
 };
 /* State the resident shares with the reader, kept between the vectors (the

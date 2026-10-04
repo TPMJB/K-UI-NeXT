@@ -174,6 +174,15 @@ static unsigned interrupts(unsigned limit) {
     }
     return n;
 }
+static void arrived_irq(void) {
+    elapse();
+    unsigned before = R.engine.stats.irq_blocks;
+    hw.in_irq = true;
+    CHECK(kui_retail_async_irq() == 0);
+    hw.in_irq = false;
+    take_events();
+    CHECK(R.engine.stats.irq_blocks - before <= 2u);
+}
 
 static void setup(unsigned take_max, bool mmu) {
     fixture(take_max);
@@ -609,6 +618,89 @@ static void test_polled_irq_yields(void) {
     CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 8u * 2048u));
     CHECK(ram[OUTPUT - BEGIN + 8u * 2048u] == 0xa5);
 }
+static void test_first_unrecovered_overrun(void) {
+    setup(2000, true);
+    mode(2048);
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+    uint32_t first = R.engine.cursor.block;
+    unsigned dma = m.dma_starts;
+    /* The lost CRC byte is outside the single-data-byte repair path. On
+     * this first unrecovered overrun, reread this exact block by programmed
+     * transfers, then yield without exposing its still-unchecked bytes. */
+    m.overrun_after = 512u;
+    arrived_irq();
+    const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
+    CHECK(ss->overruns == 1u && !ss->repaired && ss->polled == 1u);
+    CHECK(R.engine.retries == 1u && R.engine.early_polled);
+    CHECK(R.engine.cursor.block == first && kui_sci_stream_ready(first));
+    CHECK(m.dma_starts == dma && !kui_sci_stream_busy());
+    CHECK(R.shared.service.pending && !R.shared.service.completed_bytes && !R.engine.piece_filled);
+    CHECK(ev.drive);
+    untouched(ram + OUTPUT - BEGIN, 3u * 2048u);
+    /* Taking that CRC-checked block resumes normal DMA at its successor. */
+    CHECK(status(token) == KUI_GD_PROCESSING);
+    CHECK(!R.engine.early_polled && !R.engine.retries);
+    CHECK(m.dma_starts == dma + 1u && kui_sci_stream_busy());
+    CHECK(R.engine.cursor.block == first + 1u && ss->polled == 1u);
+    CHECK(!R.shared.service.completed_bytes && R.engine.piece_filled == 496u);
+    reference_read(45000, 3);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 496u));
+    untouched(ram + OUTPUT - BEGIN + 496u, 3u * 2048u - 496u);
+    CHECK(finish(token, 5) == KUI_GD_COMPLETED && ss->polled == 1u);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+    CHECK(ram[OUTPUT - BEGIN + 3u * 2048u] == 0xa5);
+}
+static void test_deferred_repair_stays_dma(void) {
+    setup(2000, true);
+    mode(2048);
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+    uint32_t first = R.engine.cursor.block;
+    unsigned dma = m.dma_starts;
+    m.overrun_after = 100u; /* A repairable data-byte loss. */
+    arrived_irq();
+    const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
+    CHECK(ss->repaired == 1u && ss->deferred == 1u && !ss->overruns);
+    CHECK(!R.engine.early_polled && !R.engine.retries && !ss->polled);
+    CHECK(R.engine.cursor.block == first && m.dma_starts == dma);
+    CHECK(!R.engine.piece_filled && R.shared.service.pending);
+    CHECK(status(token) == KUI_GD_PROCESSING && kui_sci_stream_busy());
+    CHECK(m.dma_starts == dma + 1u && !R.engine.early_polled && !ss->polled);
+    CHECK(finish(token, 5) == KUI_GD_COMPLETED && !ss->polled);
+    reference_read(45000, 3);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+}
+static void test_other_errors_keep_retry_threshold(void) {
+    for(unsigned failures = 1; failures <= 2; ++failures) {
+        setup(2000, true);
+        mode(2048);
+        card.bad_token_lba = manifest.slots[6].extent.card_lba;
+        card.bad_token_count = failures;
+        int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+        CHECK(!R.engine.early_polled && kui_sci_stream_stats()->token_errors == failures);
+        CHECK(kui_sci_stream_stats()->polled == failures - 1u);
+        CHECK(finish(token, 5) == KUI_GD_COMPLETED);
+        reference_read(45000, 3);
+        CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+    }
+    setup(2000, true);
+    mode(2048);
+    card.corrupt_lba = manifest.slots[6].extent.card_lba;
+    card.corrupt_count = 2u;
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+    const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
+    bool saw_first = false;
+    for(unsigned i = 0; i < 64u && R.shared.service.pending; ++i) {
+        if(kui_sci_stream_busy()) arrived_irq();
+        else (void)status(token);
+        CHECK(!R.engine.early_polled);
+        if(ss->crc_errors == 1u) {saw_first = true; CHECK(!ss->polled);}
+        if(ss->polled) CHECK(ss->crc_errors == 2u);
+    }
+    CHECK(saw_first && ss->crc_errors == 2u && ss->polled == 1u);
+    CHECK(finish(token, 5) == KUI_GD_COMPLETED);
+    reference_read(45000, 3);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+}
 static void test_failures_complete_the_request(void) {
     /* A block that never passes its CRC fails the read: the drive's
      * interrupt tells CE's driver, and CHECK reports the error. */
@@ -618,6 +710,7 @@ static void test_failures_complete_the_request(void) {
     unsigned drive = ev.drive;
     int32_t token = request(KUI_GD_DMAREAD, 45000, 20, OUTPUT);
     CHECK(finish(token, 3) == KUI_GD_FAILED && get(STATUS + 4) == KUI_GD_ERROR_IO);
+    CHECK(R.engine.retries == 9u && kui_sci_stream_stats()->crc_errors == 9u);
     CHECK(ev.drive > drive);
     card.corrupt_count = 0;
     /* A stream's too: its transfer ends with the error. */
@@ -717,6 +810,9 @@ int main(void) {
     test_prefetch_crc_failure();
     test_pio_prefetch_crc_failure();
     test_polled_irq_yields();
+    test_first_unrecovered_overrun();
+    test_deferred_repair_stays_dma();
+    test_other_errors_keep_retry_threshold();
     test_failures_complete_the_request();
     test_table_replaced();
     test_level_dropped_in_a_call();
