@@ -1,13 +1,36 @@
 # K-UI NeXT handoff (2026-09-28)
 
-## Windows CE: remove the live overlay for playback comparison (2026-10-04)
+## Windows CE: restore boot paths, suppress only the live redraw (2026-10-04)
+
+Owner reports that no-overlay build `b3d9ee49f9b7` stops at the bootstrap 2
+screen. The precise last line/fault is not yet available; no root cause is
+confirmed. That build passed compile/layout/stack audits, which did not
+establish console boot compatibility. Use `90b0456391fe` as the last
+owner-confirmed booting prefetch build.
+
+The recovery comparison restores the timer/accounting and display code
+from `90b0456391fe`. Its only production-code difference from that build is
+an early return from `retail_display_status` when MMUCR.AT is set, the same
+CE-active distinction used by the background reader. Boot diagnostics keep
+their previous path; normal MMU-on CE calls do not redraw the live overlay.
+Fault and menu-return diagnostics do not use this gated function. There is
+no change to the prefetch queue, CRC, DMA handoff or interrupt priority.
+
+This isolates live drawing from the earlier wholesale removal. Timer
+sampling and accounting remain deliberately, and compiled resident addresses
+can still move. It is a recovery experiment, not a proven boot fix or speed
+gain. Test the same title and reader selection first; if it stops, capture
+the exact last line and fault detail. Once boot is confirmed, compare the
+same intro's pacing, audio sync and skips without the live overlay.
+
+## Windows CE: earlier full overlay-removal experiment (regressed, 2026-10-04)
 
 Owner result on `90b0456391fe`: ARMADA's intro initially appeared improved,
 with displayed delivery around 620 KiB/s, later around 420 and sometimes
 300. These scene-dependent delivery rates alone do not establish a card
 throughput limit. The owner requested removing the live speed/call display.
 
-Both CE readers now omit the live framebuffer drawing and the associated
+That experiment omitted the live framebuffer drawing and the associated
 timer sampling, rate calculation and formatting. The overlay cleared
 53,504 framebuffer bytes per refresh plus glyph writes while the GD call
 masked interrupts; its cost was excluded from BUSY PCT. Stage, failure and

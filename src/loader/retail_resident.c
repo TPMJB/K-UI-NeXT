@@ -395,6 +395,45 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     return KUI_RETAIL_RESIDENT_OK;
 }
 #ifdef KUI_RETAIL_CE
+/* How fast CE reads and how much of its time it spends inside this reader
+ * (its calls and, in the background reader, its interrupt), over windows of
+ * at least half a second, on a live status line drawn once per window
+ * (drawing costs time too). CE's clock is its millisecond count (KData,
+ * just after the reschedule flag); time inside the reader is counted from
+ * TMU0, which drives CE's tick and is only read here. */
+#define TCOR0 0xffd80008u
+#define TCNT0 0xffd8000cu
+#define TCR0 0xffd80010u
+static struct { uint32_t since, sectors, busy, shown[5]; } meter;
+/* n's decimal digits as hexadecimal ones, for the hexadecimal printer. */
+static uint32_t decimal(uint32_t n) {
+    uint32_t out = 0;
+    for(unsigned shift = 0; shift < 32; shift += 4) { out |= (n % 10u) << shift; n /= 10u; }
+    return out;
+}
+static void meter_busy(uint32_t started) {
+    volatile const uint32_t *tmu = (volatile const uint32_t *)(uintptr_t)TCOR0;
+    uint32_t ended = tmu[1], period = tmu[0] + 1u;
+    /* TMU0 counts down; a call is far shorter than its 25 ms period. */
+    meter.busy += started >= ended ? started - ended : started + period - ended;
+}
+static void meter_call(uint32_t started) {
+    meter_busy(started);
+    uint32_t now = kui_retail_ce_kernel[2] ?
+        *(volatile const uint32_t *)(uintptr_t)(kui_retail_ce_kernel[2] + 4u) : ce_count * 8u;
+    uint32_t elapsed = now - meter.since;
+    if(elapsed < 500u) return;
+    /* Pphi is 50 MHz; TPSC selects Pphi/4, /16, /64, /256 or /1024. */
+    uint32_t per_ms = 50000u >> (2u + 2u * (*(volatile const uint16_t *)(uintptr_t)TCR0 & 7u));
+    if(meter.since && per_ms) {
+        meter.shown[2] = decimal((service.diag.sectors_read - meter.sectors) * 2000u / elapsed);
+        meter.shown[3] = decimal(meter.busy / per_ms * 100u / elapsed);
+    }
+    meter.since = now; meter.sectors = service.diag.sectors_read; meter.busy = 0;
+    meter.shown[0] = decimal(ce_count); meter.shown[1] = service.diag.last_command;
+    meter.shown[4] = decimal(service.diag.sectors_read);
+    retail_display_status("CALLS    COMMAND  KIB/S    BUSY PCT SECTORS", meter.shown, 5);
+}
 /* After each call: the interrupts the service raised, G1 DMA end (SYSINTR
  * 21) and the drive's (SYSINTR 20) as CE's platform maps them; and a PIO
  * stream's callback, due after a transfer, made when this EXEC returns, as
@@ -429,6 +468,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * the service answers, and starts or stops a read after it. */
     uint32_t source=kui_retail_hook_source;
 #ifdef KUI_RETAIL_CE
+    uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0;
     if(ce_record(source,r4,r5,r6,r7)) return 0;
 #endif
     if(source>3) return -1;
@@ -446,6 +486,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
         report_fault("GD FUNCTION UNSUPPORTED", r7);
 #ifdef KUI_RETAIL_CE
     ce_events(r7);
+    meter_call(started);
 #endif
     return result;
 }
@@ -457,7 +498,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
  * as for any device: the drive's (20) or the G1 DMA end (21), the other
  * one, when both, raised here as CE would; 0 for none. */
 uint32_t kui_retail_ce_irq(void) {
-    uint32_t sysintr=0;
+    uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0, sysintr=0;
     if(!kui_retail_async_irq()) {
         uint32_t raised=service.interrupts;
         service.interrupts=0;
@@ -467,6 +508,7 @@ uint32_t kui_retail_ce_irq(void) {
             sysintr=20u;
         }
     }
+    meter_busy(started);
     return sysintr;
 }
 #endif
@@ -511,6 +553,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * Font/flash/system BIOS vectors are independent and unchanged. */
     uint32_t source=kui_retail_hook_source;
 #ifdef KUI_RETAIL_CE
+    uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0;
     if(ce_record(source,r4,r5,r6,r7)) return 0;
 #endif
     if(source>3) return -1;
@@ -544,6 +587,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     if(service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", r7);
     ce_events(r7);
+    meter_call(started);
 #endif
     return result;
 }

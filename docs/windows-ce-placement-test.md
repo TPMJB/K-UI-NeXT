@@ -26,14 +26,22 @@ history of that implementation, not a statement that games still cannot run.
 
 ## CE prefetch experiment (2026-10-04)
 
-**Current comparison build:** the live speed/call overlay and its timer
-sampling are removed from both CE readers. Stage, failure and menu-return
-diagnostics remain. The owner saw roughly 620 KiB/s initially with the
-prefetch build, then about 420 with dips to 300; the next comparison checks
-whether drawing the diagnostic display affected actual playback. Use the
-same ARMADA intro with X and compare pacing, audio sync and skips. There is
-intentionally no live rate or BUSY PCT line in this build. The prefetch
-mechanism and its exit counters below are unchanged.
+**Current recovery comparison:** full overlay-removal build `b3d9ee49f9b7`
+stopped at the bootstrap 2 screen on the owner's console. The precise last
+line is not yet available, so the cause remains unconfirmed. The current
+change restores the last working `90b0456391fe` timer/accounting and display
+paths, suppressing only `retail_display_status` while MMUCR.AT is set
+(Windows CE active). Thus normal CE gameplay has no live rate/call overlay,
+while bootstrap, failure and menu-return diagnostics remain. Timer reads
+and accounting are intentionally retained to isolate the drawing change.
+This is not yet a console-verified boot fix.
+
+First repeat the same title and reader choice that regressed; photograph
+any stop screen, including its last line and hexadecimal detail. Once boot
+works, use the same ARMADA intro with X and compare pacing, audio sync and
+skips. The owner saw roughly 620 KiB/s initially with `90b0456391fe`, then
+about 420 with dips to 300. Those delivery rates do not establish a card
+throughput limit. The prefetch mechanism and exit counters below are unchanged.
 
 The background reader now has a 2 KiB ring of CRC-checked output instead of
 a single 512-byte spill. It can read ahead within the current request while
@@ -73,7 +81,7 @@ possible. A queue peak above `00000200` proves use beyond the old spill;
 it does not by itself establish a speed gain. Hardware performance remains
 unmeasured when that change was built. Build `90b0456391fe` kept the live
 display, so that first experiment did not change its drawing overhead; the
-current comparison removes it as described above.
+current comparison suppresses its MMU-on redraw as described above.
 
 ## Step 1: placement (passed on ARMADA)
 
