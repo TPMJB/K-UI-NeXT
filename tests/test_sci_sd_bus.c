@@ -41,10 +41,12 @@ static struct {
     uint32_t sar, dar, tcr, chcr, dmaor;
     unsigned dma_writes, dma_starts, dma_bytes, dma_complete_delay;
     unsigned cache_purges, irq_disables, irq_restores;
+    unsigned scr_writes, cs_writes;
     uint8_t *dma_buffer;
     size_t dma_size;
     bool timeout, overrun, active, receive_enabled, patterned_rx, queued;
     bool dma_available, dma_stall, dma_completion_stall, dma_error, dma_late_error, irq_disabled;
+    bool single_in_flight;
 } hw;
 
 /* Deliberately independent of the driver's lookup/bit-twiddling method. */
@@ -60,6 +62,7 @@ static uint8_t received_byte(unsigned index) {
     if(hw.use_custom_rx) return hw.custom_rx[index % 512u];
     return (uint8_t)(index*37u+11u+hw.pattern_bias); /* Every value once per 256 bytes. */
 }
+#ifndef KUI_SCI_SD_NO_BLOCK
 /* SD's CRC16-CCITT, computed bit by bit as an independent test oracle. */
 static uint16_t crc16_reference(const uint8_t *bytes,size_t count) {
     uint16_t crc=0;
@@ -89,6 +92,7 @@ static void same_profile(const struct kui_sci_sd_stats *a,const struct kui_sci_s
     assert(a->rx_setup_us==b->rx_setup_us && a->rx_transfer_us==b->rx_transfer_us && a->rx_check_us==b->rx_check_us);
     assert(a->tx_setup_us==b->tx_setup_us && a->tx_transfer_us==b->tx_transfer_us);
 }
+#endif
 static bool dma_running(unsigned request) {
     return (hw.chcr&3u)==1u && ((hw.chcr>>8)&15u)==request;
 }
@@ -109,6 +113,7 @@ static void start_byte(uint8_t value) {
 }
 static void submit_byte(uint8_t value) {
     assert((hw.scr&TE) && hw.smr==0x80 && !hw.queued);
+    if(hw.single_in_flight) assert(!hw.active);
     hw.ssr&=(uint8_t)~TDRE;
     if(hw.active) {
         hw.queued=true;
@@ -228,6 +233,7 @@ void kui_sci_sd_test_write(uint32_t address,uint32_t value,unsigned width) {
         case BRR: assert(width==1 && !hw.active); hw.brr=value; break;
         case SCR:
             assert(width==1);
+            ++hw.scr_writes;
             if(value&TE) {
                 /* DMA request enables are permitted only with CPU interrupts
                  * masked; receive-only autonomous clocks are never allowed. */
@@ -260,6 +266,7 @@ void kui_sci_sd_test_write(uint32_t address,uint32_t value,unsigned width) {
         case PCTR: assert(width==4); hw.pctr=value; break;
         case PDTR:
             assert(width==2);
+            ++hw.cs_writes;
             /* Deselect must not cut short a healthy wire transfer. */
             if(!(hw.pdtr&0x80) && (value&0x80)) assert(!hw.active);
             hw.pdtr=value; break;
@@ -283,6 +290,7 @@ static void restored(void) {
     assert(hw.sar==0x0c002000 && hw.dar==0x0c004000 && hw.tcr==7);
     assert(hw.chcr==0x4000 && hw.dmaor==0x0301);
 }
+#ifndef KUI_SCI_SD_NO_BLOCK
 static void test_ownership(const struct kui_loader_sd_bus *bus) {
     for(unsigned bit=4;bit<=128;bit<<=1) {
         if(bit==8) continue;
@@ -825,3 +833,82 @@ int main(void) {
     test_borrower_baud_cache(bus);
     puts("SCI SD bus: polled/DMA data, CRC, profiling, bounded faults and ownership restoration passed");
 }
+#else
+static void raw_ready(const struct kui_loader_sd_bus *bus) {
+    reset();
+    assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+    hw.patterned_rx=true;
+    (void)bus->transfer(NULL,0xff,false); /* Establish the stream's fast baud. */
+    bus->select(NULL,true);
+    hw.bytes=hw.received=hw.polls=hw.tdr_writes=hw.scr_writes=hw.cs_writes=0;
+    hw.single_in_flight=true;
+}
+static void test_raw_receiver(const struct kui_loader_sd_bus *bus) {
+    uint8_t out[KUI_SCI_SD_RAW_BLOCK_BYTES+2u];
+    const unsigned delays[]={1,3,11};
+    for(unsigned slow=0;slow<sizeof(delays)/sizeof(delays[0]);++slow) {
+        raw_ready(bus);
+        hw.byte_polls=delays[slow];
+        memset(out,0x5a,sizeof(out));
+        uint16_t cs=hw.pdtr;
+        assert(kui_sci_sd_receive_polled_raw(out+1));
+        assert(hw.bytes==514u && hw.received==514u && hw.tdr_writes==1u);
+        assert(!hw.active && !hw.queued && hw.scr==(TE|RE));
+        assert(hw.scr_writes==1u && !hw.cs_writes && hw.pdtr==cs);
+        assert(!hw.dma_writes && !hw.dma_starts && !hw.cache_purges);
+        assert(!hw.irq_disables && !hw.irq_restores && kui_sci_sd_healthy());
+        for(unsigned i=0;i<514u;++i) {
+            assert(out[i+1u]==reversed(received_byte(i)));
+            assert(hw.sent[i]==0xffu);
+        }
+        assert(out[0]==0x5a && out[515]==0x5a);
+        /* The helper did not clock byte515 or leave a stale RDR byte. */
+        assert(bus->transfer(NULL,0x40,false)==received_byte(514u));
+        assert(hw.bytes==515u && hw.sent[514]==reversed(0x40));
+        bus->select(NULL,false);
+        kui_sci_sd_release(); restored();
+    }
+}
+static void test_raw_faults(const struct kui_loader_sd_bus *bus) {
+    uint8_t out[KUI_SCI_SD_RAW_BLOCK_BYTES+2u];
+    const unsigned positions[]={1,137,514};
+    for(unsigned error=0;error<2u;++error) for(unsigned at=0;at<3u;++at) {
+        raw_ready(bus);
+        memset(out,0x5a,sizeof(out));
+        hw.fault_byte=positions[at]; hw.timeout=!error; hw.overrun=error!=0;
+        uint16_t cs=hw.pdtr;
+        assert(!kui_sci_sd_receive_polled_raw(out+1));
+        assert(hw.bytes==positions[at] && hw.polls<12000u && hw.tdr_writes==1u);
+        assert(!kui_sci_sd_healthy() && !hw.active && !hw.queued && !hw.scr);
+        assert(!hw.cs_writes && hw.pdtr==cs && !hw.dma_writes && !hw.irq_disables);
+        for(unsigned i=0;i<positions[at]-1u;++i) assert(out[i+1u]==reversed(received_byte(i)));
+        for(unsigned i=positions[at];i<sizeof(out);++i) assert(out[i]==0x5a);
+        assert(out[0]==0x5a);
+        unsigned reads=hw.reads,writes=hw.writes;
+        assert(!kui_sci_sd_receive_polled_raw(out+1));
+        assert(bus->transfer(NULL,0xff,false)==0xff);
+        assert(hw.reads==reads && hw.writes==writes && hw.bytes==positions[at]);
+        kui_sci_sd_release(); restored();
+    }
+    reset();
+    unsigned reads=hw.reads,writes=hw.writes;
+    assert(!kui_sci_sd_receive_polled_raw(out+1));
+    assert(hw.reads==reads && hw.writes==writes);
+    raw_ready(bus);
+    reads=hw.reads; writes=hw.writes;
+    assert(!kui_sci_sd_receive_polled_raw(NULL));
+    assert(hw.reads==reads && hw.writes==writes && !hw.bytes && kui_sci_sd_healthy());
+    hw.missing_flags=TDRE;
+    assert(!kui_sci_sd_receive_polled_raw(out+1));
+    assert(!hw.bytes && !kui_sci_sd_healthy() && !hw.scr && hw.polls<=10001u);
+    hw.missing_flags=0;
+    kui_sci_sd_release(); restored();
+}
+int main(void) {
+    const struct kui_loader_sd_bus *bus=kui_sci_sd_bus();
+    assert(bus && !bus->transfer_block);
+    test_raw_receiver(bus);
+    test_raw_faults(bus);
+    puts("CE raw SCI receiver: exact514 bytes, raw order, one in flight, bounded faults and ownership passed");
+}
+#endif

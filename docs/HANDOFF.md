@@ -1,5 +1,79 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: batched polled recovery experiment (2026-10-04)
+
+Owner reports `e9ff2353c3cd` is quite a bit better. ARMADA still needs
+improvement; Worms Armageddon's roughly ten-second intro is almost perfect,
+but audio precedes the corresponding video. Whether that offset grows or
+stays constant is unknown. No artificial audio delay or timing adjustment
+is part of this experiment; the owner requested one problem at a time.
+
+Photo `image(6).png` identifies `e9ff2353c3cd`; its title and exact run
+duration are unconfirmed. Whole-session counters are:
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 0001614E | 90446 |
+| Call blocks | 00006B81 | 27521 |
+| DMA blocks | 00016175 | 90485 |
+| Polled blocks | 0000689D | 26781 |
+| Stream starts | 000069E8 | 27112 |
+| Kept blocks | 000002BF | 703 |
+| Overruns | 0000689D | 26781 |
+| CRC errors | 00000002 | 2 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 00000098 | 152 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+Of 117,266 completed card receptions, 22.84% were polled, close to 22.23%
+in the prior run. The unchanged one-overrun-per-polled-block relationship
+and reported smoother playback are consistent with less CRC CPU work,
+but do not establish measured throughput or the cause of Worms' offset.
+
+The next isolated change targets those CPU-driven recoveries. The CE
+background reader receives each 512-byte payload and its two CRC bytes
+with one bounded batch, preparing SCI once and keeping only one byte in
+flight. Raw bytes then pass through the existing word reversal and CRC
+validation. It must not start DMA, clock an extra byte, publish unchecked
+data, or change retry/repair policy, interrupt ownership, queue capacity,
+boot behavior or live-overlay suppression. Native and synchronous CE
+readers retain their existing paths. Console benefit remains unmeasured.
+
+Local SH proxy native/CE instruction, layout and stack audits pass. CE
+async payload is 15,780 bytes (+160), with unchanged 5,084-byte BSS; its
+end is `0x8c00d49c`, leaving 868 bytes below the unchanged limit. Worst
+stack is 432 plus 64 bytes within 2,000 usable; the interrupt path is
+232 bytes. At a fixed build ID, native resident/stage binaries and the
+synchronous CE resident remain byte-identical to `e9ff2353c3cd`.
+
+The generated batch prepares once and seeds TDR once. Each byte uses one
+bounded flag wait, with no per-byte bus callback, repeated preparation or
+bit reversal; storing the preceding byte overlaps the next transfer.
+Generated code still spills registers around the wait call, so no cycle
+or throughput improvement is claimed without the console comparison.
+
+The actual helper passes the register model with varied byte timing:
+exactly 514 bytes, one byte in flight, raw bit order, no byte 515, unchanged
+CS/DMA/IRQ ownership, and latched bounded failures at the first, middle
+and final byte. The existing bus suite also passes. The stream-model
+adapter supplies the helper's raw-wire contract; the separate register
+test exercises the production implementation itself.
+
+ASan/UBSan native and CE stream tests pass, including the independent CRC
+vectors, corruption rejection and repair cases. CE async passes 103,800
+checks, including raw-helper selection on first-overrun recovery and a
+partial helper fault ending the request with zero published bytes. Normal
+`make test` includes the new register-model variant. Full pinned CI is
+required for these committed test and Makefile changes. Compare the same
+ARMADA intro with X after a cold boot, then capture menu-return counters;
+judge audio/video pacing without changing reader settings or adding an
+audio synchronization workaround.
+
 ## Windows CE: CRC lookup experiment and first-overrun result (2026-10-04)
 
 Owner reports smoother ARMADA intro video and audio on `ba7caf575391`,

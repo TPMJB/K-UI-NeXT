@@ -631,6 +631,9 @@ static void test_first_unrecovered_overrun(void) {
     arrived_irq();
     const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
     CHECK(ss->overruns == 1u && !ss->repaired && ss->polled == 1u);
+#ifdef KUI_SCI_SD_NO_BLOCK
+    CHECK(m.raw_batches == 1u);
+#endif
     CHECK(R.engine.retries == 1u && R.engine.early_polled);
     CHECK(R.engine.cursor.block == first && kui_sci_stream_ready(first));
     CHECK(m.dma_starts == dma && !kui_sci_stream_busy());
@@ -669,6 +672,22 @@ static void test_deferred_repair_stays_dma(void) {
     reference_read(45000, 3);
     CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
 }
+#ifdef KUI_SCI_SD_NO_BLOCK
+static void test_raw_recovery_fault_is_terminal(void) {
+    setup(2000, true);
+    mode(2048);
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+    m.overrun_after = 512u;
+    m.raw_fault_after = 137u; /* Helper fails after a partial raw block. */
+    arrived_irq();
+    CHECK(m.raw_batches == 1u && !m.healthy && !kui_sci_stream_busy());
+    CHECK(!R.shared.service.pending && R.shared.service.error == KUI_GD_ERROR_IO);
+    CHECK(!R.engine.piece_filled && !R.shared.service.completed_bytes && !R.engine.spill_bytes);
+    CHECK(ev.drive && !hw.writes);
+    untouched(ram + OUTPUT - BEGIN, 3u * 2048u);
+    CHECK(status(token) == KUI_GD_FAILED && get(STATUS + 4) == KUI_GD_ERROR_IO);
+}
+#endif
 static void test_other_errors_keep_retry_threshold(void) {
     for(unsigned failures = 1; failures <= 2; ++failures) {
         setup(2000, true);
@@ -812,6 +831,9 @@ int main(void) {
     test_polled_irq_yields();
     test_first_unrecovered_overrun();
     test_deferred_repair_stays_dma();
+#ifdef KUI_SCI_SD_NO_BLOCK
+    test_raw_recovery_fault_is_terminal();
+#endif
     test_other_errors_keep_retry_threshold();
     test_failures_complete_the_request();
     test_table_replaced();

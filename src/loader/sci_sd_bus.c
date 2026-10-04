@@ -239,6 +239,28 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
     return reverse(received);
 }
 
+#if defined(KUI_RETAIL_CE) && defined(KUI_SCI_SD_NO_BLOCK)
+bool kui_sci_sd_receive_polled_raw(uint8_t out[KUI_SCI_SD_RAW_BLOCK_BYTES]) {
+    if(!out || !prepare(false) || !wait_flag(TDRE)) return false;
+    /* TDR retains 0xff after transmission. Reuse it, but do not launch the
+     * next byte until this one's RDR has been consumed. That bounds receive
+     * occupancy even when another DMA user holds the CPU off the bus. */
+    wr8(TDR, 0xffu);
+    wr8(SSR, 0x7cu);
+    for(unsigned i = 0; i < KUI_SCI_SD_RAW_BLOCK_BYTES; ++i) {
+        port.work += 8u;
+        if(!wait_flag(RDRF | TDRE)) return false;
+        uint8_t received = rd8(RDR);
+        wr8(SSR, 0xbcu);
+        /* Clock the next byte while the previous raw byte is stored. Leave
+         * the card's gap/token untouched after the second CRC byte. */
+        if(i + 1u < KUI_SCI_SD_RAW_BLOCK_BYTES) wr8(SSR, 0x7cu);
+        out[i] = received;
+    }
+    return true;
+}
+#endif
+
 #ifndef KUI_SCI_SD_NO_BLOCK
 static uint32_t mask_interrupts(void) {
 #ifdef KUI_SCI_SD_TEST
@@ -472,8 +494,9 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
 #endif
 #ifdef KUI_SCI_SD_NO_BLOCK
 /* The background game reader streams by its own DMA (sci_stream.c) and uses
- * this bus only to select the card and move command bytes: no block
- * transfer, work clock or end-of-use release is linked. */
+ * this callback table only to select the card and move command bytes. CE
+ * also has the explicit raw polled helper above; no DMA-capable block
+ * callback, work clock or end-of-use release is linked. */
 static const struct kui_loader_sd_bus bus = {
     NULL, NULL, NULL, select_card, transfer, NULL, NULL
 };
@@ -490,6 +513,12 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) { return KUI_LOADER_SD_UNSUPP
 void kui_sci_sd_release(void) {}
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return NULL; }
 bool kui_sci_sd_healthy(void) { return false; }
+#if defined(KUI_RETAIL_CE) && defined(KUI_SCI_SD_NO_BLOCK)
+bool kui_sci_sd_receive_polled_raw(uint8_t out[KUI_SCI_SD_RAW_BLOCK_BYTES]) {
+    (void)out;
+    return false;
+}
+#endif
 #ifndef KUI_RETAIL_TRANSPORT
 bool kui_sci_sd_resync_speed(void) { return false; }
 void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) {
