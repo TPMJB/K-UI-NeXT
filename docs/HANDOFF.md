@@ -1,5 +1,79 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: CRC lookup experiment and first-overrun result (2026-10-04)
+
+Owner reports smoother ARMADA intro video and audio on `ba7caf575391`,
+with room for improvement. Photo `61832.jpg` records the following
+whole-session counters. No live overlay or audio audition is used to
+claim a measured throughput gain.
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 00010D29 | 68905 |
+| Call blocks | 00004F21 | 20257 |
+| DMA blocks | 00010D50 | 68944 |
+| Polled blocks | 00004CF7 | 19703 |
+| Stream starts | 00004DF0 | 19952 |
+| Overruns | 00004CF7 | 19703 |
+| CRC errors | 00000003 | 3 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 0000009D | 157 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+There is now exactly one overrun per polled block, versus about 2.01 in
+the preceding run. This confirms the immediate-fallback behavior; it does
+not show a lower normalized overrun rate. The newer session completed
+88,647 card receptions (DMA plus polled), 3.19 times the preceding 27,773,
+and roughly 22.2% were polled versus 10.5% previously. Different workloads
+and run lengths prevent treating these totals as a controlled speed test.
+Guard faults remain zero. The three CRC errors and 157 repair attempts
+do not establish which failures triggered the existing repair cutoff.
+
+The next isolated experiment replaces only the CE stream reader's
+algebraic CRC16 byte update with an original, polynomial-generated
+256-entry constant table (512 bytes). It retains CRC checks on every
+block and the same repair validation. Native readers keep their existing
+algebraic calculation. DMA, fallback thresholds, interrupt priority,
+queue size, boot paths and the live-overlay guard are unchanged.
+
+The aim is to shorten CPU work while checking each received sector,
+including work done with interrupts masked. This does not eliminate the
+CPU-driven fallback transfer or guarantee fewer DMA overruns. Console
+comparison should use the same ARMADA intro interval after a cold boot,
+launching with X, and compare broken/repeated speech, video pacing and
+menu-return counters. Host correctness and resident fit must pass before
+publishing; any speed or smoothness gain still requires console evidence.
+
+Local SH proxy compilation and instruction/layout/stack audits pass. CE
+async payload is 15,620 bytes, with unchanged 5,084-byte BSS; the resident
+ends at `0x8c00d3fc`, leaving 1,028 bytes below its `0x8c00d800` limit. The
+512-byte table is read-only and 32-byte aligned. Worst conservative stack
+is 408 plus 64 bytes within 2,000 usable, with a 208-byte interrupt path.
+At a fixed build ID, native resident/stage binaries and the CE synchronous
+resident remain byte-identical to `ba7caf575391`. These proxy checks do not
+replace pinned CI or console playback comparison.
+
+The CE accumulator uses a full register while explicitly retaining a
+16-bit CRC state at each step. This avoids the compiler's initial
+per-byte spill/reload. The final proxy byte loop has 14 instructions
+versus 23 previously, with two table-related memory reads and no per-byte
+stack traffic or function calls. Instruction counts alone are not a
+timing measurement; cache behavior and the card/game workload still matter.
+
+Focused ASan/UBSan validation passes both native and CE stream suites and
+the CE async suite (97,636 checks). New stream vectors exercise six sector
+patterns through DMA and polled reads against the model's independent
+bitwise CRC reference, anchored by `123456789` yielding `0x31c3`. They
+reject payload and CRC-trailer corruption, accept clean rereads, and check
+single-byte reconstruction with nonuniform data. Normal `make test` now
+also runs the stream suite with `KUI_RETAIL_CE`, so CI covers the table
+and algebraic implementations through the same public receive APIs.
+
 ## Windows CE: first-overrun fallback experiment (2026-10-04)
 
 Owner confirmed `68cbe37aa95e` boots. The FMV advanced steadily, but audio

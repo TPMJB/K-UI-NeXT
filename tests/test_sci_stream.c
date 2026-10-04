@@ -464,6 +464,77 @@ static void test_polled_on_request(void) {
     check_block(61, kui_sci_stream_take(61, &r));
     assert(card.cmd18 == 1 && m.fences >= 1);
 }
+static uint8_t crc_vector[512];
+static uint8_t vector_content(uint32_t lba, unsigned offset) {
+    (void)lba;
+    return crc_vector[offset];
+}
+static void test_crc_reference_vectors(void) {
+    /* The card model emits CRC from its independent bit-at-a-time 0x1021
+     * reference. Exercise the complete public receive/check path under both
+     * native and CE builds, including bit reversal and the separate RDR tail. */
+    assert(crc16((const uint8_t *)"123456789", 9) == 0x31c3u);
+    for(unsigned pattern = 0; pattern < 6u; ++pattern) {
+        uint32_t random = 0x7ab32ed1u;
+        for(unsigned i = 0; i < sizeof(crc_vector); ++i) {
+            random = random * 1664525u + 1013904223u;
+            crc_vector[i] = pattern == 0 ? 0 : pattern == 1 ? 255 :
+                pattern == 2 ? (uint8_t)i : pattern == 3 ? (uint8_t)(1u << (i & 7u)) :
+                pattern == 4 ? (i & 1u ? 0xaau : 0x55u) : (uint8_t)(random >> 24);
+        }
+        uint16_t expected = crc16(crc_vector, sizeof(crc_vector));
+        for(unsigned polled = 0; polled < 2u; ++polled) {
+            reset_model();
+            card_content = vector_content;
+            open_stream(false);
+            uint32_t lba = 700u;
+            enum kui_sci_stream_result r;
+            const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
+            struct kui_sci_stream_stats before = *st;
+            assert(kui_sci_stream_fetch(lba, LIMIT, polled != 0) == KUI_SCI_STREAM_OK);
+            assert(kui_sci_stream_busy() == !polled);
+            assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+            const uint8_t *p = kui_sci_stream_take(lba, &r);
+            assert(p && r == KUI_SCI_STREAM_OK && !memcmp(p, crc_vector, sizeof(crc_vector)));
+            assert(crc16(p, sizeof(crc_vector)) == expected && st->crc_errors == before.crc_errors);
+            /* A payload bit error is rejected, including for zero and
+             * all-one blocks; a clean reread then passes independently. */
+            card.corrupt_lba = ++lba; card.corrupt_count = 1;
+            assert(kui_sci_stream_fetch(lba, LIMIT, polled != 0) == KUI_SCI_STREAM_OK);
+            assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+            assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
+            assert(st->crc_errors == before.crc_errors + 1u);
+            assert(kui_sci_stream_fetch(lba, LIMIT, polled != 0) == KUI_SCI_STREAM_OK);
+            assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+            p = kui_sci_stream_take(lba, &r);
+            assert(p && r == KUI_SCI_STREAM_OK && !memcmp(p, crc_vector, sizeof(crc_vector)));
+            /* Corrupt only the stored high CRC byte of the received
+             * area; neither DMA nor polled reception may accept it. */
+            assert(kui_sci_stream_fetch(++lba, LIMIT, polled != 0) == KUI_SCI_STREAM_OK);
+            assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+            areas[0][512] ^= 1u; areas[1][512] ^= 1u;
+            assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
+            assert(st->crc_errors == before.crc_errors + 2u);
+            assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+            check_restored(); check_channel_restored();
+        }
+    }
+    /* Keep repair's CRC-syndrome reconstruction covered with the final
+     * nonuniform vector too, rather than only the model's usual pattern. */
+    reset_model();
+    card_content = vector_content;
+    open_stream(false);
+    unsigned repaired = kui_sci_stream_stats()->repaired;
+    m.overrun_after = 100u;
+    assert(kui_sci_stream_fetch(800u, LIMIT, false) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    enum kui_sci_stream_result r;
+    const uint8_t *p = kui_sci_stream_take(800u, &r);
+    assert(p && r == KUI_SCI_STREAM_OK && !memcmp(p, crc_vector, sizeof(crc_vector)));
+    assert(kui_sci_stream_stats()->repaired == repaired + 1u);
+    assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+    card_content = data_at;
+}
 int main(void) {
     test_sequential();
     test_pending_and_kept();
@@ -476,6 +547,7 @@ int main(void) {
     test_byte_addressed();
     test_bus_fault();
     test_random_faults();
+    test_crc_reference_vectors();
     puts("sci stream: ok");
     return 0;
 }
