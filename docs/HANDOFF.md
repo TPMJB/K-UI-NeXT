@@ -7,6 +7,9 @@ the stage's own post-bootstrap comparison of the reader with its blob saw
 the kernel-address slot it had filled in (`KUI_RETAIL_CE_KERNEL`). The
 relay now compares around the slot, checks the slot holds the addresses,
 and reports the first changed offset as the detail.
+Build `50c37b5c2464` ([Diagnostic run
+37165807642](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37165807642)):
+host and Dreamcast passed.
 
 ## Windows CE: stream reads with CE's own interrupts (2026-10-04 UTC)
 
