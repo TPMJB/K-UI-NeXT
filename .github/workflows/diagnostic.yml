@@ -211,13 +211,20 @@ jobs:
         shell: bash
         run: |
           source .deps/kos/environ.sh
+          # Candidate labeling does not alter compilation or validation gates.
+          export KUI_RELEASE_CANDIDATE="$(python3 - <<'PY'
+          import subprocess
+          message = subprocess.check_output(['git', 'show', '-s', '--format=%B', 'HEAD'], text=True)
+          print('1' if 'Candidate: ATA readiness' in message.splitlines() else '0')
+          PY
+          )"
           python3 tools/package.py
           python3 - <<'PY'
           import os, sys
           sys.path.insert(0, 'tools')
-          from package import release_metadata
+          from package import package_metadata
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write('artifact_prefix=' + release_metadata()['artifact_prefix'] + '\n')
+              out.write('artifact_prefix=' + package_metadata()['artifact_prefix'] + '\n')
           PY
       - name: Upload diagnostic test artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

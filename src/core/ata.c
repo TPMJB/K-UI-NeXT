@@ -50,9 +50,11 @@ static bool wait_status(struct kui_ata *a, uint8_t set, uint8_t clear,
 /* Never change selection during another device's DMA or PIO transfer. */
 static bool begin(struct kui_ata *a, uint8_t *previous) {
     if(a->bus->dma_busy(a->bus->ctx)) return fail(a, KUI_ATA_BUSY);
-    *previous = rd(a, KUI_ATA_DEVICE);
     if(!wait_status(a, 0, ATA_BSY | ATA_DRQ, false, false)) return false;
     if(a->bus->dma_busy(a->bus->ctx)) return fail(a, KUI_ATA_BUSY);
+    /* While BSY is set, taskfile reads may return Status instead of the
+     * requested register. Save the selection only after the bus is idle. */
+    *previous = rd(a, KUI_ATA_DEVICE);
     if(a->bus->prepare) a->bus->prepare(a->bus->ctx);
     wr(a, KUI_ATA_DEVICE, 0xf0);
     settle(a);
@@ -111,7 +113,9 @@ bool kui_ata_init(struct kui_ata *a, const struct kui_ata_bus *bus) {
         a->sectors = a->lba48 ? ((uint64_t)id[100] | ((uint64_t)id[101] << 16) |
                          ((uint64_t)id[102] << 32) | ((uint64_t)id[103] << 48)) :
                          ((uint64_t)id[60] | ((uint64_t)id[61] << 16));
-        a->write_cache = (id[82] & 0x0020u) != 0;
+        /* Word 83's validity bits cover word 82 as well. Older CF devices
+         * may leave unsupported command-set words zero or all ones. */
+        a->write_cache = sets_valid && (id[82] & 0x0020u);
         a->flush_supported = sets_valid && (id[83] & 0x1000u);
         if(!a->sectors || a->sectors > (a->lba48 ? ATA_LBA48_SECTORS : ATA_LBA28_SECTORS))
             ok = fail(a, KUI_ATA_UNSUPPORTED);
@@ -124,9 +128,48 @@ bool kui_ata_init(struct kui_ata *a, const struct kui_ata_bus *bus) {
     return ok;
 }
 
+/* Shared taskfile setup for complete transfers and bounded resident runs. */
+static bool issue_transfer(struct kui_ata *a, uint64_t lba, unsigned n, bool write) {
+    bool ext = lba + n > ATA_LBA28_SECTORS;
+    if(ext && !a->lba48) return fail(a, KUI_ATA_RANGE);
+    if(!wait_status(a, ATA_DRDY, ATA_BSY | ATA_DRQ, false, true)) return false;
+    wr(a, KUI_ATA_DEVICE, ext ? 0xf0 : (uint8_t)(0xf0u | (lba >> 24)));
+    settle(a);
+    if(ext) {
+        wr(a, KUI_ATA_COUNT, (uint8_t)(n >> 8));
+        wr(a, KUI_ATA_LBA0, (uint8_t)(lba >> 24));
+        wr(a, KUI_ATA_LBA1, (uint8_t)(lba >> 32));
+        wr(a, KUI_ATA_LBA2, (uint8_t)(lba >> 40));
+    }
+    wr(a, KUI_ATA_COUNT, (uint8_t)n);
+    wr(a, KUI_ATA_LBA0, (uint8_t)lba);
+    wr(a, KUI_ATA_LBA1, (uint8_t)(lba >> 8));
+    wr(a, KUI_ATA_LBA2, (uint8_t)(lba >> 16));
+    wr(a, KUI_ATA_COMMAND, write ? (ext ? 0x34 : 0x30) : (ext ? 0x24 : 0x20));
+    settle(a);
+    return true;
+}
+static bool transfer_sector(struct kui_ata *a, uint8_t *p, bool write) {
+    if(!wait_status(a, ATA_DRQ, ATA_BSY, true, true)) return false;
+    const struct kui_ata_bus *bus = a->bus;
+    if(write && bus->write_sector) bus->write_sector(bus->ctx, p);
+    else if(!write && p && bus->read_sector) bus->read_sector(bus->ctx, p);
+    else for(unsigned word = 0; word < 256; ++word) {
+        if(write) bus->write16(bus->ctx, (uint16_t)(p[0] | ((uint16_t)p[1] << 8)));
+        else {
+            uint16_t v = bus->read16(bus->ctx);
+            /* A null buffer deliberately drains an unfinished read command. */
+            if(p) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
+        }
+        if(p) p += 2;
+    }
+    settle(a);
+    return true;
+}
 static bool transfer(struct kui_ata *a, uint64_t lba, uint32_t count,
                      void *buffer, bool write) {
     if(!a) return false;
+    if(a->read_active) return fail(a, KUI_ATA_BUSY);
     if(!a->ready || !buffer || !count) return fail(a, KUI_ATA_INVALID);
     if(lba >= a->sectors || (uint64_t)count > a->sectors - lba)
         return fail(a, KUI_ATA_RANGE);
@@ -139,42 +182,54 @@ static bool transfer(struct kui_ata *a, uint64_t lba, uint32_t count,
     bool ok = true;
     while(count && ok) {
         unsigned n = count > 256u ? 256u : count;
-        bool ext = lba + n > ATA_LBA28_SECTORS;
-        if(ext && !a->lba48) { ok = fail(a, KUI_ATA_RANGE); break; }
-        ok = wait_status(a, ATA_DRDY, ATA_BSY | ATA_DRQ, false, true);
-        if(!ok) break;
-        wr(a, KUI_ATA_DEVICE, ext ? 0xf0 : (uint8_t)(0xf0u | (lba >> 24)));
-        settle(a);
-        if(ext) {
-            wr(a, KUI_ATA_COUNT, (uint8_t)(n >> 8));
-            wr(a, KUI_ATA_LBA0, (uint8_t)(lba >> 24));
-            wr(a, KUI_ATA_LBA1, (uint8_t)(lba >> 32));
-            wr(a, KUI_ATA_LBA2, (uint8_t)(lba >> 40));
-        }
-        wr(a, KUI_ATA_COUNT, (uint8_t)n);
-        wr(a, KUI_ATA_LBA0, (uint8_t)lba);
-        wr(a, KUI_ATA_LBA1, (uint8_t)(lba >> 8));
-        wr(a, KUI_ATA_LBA2, (uint8_t)(lba >> 16));
-        wr(a, KUI_ATA_COMMAND, write ? (ext ? 0x34 : 0x30) : (ext ? 0x24 : 0x20));
-        settle(a);
-        for(unsigned sector = 0; sector < n && ok; ++sector) {
-            ok = wait_status(a, ATA_DRQ, ATA_BSY, true, true);
-            if(!ok) break;
-            for(unsigned word = 0; word < 256; ++word, p += 2) {
-                if(write) a->bus->write16(a->bus->ctx, (uint16_t)(p[0] | ((uint16_t)p[1] << 8)));
-                else {
-                    uint16_t v = a->bus->read16(a->bus->ctx);
-                    p[0] = (uint8_t)v;
-                    p[1] = (uint8_t)(v >> 8);
-                }
-            }
-            settle(a);
-        }
+        ok = issue_transfer(a, lba, n, write);
+        for(unsigned sector = 0; sector < n && ok; ++sector, p += 512)
+            ok = transfer_sector(a, p, write);
         if(ok) ok = wait_status(a, 0, ATA_BSY | ATA_DRQ, true, true);
         lba += n;
         count -= n;
     }
     return end(a, previous, ok);
+}
+static bool finish_read(struct kui_ata *a, bool ok) {
+    if(ok) ok = wait_status(a, 0, ATA_BSY | ATA_DRQ, true, true);
+    a->read_active = false;
+    a->read_remaining = 0;
+    return end(a, a->read_previous, ok);
+}
+bool kui_ata_read_stop(struct kui_ata *a) {
+    if(!a) return false;
+    if(!a->ready) return fail(a, KUI_ATA_INVALID);
+    if(!a->read_active) { a->error = KUI_ATA_OK; return true; }
+    if(a->bus->dma_busy(a->bus->ctx)) return fail(a, KUI_ATA_BUSY);
+    bool ok = true;
+    while(a->read_remaining && ok) {
+        ok = transfer_sector(a, NULL, false);
+        if(ok) --a->read_remaining;
+    }
+    return finish_read(a, ok);
+}
+bool kui_ata_read_run(struct kui_ata *a, uint64_t lba, uint32_t available, void *p) {
+    if(!a) return false;
+    if(!a->ready || !p || !available) return fail(a, KUI_ATA_INVALID);
+    unsigned n = available > 8u ? 8u : available;
+    if(lba >= a->sectors || (uint64_t)n > a->sectors - lba)
+        return fail(a, KUI_ATA_RANGE);
+    if(a->read_active && (a->read_next_lba != lba || available < a->read_remaining)) {
+        if(!kui_ata_read_stop(a)) return false;
+    }
+    if(!a->read_active) {
+        if(!begin(a, &a->read_previous)) return false;
+        if(!issue_transfer(a, lba, n, false)) return end(a, a->read_previous, false);
+        a->read_remaining = (uint8_t)n;
+        a->read_next_lba = lba;
+        a->read_active = true;
+    } else if(a->bus->dma_busy(a->bus->ctx)) return fail(a, KUI_ATA_BUSY);
+    if(!transfer_sector(a, p, false)) return finish_read(a, false);
+    ++a->read_next_lba;
+    if(!--a->read_remaining) return finish_read(a, true);
+    a->error = KUI_ATA_OK;
+    return true;
 }
 bool kui_ata_read(struct kui_ata *a, uint64_t lba, uint32_t n, void *p) {
     return transfer(a, lba, n, p, false);
@@ -184,6 +239,7 @@ bool kui_ata_write(struct kui_ata *a, uint64_t lba, uint32_t n, const void *p) {
 }
 bool kui_ata_sync(struct kui_ata *a) {
     if(!a) return false;
+    if(a->read_active) return fail(a, KUI_ATA_BUSY);
     if(!a->ready) return fail(a, KUI_ATA_INVALID);
     if(!a->flush_supported) { a->error = KUI_ATA_OK; return true; }
     uint8_t previous;
@@ -197,5 +253,6 @@ bool kui_ata_sync(struct kui_ata *a) {
     return end(a, previous, ok);
 }
 void kui_ata_shutdown(struct kui_ata *a) {
+    if(a && a->read_active) { (void)fail(a, KUI_ATA_BUSY); return; }
     if(a) *a = (struct kui_ata){0};
 }

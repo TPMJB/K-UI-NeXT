@@ -47,6 +47,40 @@ def release_metadata(path=ROOT / "include/kui/version.h"):
     return release
 
 
+def candidate_requested(environment=None):
+    """Keep the development candidate opt-in separate from experimental DMA."""
+    value = (os.environ if environment is None else environment).get("KUI_RELEASE_CANDIDATE", "")
+    if value not in ("", "0", "1"):
+        raise ValueError("KUI_RELEASE_CANDIDATE must be empty, 0 or 1")
+    return value == "1"
+
+
+def package_metadata(candidate=None):
+    """Name candidate downloads apart without changing the console's version."""
+    if candidate is None:
+        candidate = candidate_requested()
+    release = release_metadata()
+    if candidate:
+        release = {**release,
+                   "name": release["name"] + " — ATA readiness candidate",
+                   "artifact_prefix": release["artifact_prefix"] + "-ata-readiness-candidate"}
+    return release
+
+
+def candidate_evidence():
+    return {"name": "ATA readiness", "ata_hardware": "untested",
+            "sci512_hardware": "pending", "ata_io": "synchronous PIO",
+            "ata_dma": "not implemented", "windows_ce_ide": "unsupported"}
+
+
+def candidate_notice():
+    return ("ATA readiness release candidate; not a hardware-validated release.\n"
+            "ATA hardware is untested; the SCI512 hardware result is pending.\n"
+            "The ATA changes use synchronous PIO only. ATA DMA is not implemented;\n"
+            "an asynchronous DMA hardware diagnostic is a future milestone.\n"
+            "Windows CE remains SCI-only; no CE IDE support or measured speed gain is claimed.\n\n")
+
+
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
     for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery"):
@@ -61,6 +95,15 @@ def guide(source):
     return text
 
 
+def write_release_guides(dist, candidate=False):
+    guides = (("START-HERE.md", "release-v1.5.1.md"),
+              ("RELEASE-NOTES.md", "release-v1.5.1-notes.md"))
+    for target, source in guides:
+        if candidate:
+            source = "ata-readiness-candidate.md"
+        (dist / target).write_text(guide(source), encoding="utf-8")
+
+
 def storage_image(elf_data, build, label):
     """Validate an executable and its initialized transport handoff before saving."""
     payload, memory = flatten_elf(elf_data)
@@ -73,7 +116,105 @@ def storage_image(elf_data, build, label):
     return package, verify(package)
 
 
+def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate=False):
+    """Assemble the actual install tree; candidate-only files never enter stable bundles."""
+    release = record["release"]
+    commit = record["commit"]
+    # Ship only the normal application payloads. This fresh directory cannot
+    # retain scan fixtures, demo music, or preferences from an earlier package.
+    bundle = dist / "release"
+    if bundle.exists():
+        shutil.rmtree(bundle)
+    bundle_sd = bundle / "KUI"
+    (bundle_sd / "apps").mkdir(parents=True)
+    shutil.copyfile(sd / "runtime.kui", bundle_sd / "runtime.kui")
+    bundle_apps = {
+        "music": [track["ogg"]["file"] for track in music_manifest["tracks"]],
+        "games": ("probe.kui", "image-probe.kui", "retail-boot.kui", "probe.dat"),
+    }
+    if candidate:
+        bundle_apps["games"] += ("ce-probe.kui",)
+    for app, files in bundle_apps.items():
+        (bundle_sd / "apps" / app).mkdir()
+        for name in files:
+            shutil.copyfile(sd / "apps" / app / name, bundle_sd / "apps" / app / name)
+    for name in ("redump.db", "tosec.db"):
+        shutil.copyfile(sd / name, bundle_sd / name)
+    (bundle / "boot-cd").mkdir()
+    cdi_name = release["artifact_prefix"] + ".cdi" if candidate else "kui-v1.5.1.cdi"
+    shutil.copyfile(cdi, bundle / "boot-cd" / cdi_name)
+    splash = ROOT / "resources/branding/startup.png"
+    shutil.copyfile(splash, bundle / "splash-preview.png")
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "LICENSE", "THIRD_PARTY.md"):
+        shutil.copyfile(dist / name, bundle / name)
+    if candidate:
+        shutil.copyfile(dist / "WINDOWS-CE-PLACEMENT-TEST.md", bundle / "WINDOWS-CE-PLACEMENT-TEST.md")
+    shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
+    bundle_record = {**record, "kind": "release-candidate" if candidate else "release",
+                        "bootstrap": boot_record["bootstrap"],
+                        "splash": {"sha256": hashlib.sha256(splash.read_bytes()).hexdigest(),
+                                   "preview": "splash-preview.png"}}
+    (bundle / "build.json").write_text(
+        json.dumps(bundle_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    status = "release candidate" if candidate else "final release"
+    bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap; IDE needs a compatible CDI.\n"
+                      if candidate else
+                      "Existing boot CDs work with SCIF; SCI/IDE boot needs the new CDI in boot-cd/.\n")
+    (bundle / "SOURCE.txt").write_text(
+        f"{release['name']} ({release['version']}) — {status}\n"
+        + (candidate_notice() if candidate else "") +
+        f"K-UI NeXT source commit: {commit}\n"
+        f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
+        f"The accompanying {release['artifact_prefix']}-source.zip contains exact K-UI, KOS,\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
+        "original notices are also included in build.json and LICENSES/.\n"
+        "Original badge and splash provenance are in resources/branding/ in that source.\n\n"
+        "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
+        "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
+        + bootstrap_note +
+        "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
+        "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
+        "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
+        "Preserve any working recovery.kui; BOOT-RECOVERY.md describes boot fallback\n"
+        "and the future split-card layout. No ext4 repair program is bundled yet.\n"
+        "The graphical CD menu offers manual source selection and idle SD retry; B\n"
+        "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
+        "artifact supplies optional tools.kui for read-only load measurement.\n"
+        "The normal retail game reader is installed; no SD benchmark payload is included.\n",
+        encoding="utf-8")
+    bundle_hashes = []
+    for path in sorted(bundle.rglob("*")):
+        if path.is_file() and path.name != "SHA256SUMS":
+            bundle_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(bundle)}")
+    (bundle / "SHA256SUMS").write_text("\n".join(bundle_hashes) + "\n")
+    return bundle
+
+
+def write_release_assets(dist, bundle, source, release):
+    """Archive the install tree and corresponding source with exact checksums."""
+    # Permanent release assets: normal installation files plus corresponding source.
+    # Include notices and build identity alongside the complete pinned source inputs.
+    assets = dist / "release-assets"
+    if assets.exists():
+        shutil.rmtree(assets)
+    assets.mkdir()
+    shutil.make_archive(str(assets / (release["artifact_prefix"] + "-release")), "zip", bundle)
+    with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-source.zip"), "w", zipfile.ZIP_DEFLATED) as archive:
+        for tree in (source, dist / "LICENSES"):
+            for path in sorted(tree.rglob("*")):
+                if path.is_file():
+                    archive.write(path, path.relative_to(dist))
+        for name in ("build.json", "LICENSE", "THIRD_PARTY.md"):
+            archive.write(dist / name, name)
+    asset_hashes = []
+    for path in sorted(assets.glob("*.zip")):
+        with path.open("rb") as stream:
+            asset_hashes.append(f"{hashlib.file_digest(stream, 'sha256').hexdigest()}  {path.name}")
+    (assets / "SHA256SUMS.txt").write_text("\n".join(asset_hashes) + "\n")
+
+
 def main():
+    candidate = candidate_requested()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)
     if dirty:
         raise SystemExit("Commit source changes before packaging; source and binary must agree")
@@ -83,7 +224,7 @@ def main():
     if not elf.is_file():
         raise SystemExit("Build the Dreamcast diagnostic first")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    release = release_metadata()
+    release = package_metadata(candidate)
     runtime = ROOT / "build/kui-runtime.elf"
     probe = ROOT / "build/loader/entry.elf"
     image_probe = ROOT / "build/loader/image_entry.elf"
@@ -197,8 +338,7 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
-    (dist / "START-HERE.md").write_text(guide("release-v1.5.1.md"), encoding="utf-8")
-    (dist / "RELEASE-NOTES.md").write_text(guide("release-v1.5.1-notes.md"), encoding="utf-8")
+    write_release_guides(dist, candidate)
     for name in ("windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
@@ -249,6 +389,8 @@ def main():
               "retail_boot": retail_info, "ce_probe": ce_info,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
+    if candidate:
+        record.update(kind="release-candidate", candidate=candidate_evidence())
     (dist / "build.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Existing boot discs need only the small runtime update. Full source and
     # dependency archives remain available in this run's diagnostic artifact.
@@ -273,14 +415,18 @@ def main():
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     for name in ("START-HERE.md", "RELEASE-NOTES.md"):
         shutil.copyfile(dist / name, update / name)
+    bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap; IDE needs a compatible CDI.\n"
+                      if candidate else
+                      "SCIF can keep its existing boot CD; SCI/IDE boot requires this run's new bootstrap CD.\n")
     (update / "SOURCE.txt").write_text(
+        (candidate_notice() if candidate else "") +
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
         "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
         "Install KUI/runtime.kui and the matching Games payload on your storage card.\n"
-        "SCIF can keep its existing boot CD; SCI/IDE boot requires this run's new bootstrap CD.\n"
+        + bootstrap_note +
         "Read STORAGE-TRANSPORTS.md before testing standalone SCI microSD or IDE/CF.\n"
         "The CD can read compatible ext4, but this runtime still needs FAT32/exFAT.\n"
         "Keep your card's filesystem; EXT4-BOOTSTRAP.md explains future runtime updates.\n"
@@ -419,82 +565,8 @@ def main():
         if path.is_file() and path.name != "SHA256SUMS":
             boot_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(boot)}")
     (boot / "SHA256SUMS").write_text("\n".join(boot_hashes) + "\n")
-    # Ship only the normal application payloads. This fresh directory cannot
-    # retain scan fixtures, demo music, or preferences from an earlier package.
-    bundle = dist / "release"
-    if bundle.exists():
-        shutil.rmtree(bundle)
-    bundle_sd = bundle / "KUI"
-    (bundle_sd / "apps").mkdir(parents=True)
-    shutil.copyfile(sd / "runtime.kui", bundle_sd / "runtime.kui")
-    bundle_apps = {
-        "music": [track["ogg"]["file"] for track in music_manifest["tracks"]],
-        "games": ("probe.kui", "image-probe.kui", "retail-boot.kui", "probe.dat"),
-    }
-    for app, files in bundle_apps.items():
-        (bundle_sd / "apps" / app).mkdir()
-        for name in files:
-            shutil.copyfile(sd / "apps" / app / name, bundle_sd / "apps" / app / name)
-    for name in ("redump.db", "tosec.db"):
-        shutil.copyfile(sd / name, bundle_sd / name)
-    (bundle / "boot-cd").mkdir()
-    shutil.copyfile(cdi, bundle / "boot-cd/kui-v1.5.1.cdi")
-    splash = ROOT / "resources/branding/startup.png"
-    shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "LICENSE", "THIRD_PARTY.md"):
-        shutil.copyfile(dist / name, bundle / name)
-    shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
-    bundle_record = {**record, "kind": "release",
-                        "bootstrap": boot_record["bootstrap"],
-                        "splash": {"sha256": hashlib.sha256(splash.read_bytes()).hexdigest(),
-                                   "preview": "splash-preview.png"}}
-    (bundle / "build.json").write_text(
-        json.dumps(bundle_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    (bundle / "SOURCE.txt").write_text(
-        f"{release['name']} ({release['version']}) — final release\n"
-        f"K-UI NeXT source commit: {commit}\n"
-        f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
-        f"The accompanying {release['artifact_prefix']}-source.zip contains exact K-UI, KOS,\n"
-        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
-        "original notices are also included in build.json and LICENSES/.\n"
-        "Original badge and splash provenance are in resources/branding/ in that source.\n\n"
-        "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
-        "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
-        "Existing boot CDs work with SCIF; SCI/IDE boot needs the new CDI in boot-cd/.\n"
-        "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
-        "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
-        "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
-        "Preserve any working recovery.kui; BOOT-RECOVERY.md describes boot fallback\n"
-        "and the future split-card layout. No ext4 repair program is bundled yet.\n"
-        "The graphical CD menu offers manual source selection and idle SD retry; B\n"
-        "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
-        "artifact supplies optional tools.kui for read-only load measurement.\n"
-        "The normal retail game reader is installed; no SD benchmark payload is included.\n",
-        encoding="utf-8")
-    bundle_hashes = []
-    for path in sorted(bundle.rglob("*")):
-        if path.is_file() and path.name != "SHA256SUMS":
-            bundle_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(bundle)}")
-    (bundle / "SHA256SUMS").write_text("\n".join(bundle_hashes) + "\n")
-    # Permanent release assets: normal installation files plus corresponding source.
-    # Include notices and build identity alongside the complete pinned source inputs.
-    assets = dist / "release-assets"
-    if assets.exists():
-        shutil.rmtree(assets)
-    assets.mkdir()
-    shutil.make_archive(str(assets / (release["artifact_prefix"] + "-release")), "zip", bundle)
-    with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-source.zip"), "w", zipfile.ZIP_DEFLATED) as archive:
-        for tree in (source, dist / "LICENSES"):
-            for path in sorted(tree.rglob("*")):
-                if path.is_file():
-                    archive.write(path, path.relative_to(dist))
-        for name in ("build.json", "LICENSE", "THIRD_PARTY.md"):
-            archive.write(dist / name, name)
-    asset_hashes = []
-    for path in sorted(assets.glob("*.zip")):
-        with path.open("rb") as stream:
-            asset_hashes.append(f"{hashlib.file_digest(stream, 'sha256').hexdigest()}  {path.name}")
-    (assets / "SHA256SUMS.txt").write_text("\n".join(asset_hashes) + "\n")
+    bundle = write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate)
+    write_release_assets(dist, bundle, source, release)
     hashes = []
     for path in sorted(dist.rglob("*")):
         if path.is_file() and path != dist / "SHA256SUMS":

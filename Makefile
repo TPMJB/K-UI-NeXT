@@ -165,7 +165,7 @@ build/test-sci-async-heartbeat: tests/test_sci_async_heartbeat.c tests/sci_async
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_ASYNC_HEARTBEAT_TEST=1 -Iinclude -Isrc/dreamcast src/dreamcast/sci_async_heartbeat.c tests/test_sci_async_heartbeat.c -o $@
 
-build/test-sci-async-runtime: tests/test_sci_async_runtime.c src/dreamcast/sd.c src/dreamcast/sd.h src/dreamcast/sci_async_heartbeat.h include/kui/sci_async_probe.h src/core/storage_error.c src/core/storage_policy.c src/core/data.c
+build/test-sci-async-runtime: tests/test_sci_async_runtime.c src/dreamcast/sd.c src/dreamcast/sd.h src/dreamcast/sci_async_heartbeat.h include/kui/sci_async_probe.h src/core/storage_error.c src/core/storage_policy.c src/core/data.c include/kui/ata.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_ASYNC_RUNTIME=1 -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c src/core/data.c tests/test_sci_async_runtime.c -o $@
 
@@ -234,11 +234,11 @@ build/test-sci-stream-ce: tests/test_sci_stream.c tests/sci_stream_model.h src/l
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_CE=1 -Iinclude -Isrc/loader src/loader/sci_stream.c tests/test_sci_stream.c -o $@
 
-build/test-retail-async: tests/test_retail_async.c tests/sci_stream_model.h src/loader/retail_async.c src/loader/retail_async.h src/loader/sci_stream.c src/loader/sci_stream.h src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_cursor.h include/kui/retail_image.h
+build/test-retail-async: tests/test_retail_async.c tests/sci_stream_model.h src/loader/retail_async.c src/loader/retail_async.h src/loader/sci_stream.c src/loader/sci_stream.h src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_cursor.h include/kui/retail_image.h include/kui/ata.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_TRANSPORT=1 -Iinclude -Isrc/loader src/loader/retail_async.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c tests/test_retail_async.c -o $@
 
-build/test-retail-async-ce: tests/test_retail_async_ce.c tests/sci_stream_model.h src/loader/retail_async.c src/loader/retail_async.h src/loader/sci_stream.c src/loader/sci_stream.h src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_cursor.h include/kui/retail_image.h include/kui/retail_loader_layout.h
+build/test-retail-async-ce: tests/test_retail_async_ce.c tests/sci_stream_model.h src/loader/retail_async.c src/loader/retail_async.h src/loader/sci_stream.c src/loader/sci_stream.h src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_cursor.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/ata.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_CE=1 -DKUI_RETAIL_TRANSPORT=1 -Iinclude -Isrc/loader src/loader/retail_async.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c tests/test_retail_async_ce.c -o $@
 
@@ -656,6 +656,6 @@ build/boot-recovery: tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FA
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(LWEXT4_CPPFLAGS) tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FATFS) $(LWEXT4_HOST_OBJECTS) -o $@
 
 # Runtime storage failure snapshots, with fake hardware below the real adapter.
-build/test-storage-errors: tests/test_storage_errors.c src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c include/kui/storage_error.h src/dreamcast/sci_sd_storage.h src/loader/sci_sd_bus.h tests/storage_stubs/dc/sd.h tests/storage_stubs/kos/sem.h
+build/test-storage-errors: tests/test_storage_errors.c src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c include/kui/storage_error.h src/dreamcast/sci_sd_storage.h src/loader/sci_sd_bus.h tests/storage_stubs/dc/sd.h tests/storage_stubs/kos/sem.h include/kui/ata.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c tests/test_storage_errors.c -o $@

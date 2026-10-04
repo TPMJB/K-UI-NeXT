@@ -121,7 +121,7 @@ def check_stack_usage(directory, symbols, transport="scif", ce=False):
             emitted_frames.append(frame)
     for name in ("kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
                  "kui_retail_image_read",
-                 "kui_ata_read" if transport == "ide" else "kui_loader_sd_stream_next"):
+                 "kui_ata_read_run" if transport == "ide" else "kui_loader_sd_stream_next"):
         if name not in frames or "_" + name not in symbols:
             raise ValueError(f"Missing runtime stack-usage frame: {name}")
     available = (stack_top(transport, ce) - stack_bottom(transport, ce) -
@@ -187,7 +187,7 @@ def check_directory(directory, ce=False):
         if transport == ASYNC:
             pass
         elif transport == "ide":
-            required += ["_kui_ata_read"]
+            required += ["_kui_ata_read_run", "_kui_ata_read_stop"]
         else:
             required += ["_kui_loader_sd_stream_next"]
             prefix = "_kui_retail_sd_" if transport == "scif" else "_kui_sci_sd_"
