@@ -1,12 +1,21 @@
-# K-UI NeXT handoff (2026-09-28)
+# K-UI NeXT handoff (updated 2026-10-04)
+
+## Release 1.7: accepted SCI baseline
+
+Release 1.7 carries the prior owner-selected SCI configuration, new crimson
+Dáinsleif artwork, the Windows CE SCI test payload and isolated ATA PIO
+preparation. CE FMV audio/video remain imperfect and ATA hardware is untested.
+See [release notes](release-v1.7-notes.md) and the
+[SCI baseline record](evidence/v1.7-sci-baseline-2026-10-04.md).
+
 
 ## ATA readiness release candidate (2026-10-04)
 
 Owner requests ATA preparation and a release build, but cannot test IDE/CF
-until soldering is complete. SCI512 build `6dc75f1ea0b2` is still awaiting
-their next test. Preserve that branch/artifact while preparing the isolated
-`codex/ata-readiness` candidate. No final release promotion is requested by
-the candidate packaging step.
+until soldering is complete. The SCI512 test `6dc75f1ea0b2` was subsequently rejected for unclear audio.
+Release 1.7 restores the accepted 256-byte setting from `6f14bc529472`,
+while retaining the isolated ATA preparation from `d584316ac1c2`.
+The owner explicitly requested final release 1.7 after the SCI result.
 
 The candidate adds bounded eight-sector ATA PIO command streaming, optional
 bulk PIO sector copies, and device-selection/IDENTIFY validity fixes. It
@@ -29,10 +38,11 @@ polled), 7,174 token yields, guard 0, CRC errors 2, and token/foreign errors
 attempts. These unequal-duration sessions do not establish a transfer-rate
 change or the cause of the audio offset.
 
-The next isolated test changes only `KUI_SCI_STREAM_TOKEN_SLICE` from 256
-to 512 bytes. This trades longer bounded token polling for fewer possible
-continuation round trips. Payload reception, CRC, recovery and wakeup rules
-are unchanged. See [result and test plan](evidence/ce-token-512-2026-10-04.md).
+The 512-byte test `6dc75f1ea0b2` was rejected: the owner reports unclear
+audio and uncertain video synchronization, and prefers the preceding test.
+Release 1.7 restores only `KUI_SCI_STREAM_TOKEN_SLICE` to 256 bytes.
+Payload reception, CRC, recovery and wakeup rules are unchanged. See the
+[comparison record](evidence/ce-token-512-2026-10-04.md).
 
 ## Windows CE: resumable token search experiment (2026-10-04)
 

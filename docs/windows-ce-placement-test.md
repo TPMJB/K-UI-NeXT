@@ -1,5 +1,21 @@
 # Windows CE boot test
 
+## Current release status — 1.7 (2026-10-04)
+
+**1.7 retains the accepted 256-byte SCI token-search allowance from
+`6f14bc529472`.** On the Windows CE confirmation, **X** selects the
+background SCI reader and **A** the standard synchronous reader. The later
+512-byte comparison was rejected after the owner's audio regression report;
+no repeat comparison is pending. Windows CE remains experimental and
+SCI-only, with title-specific FMV, audio and synchronization limits.
+
+Use the [1.7 installation guide](release-v1.7.md),
+[release notes](release-v1.7-notes.md) and
+[baseline decision](evidence/v1.7-sci-baseline-2026-10-04.md) for current
+operation. The dated experiments and next-step proposals below are retained
+as implementation history; they do not request older comparison tests or
+describe the selected release setting.
+
 ARMADA and Worms Armageddon now boot and run from SCI microSD. FMV speed and
 compatibility remain under test. The **Windows CE boot test** on a game's
 detail screen provides the standard reader (A on confirmation) and the
@@ -21,12 +37,13 @@ history of that implementation, not a statement that games still cannot run.
    experimental confirmation warning remains; compatibility is title-specific.
 4. The launcher closes. The stage loads IP.BIN, then the kernel file
    (`0WINCEOS.BIN`), checking every sector's header and every SD block's CRC.
-5. Compare the same scene between readers. On a fault, photograph the stop
-   screen and power cycle. A+B+X+Y+Start can show the menu-return counters.
+5. Play the selected title. On a fault, photograph the stop screen and power
+   cycle. A+B+X+Y+Start can show the menu-return counters. A standard-reader
+   comparison is optional for troubleshooting.
 
-## CE prefetch experiment (2026-10-04)
+## Historical CE prefetch experiment (2026-10-04)
 
-**Current comparison: first-overrun fallback.** Recovery build
+**Comparison at this stage: first-overrun fallback.** Recovery build
 `68cbe37aa95e` boots with the live overlay hidden. The owner reports steady
 FMV progression with persistent echo/repetition-like audio and no clear
 improvement. Its whole-session report showed 5,891 overruns, 6,188 stream
@@ -35,7 +52,7 @@ consistent with the existing retry threshold; it does not establish the
 cause of the audio symptom. The full counters and interpretation are in
 [the handoff](HANDOFF.md#windows-ce-first-overrun-fallback-experiment-2026-10-04).
 
-The next experiment changes only the CE background reader: after an
+The next experiment at this stage changed only the CE background reader: after an
 unrecovered overrun, reread that block by polled transfers immediately,
 then return to DMA for following blocks. Other failure thresholds, the
 retry limit, CRC, in-place repair safeguards and interrupt iteration bound
@@ -625,7 +642,7 @@ run with faults. Every byte is compared with the image reader's.
   parameter address) and the caller's stack show whether CE passes virtual
   addresses, which the next step maps.
 
-## Next steps
+## Historical next steps
 
 1. From the trace: map CE's virtual parameter and buffer addresses to
    physical RAM (with the MMU state shown), or whatever the first failure is.

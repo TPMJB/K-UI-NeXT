@@ -35,7 +35,7 @@ class CandidateInstallation(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(("fixture " + name).encode())
         for name in ("STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md",
-                     "WINDOWS-CE-PLACEMENT-TEST.md", "LICENSE", "THIRD_PARTY.md"):
+                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "LICENSE", "THIRD_PARTY.md"):
             (self.dist / name).write_text(name + "\n")
         (self.dist / "LICENSES").mkdir()
         (self.dist / "LICENSES/notice.txt").write_text("fixture license\n")
@@ -76,7 +76,7 @@ class CandidateInstallation(unittest.TestCase):
         self.assertEqual(record["kind"], "release-candidate")
         self.assertFalse(record["hardware_tested"])
         self.assertEqual(record["candidate"]["ata_hardware"], "untested")
-        self.assertEqual(record["candidate"]["sci512_hardware"], "pending")
+        self.assertEqual(record["candidate"]["sci512_hardware"], "rejected; restored 256-byte allowance")
         self.assertEqual(record["commit"], self.commit)
         for name in ("runtime.kui", "apps/games/retail-boot.kui", "apps/games/ce-probe.kui"):
             self.assertEqual((bundle / "KUI" / name).read_bytes(), (self.sd / name).read_bytes())
@@ -87,7 +87,7 @@ class CandidateInstallation(unittest.TestCase):
         for name in ("START-HERE.md", "RELEASE-NOTES.md", "SOURCE.txt"):
             text = (bundle / name).read_text()
             self.assertIn("candidate", text)
-            self.assertIn("pending", text)
+            self.assertIn("256", text)
             self.assertIn("untested", text)
             self.assertNotIn("— final release", text)
         self.assert_checksums(bundle, "SHA256SUMS")
@@ -106,19 +106,39 @@ class CandidateInstallation(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "Refusing a diagnostic or candidate package"):
             verify_assets(self.dist / "release-assets", release, self.commit)
 
-    def test_stable_build_after_candidate_removes_candidate_files_and_remains_promotable(self):
+    def test_stable_build_after_candidate_keeps_launch_payloads_and_remains_promotable(self):
         self.assemble(True)
         bundle, release = self.assemble(False)
         self.assertEqual(release, release_metadata())
         self.assertEqual(json.loads((bundle / "build.json").read_text())["kind"], "release")
-        self.assertFalse((bundle / "KUI/apps/games/ce-probe.kui").exists())
-        self.assertFalse((bundle / "WINDOWS-CE-PLACEMENT-TEST.md").exists())
-        self.assertEqual({path.name for path in (bundle / "boot-cd").iterdir()}, {"kui-v1.5.1.cdi"})
+        self.assertEqual((bundle / "KUI/apps/games/ce-probe.kui").read_bytes(),
+                         (self.sd / "apps/games/ce-probe.kui").read_bytes())
+        self.assertTrue((bundle / "WINDOWS-CE-PLACEMENT-TEST.md").exists())
+        self.assertTrue((bundle / "GAMES-BACKGROUND-READER.md").exists())
+        self.assertTrue((bundle / "ANNOUNCEMENTS.md").exists())
+        self.assertEqual((bundle / "release-banner.jpg").read_bytes(),
+                         (ROOT / "resources/branding/release-v1.7-banner.jpg").read_bytes())
+        self.assertEqual({path.name for path in (bundle / "boot-cd").iterdir()},
+                         {"kui-v" + release["version"] + ".cdi"})
         self.assertIn("— final release", (bundle / "SOURCE.txt").read_text())
-        self.assertEqual((bundle / "START-HERE.md").read_text(),
-                         (self.dist / "START-HERE.md").read_text())
+        self.assertIn(release["version"], (bundle / "START-HERE.md").read_text())
         self.assertEqual(len(verify_assets(self.dist / "release-assets", release, self.commit)), 3)
         self.assert_checksums(bundle, "SHA256SUMS")
+
+    def test_release_cannot_omit_windows_ce_payload_or_misidentify_source(self):
+        for corruption in ("ce-payload", "commit"):
+            with self.subTest(corruption=corruption):
+                bundle, release = self.assemble(False)
+                if corruption == "ce-payload":
+                    (bundle / "KUI/apps/games/ce-probe.kui").unlink()
+                else:
+                    record = json.loads((bundle / "build.json").read_text())
+                    record["commit"] = "f" * 40
+                    (bundle / "build.json").write_text(json.dumps(record))
+                write_release_assets(self.dist, bundle, self.source, release)
+                expected = "Incomplete release" if corruption == "ce-payload" else "source identity"
+                with self.assertRaisesRegex(SystemExit, expected):
+                    verify_assets(self.dist / "release-assets", release, self.commit)
 
     def test_archive_tampering_remains_rejected(self):
         _, release = self.assemble(False)

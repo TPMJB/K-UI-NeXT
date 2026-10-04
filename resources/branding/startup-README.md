@@ -1,29 +1,16 @@
-# K-UI crimson Dáinsleif startup
+# K-UI V1.7 Dáinsleif startup
 
-`startup.png` is the 640×480 RGB SD runtime splash. At the owner's request on
-2026-10-01, it now uses the exact approved red boot-menu artwork: the new visor
-portrait, crimson light, chrome K-UI lettering and Dáinsleif title. Software
-remains 1.5.1; 2.0 follows SCI testing/tuning. The badge beneath Sega's logo is
-a separate asset.
+`startup.png` is the new 640×480 RGB release splash, identical to the matching
+`boot-red.png` artwork. The built-in image-generation tool created it for
+TPMJB on October 4, 2026 in the established crimson/chrome cyberpunk style.
+See [boot-red-README.md](boot-red-README.md) and
+`startup-dainsleif-prompt.txt` for the prompt, TV-safe conversion and exact hashes.
 
-The runtime and `boot-red.png` are byte-for-byte identical. Artwork provenance,
-the original generation prompt and TV-safe conversion are recorded in
-[boot-red-README.md](boot-red-README.md). The 576×432 composition is centered in
-a 640×480 frame with a `#090102` border. No new image generation or lettering
-change was needed for this runtime update.
-
-- Runtime and boot PNG Git blob: `f2b9132613a527f90759fdb0fd70d47a6eb07563`.
-- PNG SHA-256: `f1cfdd82dba67518af18fe208a1334f18dc0bee2041590f9ade2af0f2c3549e1`.
-- Original source PNG SHA-256: `d4b67cc589009c776bff4488d0206dc71abc3efce566b0248a624abeed1314fe`.
-
-The host encoder checks the pinned PNG identity and converts it to RGB565.
-Each executable links only its own fixed 640×480 array: runtime dimensions,
-memory usage, sound and startup timing are unchanged. Updating `KUI/runtime.kui`
-is sufficient for this splash change; the confirmed `6af5e11` boot CD remains
-compatible and does not need rebuilding or reburning.
-
-The preceding September 24 artwork and its generation prompt remain documented
-in Git history (`startup.png` blob `b08c8ee03362b6775403e1bd50f8609f1c522f40`).
+The encoder pins the artwork and emits the existing RGB565 pixel array.
+Runtime dimensions, memory use and startup timing are unchanged. Updating
+`KUI/runtime.kui` supplies the new runtime splash; a compatible working boot CD
+remains usable. The package also includes an optional matching-artwork CDI.
+Previous artwork remains in Git history.
 
 The startup sound still uses the original three-note composition and timbre
 documented in the prior K-UI_DS revision's `utils/build_boot_assets.py`. Its

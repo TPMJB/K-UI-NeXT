@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import zipfile
@@ -23,6 +24,21 @@ def api(path):
 def require(condition, message):
     if not condition:
         raise SystemExit(message)
+
+
+def public_notes(notes, repository, tag):
+    """Release pages have no docs/ base URL; retain working source links."""
+    def replace(match):
+        target = match.group(1)
+        if re.match(r"^[a-z][a-z0-9+.-]*:|^#", target, re.IGNORECASE):
+            return match.group(0)
+        path, separator, anchor = target.partition("#")
+        source = (ROOT / "docs" / path).resolve()
+        if source.is_relative_to(ROOT) and source.is_file():
+            url = f"https://github.com/{repository}/blob/{tag}/{source.relative_to(ROOT)}"
+            return "(" + url + (separator + anchor if separator else "") + ")"
+        return match.group(0)
+    return re.sub(r"(?<=\])\(([^)\s]+)\)", replace, notes)
 
 
 def verify_assets(directory, release, commit):
@@ -45,7 +61,8 @@ def verify_assets(directory, release, commit):
             if name.endswith("-release.zip"):
                 require(record["kind"] == "release", "Refusing a diagnostic or candidate package")
                 for entry in ("KUI/runtime.kui", "KUI/apps/games/retail-boot.kui",
-                              "boot-cd/kui-v1.5.1.cdi", "START-HERE.md", "RELEASE-NOTES.md"):
+                              "KUI/apps/games/ce-probe.kui",
+                              f"boot-cd/kui-v{release['version']}.cdi", "START-HERE.md", "RELEASE-NOTES.md"):
                     require(entry in archive.namelist(), "Incomplete release: " + entry)
             else:
                 for entry in ("source/kui-source.tar.gz", "source/kos-source.tar.gz", "LICENSE"):
@@ -59,7 +76,7 @@ def main():
     require(repository == "TPMJB/K-UI-NeXT" and os.environ["GITHUB_REF"] == "refs/heads/main",
             "Release publication requires the upstream main branch")
     release = release_metadata()
-    require(release["version"] == "1.5.1", "This promotion is explicitly scoped to 1.5.1")
+    require(release["version"] == "1.7", "This promotion is explicitly scoped to 1.7")
     tag = "v" + release["version"]
     message = subprocess.check_output(["git", "show", "-s", "--format=%B", "HEAD"],
                                       cwd=ROOT, text=True)
@@ -84,9 +101,8 @@ def main():
         directory = Path(temporary)
         gh("run", "download", run_id, "--repo", repository, "--name", artifact_name, "--dir", temporary)
         assets = verify_assets(directory, release, commit)
-        notes = (ROOT / "docs/release-v1.5.1-notes.md").read_text(encoding="utf-8")
-        notes = notes.replace("(release-v1.5.1.md)",
-                              f"(https://github.com/{repository}/blob/{tag}/docs/release-v1.5.1.md)")
+        notes = (ROOT / f"docs/release-v{release['version']}-notes.md").read_text(encoding="utf-8")
+        notes = public_notes(notes, repository, tag)
         notes += f"\nSource commit: `{commit}`. [Native build]({run['html_url']}).\n"
         notes_file = directory / "release-notes.md"
         notes_file.write_text(notes, encoding="utf-8")

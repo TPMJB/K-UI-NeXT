@@ -263,7 +263,7 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         problem="Boot executable and full IP must be in high-density data tracks";goto done;
     }
     out->valid=true;
-    problem=out->windows_ce?"Image inspected; Windows CE: boot test only, no launch yet":
+    problem=out->windows_ce?"Image inspected; Windows CE SCI launch test, compatibility varies":
         !out->native_gd?"Image inspected; native GD-ROM with valid IP flags required":
         out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 99 tracks":
         out->boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES || out->boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES?

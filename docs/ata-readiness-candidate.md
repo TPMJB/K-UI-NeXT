@@ -1,9 +1,22 @@
-# ATA readiness release candidate
+# ATA readiness release candidate — historical packaging guide
 
-This is a development release candidate based on K-UI 1.5.1, not a new stable
-release. **ATA/IDE/CF hardware is untested, and the SCI512 hardware result is
-pending.** Keep the known-working release and the existing SCI comparison
-build available for rollback. The console still displays version 1.5.1;
+**Current status (2026-10-04):** the owner rejected the SCI512 comparison
+after an audio regression and selected the preceding 256-byte SCI setting
+for [K-UI 1.7](release-v1.7.md). The authorized ATA PIO preparation is included
+in that release with its experimental, hardware-untested status explicit.
+No repeat SCI512 test is pending. See the
+[1.7 baseline decision](evidence/v1.7-sci-baseline-2026-10-04.md).
+
+The instructions below describe the earlier, separately named ATA candidate
+package. Use the [1.7 installation guide](release-v1.7.md) for the release.
+Its source/build identity differs from that archived candidate.
+
+## Historical candidate status
+
+This candidate was based on K-UI 1.5.1. **ATA/IDE/CF hardware was untested,
+and the SCI512 result was pending when it was packaged.** Its known-working
+release and SCI comparison builds were retained for rollback. This archived
+candidate displays version 1.5.1;
 identify this candidate by the exact source build ID in `build.json` and on
 the launcher, and by `ata-readiness-candidate` in the download name.
 
@@ -25,9 +38,10 @@ ATA DMA are not implemented in this candidate. A separately gated, bounded
 DMA hardware diagnostic is a future milestone before considering a background
 ATA reader. It will need real hardware results and a safe PIO fallback.
 
-The package also carries the current SCI Windows CE test payload, including
-the pending 512-byte token-polling comparison. Its inclusion does not mean that
-comparison passed. Windows CE remains **SCI-only**; CE boot from IDE/CF is not
+The candidate package carried the SCI Windows CE test payload, including
+the then-pending 512-byte token-polling comparison. That comparison was
+subsequently rejected and is excluded from 1.7. Windows CE remains
+**SCI-only**; CE boot from IDE/CF is not
 supported. Native game loading and Windows CE testing remain separate paths.
 
 ## Install and preserve rollback
@@ -48,12 +62,12 @@ supported. Native game loading and Windows CE testing remain separate paths.
    `build.json` and the expected selected transport. Do not replace both the
    normal runtime and a working recovery runtime during this update.
 
-For the pending SCI512 comparison, use the same CE title and intro segment as
-the prior comparison, then record playback/audio behavior and the return
-counters. `WINDOWS-CE-PLACEMENT-TEST.md` describes the SCI-only CE entry and
-reader choices; its older experiment narrative is historical. This candidate
-does not request another broad soak or claim that the pending comparison has
-already succeeded.
+The archived candidate requested a SCI512 comparison using the same title and
+intro segment as the preceding run, with playback/audio observations and the
+return counters. That test has now been rejected by owner report; it is no
+longer a requested next step. `WINDOWS-CE-PLACEMENT-TEST.md` describes the
+SCI-only CE entry and reader choices; its older experiment narrative is
+historical.
 
 ATA hardware testing remains future work until the board is available. No
 ATA timing, throughput or compatibility result is supplied by host tests or a

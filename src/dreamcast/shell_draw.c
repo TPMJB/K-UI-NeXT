@@ -254,7 +254,7 @@ static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
     {KUI_SHELL_MUSIC,"Music Player","Music",
         {"Play WAV or Ogg music from SD.","Listen to audio CD tracks","or keep music in the background."},-1},
     {KUI_SHELL_GAMES,"Games","SD game library",
-        {"Launch native GD images from SD.","Browse your game library.","V1.5: compatibility varies."},-1},
+        {"Launch native GD images from SD.","Browse your game library.","V1.7: compatibility varies."},-1},
     {KUI_SHELL_FILES,"File Manager","SD card files",
         {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."},-1}};
 static const struct home_app *home_app(unsigned row) {
@@ -1286,12 +1286,12 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
             words(p,44,337,right,CYAN,"A Launch game   Y Advanced read test",false);
             words(p,44,365,right,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
                 "CD audio is unavailable; this game may not run.":
-                "V1.5: game compatibility varies.",false);
+                "V1.7: game compatibility varies.",false);
         } else if(kui_shell_games_ce_probe_ready(s)) {
             words(p,44,337,right,CYAN,"A Windows CE boot test   Y Advanced read test",false);
-            words(p,44,365,right,AMBER,"Windows CE games cannot be launched yet.",false);
+            words(p,44,365,right,AMBER,"Windows CE SCI launch test; compatibility varies.",false);
         } else {
-            words(p,44,337,right,AMBER,d->windows_ce?"Windows CE games cannot be launched yet.":
+            words(p,44,337,right,AMBER,d->windows_ce?"Windows CE SCI launch test; compatibility varies.":
                 !d->native_gd?"This image has no supported native GD boot header.":
                 d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 99 tracks.":
                 "This image exceeds the current launch limits.",false);
@@ -1361,15 +1361,15 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         panel(p,32,168,576,234,PANEL);
         label(p,48,186,CYAN,v->busy?"Preparing the test...":
             s->games_detail.title[0]?s->games_detail.title:"Test the selected image?");
-        label(p,48,218,AMBER,"The game is not expected to start yet.");
-        label(p,48,244,WHITE,"Loads Windows CE from SD and starts it,");
-        label(p,48,270,WHITE,"then stops at a disc request K-UI can't serve.");
+        label(p,48,218,AMBER,"Experimental SCI launch; compatibility varies.");
+        label(p,48,244,WHITE,"Loads Windows CE and the selected game.");
+        label(p,48,270,WHITE,"Video and audio may still slow or lose sync.");
         label(p,48,302,WHITE,"Needs SCI microSD. SD stays read-only.");
-        label(p,48,328,WHITE,"Photograph the last screen shown.");
+        label(p,48,328,WHITE,"A: standard reader   X: background reader.");
         label(p,48,354,AMBER,"Power cycle to return to the launcher.");
         if(v->busy && v->app_status && v->app_status->message[0])
             label(p,48,380,CYAN,v->app_status->message);
-        else label(p,48,380,MUTED,"X: background reader test (faster video).");
+        else label(p,48,380,MUTED,"X: background reader with bounded SCI work.");
         return;
     }
     title(p,40,108,"Games / Launch game");
@@ -1383,7 +1383,7 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         s->games_detail.title[0]?s->games_detail.title:"Launch selected game?");
     label(p,48,218,AMBER,s->games_detail.high_density_audio?
         "CD audio is unavailable; this game may not run.":
-        "V1.5: game compatibility varies.");
+        "V1.7: game compatibility varies.");
     label(p,48,244,WHITE,"SD access remains read-only.");
     label(p,48,270,WHITE,"The launcher closes before the game starts.");
     label(p,48,302,WHITE,"Keep the SD card inserted while playing.");

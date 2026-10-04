@@ -1128,7 +1128,7 @@ static void games_views(void) {
 static void games_rendering(void) {
     struct kui_shell_view view={0};
     reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);render(&view);
-    assert(strstr(drawn,"Games") && strstr(drawn,"10 applications") && strstr(drawn,"V1.5: compatibility varies"));
+    assert(strstr(drawn,"Games") && strstr(drawn,"10 applications") && strstr(drawn,"V1.7: compatibility varies"));
     reset(KUI_SHELL_GAMES);s.games_listing.count=8;s.games_listing.has_more=true;s.games_selected=7;
     for(unsigned i=0;i<8;i++) {
         snprintf(s.games_listing.entries[i].name,sizeof(s.games_listing.entries[i].name),"Game %u with a long but bounded name",i+1);
@@ -1165,16 +1165,16 @@ static void games_rendering(void) {
     assert(strstr(drawn,"A Launch"));
     s.games_detail.high_density_audio=true;render(&view);assert(strstr(drawn,"CD audio is unavailable"));
     s.games_detail.high_density_audio=false;s.games_detail.windows_ce=true;render(&view);
-    assert(strstr(drawn,"Windows CE games cannot be launched yet") && !strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"Windows CE SCI launch test") && !strstr(drawn,"A Launch"));
     assert(!strstr(drawn,"boot test"));
     s.games_detail.native_gd=false;strcpy(s.games_detail.boot_file,"0WINCEOS.BIN");
     s.games_detail.boot_bytes=1253376;render(&view);
-    assert(strstr(drawn,"A Windows CE boot test") && strstr(drawn,"cannot be launched yet"));
+    assert(strstr(drawn,"A Windows CE boot test") && strstr(drawn,"SCI launch test"));
     assert(!strstr(drawn,"A Launch"));
     s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
-    assert(strstr(drawn,"Games / Windows CE boot test") && strstr(drawn,"not expected to start"));
+    assert(strstr(drawn,"Games / Windows CE boot test") && strstr(drawn,"Experimental SCI launch"));
     assert(strstr(drawn,"A Start test") && strstr(drawn,"X Background reader"));
-    assert(strstr(drawn,"background reader test") && !strstr(drawn,"X/Y"));
+    assert(strstr(drawn,"background reader with bounded SCI work") && !strstr(drawn,"X/Y"));
     s.page=KUI_SHELL_GAMES_DETAIL;s.games_detail.native_gd=true;
     strcpy(s.games_detail.boot_file,"1ST_READ.BIN");s.games_detail.boot_bytes=123456;
     s.games_detail.windows_ce=false;

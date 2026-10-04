@@ -69,13 +69,14 @@ def package_metadata(candidate=None):
 
 def candidate_evidence():
     return {"name": "ATA readiness", "ata_hardware": "untested",
-            "sci512_hardware": "pending", "ata_io": "synchronous PIO",
+            "sci512_hardware": "rejected; restored 256-byte allowance", "ata_io": "synchronous PIO",
             "ata_dma": "not implemented", "windows_ce_ide": "unsupported"}
 
 
 def candidate_notice():
     return ("ATA readiness release candidate; not a hardware-validated release.\n"
-            "ATA hardware is untested; the SCI512 hardware result is pending.\n"
+            "ATA hardware is untested; the SCI512 test was rejected after degraded audio.\n"
+            "The prior 256-byte SCI token allowance is restored.\n"
             "The ATA changes use synchronous PIO only. ATA DMA is not implemented;\n"
             "an asynchronous DMA hardware diagnostic is a future milestone.\n"
             "Windows CE remains SCI-only; no CE IDE support or measured speed gain is claimed.\n\n")
@@ -89,19 +90,49 @@ def guide(source):
                       "(" + name.upper() + ".md", text)
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
-    text = text.replace("(release-v1.5.1.md)", "(START-HERE.md)")
+    version = release_metadata()["version"]
+    text = text.replace(f"(release-v{version}.md)", "(START-HERE.md)")
     text = text.replace("(../resources/music/README.md)", "(MUSIC.md)")
-    text = text.replace("(release-v1.5.1-notes.md)", "(RELEASE-NOTES.md)")
+    text = text.replace(f"(release-v{version}-notes.md)", "(RELEASE-NOTES.md)")
     return text
 
 
 def write_release_guides(dist, candidate=False):
-    guides = (("START-HERE.md", "release-v1.5.1.md"),
-              ("RELEASE-NOTES.md", "release-v1.5.1-notes.md"))
+    version = release_metadata()["version"]
+    guides = (("START-HERE.md", f"release-v{version}.md"),
+              ("RELEASE-NOTES.md", f"release-v{version}-notes.md"))
     for target, source in guides:
         if candidate:
             source = "ata-readiness-candidate.md"
         (dist / target).write_text(guide(source), encoding="utf-8")
+    if not candidate:
+        (dist / "ANNOUNCEMENTS.md").write_text(
+            guide(f"release-v{version}-announcements.md"), encoding="utf-8")
+
+
+def resolve_bundle_links(bundle, commit):
+    """Point supporting documentation omitted from the install ZIP at exact source."""
+    def replace_link(match, document):
+        target = match.group(1)
+        if re.match(r"^[a-z][a-z0-9+.-]*:|^#", target, re.IGNORECASE):
+            return match.group(0)
+        path, separator, anchor = target.partition("#")
+        installed = (document.parent / path).resolve()
+        if installed.is_relative_to(bundle.resolve()) and installed.is_file():
+            return match.group(0)
+        source = (ROOT / "docs" / path).resolve()
+        if not source.is_file():
+            source = (ROOT / "docs" / path.lower()).resolve()
+        if source.is_relative_to(ROOT) and source.is_file():
+            url = f"https://github.com/TPMJB/K-UI-NeXT/blob/{commit}/{source.relative_to(ROOT)}"
+            return "(" + url + (separator + anchor if separator else "") + ")"
+        return match.group(0)
+
+    for document in bundle.glob("*.md"):
+        content = document.read_text(encoding="utf-8")
+        content = re.sub(r"(?<=\])\(([^)\s]+)\)",
+                         lambda match: replace_link(match, document), content)
+        document.write_text(content, encoding="utf-8")
 
 
 def storage_image(elf_data, build, label):
@@ -117,7 +148,7 @@ def storage_image(elf_data, build, label):
 
 
 def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate=False):
-    """Assemble the actual install tree; candidate-only files never enter stable bundles."""
+    """Assemble the install tree without benchmarks, fixtures or user preferences."""
     release = record["release"]
     commit = record["commit"]
     # Ship only the normal application payloads. This fresh directory cannot
@@ -130,10 +161,8 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     shutil.copyfile(sd / "runtime.kui", bundle_sd / "runtime.kui")
     bundle_apps = {
         "music": [track["ogg"]["file"] for track in music_manifest["tracks"]],
-        "games": ("probe.kui", "image-probe.kui", "retail-boot.kui", "probe.dat"),
+        "games": ("probe.kui", "image-probe.kui", "retail-boot.kui", "ce-probe.kui", "probe.dat"),
     }
-    if candidate:
-        bundle_apps["games"] += ("ce-probe.kui",)
     for app, files in bundle_apps.items():
         (bundle_sd / "apps" / app).mkdir()
         for name in files:
@@ -141,14 +170,17 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, bundle_sd / name)
     (bundle / "boot-cd").mkdir()
-    cdi_name = release["artifact_prefix"] + ".cdi" if candidate else "kui-v1.5.1.cdi"
+    cdi_name = release["artifact_prefix"] + ".cdi" if candidate else f"kui-v{release['version']}.cdi"
     shutil.copyfile(cdi, bundle / "boot-cd" / cdi_name)
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
-    if candidate:
-        shutil.copyfile(dist / "WINDOWS-CE-PLACEMENT-TEST.md", bundle / "WINDOWS-CE-PLACEMENT-TEST.md")
+    if not candidate:
+        shutil.copyfile(dist / "ANNOUNCEMENTS.md", bundle / "ANNOUNCEMENTS.md")
+        shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
+                        bundle / "release-banner.jpg")
+    resolve_bundle_links(bundle, commit)
     shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
     bundle_record = {**record, "kind": "release-candidate" if candidate else "release",
                         "bootstrap": boot_record["bootstrap"],
@@ -157,9 +189,8 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     (bundle / "build.json").write_text(
         json.dumps(bundle_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     status = "release candidate" if candidate else "final release"
-    bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap; IDE needs a compatible CDI.\n"
-                      if candidate else
-                      "Existing boot CDs work with SCIF; SCI/IDE boot needs the new CDI in boot-cd/.\n")
+    bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
+                      "needs the new CDI in boot-cd/ only when changing to SCI or IDE/CF.\n")
     (bundle / "SOURCE.txt").write_text(
         f"{release['name']} ({release['version']}) — {status}\n"
         + (candidate_notice() if candidate else "") +
@@ -180,7 +211,10 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         "The graphical CD menu offers manual source selection and idle SD retry; B\n"
         "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
         "artifact supplies optional tools.kui for read-only load measurement.\n"
-        "The normal retail game reader is installed; no SD benchmark payload is included.\n",
+        "Native standard/background and Windows CE launch payloads are installed.\n"
+        "CE and background launch remain title-dependent SCI options; consult their guides.\n"
+        "No SD benchmark payload is included. ATA/IDE/CF is untested synchronous PIO;\n"
+        "ATA DMA and Windows CE on IDE are not implemented.\n",
         encoding="utf-8")
     bundle_hashes = []
     for path in sorted(bundle.rglob("*")):
@@ -415,9 +449,8 @@ def main():
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     for name in ("START-HERE.md", "RELEASE-NOTES.md"):
         shutil.copyfile(dist / name, update / name)
-    bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap; IDE needs a compatible CDI.\n"
-                      if candidate else
-                      "SCIF can keep its existing boot CD; SCI/IDE boot requires this run's new bootstrap CD.\n")
+    bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
+                      "needs this run's new bootstrap CD only when changing to SCI or IDE/CF.\n")
     (update / "SOURCE.txt").write_text(
         (candidate_notice() if candidate else "") +
         f"K-UI NeXT source commit: {commit}\n"

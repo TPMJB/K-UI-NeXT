@@ -1,4 +1,22 @@
-# Games: background SCI reader (test build)
+# Games: background SCI reader
+
+## Current release status — 1.7 (2026-10-04)
+
+Native launch confirmation keeps **A** for the standard reader, **X** for
+background SCI with **20 blocks per call**, and **Y** for background SCI with
+**25 blocks per call**. Y/25 is the owner's preferred recorded DOA2 result;
+other games still need their own compatibility reports.
+
+Windows CE uses a separate SCI-only reader: **X** on its confirmation selects
+the background path. 1.7 retains the accepted **256-byte token-search
+allowance** from `6f14bc529472`; the later 512-byte experiment is rejected.
+Audio/FMV/sync limitations remain.
+
+Use the [1.7 installation guide](release-v1.7.md) and
+[release notes](release-v1.7-notes.md) for the current package. The dated
+console runs, parked proposals and historical comparison procedure below
+record how the reader was developed; they do not request repeating those
+experiments for 1.7.
 
 The game reader normally reads each EXEC's sectors on the spot, with the
 game's interrupts masked: about 2 sectors (9 card blocks, roughly 4 ms) per
@@ -9,9 +27,11 @@ It is chosen per launch: on the **Launch game** confirmation, **A** launches
 with the standard reader, **X** with the background reader whose EXEC and
 CHECK calls each top reading up to 20 card blocks (about twice the standard
 reader's step), and **Y** with the same reader topping up to 25 (see *How
-long a GD call waits*). It needs SCI microSD and a launch map of at most 32
-file extents (a freshly copied game has a handful); otherwise the launch
-uses the standard reader and the log says why. The stage screen shows
+long a GD call waits*). It needs SCI microSD and a launch map fitting **64
+shared track and physical file-extent slots**. The standard reader has **160
+shared slots**, with up to 99 tracks. If the background map cannot fit,
+launch uses the standard reader and the log says why. See
+[the current launch-map format](games-launch-map.md). The stage screen shows
 `BACKGROUND READER X - 20 PER CALL` or `BACKGROUND READER Y - 25 PER CALL`
 when it is installed.
 
@@ -169,6 +189,12 @@ standard residents are unchanged.
   delivered 41% of blocks, during boot almost none (the fifth run).
 * Game code that reads VBR (rather than its own handlers) while a block is
   in flight sees the reader's. DOA2 has not minded.
+
+## Historical console experiments (2026-10-03)
+
+The following results and successive next-build proposals are dated reference
+material. Later reader settings supersede earlier X/Y allowances; the current
+1.7 settings are listed above.
 
 ## First console run (80687b46fde8)
 
@@ -374,7 +400,7 @@ the rare exception. A next step, parked: treat an overrun the interrupt
 finds as a restart rather than a repair, which keeps repair on whatever the
 mix, and make 25 blocks per call the default.
 
-## Console test (DOA2)
+## Historical DOA2 comparison procedure
 
 1. Install `KUI/runtime.kui` and `KUI/apps/games/retail-boot.kui` from the
    build's `sd-update` artifact. Storage must be SCI microSD.
@@ -397,7 +423,7 @@ request, the card block and the stream's error counters.
 | --- | --- |
 | `SECTORS READ` | Sectors delivered to the game |
 | `IRQ BLKS` / `CALLBLKS` | Blocks delivered by the reader's interrupt / by the game's GD calls |
-| `WAITS` | EXEC and CHECK calls that waited for blocks (short of 20, or with Y 30, since the previous one) |
+| `WAITS` | EXEC and CHECK calls that waited for blocks (short of 20, or with Y 25, since the previous one) |
 | `EXECS` / `EXEC INT` | EXEC calls during reads; those made from an interrupt handler (caller IMASK above 0) |
 | `HOOKS` / `RELEASES` | Vector installs per read; installs again by a GD call after a release |
 | `REHOOKS` | Installs again by the trampoline as an interrupt handler returned |

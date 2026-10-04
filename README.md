@@ -1,17 +1,24 @@
-# K-UI V1.5.1 "Dáinsleif"
+# K-UI V1.7 "Dáinsleif"
 
 An independent Dreamcast environment built directly on upstream KallistiOS.
 
-**Version 1.5.1 is released.** Download the
-[1.5.1 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.5.1), then read
-[the installation guide](docs/release-v1.5.1.md) and
-[release notes](docs/release-v1.5.1-notes.md). This Dáinsleif point release
-adds steadier game loading, faster launches, silent CD-audio games, a
-button combination that returns to K-UI, box art with disc titles in three
-Games views, and Ogg menu music. Compatibility remains title-dependent and
-loading speed is bounded by the serial SD interface. Existing boot CDs and
-FAT32/exFAT cards remain usable; no reformat is needed. The
-[1.5.0 notes](docs/release-v1.5-notes.md) remain available.
+![K-UI V1.7 Dáinsleif](resources/branding/release-v1.7-banner.jpg)
+
+**Version 1.7** brings Windows CE game booting on SCI microSD, background
+SCI reads, a graphical multi-transport bootstrap, hardware-tested W5500 FTP
+and a new crimson Dáinsleif splash. It also includes the isolated ATA PIO
+preparation for future IDE/CF testing. The ten-app environment combines game
+launching, verified GD-ROM capture, VMU management, music and system tools.
+
+Download the [1.7 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7),
+then read the [installation guide](docs/release-v1.7.md) and
+[release notes](docs/release-v1.7-notes.md). Windows CE support is experimental,
+SCI-only and title-dependent; FMV video/audio remain imperfect. The release
+restores the owner-selected 256-byte SCI allowance from `6f14bc529472`.
+ATA hardware is untested and uses synchronous PIO; ATA DMA and CE on IDE
+are future work. Existing exFAT cards and compatible boot CDs remain usable.
+Runtime ext4 support is not included; the bootstrap can read compatible ext4.
+The [1.5.1 notes](docs/release-v1.5.1-notes.md) remain available.
 
 The current SD runtime adds **raw-track GDI capture, saved-file verification and
 controlled resume** to the independently booting hardware diagnostic. It stays
@@ -33,7 +40,7 @@ good runtime have now passed by user report; see the
 New project code uses GPLv3; dependencies retain their own licenses. There is no
 separate contribution or commercial-relicensing agreement.
 
-## The 1.5 shell
+## The ten-app shell
 
 The SD runtime opens ten apps, in this order on Home: **Games**, **Disc Ripper**,
 **VMU Manager**, **File Manager** (new since 1.5.1), **Music Player**, **GD Play**,
@@ -42,7 +49,7 @@ parent folder, defaulting to `/Games`, with title-based folders and GDI filename
 The hardware-proven acquisition engine remains unchanged.
 
 Use the existing bootstrap CD and merge the release package's `KUI` folder
-onto the SD card as described in the [installation guide](docs/release-v1.5.1.md).
+onto the SD card as described in the [installation guide](docs/release-v1.7.md).
 Update the runtime and Games payload together; optional original menu music
 is included.
 See [the current app acceptance round](docs/apps-round-five.md) and

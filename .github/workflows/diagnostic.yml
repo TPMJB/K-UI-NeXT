@@ -38,7 +38,7 @@ jobs:
     # *-shell feature branches build through their PR, where GitHub permits
     # restoring the base branch's caches. Keep ordinary milestone push builds.
     if: >-
-      ${{ !(github.event_name == 'push' && github.ref_name == 'main' && contains(github.event.head_commit.message, 'Release: v1.5.1')) &&
+      ${{ !(github.event_name == 'push' && github.ref_name == 'main' && contains(github.event.head_commit.message, 'Release: v1.7')) &&
       (github.event_name != 'push' || !endsWith(github.ref_name, '-shell')) &&
       (github.event_name != 'pull_request' || endsWith(github.head_ref, '-shell') || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository) }}
     runs-on: ubuntu-24.04
@@ -100,7 +100,7 @@ jobs:
               if not paths or any(p not in exact and not p.startswith(('resources/branding/startup', 'docs/')) for p in paths):
                   raise SystemExit('RC-only request includes changes outside Games eligibility, branding and packaging')
               requested = True
-              print('V1.5 release: focused checks recorded locally; native build, layout and packaging checks run here.')
+              print('Release packaging: focused checks recorded locally; native build, layout and packaging checks run here.')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('console_only=' + str(requested).lower() + '\n')
           PY
@@ -256,7 +256,7 @@ jobs:
           path: dist/bootstrap-cd/
           if-no-files-found: error
           retention-days: 30
-      - name: Upload V1.5 release
+      - name: Upload release installation bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.package.outputs.artifact_prefix }}-release${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}
