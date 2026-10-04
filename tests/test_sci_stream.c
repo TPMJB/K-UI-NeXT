@@ -464,6 +464,167 @@ static void test_polled_on_request(void) {
     check_block(61, kui_sci_stream_take(61, &r));
     assert(card.cmd18 == 1 && m.fences >= 1);
 }
+static uint8_t crc_vector[512];
+static uint8_t vector_content(uint32_t lba, unsigned offset) {
+    (void)lba;
+    return crc_vector[offset];
+}
+static void test_crc_reference_vectors(void) {
+    /* The card model emits CRC from its independent bit-at-a-time 0x1021
+     * reference. Exercise the complete public receive/check path under both
+     * native and CE builds, including bit reversal and the separate RDR tail. */
+    assert(crc16((const uint8_t *)"123456789", 9) == 0x31c3u);
+    for(unsigned pattern = 0; pattern < 6u; ++pattern) {
+        uint32_t random = 0x7ab32ed1u;
+        for(unsigned i = 0; i < sizeof(crc_vector); ++i) {
+            random = random * 1664525u + 1013904223u;
+            crc_vector[i] = pattern == 0 ? 0 : pattern == 1 ? 255 :
+                pattern == 2 ? (uint8_t)i : pattern == 3 ? (uint8_t)(1u << (i & 7u)) :
+                pattern == 4 ? (i & 1u ? 0xaau : 0x55u) : (uint8_t)(random >> 24);
+        }
+        uint16_t expected = crc16(crc_vector, sizeof(crc_vector));
+        for(unsigned polled = 0; polled < 2u; ++polled) {
+            reset_model();
+            card_content = vector_content;
+            open_stream(false);
+            uint32_t lba = 700u;
+            enum kui_sci_stream_result r;
+            const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
+            struct kui_sci_stream_stats before = *st;
+            assert(kui_sci_stream_fetch(lba, LIMIT, polled != 0) == KUI_SCI_STREAM_OK);
+            assert(kui_sci_stream_busy() == !polled);
+            assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+            const uint8_t *p = kui_sci_stream_take(lba, &r);
+            assert(p && r == KUI_SCI_STREAM_OK && !memcmp(p, crc_vector, sizeof(crc_vector)));
+            assert(crc16(p, sizeof(crc_vector)) == expected && st->crc_errors == before.crc_errors);
+            /* A payload bit error is rejected, including for zero and
+             * all-one blocks; a clean reread then passes independently. */
+            card.corrupt_lba = ++lba; card.corrupt_count = 1;
+            assert(kui_sci_stream_fetch(lba, LIMIT, polled != 0) == KUI_SCI_STREAM_OK);
+            assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+            assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
+            assert(st->crc_errors == before.crc_errors + 1u);
+            assert(kui_sci_stream_fetch(lba, LIMIT, polled != 0) == KUI_SCI_STREAM_OK);
+            assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+            p = kui_sci_stream_take(lba, &r);
+            assert(p && r == KUI_SCI_STREAM_OK && !memcmp(p, crc_vector, sizeof(crc_vector)));
+            /* Corrupt only the stored high CRC byte of the received
+             * area; neither DMA nor polled reception may accept it. */
+            assert(kui_sci_stream_fetch(++lba, LIMIT, polled != 0) == KUI_SCI_STREAM_OK);
+            assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+            areas[0][512] ^= 1u; areas[1][512] ^= 1u;
+            assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
+            assert(st->crc_errors == before.crc_errors + 2u);
+            assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+            check_restored(); check_channel_restored();
+        }
+    }
+    /* Keep repair's CRC-syndrome reconstruction covered with the final
+     * nonuniform vector too, rather than only the model's usual pattern. */
+    reset_model();
+    card_content = vector_content;
+    open_stream(false);
+    unsigned repaired = kui_sci_stream_stats()->repaired;
+    m.overrun_after = 100u;
+    assert(kui_sci_stream_fetch(800u, LIMIT, false) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    enum kui_sci_stream_result r;
+    const uint8_t *p = kui_sci_stream_take(800u, &r);
+    assert(p && r == KUI_SCI_STREAM_OK && !memcmp(p, crc_vector, sizeof(crc_vector)));
+    assert(kui_sci_stream_stats()->repaired == repaired + 1u);
+    assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+    card_content = data_at;
+}
+#ifdef KUI_RETAIL_CE
+static void test_ce_token_slices(void) {
+    const uint32_t slice = KUI_SCI_STREAM_TOKEN_SLICE, lba = 700u;
+    reset_model(); open_stream(false); card.nac_first = 3u * slice + 7u;
+    struct kui_sci_stream_stats before = *kui_sci_stream_stats();
+    enum kui_sci_stream_result r;
+    for(unsigned i = 1; i <= 3u; ++i) {
+        kui_sci_stream_token_budget(true);
+        assert(kui_sci_stream_fetch(lba, 3u * slice + 8u, false) == KUI_SCI_STREAM_PENDING);
+        assert(card.frame == i * slice && card.cmd18 == 1u && !card.cmd12);
+        assert(kui_sci_stream_token_pending() && !kui_sci_stream_busy());
+        assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_PENDING);
+        /* A second visit in the same service entry has no fresh budget. */
+        assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_PENDING);
+        assert(card.frame == i * slice && card.cmd18 == 1u);
+    }
+    kui_sci_stream_token_budget(true);
+    assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
+    assert(!kui_sci_stream_token_pending() && kui_sci_stream_busy());
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    check_block(lba, kui_sci_stream_take(lba, &r));
+    assert(kui_sci_stream_stats()->token_errors == before.token_errors);
+    assert(kui_sci_stream_stats()->token_bytes - before.token_bytes == 3u * slice + 8u);
+    assert(kui_sci_stream_stats()->token_yields - before.token_yields == 3u);
+    assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+
+    /* The original total timeout survives slice boundaries and changing
+     * limit arguments on retries; pending slices never expose a payload. */
+    reset_model(); open_stream(false); card.nac_first = 4u * slice;
+    before = *kui_sci_stream_stats();
+    const uint32_t limit = 2u * slice + 9u;
+    for(unsigned i = 0; i < 3u; ++i) {
+        kui_sci_stream_token_budget(true);
+        assert(kui_sci_stream_fetch(lba, i ? UINT32_MAX : limit, false) ==
+            (i == 2u ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_PENDING));
+    }
+    assert(card.frame == limit && card.cmd18 == 1u && !m.dma_starts);
+    assert(kui_sci_stream_stats()->token_errors - before.token_errors == 1u);
+    assert(kui_sci_stream_stats()->token_bytes - before.token_bytes == limit);
+    assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_PENDING);
+    assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK && card.cmd12 == 1u);
+
+    reset_model(); open_stream(false); card.nac_first = 4u * slice;
+    kui_sci_stream_token_budget(true);
+    assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_PENDING);
+    card.nac_first = 30u;
+    kui_sci_stream_token_budget(true);
+    assert(kui_sci_stream_fetch(lba + 1u, LIMIT, false) == KUI_SCI_STREAM_OK);
+    assert(card.cmd12 == 1u && card.cmd18 == 2u);
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    check_block(lba + 1u, kui_sci_stream_take(lba + 1u, &r));
+    assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+    kui_sci_stream_token_budget(false);
+}
+static void test_ce_counters(void) {
+    /* Count the terminating token byte on both success and rejection. */
+    for(unsigned bad = 0; bad < 2; ++bad) {
+        reset_model(); open_stream(false);
+        struct kui_sci_stream_stats before = *kui_sci_stream_stats();
+        card.bad_token_lba = 700; card.bad_token_count = bad;
+        card.nac_first = before.token_max + 1u;
+        assert(kui_sci_stream_fetch(700, card.nac_first + 1u, true) ==
+            (bad ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_OK));
+        const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
+        assert(st->token_bytes - before.token_bytes == card.nac_first + 1u);
+        assert(st->token_max == card.nac_first + 1u);
+        assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+        assert(st->stops - before.stops == 1u && card.cmd12 == 1u);
+    }
+    /* Synthetic owned, stopped receptions exercise every reported bucket.
+     * The CH2/DMAOR values are handoff-time observations, not fault causes. */
+    static const uint32_t remaining[] = {0, 128, 129, 385};
+    for(unsigned i = 0; i < 4; ++i) {
+        reset_model(); open_stream(false); m.stall = true;
+        assert(kui_sci_stream_fetch(800, LIMIT, false) == KUI_SCI_STREAM_OK);
+        struct kui_sci_stream_stats before = *kui_sci_stream_stats();
+        m.dar += 513u - remaining[i]; m.tcr = remaining[i]; m.chcr &= ~3u;
+        m.chcr2 = i;
+        if(i & 1u) m.dmaor &= ~1u;
+        assert(kui_sci_stream_poll(false) == KUI_SCI_STREAM_OVERRUN);
+        const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
+        for(unsigned b = 0; b < 4; ++b)
+            assert(st->incomplete[b] - before.incomplete[b] == (b == i));
+        assert(st->incomplete_ch2_active - before.incomplete_ch2_active == (i == 1u));
+        assert(st->incomplete_dmaor_bad - before.incomplete_dmaor_bad == (i & 1u));
+        assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+        check_restored(); check_channel_restored();
+    }
+}
+#endif
 int main(void) {
     test_sequential();
     test_pending_and_kept();
@@ -476,6 +637,11 @@ int main(void) {
     test_byte_addressed();
     test_bus_fault();
     test_random_faults();
+    test_crc_reference_vectors();
+#ifdef KUI_RETAIL_CE
+    test_ce_counters();
+    test_ce_token_slices();
+#endif
     puts("sci stream: ok");
     return 0;
 }

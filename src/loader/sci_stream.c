@@ -73,7 +73,11 @@ static void fence(const void *area) {
 
 typedef uint32_t alias_word __attribute__((__may_alias__));
 /* RESUME: stopped mid-block by an overrun in an interrupt, to be resumed. */
-enum { CLOSED, PAUSED, DMA, LOST, RESUME };
+enum { CLOSED, PAUSED, DMA, LOST, RESUME
+#ifdef KUI_RETAIL_CE
+    , TOKEN_WAIT
+#endif
+};
 #ifdef KUI_RETAIL_ASYNC
 /* The game reader keeps this state between its interrupt vectors. */
 #include "retail_async.h"
@@ -93,11 +97,62 @@ static uint32_t reverse(uint32_t x) {
     t = (x ^ (x >> 4)) & UINT32_C(0x0f0f0f0f);
     return x ^ t ^ (t << 4);
 }
+#ifdef KUI_RETAIL_CE
+/* Original MSB-first CRC16 table for x^16+x^12+x^5+1 (0x1021).
+ * Entry i is generated from i << 8 by eight repetitions of:
+ *     crc = (crc << 1) ^ ((crc & 0x8000) ? 0x1021 : 0);
+ * retaining the low 16 bits after each step. CE spends 512 bytes of
+ * read-only resident space to shorten checks in both DMA and polled paths.
+ * Native readers retain the table-free update below. */
+static const uint16_t ce_crc16_table[256] __attribute__((aligned(32))) = {
+    0x0000u, 0x1021u, 0x2042u, 0x3063u, 0x4084u, 0x50a5u, 0x60c6u, 0x70e7u,
+    0x8108u, 0x9129u, 0xa14au, 0xb16bu, 0xc18cu, 0xd1adu, 0xe1ceu, 0xf1efu,
+    0x1231u, 0x0210u, 0x3273u, 0x2252u, 0x52b5u, 0x4294u, 0x72f7u, 0x62d6u,
+    0x9339u, 0x8318u, 0xb37bu, 0xa35au, 0xd3bdu, 0xc39cu, 0xf3ffu, 0xe3deu,
+    0x2462u, 0x3443u, 0x0420u, 0x1401u, 0x64e6u, 0x74c7u, 0x44a4u, 0x5485u,
+    0xa56au, 0xb54bu, 0x8528u, 0x9509u, 0xe5eeu, 0xf5cfu, 0xc5acu, 0xd58du,
+    0x3653u, 0x2672u, 0x1611u, 0x0630u, 0x76d7u, 0x66f6u, 0x5695u, 0x46b4u,
+    0xb75bu, 0xa77au, 0x9719u, 0x8738u, 0xf7dfu, 0xe7feu, 0xd79du, 0xc7bcu,
+    0x48c4u, 0x58e5u, 0x6886u, 0x78a7u, 0x0840u, 0x1861u, 0x2802u, 0x3823u,
+    0xc9ccu, 0xd9edu, 0xe98eu, 0xf9afu, 0x8948u, 0x9969u, 0xa90au, 0xb92bu,
+    0x5af5u, 0x4ad4u, 0x7ab7u, 0x6a96u, 0x1a71u, 0x0a50u, 0x3a33u, 0x2a12u,
+    0xdbfdu, 0xcbdcu, 0xfbbfu, 0xeb9eu, 0x9b79u, 0x8b58u, 0xbb3bu, 0xab1au,
+    0x6ca6u, 0x7c87u, 0x4ce4u, 0x5cc5u, 0x2c22u, 0x3c03u, 0x0c60u, 0x1c41u,
+    0xedaeu, 0xfd8fu, 0xcdecu, 0xddcdu, 0xad2au, 0xbd0bu, 0x8d68u, 0x9d49u,
+    0x7e97u, 0x6eb6u, 0x5ed5u, 0x4ef4u, 0x3e13u, 0x2e32u, 0x1e51u, 0x0e70u,
+    0xff9fu, 0xefbeu, 0xdfddu, 0xcffcu, 0xbf1bu, 0xaf3au, 0x9f59u, 0x8f78u,
+    0x9188u, 0x81a9u, 0xb1cau, 0xa1ebu, 0xd10cu, 0xc12du, 0xf14eu, 0xe16fu,
+    0x1080u, 0x00a1u, 0x30c2u, 0x20e3u, 0x5004u, 0x4025u, 0x7046u, 0x6067u,
+    0x83b9u, 0x9398u, 0xa3fbu, 0xb3dau, 0xc33du, 0xd31cu, 0xe37fu, 0xf35eu,
+    0x02b1u, 0x1290u, 0x22f3u, 0x32d2u, 0x4235u, 0x5214u, 0x6277u, 0x7256u,
+    0xb5eau, 0xa5cbu, 0x95a8u, 0x8589u, 0xf56eu, 0xe54fu, 0xd52cu, 0xc50du,
+    0x34e2u, 0x24c3u, 0x14a0u, 0x0481u, 0x7466u, 0x6447u, 0x5424u, 0x4405u,
+    0xa7dbu, 0xb7fau, 0x8799u, 0x97b8u, 0xe75fu, 0xf77eu, 0xc71du, 0xd73cu,
+    0x26d3u, 0x36f2u, 0x0691u, 0x16b0u, 0x6657u, 0x7676u, 0x4615u, 0x5634u,
+    0xd94cu, 0xc96du, 0xf90eu, 0xe92fu, 0x99c8u, 0x89e9u, 0xb98au, 0xa9abu,
+    0x5844u, 0x4865u, 0x7806u, 0x6827u, 0x18c0u, 0x08e1u, 0x3882u, 0x28a3u,
+    0xcb7du, 0xdb5cu, 0xeb3fu, 0xfb1eu, 0x8bf9u, 0x9bd8u, 0xabbbu, 0xbb9au,
+    0x4a75u, 0x5a54u, 0x6a37u, 0x7a16u, 0x0af1u, 0x1ad0u, 0x2ab3u, 0x3a92u,
+    0xfd2eu, 0xed0fu, 0xdd6cu, 0xcd4du, 0xbdaau, 0xad8bu, 0x9de8u, 0x8dc9u,
+    0x7c26u, 0x6c07u, 0x5c64u, 0x4c45u, 0x3ca2u, 0x2c83u, 0x1ce0u, 0x0cc1u,
+    0xef1fu, 0xff3eu, 0xcf5du, 0xdf7cu, 0xaf9bu, 0xbfbau, 0x8fd9u, 0x9ff8u,
+    0x6e17u, 0x7e36u, 0x4e55u, 0x5e74u, 0x2e93u, 0x3eb2u, 0x0ed1u, 0x1ef0u,
+};
+#endif
+#ifdef KUI_RETAIL_CE
+/* Keep the accumulator in a full SH register; a uint16_t accumulator made
+ * the compiler spill/reload it each byte. Every update still yields a
+ * 16-bit state, so the next table index remains within 0..255. */
+static inline uint32_t crc16(uint32_t crc, uint8_t data) {
+    return ((crc << 8) & 0xffffu) ^ ce_crc16_table[(crc >> 8) ^ data];
+}
+#else
 static inline uint16_t crc16(uint16_t crc, uint8_t data) {
     uint32_t x = (crc >> 8) ^ data;
     x ^= x >> 4;
     return (uint16_t)((crc << 8) ^ (x << 12) ^ (x << 5) ^ x);
 }
+#endif
 static uint8_t crc7(const uint8_t *p) {
     unsigned c = 0;
     for(unsigned i = 0; i < 5; ++i) for(unsigned j = 0; j < 8; ++j) {
@@ -127,11 +182,55 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
 }
 bool kui_sci_stream_busy(void) { return s.state == DMA; }
 bool kui_sci_stream_ready(uint32_t lba) { return s.arrived == lba + 1u; }
+#ifdef KUI_RETAIL_CE
+void kui_sci_stream_token_budget(bool bounded) {
+    s.token_bounded = bounded;
+    s.token_budget = KUI_SCI_STREAM_TOKEN_SLICE;
+}
+bool kui_sci_stream_token_pending(void) { return s.state == TOKEN_WAIT; }
+#endif
 const struct kui_sci_stream_stats *kui_sci_stream_stats(void) { return &s.stats; }
 void kui_sci_stream_discard(void) { s.ready[0] = s.ready[1] = 0; s.kept = 0; s.arrived = 0; }
 
 /* Data token after the card's wait (0xff); TEND before the DMA starts. */
+#ifdef KUI_RETAIL_CE
+static void token_count(uint32_t bytes) {
+    s.stats.token_bytes += bytes;
+    if(bytes > s.stats.token_max) s.stats.token_max = bytes;
+}
+#endif
 static enum kui_sci_stream_result token(uint32_t limit) {
+#ifdef KUI_RETAIL_CE
+    if(s.state != TOKEN_WAIT) {
+        s.token_limit = limit;
+        s.token_used = 0;
+        s.state = TOKEN_WAIT;
+    }
+    uint32_t remaining = s.token_limit - s.token_used, run = remaining;
+    if(s.token_bounded && run > s.token_budget) run = s.token_budget;
+    uint32_t n = 0;
+    uint8_t value = 0xff;
+    while(n < run) {
+        value = byte(0xff);
+        ++n;
+        if(value != 0xff) break;
+    }
+    s.token_used += n;
+    if(s.token_bounded) s.token_budget -= n;
+    if(value == 0xfe) {
+        for(unsigned k = 0; k < 64u && !(rd8(SSR) & TEND); ++k) {}
+        token_count(s.token_used);
+        return KUI_SCI_STREAM_OK;
+    }
+    if(value == 0xff && n < remaining && healthy()) {
+        select(false); /* no more clocks until the same search resumes */
+        if(!healthy()) {s.state = LOST; return KUI_SCI_STREAM_RESET;}
+        if(n) ++s.stats.token_yields; /* count work paused, not zero-budget probes */
+        return KUI_SCI_STREAM_PENDING;
+    }
+    token_count(s.token_used);
+    s.state = LOST;
+#else
     for(uint32_t n = 0; n < limit; ++n) {
         uint8_t value = byte(0xff);
         if(value == 0xfe) {
@@ -140,6 +239,7 @@ static enum kui_sci_stream_result token(uint32_t limit) {
         }
         if(value != 0xff) break;
     }
+#endif
     ++s.stats.token_errors;
     return healthy() ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_RESET;
 }
@@ -155,6 +255,10 @@ static uint8_t command(const uint8_t packet[6], bool stop) {
  * idle card answers "illegal command" (0x04): it is stopped all the same. */
 static enum kui_sci_stream_result stop_card(void) {
     static const uint8_t stop[6] = {0x4c, 0, 0, 0, 0, 0x61};
+#ifdef KUI_RETAIL_CE
+    if(s.state == TOKEN_WAIT) token_count(s.token_used);
+    ++s.stats.stops;
+#endif
     select(true);
     enum kui_sci_stream_result result = command(stop, true) & ~0x04u ?
         KUI_SCI_STREAM_COMMAND : KUI_SCI_STREAM_OK;
@@ -177,6 +281,9 @@ static enum kui_sci_stream_result start(uint32_t lba, uint32_t limit) {
     ++s.stats.starts;
     uint8_t r1 = command(packet, false);
     if(!healthy()) return KUI_SCI_STREAM_RESET;
+#ifdef KUI_RETAIL_CE
+    s.position = lba;
+#endif
     return r1 ? KUI_SCI_STREAM_COMMAND : token(limit);
 }
 static enum kui_sci_stream_result module_reset(void) {
@@ -277,10 +384,23 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
         if((result = start_dma(s.fill, s.lost[s.fill])) != KUI_SCI_STREAM_OK) s.state = LOST;
         return result;
     }
+#ifdef KUI_RETAIL_CE
+    bool pending = s.state == TOKEN_WAIT && s.position == lba;
+    if(!pending) s.token_polled = polled;
+    else polled = s.token_polled;
+    if(pending || (s.state == PAUSED && s.position == lba)) {
+#else
     if(s.state == PAUSED && s.position == lba) {
+#endif
         select(true);
         result = token(token_limit);
-        if(result != KUI_SCI_STREAM_OK) {s.state = LOST; return result;}
+        if(result != KUI_SCI_STREAM_OK) {
+#ifdef KUI_RETAIL_CE
+            if(result != KUI_SCI_STREAM_PENDING)
+#endif
+                s.state = LOST;
+            return result;
+        }
     } else {
         if(s.state != CLOSED && (result = stop_card()) != KUI_SCI_STREAM_OK) return result;
         result = start(lba, token_limit);
@@ -327,6 +447,14 @@ static enum kui_sci_stream_result finish(bool later) {
         return KUI_SCI_STREAM_BUSY;
     }
     if(count || !(control & 2u) || !(status & RDRF)) {
+#ifdef KUI_RETAIL_CE
+        unsigned bucket = !count ? 0u : count <= 128u ? 1u : count <= 384u ? 2u : 3u;
+        ++s.stats.incomplete[bucket];
+        /* The SCI and our channel have already stopped and handed back.
+         * These late snapshots cannot identify the exact fault-time owner. */
+        s.stats.incomplete_ch2_active += (rd32(CHCR + 0x10u) & 3u) == 1u;
+        s.stats.incomplete_dmaor_bad += (rd32(DMAOR) & 7u) != 1u;
+#endif
         /* The channel was held off the bus (the game's own DMA) and the
          * receiver overran mid-block: the byte that overran is lost and the
          * card stopped after it. The channel has `at` bytes; usually it
@@ -401,7 +529,11 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
         }
         uint8_t high = area[512], low = s.rdr[i];
         bool wire = s.wire[i];
+#ifdef KUI_RETAIL_CE
+        uint32_t crc = 0;
+#else
         uint16_t crc = 0;
+#endif
         for(unsigned w = 0; w < 128u; ++w) {
             uint32_t word = ((alias_word *)area)[w];
             if(wire) ((alias_word *)area)[w] = word = reverse(word);

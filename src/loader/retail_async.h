@@ -40,9 +40,11 @@
  * destination, or each transfer CE's driver gives a stream (DMA_TRANSFER;
  * PIO_TRANSFER through kui_retail_async_read_part). The interrupt fills only
  * pieces at physical addresses (P1, P2 or a DMA destination); CE's virtual
- * addresses are filled by its own calls. Bytes the cursor produces past a
- * piece's end wait in the spill for the next piece, and the stream waits
- * meanwhile. A full stream transfer raises the DMA end interrupt and a
+ * addresses are filled by its own calls. The interrupt prefetches those
+ * bytes, and bytes past a piece's end, into a bounded physical ring; calls
+ * drain it in order. Card production pauses when the ring is full, and a
+ * queued tail never completes a request before its destination is filled.
+ * A full stream transfer raises the DMA end interrupt and a
  * finished request the drive's (kui_retail_gd_stream_progress,
  * kui_retail_gd_progress); a block the interrupt cannot place raises the
  * drive's too, so CE's driver calls again to take it. */
@@ -81,13 +83,22 @@ struct kui_retail_async {
     /* The current piece: request output bytes [piece_begin, piece_begin +
      * piece_bytes) go to guest address piece_destination (or, from
      * read_part, to piece_direct); piece_filled of them are written. Once
-     * closed (piece_set clear), all output goes to the spill: spill_bytes
-     * from spill + spill_from, the bytes right after the piece's. isr: CE's
+     * closed (piece_set clear), or virtual during an interrupt, output goes
+     * to the spill ring: spill_bytes from spill_from, wrapping at its end.
+     * They are the bytes immediately after the piece's delivered bytes.
+     * active tracks card production, not delivery: a final queued tail may
+     * remain after it clears. isr: CE's
      * handler table leads the SCI's events to the resident. */
     uint32_t piece_destination, piece_begin, piece_bytes, piece_filled;
     uint32_t spill_from, spill_bytes;
+    uint32_t queue_highwater, prefetched_bytes, queue_blocked;
+    /* Work per delivery visit, not elapsed time or a whole GD call. */
+    uint32_t polled_irq_max, polled_call_max;
+    uint32_t pio_calls, pio_bytes; /* token-matching read_part requests */
     uint8_t *piece_direct;
-    uint8_t piece_set, piece_physical, isr;
+    /* A failed overrun uses a polled reread of this block only. Other
+     * faults retain the ordinary retry threshold; no session-wide mode. */
+    uint8_t piece_set, piece_physical, isr, early_polled;
 #endif
 };
 /* State the resident shares with the reader, kept between the vectors (the
@@ -100,8 +111,9 @@ struct kui_retail_async_shared {
     struct kui_sci_sd_port port;
 };
 #ifdef KUI_RETAIL_CE
-/* Bytes one card block can hold past a piece's end. */
-#define KUI_RETAIL_ASYNC_SPILL_BYTES 512u
+/* Bounded physical staging while CE runs or supplies the next destination.
+ * Power of two for ring indexing; whole card blocks keep admission simple. */
+#define KUI_RETAIL_ASYNC_SPILL_BYTES 2048u
 struct kui_retail_async_region {
     uint8_t area0[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
     uint8_t area1[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));

@@ -1,5 +1,377 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: compare 512-byte token allowance (2026-10-04)
+
+Owner confirms photo `01-image-1791148467591.jpg` is ARMADA on build
+`6f14bc529472`. ARMADA seemed a little better. Worms Armageddon improved
+in some respects but its intro audio preceded video by about half a second;
+the owner considers it mostly fine and is not supplying a separate photo.
+
+The ARMADA counters show 24,657 DMA and 7,058 polled receptions (22.25%
+polled), 7,174 token yields, guard 0, CRC errors 2, and token/foreign errors
+0. Incomplete bins total 7,226, matching 7,058 overruns plus 168 repair
+attempts. These unequal-duration sessions do not establish a transfer-rate
+change or the cause of the audio offset.
+
+The next isolated test changes only `KUI_SCI_STREAM_TOKEN_SLICE` from 256
+to 512 bytes. This trades longer bounded token polling for fewer possible
+continuation round trips. Payload reception, CRC, recovery and wakeup rules
+are unchanged. See [result and test plan](evidence/ce-token-512-2026-10-04.md).
+
+## Windows CE: resumable token search experiment (2026-10-04)
+
+ARMADA photo `61835.jpg` confirms diagnostic build `b6f55e1e0876`. It
+records 66,595 DMA and 18,643 polled receptions (21.87% polled). All
+successful polled receptions occurred in interrupt delivery visits, maximum
+one per visit; no PIO `read_part` calls occurred. The 18,809 incomplete
+receptions equal 18,643 overruns plus 166 repair attempts; 83.7% stopped
+with 129–384 DMA bytes left. Late controller snapshots were clean, which
+does not exclude earlier contention. Token searches clocked 6,524,422
+bytes, with a maximum of 3,222 in one successful search. Starts/stops were
+18,893/18,892; guard 0, CRC errors 4, token/foreign errors 0.
+
+The owner separately reports Worms Armageddon is slightly laggy but its
+audio/video appear synchronized. No controlled duration or Worms counters
+were supplied, and the diagnostic build does not establish a sync fix.
+
+The approved next experiment shares a 256-token-byte allowance across each
+CE service entry, preserves pending searches across returns and explicitly
+wakes CE to continue. It retains the accepted payload byte loop and CRC.
+Boot/noninstalled and synchronous PIO-transfer entries remain unbudgeted.
+`TOKYIELD` replaces the unused fifth column of the last counter row. See
+[design, evidence and validation](evidence/ce-token-slicing-2026-10-04.md).
+
+## Windows CE: count incomplete DMA and blocking work (2026-10-04)
+
+The next experiment adds CE-only counters to the restored `e9ff2353c3cd`
+reader. It does not reintroduce the rejected batched receiver or change
+transfer ordering, retries, CRC, IRQ priorities, queue size or live overlay.
+The goal is to choose a smaller blocking-work change from console evidence,
+not claim a speed gain from this diagnostic build. See
+[counter definitions and test procedure](evidence/ce-blocking-diagnostics-2026-10-04.md).
+
+The return screen replaces last-command and queue rows with incomplete-DMA
+bins, late controller snapshots, token work and maximum polled blocks per
+delivery visit. All values remain hexadecimal; one photo captures the whole
+screen. The existing CE-owned timer cannot safely measure arbitrarily long
+masked intervals, so these counts must not be reported as microseconds.
+
+The older DreamShell-based menu was also compared read-only. Its cached
+PCM callback only copied samples, and its UI status mutex was released
+before sound-driver work. Current K-UI decodes Ogg while holding the mutex
+that the main loop acquires before processing input. Separate input/render
+scheduling and PVR rendering are further differences. No menu implementation
+or code from that repository is included in this CE experiment.
+
+## Windows CE: batched recovery rejected, restore CRC baseline (2026-10-04)
+
+Owner reports `bd2b7fb7424b` made ARMADA worse and Worms Armageddon no
+longer boots. Reject this experiment. Restore all source, test and Makefile
+changes from that commit to `e9ff2353c3cd`, the last owner-confirmed build
+that improved both titles. Retain the original verified e9 SD ZIP as the
+immediate recovery artifact; a freshly compiled rollback is not needed
+for the owner's next run.
+
+Photo `image(7).png` confirms the rejected build and records a menu return:
+guard 0, DMA blocks `0x143C2` (82,882), polled/overruns `0x5FF8` (24,568),
+starts `0x6144` (24,900), kept `0x273` (627), CRC errors 4, token/foreign 0,
+and repair attempts/deferred `0xA2` (162). The polled fraction is 22.86%,
+essentially unchanged from 22.84% previously. This does not measure stall
+duration or identify the boot-failure cause. The image does not show the
+Worms boot failure itself, and no exact failed stage is yet established.
+
+The host register model covered the intended byte sequence; it did not
+establish real SCI timing or CE compatibility. Passing checks and zero
+guard faults did not predict the console result. No root cause is claimed,
+and no new optimization or audio/video timing workaround accompanies this
+rollback. Previous experiment details below remain as the rejected record.
+
+## Windows CE: batched polled recovery experiment (2026-10-04)
+
+Owner reports `e9ff2353c3cd` is quite a bit better. ARMADA still needs
+improvement; Worms Armageddon's roughly ten-second intro is almost perfect,
+but audio precedes the corresponding video. Whether that offset grows or
+stays constant is unknown. No artificial audio delay or timing adjustment
+is part of this experiment; the owner requested one problem at a time.
+
+Photo `image(6).png` identifies `e9ff2353c3cd`; its title and exact run
+duration are unconfirmed. Whole-session counters are:
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 0001614E | 90446 |
+| Call blocks | 00006B81 | 27521 |
+| DMA blocks | 00016175 | 90485 |
+| Polled blocks | 0000689D | 26781 |
+| Stream starts | 000069E8 | 27112 |
+| Kept blocks | 000002BF | 703 |
+| Overruns | 0000689D | 26781 |
+| CRC errors | 00000002 | 2 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 00000098 | 152 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+Of 117,266 completed card receptions, 22.84% were polled, close to 22.23%
+in the prior run. The unchanged one-overrun-per-polled-block relationship
+and reported smoother playback are consistent with less CRC CPU work,
+but do not establish measured throughput or the cause of Worms' offset.
+
+The next isolated change targets those CPU-driven recoveries. The CE
+background reader receives each 512-byte payload and its two CRC bytes
+with one bounded batch, preparing SCI once and keeping only one byte in
+flight. Raw bytes then pass through the existing word reversal and CRC
+validation. It must not start DMA, clock an extra byte, publish unchecked
+data, or change retry/repair policy, interrupt ownership, queue capacity,
+boot behavior or live-overlay suppression. Native and synchronous CE
+readers retain their existing paths. Console benefit remains unmeasured.
+
+Local SH proxy native/CE instruction, layout and stack audits pass. CE
+async payload is 15,780 bytes (+160), with unchanged 5,084-byte BSS; its
+end is `0x8c00d49c`, leaving 868 bytes below the unchanged limit. Worst
+stack is 432 plus 64 bytes within 2,000 usable; the interrupt path is
+232 bytes. At a fixed build ID, native resident/stage binaries and the
+synchronous CE resident remain byte-identical to `e9ff2353c3cd`.
+
+The generated batch prepares once and seeds TDR once. Each byte uses one
+bounded flag wait, with no per-byte bus callback, repeated preparation or
+bit reversal; storing the preceding byte overlaps the next transfer.
+Generated code still spills registers around the wait call, so no cycle
+or throughput improvement is claimed without the console comparison.
+
+The actual helper passes the register model with varied byte timing:
+exactly 514 bytes, one byte in flight, raw bit order, no byte 515, unchanged
+CS/DMA/IRQ ownership, and latched bounded failures at the first, middle
+and final byte. The existing bus suite also passes. The stream-model
+adapter supplies the helper's raw-wire contract; the separate register
+test exercises the production implementation itself.
+
+ASan/UBSan native and CE stream tests pass, including the independent CRC
+vectors, corruption rejection and repair cases. CE async passes 103,800
+checks, including raw-helper selection on first-overrun recovery and a
+partial helper fault ending the request with zero published bytes. Normal
+`make test` includes the new register-model variant. Full pinned CI is
+required for these committed test and Makefile changes. Compare the same
+ARMADA intro with X after a cold boot, then capture menu-return counters;
+judge audio/video pacing without changing reader settings or adding an
+audio synchronization workaround.
+
+## Windows CE: CRC lookup experiment and first-overrun result (2026-10-04)
+
+Owner reports smoother ARMADA intro video and audio on `ba7caf575391`,
+with room for improvement. Photo `61832.jpg` records the following
+whole-session counters. No live overlay or audio audition is used to
+claim a measured throughput gain.
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 00010D29 | 68905 |
+| Call blocks | 00004F21 | 20257 |
+| DMA blocks | 00010D50 | 68944 |
+| Polled blocks | 00004CF7 | 19703 |
+| Stream starts | 00004DF0 | 19952 |
+| Overruns | 00004CF7 | 19703 |
+| CRC errors | 00000003 | 3 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 0000009D | 157 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+There is now exactly one overrun per polled block, versus about 2.01 in
+the preceding run. This confirms the immediate-fallback behavior; it does
+not show a lower normalized overrun rate. The newer session completed
+88,647 card receptions (DMA plus polled), 3.19 times the preceding 27,773,
+and roughly 22.2% were polled versus 10.5% previously. Different workloads
+and run lengths prevent treating these totals as a controlled speed test.
+Guard faults remain zero. The three CRC errors and 157 repair attempts
+do not establish which failures triggered the existing repair cutoff.
+
+The next isolated experiment replaces only the CE stream reader's
+algebraic CRC16 byte update with an original, polynomial-generated
+256-entry constant table (512 bytes). It retains CRC checks on every
+block and the same repair validation. Native readers keep their existing
+algebraic calculation. DMA, fallback thresholds, interrupt priority,
+queue size, boot paths and the live-overlay guard are unchanged.
+
+The aim is to shorten CPU work while checking each received sector,
+including work done with interrupts masked. This does not eliminate the
+CPU-driven fallback transfer or guarantee fewer DMA overruns. Console
+comparison should use the same ARMADA intro interval after a cold boot,
+launching with X, and compare broken/repeated speech, video pacing and
+menu-return counters. Host correctness and resident fit must pass before
+publishing; any speed or smoothness gain still requires console evidence.
+
+Local SH proxy compilation and instruction/layout/stack audits pass. CE
+async payload is 15,620 bytes, with unchanged 5,084-byte BSS; the resident
+ends at `0x8c00d3fc`, leaving 1,028 bytes below its `0x8c00d800` limit. The
+512-byte table is read-only and 32-byte aligned. Worst conservative stack
+is 408 plus 64 bytes within 2,000 usable, with a 208-byte interrupt path.
+At a fixed build ID, native resident/stage binaries and the CE synchronous
+resident remain byte-identical to `ba7caf575391`. These proxy checks do not
+replace pinned CI or console playback comparison.
+
+The CE accumulator uses a full register while explicitly retaining a
+16-bit CRC state at each step. This avoids the compiler's initial
+per-byte spill/reload. The final proxy byte loop has 14 instructions
+versus 23 previously, with two table-related memory reads and no per-byte
+stack traffic or function calls. Instruction counts alone are not a
+timing measurement; cache behavior and the card/game workload still matter.
+
+Focused ASan/UBSan validation passes both native and CE stream suites and
+the CE async suite (97,636 checks). New stream vectors exercise six sector
+patterns through DMA and polled reads against the model's independent
+bitwise CRC reference, anchored by `123456789` yielding `0x31c3`. They
+reject payload and CRC-trailer corruption, accept clean rereads, and check
+single-byte reconstruction with nonuniform data. Normal `make test` now
+also runs the stream suite with `KUI_RETAIL_CE`, so CI covers the table
+and algebraic implementations through the same public receive APIs.
+
+## Windows CE: first-overrun fallback experiment (2026-10-04)
+
+Owner confirmed `68cbe37aa95e` boots. The FMV advanced steadily, but audio
+had a consistent echo/repetition effect and no clear playback improvement
+was reported. Photo `61827.jpg` identifies that build and records the
+whole-session counters below; clip `61826.mp4` accompanies it. Audio could
+not be auditioned by this agent, so the description is the owner's.
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 000060E8 | 24808 |
+| Call blocks | 00000C22 | 3106 |
+| DMA blocks | 00006110 | 24848 |
+| Polled blocks | 00000B6D | 2925 |
+| Stream starts | 0000182C | 6188 |
+| Overruns | 00001703 | 5891 |
+| CRC errors | 00000002 | 2 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 000000C7 | 199 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+`OVERRUNS` counts failed/incomplete receptions, not the intentional stop at
+successful block ends. `REPAIRED` is incremented when an in-place repair is
+attempted, before its CRC is known. These totals do not prove that the two
+CRC errors disabled repairs, nor isolate the FMV interval. Roughly two
+overruns per polled block is consistent with the existing two-failure
+fallback threshold; it motivates the following controlled test.
+
+Only the CE background reader changes: an unrecovered `OVERRUN` marks the
+current block for a polled reread immediately. Other failures retain the
+two-failure fallback rule, and the eight-retry failure budget is unchanged.
+The flag clears after successful block delivery, on new requests and abort.
+Following blocks resume normal DMA. CRC checks, the existing two-failed-
+repair cutoff, the two-iteration interrupt limit, queue size and live-overlay
+guard remain intact. This is an attempt to reduce wasted retries/restarts;
+no improvement is claimed before the console comparison.
+
+Validation: the CE model passes 97,636 checks under ASan/UBSan, including
+first-overrun reread at the same LBA before delivery, return to DMA for the
+next block, repairable-overrun continuation, other error thresholds and
+terminal CRC failure. The first-overrun case fails against `68cbe37aa95e`
+as expected. Native async (119,928 checks) and GD (847) pass. Local SH
+instruction/layout/stack audits pass; CE async has 1,540 bytes free and its
+stack remains 404 + 64 bytes within 2,000 usable. At a fixed build ID,
+native images and CE standard are byte-identical; CE stage instructions
+are unchanged, with relocated pointers adjusted. Full pinned CI is required
+because the committed CE test file is outside the existing console-only
+scope. Console performance remains unmeasured.
+
+Console comparison: cold boot, launch the same CE title with X, play the
+same intro segment for the same duration, then photograph the menu-return
+counters. Compare audio/video smoothness and overruns/starts relative to
+completed DMA plus polled blocks; absolute counts alone depend on run length.
+
+## Windows CE: restore boot paths, suppress only the live redraw (2026-10-04)
+
+Owner reports that no-overlay build `b3d9ee49f9b7` stops at the bootstrap 2
+screen. The precise last line/fault is not yet available; no root cause is
+confirmed. That build passed compile/layout/stack audits, which did not
+establish console boot compatibility. Recovery build `68cbe37aa95e` subsequently booted on the owner's console;
+its FMV results are recorded above.
+
+The recovery comparison restores the timer/accounting and display code
+from `90b0456391fe`. Its only production-code difference from that build is
+an early return from `retail_display_status` when MMUCR.AT is set, the same
+CE-active distinction used by the background reader. Boot diagnostics keep
+their previous path; normal MMU-on CE calls do not redraw the live overlay.
+Fault and menu-return diagnostics do not use this gated function. There is
+no change to the prefetch queue, CRC, DMA handoff or interrupt priority.
+
+This isolates live drawing from the earlier wholesale removal. Timer
+sampling and accounting remain deliberately, and compiled resident addresses
+can still move. Build `68cbe37aa95e` passed its console boot test. No clear playback gain
+was reported; the root cause of the earlier regression remains unconfirmed.
+
+## Windows CE: earlier full overlay-removal experiment (regressed, 2026-10-04)
+
+Owner result on `90b0456391fe`: ARMADA's intro initially appeared improved,
+with displayed delivery around 620 KiB/s, later around 420 and sometimes
+300. These scene-dependent delivery rates alone do not establish a card
+throughput limit. The owner requested removing the live speed/call display.
+
+That experiment omitted the live framebuffer drawing and the associated
+timer sampling, rate calculation and formatting. The overlay cleared
+53,504 framebuffer bytes per refresh plus glyph writes while the GD call
+masked interrupts; its cost was excluded from BUSY PCT. Stage, failure and
+return-to-menu screens remain, including queue and stream-error counters.
+The 2 KiB prefetch queue, CRC, IRQ priority and transfer logic are unchanged.
+
+Local GCC 15 SH preflight: full native/CE instruction, layout and stack
+audits pass. CE async ends at `0x8c00cfbc` (2,116 bytes free), stack 400 plus
+64-byte margin within 2,000 usable; CE standard ends at `0x8c00c164`
+(1,692 bytes free). Native resident/stage binaries remain byte-identical
+to `90b0456` at a fixed build identifier. Existing console-only CI scope
+applies to this loader/docs-only change; the preceding build passed the
+full host/filesystem suite. Console comparison: same ARMADA intro with X,
+judged by playback pacing, audio sync and skips, without a live rate line.
+
+## Windows CE: bounded prefetch between driver buffers (2026-10-04)
+
+First optimization after the owner's background-reader result of roughly
+420 to 470 KiB/s. CE's background reader now stages up to 2 KiB of checked
+output in a ring, replacing the 512-byte spill. It continues production
+between physical DMA pieces and while virtual PIO buffers cannot be touched
+from an interrupt. CE calls drain virtual buffers; physical buffers keep
+their direct path when no older queued data remains. Completion follows
+bytes delivered to the destination, including a final queued tail after
+the cursor finishes. Abort/reset clears the queue. CE interrupt visits are
+limited to two delivery-loop iterations, including retries.
+
+Review also caught terminal PIO-stream prefetch errors not notifying CE;
+they now fail the request and raise the drive event without synthesizing
+a callback for an unsubmitted transfer. Focused CE host tests pass 85,428
+checks under ASan/UBSan (LSan disabled for this container's /proc restriction),
+covering queued final tails, FIFO wrap, small physical pieces, virtual-buffer
+isolation, abort/init/reset, CRC failure and bounded polled-fallback wakeup.
+Supporting GD, cursor, SCI stream and native async suites also pass.
+
+The menu-return report now shows `ISR Q PEAK Q BYTES Q FULL Q LEFT` in the
+old hook-count row. No extra screen rows or changes to the live overlay.
+The standard CE reader, native readers, SCI framing/CRC and memory/stack
+boundaries are unchanged. See
+[the prefetch experiment](windows-ce-placement-test.md#ce-prefetch-experiment-2026-10-04)
+for counter meanings and the ARMADA/X then Worms comparison. No console
+speed or compatibility gain is claimed before those tests.
+
+Local GCC 15 SH preflight: full native and CE instruction/layout/stack
+audits pass; CE background resident ends at `0x8c00d1bc` (1,604 bytes free),
+worst stack 404 bytes plus the audit's 64-byte margin within 2,000 usable.
+All native residents/stage and the standard CE resident are byte-identical
+to the baseline when built with the same identifier. Pinned CI and console
+results are recorded separately after completion.
+
 ## Windows CE: background reader through CE's interrupt table (2026-10-04 UTC)
 
 For the slow FMVs: **X** on the Windows CE boot test's confirmation launches

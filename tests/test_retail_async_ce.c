@@ -174,6 +174,15 @@ static unsigned interrupts(unsigned limit) {
     }
     return n;
 }
+static void arrived_irq(void) {
+    elapse();
+    unsigned before = R.engine.stats.irq_blocks;
+    hw.in_irq = true;
+    CHECK(kui_retail_async_irq() == 0);
+    hw.in_irq = false;
+    take_events();
+    CHECK(R.engine.stats.irq_blocks - before <= 2u);
+}
 
 static void setup(unsigned take_max, bool mmu) {
     fixture(take_max);
@@ -207,6 +216,9 @@ static void reference_read(uint32_t lba, uint32_t count) {
     enum kui_game_sector_format format = R.shared.service.sector_bytes == 2352u ?
         KUI_GAME_SECTOR_RAW : KUI_GAME_SECTOR_MODE1;
     CHECK(kui_retail_image_read(&reference, lba, count, format, expected, sizeof(expected)) == KUI_GAME_OK);
+}
+static void untouched(const uint8_t *bytes, uint32_t count) {
+    for(uint32_t i = 0; i < count; ++i) CHECK(bytes[i] == 0xa5);
 }
 static void mode(uint32_t bytes) {
     put(PARAM, 0); put(PARAM + 4, bytes == 2048 ? 0x2000 : 0x1000);
@@ -272,11 +284,13 @@ static void test_before_ce_runs(void) {
      * Nothing is installed and the SCI's level never changes; calls read
      * (topping up as the native reader does). */
     setup(2000, false);
+    card.nac_first = 3u * 256u; /* Bootstrap still waits for the whole token. */
     hw.table[0] = hw.table[1] = 0;
     mode(2048);
     const struct kui_retail_async_stats *st = &R.engine.stats;
     int32_t token = request(KUI_GD_PIOREAD, 45001, 40, OUTPUT);
     CHECK(!R.engine.isr && hw.iprb == 0x5a0f && !installed());
+    CHECK(kui_sci_stream_busy() && card.cmd18 == 1u);
     CHECK(finish(token, 0) == KUI_GD_COMPLETED);
     CHECK(st->waits && !st->irq_blocks && !st->hooks && hw.iprb == 0x5a0f);
     CHECK(!hw.table[0] && !hw.table[1]);
@@ -288,6 +302,7 @@ static void test_before_ce_runs(void) {
     CHECK(!R.engine.isr && hw.table[0] == 0x00001234u && hw.iprb == 0x5a0f);
     CHECK(finish(token, 0) == KUI_GD_COMPLETED);
     /* Then CE's: installed at the next call. */
+    card.nac_first = 30;
     hw.table[0] = CE_DEFAULT;
     token = request(KUI_GD_DMAREAD, 45049, 8, OUTPUT);
     CHECK(R.engine.isr && installed() && level_up());
@@ -296,9 +311,8 @@ static void test_before_ce_runs(void) {
     CHECK(!memcmp(ram + (OUTPUT - BEGIN), expected, 8u * 2048u));
 }
 static void test_virtual_pio_read(void) {
-    /* A PIOREAD into CE's virtual buffer: the interrupt never writes it
-     * (map asserts); a block it cannot place raises the drive's interrupt,
-     * so CE's driver calls, and the call writes. */
+    /* A PIOREAD into CE's virtual buffer: interrupts stage verified bytes
+     * without mapping it; CE's own calls drain those bytes in order. */
     setup(48, true);
     mode(2048);
     const struct kui_retail_async_stats *st = &R.engine.stats;
@@ -312,10 +326,96 @@ static void test_virtual_pio_read(void) {
         if(status(token) != KUI_GD_PROCESSING) break;
     }
     CHECK(get(STATUS) == (uint32_t)KUI_GD_COMPLETED || !R.shared.service.pending);
-    CHECK(!st->irq_blocks && st->call_blocks >= 30u * 2048u / 512u && woken);
+    CHECK(st->irq_blocks && R.engine.prefetched_bytes > 512u && woken);
     reference_read(45010, 30);
     CHECK(!memcmp(vram + (dest - VBASE), expected, 30u * 2048u));
     CHECK(vram[dest - VBASE + 30u * 2048u] == 0xa5 && !hw.writes);
+}
+
+static void test_prefetched_virtual_tail(void) {
+    /* This sector's 16-byte header ends at a card-block boundary, so all
+     * 2048 payload bytes can fit the queue before CE supplies a call. The
+     * image cursor being done must not complete an undelivered request. */
+    setup(2000, true);
+    mode(2048);
+    const uint32_t dest = VBASE + 0x800u;
+    int32_t token = request(KUI_GD_PIOREAD, 45005, 1, dest);
+    CHECK(interrupts(64));
+    CHECK(!R.engine.active && R.engine.cursor.done == 1u);
+    CHECK(R.engine.spill_bytes == 2048u && !R.engine.piece_filled);
+    CHECK(R.shared.service.pending && !R.shared.service.completed_bytes);
+    CHECK(!hw.virtual_writes && !hw.writes && ev.drive && !ev.dma_end);
+    untouched(vram + dest - VBASE, 2049u);
+    reference_read(45005, 1);
+    CHECK(status(token) == KUI_GD_COMPLETED && get(STATUS + 8) == 2048u);
+    CHECK(!memcmp(vram + dest - VBASE, expected, 2048u));
+    CHECK(vram[dest - VBASE + 2048u] == 0xa5 && !R.engine.spill_bytes);
+}
+
+static void test_prefetch_between_dma_pieces(void) {
+    /* No physical piece is supplied during each interrupt-only burst.
+     * Tiny pieces force repeated ring wrap; guards distinguish a wrong
+     * destination or an old piece being filled past its end. */
+    static const uint32_t sizes[7] = {32, 96, 480, 160, 64, 320, 288};
+    setup(48, true);
+    mode(2048);
+    const uint32_t total = 8u * 2048u;
+    int32_t token = request(KUI_RETAIL_GD_DMAREAD_STREAM, 45000, 8, 0);
+    reference_read(45000, 8);
+    CHECK(interrupts(64));
+    CHECK(R.engine.spill_bytes > 512u && R.engine.spill_bytes <= KUI_RETAIL_ASYNC_SPILL_BYTES);
+    CHECK(!R.shared.service.completed_bytes && !hw.writes && !hw.virtual_writes);
+    unsigned staged_gaps = 0, wraps = 0;
+    uint32_t done = 0, dest = OUTPUT;
+    for(unsigned i = 0; done < total; ++i) {
+        (void)interrupts(64);
+        if(R.engine.spill_bytes > 512u) ++staged_gaps;
+        CHECK(R.engine.spill_bytes <= KUI_RETAIL_ASYNC_SPILL_BYTES);
+        uint32_t bytes = sizes[i % 7u], before = R.engine.spill_from;
+        if(bytes > total - done) bytes = total - done;
+        put(PIECE, dest & 0x1fffffffu); put(PIECE + 4, bytes);
+        unsigned end = ev.dma_end;
+        CHECK(gd(KUI_GD_DMA_TRANSFER, (uint32_t)token, PIECE) == 0);
+        CHECK(!R.shared.service.xfer_left && ev.dma_end == end + 1u);
+        CHECK(!memcmp(ram + dest - BEGIN, expected + done, bytes));
+        untouched(ram + dest - BEGIN + bytes, 64u);
+        if(R.engine.spill_from < before) ++wraps;
+        done += bytes; dest += bytes + 64u;
+        CHECK(R.shared.service.completed_bytes == done);
+    }
+    CHECK(staged_gaps > 8u && wraps > 3u);
+    CHECK(status(token) == KUI_GD_COMPLETED && get(STATUS + 8) == total);
+    CHECK(!R.engine.spill_bytes && !hw.virtual_writes);
+}
+
+static void test_prefetched_stream_tail(void) {
+    /* The complete request is already verified in the queue, with no
+     * active producer. Both stream APIs still deliver later small pieces
+     * and complete only when the final destination has received its tail. */
+    for(unsigned pio = 0; pio < 2; ++pio) {
+        setup(2000, true);
+        mode(2048);
+        int32_t token = request(pio ? KUI_RETAIL_GD_PIOREAD_STREAM :
+            KUI_RETAIL_GD_DMAREAD_STREAM, 45005, 1, 0);
+        CHECK(interrupts(64));
+        CHECK(!R.engine.active && R.engine.spill_bytes == 2048u);
+        CHECK(R.shared.service.pending && !R.shared.service.completed_bytes);
+        CHECK(!hw.writes && !hw.virtual_writes && !ev.dma_end);
+        reference_read(45005, 1);
+        for(uint32_t done = 0; done < 2048u; done += 32u) {
+            uint32_t dest = pio ? VBASE + done : OUTPUT + done;
+            put(PIECE, pio ? dest : dest & 0x1fffffffu); put(PIECE + 4, 32u);
+            CHECK(gd(pio ? KUI_GD_PIO_TRANSFER : KUI_GD_DMA_TRANSFER,
+                (uint32_t)token, PIECE) == 0);
+            CHECK(R.shared.service.completed_bytes == done + 32u);
+            CHECK(R.shared.service.pending == (done + 32u < 2048u));
+            CHECK(R.engine.spill_bytes == 2048u - done - 32u);
+        }
+        CHECK(status(token) == KUI_GD_COMPLETED && get(STATUS + 8) == 2048u);
+        const uint8_t *out = pio ? vram : ram + OUTPUT - BEGIN;
+        CHECK(!memcmp(out, expected, 2048u) && out[2048] == 0xa5);
+        CHECK(!pio || !hw.writes);
+    }
 }
 
 /* ---- DMA streams: transfers of any size ---- */
@@ -392,20 +492,24 @@ static void test_pio_stream(void) {
     int32_t token = request(KUI_RETAIL_GD_PIOREAD_STREAM, lba, count, 0);
     reference_read(lba, count);
     CHECK(gd(KUI_GD_PIO_CALLBACK, 0x8c0f0000u, 0x1234u) == 0);
+    unsigned calls = 0;
     for(unsigned i = 0; done < total; ++i) {
-        /* The interrupt only takes a block ahead into the spill. */
-        (void)interrupts(1 + i % 3u);
+        /* CE may run long enough between pieces to fill the ring. The
+         * pending virtual buffer is never touched by those interrupts. */
+        (void)interrupts(32 + i % 3u);
         CHECK(gd(KUI_GD_PIO_CHECK, (uint32_t)token, STATUS) == 0);
         uint32_t offered = get(STATUS), bytes = sizes[i % 7u];
         CHECK(offered == (total - done < 4096u ? total - done : 4096u));
         if(bytes > offered) bytes = offered;
         put(PIECE, dest); put(PIECE + 4, bytes);
         CHECK(gd(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == 0);
+        ++calls;
         CHECK(!memcmp(vram + (dest - VBASE), expected + done, bytes));
         CHECK(R.shared.service.callback_due);
         (void)gd(KUI_GD_EXEC, 0, 0);
         R.shared.service.callback_due = 0; /* the resident made the callback */
         done += bytes; dest += bytes;
+        CHECK(R.engine.pio_calls == calls && R.engine.pio_bytes == done);
     }
     CHECK(status(token) == KUI_GD_COMPLETED && vram[dest - VBASE] == 0xa5);
     CHECK(!hw.writes && st->call_blocks && !R.engine.spill_bytes && !R.engine.piece_set);
@@ -433,6 +537,256 @@ static void test_abort_writes_nothing_more(void) {
         dma_stream(45040, 9, sizes, 3);
     }
 }
+static void test_abort_discards_prefetch(void) {
+    for(unsigned how = 0; how < 3; ++how) {
+        setup(2000, true);
+        mode(2048);
+        int32_t token = request(KUI_RETAIL_GD_DMAREAD_STREAM, 45000, 12, 0);
+        CHECK(interrupts(64) && R.engine.spill_bytes > 512u);
+        CHECK(!hw.writes && !R.shared.service.completed_bytes);
+        if(how == 0) CHECK(gd(KUI_GD_ABORT, (uint32_t)token, 0) == 0);
+        else if(how == 1) CHECK(gd(KUI_GD_INIT, 0, 0) == 0);
+        else CHECK(gd(KUI_GD_RESET, 0, 0) == 0);
+        hw.frozen = true;
+        (void)interrupts(64);
+        (void)gd(KUI_GD_EXEC, 0, 0);
+        CHECK(!R.engine.spill_bytes && !R.engine.piece_set && !kui_sci_stream_busy());
+        untouched(ram + OUTPUT - BEGIN, 2048u);
+        hw.frozen = false;
+        /* Different source data makes a stale queue visible. */
+        token = request(KUI_GD_DMAREAD, 45100, 3, OUTPUT);
+        CHECK(finish(token, 8) == KUI_GD_COMPLETED);
+        reference_read(45100, 3);
+        CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+        CHECK(ram[OUTPUT - BEGIN + 3u * 2048u] == 0xa5);
+    }
+}
+static void test_prefetch_crc_failure(void) {
+    setup(2000, true);
+    mode(2048);
+    /* Two valid card blocks precede a persistent corrupt one. The valid
+     * prefix may be staged, but none of the failing block reaches the
+     * queue or a virtual destination. IRQ-only retries must wake CE with
+     * failure, even when the retry path uses programmed transfers. */
+    card.corrupt_lba = manifest.slots[6].extent.card_lba + 2u;
+    card.corrupt_count = 1000u;
+    int32_t token = request(KUI_GD_PIOREAD, 45000, 4, VBASE);
+    for(unsigned i = 0; i < 64u && R.shared.service.pending; ++i) (void)interrupts(8);
+    CHECK(!R.shared.service.pending && R.shared.service.error == KUI_GD_ERROR_IO);
+    CHECK(kui_sci_stream_stats()->crc_errors && ev.drive);
+    CHECK(!hw.virtual_writes && !hw.writes);
+    CHECK(R.engine.spill_bytes == 1008u);
+    reference_read(45000, 4);
+    for(uint32_t i = 0; i < R.engine.spill_bytes; ++i)
+        CHECK(R.spill[(R.engine.spill_from + i) & (KUI_RETAIL_ASYNC_SPILL_BYTES - 1u)] == expected[i]);
+    untouched(vram, 4u * 2048u);
+    CHECK(status(token) == KUI_GD_FAILED && get(STATUS + 4) == KUI_GD_ERROR_IO);
+    untouched(vram, 4u * 2048u);
+    CHECK(!R.engine.spill_bytes && !R.engine.piece_set);
+}
+static void test_pio_prefetch_crc_failure(void) {
+    setup(2000, true);
+    mode(2048);
+    card.corrupt_lba = manifest.slots[6].extent.card_lba + 2u;
+    card.corrupt_count = 1000u;
+    int32_t token = request(KUI_RETAIL_GD_PIOREAD_STREAM, 45000, 4, 0);
+    /* No destination exists yet: a terminal prefetch error itself must
+     * wake the driver and publish failure, without needing PIO_TRANSFER. */
+    for(unsigned i = 0; i < 64u && !R.engine.failed; ++i) (void)interrupts(8);
+    CHECK(R.engine.failed == KUI_GD_ERROR_IO && ev.drive);
+    CHECK(!R.shared.service.pending && R.shared.service.error == KUI_GD_ERROR_IO);
+    CHECK(!R.shared.service.callback_due); /* No PIO_TRANSFER was submitted. */
+    CHECK(!hw.virtual_writes && !hw.writes && !R.shared.service.completed_bytes);
+    CHECK(status(token) == KUI_GD_FAILED && get(STATUS + 4) == KUI_GD_ERROR_IO);
+    CHECK(!R.engine.spill_bytes && !R.engine.piece_set);
+}
+static void test_token_slices(void) {
+    setup(2000, true); mode(2048);
+    const uint32_t slice = KUI_SCI_STREAM_TOKEN_SLICE;
+    card.nac_first = 3u * slice + 7u;
+    int32_t token = request(KUI_RETAIL_GD_DMAREAD_STREAM, 45000, 3, 0);
+    CHECK(card.frame == slice && card.cmd18 == 1u && !card.cmd12);
+    CHECK(kui_sci_stream_token_pending() && !kui_sci_stream_busy());
+    CHECK(!R.engine.retries && !R.shared.stream.stats.token_errors);
+    unsigned drive = ev.drive, dma_end = ev.dma_end;
+    put(PIECE, OUTPUT & 0x1fffffffu); put(PIECE + 4, 3u * 2048u);
+    CHECK(gd(KUI_GD_DMA_TRANSFER, (uint32_t)token, PIECE) == 0);
+    /* Its before and after hooks share one allowance, despite the new
+     * physical piece. No SCI reception exists to provide a later IRQ. */
+    CHECK(card.frame == 2u * slice && !kui_sci_stream_busy());
+    CHECK(ev.drive > drive && ev.dma_end > dma_end && !level_up());
+    CHECK(!R.engine.retries && !R.shared.service.completed_bytes);
+    untouched(ram + OUTPUT - BEGIN, 3u * 2048u);
+    CHECK(status(token) == KUI_RETAIL_GD_STREAMING && card.frame == 3u * slice);
+    CHECK(status(token) == KUI_RETAIL_GD_STREAMING && kui_sci_stream_busy());
+    CHECK(!kui_sci_stream_token_pending() && card.cmd18 == 1u && !card.cmd12);
+    CHECK(!R.engine.retries && !R.shared.stream.stats.token_errors);
+    CHECK(interrupts(64));
+    CHECK(status(token) == KUI_GD_COMPLETED);
+    reference_read(45000, 3);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+
+    /* The IRQ finishes one block, preserves it while its successor's
+     * token pauses, then wakes CE to continue without a fresh CMD18. */
+    setup(2000, true); mode(2048); card.nac = 3u * slice;
+    token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+    unsigned before = bus_bytes; drive = ev.drive;
+    arrived_irq();
+    CHECK(bus_bytes - before == slice && kui_sci_stream_token_pending());
+    CHECK(!kui_sci_stream_busy() && !level_up() && ev.drive > drive);
+    CHECK(R.engine.piece_filled && !R.engine.retries && card.cmd18 == 1u);
+    CHECK(finish(token, 8) == KUI_GD_COMPLETED);
+    reference_read(45000, 3);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+
+    /* A synchronous PIO transfer must still return all requested bytes,
+     * even when the pending token needs more than one normal allowance. */
+    setup(2000, true); mode(2048); card.nac_first = 4u * slice;
+    token = request(KUI_RETAIL_GD_PIOREAD_STREAM, 45000, 2, 0);
+    CHECK(kui_sci_stream_token_pending());
+    put(PIECE, VBASE); put(PIECE + 4, 4096u);
+    CHECK(gd(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == 0);
+    CHECK(!R.shared.service.error && R.shared.service.completed_bytes == 4096u);
+    reference_read(45000, 2);
+    CHECK(!memcmp(vram, expected, 4096u) && vram[4096] == 0xa5);
+}
+static void test_token_pause_abort(void) {
+    static const uint32_t stop[] = {KUI_GD_ABORT, KUI_GD_INIT, KUI_GD_RESET};
+    for(unsigned i = 0; i < 3u; ++i) {
+        setup(2000, true); mode(2048); card.nac_first = 4u * KUI_SCI_STREAM_TOKEN_SLICE;
+        int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+        CHECK(kui_sci_stream_token_pending());
+        CHECK(gd(stop[i], (uint32_t)token, 0) == 0);
+        CHECK(!R.engine.active && !kui_sci_stream_busy());
+        hw.frozen = true;
+        (void)gd(KUI_GD_EXEC, 0, 0);
+        untouched(ram + OUTPUT - BEGIN, 3u * 2048u);
+        hw.frozen = false;
+        card.nac_first = 30;
+        token = request(KUI_GD_DMAREAD, 45100, 1, OUTPUT);
+        CHECK(card.cmd12 == 1u && card.cmd18 == 2u);
+        CHECK(finish(token, 8) == KUI_GD_COMPLETED);
+        reference_read(45100, 1);
+        CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 2048u));
+    }
+}
+static void test_polled_irq_yields(void) {
+    setup(2000, true);
+    mode(2048);
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 8, OUTPUT);
+    /* Complete the current DMA, then make DMA unavailable before its IRQ
+     * starts the next block. The ISR's programmed fallback must not run
+     * through this whole physical destination with interrupts blocked. */
+    elapse();
+    CHECK(kui_sci_stream_test_read(CHCR, 4) & 2u);
+    m.dmaor &= ~1u;
+    unsigned before = R.engine.stats.irq_blocks, drive = ev.drive;
+    hw.in_irq = true;
+    CHECK(kui_retail_async_irq() == 0);
+    hw.in_irq = false;
+    take_events();
+    CHECK(R.engine.stats.irq_blocks - before <= 2u);
+    CHECK(kui_sci_stream_stats()->polled && !kui_sci_stream_busy());
+    CHECK(R.engine.polled_irq_max == kui_sci_stream_stats()->polled);
+    CHECK(!R.engine.polled_call_max);
+    CHECK(R.shared.service.pending && ev.drive > drive);
+    uint32_t polled = kui_sci_stream_stats()->polled;
+    int32_t state = status(token);
+    CHECK(state == KUI_GD_PROCESSING || state == KUI_GD_COMPLETED);
+    CHECK(R.engine.polled_call_max == kui_sci_stream_stats()->polled - polled);
+    CHECK(R.engine.polled_call_max > 0u);
+    uint32_t call_max = R.engine.polled_call_max, irq_max = R.engine.polled_irq_max;
+    m.dmaor |= 1u;
+    if(state != KUI_GD_COMPLETED) CHECK(finish(token, 8) == KUI_GD_COMPLETED);
+    reference_read(45000, 8);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 8u * 2048u));
+    CHECK(ram[OUTPUT - BEGIN + 8u * 2048u] == 0xa5);
+    CHECK(R.engine.polled_call_max == call_max && R.engine.polled_irq_max == irq_max);
+}
+static void test_first_unrecovered_overrun(void) {
+    setup(2000, true);
+    mode(2048);
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+    uint32_t first = R.engine.cursor.block;
+    unsigned dma = m.dma_starts;
+    /* The lost CRC byte is outside the single-data-byte repair path. On
+     * this first unrecovered overrun, reread this exact block by programmed
+     * transfers, then yield without exposing its still-unchecked bytes. */
+    m.overrun_after = 512u;
+    arrived_irq();
+    const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
+    CHECK(ss->overruns == 1u && !ss->repaired && ss->polled == 1u);
+    CHECK(R.engine.polled_irq_max == 1u && !R.engine.polled_call_max);
+    CHECK(R.engine.retries == 1u && R.engine.early_polled);
+    CHECK(R.engine.cursor.block == first && kui_sci_stream_ready(first));
+    CHECK(m.dma_starts == dma && !kui_sci_stream_busy());
+    CHECK(R.shared.service.pending && !R.shared.service.completed_bytes && !R.engine.piece_filled);
+    CHECK(ev.drive);
+    untouched(ram + OUTPUT - BEGIN, 3u * 2048u);
+    /* Taking that CRC-checked block resumes normal DMA at its successor. */
+    CHECK(status(token) == KUI_GD_PROCESSING);
+    CHECK(!R.engine.early_polled && !R.engine.retries);
+    CHECK(m.dma_starts == dma + 1u && kui_sci_stream_busy());
+    CHECK(R.engine.cursor.block == first + 1u && ss->polled == 1u);
+    CHECK(!R.shared.service.completed_bytes && R.engine.piece_filled == 496u);
+    reference_read(45000, 3);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 496u));
+    untouched(ram + OUTPUT - BEGIN + 496u, 3u * 2048u - 496u);
+    CHECK(finish(token, 5) == KUI_GD_COMPLETED && ss->polled == 1u);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+    CHECK(ram[OUTPUT - BEGIN + 3u * 2048u] == 0xa5);
+}
+static void test_deferred_repair_stays_dma(void) {
+    setup(2000, true);
+    mode(2048);
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+    uint32_t first = R.engine.cursor.block;
+    unsigned dma = m.dma_starts;
+    m.overrun_after = 100u; /* A repairable data-byte loss. */
+    arrived_irq();
+    const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
+    CHECK(ss->repaired == 1u && ss->deferred == 1u && !ss->overruns);
+    CHECK(!R.engine.early_polled && !R.engine.retries && !ss->polled);
+    CHECK(R.engine.cursor.block == first && m.dma_starts == dma);
+    CHECK(!R.engine.piece_filled && R.shared.service.pending);
+    CHECK(status(token) == KUI_GD_PROCESSING && kui_sci_stream_busy());
+    CHECK(m.dma_starts == dma + 1u && !R.engine.early_polled && !ss->polled);
+    CHECK(finish(token, 5) == KUI_GD_COMPLETED && !ss->polled);
+    reference_read(45000, 3);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+}
+static void test_other_errors_keep_retry_threshold(void) {
+    for(unsigned failures = 1; failures <= 2; ++failures) {
+        setup(2000, true);
+        mode(2048);
+        card.bad_token_lba = manifest.slots[6].extent.card_lba;
+        card.bad_token_count = failures;
+        int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+        CHECK(!R.engine.early_polled && kui_sci_stream_stats()->token_errors == failures);
+        CHECK(kui_sci_stream_stats()->polled == failures - 1u);
+        CHECK(finish(token, 5) == KUI_GD_COMPLETED);
+        reference_read(45000, 3);
+        CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+    }
+    setup(2000, true);
+    mode(2048);
+    card.corrupt_lba = manifest.slots[6].extent.card_lba;
+    card.corrupt_count = 2u;
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
+    const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
+    bool saw_first = false;
+    for(unsigned i = 0; i < 64u && R.shared.service.pending; ++i) {
+        if(kui_sci_stream_busy()) arrived_irq();
+        else (void)status(token);
+        CHECK(!R.engine.early_polled);
+        if(ss->crc_errors == 1u) {saw_first = true; CHECK(!ss->polled);}
+        if(ss->polled) CHECK(ss->crc_errors == 2u);
+    }
+    CHECK(saw_first && ss->crc_errors == 2u && ss->polled == 1u);
+    CHECK(finish(token, 5) == KUI_GD_COMPLETED);
+    reference_read(45000, 3);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
+}
 static void test_failures_complete_the_request(void) {
     /* A block that never passes its CRC fails the read: the drive's
      * interrupt tells CE's driver, and CHECK reports the error. */
@@ -442,6 +796,7 @@ static void test_failures_complete_the_request(void) {
     unsigned drive = ev.drive;
     int32_t token = request(KUI_GD_DMAREAD, 45000, 20, OUTPUT);
     CHECK(finish(token, 3) == KUI_GD_FAILED && get(STATUS + 4) == KUI_GD_ERROR_IO);
+    CHECK(R.engine.retries == 9u && kui_sci_stream_stats()->crc_errors == 9u);
     CHECK(ev.drive > drive);
     card.corrupt_count = 0;
     /* A stream's too: its transfer ends with the error. */
@@ -461,7 +816,12 @@ static void test_failures_complete_the_request(void) {
     setup(2000, true);
     mode(2048);
     token = request(KUI_RETAIL_GD_PIOREAD_STREAM, 45000, 4, 0);
+    ++R.engine.token;
     CHECK(kui_retail_async_read_part(NULL, 45000, 2048, 512, 512, vram) == -1);
+    CHECK(!R.engine.pio_calls && !R.engine.pio_bytes);
+    --R.engine.token;
+    CHECK(kui_retail_async_read_part(NULL, 45000, 2048, 512, 512, vram) == -1);
+    CHECK(R.engine.pio_calls == 1u && R.engine.pio_bytes == 512u);
 }
 static void test_table_replaced(void) {
     /* CE puts its own handlers back mid-read: the next call drops the
@@ -531,9 +891,21 @@ int main(void) {
     test_dma_reads_by_interrupt();
     test_before_ce_runs();
     test_virtual_pio_read();
+    test_prefetched_virtual_tail();
+    test_prefetch_between_dma_pieces();
+    test_prefetched_stream_tail();
     test_dma_stream_pieces();
     test_pio_stream();
     test_abort_writes_nothing_more();
+    test_abort_discards_prefetch();
+    test_prefetch_crc_failure();
+    test_pio_prefetch_crc_failure();
+    test_token_slices();
+    test_token_pause_abort();
+    test_polled_irq_yields();
+    test_first_unrecovered_overrun();
+    test_deferred_repair_stays_dma();
+    test_other_errors_keep_retry_threshold();
     test_failures_complete_the_request();
     test_table_replaced();
     test_level_dropped_in_a_call();

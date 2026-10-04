@@ -109,6 +109,11 @@ void retail_display_values(const char *legend,const uint32_t *values,unsigned co
  * video register: FB_R_SOF1 is its start and FB_R_SIZE its line pitch
  * (32-bit units per line plus modulo, minus one). 16-bit pixels assumed. */
 void retail_display_status(const char *legend,const uint32_t *values,unsigned count) {
+    /* Suppress the live overlay after CE enables its MMU. Keep the pre-CE
+     * display path and the caller's timing/accounting intact for this
+     * comparison: removing them together regressed a console boot. This
+     * guard belongs only to the live status line, never fault diagnostics. */
+    if(*(volatile const uint32_t *)(uintptr_t)0xff000010u & 1u) return;
     volatile const uint32_t *pvr=(volatile const uint32_t *)(uintptr_t)0xa05f8000u;
     uint32_t size=pvr[0x5c/4], saved=row;
     base=0xa5000000u|(pvr[0x50/4]&0x007ffffcu);

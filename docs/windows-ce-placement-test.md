@@ -1,10 +1,10 @@
 # Windows CE boot test
 
-Windows CE games are being brought up in steps, with ARMADA first. The test
-from the Games detail screen of a CE image is now the **boot test**: it loads
-the Windows CE kernel exactly as the placement test below did, then starts it
-and stops at the first disc request K-UI cannot serve, showing what CE asked
-for. The game is not expected to run yet.
+ARMADA and Worms Armageddon now boot and run from SCI microSD. FMV speed and
+compatibility remain under test. The **Windows CE boot test** on a game's
+detail screen provides the standard reader (A on confirmation) and the
+background reader (X). The placement and bring-up results below are the
+history of that implementation, not a statement that games still cannot run.
 
 ## What it needs
 
@@ -17,10 +17,77 @@ for. The game is not expected to run yet.
 
 1. Games, select the CE game, A to inspect it.
 2. The detail screen says `A Windows CE boot test`. Press A.
-3. The confirmation says the game is not expected to start. Press A.
+3. Press A for the standard reader, or X for the background reader. The
+   experimental confirmation warning remains; compatibility is title-specific.
 4. The launcher closes. The stage loads IP.BIN, then the kernel file
    (`0WINCEOS.BIN`), checking every sector's header and every SD block's CRC.
-5. Photograph the last screen shown, then power cycle.
+5. Compare the same scene between readers. On a fault, photograph the stop
+   screen and power cycle. A+B+X+Y+Start can show the menu-return counters.
+
+## CE prefetch experiment (2026-10-04)
+
+**Current comparison: first-overrun fallback.** Recovery build
+`68cbe37aa95e` boots with the live overlay hidden. The owner reports steady
+FMV progression with persistent echo/repetition-like audio and no clear
+improvement. Its whole-session report showed 5,891 overruns, 6,188 stream
+starts and 2,925 polled blocks. Roughly two overruns per polled block is
+consistent with the existing retry threshold; it does not establish the
+cause of the audio symptom. The full counters and interpretation are in
+[the handoff](HANDOFF.md#windows-ce-first-overrun-fallback-experiment-2026-10-04).
+
+The next experiment changes only the CE background reader: after an
+unrecovered overrun, reread that block by polled transfers immediately,
+then return to DMA for following blocks. Other failure thresholds, the
+retry limit, CRC, in-place repair safeguards and interrupt iteration bound
+remain unchanged. Cold boot and use X on the same title; play the same
+intro segment for the same duration, then photograph the return counters.
+Compare pacing/audio and overruns/starts per completed card block. There
+is no live rate overlay and no measured improvement for this change yet.
+
+Earlier full overlay removal (`b3d9ee49f9b7`) stopped at bootstrap 2.
+`68cbe37aa95e` restored the last working timer/accounting and display paths,
+suppressing only status drawing while MMUCR.AT is set (CE active). Boot,
+failure and menu-return screens remain. That guard is retained here.
+
+The background reader now has a 2 KiB ring of CRC-checked output instead of
+a single 512-byte spill. It can read ahead within the current request while
+CE supplies the next DMA destination, and while a virtual PIO destination
+cannot be accessed from the interrupt. Physical destinations still take a
+direct copy when no older queued bytes remain. Virtual destinations are
+copied only inside CE's GD calls, in the caller's address space.
+
+Data arriving in the queue is not completion: a request or transfer finishes
+only once its bytes reach the guest destination. Abort/reset discards queued
+output. A terminal PIO-stream prefetch error reports failure and wakes CE,
+even before its next transfer is submitted; it does not invent a transfer
+callback. CRC checks, the resident memory limit and its 2 KiB stack are retained.
+Each CE interrupt delivery visit takes at most two delivery-loop iterations,
+including retries; this bounds block work, not the elapsed time of existing
+token-polling loops.
+Native game readers and the standard CE reader retain their existing paths.
+
+The menu-return screen replaces the hook-count row with:
+
+| Field | Meaning (hexadecimal) |
+| --- | --- |
+| `ISR` | 1 when CE's SCI handlers are installed |
+| `Q PEAK` | Most queued bytes; capacity is `00000800` (2,048 bytes) |
+| `Q BYTES` | Total checked bytes staged in the queue since launch |
+| `Q FULL` | Service visits unable to admit another 512-byte block; a count, not time |
+| `Q LEFT` | Bytes still queued when the report is captured |
+
+`IRQ BLKS` and `CALLBLKS` count card blocks processed in those contexts;
+prefetched IRQ blocks need not already have reached CE's destination.
+
+Original prefetch comparison: replay ARMADA's same intro with X and compare with
+the previous background build's roughly 470 KiB/s, including playback and
+audio smoothness. A still supplies the standard-reader comparison. Then try
+Worms' PIO intro. Capture the rate/busy display and menu-return screen if
+possible. A queue peak above `00000200` proves use beyond the old spill;
+it does not by itself establish a speed gain. Hardware performance remains
+unmeasured when that change was built. Build `90b0456391fe` kept the live
+display, so that first experiment did not change its drawing overhead; the
+current comparison suppresses its MMU-on redraw as described above.
 
 ## Step 1: placement (passed on ARMADA)
 
