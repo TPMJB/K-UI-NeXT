@@ -173,8 +173,10 @@ jobs:
             echo "=============== BUILD FAILED: THE ERRORS, IN ONE PLACE ==============="
             grep -nE "error:|Error [0-9]+|undefined reference|multiple definition|\*\*\*|check failed|[Ff]ailed:" "$LOG" | head -60
             echo "======================================================================"
-            # The same lines as annotations, readable without the job log.
-            grep -E "error:|undefined reference|multiple definition|check failed|[Ff]ailed:" "$LOG" | head -20 |
+            # The same lines as annotations, readable without the job log, including make's
+            # failed-target lines and tool messages that carry no "error:" (Python exceptions,
+            # the FPU audit, a cp of compiler reports).
+            grep -E "error:|Error:|undefined reference|multiple definition|check failed|[Ff]ailed:|\*\*\*|Traceback|FPU use|cannot stat|No rule to make target" "$LOG" | head -20 |
               while IFS= read -r line; do echo "::error title=Build error::${line}"; done
           fi
           exit "$status"
