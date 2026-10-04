@@ -1,5 +1,16 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: Worms Armageddon and ARMADA run; FMVs slow (2026-10-04 UTC)
+
+Build `e349bdc5457a`: Worms Armageddon and ARMADA both run from SCI microSD.
+FMVs are still somewhat slow; 442 KiB/s seen during ARMADA's intro. The
+synchronous reader costs about 1 ms of CPU per KiB (roughly 40 to 45% of
+CE's time at that rate). Levers, largest first: the background reader for
+CE (DMA receive, interrupt per block, about a third of the CPU per KiB,
+overlapped; CE's ISR table at KData + 0x404 could take its handler); a
+CMD18 stream kept open between calls (about 10 to 15%). Details:
+[windows-ce-placement-test.md](windows-ce-placement-test.md).
+
 ## Windows CE: PIO stream reads with the driver's callback (2026-10-04 UTC)
 
 Worms Armageddon stopped on command 39 (PIOREAD_STREAM_EX). CE build: GD

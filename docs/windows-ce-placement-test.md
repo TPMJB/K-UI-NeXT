@@ -435,6 +435,26 @@ ordinary calls.
 Bust-a-Move 4 did not start from the launcher; the reason (its detail
 screen's message) is not known yet.
 
+## Console result: speed and PIO stream build e349bdc5457a (2026-10-04)
+
+**Worms Armageddon and ARMADA both run.** FMVs (ARMADA's intro, Worms'
+Team17 logo) are still somewhat slow. The status line showed 442 KiB/s during
+ARMADA's intro FMV (BUSY PCT not caught).
+
+Why, in numbers: the standard SCI reader keeps the CPU busy for the whole
+transfer (it clocks every byte; about 1 ms of CPU per KiB at the measured
+926 to 1,095 KiB/s), so 442 KiB/s costs CE roughly 40 to 45% of its time,
+frozen. A real GD-ROM's DMA costs the CPU almost nothing. The native
+background reader receives each block by DMA with the card clocked by the
+receiver alone, finishing it in an interrupt: measured per 512-byte block,
+receive 343 us (CPU free), check 69 us and framing 62 us, so about a third
+of the CPU per KiB, overlapped with the game. That is the remaining large
+software lever for CE; keeping the card's CMD18 stream open between CE's
+calls is a smaller one (about 10 to 15%). CE's own interrupt dispatch calls
+handlers from a table (`0x8c145c04` in ARMADA, KData + 0x404, entry
+INTEVT / 8 bytes), so a reader interrupt could be installed there and return
+SYSINTR 20 itself.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the
