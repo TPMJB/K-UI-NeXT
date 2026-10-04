@@ -303,6 +303,29 @@ reader with its original copy. Next build: that comparison skips the slot
 (checked against the addresses instead) and its detail is now the offset
 of the first changed byte.
 
+## Console result: resident-check build 50c37b5c2464 (2026-10-04)
+
+Stream reads started working: after 33 calls ARMADA stopped with `IMAGE READ
+FAILED` on a DMA_TRANSFER (R7 6, token 7, parameters `080AFE94`) from the
+driver's DMA thread (caller `01DE1788`). Before it: DMA_CHECK of token 7
+(answered 0) from that thread, which had woken on the SYSINTR 21 K-UI raised,
+and CHECK of token 7. So the first piece moved, CE's kernel delivered the
+injected interrupt, and the next piece's card read failed.
+
+The byte-range read passes the host tests with the streaming transport too,
+so the failure is most likely the SD transfer itself: K-UI's SCI reader
+receives each 512-byte block by DMA channel 1, and once CE's display driver
+runs, its channel 2 DMA (which DMAOR serves first) can hold channel 1 off
+for longer than one SCI byte. The receiver then overruns, the SCI port is
+marked faulted and the read fails. Earlier reads ran before CE drew anything.
+
+Next build: the Windows CE reader reads the card by polling (the CPU paces
+every byte, so nothing can overrun); and its stop screen replaces the oldest
+call row with `SD IMAGE BLOCKS DMAOR DMA2 CTL`: the SD result (0 OK, 3
+timeout, 4 command rejected, 5 data token, 6 CRC), the image read result,
+card blocks read, and the DMA controller's operation and channel 2 control
+registers.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the

@@ -42,6 +42,7 @@ volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
 volatile uint32_t kui_retail_hook_caller[2];
 static uint32_t ce_calls[4][4], ce_count;
 extern volatile uint32_t kui_retail_ce_kernel[3];
+static enum kui_game_result image_result; /* The last image read's, for the trace. */
 static int ram_alias(uint32_t address) {
     uint32_t area = address & 0xff000000u;
     return area == 0x0c000000u || area == 0x8c000000u || area == 0xac000000u;
@@ -127,6 +128,9 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     if(card_result != KUI_LOADER_SD_OK) return -1;
     enum kui_game_result result = kui_retail_image_read(&image, lba, count,
         sector_format(bytes), out, (size_t)count * bytes);
+#ifdef KUI_RETAIL_CE
+    image_result = result;
+#endif
     enum kui_loader_sd_result stopped = kui_retail_storage_stop(&card);
     if(card_result == KUI_LOADER_SD_OK) card_result = stopped;
     if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
@@ -142,8 +146,8 @@ static int read_part(void *unused, uint32_t lba, uint32_t sector_bytes,
     (void)unused;
     card_result = kui_retail_storage_acquire(&card);
     if(card_result != KUI_LOADER_SD_OK) return -1;
-    enum kui_game_result result = kui_retail_image_read_part(&image, lba, skip, bytes,
-        sector_format(sector_bytes), out);
+    enum kui_game_result result = image_result = kui_retail_image_read_part(&image, lba,
+        skip, bytes, sector_format(sector_bytes), out);
     enum kui_loader_sd_result stopped = kui_retail_storage_stop(&card);
     if(card_result == KUI_LOADER_SD_OK) card_result = stopped;
     if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
@@ -210,7 +214,7 @@ static void stream_lines(void) {
 #ifdef KUI_RETAIL_CE
 /* Who called last (CE's address, stack, SR, MMU state) and the last four
  * calls: value rows only, as this build has no single-value printer. */
-static void ce_trace(void) {
+static void ce_trace(unsigned earlier) {
     static uint32_t caller[5], row[5]; /* Static: the stack budget is full. */
     caller[0]=kui_retail_hook_caller[0]; caller[1]=kui_retail_hook_caller[1];
     caller[2]=kui_retail_hook_sr; caller[3]=*(volatile uint32_t *)(uintptr_t)0xff000010u;
@@ -218,7 +222,7 @@ static void ce_trace(void) {
     retail_display_values("CALLER   STACK    SR       MMUCR    VBR",caller,5);
     memcpy(row,ce_calls[(ce_count-1u)&3u],16); row[4]=ce_count;
     retail_display_values("R7       R4       R5       R6       CALLS",row,5);
-    for(unsigned i=1;i<4;i++)
+    for(unsigned i=1;i<=earlier;i++)
         retail_display_values("EARLIER",ce_calls[(ce_count-1u-i)&3u],4);
 }
 #endif
@@ -240,7 +244,14 @@ static void report_fault(const char *reason, uint32_t function) {
      * value rows only, as this build has no single-value printer. */
     (void)function;
     retail_display_line(reason);
-    ce_trace();
+    ce_trace(2);
+    /* How the last image read ended (SD and image results, card blocks)
+     * and the DMA controller's state (DMAOR, channel 2 control). */
+    static uint32_t io[5];
+    io[0]=(uint32_t)card_result; io[1]=(uint32_t)image_result; io[2]=image.blocks_read;
+    io[3]=*(volatile uint32_t *)(uintptr_t)0xffa00040u;
+    io[4]=*(volatile uint32_t *)(uintptr_t)0xffa0002cu;
+    retail_display_values("SD       IMAGE    BLOCKS   DMAOR    DMA2 CTL",io,5);
 #else
     retail_display_line(kui_retail_storage_name(card.transport));
     retail_display_line(reason);
@@ -268,7 +279,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     counts[2]=service.diag.sectors_read;
     retail_display_values("GUARD    STEPS    SECTORS",counts,3);
     /* Where CE was when it was reset: its last calls and disc command. */
-    ce_trace();
+    ce_trace(3);
     _Static_assert(offsetof(struct kui_retail_gd_diagnostics, last_destination) ==
                    offsetof(struct kui_retail_gd_diagnostics, last_command) + 12u, "GD row");
     retail_display_values("COMMAND  LBA      SECTORS  DEST", &service.diag.last_command, 4);

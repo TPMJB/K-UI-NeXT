@@ -1,5 +1,15 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: stream reads run; card read fails under CE's display (2026-10-04 UTC)
+
+Build `50c37b5c2464`: the first DMA stream piece moved and CE delivered the
+injected SYSINTR 21 to the driver's DMA thread; its next DMA_TRANSFER failed
+with `IMAGE READ FAILED`. Likely SCI receive overruns: the reader's DMA
+channel 1 is starved by CE's display DMA on channel 2. Next build: the CE
+reader's SCI bus never uses DMA (`KUI_RETAIL_CE` in `sci_sd_bus.c`), and its
+stop screen shows SD/image results, blocks read, DMAOR and CHCR2. Native
+readers byte-identical (proxy).
+
 ## Windows CE: resident check fix (2026-10-04 UTC)
 
 Build `bddec88525e8` stopped at `BOOTSTRAP ALTERED RESIDENT` (detail 0):

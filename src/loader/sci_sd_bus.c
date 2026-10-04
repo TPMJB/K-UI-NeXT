@@ -240,6 +240,7 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
 }
 
 #ifndef KUI_SCI_SD_NO_BLOCK
+#ifndef KUI_RETAIL_CE
 static uint32_t mask_interrupts(void) {
 #ifdef KUI_SCI_SD_TEST
     return kui_sci_sd_test_irq_disable();
@@ -430,6 +431,7 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     return ok;
 }
 
+#endif
 static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
                            size_t count, bool slow, uint16_t *crc_out) {
     (void)ctx;
@@ -441,10 +443,15 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
     if(!count || count > 512 || (!tx && !rx) || !port.acquired || port.fault)
         return false;
     if(!prepare(slow)) return false;
+    /* The Windows CE reader always polls: CE's display DMA (channel 2, which
+     * DMAOR serves first) can hold off channel 1 for longer than one SCI
+     * byte, overrunning the receiver. Polling, the CPU paces every byte. */
+#ifndef KUI_RETAIL_CE
     if(!slow && count == 512 && (!tx || !rx)) {
         int result = dma_block(tx, rx, crc_out);
         if(result >= 0) return result != 0;
     }
+#endif
     COUNT(polled_blocks);
     /* One byte in flight, so interrupt latency cannot overrun a second
      * receive. Commands and short/unaligned payloads need no DMAC ownership.

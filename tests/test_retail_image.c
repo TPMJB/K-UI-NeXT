@@ -260,14 +260,17 @@ static void compare_part(uint32_t lba, uint32_t skip, uint32_t bytes,
                          enum kui_game_sector_format format) {
     uint32_t stride = format == KUI_GAME_SECTOR_RAW ? 2352u : 2048u;
     uint32_t first = skip / stride, count = (skip % stride + bytes + stride - 1u) / stride;
+    run_calls = 0;
     CHECK(kui_retail_image_read(&image, lba + first, count, format, whole, sizeof(whole)) == KUI_GAME_OK);
+    run_calls = 0;
     memset(output, 0x77, sizeof(output));
     CHECK(kui_retail_image_read_part(&image, lba, skip, bytes, format, output) == KUI_GAME_OK);
     CHECK(!memcmp(output, whole + skip % stride, bytes));
     CHECK(output[bytes] == 0x77);
 }
-static void part_tests(bool fragmented) {
+static void part_tests(bool fragmented, bool streaming) {
     fixture(fragmented);
+    if(streaming) image.read_run = read_run;
     compare_part(45000, 0, 2048, KUI_GAME_SECTOR_MODE1);
     compare_part(45000, 0x120, 0xee0, KUI_GAME_SECTOR_MODE1);
     compare_part(45000, 0xee0, 0x1000, KUI_GAME_SECTOR_MODE1);
@@ -589,7 +592,7 @@ static void header_tests(void) {
 int main(void) {
     header_tests();
     wire_tests(); invalid_map_tests(); reader_tests(false); reader_tests(true);
-    part_tests(false); part_tests(true);
+    for(unsigned i = 0; i < 4; ++i) part_tests(i & 1u, i >= 2);
     sequential_cache_tests(false); sequential_cache_tests(true);
     run_span_tests(); run_failure_tests();
     maximum_map_tests();
