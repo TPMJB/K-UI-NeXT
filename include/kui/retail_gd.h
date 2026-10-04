@@ -26,10 +26,11 @@ enum kui_retail_gd_command {
 #ifdef KUI_RETAIL_CE
 /* Windows CE's DMA stream read (DMAREAD_STREAM_EX), params {FAD, sectors,
  * flag}: CHECK reports STREAMING while bytes remain, and the driver moves
- * them with DMA_TRANSFER {destination, bytes}, one 4 KiB page or less at a
- * time, then DMA_CHECK {bytes left}. Each transfer completes at once and
- * raises the interrupts the hardware would: G1 DMA end, and after the last
- * one the drive's. CE's driver waits for those (its SYSINTR 21 and 20). */
+ * them with DMA_TRANSFER {destination, bytes}, one physically contiguous
+ * piece of its buffer at a time (adjacent pages merge, so any size), then
+ * DMA_CHECK {bytes left}. Each driver call moves 4 KiB of a transfer and
+ * raises the interrupts that keep CE's driver calling: G1 DMA end, and the
+ * drive's while bytes remain and at completion (its SYSINTR 21 and 20). */
 #define KUI_RETAIL_GD_DMAREAD_STREAM 38u
 #define KUI_RETAIL_GD_STREAMING 3
 enum kui_retail_gd_interrupt {
@@ -65,6 +66,7 @@ struct kui_retail_gd {
     int (*read_part)(void *, uint32_t lba, uint32_t sector_bytes,
                      uint32_t skip, uint32_t bytes, void *output);
     uint32_t interrupts; /* KUI_RETAIL_GD_IRQ_* raised; the adapter clears. */
+    uint32_t xfer_destination, xfer_left; /* The stream's current DMA transfer. */
 #endif
     struct kui_retail_gd_diagnostics diag;
 };

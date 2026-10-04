@@ -1,5 +1,18 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: large stream transfers, stepped (2026-10-04 UTC)
+
+Build `96705505d1d6` (polled SD) stopped at the same call with SD 0 and
+IMAGE 9 (RANGE): the driver merges adjacent physical pages, so one
+DMA_TRANSFER exceeded `kui_retail_image_read_part`'s 64 sectors. Not DMA
+starvation; the CE reader's SCI DMA is restored. The GD service now steps a
+stream transfer 4 KiB per DMA_TRANSFER/DMA_CHECK/EXEC call
+(`stream_step`, `xfer_destination`, `xfer_left`), raising SYSINTR 21 after
+each step and SYSINTR 20 while bytes remain and at completion; DMA_CHECK
+returns 1 with the bytes left until done. CE reader limit `0x8c00c800`,
+stack to `0x8c00d000`. Host: `test-retail-gd-ce` covers stepping, abort,
+init and a mid-transfer refusal.
+
 ## Windows CE: stream reads run; card read fails under CE's display (2026-10-04 UTC)
 
 Build `50c37b5c2464`: the first DMA stream piece moved and CE delivered the

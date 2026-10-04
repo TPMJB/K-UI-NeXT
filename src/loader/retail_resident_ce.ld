@@ -20,11 +20,11 @@ SECTIONS
         . = ALIGN(4);
         __retail_resident_bss_end = .;
     } :resident
-    __retail_hook_stack_bottom = 0x8c00c000;
-    __retail_hook_stack = 0x8c00c800;
+    __retail_hook_stack_bottom = 0x8c00c800;
+    __retail_hook_stack = 0x8c00d000;
     ASSERT(_start == 0x8c008300, "resident entry moved")
     ASSERT(_kui_retail_ce_kernel == 0x8c008324, "CE kernel slot moved")
-    ASSERT(__retail_resident_bss_end <= 0x8c00c000,
+    ASSERT(__retail_resident_bss_end <= 0x8c00c800,
            "retail resident overlaps its guarded service stack")
     /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }

@@ -326,6 +326,29 @@ timeout, 4 command rejected, 5 data token, 6 CRC), the image read result,
 card blocks read, and the DMA controller's operation and channel 2 control
 registers.
 
+## Console result: polled-SD build 96705505d1d6 (2026-10-04)
+
+The same stop at the same call (DMA_TRANSFER of token 7 from the DMA thread,
+`080AFE94`, after 31 calls), now with the new row: SD `0` (the card read
+was fine), IMAGE `9` (`KUI_GAME_RANGE`), 114 blocks read, DMAOR `8201`,
+channel 2 control `12C0`. So DMA starvation was not the cause: the image
+reader refused the range. ARMADA's driver merges physically adjacent pages
+into one piece, so a DMA_TRANSFER can be far larger than 4 KiB, and
+`kui_retail_image_read_part` takes at most 64 sectors per call.
+
+Next build:
+
+- A stream's DMA transfer moves 4 KiB per driver call: DMA_TRANSFER takes
+  the first step; DMA_CHECK (from the DMA thread) and EXEC (from the
+  interrupt thread) each take one more and DMA_CHECK reports the bytes left
+  (1 while some remain). After every step the DMA end interrupt is raised,
+  and the drive's while bytes remain, so one of the driver's threads calls
+  again; for the last piece only the interrupt thread does. CE runs between
+  steps, however large the transfer.
+- The CE reader reads the card by DMA again (polling would halve reads).
+- The CE reader's limit is now `0x8c00c800`, its stack `0x8c00c800`-
+  `0x8c00d000`, still below bootstrap 2.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the

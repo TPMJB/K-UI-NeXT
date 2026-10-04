@@ -44,10 +44,10 @@
 #define KUI_RETAIL_ASYNC_LIMIT 0x8c00bea0
 /* The Windows CE boot test's reader (built with KUI_RETAIL_CE). CE enters
  * through bootstrap 2 at KUI_RETAIL_BOOT2_ADDRESS and never returns to the
- * IP's lower bootstrap area, so this reader may fill everything below C000
- * and keep a 2 KiB guarded stack above it. */
-#define KUI_RETAIL_CE_LIMIT 0x8c00c000
-#define KUI_RETAIL_CE_HOOK_STACK 0x8c00c800
+ * IP's lower bootstrap area, so this reader may fill everything below C800
+ * and keep a 2 KiB guarded stack above it, all below bootstrap 2. */
+#define KUI_RETAIL_CE_LIMIT 0x8c00c800
+#define KUI_RETAIL_CE_HOOK_STACK 0x8c00d000
 /* Three words in that reader's entry section the stage fills in: the
  * addresses of CE's pending-interrupt mask, interrupt ring head and
  * reschedule flag (retail_resident.S, kui_retail_ce_kernel). */

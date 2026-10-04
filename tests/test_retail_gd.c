@@ -578,6 +578,61 @@ static void stream_reads(void) {
     CHECK(get(STATUS + 4) == KUI_GD_ERROR_CANCELLED && get(STATUS + 8) == 0x800);
     token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
     CHECK(token > 0 && call(KUI_GD_INIT, 0, 0) == 0 && piece(token, OUTPUT, 0x800) == -1);
+    /* A large transfer moves 4 KiB per driver call: DMA_TRANSFER, then
+     * DMA_CHECK or EXEC. Until it is done both interrupts are raised; CHECK
+     * moves nothing. Another transfer must wait for it. */
+    service.interrupts = 0; part.fail = 0;
+    stream_params(45000, 15);
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && piece(token, OUTPUT + 0x40, 0x5000) == 0);
+    CHECK(part.skip == 0 && part.bytes == 0x1000 && service.xfer_left == 0x4000);
+    CHECK(service.interrupts == (KUI_RETAIL_GD_IRQ_DMA_END | KUI_RETAIL_GD_IRQ_DRIVE));
+    CHECK(piece(token, OUTPUT + 0x8000, 0x800) == -1);
+    service.interrupts = 0;
+    CHECK(call(KUI_GD_DMA_CHECK, (uint32_t)token, STATUS) == 1 && get(STATUS) == 0x3000);
+    CHECK(part.skip == 0x1000 && part.bytes == 0x1000);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && service.xfer_left == 0x2000 && part.skip == 0x2000);
+    uint32_t calls = part.calls;
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_RETAIL_GD_STREAMING);
+    CHECK(part.calls == calls && get(STATUS + 8) == 0x3000);
+    CHECK(call(KUI_GD_DMA_CHECK, (uint32_t)token, STATUS) == 1 && get(STATUS) == 0x1000);
+    service.interrupts = 0;
+    CHECK(call(KUI_GD_DMA_CHECK, (uint32_t)token, STATUS) == 0 && get(STATUS) == 0);
+    CHECK(service.interrupts == KUI_RETAIL_GD_IRQ_DMA_END && service.pending);
+    CHECK(call(KUI_GD_DMA_CHECK, (uint32_t)token, STATUS) == 0 && part.calls == calls + 2);
+    stream_bytes(OUTPUT + 0x40, 45000, 0, 0x5000, 2048);
+    /* The last transfer, with a partial final step, completes the command. */
+    CHECK(piece(token, OUTPUT + 0x8000, 0x1000) == 0 && call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(service.xfer_left == 0 && service.pending);
+    service.interrupts = 0;
+    CHECK(piece(token, OUTPUT + 0xa000, 0x1800) == 0);
+    CHECK(service.xfer_left == 0x800 && service.pending);
+    service.interrupts = 0;
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && part.bytes == 0x800);
+    CHECK(service.xfer_left == 0 && !service.pending);
+    CHECK(service.interrupts == (KUI_RETAIL_GD_IRQ_DMA_END | KUI_RETAIL_GD_IRQ_DRIVE));
+    stream_bytes(OUTPUT + 0xa000, 45000, 0x6000, 0x1800, 2048);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(get(STATUS + 8) == 15 * 2048);
+    /* ABORT and INIT end a transfer in progress. */
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && piece(token, OUTPUT, 0x3000) == 0 && service.xfer_left == 0x2000);
+    CHECK(call(KUI_GD_ABORT, (uint32_t)token, 0) == 0 && !service.xfer_left);
+    calls = part.calls;
+    CHECK(call(KUI_GD_DMA_CHECK, (uint32_t)token, STATUS) == 0 && part.calls == calls);
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && piece(token, OUTPUT, 0x3000) == 0 && service.xfer_left == 0x2000);
+    CHECK(call(KUI_GD_INIT, 0, 0) == 0 && !service.xfer_left);
+    /* A destination refused part-way fails the command. */
+    stream_params(45000, 3);
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && piece(token, OUTPUT, 0x1800) == 0 && service.xfer_left == 0x800);
+    ctx.deny = OUTPUT + 0x1000; service.interrupts = 0;
+    CHECK(call(KUI_GD_DMA_CHECK, (uint32_t)token, STATUS) == 0 && !service.pending);
+    CHECK(service.error == KUI_GD_ERROR_MEMORY);
+    CHECK(service.interrupts == (KUI_RETAIL_GD_IRQ_DMA_END | KUI_RETAIL_GD_IRQ_DRIVE));
+    ctx.deny = 0;
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
     /* Raw sectors stream too, from audio or data tracks. */
     mode(2352, 0); stream_params(16, 2);
     uint32_t sectors = service.diag.sectors_read;

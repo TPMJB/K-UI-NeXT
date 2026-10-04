@@ -46,7 +46,13 @@ static void reset(struct kui_retail_gd *s) {
     s->sector_part = 0x2000; s->track_type = 0; s->sector_bytes = 2048;
     s->pending = 0; s->command = 0; s->status = KUI_GD_NOT_FOUND;
     s->completed_bytes = 0; s->error = 0; s->drive_status = 1;
+#ifdef KUI_RETAIL_CE
+    s->xfer_left = 0;
+#endif
 }
+#ifdef KUI_RETAIL_CE
+static void stream_step(struct kui_retail_gd *);
+#endif
 static const struct kui_gd_track *track_at(const struct kui_retail_gd *s, uint32_t i) {
     return s->image_track_layout ? &s->image_tracks[i].gd : &s->tracks[i];
 }
@@ -188,6 +194,7 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     s->status = KUI_GD_PROCESSING; s->pending = 1;
 #ifdef KUI_RETAIL_CE
     if(stream) s->status = KUI_RETAIL_GD_STREAMING;
+    s->xfer_left = 0;
 #endif
     ++s->diag.requests;
     return (int32_t)s->token;
@@ -258,8 +265,8 @@ static int32_t execute(struct kui_retail_gd *s) {
     ++s->diag.exec_calls;
     if(!s->pending) return 0;
 #ifdef KUI_RETAIL_CE
-    /* A stream moves its bytes only through DMA_TRANSFER. */
-    if(s->command == KUI_RETAIL_GD_DMAREAD_STREAM) return 0;
+    /* A stream's bytes move only within DMA transfers. */
+    if(s->command == KUI_RETAIL_GD_DMAREAD_STREAM) { stream_step(s); return 0; }
 #endif
     s->executing = 1;
     if(s->command == KUI_GD_PIOREAD || s->command == KUI_GD_DMAREAD) {
@@ -355,45 +362,64 @@ static int32_t datatype(struct kui_retail_gd *s, uint32_t address) {
     return 0;
 }
 #ifdef KUI_RETAIL_CE
-/* DMA_TRANSFER for the pending stream: params {destination, bytes}, both
- * 32-byte multiples as for the G1 DMA, the bytes continuing the stream. The
- * copy is made at once; the DMA end (and, after the last bytes, the drive's
- * completion) interrupt is raised for the adapter to deliver. */
-static int32_t transfer(struct kui_retail_gd *s, uint32_t token, uint32_t address) {
-    if(!s->pending || s->command != KUI_RETAIL_GD_DMAREAD_STREAM || token != s->token)
-        return -1;
-    const uint8_t *p = guest(s, address, 8, 4, 0);
-    if(!p) return -1;
-    uint32_t destination = get32(p), bytes = get32(p + 4);
-    s->diag.last_destination = destination;
-    if(!bytes || (bytes & 31u) || bytes > s->request_bytes - s->completed_bytes) return -1;
-    uint8_t *out = guest(s, destination, bytes, 32, 1);
-    if(!out) return -1;
+/* One step of the stream's current DMA transfer: the next 4 KiB (two
+ * sectors' bytes) or what is left of it, from the user data after the bytes
+ * already moved. A real G1 DMA keeps moving on its own; here each of the
+ * driver's calls (DMA_TRANSFER, DMA_CHECK, EXEC) moves one step, so CE runs
+ * between them however large the transfer. The DMA end interrupt is raised
+ * after every step. While the transfer lasts, the drive's is too: CE's
+ * driver calls DMA_CHECK from its DMA thread on the first, but only while
+ * further pieces remain, and EXEC from its interrupt thread on the second.
+ * The last bytes complete the command, with the drive's interrupt. */
+static void stream_step(struct kui_retail_gd *s) {
+    if(!s->pending || s->command != KUI_RETAIL_GD_DMAREAD_STREAM || !s->xfer_left) return;
+    uint32_t n = KUI_RETAIL_GD_STEP_SECTORS * s->sector_bytes;
+    if(n > s->xfer_left) n = s->xfer_left;
+    uint8_t *out = guest(s, s->xfer_destination, n, 32, 1);
     uint32_t before = s->completed_bytes / s->sector_bytes;
     ++s->diag.read_steps;
-    if(s->read_part(s->ops.context, s->lba, s->sector_bytes, s->completed_bytes, bytes, out))
+    if(!out) s->error = KUI_GD_ERROR_MEMORY;
+    else if(s->read_part(s->ops.context, s->lba, s->sector_bytes, s->completed_bytes, n, out))
         s->error = KUI_GD_ERROR_IO;
     else {
-        s->completed_bytes += bytes;
+        s->completed_bytes += n; s->xfer_destination += n; s->xfer_left -= n;
         uint32_t after = s->completed_bytes / s->sector_bytes;
         s->diag.sectors_read += after - before;
         if(after) s->position_lba = s->lba + after - 1u;
         s->drive_status = 1;
     }
     s->interrupts |= KUI_RETAIL_GD_IRQ_DMA_END;
+    if(s->xfer_left) s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
     if(s->error || s->completed_bytes == s->request_bytes) {
         s->status = s->error ? KUI_GD_FAILED : KUI_GD_COMPLETED;
-        s->pending = 0; s->diag.last_error = s->error;
+        s->pending = 0; s->xfer_left = 0; s->diag.last_error = s->error;
         s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
     }
+}
+/* DMA_TRANSFER for the pending stream: params {destination, bytes}, both
+ * 32-byte multiples as for the G1 DMA, the bytes continuing the stream after
+ * the previous transfer has finished. Its first step is taken at once. */
+static int32_t transfer(struct kui_retail_gd *s, uint32_t token, uint32_t address) {
+    if(!s->pending || s->command != KUI_RETAIL_GD_DMAREAD_STREAM || token != s->token ||
+       s->xfer_left) return -1;
+    const uint8_t *p = guest(s, address, 8, 4, 0);
+    if(!p) return -1;
+    uint32_t destination = get32(p), bytes = get32(p + 4);
+    s->diag.last_destination = destination;
+    if(!bytes || (bytes & 31u) || bytes > s->request_bytes - s->completed_bytes ||
+       !guest(s, destination, bytes, 32, KUI_RETAIL_MAP_VALIDATE)) return -1;
+    s->xfer_destination = destination; s->xfer_left = bytes;
+    stream_step(s);
     return 0;
 }
-/* DMA_CHECK: every transfer has finished, with nothing left of it. */
+/* DMA_CHECK: one more step of the current transfer, then the bytes it has
+ * left; 1 while some remain, 0 once it has finished. */
 static int32_t dma_check(struct kui_retail_gd *s, uint32_t address) {
     uint8_t *out = guest(s, address, 4, 4, 1);
     if(!out) return -1;
-    put32(out, 0);
-    return 0;
+    stream_step(s);
+    put32(out, s->xfer_left);
+    return s->xfer_left ? 1 : 0;
 }
 #endif
 #ifdef KUI_RETAIL_GD_ASYNC
@@ -438,6 +464,9 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
     }
     case KUI_GD_ABORT:
         if(r4 && s->pending && r4 == s->token) {
+#ifdef KUI_RETAIL_CE
+            s->xfer_left = 0;
+#endif
             s->pending = 0; s->error = KUI_GD_ERROR_CANCELLED;
             s->diag.last_error = s->error; s->status = KUI_GD_FAILED; result = 0;
         }
