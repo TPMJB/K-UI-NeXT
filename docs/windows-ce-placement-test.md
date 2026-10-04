@@ -26,6 +26,15 @@ history of that implementation, not a statement that games still cannot run.
 
 ## CE prefetch experiment (2026-10-04)
 
+**Current comparison build:** the live speed/call overlay and its timer
+sampling are removed from both CE readers. Stage, failure and menu-return
+diagnostics remain. The owner saw roughly 620 KiB/s initially with the
+prefetch build, then about 420 with dips to 300; the next comparison checks
+whether drawing the diagnostic display affected actual playback. Use the
+same ARMADA intro with X and compare pacing, audio sync and skips. There is
+intentionally no live rate or BUSY PCT line in this build. The prefetch
+mechanism and its exit counters below are unchanged.
+
 The background reader now has a 2 KiB ring of CRC-checked output instead of
 a single 512-byte spill. It can read ahead within the current request while
 CE supplies the next DMA destination, and while a virtual PIO destination
@@ -56,14 +65,15 @@ The menu-return screen replaces the hook-count row with:
 `IRQ BLKS` and `CALLBLKS` count card blocks processed in those contexts;
 prefetched IRQ blocks need not already have reached CE's destination.
 
-First console comparison: replay ARMADA's same intro with X and compare with
+Original prefetch comparison: replay ARMADA's same intro with X and compare with
 the previous background build's roughly 470 KiB/s, including playback and
 audio smoothness. A still supplies the standard-reader comparison. Then try
 Worms' PIO intro. Capture the rate/busy display and menu-return screen if
 possible. A queue peak above `00000200` proves use beyond the old spill;
 it does not by itself establish a speed gain. Hardware performance remains
-unmeasured for this change. The live display is unchanged, so this experiment
-does not also change the benchmark's drawing overhead.
+unmeasured when that change was built. Build `90b0456391fe` kept the live
+display, so that first experiment did not change its drawing overhead; the
+current comparison removes it as described above.
 
 ## Step 1: placement (passed on ARMADA)
 

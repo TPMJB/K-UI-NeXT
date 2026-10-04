@@ -1,5 +1,28 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: remove the live overlay for playback comparison (2026-10-04)
+
+Owner result on `90b0456391fe`: ARMADA's intro initially appeared improved,
+with displayed delivery around 620 KiB/s, later around 420 and sometimes
+300. These scene-dependent delivery rates alone do not establish a card
+throughput limit. The owner requested removing the live speed/call display.
+
+Both CE readers now omit the live framebuffer drawing and the associated
+timer sampling, rate calculation and formatting. The overlay cleared
+53,504 framebuffer bytes per refresh plus glyph writes while the GD call
+masked interrupts; its cost was excluded from BUSY PCT. Stage, failure and
+return-to-menu screens remain, including queue and stream-error counters.
+The 2 KiB prefetch queue, CRC, IRQ priority and transfer logic are unchanged.
+
+Local GCC 15 SH preflight: full native/CE instruction, layout and stack
+audits pass. CE async ends at `0x8c00cfbc` (2,116 bytes free), stack 400 plus
+64-byte margin within 2,000 usable; CE standard ends at `0x8c00c164`
+(1,692 bytes free). Native resident/stage binaries remain byte-identical
+to `90b0456` at a fixed build identifier. Existing console-only CI scope
+applies to this loader/docs-only change; the preceding build passed the
+full host/filesystem suite. Console comparison: same ARMADA intro with X,
+judged by playback pacing, audio sync and skips, without a live rate line.
+
 ## Windows CE: bounded prefetch between driver buffers (2026-10-04)
 
 First optimization after the owner's background-reader result of roughly
