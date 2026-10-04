@@ -317,6 +317,8 @@ static void deliver_work(uint32_t wait) {
 #endif
     for(;;) {
 #ifdef KUI_RETAIL_CE
+        if(kui_sci_stream_token_pending() && R.shared.stream.token_bounded &&
+           !R.shared.stream.token_budget) return;
         /* A larger queue must not turn a polled fallback into a long ISR.
          * A paused active read is woken below; an in-flight block supplies
          * the next SCI interrupt. Count failed/retry iterations too. */
@@ -461,6 +463,7 @@ void kui_retail_async_call(uint32_t function) {
     uint32_t wait = 0;
 #ifdef KUI_RETAIL_CE
     install();
+    kui_sci_stream_token_budget(e.isr && function != KUI_GD_PIO_TRANSFER);
 #endif
     if(e.active) {
         hook();
@@ -510,7 +513,8 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
     if(topping(function)) e.since = 0;
 #ifdef KUI_RETAIL_CE
     /* What the interrupt does not fill, CE's driver calls for again at once. */
-    if(!interrupt_fills() && (topping(function) || function == KUI_GD_DMA_TRANSFER)) wake();
+    if(kui_sci_stream_token_pending() ||
+       (!interrupt_fills() && (topping(function) || function == KUI_GD_DMA_TRANSFER))) wake();
 #endif
 }
 uint32_t kui_retail_async_irq(void) {
@@ -522,6 +526,9 @@ uint32_t kui_retail_async_irq(void) {
 #endif
         return 1;
     }
+#ifdef KUI_RETAIL_CE
+    kui_sci_stream_token_budget(e.isr != 0);
+#endif
     e.in_irq = 1;
     deliver(0);
     e.in_irq = 0;
@@ -542,8 +549,11 @@ int kui_retail_async_read_part(void *unused, uint32_t lba, uint32_t sector_bytes
     if(e.token != s->token) return -1;
     ++e.pio_calls;
     e.pio_bytes += bytes;
+    uint8_t bounded = R.shared.stream.token_bounded;
+    R.shared.stream.token_bounded = 0; /* synchronous PIO must fill its piece */
     piece(skip, bytes, 0, output, false);
     if(!e.failed && e.piece_filled < bytes) deliver(UINT32_MAX);
+    R.shared.stream.token_bounded = bounded;
     bool done = !e.failed && e.piece_filled == bytes;
     close_piece();
     return done ? 0 : -1;

@@ -210,7 +210,7 @@ static void install_hook(void) {
 #ifdef KUI_RETAIL_ASYNC
 /* Counter rows for both screens; every counter is a uint32_t in order. */
 #ifdef KUI_RETAIL_CE
-_Static_assert(sizeof(struct kui_sci_stream_stats) == 20u * 4u, "CE stream counters");
+_Static_assert(sizeof(struct kui_sci_stream_stats) == 21u * 4u, "CE stream counters");
 _Static_assert(offsetof(struct kui_retail_async, pio_bytes) ==
                offsetof(struct kui_retail_async, polled_irq_max) + 12u, "CE work counters");
 #else
@@ -227,7 +227,7 @@ static void stream_lines(void) {
     /* Remaining DMA bytes in incomplete receptions, then late controller
      * snapshots and framing work. Counts only: none are elapsed times. */
     retail_display_values("LEFT0    LEFT128  LEFT384  LEFT513  CH2 LATE", st + 11, 5);
-    retail_display_values("DMAORBAD TOKBYTES TOKMAX   STOPS", st + 16, 4);
+    retail_display_values("DMAORBAD TOKBYTES TOKMAX   STOPS    TOKYIELD", st + 16, 5);
 #else
     retail_display_values("DEFERRED", st + 10, 1);
 #endif

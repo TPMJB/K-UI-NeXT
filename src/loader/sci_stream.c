@@ -73,7 +73,11 @@ static void fence(const void *area) {
 
 typedef uint32_t alias_word __attribute__((__may_alias__));
 /* RESUME: stopped mid-block by an overrun in an interrupt, to be resumed. */
-enum { CLOSED, PAUSED, DMA, LOST, RESUME };
+enum { CLOSED, PAUSED, DMA, LOST, RESUME
+#ifdef KUI_RETAIL_CE
+    , TOKEN_WAIT
+#endif
+};
 #ifdef KUI_RETAIL_ASYNC
 /* The game reader keeps this state between its interrupt vectors. */
 #include "retail_async.h"
@@ -178,6 +182,13 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
 }
 bool kui_sci_stream_busy(void) { return s.state == DMA; }
 bool kui_sci_stream_ready(uint32_t lba) { return s.arrived == lba + 1u; }
+#ifdef KUI_RETAIL_CE
+void kui_sci_stream_token_budget(bool bounded) {
+    s.token_bounded = bounded;
+    s.token_budget = KUI_SCI_STREAM_TOKEN_SLICE;
+}
+bool kui_sci_stream_token_pending(void) { return s.state == TOKEN_WAIT; }
+#endif
 const struct kui_sci_stream_stats *kui_sci_stream_stats(void) { return &s.stats; }
 void kui_sci_stream_discard(void) { s.ready[0] = s.ready[1] = 0; s.kept = 0; s.arrived = 0; }
 
@@ -190,28 +201,44 @@ static void token_count(uint32_t bytes) {
 #endif
 static enum kui_sci_stream_result token(uint32_t limit) {
 #ifdef KUI_RETAIL_CE
+    if(s.state != TOKEN_WAIT) {
+        s.token_limit = limit;
+        s.token_used = 0;
+        s.state = TOKEN_WAIT;
+    }
+    uint32_t remaining = s.token_limit - s.token_used, run = remaining;
+    if(s.token_bounded && run > s.token_budget) run = s.token_budget;
     uint32_t n = 0;
-    for(; n < limit; ++n) {
+    uint8_t value = 0xff;
+    while(n < run) {
+        value = byte(0xff);
+        ++n;
+        if(value != 0xff) break;
+    }
+    s.token_used += n;
+    if(s.token_bounded) s.token_budget -= n;
+    if(value == 0xfe) {
+        for(unsigned k = 0; k < 64u && !(rd8(SSR) & TEND); ++k) {}
+        token_count(s.token_used);
+        return KUI_SCI_STREAM_OK;
+    }
+    if(value == 0xff && n < remaining && healthy()) {
+        select(false); /* no more clocks until the same search resumes */
+        if(!healthy()) {s.state = LOST; return KUI_SCI_STREAM_RESET;}
+        if(n) ++s.stats.token_yields; /* count work paused, not zero-budget probes */
+        return KUI_SCI_STREAM_PENDING;
+    }
+    token_count(s.token_used);
+    s.state = LOST;
 #else
     for(uint32_t n = 0; n < limit; ++n) {
-#endif
         uint8_t value = byte(0xff);
         if(value == 0xfe) {
             for(unsigned k = 0; k < 64u && !(rd8(SSR) & TEND); ++k) {}
-#ifdef KUI_RETAIL_CE
-            token_count(n + 1u);
-#endif
             return KUI_SCI_STREAM_OK;
         }
-        if(value != 0xff) {
-#ifdef KUI_RETAIL_CE
-            ++n; /* the error byte was clocked too */
-#endif
-            break;
-        }
+        if(value != 0xff) break;
     }
-#ifdef KUI_RETAIL_CE
-    token_count(n);
 #endif
     ++s.stats.token_errors;
     return healthy() ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_RESET;
@@ -229,6 +256,7 @@ static uint8_t command(const uint8_t packet[6], bool stop) {
 static enum kui_sci_stream_result stop_card(void) {
     static const uint8_t stop[6] = {0x4c, 0, 0, 0, 0, 0x61};
 #ifdef KUI_RETAIL_CE
+    if(s.state == TOKEN_WAIT) token_count(s.token_used);
     ++s.stats.stops;
 #endif
     select(true);
@@ -253,6 +281,9 @@ static enum kui_sci_stream_result start(uint32_t lba, uint32_t limit) {
     ++s.stats.starts;
     uint8_t r1 = command(packet, false);
     if(!healthy()) return KUI_SCI_STREAM_RESET;
+#ifdef KUI_RETAIL_CE
+    s.position = lba;
+#endif
     return r1 ? KUI_SCI_STREAM_COMMAND : token(limit);
 }
 static enum kui_sci_stream_result module_reset(void) {
@@ -353,10 +384,23 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
         if((result = start_dma(s.fill, s.lost[s.fill])) != KUI_SCI_STREAM_OK) s.state = LOST;
         return result;
     }
+#ifdef KUI_RETAIL_CE
+    bool pending = s.state == TOKEN_WAIT && s.position == lba;
+    if(!pending) s.token_polled = polled;
+    else polled = s.token_polled;
+    if(pending || (s.state == PAUSED && s.position == lba)) {
+#else
     if(s.state == PAUSED && s.position == lba) {
+#endif
         select(true);
         result = token(token_limit);
-        if(result != KUI_SCI_STREAM_OK) {s.state = LOST; return result;}
+        if(result != KUI_SCI_STREAM_OK) {
+#ifdef KUI_RETAIL_CE
+            if(result != KUI_SCI_STREAM_PENDING)
+#endif
+                s.state = LOST;
+            return result;
+        }
     } else {
         if(s.state != CLOSED && (result = stop_card()) != KUI_SCI_STREAM_OK) return result;
         result = start(lba, token_limit);

@@ -1,5 +1,28 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: resumable token search experiment (2026-10-04)
+
+ARMADA photo `61835.jpg` confirms diagnostic build `b6f55e1e0876`. It
+records 66,595 DMA and 18,643 polled receptions (21.87% polled). All
+successful polled receptions occurred in interrupt delivery visits, maximum
+one per visit; no PIO `read_part` calls occurred. The 18,809 incomplete
+receptions equal 18,643 overruns plus 166 repair attempts; 83.7% stopped
+with 129–384 DMA bytes left. Late controller snapshots were clean, which
+does not exclude earlier contention. Token searches clocked 6,524,422
+bytes, with a maximum of 3,222 in one successful search. Starts/stops were
+18,893/18,892; guard 0, CRC errors 4, token/foreign errors 0.
+
+The owner separately reports Worms Armageddon is slightly laggy but its
+audio/video appear synchronized. No controlled duration or Worms counters
+were supplied, and the diagnostic build does not establish a sync fix.
+
+The approved next experiment shares a 256-token-byte allowance across each
+CE service entry, preserves pending searches across returns and explicitly
+wakes CE to continue. It retains the accepted payload byte loop and CRC.
+Boot/noninstalled and synchronous PIO-transfer entries remain unbudgeted.
+`TOKYIELD` replaces the unused fifth column of the last counter row. See
+[design, evidence and validation](evidence/ce-token-slicing-2026-10-04.md).
+
 ## Windows CE: count incomplete DMA and blocking work (2026-10-04)
 
 The next experiment adds CE-only counters to the restored `e9ff2353c3cd`

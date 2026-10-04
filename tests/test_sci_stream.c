@@ -536,6 +536,59 @@ static void test_crc_reference_vectors(void) {
     card_content = data_at;
 }
 #ifdef KUI_RETAIL_CE
+static void test_ce_token_slices(void) {
+    const uint32_t slice = KUI_SCI_STREAM_TOKEN_SLICE, lba = 700u;
+    reset_model(); open_stream(false); card.nac_first = 3u * slice + 7u;
+    struct kui_sci_stream_stats before = *kui_sci_stream_stats();
+    enum kui_sci_stream_result r;
+    for(unsigned i = 1; i <= 3u; ++i) {
+        kui_sci_stream_token_budget(true);
+        assert(kui_sci_stream_fetch(lba, 3u * slice + 8u, false) == KUI_SCI_STREAM_PENDING);
+        assert(card.frame == i * slice && card.cmd18 == 1u && !card.cmd12);
+        assert(kui_sci_stream_token_pending() && !kui_sci_stream_busy());
+        assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_PENDING);
+        /* A second visit in the same service entry has no fresh budget. */
+        assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_PENDING);
+        assert(card.frame == i * slice && card.cmd18 == 1u);
+    }
+    kui_sci_stream_token_budget(true);
+    assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
+    assert(!kui_sci_stream_token_pending() && kui_sci_stream_busy());
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    check_block(lba, kui_sci_stream_take(lba, &r));
+    assert(kui_sci_stream_stats()->token_errors == before.token_errors);
+    assert(kui_sci_stream_stats()->token_bytes - before.token_bytes == 3u * slice + 8u);
+    assert(kui_sci_stream_stats()->token_yields - before.token_yields == 3u);
+    assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+
+    /* The original total timeout survives slice boundaries and changing
+     * limit arguments on retries; pending slices never expose a payload. */
+    reset_model(); open_stream(false); card.nac_first = 4u * slice;
+    before = *kui_sci_stream_stats();
+    const uint32_t limit = 2u * slice + 9u;
+    for(unsigned i = 0; i < 3u; ++i) {
+        kui_sci_stream_token_budget(true);
+        assert(kui_sci_stream_fetch(lba, i ? UINT32_MAX : limit, false) ==
+            (i == 2u ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_PENDING));
+    }
+    assert(card.frame == limit && card.cmd18 == 1u && !m.dma_starts);
+    assert(kui_sci_stream_stats()->token_errors - before.token_errors == 1u);
+    assert(kui_sci_stream_stats()->token_bytes - before.token_bytes == limit);
+    assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_PENDING);
+    assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK && card.cmd12 == 1u);
+
+    reset_model(); open_stream(false); card.nac_first = 4u * slice;
+    kui_sci_stream_token_budget(true);
+    assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_PENDING);
+    card.nac_first = 30u;
+    kui_sci_stream_token_budget(true);
+    assert(kui_sci_stream_fetch(lba + 1u, LIMIT, false) == KUI_SCI_STREAM_OK);
+    assert(card.cmd12 == 1u && card.cmd18 == 2u);
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    check_block(lba + 1u, kui_sci_stream_take(lba + 1u, &r));
+    assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+    kui_sci_stream_token_budget(false);
+}
 static void test_ce_counters(void) {
     /* Count the terminating token byte on both success and rejection. */
     for(unsigned bad = 0; bad < 2; ++bad) {
@@ -587,6 +640,7 @@ int main(void) {
     test_crc_reference_vectors();
 #ifdef KUI_RETAIL_CE
     test_ce_counters();
+    test_ce_token_slices();
 #endif
     puts("sci stream: ok");
     return 0;

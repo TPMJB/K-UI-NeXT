@@ -44,6 +44,7 @@ struct kui_sci_stream_stats {
     uint32_t incomplete_ch2_active, incomplete_dmaor_bad;
     uint32_t token_bytes, token_max; /* all search bytes, including token/error */
     uint32_t stops; /* CMD12 attempts */
+    uint32_t token_yields; /* token search paused at an entry's byte budget */
 #endif
 };
 /* Engine state, placed by the resident (sci_stream.c owns it otherwise). */
@@ -63,6 +64,10 @@ struct kui_sci_stream_state {
      * (not a byte ahead); after two the card is taken not to resume
      * mid-block as expected, and overruns restart. */
     uint8_t ready[2], wire[2], rdr[2], held[2], hold[2], kept, sptr, unrepaired;
+#ifdef KUI_RETAIL_CE
+    uint8_t token_bounded, token_polled;
+    uint32_t token_limit, token_used, token_budget;
+#endif
     struct kui_sci_stream_stats stats;
 };
 /* Adopt the bus (acquired, card ready) and two 32-byte-aligned receive areas
@@ -85,6 +90,14 @@ bool kui_sci_stream_busy(void);
  * in flight): the next one may be fetched before it is taken, and goes into
  * the other area. */
 bool kui_sci_stream_ready(uint32_t lba);
+#ifdef KUI_RETAIL_CE
+#define KUI_SCI_STREAM_TOKEN_SLICE 256u
+/* Once per external service entry, shared by its before/after work. Before
+ * CE's interrupt service is installed, token searches remain unbounded by
+ * this slice (their original total byte limit still applies). */
+void kui_sci_stream_token_budget(bool bounded);
+bool kui_sci_stream_token_pending(void);
+#endif
 /* If the in-flight block has arrived (or reception stopped), end it and hand
  * the SCI back: OK (the block is ready: kui_sci_stream_take), PENDING (still
  * arriving, or resumed after a mid-block overrun) or an error (the next
