@@ -1,5 +1,23 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: compare 512-byte token allowance (2026-10-04)
+
+Owner confirms photo `01-image-1791148467591.jpg` is ARMADA on build
+`6f14bc529472`. ARMADA seemed a little better. Worms Armageddon improved
+in some respects but its intro audio preceded video by about half a second;
+the owner considers it mostly fine and is not supplying a separate photo.
+
+The ARMADA counters show 24,657 DMA and 7,058 polled receptions (22.25%
+polled), 7,174 token yields, guard 0, CRC errors 2, and token/foreign errors
+0. Incomplete bins total 7,226, matching 7,058 overruns plus 168 repair
+attempts. These unequal-duration sessions do not establish a transfer-rate
+change or the cause of the audio offset.
+
+The next isolated test changes only `KUI_SCI_STREAM_TOKEN_SLICE` from 256
+to 512 bytes. This trades longer bounded token polling for fewer possible
+continuation round trips. Payload reception, CRC, recovery and wakeup rules
+are unchanged. See [result and test plan](evidence/ce-token-512-2026-10-04.md).
+
 ## Windows CE: resumable token search experiment (2026-10-04)
 
 ARMADA photo `61835.jpg` confirms diagnostic build `b6f55e1e0876`. It

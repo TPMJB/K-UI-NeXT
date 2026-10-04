@@ -91,7 +91,7 @@ bool kui_sci_stream_busy(void);
  * the other area. */
 bool kui_sci_stream_ready(uint32_t lba);
 #ifdef KUI_RETAIL_CE
-#define KUI_SCI_STREAM_TOKEN_SLICE 256u
+#define KUI_SCI_STREAM_TOKEN_SLICE 512u
 /* Once per external service entry, shared by its before/after work. Before
  * CE's interrupt service is installed, token searches remain unbounded by
  * this slice (their original total byte limit still applies). */
