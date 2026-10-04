@@ -516,6 +516,9 @@ What to look at:
   interrupt placed vs calls), `HOOKS RELEASES ISR` (`ISR 1`: the handlers
   are installed), and the stream's error counters.
 
+CI: build `a30deb97b46e` passed (host and Dreamcast, [run
+37206850694](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37206850694)).
+
 Host test: `test-retail-async-ce` covers DMAREAD by interrupt, a virtual
 PIOREAD by calls, DMA streams with 32-byte to 64 KiB transfers in 2048- and
 2352-byte sectors, PIO streams through `read_part`, abort, failures, the

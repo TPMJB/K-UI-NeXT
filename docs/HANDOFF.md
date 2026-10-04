@@ -20,6 +20,10 @@ wake), `retail_gd.c` (`kui_retail_gd_stream_progress`),
 `0x8c00e000`). Tests: `test-retail-async-ce` (new); package, shell and
 launcher cases. Details:
 [windows-ce-placement-test.md](windows-ce-placement-test.md#background-reader-for-windows-ce-x-on-the-boot-tests-confirmation).
+The first build (`951bbe0`) failed the layout check: a helper named
+`irq_fills` matched the forbidden KOS `_irq_` prefix. It is now
+`interrupt_fills`. Build `a30deb97b46e`: host and Dreamcast passed ([run
+37206850694](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37206850694)).
 To test: ARMADA's intro with A, then with X. Compare KIB/S and BUSY PCT on
 the status line.
 
