@@ -251,6 +251,48 @@ Next build: two ways to see the hang.
   and four calls, and the last command (`COMMAND LBA SECTORS DEST`), held
   for about 15 seconds before K-UI restarts.
 
+## Console result: status-line build ec6d39cc5372 (2026-10-04)
+
+This time ARMADA stopped with `GD REQUEST REJECTED` after 26 calls: REQUEST
+(R7 0) for command `0x26` (38, DMA stream read), parameters at `0204FAF0`
+on CE's stack, from `wsegacd.dll` (caller `01DE2DC2`). The earlier calls end
+with CHECK, EXEC, CHECK of token 6. (The previous build's black screen was
+probably the same point, its stop screen not reached or not drawn.)
+
+How ARMADA's driver reads: it locks the buffer's pages and lists their
+physical pieces (at most 4 KiB each, 32-byte aligned). One piece: DMAREAD
+(17). Several: DMAREAD_STREAM_EX (38) with {FAD, sectors, 0}; when CHECK
+first reports 3 it starts DMA_TRANSFER (6) {address, bytes} of the first
+piece. A DMA thread waits on SYSINTR 21 (Holly ISTNRM bit 14, GD DMA end),
+checks DMA_CHECK (7) for 0 and transfers the next piece. The request
+completes when SYSINTR 20 (ISTEXT bit 0, the drive) wakes the interrupt
+thread, whose CHECK then returns 2. A missing interrupt 20 times out after
+15 s and aborts the read.
+
+K-UI cannot make the G1 DMA or the drive raise those, so the CE reader raises
+them inside CE's kernel the way CE's own interrupt dispatch does after the
+platform handler returns a SYSINTR: set the pending bit, queue SYSINTR-8 in
+the 32-entry ring after the ring's head index, set the reschedule flag. The
+scheduler then sets the driver's events. In ARMADA's `nk.exe` these are
+`0x8c145b40`, `0x8c145aa8` and `0x8c145884` (KData + 0x340, 0x2a8, 0x84). The
+stage finds them by matching that dispatch code in the loaded kernel (one
+match each in ARMADA and two other titles' kernels, at different addresses).
+
+Next build:
+
+- The CE reader serves command 38: CHECK returns 3 (STREAMING) while bytes
+  remain; DMA_TRANSFER copies its piece at once (pieces may split sectors:
+  `kui_retail_image_read_part`), raises SYSINTR 21, and after the last piece
+  completes the command and raises SYSINTR 20; DMA_CHECK returns 0 with 0
+  bytes left.
+- The stage shows `CE PEND CE RING RESCHED` (the three addresses), or
+  `CE KERNEL INTERRUPTS NOT FOUND`, on the placement screen.
+- The CE reader may now fill up to `0x8c00c000`, with a 2 KiB stack at
+  `0x8c00c000`–`0x8c00c800` (the IP's lower bootstrap area, unused once
+  bootstrap 2 at `0x8c00e000` runs). Native readers are unchanged.
+- Still missing for ARMADA: commands 26 and 39 (PIO stream), functions 12
+  and 13, and 11 with a callback.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the
@@ -269,7 +311,10 @@ Next build: two ways to see the hang.
   possibly inside the reader; note when it happened.
 - **`GD REQUEST REJECTED` or `GD FUNCTION UNSUPPORTED`:** CE asked for a
   command (R4 of a REQUEST row) or function (R7) K-UI does not provide yet:
-  the next thing to implement.
+  the next thing to implement. With R7 = 6 it is a DMA_TRANSFER K-UI
+  refused (its parameters at R5: wrong token, size or destination).
+- **`CE KERNEL INTERRUPTS NOT FOUND`** on the reader's screen: CE started a
+  stream read but the stage did not find CE's interrupt ring in this kernel.
 - **Windows CE's own screens, then a stop or freeze:** CE got further; a
   freeze may be CE waiting for a disc interrupt K-UI does not raise yet.
 - **The status line stays still:** CE stopped calling the disc; the values

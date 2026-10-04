@@ -23,6 +23,19 @@ enum kui_retail_gd_command {
     KUI_RETAIL_GD_REQ_STAT = 36, KUI_RETAIL_GD_GET_VERS = 40
 };
 
+#ifdef KUI_RETAIL_CE
+/* Windows CE's DMA stream read (DMAREAD_STREAM_EX), params {FAD, sectors,
+ * flag}: CHECK reports STREAMING while bytes remain, and the driver moves
+ * them with DMA_TRANSFER {destination, bytes}, one 4 KiB page or less at a
+ * time, then DMA_CHECK {bytes left}. Each transfer completes at once and
+ * raises the interrupts the hardware would: G1 DMA end, and after the last
+ * one the drive's. CE's driver waits for those (its SYSINTR 21 and 20). */
+#define KUI_RETAIL_GD_DMAREAD_STREAM 38u
+#define KUI_RETAIL_GD_STREAMING 3
+enum kui_retail_gd_interrupt {
+    KUI_RETAIL_GD_IRQ_DMA_END = 1, KUI_RETAIL_GD_IRQ_DRIVE = 2
+};
+#endif
 struct kui_retail_gd_diagnostics {
     uint32_t calls, requests, exec_calls, read_steps, sectors_read, rejected;
     uint32_t last_function, last_command, last_lba, last_count, last_destination;
@@ -45,6 +58,14 @@ struct kui_retail_gd {
     /* Sectors one EXEC may read: adapter pacing policy, not drive state.
      * Init sets STEP_SECTORS; values outside 1..STEP_MAX use that default. */
     uint32_t step;
+#ifdef KUI_RETAIL_CE
+    /* Copies bytes [skip, skip + bytes) of the user data of the sectors
+     * from lba on (sector_bytes each); zero only when all were produced.
+     * The adapter sets it after init; streams are refused without it. */
+    int (*read_part)(void *, uint32_t lba, uint32_t sector_bytes,
+                     uint32_t skip, uint32_t bytes, void *output);
+    uint32_t interrupts; /* KUI_RETAIL_GD_IRQ_* raised; the adapter clears. */
+#endif
     struct kui_retail_gd_diagnostics diag;
 };
 
@@ -78,7 +99,8 @@ void kui_retail_gd_init_manifest_validated(struct kui_retail_gd *,
  * backend may use SCI DMA independently. CHECK never reads storage.
  * Completion/failure is acknowledged once by CHECK;
  * a subsequent CHECK returns NOT_FOUND. ABORT retains completed chunk bytes.
- * MISC and stream functions are not handled here. Callback-clear (r4=0) is a
+ * MISC and stream functions are not handled here, except Windows CE's DMA
+ * stream read in the KUI_RETAIL_CE build (see KUI_RETAIL_GD_DMAREAD_STREAM). Callback-clear (r4=0) is a
  * supported no-op; nonzero callback installation is explicitly unsupported.
  * The mode command's four words are virtual drive metadata, not physical SD
  * settings. DATATYPE accepts Mode1/2048 (type0 automatic or1024 explicit) and

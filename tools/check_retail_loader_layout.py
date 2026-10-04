@@ -42,12 +42,21 @@ ASYNC = "scia"
 RESIDENTS = TRANSPORTS + (ASYNC,)
 
 
-def resident_limit(transport):
+def resident_limit(transport, ce=False):
+    if ce and transport == "sci":
+        return layout.CE_RESIDENT_LIMIT
     return layout.ASYNC_RESIDENT_LIMIT if transport == ASYNC else layout.RESIDENT_LIMIT
 
 
-def stack_bottom(transport):
+def stack_bottom(transport, ce=False):
+    if ce and transport == "sci":
+        return layout.CE_RESIDENT_LIMIT
     return layout.ASYNC_HOOK_STACK_BOTTOM if transport == ASYNC else layout.HOOK_STACK_BOTTOM
+
+
+def stack_top(transport, ce=False):
+    """The Windows CE package's SCI reader has its own, larger stack."""
+    return layout.CE_HOOK_STACK if ce and transport == "sci" else layout.HOOK_STACK
 
 
 def check_async_stack(directory):
@@ -77,7 +86,7 @@ def check_bss(image, base, prefix):
         raise ValueError(f"Invalid {prefix} BSS bounds")
 
 
-def check_stack_usage(directory, symbols, transport="scif"):
+def check_stack_usage(directory, symbols, transport="scif", ce=False):
     # LTO may rename clones differently in .su and ELF, and distinct local
     # functions can share a name. Count every emitted row, including init,
     # instead of filtering by symbols or collapsing names. Only these final
@@ -108,7 +117,7 @@ def check_stack_usage(directory, symbols, transport="scif"):
                  "kui_ata_read" if transport == "ide" else "kui_loader_sd_stream_next"):
         if name not in frames or "_" + name not in symbols:
             raise ValueError(f"Missing runtime stack-usage frame: {name}")
-    available = (layout.HOOK_STACK - layout.HOOK_STACK_BOTTOM -
+    available = (stack_top(transport, ce) - stack_bottom(transport, ce) -
                  STACK_GUARD_BYTES - STACK_ALIGNMENT_GAP)
     maximum = sum(emitted_frames if lto else frames.values()) + ASSEMBLY_STACK_BYTES
     if maximum > available:
@@ -133,7 +142,7 @@ def check_directory(directory, ce=False):
     for transport in RESIDENTS:
         name = "resident-" + transport
         images[name] = inspect_elf((directory / (name + ".elf")).read_bytes(),
-                                  layout.RESIDENT_ADDRESS, resident_limit(transport))
+                                  layout.RESIDENT_ADDRESS, resident_limit(transport, ce))
     for name, image in images.items():
         forbidden = [s for s in image["symbols"] if
                      s.startswith(FORBIDDEN_PREFIXES) or s in FORBIDDEN_SYMBOLS]
@@ -174,8 +183,8 @@ def check_directory(directory, ce=False):
         for symbol in required:
             code_symbol(resident, symbol, layout.RESIDENT_ADDRESS)
         rs = resident["symbols"]
-        if (rs.get("__retail_hook_stack") != layout.HOOK_STACK or
-                rs.get("__retail_hook_stack_bottom") != stack_bottom(transport)):
+        if (rs.get("__retail_hook_stack") != stack_top(transport, ce) or
+                rs.get("__retail_hook_stack_bottom") != stack_bottom(transport, ce)):
             raise ValueError(f"{name} hook stack is outside the reserved retired IP area")
         for symbol in ("_kui_retail_hook_active", "_kui_retail_hook_fault"):
             if not layout.RESIDENT_ADDRESS <= rs.get(symbol, 0) < resident["memory_end"]:
@@ -193,7 +202,7 @@ def check_directory(directory, ce=False):
                 raise ValueError("Background reader's vector region is misplaced")
             stacks[transport] = check_async_stack(directory / transport)
         else:
-            stacks[transport] = check_stack_usage(directory / transport, rs, transport)
+            stacks[transport] = check_stack_usage(directory / transport, rs, transport, ce)
 
     for name in ("_kui_retail_stage_main", "_kui_retail_stage_relay",
                  "_kui_retail_bootstrap_enter", "_kui_retail_game_resume"):

@@ -319,6 +319,48 @@ enum kui_game_result kui_retail_image_read(struct kui_retail_image *image,
     }
     return KUI_GAME_OK;
 }
+enum kui_game_result kui_retail_image_read_part(struct kui_retail_image *image,
+    uint32_t lba, uint32_t skip, uint32_t bytes, enum kui_game_sector_format format, void *out) {
+    if(!image || !image->manifest || !image->read_block || !out || !bytes)
+        return KUI_GAME_INVALID;
+    uint32_t sector_bytes = format == KUI_GAME_SECTOR_RAW ? KUI_GAME_RAW_BYTES : KUI_GAME_DATA_BYTES;
+    uint32_t first = skip / sector_bytes;
+    skip %= sector_bytes;
+    if(bytes > KUI_RETAIL_IMAGE_MAX_SECTORS * sector_bytes - skip || first > UINT32_MAX - lba)
+        return KUI_GAME_RANGE;
+    lba += first;
+    uint32_t count = (skip + bytes + sector_bytes - 1u) / sector_bytes;
+    enum kui_game_result r = kui_retail_image_check_validated(image->manifest, lba, count, format);
+    if(r != KUI_GAME_OK) return r;
+    uint8_t *destination = out;
+    uint32_t track_index = 0;
+    for(uint32_t i = 0; i < count; ++i) {
+        uint32_t current = lba + i;
+        while(image->manifest->tracks[track_index].gd.end_lba <= current) ++track_index;
+        const struct kui_retail_track *t = &image->manifest->tracks[track_index];
+        uint32_t offset = (current - t->gd.start_lba) * KUI_GAME_RAW_BYTES;
+        uint32_t end = lba + count;
+        if(end > t->gd.end_lba) end = t->gd.end_lba;
+        uint32_t last_byte = (end - t->gd.start_lba) * KUI_GAME_RAW_BYTES;
+        if(format == KUI_GAME_SECTOR_MODE1)
+            last_byte -= KUI_GAME_RAW_BYTES - 16u - KUI_GAME_DATA_BYTES;
+        uint32_t limit = (last_byte + 511u) / 512u;
+        if(format == KUI_GAME_SECTOR_MODE1) {
+            uint8_t header[16];
+            r = file_read(image, t, offset, header, sizeof(header), limit);
+            if(r != KUI_GAME_OK) return r;
+            if(header[0] || header[11] || header[15] != 1) return KUI_GAME_MODE;
+            for(unsigned j = 1; j < 11; ++j) if(header[j] != 255) return KUI_GAME_MODE;
+            offset += sizeof(header);
+        }
+        uint32_t take = sector_bytes - skip;
+        if(take > bytes) take = bytes;
+        r = file_read(image, t, offset + skip, destination, take, limit);
+        if(r != KUI_GAME_OK) return r;
+        destination += take; bytes -= take; skip = 0;
+    }
+    return KUI_GAME_OK;
+}
 static uint8_t bcd(uint32_t value) { return (uint8_t)((value / 10u) << 4 | value % 10u); }
 enum kui_retail_header kui_retail_sector_header(const uint8_t raw[KUI_GAME_RAW_BYTES],
     uint32_t lba) {

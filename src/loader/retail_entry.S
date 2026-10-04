@@ -52,7 +52,7 @@ _start:
     .long KUI_RETAIL_STAGE_STACK
     .long KUI_RETAIL_STAGE_BLOB_OFFSET
     .long KUI_RETAIL_RESIDENT_ADDRESS
-    .long KUI_RETAIL_RESIDENT_LIMIT
+    .long KUI_RETAIL_STANDARD_LIMIT
     .long 0
     .section .retail_map,"a"
     .global __retail_map

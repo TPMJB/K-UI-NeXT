@@ -87,6 +87,9 @@ static void select_resident(void) {
         case KUI_STORAGE_SCI:
             resident_blob=__retail_resident_sci_blob_start;
             end=__retail_resident_sci_blob_end;
+#ifdef KUI_RETAIL_CE
+            resident_limit=KUI_RETAIL_CE_LIMIT; /* The Windows CE reader. */
+#endif
             break;
         default: /* Manifest decoding has already rejected every other ID. */
             resident_blob=__retail_resident_ide_blob_start;
@@ -191,6 +194,41 @@ static bool ip_windows_ce(const uint8_t *ip) {
 static uint32_t word(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
+/* Windows CE's interrupt dispatch, just after the platform's handler
+ * returns a SYSINTR in R0 (ARMADA's nk.exe; matched, not copied): a device
+ * interrupt sets its pending bit, queues SYSINTR-8 in a 32-entry ring and
+ * requests a reschedule. Values with a zero mask byte are PC-relative
+ * displacements; the three MOV.L literals they load (instructions 4, 11 and
+ * 20) are the pending mask, the ring head and the reschedule flag. */
+static const uint16_t ce_irq_code[21][2]={
+    {0x70f8,0xffff},{0x4011,0xffff},{0x8f00,0xff00},{0xe301,0xffff},
+    {0xd100,0xff00},{0x6212,0xffff},{0x430d,0xffff},{0x2238,0xffff},
+    {0x8f00,0xff00},{0x223b,0xffff},{0x2122,0xffff},{0xd100,0xff00},
+    {0x6312,0xffff},{0x313c,0xffff},{0x8014,0xffff},{0x3138,0xffff},
+    {0x6033,0xffff},{0x7001,0xffff},{0xc91f,0xffff},{0x2102,0xffff},
+    {0xd100,0xff00},
+};
+static uint32_t ce_kernel[3];
+static uint32_t ce_literal(uint32_t at) {
+    uint16_t code=*(const uint16_t *)(uintptr_t)at;
+    return word((const uint8_t *)(uintptr_t)(((at&~3u)+4u)+(code&0xffu)*4u));
+}
+/* Exactly one match in the body, each literal a word-aligned P1 RAM address,
+ * or ce_kernel stays zero and the reader stops if CE needs it. */
+static void ce_find_kernel(uint32_t body,uint32_t bytes) {
+    uint32_t found=0,at=0;
+    for(uint32_t p=body;p+sizeof(ce_irq_code)/2u<=body+bytes;p+=2u) {
+        const uint16_t *code=(const uint16_t *)(uintptr_t)p;
+        unsigned i=0;
+        while(i<21u && (code[i]&ce_irq_code[i][1])==ce_irq_code[i][0]) i++;
+        if(i==21u) { found++; at=p; }
+    }
+    if(found!=1) return;
+    uint32_t value[3]={ce_literal(at+8u),ce_literal(at+22u),ce_literal(at+40u)};
+    for(unsigned i=0;i<3;i++)
+        if((value[i]&3u) || value[i]<0x8c010000u || value[i]>=KUI_RETAIL_RAM_END-40u) return;
+    memcpy(ce_kernel,value,sizeof(ce_kernel));
+}
 static uint32_t ce_load(const uint8_t *ip) {
     if(!ip_windows_ce(ip)) stopped("IP DOES NOT SELECT WINDOWS CE",word(ip+56));
     load_sectors(manifest.boot_lba,1,ce_prefix);
@@ -238,6 +276,11 @@ static uint32_t ce_load(const uint8_t *ip) {
     if(rom_header)
         retail_display_values("ROMHDR   PHYSFRST PHYSLAST RAMSTART RAMEND",rom,5);
     else retail_display_line("NO CE ROM HEADER AT BODY OFFSET 40");
+    /* Where the reader raises CE's disc interrupts for stream reads. */
+    ce_find_kernel(plan.body.address,plan.body.bytes);
+    if(ce_kernel[0])
+        retail_display_values("CE PEND  CE RING  RESCHED",ce_kernel,3);
+    else retail_display_line("CE KERNEL INTERRUPTS NOT FOUND");
     /* Bootstrap 2 jumps to the body start, where the relay's trampoline
      * goes; a CE entry elsewhere has no known handoff yet. Only the SCI
      * resident is built CE-safe: it touches CE's stack (a virtual address)
@@ -264,6 +307,9 @@ static void install_resident(void) {
         stopped("UNSUPPORTED FIRMWARE GD VECTOR",firmware);
     memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,
            resident_blob,bytes);
+#ifdef KUI_RETAIL_CE
+    memcpy((void *)(uintptr_t)KUI_RETAIL_CE_KERNEL,ce_kernel,sizeof(ce_kernel));
+#endif
     kui_retail_stage_sync();
     kui_retail_resident_entry init=(kui_retail_resident_entry)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     int initialized=init(&manifest,&card,firmware,&display);

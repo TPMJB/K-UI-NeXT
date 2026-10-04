@@ -1,5 +1,23 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: stream reads with CE's own interrupts (2026-10-04 UTC)
+
+Build `ec6d39cc5372` on ARMADA stopped with `GD REQUEST REJECTED`: command
+38 (DMAREAD_STREAM_EX), used by `wsegacd.dll` when a buffer's pages are not
+physically contiguous. Its pieces move by DMA_TRANSFER/DMA_CHECK, driven by
+SYSINTR 21 (G1 DMA end) and completed by SYSINTR 20 (drive). Next build
+(`KUI_RETAIL_CE` only): the GD service streams (`transfer`, `dma_check`,
+`kui_retail_image_read_part` for split sectors) and flags the interrupts;
+the CE reader raises them in CE's kernel as its interrupt dispatch does
+(pending mask, ring, reschedule flag), at addresses the stage finds by
+matching that code in the loaded kernel and writes to
+`KUI_RETAIL_CE_KERNEL` (`0x8c008324`). The CE reader's limit is now
+`0x8c00c000` with a 2 KiB stack to `0x8c00c800`
+(`retail_resident_ce.ld`); package headers keep the standard limit. Host
+tests: `test-retail-gd-ce` (new), `test-retail-image` byte ranges. Native
+SCI reader bytes unchanged (proxy build compared). Details:
+[windows-ce-placement-test.md](windows-ce-placement-test.md).
+
 ## Windows CE: black screen, then a hang; status line next (2026-10-03 UTC)
 
 Build `6eb4736083b8` on ARMADA: past `ENTERING WINDOWS CE`, the screen went

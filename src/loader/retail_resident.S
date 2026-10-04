@@ -29,6 +29,13 @@ _start:
 .Lbss_begin: .long __retail_resident_bss_begin
 .Lbss_end: .long __retail_resident_bss_end
 .Linit: .long C_SYMBOL(kui_retail_resident_init)
+#ifdef KUI_RETAIL_CE
+/* KUI_RETAIL_CE_KERNEL: where Windows CE's kernel keeps its interrupt
+ * bookkeeping (pending mask, ring head, reschedule flag), written here by the
+ * stage, which finds it in the loaded kernel; zero if it was not found. */
+    .global C_SYMBOL(kui_retail_ce_kernel)
+C_SYMBOL(kui_retail_ce_kernel): .long 0,0,0
+#endif
 
 /* Save original SR on the caller's stack, then mask BEFORE examining the
  * entry lock or touching the single resident stack. This also rejects direct

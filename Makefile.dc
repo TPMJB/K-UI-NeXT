@@ -319,10 +319,10 @@ build/retail-ce/sci/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
 build/retail-ce/sci/src/loader/retail_display.o: force-build-id
-build/retail-ce/resident-sci.elf: $(RETAIL_CE_SCI) src/loader/retail_resident.ld
+build/retail-ce/resident-sci.elf: $(RETAIL_CE_SCI) src/loader/retail_resident_ce.ld
 	@mkdir -p build/retail-ce/sci/lto
 	rm -f build/retail-ce/resident-sci.elf.ltrans*.su build/retail-ce/sci/lto/*.su
-	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail-ce/resident-sci.map -o $@ $(RETAIL_CE_SCI) -lgcc
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_LINK) -Tsrc/loader/retail_resident_ce.ld -Wl,-Map,build/retail-ce/resident-sci.map -o $@ $(RETAIL_CE_SCI) -lgcc
 	cp build/retail-ce/resident-sci.elf.ltrans*.su build/retail-ce/sci/lto/
 build/retail-ce/resident-sci.bin: build/retail-ce/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@

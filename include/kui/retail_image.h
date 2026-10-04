@@ -115,6 +115,13 @@ enum kui_game_result kui_retail_image_check_validated(const struct kui_retail_ma
  * Output must not alias the reader or its manifest. */
 enum kui_game_result kui_retail_image_read(struct kui_retail_image *,
     uint32_t lba, uint32_t count, enum kui_game_sector_format, void *, size_t);
+/* Bytes [skip, skip + bytes) of the user data (2048 bytes per Mode 1 sector,
+ * 2352 raw) of the sectors from lba on, with the same checks and caching as
+ * kui_retail_image_read; the sectors touched may number at most 64. For
+ * transfers that split sectors, such as Windows CE's page-sized DMA stream
+ * pieces. bytes must be nonzero; out receives exactly bytes. */
+enum kui_game_result kui_retail_image_read_part(struct kui_retail_image *,
+    uint32_t lba, uint32_t skip, uint32_t bytes, enum kui_game_sector_format, void *out);
 
 /* Header of one raw Mode 1 sector: the sync pattern, mode 1 and the BCD
  * address of lba (FAD = lba + 150; minutes above 99 carry into the tens

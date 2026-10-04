@@ -253,6 +253,52 @@ static void compare(uint32_t lba, uint32_t count, enum kui_game_sector_format fo
     }
     CHECK(output[count * stride] == 0x77);
 }
+/* Byte ranges of the user data (Windows CE's DMA stream pieces) equal the
+ * same bytes of a whole-sector read, across sector, block and file edges. */
+static uint8_t whole[64u * 2352u];
+static void compare_part(uint32_t lba, uint32_t skip, uint32_t bytes,
+                         enum kui_game_sector_format format) {
+    uint32_t stride = format == KUI_GAME_SECTOR_RAW ? 2352u : 2048u;
+    uint32_t first = skip / stride, count = (skip % stride + bytes + stride - 1u) / stride;
+    CHECK(kui_retail_image_read(&image, lba + first, count, format, whole, sizeof(whole)) == KUI_GAME_OK);
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read_part(&image, lba, skip, bytes, format, output) == KUI_GAME_OK);
+    CHECK(!memcmp(output, whole + skip % stride, bytes));
+    CHECK(output[bytes] == 0x77);
+}
+static void part_tests(bool fragmented) {
+    fixture(fragmented);
+    compare_part(45000, 0, 2048, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 0x120, 0xee0, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 0xee0, 0x1000, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 5u * 2048u + 32u, 32, KUI_GAME_SECTOR_MODE1);
+    compare_part(45069, 0x7e0, 0x1020, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 0, 64u * 2048u, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 2047, 63u * 2048u + 1u, KUI_GAME_SECTOR_MODE1);
+    compare_part(0, 100, 2u * 2352u + 7u, KUI_GAME_SECTOR_RAW);
+    compare_part(2, 2000, 1000, KUI_GAME_SECTOR_RAW); /* Data/audio file boundary. */
+    compare_part(3, 2352u + 2000u, 352, KUI_GAME_SECTOR_RAW); /* Final padded block. */
+    for(unsigned i = 0; i < 16; ++i)
+        compare_part(45000, i * 1184u % 30000u, 32u + i * 288u, KUI_GAME_SECTOR_MODE1);
+    memset(output, 0x77, sizeof(output));
+    unsigned before = calls;
+    CHECK(kui_retail_image_read_part(&image, 45000, 1, 64u * 2048u, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read_part(&image, 45000, 0, 0, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_INVALID);
+    CHECK(kui_retail_image_read_part(&image, 45071, 2048, 16, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read_part(&image, 2, 2048, 16, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_read_part(&image, 4, 2000, 1000, KUI_GAME_SECTOR_RAW, output) == KUI_GAME_GAP);
+    CHECK(kui_retail_image_read_part(&image, UINT32_MAX, 2352, 16, KUI_GAME_SECTOR_RAW, output) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read_part(&image, 45000, 0, 16, KUI_GAME_SECTOR_MODE1, NULL) == KUI_GAME_INVALID);
+    CHECK(kui_retail_image_read_part(NULL, 45000, 0, 16, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_INVALID);
+    CHECK(calls == before);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
+    /* A failed block leaves the cache invalid; the next read recovers. */
+    fail_call = calls + 2;
+    CHECK(kui_retail_image_read_part(&image, 45010, 100, 4000, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_IO);
+    CHECK(!image.cache_valid);
+    fail_call = 0;
+    compare_part(45010, 100, 4000, KUI_GAME_SECTOR_MODE1);
+}
 static void reader_tests(bool fragmented) {
     fixture(fragmented);
     compare(0, 3, KUI_GAME_SECTOR_RAW);
@@ -543,6 +589,7 @@ static void header_tests(void) {
 int main(void) {
     header_tests();
     wire_tests(); invalid_map_tests(); reader_tests(false); reader_tests(true);
+    part_tests(false); part_tests(true);
     sequential_cache_tests(false); sequential_cache_tests(true);
     run_span_tests(); run_failure_tests();
     maximum_map_tests();

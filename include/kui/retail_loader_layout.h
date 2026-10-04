@@ -42,13 +42,29 @@
  * (tools/check_retail_stack.py) instead of summing every frame, so its
  * guarded stack is 352 bytes and its image may extend to here. */
 #define KUI_RETAIL_ASYNC_LIMIT 0x8c00bea0
+/* The Windows CE boot test's reader (built with KUI_RETAIL_CE). CE enters
+ * through bootstrap 2 at KUI_RETAIL_BOOT2_ADDRESS and never returns to the
+ * IP's lower bootstrap area, so this reader may fill everything below C000
+ * and keep a 2 KiB guarded stack above it. */
+#define KUI_RETAIL_CE_LIMIT 0x8c00c000
+#define KUI_RETAIL_CE_HOOK_STACK 0x8c00c800
+/* Three words in that reader's entry section the stage fills in: the
+ * addresses of CE's pending-interrupt mask, interrupt ring head and
+ * reschedule flag (retail_resident.S, kui_retail_ce_kernel). */
+#define KUI_RETAIL_CE_KERNEL 0x8c008324
 #ifdef KUI_RETAIL_ASYNC
 #define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_ASYNC_LIMIT
+#elif defined(KUI_RETAIL_CE)
+#define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_CE_LIMIT
 #else
 #define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_STANDARD_LIMIT
 #endif
 #define KUI_RETAIL_HOOK_STACK_BOTTOM KUI_RETAIL_RESIDENT_LIMIT
+#ifndef KUI_RETAIL_CE
 #define KUI_RETAIL_HOOK_STACK 0x8c00c000
+#else
+#define KUI_RETAIL_HOOK_STACK KUI_RETAIL_CE_HOOK_STACK
+#endif
 #define KUI_RETAIL_RAM_END 0x8d000000
 
 #endif

@@ -106,7 +106,16 @@ static uint32_t step_count(const struct kui_retail_gd *s, uint32_t remaining) {
 static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) {
     if(s->pending) return 0;
     uint32_t nparams = 0, p[4] = {0}, bytes = 0, destination = 0, lba = 0;
+#ifdef KUI_RETAIL_CE
+    const int stream = cmd == KUI_RETAIL_GD_DMAREAD_STREAM;
+    if(stream && !s->read_part) return 0;
+#else
+    const int stream = 0;
+#endif
     switch(cmd) {
+#ifdef KUI_RETAIL_CE
+    case KUI_RETAIL_GD_DMAREAD_STREAM: nparams = 3; break;
+#endif
     case KUI_GD_PIOREAD: case KUI_GD_DMAREAD:
     case KUI_RETAIL_GD_SET_MODE: case KUI_RETAIL_GD_REQ_STAT: nparams = 4; break;
     case KUI_RETAIL_GD_GETTOC: case KUI_GD_GETTOC2: nparams = 2; break;
@@ -124,15 +133,17 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         if(!params) return 0;
         for(uint32_t i = 0; i < nparams; ++i) p[i] = get32(params + i * 4u);
     }
-    if(cmd == KUI_GD_PIOREAD || cmd == KUI_GD_DMAREAD) {
+    if(cmd == KUI_GD_PIOREAD || cmd == KUI_GD_DMAREAD || stream) {
         s->diag.last_lba = p[0] >= 150 ? p[0] - 150 : UINT32_MAX;
         s->diag.last_count = p[1]; s->diag.last_destination = p[2];
         if(p[0] < 150 || p[0] >= 720000u || !p[1] || p[3]) return 0;
         lba = p[0] - 150;
         if(p[1] > 719850u - lba || p[1] > UINT32_MAX / s->sector_bytes) return 0;
         bytes = p[1] * s->sector_bytes; destination = p[2];
-        if(!guest(s, destination, bytes, cmd == KUI_GD_DMAREAD ? 32 : 2,
-                  KUI_RETAIL_MAP_VALIDATE)) return 0;
+        /* A stream's destinations arrive with each transfer. */
+        if(stream) destination = 0;
+        else if(!guest(s, destination, bytes, cmd == KUI_GD_DMAREAD ? 32 : 2,
+                       KUI_RETAIL_MAP_VALIDATE)) return 0;
         for(uint32_t done = 0; done < p[1];) {
             uint32_t n = p[1] - done;
             if(n > KUI_RETAIL_GD_CHECK_SECTORS) n = KUI_RETAIL_GD_CHECK_SECTORS;
@@ -165,7 +176,7 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         }
         if(i == s->track_count) return 0;
     }
-    if(bytes && cmd != KUI_GD_PIOREAD && cmd != KUI_GD_DMAREAD &&
+    if(bytes && cmd != KUI_GD_PIOREAD && cmd != KUI_GD_DMAREAD && !stream &&
        !guest(s, destination, bytes,
               cmd == KUI_RETAIL_GD_GET_VERS || cmd == KUI_RETAIL_GD_GETSCD ? 1 : 4,
               cmd == KUI_RETAIL_GD_GETSCD ? KUI_RETAIL_MAP_VALIDATE : 1)) return 0;
@@ -175,6 +186,9 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     memcpy(s->outputs, p, sizeof(p));
     s->completed_bytes = 0; s->error = 0;
     s->status = KUI_GD_PROCESSING; s->pending = 1;
+#ifdef KUI_RETAIL_CE
+    if(stream) s->status = KUI_RETAIL_GD_STREAMING;
+#endif
     ++s->diag.requests;
     return (int32_t)s->token;
 }
@@ -243,6 +257,10 @@ static void subcode(const struct kui_retail_gd *s, uint8_t *out) {
 static int32_t execute(struct kui_retail_gd *s) {
     ++s->diag.exec_calls;
     if(!s->pending) return 0;
+#ifdef KUI_RETAIL_CE
+    /* A stream moves its bytes only through DMA_TRANSFER. */
+    if(s->command == KUI_RETAIL_GD_DMAREAD_STREAM) return 0;
+#endif
     s->executing = 1;
     if(s->command == KUI_GD_PIOREAD || s->command == KUI_GD_DMAREAD) {
 #ifdef KUI_RETAIL_GD_ASYNC
@@ -336,6 +354,48 @@ static int32_t datatype(struct kui_retail_gd *s, uint32_t address) {
     s->sector_part = part; s->track_type = type; s->sector_bytes = bytes;
     return 0;
 }
+#ifdef KUI_RETAIL_CE
+/* DMA_TRANSFER for the pending stream: params {destination, bytes}, both
+ * 32-byte multiples as for the G1 DMA, the bytes continuing the stream. The
+ * copy is made at once; the DMA end (and, after the last bytes, the drive's
+ * completion) interrupt is raised for the adapter to deliver. */
+static int32_t transfer(struct kui_retail_gd *s, uint32_t token, uint32_t address) {
+    if(!s->pending || s->command != KUI_RETAIL_GD_DMAREAD_STREAM || token != s->token)
+        return -1;
+    const uint8_t *p = guest(s, address, 8, 4, 0);
+    if(!p) return -1;
+    uint32_t destination = get32(p), bytes = get32(p + 4);
+    s->diag.last_destination = destination;
+    if(!bytes || (bytes & 31u) || bytes > s->request_bytes - s->completed_bytes) return -1;
+    uint8_t *out = guest(s, destination, bytes, 32, 1);
+    if(!out) return -1;
+    uint32_t before = s->completed_bytes / s->sector_bytes;
+    ++s->diag.read_steps;
+    if(s->read_part(s->ops.context, s->lba, s->sector_bytes, s->completed_bytes, bytes, out))
+        s->error = KUI_GD_ERROR_IO;
+    else {
+        s->completed_bytes += bytes;
+        uint32_t after = s->completed_bytes / s->sector_bytes;
+        s->diag.sectors_read += after - before;
+        if(after) s->position_lba = s->lba + after - 1u;
+        s->drive_status = 1;
+    }
+    s->interrupts |= KUI_RETAIL_GD_IRQ_DMA_END;
+    if(s->error || s->completed_bytes == s->request_bytes) {
+        s->status = s->error ? KUI_GD_FAILED : KUI_GD_COMPLETED;
+        s->pending = 0; s->diag.last_error = s->error;
+        s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
+    }
+    return 0;
+}
+/* DMA_CHECK: every transfer has finished, with nothing left of it. */
+static int32_t dma_check(struct kui_retail_gd *s, uint32_t address) {
+    uint8_t *out = guest(s, address, 4, 4, 1);
+    if(!out) return -1;
+    put32(out, 0);
+    return 0;
+}
+#endif
 #ifdef KUI_RETAIL_GD_ASYNC
 void kui_retail_gd_progress(struct kui_retail_gd *s, uint32_t sectors, uint32_t error) {
     if(!s->pending || (s->command != KUI_GD_PIOREAD && s->command != KUI_GD_DMAREAD)) return;
@@ -385,6 +445,10 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
     case KUI_GD_DMA_CALLBACK: case KUI_GD_PIO_CALLBACK:
         if(!r4) result = 0;
         break;
+#ifdef KUI_RETAIL_CE
+    case KUI_GD_DMA_TRANSFER: result = transfer(s, r4, r5); break;
+    case KUI_GD_DMA_CHECK: result = dma_check(s, r5); break;
+#endif
     default: break;
     }
 done:

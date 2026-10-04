@@ -41,6 +41,7 @@ volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
  * the last four calls' R7, R4, R5 and R6, shown if a call fails. */
 volatile uint32_t kui_retail_hook_caller[2];
 static uint32_t ce_calls[4][4], ce_count;
+extern volatile uint32_t kui_retail_ce_kernel[3];
 static int ram_alias(uint32_t address) {
     uint32_t area = address & 0xff000000u;
     return area == 0x0c000000u || area == 0x8c000000u || area == 0xac000000u;
@@ -131,6 +132,41 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
     kui_retail_storage_release(&card);
     return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
+}
+#endif
+#ifdef KUI_RETAIL_CE
+/* Windows CE's DMA stream pieces: part of the user data of a run of
+ * sectors, under the same card ownership rules as read_sectors. */
+static int read_part(void *unused, uint32_t lba, uint32_t sector_bytes,
+                     uint32_t skip, uint32_t bytes, void *out) {
+    (void)unused;
+    card_result = kui_retail_storage_acquire(&card);
+    if(card_result != KUI_LOADER_SD_OK) return -1;
+    enum kui_game_result result = kui_retail_image_read_part(&image, lba, skip, bytes,
+        sector_format(sector_bytes), out);
+    enum kui_loader_sd_result stopped = kui_retail_storage_stop(&card);
+    if(card_result == KUI_LOADER_SD_OK) card_result = stopped;
+    if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
+    kui_retail_storage_release(&card);
+    return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
+}
+/* Raise a device interrupt (SYSINTR) in Windows CE as its kernel's own
+ * interrupt dispatch does when the platform handler returns one: mark it
+ * pending, queue its index (SYSINTR - 8) in the 32-entry ring after the
+ * ring's head index, and request a reschedule. The scheduler then sets the
+ * event the driver waits on. Called with interrupts masked, so CE's
+ * dispatch cannot run in between. */
+static void ce_raise(uint32_t sysintr) {
+    volatile uint32_t *pending = (volatile uint32_t *)(uintptr_t)kui_retail_ce_kernel[0];
+    volatile uint32_t *head = (volatile uint32_t *)(uintptr_t)kui_retail_ce_kernel[1];
+    uint32_t index = sysintr - 8u, bit = 1u << index;
+    if(!(*pending & bit)) {
+        *pending |= bit;
+        uint32_t next = *head;
+        ((volatile uint8_t *)head)[4u + next] = (uint8_t)index;
+        *head = (next + 1u) & 31u;
+    }
+    *(volatile uint8_t *)(uintptr_t)kui_retail_ce_kernel[2] |= 1u;
 }
 #endif
 static void redirect_entry(uint32_t address,void (*target)(void)) {
@@ -303,6 +339,9 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
 #endif
     kui_retail_gd_init_manifest_validated(&service, manifest.tracks,
         manifest.track_count, &ops, KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
+#ifdef KUI_RETAIL_CE
+    service.read_part = read_part;
+#endif
     volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
     for(unsigned i = 0; i < 4; ++i) guard[i] = 0x4b554947u;
     kui_retail_original_menu=*(volatile uint32_t *)(uintptr_t)0x8c0000e0u;
@@ -410,6 +449,17 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
         report_fault("GD FUNCTION UNSUPPORTED", r7);
 #ifdef KUI_RETAIL_CE
+    /* A stream transfer's interrupts: G1 DMA end (SYSINTR 21) and the
+     * drive's completion (SYSINTR 20), as CE's platform maps them. */
+    if(service.error == KUI_GD_ERROR_IO)
+        report_fault("IMAGE READ FAILED", r7);
+    if(service.interrupts) {
+        if(!kui_retail_ce_kernel[0])
+            report_fault("CE KERNEL INTERRUPTS NOT FOUND", r7);
+        if(service.interrupts & KUI_RETAIL_GD_IRQ_DMA_END) ce_raise(21u);
+        if(service.interrupts & KUI_RETAIL_GD_IRQ_DRIVE) ce_raise(20u);
+        service.interrupts = 0;
+    }
     /* Live status on CE's own screen: every request and every 16th call. */
     if(r7 == KUI_GD_REQUEST || !(ce_count & 15u)) {
         static uint32_t status[5]; /* Static: the stack budget is full. */

@@ -38,6 +38,11 @@ static uint32_t get(uint32_t a) {
 }
 static uint8_t *map(void *unused, uint32_t a, uint32_t bytes, int writing) {
     (void)unused;
+#ifdef KUI_RETAIL_CE
+    /* The CE build passes other areas' (virtual) addresses on; with no MMU
+     * here, the adapter refuses them as the CE reader would. */
+    if((a & 0xff000000u) != 0x8c000000u) return NULL;
+#endif
     CHECK(a >= BEGIN && a < END && bytes <= END - a);
     CHECK(writing >= 0 && writing <= KUI_RETAIL_MAP_VALIDATE);
     ++ctx.maps[writing];
@@ -400,7 +405,11 @@ static void bounds_and_modes(void) {
     CHECK(call(KUI_GD_DMA_CALLBACK, 0, 0) == 0);
     CHECK(call(KUI_GD_DMA_CALLBACK, OUTPUT, 0) == -1);
     CHECK(call(KUI_GD_DMA_TRANSFER, 1, PARAM) == -1);
+#ifdef KUI_RETAIL_CE
+    CHECK(call(KUI_GD_DMA_CHECK, 1, PARAM) == 0); /* Stream reads: see stream_reads. */
+#else
     CHECK(call(KUI_GD_DMA_CHECK, 1, PARAM) == -1);
+#endif
     CHECK(call(KUI_GD_REQUEST, 38, PARAM) == 0);
     CHECK(kui_retail_gd_dispatch(&service, 0, 0, UINT32_MAX, 0) == -1);
     CHECK(service.diag.rejected > 0 && service.diag.last_result == -1);
@@ -465,12 +474,134 @@ static void async_reads(void) {
     CHECK(!ctx.reads);
 }
 #endif
+#ifdef KUI_RETAIL_CE
+/* Windows CE's DMA stream reads (DMAREAD_STREAM_EX and DMA_TRANSFER). */
+static struct { uint32_t calls, lba, sector_bytes, skip, bytes, fail; } part;
+static int read_part(void *unused, uint32_t lba, uint32_t sector_bytes,
+                     uint32_t skip, uint32_t bytes, void *output) {
+    (void)unused; ++part.calls;
+    part.lba = lba; part.sector_bytes = sector_bytes; part.skip = skip; part.bytes = bytes;
+    if(part.fail && part.calls == part.fail) return -1;
+    uint8_t *p = output;
+    for(uint32_t i = 0; i < bytes; ++i)
+        *p++ = pattern(lba + (skip + i) / sector_bytes, (skip + i) % sector_bytes);
+    return 0;
+}
+static void stream_params(uint32_t lba, uint32_t count) {
+    put(PARAM, lba + 150); put(PARAM + 4, count); put(PARAM + 8, 0);
+}
+#define PIECE (PARAM + 0x40u)
+static int32_t piece(int32_t token, uint32_t destination, uint32_t bytes) {
+    put(PIECE, destination); put(PIECE + 4, bytes);
+    return call(KUI_GD_DMA_TRANSFER, (uint32_t)token, PIECE);
+}
+static void stream_bytes(uint32_t destination, uint32_t lba, uint32_t skip,
+                         uint32_t bytes, uint32_t sector_bytes) {
+    for(uint32_t i = 0; i < bytes; ++i)
+        CHECK(ram[destination - BEGIN + i] ==
+              pattern(lba + (skip + i) / sector_bytes, (skip + i) % sector_bytes));
+}
+static void stream_reads(void) {
+    reset(); memset(&part, 0, sizeof(part));
+    /* Without the adapter's part reader a stream is refused. */
+    stream_params(45000, 3);
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM) == 0);
+    service.read_part = read_part;
+    stream_params(149, 3);
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM) == 0);
+    stream_params(45000, 0);
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM) == 0);
+    stream_params(16, 2); /* Audio sectors are not Mode 1 data. */
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM) == 0);
+    /* The request checks its sectors but maps no destination; EXEC reads
+     * nothing; CHECK reports STREAMING until every byte has moved. */
+    stream_params(45000, 3);
+    uint32_t validations = ctx.maps[KUI_RETAIL_MAP_VALIDATE];
+    int32_t token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && ctx.maps[KUI_RETAIL_MAP_VALIDATE] == validations);
+    CHECK(service.diag.last_command == KUI_RETAIL_GD_DMAREAD_STREAM && service.diag.last_lba == 45000);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_RETAIL_GD_STREAMING);
+    CHECK(get(STATUS + 8) == 0 && get(STATUS + 12) == 4);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && !part.calls && !ctx.reads && service.pending);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_NOP, 0) == 0);
+    /* Rejected pieces change nothing: wrong token, unaligned or empty
+     * sizes, more than remains, unaligned or unmapped destinations. */
+    CHECK(piece(token + 1, OUTPUT, 0x800) == -1);
+    CHECK(piece(token, OUTPUT, 0x810 - 8) == -1);
+    CHECK(piece(token, OUTPUT, 0) == -1);
+    CHECK(piece(token, OUTPUT, 3 * 2048 + 32) == -1);
+    CHECK(piece(token, OUTPUT + 16, 0x800) == -1);
+    ctx.deny = OUTPUT;
+    CHECK(piece(token, OUTPUT, 0x800) == -1);
+    ctx.deny = 0;
+    CHECK(!part.calls && !service.interrupts && service.pending);
+    /* Page pieces split sectors: 0xee0, then 0x800, then the last 0x120. */
+    CHECK(piece(token, OUTPUT, 0xee0) == 0);
+    CHECK(part.calls == 1 && part.lba == 45000 && part.skip == 0 && part.bytes == 0xee0);
+    CHECK(part.sector_bytes == 2048 && service.interrupts == KUI_RETAIL_GD_IRQ_DMA_END);
+    CHECK(service.diag.sectors_read == 1 && service.position_lba == 45000);
+    service.interrupts = 0;
+    put(STATUS, 0xffffffffu);
+    CHECK(call(KUI_GD_DMA_CHECK, (uint32_t)token, STATUS) == 0 && get(STATUS) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_RETAIL_GD_STREAMING);
+    CHECK(get(STATUS + 8) == 0xee0);
+    CHECK(piece(token, OUTPUT + 0x1000, 0x800) == 0);
+    CHECK(part.skip == 0xee0 && service.interrupts == KUI_RETAIL_GD_IRQ_DMA_END);
+    CHECK(service.diag.sectors_read == 2 && service.pending);
+    service.interrupts = 0;
+    CHECK(piece(token, OUTPUT + 0x2000, 0x120) == 0);
+    CHECK(part.skip == 0x16e0 && !service.pending && service.diag.sectors_read == 3);
+    CHECK(service.interrupts == (KUI_RETAIL_GD_IRQ_DMA_END | KUI_RETAIL_GD_IRQ_DRIVE));
+    CHECK(service.position_lba == 45002 && service.diag.last_destination == OUTPUT + 0x2000);
+    stream_bytes(OUTPUT, 45000, 0, 0xee0, 2048);
+    stream_bytes(OUTPUT + 0x1000, 45000, 0xee0, 0x800, 2048);
+    stream_bytes(OUTPUT + 0x2000, 45000, 0x16e0, 0x120, 2048);
+    CHECK(ram[OUTPUT - BEGIN + 0xee0] == 0xa5 && ram[OUTPUT - BEGIN + 0x2120] == 0xa5);
+    CHECK(piece(token, OUTPUT, 32) == -1);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(get(STATUS) == 0 && get(STATUS + 8) == 3 * 2048 && get(STATUS + 12) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
+    /* A failed piece ends the stream with an IO error and both interrupts. */
+    service.interrupts = 0; part.fail = part.calls + 1;
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && piece(token, OUTPUT, 0x1000) == 0);
+    CHECK(!service.pending && service.error == KUI_GD_ERROR_IO);
+    CHECK(service.interrupts == (KUI_RETAIL_GD_IRQ_DMA_END | KUI_RETAIL_GD_IRQ_DRIVE));
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_IO && get(STATUS + 8) == 0);
+    /* ABORT ends a stream; INIT forgets one. */
+    service.interrupts = 0; part.fail = 0;
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && piece(token, OUTPUT, 0x800) == 0);
+    CHECK(call(KUI_GD_ABORT, (uint32_t)token, 0) == 0 && piece(token, OUTPUT, 0x800) == -1);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_CANCELLED && get(STATUS + 8) == 0x800);
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && call(KUI_GD_INIT, 0, 0) == 0 && piece(token, OUTPUT, 0x800) == -1);
+    /* Raw sectors stream too, from audio or data tracks. */
+    mode(2352, 0); stream_params(16, 2);
+    uint32_t sectors = service.diag.sectors_read;
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
+    CHECK(token > 0 && piece(token, OUTPUT, 2 * 2352) == 0);
+    CHECK(part.sector_bytes == 2352 && part.lba == 16 && !service.pending);
+    CHECK(service.diag.sectors_read == sectors + 2);
+    stream_bytes(OUTPUT, 16, 0, 2 * 2352, 2352);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    /* DMA_CHECK needs a writable result word. */
+    ctx.deny = STATUS;
+    CHECK(call(KUI_GD_DMA_CHECK, 0, STATUS) == -1);
+    ctx.deny = 0;
+}
+#endif
 int main(void) {
     for(use_manifest_tracks=0;use_manifest_tracks<2;use_manifest_tracks++) {
 #ifdef KUI_RETAIL_GD_ASYNC
         async_reads(); metadata(); silent_cd_audio(); version_query();
 #else
         large_reads(); paced_steps(); cancel_failures(); metadata(); silent_cd_audio(); version_query(); subcode_query(); bounds_and_modes();
+#endif
+#ifdef KUI_RETAIL_CE
+        stream_reads();
 #endif
     }
     printf("retail GD service: %u checks passed\n", assertions);

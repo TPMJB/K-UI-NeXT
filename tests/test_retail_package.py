@@ -66,6 +66,22 @@ class RetailPackage(unittest.TestCase):
         script = (ROOT / "src/loader/retail_resident_async.ld").read_text()
         self.assertIn(f"__retail_hook_stack_bottom = 0x{layout.ASYNC_HOOK_STACK_BOTTOM:08x};", script)
         self.assertIn(f"__retail_resident_bss_end <= 0x{layout.ASYNC_RESIDENT_LIMIT:08x},", script)
+        # The Windows CE reader: its own limit and larger stack, below the
+        # bootstrap 2 it enters CE through.
+        for suffix, value in (("CE_LIMIT", layout.CE_RESIDENT_LIMIT),
+                              ("CE_HOOK_STACK", layout.CE_HOOK_STACK),
+                              ("BOOT2_ADDRESS", 0x8C00E000)):
+            with self.subTest(suffix=suffix):
+                found = re.search(r"^#define KUI_RETAIL_" + suffix + r"\s+(\w+)\s*$", source, re.M)
+                self.assertEqual(int(found.group(1), 0), value)
+        self.assertLess(layout.CE_HOOK_STACK, 0x8C00E000)
+        script = (ROOT / "src/loader/retail_resident_ce.ld").read_text()
+        self.assertIn(f"__retail_hook_stack_bottom = 0x{layout.CE_RESIDENT_LIMIT:08x};", script)
+        self.assertIn(f"__retail_hook_stack = 0x{layout.CE_HOOK_STACK:08x};", script)
+        self.assertIn(f"__retail_resident_bss_end <= 0x{layout.CE_RESIDENT_LIMIT:08x},", script)
+        # Both packages' headers record the standard reader limit.
+        entry = (ROOT / "src/loader/retail_entry.S").read_text()
+        self.assertIn(".long KUI_RETAIL_STANDARD_LIMIT", entry)
 
     def test_valid_minimum_normal_and_maximum(self):
         for size in (4, 16, layout.STAGE_MAX_BYTES):
@@ -423,6 +439,12 @@ class RetailLinkedLayout(unittest.TestCase):
             ss[name] += shift
         struct.pack_into("<I", self.payload["stage"], 240, ss["_kui_retail_game_resume"] | 0x20000000)
         self.payload["entry"][layout.STAGE_BLOB_OFFSET:] = self.payload["stage"]
+        self.write()
+        # Its SCI reader has its own limit and larger stack.
+        with self.assertRaisesRegex(ValueError, "resident-sci hook stack"):
+            check_directory(self.directory, ce=True)
+        self.symbols["resident-sci"].update({"__retail_hook_stack": layout.CE_HOOK_STACK,
+                                             "__retail_hook_stack_bottom": layout.CE_RESIDENT_LIMIT})
         self.write()
         with self.assertRaisesRegex(ValueError, "relocation header mismatch"):
             check_directory(self.directory, ce=True)
