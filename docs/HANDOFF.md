@@ -12,6 +12,9 @@ Next build (CE reader only): a live status line on CE's own frame
 REQUEST and every 16th call, and the CE trace plus the last command on the
 A+B+X+Y+Start screen. Native residents unchanged (proxy sizes identical).
 Details: [windows-ce-placement-test.md](windows-ce-placement-test.md).
+Build `ec6d39cc5372` ([Diagnostic run
+37162823553](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37162823553)):
+host and Dreamcast passed; native resident sizes unchanged (SCI 48 bytes free).
 
 ## Windows CE: first stop inside CE; virtual addresses next (2026-10-03 UTC)
 
