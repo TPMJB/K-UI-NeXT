@@ -12,6 +12,9 @@ each step and SYSINTR 20 while bytes remain and at completion; DMA_CHECK
 returns 1 with the bytes left until done. CE reader limit `0x8c00c800`,
 stack to `0x8c00d000`. Host: `test-retail-gd-ce` covers stepping, abort,
 init and a mid-transfer refusal.
+Build `9ab26bd0e9ad` ([Diagnostic run
+37168123361](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37168123361)):
+host and Dreamcast passed; native resident sizes unchanged.
 
 ## Windows CE: stream reads run; card read fails under CE's display (2026-10-04 UTC)
 
