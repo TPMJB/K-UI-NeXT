@@ -8,7 +8,13 @@ with `IMAGE READ FAILED`. Likely SCI receive overruns: the reader's DMA
 channel 1 is starved by CE's display DMA on channel 2. Next build: the CE
 reader's SCI bus never uses DMA (`KUI_RETAIL_CE` in `sci_sd_bus.c`), and its
 stop screen shows SD/image results, blocks read, DMAOR and CHCR2. Native
-readers byte-identical (proxy).
+readers byte-identical (proxy). Polling roughly halves card reads (SCI
+soaks: about 530 KiB/s polled, 930-1,050 KiB/s with DMA): a test of the
+starvation theory; if confirmed, DMA returns with a starved-block retry or
+a raised channel 1 priority while it reads.
+Build `96705505d1d6` ([Diagnostic run
+37166820490](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37166820490)):
+host and Dreamcast passed; native resident sizes unchanged.
 
 ## Windows CE: resident check fix (2026-10-04 UTC)
 
