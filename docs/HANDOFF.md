@@ -1,5 +1,14 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: ARMADA reaches gameplay (2026-10-04 UTC)
+
+Build `fc08d071ed7d`: ARMADA boots through Windows CE to gameplay from SCI
+microSD. Its intro FMV runs at roughly 5 fps: reads run synchronously with
+CE frozen, and ordinary reads step 4 KiB per EXEC/CHECK around the driver's
+5 ms sleeps. Bust-a-Move 4 and Worms Armageddon (CE titles the owner knows)
+are the next calibration runs. Speed options are listed in
+[windows-ce-placement-test.md](windows-ce-placement-test.md).
+
 ## Windows CE: 711 calls in; 0x0c pointers are virtual under CE (2026-10-04 UTC)
 
 Build `9ab26bd0e9ad`: stream reads ran (status line climbing; 711 GD calls,

@@ -368,6 +368,25 @@ TOC destinations) outside P1/P2 is virtual, `0x0c` included; only DMA
 destinations (DMAREAD's, DMA_TRANSFER's) are physical RAM (`dma_guest`).
 Host test `virtual_pointers` keeps a separate virtual window at `0C3B0000`.
 
+## Console result: virtual-pointer build fc08d071ed7d (2026-10-04)
+
+**ARMADA reaches gameplay under Windows CE, loading from SCI microSD.** The
+intro FMV runs very slowly ("maybe 5 fps at best"); the owner has not played
+ARMADA on a drive for comparison. Likely why: every read happens inside CE's
+disc call with interrupts masked, so CE is frozen while the card is read
+(about 1 MB/s at best), and ordinary reads (DMAREAD) advance 4 KiB per
+EXEC/CHECK with the driver sleeping 5 ms between them. On real hardware the
+GD DMA runs while the CPU decodes.
+
+Bust-a-Move 4 and Worms Armageddon are Windows CE titles too; the stage's
+kernel pattern matched both kernels. Bust-a-Move 4's `sh4ser.dll` drives
+SCIF (`0x1fe80000`), not the SCI port the reader uses.
+
+Speed options, smallest first: interrupt-driven ordinary reads (CHECK word 3
+= 1 and SYSINTR 20 per step, no 5 ms sleeps); a throughput readout (KiB/s and
+time CE spends frozen in the reader); a background reader for CE like the
+native X/Y readers (card DMA and interrupts while CE runs).
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the
