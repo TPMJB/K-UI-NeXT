@@ -31,10 +31,11 @@ _start:
 .Linit: .long C_SYMBOL(kui_retail_resident_init)
 #ifdef KUI_RETAIL_CE
 /* KUI_RETAIL_CE_KERNEL: where Windows CE's kernel keeps its interrupt
- * bookkeeping (pending mask, ring head, reschedule flag), written here by the
- * stage, which finds it in the loaded kernel; zero if it was not found. */
+ * bookkeeping (pending mask, ring head, reschedule flag) and its interrupt
+ * handler table, written here by the stage, which finds them in the loaded
+ * kernel; zero if they were not found. */
     .global C_SYMBOL(kui_retail_ce_kernel)
-C_SYMBOL(kui_retail_ce_kernel): .long 0,0,0
+C_SYMBOL(kui_retail_ce_kernel): .long 0,0,0,0
 #endif
 
 /* Save original SR on the caller's stack, then mask BEFORE examining the
@@ -279,7 +280,80 @@ C_SYMBOL(kui_retail_menu_hook):
 .Lmenu_stack: .long KUI_RETAIL_HOOK_STACK-16
 .Lmenu_report: .long C_SYMBOL(kui_retail_menu_return)
 
-#ifdef KUI_RETAIL_ASYNC
+#if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)
+/* Windows CE's background reader. CE's interrupt dispatch calls this for
+ * the SCI's events through the entries of its handler table the reader
+ * installs (retail_async.c): SR.BL set, register bank 1, R15 the
+ * interrupted stack (perhaps a virtual address: never touched here) and R7
+ * the dispatcher's own PR. CE's handlers use R0..R3 alone; R4..R7, PR, MACH
+ * and MACL are kept here and R8..R14 by the C handler, which runs on the
+ * private stack: no GD call is using it, as they mask interrupts. R0
+ * returns the SYSINTR for CE's dispatch to report, or 0. Should CE take an
+ * interrupt inside a GD call anyway (an exception path that unmasks), the
+ * SCI's level is only dropped, without a stack; the call raises it again. */
+    .section .text.retail_irq,"ax"
+    .align 2
+    .global C_SYMBOL(kui_retail_ce_isr)
+C_SYMBOL(kui_retail_ce_isr):
+    mov.l .Lce_isr_active,r0
+    mov.l @r0,r0
+    tst r0,r0
+    bf .Lce_isr_held
+    mov.l .Lce_isr_sp,r0
+    mov.l r15,@r0
+    mov.l .Lce_isr_stack,r15
+    mov.l r4,@-r15
+    mov.l r5,@-r15
+    mov.l r6,@-r15
+    mov.l r7,@-r15
+    sts.l pr,@-r15
+    sts.l mach,@-r15
+    sts.l macl,@-r15
+    mov.l .Lce_isr_handler,r0
+    jsr @r0
+    nop
+    mov.l .Lce_isr_guard,r1
+    mov.l @r1,r2
+    mov.l .Lce_isr_guard_value,r3
+    cmp/eq r2,r3
+    bt 1f
+    mov.l .Lce_isr_fault,r1
+    mov #1,r2
+    mov.l r2,@r1
+1:  lds.l @r15+,macl
+    lds.l @r15+,mach
+    lds.l @r15+,pr
+    mov.l @r15+,r7
+    mov.l @r15+,r6
+    mov.l @r15+,r5
+    mov.l @r15+,r4
+    mov.l .Lce_isr_sp,r1
+    rts
+    mov.l @r1,r15
+.Lce_isr_held:
+    mov.l .Lce_isr_iprb,r1
+    mov.w @r1,r0
+    mov.w .Lce_isr_keep,r2
+    and r2,r0
+    mov.w r0,@r1
+    mov.w @r1,r0 /* the level is down before CE resumes */
+    rts
+    mov #0,r0
+.Lce_isr_keep: .word 0xff0f /* IPRB without the SCI's field (bits 7..4) */
+    .align 2
+.Lce_isr_active: .long C_SYMBOL(kui_retail_hook_active)
+.Lce_isr_sp: .long C_SYMBOL(kui_retail_ce_isr_sp)
+.Lce_isr_stack: .long KUI_RETAIL_HOOK_STACK-16
+.Lce_isr_handler: .long C_SYMBOL(kui_retail_ce_irq)
+.Lce_isr_guard: .long KUI_RETAIL_HOOK_STACK_BOTTOM
+.Lce_isr_guard_value: .long 0x4b554947
+.Lce_isr_fault: .long C_SYMBOL(kui_retail_hook_fault)
+.Lce_isr_iprb: .long 0xffd00008
+/* The interrupted R15 while the handler runs. */
+    .section .bss.retail_ce_isr,"aw",@nobits
+    .align 2
+C_SYMBOL(kui_retail_ce_isr_sp): .space 4
+#elif defined(KUI_RETAIL_ASYNC)
 /* Vector templates for the background reader, copied by
  * kui_retail_async_init into its region (VBR = region - 0x100). They run in
  * exception state (BL=1, RB=1) and leave every register, SSR, SPC and SGR as

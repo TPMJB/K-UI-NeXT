@@ -44,24 +44,32 @@ RESIDENTS = TRANSPORTS + (ASYNC,)
 def resident_limit(transport, ce=False):
     if ce and transport == "sci":
         return layout.CE_RESIDENT_LIMIT
+    if ce and transport == ASYNC:
+        return layout.CE_ASYNC_RESIDENT_LIMIT
     return layout.ASYNC_RESIDENT_LIMIT if transport == ASYNC else layout.RESIDENT_LIMIT
 
 
 def stack_bottom(transport, ce=False):
     if ce and transport == "sci":
         return layout.CE_RESIDENT_LIMIT
+    if ce and transport == ASYNC:
+        return layout.CE_ASYNC_RESIDENT_LIMIT
     return layout.ASYNC_HOOK_STACK_BOTTOM if transport == ASYNC else layout.HOOK_STACK_BOTTOM
 
 
 def stack_top(transport, ce=False):
-    """The Windows CE package's SCI reader has its own, larger stack."""
-    return layout.CE_HOOK_STACK if ce and transport == "sci" else layout.HOOK_STACK
+    """The Windows CE package's SCI readers have their own, larger stacks."""
+    if ce and transport == "sci":
+        return layout.CE_HOOK_STACK
+    if ce and transport == ASYNC:
+        return layout.CE_ASYNC_HOOK_STACK
+    return layout.HOOK_STACK
 
 
-def check_async_stack(directory):
-    available = (layout.HOOK_STACK - layout.ASYNC_HOOK_STACK_BOTTOM -
+def check_async_stack(directory, ce=False):
+    available = (stack_top(ASYNC, ce) - stack_bottom(ASYNC, ce) -
                  STACK_GUARD_BYTES - STACK_ALIGNMENT_GAP)
-    result = check_retail_stack.check(Path(directory), available)
+    result = check_retail_stack.check(Path(directory), available, ce)
     return {"worst_bytes": result["worst_bytes"], "available_bytes": available,
             "margin": result["margin"], "call_graph": True}
 
@@ -162,7 +170,12 @@ def check_directory(directory, ce=False):
         check_bss(resident, layout.RESIDENT_ADDRESS, "__retail_resident")
         required = ["_kui_retail_resident_init", "_kui_retail_resident_hook",
                     "_kui_retail_resident_dispatch", "_kui_retail_gd_dispatch"]
-        if transport == ASYNC:
+        if transport == ASYNC and ce:
+            # Windows CE's: reached through CE's handler table (its entry and
+            # handler), and its PIO stream reads through the reader.
+            required += ["_kui_retail_async_irq", "_kui_retail_ce_isr", "_kui_retail_ce_irq",
+                         "_kui_retail_async_read_part"]
+        elif transport == ASYNC:
             # Its SCI bus claim is inlined into the reader: the interrupt
             # entry, vectors and handler identify this resident instead.
             required += ["_kui_retail_async_irq", "_kui_retail_irq_entry",
@@ -194,7 +207,14 @@ def check_directory(directory, ce=False):
                 region(stage["payload"], begin - stage_address,
                        len(low_blob), "embedded low resident") != low_blob):
             raise ValueError(f"Stage contains a different/invalid low resident: {transport}")
-        if transport == ASYNC:
+        if transport == ASYNC and ce:
+            # No vectors: its receive areas need only cache-line alignment.
+            region_symbol = rs.get("_kui_retail_async_region", 0)
+            if region_symbol % 32 or not (layout.RESIDENT_ADDRESS <= region_symbol and
+                                          region_symbol + 0x440 <= resident["memory_end"]):
+                raise ValueError("Background reader's region is misplaced")
+            stacks[transport] = check_async_stack(directory / transport, ce)
+        elif transport == ASYNC:
             region_symbol = rs.get("_kui_retail_async_region", 0)
             if region_symbol % 32 or not (layout.RESIDENT_ADDRESS + 0x100 <= region_symbol and
                                           region_symbol + 0x760 <= resident["memory_end"]):

@@ -195,7 +195,8 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     if(!package) return false;
     *package=(struct kui_runtime_image){0};
     if(!log || !cancel) return false;
-    const bool ce=reader==KUI_GAMES_RETAIL_CE_PROBE;
+    const bool ce=(reader&KUI_GAMES_RETAIL_CE_PROBE)!=0;
+    reader&=~KUI_GAMES_RETAIL_CE_PROBE;
     struct files files={.cancel=cancel};char name[KUI_GAME_NAME_CAP];
     if(!split(path,&files,name) || stopped(&files)) {log("Retail boot: invalid path or cancelled");return false;}
     if(!kui_sd_connect()) {log("Retail boot: storage unavailable");return false;}
@@ -281,7 +282,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     map->partition_start=volume.start;map->partition_end=(uint64_t)volume.start+volume.count;
     map->card_sectors=map->partition_end; /* detached stage checks actual capacity */
     log("Retail boot: mapping %u tracks",image->count);
-    bool background=!ce && reader!=KUI_RETAIL_READER_STANDARD,audio=true;
+    bool background=reader!=KUI_RETAIL_READER_STANDARD,audio=true;
     if(background && map->storage_transport!=KUI_STORAGE_SCI) {
         log("Retail boot: the background reader needs SCI microSD; using the standard reader");
         background=false;
@@ -308,7 +309,8 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
             image->count);
     if(background) {
         map->reader=reader;
-        log("Retail boot reader: background SCI stream (test, %s)",
+        if(ce) log("Retail boot reader: background SCI stream (test, Windows CE interrupts)");
+        else log("Retail boot reader: background SCI stream (test, %s)",
             reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);

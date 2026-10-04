@@ -272,8 +272,10 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
         !strcmp(test.fault, "blank-title") ? "Untitled game" : "DEAD OR ALIVE 2"));
     assert(!strcmp(map->bootfile, !strcmp(test.fault, "alternate-bootfile") ? "ALT_BOOT.BIN" : "1ST_READ.BIN"));
     if(!strcmp(test.fault, "fragmented")) assert(map->slots[2].track.extent_count > 1);
-    /* The background reader is granted only on SCI; SCIF falls back. */
-    assert(map->reader == (!strcmp(test.fault, "async-on-sci") || !strncmp(test.fault, "async-tracks", 12) ?
+    /* The background reader is granted only on SCI; SCIF falls back. The
+     * Windows CE boot test's comes from its own package. */
+    assert(map->reader == (!strcmp(test.fault, "async-on-sci") || !strncmp(test.fault, "async-tracks", 12) ||
+                           !strcmp(test.fault, "ce-probe-async") ?
                            KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD));
     assert(map->storage_transport == kui_storage_active());
     size_t size; uint8_t *gdi = host_file(directory, "disc.gdi", &size);
@@ -348,11 +350,13 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
     bool result = !strncmp(test.fault, "ce-probe", 8) ?
-        kui_games_retail_prepare_reader(selected, KUI_GAMES_RETAIL_CE_PROBE, &image, log_line, cancel) :
+        kui_games_retail_prepare_reader(selected, KUI_GAMES_RETAIL_CE_PROBE |
+            (!strcmp(test.fault, "ce-probe-async") ? KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD),
+            &image, log_line, cancel) :
         strncmp(test.fault, "async-", 6) ? kui_games_retail_prepare(selected, &image, log_line, cancel) :
         kui_games_retail_prepare_reader(selected, KUI_RETAIL_READER_ASYNC, &image, log_line, cancel);
     bool valid = !strncmp(test.fault, "async-", 6) || !strcmp(test.fault, "valid") || !strcmp(test.fault, "fragmented") ||
-        !strcmp(test.fault, "ce-probe") ||
+        !strcmp(test.fault, "ce-probe") || !strcmp(test.fault, "ce-probe-async") ||
         !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "other-title") ||
         !strcmp(test.fault, "alternate-bootfile") || !strcmp(test.fault, "cdda-warning") ||
         !strcmp(test.fault, "blank-title") || !strncmp(test.fault, "tracks-", 7);

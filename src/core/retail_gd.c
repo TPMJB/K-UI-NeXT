@@ -63,7 +63,7 @@ static void reset(struct kui_retail_gd *s) {
     s->xfer_left = 0; s->pio_callback = 0; s->callback_due = 0;
 #endif
 }
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC)
 static void stream_step(struct kui_retail_gd *);
 #endif
 /* Track i's number is i + 1. */
@@ -272,8 +272,14 @@ static int32_t execute(struct kui_retail_gd *s) {
     ++s->diag.exec_calls;
     if(!s->pending) return 0;
 #ifdef KUI_RETAIL_CE
-    /* A stream's bytes move only within DMA transfers. */
-    if(s->command == KUI_RETAIL_GD_DMAREAD_STREAM) { stream_step(s); return 0; }
+    /* A stream's bytes move only within DMA transfers (in the background
+     * reader, by the adapter: kui_retail_gd_stream_progress). */
+    if(s->command == KUI_RETAIL_GD_DMAREAD_STREAM) {
+#ifndef KUI_RETAIL_GD_ASYNC
+        stream_step(s);
+#endif
+        return 0;
+    }
     if(s->command == KUI_RETAIL_GD_PIOREAD_STREAM) return 0;
 #endif
     s->executing = 1;
@@ -388,7 +394,7 @@ static int32_t datatype(struct kui_retail_gd *s, uint32_t address) {
     s->sector_part = part; s->track_type = type; s->sector_bytes = bytes;
     return 0;
 }
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC)
 /* One step of the stream's current DMA transfer: the next 4 KiB (two
  * sectors' bytes) or what is left of it, from the user data after the bytes
  * already moved. A real G1 DMA keeps moving on its own; here each of the
@@ -423,9 +429,12 @@ static void stream_step(struct kui_retail_gd *s) {
         s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
     }
 }
+#endif
+#ifdef KUI_RETAIL_CE
 /* DMA_TRANSFER for the pending stream: params {destination, bytes}, both
  * 32-byte multiples as for the G1 DMA, the bytes continuing the stream after
- * the previous transfer has finished. Its first step is taken at once. */
+ * the previous transfer has finished. Its first step is taken at once (the
+ * background reader's adapter fills it instead). */
 static int32_t transfer(struct kui_retail_gd *s, uint32_t token, uint32_t address) {
     if(!s->pending || s->command != KUI_RETAIL_GD_DMAREAD_STREAM || token != s->token ||
        s->xfer_left) return -1;
@@ -436,15 +445,20 @@ static int32_t transfer(struct kui_retail_gd *s, uint32_t token, uint32_t addres
     if(!bytes || (bytes & 31u) || bytes > s->request_bytes - s->completed_bytes ||
        !dma_guest(s, destination, bytes, 32, KUI_RETAIL_MAP_VALIDATE)) return -1;
     s->xfer_destination = destination; s->xfer_left = bytes;
+#ifndef KUI_RETAIL_GD_ASYNC
     stream_step(s);
+#endif
     return 0;
 }
-/* DMA_CHECK: one more step of the current transfer, then the bytes it has
- * left; 1 while some remain, 0 once it has finished. */
+/* DMA_CHECK: one more step of the current transfer (none in the background
+ * reader), then the bytes it has left; 1 while some remain, 0 once it has
+ * finished. */
 static int32_t dma_check(struct kui_retail_gd *s, uint32_t address) {
     uint8_t *out = guest(s, address, 4, 4, 1);
     if(!out) return -1;
+#ifndef KUI_RETAIL_GD_ASYNC
     stream_step(s);
+#endif
     put32(out, s->xfer_left);
     return s->xfer_left ? 1 : 0;
 }
@@ -499,6 +513,25 @@ static int32_t pio_transfer(struct kui_retail_gd *s, uint32_t token, uint32_t ad
 }
 #endif
 #ifdef KUI_RETAIL_GD_ASYNC
+#ifdef KUI_RETAIL_CE
+void kui_retail_gd_stream_progress(struct kui_retail_gd *s, uint32_t total, uint32_t error) {
+    if(!s->pending || s->command != KUI_RETAIL_GD_DMAREAD_STREAM) return;
+    if(total > s->completed_bytes && total - s->completed_bytes <= s->xfer_left) {
+        uint32_t n = total - s->completed_bytes, before = s->completed_bytes / s->sector_bytes;
+        s->completed_bytes = total; s->xfer_destination += n; s->xfer_left -= n;
+        uint32_t after = total / s->sector_bytes;
+        s->diag.sectors_read += after - before;
+        if(after) s->position_lba = s->lba + after - 1u;
+        s->drive_status = 1; ++s->diag.read_steps;
+        if(!s->xfer_left) s->interrupts |= KUI_RETAIL_GD_IRQ_DMA_END;
+    }
+    if(error) s->error = error;
+    else if(s->completed_bytes < s->request_bytes) return;
+    s->status = s->error ? KUI_GD_FAILED : KUI_GD_COMPLETED;
+    s->pending = 0; s->xfer_left = 0; s->diag.last_error = s->error;
+    s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
+}
+#endif
 void kui_retail_gd_progress(struct kui_retail_gd *s, uint32_t sectors, uint32_t error) {
     if(!s->pending || (s->command != KUI_GD_PIOREAD && s->command != KUI_GD_DMAREAD)) return;
     uint32_t done = s->completed_bytes / s->sector_bytes;
@@ -514,6 +547,9 @@ void kui_retail_gd_progress(struct kui_retail_gd *s, uint32_t sectors, uint32_t 
     s->status = s->error ? KUI_GD_FAILED : KUI_GD_COMPLETED;
     s->pending = 0;
     s->diag.last_error = s->error;
+#ifdef KUI_RETAIL_CE
+    s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE; /* CE's driver waits for it. */
+#endif
 }
 #endif
 int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,

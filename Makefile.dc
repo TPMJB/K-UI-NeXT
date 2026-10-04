@@ -309,9 +309,10 @@ build/retail-bench/entry.elf: build/retail-bench/retail_entry_asm.o src/loader/r
 	python3 tools/record_build.py $@
 
 # The Windows CE boot test package (ce-probe.kui). It shares the ordinary
-# SCIF, IDE and background residents; its stage C code, link address and SCI
-# resident differ. That resident (KUI_RETAIL_CE) touches CE's stack only with
-# exceptions enabled, reads a fixed step without pacing and traces CE's calls.
+# SCIF and IDE residents; its stage C code, link address and SCI residents
+# (standard and background) differ. Those (KUI_RETAIL_CE) touch CE's stack
+# only with exceptions enabled and trace CE's calls; the standard one reads a
+# fixed step without pacing.
 RETAIL_CE_SCI := $(patsubst %.c,build/retail-ce/sci/%.o,$(RETAIL_SCI_SRC)) build/retail-ce/sci/src/loader/retail_resident_asm.o
 build/retail-ce/sci/%.o: %.c
 	@mkdir -p $(@D)
@@ -327,7 +328,25 @@ build/retail-ce/resident-sci.elf: $(RETAIL_CE_SCI) src/loader/retail_resident_ce
 	cp build/retail-ce/resident-sci.elf.ltrans*.su build/retail-ce/sci/lto/
 build/retail-ce/resident-sci.bin: build/retail-ce/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@
-build/retail-ce/retail_stage_asm.o: src/loader/retail_stage.S $(RETAIL_RESIDENT_BINS) build/retail-ce/resident-sci.bin
+# Its background reader (manifest readers 1 and 2): the native one's engine
+# and stream, reached through CE's own interrupt handler table instead of
+# vectors of its own, with room below bootstrap 2 for a 2 KiB stack.
+RETAIL_CE_SCIA := $(patsubst %.c,build/retail-ce/scia/%.o,$(RETAIL_SCIA_SRC)) build/retail-ce/scia/src/loader/retail_resident_asm.o
+build/retail-ce/scia/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
+build/retail-ce/scia/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
+build/retail-ce/scia/src/loader/retail_display.o: force-build-id
+build/retail-ce/resident-scia.elf: $(RETAIL_CE_SCIA) src/loader/retail_resident_ce_async.ld
+	@mkdir -p build/retail-ce/scia/lto
+	rm -f build/retail-ce/resident-scia.elf.ltrans* build/retail-ce/scia/lto/*
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCIA_LINK) -Wl,-u,_kui_retail_ce_irq -Tsrc/loader/retail_resident_ce_async.ld -Wl,-Map,build/retail-ce/resident-scia.map -o $@ $(RETAIL_CE_SCIA) -lgcc
+	cp build/retail-ce/resident-scia.elf.ltrans*.su build/retail-ce/resident-scia.elf.ltrans*.ci build/retail-ce/scia/lto/
+build/retail-ce/resident-scia.bin: build/retail-ce/resident-scia.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail-ce/retail_stage_asm.o: src/loader/retail_stage.S $(RETAIL_RESIDENT_BINS) build/retail-ce/resident-sci.bin build/retail-ce/resident-scia.bin
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
 build/retail-ce/retail_stage.o: src/loader/retail_stage.c
@@ -347,12 +366,12 @@ build/retail-ce/retail_entry_asm.o: src/loader/retail_entry.S build/retail-ce/st
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_RETAIL_STAGE_BIN='"build/retail-ce/stage.bin"' -MMD -MP -c $< -o $@
 build/retail-ce/entry.elf: build/retail-ce/retail_entry_asm.o src/loader/retail_entry.ld build/retail/entry.elf
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail-ce/entry.map -o $@ $<
-	for r in scif ide scia; do cp build/retail/resident-$$r.elf build/retail/resident-$$r.bin build/retail/resident-$$r.map build/retail-ce/; done
-	cp -r build/retail/src build/retail/scif build/retail/ide build/retail/scia build/retail-ce/
+	for r in scif ide; do cp build/retail/resident-$$r.elf build/retail/resident-$$r.bin build/retail/resident-$$r.map build/retail-ce/; done
+	cp -r build/retail/src build/retail/scif build/retail/ide build/retail-ce/
 	python3 tools/check_retail_instructions.py build/retail-ce
 	python3 tools/check_retail_loader_layout.py --ce build/retail-ce
 	python3 tools/record_build.py $@
 
 -include $(RETAIL_SCIF:.o=.d) $(RETAIL_SCI:.o=.d) $(RETAIL_IDE:.o=.d) $(RETAIL_SCIA:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
 -include $(RETAIL_BENCH_STAGE:.o=.d) build/retail-bench/retail_entry_asm.d
--include $(RETAIL_CE_STAGE:.o=.d) $(RETAIL_CE_SCI:.o=.d) build/retail-ce/retail_entry_asm.d
+-include $(RETAIL_CE_STAGE:.o=.d) $(RETAIL_CE_SCI:.o=.d) $(RETAIL_CE_SCIA:.o=.d) build/retail-ce/retail_entry_asm.d

@@ -32,6 +32,9 @@ HOOK_STACK = 0x8C00C000
 # The Windows CE boot test's SCI reader: image below C800, 2 KiB stack above.
 CE_RESIDENT_LIMIT = 0x8C00C800
 CE_HOOK_STACK = 0x8C00D000
+# Its background reader: image below D800, 2 KiB stack up to bootstrap 2.
+CE_ASYNC_RESIDENT_LIMIT = 0x8C00D800
+CE_ASYNC_HOOK_STACK = 0x8C00E000
 TRAMPOLINE_BYTES = 128
 HEADER = struct.Struct("<8s14I")
 

@@ -30,7 +30,22 @@
  * next GD call does so after an exception. The game's VBR and level are put
  * back whenever the stream is idle. Games may keep the bootstrap's VBR
  * (0x8C00F400) throughout; it is hooked the same way. Reads complete from
- * the game's calls alone whenever no interrupt is delivering. */
+ * the game's calls alone whenever no interrupt is delivering.
+ *
+ * Windows CE (built with KUI_RETAIL_CE): CE owns the exception vectors, and
+ * its own interrupt dispatch reaches the reader through the handler table
+ * entries the resident installs for the SCI's events (kui_retail_ce_isr);
+ * only the SCI's level changes here, and only once they are installed
+ * (isr). A read's output goes into pieces: a PIOREAD's or DMAREAD's whole
+ * destination, or each transfer CE's driver gives a stream (DMA_TRANSFER;
+ * PIO_TRANSFER through kui_retail_async_read_part). The interrupt fills only
+ * pieces at physical addresses (P1, P2 or a DMA destination); CE's virtual
+ * addresses are filled by its own calls. Bytes the cursor produces past a
+ * piece's end wait in the spill for the next piece, and the stream waits
+ * meanwhile. A full stream transfer raises the DMA end interrupt and a
+ * finished request the drive's (kui_retail_gd_stream_progress,
+ * kui_retail_gd_progress); a block the interrupt cannot place raises the
+ * drive's too, so CE's driver calls again to take it. */
 struct kui_retail_async_stats {
     uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
     uint32_t hooks, releases;
@@ -62,6 +77,18 @@ struct kui_retail_async {
     uint32_t token, destination, since;
     uint32_t active, failed, opened, retries, in_irq, hooked, target;
     struct kui_retail_async_stats stats;
+#ifdef KUI_RETAIL_CE
+    /* The current piece: request output bytes [piece_begin, piece_begin +
+     * piece_bytes) go to guest address piece_destination (or, from
+     * read_part, to piece_direct); piece_filled of them are written. Once
+     * closed (piece_set clear), all output goes to the spill: spill_bytes
+     * from spill + spill_from, the bytes right after the piece's. isr: CE's
+     * handler table leads the SCI's events to the resident. */
+    uint32_t piece_destination, piece_begin, piece_bytes, piece_filled;
+    uint32_t spill_from, spill_bytes;
+    uint8_t *piece_direct;
+    uint8_t piece_set, piece_physical, isr;
+#endif
 };
 /* State the resident shares with the reader, kept between the vectors (the
  * SCI bus's own state too: the resident's BSS has no room for it). */
@@ -72,6 +99,17 @@ struct kui_retail_async_shared {
     struct kui_sci_stream_state stream;
     struct kui_sci_sd_port port;
 };
+#ifdef KUI_RETAIL_CE
+/* Bytes one card block can hold past a piece's end. */
+#define KUI_RETAIL_ASYNC_SPILL_BYTES 512u
+struct kui_retail_async_region {
+    uint8_t area0[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
+    uint8_t area1[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
+    uint8_t spill[KUI_RETAIL_ASYNC_SPILL_BYTES];
+    struct kui_retail_async engine;
+    struct kui_retail_async_shared shared;
+};
+#else
 /* VBR is this region's address minus 0x100; the hardware uses only its
  * three vector offsets, so the gaps between them hold the receive areas and
  * state. The vectors are copied from assembly templates at init. */
@@ -107,6 +145,7 @@ _Static_assert(offsetof(struct kui_retail_async, release) == 0 &&
                "release frame offsets used by retail_resident.S");
 _Static_assert(sizeof(struct kui_retail_async_shared) <= 0x1e0u, "shared fits gap B");
 #endif
+#endif
 extern struct kui_retail_async_region kui_retail_async_region;
 
 /* Once, at resident init: install nothing yet, copy the vectors; the
@@ -117,8 +156,18 @@ void kui_retail_async_call(uint32_t function);
 /* After the service ran it: start a new read, or stop an abandoned one. */
 void kui_retail_async_after(uint32_t function, int32_t result);
 /* The handler behind VBR+0x600 for the stream's events: zero when handled,
- * nonzero to pass the event on as any other (kui_retail_release_600). */
+ * nonzero to pass the event on as any other (kui_retail_release_600). Under
+ * Windows CE, CE's dispatch calls it for the SCI's events; nonzero: none was
+ * the stream's (its level is dropped). */
 uint32_t kui_retail_async_irq(void);
+#ifdef KUI_RETAIL_CE
+/* The GD service's read_part for a PIO stream (Windows CE): bytes [skip,
+ * skip + bytes) of the request's output, the next ones, into output (a CE
+ * virtual buffer, written only here, in the caller's call). Waits for the
+ * blocks it needs; zero once all were written. */
+int kui_retail_async_read_part(void *unused, uint32_t lba, uint32_t sector_bytes,
+                               uint32_t skip, uint32_t bytes, void *output);
+#else
 /* The releasing entries (retail_resident.S): VBR and SCI level back to the
  * game's, then its vector at +0x100, +0x400 or +0x600; and the trampoline a
  * released interrupt's handler returns through. */
@@ -126,4 +175,5 @@ void kui_retail_release_100(void);
 void kui_retail_release_400(void);
 void kui_retail_release_600(void);
 void kui_retail_rehook(void);
+#endif
 #endif

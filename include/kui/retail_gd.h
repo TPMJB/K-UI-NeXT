@@ -132,6 +132,17 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *, uint32_t r4,
  * every sector is delivered; CHECK then reports it as usual. Calls for
  * anything but a pending read are ignored. ops.read is never called. */
 void kui_retail_gd_progress(struct kui_retail_gd *, uint32_t sectors, uint32_t error);
+#ifdef KUI_RETAIL_CE
+/* Windows CE's background reader also fills a DMA stream's transfers: total
+ * is the request's output bytes written so far (in this transfer and the
+ * earlier ones), error a nonzero KUI_GD_ERROR_* that ends the request. A
+ * transfer whose bytes are all written raises the DMA end interrupt; the
+ * request's last bytes, or an error, complete it with the drive's. In this
+ * build DMA_TRANSFER and DMA_CHECK move nothing themselves, and a completed
+ * or failed PIOREAD/DMAREAD (kui_retail_gd_progress) raises the drive's
+ * interrupt too. */
+void kui_retail_gd_stream_progress(struct kui_retail_gd *, uint32_t total, uint32_t error);
+#endif
 #endif
 
 #endif

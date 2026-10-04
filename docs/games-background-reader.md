@@ -15,6 +15,11 @@ uses the standard reader and the log says why. The stage screen shows
 `BACKGROUND READER X - 20 PER CALL` or `BACKGROUND READER Y - 25 PER CALL`
 when it is installed.
 
+Windows CE games have their own build of this reader, reached through CE's
+interrupt handler table instead of vectors: **X** on the Windows CE boot
+test's confirmation. See
+[windows-ce-placement-test.md](windows-ce-placement-test.md#background-reader-for-windows-ce-x-on-the-boot-tests-confirmation).
+
 ## How it works
 
 * A read REQUEST starts a CMD18 stream at the request's first card block.

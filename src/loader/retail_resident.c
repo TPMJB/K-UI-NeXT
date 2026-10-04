@@ -41,11 +41,13 @@ volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
  * the last four calls' R7, R4, R5 and R6, shown if a call fails. */
 volatile uint32_t kui_retail_hook_caller[2];
 static uint32_t ce_calls[4][4], ce_count;
-extern volatile uint32_t kui_retail_ce_kernel[3];
+extern volatile uint32_t kui_retail_ce_kernel[KUI_RETAIL_CE_KERNEL_WORDS];
 /* A callback the hook's exit makes once the lock is released: function and
  * argument (retail_resident.S, .Ldeferred_call); zero when none. */
 volatile uint32_t kui_retail_ce_deferred[2];
+#ifndef KUI_RETAIL_ASYNC
 static enum kui_game_result image_result; /* The last image read's, for the trace. */
+#endif
 /* The GD service hands RAM over as P1 (DMA destinations converted from
  * physical); anything else is one of CE's virtual addresses. */
 static int ram_alias(uint32_t address) {
@@ -143,7 +145,7 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
 #endif
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
 /* Windows CE's DMA stream pieces: part of the user data of a run of
  * sectors, under the same card ownership rules as read_sectors. */
 static int read_part(void *unused, uint32_t lba, uint32_t sector_bytes,
@@ -159,6 +161,8 @@ static int read_part(void *unused, uint32_t lba, uint32_t sector_bytes,
     kui_retail_storage_release(&card);
     return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
+#endif
+#ifdef KUI_RETAIL_CE
 /* Raise a device interrupt (SYSINTR) in Windows CE as its kernel's own
  * interrupt dispatch does when the platform handler returns one: mark it
  * pending, queue its index (SYSINTR - 8) in the 32-entry ring after the
@@ -216,7 +220,7 @@ static void stream_lines(void) {
     retail_display_values("DEFERRED", st + 10, 1);
 }
 #endif
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
 /* Who called last (CE's address, stack, SR, MMU state) and the last four
  * calls: value rows only, as this build has no single-value printer. */
 static void ce_trace(unsigned earlier) {
@@ -283,15 +287,30 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     counts[0]=kui_retail_hook_fault; counts[1]=service.diag.read_steps;
     counts[2]=service.diag.sectors_read;
     retail_display_values("GUARD    STEPS    SECTORS",counts,3);
-    /* Where CE was when it was reset: its last calls and disc command. */
+    /* Where CE was when it was reset: its last calls (the background
+     * reader shows its counters in those rows: 16 lines fit) and disc
+     * command. */
+#ifndef KUI_RETAIL_ASYNC
     ce_trace(3);
+#endif
     _Static_assert(offsetof(struct kui_retail_gd_diagnostics, last_destination) ==
                    offsetof(struct kui_retail_gd_diagnostics, last_command) + 12u, "GD row");
     retail_display_values("COMMAND  LBA      SECTORS  DEST", &service.diag.last_command, 4);
 #else
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
 #endif
-#ifdef KUI_RETAIL_ASYNC
+#if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)
+    /* Windows CE's background reader: where blocks were delivered (its
+     * interrupt through CE's handler table, or CE's calls), how often a call
+     * waited, how often the SCI's level was raised and dropped, whether the
+     * handlers are installed, and the stream's errors. */
+    const uint32_t *st=(const uint32_t *)&reader.stats;
+    retail_display_values("IRQ BLKS CALLBLKS WAITS    EXECS    EXEC INT",st,5);
+    static uint32_t levels[3]; /* Static, like the rows above. */
+    levels[0]=st[5]; levels[1]=st[6]; levels[2]=reader.isr;
+    retail_display_values("HOOKS    RELEASES ISR",levels,3);
+    stream_lines();
+#elif defined(KUI_RETAIL_ASYNC)
     /* Background reader: where blocks were delivered (its interrupt or the
      * game's calls), how often an EXEC waited, how the vectors were handed
      * back and installed again, and the stream's errors. */
@@ -356,7 +375,9 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
 #endif
     kui_retail_gd_init_validated(&service, manifest.slots,
         manifest.track_count, &ops, KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) && defined(KUI_RETAIL_ASYNC)
+    service.read_part = kui_retail_async_read_part;
+#elif defined(KUI_RETAIL_CE)
     service.read_part = read_part;
 #endif
     volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
@@ -370,34 +391,13 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     install_hook();
     return KUI_RETAIL_RESIDENT_OK;
 }
-#ifdef KUI_RETAIL_ASYNC
-int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
-                                    uint32_t r6, uint32_t r7) {
-    /* Entry contract as below. The reader delivers what has arrived before
-     * the service answers, and starts or stops a read after it. */
-    uint32_t source=kui_retail_hook_source;
-    if(source>3) return -1;
-    if(source!=1 && r6==UINT32_MAX) return 0;
-    uint32_t pending = service.pending;
-    kui_retail_async_call(r7);
-    int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
-    kui_retail_async_after(r7, result);
-    if(service.error == KUI_GD_ERROR_IO)
-        report_fault("IMAGE READ FAILED", r7);
-    if(r7 == KUI_GD_REQUEST && !pending && result == 0)
-        report_fault("GD REQUEST REJECTED", r7);
-    else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
-            r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
-        report_fault("GD FUNCTION UNSUPPORTED", r7);
-    return result;
-}
-#else
 #ifdef KUI_RETAIL_CE
-/* How fast CE reads and how much of its time it spends inside this reader,
- * over windows of at least half a second, on a live status line drawn once
- * per window (drawing costs time too). CE's clock is its millisecond count
- * (KData, just after the reschedule flag); time inside the reader is
- * counted from TMU0, which drives CE's tick and is only read here. */
+/* How fast CE reads and how much of its time it spends inside this reader
+ * (its calls and, in the background reader, its interrupt), over windows of
+ * at least half a second, on a live status line drawn once per window
+ * (drawing costs time too). CE's clock is its millisecond count (KData,
+ * just after the reschedule flag); time inside the reader is counted from
+ * TMU0, which drives CE's tick and is only read here. */
 #define TCOR0 0xffd80008u
 #define TCNT0 0xffd8000cu
 #define TCR0 0xffd80010u
@@ -408,11 +408,14 @@ static uint32_t decimal(uint32_t n) {
     for(unsigned shift = 0; shift < 32; shift += 4) { out |= (n % 10u) << shift; n /= 10u; }
     return out;
 }
-static void meter_call(uint32_t started) {
+static void meter_busy(uint32_t started) {
     volatile const uint32_t *tmu = (volatile const uint32_t *)(uintptr_t)TCOR0;
     uint32_t ended = tmu[1], period = tmu[0] + 1u;
     /* TMU0 counts down; a call is far shorter than its 25 ms period. */
     meter.busy += started >= ended ? started - ended : started + period - ended;
+}
+static void meter_call(uint32_t started) {
+    meter_busy(started);
     uint32_t now = kui_retail_ce_kernel[2] ?
         *(volatile const uint32_t *)(uintptr_t)(kui_retail_ce_kernel[2] + 4u) : ce_count * 8u;
     uint32_t elapsed = now - meter.since;
@@ -428,6 +431,86 @@ static void meter_call(uint32_t started) {
     meter.shown[4] = decimal(service.diag.sectors_read);
     retail_display_status("CALLS    COMMAND  KIB/S    BUSY PCT SECTORS", meter.shown, 5);
 }
+/* After each call: the interrupts the service raised, G1 DMA end (SYSINTR
+ * 21) and the drive's (SYSINTR 20) as CE's platform maps them; and a PIO
+ * stream's callback, due after a transfer, made when this EXEC returns, as
+ * the BIOS would make it within its own EXEC. */
+static void ce_events(uint32_t r7) {
+    if(service.interrupts) {
+        if(!kui_retail_ce_kernel[0])
+            report_fault("CE KERNEL INTERRUPTS NOT FOUND", r7);
+        if(service.interrupts & KUI_RETAIL_GD_IRQ_DMA_END) ce_raise(21u);
+        if(service.interrupts & KUI_RETAIL_GD_IRQ_DRIVE) ce_raise(20u);
+        service.interrupts = 0;
+    }
+    if(r7 == KUI_GD_EXEC && service.callback_due && service.pio_callback) {
+        kui_retail_ce_deferred[1] = service.pio_argument;
+        kui_retail_ce_deferred[0] = service.pio_callback;
+        service.callback_due = 0;
+    }
+}
+/* Who called: source 4 is BIOS system function 2, the disc check (recorded
+ * as E0). Returns whether that is all the call asks: the image is in the
+ * virtual drive, unchanged. */
+static int ce_record(uint32_t source, uint32_t r4, uint32_t r5, uint32_t r6, uint32_t r7) {
+    uint32_t *call=ce_calls[ce_count++&3u];
+    call[0]=source==4u?0xe0u:r7; call[1]=r4; call[2]=r5; call[3]=r6;
+    return source==4u;
+}
+#endif
+#ifdef KUI_RETAIL_ASYNC
+int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
+                                    uint32_t r6, uint32_t r7) {
+    /* Entry contract as below. The reader delivers what has arrived before
+     * the service answers, and starts or stops a read after it. */
+    uint32_t source=kui_retail_hook_source;
+#ifdef KUI_RETAIL_CE
+    uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0;
+    if(ce_record(source,r4,r5,r6,r7)) return 0;
+#endif
+    if(source>3) return -1;
+    if(source!=1 && r6==UINT32_MAX) return 0;
+    uint32_t pending = service.pending;
+    kui_retail_async_call(r7);
+    int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
+    kui_retail_async_after(r7, result);
+    if(service.error == KUI_GD_ERROR_IO)
+        report_fault("IMAGE READ FAILED", r7);
+    if(r7 == KUI_GD_REQUEST && !pending && result == 0)
+        report_fault("GD REQUEST REJECTED", r7);
+    else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
+            r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
+        report_fault("GD FUNCTION UNSUPPORTED", r7);
+#ifdef KUI_RETAIL_CE
+    ce_events(r7);
+    meter_call(started);
+#endif
+    return result;
+}
+#ifdef KUI_RETAIL_CE
+/* CE's interrupt dispatch calls this for the SCI's events, through the
+ * handler table entries the reader installs and kui_retail_ce_isr
+ * (retail_resident.S): SR.BL set, on the private stack, which no GD call is
+ * using. Returns the SYSINTR CE's dispatch then marks pending and schedules
+ * as for any device: the drive's (20) or the G1 DMA end (21), the other
+ * one, when both, raised here as CE would; 0 for none. */
+uint32_t kui_retail_ce_irq(void) {
+    uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0, sysintr=0;
+    if(!kui_retail_async_irq()) {
+        uint32_t raised=service.interrupts;
+        service.interrupts=0;
+        if(raised & KUI_RETAIL_GD_IRQ_DMA_END) sysintr=21u;
+        if(raised & KUI_RETAIL_GD_IRQ_DRIVE) {
+            if(sysintr && kui_retail_ce_kernel[0]) ce_raise(sysintr);
+            sysintr=20u;
+        }
+    }
+    meter_busy(started);
+    return sysintr;
+}
+#endif
+#else
+#ifdef KUI_RETAIL_CE
 /* One EXEC of the standard step. */
 static int32_t step(uint32_t r4, uint32_t r5) {
     service.step = KUI_RETAIL_GD_STEP_SECTORS;
@@ -468,11 +551,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     uint32_t source=kui_retail_hook_source;
 #ifdef KUI_RETAIL_CE
     uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0;
-    /* Source 4 is BIOS system function 2, the disc check (recorded as E0):
-     * the image is in the virtual drive, unchanged. */
-    uint32_t *call=ce_calls[ce_count++&3u];
-    call[0]=source==4u?0xe0u:r7; call[1]=r4; call[2]=r5; call[3]=r6;
-    if(source==4u) return 0;
+    if(ce_record(source,r4,r5,r6,r7)) return 0;
 #endif
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) {
@@ -502,24 +581,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
         report_fault("GD FUNCTION UNSUPPORTED", r7);
 #ifdef KUI_RETAIL_CE
-    /* A stream transfer's interrupts: G1 DMA end (SYSINTR 21) and the
-     * drive's completion (SYSINTR 20), as CE's platform maps them. */
     if(service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", r7);
-    if(service.interrupts) {
-        if(!kui_retail_ce_kernel[0])
-            report_fault("CE KERNEL INTERRUPTS NOT FOUND", r7);
-        if(service.interrupts & KUI_RETAIL_GD_IRQ_DMA_END) ce_raise(21u);
-        if(service.interrupts & KUI_RETAIL_GD_IRQ_DRIVE) ce_raise(20u);
-        service.interrupts = 0;
-    }
-    /* A PIO stream's callback, due after a transfer, is made when this
-     * EXEC returns, as the BIOS would make it within its own EXEC. */
-    if(r7 == KUI_GD_EXEC && service.callback_due && service.pio_callback) {
-        kui_retail_ce_deferred[1] = service.pio_argument;
-        kui_retail_ce_deferred[0] = service.pio_callback;
-        service.callback_due = 0;
-    }
+    ce_events(r7);
     meter_call(started);
 #endif
     return result;

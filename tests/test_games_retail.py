@@ -24,13 +24,14 @@ CASES = (
     "read-fail", "close-fail", "unmount-fail", "cancel-before", "cancel-map",
     "cancel-ip", "size-change", "async-on-sci", "async-on-scif",
     "ce-probe", "ce-probe-native", "ce-probe-package", "ce-probe-small", "ce-probe-scif",
+    "ce-probe-async",
 )
 RC_CASES = ("valid", "other-title", "alternate-bootfile", "cdda-warning",
             "windows-ce", "bad-flags", "bad-media", "bad-bootfile", "unsupported-2048",
             "tracks-99", "boot-low-density", "boot-overlap-ip", "blank-title", "ce-probe")
 SUCCESS_CASES = ("valid", "boot-tail", "fragmented", "other-title",
                  "alternate-bootfile", "cdda-warning", "blank-title",
-                 "async-on-sci", "async-on-scif", "ce-probe",
+                 "async-on-sci", "async-on-scif", "ce-probe", "ce-probe-async",
                  "tracks-31", "tracks-99", "async-tracks-31", "async-tracks-40")
 # Track counts beyond the fixture's three: MDK2's 31, GD-ROM's 99, and 40,
 # which fits the background reader's 64 slots only with audio left unmapped.
@@ -143,6 +144,10 @@ def main():
                         assert "Windows CE game launching is not supported" in output
                     if case == "ce-probe":
                         assert "Windows CE boot test prepared" in output
+                        assert "background SCI stream" not in output
+                    if case == "ce-probe-async":
+                        assert "Windows CE boot test prepared" in output
+                        assert "Retail boot reader: background SCI stream (test, Windows CE interrupts)" in output
                     if case == "ce-probe-native":
                         assert "the Windows CE boot test needs a Windows CE image" in output
                     if case == "ce-probe-package":

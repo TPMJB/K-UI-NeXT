@@ -7,10 +7,12 @@ file lists every emitted function with its static frame and its calls, with
 indirect calls marked. The entries that run on the private stack are walked
 to their deepest path: GD calls (kui_retail_resident_dispatch; the hook's own
 frame is on the caller's stack), the stream interrupt (kui_retail_async_irq,
-after the assembly entry pushes 44 bytes) and the menu return. Indirect calls
-reach only the resident's callbacks (bus transfer/select, GD map/check, the
-cursor's writer), so each counts as the deepest its source file can reach
-(INDIRECT); the menu return's
+after the assembly entry pushes 44 bytes; in the Windows CE build
+kui_retail_ce_irq, after kui_retail_ce_isr pushes 28) and the menu return.
+Indirect calls reach only the resident's callbacks (bus transfer/select, GD
+map/check, the cursor's writer and, under CE, the PIO stream's read_part),
+so each counts as the deepest its source file can reach (INDIRECT); the menu
+return's
 jump to the boot ROM never comes back. Recursion, a dynamic or missing frame,
 a missing callback or an indirect call from elsewhere fails the check.
 """
@@ -20,6 +22,8 @@ import sys
 
 ROOTS = {"kui_retail_resident_dispatch": 0, "kui_retail_async_irq": 44,
          "kui_retail_menu_return": 0}
+CE_ROOTS = {"kui_retail_resident_dispatch": 0, "kui_retail_ce_irq": 28,
+            "kui_retail_menu_return": 0}
 # Each source file's indirect calls and the callbacks they can reach.
 INDIRECT = {
     "retail_gd.c": ("map_guest", "check_sectors"),   # ops.map, ops.check
@@ -27,7 +31,9 @@ INDIRECT = {
     "retail_cursor.c": ("write_out",),               # the cursor's writer
     "retail_async.c": ("map_guest",),                # ops.map
 }
-CALLBACKS = tuple(sorted({c for targets in INDIRECT.values() for c in targets}))
+CE_INDIRECT = dict(INDIRECT, **{
+    "retail_gd.c": ("map_guest", "check_sectors", "kui_retail_async_read_part"),  # + read_part
+})
 REBOOT = ("kui_retail_menu_return", "retail_resident.c")
 # Covers the compiler's library calls, which the call graph does not list:
 # the resident links only __udivsi3, which pushes PR (4 bytes).
@@ -69,9 +75,10 @@ LIBRARY = {"__udivsi3": 0, "__sdivsi3": 0, "__udivsi3_i4i": 0, "__sdivsi3_i4i": 
            "memcpy": 0, "memset": 0}
 
 
-def worst(frames, calls):
+def worst(frames, calls, ce=False):
+    roots, indirect = (CE_ROOTS, CE_INDIRECT) if ce else (ROOTS, INDIRECT)
     callbacks = {}
-    for callback in CALLBACKS:
+    for callback in sorted({c for targets in indirect.values() for c in targets}):
         found = [f for f in frames if base(f) == callback]
         if not found:
             raise ValueError(f"Missing callback frame: {callback}")
@@ -99,9 +106,9 @@ def worst(frames, calls):
                 source_file = label.split(":", 1)[0]
                 if (base(function), source_file) == REBOOT:
                     continue
-                if source_file not in INDIRECT:
+                if source_file not in indirect:
                     raise ValueError(f"Unexpected indirect call in {function} at {label}")
-                targets = [f for c in INDIRECT[source_file] for f in callbacks[c]]
+                targets = [f for c in indirect[source_file] for f in callbacks[c]]
             else:
                 targets = [target]
             for callee in targets:
@@ -112,7 +119,7 @@ def worst(frames, calls):
         return memo[function]
 
     result = {}
-    for root, entry in ROOTS.items():
+    for root, entry in roots.items():
         roots = [f for f in frames if base(f) == root]
         if len(roots) != 1:
             raise ValueError(f"Missing or duplicated stack root: {root}")
@@ -121,12 +128,12 @@ def worst(frames, calls):
     return result
 
 
-def check(directory, available):
+def check(directory, available, ce=False):
     reports = sorted(Path(directory).glob("lto/*.ci"))
     if not reports:
         raise ValueError("Missing compiler call-graph reports")
     frames, calls = load(reports)
-    result = worst(frames, calls)
+    result = worst(frames, calls, ce)
     deepest = max(entry["bytes"] for entry in result.values())
     if deepest + MARGIN > available:
         raise ValueError(f"Resident worst-case stack {deepest} + {MARGIN} exceeds {available}")

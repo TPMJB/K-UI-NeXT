@@ -77,7 +77,11 @@ static void select_resident(void) {
     if(manifest.reader!=KUI_RETAIL_READER_STANDARD) {
         resident_blob=__retail_resident_scia_blob_start;
         resident_bytes=(size_t)(__retail_resident_scia_blob_end-resident_blob);
+#ifdef KUI_RETAIL_CE
+        resident_limit=KUI_RETAIL_CE_ASYNC_LIMIT; /* The Windows CE background reader. */
+#else
         resident_limit=KUI_RETAIL_ASYNC_LIMIT;
+#endif
         return;
     }
     switch(manifest.storage_transport) {
@@ -209,25 +213,42 @@ static const uint16_t ce_irq_code[21][2]={
     {0x6033,0xffff},{0x7001,0xffff},{0xc91f,0xffff},{0x2102,0xffff},
     {0xd100,0xff00},
 };
-static uint32_t ce_kernel[3];
+/* The same dispatch's start, its VBR+0x600 entry, up to the code above:
+ * the handler for the interrupt is called from a table indexed by INTEVT/8
+ * (the MOV.L literal of instruction 1), with CE's PR kept in R7 meanwhile,
+ * and a SYSINTR of 0 or 2 is handled apart. */
+static const uint16_t ce_entry_code[15][2]={
+    {0x567a,0xffff},{0xd000,0xff00},{0x6163,0xffff},{0x4109,0xffff},
+    {0x4101,0xffff},{0x011e,0xffff},{0x072a,0xffff},{0x410b,0xffff},
+    {0x0009,0xffff},{0x472a,0xffff},{0xd700,0xff00},{0x8800,0xffff},
+    {0x8900,0xff00},{0x8802,0xffff},{0x8900,0xff00},
+};
+static uint32_t ce_kernel[KUI_RETAIL_CE_KERNEL_WORDS];
 static uint32_t ce_literal(uint32_t at) {
     uint16_t code=*(const uint16_t *)(uintptr_t)at;
     return word((const uint8_t *)(uintptr_t)(((at&~3u)+4u)+(code&0xffu)*4u));
 }
+static bool ce_matches(uint32_t at,const uint16_t (*pattern)[2],unsigned count) {
+    const uint16_t *code=(const uint16_t *)(uintptr_t)at;
+    for(unsigned i=0;i<count;i++) if((code[i]&pattern[i][1])!=pattern[i][0]) return false;
+    return true;
+}
 /* Exactly one match in the body, each literal a word-aligned P1 RAM address,
- * or ce_kernel stays zero and the reader stops if CE needs it. */
+ * or ce_kernel stays zero and the reader stops if CE needs it. The handler
+ * table (for the background reader) is taken only from the matching entry
+ * and only where CE's kernel data keeps it: 0xC4 bytes after the pending
+ * mask in every kernel seen (KData + 0x404); otherwise it stays zero. */
 static void ce_find_kernel(uint32_t body,uint32_t bytes) {
     uint32_t found=0,at=0;
-    for(uint32_t p=body;p+sizeof(ce_irq_code)/2u<=body+bytes;p+=2u) {
-        const uint16_t *code=(const uint16_t *)(uintptr_t)p;
-        unsigned i=0;
-        while(i<21u && (code[i]&ce_irq_code[i][1])==ce_irq_code[i][0]) i++;
-        if(i==21u) { found++; at=p; }
-    }
+    for(uint32_t p=body;p+sizeof(ce_irq_code)/2u<=body+bytes;p+=2u)
+        if(ce_matches(p,ce_irq_code,21u)) { found++; at=p; }
     if(found!=1) return;
-    uint32_t value[3]={ce_literal(at+8u),ce_literal(at+22u),ce_literal(at+40u)};
+    uint32_t value[KUI_RETAIL_CE_KERNEL_WORDS]={ce_literal(at+8u),ce_literal(at+22u),ce_literal(at+40u),0};
     for(unsigned i=0;i<3;i++)
         if((value[i]&3u) || value[i]<0x8c010000u || value[i]>=KUI_RETAIL_RAM_END-40u) return;
+    const uint32_t entry=at-sizeof(ce_entry_code)/2u;
+    if(entry>=body && ce_matches(entry,ce_entry_code,15u) &&
+       ce_literal(entry+2u)==value[0]+0xc4u) value[3]=value[0]+0xc4u;
     memcpy(ce_kernel,value,sizeof(ce_kernel));
 }
 static uint32_t ce_load(const uint8_t *ip) {
@@ -280,8 +301,14 @@ static uint32_t ce_load(const uint8_t *ip) {
     /* Where the reader raises CE's disc interrupts for stream reads. */
     ce_find_kernel(plan.body.address,plan.body.bytes);
     if(ce_kernel[0])
-        retail_display_values("CE PEND  CE RING  RESCHED",ce_kernel,3);
+        retail_display_values("CE PEND  CE RING  RESCHED  ISR TABLE",ce_kernel,4);
     else retail_display_line("CE KERNEL INTERRUPTS NOT FOUND");
+    /* The background reader is reached through CE's handler table. */
+    if(manifest.reader!=KUI_RETAIL_READER_STANDARD && !ce_kernel[3]) {
+        retail_display_line("NO CE HANDLER TABLE - STANDARD READER");
+        manifest.reader=KUI_RETAIL_READER_STANDARD;
+        select_resident();
+    }
     /* Bootstrap 2 jumps to the body start, where the relay's trampoline
      * goes; a CE entry elsewhere has no known handoff yet. Only the SCI
      * resident is built CE-safe: it touches CE's stack (a virtual address)
@@ -330,9 +357,14 @@ void kui_retail_stage_main(const uint8_t *wire) {
         stopped("UNSUPPORTED BOOT LAYOUT",manifest.boot_bytes);
     if(manifest.storage_transport==KUI_STORAGE_SCIF) retire_launcher_serial();
     retail_display_line(kui_retail_storage_name(manifest.storage_transport));
+#ifdef KUI_RETAIL_CE
+    if(manifest.reader!=KUI_RETAIL_READER_STANDARD)
+        retail_display_line("BACKGROUND READER - CE INTERRUPT DELIVERY");
+#else
     if(manifest.reader!=KUI_RETAIL_READER_STANDARD)
         retail_display_line(manifest.reader==KUI_RETAIL_READER_ASYNC_EAGER?
             "BACKGROUND READER Y - 25 PER CALL":"BACKGROUND READER X - 20 PER CALL");
+#endif
     last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {
         if(card.transport!=KUI_STORAGE_IDE) {

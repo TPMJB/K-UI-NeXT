@@ -456,6 +456,72 @@ handlers from a table (`0x8c145c04` in ARMADA, KData + 0x404, entry
 INTEVT / 8 bytes), so a reader interrupt could be installed there and return
 SYSINTR 20 itself.
 
+## Background reader for Windows CE (X on the boot test's confirmation)
+
+The boot test's confirmation now offers two readers: **A** the standard one
+(as before) and **X** the background reader, built for CE. It aims at the
+FMV slowdown above: the card's blocks arrive by DMA while CE runs, and
+each is checked and placed by an interrupt instead of a GD call clocking
+every byte.
+
+How CE reaches it. CE owns the exception vectors, so the reader does not
+install its own (as the native background reader does). CE's dispatch calls
+interrupt handlers from a table, indexed by INTEVT / 8 (`KData + 0x404`,
+`0x8c145c04` in ARMADA). The stage finds the table in each kernel by the
+dispatch code that indexes it, and the stage screen shows it as `ISR TABLE`
+next to `CE PEND`, `CE RING` and `RESCHED`. The match was checked on
+ARMADA, Bust-a-Move 4 and Worms, and in all three the table is 0xC4 bytes
+after the pending mask. At CE's first GD call with its MMU on, the reader
+points the table's entries for the SCI's receive error and receive events
+(INTEVT 0x4E0 and 0x500, offsets 0x9C and 0xA0) at its own entry,
+`kui_retail_ce_isr`. It then raises the SCI's level only while a block is in
+flight. Calls made before that point (bootstrap 2 loading CE) read the way
+the native reader's calls do. If the table is not found, the stage shows
+`NO CE HANDLER TABLE - STANDARD READER` and the standard reader is used.
+
+What the interrupt fills. It writes only physical destinations: a DMAREAD's
+buffer, each DMA_TRANSFER of a stream (command 38, ARMADA's FMVs) and a
+PIOREAD into P1. When a transfer's last byte is written, the interrupt
+returns SYSINTR 21 (DMA end); a finished or failed request returns 20 (the
+drive's). If both are due, the second is raised as CE's dispatch would. CE's
+virtual buffers (a PIOREAD into its own memory, and every PIO stream,
+command 39, Worms) are written only inside CE's own calls. When the
+interrupt has a block for one of those, it raises the drive's interrupt so
+CE's driver calls back for it. Output past a transfer's end waits in a
+512-byte spill for the next transfer. Transfers of any size work, down to
+32 bytes.
+
+Safety. The handler runs with SR.BL set on the reader's private stack.
+GD calls mask interrupts, so the two never share that stack. It keeps
+CE's R4 to R7, PR and MAC, never touches CE's stack and never touches a
+virtual address. Should CE ever take the interrupt inside a GD call (an
+exception path that unmasks), the entry only drops the SCI's level, and the
+call raises it again. The resident sits below `0x8c00d800` with a 2 KiB
+stack up to bootstrap 2, at `0x8c00e000`. With the local SH compiler
+standing in for CI's, the image ends at `0x8c00cad8` and the worst-case
+stack is 404 of 2,000 bytes (call-graph check, entries `kui_retail_ce_irq`
+and the PIO stream's `read_part`).
+
+Expected effect. ARMADA's DMA paths (commands 17 and 38) should cost CE
+about a third of the CPU per KiB, overlapped with its own work. PIO paths
+(Worms) gain little, since their copies still happen in CE's calls.
+
+What to look at:
+- The stage screen: `BACKGROUND READER - CE INTERRUPT DELIVERY` and a
+  nonzero `ISR TABLE`.
+- The status line during ARMADA's intro: **KIB/S** (was 442) and **BUSY
+  PCT** (time in the reader, its interrupt included), compared with the
+  same scene on **A**.
+- On a stop or A+B+X+Y+Start: `IRQ BLKS` vs `CALLBLKS` (blocks the
+  interrupt placed vs calls), `HOOKS RELEASES ISR` (`ISR 1`: the handlers
+  are installed), and the stream's error counters.
+
+Host test: `test-retail-async-ce` covers DMAREAD by interrupt, a virtual
+PIOREAD by calls, DMA streams with 32-byte to 64 KiB transfers in 2048- and
+2352-byte sectors, PIO streams through `read_part`, abort, failures, the
+table being replaced, a level dropped inside a call, and a 200-read stress
+run with faults. Every byte is compared with the image reader's.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the

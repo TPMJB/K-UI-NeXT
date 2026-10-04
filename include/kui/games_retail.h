@@ -7,7 +7,10 @@
 /* Not a manifest reader: prepare_reader given this prepares the Windows CE
  * boot test instead of a launch. It needs a Windows CE image and the CE probe
  * package, whose stage loads, checks and starts the CE kernel with a tracing
- * reader that stops at the first disc request it cannot serve. */
+ * reader that stops at the first disc request it cannot serve. Combined with
+ * a background reader (KUI_GAMES_RETAIL_CE_PROBE | KUI_RETAIL_READER_ASYNC),
+ * the test uses the CE package's background reader, which CE's own interrupt
+ * dispatch reaches. */
 #define KUI_GAMES_RETAIL_CE_PROBE 0x100u
 /* Single storage worker only. Prepare one native GD-ROM launch;
  * complete IP/boot CRCs and bounded physical extent map are read-only. Success

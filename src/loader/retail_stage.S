@@ -354,7 +354,12 @@ __retail_resident_ide_blob_end:
     .align 2
     .global __retail_resident_scia_blob_start,__retail_resident_scia_blob_end
 __retail_resident_scia_blob_start:
+#ifdef KUI_RETAIL_CE
+    /* The Windows CE boot test's background reader. */
+    .incbin "build/retail-ce/resident-scia.bin"
+#else
     .incbin "build/retail/resident-scia.bin"
+#endif
     .align 2
 __retail_resident_scia_blob_end:
 

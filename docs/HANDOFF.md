@@ -1,5 +1,28 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: background reader through CE's interrupt table (2026-10-04 UTC)
+
+For the slow FMVs: **X** on the Windows CE boot test's confirmation launches
+with a CE build of the background SCI reader (A keeps the standard one). The
+stage finds CE's interrupt handler table (KData + 0x404, matched in ARMADA,
+Bust-a-Move 4 and Worms). The reader puts its entry in the SCI's two slots
+at CE's first GD call with the MMU on. Blocks then arrive by DMA and are
+placed by the interrupt into physical destinations: DMAREAD, and each
+DMA_TRANSFER of a command-38 stream. The interrupt returns SYSINTR 21 or 20
+as CE's driver expects. CE's virtual buffers (PIO reads, command-39
+streams) are filled in CE's calls, with the drive's interrupt bringing those
+calls. Without a table the stage falls back to the standard reader.
+
+Code: `retail_async.c` (`KUI_RETAIL_CE`: pieces, a 512-byte spill, install,
+wake), `retail_gd.c` (`kui_retail_gd_stream_progress`),
+`retail_resident.c`/`.S` (`kui_retail_ce_irq`, `kui_retail_ce_isr`) and
+`build/retail-ce/resident-scia` (below `0x8c00d800`, 2 KiB stack to
+`0x8c00e000`). Tests: `test-retail-async-ce` (new); package, shell and
+launcher cases. Details:
+[windows-ce-placement-test.md](windows-ce-placement-test.md#background-reader-for-windows-ce-x-on-the-boot-tests-confirmation).
+To test: ARMADA's intro with A, then with X. Compare KIB/S and BUSY PCT on
+the status line.
+
 ## Games: the launch map holds 99 tracks (2026-10-04 UTC)
 
 Bust-a-Move 4 (25 tracks) and MDK2 (31, native) were refused: the map held

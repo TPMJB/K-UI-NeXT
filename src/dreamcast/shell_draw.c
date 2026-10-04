@@ -165,7 +165,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "A Start test   B Image details":"B Image details") :
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM ? (kui_shell_games_retail_ready(s)?
             "A Launch   X/Y Background reader   B Details":kui_shell_games_ce_probe_ready(s)?
-            "A Start test   B Details":"B Image details") :
+            "A Start test   X Background reader   B Details":"B Image details") :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
@@ -1369,6 +1369,7 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         label(p,48,354,AMBER,"Power cycle to return to the launcher.");
         if(v->busy && v->app_status && v->app_status->message[0])
             label(p,48,380,CYAN,v->app_status->message);
+        else label(p,48,380,MUTED,"X: background reader test (faster video).");
         return;
     }
     title(p,40,108,"Games / Launch game");

@@ -79,6 +79,20 @@ class RetailPackage(unittest.TestCase):
         self.assertIn(f"__retail_hook_stack_bottom = 0x{layout.CE_RESIDENT_LIMIT:08x};", script)
         self.assertIn(f"__retail_hook_stack = 0x{layout.CE_HOOK_STACK:08x};", script)
         self.assertIn(f"__retail_resident_bss_end <= 0x{layout.CE_RESIDENT_LIMIT:08x},", script)
+        # Its background reader: a larger image, its 2 KiB stack ending where
+        # bootstrap 2 begins.
+        for suffix, value in (("CE_ASYNC_LIMIT", layout.CE_ASYNC_RESIDENT_LIMIT),
+                              ("CE_ASYNC_HOOK_STACK", layout.CE_ASYNC_HOOK_STACK)):
+            with self.subTest(suffix=suffix):
+                found = re.search(r"^#define KUI_RETAIL_" + suffix + r"\s+(\w+)\s*$", source, re.M)
+                self.assertEqual(int(found.group(1), 0), value)
+        self.assertEqual(layout.CE_ASYNC_HOOK_STACK, 0x8C00E000)
+        self.assertEqual(layout.CE_ASYNC_HOOK_STACK - layout.CE_ASYNC_RESIDENT_LIMIT, 0x800)
+        script = (ROOT / "src/loader/retail_resident_ce_async.ld").read_text()
+        self.assertIn(f"__retail_hook_stack_bottom = 0x{layout.CE_ASYNC_RESIDENT_LIMIT:08x};", script)
+        self.assertIn(f"__retail_hook_stack = 0x{layout.CE_ASYNC_HOOK_STACK:08x};", script)
+        self.assertIn(f"__retail_resident_bss_end <= 0x{layout.CE_ASYNC_RESIDENT_LIMIT:08x},", script)
+        self.assertIn("ASSERT(_kui_retail_ce_kernel == 0x8c008324", script)
         # Both packages' headers record the standard reader limit.
         entry = (ROOT / "src/loader/retail_entry.S").read_text()
         self.assertIn(".long KUI_RETAIL_STANDARD_LIMIT", entry)
@@ -294,12 +308,33 @@ class CallGraphStack(unittest.TestCase):
                          f'label: "../../src/loader/{label or "x.c:1:1"}" }}')
         return "\n".join(lines) + "\n}\n"
 
-    def check(self, frames=None, calls=None, kind="static", available=464):
+    @classmethod
+    def ce_graph(cls):
+        """Windows CE's: CE's dispatch enters kui_retail_ce_irq, and a PIO
+        stream's transfer reads through the reader (read_part)."""
+        frames = dict(cls.frames, kui_retail_ce_irq=12, kui_retail_async_read_part=24)
+        calls = cls.calls + [("kui_retail_ce_irq", "kui_retail_async_irq", ""),
+                             ("kui_retail_async_read_part", "deliver", "")]
+        return frames, calls
+
+    def check(self, frames=None, calls=None, kind="static", available=464, ce=False):
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "lto").mkdir()
             (Path(tmp) / "lto/r.ltrans0.ltrans.ci").write_text(
                 self.graph(frames or self.frames, calls or self.calls, kind))
-            return check_retail_stack.check(tmp, available)
+            return check_retail_stack.check(tmp, available, ce)
+
+    def test_windows_ce_entry_and_read_part(self):
+        frames, calls = self.ce_graph()
+        result = self.check(frames, calls, ce=True)
+        # entry 28 + ce_irq 12 + irq 16 + deliver 64 + fetch 40 + transfer 24.
+        self.assertEqual(result["paths"]["kui_retail_ce_irq"]["bytes"], 184)
+        # dispatch 48 + gd 172 + guest 0 + read_part 24 + deliver 64 + fetch 40
+        # + transfer 24: the GD service's indirect calls reach read_part too.
+        self.assertEqual(result["paths"]["kui_retail_resident_dispatch"]["bytes"], 372)
+        self.assertNotIn("kui_retail_async_irq", result["paths"])
+        with self.assertRaisesRegex(ValueError, "Missing callback frame: kui_retail_async_read_part"):
+            self.check(ce=True)
 
     def test_deepest_path_per_entry_with_callbacks(self):
         result = self.check()
@@ -446,6 +481,23 @@ class RetailLinkedLayout(unittest.TestCase):
         self.symbols["resident-sci"].update({"__retail_hook_stack": layout.CE_HOOK_STACK,
                                              "__retail_hook_stack_bottom": layout.CE_RESIDENT_LIMIT})
         self.write()
+        # So has its background reader, reached through CE's handler table.
+        with self.assertRaisesRegex(ValueError, "Missing retail executable symbol: _kui_retail_ce_isr"):
+            check_directory(self.directory, ce=True)
+        rs = self.symbols["resident-scia"]
+        for index, symbol in enumerate(("kui_retail_ce_isr", "kui_retail_ce_irq",
+                                        "kui_retail_async_read_part")):
+            rs["_" + symbol] = layout.RESIDENT_ADDRESS + 64 + index * 4
+        self.write()
+        with self.assertRaisesRegex(ValueError, "resident-scia hook stack"):
+            check_directory(self.directory, ce=True)
+        rs.update({"__retail_hook_stack": layout.CE_ASYNC_HOOK_STACK,
+                   "__retail_hook_stack_bottom": layout.CE_ASYNC_RESIDENT_LIMIT})
+        self.write()
+        with self.assertRaisesRegex(ValueError, "Missing callback frame: kui_retail_async_read_part"):
+            check_directory(self.directory, ce=True)
+        report = self.directory / "scia/lto/resident-scia.elf.ltrans0.ltrans.ci"
+        report.write_text(CallGraphStack.graph(*CallGraphStack.ce_graph()))
         with self.assertRaisesRegex(ValueError, "relocation header mismatch"):
             check_directory(self.directory, ce=True)
         self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]), ce=True)

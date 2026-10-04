@@ -48,11 +48,20 @@
  * and keep a 2 KiB guarded stack above it, all below bootstrap 2. */
 #define KUI_RETAIL_CE_LIMIT 0x8c00c800
 #define KUI_RETAIL_CE_HOOK_STACK 0x8c00d000
-/* Three words in that reader's entry section the stage fills in: the
- * addresses of CE's pending-interrupt mask, interrupt ring head and
- * reschedule flag (retail_resident.S, kui_retail_ce_kernel). */
+/* The Windows CE background reader (KUI_RETAIL_CE and KUI_RETAIL_ASYNC).
+ * Once booted, CE uses nothing below its kernel image at 0x8c010000 (its RAM
+ * lies above that), so this reader may fill everything below D800 and keep a
+ * 2 KiB guarded stack above it, ending where bootstrap 2 begins. */
+#define KUI_RETAIL_CE_ASYNC_LIMIT 0x8c00d800
+#define KUI_RETAIL_CE_ASYNC_HOOK_STACK 0x8c00e000
+/* Four words in the CE readers' entry section the stage fills in: the
+ * addresses of CE's pending-interrupt mask, interrupt ring head, reschedule
+ * flag and interrupt handler table (retail_resident.S, kui_retail_ce_kernel). */
 #define KUI_RETAIL_CE_KERNEL 0x8c008324
-#ifdef KUI_RETAIL_ASYNC
+#define KUI_RETAIL_CE_KERNEL_WORDS 4
+#if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)
+#define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_CE_ASYNC_LIMIT
+#elif defined(KUI_RETAIL_ASYNC)
 #define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_ASYNC_LIMIT
 #elif defined(KUI_RETAIL_CE)
 #define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_CE_LIMIT
@@ -62,6 +71,8 @@
 #define KUI_RETAIL_HOOK_STACK_BOTTOM KUI_RETAIL_RESIDENT_LIMIT
 #ifndef KUI_RETAIL_CE
 #define KUI_RETAIL_HOOK_STACK 0x8c00c000
+#elif defined(KUI_RETAIL_ASYNC)
+#define KUI_RETAIL_HOOK_STACK KUI_RETAIL_CE_ASYNC_HOOK_STACK
 #else
 #define KUI_RETAIL_HOOK_STACK KUI_RETAIL_CE_HOOK_STACK
 #endif
