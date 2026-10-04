@@ -716,6 +716,63 @@ static void stream_reads(void) {
     CHECK(call(KUI_GD_DMA_CHECK, 0, STATUS) == -1);
     ctx.deny = 0;
 }
+/* Windows CE's PIO stream: PIO_CHECK offers up to 4 KiB, PIO_TRANSFER
+ * copies it into the CPU's (here virtual) buffer and makes the registered
+ * callback due, with the drive's interrupt. */
+static void pio_stream_reads(void) {
+    reset(); memset(&part, 0, sizeof(part)); memset(virt, 0x5a, sizeof(virt));
+    service.read_part = read_part;
+    stream_params(45000, 4);
+    int32_t token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_PIOREAD_STREAM, PARAM);
+    CHECK(token > 0 && service.status == KUI_RETAIL_GD_STREAMING);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_RETAIL_GD_STREAMING);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && !part.calls);
+    CHECK(call(KUI_GD_PIO_CALLBACK, 0x01de5724u, 0x0c3b1000u) == 0);
+    CHECK(service.pio_callback == 0x01de5724u && service.pio_argument == 0x0c3b1000u);
+    put(STATUS, 0xffffffffu);
+    CHECK(call(KUI_GD_PIO_CHECK, (uint32_t)token, STATUS) == 0 && get(STATUS) == 0x1000);
+    /* Refused: wrong token, more than offered, an unmapped destination. */
+    put(PIECE, VIRT + 0x100); put(PIECE + 4, 0x1000);
+    CHECK(call(KUI_GD_PIO_TRANSFER, (uint32_t)token + 1, PIECE) == -1);
+    put(PIECE + 4, 0x1002);
+    CHECK(call(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == -1);
+    put(PIECE, 0x02000000u); put(PIECE + 4, 0x1000);
+    CHECK(call(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == -1);
+    CHECK(!part.calls && !service.callback_due);
+    /* Pieces need not be sector- or 32-byte-sized. */
+    put(PIECE, VIRT + 0x102); put(PIECE + 4, 0x7fe);
+    service.interrupts = 0;
+    CHECK(call(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == 0);
+    CHECK(service.callback_due && service.interrupts == KUI_RETAIL_GD_IRQ_DRIVE);
+    CHECK(part.skip == 0 && part.bytes == 0x7fe && service.pending);
+    for(uint32_t i = 0; i < 0x7fe; ++i) CHECK(virt[0x102 + i] == pattern(45000, i));
+    CHECK(virt[0x101] == 0x5a && virt[0x102 + 0x7fe] == 0x5a);
+    service.callback_due = 0;
+    CHECK(call(KUI_GD_PIO_CHECK, (uint32_t)token, STATUS) == 0 && get(STATUS) == 0x1000);
+    put(PIECE, VIRT + 0x2000); put(PIECE + 4, 0x1000);
+    CHECK(call(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == 0 && part.skip == 0x7fe);
+    CHECK(call(KUI_GD_PIO_CHECK, (uint32_t)token, STATUS) == 0 && get(STATUS) == 0x802);
+    put(PIECE, VIRT + 0x4000); put(PIECE + 4, 0x802);
+    CHECK(call(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == 0 && !service.pending);
+    for(uint32_t i = 0; i < 0x802; ++i)
+        CHECK(virt[0x4000 + i] == pattern(45000 + (0x17fe + i) / 2048, (0x17fe + i) % 2048));
+    CHECK(service.diag.sectors_read == 4 && service.position_lba == 45003);
+    /* The driver's callback then finds nothing left and removes itself. */
+    CHECK(call(KUI_GD_PIO_CHECK, (uint32_t)token, STATUS) == 0 && get(STATUS) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(get(STATUS + 8) == 4 * 2048);
+    CHECK(call(KUI_GD_PIO_CALLBACK, 0, 0) == 0 && !service.pio_callback);
+    /* A failed piece ends the command; INIT forgets the callback. */
+    part.fail = part.calls + 1;
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_PIOREAD_STREAM, PARAM);
+    CHECK(token > 0 && call(KUI_GD_PIO_CALLBACK, 0x01de5724u, 1) == 0);
+    put(PIECE, VIRT); put(PIECE + 4, 0x800);
+    CHECK(call(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == 0);
+    CHECK(!service.pending && service.error == KUI_GD_ERROR_IO && service.callback_due);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(call(KUI_GD_INIT, 0, 0) == 0 && !service.pio_callback && !service.callback_due);
+    part.fail = 0;
+}
 #endif
 int main(void) {
     for(use_manifest_tracks=0;use_manifest_tracks<2;use_manifest_tracks++) {
@@ -725,7 +782,7 @@ int main(void) {
         large_reads(); paced_steps(); cancel_failures(); metadata(); silent_cd_audio(); version_query(); subcode_query(); bounds_and_modes();
 #endif
 #ifdef KUI_RETAIL_CE
-        virtual_pointers(); stream_reads();
+        virtual_pointers(); stream_reads(); pio_stream_reads();
 #endif
     }
     printf("retail GD service: %u checks passed\n", assertions);

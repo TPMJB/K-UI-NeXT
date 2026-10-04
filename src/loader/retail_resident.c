@@ -42,6 +42,9 @@ volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
 volatile uint32_t kui_retail_hook_caller[2];
 static uint32_t ce_calls[4][4], ce_count;
 extern volatile uint32_t kui_retail_ce_kernel[3];
+/* A callback the hook's exit makes once the lock is released: function and
+ * argument (retail_resident.S, .Ldeferred_call); zero when none. */
+volatile uint32_t kui_retail_ce_deferred[2];
 static enum kui_game_result image_result; /* The last image read's, for the trace. */
 /* The GD service hands RAM over as P1 (DMA destinations converted from
  * physical); anything else is one of CE's virtual addresses. */
@@ -508,6 +511,13 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
         if(service.interrupts & KUI_RETAIL_GD_IRQ_DMA_END) ce_raise(21u);
         if(service.interrupts & KUI_RETAIL_GD_IRQ_DRIVE) ce_raise(20u);
         service.interrupts = 0;
+    }
+    /* A PIO stream's callback, due after a transfer, is made when this
+     * EXEC returns, as the BIOS would make it within its own EXEC. */
+    if(r7 == KUI_GD_EXEC && service.callback_due && service.pio_callback) {
+        kui_retail_ce_deferred[1] = service.pio_argument;
+        kui_retail_ce_deferred[0] = service.pio_callback;
+        service.callback_due = 0;
     }
     meter_call(started);
 #endif

@@ -35,6 +35,14 @@ enum kui_retail_gd_command {
  * while one is pending and each step raises the drive's interrupt, so CE's
  * driver continues on that interrupt instead of sleeping a 25 ms tick. */
 #define KUI_RETAIL_GD_DMAREAD_STREAM 38u
+/* Its PIO twin (PIOREAD_STREAM_EX), same params: the driver registers a
+ * callback (PIO_CALLBACK), then moves pieces of at most what PIO_CHECK
+ * offers (4 KiB) with PIO_TRANSFER {destination, bytes} into its own
+ * (virtual) buffer, and its callback, made when a transfer ends, moves the
+ * next. Transfers complete at once; the callback is then due and the drive's
+ * interrupt raised so that CE's driver calls EXEC, after which the adapter
+ * makes the callback (callback_due, pio_callback, pio_argument). */
+#define KUI_RETAIL_GD_PIOREAD_STREAM 39u
 #define KUI_RETAIL_GD_STREAMING 3
 enum kui_retail_gd_interrupt {
     KUI_RETAIL_GD_IRQ_DMA_END = 1, KUI_RETAIL_GD_IRQ_DRIVE = 2
@@ -70,6 +78,7 @@ struct kui_retail_gd {
                      uint32_t skip, uint32_t bytes, void *output);
     uint32_t interrupts; /* KUI_RETAIL_GD_IRQ_* raised; the adapter clears. */
     uint32_t xfer_destination, xfer_left; /* The stream's current DMA transfer. */
+    uint32_t pio_callback, pio_argument, callback_due; /* A PIO stream's callback. */
 #endif
     struct kui_retail_gd_diagnostics diag;
 };

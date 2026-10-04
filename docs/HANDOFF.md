@@ -1,5 +1,15 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: PIO stream reads with the driver's callback (2026-10-04 UTC)
+
+Worms Armageddon stopped on command 39 (PIOREAD_STREAM_EX). CE build: GD
+service `pio_check`/`pio_transfer` and PIO_CALLBACK storage
+(`pio_callback`, `pio_argument`, `callback_due`); the CE reader queues a due
+callback on EXEC (`kui_retail_ce_deferred`) and `retail_resident.S`
+`.Ldeferred_call` makes it after unlocking, in the caller's restored
+context (16-byte home area, GBR kept). Host: `pio_stream_reads`. Bust-a-Move
+4 was refused by the launcher; message pending.
+
 ## Windows CE: no 25 ms sleeps between reads; rate readout (2026-10-04 UTC)
 
 CE's tick is 25 ms (all three kernels), so the driver's Sleep(5) between

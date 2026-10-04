@@ -136,6 +136,12 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov #0,r2
     mov.l r2,@r1
     mov r9,r0
+#ifdef KUI_RETAIL_CE
+    mov.l .Ldeferred,r1
+    mov.l @r1,r2
+    tst r2,r2
+    bf .Ldeferred_call
+#endif
     bra .Lreturn
     nop
 .Lbusy:
@@ -173,6 +179,42 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 #endif
     rts
     nop
+#ifdef KUI_RETAIL_CE
+/* Windows CE's PIO stream: the BIOS calls the CD driver's callback when a
+ * PIO transfer ends. The service marks it due; it is made here, after the
+ * lock is released, in the caller's own context (its SR, stack and R8..R14
+ * restored, as if the firmware had called it within this call), and the
+ * call's result is then returned as usual. Microsoft's SH convention gives
+ * a callee 16 bytes at the top of the stack to keep R4..R7; GBR is kept. */
+.Ldeferred_call:
+    mov #0,r3
+    mov.l r3,@r1
+    mov.l @(4,r1),r4
+    mov r8,r15
+    mov.l @(32,r15),r1
+    ldc r1,sr
+    mov.l @r15+,r14
+    mov.l @r15+,r13
+    mov.l @r15+,r12
+    mov.l @r15+,r11
+    mov.l @r15+,r10
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    lds.l @r15+,pr
+    mov.l @r15+,r1
+    sts.l pr,@-r15
+    mov.l r0,@-r15
+    stc.l gbr,@-r15
+    add #-16,r15
+    jsr @r2
+    nop
+    add #16,r15
+    ldc.l @r15+,gbr
+    mov.l @r15+,r0
+    lds.l @r15+,pr
+    rts
+    nop
+#endif
     .align 2
 #ifdef KUI_RETAIL_CE
 /* Windows CE: interrupts masked, SR.BL left clear, so a TLB miss on CE's
@@ -192,6 +234,7 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Lcaller_sr: .long C_SYMBOL(kui_retail_hook_sr)
 #ifdef KUI_RETAIL_CE
 .Lcaller: .long C_SYMBOL(kui_retail_hook_caller)
+.Ldeferred: .long C_SYMBOL(kui_retail_ce_deferred)
 #endif
 
 /* Menu command 1 (return to the BIOS menu; A+B+X+Y+Start in most games)

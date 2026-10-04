@@ -60,7 +60,7 @@ static void reset(struct kui_retail_gd *s) {
     s->pending = 0; s->command = 0; s->status = KUI_GD_NOT_FOUND;
     s->completed_bytes = 0; s->error = 0; s->drive_status = 1;
 #ifdef KUI_RETAIL_CE
-    s->xfer_left = 0;
+    s->xfer_left = 0; s->pio_callback = 0; s->callback_due = 0;
 #endif
 }
 #ifdef KUI_RETAIL_CE
@@ -126,14 +126,14 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     if(s->pending) return 0;
     uint32_t nparams = 0, p[4] = {0}, bytes = 0, destination = 0, lba = 0;
 #ifdef KUI_RETAIL_CE
-    const int stream = cmd == KUI_RETAIL_GD_DMAREAD_STREAM;
+    const int stream = cmd == KUI_RETAIL_GD_DMAREAD_STREAM || cmd == KUI_RETAIL_GD_PIOREAD_STREAM;
     if(stream && !s->read_part) return 0;
 #else
     const int stream = 0;
 #endif
     switch(cmd) {
 #ifdef KUI_RETAIL_CE
-    case KUI_RETAIL_GD_DMAREAD_STREAM: nparams = 3; break;
+    case KUI_RETAIL_GD_DMAREAD_STREAM: case KUI_RETAIL_GD_PIOREAD_STREAM: nparams = 3; break;
 #endif
     case KUI_GD_PIOREAD: case KUI_GD_DMAREAD:
     case KUI_RETAIL_GD_SET_MODE: case KUI_RETAIL_GD_REQ_STAT: nparams = 4; break;
@@ -285,6 +285,7 @@ static int32_t execute(struct kui_retail_gd *s) {
 #ifdef KUI_RETAIL_CE
     /* A stream's bytes move only within DMA transfers. */
     if(s->command == KUI_RETAIL_GD_DMAREAD_STREAM) { stream_step(s); return 0; }
+    if(s->command == KUI_RETAIL_GD_PIOREAD_STREAM) return 0;
 #endif
     s->executing = 1;
     if(s->command == KUI_GD_PIOREAD || s->command == KUI_GD_DMAREAD) {
@@ -458,6 +459,55 @@ static int32_t dma_check(struct kui_retail_gd *s, uint32_t address) {
     put32(out, s->xfer_left);
     return s->xfer_left ? 1 : 0;
 }
+/* PIO_CHECK for a PIO stream (PIOREAD_STREAM_EX): no transfer is ever in
+ * progress (each completes at once), so 0, with the bytes the next
+ * PIO_TRANSFER may take: up to 4 KiB of what remains, 0 when none does. */
+static int32_t pio_check(struct kui_retail_gd *s, uint32_t token, uint32_t address) {
+    uint8_t *out = guest(s, address, 4, 4, 1);
+    if(!out) return -1;
+    uint32_t n = 0;
+    if(s->pending && s->command == KUI_RETAIL_GD_PIOREAD_STREAM && token == s->token) {
+        n = KUI_RETAIL_GD_STEP_SECTORS * s->sector_bytes;
+        if(n > s->request_bytes - s->completed_bytes) n = s->request_bytes - s->completed_bytes;
+    }
+    put32(out, n);
+    return 0;
+}
+/* PIO_TRANSFER: params {destination, bytes}, the CPU's (virtual) buffer and
+ * no more than PIO_CHECK offered. The bytes are copied at once; the driver's
+ * callback is then due (the adapter makes it after its next EXEC, as the
+ * BIOS would when the transfer ends) with the drive's interrupt to bring
+ * that EXEC about. The last bytes complete the command. */
+static int32_t pio_transfer(struct kui_retail_gd *s, uint32_t token, uint32_t address) {
+    if(!s->pending || s->command != KUI_RETAIL_GD_PIOREAD_STREAM || token != s->token)
+        return -1;
+    const uint8_t *p = guest(s, address, 8, 4, 0);
+    if(!p) return -1;
+    uint32_t destination = get32(p), bytes = get32(p + 4);
+    s->diag.last_destination = destination;
+    uint32_t offered = KUI_RETAIL_GD_STEP_SECTORS * s->sector_bytes;
+    if(!bytes || bytes > offered || bytes > s->request_bytes - s->completed_bytes) return -1;
+    uint8_t *out = guest(s, destination, bytes, 2, 1);
+    if(!out) return -1;
+    uint32_t before = s->completed_bytes / s->sector_bytes;
+    ++s->diag.read_steps;
+    if(s->read_part(s->ops.context, s->lba, s->sector_bytes, s->completed_bytes, bytes, out))
+        s->error = KUI_GD_ERROR_IO;
+    else {
+        s->completed_bytes += bytes;
+        uint32_t after = s->completed_bytes / s->sector_bytes;
+        s->diag.sectors_read += after - before;
+        if(after) s->position_lba = s->lba + after - 1u;
+        s->drive_status = 1;
+    }
+    s->callback_due = 1;
+    s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
+    if(s->error || s->completed_bytes == s->request_bytes) {
+        s->status = s->error ? KUI_GD_FAILED : KUI_GD_COMPLETED;
+        s->pending = 0; s->diag.last_error = s->error;
+    }
+    return 0;
+}
 #endif
 #ifdef KUI_RETAIL_GD_ASYNC
 void kui_retail_gd_progress(struct kui_retail_gd *s, uint32_t sectors, uint32_t error) {
@@ -508,11 +558,20 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
             s->diag.last_error = s->error; s->status = KUI_GD_FAILED; result = 0;
         }
         break;
+#ifdef KUI_RETAIL_CE
+    case KUI_GD_PIO_CALLBACK: /* Function and its argument; 0 removes it. */
+        s->pio_callback = r4; s->pio_argument = r5; result = 0;
+        break;
+    case KUI_GD_DMA_CALLBACK:
+#else
     case KUI_GD_DMA_CALLBACK: case KUI_GD_PIO_CALLBACK:
+#endif
         if(!r4) result = 0;
         break;
 #ifdef KUI_RETAIL_CE
     case KUI_GD_DMA_TRANSFER: result = transfer(s, r4, r5); break;
+    case KUI_GD_PIO_TRANSFER: result = pio_transfer(s, r4, r5); break;
+    case KUI_GD_PIO_CHECK: result = pio_check(s, r4, r5); break;
     case KUI_GD_DMA_CHECK: result = dma_check(s, r5); break;
 #endif
     default: break;

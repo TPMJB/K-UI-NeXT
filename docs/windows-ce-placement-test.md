@@ -408,6 +408,33 @@ Next build (CE reader only):
   The clock is CE's millisecond count; time inside the reader comes from
   TMU0's count, which is only read.
 
+## Console result: Worms Armageddon on fc08d071ed7d (2026-10-04)
+
+Worms stopped after 26 calls with `GD REQUEST REJECTED`: command `0x27` (39,
+PIOREAD_STREAM_EX), parameters at `0205FB5C`, caller `01E13058`. Its
+`wsegacd.dll` is a slightly different build from ARMADA's (code `0x4c43`
+bytes, Bust-a-Move 4's matches ARMADA's) but uses the same PIO stream design:
+its scatter-gather read path takes PIO for buffers in several pieces.
+
+PIO stream (both drivers): REQUEST 39 {FAD, sectors, 0}; on the first CHECK
+of 3 the driver registers a callback (PIO_CALLBACK, function 11, with its
+device as argument) and calls it once itself. The callback: PIO_CHECK
+(function 13) must return 0 and report the bytes available; 0 bytes means
+done (it removes the callback); otherwise PIO_TRANSFER (function 12)
+{destination, min(piece, available)} and it advances its piece. The BIOS
+calls the callback again when that transfer ends.
+
+Next build (CE reader): PIO_CHECK offers up to 4 KiB; PIO_TRANSFER copies it
+into the driver's (virtual) buffer at once, marks the callback due and
+raises SYSINTR 20; the driver's interrupt thread then calls EXEC, and the
+hook's exit makes the callback after EXEC returns, with the lock released
+and the caller's own SR, stack, R8 to R14 and GBR (`.Ldeferred_call`), as if
+the BIOS had made it within EXEC. Nested GD calls from the callback are
+ordinary calls.
+
+Bust-a-Move 4 did not start from the launcher; the reason (its detail
+screen's message) is not known yet.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the
