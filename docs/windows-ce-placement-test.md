@@ -293,6 +293,16 @@ Next build:
 - Still missing for ARMADA: commands 26 and 39 (PIO stream), functions 12
   and 13, and 11 with a callback.
 
+## Console result: stream-read build bddec88525e8 (2026-10-04)
+
+Stopped before CE: `BOOTSTRAP 2 REACHED GAME ENTRY` (stack `8C00F400`, SR
+`700000F0`, cache `00000000`, as before), then `BOOTSTRAP ALTERED RESIDENT`.
+A K-UI bug, not bootstrap 2: the stage writes CE's kernel addresses into
+the reader's slot after copying the reader in, then compared the whole
+reader with its original copy. Next build: that comparison skips the slot
+(checked against the addresses instead) and its detail is now the offset
+of the first changed byte.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the

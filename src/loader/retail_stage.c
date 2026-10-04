@@ -423,8 +423,19 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     if(crc!=boot_crc) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     size_t bytes=resident_bytes;
-    if(memcmp(resident,resident_blob,bytes))
-        stopped("BOOTSTRAP ALTERED RESIDENT",0);
+#ifdef KUI_RETAIL_CE
+    /* Except the slot the stage filled with CE's kernel addresses. */
+    const size_t slot=KUI_RETAIL_CE_KERNEL-KUI_RETAIL_RESIDENT_ADDRESS;
+    if(memcmp(resident+slot,ce_kernel,sizeof(ce_kernel)))
+        stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)slot);
+#endif
+    for(size_t i=0;i<bytes;i++) {
+#ifdef KUI_RETAIL_CE
+        if(i-slot<sizeof(ce_kernel)) continue;
+#endif
+        /* Detail: the offset of the first changed byte. */
+        if(resident[i]!=resident_blob[i]) stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)i);
+    }
     retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
 #ifdef KUI_RETAIL_CE
     retail_display_hex("BODY CRC32",crc);

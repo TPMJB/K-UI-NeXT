@@ -1,5 +1,13 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: resident check fix (2026-10-04 UTC)
+
+Build `bddec88525e8` stopped at `BOOTSTRAP ALTERED RESIDENT` (detail 0):
+the stage's own post-bootstrap comparison of the reader with its blob saw
+the kernel-address slot it had filled in (`KUI_RETAIL_CE_KERNEL`). The
+relay now compares around the slot, checks the slot holds the addresses,
+and reports the first changed offset as the detail.
+
 ## Windows CE: stream reads with CE's own interrupts (2026-10-04 UTC)
 
 Build `ec6d39cc5372` on ARMADA stopped with `GD REQUEST REJECTED`: command
