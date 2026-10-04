@@ -1,5 +1,27 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: count incomplete DMA and blocking work (2026-10-04)
+
+The next experiment adds CE-only counters to the restored `e9ff2353c3cd`
+reader. It does not reintroduce the rejected batched receiver or change
+transfer ordering, retries, CRC, IRQ priorities, queue size or live overlay.
+The goal is to choose a smaller blocking-work change from console evidence,
+not claim a speed gain from this diagnostic build. See
+[counter definitions and test procedure](evidence/ce-blocking-diagnostics-2026-10-04.md).
+
+The return screen replaces last-command and queue rows with incomplete-DMA
+bins, late controller snapshots, token work and maximum polled blocks per
+delivery visit. All values remain hexadecimal; one photo captures the whole
+screen. The existing CE-owned timer cannot safely measure arbitrarily long
+masked intervals, so these counts must not be reported as microseconds.
+
+The older DreamShell-based menu was also compared read-only. Its cached
+PCM callback only copied samples, and its UI status mutex was released
+before sound-driver work. Current K-UI decodes Ogg while holding the mutex
+that the main loop acquires before processing input. Separate input/render
+scheduling and PVR rendering are further differences. No menu implementation
+or code from that repository is included in this CE experiment.
+
 ## Windows CE: batched recovery rejected, restore CRC baseline (2026-10-04)
 
 Owner reports `bd2b7fb7424b` made ARMADA worse and Worms Armageddon no

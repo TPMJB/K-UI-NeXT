@@ -209,7 +209,13 @@ static void install_hook(void) {
 }
 #ifdef KUI_RETAIL_ASYNC
 /* Counter rows for both screens; every counter is a uint32_t in order. */
+#ifdef KUI_RETAIL_CE
+_Static_assert(sizeof(struct kui_sci_stream_stats) == 20u * 4u, "CE stream counters");
+_Static_assert(offsetof(struct kui_retail_async, pio_bytes) ==
+               offsetof(struct kui_retail_async, polled_irq_max) + 12u, "CE work counters");
+#else
 _Static_assert(sizeof(struct kui_sci_stream_stats) == 11u * 4u, "stream counters");
+#endif
 _Static_assert(sizeof(struct kui_retail_async_stats) == 7u * 4u, "reader counters");
 _Static_assert(offsetof(struct kui_retail_async_release, vbr_changes) ==
                offsetof(struct kui_retail_async_release, rehooks) + 16u, "release counters");
@@ -217,7 +223,14 @@ static void stream_lines(void) {
     const uint32_t *st = (const uint32_t *)kui_sci_stream_stats();
     retail_display_values("DMA BLKS POLLED   STARTS   KEPT     OVERRUNS", st, 5);
     retail_display_values("CRC ERRS TOKENERR FOREIGN  REPAIRED AHEAD", st + 5, 5);
+#ifdef KUI_RETAIL_CE
+    /* Remaining DMA bytes in incomplete receptions, then late controller
+     * snapshots and framing work. Counts only: none are elapsed times. */
+    retail_display_values("LEFT0    LEFT128  LEFT384  LEFT513  CH2 LATE", st + 11, 5);
+    retail_display_values("DMAORBAD TOKBYTES TOKMAX   STOPS", st + 16, 4);
+#else
     retail_display_values("DEFERRED", st + 10, 1);
+#endif
 }
 #endif
 #if defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
@@ -292,26 +305,20 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
      * command. */
 #ifndef KUI_RETAIL_ASYNC
     ce_trace(3);
-#endif
     _Static_assert(offsetof(struct kui_retail_gd_diagnostics, last_destination) ==
                    offsetof(struct kui_retail_gd_diagnostics, last_command) + 12u, "GD row");
     retail_display_values("COMMAND  LBA      SECTORS  DEST", &service.diag.last_command, 4);
+#endif
 #else
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
 #endif
 #if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)
-    /* Windows CE's background reader: where blocks were processed, calls
-     * that waited, and the prefetch queue. Reuse the old hook-count row so
-     * the complete result still fits on one photographable screen. Queue
-     * bytes are CRC-checked output staged ahead of the guest destination;
-     * a full count is a blocked service visit, not a duration. */
+    /* Six two-line counter rows plus guard/result fit on one photograph.
+     * IRQ/CALL POL are maximum polled blocks in a delivery visit, not
+     * time spent with interrupts masked or totals for an entire GD call. */
     const uint32_t *st=(const uint32_t *)&reader.stats;
     retail_display_values("IRQ BLKS CALLBLKS WAITS    EXECS    EXEC INT",st,5);
-    static uint32_t queue[5]; /* Static, like the rows above. */
-    queue[0]=reader.isr; queue[1]=reader.queue_highwater;
-    queue[2]=reader.prefetched_bytes; queue[3]=reader.queue_blocked;
-    queue[4]=reader.spill_bytes;
-    retail_display_values("ISR      Q PEAK   Q BYTES  Q FULL   Q LEFT",queue,5);
+    retail_display_values("IRQ POL  CALL POL PIOCALLS PIOBYTES",&reader.polled_irq_max,4);
     stream_lines();
 #elif defined(KUI_RETAIL_ASYNC)
     /* Background reader: where blocks were delivered (its interrupt or the

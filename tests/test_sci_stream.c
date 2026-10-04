@@ -535,6 +535,43 @@ static void test_crc_reference_vectors(void) {
     assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
     card_content = data_at;
 }
+#ifdef KUI_RETAIL_CE
+static void test_ce_counters(void) {
+    /* Count the terminating token byte on both success and rejection. */
+    for(unsigned bad = 0; bad < 2; ++bad) {
+        reset_model(); open_stream(false);
+        struct kui_sci_stream_stats before = *kui_sci_stream_stats();
+        card.bad_token_lba = 700; card.bad_token_count = bad;
+        card.nac_first = before.token_max + 1u;
+        assert(kui_sci_stream_fetch(700, card.nac_first + 1u, true) ==
+            (bad ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_OK));
+        const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
+        assert(st->token_bytes - before.token_bytes == card.nac_first + 1u);
+        assert(st->token_max == card.nac_first + 1u);
+        assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+        assert(st->stops - before.stops == 1u && card.cmd12 == 1u);
+    }
+    /* Synthetic owned, stopped receptions exercise every reported bucket.
+     * The CH2/DMAOR values are handoff-time observations, not fault causes. */
+    static const uint32_t remaining[] = {0, 128, 129, 385};
+    for(unsigned i = 0; i < 4; ++i) {
+        reset_model(); open_stream(false); m.stall = true;
+        assert(kui_sci_stream_fetch(800, LIMIT, false) == KUI_SCI_STREAM_OK);
+        struct kui_sci_stream_stats before = *kui_sci_stream_stats();
+        m.dar += 513u - remaining[i]; m.tcr = remaining[i]; m.chcr &= ~3u;
+        m.chcr2 = i;
+        if(i & 1u) m.dmaor &= ~1u;
+        assert(kui_sci_stream_poll(false) == KUI_SCI_STREAM_OVERRUN);
+        const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
+        for(unsigned b = 0; b < 4; ++b)
+            assert(st->incomplete[b] - before.incomplete[b] == (b == i));
+        assert(st->incomplete_ch2_active - before.incomplete_ch2_active == (i == 1u));
+        assert(st->incomplete_dmaor_bad - before.incomplete_dmaor_bad == (i & 1u));
+        assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
+        check_restored(); check_channel_restored();
+    }
+}
+#endif
 int main(void) {
     test_sequential();
     test_pending_and_kept();
@@ -548,6 +585,9 @@ int main(void) {
     test_bus_fault();
     test_random_faults();
     test_crc_reference_vectors();
+#ifdef KUI_RETAIL_CE
+    test_ce_counters();
+#endif
     puts("sci stream: ok");
     return 0;
 }

@@ -307,7 +307,10 @@ static bool tops_up(uint32_t function) { return topping(function); }
  * run is started before each block is checked and copied. Returns while a block is in
  * flight, after up to wait blocks have been waited for. Without an active
  * read, only a finished reception is ended (its interrupt cleared). */
-static void deliver(uint32_t wait) {
+#ifndef KUI_RETAIL_CE
+#define deliver_work deliver
+#endif
+static void deliver_work(uint32_t wait) {
     uint32_t delivered = 0;
 #ifdef KUI_RETAIL_CE
     uint32_t irq_steps = 0;
@@ -376,6 +379,15 @@ static void deliver(uint32_t wait) {
         if(r > KUI_SCI_STREAM_BUSY) failure(r);
     }
 }
+#ifdef KUI_RETAIL_CE
+static void deliver(uint32_t wait) {
+    uint32_t before = R.shared.stream.stats.polled;
+    deliver_work(wait);
+    uint32_t blocks = R.shared.stream.stats.polled - before;
+    uint32_t *maximum = e.in_irq ? &e.polled_irq_max : &e.polled_call_max;
+    if(blocks > *maximum) *maximum = blocks;
+}
+#endif
 static void report(void) {
     struct kui_retail_gd *s = &R.shared.service;
     if(!s->pending || e.token != s->token) return;
@@ -528,6 +540,8 @@ int kui_retail_async_read_part(void *unused, uint32_t lba, uint32_t sector_bytes
     (void)unused; (void)lba; (void)sector_bytes;
     struct kui_retail_gd *s = &R.shared.service;
     if(e.token != s->token) return -1;
+    ++e.pio_calls;
+    e.pio_bytes += bytes;
     piece(skip, bytes, 0, output, false);
     if(!e.failed && e.piece_filled < bytes) deliver(UINT32_MAX);
     bool done = !e.failed && e.piece_filled == bytes;

@@ -182,15 +182,37 @@ const struct kui_sci_stream_stats *kui_sci_stream_stats(void) { return &s.stats;
 void kui_sci_stream_discard(void) { s.ready[0] = s.ready[1] = 0; s.kept = 0; s.arrived = 0; }
 
 /* Data token after the card's wait (0xff); TEND before the DMA starts. */
+#ifdef KUI_RETAIL_CE
+static void token_count(uint32_t bytes) {
+    s.stats.token_bytes += bytes;
+    if(bytes > s.stats.token_max) s.stats.token_max = bytes;
+}
+#endif
 static enum kui_sci_stream_result token(uint32_t limit) {
+#ifdef KUI_RETAIL_CE
+    uint32_t n = 0;
+    for(; n < limit; ++n) {
+#else
     for(uint32_t n = 0; n < limit; ++n) {
+#endif
         uint8_t value = byte(0xff);
         if(value == 0xfe) {
             for(unsigned k = 0; k < 64u && !(rd8(SSR) & TEND); ++k) {}
+#ifdef KUI_RETAIL_CE
+            token_count(n + 1u);
+#endif
             return KUI_SCI_STREAM_OK;
         }
-        if(value != 0xff) break;
+        if(value != 0xff) {
+#ifdef KUI_RETAIL_CE
+            ++n; /* the error byte was clocked too */
+#endif
+            break;
+        }
     }
+#ifdef KUI_RETAIL_CE
+    token_count(n);
+#endif
     ++s.stats.token_errors;
     return healthy() ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_RESET;
 }
@@ -206,6 +228,9 @@ static uint8_t command(const uint8_t packet[6], bool stop) {
  * idle card answers "illegal command" (0x04): it is stopped all the same. */
 static enum kui_sci_stream_result stop_card(void) {
     static const uint8_t stop[6] = {0x4c, 0, 0, 0, 0, 0x61};
+#ifdef KUI_RETAIL_CE
+    ++s.stats.stops;
+#endif
     select(true);
     enum kui_sci_stream_result result = command(stop, true) & ~0x04u ?
         KUI_SCI_STREAM_COMMAND : KUI_SCI_STREAM_OK;
@@ -378,6 +403,14 @@ static enum kui_sci_stream_result finish(bool later) {
         return KUI_SCI_STREAM_BUSY;
     }
     if(count || !(control & 2u) || !(status & RDRF)) {
+#ifdef KUI_RETAIL_CE
+        unsigned bucket = !count ? 0u : count <= 128u ? 1u : count <= 384u ? 2u : 3u;
+        ++s.stats.incomplete[bucket];
+        /* The SCI and our channel have already stopped and handed back.
+         * These late snapshots cannot identify the exact fault-time owner. */
+        s.stats.incomplete_ch2_active += (rd32(CHCR + 0x10u) & 3u) == 1u;
+        s.stats.incomplete_dmaor_bad += (rd32(DMAOR) & 7u) != 1u;
+#endif
         /* The channel was held off the bus (the game's own DMA) and the
          * receiver overran mid-block: the byte that overran is lost and the
          * card stopped after it. The channel has `at` bytes; usually it

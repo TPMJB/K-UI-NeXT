@@ -489,6 +489,7 @@ static void test_pio_stream(void) {
     int32_t token = request(KUI_RETAIL_GD_PIOREAD_STREAM, lba, count, 0);
     reference_read(lba, count);
     CHECK(gd(KUI_GD_PIO_CALLBACK, 0x8c0f0000u, 0x1234u) == 0);
+    unsigned calls = 0;
     for(unsigned i = 0; done < total; ++i) {
         /* CE may run long enough between pieces to fill the ring. The
          * pending virtual buffer is never touched by those interrupts. */
@@ -499,11 +500,13 @@ static void test_pio_stream(void) {
         if(bytes > offered) bytes = offered;
         put(PIECE, dest); put(PIECE + 4, bytes);
         CHECK(gd(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == 0);
+        ++calls;
         CHECK(!memcmp(vram + (dest - VBASE), expected + done, bytes));
         CHECK(R.shared.service.callback_due);
         (void)gd(KUI_GD_EXEC, 0, 0);
         R.shared.service.callback_due = 0; /* the resident made the callback */
         done += bytes; dest += bytes;
+        CHECK(R.engine.pio_calls == calls && R.engine.pio_bytes == done);
     }
     CHECK(status(token) == KUI_GD_COMPLETED && vram[dest - VBASE] == 0xa5);
     CHECK(!hw.writes && st->call_blocks && !R.engine.spill_bytes && !R.engine.piece_set);
@@ -611,12 +614,21 @@ static void test_polled_irq_yields(void) {
     take_events();
     CHECK(R.engine.stats.irq_blocks - before <= 2u);
     CHECK(kui_sci_stream_stats()->polled && !kui_sci_stream_busy());
+    CHECK(R.engine.polled_irq_max == kui_sci_stream_stats()->polled);
+    CHECK(!R.engine.polled_call_max);
     CHECK(R.shared.service.pending && ev.drive > drive);
+    uint32_t polled = kui_sci_stream_stats()->polled;
+    int32_t state = status(token);
+    CHECK(state == KUI_GD_PROCESSING || state == KUI_GD_COMPLETED);
+    CHECK(R.engine.polled_call_max == kui_sci_stream_stats()->polled - polled);
+    CHECK(R.engine.polled_call_max > 0u);
+    uint32_t call_max = R.engine.polled_call_max, irq_max = R.engine.polled_irq_max;
     m.dmaor |= 1u;
-    CHECK(finish(token, 8) == KUI_GD_COMPLETED);
+    if(state != KUI_GD_COMPLETED) CHECK(finish(token, 8) == KUI_GD_COMPLETED);
     reference_read(45000, 8);
     CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 8u * 2048u));
     CHECK(ram[OUTPUT - BEGIN + 8u * 2048u] == 0xa5);
+    CHECK(R.engine.polled_call_max == call_max && R.engine.polled_irq_max == irq_max);
 }
 static void test_first_unrecovered_overrun(void) {
     setup(2000, true);
@@ -631,6 +643,7 @@ static void test_first_unrecovered_overrun(void) {
     arrived_irq();
     const struct kui_sci_stream_stats *ss = kui_sci_stream_stats();
     CHECK(ss->overruns == 1u && !ss->repaired && ss->polled == 1u);
+    CHECK(R.engine.polled_irq_max == 1u && !R.engine.polled_call_max);
     CHECK(R.engine.retries == 1u && R.engine.early_polled);
     CHECK(R.engine.cursor.block == first && kui_sci_stream_ready(first));
     CHECK(m.dma_starts == dma && !kui_sci_stream_busy());
@@ -730,7 +743,12 @@ static void test_failures_complete_the_request(void) {
     setup(2000, true);
     mode(2048);
     token = request(KUI_RETAIL_GD_PIOREAD_STREAM, 45000, 4, 0);
+    ++R.engine.token;
     CHECK(kui_retail_async_read_part(NULL, 45000, 2048, 512, 512, vram) == -1);
+    CHECK(!R.engine.pio_calls && !R.engine.pio_bytes);
+    --R.engine.token;
+    CHECK(kui_retail_async_read_part(NULL, 45000, 2048, 512, 512, vram) == -1);
+    CHECK(R.engine.pio_calls == 1u && R.engine.pio_bytes == 512u);
 }
 static void test_table_replaced(void) {
     /* CE puts its own handlers back mid-read: the next call drops the

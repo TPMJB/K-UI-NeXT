@@ -92,6 +92,9 @@ struct kui_retail_async {
     uint32_t piece_destination, piece_begin, piece_bytes, piece_filled;
     uint32_t spill_from, spill_bytes;
     uint32_t queue_highwater, prefetched_bytes, queue_blocked;
+    /* Work per delivery visit, not elapsed time or a whole GD call. */
+    uint32_t polled_irq_max, polled_call_max;
+    uint32_t pio_calls, pio_bytes; /* token-matching read_part requests */
     uint8_t *piece_direct;
     /* A failed overrun uses a polled reread of this block only. Other
      * faults retain the ordinary retry threshold; no session-wide mode. */

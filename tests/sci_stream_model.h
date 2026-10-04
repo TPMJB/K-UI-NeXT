@@ -132,7 +132,7 @@ static uint8_t card_clock(uint8_t mosi) {
 static struct {
     uint8_t smr, brr, scr, ssr, rdr, scmr, sptr, stbcr;
     bool cs_high, healthy, rx, stall;
-    uint32_t sar, dar, tcr, chcr, dmaor;
+    uint32_t sar, dar, tcr, chcr, chcr2, dmaor;
     unsigned rx_delay, delay, overrun_after, overrun_again, received;
     unsigned overrun_every; /* every DMA reception overruns at this byte */
     /* After an overrun the channel, back on the bus, takes the byte RDR
@@ -222,6 +222,7 @@ uint32_t kui_sci_stream_test_read(uint32_t address, unsigned width) {
     case DAR: assert(width == 4); advance(); return m.dar;
     case TCR: assert(width == 4); advance(); return m.tcr;
     case CHCR: assert(width == 4); advance(); return m.chcr;
+    case CHCR + 0x10u: assert(width == 4); assert(!m.rx); return m.chcr2;
     case DMAOR: assert(width == 4); return m.dmaor;
     default: assert(!"unexpected read"); return 0;
     }

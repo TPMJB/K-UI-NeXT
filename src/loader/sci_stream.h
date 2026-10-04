@@ -35,6 +35,16 @@ struct kui_sci_stream_stats {
      * token: the resumed reception ran a byte ahead (fetched again). */
     uint32_t ahead;
     uint32_t deferred; /* of those repaired, resumed by a later fetch (interrupt) */
+#ifdef KUI_RETAIL_CE
+    /* Incomplete receptions, including repair attempts, by DMA bytes still
+     * remaining: 0, 1..128, 129..384, 385 or more. These are not timings. */
+    uint32_t incomplete[4];
+    /* Read-only snapshots after the existing stop/handoff, not at the
+     * instant of failure; correlation alone does not establish contention. */
+    uint32_t incomplete_ch2_active, incomplete_dmaor_bad;
+    uint32_t token_bytes, token_max; /* all search bytes, including token/error */
+    uint32_t stops; /* CMD12 attempts */
+#endif
 };
 /* Engine state, placed by the resident (sci_stream.c owns it otherwise). */
 struct kui_sci_stream_state {
