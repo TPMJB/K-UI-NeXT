@@ -1,5 +1,40 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: bounded prefetch between driver buffers (2026-10-04)
+
+First optimization after the owner's background-reader result of roughly
+420 to 470 KiB/s. CE's background reader now stages up to 2 KiB of checked
+output in a ring, replacing the 512-byte spill. It continues production
+between physical DMA pieces and while virtual PIO buffers cannot be touched
+from an interrupt. CE calls drain virtual buffers; physical buffers keep
+their direct path when no older queued data remains. Completion follows
+bytes delivered to the destination, including a final queued tail after
+the cursor finishes. Abort/reset clears the queue. CE interrupt visits are
+limited to two delivery-loop iterations, including retries.
+
+Review also caught terminal PIO-stream prefetch errors not notifying CE;
+they now fail the request and raise the drive event without synthesizing
+a callback for an unsubmitted transfer. Focused CE host tests pass 85,428
+checks under ASan/UBSan (LSan disabled for this container's /proc restriction),
+covering queued final tails, FIFO wrap, small physical pieces, virtual-buffer
+isolation, abort/init/reset, CRC failure and bounded polled-fallback wakeup.
+Supporting GD, cursor, SCI stream and native async suites also pass.
+
+The menu-return report now shows `ISR Q PEAK Q BYTES Q FULL Q LEFT` in the
+old hook-count row. No extra screen rows or changes to the live overlay.
+The standard CE reader, native readers, SCI framing/CRC and memory/stack
+boundaries are unchanged. See
+[the prefetch experiment](windows-ce-placement-test.md#ce-prefetch-experiment-2026-10-04)
+for counter meanings and the ARMADA/X then Worms comparison. No console
+speed or compatibility gain is claimed before those tests.
+
+Local GCC 15 SH preflight: full native and CE instruction/layout/stack
+audits pass; CE background resident ends at `0x8c00d1bc` (1,604 bytes free),
+worst stack 404 bytes plus the audit's 64-byte margin within 2,000 usable.
+All native residents/stage and the standard CE resident are byte-identical
+to the baseline when built with the same identifier. Pinned CI and console
+results are recorded separately after completion.
+
 ## Windows CE: background reader through CE's interrupt table (2026-10-04 UTC)
 
 For the slow FMVs: **X** on the Windows CE boot test's confirmation launches

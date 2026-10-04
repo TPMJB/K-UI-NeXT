@@ -300,15 +300,18 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
 #endif
 #if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)
-    /* Windows CE's background reader: where blocks were delivered (its
-     * interrupt through CE's handler table, or CE's calls), how often a call
-     * waited, how often the SCI's level was raised and dropped, whether the
-     * handlers are installed, and the stream's errors. */
+    /* Windows CE's background reader: where blocks were processed, calls
+     * that waited, and the prefetch queue. Reuse the old hook-count row so
+     * the complete result still fits on one photographable screen. Queue
+     * bytes are CRC-checked output staged ahead of the guest destination;
+     * a full count is a blocked service visit, not a duration. */
     const uint32_t *st=(const uint32_t *)&reader.stats;
     retail_display_values("IRQ BLKS CALLBLKS WAITS    EXECS    EXEC INT",st,5);
-    static uint32_t levels[3]; /* Static, like the rows above. */
-    levels[0]=st[5]; levels[1]=st[6]; levels[2]=reader.isr;
-    retail_display_values("HOOKS    RELEASES ISR",levels,3);
+    static uint32_t queue[5]; /* Static, like the rows above. */
+    queue[0]=reader.isr; queue[1]=reader.queue_highwater;
+    queue[2]=reader.prefetched_bytes; queue[3]=reader.queue_blocked;
+    queue[4]=reader.spill_bytes;
+    retail_display_values("ISR      Q PEAK   Q BYTES  Q FULL   Q LEFT",queue,5);
     stream_lines();
 #elif defined(KUI_RETAIL_ASYNC)
     /* Background reader: where blocks were delivered (its interrupt or the

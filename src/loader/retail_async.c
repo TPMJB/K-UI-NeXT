@@ -191,26 +191,50 @@ static void place(const uint8_t *bytes, uint32_t count) {
     struct kui_retail_gd *s = &R.shared.service;
     uint8_t *out = e.piece_direct ? e.piece_direct + e.piece_filled :
         s->ops.map(s->ops.context, e.piece_destination + e.piece_filled, count, 1);
-    if(out) memcpy(out, bytes, count);
-    else e.failed = KUI_GD_ERROR_MEMORY;
+    if(!out) {e.failed = KUI_GD_ERROR_MEMORY; return;}
+    memcpy(out, bytes, count);
     e.piece_filled += count;
 }
+/* Drain oldest bytes first, and touch virtual destinations only while CE's
+ * own call supplies their address space. A finished cursor may still have
+ * a queued tail, so draining does not depend on e.active. */
+static void drain(void) {
+    if(!e.piece_set || (e.in_irq && !e.piece_physical)) return;
+    while(e.spill_bytes && e.piece_filled < e.piece_bytes && !e.failed) {
+        uint32_t n = e.piece_bytes - e.piece_filled;
+        if(n > e.spill_bytes) n = e.spill_bytes;
+        uint32_t contiguous = KUI_RETAIL_ASYNC_SPILL_BYTES - e.spill_from;
+        if(n > contiguous) n = contiguous;
+        place(R.spill + e.spill_from, n);
+        if(e.failed) return;
+        e.spill_from = (e.spill_from + n) & (KUI_RETAIL_ASYNC_SPILL_BYTES - 1u);
+        e.spill_bytes -= n;
+    }
+}
 /* The cursor's output arrives in order: into the piece while it has room
- * and nothing waits in the spill, the rest into the spill, which a block is
- * taken into only when empty (writable) and so always holds it. */
+ * and can be touched, otherwise into the bounded physical ring. Admission
+ * reserves a whole card block, including when its output wraps the ring. */
 static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint32_t count) {
     (void)unused;
     if(offset != e.piece_begin + e.piece_filled + e.spill_bytes) {e.failed = KUI_GD_ERROR_IO; return;}
-    if(e.piece_set && !e.spill_bytes) {
+    if(e.piece_set && !e.spill_bytes && (!e.in_irq || e.piece_physical)) {
         uint32_t n = e.piece_bytes - e.piece_filled;
         if(n > count) n = count;
         if(n) place(bytes, n);
+        if(e.failed) return;
         bytes += n; count -= n;
     }
     if(!count) return;
-    if(count > KUI_RETAIL_ASYNC_SPILL_BYTES - e.spill_from - e.spill_bytes) {e.failed = KUI_GD_ERROR_IO; return;}
-    memcpy(R.spill + e.spill_from + e.spill_bytes, bytes, count);
-    e.spill_bytes += count;
+    if(count > KUI_RETAIL_ASYNC_SPILL_BYTES - e.spill_bytes) {e.failed = KUI_GD_ERROR_IO; return;}
+    e.prefetched_bytes += count;
+    while(count) {
+        uint32_t at = (e.spill_from + e.spill_bytes) & (KUI_RETAIL_ASYNC_SPILL_BYTES - 1u);
+        uint32_t n = KUI_RETAIL_ASYNC_SPILL_BYTES - at;
+        if(n > count) n = count;
+        memcpy(R.spill + at, bytes, n);
+        e.spill_bytes += n; bytes += n; count -= n;
+    }
+    if(e.spill_bytes > e.queue_highwater) e.queue_highwater = e.spill_bytes;
 }
 /* The next piece: output bytes [begin, begin + bytes), right after the
  * previous piece's (closed or full), to destination (P1 or CE's virtual
@@ -223,23 +247,20 @@ static void piece(uint32_t begin, uint32_t bytes, uint32_t destination, uint8_t 
     e.piece_begin = begin; e.piece_bytes = bytes; e.piece_filled = 0;
     e.piece_destination = destination; e.piece_direct = direct;
     e.piece_physical = physical; e.piece_set = 1;
-    uint32_t n = e.spill_bytes < bytes ? e.spill_bytes : bytes;
-    if(n) place(R.spill + e.spill_from, n);
-    e.spill_from += n; e.spill_bytes -= n;
-    if(!e.spill_bytes) e.spill_from = 0;
+    drain();
 }
 /* No more of the piece is written here (read_part's buffer is the caller's
  * only during its call). */
 static void close_piece(void) {
     e.piece_set = 0; e.piece_bytes = e.piece_filled; e.piece_direct = NULL;
 }
-/* Whether a block may be taken now: its output (at most a card block's
- * bytes) goes into the piece, and what the piece cannot hold into the
- * spill, which must be empty. The interrupt writes no virtual piece. */
+/* A card block produces at most 512 output bytes. Reserve that much even
+ * when the piece may take some directly; an interrupt can then prefetch
+ * without knowing or touching a virtual destination. */
 static bool writable(void) {
-    if(e.spill_bytes) return false;
-    if(!e.piece_set || e.piece_filled == e.piece_bytes) return true;
-    return !e.in_irq || e.piece_physical;
+    if(e.spill_bytes <= KUI_RETAIL_ASYNC_SPILL_BYTES - 512u) return true;
+    ++e.queue_blocked;
+    return false;
 }
 /* Whether the interrupt fills the current read: its handlers installed and
  * its piece physical. */
@@ -257,7 +278,8 @@ static bool tops_up(uint32_t function) { return topping(function) && !interrupt_
 static void wake(void) {
     struct kui_retail_gd *s = &R.shared.service;
     if(!s->pending || e.token != s->token || e.failed) return;
-    if(s->command == KUI_GD_PIOREAD || s->command == KUI_GD_DMAREAD)
+    if(s->command == KUI_GD_PIOREAD || s->command == KUI_GD_DMAREAD ||
+       s->command == KUI_RETAIL_GD_PIOREAD_STREAM)
         s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
     else if(s->command == KUI_RETAIL_GD_DMAREAD_STREAM && s->xfer_left)
         s->interrupts |= KUI_RETAIL_GD_IRQ_DMA_END | KUI_RETAIL_GD_IRQ_DRIVE;
@@ -279,12 +301,28 @@ static bool tops_up(uint32_t function) { return topping(function); }
  * read, only a finished reception is ended (its interrupt cleared). */
 static void deliver(uint32_t wait) {
     uint32_t delivered = 0;
+#ifdef KUI_RETAIL_CE
+    uint32_t irq_steps = 0;
+#endif
     for(;;) {
+#ifdef KUI_RETAIL_CE
+        /* A larger queue must not turn a polled fallback into a long ISR.
+         * A paused active read is woken below; an in-flight block supplies
+         * the next SCI interrupt. Count failed/retry iterations too. */
+        if(e.in_irq && irq_steps++ >= 2u) return;
+        drain();
+        if(wait == UINT32_MAX && e.piece_set && e.piece_filled == e.piece_bytes) return;
+#endif
         enum kui_sci_stream_result r = KUI_SCI_STREAM_OK;
         if(kui_sci_stream_busy()) {
             r = kui_sci_stream_poll(e.in_irq != 0);
             if(r == KUI_SCI_STREAM_PENDING) {
                 if(!e.active || e.failed || delivered >= wait) return;
+#ifdef KUI_RETAIL_CE
+                /* read_part waits for its requested bytes, never for a
+                 * speculative refill after its destination is full. */
+                if(e.piece_set && e.piece_filled == e.piece_bytes) return;
+#endif
                 r = kui_sci_stream_wait();
             }
         }
@@ -293,7 +331,7 @@ static void deliver(uint32_t wait) {
         uint32_t lba = e.cursor.block;
 #ifdef KUI_RETAIL_CE
         if(!writable()) {
-            /* Until a piece can take it, only have the block ready. */
+            /* The queue is full: keep at most one more card block ready. */
             if(!kui_sci_stream_ready(lba)) {
                 r = kui_sci_stream_fetch(lba, TOKEN_LIMIT, e.retries >= POLLED);
                 if(r > KUI_SCI_STREAM_BUSY) failure(r);
@@ -338,8 +376,25 @@ static void report(void) {
             kui_retail_gd_stream_progress(s, e.piece_begin + e.piece_filled, e.failed);
         return;
     }
-#endif
+    if(s->command == KUI_RETAIL_GD_PIOREAD_STREAM) {
+        /* Prefetch can fail before the next PIO_TRANSFER is submitted.
+         * Wake the driver's request/error path now; do not invent a
+         * transfer callback. Successful progress still belongs to its
+         * synchronous read_part caller. */
+        if(e.failed) {
+            s->error = e.failed; s->status = KUI_GD_FAILED; s->pending = 0;
+            s->diag.last_error = e.failed;
+            s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
+        }
+        return;
+    }
+    /* Prefetch can finish the cursor before its final bytes reach CE.
+     * Ordinary reads complete only at the destination, never in the queue.
+     * PIO stream progress remains owned by read_part's service caller. */
+    kui_retail_gd_progress(s, e.piece_filled / s->sector_bytes, e.failed);
+#else
     kui_retail_gd_progress(s, e.cursor.done, e.failed);
+#endif
 }
 static bool reads(uint32_t command) {
 #ifdef KUI_RETAIL_CE
@@ -418,7 +473,7 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
     } else if(!s->pending || e.token != s->token) {
         e.active = 0; /* aborted or reset: nothing more is written */
 #ifdef KUI_RETAIL_CE
-        e.piece_set = 0; e.spill_bytes = 0;
+        e.piece_set = 0; e.spill_from = e.spill_bytes = 0; e.piece_direct = NULL;
 #endif
     }
 #ifdef KUI_RETAIL_CE
@@ -449,7 +504,7 @@ uint32_t kui_retail_async_irq(void) {
     report();
     /* The stream stopped short of the read (a block for a virtual piece, or
      * one to resume later): CE's driver calls for the rest. */
-    if(e.active && !kui_sci_stream_busy()) wake();
+    if((e.active || e.spill_bytes) && !kui_sci_stream_busy()) wake();
 #endif
     if(!kui_sci_stream_busy()) unhook();
     return 0;
