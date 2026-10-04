@@ -27,21 +27,34 @@ static void put32(uint8_t *p, uint32_t n) {
 static uint8_t *guest(struct kui_retail_gd *s, uint32_t address,
                       uint32_t bytes, uint32_t align, int writing) {
     uint32_t area = address & 0xff000000u;
-    if(area != 0x0c000000u && area != 0x8c000000u && area != 0xac000000u) {
 #ifdef KUI_RETAIL_CE
-        /* Windows CE runs with its MMU on and passes virtual addresses: its
-         * resident's map decides whether one is usable (it is not RAM). */
+    /* Windows CE runs with its MMU on: an address its CPU uses (parameters,
+     * status, PIO and TOC destinations) outside P1/P2 is virtual, 0x0c...
+     * included (a process slot). Its resident's map decides whether one is
+     * usable. Only DMA destinations are physical (dma_guest). */
+    if(area != 0x8c000000u && area != 0xac000000u) {
         if(!bytes || (address & (align - 1u))) return NULL;
         return s->ops.map(s->ops.context, address, bytes, writing);
-#else
-        return NULL;
-#endif
     }
+#else
+    if(area != 0x0c000000u && area != 0x8c000000u && area != 0xac000000u) return NULL;
+#endif
     uint32_t p1 = (address & 0x00ffffffu) | 0x8c000000u;
     if(!bytes || (p1 & (align - 1u)) || p1 < s->guest_begin ||
        p1 >= s->guest_end || bytes > s->guest_end - p1) return NULL;
     return s->ops.map(s->ops.context, p1, bytes, writing);
 }
+#ifdef KUI_RETAIL_CE
+/* A DMA destination: a physical RAM address (as the G1 DMA takes it) or
+ * its P1/P2 alias, never virtual. */
+static uint8_t *dma_guest(struct kui_retail_gd *s, uint32_t address,
+                          uint32_t bytes, uint32_t align, int writing) {
+    uint32_t area = address & 0xff000000u;
+    if(area == 0x0c000000u) address |= 0x80000000u;
+    else if(area != 0x8c000000u && area != 0xac000000u) return NULL;
+    return guest(s, address, bytes, align, writing);
+}
+#endif
 static void reset(struct kui_retail_gd *s) {
     s->sector_part = 0x2000; s->track_type = 0; s->sector_bytes = 2048;
     s->pending = 0; s->command = 0; s->status = KUI_GD_NOT_FOUND;
@@ -148,8 +161,13 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         bytes = p[1] * s->sector_bytes; destination = p[2];
         /* A stream's destinations arrive with each transfer. */
         if(stream) destination = 0;
+#ifdef KUI_RETAIL_CE
+        else if(!(cmd == KUI_GD_DMAREAD ? dma_guest(s, destination, bytes, 32, KUI_RETAIL_MAP_VALIDATE) :
+                  guest(s, destination, bytes, 2, KUI_RETAIL_MAP_VALIDATE))) return 0;
+#else
         else if(!guest(s, destination, bytes, cmd == KUI_GD_DMAREAD ? 32 : 2,
                        KUI_RETAIL_MAP_VALIDATE)) return 0;
+#endif
         for(uint32_t done = 0; done < p[1];) {
             uint32_t n = p[1] - done;
             if(n > KUI_RETAIL_GD_CHECK_SECTORS) n = KUI_RETAIL_GD_CHECK_SECTORS;
@@ -278,7 +296,13 @@ static int32_t execute(struct kui_retail_gd *s) {
 #endif
         uint32_t done = s->completed_bytes / s->sector_bytes;
         uint32_t n = step_count(s, s->count - done), bytes = n * s->sector_bytes;
+#ifdef KUI_RETAIL_CE
+        uint32_t at = s->destination + s->completed_bytes;
+        uint8_t *out = s->command == KUI_GD_DMAREAD ? dma_guest(s, at, bytes, 2, 1) :
+            guest(s, at, bytes, 2, 1);
+#else
         uint8_t *out = guest(s, s->destination + s->completed_bytes, bytes, 2, 1);
+#endif
         if(!out) s->error = KUI_GD_ERROR_MEMORY;
         else {
             ++s->diag.read_steps;
@@ -375,7 +399,7 @@ static void stream_step(struct kui_retail_gd *s) {
     if(!s->pending || s->command != KUI_RETAIL_GD_DMAREAD_STREAM || !s->xfer_left) return;
     uint32_t n = KUI_RETAIL_GD_STEP_SECTORS * s->sector_bytes;
     if(n > s->xfer_left) n = s->xfer_left;
-    uint8_t *out = guest(s, s->xfer_destination, n, 32, 1);
+    uint8_t *out = dma_guest(s, s->xfer_destination, n, 32, 1);
     uint32_t before = s->completed_bytes / s->sector_bytes;
     ++s->diag.read_steps;
     if(!out) s->error = KUI_GD_ERROR_MEMORY;
@@ -407,7 +431,7 @@ static int32_t transfer(struct kui_retail_gd *s, uint32_t token, uint32_t addres
     uint32_t destination = get32(p), bytes = get32(p + 4);
     s->diag.last_destination = destination;
     if(!bytes || (bytes & 31u) || bytes > s->request_bytes - s->completed_bytes ||
-       !guest(s, destination, bytes, 32, KUI_RETAIL_MAP_VALIDATE)) return -1;
+       !dma_guest(s, destination, bytes, 32, KUI_RETAIL_MAP_VALIDATE)) return -1;
     s->xfer_destination = destination; s->xfer_left = bytes;
     stream_step(s);
     return 0;

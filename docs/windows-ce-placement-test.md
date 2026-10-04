@@ -349,6 +349,25 @@ Next build:
 - The CE reader's limit is now `0x8c00c800`, its stack `0x8c00c800`-
   `0x8c00d000`, still below bootstrap 2.
 
+## Console result: stepped-stream build 9ab26bd0e9ad (2026-10-04)
+
+Large stream reads work: the status line climbed (seen at `0x190` calls,
+516 sectors, last LBA `0x7DA6B`), and ARMADA ran to 711 GD calls and 4,646
+card blocks before stopping with `GD REQUEST REJECTED`: a DMAREAD (R4 `0x11`)
+whose parameters are at `0C3BF4EC`, on a stack (`0C3BF4B8`) in process slot
+6, from `wsegacd.dll` (caller `01DE2D96`). SD 0, IMAGE 0.
+
+The bug: with CE's MMU on, `0x0c......` is a virtual address (slot 6), but
+K-UI took that area as RAM's physical alias (true with the MMU off), so it
+read the parameters from the wrong memory. Physical `0x0c` addresses do
+reach K-UI from CE, but only as DMA destinations (taken from the locked
+pages), never as pointers the CPU uses.
+
+Next build: in the CE reader, every CPU pointer (parameters, status, PIO and
+TOC destinations) outside P1/P2 is virtual, `0x0c` included; only DMA
+destinations (DMAREAD's, DMA_TRANSFER's) are physical RAM (`dma_guest`).
+Host test `virtual_pointers` keeps a separate virtual window at `0C3B0000`.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the

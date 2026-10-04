@@ -11,6 +11,10 @@
 #define STATUS (BEGIN + 0x200u)
 #define OUTPUT (BEGIN + 0x1000u)
 static uint8_t ram[END - BEGIN];
+#ifdef KUI_RETAIL_CE
+#define VIRT 0x0c3b0000u /* A CE process slot's addresses, not RAM. */
+static uint8_t virt[0x10000];
+#endif
 static struct kui_retail_gd service;
 static struct {
     uint32_t reads, sectors, max_count, deny, fail_at, checks, reenter;
@@ -25,6 +29,13 @@ static const struct kui_retail_track image_tracks[] = {
     {.gd={2,0,16,24}, .first_extent=92, .extent_count=12},
     {.gd={3,4,45000,60000}, .first_extent=93, .extent_count=13}
 };
+/* A RAM pointer through its 0x0c... alias. In the CE build such CPU
+ * pointers are virtual (virtual_pointers), so the P1 address stands in. */
+#ifdef KUI_RETAIL_CE
+#define LOW_ALIAS(a) (a)
+#else
+#define LOW_ALIAS(a) ((a) & 0x1fffffffu)
+#endif
 static unsigned use_manifest_tracks;
 static unsigned assertions;
 #define CHECK(x) do { ++assertions; assert(x); } while(0)
@@ -39,9 +50,14 @@ static uint32_t get(uint32_t a) {
 static uint8_t *map(void *unused, uint32_t a, uint32_t bytes, int writing) {
     (void)unused;
 #ifdef KUI_RETAIL_CE
-    /* The CE build passes other areas' (virtual) addresses on; with no MMU
-     * here, the adapter refuses them as the CE reader would. */
-    if((a & 0xff000000u) != 0x8c000000u) return NULL;
+    /* The CE build passes other areas' addresses on as CE's virtual ones:
+     * here one 64 KiB window of a process slot, separate from RAM, stands
+     * for them, and the adapter refuses the rest. */
+    if((a & 0xff000000u) != 0x8c000000u) {
+        if(a < VIRT || bytes > sizeof(virt) || a - VIRT > sizeof(virt) - bytes) return NULL;
+        ++ctx.maps[writing];
+        return writing == KUI_RETAIL_MAP_VALIDATE ? virt + sizeof(virt) : virt + (a - VIRT);
+    }
 #endif
     CHECK(a >= BEGIN && a < END && bytes <= END - a);
     CHECK(writing >= 0 && writing <= KUI_RETAIL_MAP_VALIDATE);
@@ -119,7 +135,12 @@ static void mode(uint32_t bytes, uint32_t type) {
 static void large_reads(void) {
     reset();
     const uint32_t aliases[] = {0,0x80000000u,0xa0000000u};
+#ifdef KUI_RETAIL_CE
+    /* CE's 0x0c... CPU pointers are virtual (virtual_pointers below). */
+    for(unsigned a = 1; a < 3; ++a) {
+#else
     for(unsigned a = 0; a < 3; ++a) {
+#endif
         read_params(45000, 129, (OUTPUT & 0x1fffffffu) | aliases[a]);
         uint32_t read_maps = ctx.maps[0], write_maps = ctx.maps[1];
         uint32_t validations = ctx.maps[KUI_RETAIL_MAP_VALIDATE], checks = ctx.checks;
@@ -153,12 +174,20 @@ static void large_reads(void) {
             for(unsigned i = 0; i < 2048; i += 127)
                 CHECK(ram[OUTPUT - BEGIN + n * 2048 + i] == pattern(45000 + n, i));
     }
+#ifdef KUI_RETAIL_CE
+    CHECK(service.diag.sectors_read == 258 && service.diag.requests == 2);
+#else
     CHECK(service.diag.sectors_read == 387 && service.diag.requests == 3);
+#endif
     /* Full available RAM-sized requests have no arbitrary 64-sector ceiling. */
     uint32_t count = (END - OUTPUT) / 2048;
     read_params(45000, count, OUTPUT);
     CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) > 0);
+#ifdef KUI_RETAIL_CE
+    CHECK(service.request_bytes == count * 2048 && ctx.reads == 130);
+#else
     CHECK(service.request_bytes == count * 2048 && ctx.reads == 195);
+#endif
     CHECK(call(KUI_GD_ABORT, service.token, 0) == 0);
 }
 #endif
@@ -287,7 +316,7 @@ static void silent_cd_audio(void) {
 }
 static void version_query(void) {
     static const uint8_t expected[28] = "GDC Version 1.10 1999-03-31\002";
-    const uint32_t destinations[] = {OUTPUT + 1, (OUTPUT + 1) & 0x1fffffffu,
+    const uint32_t destinations[] = {OUTPUT + 1, LOW_ALIAS(OUTPUT + 1),
                                     (OUTPUT + 1) | 0x20000000u, END - 28};
     reset();
     for(unsigned i = 0; i < sizeof(destinations) / sizeof(*destinations); ++i) {
@@ -341,7 +370,7 @@ static void subcode_query(void) {
             uint32_t bytes=short_read?5:length;
             uint32_t dest=short_read?END-bytes:OUTPUT+1;
             memset(ram+dest-BEGIN,0xa5,bytes+(short_read?0:1));
-            put(PARAM,format);put(PARAM+4,bytes);put(PARAM+8,dest&0x1fffffffu);
+            put(PARAM,format);put(PARAM+4,bytes);put(PARAM+8,LOW_ALIAS(dest));
             int32_t token=call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM);
             CHECK(token>0 && ram[dest-BEGIN]==0xa5);
             CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_PROCESSING);
@@ -501,6 +530,39 @@ static void stream_bytes(uint32_t destination, uint32_t lba, uint32_t skip,
         CHECK(ram[destination - BEGIN + i] ==
               pattern(lba + (skip + i) / sector_bytes, (skip + i) % sector_bytes));
 }
+/* With CE's MMU on, a 0x0c... pointer the CPU uses (parameters, status) is
+ * virtual, while a DMA destination there is physical RAM. */
+static void virtual_pointers(void) {
+    reset(); memset(virt, 0x5a, sizeof(virt));
+    uint32_t params = VIRT + 0xf4ec, status = VIRT + 0xf500;
+    uint32_t physical = (OUTPUT & 0x1fffffffu);
+    uint8_t *v = virt + (params - VIRT);
+    const uint32_t words[4] = {45000 + 150, 3, physical, 0};
+    for(unsigned i = 0; i < 4; ++i)
+        for(unsigned b = 0; b < 4; ++b) v[i * 4 + b] = (uint8_t)(words[i] >> (b * 8));
+    int32_t token = call(KUI_GD_REQUEST, KUI_GD_DMAREAD, params);
+    CHECK(token > 0 && ctx.validate_address == OUTPUT);
+    while(service.pending) CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, status) == KUI_GD_COMPLETED);
+    CHECK(virt[status - VIRT + 8] == 0x00 && virt[status - VIRT + 9] == 0x18); /* 3 * 2048 */
+    for(uint32_t i = 0; i < 3 * 2048; ++i)
+        CHECK(ram[OUTPUT - BEGIN + i] == pattern(45000 + i / 2048, i % 2048));
+    CHECK(virt[0] == 0x5a && virt[physical & 0xffffu] == 0x5a);
+    /* A PIO destination is the CPU's, so virtual too; a DMA one never is. */
+    v = virt + (params - VIRT);
+    const uint32_t pio[4] = {45000 + 150, 1, VIRT, 0};
+    for(unsigned i = 0; i < 4; ++i)
+        for(unsigned b = 0; b < 4; ++b) v[i * 4 + b] = (uint8_t)(pio[i] >> (b * 8));
+    token = call(KUI_GD_REQUEST, KUI_GD_PIOREAD, params);
+    CHECK(token > 0);
+    while(service.pending) CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    for(uint32_t i = 0; i < 2048; ++i) CHECK(virt[i] == pattern(45000, i));
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, status) == KUI_GD_COMPLETED);
+    /* A DMA destination outside RAM's physical and P1/P2 areas (another
+     * process slot) is refused; in 0x0c... it is RAM, never virtual. */
+    v[8] = 0x00; v[9] = 0xf0; v[10] = 0x04; v[11] = 0x02;
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, params) == 0);
+}
 static void stream_reads(void) {
     reset(); memset(&part, 0, sizeof(part));
     /* Without the adapter's part reader a stream is refused. */
@@ -656,7 +718,7 @@ int main(void) {
         large_reads(); paced_steps(); cancel_failures(); metadata(); silent_cd_audio(); version_query(); subcode_query(); bounds_and_modes();
 #endif
 #ifdef KUI_RETAIL_CE
-        stream_reads();
+        virtual_pointers(); stream_reads();
 #endif
     }
     printf("retail GD service: %u checks passed\n", assertions);

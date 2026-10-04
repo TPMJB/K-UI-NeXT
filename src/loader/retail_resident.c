@@ -43,9 +43,11 @@ volatile uint32_t kui_retail_hook_caller[2];
 static uint32_t ce_calls[4][4], ce_count;
 extern volatile uint32_t kui_retail_ce_kernel[3];
 static enum kui_game_result image_result; /* The last image read's, for the trace. */
+/* The GD service hands RAM over as P1 (DMA destinations converted from
+ * physical); anything else is one of CE's virtual addresses. */
 static int ram_alias(uint32_t address) {
     uint32_t area = address & 0xff000000u;
-    return area == 0x0c000000u || area == 0x8c000000u || area == 0xac000000u;
+    return area == 0x8c000000u || area == 0xac000000u;
 }
 #endif
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;

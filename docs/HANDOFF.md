@@ -1,5 +1,15 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: 711 calls in; 0x0c pointers are virtual under CE (2026-10-04 UTC)
+
+Build `9ab26bd0e9ad`: stream reads ran (status line climbing; 711 GD calls,
+4,646 card blocks), then `GD REQUEST REJECTED` for a DMAREAD whose
+parameters were at `0C3BF4EC`, a slot-6 stack address. K-UI treated
+`0x0c......` as physical RAM. Next build (CE only): CPU pointers outside
+P1/P2 are virtual including `0x0c`; DMA destinations stay physical
+(`dma_guest` in `retail_gd.c`; the CE reader's map takes only P1/P2 as
+RAM). Native readers byte-identical (proxy).
+
 ## Windows CE: large stream transfers, stepped (2026-10-04 UTC)
 
 Build `96705505d1d6` (polled SD) stopped at the same call with SD 0 and
