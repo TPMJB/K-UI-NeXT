@@ -17,6 +17,11 @@ matching that code in the loaded kernel and writes to
 tests: `test-retail-gd-ce` (new), `test-retail-image` byte ranges. Native
 SCI reader bytes unchanged (proxy build compared). Details:
 [windows-ce-placement-test.md](windows-ce-placement-test.md).
+Build `bddec88525e8` ([Diagnostic run
+37164952134](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37164952134)):
+host and Dreamcast passed, including the CE package's layout and stack
+checks; native resident sizes unchanged (SCIF 596, SCI 48, IDE 1380,
+background 36 bytes free).
 
 ## Windows CE: black screen, then a hang; status line next (2026-10-03 UTC)
 
