@@ -31,6 +31,9 @@ enum kui_retail_gd_command {
  * DMA_CHECK {bytes left}. Each driver call moves 4 KiB of a transfer and
  * raises the interrupts that keep CE's driver calling: G1 DMA end, and the
  * drive's while bytes remain and at completion (its SYSINTR 21 and 20). */
+/* Ordinary reads (PIOREAD, DMAREAD) in this build: CHECK's word 3 is 1
+ * while one is pending and each step raises the drive's interrupt, so CE's
+ * driver continues on that interrupt instead of sleeping a 25 ms tick. */
 #define KUI_RETAIL_GD_DMAREAD_STREAM 38u
 #define KUI_RETAIL_GD_STREAMING 3
 enum kui_retail_gd_interrupt {

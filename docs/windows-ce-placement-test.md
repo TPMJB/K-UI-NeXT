@@ -387,6 +387,27 @@ Speed options, smallest first: interrupt-driven ordinary reads (CHECK word 3
 time CE spends frozen in the reader); a background reader for CE like the
 native X/Y readers (card DMA and interrupts while CE runs).
 
+## Speed build after fc08d071ed7d (2026-10-04)
+
+CE's scheduler tick is 25 ms (its timer interrupt adds 25 to its millisecond
+count, KData + 0x88, in ARMADA, Bust-a-Move 4 and Worms Armageddon alike), so
+`wsegacd.dll`'s "Sleep(5)" between ordinary-read steps really waits about
+25 ms: two 4 KiB steps per tick caps DMAREAD near 300 KiB/s, and an FMV
+starves. The driver sleeps only when CHECK's word 3 is not 1; with 1 it
+returns pending and its interrupt thread waits for the drive's interrupt.
+
+Next build (CE reader only):
+
+- CHECK reports word 3 = 1 while a PIOREAD/DMAREAD is pending, and every
+  read step raises SYSINTR 20, so the driver continues at once instead of
+  sleeping a tick.
+- The live status line becomes `CALLS COMMAND KIB/S BUSY PCT SECTORS`,
+  redrawn about twice a second: calls, last command (hexadecimal), then in
+  **decimal** the read rate in KiB/s and the share of time CE spends inside
+  K-UI's reader over the last half second or more, and total sectors read.
+  The clock is CE's millisecond count; time inside the reader comes from
+  TMU0's count, which is only read.
+
 ## What each outcome means
 
 - **`EXCEPTION WHILE BOOTSTRAP 2 RAN`**: bootstrap 2 faulted; SPC and the

@@ -313,6 +313,11 @@ static int32_t execute(struct kui_retail_gd *s) {
                 s->position_lba = s->lba + done + n - 1u; s->drive_status = 1;
             }
         }
+#ifdef KUI_RETAIL_CE
+        /* Windows CE's driver waits for the drive's interrupt while CHECK
+         * reports word 3 = 1, instead of sleeping a 25 ms scheduler tick. */
+        s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
+#endif
         if(!s->error && s->completed_bytes < s->request_bytes) {
             s->executing = 0; return 0;
         }
@@ -364,7 +369,15 @@ static int32_t check(struct kui_retail_gd *s, uint32_t token, uint32_t address) 
         memset(out, 0, 16); return KUI_GD_NOT_FOUND;
     }
     put32(out, s->error ? 1u : 0u); put32(out + 4, s->error);
+#ifdef KUI_RETAIL_CE
+    /* Word 3 = 1 while a read is pending: CE's driver then waits for the
+     * drive's interrupt, which each read step raises. */
+    put32(out + 8, s->completed_bytes);
+    put32(out + 12, !s->pending ? 0u : s->command == KUI_GD_PIOREAD ||
+          s->command == KUI_GD_DMAREAD ? 1u : 4u);
+#else
     put32(out + 8, s->completed_bytes); put32(out + 12, s->pending ? 4u : 0u);
+#endif
     int32_t result = s->status;
     if(!s->pending) s->command = 0;
     return result;

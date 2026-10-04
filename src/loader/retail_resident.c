@@ -389,6 +389,41 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 }
 #else
 #ifdef KUI_RETAIL_CE
+/* How fast CE reads and how much of its time it spends inside this reader,
+ * over windows of at least half a second, on a live status line drawn once
+ * per window (drawing costs time too). CE's clock is its millisecond count
+ * (KData, just after the reschedule flag); time inside the reader is
+ * counted from TMU0, which drives CE's tick and is only read here. */
+#define TCOR0 0xffd80008u
+#define TCNT0 0xffd8000cu
+#define TCR0 0xffd80010u
+static struct { uint32_t since, sectors, busy, shown[5]; } meter;
+/* n's decimal digits as hexadecimal ones, for the hexadecimal printer. */
+static uint32_t decimal(uint32_t n) {
+    uint32_t out = 0;
+    for(unsigned shift = 0; shift < 32; shift += 4) { out |= (n % 10u) << shift; n /= 10u; }
+    return out;
+}
+static void meter_call(uint32_t started) {
+    volatile const uint32_t *tmu = (volatile const uint32_t *)(uintptr_t)TCOR0;
+    uint32_t ended = tmu[1], period = tmu[0] + 1u;
+    /* TMU0 counts down; a call is far shorter than its 25 ms period. */
+    meter.busy += started >= ended ? started - ended : started + period - ended;
+    uint32_t now = kui_retail_ce_kernel[2] ?
+        *(volatile const uint32_t *)(uintptr_t)(kui_retail_ce_kernel[2] + 4u) : ce_count * 8u;
+    uint32_t elapsed = now - meter.since;
+    if(elapsed < 500u) return;
+    /* Pphi is 50 MHz; TPSC selects Pphi/4, /16, /64, /256 or /1024. */
+    uint32_t per_ms = 50000u >> (2u + 2u * (*(volatile const uint16_t *)(uintptr_t)TCR0 & 7u));
+    if(meter.since && per_ms) {
+        meter.shown[2] = decimal((service.diag.sectors_read - meter.sectors) * 2000u / elapsed);
+        meter.shown[3] = decimal(meter.busy / per_ms * 100u / elapsed);
+    }
+    meter.since = now; meter.sectors = service.diag.sectors_read; meter.busy = 0;
+    meter.shown[0] = decimal(ce_count); meter.shown[1] = service.diag.last_command;
+    meter.shown[4] = decimal(service.diag.sectors_read);
+    retail_display_status("CALLS    COMMAND  KIB/S    BUSY PCT SECTORS", meter.shown, 5);
+}
 /* One EXEC of the standard step. */
 static int32_t step(uint32_t r4, uint32_t r5) {
     service.step = KUI_RETAIL_GD_STEP_SECTORS;
@@ -428,6 +463,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * Font/flash/system BIOS vectors are independent and unchanged. */
     uint32_t source=kui_retail_hook_source;
 #ifdef KUI_RETAIL_CE
+    uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0;
     /* Source 4 is BIOS system function 2, the disc check (recorded as E0):
      * the image is in the virtual drive, unchanged. */
     uint32_t *call=ce_calls[ce_count++&3u];
@@ -473,13 +509,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
         if(service.interrupts & KUI_RETAIL_GD_IRQ_DRIVE) ce_raise(20u);
         service.interrupts = 0;
     }
-    /* Live status on CE's own screen: every request and every 16th call. */
-    if(r7 == KUI_GD_REQUEST || !(ce_count & 15u)) {
-        static uint32_t status[5]; /* Static: the stack budget is full. */
-        status[0]=ce_count; status[1]=r7; status[2]=service.diag.last_command;
-        status[3]=service.diag.sectors_read; status[4]=service.diag.last_lba;
-        retail_display_status("CALLS    FUNCTION COMMAND  SECTORS  LBA",status,5);
-    }
+    meter_call(started);
 #endif
     return result;
 }

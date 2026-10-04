@@ -1,5 +1,14 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Windows CE: no 25 ms sleeps between reads; rate readout (2026-10-04 UTC)
+
+CE's tick is 25 ms (all three kernels), so the driver's Sleep(5) between
+DMAREAD steps costs a tick each. CE reader: CHECK word 3 = 1 while a read is
+pending and SYSINTR 20 per read step (driver waits on the interrupt instead);
+status line `CALLS COMMAND KIB/S BUSY PCT SECTORS` (decimal except the
+command) from CE's millisecond count (`kui_retail_ce_kernel[2] + 4`) and
+TMU0 counts, redrawn per half-second window. Native readers byte-identical.
+
 ## Windows CE: ARMADA reaches gameplay (2026-10-04 UTC)
 
 Build `fc08d071ed7d`: ARMADA boots through Windows CE to gameplay from SCI

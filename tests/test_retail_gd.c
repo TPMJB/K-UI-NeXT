@@ -163,7 +163,14 @@ static void large_reads(void) {
             CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) ==
                   (done == 129 ? KUI_GD_COMPLETED : KUI_GD_PROCESSING));
             CHECK(get(STATUS + 8) == done * 2048);
+#ifdef KUI_RETAIL_CE
+            /* CE's driver waits on the drive's interrupt each step raises. */
+            CHECK(get(STATUS + 12) == (done == 129 ? 0u : 1u));
+            CHECK(service.interrupts == KUI_RETAIL_GD_IRQ_DRIVE);
+            service.interrupts = 0;
+#else
             CHECK(get(STATUS + 12) == (done == 129 ? 0u : 4u));
+#endif
         }
         CHECK(ctx.reads == before + 65 && ctx.max_count == 2 && ctx.last_count == 1);
         CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
