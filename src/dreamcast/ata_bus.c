@@ -30,6 +30,38 @@ static void write16(void *ctx, uint16_t value) {
     (void)ctx;
     *(volatile uint16_t *)(uintptr_t)0xa05f7080u = value;
 }
+/* A sector callback keeps the volatile 16-bit ATA accesses in one loop rather
+ * than making an indirect call for every word. Buffers need not be aligned;
+ * the aligned path uses GCC's alias-safe word type for byte-array storage.
+ * This remains PIO: no DMA engine, IRQ handler or transfer timing is changed. */
+typedef uint16_t ata_word __attribute__((__may_alias__));
+static void read_sector(void *ctx, void *out) {
+    (void)ctx;
+    volatile uint16_t *data = (volatile uint16_t *)(uintptr_t)0xa05f7080u;
+    if(!((uintptr_t)out & 1u)) {
+        ata_word *p = out;
+        for(unsigned i = 0; i < 256; ++i) p[i] = *data;
+    } else {
+        uint8_t *p = out;
+        for(unsigned i = 0; i < 256; ++i) {
+            uint16_t value = *data;
+            p[2u*i] = (uint8_t)value;
+            p[2u*i+1u] = (uint8_t)(value >> 8);
+        }
+    }
+}
+static void write_sector(void *ctx, const void *in) {
+    (void)ctx;
+    volatile uint16_t *data = (volatile uint16_t *)(uintptr_t)0xa05f7080u;
+    if(!((uintptr_t)in & 1u)) {
+        const ata_word *p = in;
+        for(unsigned i = 0; i < 256; ++i) *data = p[i];
+    } else {
+        const uint8_t *p = in;
+        for(unsigned i = 0; i < 256; ++i)
+            *data = (uint16_t)(p[2u*i] | ((uint16_t)p[2u*i+1u] << 8));
+    }
+}
 static bool dma_busy(void *ctx) {
     (void)ctx;
     return *(volatile uint32_t *)(uintptr_t)0xa05f7418u != 0;
@@ -63,7 +95,8 @@ static void prepare(void *ctx) {
 }
 const struct kui_ata_bus *kui_ata_native_bus(void) {
     static const struct kui_ata_bus bus = {
-        NULL, read8, write8, read16, write16, dma_busy, prepare, NULL, NULL, activate
+        NULL, read8, write8, read16, write16, dma_busy, prepare, NULL, NULL, activate,
+        read_sector, write_sector
     };
     return &bus;
 }

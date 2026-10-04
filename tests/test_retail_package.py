@@ -393,7 +393,7 @@ class RetailLinkedLayout(unittest.TestCase):
             if transport == "scia":
                 pass
             elif transport == "ide":
-                required += ["kui_ata_read"]
+                required += ["kui_ata_read_run", "kui_ata_read_stop"]
             else:
                 required += ["kui_loader_sd_stream_next"]
                 prefix = "kui_retail_sd_" if transport == "scif" else "kui_sci_sd_"
@@ -407,7 +407,8 @@ class RetailLinkedLayout(unittest.TestCase):
                        "_kui_retail_hook_fault": layout.RESIDENT_ADDRESS + 132})
             frames = list(ResidentStackReports.required)
             if transport == "ide":
-                frames[-1] = "kui_ata_read"
+                frames[-1] = "kui_ata_read_run"
+                frames.append("kui_ata_read_stop")
             report = "\n".join(f"test.c:1:1:{frame}\t32\tstatic" for frame in frames)
             (self.directory / transport).mkdir()
             if transport == "scia":
@@ -462,7 +463,8 @@ class RetailLinkedLayout(unittest.TestCase):
         result = check_directory(self.directory)
         for transport in TRANSPORTS:
             self.assertEqual(result["resident-" + transport]["payload_bytes"], 128)
-            self.assertEqual(result["resident_stacks"][transport]["conservative_bytes"], 384)
+            self.assertEqual(result["resident_stacks"][transport]["conservative_bytes"],
+                             416 if transport == "ide" else 384)
         self.assertEqual(result["resident-scia"]["payload_bytes"], 128)
         self.assertEqual(result["resident_stacks"]["scia"]["worst_bytes"], 48 + 172 + 8)
 

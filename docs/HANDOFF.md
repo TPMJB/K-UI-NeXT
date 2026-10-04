@@ -1,5 +1,21 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## ATA readiness release candidate (2026-10-04)
+
+Owner requests ATA preparation and a release build, but cannot test IDE/CF
+until soldering is complete. SCI512 build `6dc75f1ea0b2` is still awaiting
+their next test. Preserve that branch/artifact while preparing the isolated
+`codex/ata-readiness` candidate. No final release promotion is requested by
+the candidate packaging step.
+
+The candidate adds bounded eight-sector ATA PIO command streaming, optional
+bulk PIO sector copies, and device-selection/IDENTIFY validity fixes. It
+does not enable ATA DMA or Windows CE on IDE. Candidate packages explicitly
+retain those evidence limits. See
+[implementation scope and DMA follow-up](evidence/ata-readiness-2026-10-04.md).
+SCI/SCIF tuning stays at the selected
+baseline; shared resident memory and stack bounds must still pass.
+
 ## Windows CE: compare 512-byte token allowance (2026-10-04)
 
 Owner confirms photo `01-image-1791148467591.jpg` is ARMADA on build
