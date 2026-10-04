@@ -20,8 +20,10 @@ used for 16 tracks and 128 pieces:
 | Standard (SCIF, SCI, IDE, Windows CE) | 160 | 31 tracks and 129 pieces; 99 tracks and 61 pieces |
 | Background SCI reader | 64 | 31 tracks and 33 pieces |
 
-Each reader is 64 bytes smaller than before (proxy build). The disc service
-now reads one track layout instead of two.
+No reader grew (CI build `e965e09d10b0`): code is 12 to 52 bytes smaller,
+free space is unchanged for SCIF (596 bytes) and SCI (48), and up for IDE
+(1,380 to 1,412) and the background reader (36 to 100). The disc service now
+reads one track layout instead of two.
 
 Read speed does not depend on the track count.
 

@@ -9,8 +9,19 @@ in the background reader, the same memory as before. A track's number is its
 position, and the GD service reads track slots directly (one layout, not
 two). Audio tracks keep their extents when everything fits; otherwise they
 are listed without them, and reads of them are refused. Wire format
-`KUIRTI02`. Every resident is 64 bytes smaller (proxy). Details:
+`KUIRTI02`. No resident grew: free bytes SCIF 596, SCI 48 (unchanged), IDE
+1,412 (was 1,380), background 100 (was 36). Details:
 [games-launch-map.md](games-launch-map.md).
+The first build (`24018ef`) failed in the linked-instruction audit: it took a
+literal-pool pointer for a PC-relative load that "loaded" the stage's FPSCR
+setup and so skipped it ("Missing unique bootstrap FPSCR setup"). The audit
+now walks in address order so pool data never marks literals
+(`tests/test_retail_instructions.py`), and CI annotates every failing line
+(make's `***` lines, Python exceptions). Build `e965e09d10b0`: host and
+Dreamcast passed ([run
+37179324326](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37179324326)).
+To test: Bust-a-Move 4 (Windows CE boot test), MDK2 (normal launch), and a
+title that already works.
 
 ## Windows CE: Worms Armageddon and ARMADA run; FMVs slow (2026-10-04 UTC)
 

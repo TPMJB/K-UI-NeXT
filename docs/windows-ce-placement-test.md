@@ -433,7 +433,8 @@ the BIOS had made it within EXEC. Nested GD calls from the callback are
 ordinary calls.
 
 Bust-a-Move 4 did not start from the launcher: it has 25 tracks and the
-launch map held 16. The map now holds 99 ([the launch map](games-launch-map.md)).
+launch map held 16. The map now holds 99 ([the launch map](games-launch-map.md));
+build `e965e09d10b0` is the one to try it with.
 
 ## Console result: speed and PIO stream build e349bdc5457a (2026-10-04)
 
