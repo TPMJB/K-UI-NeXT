@@ -9,19 +9,19 @@ static uint32_t needed(const struct kui_retail_cursor *c) {
 static enum kui_game_result locate(struct kui_retail_cursor *c) {
     const struct kui_retail_manifest *m = c->manifest;
     uint32_t sector = c->lba + c->done;
-    while(m->tracks[c->track].gd.end_lba <= sector) ++c->track;
-    const struct kui_retail_track *t = &m->tracks[c->track];
-    uint32_t file_block = ((sector - t->gd.start_lba) * KUI_GAME_RAW_BYTES + c->offset) / 512u;
+    while(m->slots[c->track].track.end_lba <= sector) ++c->track;
+    const struct kui_retail_track *t = &m->slots[c->track].track;
+    uint32_t file_block = ((sector - t->start_lba) * KUI_GAME_RAW_BYTES + c->offset) / 512u;
     uint32_t last = c->lba + c->count;
-    if(last > t->gd.end_lba) last = t->gd.end_lba;
-    uint32_t end_block = ((last - 1u - t->gd.start_lba) * KUI_GAME_RAW_BYTES + needed(c) + 511u) / 512u;
+    if(last > t->end_lba) last = t->end_lba;
+    uint32_t end_block = ((last - 1u - t->start_lba) * KUI_GAME_RAW_BYTES + needed(c) + 511u) / 512u;
     uint32_t lo = t->first_extent, hi = lo + t->extent_count;
     while(lo + 1u < hi) {
         uint32_t mid = lo + (hi - lo) / 2u;
-        if(m->extents[mid].file_block <= file_block) lo = mid;
+        if(m->slots[mid].extent.file_block <= file_block) lo = mid;
         else hi = mid;
     }
-    const struct kui_retail_extent *e = &m->extents[lo];
+    const struct kui_retail_extent *e = &m->slots[lo].extent;
     if(file_block < e->file_block || file_block - e->file_block >= e->blocks) return KUI_GAME_RANGE;
     uint32_t stop = e->file_block + e->blocks;
     if(stop > end_block) stop = end_block;
@@ -37,8 +37,8 @@ enum kui_game_result kui_retail_cursor_begin(struct kui_retail_cursor *c,
     return locate(c);
 }
 enum kui_game_result kui_retail_cursor_feed(struct kui_retail_cursor *c, const uint8_t block[512]) {
-    const struct kui_retail_track *t = &c->manifest->tracks[c->track];
-    uint32_t base = (c->lba + c->done - t->gd.start_lba) * KUI_GAME_RAW_BYTES;
+    const struct kui_retail_track *t = &c->manifest->slots[c->track].track;
+    uint32_t base = (c->lba + c->done - t->start_lba) * KUI_GAME_RAW_BYTES;
     uint32_t start = (base + c->offset) & ~511u, end = start + 512u;
     for(;;) {
         uint32_t position = base + c->offset;
@@ -59,7 +59,7 @@ enum kui_game_result kui_retail_cursor_feed(struct kui_retail_cursor *c, const u
         if(c->offset < needed(c)) break;
         c->offset = 0;
         if(++c->done == c->count) return KUI_GAME_OK;
-        if(c->lba + c->done >= t->gd.end_lba) break; /* next sector: next track file */
+        if(c->lba + c->done >= t->end_lba) break; /* next sector: next track file */
         base += KUI_GAME_RAW_BYTES;
     }
     return locate(c);

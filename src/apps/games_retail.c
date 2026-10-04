@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+_Static_assert(KUI_GAME_TRACK_MAX <= KUI_RETAIL_IMAGE_TRACKS, "a launch map holds every GDI's tracks");
 struct files {
     char root[KUI_DEST_ROOT_CAP], open_name[KUI_GAME_NAME_CAP];
     kui_cancel_fn cancel;
@@ -105,43 +106,68 @@ static bool layout(const struct kui_runtime_image *image,bool ce) {
     return true;
 }
 /* FatFs fast-seek link map: the table size, then (cluster count, first
- * cluster) pairs ending in zero. Room for more runs than a manifest can hold,
- * so an over-fragmented track fails on the extent limit, not on this table. */
-#define LINK_MAP_WORDS (2u+2u*(KUI_RETAIL_IMAGE_EXTENTS+1u))
+ * cluster) pairs ending in zero. Room for more runs than a map can hold, so
+ * an over-fragmented track fails on the slot limit, not on this table. */
+#define LINK_MAP_WORDS (2u+2u*(KUI_RETAIL_IMAGE_SLOTS+1u))
 static DWORD link_map[LINK_MAP_WORDS]; /* One I/O worker prepares at a time. */
-static bool map_track(struct files *files,FATFS *fs,const struct kui_volume *volume,
-    const struct kui_game_image_track *track,struct kui_retail_manifest *map,unsigned index) {
+enum map_result {MAP_OK,MAP_FULL,MAP_FAILED};
+/* Lists track index in map's slots and, when mapped, appends its file's
+ * extents, using at most capacity slots in all. An audio track not mapped
+ * keeps no extents (the readers refuse its sectors). */
+static enum map_result map_track(struct files *files,FATFS *fs,const struct kui_volume *volume,
+    const struct kui_game_image_track *track,struct kui_retail_manifest *map,unsigned index,
+    uint32_t capacity,bool mapped) {
+    struct kui_retail_track *t=&map->slots[index].track;
+    *t=(struct kui_retail_track){.start_lba=track->start_lba,.end_lba=track->end_lba,
+        .first_extent=(uint16_t)(map->track_count+map->extent_count),.control=(uint8_t)track->control};
+    if(!mapped) return stopped(files)?MAP_FAILED:MAP_OK;
     char path[KUI_GAMES_FILE_CAP+3];FIL file;
-    if(stopped(files) || !join(files,track->name,path) || f_open(&file,path,FA_READ)!=FR_OK) return false;
-    bool ok=f_size(&file)==track->file_bytes && fs->csize;
-    struct kui_retail_track *t=&map->tracks[index];
-    *t=(struct kui_retail_track){.gd={.number=track->number,.start_lba=track->start_lba,
-        .end_lba=track->end_lba,.control=track->control},.first_extent=map->extent_count};
+    if(stopped(files) || !join(files,track->name,path) || f_open(&file,path,FA_READ)!=FR_OK) return MAP_FAILED;
+    enum map_result result=f_size(&file)==track->file_bytes && fs->csize?MAP_OK:MAP_FAILED;
     uint32_t total=(uint32_t)((track->file_bytes+511u)/512u);
     /* The allocation table alone lists the file's contiguous cluster runs:
      * no track data is read (one data read per cluster took seconds). */
     link_map[0]=LINK_MAP_WORDS;file.cltbl=link_map;
-    if(ok) ok=f_lseek(&file,CREATE_LINKMAP)==FR_OK && !stopped(files);
+    if(result==MAP_OK) {
+        FRESULT seek=f_lseek(&file,CREATE_LINKMAP);
+        result=seek==FR_NOT_ENOUGH_CORE?MAP_FULL:seek!=FR_OK || stopped(files)?MAP_FAILED:MAP_OK;
+    }
     uint32_t block=0;
-    for(const DWORD *run=link_map+1;ok && block<total;run+=2) {
-        if(!run[0] || run[1]<2u || run[1]>=fs->n_fatent) {ok=false;break;}
+    for(const DWORD *run=link_map+1;result==MAP_OK && block<total;run+=2) {
+        if(!run[0] || run[1]<2u || run[1]>=fs->n_fatent) {result=MAP_FAILED;break;}
         uint64_t sect=(uint64_t)fs->database+(uint64_t)(run[1]-2u)*fs->csize;
         uint64_t count=(uint64_t)run[0]*fs->csize;
         if(count>total-block) count=total-block;
-        if(sect<fs->database || sect>=volume->count || sect+count>volume->count) {ok=false;break;}
-        uint32_t card=volume->start+(uint32_t)sect;
-        struct kui_retail_extent *last=t->extent_count?&map->extents[map->extent_count-1]:NULL;
+        if(sect<fs->database || sect>=volume->count || sect+count>volume->count) {result=MAP_FAILED;break;}
+        uint32_t card=volume->start+(uint32_t)sect,used=map->track_count+map->extent_count;
+        struct kui_retail_extent *last=t->extent_count?&map->slots[used-1].extent:NULL;
         if(last && (uint64_t)last->card_lba+last->blocks==card) last->blocks+=(uint32_t)count;
         else {
-            if(map->extent_count==KUI_RETAIL_IMAGE_EXTENTS) {ok=false;break;}
-            map->extents[map->extent_count++]=(struct kui_retail_extent){block,card,(uint32_t)count};
-            ++t->extent_count;
+            if(used>=capacity || t->extent_count==UINT8_MAX) {result=MAP_FULL;break;}
+            map->slots[used].extent=(struct kui_retail_extent){block,card,(uint32_t)count};
+            ++map->extent_count;++t->extent_count;
         }
         block+=(uint32_t)count;
     }
     file.cltbl=NULL;
-    if(f_close(&file)!=FR_OK) ok=false;
-    return ok;
+    if(f_close(&file)!=FR_OK) result=MAP_FAILED;
+    return result;
+}
+/* Maps every track's file within capacity slots when they fit; otherwise
+ * lists audio tracks without their files: K-UI plays no disc audio, and
+ * games read audio tracks only to play them. *audio says which. */
+static enum map_result map_tracks(struct files *files,FATFS *fs,const struct kui_volume *volume,
+    const struct kui_game_image *image,struct kui_retail_manifest *map,uint32_t capacity,bool *audio) {
+    enum map_result result=MAP_FULL;*audio=false;
+    if(image->count>capacity) return MAP_FULL;
+    for(int with_audio=1;with_audio>=0 && result==MAP_FULL;--with_audio) {
+        memset(map->slots,0,sizeof(map->slots));map->extent_count=0;result=MAP_OK;
+        for(unsigned i=0;i<image->count && result==MAP_OK;i++)
+            result=map_track(files,fs,volume,&image->tracks[i],map,i,capacity,
+                with_audio || image->tracks[i].control);
+        *audio=with_audio;
+    }
+    return result;
 }
 /* Hash only the requested logical bytes of the IP. The boot executable is not
  * read here: the stage checks each of its sectors' headers as it loads them. */
@@ -197,7 +223,6 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
             "raw 2352-byte GDI tracks with zero file offsets required":kui_game_result_name(r);
         goto done;
     }
-    if(image->count>KUI_RETAIL_IMAGE_TRACKS) {problem="launch map supports at most 16 tracks";goto done;}
     map->storage_transport=kui_storage_active();
     if(map->storage_transport>KUI_STORAGE_IDE) {problem="storage transport not selected";goto done;}
     log("Retail boot storage: %s",map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":
@@ -256,23 +281,35 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     map->partition_start=volume.start;map->partition_end=(uint64_t)volume.start+volume.count;
     map->card_sectors=map->partition_end; /* detached stage checks actual capacity */
     log("Retail boot: mapping %u tracks",image->count);
-    for(unsigned i=0;i<image->count;i++) {
-        if(!map_track(&files,&fs,&volume,&image->tracks[i],map,i)) {
-            problem="track map failed: changed file, I/O, bounds or fragmentation limit (128 extents)";goto done;
-        }
-        log("Retail map T%02u: %u extents",image->tracks[i].number,map->tracks[i].extent_count);
+    bool background=!ce && reader!=KUI_RETAIL_READER_STANDARD,audio=true;
+    if(background && map->storage_transport!=KUI_STORAGE_SCI) {
+        log("Retail boot: the background reader needs SCI microSD; using the standard reader");
+        background=false;
     }
-    if(!ce && reader!=KUI_RETAIL_READER_STANDARD) {
-        if(map->storage_transport!=KUI_STORAGE_SCI)
-            log("Retail boot: the background reader needs SCI microSD; using the standard reader");
-        else if(map->extent_count>KUI_RETAIL_ASYNC_EXTENTS)
-            log("Retail boot: %u extents exceed the background reader's %u; using the standard reader",
-                map->extent_count,KUI_RETAIL_ASYNC_EXTENTS);
-        else {
-            map->reader=reader;
-            log("Retail boot reader: background SCI stream (test, %s)",
-                reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
+    enum map_result mapped=MAP_FULL;
+    if(background) {
+        mapped=map_tracks(&files,&fs,&volume,image,map,KUI_RETAIL_ASYNC_SLOTS,&audio);
+        if(mapped==MAP_FULL) {
+            log("Retail boot: the map needs more than the background reader's %u slots; using the standard reader",
+                KUI_RETAIL_ASYNC_SLOTS);
+            background=false;
         }
+    }
+    if(!background && mapped!=MAP_FAILED) mapped=map_tracks(&files,&fs,&volume,image,map,KUI_RETAIL_IMAGE_SLOTS,&audio);
+    if(mapped!=MAP_OK) {
+        problem=mapped==MAP_FULL?"track files too fragmented for the launch map (160 slots)":
+            "track map failed: changed file, I/O or bounds";
+        goto done;
+    }
+    for(unsigned i=0;i<image->count;i++) if(map->slots[i].track.extent_count)
+        log("Retail map T%02u: %u extents",image->tracks[i].number,map->slots[i].track.extent_count);
+    if(!audio)
+        log("Retail boot: audio tracks listed without their files to fit %u tracks; their sectors cannot be read",
+            image->count);
+    if(background) {
+        map->reader=reader;
+        log("Retail boot reader: background SCI stream (test, %s)",
+            reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}

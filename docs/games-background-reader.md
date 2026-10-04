@@ -141,8 +141,9 @@ included (`src/loader/retail_async.h`).
 ### Memory
 
 The background resident is a fourth low resident (`resident-scia`). To fit
-the receive areas it holds 32 extents instead of 128, has no ordinary block
-reader, and keeps a 352-byte private stack instead of 1,280: its worst-case
+the receive areas it holds a 64-slot launch map instead of 160 slots (tracks
+and extents together; see [the launch map](games-launch-map.md)), has no
+ordinary block reader, and keeps a 352-byte private stack instead of 1,280: its worst-case
 stack depth comes from GCC's call graph (`-fcallgraph-info=su`,
 `tools/check_retail_stack.py`) rather than a sum of every frame. The worst
 path is a GD call into the service core at about 224 bytes (CI compiler),

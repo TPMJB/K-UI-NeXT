@@ -71,8 +71,9 @@ static uint32_t resident_limit;
 static void select_resident(void) {
     const uint8_t *end;
     resident_limit=KUI_RETAIL_STANDARD_LIMIT;
-    /* Decoding accepted the background reader only for SCI with at most
-     * KUI_RETAIL_ASYNC_EXTENTS extents, the most its resident holds. */
+    /* Decoding accepted the background reader only for SCI with tracks and
+     * extents in at most KUI_RETAIL_ASYNC_SLOTS slots, the most its resident
+     * holds. */
     if(manifest.reader!=KUI_RETAIL_READER_STANDARD) {
         resident_blob=__retail_resident_scia_blob_start;
         resident_bytes=(size_t)(__retail_resident_scia_blob_end-resident_blob);

@@ -1293,7 +1293,7 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         } else {
             words(p,44,337,right,AMBER,d->windows_ce?"Windows CE games cannot be launched yet.":
                 !d->native_gd?"This image has no supported native GD boot header.":
-                d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 16 tracks in V1.5.":
+                d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 99 tracks.":
                 "This image exceeds the current launch limits.",false);
             words(p,44,365,right,MUTED,"Y Advanced read test   X Inspect again",false);
         }

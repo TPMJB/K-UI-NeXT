@@ -31,8 +31,23 @@ static const char *const ce_package = "0:/KUI/apps/games/ce-probe.kui";
 static const char *const names[] = {"track01.bin", "music track02.raw", "track03.bin", "music track04.raw"};
 static const uint32_t starts[] = {0, 4, 45000, 45064};
 static const uint32_t counts[] = {4, 4, 64, 4};
+/* Tracks 5 on are copies of track 2's audio, four sectors each, end to end. */
 static unsigned track_count(void) {
-    return !strcmp(test.fault, "track-limit") ? 17u : !strcmp(test.fault, "cdda-warning") ? 4u : 3u;
+    return !strcmp(test.fault, "tracks-99") ? 99u :
+        !strcmp(test.fault, "tracks-31") || !strcmp(test.fault, "async-tracks-31") ? 31u :
+        !strcmp(test.fault, "async-tracks-40") ? 40u :
+        !strcmp(test.fault, "cdda-warning") ? 4u : 3u;
+}
+static const char *track_name(unsigned i, char generated[32]) {
+    snprintf(generated, 32, "track%02u.raw", i + 1);
+    return i < 4 ? names[i] : generated;
+}
+static uint32_t track_start(unsigned i) { return i < 4 ? starts[i] : 45064u + (i - 3u) * 4u; }
+static uint32_t track_sectors(unsigned i) { return i < 4 ? counts[i] : 4u; }
+/* Maps whose tracks with their files exceed the reader's slots list audio
+ * tracks without them: 99 + 99 > 160, and the background reader's 40 + 40 > 64. */
+static bool audio_unmapped(void) {
+    return !strcmp(test.fault, "tracks-99") || !strcmp(test.fault, "async-tracks-40");
 }
 static bool fault(const char *name) { return test.active && !strcmp(test.fault, name); }
 static void log_line(const char *format, ...) {
@@ -56,8 +71,9 @@ static int sync_image(void *ctx) {
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
 unsigned kui_storage_active(void) {
     /* The CE boot test needs SCI; ce-probe-scif checks the refusal. */
-    return !strcmp(test.fault, "async-on-sci") || (!strncmp(test.fault, "ce-probe", 8) &&
-        strcmp(test.fault, "ce-probe-scif")) ? KUI_STORAGE_SCI : KUI_STORAGE_SCIF;
+    return !strcmp(test.fault, "async-on-sci") || !strncmp(test.fault, "async-tracks", 12) ||
+        (!strncmp(test.fault, "ce-probe", 8) && strcmp(test.fault, "ce-probe-scif")) ?
+        KUI_STORAGE_SCI : KUI_STORAGE_SCIF;
 }
 bool kui_sd_connect(void) {
     assert(!test.connected); ++test.connects;
@@ -202,8 +218,7 @@ static void seed(const char *directory) {
     for(unsigned i = 0; i < track_count(); ++i) {
         if(i == 1 && !strcmp(test.fault, "missing-track")) continue;
         char path[256], generated[32];
-        snprintf(generated, sizeof(generated), "track%02u.raw", i + 1);
-        const char *name = i < 4 ? names[i] : generated;
+        const char *name = track_name(i, generated);
         snprintf(path, sizeof(path), "0:/Games/Reader Test/%s", name);
         data = host_file(directory, name, &size);
         if(i == 2 && !strcmp(test.fault, "bad-ip")) data[16] ^= 1;
@@ -213,7 +228,7 @@ static void seed(const char *directory) {
         if(i == 2 && !strcmp(test.fault, "bad-flags")) data[16 + 60] = 'G';
         if(i == 2 && !strcmp(test.fault, "fragment-limit")) {
             size_t prior = size;
-            size_t minimum = (KUI_RETAIL_IMAGE_EXTENTS + 2u) * (size_t)fs.csize * 512u;
+            size_t minimum = (KUI_RETAIL_IMAGE_SLOTS + 2u) * (size_t)fs.csize * 512u;
             size = ((minimum + 2351u) / 2352u) * 2352u;
             if(size < prior) size = prior;
             data = realloc(data, size); assert(data);
@@ -250,28 +265,40 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(map->card_sectors <= test.blocks && map->partition_end <= map->card_sectors);
     assert(map->partition_start == 0 || map->partition_start == 2048);
     assert(map->partition_end - map->partition_start == 96u * 1024u * 1024u / 512u);
-    assert(map->track_count == track_count() && map->extent_count >= track_count());
+    assert(map->track_count == track_count() &&
+           map->extent_count >= (audio_unmapped() ? 2u : track_count()));
     assert(map->session_lba == 45000 && map->boot_lba == 45021 && map->boot_bytes == (!strcmp(test.fault, "boot-tail") ? 3001u : 4096u));
     assert(!strcmp(map->title, !strcmp(test.fault, "other-title") ? "Independent Native Game" :
         !strcmp(test.fault, "blank-title") ? "Untitled game" : "DEAD OR ALIVE 2"));
     assert(!strcmp(map->bootfile, !strcmp(test.fault, "alternate-bootfile") ? "ALT_BOOT.BIN" : "1ST_READ.BIN"));
-    if(!strcmp(test.fault, "fragmented")) assert(map->tracks[2].extent_count > 1);
+    if(!strcmp(test.fault, "fragmented")) assert(map->slots[2].track.extent_count > 1);
     /* The background reader is granted only on SCI; SCIF falls back. */
-    assert(map->reader == (!strcmp(test.fault, "async-on-sci") ? KUI_RETAIL_READER_ASYNC :
-                           KUI_RETAIL_READER_STANDARD));
+    assert(map->reader == (!strcmp(test.fault, "async-on-sci") || !strncmp(test.fault, "async-tracks", 12) ?
+                           KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD));
     assert(map->storage_transport == kui_storage_active());
     size_t size; uint8_t *gdi = host_file(directory, "disc.gdi", &size);
     assert(map->gdi_crc32 == kui_crc32(0, gdi, size)); free(gdi);
     struct kui_retail_image reader;
     assert(kui_retail_image_init(&reader, map, detached_block, NULL) == KUI_GAME_OK);
-    uint8_t *expected[4]; size_t sizes[4];
+    uint8_t *expected[KUI_RETAIL_IMAGE_TRACKS] = {0}; size_t sizes[KUI_RETAIL_IMAGE_TRACKS];
     uint8_t *actual = malloc(KUI_GAME_RAW_BYTES * 64u); assert(actual);
     for(unsigned i = 0; i < track_count(); ++i) {
-        expected[i] = host_file(directory, names[i], &sizes[i]);
-        assert(sizes[i] == (size_t)counts[i] * KUI_GAME_RAW_BYTES);
-        assert(map->tracks[i].gd.number == i + 1 && map->tracks[i].gd.start_lba == starts[i]);
-        assert(map->tracks[i].gd.end_lba == starts[i] + counts[i]);
-        assert(kui_retail_image_read(&reader, starts[i], counts[i], KUI_GAME_SECTOR_RAW,
+        char generated[32];
+        const struct kui_retail_track *t = &map->slots[i].track;
+        expected[i] = host_file(directory, track_name(i, generated), &sizes[i]);
+        assert(sizes[i] == (size_t)track_sectors(i) * KUI_GAME_RAW_BYTES);
+        assert(t->start_lba == track_start(i) && t->end_lba == track_start(i) + track_sectors(i));
+        assert(t->control == (i == 0 || i == 2 ? 4u : 0u));
+        if(t->control == 0 && audio_unmapped()) {
+            /* Listed without its file: refused before any card read. */
+            unsigned before = test.physical_reads;
+            assert(!t->extent_count && kui_retail_image_read(&reader, t->start_lba, 1,
+                KUI_GAME_SECTOR_RAW, actual, KUI_GAME_RAW_BYTES) == KUI_GAME_AUDIO);
+            assert(test.physical_reads == before);
+            continue;
+        }
+        assert(t->extent_count);
+        assert(kui_retail_image_read(&reader, track_start(i), track_sectors(i), KUI_GAME_SECTOR_RAW,
             actual, sizes[i]) == KUI_GAME_OK && !memcmp(actual, expected[i], sizes[i]));
         if(i == 0 || i == 2) {
             assert(kui_retail_image_read(&reader, starts[i], counts[i], KUI_GAME_SECTOR_MODE1,
@@ -303,10 +330,15 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
         expected_ip_crc = kui_crc32(expected_ip_crc, expected[2] + n * 2352u + 16u, 2048);
     assert(ip_crc == map->ip_crc32 && expected_ip_crc == map->ip_crc32);
     /* Adjacent data/audio boundary, hole and cooked audio rejection. */
-    assert(kui_retail_image_read(&reader, 3, 2, KUI_GAME_SECTOR_RAW, actual, 4704) == KUI_GAME_OK);
-    assert(!memcmp(actual, expected[0] + 3u * 2352u, 2352) && !memcmp(actual + 2352, expected[1], 2352));
+    if(audio_unmapped()) {
+        assert(kui_retail_image_read(&reader, 3, 2, KUI_GAME_SECTOR_RAW, actual, 4704) == KUI_GAME_AUDIO);
+    } else {
+        assert(kui_retail_image_read(&reader, 3, 2, KUI_GAME_SECTOR_RAW, actual, 4704) == KUI_GAME_OK);
+        assert(!memcmp(actual, expected[0] + 3u * 2352u, 2352) && !memcmp(actual + 2352, expected[1], 2352));
+    }
     unsigned reads = test.physical_reads;
-    assert(kui_retail_image_read(&reader, 7, 2, KUI_GAME_SECTOR_RAW, actual, 4704) == KUI_GAME_GAP);
+    assert(kui_retail_image_read(&reader, 7, 2, KUI_GAME_SECTOR_RAW, actual, 4704) ==
+           (audio_unmapped() ? KUI_GAME_AUDIO : KUI_GAME_GAP));
     assert(kui_retail_image_read(&reader, 4, 1, KUI_GAME_SECTOR_MODE1, actual, 2048) == KUI_GAME_AUDIO);
     assert(test.physical_reads == reads && reads > 0);
     for(unsigned i = 0; i < track_count(); ++i) free(expected[i]);
@@ -323,7 +355,7 @@ static void check(const char *directory) {
         !strcmp(test.fault, "ce-probe") ||
         !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "other-title") ||
         !strcmp(test.fault, "alternate-bootfile") || !strcmp(test.fault, "cdda-warning") ||
-        !strcmp(test.fault, "blank-title");
+        !strcmp(test.fault, "blank-title") || !strncmp(test.fault, "tracks-", 7);
     assert(result == valid);
     assert(!test.boot_read);
     if(valid) check_mapping(directory, &image);

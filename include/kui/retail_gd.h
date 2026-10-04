@@ -3,6 +3,7 @@
 #define KUI_RETAIL_GD_H
 
 #include "kui/gd_service.h"
+#include "kui/retail_image.h"
 
 /* This opt-in service is independent of the accepted own-client probe. The
  * native entry must serialize dispatch BEFORE switching to its private stack,
@@ -54,14 +55,10 @@ struct kui_retail_gd_diagnostics {
     uint32_t last_error;
     int32_t last_result;
 };
-struct kui_retail_track;
 struct kui_retail_gd {
     struct kui_gd_ops ops;
-    union {
-        const struct kui_gd_track *tracks;
-        const struct kui_retail_track *image_tracks;
-    };
-    uint32_t image_track_layout, track_count, guest_begin, guest_end;
+    const union kui_retail_slot *tracks; /* A launch map's track slots. */
+    uint32_t track_count, guest_begin, guest_end;
     uint32_t sector_part, track_type, sector_bytes;
     uint32_t token, command, lba, count, destination, area, request_bytes;
     uint32_t completed_bytes, error, pending, executing, initialized;
@@ -83,14 +80,16 @@ struct kui_retail_gd {
     struct kui_retail_gd_diagnostics diag;
 };
 
-/* Tracks are referenced, not copied, and must stay resident and immutable.
+/* Tracks (a launch map's first count slots, track i numbered i + 1; their
+ * extent fields are not used here) are referenced, not copied, and must
+ * stay resident and immutable.
  * ops.map receives checked P1 addresses. Full read destinations are mapped
  * with KUI_RETAIL_MAP_VALIDATE during REQUEST, without cache maintenance or
  * memory access; EXEC maps each output chunk for writing before use.
  * ops.check is called in <=8-sector chunks with no I/O; ops.read only from
  * EXEC, in chunks of at most step sectors (two unless the adapter paces it).
  * All destination bytes must fit [guest_begin,guest_end). */
-int kui_retail_gd_init(struct kui_retail_gd *, const struct kui_gd_track *,
+int kui_retail_gd_init(struct kui_retail_gd *, const union kui_retail_slot *tracks,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,
     uint32_t guest_end);
 
@@ -98,15 +97,9 @@ int kui_retail_gd_init(struct kui_retail_gd *, const struct kui_gd_track *,
  * immutable manifest (including GD session boundaries). Pointers/callbacks and
  * guest bounds must be valid. This keeps duplicate input validation out of the
  * protected low-memory reader; untrusted callers use kui_retail_gd_init. */
-void kui_retail_gd_init_validated(struct kui_retail_gd *, const struct kui_gd_track *,
+void kui_retail_gd_init_validated(struct kui_retail_gd *, const union kui_retail_slot *tracks,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,
     uint32_t guest_end);
-/* Same trusted initialization using the manifest's actual track array.
- * This borrows each track's GD subobject with its enclosing array's stride;
- * the manifest must remain resident and immutable for the service lifetime. */
-void kui_retail_gd_init_manifest_validated(struct kui_retail_gd *,
-    const struct kui_retail_track *, uint32_t count, const struct kui_gd_ops *,
-    uint32_t guest_begin, uint32_t guest_end);
 
 /* Virtual PIOREAD/DMAREAD complete by polling and CPU copy into guest memory;
  * no virtual GD DMA interrupt/callback is generated. The physical sector

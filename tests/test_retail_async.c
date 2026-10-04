@@ -84,18 +84,18 @@ static void fixture(unsigned take_max, bool scattered) {
     static const uint32_t ends[4] = {3, 5, 45300, 45302};
     uint32_t used = 0;
     for(unsigned i = 0; i < 4; ++i) {
-        struct kui_retail_track *t = &manifest.tracks[i];
-        *t = (struct kui_retail_track){.gd={.number=i + 1, .start_lba=starts[i],
-            .end_lba=ends[i], .control=i == 1 ? 0u : 4u}, .first_extent=manifest.extent_count};
-        uint32_t bytes = (t->gd.end_lba - t->gd.start_lba) * 2352u;
+        struct kui_retail_track *t = &manifest.slots[i].track;
+        *t = (struct kui_retail_track){.start_lba=starts[i], .end_lba=ends[i],
+            .control=i == 1 ? 0u : 4u, .first_extent=(uint16_t)(4u + manifest.extent_count)};
+        uint32_t bytes = (t->end_lba - t->start_lba) * 2352u;
         uint32_t blocks = (bytes + 511u) / 512u;
         for(uint32_t n = 0; n < blocks;) {
             uint32_t take = blocks - n > take_max ? take_max : blocks - n;
             uint32_t index = manifest.extent_count;
             uint32_t physical = scattered ? 100u + (index & 1u ? 900u : 0u) + (index >> 1) * (take_max + 1u) :
                 100u + used;
-            CHECK(index < KUI_RETAIL_ASYNC_EXTENTS && physical + take <= 1990u);
-            manifest.extents[manifest.extent_count++] = (struct kui_retail_extent){n, physical, take};
+            CHECK(4u + index < KUI_RETAIL_ASYNC_SLOTS && physical + take <= 1990u);
+            manifest.slots[4u + manifest.extent_count++].extent = (struct kui_retail_extent){n, physical, take};
             ++t->extent_count;
             for(uint32_t p = 0; p < take * 512u; ++p)
                 if(n * 512u + p < bytes) image_card[physical * 512u + p] = source(i, n * 512u + p);
@@ -104,7 +104,7 @@ static void fixture(unsigned take_max, bool scattered) {
     }
     CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_OK);
     CHECK(kui_retail_image_init(&reference, &manifest, read_block, NULL) == KUI_GAME_OK);
-    /* The launch map selecting this reader round-trips (SCI, <= 32 extents). */
+    /* The launch map selecting this reader round-trips (SCI, <= 64 slots). */
     static uint8_t wire[KUI_RETAIL_IMAGE_WIRE_BYTES];
     static struct kui_retail_manifest decoded;
     struct kui_retail_manifest async = manifest;
@@ -200,7 +200,7 @@ static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scatt
     sd->high_capacity = true; sd->ready = true; sd->blocks = 2048;
     kui_retail_async_init(&manifest);
     const struct kui_gd_ops ops = {NULL, map, check, NULL};
-    kui_retail_gd_init_manifest_validated(&R.shared.service, manifest.tracks, manifest.track_count,
+    kui_retail_gd_init_validated(&R.shared.service, manifest.slots, manifest.track_count,
         &ops, BEGIN, END);
     memset(&hw, 0, sizeof(hw));
     hw.vbr = game_vbr; hw.iprb = 0x5a0f;
@@ -483,7 +483,7 @@ static void test_diagnostic_counters(void) {
 }
 static void test_faults_retried(void) {
     setup(GAME_VBR, X, 50, true);
-    card.corrupt_lba = manifest.extents[3].card_lba + 1; card.corrupt_count = 2;
+    card.corrupt_lba = manifest.slots[4 + 3].extent.card_lba + 1; card.corrupt_count = 2;
     read_and_compare(45000, 40, true, 3);
     CHECK(kui_sci_stream_stats()->crc_errors == 2);
     /* Held off the bus mid-block: resumed in place, the byte rebuilt. */
@@ -528,7 +528,7 @@ static void test_game_moves_vbr(void) {
 }
 static void test_read_fails_after_retries(void) {
     setup(GAME_VBR, X, 2000, false);
-    card.corrupt_lba = manifest.extents[2].card_lba + 3; card.corrupt_count = 1000;
+    card.corrupt_lba = manifest.slots[4 + 2].extent.card_lba + 3; card.corrupt_count = 1000;
     int32_t token = request(45000, 20, OUTPUT);
     CHECK(finish(token, true, 1) == KUI_GD_FAILED);
     CHECK(get(STATUS + 4) == KUI_GD_ERROR_IO && R.shared.service.error == KUI_GD_ERROR_IO);

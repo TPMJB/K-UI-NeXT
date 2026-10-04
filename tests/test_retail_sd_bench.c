@@ -55,9 +55,9 @@ static void reset(void) {
     card.blocks = 2000; card.ready = true;
     manifest.card_sectors = 2000; manifest.partition_start = 100;
     manifest.partition_end = 1900; manifest.track_count = manifest.extent_count = 1;
-    manifest.tracks[0] = (struct kui_retail_track){.gd={.number=1, .start_lba=45000,
-        .end_lba=45009, .control=4}, .first_extent=0, .extent_count=1};
-    manifest.extents[0] = (struct kui_retail_extent){0, 1000, 42};
+    manifest.slots[0].track = (struct kui_retail_track){.start_lba=45000,
+        .end_lba=45009, .first_extent=1, .extent_count=1, .control=4};
+    manifest.slots[1].extent = (struct kui_retail_extent){0, 1000, 42};
 }
 static enum kui_sd_bench_status run(void) {
     enum kui_sd_bench_status s = kui_retail_sd_bench_run(&card, &manifest, &report, clock_ticks);
@@ -77,17 +77,19 @@ int main(void) {
         assert(s->blocks == 80 && s->max_ticks == cost);
         assert(s->ticks == (uint64_t)(80 / groups[g]) * cost);
     }
-    reset(); manifest.tracks[0].gd.end_lba = 45008; /* Only 36 full blocks. */
+    reset(); manifest.slots[0].track.end_lba = 45008; /* Only 36 full blocks. */
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
-    reset(); manifest.extents[0].file_block = 2; /* Last block is padding. */
+    reset(); manifest.slots[1].extent.file_block = 2; /* Last block is padding. */
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
     reset(); manifest.partition_end = 1039;
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
-    reset(); manifest.extents[0].card_lba = UINT32_MAX - 20;
+    reset(); manifest.slots[1].extent.card_lba = UINT32_MAX - 20;
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
-    reset(); manifest.tracks[0].gd.control = 0;
+    reset(); manifest.slots[0].track.control = 0;
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
-    reset(); manifest.tracks[0].first_extent = UINT32_MAX;
+    reset(); manifest.slots[0].track.first_extent = UINT16_MAX;
+    assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
+    reset(); manifest.slots[0].track.first_extent = 0; /* A track slot, not an extent. */
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
     reset(); corrupt_multi = true;
     assert(run() == KUI_SD_BENCH_MISMATCH && report.failed_method == 18 && reads == 22);

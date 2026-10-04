@@ -432,8 +432,8 @@ and the caller's own SR, stack, R8 to R14 and GBR (`.Ldeferred_call`), as if
 the BIOS had made it within EXEC. Nested GD calls from the callback are
 ordinary calls.
 
-Bust-a-Move 4 did not start from the launcher; the reason (its detail
-screen's message) is not known yet.
+Bust-a-Move 4 did not start from the launcher: it has 25 tracks and the
+launch map held 16. The map now holds 99 ([the launch map](games-launch-map.md)).
 
 ## Console result: speed and PIO stream build e349bdc5457a (2026-10-04)
 

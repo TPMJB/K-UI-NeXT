@@ -1009,7 +1009,8 @@ static void games_retail_controls(void) {
     s.games_detail=detail;s.games_detail.boot_bytes=0;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.boot_bytes=12u*1024u*1024u+1;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.boot_lba=44999;assert(!kui_shell_games_retail_ready(&s));
-    s.games_detail=detail;s.games_detail.tracks=17;assert(!kui_shell_games_retail_ready(&s));
+    s.games_detail=detail;s.games_detail.tracks=99;assert(kui_shell_games_retail_ready(&s));
+    s.games_detail=detail;s.games_detail.tracks=100;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.tracks=0;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;press(KUI_SHELL_B,false);
     strcpy(s.games_detail.title,"ARMADA");
@@ -1032,7 +1033,8 @@ static void games_retail_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
     s.games_detail.boot_bytes=12u*1024u*1024u+1;assert(!kui_shell_games_ce_probe_ready(&s));
     s.games_detail.boot_bytes=1253376;s.games_detail.native_gd=true;assert(!kui_shell_games_ce_probe_ready(&s));
-    s.games_detail.native_gd=false;s.games_detail.tracks=17;assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail.native_gd=false;s.games_detail.tracks=25;assert(kui_shell_games_ce_probe_ready(&s));
+    s.games_detail.tracks=100;assert(!kui_shell_games_ce_probe_ready(&s));
     s.games_detail.tracks=3;s.games_detail.boot_lba=44999;assert(!kui_shell_games_ce_probe_ready(&s));
     s.games_detail.boot_lba=45166;strcpy(s.games_detail.path,"/Games/Other.gdi");
     assert(!kui_shell_games_ce_probe_ready(&s));

@@ -1,5 +1,17 @@
 # K-UI NeXT handoff (2026-09-28)
 
+## Games: the launch map holds 99 tracks (2026-10-04 UTC)
+
+Bust-a-Move 4 (25 tracks) and MDK2 (31, native) were refused: the map held
+16. Tracks and extents now share one table of 12-byte slots (`union
+kui_retail_slot`, `retail_image.h`): 160 slots in the standard readers and 64
+in the background reader, the same memory as before. A track's number is its
+position, and the GD service reads track slots directly (one layout, not
+two). Audio tracks keep their extents when everything fits; otherwise they
+are listed without them, and reads of them are refused. Wire format
+`KUIRTI02`. Every resident is 64 bytes smaller (proxy). Details:
+[games-launch-map.md](games-launch-map.md).
+
 ## Windows CE: Worms Armageddon and ARMADA run; FMVs slow (2026-10-04 UTC)
 
 Build `e349bdc5457a`: Worms Armageddon and ARMADA both run from SCI microSD.

@@ -28,7 +28,6 @@ FORBIDDEN_SYMBOLS = {
 INIT_ONLY = {
     "kui_retail_resident_init", "kui_retail_manifest_decode",
     "kui_retail_image_init", "kui_retail_gd_init", "kui_retail_gd_init_validated", "kui_retail_sd_init",
-    "kui_retail_gd_init_manifest_validated", "init_validated",
     "kui_loader_sd_init_bus", "capacity",
     "kui_retail_sd_adopt",  # Called only by resident_init on the high stage stack.
     "kui_retail_storage_adopt",  # Rebinds the prepared transport before game entry.

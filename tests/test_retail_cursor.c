@@ -39,10 +39,10 @@ static void fixture(unsigned take_max, bool scattered) {
     static const uint32_t ends[4] = {3, 5, 45070, 45072};
     uint32_t used = 0;
     for(unsigned i = 0; i < 4; ++i) {
-        struct kui_retail_track *t = &manifest.tracks[i];
-        *t = (struct kui_retail_track){.gd={.number=i + 1, .start_lba=starts[i],
-            .end_lba=ends[i], .control=i == 1 ? 0u : 4u}, .first_extent=manifest.extent_count};
-        uint32_t bytes = (t->gd.end_lba - t->gd.start_lba) * 2352u;
+        struct kui_retail_track *t = &manifest.slots[i].track;
+        *t = (struct kui_retail_track){.start_lba=starts[i], .end_lba=ends[i],
+            .control=i == 1 ? 0u : 4u, .first_extent=(uint16_t)(4u + manifest.extent_count)};
+        uint32_t bytes = (t->end_lba - t->start_lba) * 2352u;
         uint32_t blocks = (bytes + 511u) / 512u;
         for(uint32_t n = 0; n < blocks;) {
             uint32_t take = blocks - n > take_max ? take_max : blocks - n;
@@ -50,8 +50,8 @@ static void fixture(unsigned take_max, bool scattered) {
             /* Scattered: odd extents far after even ones, with gaps. */
             uint32_t physical = scattered ? 100u + (index & 1u ? 900u : 0u) + (index >> 1) * (take_max + 1u) :
                 100u + used;
-            CHECK(index < KUI_RETAIL_IMAGE_EXTENTS && physical + take <= 1990u);
-            manifest.extents[manifest.extent_count++] = (struct kui_retail_extent){n, physical, take};
+            CHECK(4u + index < KUI_RETAIL_IMAGE_SLOTS && physical + take <= 1990u);
+            manifest.slots[4u + manifest.extent_count++].extent = (struct kui_retail_extent){n, physical, take};
             ++t->extent_count;
             for(uint32_t p = 0; p < take * 512u; ++p)
                 if(n * 512u + p < bytes) card[physical * 512u + p] = source(i, n * 512u + p);
@@ -81,7 +81,7 @@ static void compare(uint32_t lba, uint32_t count, enum kui_game_sector_format fo
         CHECK(c.run >= 1);
         bool inside = false;
         for(uint32_t i = 0; i < manifest.extent_count; ++i) {
-            const struct kui_retail_extent *e = &manifest.extents[i];
+            const struct kui_retail_extent *e = &manifest.slots[4u + i].extent;
             if(c.block >= e->card_lba && c.block - e->card_lba < e->blocks)
                 inside = c.run <= e->blocks - (c.block - e->card_lba);
         }
@@ -107,9 +107,9 @@ static void mode_error(void) {
     fixture(3, true);
     /* A bad sync byte in sector 45001's header: sector 45000 completes first. */
     uint32_t file_byte = 2352u, lba = 0;
-    const struct kui_retail_track *t = &manifest.tracks[2];
+    const struct kui_retail_track *t = &manifest.slots[2].track;
     for(uint32_t i = 0; i < t->extent_count; ++i) {
-        const struct kui_retail_extent *e = &manifest.extents[t->first_extent + i];
+        const struct kui_retail_extent *e = &manifest.slots[t->first_extent + i].extent;
         if(file_byte / 512u >= e->file_block && file_byte / 512u - e->file_block < e->blocks)
             lba = e->card_lba + file_byte / 512u - e->file_block;
     }
@@ -124,7 +124,7 @@ static void mode_error(void) {
     for(unsigned i = 0; i < 2048; ++i) CHECK(output[i] == source(2, 16u + i));
 }
 int main(void) {
-    static const unsigned takes[] = {3, 4, 5, 7, 64}; /* 128 extents at most */
+    static const unsigned takes[] = {3, 4, 5, 7, 64}; /* 125 of the 160 slots at most */
     for(unsigned i = 0; i < sizeof(takes) / sizeof(takes[0]); ++i) {
         fixture(takes[i], false); sweep();
         fixture(takes[i], true); sweep();

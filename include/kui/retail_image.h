@@ -7,41 +7,53 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define KUI_RETAIL_IMAGE_VERSION 1u
+#define KUI_RETAIL_IMAGE_VERSION 2u
 #define KUI_RETAIL_IMAGE_WIRE_BYTES 4096u
-#define KUI_RETAIL_IMAGE_TRACKS 16u
-#define KUI_RETAIL_IMAGE_EXTENTS 128u
+/* A map holds up to 99 tracks, GD-ROM's limit, and its storage is a table of
+ * 12-byte slots shared by tracks and extents: track i (number i + 1) in slot
+ * i, then every track's extents in track order. A disc with many tracks and
+ * a card with many fragments both fit, within the readers' unchanged memory
+ * (the 16 tracks and 128 extents they used to hold). */
+#define KUI_RETAIL_IMAGE_TRACKS 99u
+#define KUI_RETAIL_IMAGE_SLOTS 160u
 /* Which low resident the stage installs (wire offset 264). The background
  * reader streams SCI microSD from its own interrupt and holds at most
- * KUI_RETAIL_ASYNC_EXTENTS extents; validation enforces both. Its EXEC and
+ * KUI_RETAIL_ASYNC_SLOTS slots; validation enforces both. Its EXEC and
  * CHECK top reading up to 20 card blocks each (ASYNC, about twice the
  * standard reader's step) or 25 (ASYNC_EAGER). */
 enum kui_retail_reader { KUI_RETAIL_READER_STANDARD, KUI_RETAIL_READER_ASYNC,
     KUI_RETAIL_READER_ASYNC_EAGER };
-#define KUI_RETAIL_ASYNC_EXTENTS 32u
-/* Extents a manifest holds in memory. The background game reader's resident
- * is built with fewer (KUI_RETAIL_ASYNC_EXTENTS) to fit its receive areas;
+#define KUI_RETAIL_ASYNC_SLOTS 64u
+/* Slots a manifest holds in memory. The background game reader's resident
+ * is built with fewer (KUI_RETAIL_ASYNC_SLOTS) to fit its receive areas;
  * the layout is otherwise identical, so a prefix copy of a full manifest
- * with no more extents than that is valid. Such a build has no wire
+ * using no more slots than that is valid. Such a build has no wire
  * encode/decode/validate. */
-#ifndef KUI_RETAIL_MANIFEST_EXTENTS
-#define KUI_RETAIL_MANIFEST_EXTENTS KUI_RETAIL_IMAGE_EXTENTS
+#ifndef KUI_RETAIL_MANIFEST_SLOTS
+#define KUI_RETAIL_MANIFEST_SLOTS KUI_RETAIL_IMAGE_SLOTS
 #endif
 #define KUI_RETAIL_IMAGE_MAX_SECTORS 64u
 #define KUI_RETAIL_IMAGE_BOOT_MAX (12u * 1024u * 1024u)
 
 /* Raw 2352-byte track files with zero file offsets. The final physical block
  * may contain allocation padding, which is never exposed as file data.
- * Extents exactly cover ceil(file_bytes/512), in file order, without aliases. */
+ * Extents exactly cover ceil(file_bytes/512), in file order, without aliases.
+ * An audio track may have none: it is listed (TOC, position reports) but its
+ * sectors are not mapped, and reads of them are refused. K-UI leaves audio
+ * unmapped only when a map would not fit otherwise; no audio is played. */
 struct kui_retail_track {
-    /* The GD service borrows this actual subobject, avoiding a second track
-     * table and any type-punning. Named wire fields retain their existing
-     * encoding, independent of this memory layout. */
-    struct kui_gd_track gd;
-    uint32_t first_extent, extent_count;
+    uint32_t start_lba, end_lba; /* end exclusive */
+    uint16_t first_extent;       /* the slot of its first extent */
+    uint8_t extent_count;
+    uint8_t control;             /* 4 data, 0 audio */
 };
-_Static_assert(sizeof(struct kui_retail_track) == 24u, "retail track memory size");
 struct kui_retail_extent { uint32_t file_block, card_lba, blocks; };
+union kui_retail_slot {
+    struct kui_retail_track track;
+    struct kui_retail_extent extent;
+};
+_Static_assert(sizeof(union kui_retail_slot) == 12u, "retail map slot size");
+_Static_assert(KUI_RETAIL_IMAGE_TRACKS <= KUI_GD_TRACK_MAX, "GD track numbers");
 struct kui_retail_manifest {
     uint64_t card_sectors, partition_start, partition_end; /* End exclusive. */
     uint32_t track_count, extent_count, session_lba, boot_lba, boot_bytes;
@@ -51,13 +63,15 @@ struct kui_retail_manifest {
      * header instead of re-reading the file before launch. */
     uint32_t boot_crc32, ip_crc32, gdi_crc32;
     char title[128], product[16], bootfile[24], region[16];
-    struct kui_retail_track tracks[KUI_RETAIL_IMAGE_TRACKS];
-    struct kui_retail_extent extents[KUI_RETAIL_MANIFEST_EXTENTS]; /* last member */
+    union kui_retail_slot slots[KUI_RETAIL_MANIFEST_SLOTS]; /* last member */
 };
-/* Canonical fixed-size LE wire form with magic KUIRTI01 and CRC32 at byte16
- * covering all 4096 bytes with bytes16..19 zeroed. Reserved and unused bytes
- * must be zero. No heap or large automatic objects. Decode clears out on
- * error; encode preserves out on error. Input/output must not alias. */
+/* Canonical fixed-size LE wire form with magic KUIRTI02 and CRC32 at byte16
+ * covering all 4096 bytes with bytes16..19 zeroed: a 320-byte header, then
+ * the used slots as 12-byte records from byte 320 (a track's: start, end,
+ * control byte, extent count byte, two zero bytes; first extents follow
+ * from the counts). Reserved and unused bytes must be zero. No heap or
+ * large automatic objects. Decode clears out on error; encode preserves out
+ * on error. Input/output must not alias. */
 enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manifest *);
 enum kui_game_result kui_retail_manifest_encode(const struct kui_retail_manifest *,
     uint8_t out[KUI_RETAIL_IMAGE_WIRE_BYTES]);

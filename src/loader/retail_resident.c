@@ -333,7 +333,8 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
         return KUI_RETAIL_RESIDENT_ARGUMENT;
     display = *saved_display;
     if(!prepared->track_count || prepared->track_count > KUI_RETAIL_IMAGE_TRACKS ||
-       !prepared->extent_count || prepared->extent_count > KUI_RETAIL_MANIFEST_EXTENTS)
+       prepared->track_count > KUI_RETAIL_MANIFEST_SLOTS || !prepared->extent_count ||
+       prepared->extent_count > KUI_RETAIL_MANIFEST_SLOTS - prepared->track_count)
         return KUI_RETAIL_RESIDENT_MAP;
     /* The high stage already decoded/validated this map and CRC-checked the
      * owner IP/executable. Copy it and rebind initialized card state to local
@@ -353,7 +354,7 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     image.read_run = read_run;
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, read_sectors};
 #endif
-    kui_retail_gd_init_manifest_validated(&service, manifest.tracks,
+    kui_retail_gd_init_validated(&service, manifest.slots,
         manifest.track_count, &ops, KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
 #ifdef KUI_RETAIL_CE
     service.read_part = read_part;

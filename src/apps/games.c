@@ -265,7 +265,7 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     out->valid=true;
     problem=out->windows_ce?"Image inspected; Windows CE: boot test only, no launch yet":
         !out->native_gd?"Image inspected; native GD-ROM with valid IP flags required":
-        out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 16 tracks":
+        out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 99 tracks":
         out->boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES || out->boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES?
             "Image inspected; boot executable must be 128 bytes to 12 MiB":
         out->high_density_audio?"Image inspected; CD audio unsupported, audio requests may stop the game":

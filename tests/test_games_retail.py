@@ -16,7 +16,8 @@ CASES = (
     "valid", "boot-tail", "fragmented", "fragment-limit", "missing-track",
     "payload-checksum", "layout-manifest", "layout-entry", "layout-size",
     "layout-resident", "layout-flags", "manifest-not-empty", "bad-ip", "other-title",
-    "alternate-bootfile", "blank-title", "cdda-warning", "unsupported-2048", "track-limit",
+    "alternate-bootfile", "blank-title", "cdda-warning", "unsupported-2048",
+    "tracks-31", "tracks-99", "async-tracks-31", "async-tracks-40",
     "boot-low-density", "boot-overlap-ip",
     "bad-bootfile", "bad-media", "windows-ce", "bad-flags", "boot-small", "boot-large",
     "sector-beforedata", "sector-aftercard", "sector-repeat", "seek-fail",
@@ -26,10 +27,15 @@ CASES = (
 )
 RC_CASES = ("valid", "other-title", "alternate-bootfile", "cdda-warning",
             "windows-ce", "bad-flags", "bad-media", "bad-bootfile", "unsupported-2048",
-            "track-limit", "boot-low-density", "boot-overlap-ip", "blank-title", "ce-probe")
+            "tracks-99", "boot-low-density", "boot-overlap-ip", "blank-title", "ce-probe")
 SUCCESS_CASES = ("valid", "boot-tail", "fragmented", "other-title",
                  "alternate-bootfile", "cdda-warning", "blank-title",
-                 "async-on-sci", "async-on-scif", "ce-probe")
+                 "async-on-sci", "async-on-scif", "ce-probe",
+                 "tracks-31", "tracks-99", "async-tracks-31", "async-tracks-40")
+# Track counts beyond the fixture's three: MDK2's 31, GD-ROM's 99, and 40,
+# which fits the background reader's 64 slots only with audio left unmapped.
+MANY_TRACKS = {"tracks-31": 31, "tracks-99": 99, "async-tracks-31": 31, "async-tracks-40": 40}
+AUDIO_UNMAPPED = ("tracks-99", "async-tracks-40")
 
 
 def synthetic_package(ce=False):
@@ -80,9 +86,10 @@ def make_retail_fixture(folder, case):
                        '4 45064 0 2352 "music track04.raw" 0\n', encoding="ascii")
     if case == "unsupported-2048":
         gdi.write_text(gdi.read_text().replace("4 2352 track01", "4 2048 track01"), encoding="ascii")
-    if case == "track-limit":
-        text = gdi.read_text().replace("3\n", "17\n", 1)
-        for number in range(4, 18):
+    if case in MANY_TRACKS:
+        count = MANY_TRACKS[case]
+        text = gdi.read_text().replace("3\n", f"{count}\n", 1)
+        for number in range(4, count + 1):
             name = "music track04.raw" if number == 4 else f"track{number:02d}.raw"
             shutil.copyfile(folder / "music track02.raw", folder / name)
             text += f'{number} {45064 + (number - 4) * 4} 0 2352 "{name}" 0\n'
@@ -146,8 +153,11 @@ def main():
                         assert "the Windows CE boot test needs SCI microSD" in output
                     if case == "unsupported-2048":
                         assert "raw 2352-byte GDI tracks with zero file offsets required" in output
-                    if case == "track-limit":
-                        assert "launch map supports at most 16 tracks" in output
+                    if case in MANY_TRACKS:
+                        unmapped = "audio tracks listed without their files" in output
+                        assert unmapped == (case in AUDIO_UNMAPPED), case
+                        assert ("Retail boot reader: background SCI stream" in output) == \
+                            case.startswith("async-"), case
                     if case in ("boot-low-density", "boot-overlap-ip"):
                         assert "boot executable and full IP must be in high-density data tracks" in output
                     image.unlink()

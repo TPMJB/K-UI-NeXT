@@ -10,18 +10,19 @@ static const uint32_t batches[3] = {2, 8, 10};
 static bool bench_window(const struct kui_retail_manifest *m,
                          uint64_t card_blocks, uint32_t *lba) {
     if(!m || !m->track_count || m->track_count > KUI_RETAIL_IMAGE_TRACKS ||
-       m->extent_count > KUI_RETAIL_IMAGE_EXTENTS ||
+       m->extent_count > KUI_RETAIL_IMAGE_SLOTS - m->track_count ||
        m->partition_start >= m->partition_end ||
        m->partition_end > m->card_sectors || m->card_sectors > card_blocks)
         return false;
     for(uint32_t i = 0; i < m->track_count; ++i) {
-        const struct kui_retail_track *t = &m->tracks[i];
-        if(t->gd.control != 4 || t->gd.start_lba < 45000 || t->gd.end_lba <= t->gd.start_lba ||
-           t->first_extent >= m->extent_count ||
-           t->extent_count > m->extent_count - t->first_extent) continue;
-        uint64_t full_blocks = (uint64_t)(t->gd.end_lba - t->gd.start_lba) * 2352 / 512;
+        const struct kui_retail_track *t = &m->slots[i].track;
+        const uint32_t used = m->track_count + m->extent_count;
+        if(t->control != 4 || t->start_lba < 45000 || t->end_lba <= t->start_lba ||
+           t->first_extent < m->track_count || t->first_extent >= used ||
+           t->extent_count > used - t->first_extent) continue;
+        uint64_t full_blocks = (uint64_t)(t->end_lba - t->start_lba) * 2352 / 512;
         for(uint32_t j = 0; j < t->extent_count; ++j) {
-            const struct kui_retail_extent *e = &m->extents[t->first_extent + j];
+            const struct kui_retail_extent *e = &m->slots[t->first_extent + j].extent;
             uint64_t end = (uint64_t)e->card_lba + KUI_SD_BENCH_BLOCKS;
             if(e->blocks < KUI_SD_BENCH_BLOCKS ||
                (uint64_t)e->file_block + KUI_SD_BENCH_BLOCKS > full_blocks ||

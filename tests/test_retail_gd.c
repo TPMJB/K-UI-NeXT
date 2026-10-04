@@ -20,14 +20,16 @@ static struct {
     uint32_t reads, sectors, max_count, deny, fail_at, checks, reenter;
     uint32_t maps[3], validate_address, validate_bytes, max_checked, last_count;
 } ctx;
-static const struct kui_gd_track tracks[] = {
-    {1,4,0,8}, {2,0,16,24}, {3,4,45000,60000}
+static const union kui_retail_slot tracks[] = {
+    {.track={.start_lba=0, .end_lba=8, .control=4}},
+    {.track={.start_lba=16, .end_lba=24, .control=0}},
+    {.track={.start_lba=45000, .end_lba=60000, .control=4}}
 };
-/* Deliberately non-GD trailing fields expose incorrect plain-array strides. */
-static const struct kui_retail_track image_tracks[] = {
-    {.gd={1,4,0,8}, .first_extent=91, .extent_count=11},
-    {.gd={2,0,16,24}, .first_extent=92, .extent_count=12},
-    {.gd={3,4,45000,60000}, .first_extent=93, .extent_count=13}
+/* The same tracks with their map's extent fields set: the service ignores them. */
+static const union kui_retail_slot mapped_tracks[] = {
+    {.track={.start_lba=0, .end_lba=8, .first_extent=3, .extent_count=11, .control=4}},
+    {.track={.start_lba=16, .end_lba=24, .first_extent=14, .extent_count=0, .control=0}},
+    {.track={.start_lba=45000, .end_lba=60000, .first_extent=14, .extent_count=13, .control=4}}
 };
 /* A RAM pointer through its 0x0c... alias. In the CE build such CPU
  * pointers are virtual (virtual_pointers), so the P1 address stands in. */
@@ -36,7 +38,7 @@ static const struct kui_retail_track image_tracks[] = {
 #else
 #define LOW_ALIAS(a) ((a) & 0x1fffffffu)
 #endif
-static unsigned use_manifest_tracks;
+static unsigned use_mapped_tracks;
 static unsigned assertions;
 #define CHECK(x) do { ++assertions; assert(x); } while(0)
 static void put(uint32_t a, uint32_t n) {
@@ -78,8 +80,8 @@ static int check(void *unused, uint32_t lba, uint32_t count, uint32_t bytes) {
     for(uint32_t n = 0; n < count; ++n) {
         unsigned i;
         for(i = 0; i < 3; ++i)
-            if(lba + n >= tracks[i].start_lba && lba + n < tracks[i].end_lba) break;
-        if(i == 3 || (bytes == 2048 && !tracks[i].control)) return -1;
+            if(lba + n >= tracks[i].track.start_lba && lba + n < tracks[i].track.end_lba) break;
+        if(i == 3 || (bytes == 2048 && !tracks[i].track.control)) return -1;
     }
     return 0;
 }
@@ -110,18 +112,13 @@ static int32_t call(uint32_t fn, uint32_t a, uint32_t b) {
 }
 static void reset(void) {
     memset(&ctx, 0, sizeof(ctx)); memset(ram, 0xa5, sizeof(ram));
-    CHECK(kui_retail_gd_init(&service, tracks, 3, &ops, BEGIN, END) == 0);
-    CHECK(service.tracks == tracks && sizeof(service) < 512);
+    const union kui_retail_slot *slots = use_mapped_tracks ? mapped_tracks : tracks;
+    CHECK(kui_retail_gd_init(&service, slots, 3, &ops, BEGIN, END) == 0);
+    CHECK(service.tracks == slots && sizeof(service) < 512);
     struct kui_retail_gd expected = service;
     memset(&service, 0xa5, sizeof(service));
-    kui_retail_gd_init_validated(&service, tracks, 3, &ops, BEGIN, END);
+    kui_retail_gd_init_validated(&service, slots, 3, &ops, BEGIN, END);
     CHECK(!memcmp(&service, &expected, sizeof(service)));
-    if(use_manifest_tracks) {
-        kui_retail_gd_init_manifest_validated(&service, image_tracks, 3, &ops, BEGIN, END);
-        expected.image_tracks = image_tracks;
-        expected.image_track_layout = 1;
-        CHECK(!memcmp(&service, &expected, sizeof(service)));
-    }
 }
 static void read_params(uint32_t lba, uint32_t count, uint32_t dest) {
     put(PARAM, lba + 150); put(PARAM + 4, count); put(PARAM + 8, dest); put(PARAM + 12, 0);
@@ -452,8 +449,14 @@ static void bounds_and_modes(void) {
     CHECK(kui_retail_gd_init(NULL, tracks, 3, &ops, BEGIN, END) == -1);
     CHECK(kui_retail_gd_init(&service, tracks, 0, &ops, BEGIN, END) == -1);
     CHECK(kui_retail_gd_init(&service, tracks, 3, &ops, 0x8c007ffcu, END) == -1);
-    struct kui_gd_track invalid[3]; memcpy(invalid, tracks, sizeof(invalid));
-    invalid[2].end_lba = 720000;
+    union kui_retail_slot invalid[3]; memcpy(invalid, tracks, sizeof(invalid));
+    invalid[2].track.end_lba = 720000;
+    CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
+    memcpy(invalid, tracks, sizeof(invalid)); invalid[1].track.control = 1;
+    CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
+    memcpy(invalid, tracks, sizeof(invalid)); invalid[1].track.start_lba = 7;
+    CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
+    memcpy(invalid, tracks, sizeof(invalid)); invalid[2].track.start_lba = 44999;
     CHECK(kui_retail_gd_init(&service, invalid, 3, &ops, BEGIN, END) == -1);
 }
 #endif
@@ -774,8 +777,47 @@ static void pio_stream_reads(void) {
     part.fail = 0;
 }
 #endif
+/* GD-ROM's 99 tracks: the TOC lists each in its numbered entry, and the
+ * position reports name the track holding the current sector. */
+static void many_tracks(void) {
+    static union kui_retail_slot many[KUI_RETAIL_IMAGE_TRACKS];
+    many[0].track = (struct kui_retail_track){.start_lba=0, .end_lba=8, .control=4};
+    many[1].track = (struct kui_retail_track){.start_lba=16, .end_lba=24, .control=0};
+    for(uint32_t i = 2; i < KUI_RETAIL_IMAGE_TRACKS; ++i)
+        many[i].track = (struct kui_retail_track){.start_lba=45000 + (i - 2) * 100,
+            .end_lba=45000 + (i - 2) * 100 + 90, .control=i == 2 || i == 98 ? 4u : 0u};
+    reset();
+    CHECK(kui_retail_gd_init(&service, many, KUI_RETAIL_IMAGE_TRACKS + 1, &ops, BEGIN, END) == -1);
+    CHECK(kui_retail_gd_init(&service, many, KUI_RETAIL_IMAGE_TRACKS, &ops, BEGIN, END) == 0);
+    put(PARAM, 1); put(PARAM + 4, OUTPUT);
+    int32_t token = call(KUI_GD_REQUEST, KUI_GD_GETTOC2, PARAM);
+    CHECK(token > 0); CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(get(OUTPUT) == UINT32_MAX && get(OUTPUT + 4) == UINT32_MAX);
+    for(uint32_t i = 2; i < KUI_RETAIL_IMAGE_TRACKS; ++i)
+        CHECK(get(OUTPUT + i * 4u) == ((i == 2 || i == 98 ? 0x41000000u : 0x01000000u) |
+                                       (45150u + (i - 2) * 100u)));
+    CHECK(get(OUTPUT + 396) == 0x41030000u && get(OUTPUT + 400) == 0x41630000u);
+    CHECK(get(OUTPUT + 404) == (0x41000000u | (45000u + 96u * 100u + 90u + 150u)));
+    put(PARAM, 45000 + 50 * 100 + 95 + 150); /* Between two tracks. */
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_SEEK, PARAM) == 0);
+    put(PARAM, 45000 + 50 * 100 + 5 + 150);
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_SEEK, PARAM) > 0);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    for(unsigned i = 0; i < 4; ++i) put(PARAM + i * 4u, OUTPUT + i * 8u);
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_REQ_STAT, PARAM) > 0);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(get(OUTPUT + 8) == 53 && get(OUTPUT + 16) == (0x10000000u | 50155u));
+    put(PARAM, 1); put(PARAM + 4, 14); put(PARAM + 8, OUTPUT);
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_GETSCD, PARAM);
+    CHECK(token > 0); CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(ram[OUTPUT - BEGIN + 4] == 0x01 && ram[OUTPUT - BEGIN + 5] == 53);
+    CHECK(ctx.reads == 0);
+}
 int main(void) {
-    for(use_manifest_tracks=0;use_manifest_tracks<2;use_manifest_tracks++) {
+    many_tracks();
+    for(use_mapped_tracks=0;use_mapped_tracks<2;use_mapped_tracks++) {
 #ifdef KUI_RETAIL_GD_ASYNC
         async_reads(); metadata(); silent_cd_audio(); version_query();
 #else
