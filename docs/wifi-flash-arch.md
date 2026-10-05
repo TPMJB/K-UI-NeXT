@@ -63,8 +63,9 @@ Extract the **kui-wifi-esp32c5** firmware download, then open a terminal in the
 folder containing these three files:
 
 - `kui-wifi-esp32c5.bin`: complete merged image for initial USB flashing.
-- `kui-wifi-esp32c5-update.bin`: application image for the later K-UI update
-  mechanism; do not use this one for initial flashing.
+- `kui-wifi-esp32c5-update.bin`: application image for the firmware-update
+  protocol; K-UI's update workflow is not yet implemented. Do not use this
+  one for initial flashing.
 - `SHA256SUMS`: download checksums.
 
 If using a larger test pack, these files may be in its `firmware/` folder.
