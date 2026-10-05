@@ -36,6 +36,7 @@ struct kui_game_file_ops {
 struct kui_game_image_track {
     uint32_t start_lba, end_lba; /* End exclusive, derived from exact file size. */
     unsigned number, control; /* 0 = audio, 4 = data. */
+    unsigned sector_bytes; /* Physical stride: 2352 raw, or 2048 Mode 1 data. */
     uint64_t file_bytes;
     char name[KUI_GAME_NAME_CAP];
 };
@@ -48,7 +49,8 @@ struct kui_game_image {
 
 enum kui_game_sector_format { KUI_GAME_SECTOR_RAW, KUI_GAME_SECTOR_MODE1 };
 
-/* Accept only consecutive track numbers, raw 2352-byte files and zero offsets.
+/* Accept consecutive track numbers and zero offsets. Data tracks may contain
+ * raw 2352-byte sectors or cooked 2048-byte Mode 1 payloads; audio stays raw.
  * Validate all file sizes/overlaps before publishing out; out is unchanged on
  * failure. GDI is a bounded byte span and need not be NUL-terminated. */
 enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
@@ -60,8 +62,9 @@ enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
 enum kui_game_result kui_game_image_check(const struct kui_game_image *image,
     uint32_t lba, uint32_t count, enum kui_game_sector_format format);
 
-/* RAW supports data and audio. MODE1 validates sync/mode and extracts 2048 user
- * bytes at offset 16; Mode 2 and audio are unsupported for this first stage.
+/* RAW supports raw data and audio, and refuses cooked tracks before any IO.
+ * MODE1 validates raw sync/mode and extracts 2048 user bytes at offset 16,
+ * or reads cooked payloads directly. Mode 2 and audio are unsupported.
  * Preflights the complete range, track types and output size before any read or
  * output modification. Later IO/cancel/mode errors may leave a partial output;
  * callers must discard all output unless OK. No whole-image hash is performed. */

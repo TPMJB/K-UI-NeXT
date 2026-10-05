@@ -163,19 +163,19 @@ class RetailPackage(unittest.TestCase):
 class ReleaseMetadata(unittest.TestCase):
     def test_canonical_names_preserve_accent_and_match_artifact_version(self):
         release = release_metadata()
-        self.assertEqual(release["version"], "1.7")
+        self.assertEqual(release["version"], "1.7-2048-test")
         self.assertIn("Dáinsleif", release["name"])
         self.assertTrue(release["short_name"].isascii())
-        self.assertEqual(release["artifact_prefix"], "kui-1.7-dainsleif")
+        self.assertEqual(release["artifact_prefix"], "kui-1.7-2048-test-dainsleif")
 
     def test_missing_duplicate_control_character_and_unsafe_artifact_names_reject(self):
         source = (ROOT / "include/kui/version.h").read_text(encoding="utf-8")
         invalid = (
-            (source.replace('#define KUI_VERSION "1.7"', ''), "Missing"),
+            (source.replace('#define KUI_VERSION "1.7-2048-test"', ''), "Missing"),
             (source + '\n#define KUI_VERSION "1.7"\n', "repeated"),
-            (source.replace('"1.7"', '"1.7\\n"'), "Invalid"),
-            (source.replace('"kui-1.7-dainsleif"', '"../escape"'), "artifact prefix"),
-            (source.replace('"kui-1.7-dainsleif"', '"kui-1.4.0-dainsleif"'), "canonical version"),
+            (source.replace('"1.7-2048-test"', '"1.7\\n"'), "Invalid"),
+            (source.replace('"kui-1.7-2048-test-dainsleif"', '"../escape"'), "artifact prefix"),
+            (source.replace('"kui-1.7-2048-test-dainsleif"', '"kui-1.4.0-dainsleif"'), "canonical version"),
         )
         with tempfile.TemporaryDirectory() as tmp:
             header = Path(tmp) / "version.h"

@@ -22,6 +22,7 @@ static uint8_t expected[64u * 2352u];
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image reference;
 static unsigned checks;
+static bool cooked_fixture;
 #define CHECK(test) do { ++checks; assert(test); } while(0)
 
 /* ---- Resident and CPU hooks ---- */
@@ -58,7 +59,10 @@ static uint32_t our_vbr(void) { return (uint32_t)(uintptr_t)&R - 0x100u; }
 
 /* ---- Image: the cursor test's track bytes, mapped onto the model card ---- */
 static uint8_t source(uint32_t track, uint32_t file_byte) {
-    uint32_t sector = file_byte / 2352u, inside = file_byte % 2352u;
+    bool cooked = cooked_fixture && track != 1u && track != 3u;
+    uint32_t stride = cooked ? 2048u : 2352u;
+    uint32_t sector = file_byte / stride, inside = file_byte % stride;
+    if(cooked) inside += 16u;
     if(track != 1) {
         if(inside == 0 || inside == 11) return 0;
         if(inside < 11) return 255;
@@ -87,7 +91,8 @@ static void fixture(unsigned take_max, bool scattered) {
         struct kui_retail_track *t = &manifest.slots[i].track;
         *t = (struct kui_retail_track){.start_lba=starts[i], .end_lba=ends[i],
             .control=i == 1 ? 0u : 4u, .first_extent=(uint16_t)(4u + manifest.extent_count)};
-        uint32_t bytes = (t->end_lba - t->start_lba) * 2352u;
+        if(cooked_fixture && i != 1u && i != 3u) t->control |= KUI_RETAIL_TRACK_COOKED;
+        uint32_t bytes = (t->end_lba - t->start_lba) * kui_retail_track_sector_bytes(t);
         uint32_t blocks = (bytes + 511u) / 512u;
         for(uint32_t n = 0; n < blocks;) {
             uint32_t take = blocks - n > take_max ? take_max : blocks - n;
@@ -588,6 +593,29 @@ static void test_stress(void) {
     }
 }
 
+static void test_cooked_reads(void) {
+    cooked_fixture = true;
+    for(unsigned how = X; how <= Y; ++how) {
+        setup(GAME_VBR, how, 48, true);
+        for(uint32_t lba = 45000; lba < 45060; lba += 6)
+            read_and_compare(lba, 6, 14, 0);
+        CHECK(kui_sci_stream_stats()->blocks == 240u); /* Four per payload sector. */
+        read_and_compare(45298, 4, 5, 0); /* Cooked data into the final raw data track. */
+        read_and_compare(45001, 64, 0, 1); /* Calls alone, no interrupt delivery. */
+        mode(2352);
+        /* Unsupported raw reads of cooked data fail before starting storage. */
+        unsigned blocks = kui_sci_stream_stats()->blocks;
+        put(PARAM, 45150); put(PARAM + 4, 1); put(PARAM + 8, OUTPUT); put(PARAM + 12, 0);
+        CHECK(gd(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+        CHECK(kui_sci_stream_stats()->blocks == blocks);
+        read_and_compare(3, 2, 5, 0); /* Audio is still the original raw stride. */
+        read_and_compare(45300, 2, 5, 0); /* Unconverted data remains raw-readable. */
+    }
+    test_faults_retried();
+    test_cancel_writes_nothing_more();
+    test_stress();
+    cooked_fixture = false;
+}
 int main(void) {
     test_interrupt_reads();
     test_levels_while_streaming();
@@ -603,6 +631,7 @@ int main(void) {
     test_game_moves_vbr();
     test_read_fails_after_retries();
     test_stress();
+    test_cooked_reads();
     printf("retail async reader: %u checks passed\n", checks);
     return 0;
 }

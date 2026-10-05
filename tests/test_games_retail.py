@@ -16,7 +16,8 @@ CASES = (
     "valid", "boot-tail", "fragmented", "fragment-limit", "missing-track",
     "payload-checksum", "layout-manifest", "layout-entry", "layout-size",
     "layout-resident", "layout-flags", "manifest-not-empty", "bad-ip", "other-title",
-    "alternate-bootfile", "blank-title", "cdda-warning", "unsupported-2048",
+    "alternate-bootfile", "blank-title", "cdda-warning", "bad-cooked-size",
+    "cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked",
     "tracks-31", "tracks-99", "async-tracks-31", "async-tracks-40",
     "boot-low-density", "boot-overlap-ip",
     "bad-bootfile", "bad-media", "windows-ce", "bad-flags", "boot-small", "boot-large",
@@ -27,12 +28,14 @@ CASES = (
     "ce-probe-async",
 )
 RC_CASES = ("valid", "other-title", "alternate-bootfile", "cdda-warning",
-            "windows-ce", "bad-flags", "bad-media", "bad-bootfile", "unsupported-2048",
-            "tracks-99", "boot-low-density", "boot-overlap-ip", "blank-title", "ce-probe")
+            "windows-ce", "bad-flags", "bad-media", "bad-bootfile", "bad-cooked-size",
+            "tracks-99", "boot-low-density", "boot-overlap-ip", "blank-title", "ce-probe",
+            "cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked")
 SUCCESS_CASES = ("valid", "boot-tail", "fragmented", "other-title",
                  "alternate-bootfile", "cdda-warning", "blank-title",
                  "async-on-sci", "async-on-scif", "ce-probe", "ce-probe-async",
-                 "tracks-31", "tracks-99", "async-tracks-31", "async-tracks-40")
+                 "tracks-31", "tracks-99", "async-tracks-31", "async-tracks-40",
+                 "cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked")
 # Track counts beyond the fixture's three: MDK2's 31, GD-ROM's 99, and 40,
 # which fits the background reader's 64 slots only with audio left unmapped.
 MANY_TRACKS = {"tracks-31": 31, "tracks-99": 99, "async-tracks-31": 31, "async-tracks-40": 40}
@@ -70,7 +73,8 @@ def make_retail_fixture(folder, case):
     if case == "alternate-bootfile":
         data[16 + 96:16 + 112] = b"ALT_BOOT.BIN".ljust(16)
         data[20 * 2352 + 16 + 68 + 33:20 * 2352 + 16 + 68 + 47] = b"ALT_BOOT.BIN;1"
-    boot_bytes = {"boot-tail": 3001, "boot-small": 127, "ce-probe-small": 2048,
+    boot_bytes = {"boot-tail": 3001, "cooked-boot-tail": 3001,
+                  "boot-small": 127, "ce-probe-small": 2048,
                   "boot-large": 0xC00001}.get(case, 4096)
     # The third root record describes our generated random test bytes.
     dual32(data, 20 * 2352 + 16 + 68 + 10, boot_bytes)
@@ -85,8 +89,19 @@ def make_retail_fixture(folder, case):
         shutil.copyfile(folder / "music track02.raw", folder / "music track04.raw")
         gdi.write_text(gdi.read_text().replace("3\n", "4\n", 1) +
                        '4 45064 0 2352 "music track04.raw" 0\n', encoding="ascii")
-    if case == "unsupported-2048":
+    if case == "bad-cooked-size":
+        # Merely changing the descriptor must not make raw bytes a valid
+        # cooked file. This track's raw length is not divisible by 2048.
         gdi.write_text(gdi.read_text().replace("4 2352 track01", "4 2048 track01"), encoding="ascii")
+    if case in ("cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked"):
+        names = ("track01.bin", "track03.bin") if case == "async-cooked-2048" else ("track03.bin",)
+        for name in names:
+            path = folder / name
+            raw = path.read_bytes()
+            assert len(raw) % 2352 == 0
+            cooked = b"".join(raw[offset + 16:offset + 2064] for offset in range(0, len(raw), 2352))
+            path.write_bytes(cooked)
+            gdi.write_text(gdi.read_text().replace(f"4 2352 {name}", f"4 2048 {name}"), encoding="ascii")
     if case in MANY_TRACKS:
         count = MANY_TRACKS[case]
         text = gdi.read_text().replace("3\n", f"{count}\n", 1)
@@ -118,7 +133,7 @@ def main():
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
             layouts = ((True, RC_CASES),) if args.rc_only else (
-                (True, CASES), (False, ("valid", "boot-tail", "fragmented")))
+                (True, CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
             for partitioned, cases in layouts:
                 clean = partitioned_clean if partitioned else volume
                 layout = "MBR" if partitioned else "superfloppy"
@@ -136,13 +151,13 @@ def main():
                         check_fs(image, base / "check-volume.img", kind, partitioned)
                     if case == "cdda-warning":
                         assert "CD audio playback is unsupported" in output
-                    if case == "async-on-sci":
+                    if case in ("async-on-sci", "async-cooked-2048"):
                         assert "Retail boot reader: background SCI stream" in output
                     if case == "async-on-scif":
                         assert "background reader needs SCI microSD; using the standard reader" in output
                     if case == "windows-ce":
                         assert "Windows CE game launching is not supported" in output
-                    if case == "ce-probe":
+                    if case in ("ce-probe", "ce-probe-cooked"):
                         assert "Windows CE boot test prepared" in output
                         assert "background SCI stream" not in output
                     if case == "ce-probe-async":
@@ -156,8 +171,11 @@ def main():
                         assert "larger than its 2048-byte prefix" in output
                     if case == "ce-probe-scif":
                         assert "the Windows CE boot test needs SCI microSD" in output
-                    if case == "unsupported-2048":
-                        assert "raw 2352-byte GDI tracks with zero file offsets required" in output
+                    if case == "bad-cooked-size":
+                        assert "Invalid track length" in output
+                    if case in ("cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked"):
+                        assert "checking cooked executable CRC before detached launch" in output
+                        assert "Cooked data RAW requests refused before IO; exact boot CRC" in output
                     if case in MANY_TRACKS:
                         unmapped = "audio tracks listed without their files" in output
                         assert unmapped == (case in AUDIO_UNMAPPED), case

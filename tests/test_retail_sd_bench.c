@@ -79,6 +79,12 @@ int main(void) {
     }
     reset(); manifest.slots[0].track.end_lba = 45008; /* Only 36 full blocks. */
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
+    /* Cooked data has four card blocks per sector, not the raw stride. */
+    reset(); manifest.slots[0].track.control |= KUI_RETAIL_TRACK_COOKED;
+    assert(run() == KUI_SD_BENCH_WINDOW && reads == 0); /* Nine sectors: 36. */
+    reset(); manifest.slots[0].track.control |= KUI_RETAIL_TRACK_COOKED;
+    manifest.slots[0].track.end_lba = 45010;
+    assert(run() == KUI_SD_BENCH_OK && report.lba == 1000); /* Ten: 40. */
     reset(); manifest.slots[1].extent.file_block = 2; /* Last block is padding. */
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
     reset(); manifest.partition_end = 1039;

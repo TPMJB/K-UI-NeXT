@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct file { char name[KUI_GAME_NAME_CAP]; uint64_t bytes; unsigned tag; };
+struct file { char name[KUI_GAME_NAME_CAP]; uint64_t bytes; unsigned tag, stride; };
 struct fixture {
     struct file files[KUI_GAME_TRACK_MAX];
     unsigned count, stats, reads, fail_stat, fail_read;
@@ -54,7 +54,10 @@ static enum kui_game_result read_file(void *ctx, const char *name, uint64_t offs
         return KUI_GAME_IO;
     unsigned char *data = out;
     for(size_t i = 0; i < size; ++i) {
-        data[i] = raw_byte(file->tag, offset + i);
+        uint64_t at = offset + i;
+        if(file->stride == KUI_GAME_DATA_BYTES)
+            at = at / KUI_GAME_DATA_BYTES * KUI_GAME_RAW_BYTES + 16u + at % KUI_GAME_DATA_BYTES;
+        data[i] = raw_byte(file->tag, at);
         if(fixture->bad_mode && (offset + i) % KUI_GAME_RAW_BYTES == 15) data[i] = 2;
         if(fixture->bad_sync && (offset + i) % KUI_GAME_RAW_BYTES == 5) data[i] = 0;
     }
@@ -66,6 +69,7 @@ static void add_file(struct fixture *fixture, const char *name, uint32_t sectors
     CHECK(strlen(name) < sizeof(file->name));
     memcpy(file->name, name, strlen(name) + 1u);
     file->bytes = (uint64_t)sectors * KUI_GAME_RAW_BYTES;
+    file->stride = KUI_GAME_RAW_BYTES;
     file->tag = fixture->count + 1u;
     ++fixture->count;
 }
@@ -203,7 +207,8 @@ static void syntax(void) {
         {"1\n1 0 4 2352 track01.bin -1", KUI_GAME_SYNTAX},
         {"1\n1 4294967296 4 2352 track01.bin 0", KUI_GAME_SYNTAX},
         {"1\n1 0 5 2352 track01.bin 0", KUI_GAME_UNSUPPORTED},
-        {"1\n1 0 4 2048 track01.bin 0", KUI_GAME_UNSUPPORTED},
+        {"1\n1 0 0 2048 track01.bin 0", KUI_GAME_UNSUPPORTED},
+        {"1\n1 0 4 2336 track01.bin 0", KUI_GAME_UNSUPPORTED},
         {"1\n1 0 4 2352 track01.bin 2352", KUI_GAME_UNSUPPORTED},
         {"1\n1 719850 4 2352 track01.bin 0", KUI_GAME_RANGE},
         {"2\n1 4 4 2352 track01.bin 0\n2 0 0 2352 track02.raw 0", KUI_GAME_OVERLAP},
@@ -334,12 +339,48 @@ static void upper_bounds(void) {
     CHECK(!strcmp(kui_game_result_name((enum kui_game_result)999), "Unknown image error"));
 }
 
+static void cooked_tracks(void) {
+    struct fixture fixture;
+    struct kui_game_image image;
+    init(&fixture);
+    fixture.files[2].stride = KUI_GAME_DATA_BYTES;
+    fixture.files[2].bytes = 4u * KUI_GAME_DATA_BYTES;
+    const char mixed[] =
+        "4\n1 0 4 2352 track01.bin 0\n2 4 0 2352 track02.raw 0\n"
+        "3 45000 4 2048 \"Track 03.bin\" 0\n4 45004 4 2352 track04.bin 0\n";
+    CHECK(open_image(&fixture, mixed, &image) == KUI_GAME_OK);
+    CHECK(image.tracks[2].sector_bytes == 2048 && image.tracks[2].end_lba == 45004);
+    unsigned char out[4u * KUI_GAME_RAW_BYTES + 1u];
+    memset(out, 0xa5, sizeof(out));
+    CHECK(kui_game_image_read(&image, 45001, 3, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
+    expect_data(out, 3, 1, 3);
+    CHECK(fixture.reads == 1 && fixture.last_offset == 2048 && fixture.last_size == 6144);
+    CHECK(out[6144] == 0xa5);
+    fixture.reads = 0;
+    CHECK(kui_game_image_read(&image, 45002, 4, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
+    expect_data(out, 3, 2, 2);
+    expect_data(out + 4096, 4, 0, 2);
+    CHECK(fixture.reads == 3); /* one cooked span, two raw sectors */
+    memset(out, 0xa5, sizeof(out));
+    fixture.reads = 0;
+    CHECK(kui_game_image_read(&image, 45003, 2, KUI_GAME_SECTOR_RAW, out, sizeof(out)) == KUI_GAME_UNSUPPORTED);
+    CHECK(fixture.reads == 0 && all_is(out, sizeof(out), 0xa5));
+    CHECK(kui_game_image_read(&image, 4, 2, KUI_GAME_SECTOR_RAW, out, sizeof(out)) == KUI_GAME_OK);
+    expect_raw(out, 2, 0, 2);
+    /* File length uses the declared stride, and opened metadata is guarded. */
+    fixture.files[2].bytes = 4u * 2048u - 1u;
+    CHECK(open_image(&fixture, mixed, &image) == KUI_GAME_FILE_SIZE);
+    image.tracks[2].sector_bytes = 2049;
+    CHECK(kui_game_image_check(&image, 45000, 1, KUI_GAME_SECTOR_MODE1) == KUI_GAME_INVALID);
+}
+
 int main(void) {
     happy_paths();
     preflight();
     syntax();
     file_sizes_and_failures();
     upper_bounds();
+    cooked_tracks();
     printf("game image: %u checks passed\n", checks);
     return 0;
 }

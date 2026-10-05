@@ -35,7 +35,8 @@ enum kui_retail_reader { KUI_RETAIL_READER_STANDARD, KUI_RETAIL_READER_ASYNC,
 #define KUI_RETAIL_IMAGE_MAX_SECTORS 64u
 #define KUI_RETAIL_IMAGE_BOOT_MAX (12u * 1024u * 1024u)
 
-/* Raw 2352-byte track files with zero file offsets. The final physical block
+/* 2352-byte raw tracks or 2048-byte Mode 1 data, with zero file offsets.
+ * The final physical block
  * may contain allocation padding, which is never exposed as file data.
  * Extents exactly cover ceil(file_bytes/512), in file order, without aliases.
  * An audio track may have none: it is listed (TOC, position reports) but its
@@ -45,8 +46,20 @@ struct kui_retail_track {
     uint32_t start_lba, end_lba; /* end exclusive */
     uint16_t first_extent;       /* the slot of its first extent */
     uint8_t extent_count;
-    uint8_t control;             /* 4 data, 0 audio */
+    uint8_t control;             /* 4 data, 0 audio; optional cooked flag below. */
 };
+/* Keep the resident map's 12-byte slots and memory footprint unchanged. The
+ * flag is an internal representation only; TOC control must use the helper. */
+#define KUI_RETAIL_TRACK_COOKED 0x80u
+static inline uint32_t kui_retail_track_control(const struct kui_retail_track *t) {
+    return t->control & ~KUI_RETAIL_TRACK_COOKED;
+}
+static inline uint32_t kui_retail_track_sector_bytes(const struct kui_retail_track *t) {
+    return (int8_t)t->control < 0 ? KUI_GAME_DATA_BYTES : KUI_GAME_RAW_BYTES;
+}
+static inline uint32_t kui_retail_track_header_bytes(const struct kui_retail_track *t) {
+    return (int8_t)t->control < 0 ? 0u : 16u;
+}
 struct kui_retail_extent { uint32_t file_block, card_lba, blocks; };
 union kui_retail_slot {
     struct kui_retail_track track;
@@ -59,8 +72,9 @@ struct kui_retail_manifest {
     uint32_t track_count, extent_count, session_lba, boot_lba, boot_bytes;
     uint32_t storage_transport; /* Wire offset28; old zero field means SCIF. */
     uint32_t reader; /* enum kui_retail_reader; wire offset 264, formerly reserved zero */
-    /* boot_crc32 is zero from K-UI: the stage checks each boot sector's
-     * header instead of re-reading the file before launch. */
+    /* Raw boot sectors retain header/address validation. Cooked boot ranges
+     * have no headers: boot_crc32 then identifies the exact full bootfile
+     * bytes, including a CE prefix, checked during loading (zero is valid). */
     uint32_t boot_crc32, ip_crc32, gdi_crc32;
     char title[128], product[16], bootfile[24], region[16];
     union kui_retail_slot slots[KUI_RETAIL_MANIFEST_SLOTS]; /* last member */
@@ -68,7 +82,8 @@ struct kui_retail_manifest {
 /* Canonical fixed-size LE wire form with magic KUIRTI02 and CRC32 at byte16
  * covering all 4096 bytes with bytes16..19 zeroed: a 320-byte header, then
  * the used slots as 12-byte records from byte 320 (a track's: start, end,
- * control byte, extent count byte, two zero bytes; first extents follow
+ * control byte, extent count byte, cooked marker (0 raw, 1 cooked), zero byte;
+ * first extents follow
  * from the counts). Reserved and unused bytes must be zero. No heap or
  * large automatic objects. Decode clears out on error; encode preserves out
  * on error. Input/output must not alias. */
@@ -120,7 +135,9 @@ enum kui_game_result kui_retail_image_check_validated(const struct kui_retail_ma
     uint32_t lba, uint32_t count, enum kui_game_sector_format);
 /* Preflight range/type/capacity before any IO or output changes. Count <=64.
  * MODE1 checks a 16-byte sync/mode header and copies only 2048 user bytes;
- * RAW copies 2352 bytes from either data or audio tracks. Later IO/mode errors
+ * Cooked Mode 1 reads copy the stored 2048 bytes directly. RAW copies 2352
+ * bytes from raw data or audio tracks and preflights cooked tracks as
+ * UNSUPPORTED. Later IO/mode errors
  * may leave partial output. The one-block cache survives read calls so chunks
  * can share a physical block. Init clears it; a failed physical read invalidates
  * it before the callback can supply partial or poisoned bytes. Rejected ranges

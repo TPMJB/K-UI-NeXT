@@ -27,7 +27,7 @@ static int read_block(void *context, uint32_t lba, uint8_t out[512]) {
     return 0;
 }
 /* Extents of `take` blocks; scattered places them out of order on the card. */
-static void fixture(unsigned take_max, bool scattered) {
+static void fixture_format(unsigned take_max, bool scattered, unsigned cooked_mask) {
     memset(&manifest, 0, sizeof(manifest));
     memset(card, 0xf3, sizeof(card));
     manifest.card_sectors = 2048;
@@ -41,8 +41,10 @@ static void fixture(unsigned take_max, bool scattered) {
     for(unsigned i = 0; i < 4; ++i) {
         struct kui_retail_track *t = &manifest.slots[i].track;
         *t = (struct kui_retail_track){.start_lba=starts[i], .end_lba=ends[i],
-            .control=i == 1 ? 0u : 4u, .first_extent=(uint16_t)(4u + manifest.extent_count)};
-        uint32_t bytes = (t->end_lba - t->start_lba) * 2352u;
+            .control=i == 1 ? 0u : (4u | (cooked_mask & (1u << i) ? KUI_RETAIL_TRACK_COOKED : 0u)),
+            .first_extent=(uint16_t)(4u + manifest.extent_count)};
+        uint32_t stride = cooked_mask & (1u << i) ? 2048u : 2352u;
+        uint32_t bytes = (t->end_lba - t->start_lba) * stride;
         uint32_t blocks = (bytes + 511u) / 512u;
         for(uint32_t n = 0; n < blocks;) {
             uint32_t take = blocks - n > take_max ? take_max : blocks - n;
@@ -53,14 +55,20 @@ static void fixture(unsigned take_max, bool scattered) {
             CHECK(4u + index < KUI_RETAIL_IMAGE_SLOTS && physical + take <= 1990u);
             manifest.slots[4u + manifest.extent_count++].extent = (struct kui_retail_extent){n, physical, take};
             ++t->extent_count;
-            for(uint32_t p = 0; p < take * 512u; ++p)
-                if(n * 512u + p < bytes) card[physical * 512u + p] = source(i, n * 512u + p);
+            for(uint32_t p = 0; p < take * 512u; ++p) {
+                uint32_t at = n * 512u + p;
+                if(at < bytes) {
+                    uint32_t original = stride == 2048u ? at / 2048u * 2352u + 16u + at % 2048u : at;
+                    card[physical * 512u + p] = source(i, original);
+                }
+            }
             n += take; used += take;
         }
     }
     CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_OK);
     CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
 }
+static void fixture(unsigned take_max, bool scattered) { fixture_format(take_max, scattered, 0); }
 static void write_output(void *context, uint32_t offset, const uint8_t *bytes, uint32_t count) {
     CHECK(context == output && count && count <= 512u && offset + count <= sizeof(output) - 1);
     memcpy(output + offset, bytes, count);
@@ -128,6 +136,9 @@ int main(void) {
     for(unsigned i = 0; i < sizeof(takes) / sizeof(takes[0]); ++i) {
         fixture(takes[i], false); sweep();
         fixture(takes[i], true); sweep();
+        fixture_format(takes[i], false, (1u << 0) | (1u << 2)); sweep();
+        fixture_format(takes[i], true, (1u << 0) | (1u << 2)); sweep();
+        fixture_format(takes[i], true, 1u << 3); sweep(); /* raw -> cooked */
     }
     mode_error();
     printf("retail cursor: %u checks, %u writes passed\n", checks, writes);

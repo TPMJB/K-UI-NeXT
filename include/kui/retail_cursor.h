@@ -8,7 +8,8 @@
  * call or an interrupt). It produces exactly the bytes kui_retail_image_read
  * would: Mode1 checks each raw sector's 16-byte sync/mode header (it never
  * crosses a block, as 2352 and 512 are multiples of 16) and copies 2048 data
- * bytes; RAW copies all 2352. Every block between a request's first and last
+ * bytes, or copies stored cooked payloads without a header; RAW copies all
+ * 2352 and is unsupported for cooked tracks. Every block between a request's first and last
  * needed byte holds some needed byte (the 288-byte Mode1 tail is shorter than
  * a block), so the needed blocks are consecutive within each track file; an
  * extent or track change moves the card address.

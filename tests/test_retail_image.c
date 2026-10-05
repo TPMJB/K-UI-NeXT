@@ -63,7 +63,7 @@ static int read_run(void *context, uint32_t lba, uint32_t available, uint8_t out
     run_trace[run_calls++].available = available;
     return read_block(context, lba, out);
 }
-static void fixture(bool fragmented) {
+static void fixture_format(bool fragmented, unsigned cooked_mask) {
     memset(&manifest, 0, sizeof(manifest));
     memset(card, 0xf3, sizeof(card));
     manifest.card_sectors = 2048;
@@ -81,8 +81,10 @@ static void fixture(bool fragmented) {
     for(unsigned i = 0; i < 4; ++i) {
         struct kui_retail_track *t = &TRACK(manifest, i);
         *t = (struct kui_retail_track){.start_lba=starts[i], .end_lba=ends[i],
-            .control=i == 1 ? 0u : 4u, .first_extent=(uint16_t)(4u + manifest.extent_count)};
-        uint32_t bytes = (t->end_lba - t->start_lba) * 2352u;
+            .control=i == 1 ? 0u : (4u | (cooked_mask & (1u << i) ? KUI_RETAIL_TRACK_COOKED : 0u)),
+            .first_extent=(uint16_t)(4u + manifest.extent_count)};
+        uint32_t stride = cooked_mask & (1u << i) ? 2048u : 2352u;
+        uint32_t bytes = (t->end_lba - t->start_lba) * stride;
         uint32_t blocks = (bytes + 511u) / 512u;
         for(uint32_t n = 0; n < blocks;) {
             uint32_t take = fragmented && blocks - n > 3 ? 3 : blocks - n;
@@ -91,8 +93,13 @@ static void fixture(bool fragmented) {
             EXTENT(manifest, manifest.extent_count++) =
                 (struct kui_retail_extent){n, physical, take};
             ++t->extent_count;
-            for(uint32_t p = 0; p < take * 512u; ++p)
-                if(n * 512u + p < bytes) card[physical * 512u + p] = source(i, n * 512u + p);
+            for(uint32_t p = 0; p < take * 512u; ++p) {
+                uint32_t at = n * 512u + p;
+                if(at < bytes) {
+                    uint32_t original = stride == 2048u ? at / 2048u * 2352u + 16u + at % 2048u : at;
+                    card[physical * 512u + p] = source(i, original);
+                }
+            }
             n += take; physical_index += take;
         }
     }
@@ -100,6 +107,7 @@ static void fixture(bool fragmented) {
     calls = fail_call = edge_source = run_calls = 0;
     CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
 }
+static void fixture(bool fragmented) { fixture_format(fragmented, 0); }
 static void put32(uint8_t *p, uint32_t value) {
     for(unsigned i = 0; i < 4; ++i) p[i] = (uint8_t)(value >> (8u * i));
 }
@@ -113,6 +121,9 @@ static void wire_tests(void) {
     CHECK(kui_retail_crc32(kui_retail_crc32(0, "1234", 4), "56789", 5) == 0xcbf43926);
     CHECK(kui_retail_crc32(0xabcdef01, NULL, 0) == 0xabcdef01);
     CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+    /* Golden CRC captured from the original raw-only encoder: every byte of
+     * the canonical raw map, including reserved bytes, remains identical. */
+    CHECK(wire[16] == 0x9a && wire[17] == 0x68 && wire[18] == 0x4b && wire[19] == 0x97);
     CHECK(!memcmp(wire, "KUIRTI02", 8));
     CHECK(wire[8] == 2 && wire[12] == 0 && wire[13] == 16 && wire[14] == 0);
     CHECK(wire[20] == 4 && wire[24] == 121 && wire[32] == 0 && wire[33] == 8 && wire[68] == 0xef);
@@ -166,7 +177,7 @@ static void wire_tests(void) {
         wire[i] ^= 1;
     }
     /* Valid CRC cannot bless noncanonical fields, unused entries or text tails. */
-    const unsigned reserved[] = {31, 265, 268, 319, 330, 331, 320 + 3 * 12 + 10,
+    const unsigned reserved[] = {31, 265, 268, 319, 331,
         320 + (4 + manifest.extent_count) * 12, 3000, 4095,
         72 + sizeof("Original retail image test"), 200 + sizeof("KUITEST"),
         216 + sizeof("1ST_READ.BIN"), 240 + sizeof("JUE")};
@@ -672,6 +683,56 @@ static void header_tests(void) {
     header_sector(raw, cases[0].address);
     CHECK(kui_retail_sector_header(raw, KUI_GAME_LBA_LIMIT) == KUI_RETAIL_HEADER_ADDRESS);
 }
+static void cooked_tests(bool fragmented, bool streaming) {
+    /* Raw audio and the last data track surround cooked data tracks. */
+    fixture_format(fragmented, (1u << 0) | (1u << 2));
+    if(streaming) image.read_run = read_run;
+    round_trip();
+    CHECK(wire[320 + 8] == 4 && wire[320 + 10] == 1 && wire[320 + 11] == 0);
+    CHECK(wire[320 + 12 + 8] == 0 && wire[320 + 12 + 10] == 0);
+    CHECK(sizeof(union kui_retail_slot) == 12);
+    compare(0, 3, KUI_GAME_SECTOR_MODE1);
+    compare(3, 2, KUI_GAME_SECTOR_RAW);
+    run_calls = 0;
+    compare(45000, 64, KUI_GAME_SECTOR_MODE1);
+    run_calls = 0;
+    compare(45069, 3, KUI_GAME_SECTOR_MODE1); /* cooked -> raw */
+    compare_part(45000, 0xee0, 0x1000, KUI_GAME_SECTOR_MODE1);
+    compare_part(45069, 0x7e0, 0x1020, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 2047, 63u * 2048u + 1u, KUI_GAME_SECTOR_MODE1);
+    run_calls = 0;
+    image.cache_valid = 0;
+    run_calls = 0;
+    unsigned before = calls;
+    compare(45001, 1, KUI_GAME_SECTOR_MODE1);
+    CHECK(calls == before + 4); /* exactly four aligned card blocks per sector */
+    image.cache_valid = 0;
+    before = calls;
+    compare(45000, 64, KUI_GAME_SECTOR_MODE1);
+    CHECK(calls == before + 256);
+    before = calls;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, 45069, 2, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_UNSUPPORTED);
+    CHECK(kui_retail_image_read_part(&image, 45000, 16, 2048, KUI_GAME_SECTOR_RAW, output) == KUI_GAME_UNSUPPORTED);
+    CHECK(calls == before);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
+    /* A cooked marker on audio, an unknown marker, or a control flag on the
+     * wire is rejected even with a recomputed CRC. */
+    memcpy(clean_wire, wire, sizeof(wire));
+    wire[320 + 12 + 10] = 1; refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    memcpy(wire, clean_wire, sizeof(wire));
+    wire[320 + 10] = 2; refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    memcpy(wire, clean_wire, sizeof(wire));
+    wire[320 + 8] = 4u | KUI_RETAIL_TRACK_COOKED; refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    wire[320 + 10] = 0; refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    TRACK(manifest, 1).control = KUI_RETAIL_TRACK_COOKED;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+}
+
 int main(void) {
     header_tests();
     wire_tests(); invalid_map_tests(); reader_tests(false); reader_tests(true);
@@ -679,6 +740,7 @@ int main(void) {
     sequential_cache_tests(false); sequential_cache_tests(true);
     run_span_tests(); run_failure_tests();
     maximum_map_tests(); unmapped_audio_tests(false); unmapped_audio_tests(true);
+    for(unsigned i = 0; i < 4; ++i) cooked_tests(i & 1u, i >= 2);
     printf("retail image: %u checks passed (canonical wire, fragmented bounds, cached runs, IO, 99 tracks)\n", checks);
     return 0;
 }

@@ -69,7 +69,8 @@ static bool tracks_valid(const struct kui_retail_manifest *m) {
         const struct kui_retail_track *t = &m->slots[i].track;
         if(t->start_lba >= t->end_lba || t->end_lba > KUI_GAME_LBA_LIMIT ||
            (t->start_lba < 45000u && t->end_lba > 45000u) ||
-           (t->control != 0 && t->control != 4) ||
+           (t->control != 0 && t->control != 4 &&
+            t->control != (4u | KUI_RETAIL_TRACK_COOKED)) ||
            (i && m->slots[i - 1].track.end_lba > t->start_lba)) return false;
     }
     return true;
@@ -87,8 +88,12 @@ static enum kui_game_result range_check(const struct kui_retail_manifest *m,
         if(t->end_lba <= cursor) continue;
         if(t->start_lba > cursor) return KUI_GAME_GAP;
         /* Data tracks always have extents; an unmapped audio track has none. */
-        if(!t->extent_count || (format == KUI_GAME_SECTOR_MODE1 && t->control != 4))
+        /* Full map validation admits only audio 0, raw data 4 or cooked
+         * data 0x84. The data bit therefore identifies Mode 1 eligibility. */
+        if(!t->extent_count || (format == KUI_GAME_SECTOR_MODE1 && !(t->control & 4u)))
             return KUI_GAME_AUDIO;
+        if(format == KUI_GAME_SECTOR_RAW && (int8_t)t->control < 0)
+            return KUI_GAME_UNSUPPORTED;
         cursor = t->end_lba < end ? t->end_lba : end;
     }
     return cursor == end ? KUI_GAME_OK : KUI_GAME_RANGE;
@@ -120,12 +125,12 @@ enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manife
     bool session_found = false;
     for(uint32_t i = 0; i < m->track_count; ++i) {
         const struct kui_retail_track *t = &m->slots[i].track;
-        if(t->control == 4 && t->start_lba == m->session_lba &&
+        if(kui_retail_track_control(t) == 4 && t->start_lba == m->session_lba &&
            m->session_lba >= 45000) session_found = true;
         if(t->first_extent != next_extent || t->extent_count > used - next_extent ||
-           (!t->extent_count && t->control == 4)) return KUI_GAME_RANGE;
+           (!t->extent_count && kui_retail_track_control(t) == 4)) return KUI_GAME_RANGE;
         if(!t->extent_count) continue; /* Audio listed without its file mapped. */
-        uint32_t bytes = (t->end_lba - t->start_lba) * KUI_GAME_RAW_BYTES;
+        uint32_t bytes = (t->end_lba - t->start_lba) * kui_retail_track_sector_bytes(t);
         uint32_t blocks = (bytes + 511u) / 512u, next_block = 0;
         for(uint32_t j = 0; j < t->extent_count; ++j) {
             const struct kui_retail_extent *e = &m->slots[next_extent + j].extent;
@@ -181,7 +186,8 @@ enum kui_game_result kui_retail_manifest_encode(const struct kui_retail_manifest
         if(i < m->track_count) {
             const struct kui_retail_track *t = &m->slots[i].track;
             put32(p, t->start_lba); put32(p + 4, t->end_lba);
-            p[8] = t->control; p[9] = t->extent_count;
+            p[8] = (uint8_t)kui_retail_track_control(t); p[9] = t->extent_count;
+            p[10] = (t->control & KUI_RETAIL_TRACK_COOKED) != 0;
         } else {
             const struct kui_retail_extent *e = &m->slots[i].extent;
             put32(p, e->file_block); put32(p + 4, e->card_lba); put32(p + 8, e->blocks);
@@ -219,10 +225,12 @@ enum kui_game_result kui_retail_manifest_decode(
     for(uint32_t i = 0; i < used; ++i) {
         const uint8_t *p = wire + RECORD_BASE + i * RECORD_BYTES;
         if(i < m->track_count) {
-            if(p[10] || p[11]) goto invalid;
+            if((p[8] != 0 && p[8] != 4) || p[10] > 1 || p[11] ||
+               (p[10] && p[8] != 4)) goto invalid;
             struct kui_retail_track *t = &m->slots[i].track;
             t->start_lba = get32(p); t->end_lba = get32(p + 4);
-            t->control = p[8]; t->extent_count = p[9];
+            t->control = p[8] | (p[10] ? KUI_RETAIL_TRACK_COOKED : 0u);
+            t->extent_count = p[9];
             t->first_extent = (uint16_t)next_extent; next_extent += p[9];
         } else {
             struct kui_retail_extent *e = &m->slots[i].extent;
@@ -251,8 +259,10 @@ static enum kui_game_result file_read(struct kui_retail_image *image,
     const struct kui_retail_track *track, uint32_t offset, uint8_t *out,
     uint32_t bytes, uint32_t limit) {
     const struct kui_retail_manifest *m = image->manifest;
-    uint32_t file_bytes = (track->end_lba - track->start_lba) * KUI_GAME_RAW_BYTES;
-    if(offset > file_bytes || bytes > file_bytes - offset) return KUI_GAME_RANGE;
+    /* Private calls follow the full immutable-map request preflight. Their
+     * offsets identify a checked sector in this track, and their copy ends
+     * within its stored stride (including bounded read_part slices). No file
+     * padding is exposed. Keep physical extent and stream-limit checks here. */
     while(bytes) {
         uint32_t file_block = offset / 512u, inside = offset % 512u;
         uint32_t take = 512u - inside;
@@ -301,14 +311,15 @@ enum kui_game_result kui_retail_image_read(struct kui_retail_image *image,
         uint32_t current = lba + i;
         while(image->manifest->slots[track_index].track.end_lba <= current) ++track_index;
         const struct kui_retail_track *t = &image->manifest->slots[track_index].track;
-        uint32_t offset = (current - t->start_lba) * KUI_GAME_RAW_BYTES;
+        uint32_t stride = kui_retail_track_sector_bytes(t);
+        uint32_t offset = (current - t->start_lba) * stride;
         uint32_t end = lba + count;
         if(end > t->end_lba) end = t->end_lba;
-        uint32_t last_byte = (end - t->start_lba) * KUI_GAME_RAW_BYTES;
-        if(format == KUI_GAME_SECTOR_MODE1)
+        uint32_t last_byte = (end - t->start_lba) * stride;
+        if(format == KUI_GAME_SECTOR_MODE1 && stride == KUI_GAME_RAW_BYTES)
             last_byte -= KUI_GAME_RAW_BYTES - 16u - KUI_GAME_DATA_BYTES;
         uint32_t limit = (last_byte + 511u) / 512u;
-        if(format == KUI_GAME_SECTOR_MODE1) {
+        if(format == KUI_GAME_SECTOR_MODE1 && stride == KUI_GAME_RAW_BYTES) {
             uint8_t header[16];
             r = file_read(image, t, offset, header, sizeof(header), limit);
             if(r != KUI_GAME_OK) return r;
@@ -341,14 +352,15 @@ enum kui_game_result kui_retail_image_read_part(struct kui_retail_image *image,
         uint32_t current = lba + i;
         while(image->manifest->slots[track_index].track.end_lba <= current) ++track_index;
         const struct kui_retail_track *t = &image->manifest->slots[track_index].track;
-        uint32_t offset = (current - t->start_lba) * KUI_GAME_RAW_BYTES;
+        uint32_t stride = kui_retail_track_sector_bytes(t);
+        uint32_t offset = (current - t->start_lba) * stride;
         uint32_t end = lba + count;
         if(end > t->end_lba) end = t->end_lba;
-        uint32_t last_byte = (end - t->start_lba) * KUI_GAME_RAW_BYTES;
-        if(format == KUI_GAME_SECTOR_MODE1)
+        uint32_t last_byte = (end - t->start_lba) * stride;
+        if(format == KUI_GAME_SECTOR_MODE1 && stride == KUI_GAME_RAW_BYTES)
             last_byte -= KUI_GAME_RAW_BYTES - 16u - KUI_GAME_DATA_BYTES;
         uint32_t limit = (last_byte + 511u) / 512u;
-        if(format == KUI_GAME_SECTOR_MODE1) {
+        if(format == KUI_GAME_SECTOR_MODE1 && stride == KUI_GAME_RAW_BYTES) {
             uint8_t header[16];
             r = file_read(image, t, offset, header, sizeof(header), limit);
             if(r != KUI_GAME_OK) return r;

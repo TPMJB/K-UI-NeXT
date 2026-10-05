@@ -78,7 +78,9 @@ int kui_retail_gd_init(struct kui_retail_gd *s,
        end > 0x8d000000u || begin >= end || ((begin | end) & 3u)) return -1;
     for(uint32_t i = 0; i < count; ++i) {
         const struct kui_retail_track *t = &tracks[i].track;
-        if((t->control != 0 && t->control != 4) ||
+        if((kui_retail_track_control(t) != 0 && kui_retail_track_control(t) != 4) ||
+           (kui_retail_track_sector_bytes(t) == KUI_GAME_DATA_BYTES &&
+            kui_retail_track_control(t) != 4) ||
            t->start_lba >= t->end_lba || t->end_lba > 719850u ||
            (t->start_lba < 45000u && t->end_lba > 45000u) ||
            (i && tracks[i - 1].track.end_lba > t->start_lba)) return -1;
@@ -213,12 +215,12 @@ static void toc(struct kui_retail_gd *s, uint8_t *out) {
     memset(out, 0xff, KUI_GD_TOC_BYTES);
     for(uint32_t i = first; i <= last; ++i) {
         const struct kui_retail_track *t = track_at(s, i);
-        put32(out + i * 4u, (uint32_t)t->control << 28 | 0x01000000u | (t->start_lba + 150u));
+        put32(out + i * 4u, (uint32_t)kui_retail_track_control(t) << 28 | 0x01000000u | (t->start_lba + 150u));
     }
     const struct kui_retail_track *f = track_at(s, first), *l = track_at(s, last);
-    put32(out + 396, (uint32_t)f->control << 28 | 0x01000000u | (first + 1u) << 16);
-    put32(out + 400, (uint32_t)l->control << 28 | 0x01000000u | (last + 1u) << 16);
-    put32(out + 404, (uint32_t)l->control << 28 | 0x01000000u | (l->end_lba + 150u));
+    put32(out + 396, (uint32_t)kui_retail_track_control(f) << 28 | 0x01000000u | (first + 1u) << 16);
+    put32(out + 400, (uint32_t)kui_retail_track_control(l) << 28 | 0x01000000u | (last + 1u) << 16);
+    put32(out + 404, (uint32_t)kui_retail_track_control(l) << 28 | 0x01000000u | (l->end_lba + 150u));
 }
 static uint8_t bcd(uint32_t n) { return (uint8_t)((n / 10u) * 16u + n % 10u); }
 static void msf(uint8_t *out, uint32_t frames) {
@@ -243,7 +245,7 @@ static void subcode(const struct kui_retail_gd *s, uint8_t *out) {
         const struct kui_retail_track *t = track_at(s, i);
         uint32_t elapsed = s->position_lba - t->start_lba;
         uint32_t fad = s->position_lba + 150u;
-        data[4] = (uint8_t)(t->control << 4 | 1u);
+        data[4] = (uint8_t)(kui_retail_track_control(t) << 4 | 1u);
         data[5] = (uint8_t)(i + 1u); data[6] = 1;
         if(s->area == 1) {
             for(unsigned n = 0; n < 3; ++n) {
@@ -328,7 +330,7 @@ static int32_t execute(struct kui_retail_gd *s) {
             while(i + 1 < s->track_count && track_at(s, i + 1)->start_lba <= s->position_lba) ++i;
             const struct kui_retail_track *t = track_at(s, i);
             put32(out[0], s->drive_status); put32(out[1], i + 1u);
-            put32(out[2], 0x10000000u | (uint32_t)t->control << 24 |
+            put32(out[2], 0x10000000u | (uint32_t)kui_retail_track_control(t) << 24 |
                   (s->position_lba + 150u));
             put32(out[3], 1); s->completed_bytes = 16;
         }

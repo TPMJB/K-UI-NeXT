@@ -119,7 +119,9 @@ static enum map_result map_track(struct files *files,FATFS *fs,const struct kui_
     uint32_t capacity,bool mapped) {
     struct kui_retail_track *t=&map->slots[index].track;
     *t=(struct kui_retail_track){.start_lba=track->start_lba,.end_lba=track->end_lba,
-        .first_extent=(uint16_t)(map->track_count+map->extent_count),.control=(uint8_t)track->control};
+        .first_extent=(uint16_t)(map->track_count+map->extent_count),
+        .control=(uint8_t)(track->control |
+            (track->sector_bytes==KUI_GAME_DATA_BYTES?KUI_RETAIL_TRACK_COOKED:0u))};
     if(!mapped) return stopped(files)?MAP_FAILED:MAP_OK;
     char path[KUI_GAMES_FILE_CAP+3];FIL file;
     if(stopped(files) || !join(files,track->name,path) || f_open(&file,path,FA_READ)!=FR_OK) return MAP_FAILED;
@@ -169,8 +171,9 @@ static enum map_result map_tracks(struct files *files,FATFS *fs,const struct kui
     }
     return result;
 }
-/* Hash only the requested logical bytes of the IP. The boot executable is not
- * read here: the stage checks each of its sectors' headers as it loads them. */
+/* Hash exact logical bytes. Raw boot tracks retain their address checks in
+ * the stage; a cooked boot has no sector headers, so its expected executable
+ * CRC is prepared here and checked against the detached physical read. */
 static enum kui_game_result extent_crc(const struct kui_game_image *image,
     uint32_t lba,uint32_t bytes,uint32_t *crc) {
     if(!bytes) return KUI_GAME_INVALID;
@@ -221,7 +224,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     enum kui_game_result r=kui_game_image_open(gdi,(size_t)size,&file_ops,image);
     if(r!=KUI_GAME_OK) {
         problem=r==KUI_GAME_UNSUPPORTED?
-            "raw 2352-byte GDI tracks with zero file offsets required":kui_game_result_name(r);
+            "GDI needs 2048/2352-byte data, 2352-byte audio and zero offsets":kui_game_result_name(r);
         goto done;
     }
     map->storage_transport=kui_storage_active();
@@ -232,7 +235,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     for(unsigned i=0;i<image->count;i++) if(image->tracks[i].control==4 && image->tracks[i].start_lba>=45000) {
         map->session_lba=image->tracks[i].start_lba;break;
     }
-    if(!map->session_lba) {problem="raw GD-ROM high-density session required";goto done;}
+    if(!map->session_lba) {problem="GD-ROM high-density data session required";goto done;}
     struct kui_game_metadata metadata;struct kui_game_metadata_ops metadata_ops={image,metadata_read,metadata_range};
     enum kui_game_metadata_status ms=kui_game_metadata_read(&metadata_ops,map->session_lba,&metadata);
     if(ms!=KUI_GAME_METADATA_OK) {problem=kui_game_metadata_status_text(ms);goto done;}
@@ -276,6 +279,18 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     r=kui_game_image_check(image,map->boot_lba,(map->boot_bytes+2047u)/2048u,KUI_GAME_SECTOR_MODE1);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+    const uint32_t boot_end=map->boot_lba+(map->boot_bytes+2047u)/2048u;
+    bool cooked_boot=false;
+    for(unsigned i=0;i<image->count;i++)
+        if(image->tracks[i].sector_bytes==KUI_GAME_DATA_BYTES &&
+            image->tracks[i].start_lba<boot_end && image->tracks[i].end_lba>map->boot_lba)
+            cooked_boot=true;
+    if(cooked_boot) {
+        log("Retail boot: checking cooked executable CRC before detached launch");
+        r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
+        if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+        log("Retail boot: cooked executable CRC32=%08x",map->boot_crc32);
+    }
     if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
     const struct kui_volume volume=*kui_media_volume();
     if(!volume.count || (uint64_t)volume.start+volume.count>UINT32_MAX) {problem="invalid partition bounds";goto done;}
@@ -303,7 +318,8 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         goto done;
     }
     for(unsigned i=0;i<image->count;i++) if(map->slots[i].track.extent_count)
-        log("Retail map T%02u: %u extents",image->tracks[i].number,map->slots[i].track.extent_count);
+        log("Retail map T%02u: %u-byte sectors, %u extents",image->tracks[i].number,
+            image->tracks[i].sector_bytes,map->slots[i].track.extent_count);
     if(!audio)
         log("Retail boot: audio tracks listed without their files to fit %u tracks; their sectors cannot be read",
             image->count);

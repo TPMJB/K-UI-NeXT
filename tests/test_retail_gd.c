@@ -39,6 +39,8 @@ static const union kui_retail_slot mapped_tracks[] = {
 #define LOW_ALIAS(a) ((a) & 0x1fffffffu)
 #endif
 static unsigned use_mapped_tracks;
+static unsigned use_cooked_tracks;
+static union kui_retail_slot cooked_tracks[3];
 static unsigned assertions;
 #define CHECK(x) do { ++assertions; assert(x); } while(0)
 static void put(uint32_t a, uint32_t n) {
@@ -113,6 +115,12 @@ static int32_t call(uint32_t fn, uint32_t a, uint32_t b) {
 static void reset(void) {
     memset(&ctx, 0, sizeof(ctx)); memset(ram, 0xa5, sizeof(ram));
     const union kui_retail_slot *slots = use_mapped_tracks ? mapped_tracks : tracks;
+    if(use_cooked_tracks) {
+        memcpy(cooked_tracks, slots, sizeof(cooked_tracks));
+        cooked_tracks[0].track.control |= KUI_RETAIL_TRACK_COOKED;
+        cooked_tracks[2].track.control |= KUI_RETAIL_TRACK_COOKED;
+        slots = cooked_tracks;
+    }
     CHECK(kui_retail_gd_init(&service, slots, 3, &ops, BEGIN, END) == 0);
     CHECK(service.tracks == slots && sizeof(service) < 512);
     struct kui_retail_gd expected = service;
@@ -817,6 +825,16 @@ static void many_tracks(void) {
 }
 int main(void) {
     many_tracks();
+    /* The physical cooked flag must never leak into a game's disc metadata.
+     * Exercise TOC, drive position and Q subcode through normal GD calls. */
+    use_cooked_tracks = 1;
+    metadata();
+#ifndef KUI_RETAIL_GD_ASYNC
+    subcode_query();
+#endif
+    reset(); cooked_tracks[1].track.control |= KUI_RETAIL_TRACK_COOKED;
+    CHECK(kui_retail_gd_init(&service, cooked_tracks, 3, &ops, BEGIN, END) == -1);
+    use_cooked_tracks = 0;
     for(use_mapped_tracks=0;use_mapped_tracks<2;use_mapped_tracks++) {
 #ifdef KUI_RETAIL_GD_ASYNC
         async_reads(); metadata(); silent_cd_audio(); version_query();

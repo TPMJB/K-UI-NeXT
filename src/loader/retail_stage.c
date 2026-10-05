@@ -4,6 +4,7 @@
 #include "kui/retail_resident.h"
 #include "retail_storage.h"
 #include "retail_display.h"
+#include "retail_boot.h"
 #ifdef KUI_RETAIL_SD_BENCH
 #include "retail_sd_bench.h"
 #endif
@@ -56,11 +57,14 @@ static struct kui_retail_storage card;
 static struct retail_display_state display;
 static enum kui_loader_sd_result last_card_result;
 /* Raw boot sectors are checked, then their 2048 data bytes copied into place.
+ * Cooked boot sectors are copied directly and checked against the executable
+ * CRC captured while preparing the image, including CE's load prefix.
  * The executable's CRC32 is taken after loading, for the relay's check that
  * bootstrap 2 left it unchanged. */
 #define BOOT_CHUNK_SECTORS 16u
 static uint8_t raw_boot[BOOT_CHUNK_SECTORS*KUI_GAME_RAW_BYTES];
 static uint32_t boot_crc;
+static uint32_t source_boot_crc, boot_cooked;
 /* Bytes of the executable at KUI_RETAIL_EXEC_ADDRESS: the boot file, or for
  * Windows CE its body (the file less its 2048-byte load prefix). */
 static uint32_t exec_bytes;
@@ -154,22 +158,36 @@ static void read_sectors(uint32_t lba,uint32_t count,enum kui_game_sector_format
         stopped("IMAGE READ FAILED",(uint32_t)result);
     }
 }
-/* Loads whole raw sectors from lba, checking each one's header, and copies
- * their 2048 data bytes to out. */
-static void load_sectors(uint32_t lba,uint32_t sectors,uint8_t *out) {
+/* Loads payload sectors from lba. Each chunk stays within one backing track;
+ * mixed cooked data/raw audio maps retain their physical file stride. Raw
+ * data keeps the original header checks, including its absolute address. */
+static void load_sectors(uint32_t lba,uint32_t sectors,uint32_t file_bytes,uint8_t *out) {
     for(uint32_t done=0;done<sectors;) {
+        const struct kui_retail_track *track=NULL;
+        for(uint32_t i=0;i<manifest.track_count;i++) {
+            const struct kui_retail_track *t=&manifest.slots[i].track;
+            if(lba+done>=t->start_lba && lba+done<t->end_lba) { track=t; break; }
+        }
+        if(!track) stopped("BOOT SECTOR OUTSIDE TRACK",lba+done);
         uint32_t count=sectors-done;
         if(count>BOOT_CHUNK_SECTORS) count=BOOT_CHUNK_SECTORS;
-        read_sectors(lba+done,count,KUI_GAME_SECTOR_RAW,raw_boot);
-        for(uint32_t i=0;i<count;i++) {
-            const uint8_t *sector=raw_boot+(size_t)i*KUI_GAME_RAW_BYTES;
-            enum kui_retail_header header=kui_retail_sector_header(sector,lba+done+i);
-            if(header!=KUI_RETAIL_HEADER_OK) {
-                retail_display_hex("BOOT SECTOR LBA",lba+done+i);
-                stopped(header==KUI_RETAIL_HEADER_ADDRESS?"BOOT SECTOR ADDRESS MISMATCH":
-                    "BOOT SECTOR IS NOT MODE 1 DATA",(uint32_t)header);
-            }
-            memcpy(out+(size_t)(done+i)*2048u,sector+16,2048);
+        if(count>track->end_lba-lba-done) count=track->end_lba-lba-done;
+        uint32_t stride=kui_retail_track_sector_bytes(track),failed_lba=0;
+        read_sectors(lba+done,count,stride==KUI_GAME_DATA_BYTES?
+            KUI_GAME_SECTOR_MODE1:KUI_GAME_SECTOR_RAW,raw_boot);
+        uint8_t *destination=out+(size_t)done*KUI_GAME_DATA_BYTES;
+        enum kui_retail_header header=kui_retail_boot_copy(raw_boot,destination,
+            lba+done,count,stride,&failed_lba);
+        if(header!=KUI_RETAIL_HEADER_OK) {
+            retail_display_hex("BOOT SECTOR LBA",failed_lba);
+            stopped(header==KUI_RETAIL_HEADER_ADDRESS?"BOOT SECTOR ADDRESS MISMATCH":
+                "BOOT SECTOR IS NOT MODE 1 DATA",(uint32_t)header);
+        }
+        if(boot_cooked) {
+            uint32_t bytes=count*KUI_GAME_DATA_BYTES;
+            uint32_t left=file_bytes-done*KUI_GAME_DATA_BYTES;
+            if(bytes>left) bytes=left;
+            source_boot_crc=kui_retail_crc32(source_boot_crc,destination,bytes);
         }
         done+=count;
         retail_display_progress(done,sectors);
@@ -253,7 +271,7 @@ static void ce_find_kernel(uint32_t body,uint32_t bytes) {
 }
 static uint32_t ce_load(const uint8_t *ip) {
     if(!ip_windows_ce(ip)) stopped("IP DOES NOT SELECT WINDOWS CE",word(ip+56));
-    load_sectors(manifest.boot_lba,1,ce_prefix);
+    load_sectors(manifest.boot_lba,1,KUI_CE_LOAD_PREFIX_BYTES,ce_prefix);
     /* Everything still in use: firmware, IP, the bootstrap area below the
      * body, and this stage with its BSS and stack. */
     const struct kui_ce_live_range live[]={
@@ -271,7 +289,7 @@ static uint32_t ce_load(const uint8_t *ip) {
     }
     uint8_t *body=(uint8_t *)(uintptr_t)plan.body.address;
     retail_display_line("LOADING WINDOWS CE BODY");
-    load_sectors(manifest.boot_lba+1u,plan.body.sector_count,body);
+    load_sectors(manifest.boot_lba+1u,plan.body.sector_count,plan.body.bytes,body);
     uint8_t *prefix=(uint8_t *)(uintptr_t)plan.prefix.address;
     memcpy(prefix,ce_prefix,sizeof(ce_prefix));
     uint32_t prefix_crc=kui_retail_crc32(0,prefix,plan.prefix.bytes);
@@ -390,23 +408,31 @@ void kui_retail_stage_main(const uint8_t *wire) {
     read_sectors(manifest.session_lba,16,KUI_GAME_SECTOR_MODE1,ip);
     uint32_t crc=kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES);
     if(crc!=manifest.ip_crc32) stopped("IP CHECKSUM CHANGED",crc);
-    /* K-UI no longer reads the executable before launch. Every boot sector's
-     * sync, mode and address must match its LBA, proving the file map; SD
-     * CRCs cover the transfer. EDC is not required: patched executables
-     * commonly leave it stale, and they launch as before. */
+    /* Raw maps retain the fast header/address validation. Cooked data has
+     * discarded those headers, so preparation fingerprints the executable
+     * and the stage checks its exact file bytes after this mapped read. */
+    uint32_t boot_end=manifest.boot_lba+(manifest.boot_bytes+2047u)/2048u;
+    for(uint32_t i=0;i<manifest.track_count;i++) {
+        const struct kui_retail_track *t=&manifest.slots[i].track;
+        if(t->end_lba>manifest.boot_lba && t->start_lba<boot_end &&
+           kui_retail_track_sector_bytes(t)==KUI_GAME_DATA_BYTES) boot_cooked=1;
+    }
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
 #ifdef KUI_RETAIL_CE
     exec_bytes=ce_load(ip);
 #else
     exec_bytes=manifest.boot_bytes;
-    load_sectors(manifest.boot_lba,(manifest.boot_bytes+2047u)/2048u,boot);
+    load_sectors(manifest.boot_lba,(manifest.boot_bytes+2047u)/2048u,manifest.boot_bytes,boot);
 #endif
+    if(boot_cooked && source_boot_crc!=manifest.boot_crc32)
+        stopped("COOKED EXECUTABLE CHECKSUM CHANGED",source_boot_crc);
     boot_crc=kui_retail_crc32(0,boot,exec_bytes);
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);
     memcpy(original_entry,boot,ENTRY_PATCH_BYTES);
     memcpy(boot,__retail_trampoline_start,ENTRY_PATCH_BYTES);
-    retail_display_line("IP CHECKSUM AND BOOT SECTOR HEADERS PASSED");
+    retail_display_line(boot_cooked?"IP AND COOKED EXECUTABLE CHECKSUMS PASSED":
+        "IP CHECKSUM AND BOOT SECTOR HEADERS PASSED");
     retail_display_hex("BOOT BYTES",exec_bytes);
     retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
     /* DreamShell's native Katana path clears this IP bootstrap flag before

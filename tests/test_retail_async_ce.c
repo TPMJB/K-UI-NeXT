@@ -32,6 +32,7 @@ static uint8_t expected[64u * 2352u];
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image reference;
 static unsigned checks;
+static bool cooked_fixture;
 #define CHECK(test) do { ++checks; assert(test); } while(0)
 
 /* ---- Resident, CE and CPU hooks ---- */
@@ -61,7 +62,10 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) { ++hw.acquires; return KUI_L
 
 /* ---- Image: the cursor test's track bytes, mapped onto the model card ---- */
 static uint8_t source(uint32_t track, uint32_t file_byte) {
-    uint32_t sector = file_byte / 2352u, inside = file_byte % 2352u;
+    bool cooked = cooked_fixture && track != 1u && track != 3u;
+    uint32_t stride = cooked ? 2048u : 2352u;
+    uint32_t sector = file_byte / stride, inside = file_byte % stride;
+    if(cooked) inside += 16u;
     if(track != 1) {
         if(inside == 0 || inside == 11) return 0;
         if(inside < 11) return 255;
@@ -93,7 +97,8 @@ static void fixture(unsigned take_max) {
         struct kui_retail_track *t = &manifest.slots[i].track;
         *t = (struct kui_retail_track){.start_lba=starts[i], .end_lba=ends[i],
             .control=i == 1 ? 0u : 4u, .first_extent=(uint16_t)(4u + manifest.extent_count)};
-        uint32_t bytes = (t->end_lba - t->start_lba) * 2352u;
+        if(cooked_fixture && i != 1u && i != 3u) t->control |= KUI_RETAIL_TRACK_COOKED;
+        uint32_t bytes = (t->end_lba - t->start_lba) * kui_retail_track_sector_bytes(t);
         uint32_t blocks = (bytes + 511u) / 512u;
         for(uint32_t n = 0; n < blocks;) {
             uint32_t take = blocks - n > take_max ? take_max : blocks - n;
@@ -887,6 +892,31 @@ static void test_stress(void) {
     CHECK(st->irq_blocks > st->call_blocks && ss->repaired);
 }
 
+static void test_cooked_reads(void) {
+    cooked_fixture = true;
+    setup(48, true);
+    mode(2048);
+    int32_t token = request(KUI_GD_DMAREAD, 45298, 4, OUTPUT);
+    CHECK(finish(token, 5) == KUI_GD_COMPLETED);
+    reference_read(45298, 4); /* Cooked to raw data transition. */
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 4u * 2048u));
+    static const uint32_t sizes[7] = {32, 4096, 2080, 96, 8192, 512, 1600};
+    dma_stream(45000, 40, sizes, 4); /* Page pieces and mid-sector spill. */
+    mode(2352);
+    unsigned blocks = kui_sci_stream_stats()->blocks;
+    put(PARAM, 45150); put(PARAM + 4, 1); put(PARAM + 8, OUTPUT); put(PARAM + 12, 0);
+    CHECK(gd(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK(kui_sci_stream_stats()->blocks == blocks);
+    token = request(KUI_GD_DMAREAD, 3, 2, OUTPUT);
+    CHECK(finish(token, 5) == KUI_GD_COMPLETED);
+    reference_read(3, 2);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 2u * 2352u));
+    test_virtual_pio_read();
+    test_pio_stream();
+    test_abort_writes_nothing_more();
+    test_stress();
+    cooked_fixture = false;
+}
 int main(void) {
     test_dma_reads_by_interrupt();
     test_before_ce_runs();
@@ -910,6 +940,7 @@ int main(void) {
     test_table_replaced();
     test_level_dropped_in_a_call();
     test_stress();
+    test_cooked_reads();
     printf("retail async reader (Windows CE): %u checks passed\n", checks);
     return 0;
 }

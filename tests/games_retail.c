@@ -44,6 +44,14 @@ static const char *track_name(unsigned i, char generated[32]) {
 }
 static uint32_t track_start(unsigned i) { return i < 4 ? starts[i] : 45064u + (i - 3u) * 4u; }
 static uint32_t track_sectors(unsigned i) { return i < 4 ? counts[i] : 4u; }
+/* Preserve a raw data track alongside cooked high-density data; the async
+ * case also cooks track 1, while audio always remains raw. */
+static bool cooked_track(unsigned i) {
+    bool cooked = !strcmp(test.fault, "cooked-2048") || !strcmp(test.fault, "cooked-boot-tail") ||
+        !strcmp(test.fault, "async-cooked-2048") || !strcmp(test.fault, "ce-probe-cooked");
+    return cooked && (i == 2 || (i == 0 && !strcmp(test.fault, "async-cooked-2048")));
+}
+static uint32_t track_stride(unsigned i) { return cooked_track(i) ? 2048u : 2352u; }
 /* Maps whose tracks with their files exceed the reader's slots list audio
  * tracks without them: 99 + 99 > 160, and the background reader's 40 + 40 > 64. */
 static bool audio_unmapped(void) {
@@ -71,7 +79,8 @@ static int sync_image(void *ctx) {
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
 unsigned kui_storage_active(void) {
     /* The CE boot test needs SCI; ce-probe-scif checks the refusal. */
-    return !strcmp(test.fault, "async-on-sci") || !strncmp(test.fault, "async-tracks", 12) ||
+    return !strcmp(test.fault, "async-on-sci") || !strcmp(test.fault, "async-cooked-2048") ||
+        !strncmp(test.fault, "async-tracks", 12) ||
         (!strncmp(test.fault, "ce-probe", 8) && strcmp(test.fault, "ce-probe-scif")) ?
         KUI_STORAGE_SCI : KUI_STORAGE_SCIF;
 }
@@ -105,10 +114,11 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
         ++test.read_calls;
         if(file == test.track) {
             if(fault("read-fail")) { test.injected = true; return FR_DISK_ERR; }
-            /* The boot executable (track sectors 21 and 22) is read only by
-             * the stage after handoff, never during preparation. */
+            /* Raw boot files are read only by the detached stage; cooked
+             * preparation reads their exact logical bytes for expected CRC. */
             FSIZE_t end = f_tell(file), start = end - *got;
-            if(strstr(test.track_name, "track03") && start < 23u * 2352u && end > 21u * 2352u)
+            if(strstr(test.track_name, "track03") && start < 23u * track_stride(2) &&
+               end > 21u * track_stride(2))
                 test.boot_read = true;
             /* The last IP sector: the launcher's final read of track data. */
             if(bytes == 2352 && f_tell(file) == 16u * 2352u && fault("cancel-ip")) {
@@ -267,14 +277,16 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(map->partition_end - map->partition_start == 96u * 1024u * 1024u / 512u);
     assert(map->track_count == track_count() &&
            map->extent_count >= (audio_unmapped() ? 2u : track_count()));
-    assert(map->session_lba == 45000 && map->boot_lba == 45021 && map->boot_bytes == (!strcmp(test.fault, "boot-tail") ? 3001u : 4096u));
+    assert(map->session_lba == 45000 && map->boot_lba == 45021 &&
+           map->boot_bytes == (!strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "cooked-boot-tail") ? 3001u : 4096u));
     assert(!strcmp(map->title, !strcmp(test.fault, "other-title") ? "Independent Native Game" :
         !strcmp(test.fault, "blank-title") ? "Untitled game" : "DEAD OR ALIVE 2"));
     assert(!strcmp(map->bootfile, !strcmp(test.fault, "alternate-bootfile") ? "ALT_BOOT.BIN" : "1ST_READ.BIN"));
     if(!strcmp(test.fault, "fragmented")) assert(map->slots[2].track.extent_count > 1);
     /* The background reader is granted only on SCI; SCIF falls back. The
      * Windows CE boot test's comes from its own package. */
-    assert(map->reader == (!strcmp(test.fault, "async-on-sci") || !strncmp(test.fault, "async-tracks", 12) ||
+    assert(map->reader == (!strcmp(test.fault, "async-on-sci") || !strcmp(test.fault, "async-cooked-2048") ||
+                           !strncmp(test.fault, "async-tracks", 12) ||
                            !strcmp(test.fault, "ce-probe-async") ?
                            KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD));
     assert(map->storage_transport == kui_storage_active());
@@ -288,10 +300,12 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
         char generated[32];
         const struct kui_retail_track *t = &map->slots[i].track;
         expected[i] = host_file(directory, track_name(i, generated), &sizes[i]);
-        assert(sizes[i] == (size_t)track_sectors(i) * KUI_GAME_RAW_BYTES);
+        uint32_t stride = kui_retail_track_sector_bytes(t);
+        assert(stride == track_stride(i) && sizes[i] == (size_t)track_sectors(i) * stride);
         assert(t->start_lba == track_start(i) && t->end_lba == track_start(i) + track_sectors(i));
-        assert(t->control == (i == 0 || i == 2 ? 4u : 0u));
-        if(t->control == 0 && audio_unmapped()) {
+        assert(kui_retail_track_control(t) == (i == 0 || i == 2 ? 4u : 0u));
+        assert((bool)(t->control & KUI_RETAIL_TRACK_COOKED) == cooked_track(i));
+        if(kui_retail_track_control(t) == 0 && audio_unmapped()) {
             /* Listed without its file: refused before any card read. */
             unsigned before = test.physical_reads;
             assert(!t->extent_count && kui_retail_image_read(&reader, t->start_lba, 1,
@@ -300,39 +314,60 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
             continue;
         }
         assert(t->extent_count);
-        assert(kui_retail_image_read(&reader, track_start(i), track_sectors(i), KUI_GAME_SECTOR_RAW,
-            actual, sizes[i]) == KUI_GAME_OK && !memcmp(actual, expected[i], sizes[i]));
+        if(cooked_track(i)) {
+            unsigned before = test.physical_reads;
+            memset(actual, 0x77, KUI_GAME_RAW_BYTES * 64u);
+            assert(kui_retail_image_read(&reader, track_start(i), track_sectors(i), KUI_GAME_SECTOR_RAW,
+                actual, KUI_GAME_RAW_BYTES * 64u) == KUI_GAME_UNSUPPORTED);
+            assert(test.physical_reads == before);
+            for(size_t j = 0; j < KUI_GAME_RAW_BYTES * 64u; ++j) assert(actual[j] == 0x77);
+        } else {
+            assert(kui_retail_image_read(&reader, track_start(i), track_sectors(i), KUI_GAME_SECTOR_RAW,
+                actual, sizes[i]) == KUI_GAME_OK && !memcmp(actual, expected[i], sizes[i]));
+        }
         if(i == 0 || i == 2) {
             assert(kui_retail_image_read(&reader, starts[i], counts[i], KUI_GAME_SECTOR_MODE1,
                 actual, (size_t)counts[i] * 2048u) == KUI_GAME_OK);
             for(uint32_t n = 0; n < counts[i]; ++n)
-                assert(!memcmp(actual + n * 2048u, expected[i] + n * KUI_GAME_RAW_BYTES + 16, 2048));
+                assert(!memcmp(actual + n * 2048u, expected[i] + n * stride + kui_retail_track_header_bytes(t), 2048));
         }
     }
-    /* K-UI no longer reads the executable before launch; the stage checks
-     * each boot sector's header as it loads. The detached reader must still
-     * return the exact logical boot bytes, compared with the fixture itself. */
-    assert(map->boot_crc32 == 0);
+    /* Raw preparation skips the executable and preserves zero boot CRC.
+     * Cooked preparation provides its exact expected logical-byte CRC. */
+    const struct kui_retail_track *boot_track = &map->slots[2].track;
+    uint32_t boot_stride = kui_retail_track_sector_bytes(boot_track);
+    uint32_t boot_header = kui_retail_track_header_bytes(boot_track), boot_crc = 0;
     for(uint32_t done = 0; done < map->boot_bytes; ) {
         uint32_t n = done / 2048u, bytes = map->boot_bytes - done;
         if(bytes > 2048u) bytes = 2048u;
         assert(kui_retail_image_read(&reader, map->boot_lba + n, 1,
             KUI_GAME_SECTOR_MODE1, actual, 2048) == KUI_GAME_OK);
-        assert(!memcmp(actual, expected[2] + (21u + n) * 2352u + 16u, bytes));
-        assert(kui_retail_image_read(&reader, map->boot_lba + n, 1,
-            KUI_GAME_SECTOR_RAW, actual, 2352) == KUI_GAME_OK);
-        assert(kui_retail_sector_header(actual, map->boot_lba + n) == KUI_RETAIL_HEADER_OK);
-        assert(kui_retail_sector_header(actual, map->boot_lba + n + 1u) == KUI_RETAIL_HEADER_ADDRESS);
+        const uint8_t *source = expected[2] + (21u + n) * boot_stride + boot_header;
+        assert(!memcmp(actual, source, bytes));
+        boot_crc = kui_retail_crc32(boot_crc, source, bytes);
+        if(!cooked_track(2)) {
+            assert(kui_retail_image_read(&reader, map->boot_lba + n, 1,
+                KUI_GAME_SECTOR_RAW, actual, 2352) == KUI_GAME_OK);
+            assert(kui_retail_sector_header(actual, map->boot_lba + n) == KUI_RETAIL_HEADER_OK);
+            assert(kui_retail_sector_header(actual, map->boot_lba + n + 1u) == KUI_RETAIL_HEADER_ADDRESS);
+        }
         done += bytes;
     }
+    assert(map->boot_crc32 == (cooked_track(2) ? boot_crc : 0));
+    if(cooked_track(2))
+        assert(boot_crc == (!strcmp(test.fault, "cooked-boot-tail") ? 0x4a3efbf8u : 0xbaf6ad9cu));
     assert(kui_retail_image_read(&reader, map->session_lba, 16,
         KUI_GAME_SECTOR_MODE1, actual, 32768) == KUI_GAME_OK);
     uint32_t ip_crc = kui_retail_crc32(0, actual, 32768), expected_ip_crc = 0;
     for(uint32_t n = 0; n < 16; ++n)
-        expected_ip_crc = kui_crc32(expected_ip_crc, expected[2] + n * 2352u + 16u, 2048);
+        expected_ip_crc = kui_crc32(expected_ip_crc, expected[2] + n * boot_stride + boot_header, 2048);
     assert(ip_crc == map->ip_crc32 && expected_ip_crc == map->ip_crc32);
     /* Adjacent data/audio boundary, hole and cooked audio rejection. */
-    if(audio_unmapped()) {
+    if(cooked_track(0)) {
+        unsigned before = test.physical_reads;
+        assert(kui_retail_image_read(&reader, 3, 2, KUI_GAME_SECTOR_RAW, actual, 4704) == KUI_GAME_UNSUPPORTED);
+        assert(test.physical_reads == before);
+    } else if(audio_unmapped()) {
         assert(kui_retail_image_read(&reader, 3, 2, KUI_GAME_SECTOR_RAW, actual, 4704) == KUI_GAME_AUDIO);
     } else {
         assert(kui_retail_image_read(&reader, 3, 2, KUI_GAME_SECTOR_RAW, actual, 4704) == KUI_GAME_OK);
@@ -346,6 +381,7 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     for(unsigned i = 0; i < track_count(); ++i) free(expected[i]);
     free(actual); free(map);
     printf("Detached selected-image read PASS: all raw tracks, cooked data, full IP CRC, exact boot bytes and headers; %u SD blocks\n", reads);
+    if(cooked_track(2)) printf("Cooked data RAW requests refused before IO; exact boot CRC %08x\n", boot_crc);
 }
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
@@ -356,12 +392,13 @@ static void check(const char *directory) {
         strncmp(test.fault, "async-", 6) ? kui_games_retail_prepare(selected, &image, log_line, cancel) :
         kui_games_retail_prepare_reader(selected, KUI_RETAIL_READER_ASYNC, &image, log_line, cancel);
     bool valid = !strncmp(test.fault, "async-", 6) || !strcmp(test.fault, "valid") || !strcmp(test.fault, "fragmented") ||
-        !strcmp(test.fault, "ce-probe") || !strcmp(test.fault, "ce-probe-async") ||
+        !strcmp(test.fault, "ce-probe") || !strcmp(test.fault, "ce-probe-async") || !strcmp(test.fault, "ce-probe-cooked") ||
+        !strcmp(test.fault, "cooked-2048") || !strcmp(test.fault, "cooked-boot-tail") ||
         !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "other-title") ||
         !strcmp(test.fault, "alternate-bootfile") || !strcmp(test.fault, "cdda-warning") ||
         !strcmp(test.fault, "blank-title") || !strncmp(test.fault, "tracks-", 7);
     assert(result == valid);
-    assert(!test.boot_read);
+    assert(test.boot_read == (valid && cooked_track(2)));
     if(valid) check_mapping(directory, &image);
     else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
     kui_runtime_free(&image);

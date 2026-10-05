@@ -85,7 +85,9 @@ static enum kui_game_result parse(const void *gdi, size_t size,
                !number(&line, &control) || !number(&line, &bytes) ||
                !filename(&line, track->name) || !number(&line, &offset))
                 return KUI_GAME_SYNTAX;
-            if((control != 0 && control != 4) || bytes != KUI_GAME_RAW_BYTES || offset)
+            if((control != 0 && control != 4) || offset ||
+               (bytes != KUI_GAME_RAW_BYTES &&
+                (bytes != KUI_GAME_DATA_BYTES || control != 4)))
                 return KUI_GAME_UNSUPPORTED;
             if(lba >= KUI_GAME_LBA_LIMIT) return KUI_GAME_RANGE;
             if(row > 1u && lba <= image->tracks[row - 2u].start_lba)
@@ -96,6 +98,7 @@ static enum kui_game_result parse(const void *gdi, size_t size,
             track->number = index;
             track->start_lba = lba;
             track->control = control;
+            track->sector_bytes = bytes;
         }
         space(&line);
         if(line.at != line.end) return KUI_GAME_SYNTAX;
@@ -118,8 +121,8 @@ enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
         uint64_t bytes = 0;
         result = files->stat(files->ctx, track->name, &bytes);
         if(result != KUI_GAME_OK) return result;
-        if(!bytes || bytes % KUI_GAME_RAW_BYTES) return KUI_GAME_FILE_SIZE;
-        uint64_t sectors = bytes / KUI_GAME_RAW_BYTES;
+        if(!bytes || bytes % track->sector_bytes) return KUI_GAME_FILE_SIZE;
+        uint64_t sectors = bytes / track->sector_bytes;
         if(sectors > KUI_GAME_LBA_LIMIT - track->start_lba)
             return KUI_GAME_RANGE;
         track->file_bytes = bytes;
@@ -142,8 +145,10 @@ static bool valid_image(const struct kui_game_image *image) {
         if(track->number != i + 1u || track->start_lba >= track->end_lba ||
            track->end_lba > KUI_GAME_LBA_LIMIT ||
            (track->control != 0 && track->control != 4) ||
+           (track->sector_bytes != KUI_GAME_RAW_BYTES &&
+            (track->sector_bytes != KUI_GAME_DATA_BYTES || track->control != 4)) ||
            track->file_bytes != (uint64_t)(track->end_lba - track->start_lba) *
-                                KUI_GAME_RAW_BYTES ||
+                                track->sector_bytes ||
            !track->name[0] || !memchr(track->name, 0, sizeof(track->name)) ||
            (i && image->tracks[i - 1u].end_lba > track->start_lba))
             return false;
@@ -167,6 +172,8 @@ enum kui_game_result kui_game_image_check(const struct kui_game_image *image,
         if(track->start_lba > cursor) return KUI_GAME_GAP;
         if(format == KUI_GAME_SECTOR_MODE1 && track->control != 4)
             return KUI_GAME_AUDIO;
+        if(format == KUI_GAME_SECTOR_RAW && track->sector_bytes != KUI_GAME_RAW_BYTES)
+            return KUI_GAME_UNSUPPORTED;
         cursor = track->end_lba < end ? track->end_lba : (uint32_t)end;
     }
     return cursor == end ? KUI_GAME_OK : KUI_GAME_RANGE;
@@ -194,9 +201,9 @@ enum kui_game_result kui_game_image_read(const struct kui_game_image *image,
         if(track->end_lba <= cursor) continue;
         uint32_t take = track->end_lba - cursor;
         if(take > remaining) take = remaining;
-        uint64_t offset = (uint64_t)(cursor - track->start_lba) * KUI_GAME_RAW_BYTES;
-        if(format == KUI_GAME_SECTOR_RAW) {
-            size_t length = (size_t)take * KUI_GAME_RAW_BYTES;
+        uint64_t offset = (uint64_t)(cursor - track->start_lba) * track->sector_bytes;
+        if(format == KUI_GAME_SECTOR_RAW || track->sector_bytes == KUI_GAME_DATA_BYTES) {
+            size_t length = (size_t)take * track->sector_bytes;
             result = image->files.read(image->files.ctx, track->name, offset,
                                        destination, length);
             if(result != KUI_GAME_OK) return result;
@@ -227,7 +234,7 @@ const char *kui_game_result_name(enum kui_game_result result) {
     case KUI_GAME_NOT_FOUND: return "Track file missing";
     case KUI_GAME_IO: return "Image read failed";
     case KUI_GAME_CANCELLED: return "Cancelled";
-    case KUI_GAME_FILE_SIZE: return "Invalid raw track length";
+    case KUI_GAME_FILE_SIZE: return "Invalid track length";
     case KUI_GAME_OVERLAP: return "Overlapping or aliased tracks";
     case KUI_GAME_RANGE: return "Outside image bounds";
     case KUI_GAME_GAP: return "Unmapped disc gap";

@@ -224,7 +224,7 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     result=kui_game_image_open(gdi,(size_t)size,&ops,image);
     if(result!=KUI_GAME_OK) {
         problem=result==KUI_GAME_UNSUPPORTED?
-            "Raw 2352-byte GDI tracks with zero file offsets required":kui_game_result_name(result);
+            "GDI needs 2048/2352-byte data, 2352-byte audio and zero offsets":kui_game_result_name(result);
         goto done;
     }
     uint32_t session=0;
@@ -240,7 +240,7 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
             if(t->start_lba>=45000u) out->high_density_audio=true;
         }
     }
-    if(!session) {problem="No high-density data track; raw GD-ROM GDI required";goto done;}
+    if(!session) {problem="No high-density data track; GD-ROM GDI required";goto done;}
     struct metadata_reader reader={image,&files};
     struct kui_game_metadata_ops metadata_ops={&reader,metadata_sector,metadata_range};
     struct kui_game_metadata metadata;

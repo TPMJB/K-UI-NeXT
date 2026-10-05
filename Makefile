@@ -21,7 +21,7 @@ test: build/test-game-image build/test-game-metadata build/test-loader-probe bui
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
 test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
-test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan
+test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan build/test-retail-boot
 test: build/test-retail-cursor build/test-sci-stream build/test-sci-stream-ce build/test-retail-gd-async build/test-retail-gd-ce build/test-retail-async build/test-retail-async-ce
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
@@ -51,6 +51,7 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-retail-pace
 	./build/test-retail-sd
 	./build/test-ce-load-plan
+	./build/test-retail-boot
 	./build/test-boot-volume
 	./build/test-boot-ui
 	python3 tests/test_ext4_boot.py
@@ -221,6 +222,10 @@ build/test-retail-minic: tests/test_retail_minic.c build/retail-minic-test.o
 build/test-retail-image: tests/test_retail_image.c src/core/retail_image.c include/kui/retail_image.h include/kui/game_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_image.c tests/test_retail_image.c -o $@
+
+build/test-retail-boot: tests/test_retail_boot.c src/loader/retail_boot.h src/core/retail_image.c include/kui/retail_image.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/core/retail_image.c tests/test_retail_boot.c -o $@
 
 build/test-retail-cursor: tests/test_retail_cursor.c src/core/retail_cursor.c src/core/retail_image.c include/kui/retail_cursor.h include/kui/retail_image.h
 	@mkdir -p $(@D)
