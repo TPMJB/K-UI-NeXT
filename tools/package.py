@@ -55,6 +55,24 @@ def candidate_requested(environment=None):
     return value == "1"
 
 
+def development_test(release=None):
+    """The explicitly versioned cooked-sector experiment is never a public release."""
+    return (release or release_metadata())["version"].endswith("-2048-test")
+
+
+def package_kind(release, candidate=False):
+    if development_test(release):
+        return "development-test"
+    return "release-candidate" if candidate else "release"
+
+
+def development_notice():
+    return ("Experimental 2048-byte sector hardware test; not a public release.\n"
+            "Dreamcast hardware is untested. No measured loading-speed or compatibility\n"
+            "improvement is claimed. Preserve the original dump and back up KUI; install\n"
+            "this build's matching runtime and Games payloads together.\n\n")
+
+
 def package_metadata(candidate=None):
     """Name candidate downloads apart without changing the console's version."""
     if candidate is None:
@@ -99,13 +117,14 @@ def guide(source):
 
 def write_release_guides(dist, candidate=False):
     version = release_metadata()["version"]
+    experimental = development_test()
     guides = (("START-HERE.md", f"release-v{version}.md"),
               ("RELEASE-NOTES.md", f"release-v{version}-notes.md"))
     for target, source in guides:
-        if candidate:
+        if candidate and not experimental:
             source = "ata-readiness-candidate.md"
         (dist / target).write_text(guide(source), encoding="utf-8")
-    if not candidate:
+    if not candidate or experimental:
         (dist / "ANNOUNCEMENTS.md").write_text(
             guide(f"release-v{version}-announcements.md"), encoding="utf-8")
 
@@ -151,6 +170,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     """Assemble the install tree without benchmarks, fixtures or user preferences."""
     release = record["release"]
     commit = record["commit"]
+    experimental = development_test(release)
     # Ship only the normal application payloads. This fresh directory cannot
     # retain scan fixtures, demo music, or preferences from an earlier package.
     bundle = dist / "release"
@@ -170,30 +190,31 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, bundle_sd / name)
     (bundle / "boot-cd").mkdir()
-    cdi_name = release["artifact_prefix"] + ".cdi" if candidate else f"kui-v{release['version']}.cdi"
+    cdi_name = release["artifact_prefix"] + ".cdi" if candidate or experimental else f"kui-v{release['version']}.cdi"
     shutil.copyfile(cdi, bundle / "boot-cd" / cdi_name)
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
     for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
-    if not candidate:
+    if not candidate or experimental:
         shutil.copyfile(dist / "ANNOUNCEMENTS.md", bundle / "ANNOUNCEMENTS.md")
+    if not candidate and not experimental:
         shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
                         bundle / "release-banner.jpg")
     resolve_bundle_links(bundle, commit)
     shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
-    bundle_record = {**record, "kind": "release-candidate" if candidate else "release",
+    bundle_record = {**record, "kind": package_kind(release, candidate),
                         "bootstrap": boot_record["bootstrap"],
                         "splash": {"sha256": hashlib.sha256(splash.read_bytes()).hexdigest(),
                                    "preview": "splash-preview.png"}}
     (bundle / "build.json").write_text(
         json.dumps(bundle_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    status = "release candidate" if candidate else "final release"
+    status = "experimental hardware test" if experimental else "release candidate" if candidate else "final release"
     bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
                       "needs the new CDI in boot-cd/ only when changing to SCI or IDE/CF.\n")
     (bundle / "SOURCE.txt").write_text(
         f"{release['name']} ({release['version']}) — {status}\n"
-        + (candidate_notice() if candidate else "") +
+        + (development_notice() if experimental else candidate_notice() if candidate else "") +
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         f"The accompanying {release['artifact_prefix']}-source.zip contains exact K-UI, KOS,\n"
@@ -425,6 +446,8 @@ def main():
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
     if candidate:
         record.update(kind="release-candidate", candidate=candidate_evidence())
+    if development_test(release):
+        record.update(kind="development-test", experiment="2048-byte sector hardware test")
     (dist / "build.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Existing boot discs need only the small runtime update. Full source and
     # dependency archives remain available in this run's diagnostic artifact.
@@ -452,7 +475,7 @@ def main():
     bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
                       "needs this run's new bootstrap CD only when changing to SCI or IDE/CF.\n")
     (update / "SOURCE.txt").write_text(
-        (candidate_notice() if candidate else "") +
+        (development_notice() if development_test(release) else candidate_notice() if candidate else "") +
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
