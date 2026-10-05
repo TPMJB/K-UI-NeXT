@@ -182,7 +182,7 @@ static void seed(const char *host) {
         write_file("0:/Games/Reader Test/track03.bin", data, bytes);
     }
     if(!strcmp(test.fault, "unsupported-format")) {
-        const char *bad = "3\n1 0 4 2048 track01.bin 0\n2 4 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n";
+        const char *bad = "3\n1 0 4 2336 track01.bin 0\n2 4 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n";
         write_file("0:/Games/Reader Test/disc.gdi", bad, strlen(bad));
     }
     if(!strcmp(test.fault, "listing") || !strcmp(test.fault, "cancel-list") ||
@@ -273,6 +273,9 @@ static void check(void) {
     bool valid = !strcmp(test.fault, "valid") || !strcmp(test.fault, "valid-session-size");
     assert(result == valid && detail.valid == valid);
     assert(detail.message[0]);
+    if(!strcmp(test.fault, "unsupported-format"))
+        assert(!strcmp(detail.message,
+            "GDI needs 2048/2352-byte data, 2352-byte audio and zero offsets"));
     if(valid) {
         assert(!strcmp(detail.path, selected));
         assert(!strcmp(detail.title, "Independent Games Fixture"));
