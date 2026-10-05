@@ -27,6 +27,8 @@ contain these Wi-Fi changes.
   change retains the previous allowed band rather than reporting success.
 - FTP says "no overlap (Wi-Fi)" instead of "no DMA (Wi-Fi)". The Wi-Fi bus
   can use SCI DMA; the FTP path processes network and storage in turn.
+- FTP waits for the board's listen commands to finish before displaying
+  Ready, so an immediate client does not race an unopened listening port.
 
 ## Update the existing board
 

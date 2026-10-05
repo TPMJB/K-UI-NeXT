@@ -57,6 +57,7 @@
 #define TRACE_SECONDS 10u
 #define PART_LIMIT 99u
 #define WIFI_ONLINE_MS 30000u
+#define WIFI_LISTEN_MS 3000u /* for queued listener commands to reach the board */
 /* A file an upload replaces, until the upload has taken its name. */
 #define OLD_SUFFIX ".kui-old"
 enum {FREE = -1, REJECTING = -2, RENEWING = -3};
@@ -1602,6 +1603,33 @@ static void w5500_adapter(struct server *sv) {
         l->fast ? "100" : "10", l->full ? "full" : "half");
     sv->changed = true;
 }
+static bool wifi_listeners_ready(struct server *sv) {
+    /* kwh_listen queues a command and sets LISTEN optimistically. Drain its
+     * checked acknowledgements and state replies before publishing READY,
+     * so a client can connect as soon as the UI says the server is ready. */
+    stage(sv, "Opening FTP listeners on the Wi-Fi board");
+    uint64_t start = now_ms(sv);
+    while(kui_wifi_session_busy(sv->wifi)) {
+        if(sv->cancel && sv->cancel()) { fail(sv, "Stopped"); return false; }
+        if(now_ms(sv) - start >= WIFI_LISTEN_MS) {
+            fail(sv, "The Wi-Fi board did not acknowledge the FTP listeners");
+            return false;
+        }
+        if(!kui_wifi_session_step(sv->wifi)) { fail(sv, sv->wifi->problem); return false; }
+        if(kui_wifi_session_busy(sv->wifi)) pause_ms(sv, 0);
+    }
+    for(unsigned c = 0; c < CONTROL_SOCKETS; ++c) {
+        unsigned socket = CONTROL_FIRST + c;
+        uint8_t state = KUI_NET_CLOSED;
+        /* A client may already have connected before READY is published. */
+        if(!net_state(sv, socket, &state) || kwh_error(&sv->wifi->host, socket) ||
+           (state != KUI_NET_LISTEN && state != KUI_NET_ESTABLISHED && state != KUI_NET_PEER_CLOSED)) {
+            fail(sv, "The Wi-Fi board could not listen for connections");
+            return false;
+        }
+    }
+    return true;
+}
 static bool start_network(struct server *sv) {
     if(sv->wifi) {
         stage(sv, "Waiting for the Wi-Fi network");
@@ -1629,7 +1657,7 @@ static bool start_network(struct server *sv) {
             fail(sv, sv->wifi ? "The Wi-Fi board could not listen for connections" : "The W5500 could not listen for connections");
             return false;
         }
-    return true;
+    return !sv->wifi || wifi_listeners_ready(sv);
 }
 static void ready_message(struct server *sv) {
     char where[8] = "";

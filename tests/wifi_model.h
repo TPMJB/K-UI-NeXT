@@ -37,6 +37,8 @@ struct wifi_model_join {
 extern struct wifi_model_join wifi_model_joined;
 /* The options in force, to change while running (unplugging it, say). */
 struct wifi_model_options *wifi_model_live(void);
+/* A real TCP listener has been bound, rather than merely queued on SPI. */
+bool wifi_model_listening(uint16_t port);
 /* Transfers with the board, and transfers nobody answered. */
 extern unsigned wifi_model_transfers, wifi_model_unanswered;
 /* The networks the model's scan finds: "Home 5G" (5 GHz, WPA2, password

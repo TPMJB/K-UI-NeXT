@@ -702,6 +702,19 @@ def main():
                 stream.truncate(96 * 1024 * 1024)
             run("mkfs.fat", "-F", "32", str(wifi)) if kind == "fat32" else run("mkfs.exfat", str(wifi))
             run(BINARY, str(wifi), "seed")
+            if kind == "fat32":
+                # A queued LISTEN is not readiness: a rejected actual bind
+                # must fail startup before publishing READY.
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
+                    occupied.bind((HOST, port + 4))
+                    occupied.listen(1)
+                    blocked = Server(BINARY, wifi, port + 4, passive + 100,
+                                     extra=("wifi",), ready=False)
+                    assert blocked.proc.wait(60) == 1
+                    blocked.wait_for("STOPPED state=3")
+                    assert "could not listen for connections" in blocked.output(), blocked.output()
+                    assert "READY " not in blocked.output(), blocked.output()
+                print("PASS Wi-Fi FTP waits for actual listener setup and reports bind failure", flush=True)
             _, wifi_files = serve_image(BINARY, wifi, kind, port + 4, passive + 100, adapter=("wifi",))
             run(*fsck, "-n", str(wifi))
             if kind == "fat32":

@@ -261,6 +261,11 @@ void wifi_model_start(const struct wifi_model_options *options) {
 }
 void wifi_model_stop(void) { kwb_release(&m.bridge); }
 struct wifi_model_options *wifi_model_live(void) { return &m.options; }
+bool wifi_model_listening(uint16_t port) {
+    for(unsigned i = 0; i < KWM_SLOTS; ++i)
+        if(m.bridge.listener[i].fd >= 0 && m.bridge.listener[i].port == port) return true;
+    return false;
+}
 void wifi_model_restart(void) {
     kwb_reset(&m.bridge);
     arm();

@@ -42,7 +42,7 @@ static struct {
     FILE *image;
     uint64_t blocks;
     unsigned files, dirs, armed, fail_part, fail_old, latencies, reports, sleeps, faults, fail_write, writes;
-    bool active, connected, ready, stop;
+    bool active, connected, ready, stop, wifi;
     char last_event[KUI_APP_LINE_CAP];
 } test;
 static FATFS fs;
@@ -186,6 +186,9 @@ static bool cancel(void) {
 }
 static void publish(const struct kui_ftp_status *s) {
     if(s->state == KUI_FTP_READY && !test.ready) {
+        /* READY must follow the board's actual bind/listen, so an immediate
+         * client never races queued SPI commands. */
+        assert(!test.wifi || wifi_model_listening(s->port));
         test.ready = true;
         printf("READY port=%u password=%s ip=%u.%u.%u.%u adapter=%s\n", s->port, s->password, s->ip[0], s->ip[1], s->ip[2],
             s->ip[3], s->adapter);
@@ -250,6 +253,7 @@ int main(int argc, char **argv) {
         while(kind < 6 && strcmp(mode, modes[kind])) ++kind;
         if(kind == 6) { fprintf(stderr, "unknown adapter %s\n", mode); return 2; }
         bool wifi = kind >= 2 && kind <= 4;
+        test.wifi = wifi;
         struct kui_ftp_options options = {(uint16_t)atoi(argv[3]), (uint16_t)atoi(argv[4]), 40, 1234};
         struct kui_ftp_status status;
         struct w5500_model_options model = {.absent = kind >= 1 && kind <= 4, .no_async = kind == 5};
