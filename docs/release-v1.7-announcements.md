@@ -1,70 +1,103 @@
 # K-UI 1.7 announcements
 
-## Reddit / forum title
+## Forum title
 
 K-UI 1.7 Dáinsleif: from the DreamShell-based 1.0 to a standalone Dreamcast environment
 
-## Reddit / forum post
+## Forum post — BBCode
 
-**K-UI 1.7 "Dáinsleif" is out! If the last version you saw was my
-DreamShell-based K-UI 1.0, quite a lot has changed.**
+```bbcode
+[b]K-UI 1.7 "Dáinsleif" is out! If you last saw my DreamShell-based K-UI 1.0, here's what's changed.[/b]
 
-K-UI means Katana User Interface. I started with DreamShell, which gave me a
-valuable foundation for improving the tools I wanted on my Dreamcast. Since
-then, I've moved K-UI into a standalone project built directly on upstream
-KallistiOS, with its own bootloader, shell, disc capture engine and resident
-GDI game loader.
+I've moved K-UI into a standalone project with its own bootloader, shell, disc capture engine and resident GDI loader. Both DreamShell and K-UI use KallistiOS; the change is the application and loader layer above it. My focused C shell uses a fixed renderer and statically linked tools in place of the earlier SDL/Lua/XML framework. DreamShell's framework and game reader are not inputs to this build.
 
-DreamShell also uses KallistiOS; the difference is K-UI's own application
-and loader layer above it.
+DreamShell was a valuable starting point. Original K-UI branding, music and selected independently authored helpers carry forward with recorded provenance. KOS and other dependencies retain their credits and licenses.
 
-The current shell is a focused C implementation with a fixed renderer and
-statically linked tools, replacing the earlier SDL/Lua/XML application
-framework. I've kept original K-UI branding, music and selected independently
-authored helpers and policies, with their provenance recorded. KOS and the
-other dependencies keep their own credits and licenses.
+[i]Images below are rendered previews of the release UI with example data.[/i]
 
-Some tools will look familiar to 1.0 users, but they're now running on this
-independent foundation. **Windows CE from SCI microSD is the big headline:
-ARMADA and Worms Armageddon have booted and run on my Dreamcast.** The SCI
-reader also uses DMA, multi-block streaming and background delivery, checking
-one block while the next arrives. DOA2's tested background-reader setting is
-the most fluid I've had so far.
+[img]https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/home-games.png[/img]
 
-What you get:
+[b]Games[/b]
 
-- **Games:** native GDI launch, cover art, disc titles and three browsing views,
-  plus the experimental SCI Windows CE path.
+Native GDI launching includes covers, titles and three views. SCI reading uses DMA, streaming and background delivery; DOA2's tested background setting is my most fluid result yet. [b]ARMADA and Worms Armageddon have also booted and run from SCI microSD through the experimental Windows CE loader.[/b]
+
+[img]https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/games-gallery.png[/img]
+
+[b]Tools[/b]
+[list]
+[*]Disc Ripper: raw-track dumps, stop/resume, verification, reference comparison and separate salvage. Sword of the Berserk and 31-track MDK2 captures took about twenty minutes each and matched TOSEC on Dreamcast and PC.
+[*]VMU backups/restore and checked File Manager operations. File Manager's console acceptance is pending.
+[*]Music, audio CD, diagnostics, settings and graphical boot/recovery, with fresh crimson artwork. The original GD-ROM stays installed.
+[/list]
+
+[img]https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/ripper.png[/img]
+
+[b]W5500 FTP[/b] adds local-network transfers with completion-safe uploads. Tested W5500/SCIF builds reached around 0.8 MiB/s uploads and 0.5 MiB/s downloads.
+
+[img]https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/ftp-busy.png[/img]
+
+Compatibility varies. CE is SCI-only with audio/FMV/sync limits; image-backed CD audio is silent. K-UI does not cover every DreamShell loader feature. BIOS/region writes, ATA hardware testing and ATA DMA remain future work.
+
+Coming from 1.0? Burn the supplied 1.7 CDI and install its KUI folder, preserving compatible game dumps. The old DreamShell CD cannot boot this runtime.
+
+[url=https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7]Download, installation and release notes[/url]
+[url=https://github.com/TPMJB/K-UI-NeXT]Source[/url]
+[url=https://ko-fi.com/tpmjb]Support TPMJB on Ko-fi[/url]
+```
+
+## Reddit title
+
+K-UI 1.7 Dáinsleif: standalone Dreamcast tools, Windows CE from SCI microSD, and W5500 FTP
+
+## Reddit post — Markdown
+
+**K-UI 1.7 "Dáinsleif" is out! If you last saw my DreamShell-based K-UI 1.0,
+there's a new foundation underneath the familiar name.**
+
+I've moved K-UI into a standalone project with its own bootloader, shell,
+disc capture engine and resident GDI loader. Both projects use KallistiOS;
+the difference is K-UI's application and loader layer. Its focused C shell
+uses a fixed renderer and statically linked tools in place of the earlier
+SDL/Lua/XML framework. DreamShell's framework and game reader are not inputs
+to this build.
+
+DreamShell was a valuable starting point. Original K-UI branding, music and
+selected independently authored helpers carry forward with recorded
+provenance. KOS and other dependencies retain their credits and licenses.
+
+**What's here:**
+
+- **Games:** native GDI launching, covers, titles and three views. SCI reading
+  uses DMA, streaming and background delivery. DOA2's tested background setting
+  is my most fluid result yet. **ARMADA and Worms Armageddon have also booted
+  and run from SCI microSD through the experimental Windows CE loader.**
 - **Disc Ripper:** raw-track dumps, stop/resume, verification, reference
-  comparison and separate damaged-disc salvage. Established Sword of the
-  Berserk and 31-track MDK2 captures took about twenty minutes each and matched
-  TOSEC on Dreamcast and PC.
-- **VMU Manager and File Manager:** verified save backups/restore and card file
-  operations. File Manager's console acceptance is still pending.
-- **W5500 FTP:** local-network transfers with completion-safe uploads and
-  progress on the console. Tested W5500/SCIF builds reached around 0.8 MiB/s
-  uploads and 0.5 MiB/s downloads.
-- **Music, audio CD, diagnostics, settings and graphical boot/recovery**, with
-  fresh crimson artwork. The original GD-ROM stays installed.
+  comparison and separate salvage. Established Sword of the Berserk and
+  31-track MDK2 captures took about twenty minutes each and matched TOSEC on
+  Dreamcast and PC.
+- **VMU and file tools:** verified save backups/restore and checked File Manager
+  operations. File Manager's console acceptance is pending.
+- **W5500 FTP:** local-network transfers with completion-safe uploads. Tested
+  W5500/SCIF builds reached around 0.8 MiB/s uploads and 0.5 MiB/s downloads.
+- Music, audio CD, diagnostics, settings, graphical boot/recovery and fresh
+  crimson artwork. The original GD-ROM stays installed.
 
-This is still a growing independent loader: compatibility varies, CE is
-SCI-only with audio/FMV/sync limitations, and image-backed CD audio is silent.
-It doesn't yet replace DreamShell's full compatibility layer or BIOS/region
-write tools. ATA PIO is prepared for my upcoming IDE/CF board, but hardware
-testing and ATA DMA remain ahead.
+**UI previews on GitHub:** [Home](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/home-games.png),
+[Games Gallery](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/games-gallery.png),
+[Disc Ripper](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/ripper.png),
+[FTP Server](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/ftp-busy.png).
+These are rendered previews of the release UI with example data.
 
-Coming from the DreamShell-based 1.0? Use the supplied 1.7 boot CDI for the
-independent runtime.
+Compatibility varies. CE is SCI-only with audio/FMV/sync limits; image-backed
+CD audio is silent. K-UI does not cover every DreamShell loader feature.
+BIOS/region writes, ATA hardware testing and ATA DMA remain future work.
 
-Installation instructions, interface previews and exact limits:
-https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7
+Coming from 1.0? Burn the supplied 1.7 CDI and install its `KUI` folder,
+preserving compatible dumps. The old DreamShell CD cannot boot this runtime.
 
-Source: https://github.com/TPMJB/K-UI-NeXT
-
-Title/region, transport, reader choice and any audio, FMV or VMU save/load
-reports are welcome.
-
-By **TPMJB**. If you'd like to support development: https://ko-fi.com/tpmjb
+[Download, installation and notes](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7)
+• [Source](https://github.com/TPMJB/K-UI-NeXT)
+• [Support TPMJB on Ko-fi](https://ko-fi.com/tpmjb)
 
 ## Discord / short forum post
 
@@ -91,3 +124,18 @@ Download, screenshots + notes:
 https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7
 
 By TPMJB • Support: https://ko-fi.com/tpmjb
+
+## Direct image links
+
+All six screenshots are rendered release UI previews with example data.
+These immutable links identify the committed assets used above.
+
+| Asset | Direct link |
+| --- | --- |
+| Home / Games selected | [home-games.png](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/home-games.png) |
+| Games Gallery | [games-gallery.png](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/games-gallery.png) |
+| Disc Ripper | [ripper.png](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/ripper.png) |
+| VMU Manager | [vmu.png](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/vmu.png) |
+| FTP Server | [ftp-busy.png](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/ftp-busy.png) |
+| Windows CE confirmation | [games-ce-probe.png](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/release-v1.7/games-ce-probe.png) |
+| Dáinsleif release banner | [release-v1.7-banner.jpg](https://raw.githubusercontent.com/TPMJB/K-UI-NeXT/7800e886dbab6795e6248469a5adb5c78261dc86/resources/branding/release-v1.7-banner.jpg) |
