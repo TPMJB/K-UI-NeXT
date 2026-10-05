@@ -2,92 +2,92 @@
 
 ## Reddit / forum title
 
-K-UI 1.7 Dáinsleif: Windows CE from SCI microSD, faster game reading, FTP and a full Dreamcast toolkit
+K-UI 1.7 Dáinsleif: from the DreamShell-based 1.0 to a standalone Dreamcast environment
 
 ## Reddit / forum post
 
-**K-UI 1.7 "Dáinsleif" is out. Windows CE from SCI microSD is the headline,
-but this has become a much bigger Dreamcast project than a game launcher.**
+**K-UI 1.7 "Dáinsleif" is out! If the last version you saw was my
+DreamShell-based K-UI 1.0, quite a lot has changed.**
 
-K-UI means Katana User Interface. It's my independent Dreamcast environment,
-built directly on KallistiOS, with its own shell, disc capture engine and game
-loader. It keeps the original GD-ROM in the console. Boot K-UI from CD, keep
-the runtime on your card, and update it by copying files.
+K-UI means Katana User Interface. I started with DreamShell, which gave me a
+valuable foundation for improving the tools I wanted on my Dreamcast. Since
+then, I've moved K-UI into a standalone project built directly on upstream
+KallistiOS, with its own bootloader, shell, disc capture engine and resident
+GDI game loader.
 
-Since 1.5.1, a lot of work has gone into how the SH-4 actually receives and
-delivers data: bounded SCI DMA, multi-block streaming, checking a completed
-block while the next arrives, interrupt handling, recovery, and CE's virtual
-memory and disc-driver contracts. The reward is **ARMADA and Worms Armageddon
-booting and running from SCI microSD on my Dreamcast**, plus much better
-native-game results in the tested DOA2 configuration.
+DreamShell also uses KallistiOS; the difference is K-UI's own application
+and loader layer above it.
 
-There are useful numbers behind it, too. An optimized SCI filesystem soak
-verified 160 MiB with zero reported errors at about **1,068 KiB/s reads and
-1,201 KiB/s writes**. The separate async streaming diagnostic verified its
-data at **1,202 KiB/s**. Those are storage tests, not game frame rates, but
-they show how far the reader has come.
+The current shell is a focused C implementation with a fixed renderer and
+statically linked tools, replacing the earlier SDL/Lua/XML application
+framework. I've kept original K-UI branding, music and selected independently
+authored helpers and policies, with their provenance recorded. KOS and the
+other dependencies keep their own credits and licenses.
 
-What you get in 1.7:
+Some tools will look familiar to 1.0 users, but they're now running on this
+independent foundation. **Windows CE from SCI microSD is the big headline:
+ARMADA and Worms Armageddon have booted and run on my Dreamcast.** The SCI
+reader also uses DMA, multi-block streaming and background delivery, checking
+one block while the next arrives. DOA2's tested background-reader setting is
+the most fluid I've had so far.
 
-- **Games:** native GDI launching, cover art, disc titles and three browsing
-  views, with SCI background-reader choices and experimental Windows CE launch.
-- **Disc Ripper:** raw-track GDI dumps, stop/resume, verification, reference
-  comparison, named destinations and damaged-disc salvage tools. The established
-  Sword of the Berserk and 31-track MDK2 captures each took about twenty minutes
-  and matched TOSEC on both Dreamcast and PC.
-- **VMU Manager:** save browsing, verified backups, restore and managed copy/delete.
-- **File Manager:** card browsing and checked file operations, with startup files
-  protected. Console acceptance for this newer app is still pending.
-- **W5500 FTP:** copy files over your local network, with completion-safe uploads,
-  download resume and progress on the console. Tested transfer builds have reached
-  around **0.8 MiB/s up and 0.5 MiB/s down** using W5500 on SCI and storage on SCIF.
-- **Music, audio CD, memory/storage diagnostics and settings**, plus a graphical
-  boot/recovery menu and fresh crimson cyberpunk artwork.
+What you get:
 
-The CE path is experimental and SCI-only. It still has FMV, audio and sync
-limitations, and title compatibility varies. I kept the better prior 256-byte
-SCI token-search setting for this release after the newer 512-byte experiment
-made audio worse. Image-backed CD audio remains silent. This release also
-prepares bounded ATA PIO reads for my upcoming IDE/CF board, but that hardware
-is still untested and ATA DMA is future work.
+- **Games:** native GDI launch, cover art, disc titles and three browsing views,
+  plus the experimental SCI Windows CE path.
+- **Disc Ripper:** raw-track dumps, stop/resume, verification, reference
+  comparison and separate damaged-disc salvage. Established Sword of the
+  Berserk and 31-track MDK2 captures took about twenty minutes each and matched
+  TOSEC on Dreamcast and PC.
+- **VMU Manager and File Manager:** verified save backups/restore and card file
+  operations. File Manager's console acceptance is still pending.
+- **W5500 FTP:** local-network transfers with completion-safe uploads and
+  progress on the console. Tested W5500/SCIF builds reached around 0.8 MiB/s
+  uploads and 0.5 MiB/s downloads.
+- **Music, audio CD, diagnostics, settings and graphical boot/recovery**, with
+  fresh crimson artwork. The original GD-ROM stays installed.
 
-**Download:** https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7
+This is still a growing independent loader: compatibility varies, CE is
+SCI-only with audio/FMV/sync limitations, and image-backed CD audio is silent.
+It doesn't yet replace DreamShell's full compatibility layer or BIOS/region
+write tools. ATA PIO is prepared for my upcoming IDE/CF board, but hardware
+testing and ATA DMA remain ahead.
 
-**Source:** https://github.com/TPMJB/K-UI-NeXT
+Coming from the DreamShell-based 1.0? Use the supplied 1.7 boot CDI for the
+independent runtime.
 
-Existing exFAT/FAT32 cards can be updated in place: merge the package's `KUI`
-folder and keep your games and settings. Existing compatible CDs remain usable;
-SCI/IDE needs the multi-transport bootstrap. Runtime and game payloads must come
-from the same package. Installation steps and exact compatibility limits are
-included.
+Installation instructions, interface previews and exact limits:
+https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7
 
-If you try it, title/region, storage transport, reader choice and where the game
-gets to are useful reports—especially any FMV, audio or VMU save/load behavior.
-This release has been shaped by repeated testing on real hardware, and those
-specific reports help move the next piece forward.
+Source: https://github.com/TPMJB/K-UI-NeXT
 
-Made by **TPMJB**. K-UI source is GPLv3; dependencies retain their own licenses.
-If you'd like to support the project: https://ko-fi.com/tpmjb
+Title/region, transport, reader choice and any audio, FMV or VMU save/load
+reports are welcome.
+
+By **TPMJB**. If you'd like to support development: https://ko-fi.com/tpmjb
 
 ## Discord / short forum post
 
 **K-UI 1.7 "Dáinsleif" is out!**
 
-Big step for my independent KallistiOS-based Dreamcast environment:
-**ARMADA and Worms Armageddon now boot and run from SCI microSD**, alongside
-faster SCI storage and the tested DOA2 background reader.
+If you remember my DreamShell-based K-UI 1.0, this is the next big step:
+a standalone KallistiOS-based project with its own bootloader, C shell,
+disc capture engine and resident GDI loader. Original branding, music and
+selected authored helpers carry forward; DreamShell deserves credit as the
+starting point.
 
-- Native GDI launcher with covers and three views
-- Raw-track disc ripping, resume, verification and reference comparison
-- VMU backup/restore tools and new File Manager
-- W5500 FTP, tested around 0.8 MiB/s up / 0.5 MiB/s down with SCIF storage
-- Graphical boot/recovery menu, music, diagnostics and new crimson artwork
-- Original GD-ROM stays installed
+**ARMADA and Worms Armageddon now run from SCI microSD**, alongside improved
+native-game reading, covers, verified ripping/resume, VMU tools, File Manager,
+W5500 FTP and a graphical recovery menu. The original GD-ROM stays installed,
+and there's fresh crimson artwork.
 
-CE is experimental and SCI-only; audio/FMV/sync limits remain. ATA PIO is
-prepared but hardware-untested, and CD-audio tracks in game images are silent.
-Existing cards update in place—merge `KUI` and keep your games/settings.
+CE is experimental/SCI-only with audio and FMV limits. Compatibility varies;
+this doesn't replace every DreamShell feature. Image CD audio is silent;
+BIOS/region writes, ATA hardware testing and ATA DMA remain future work.
 
-Download + notes: https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7
-Source: https://github.com/TPMJB/K-UI-NeXT
-By TPMJB • https://ko-fi.com/tpmjb
+Coming from 1.0? Use the supplied 1.7 boot CDI.
+
+Download, screenshots + notes:
+https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7
+
+By TPMJB • Support: https://ko-fi.com/tpmjb

@@ -1,6 +1,7 @@
 # K-UI V1.7 "Dáinsleif"
 
-K-UI 1.7 brings the work since 1.5.1 into one release: faster SCI microSD
+For users coming from the DreamShell-based K-UI 1.0, version 1.7 introduces
+the independent K-UI runtime and bootloader, with faster SCI microSD
 storage, background native-game reading, experimental Windows CE launching
 on SCI, W5500 FTP, File Manager, a graphical boot/recovery menu and new crimson
 artwork. K-UI is an independent Dreamcast environment built on upstream
@@ -13,7 +14,14 @@ Use this installation package for normal operation. The separate
 `kui-1.7-dainsleif-source.zip` contains corresponding source and license
 records; workflow diagnostic and benchmark artifacts serve development.
 
-## Update an existing card
+## Update an existing independent K-UI card
+
+If you are moving from DreamShell-based K-UI 1.0, use the supplied 1.7 boot
+CDI. The old DreamShell-based CD cannot boot this independent runtime.
+Install the supplied `/KUI` folder and follow the layout below; preserve your
+compatible GDI dumps and other personal files. DreamShell settings and ripper
+resume records are not interchangeable with this runtime. The update steps
+below apply to existing independent K-UI builds.
 
 1. Keep the current working package for rollback. Preserve any known-working
    `KUI/recovery.kui` already on the card.
@@ -37,7 +45,8 @@ SCI and IDE/CF use that same layout; there is no separate `/SCI` directory.
 
 | Your setup | Boot requirement |
 | --- | --- |
-| Existing external SCIF SD adapter | Your working K-UI CD can continue to boot the updated runtime |
+| DreamShell-based K-UI 1.0 | Burn the supplied 1.7 CDI; the old CD cannot boot this independent runtime |
+| Existing independent K-UI with an external SCIF SD adapter | Your compatible independent K-UI CD can continue to boot the updated runtime |
 | SCI microSD | Use the SCI-capable graphical bootstrap from `6af5e11` or later, or the supplied 1.7 CDI |
 | IDE/CF | Requires a compatible multi-transport bootstrap; hardware support remains experimental and untested |
 | New crimson CD artwork and graphical recovery menu | Burn the supplied image in `boot-cd` as a CDI disc image |

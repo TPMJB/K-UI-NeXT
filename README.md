@@ -48,7 +48,9 @@ The SD runtime opens ten apps, in this order on Home: **Games**, **Disc Ripper**
 parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
 The hardware-proven acquisition engine remains unchanged.
 
-Use the existing bootstrap CD and merge the release package's `KUI` folder
+Coming from DreamShell-based K-UI 1.0? Burn the supplied 1.7 CDI; that older
+CD cannot boot this independent runtime. For an existing independent K-UI
+installation, use its compatible bootstrap CD and merge the release package's `KUI` folder
 onto the SD card as described in the [installation guide](docs/release-v1.7.md).
 Update the runtime and Games payload together; optional original menu music
 is included.

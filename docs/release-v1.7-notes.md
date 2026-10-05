@@ -3,9 +3,10 @@
 ![K-UI V1.7 Dáinsleif — independent Dreamcast environment by TPMJB](../resources/branding/release-v1.7-banner.jpg)
 
 **Windows CE games running from SCI microSD, a much stronger SCI reader and
-working W5500 FTP are the headline advances in 1.7.** This release gathers the
-work since 1.5.1 into K-UI's independent Dreamcast launcher and tools, with new
-crimson artwork for the runtime and graphical boot CD.
+working W5500 FTP are the headline advances in 1.7.** For readers coming from
+the publicly announced DreamShell-based K-UI 1.0, this release introduces the
+standalone K-UI foundation, familiar tools implemented for it, and new crimson
+artwork for the runtime and graphical boot CD.
 
 K-UI is built directly on upstream KallistiOS with its own shell, capture
 engine and game loader. It runs with the original GD-ROM retained. Follow the
@@ -32,7 +33,27 @@ and embedded assets. Hardware test results are listed below.
 | --- | --- |
 | ![W5500 FTP Server with example clients and transfer counters](../resources/release-v1.7/ftp-busy.png) | ![Experimental Windows CE SCI confirmation with standard and background readers](../resources/release-v1.7/games-ce-probe.png) |
 
-## Changes since 1.5.1
+## From K-UI 1.0 to 1.7
+
+K-UI 1.0 began as a DreamShell-based project. Version 1.7 lives in a standalone
+repository built on upstream KallistiOS, with K-UI's own bootloader, shell,
+capture engine and resident GDI game loader. Both projects use KallistiOS;
+the change is the application and loader layer above it. K-UI's focused C
+shell uses a fixed renderer and statically linked tools in place of the earlier SDL/Lua/XML app
+framework. DreamShell was a valuable starting point; its framework and reader
+are not inputs to this build.
+
+Selected original K-UI branding, music and independently authored helpers and
+policies carry forward with recorded provenance. KOS and other dependencies
+retain their own credits and licenses. Familiar app names do not imply full
+DreamShell feature or game compatibility: the independent loader has its own
+tested limits, and BIOS programming and permanent region writes remain future
+work. See [source provenance](../THIRD_PARTY.md) and
+[prior-work reuse](prior-work-reuse.md).
+
+Coming from the DreamShell-based 1.0 CD? Burn the supplied 1.7 CDI to boot
+this independent runtime. Reusing a boot CD applies to compatible independent
+K-UI bootstraps; see the [installation guide](release-v1.7.md).
 
 ### Windows CE reaches real games
 
@@ -71,8 +92,8 @@ audio/video synchronization.
 - Standard game-read pacing now uses the actual programmed scanline period;
   this fixes a video-mode-dependent defect that prevented larger batches from
   activating in the captured DOA2 session.
-- Launch maps now allow **99 tracks**, accommodating images beyond the old
-  16-track limit. Image, allocation, payload and memory checks remain.
+- The independent loader's launch maps allow **99 tracks**, expanding its
+  earlier 16-track map. Image, allocation, payload and memory checks remain.
 
 Storage throughput and game performance are different measurements. The
 console results below document both without treating a storage benchmark as
@@ -193,6 +214,7 @@ remain in [the handoff](HANDOFF.md), [SCI storage evidence](evidence/sci-inline-
 | Saves and full-game coverage | VMU tools have scoped owner tests; broader game save/load and completion remain unproven |
 | W5500 with SCI storage | Unavailable together on the same SCI port |
 | ATA DMA | Not implemented; G1 DMA and original drive interrupt integration remain future work |
+| BIOS/region maintenance | Read-only inspection and verified backups; BIOS programming and permanent region writes are not implemented |
 
 Preparation success establishes that an image fits the reader's checks.
 Games may still load slowly, lose CD-audio music, exhibit FMV/audio issues or

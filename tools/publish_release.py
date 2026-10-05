@@ -39,7 +39,7 @@ def public_notes(notes, repository, tag, asset_ref=None):
             if source.suffix.lower() in (".png", ".jpg", ".jpeg"):
                 url = f"https://raw.githubusercontent.com/{repository}/{asset_ref or tag}/{source.relative_to(ROOT)}"
             else:
-                url = f"https://github.com/{repository}/blob/{tag}/{source.relative_to(ROOT)}"
+                url = f"https://github.com/{repository}/blob/{asset_ref or tag}/{source.relative_to(ROOT)}"
             return "(" + url + (separator + anchor if separator else "") + ")"
         return match.group(0)
     return re.sub(r"(?<=\])\(([^)\s]+)\)", replace, notes)
@@ -84,7 +84,8 @@ def update_post(repository, commit, release, tag, message):
     require(not published["draft"] and not published["prerelease"], "Expected an existing full release")
     tag_before = api(endpoint + "/git/ref/tags/" + tag)["object"]
     require(tag_before["type"] == "commit", "Expected the original lightweight release tag")
-    allowed = {"docs/release-v1.7-notes.md", "tools/publish_release.py",
+    allowed = {"README.md", "docs/release-v1.7.md", "docs/release-v1.7-notes.md",
+               "docs/release-v1.7-announcements.md", "tools/publish_release.py",
                ".github/workflows/release.yml", ".github/workflows/diagnostic.yml"}
     paths = subprocess.check_output(["git", "diff", "--name-only", tag_before["sha"], commit],
                                     cwd=ROOT, text=True).splitlines()
@@ -107,7 +108,7 @@ def update_post(repository, commit, release, tag, message):
             "Release asset identity changed during the post update")
     require(api(endpoint + "/git/ref/tags/" + tag)["object"] == tag_before,
             "Release tag changed during the post update")
-    print("Updated release screenshots and support link; original build attribution and assets verified")
+    print("Updated release post; original build attribution and assets verified")
 
 
 def main():
