@@ -44,5 +44,5 @@ bool kui_sci_dma_transfer(const uint8_t *out, uint8_t *in, size_t bytes);
 bool kui_sci_async(const uint8_t header[3], const uint8_t *out, uint8_t *in, size_t bytes,
                    void (*done)(void *arg, bool ok), void *arg);
 bool kui_sci_idle(size_t bytes, void (*done)(void *arg, bool ok), void *arg);
-void kui_sci_async_cancel(void);
+void kui_sci_port_async_cancel(void);
 #endif

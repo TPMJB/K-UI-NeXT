@@ -367,14 +367,14 @@ bool kui_sci_idle(size_t bytes, void (*done)(void *arg, bool ok), void *arg) {
     deadline_set(byte_counts(bytes));
     return true;
 }
-void kui_sci_async_cancel(void) {
+void kui_sci_port_async_cancel(void) {
     irq_mask_t mask = irq_disable();
     if(async.busy) (void)async_stop();
     irq_restore(mask);
 }
 static void async_on(bool on) {
     if(async_ready) {
-        kui_sci_async_cancel();
+        kui_sci_port_async_cancel();
         deadline_clear();
         irq_set_handler(EXC_DMAC_DMTE1, NULL, NULL);
         irq_set_priority(IRQ_SRC_TMU1, IRQ_PRIO_MASKED);

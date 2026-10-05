@@ -66,7 +66,7 @@ static bool idle_async(void *ctx, size_t bytes, void (*done)(void *arg, bool ok)
     (void)ctx;
     return dma && kui_sci_idle(bytes, done, arg);
 }
-static void cancel_async(void *ctx) { (void)ctx; kui_sci_async_cancel(); }
+static void cancel_async(void *ctx) { (void)ctx; kui_sci_port_async_cancel(); }
 static uint64_t now_ms(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
 static uint64_t now_us(void *ctx) { (void)ctx; return timer_us_gettime64(); }
 /* KOS: thd_sleep(0) is thd_pass(). */
