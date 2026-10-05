@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """Promote a successful exact-commit native build to the explicitly requested release."""
+import argparse
 import hashlib
 import json
 import os
@@ -26,7 +27,7 @@ def require(condition, message):
         raise SystemExit(message)
 
 
-def public_notes(notes, repository, tag):
+def public_notes(notes, repository, tag, asset_ref=None):
     """Release pages have no docs/ base URL; retain working source links."""
     def replace(match):
         target = match.group(1)
@@ -35,7 +36,10 @@ def public_notes(notes, repository, tag):
         path, separator, anchor = target.partition("#")
         source = (ROOT / "docs" / path).resolve()
         if source.is_relative_to(ROOT) and source.is_file():
-            url = f"https://github.com/{repository}/blob/{tag}/{source.relative_to(ROOT)}"
+            if source.suffix.lower() in (".png", ".jpg", ".jpeg"):
+                url = f"https://raw.githubusercontent.com/{repository}/{asset_ref or tag}/{source.relative_to(ROOT)}"
+            else:
+                url = f"https://github.com/{repository}/blob/{tag}/{source.relative_to(ROOT)}"
             return "(" + url + (separator + anchor if separator else "") + ")"
         return match.group(0)
     return re.sub(r"(?<=\])\(([^)\s]+)\)", replace, notes)
@@ -70,7 +74,46 @@ def verify_assets(directory, release, commit):
     return sorted(directory / name for name in names) + [directory / "SHA256SUMS.txt"]
 
 
+def update_post(repository, commit, release, tag, message):
+    """Update only an existing release's prose; retain its tested binaries and tag."""
+    require("Release post: " + tag in message.splitlines(), "Missing explicit release-post request")
+    endpoint = "repos/" + repository
+    require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,
+            "Main advanced after the release-post request")
+    published = api(endpoint + "/releases/tags/" + tag)
+    require(not published["draft"] and not published["prerelease"], "Expected an existing full release")
+    tag_before = api(endpoint + "/git/ref/tags/" + tag)["object"]
+    require(tag_before["type"] == "commit", "Expected the original lightweight release tag")
+    allowed = {"docs/release-v1.7-notes.md", "tools/publish_release.py",
+               ".github/workflows/release.yml", ".github/workflows/diagnostic.yml"}
+    paths = subprocess.check_output(["git", "diff", "--name-only", tag_before["sha"], commit],
+                                    cwd=ROOT, text=True).splitlines()
+    require(paths and all(path in allowed or
+            (path.startswith("resources/release-v1.7/") and path.endswith(".png")) for path in paths),
+            "Release-post update includes changes outside documentation and screenshots")
+    old_body = published["body"]
+    require("\nSource commit: " in old_body, "Missing original build attribution")
+    footer = "\nSource commit: " + old_body.rsplit("\nSource commit: ", 1)[1]
+    notes = (ROOT / f"docs/release-v{release['version']}-notes.md").read_text(encoding="utf-8")
+    notes = public_notes(notes, repository, tag, asset_ref=commit) + footer
+    assets_before = [(asset["id"], asset["name"], asset.get("digest")) for asset in published["assets"]]
+    with tempfile.TemporaryDirectory(prefix="kui-release-post-") as temporary:
+        notes_file = Path(temporary) / "release-notes.md"
+        notes_file.write_text(notes, encoding="utf-8")
+        print(gh("release", "edit", tag, "--repo", repository, "--notes-file", str(notes_file)))
+    updated = api(endpoint + "/releases/tags/" + tag)
+    require(updated["body"] == notes, "Published release post differs from requested text")
+    require([(asset["id"], asset["name"], asset.get("digest")) for asset in updated["assets"]] == assets_before,
+            "Release asset identity changed during the post update")
+    require(api(endpoint + "/git/ref/tags/" + tag)["object"] == tag_before,
+            "Release tag changed during the post update")
+    print("Updated release screenshots and support link; original build attribution and assets verified")
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--update-post", action="store_true")
+    args = parser.parse_args()
     repository = os.environ["GITHUB_REPOSITORY"]
     commit = os.environ["GITHUB_SHA"]
     require(repository == "TPMJB/K-UI-NeXT" and os.environ["GITHUB_REF"] == "refs/heads/main",
@@ -80,6 +123,9 @@ def main():
     tag = "v" + release["version"]
     message = subprocess.check_output(["git", "show", "-s", "--format=%B", "HEAD"],
                                       cwd=ROOT, text=True)
+    if args.update_post:
+        update_post(repository, commit, release, tag, message)
+        return
     require("Release: " + tag in message.splitlines(), "Missing explicit release request")
     endpoint = "repos/" + repository
     require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,

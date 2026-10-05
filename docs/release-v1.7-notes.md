@@ -1,5 +1,7 @@
 # K-UI V1.7 "Dáinsleif" — release notes
 
+![K-UI V1.7 Dáinsleif — independent Dreamcast environment by TPMJB](../resources/branding/release-v1.7-banner.jpg)
+
 **Windows CE games running from SCI microSD, a much stronger SCI reader and
 working W5500 FTP are the headline advances in 1.7.** This release gathers the
 work since 1.5.1 into K-UI's independent Dreamcast launcher and tools, with new
@@ -9,6 +11,26 @@ K-UI is built directly on upstream KallistiOS with its own shell, capture
 engine and game loader. It runs with the original GD-ROM retained. Follow the
 [installation guide](release-v1.7.md) to update the runtime and game payloads
 together. Existing exFAT/FAT32 cards and game dumps stay usable.
+
+If you'd like to support K-UI development: [TPMJB on Ko-fi](https://ko-fi.com/tpmjb).
+
+## Interface previews
+
+Rendered from the v1.7 release code with example titles, covers, saves,
+counters and connection details. These use the release's UI renderer, fonts
+and embedded assets. Hardware test results are listed below.
+
+| Launcher: all ten apps, Games first | Games: Gallery view and disc titles |
+| --- | --- |
+| ![K-UI 1.7 Home with Games selected](../resources/release-v1.7/home-games.png) | ![Games Gallery with example titles and placeholder covers](../resources/release-v1.7/games-gallery.png) |
+
+| Disc Ripper: progress, saved bytes and ETA | VMU Manager: saves, free space and backups |
+| --- | --- |
+| ![Disc Ripper showing example MDK2 capture progress](../resources/release-v1.7/ripper.png) | ![VMU Manager showing example save entries and backup controls](../resources/release-v1.7/vmu.png) |
+
+| FTP: clients, transfers and status | Windows CE: SCI reader selection |
+| --- | --- |
+| ![W5500 FTP Server with example clients and transfer counters](../resources/release-v1.7/ftp-busy.png) | ![Experimental Windows CE SCI confirmation with standard and background readers](../resources/release-v1.7/games-ce-probe.png) |
 
 ## Changes since 1.5.1
 
