@@ -1,6 +1,8 @@
 # Source provenance and licenses
 
-New code is GPL-3.0-only under [LICENSE](LICENSE). No DreamShell framework or
+New code is GPL-3.0-only under [LICENSE](LICENSE), except files explicitly
+licensed otherwise, including the MIT Wi-Fi firmware and shared link library.
+No DreamShell framework or
 reader code is used as an input to this build. Selected original TPMJB artwork
 from the earlier K-UI project is reused with the owner's authorization. This is source-aware
 development, not a claim of a formal clean-room process.
@@ -16,6 +18,7 @@ development, not a claim of a formal clean-room process.
 | stb_image 2.30 | `stb_image.h` with a documented zero-length read guard, from the same `nothings/stb` commit; PNG and JPEG box art that the owner places in `KUI/covers` | Upstream alternative A, [MIT notice](LICENSES/stb_image.txt); upstream/local hashes and adaptation in `dependencies.json` |
 | lwext4 | Pinned `include/` and `src/` from `gkostka/lwext4` commit `58bcf89a121b72d4fb66334f1693d3b30e4cb9c5`; read-only CD bootstrap with documented checksum/bounds and read-only fixes; upstream/local per-file SHA-256 pins in `dependencies.json` | BSD-3-Clause and GPL-2.0-or-later per file; upstream [notice](LICENSES/lwext4.txt), all file headers retained in `third_party/lwext4` |
 | FatFs | ChaN R0.16, official patches 1 and 2; SHA-256-pinned downloads, original license and patched source retained | [FatFs notice](LICENSES/LICENSE.FatFs) |
+| K-UI Wi-Fi link library | This project's own `firmware/kui-wifi/components/kwlink` (`kwlink.c`, `kwhost.c`): the Dreamcast's side of the Wi-Fi board's link, shared with the board's firmware | MIT rather than GPL-3.0-only, so the firmware, which links Espressif's closed-source Wi-Fi libraries, can use it too; [notice](LICENSES/kui-wifi-kwlink.txt) |
 | Known-dump catalogues (`data/known-dumps/`) | Track names, sizes and CRC32s only, no game or disc data. `redump.db` is adapted from the Libretro database's Redump Dreamcast DAT (CC BY-SA 4.0, share-alike; this file stays under that licence); `tosec.db` is a factual index of TOSEC's 2025-03-13 DAT pack | [Sources and licences](LICENSES/known-dumps-README.txt) |
 | GCC/Binutils/Newlib | KOS stable profile at the pinned KOS revision | Component licenses; GCC runtime exception and Newlib component notices apply to runtime code |
 | mkdcdisc | Canonical Simulant GitLab repository `4d74e40dd2122e14389a305ed1d86dd024201389`; separate host image-writing tool | MIT for its own code, with separate third-party components; upstream `THIRD-PARTY-NOTICES.md` |
@@ -24,6 +27,12 @@ development, not a claim of a formal clean-room process.
 | KiCad 7 libraries (CF board) | Symbols and footprints used by `hardware/cf-board`; `cf-board.pretty/CF-Card_3M_N7E50-E516xx-30_SmallRing.kicad_mod` is KiCad's `CF-Card_3M_N7E50-E516xx-30` with its board-lock rings cut from 3.99 to 3.2 mm | CC-BY-SA 4.0 with the KiCad libraries' exception for designs that use them; the adapted footprint file stays under CC-BY-SA 4.0 |
 | iceGDROM riser board (reference) | Only the signal on each pin of the Dreamcast's GD-ROM connector, taken from `zeldin/iceGDROM` `pcb/riser`; no files copied | GPL-3.0 upstream; facts only |
 | KiCad, Freerouting, kiutils | Host tools that draw, route and check the CF board (`hardware/cf-board/tools/build.sh`) | Host tools only; nothing from them is in the board files beyond their output |
+
+The Wi-Fi board's firmware ([firmware/kui-wifi](firmware/kui-wifi/README.md))
+is a separate program for the ESP32-C5 under its own MIT licence. It is built
+with Espressif's ESP-IDF, including its closed-source Wi-Fi libraries, by its
+own workflow, and is not part of the Dreamcast builds. Its host tests, and
+K-UI's (`tests/wifi_model.c`), run its bridge core on the build computer only.
 
 Source URLs and downloaded-file hashes are in [dependencies.json](dependencies.json).
 The build artifact includes applicable KOS and FatFs license texts and source

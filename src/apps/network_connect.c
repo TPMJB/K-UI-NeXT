@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/network_probe.h"
 #include "kui/network_w5500.h"
+#include "kui/network_wifi.h"
 #include <kos/net.h>
 #include <kos/thread.h>
 #include <kos/irq.h>
@@ -35,9 +36,9 @@ void kui_network_connect_run(const struct kui_network_config *config,struct kui_
     if(cancel&&cancel())goto stop;
     if(!n){if(la_init()==0){n=find("la");owned=2;}else la_shutdown();}
     if(n&&!(n->flags&NETIF_DETECTED)&&n->if_detect)n->if_detect(n);
-    /* No BBA or LAN adapter: a W5500 on the SCI port, if one is fitted (DHCP only). */
-    if(!n&&!config&&kui_w5500_network_test(out,log,cancel,progress))return;
-    if(!n||!(n->flags&NETIF_DETECTED)||(n->flags&NETIF_NOETH)||!n->if_init||!n->if_start||!n->if_stop||!n->if_shutdown||!n->if_tx){emit(out,progress,"No Broadband, LAN or W5500 adapter detected");++out->errors;goto done;}
+    /* No BBA or LAN adapter: a W5500 (DHCP only) or the Wi-Fi board on the SCI port, if one is fitted. */
+    if(!n&&!config&&(kui_w5500_network_test(out,log,cancel,progress)||kui_wifi_network_test(out,log,cancel,progress)))return;
+    if(!n||!(n->flags&NETIF_DETECTED)||(n->flags&NETIF_NOETH)||!n->if_init||!n->if_start||!n->if_stop||!n->if_shutdown||!n->if_tx){emit(out,progress,"No Broadband, LAN, W5500 or Wi-Fi adapter detected");++out->errors;goto done;}
     emit(out,progress,"Starting adapter (KOS link wait: up to 10 seconds)");
     if(!(n->flags&NETIF_INITIALIZED)){if(n->if_init(n)<0){emit(out,progress,"Adapter initialization failed");++out->errors;goto done;}initialized=true;}
     if(cancel&&cancel())goto stop;

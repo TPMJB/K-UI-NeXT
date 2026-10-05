@@ -1,19 +1,22 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* K-UI's FTP server over the W5500's TCP sockets, written for K-UI. One
- * loop on the storage worker serves up to three clients: their commands,
- * their data connections (passive or active) and the card through FatFs.
+/* K-UI's FTP server, written for K-UI, over the TCP sockets of an adapter
+ * on the SCI port: the W5500 or the Wi-Fi board (kui/net.h). One loop on
+ * the storage worker serves up to three clients: their commands, their
+ * data connections (passive or active) and the card through FatFs.
  *
- * Sockets: 0-2 carry data (4 KB buffers each way; 0 is first used for
- * DHCP), 3-6 listen for control connections on port 21 (1 KB each): one
- * more than there are sessions, so a client over the limit is told why.
- * The data sockets are alike: a transfer lands on whichever is free, often
- * not 0, which a listing just before may still be closing. Lease renewals
- * borrow the last free data socket for UDP.
+ * Sockets: 0-2 carry data, 3-6 listen for control connections on port 21:
+ * one more than there are sessions, so a client over the limit is told
+ * why. On the W5500, data sockets have 4 KB buffers each way (0 is first
+ * used for DHCP) and control sockets 1 KB; the data sockets are alike, as
+ * a transfer lands on whichever is free, often not 0, which a listing just
+ * before may still be closing. Lease renewals borrow the last free data
+ * socket for UDP. The Wi-Fi board keeps its own lease.
  *
- * One upload or download at a time moves by the chip's async frames when
- * the wiring check passed them (DMA on the console, kui_w5500_stream):
- * the network fills (or empties) a ring while the card is written (or
- * read), each at its own speed, instead of the two taking turns. */
+ * On the W5500, one upload or download at a time moves by the chip's async
+ * frames when the wiring check passed them (DMA on the console,
+ * kui_w5500_stream): the network fills (or empties) a ring while the card
+ * is written (or read), each at its own speed, instead of the two taking
+ * turns. */
 #include "kui/ftp.h"
 #include "kui/clock.h"
 #include "platform.h"
@@ -53,6 +56,7 @@
 /* Seconds at the start of a streamed transfer that the log traces. */
 #define TRACE_SECONDS 10u
 #define PART_LIMIT 99u
+#define WIFI_ONLINE_MS 30000u
 /* A file an upload replaces, until the upload has taken its name. */
 #define OLD_SUFFIX ".kui-old"
 enum {FREE = -1, REJECTING = -2, RENEWING = -3};
@@ -112,7 +116,15 @@ struct session {
     unsigned trace_lines;
 };
 struct server {
-    struct kui_w5500_session net;
+    /* The adapter in use: the W5500 session, or the Wi-Fi board's (large,
+     * so allocated only when used), and its sockets. */
+    const struct kui_net_ports *ports;
+    struct kui_w5500_session w5500;
+    struct kui_wifi_session *wifi;
+    struct kui_net_sockets net;
+    uint8_t ip[4], mac[6];
+    /* The Wi-Fi board's status and restarts already seen. */
+    uint32_t wifi_seen, wifi_lost;
     struct kui_ftp_status *status;
     kui_log_fn log;
     kui_cancel_fn cancel;
@@ -121,6 +133,7 @@ struct server {
     struct session sessions[KUI_FTP_SESSIONS];
     int data_owner[DATA_SOCKETS];
     bool data_draining[DATA_SOCKETS];
+    bool data_aborting[DATA_SOCKETS]; /* force-close still waiting for queue room */
     uint64_t data_since[DATA_SOCKETS];
     uint8_t data_close_state[DATA_SOCKETS];
     uint64_t data_close_since[DATA_SOCKETS];
@@ -138,10 +151,38 @@ struct server {
     uint64_t poll_ms;
 };
 
-static uint64_t now_ms(struct server *sv) { return sv->net.port->bus->now_ms(sv->net.port->bus->ctx); }
+/* The clock and pauses come from whichever adapter port was given. */
+static uint64_t now_ms(struct server *sv) {
+    const struct kui_net_ports *p = sv->ports;
+    return p->w5500 ? p->w5500->bus->now_ms(p->w5500->bus->ctx) : p->wifi->bus->now_ms(p->wifi->bus->ctx);
+}
+static void pause_ms(struct server *sv, unsigned ms) {
+    const struct kui_net_ports *p = sv->ports;
+    if(p->w5500) p->w5500->bus->pause(p->w5500->bus->ctx, ms);
+    else p->wifi->bus->pause(p->wifi->bus->ctx, ms);
+}
+/* The adapter's sockets. */
+static bool net_state(struct server *sv, unsigned s, uint8_t *state) { return sv->net.state(sv->net.ctx, s, state); }
+static bool net_close(struct server *sv, unsigned s) { return sv->net.close(sv->net.ctx, s); }
+static bool net_disconnect(struct server *sv, unsigned s) { return sv->net.disconnect(sv->net.ctx, s); }
+static bool net_peer(struct server *sv, unsigned s, uint8_t ip[4], uint16_t *port) {
+    return sv->net.peer(sv->net.ctx, s, ip, port);
+}
+static bool net_keepalive(struct server *sv, unsigned s) { return sv->net.keepalive(sv->net.ctx, s, 60); }
+static bool net_received(struct server *sv, unsigned s, size_t *bytes) { return sv->net.received(sv->net.ctx, s, bytes); }
+static bool net_receive(struct server *sv, unsigned s, void *data, size_t bytes) {
+    return sv->net.receive(sv->net.ctx, s, data, bytes);
+}
+static bool net_room(struct server *sv, unsigned s, size_t *bytes) { return sv->net.room(sv->net.ctx, s, bytes); }
+static bool net_send(struct server *sv, unsigned s, const void *data, size_t bytes) {
+    return sv->net.send(sv->net.ctx, s, data, bytes);
+}
+/* Microseconds, for a transfer's timing: the W5500 port's clock if it has
+ * one, otherwise milliseconds. */
 static uint64_t now_us(struct server *sv) {
-    const struct kui_w5500_bus *bus = sv->net.port->bus;
-    return bus->now_us ? bus->now_us(bus->ctx) : 0;
+    const struct kui_net_ports *p = sv->ports;
+    if(p->w5500 && p->w5500->bus->now_us) return p->w5500->bus->now_us(p->w5500->bus->ctx);
+    return now_ms(sv) * 1000u;
 }
 static bool card(char out[CARD_CAP], const char *path) {
     int n = snprintf(out, CARD_CAP, "0:%s", path);
@@ -186,10 +227,10 @@ static void reply(struct session *s, const char *format, ...) {
 }
 static bool flush(struct server *sv, struct session *s, uint64_t now) {
     if(!s->out_len || now < s->hold_until) return false;
-    uint16_t room = 0;
-    if(!kui_w5500_room(&sv->net.chip, s->control, &room) || !room) return false;
-    uint16_t n = (uint16_t)(s->out_len < room ? s->out_len : room);
-    if(!kui_w5500_send(&sv->net.chip, s->control, s->out, n)) return false;
+    size_t room = 0;
+    if(!net_room(sv, s->control, &room) || !room) return false;
+    size_t n = s->out_len < room ? s->out_len : room;
+    if(!net_send(sv, s->control, s->out, n)) return false;
     memmove(s->out, s->out + n, s->out_len - n);
     s->out_len -= n;
     return true;
@@ -197,13 +238,18 @@ static bool flush(struct server *sv, struct session *s, uint64_t now) {
 
 /* ---- Data sockets ---- */
 static int data_take(struct server *sv, struct session *s, uint64_t now) {
+    /* W5500 sends have been acknowledged before retirement. The Wi-Fi
+     * board has only accepted them into its TCP stack, so retain its full
+     * close deadline even when another transfer needs a slot. */
+    uint64_t grace = sv->wifi ? DRAIN_MS : 1000u;
     for(unsigned pass = 0; pass < 2; ++pass)
         for(unsigned j = 0; j < DATA_SOCKETS; ++j) {
             if(sv->data_owner[j] != FREE) continue;
             /* A connection still closing is cut short only when needed. */
-            if(sv->data_draining[j] && (!pass || now - sv->data_since[j] < 1000u)) continue;
-            if(sv->data_draining[j] && !kui_w5500_close(&sv->net.chip, j)) return -1;
-            sv->data_draining[j] = false;
+            if(sv->data_draining[j] && !sv->data_aborting[j] &&
+               (!pass || now - sv->data_since[j] < grace)) continue;
+            if(sv->data_draining[j] && !net_close(sv, j)) return -1;
+            sv->data_draining[j] = sv->data_aborting[j] = false;
             sv->data_owner[j] = (int)index_of(sv, s);
             sv->data_since[j] = now;
             return (int)j;
@@ -216,16 +262,26 @@ static void data_release(struct server *sv, struct session *s, bool graceful, ui
     unsigned j = (unsigned)s->data;
     s->data = -1;
     sv->data_owner[j] = FREE;
-    sv->data_draining[j] = graceful && kui_w5500_disconnect(&sv->net.chip, j);
-    if(!sv->data_draining[j]) (void)kui_w5500_close(&sv->net.chip, j);
+    sv->data_draining[j] = graceful && net_disconnect(sv, j);
+    sv->data_aborting[j] = false;
+    if(!sv->data_draining[j]) {
+        /* Wi-Fi commands can be rejected while its outgoing queue is full.
+         * Keep responsibility until a later poll actually queues the close. */
+        sv->data_aborting[j] = !net_close(sv, j);
+        sv->data_draining[j] = sv->data_aborting[j];
+    }
     sv->data_since[j] = now;
     sv->data_close_state[j] = 0xffu;
 }
 static void data_poll(struct server *sv, uint64_t now) {
     for(unsigned j = 0; j < DATA_SOCKETS; ++j) {
         if(!sv->data_draining[j] || sv->data_owner[j] != FREE) continue;
+        if(sv->data_aborting[j]) {
+            if(net_close(sv, j)) sv->data_draining[j] = sv->data_aborting[j] = false;
+            continue;
+        }
         uint8_t state = KUI_W5500_CLOSED;
-        if(!kui_w5500_status(&sv->net.chip, j, &state)) continue;
+        if(!net_state(sv, j, &state)) continue;
         uint64_t elapsed = now - sv->data_since[j];
         if(state != sv->data_close_state[j]) {
             sv->data_close_state[j] = state;
@@ -244,10 +300,10 @@ static void data_poll(struct server *sv, uint64_t now) {
          * Give CLOSING a bounded final-handshake grace period, measured from
          * entry to that state, then stop the storm. FIN_WAIT/LAST_ACK retain
          * the original deadline. TIME_WAIT can be reaped immediately. */
-        bool finished = state == KUI_W5500_TIME_WAIT;
+        bool finished = !sv->wifi && state == KUI_W5500_TIME_WAIT;
         uint64_t state_elapsed = now - sv->data_close_since[j];
-        bool closing_stuck = state == KUI_W5500_CLOSING && state_elapsed >= CLOSING_MS;
-        if((finished || closing_stuck || elapsed > DRAIN_MS) && kui_w5500_close(&sv->net.chip, j)) {
+        bool closing_stuck = !sv->wifi && state == KUI_W5500_CLOSING && state_elapsed >= CLOSING_MS;
+        if((finished || closing_stuck || elapsed > DRAIN_MS) && net_close(sv, j)) {
             sv->data_draining[j] = false;
             if(sv->log) sv->log("FTP: data socket %u closed from %02X after %llu ms, state %llu ms (%s)",
                 j, (unsigned)state, (unsigned long long)elapsed, (unsigned long long)state_elapsed,
@@ -426,8 +482,7 @@ static void begin_transfer(struct server *sv, struct session *s, enum transfer k
     if(s->data < 0 && s->active_ready) {
         /* Active mode: connect out to the address PORT or EPRT gave. */
         int j = data_take(sv, s, now);
-        if(j < 0 || !kui_w5500_open(&sv->net.chip, (unsigned)j, KUI_W5500_TCP | KUI_W5500_MR_NODELAY, next_port(sv)) ||
-           !kui_w5500_connect(&sv->net.chip, (unsigned)j, s->active_ip, s->active_port)) {
+        if(j < 0 || !sv->net.connect(sv->net.ctx, (unsigned)j, next_port(sv), s->active_ip, s->active_port)) {
             if(j >= 0) { s->data = j; }
             fail_transfer(sv, s, now, "425 Cannot open the data connection");
             return;
@@ -439,20 +494,20 @@ static void begin_transfer(struct server *sv, struct session *s, enum transfer k
 /* The data connection, once open: the client must be the one on the
  * control connection. */
 static bool data_ready(struct server *sv, struct session *s, uint64_t now, bool *failed) {
-    uint8_t state = KUI_W5500_CLOSED;
+    uint8_t state = KUI_NET_CLOSED;
     *failed = false;
-    if(!kui_w5500_status(&sv->net.chip, (unsigned)s->data, &state)) { *failed = true; return false; }
-    if(state == KUI_W5500_ESTABLISHED || (state == KUI_W5500_CLOSE_WAIT && s->kind == T_STOR)) {
+    if(!net_state(sv, (unsigned)s->data, &state)) { *failed = true; return false; }
+    if(state == KUI_NET_ESTABLISHED || (state == KUI_NET_PEER_CLOSED && s->kind == T_STOR)) {
         uint8_t ip[4];
         uint16_t port;
-        if(!kui_w5500_peer(&sv->net.chip, (unsigned)s->data, ip, &port) || memcmp(ip, s->peer, 4)) {
+        if(!net_peer(sv, (unsigned)s->data, ip, &port) || memcmp(ip, s->peer, 4)) {
             *failed = true;
             return false;
         }
-        (void)kui_w5500_keepalive(&sv->net.chip, (unsigned)s->data, 60);
+        (void)net_keepalive(sv, (unsigned)s->data);
         return true;
     }
-    if(state == KUI_W5500_CLOSED || state == KUI_W5500_CLOSE_WAIT || now - s->phase_ms > CONNECT_MS) *failed = true;
+    if(state == KUI_NET_CLOSED || state == KUI_NET_PEER_CLOSED || now - s->phase_ms > CONNECT_MS) *failed = true;
     return false;
 }
 static bool fill_listing(struct server *sv, struct session *s) {
@@ -622,7 +677,7 @@ static bool stream_transfer(struct server *sv, struct session *s, uint64_t now, 
     trace_line(sv, s);
     if(s->card_failed) { card_failure(sv, s, now); return true; }
     /* First, as a connection that has gone also stops the stream. */
-    if(state != KUI_W5500_ESTABLISHED && state != KUI_W5500_CLOSE_WAIT) {
+    if(state != KUI_NET_ESTABLISHED && state != KUI_NET_PEER_CLOSED) {
         fail_transfer(sv, s, now, s->kind == T_STOR ? "426 The connection was lost; upload discarded" :
             "426 The connection was closed; transfer stopped");
         return true;
@@ -630,7 +685,7 @@ static bool stream_transfer(struct server *sv, struct session *s, uint64_t now, 
     if(st->failed) {
         /* The async frames kept failing, or one never ended (then they stay
          * off): the transfer goes on without them. */
-        bool lost = !sv->net.chip.async;
+        bool lost = !sv->w5500.chip.async;
         s->fell_back = true;
         event(sv, lost ? "DMA transfers stopped; going on without them" : "DMA transfers kept failing; going on without");
         if(!stream_stop(sv, s, true, now)) {
@@ -642,9 +697,9 @@ static bool stream_transfer(struct server *sv, struct session *s, uint64_t now, 
     if(s->kind == T_STOR) {
         /* The client has sent everything once it has closed its side and the
          * chip holds nothing more: the rest is in the ring. */
-        if(state == KUI_W5500_CLOSE_WAIT && !s->ending) {
-            uint16_t waiting = 1;
-            if(!kui_w5500_received(&sv->net.chip, (unsigned)s->data, &waiting)) {
+        if(state == KUI_NET_PEER_CLOSED && !s->ending) {
+            size_t waiting = 1;
+            if(!net_received(sv, (unsigned)s->data, &waiting)) {
                 fail_transfer(sv, s, now, "426 The network adapter stopped");
                 return true;
             }
@@ -700,10 +755,11 @@ static bool stream_card(struct server *sv) {
     return true;
 }
 static bool stream_begin(struct server *sv, struct session *s) {
-    s->no_stream = !sv->net.chip.async ? "DMA off" : sv->streaming ? "DMA in use" : "no DMA";
-    if(sv->streaming || !sv->net.chip.async || (s->kind != T_RETR && s->kind != T_STOR)) return false;
+    s->no_stream = sv->wifi ? "no DMA (Wi-Fi)" : !sv->w5500.chip.async ? "DMA off" : sv->streaming ? "DMA in use" :
+        "no DMA";
+    if(sv->wifi || sv->streaming || !sv->w5500.chip.async || (s->kind != T_RETR && s->kind != T_STOR)) return false;
     if(!sv->ring && !(sv->ring = malloc(RING_BYTES))) return false;
-    if(!kui_w5500_stream_begin(&sv->stream, &sv->net.chip, (unsigned)s->data, s->kind == T_RETR, sv->ring, RING_BYTES))
+    if(!kui_w5500_stream_begin(&sv->stream, &sv->w5500.chip, (unsigned)s->data, s->kind == T_RETR, sv->ring, RING_BYTES))
         return false;
     sv->streaming = s;
     s->streamed = s->used_stream = true;
@@ -734,16 +790,16 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
         return false;
     }
     unsigned j = (unsigned)s->data;
-    uint8_t state = KUI_W5500_CLOSED;
-    if(!kui_w5500_status(&sv->net.chip, j, &state)) { fail_transfer(sv, s, now, "426 The network adapter stopped"); return true; }
+    uint8_t state = KUI_NET_CLOSED;
+    if(!net_state(sv, j, &state)) { fail_transfer(sv, s, now, "426 The network adapter stopped"); return true; }
     if(s->streamed) return stream_transfer(sv, s, now, state);
     bool work = false;
     if(s->kind == T_STOR) {
-        uint16_t waiting = 0;
-        if(!kui_w5500_received(&sv->net.chip, j, &waiting)) { fail_transfer(sv, s, now, "426 The network adapter stopped"); return true; }
+        size_t waiting = 0;
+        if(!net_received(sv, j, &waiting)) { fail_transfer(sv, s, now, "426 The network adapter stopped"); return true; }
         if(waiting && s->buffered < BUFFER_BYTES) {
-            uint16_t take = (uint16_t)(BUFFER_BYTES - s->buffered < waiting ? BUFFER_BYTES - s->buffered : waiting);
-            if(!kui_w5500_receive(&sv->net.chip, j, s->buffer + s->buffered, take)) {
+            size_t take = BUFFER_BYTES - s->buffered < waiting ? BUFFER_BYTES - s->buffered : waiting;
+            if(!net_receive(sv, j, s->buffer + s->buffered, take)) {
                 fail_transfer(sv, s, now, "426 The network adapter stopped");
                 return true;
             }
@@ -752,22 +808,22 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
             sv->status->bytes_in += take;
             s->progress_ms = now;
             work = true;
-            waiting = (uint16_t)(waiting - take);
+            waiting -= take;
         }
-        bool ended = state == KUI_W5500_CLOSE_WAIT && !waiting;
+        bool ended = state == KUI_NET_PEER_CLOSED && !waiting;
         /* Whole buffers suit the card; the rest is written at the end. */
         if(s->buffered == BUFFER_BYTES || (ended && s->buffered)) {
             if(!write_buffer(sv, s, now)) return true;
             work = true;
         }
         if(ended && !s->buffered) { finish_upload(sv, s, now); return true; }
-        if(state != KUI_W5500_ESTABLISHED && state != KUI_W5500_CLOSE_WAIT) {
+        if(state != KUI_NET_ESTABLISHED && state != KUI_NET_PEER_CLOSED) {
             fail_transfer(sv, s, now, "426 The connection was lost; upload discarded");
             return true;
         }
     } else if(s->phase == P_RUN) {
         /* A client may close its own side early and still read. */
-        if(state != KUI_W5500_ESTABLISHED && state != KUI_W5500_CLOSE_WAIT) {
+        if(state != KUI_NET_ESTABLISHED && state != KUI_NET_PEER_CLOSED) {
             fail_transfer(sv, s, now, "426 The connection was closed; transfer stopped");
             return true;
         }
@@ -788,11 +844,11 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
             work = true;
         }
         if(s->sent < s->buffered) {
-            uint16_t room = 0;
-            if(!kui_w5500_room(&sv->net.chip, j, &room)) { fail_transfer(sv, s, now, "426 The connection was lost"); return true; }
+            size_t room = 0;
+            if(!net_room(sv, j, &room)) { fail_transfer(sv, s, now, "426 The connection was lost"); return true; }
             if(room) {
-                uint16_t n = (uint16_t)(s->buffered - s->sent < room ? s->buffered - s->sent : room);
-                if(!kui_w5500_send(&sv->net.chip, j, s->buffer + s->sent, n)) {
+                size_t n = s->buffered - s->sent < room ? s->buffered - s->sent : room;
+                if(!net_send(sv, j, s->buffer + s->sent, n)) {
                     fail_transfer(sv, s, now, "426 The connection was lost");
                     return true;
                 }
@@ -805,10 +861,10 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
         }
         if(s->source_done && s->sent == s->buffered) { s->phase = P_DRAIN; s->phase_ms = now; }
     } else {
-        /* Everything sent: close once the client has acknowledged it all. */
-        uint16_t room = 0;
-        bool acked = kui_w5500_room(&sv->net.chip, j, &room) && room == sv->net.chip.tx_kb[j] * 1024u;
-        if(acked && (state == KUI_W5500_ESTABLISHED || state == KUI_W5500_CLOSE_WAIT)) {
+        /* Everything sent: close once it has all left the adapter. */
+        bool acked = false;
+        if(!sv->net.sent(sv->net.ctx, j, &acked)) acked = false;
+        if(acked && (state == KUI_NET_ESTABLISHED || state == KUI_NET_PEER_CLOSED)) {
             if(s->kind == T_RETR) {
                 char size[16];
                 size_words(size, s->done);
@@ -820,7 +876,7 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
             reply(s, "226 Transfer complete");
             return true;
         }
-        if(state != KUI_W5500_ESTABLISHED && state != KUI_W5500_CLOSE_WAIT) {
+        if(state != KUI_NET_ESTABLISHED && state != KUI_NET_PEER_CLOSED) {
             fail_transfer(sv, s, now, "426 The connection was lost before the end");
             return true;
         }
@@ -862,13 +918,12 @@ static void open_passive(struct server *sv, struct session *s, bool extended, ui
     uint16_t port = next_port(sv);
     if(j < 0) { reply(s, "425 Too many data connections at once; try again"); return; }
     s->data = j;
-    if(!kui_w5500_open(&sv->net.chip, (unsigned)j, KUI_W5500_TCP | KUI_W5500_MR_NODELAY, port) ||
-       !kui_w5500_listen(&sv->net.chip, (unsigned)j)) {
+    if(!sv->net.listen(sv->net.ctx, (unsigned)j, port)) {
         forget_data(sv, s, now);
         reply(s, "425 Cannot open a data port");
         return;
     }
-    const uint8_t *ip = sv->net.config.ip;
+    const uint8_t *ip = sv->ip;
     if(extended) reply(s, "229 Entering Extended Passive Mode (|||%u|)", port);
     else reply(s, "227 Entering Passive Mode (%u,%u,%u,%u,%u,%u)", ip[0], ip[1], ip[2], ip[3], port >> 8, port & 255u);
 }
@@ -1207,12 +1262,12 @@ static void command(struct server *sv, struct session *s, char *line, uint64_t n
 
 /* ---- Control connection input ---- */
 static bool read_input(struct server *sv, struct session *s) {
-    uint16_t waiting = 0;
-    if(!kui_w5500_received(&sv->net.chip, s->control, &waiting) || !waiting) return false;
+    size_t waiting = 0;
+    if(!net_received(sv, s->control, &waiting) || !waiting) return false;
     size_t room = sizeof(s->in) - s->in_len;
     if(!room) return false;
-    uint16_t take = (uint16_t)(waiting < room ? waiting : room);
-    if(!kui_w5500_receive(&sv->net.chip, s->control, s->in + s->in_len, take)) return false;
+    size_t take = waiting < room ? waiting : room;
+    if(!net_receive(sv, s->control, s->in + s->in_len, take)) return false;
     s->in_len += take;
     return true;
 }
@@ -1261,8 +1316,8 @@ static void session_open(struct server *sv, struct session *s, unsigned control,
     s->opened_ms = s->last_command = now;
     strcpy(s->cwd, "/");
     uint16_t port;
-    if(!kui_w5500_peer(&sv->net.chip, control, s->peer, &port)) memset(s->peer, 0, 4);
-    (void)kui_w5500_keepalive(&sv->net.chip, control, 60);
+    if(!net_peer(sv, control, s->peer, &port)) memset(s->peer, 0, 4);
+    (void)net_keepalive(sv, control);
     ++sv->status->connections;
     event(sv, "%u.%u.%u.%u connected", s->peer[0], s->peer[1], s->peer[2], s->peer[3]);
     reply(s, "220 K-UI FTP server on a Dreamcast; log in with the password on its screen");
@@ -1271,8 +1326,8 @@ static void session_close(struct server *sv, struct session *s, uint64_t now, bo
     if(transferring(s)) fail_transfer(sv, s, now, "426 The connection is closing");
     forget_data(sv, s, now);
     unsigned c = s->control - CONTROL_FIRST;
-    if(graceful) (void)kui_w5500_disconnect(&sv->net.chip, s->control);
-    else (void)kui_w5500_close(&sv->net.chip, s->control);
+    if(graceful) (void)net_disconnect(sv, s->control);
+    else (void)net_close(sv, s->control);
     /* The control socket listens again once it has closed. */
     sv->control_owner[c] = REJECTING;
     sv->control_since[c] = now;
@@ -1288,16 +1343,16 @@ static bool allowed_during_transfer(const char *line) {
 }
 static bool service(struct server *sv, struct session *s, uint64_t now) {
     bool work = flush(sv, s, now);
-    uint8_t state = KUI_W5500_CLOSED;
-    if(!kui_w5500_status(&sv->net.chip, s->control, &state)) return work;
+    uint8_t state = KUI_NET_CLOSED;
+    if(!net_state(sv, s->control, &state)) return work;
     if(s->closing) {
-        if(!s->out_len || now - s->closing_ms > STOP_MS || state != KUI_W5500_ESTABLISHED) {
+        if(!s->out_len || now - s->closing_ms > STOP_MS || state != KUI_NET_ESTABLISHED) {
             session_close(sv, s, now, true);
             return true;
         }
         return work;
     }
-    if(state != KUI_W5500_ESTABLISHED && state != KUI_W5500_CLOSE_WAIT) { session_close(sv, s, now, false); return true; }
+    if(state != KUI_NET_ESTABLISHED && state != KUI_NET_PEER_CLOSED) { session_close(sv, s, now, false); return true; }
     work |= read_input(sv, s);
     if(transferring(s)) work |= transfer_step(sv, s, now);
     if(s->closing) return true;
@@ -1309,7 +1364,7 @@ static bool service(struct server *sv, struct session *s, uint64_t now) {
                 if(line[0]) command(sv, s, line, now);
                 work = true;
             }
-        } else if(state == KUI_W5500_CLOSE_WAIT && !transferring(s)) {
+        } else if(state == KUI_NET_PEER_CLOSED && !transferring(s)) {
             /* The client has gone and said all it had to say. */
             session_close(sv, s, now, true);
             return true;
@@ -1329,17 +1384,16 @@ static bool service(struct server *sv, struct session *s, uint64_t now) {
 static bool listen_control(struct server *sv, unsigned c) {
     unsigned socket = CONTROL_FIRST + c;
     sv->control_owner[c] = FREE;
-    return kui_w5500_open(&sv->net.chip, socket, KUI_W5500_TCP | KUI_W5500_MR_NODELAY, sv->control_port) &&
-        kui_w5500_listen(&sv->net.chip, socket);
+    return sv->net.listen(sv->net.ctx, socket, sv->control_port);
 }
 static bool controls(struct server *sv, uint64_t now) {
     bool work = false;
     for(unsigned c = 0; c < CONTROL_SOCKETS; ++c) {
         unsigned socket = CONTROL_FIRST + c;
-        uint8_t state = KUI_W5500_CLOSED;
-        if(!kui_w5500_status(&sv->net.chip, socket, &state)) return work;
+        uint8_t state = KUI_NET_CLOSED;
+        if(!net_state(sv, socket, &state)) return work;
         if(sv->control_owner[c] == FREE) {
-            if(state == KUI_W5500_ESTABLISHED || state == KUI_W5500_CLOSE_WAIT) {
+            if(state == KUI_NET_ESTABLISHED || state == KUI_NET_PEER_CLOSED) {
                 struct session *free_session = NULL;
                 for(unsigned i = 0; i < KUI_FTP_SESSIONS && !free_session; ++i)
                     if(!sv->sessions[i].active) free_session = &sv->sessions[i];
@@ -1348,20 +1402,20 @@ static bool controls(struct server *sv, uint64_t now) {
                     session_open(sv, free_session, socket, now);
                 } else {
                     static const char full[] = "421 K-UI serves 3 connections at once; try again later\r\n";
-                    uint16_t room = 0;
-                    if(kui_w5500_room(&sv->net.chip, socket, &room) && room >= sizeof(full) - 1u)
-                        (void)kui_w5500_send(&sv->net.chip, socket, full, sizeof(full) - 1u);
-                    (void)kui_w5500_disconnect(&sv->net.chip, socket);
+                    size_t room = 0;
+                    if(net_room(sv, socket, &room) && room >= sizeof(full) - 1u)
+                        (void)net_send(sv, socket, full, sizeof(full) - 1u);
+                    (void)net_disconnect(sv, socket);
                     sv->control_owner[c] = REJECTING;
                     sv->control_since[c] = now;
                 }
                 work = true;
-            } else if(state == KUI_W5500_CLOSED) {
+            } else if(state == KUI_NET_CLOSED) {
                 if(!listen_control(sv, c)) return work;
                 work = true;
             }
         } else if(sv->control_owner[c] == REJECTING) {
-            if(state == KUI_W5500_CLOSED || now - sv->control_since[c] > 2000u) {
+            if(state == KUI_NET_CLOSED || now - sv->control_since[c] > 2000u) {
                 if(!listen_control(sv, c)) return work;
                 work = true;
             }
@@ -1371,9 +1425,10 @@ static bool controls(struct server *sv, uint64_t now) {
 }
 
 /* ---- Lease, status ---- */
+/* The W5500's DHCP lease; the Wi-Fi board keeps its own. */
 static void lease(struct server *sv, uint64_t now) {
-    if(kui_w5500_session_expires_in(&sv->net, now) == 0) { sv->stop_reason = "The network address lease ran out"; return; }
-    if(kui_w5500_session_renew_in(&sv->net, now) || now < sv->renew_after_ms) return;
+    if(kui_w5500_session_expires_in(&sv->w5500, now) == 0) { sv->stop_reason = "The network address lease ran out"; return; }
+    if(kui_w5500_session_renew_in(&sv->w5500, now) || now < sv->renew_after_ms) return;
     /* The last free data socket, leaving 0 (the largest) for transfers. */
     int j = -1;
     for(unsigned k = DATA_SOCKETS; k-- > 0 && j < 0;)
@@ -1381,10 +1436,10 @@ static void lease(struct server *sv, uint64_t now) {
     if(j < 0) return; /* all busy: try again shortly */
     sv->data_owner[j] = RENEWING;
     bool refused = false;
-    if(kui_w5500_session_renew(&sv->net, (unsigned)j, RENEW_LIMIT_MS, &refused, sv->cancel)) event(sv, "Address lease renewed");
+    if(kui_w5500_session_renew(&sv->w5500, (unsigned)j, RENEW_LIMIT_MS, &refused, sv->cancel)) event(sv, "Address lease renewed");
     else if(refused) sv->stop_reason = "The network refused to renew K-UI's address";
     else {
-        event(sv, "Lease renewal: %.60s; trying again in a minute", sv->net.problem);
+        event(sv, "Lease renewal: %.60s; trying again in a minute", sv->w5500.problem);
         sv->renew_after_ms = now + RENEW_RETRY_MS;
     }
     sv->data_owner[j] = FREE;
@@ -1410,7 +1465,7 @@ static void publish(struct server *sv, uint64_t now, bool force) {
             c->rate = s->rate;
         }
     }
-    st->lease_left = kui_w5500_session_expires_in(&sv->net, now);
+    st->lease_left = sv->wifi ? UINT32_MAX : kui_w5500_session_expires_in(&sv->w5500, now);
     if(sv->publish) sv->publish(st);
     sv->published_ms = now;
     sv->changed = false;
@@ -1446,7 +1501,7 @@ static const char *password(struct server *sv, uint32_t seed) {
     }
     if(r != FR_NO_FILE && r != FR_NO_PATH) return "Cannot read KUI/ftp-password.txt";
     uint64_t x = mix((uint64_t)seed << 32 ^ now_ms(sv));
-    for(unsigned i = 0; i < 6; ++i) x = mix(x ^ sv->net.mac[i]);
+    for(unsigned i = 0; i < 6; ++i) x = mix(x ^ sv->mac[i]);
     snprintf(sv->password, sizeof(sv->password), "%08u", (unsigned)(x % 100000000u));
     (void)f_mkdir("0:/KUI");
     if(f_open(&file, KUI_FTP_PASSWORD_PATH, FA_WRITE | FA_CREATE_NEW) != FR_OK) return "Cannot create KUI/ftp-password.txt";
@@ -1458,6 +1513,11 @@ static const char *password(struct server *sv, uint32_t seed) {
     if(r != FR_OK || wrote != (UINT)n || !closed) return "Cannot save KUI/ftp-password.txt";
     event(sv, "New password saved in KUI/ftp-password.txt");
     return NULL;
+}
+/* A pause in which the Wi-Fi board's link keeps moving. */
+static void idle(struct server *sv, unsigned ms) {
+    if(sv->wifi && sv->wifi->open) (void)kui_wifi_session_step(sv->wifi);
+    pause_ms(sv, ms);
 }
 static void stop_all(struct server *sv, const char *why) {
     uint64_t now = now_ms(sv);
@@ -1478,7 +1538,7 @@ static void stop_all(struct server *sv, const char *why) {
             flush(sv, s, now);
             pending = pending || s->out_len;
         }
-        if(pending) sv->net.port->bus->pause(sv->net.port->bus->ctx, 5);
+        if(pending) idle(sv, 5);
     }
     for(unsigned i = 0; i < KUI_FTP_SESSIONS; ++i)
         if(sv->sessions[i].active) session_close(sv, &sv->sessions[i], now, true);
@@ -1499,49 +1559,150 @@ static void dhcp_stage(enum kui_network_stage s) {
     if(dhcp_server && (s == KUI_NET_DISCOVER || s == KUI_NET_REQUEST || s == KUI_NET_CONFLICT))
         stage(dhcp_server, s == KUI_NET_CONFLICT ? "Checking that the address is free" : "Asking the router for an address (DHCP)");
 }
-static bool find_chip(struct server *sv) {
-    stage(sv, "Looking for the W5500 on the SCI port");
-    if(!kui_w5500_session_find(&sv->net, sv->net.port, sv->log)) { fail(sv, sv->net.problem); return false; }
-    static const uint8_t rx[KUI_W5500_SOCKETS] = {4, 4, 4, 1, 1, 1, 1, 0}, tx[KUI_W5500_SOCKETS] = {4, 4, 4, 1, 1, 1, 1, 0};
-    if(!kui_w5500_buffers(&sv->net.chip, rx, tx)) { fail(sv, "The W5500 stopped answering"); return false; }
+/* ---- The adapter ---- */
+/* A W5500 first; failing that, the Wi-Fi board. A W5500 that answers but
+ * fails its wiring check is reported rather than passed over. */
+static bool find_adapter(struct server *sv) {
+    const struct kui_net_ports *ports = sv->ports;
+    if(ports->w5500) {
+        stage(sv, "Looking for a W5500 on the SCI port");
+        if(kui_w5500_session_find(&sv->w5500, ports->w5500, sv->log)) {
+            static const uint8_t rx[KUI_W5500_SOCKETS] = {4, 4, 4, 1, 1, 1, 1, 0}, tx[KUI_W5500_SOCKETS] = {4, 4, 4, 1, 1, 1, 1, 0};
+            if(!kui_w5500_buffers(&sv->w5500.chip, rx, tx)) { fail(sv, "The W5500 stopped answering"); return false; }
+            kui_w5500_session_sockets(&sv->w5500, &sv->net);
+            memcpy(sv->mac, sv->w5500.mac, 6);
+            return true;
+        }
+        if(sv->w5500.version == KUI_W5500_VERSION || !ports->wifi) { fail(sv, sv->w5500.problem); return false; }
+    }
+    stage(sv, "Looking for the Wi-Fi board on the SCI port");
+    if(!(sv->wifi = calloc(1, sizeof(*sv->wifi)))) { fail(sv, "Insufficient memory for the Wi-Fi board"); return false; }
+    if(!kui_wifi_session_find(sv->wifi, ports->wifi, sv->log)) {
+        fail(sv, sv->wifi->answered || !ports->w5500 ? sv->wifi->problem : "No W5500 or Wi-Fi board answered on the SCI port");
+        return false;
+    }
+    kui_wifi_session_sockets(sv->wifi, &sv->net);
+    memcpy(sv->mac, sv->wifi->host.hello.mac, 6);
+    sv->status->wifi = true;
+    sv->wifi_lost = sv->wifi->host.counts.lost;
     return true;
 }
+static void wifi_adapter(struct server *sv) {
+    const struct kwh_wifi *w = &sv->wifi->host.wifi;
+    snprintf(sv->status->adapter, sizeof(sv->status->adapter), "Wi-Fi: %.32s, %s GHz channel %u, %d dBm", w->ssid,
+        w->band == 5 ? "5" : "2.4", w->channel, w->rssi);
+}
+static void wifi_stage(void *ctx, const char *text) { stage(ctx, text); }
 /* "overlapped": the network and the card move data at the same time. */
-static void adapter(struct server *sv) {
-    const struct kui_w5500_link *l = &sv->net.link;
+static void w5500_adapter(struct server *sv) {
+    const struct kui_w5500_link *l = &sv->w5500.link;
+    const struct kui_w5500_port *port = sv->ports->w5500;
     snprintf(sv->status->adapter, sizeof(sv->status->adapter), "W5500 on SCI at %s%s; %s Mbit/s %s duplex",
-        sv->net.port->speed ? sv->net.port->speed(sv->net.level) : "?", sv->net.chip.async ? ", overlapped" : "",
+        port->speed ? port->speed(sv->w5500.level) : "?", sv->w5500.chip.async ? ", overlapped" : "",
         l->fast ? "100" : "10", l->full ? "full" : "half");
     sv->changed = true;
 }
 static bool start_network(struct server *sv) {
-    stage(sv, "Waiting for the network cable link");
-    if(!kui_w5500_session_link(&sv->net, sv->cancel)) { fail(sv, sv->net.problem); return false; }
-    adapter(sv);
+    if(sv->wifi) {
+        stage(sv, "Waiting for the Wi-Fi network");
+        if(!kui_wifi_session_online(sv->wifi, WIFI_ONLINE_MS, sv->cancel, wifi_stage, sv)) {
+            fail(sv, sv->wifi->problem);
+            return false;
+        }
+        wifi_adapter(sv);
+        memcpy(sv->ip, sv->wifi->host.wifi.ip, 4);
+        sv->wifi_seen = sv->wifi->host.counts.wifi;
+    } else {
+        stage(sv, "Waiting for the network cable link");
+        if(!kui_w5500_session_link(&sv->w5500, sv->cancel)) { fail(sv, sv->w5500.problem); return false; }
+        w5500_adapter(sv);
+        dhcp_server = sv;
+        bool leased = kui_w5500_session_dhcp(&sv->w5500, true, NULL, sv->log, sv->cancel, dhcp_stage);
+        dhcp_server = NULL;
+        if(!leased) { fail(sv, sv->w5500.problem); return false; }
+        memcpy(sv->ip, sv->w5500.config.ip, 4);
+    }
     sv->status->link = true;
-    dhcp_server = sv;
-    bool leased = kui_w5500_session_dhcp(&sv->net, true, NULL, sv->log, sv->cancel, dhcp_stage);
-    dhcp_server = NULL;
-    if(!leased) { fail(sv, sv->net.problem); return false; }
-    memcpy(sv->status->ip, sv->net.config.ip, 4);
+    memcpy(sv->status->ip, sv->ip, 4);
     for(unsigned c = 0; c < CONTROL_SOCKETS; ++c)
-        if(!listen_control(sv, c)) { fail(sv, "The W5500 could not listen for connections"); return false; }
+        if(!listen_control(sv, c)) {
+            fail(sv, sv->wifi ? "The Wi-Fi board could not listen for connections" : "The W5500 could not listen for connections");
+            return false;
+        }
     return true;
 }
-void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options *options,
+static void ready_message(struct server *sv) {
+    char where[8] = "";
+    if(sv->control_port != KUI_FTP_PORT) snprintf(where, sizeof(where), ":%u", sv->control_port);
+    snprintf(sv->status->message, sizeof(sv->status->message), "Ready: ftp://%u.%u.%u.%u%s", sv->ip[0], sv->ip[1],
+        sv->ip[2], sv->ip[3], where);
+}
+/* Each round: the Wi-Fi board's link moves one transfer. True while it has
+ * more to do. */
+static bool adapter_poll(struct server *sv) {
+    if(!sv->wifi) return false;
+    if(!kui_wifi_session_step(sv->wifi)) {
+        sv->stop_reason = sv->wifi->problem;
+        return false;
+    }
+    return kui_wifi_session_busy(sv->wifi);
+}
+/* Each second: the W5500's cable link and lease; the Wi-Fi board's status
+ * (its answer is read by wifi_news). */
+static void adapter_tick(struct server *sv, uint64_t now) {
+    if(sv->wifi) {
+        (void)kwh_wifi_query(&sv->wifi->host);
+        return;
+    }
+    struct kui_w5500_link link;
+    if(kui_w5500_link(&sv->w5500.chip, &link) && link.up != sv->status->link) {
+        sv->status->link = link.up;
+        event(sv, link.up ? "Network cable link back" : "Network cable link lost");
+    }
+    lease(sv, now);
+}
+/* The Wi-Fi board's news: its connection and address, and restarts (which
+ * close every connection; the control sockets listen again by themselves). */
+static void wifi_news(struct server *sv) {
+    const struct kwh *h = &sv->wifi->host;
+    if(h->counts.lost != sv->wifi_lost) {
+        sv->wifi_lost = h->counts.lost;
+        event(sv, "The Wi-Fi board restarted; its connections were closed");
+    }
+    if(h->counts.wifi == sv->wifi_seen) return;
+    sv->wifi_seen = h->counts.wifi;
+    const struct kwh_wifi *w = &h->wifi;
+    bool online = w->state == KWM_WIFI_ONLINE && (w->ip[0] | w->ip[1] | w->ip[2] | w->ip[3]);
+    if(online != sv->status->link) {
+        sv->status->link = online;
+        event(sv, online ? "Wi-Fi connection back" : "Wi-Fi connection lost; the board is reconnecting");
+    }
+    if(online && memcmp(w->ip, sv->ip, 4)) {
+        memcpy(sv->ip, w->ip, 4);
+        memcpy(sv->status->ip, w->ip, 4);
+        ready_message(sv);
+        event(sv, "New address: %u.%u.%u.%u", w->ip[0], w->ip[1], w->ip[2], w->ip[3]);
+    }
+    if(online) wifi_adapter(sv);
+    sv->changed = true;
+}
+void kui_ftp_run(const struct kui_net_ports *ports, const struct kui_ftp_options *options,
                  struct kui_ftp_status *out, kui_log_fn log, kui_cancel_fn cancel, kui_ftp_publish_fn publish_fn) {
     if(!out) return;
     memset(out, 0, sizeof(*out));
     out->state = KUI_FTP_STARTING;
     struct server *sv = calloc(1, sizeof(*sv));
-    if(!sv || !port || !port->bus) {
-        snprintf(out->message, sizeof(out->message), "%s", sv ? "No SCI port for a W5500" : "Insufficient memory for the FTP server");
+    /* The clock comes from the first port given, so it must have a bus. */
+    bool usable = ports && (ports->w5500 ? ports->w5500->bus != NULL : ports->wifi && ports->wifi->bus);
+    if(!sv || !usable) {
+        snprintf(out->message, sizeof(out->message), "%s", sv ? "No SCI port for a network adapter" :
+            "Insufficient memory for the FTP server");
         out->state = KUI_FTP_FAILED;
         if(publish_fn) publish_fn(out);
         free(sv);
         return;
     }
-    sv->net.port = port;
+    sv->ports = ports;
     sv->status = out;
     sv->log = log;
     sv->cancel = cancel;
@@ -1553,7 +1714,7 @@ void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options
     for(unsigned j = 0; j < DATA_SOCKETS; ++j) sv->data_owner[j] = FREE;
     for(unsigned c = 0; c < CONTROL_SOCKETS; ++c) sv->control_owner[c] = FREE;
     const char *problem = NULL;
-    if(!find_chip(sv)) problem = sv->status->message;
+    if(!find_adapter(sv)) problem = sv->status->message;
     else {
         stage(sv, "Opening the SD card");
         if(!(sv->connected = kui_sd_connect())) problem = "SD card unavailable";
@@ -1564,15 +1725,12 @@ void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options
     if(!problem && start_network(sv)) {
         snprintf(out->password, sizeof(out->password), "%s", sv->password);
         out->state = KUI_FTP_READY;
-        char where[8] = "";
-        if(sv->control_port != KUI_FTP_PORT) snprintf(where, sizeof(where), ":%u", sv->control_port);
-        snprintf(out->message, sizeof(out->message), "Ready: ftp://%u.%u.%u.%u%s", out->ip[0], out->ip[1], out->ip[2],
-            out->ip[3], where);
+        ready_message(sv);
         if(log) log("FTP server: %s", out->message);
         publish(sv, now_ms(sv), true);
         while(!sv->stop_reason) {
             if(cancel && cancel()) { sv->stop_reason = "The FTP server was stopped on the Dreamcast"; break; }
-            if(sv->net.chip.failed) { sv->stop_reason = "The W5500 stopped answering"; break; }
+            if(!sv->wifi && sv->w5500.chip.failed) { sv->stop_reason = "The W5500 stopped answering"; break; }
             uint64_t now = now_ms(sv);
             bool work = false;
             /* While a transfer streams, the bus is lent to it between passes
@@ -1580,22 +1738,20 @@ void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options
              * has stopped (nothing to move, a full or empty ring, a failure). */
             if(!sv->streaming || !sv->stream.busy || sv->stream.failed ||
                now - sv->poll_ms >= (moving_plainly(sv) ? SHARED_MS : POLL_MS)) {
-                bool async = sv->net.chip.async;
+                bool async = sv->w5500.chip.async;
                 if(sv->streaming) (void)kui_w5500_stream_hold(&sv->stream);
                 work = controls(sv, now);
                 data_poll(sv, now);
                 for(unsigned i = 0; i < KUI_FTP_SESSIONS; ++i)
                     if(sv->sessions[i].active) work |= service(sv, &sv->sessions[i], now);
+                work |= adapter_poll(sv);
+                if(sv->stop_reason) break;
+                if(sv->wifi) wifi_news(sv);
                 if(now - sv->link_ms > 1000u) {
-                    struct kui_w5500_link link;
                     sv->link_ms = now;
-                    if(kui_w5500_link(&sv->net.chip, &link) && link.up != out->link) {
-                        out->link = link.up;
-                        event(sv, link.up ? "Network cable link back" : "Network cable link lost");
-                    }
-                    lease(sv, now);
+                    adapter_tick(sv, now);
                 }
-                if(async != sv->net.chip.async) adapter(sv);
+                if(!sv->wifi && async != sv->w5500.chip.async) w5500_adapter(sv);
                 sv->poll_ms = now;
                 ++sv->passes;
                 if(sv->streaming) kui_w5500_stream_run(&sv->stream);
@@ -1605,7 +1761,7 @@ void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options
                 work |= stream_card(sv);
             }
             publish(sv, now, false);
-            port->bus->pause(port->bus->ctx, work || moving(sv) ? 0 : 1);
+            pause_ms(sv, work || moving(sv) ? 0 : 1);
         }
         if(sv->streaming) (void)kui_w5500_stream_hold(&sv->stream);
         bool asked = cancel && cancel();
@@ -1616,7 +1772,9 @@ void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options
     }
     for(unsigned i = 0; i < KUI_FTP_SESSIONS; ++i) free(sv->sessions[i].buffer);
     free(sv->ring);
-    kui_w5500_session_end(&sv->net);
+    kui_w5500_session_end(&sv->w5500);
+    if(sv->wifi) kui_wifi_session_end(sv->wifi);
+    free(sv->wifi);
     memset(out->clients, 0, sizeof(out->clients));
     out->link = false;
     if(sv->mounted && f_mount(NULL, "0:", 0) != FR_OK && out->state != KUI_FTP_FAILED) {

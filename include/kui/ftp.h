@@ -3,12 +3,15 @@
 #define KUI_FTP_H
 #include "kui/apps.h"
 #include "kui/files.h"
+#include "kui/net.h"
 #include "kui/network_w5500.h"
+#include "kui/network_wifi.h"
 #include <stddef.h>
 #include <stdint.h>
 
-/* K-UI's FTP server: the SD card over the network through a W5500 on the
- * SCI port, using the chip's own TCP sockets. RFC 959 with the usual
+/* K-UI's FTP server: the SD card over the network through an adapter on
+ * the SCI port, a W5500 (its own TCP sockets) or the Wi-Fi board (its
+ * socket slots). RFC 959 with the usual
  * extensions (RFC 2389 FEAT, RFC 2428 EPSV/EPRT, RFC 3659 SIZE, MDTM,
  * REST and MLSD/MLST). Plain FTP only: the password and the files cross
  * the network unencrypted, so it is meant for a home network, and runs
@@ -53,8 +56,10 @@ struct kui_ftp_status {
     char password[KUI_FTP_PASSWORD_CAP];
     uint8_t ip[4];
     uint16_t port;
-    bool link;
-    uint32_t lease_left; /* seconds; UINT32_MAX when it never ends */
+    /* wifi: the Wi-Fi board is the adapter. link: the cable link, or Wi-Fi
+     * online. */
+    bool wifi, link;
+    uint32_t lease_left; /* seconds; UINT32_MAX when it never ends or the board keeps it */
     struct kui_ftp_client clients[KUI_FTP_SESSIONS];
     unsigned connections, files_in, files_out, failures;
     uint64_t bytes_in, bytes_out;
@@ -66,10 +71,12 @@ struct kui_ftp_status {
     char last_in[KUI_APP_LINE_CAP], last_out[KUI_APP_LINE_CAP];
 };
 typedef void (*kui_ftp_publish_fn)(const struct kui_ftp_status *status);
-/* Mounts the card, finds the W5500, takes a DHCP lease and serves until
- * cancel() says stop or the network is lost. The card must be reachable
- * through kui_sd_connect (on SCIF). Publishes its status as it changes. */
-void kui_ftp_run(const struct kui_w5500_port *port, const struct kui_ftp_options *options,
+/* Finds an adapter (a W5500, then the Wi-Fi board), mounts the card, gets
+ * an address (DHCP on the W5500; the Wi-Fi board has its own) and serves
+ * until cancel() says stop or the network is lost. The card must be
+ * reachable through kui_sd_connect (on SCIF). Publishes its status as it
+ * changes. */
+void kui_ftp_run(const struct kui_net_ports *ports, const struct kui_ftp_options *options,
                  struct kui_ftp_status *out, kui_log_fn log, kui_cancel_fn cancel, kui_ftp_publish_fn publish);
 
 /* Protocol pieces, kept apart from the sockets and the card for tests. */

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/network_probe.h"
 #include "kui/network_w5500.h"
+#include "kui/network_wifi.h"
 #include <kos/net.h>
 #include <kos/irq.h>
 #include <assert.h>
@@ -30,14 +31,15 @@ void irq_restore(irq_mask_t state){assert(state==0);}
 uint64_t timer_ms_gettime64(void){return now;}
 void thd_sleep(unsigned ms){now+=ms;}
 static bool cancel(void){return cancel_at&&now>=cancel_at;}
-static unsigned w5500_tests;
+static unsigned w5500_tests,wifi_tests;
 bool kui_w5500_network_test(struct kui_app_status*out,kui_log_fn log,kui_cancel_fn stop,kui_app_progress_fn progress){(void)out;(void)log;(void)stop;(void)progress;++w5500_tests;return false;}
+bool kui_wifi_network_test(struct kui_app_status*out,kui_log_fn log,kui_cancel_fn stop,kui_app_progress_fn progress){(void)out;(void)log;(void)stop;(void)progress;++wifi_tests;return false;}
 int main(void){struct kui_app_status out;struct kui_network_config c={{192,168,1,50},{255,255,255,0},{0},{0}};
     reset();kui_network_connect_run(&c,&out,NULL,cancel,NULL);assert(out.passed&&out.complete&&txs==3&&now>=3000&&unregs==1&&stops==1&&ends==1&&callbacks==2&&input==old_input&&LIST_EMPTY(&list));assert(adapter.ip_addr[0]==192&&adapter.ip_addr[3]==50);
     reset();kui_network_connect_run(NULL,&out,NULL,cancel,NULL);assert(!out.passed&&out.errors==1&&strstr(out.message,"offer")&&now>=15000&&now<15100&&unregs==1&&input==old_input);
     reset();cancel_at=20;kui_network_connect_run(NULL,&out,NULL,cancel,NULL);assert(out.stopped&&!out.passed&&stops==1&&ends==1&&unregs==1&&input==old_input);
-    reset();present=false;kui_network_connect_run(NULL,&out,NULL,cancel,NULL);assert(out.errors==1&&!inits&&!starts&&!callbacks&&w5500_tests==1&&strstr(out.message,"W5500"));
-    reset();present=false;kui_network_connect_run(&c,&out,NULL,cancel,NULL);assert(out.errors==1&&w5500_tests==1); /* static: BBA/LAN only */
+    reset();present=false;kui_network_connect_run(NULL,&out,NULL,cancel,NULL);assert(out.errors==1&&!inits&&!starts&&!callbacks&&w5500_tests==1&&wifi_tests==1&&strstr(out.message,"W5500 or Wi-Fi"));
+    reset();present=false;kui_network_connect_run(&c,&out,NULL,cancel,NULL);assert(out.errors==1&&w5500_tests==1&&wifi_tests==1); /* static: BBA/LAN only */
     for(int f=1;f<=3;f++){reset();fault=f;kui_network_connect_run(NULL,&out,NULL,cancel,NULL);assert(out.errors==1&&!out.passed&&unregs==1&&input==old_input&&LIST_EMPTY(&list));}
     reset();LIST_INSERT_HEAD(&list,&adapter,if_list);adapter.flags|=NETIF_INITIALIZED;kui_network_connect_run(&c,&out,NULL,cancel,NULL);assert(out.passed&&!inits&&!ends&&!unregs&&stops==1&&adapter.flags&NETIF_INITIALIZED);
     reset();other.flags=NETIF_RUNNING;LIST_INSERT_HEAD(&list,&other,if_list);kui_network_connect_run(NULL,&out,NULL,cancel,NULL);assert(out.errors==1&&!inits&&!starts&&!callbacks&&!unregs&&LIST_FIRST(&list)==&other);

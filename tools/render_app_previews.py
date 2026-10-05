@@ -19,7 +19,8 @@ def main():
                  "files-delete","files-refused","files-info","files-info-file","files-view","files-copying","files-keyboard",
                  "home-network","network","ftp-starting","ftp-ready","ftp-busy","ftp-stopped","ftp-failed",
                  "storage-tests","storage-test-confirm","storage-test-busy","storage-test-result",
-                 "storage-test-details","storage-test-mismatch","storage-test-history"):
+                 "storage-test-details","storage-test-mismatch","storage-test-history","ftp-wifi",
+                 "wifi","wifi-online","wifi-joining","wifi-password","wifi-name","wifi-forget","wifi-absent"):
         path=args.output/(mode+".ppm")
         subprocess.run(["build/render-shell",mode,str(path)],check=True)
         data=path.read_bytes()
