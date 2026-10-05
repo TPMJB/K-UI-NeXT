@@ -10,8 +10,10 @@
 #include "freertos/task.h"
 #include "nvs_flash.h"
 
-/* Receive and transmit buffer per open socket slot. lwIP buffers more. */
-#define SLOT_BUFFER 4096u
+/* Receive and transmit buffer per open socket slot. Keep more than one
+ * link frame queued so its pending-data hint does not collapse after a
+ * full frame. lwIP buffers more; each slot allocates its rings on use. */
+#define SLOT_BUFFER 8192u
 
 /* A firmware update from the Dreamcast starts on trial (ESP-IDF's app
  * rollback): it is kept only once everything has started and the Dreamcast

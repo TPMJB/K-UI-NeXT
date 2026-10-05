@@ -20,9 +20,19 @@ $(BUILD)/test_bridge: test_bridge.c ../main/bridge.c ../main/bridge.h ../main/br
 		$(KWLINK)/kwlink.c $(wildcard $(KWLINK)/include/*.h) | $(BUILD)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_bridge.c ../main/bridge.c $(KWLINK)/kwhost.c $(KWLINK)/kwlink.c
 
-test: $(BUILD)/test_kwlink $(BUILD)/test_bridge
+$(BUILD)/test_bridge_throughput: test_bridge_throughput.c ../main/bridge.c ../main/bridge.h ../main/bridge_platform.h $(KWLINK)/kwhost.c \
+		$(KWLINK)/kwlink.c $(wildcard $(KWLINK)/include/*.h) | $(BUILD)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_bridge_throughput.c ../main/bridge.c $(KWLINK)/kwhost.c $(KWLINK)/kwlink.c
+
+$(BUILD)/test_wifi_band_control: test_wifi_band_control.c ../main/wifi_band_control.c ../main/wifi_band_control.h \
+		$(wildcard $(KWLINK)/include/*.h) | $(BUILD)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_wifi_band_control.c ../main/wifi_band_control.c
+
+test: $(BUILD)/test_kwlink $(BUILD)/test_bridge $(BUILD)/test_bridge_throughput $(BUILD)/test_wifi_band_control
 	./$(BUILD)/test_kwlink
 	./$(BUILD)/test_bridge
+	./$(BUILD)/test_bridge_throughput
+	./$(BUILD)/test_wifi_band_control
 
 clean:
 	rm -rf $(BUILD)

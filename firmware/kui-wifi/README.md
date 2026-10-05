@@ -5,11 +5,20 @@ Dreamcast's SCI port. It gives K-UI a network connection the way the W5500
 does, over Wi-Fi instead of a cable. It also builds for the XIAO ESP32-C6
 (2.4 GHz only).
 
-**Status: first version, not yet tried on hardware.** The board side is
-complete and host-tested, and so is K-UI's side: its driver, the FTP server
-over the board and a Wi-Fi page to choose a network (see
-[Wi-Fi](../../docs/wifi.md)). The board can be set up and tested on its own
-from a computer first, which is worth doing before any soldering.
+**Status: an ESP32-C5 has joined 5 GHz Wi-Fi and transferred files over
+SCI on a Dreamcast.** The first console upload measured about 65 KiB/s with
+READY omitted. Firmware 0.1.2 is a performance test candidate: 8 KiB socket
+rings keep large link frames flowing, and modem sleep is disabled for the
+console's continuously powered network adapter. Its speed still needs a
+console measurement. K-UI includes the driver, FTP server and a Wi-Fi page
+to choose a network (see [Wi-Fi](../../docs/wifi.md)). The board can be set
+up and tested on its own from a computer before installation.
+
+Changing bands now disconnects and rejoins the configured network, clears
+the previous connection's displayed address/channel while reconnecting,
+and saves the preference only if the Wi-Fi driver accepts it. This keeps
+the same network name and password: if your router gives 5 GHz a different
+name, select that name with `join "SSID" "password"` after `band 5`.
 
 ## What it does
 
@@ -101,6 +110,17 @@ driving real TCP and UDP sockets on localhost, with listening, connecting,
 closes both ways, bands, echoes, a board reset and a firmware update. K-UI's
 own tests also run this bridge core, behind K-UI's real driver and FTP
 server (`tests/wifi_model.c` at the top of the repository).
+
+The throughput regression moves 256 KiB through real localhost TCP sockets
+and the production link protocol. It compares transfer counts with 4 KiB
+and 8 KiB bridge rings, verifies every byte and the stream's CRC32, then
+repeats with damaged frames and retransmission. This checks payload per
+transfer, not radio, storage or physical SPI speed. The rings are allocated
+when a socket slot is used; 8 KiB in each direction costs 16 KiB per used
+slot, at most 128 KiB for all eight slots (64 KiB more than before).
+The band-control transaction also has driver-failure tests: unsuccessful
+disconnect/apply operations cannot publish or save the requested mode,
+and retries resume after the operation; C6 rejects 5 GHz before disconnecting.
 
 ## Licence
 

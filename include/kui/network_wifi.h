@@ -4,6 +4,7 @@
 #include "kui/apps.h"
 #include "kui/net.h"
 #include "kwhost.h"
+#include "kui/wifi_pace.h"
 
 /* K-UI's Wi-Fi board on the SCI port: a Seeed XIAO ESP32-C5 (or C6)
  * running firmware/kui-wifi, found only when asked for. The board runs
@@ -12,16 +13,23 @@
  * side in firmware/kui-wifi/components/kwlink.
  *
  * The console's link to the board: one transfer at a time, paced by the
- * board's READY line. */
+ * board's READY line, or a checked adaptive gap when READY is absent. */
 struct kui_wifi_bus {
     void *ctx;
-    /* Waits up to KUI_WIFI_READY_MS for READY to change, then clocks `bytes`
-     * out of `out` while filling `in`, with the board's chip select held.
+    /* With a working READY line, waits up to KUI_WIFI_READY_MS for it to
+     * change; an unwired platform may use a trained timed gap. Then clocks
+     * `bytes` out of `out` while filling `in`, with chip select held.
      * *ready: READY changed (false: the wait ran out and the transfer went
      * anyway, as the protocol allows). False when the SCI port failed. */
     bool (*transfer)(void *ctx, const uint8_t *out, uint8_t *in, size_t bytes, bool *ready);
     uint64_t (*now_ms)(void *ctx);
     void (*pause)(void *ctx, unsigned ms);
+    /* Optional platform pacing: VALID/PROGRESS come from the link's checked
+     * result; TRAIN follows HELLO and all four large echo checks. */
+    void (*feedback)(void *ctx, unsigned flags);
+    /* Current timed fallback gap in microseconds, or 0 for a working READY
+     * handshake. Optional; used by inspection and diagnostics. */
+    unsigned (*gap_us)(void *ctx);
 };
 /* levels: every chip select the board may be on, each at `speeds` clock
  * rates from the fastest down (level = select * speeds + rate). */

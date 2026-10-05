@@ -10,6 +10,7 @@
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "firmware.h"
+#include "wifi_band_control.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
@@ -30,6 +31,9 @@
 static struct kwb *bridge;
 static esp_netif_t *netif;
 static SemaphoreHandle_t lock;
+/* USB commands, bridge commands and the retry timer can run on different
+ * tasks. Keep disconnect/configure/connect sequences together. */
+static SemaphoreHandle_t control_lock;
 static EventGroupHandle_t events;
 static esp_timer_handle_t retry;
 static struct kwb_wifi status;
@@ -37,6 +41,7 @@ static wifi_ap_record_t *records;
 static uint16_t record_count;
 /* A network is set and we want to be on it. */
 static volatile bool wanted;
+static bool configuring;
 static unsigned attempts, auth_failures;
 static bool sntp_started;
 static uint8_t band_mode = KWM_BAND_BOTH;
@@ -46,12 +51,6 @@ static void locked(void) { xSemaphoreTake(lock, portMAX_DELAY); }
 static void unlocked(void) { xSemaphoreGive(lock); }
 static void changed(void) {
     if(bridge) kwb_notify(bridge, KWB_NOTE_WIFI);
-}
-static void set_state(uint8_t state) {
-    locked();
-    status.state = state;
-    unlocked();
-    changed();
 }
 static uint8_t setting(const char *key, uint8_t fallback) {
     nvs_handle_t h;
@@ -70,13 +69,25 @@ static void save_setting(const char *key, uint8_t value) {
     nvs_close(h);
 }
 
-static void apply_band(void) {
+static bool apply_band(uint8_t band) {
 #if SOC_WIFI_SUPPORT_5G
-    wifi_band_mode_t mode = band_mode == KWM_BAND_24 ? WIFI_BAND_MODE_2G_ONLY
-                            : band_mode == KWM_BAND_5 ? WIFI_BAND_MODE_5G_ONLY
+    wifi_band_mode_t mode = band == KWM_BAND_24 ? WIFI_BAND_MODE_2G_ONLY
+                            : band == KWM_BAND_5 ? WIFI_BAND_MODE_5G_ONLY
                                                        : WIFI_BAND_MODE_AUTO;
     esp_err_t err = esp_wifi_set_band_mode(mode);
     if(err != ESP_OK) ESP_LOGW(TAG, "band mode: %s", esp_err_to_name(err));
+    return err == ESP_OK;
+#else
+    return band != KWM_BAND_5;
+#endif
+}
+static uint8_t actual_band(void) {
+#if SOC_WIFI_SUPPORT_5G
+    wifi_band_mode_t mode;
+    ESP_ERROR_CHECK(esp_wifi_get_band_mode(&mode));
+    return mode == WIFI_BAND_MODE_2G_ONLY ? KWM_BAND_24 : mode == WIFI_BAND_MODE_5G_ONLY ? KWM_BAND_5 : KWM_BAND_BOTH;
+#else
+    return KWM_BAND_24;
 #endif
 }
 static void apply_antenna(void) {
@@ -95,15 +106,86 @@ static void connect_now(void) {
     if(err != ESP_OK && err != ESP_ERR_WIFI_CONN) ESP_LOGW(TAG, "connect: %s", esp_err_to_name(err));
 }
 static void retry_later(void) {
+    xSemaphoreTake(control_lock, portMAX_DELAY);
+    if(!wanted) {
+        xSemaphoreGive(control_lock);
+        return;
+    }
     uint64_t ms = 1000ull << (attempts < 5 ? attempts : 5);
     if(ms > RETRY_MAX_MS) ms = RETRY_MAX_MS;
     ++attempts;
     esp_timer_stop(retry);
     esp_timer_start_once(retry, ms * 1000u);
+    xSemaphoreGive(control_lock);
 }
 static void on_retry(void *arg) {
     (void)arg;
+    xSemaphoreTake(control_lock, portMAX_DELAY);
     if(wanted) connect_now();
+    xSemaphoreGive(control_lock);
+}
+static void clear_connection(void) {
+    memset(status.ip, 0, sizeof status.ip);
+    memset(status.mask, 0, sizeof status.mask);
+    memset(status.gateway, 0, sizeof status.gateway);
+    memset(status.dns, 0, sizeof status.dns);
+    memset(status.bssid, 0, sizeof status.bssid);
+    status.channel = status.band = 0;
+    status.rssi = 0;
+    status.reason = 0;
+}
+static void pause_wifi(void) {
+    locked();
+    configuring = true;
+    bool was_wanted = wanted;
+    wanted = false;
+    clear_connection();
+    status.state = was_wanted ? KWM_WIFI_CONNECTING : KWM_WIFI_IDLE;
+    unlocked();
+    esp_timer_stop(retry);
+    esp_wifi_scan_stop();
+    changed();
+}
+static bool disconnect_wifi(void) {
+    esp_err_t err = esp_wifi_disconnect();
+    if(err != ESP_OK && err != ESP_ERR_WIFI_NOT_CONNECT) ESP_LOGW(TAG, "disconnect: %s", esp_err_to_name(err));
+    return err == ESP_OK || err == ESP_ERR_WIFI_NOT_CONNECT;
+}
+static void resume_wifi(bool reconnect) {
+    locked();
+    wanted = reconnect;
+    configuring = false;
+    status.state = reconnect ? KWM_WIFI_CONNECTING : KWM_WIFI_IDLE;
+    unlocked();
+    if(reconnect) {
+        attempts = auth_failures = 0;
+        connect_now();
+    }
+    changed();
+}
+struct band_change { bool was_wanted, reconnect; };
+static void band_pause(void *ctx) { (void)ctx; pause_wifi(); }
+static bool band_disconnect(void *ctx) { (void)ctx; return disconnect_wifi(); }
+static bool band_apply(void *ctx, uint8_t band) { (void)ctx; return apply_band(band); }
+static void band_commit(void *ctx, uint8_t band) {
+    (void)ctx;
+    locked();
+    band_mode = status.band_mode = band;
+    unlocked();
+    save_setting("band", band);
+}
+static void band_resume(void *ctx, bool changed_band) {
+    const struct band_change *change = ctx;
+    resume_wifi(change->was_wanted && (change->reconnect || !changed_band));
+}
+static bool set_band_locked(uint8_t band, bool reconnect) {
+    struct band_change change = {wanted, reconnect};
+    const struct kwifi_band_ops ops = {&change, band_pause, band_disconnect, band_apply, band_commit, band_resume};
+#if SOC_WIFI_SUPPORT_5G
+    return kwifi_band_change(band_mode, band, true, &ops);
+#else
+    return kwifi_band_change(band_mode, band, false, &ops);
+#endif
 }
 static bool auth_reason(uint8_t reason) {
     return reason == WIFI_REASON_AUTH_EXPIRE || reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
@@ -118,6 +200,7 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
     if(base == WIFI_EVENT && id == WIFI_EVENT_STA_CONNECTED) {
         const wifi_event_sta_connected_t *e = data;
         locked();
+        if(configuring || !wanted) { unlocked(); return; }
         size_t len = e->ssid_len < KWM_SSID_MAX ? e->ssid_len : KWM_SSID_MAX;
         memcpy(status.ssid, e->ssid, len);
         status.ssid[len] = 0;
@@ -133,20 +216,19 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
     } else if(base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         const wifi_event_sta_disconnected_t *e = data;
         locked();
+        /* A queued intentional leave can arrive after the new join has
+         * started. Its status was already cleared before disconnecting. */
+        if(configuring || !wanted || e->reason == WIFI_REASON_ASSOC_LEAVE) { unlocked(); return; }
         status.reason = e->reason;
         memset(status.ip, 0, sizeof status.ip);
         status.channel = status.band = 0;
-        unlocked();
-        /* Our own leave (or a new join replacing the old network). */
-        if(e->reason == WIFI_REASON_ASSOC_LEAVE || !wanted) {
-            if(!wanted) set_state(KWM_WIFI_IDLE);
-            return;
-        }
         uint8_t state = KWM_WIFI_LOST;
         if(auth_reason(e->reason)) state = ++auth_failures >= 3 ? KWM_WIFI_BAD_PASSWORD : KWM_WIFI_CONNECTING;
         else if(missing_reason(e->reason)) state = KWM_WIFI_NOT_FOUND;
+        status.state = state;
+        unlocked();
         ESP_LOGI(TAG, "disconnected (reason %u)", e->reason);
-        set_state(state);
+        changed();
         retry_later();
     } else if(base == WIFI_EVENT && id == WIFI_EVENT_SCAN_DONE) {
         uint16_t n = KWB_SCAN_MAX;
@@ -162,6 +244,9 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
         memset(&dns, 0, sizeof dns);
         esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns);
         locked();
+        /* Reject an old lease notification while a band change/new join
+         * has not yet associated with its access point. */
+        if(configuring || !wanted || !status.channel) { unlocked(); return; }
         memcpy(status.ip, &e->ip_info.ip.addr, 4);
         memcpy(status.mask, &e->ip_info.netmask.addr, 4);
         memcpy(status.gateway, &e->ip_info.gw.addr, 4);
@@ -177,6 +262,7 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
         }
     } else if(base == IP_EVENT && id == IP_EVENT_STA_LOST_IP) {
         locked();
+        if(configuring) { unlocked(); return; }
         memset(status.ip, 0, sizeof status.ip);
         if(status.state == KWM_WIFI_ONLINE) status.state = KWM_WIFI_ASSOCIATED;
         unlocked();
@@ -187,9 +273,14 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
 void wifi_start(struct kwb *b) {
     bridge = b;
     lock = xSemaphoreCreateMutex();
+    control_lock = xSemaphoreCreateMutex();
     events = xEventGroupCreate();
     records = calloc(KWB_SCAN_MAX, sizeof *records);
-    band_mode = setting("band", KWM_BAND_BOTH);
+    uint8_t saved_band = setting("band", KWM_BAND_BOTH);
+    if(saved_band != KWM_BAND_24 && saved_band != KWM_BAND_5 && saved_band != KWM_BAND_BOTH) saved_band = KWM_BAND_BOTH;
+#if !SOC_WIFI_SUPPORT_5G
+    saved_band = KWM_BAND_24;
+#endif
     antenna_external = setting("antenna", 1) != 0;
     apply_antenna();
     netif = esp_netif_create_default_wifi_sta();
@@ -200,6 +291,9 @@ void wifi_start(struct kwb *b) {
     esp_netif_set_hostname(netif, name);
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init));
+    /* The Dreamcast supplies continuous power: keep the radio awake so
+     * incoming data does not wait for the router's DTIM wake interval. */
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_event, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_LOST_IP, on_event, NULL, NULL));
@@ -214,12 +308,17 @@ void wifi_start(struct kwb *b) {
     memcpy(status.ssid, saved.sta.ssid, KWM_SSID_MAX);
     status.ssid[KWM_SSID_MAX] = 0;
     status.saved = saved.sta.ssid[0] != 0;
-    status.band_mode = band_mode;
     status.state = status.saved ? KWM_WIFI_CONNECTING : KWM_WIFI_IDLE;
     unlocked();
     wanted = status.saved;
     ESP_ERROR_CHECK(esp_wifi_start());
-    apply_band();
+    /* The SDK requires a started driver. Report its actual mode if the
+     * saved preference could not be applied; never claim a failed change. */
+    band_mode = actual_band();
+    if(apply_band(saved_band)) band_mode = saved_band;
+    locked();
+    status.band_mode = band_mode;
+    unlocked();
     if(wanted) connect_now();
 }
 
@@ -283,16 +382,28 @@ uint8_t wifi_join(const char *ssid, const char *password, bool save, uint8_t ban
     config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
     config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
     config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
-    wanted = false;
-    esp_timer_stop(retry);
-    esp_wifi_disconnect();
-    if(band != KWM_BAND_KEEP) wifi_set_band(band);
+    xSemaphoreTake(control_lock, portMAX_DELAY);
+    bool was_wanted = wanted;
+    if(band != KWM_BAND_KEEP && !set_band_locked(band, false)) {
+        memset(&config, 0, sizeof config);
+        xSemaphoreGive(control_lock);
+        return KWM_E_OTHER;
+    }
+    pause_wifi();
+    if(!disconnect_wifi()) {
+        memset(&config, 0, sizeof config);
+        resume_wifi(was_wanted);
+        xSemaphoreGive(control_lock);
+        return KWM_E_OTHER;
+    }
     esp_err_t err = esp_wifi_set_storage(save ? WIFI_STORAGE_FLASH : WIFI_STORAGE_RAM);
     if(err == ESP_OK) err = esp_wifi_set_config(WIFI_IF_STA, &config);
     esp_wifi_set_storage(WIFI_STORAGE_FLASH);
     memset(&config, 0, sizeof config);
     if(err != ESP_OK) {
         ESP_LOGW(TAG, "join: %s", esp_err_to_name(err));
+        resume_wifi(was_wanted);
+        xSemaphoreGive(control_lock);
         return KWM_E_OTHER;
     }
     locked();
@@ -300,18 +411,15 @@ uint8_t wifi_join(const char *ssid, const char *password, bool save, uint8_t ban
     status.ssid[ssid_len] = 0;
     if(save) status.saved = 1;
     status.reason = 0;
-    status.state = KWM_WIFI_CONNECTING;
     unlocked();
-    changed();
-    attempts = auth_failures = 0;
-    wanted = true;
-    connect_now();
+    resume_wifi(true);
+    xSemaphoreGive(control_lock);
     return 0;
 }
 void wifi_leave(bool forget) {
-    wanted = false;
-    esp_timer_stop(retry);
-    esp_wifi_disconnect();
+    xSemaphoreTake(control_lock, portMAX_DELAY);
+    pause_wifi();
+    disconnect_wifi();
     if(forget) {
         wifi_config_t empty;
         memset(&empty, 0, sizeof empty);
@@ -322,25 +430,21 @@ void wifi_leave(bool forget) {
         status.ssid[0] = 0;
         unlocked();
     }
-    set_state(KWM_WIFI_IDLE);
+    resume_wifi(false);
+    xSemaphoreGive(control_lock);
 }
 bool wifi_set_band(uint8_t band) {
-    if(band != KWM_BAND_24 && band != KWM_BAND_5 && band != KWM_BAND_BOTH) return false;
-#if SOC_WIFI_SUPPORT_5G
-    band_mode = band;
-    save_setting("band", band);
-    apply_band();
-#else
-    if(band == KWM_BAND_5) return false;
-    band_mode = KWM_BAND_24;
-#endif
-    locked();
-    status.band_mode = band_mode;
-    unlocked();
-    changed();
-    return true;
+    xSemaphoreTake(control_lock, portMAX_DELAY);
+    bool ok = set_band_locked(band, true);
+    xSemaphoreGive(control_lock);
+    return ok;
 }
-uint8_t wifi_band(void) { return band_mode; }
+uint8_t wifi_band(void) {
+    locked();
+    uint8_t band = band_mode;
+    unlocked();
+    return band;
+}
 bool wifi_set_antenna(bool external) {
 #ifdef PIN_RF_SWITCH_POWER
     antenna_external = external;

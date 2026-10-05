@@ -61,9 +61,29 @@ static uint16_t session_number(const struct kui_wifi_session *s) {
     return n ? n : 1u;
 }
 
+/* Every transfer, including discovery and echo checks, supplies checked
+ * link feedback to platforms that adapt a missing READY wire's pacing. */
+static void host_step(struct kui_wifi_session *s) {
+    struct kwh *h = &s->host;
+    uint32_t heard = h->heard, lost = h->counts.lost, received = h->link.stats.received;
+    uint32_t duplicates = h->link.stats.duplicates, gaps = h->link.stats.gaps;
+    unsigned head = h->link.out_head, count = h->link.out_count;
+    bool active = !kwh_idle(h);
+    (void)kwh_step(h);
+    if(!s->port->bus->feedback) return;
+    unsigned flags = 0;
+    if(h->heard != heard && h->link.live) flags |= KUI_WIFI_PACE_VALID;
+    if(h->link.stats.received != received || h->link.out_head != head || h->link.out_count < count)
+        flags |= KUI_WIFI_PACE_PROGRESS;
+    if(active || !kwh_idle(h)) flags |= KUI_WIFI_PACE_ACTIVE;
+    if(h->link.stats.duplicates != duplicates || h->link.stats.gaps != gaps) flags |= KUI_WIFI_PACE_DUPLICATE;
+    if(h->counts.lost != lost) flags |= KUI_WIFI_PACE_RESET;
+    s->port->bus->feedback(s->port->bus->ctx, flags);
+}
+
 bool kui_wifi_session_step(struct kui_wifi_session *s) {
     if(!s || !s->open) return false;
-    (void)kwh_step(&s->host);
+    host_step(s);
     uint64_t t = now(s);
     if(s->host.heard != s->heard) {
         s->heard = s->host.heard;
@@ -103,19 +123,21 @@ static struct trial attempt(struct kui_wifi_session *s) {
     kwh_start(&s->host, session_number(s));
     s->heard = 0;
     s->heard_ms = now(s);
-    for(unsigned i = 0; i < HELLO_TRANSFERS && !s->host.ready; ++i) (void)kwh_step(&s->host);
+    for(unsigned i = 0; i < HELLO_TRANSFERS && !s->host.ready; ++i) host_step(s);
     t.hello = s->host.ready && s->host.hello.protocol == KWL_PROTOCOL;
     for(unsigned round = 0; t.hello && round < ECHO_ROUNDS; ++round) {
         uint8_t sample[ECHO_BYTES];
         for(unsigned i = 0; i < ECHO_BYTES; ++i) sample[i] = (uint8_t)(i * 7u + round * 61u + (i >> 8));
         uint32_t before = s->host.counts.echo;
         if(!kwh_echo(&s->host, sample, sizeof(sample))) break;
-        for(unsigned i = 0; i < ECHO_TRANSFERS && s->host.counts.echo == before; ++i) (void)kwh_step(&s->host);
+        for(unsigned i = 0; i < ECHO_TRANSFERS && s->host.counts.echo == before; ++i) host_step(s);
         if(s->host.counts.echo == before || s->host.echo_len != sizeof(sample) || memcmp(s->host.echo, sample, sizeof(sample)))
             break;
         t.echoed = round + 1u == ECHO_ROUNDS;
     }
     t.bad = s->host.link.stats.bad;
+    if(t.hello && t.echoed && !t.bad && s->port->bus->feedback)
+        s->port->bus->feedback(s->port->bus->ctx, KUI_WIFI_PACE_TRAIN);
     t.sign = s->host.ready || s->host.heard || t.bad || s->host.link.stats.truncated || s->ready_changes != changes;
     s->heard = s->host.heard;
     s->heard_ms = now(s);
@@ -160,6 +182,11 @@ bool kui_wifi_session_find(struct kui_wifi_session *s, const struct kui_wifi_por
         if(t.hello && t.echoed && !t.bad) {
             s->level = level;
             s->found = true;
+            if(log && port->bus->gap_us) {
+                unsigned gap = port->bus->gap_us(port->bus->ctx);
+                if(gap) log("Wi-Fi SCI pacing: READY absent; transfer gap %u ms (adaptive)", gap / 1000u);
+                else log("Wi-Fi SCI pacing: READY handshake working; 20 ms timeout");
+            }
             return true;
         }
         port->close();
@@ -338,7 +365,7 @@ bool kui_wifi_session_band(struct kui_wifi_session *s, uint8_t band, kui_cancel_
     if(!s || !s->found) return false;
     if(!kwh_wifi_band(&s->host, band)) { problem(s, "The link to the Wi-Fi board is full"); return false; }
     if(settle(s, banded, band, cancel)) return true;
-    if(!s->problem[0]) problem(s, band == KWM_BAND_5 ? "This board has no 5 GHz radio" : "The Wi-Fi board kept its bands");
+    if(!s->problem[0]) problem(s, "The Wi-Fi board did not apply the requested bands");
     return false;
 }
 
@@ -489,6 +516,11 @@ bool kui_wifi_network_inspect(struct kui_app_status *out, kui_log_fn log, kui_ca
     snprintf(out->lines[6], KUI_APP_LINE_CAP, "%s", out->passed ? "The FTP server (Y) can use this connection" :
         "Choose a network on the Wi-Fi page (START)");
     snprintf(out->lines[7], KUI_APP_LINE_CAP, "No settings were changed");
+    if(s->port->bus->gap_us) {
+        unsigned gap = s->port->bus->gap_us(s->port->bus->ctx);
+        if(gap) snprintf(out->lines[7], KUI_APP_LINE_CAP, "READY absent; transfer gap %u ms (adaptive)", gap / 1000u);
+        else snprintf(out->lines[7], KUI_APP_LINE_CAP, "READY handshake working; 20 ms timeout");
+    }
     finish(s);
     if(log) {
         log("Network inspection: %s", out->message);

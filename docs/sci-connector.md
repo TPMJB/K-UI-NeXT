@@ -9,8 +9,9 @@ for standalone SCIF/SCI/IDE storage testing.
 
 **The multi-device connector remains a plan.** Network drivers support a W5500
 with chip select on GPIO7 (the usual point) or GPIO6, and the Wi-Fi board on
-GPIO6 or GPIO7 ([FTP server](ftp.md), [Wi-Fi](wifi.md)). The Wi-Fi hardware path
-is untested. Simultaneous SCI storage and networking is not implemented, and the
+GPIO6 or GPIO7 ([FTP server](ftp.md), [Wi-Fi](wifi.md)). The first standalone
+C5 upload succeeded with GPIO7, SCI DMA and no READY wire. Faster pacing remains
+a performance test. Simultaneous SCI storage and networking is not implemented, and the
 extra GPIO solder points still need confirmation against the owner's VA1 board.
 
 ## One bus, several chip selects
@@ -32,9 +33,18 @@ From the published W5500 SCI wiring and the SCI-SPI mod notes:
 | MISO (SCI RXD) | R115 |
 | MOSI (SCI TXD) | R122 |
 | SCLK (SCI SCK) | R140 |
-| GPIO7 (PA7) | RA101, the usual chip-select point |
-| GPIO0, GPIO5, GPIO6 | other RA101 pins; which pin is which is still to be confirmed |
+| GPIO7 (PDTRA bit 7) | RA101 pin 4, the usual chip-select point (A23) |
+| GPIO6 (PDTRA bit 6) | RA101 pin 3 (A22) |
+| GPIO5 (PDTRA bit 5) | RA101 pin 2 (A21), Wi-Fi READY |
+| GPIO0 | solder point not confirmed; reset is not driven by current K-UI |
 | 5 V | the drive connector's 5 V pins (A3/B3), or the Robot Retro power supply's 5 V (its fan header, on version 1.1 or later, needs no soldering) |
+
+RA101 pins 2, 3 and 4 are on the same signal-side row; pins 5 through 8
+on the opposite row connect to 3.3 V. The electrical mapping above comes
+from the original SH7091 address-port manual and the VA1 schematic. Do not
+infer left/right orientation from the schematic: identify the existing
+GPIO7 chip-select pad and check pin numbering on the actual board.
+The generic SH7750 GPIO package pin table is not the Dreamcast pin map.
 
 Check every point with a multimeter before soldering. The owner's photos
 of both sides of the VA1 board (sent 2026-09-28) show R115, R140 (beside
@@ -105,7 +115,7 @@ GPIO7), so they are left unused.
 | D10 (GPIO10) | pin 6, MOSI |
 | D9 (GPIO9) | pin 7, MISO |
 | D0 (GPIO1) | pin 8, network chip select (Dreamcast GPIO6, or GPIO7 when used alone) |
-| D1 (GPIO0) | pin 9, ready (optional; exact Dreamcast GPIO5 solder point unconfirmed) |
+| D1 (GPIO0) | pin 9, ready (Dreamcast GPIO5 / VA1 RA101 pin 2; optional) |
 | D4 (GPIO23) | pin 10, reset request (optional; leave unconnected for the first test) |
 | 5V | pin 1 |
 | GND | pin 2 |
@@ -125,8 +135,10 @@ GPIO7), so they are left unused.
 - The XIAO's reset button is not on its pins. The reset-request line asks
   K-UI's firmware to restart itself; the ESP32-C5's own watchdog covers a
   hang. Current K-UI does not drive this request line, so D4 can remain
-  unconnected. With D1 omitted, the driver uses a 20 ms wait for each transfer;
-  that fallback is host-tested but its physical timing remains unvalidated.
+  unconnected. The original driver waits 20 ms per transfer with D1 omitted.
+  The [performance test](wifi-performance-test.md) uses a shorter adaptive
+  gap after validating the link and backs off on errors. Its faster timing
+  still needs console acceptance. D1 can remain unconnected for that test.
 - **Firmware:** [firmware/kui-wifi](../firmware/kui-wifi/README.md).
   [Flash and bench-test it on Arch](wifi-flash-arch.md) before installation.
 - **Sharing MISO:** whether the XIAO releases MISO when deselected still needs
@@ -143,8 +155,9 @@ GPIO7), so they are left unused.
    game loader. Sharing SCI with a network adapter remains future work; the
    present reservation guard keeps the storage card's port untouched.
 4. The XIAO firmware, K-UI driver, Wi-Fi setup page, and FTP socket backend are
-   implemented and host-tested. Firmware-update messages exist; the K-UI update
-   workflow and all board-level acceptance tests remain to be done.
+   implemented and host-tested; the first physical C5 upload works. Firmware-update
+   messages exist; the K-UI update workflow, sustained integrity checks and
+   acceptance of the faster timing remain to be done.
 
 Everything up to the console itself can be host-tested first, as the W5500
 and FTP code was.
@@ -158,3 +171,5 @@ and FTP code was.
 - [XIAO ESP32-C5 board description](https://github.com/zephyrproject-rtos/zephyr/blob/main/boards/seeed/xiao_esp32c5/doc/index.rst)
 - [ESP32-C5 strapping pins](https://www.espboards.dev/blog/esp32-strapping-pins/)
 - [XIAO ESP32-C5 getting started, Seeed](https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/) (pin map, external antenna, and 5V/VBUS input/output)
+- [Hitachi SH7091 hardware manual](https://segaxtreme.net/resources/sh7091-hardware-manual.230/) (Appendix G, printed page 790: PDTRA bit 5 uses A21 and bit 6 uses A22 in Sega address-port mode)
+- [RDC VA1 schematic](https://consolemods.org/wiki/images/2/27/Dreamcast_VA1_FULL.pdf) (A21/B13 to RA101 pin 2; A22/A13 to pin 3; A23/B12 to pin 4), [original author's post](https://acidmods.com/forum/index.php?topic=44892.0)

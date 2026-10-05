@@ -755,7 +755,7 @@ static bool stream_card(struct server *sv) {
     return true;
 }
 static bool stream_begin(struct server *sv, struct session *s) {
-    s->no_stream = sv->wifi ? "no DMA (Wi-Fi)" : !sv->w5500.chip.async ? "DMA off" : sv->streaming ? "DMA in use" :
+    s->no_stream = sv->wifi ? "no overlap (Wi-Fi)" : !sv->w5500.chip.async ? "DMA off" : sv->streaming ? "DMA in use" :
         "no DMA";
     if(sv->wifi || sv->streaming || !sv->w5500.chip.async || (s->kind != T_RETR && s->kind != T_STOR)) return false;
     if(!sv->ring && !(sv->ring = malloc(RING_BYTES))) return false;

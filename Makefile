@@ -22,7 +22,7 @@ LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
-test: build/test-w5500 build/test-network-w5500 build/test-network-wifi build/test-ftp build/test-ftp-cleanup
+test: build/test-w5500 build/test-network-w5500 build/test-network-wifi build/test-wifi-pacing build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan
 test: build/test-retail-cursor build/test-sci-stream build/test-sci-stream-ce build/test-retail-gd-async build/test-retail-gd-ce build/test-retail-async build/test-retail-async-ce
@@ -84,6 +84,7 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-w5500
 	./build/test-network-w5500
 	./build/test-network-wifi
+	./build/test-wifi-pacing
 	./build/test-ftp
 	./build/test-ftp-cleanup
 	./build/test-menu-sound
@@ -619,11 +620,14 @@ build/files-image: tests/files_image.c $(FILES) $(CORE) $(FATFS) include/kui/fil
 # bridge core behind a simulated SPI bus, with real sockets on this machine.
 WIFI_LINK = $(KWLINK)/kwlink.c $(KWLINK)/kwhost.c
 WIFI_MODEL = tests/wifi_model.c firmware/kui-wifi/main/bridge.c
-WIFI_HEADERS = include/kui/network_wifi.h include/kui/net.h tests/wifi_model.h $(wildcard $(KWLINK)/include/*.h) \
+WIFI_HEADERS = include/kui/network_wifi.h include/kui/wifi_pace.h include/kui/net.h tests/wifi_model.h $(wildcard $(KWLINK)/include/*.h) \
                firmware/kui-wifi/main/bridge.h firmware/kui-wifi/main/bridge_platform.h
 build/test-network-wifi: tests/test_network_wifi.c src/apps/network_wifi.c src/core/wifi_text.c src/core/clock.c $(WIFI_LINK) $(WIFI_MODEL) $(WIFI_HEADERS)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Ifirmware/kui-wifi/main -Itests src/apps/network_wifi.c src/core/wifi_text.c src/core/clock.c $(WIFI_LINK) $(WIFI_MODEL) tests/test_network_wifi.c -o $@
+build/test-wifi-pacing: tests/test_wifi_pacing.c src/dreamcast/wifi_sci.c src/dreamcast/sci_port.h src/apps/network_wifi.c src/core/wifi_text.c src/core/clock.c $(WIFI_LINK) $(WIFI_MODEL) $(WIFI_HEADERS) $(wildcard tests/wifi_platform/*/*.h)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/wifi_platform -Ifirmware/kui-wifi/main -Itests src/apps/network_wifi.c src/core/wifi_text.c src/core/clock.c $(WIFI_LINK) $(WIFI_MODEL) tests/test_wifi_pacing.c -o $@
 # The FTP server: protocol pieces alone, then end to end on the W5500 model
 # and the Wi-Fi board model with real FatFs, driven by Python's ftplib
 # (tests/test_ftp_images.py).

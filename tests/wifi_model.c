@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 /* As the firmware (main/main.c): each open slot's buffers. */
-#define SLOT_BUFFER 4096u
+#define SLOT_BUFFER 8192u
 /* Joining takes this long in the model. */
 #define JOIN_MS 40u
 
@@ -222,7 +222,7 @@ static void pause_ms(void *ctx, unsigned ms) {
     service();
     if(ms) usleep(ms * 1000u);
 }
-static const struct kui_wifi_bus bus = {NULL, transfer, now_ms, pause_ms};
+static const struct kui_wifi_bus bus = {.transfer = transfer, .now_ms = now_ms, .pause = pause_ms};
 static bool open_level(unsigned level) {
     if(level >= WIFI_MODEL_SELECTS * WIFI_MODEL_RATES) return false;
     m.open = true;

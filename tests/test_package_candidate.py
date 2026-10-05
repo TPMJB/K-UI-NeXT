@@ -35,7 +35,7 @@ class CandidateInstallation(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(("fixture " + name).encode())
         for name in ("STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md",
-                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-FLASH-ARCH.md",
+                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md",
                      "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
             (self.dist / name).write_text(name + "\n")
         (self.dist / "LICENSES").mkdir()
@@ -82,7 +82,7 @@ class CandidateInstallation(unittest.TestCase):
         for name in ("runtime.kui", "apps/games/retail-boot.kui", "apps/games/ce-probe.kui"):
             self.assertEqual((bundle / "KUI" / name).read_bytes(), (self.sd / name).read_bytes())
         self.assertTrue((bundle / "WINDOWS-CE-PLACEMENT-TEST.md").is_file())
-        for name in ("WIFI.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md"):
+        for name in ("WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md"):
             self.assertEqual((bundle / name).read_bytes(), (self.dist / name).read_bytes())
         self.assertTrue((bundle / "boot-cd" / (release["artifact_prefix"] + ".cdi")).is_file())
         self.assertFalse((bundle / "KUI/preferences.ini").exists())

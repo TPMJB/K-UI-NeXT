@@ -3,8 +3,9 @@
  * (sci_port.c), full duplex through KOS's sci_spi_rw_data, and at 12.5 MHz
  * by DMA (kui_sci_dma_transfer) from KUI_SCI_DMA_MIN bytes. Its chip select
  * is GPIO6 (the network connector's) or GPIO7 (the usual W5500 point), both
- * tried from the fastest rate down, and each transfer waits for the board's
- * READY line (GPIO5) to change, as firmware/kui-wifi/PROTOCOL.md says. A DMA
+ * tried from the fastest rate down. A working READY line (GPIO5) keeps its
+ * handshake; without it, verified HELLO/echo checks permit a bounded 2 ms
+ * inter-transfer gap, backed off on checked errors or stalled delivery. A DMA
  * transfer that fails is reported as a failed transfer, which the link sends
  * again (it also checks each frame's CRC32); after DMA_GIVE_UP failures in a
  * row, DMA stays off. */
@@ -27,6 +28,8 @@ static unsigned dma_failures;
 #define SPIN_US 200u
 /* READY's level before the last transfer; -1 when not known. */
 static int seen = -1;
+static struct kui_wifi_pace pacing;
+static uint64_t ended_us;
 
 static bool transfer(void *ctx, const uint8_t *out, uint8_t *in, size_t bytes, bool *ready) {
     (void)ctx;
@@ -35,13 +38,17 @@ static bool transfer(void *ctx, const uint8_t *out, uint8_t *in, size_t bytes, b
     int level = kui_sci_ready();
     if(seen >= 0) {
         uint64_t start = timer_us_gettime64();
+        bool timed = pacing.trained && !pacing.wired;
+        uint64_t from = timed ? ended_us : start;
+        unsigned limit = timed ? kui_wifi_pace_gap_us(&pacing) : KUI_WIFI_READY_MS * 1000u;
         while(level == seen) {
-            uint64_t waited = timer_us_gettime64() - start;
-            if(waited > KUI_WIFI_READY_MS * 1000u) break;
-            if(waited > SPIN_US) thd_pass();
+            uint64_t t = timer_us_gettime64();
+            if(t - from >= limit) break;
+            if(t - start > SPIN_US) thd_pass();
             level = kui_sci_ready();
         }
         *ready = level != seen;
+        if(*ready) kui_wifi_pace_ready(&pacing);
     }
     /* After a wait that ran out, the current level is taken as armed. */
     seen = level;
@@ -53,15 +60,28 @@ static bool transfer(void *ctx, const uint8_t *out, uint8_t *in, size_t bytes, b
         else if(++dma_failures >= DMA_GIVE_UP) dma = false;
     } else ok = sci_spi_rw_data(out, in, bytes) == SCI_OK;
     kui_sci_select(false);
+    ended_us = timer_us_gettime64();
     return ok;
 }
 static uint64_t now_ms(void *ctx) { (void)ctx; return timer_ms_gettime64(); }
 /* KOS: thd_sleep(0) is thd_pass(). */
 static void pause_ms(void *ctx, unsigned ms) { (void)ctx; thd_sleep(ms); }
-static const struct kui_wifi_bus bus = {NULL, transfer, now_ms, pause_ms};
+static void feedback(void *ctx, unsigned flags) {
+    (void)ctx;
+    kui_wifi_pace_feedback(&pacing, flags);
+    if(flags & KUI_WIFI_PACE_RESET) seen = -1;
+}
+static unsigned gap_us(void *ctx) {
+    (void)ctx;
+    return pacing.wired ? 0u : kui_wifi_pace_gap_us(&pacing);
+}
+static const struct kui_wifi_bus bus = {.transfer = transfer, .now_ms = now_ms, .pause = pause_ms,
+                                       .feedback = feedback, .gap_us = gap_us};
 
 static bool open_level(unsigned level) {
     seen = -1;
+    kui_wifi_pace_reset(&pacing);
+    ended_us = 0;
     bool ok = level < LEVELS && kui_sci_open(level % KUI_SCI_RATES, selects[level / KUI_SCI_RATES]);
     dma = ok && !(level % KUI_SCI_RATES) && kui_sci_dma_ready();
     dma_failures = 0;
