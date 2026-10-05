@@ -2,8 +2,6 @@
 
 An independent Dreamcast environment built directly on upstream KallistiOS.
 
-![K-UI V1.7 Dáinsleif](resources/branding/release-v1.7-banner.jpg)
-
 **Version 1.7** brings Windows CE game booting on SCI microSD, background
 SCI reads, a graphical multi-transport bootstrap, hardware-tested W5500 FTP
 and a new crimson Dáinsleif splash. It also includes the isolated ATA PIO
