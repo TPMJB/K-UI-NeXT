@@ -21,6 +21,9 @@ static struct {
     const char *fault;
     FIL *track;
     unsigned writes, connects, disconnects, files, read_calls, physical_reads;
+    unsigned hash_phase,hash_reads[2],hash_max[2],cached_cancel_checks;
+    uint64_t hash_begin[2],hash_end[2];
+    bool hash_bounded;
     uint32_t first_sector;
     bool boot_read;
     char track_name[96];
@@ -61,6 +64,7 @@ static bool audio_unmapped(void) {
 }
 static bool fault(const char *name) { return test.active && !strcmp(test.fault, name); }
 static bool format_case(void) { return !strncmp(test.fault, "format-", 7); }
+static bool checksum_case(void) {return !strncmp(test.fault,"format-checksum-",16);}
 struct format_track {
     uint32_t lba, sectors, control, stride, mode, header;
     unsigned long long offset;
@@ -91,6 +95,9 @@ static struct format_expect format_expect(const char *directory) {
     return expected;
 }
 static void log_line(const char *format, ...) {
+    if(!strcmp(format,"Retail boot: %.100s; product=%s version=%s region=%s")) test.hash_phase=1;
+    if(strstr(format,"checking exact executable")) test.hash_phase=2;
+    if(strstr(format,"mapping %u tracks")) test.hash_phase=0;
     va_list args; va_start(args, format); vprintf(format, args); va_end(args); puts("");
 }
 static uint64_t blocks(void *ctx) { (void)ctx; return test.blocks; }
@@ -125,14 +132,22 @@ void kui_sd_disconnect(void) {
     assert(test.connected && !test.files);
     test.connected = false; ++test.disconnects; kui_media_set(NULL);
 }
-static bool cancel(void) { return test.cancelled || fault("cancel-before"); }
+static bool cancel(void) {
+    /* The refill completed, then a cached sector was copied before the next
+     * refill. Cancellation must still be observed without another FatFs read. */
+    if(test.active && checksum_case() && strstr(test.fault,"cancel-hit") &&
+       test.hash_phase==2 && test.hash_reads[1]==1u && ++test.cached_cancel_checks==3u) {
+        test.cancelled=true;test.injected=true;
+    }
+    return test.cancelled || fault("cancel-before");
+}
 FRESULT __real_f_open(FIL *, const TCHAR *, BYTE);
 FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
     if(test.active) assert(!(flags & (FA_WRITE | FA_CREATE_NEW | FA_CREATE_ALWAYS | FA_OPEN_ALWAYS | FA_OPEN_APPEND)));
     FRESULT result = __real_f_open(file, path, flags);
     if(test.active && result == FR_OK) {
         ++test.files;
-        if(strstr(path, "track")) {
+        if(strstr(path, "track") || (format_case() && !strncmp(path,"0:/Games/Reader Test/",21))) {
             test.track = file;
             snprintf(test.track_name, sizeof(test.track_name), "%s", path);
             if(fault("size-change")) { ++file->obj.objsize; test.injected = true; }
@@ -142,10 +157,25 @@ FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
 }
 FRESULT __real_f_read(FIL *, void *, UINT, UINT *);
 FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
+    FSIZE_t before=f_tell(file);
     FRESULT result = __real_f_read(file, buffer, bytes, got);
     if(test.active) {
         ++test.read_calls;
         if(file == test.track) {
+            if(test.hash_phase) {
+                unsigned phase=test.hash_phase-1u;
+                ++test.hash_reads[phase];
+                if(bytes>test.hash_max[phase]) test.hash_max[phase]=bytes;
+                if(test.hash_bounded) {
+                    assert(before>=test.hash_begin[phase] && before<=test.hash_end[phase] &&
+                        bytes<=test.hash_end[phase]-before);
+                }
+                if(checksum_case() && phase==1u && test.hash_reads[phase]==2u) {
+                    if(strstr(test.fault,"read-fail")) {test.injected=true;return FR_DISK_ERR;}
+                    if(strstr(test.fault,"short-read")) {assert(*got);--*got;test.injected=true;}
+                    if(strstr(test.fault,"cancel-refill")) {test.cancelled=test.injected=true;}
+                }
+            }
             if(fault("read-fail")) { test.injected = true; return FR_DISK_ERR; }
             /* Raw boot files are read only by the detached stage; cooked
              * preparation reads their exact logical bytes for expected CRC. */
@@ -154,7 +184,7 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
                end > 21u * track_stride(2))
                 test.boot_read = true;
             /* The last IP sector: the launcher's final read of track data. */
-            if(bytes == 2352 && f_tell(file) == 16u * 2352u && fault("cancel-ip")) {
+            if(test.hash_phase==1 && before<16u*2352u && f_tell(file)>=16u*2352u && fault("cancel-ip")) {
                 test.cancelled = true; test.injected = true;
             }
         }
@@ -461,6 +491,14 @@ static void check_format_mapping(const char *directory, const struct format_expe
     assert(ip_checked && boot_checked && test.physical_reads);
     assert(map->ip_crc32 == expected_ip_crc && map->boot_crc32 ==
         ((expected->flags & KUI_RETAIL_IMAGE_BOOT_CRC) ? expected_boot_crc : 0));
+    if(checksum_case()) {
+        char path[1024];assert(snprintf(path,sizeof(path),"%s/checksum.expect",directory)<(int)sizeof(path));
+        FILE *file=fopen(path,"r");assert(file);unsigned independent_ip,independent_boot;
+        assert(fscanf(file,"%x %x",&independent_ip,&independent_boot)==2 && !fclose(file));
+        assert(expected_ip_crc==independent_ip && expected_boot_crc==independent_boot);
+        assert(map->ip_crc32==independent_ip && map->boot_bytes==65536u+1001u);
+        if(expected->flags & KUI_RETAIL_IMAGE_BOOT_CRC) assert(map->boot_crc32==independent_boot);
+    }
     unsigned reads = test.physical_reads;
     assert(kui_retail_image_read(&reader, map->slots[expected->count - 1].track.end_lba,
         1, KUI_GAME_SECTOR_MODE1, actual, 2048) == KUI_GAME_RANGE);
@@ -588,6 +626,18 @@ static void check(const char *directory) {
     struct kui_runtime_image image = {0};
     if(format_case()) {
         struct format_expect expected = format_expect(directory);
+        if(checksum_case()) {
+            for(unsigned i=0;i<expected.count;i++) {
+                const struct format_track *track=&expected.track[i];
+                if(track->control!=4 || expected.session<track->lba || expected.session>=track->lba+track->sectors) continue;
+                test.hash_begin[0]=track->offset+(uint64_t)(expected.session-track->lba)*track->stride;
+                test.hash_end[0]=test.hash_begin[0]+16u*track->stride;
+                test.hash_begin[1]=track->offset+(uint64_t)(expected.boot_lba-track->lba)*track->stride;
+                test.hash_end[1]=test.hash_begin[1]+(uint64_t)((expected.boot_bytes+2047u)/2048u)*track->stride;
+                test.hash_bounded=true;break;
+            }
+            assert(test.hash_bounded);
+        }
         char path[KUI_GAMES_FILE_CAP];
         assert(snprintf(path, sizeof(path), "/Games/Reader Test/%s", expected.selected) < (int)sizeof(path));
         uint32_t request = strstr(test.fault, "-async") ? KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD;
@@ -601,6 +651,21 @@ static void check(const char *directory) {
         assert(result == (bool)expected.valid);
         if(result) check_format_mapping(directory, &expected, &image);
         else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
+        if(checksum_case()) {
+            assert(test.hash_max[0]<=32768u && test.hash_max[1]<=32768u);
+            if(result) {
+                unsigned stride=expected.track[expected.count-1u].stride;
+                assert(test.hash_reads[0]==(stride==2048u?1u:2u) && test.hash_max[0]==32768u);
+                if(expected.flags & KUI_RETAIL_IMAGE_BOOT_CRC) assert(test.hash_reads[1]==3u && test.hash_max[1]==32768u);
+                else assert(!test.hash_reads[1]);
+                printf("Checksum batches PASS: IP %u reads, exact 66537-byte boot %u reads; max FatFs read %u bytes; bounded physical spans\n",
+                    test.hash_reads[0],test.hash_reads[1],test.hash_max[0]>test.hash_max[1]?test.hash_max[0]:test.hash_max[1]);
+            } else if(strstr(test.fault,"cancel-hit")) {
+                assert(test.injected && test.cancelled && test.hash_reads[1]==1u && test.cached_cancel_checks>=3u);
+            } else if(strstr(test.fault,"read-fail") || strstr(test.fault,"short-read") || strstr(test.fault,"cancel-refill")) {
+                assert(test.injected && test.hash_reads[1]==2u);
+            } else assert(strstr(test.fault,"bad-mode") || strstr(test.fault,"bad-ip-header"));
+        }
         if(strstr(test.fault, "bad-encoding") || strstr(test.fault, "bad-ce-"))
             assert(!test.connects && !test.read_calls && !test.physical_reads);
         kui_runtime_free(&image);

@@ -3,9 +3,11 @@
 """Real FAT32/exFAT preparation for native retail boot; no retail game bytes."""
 from pathlib import Path
 import argparse
+import re
 import shutil
 import struct
 import tempfile
+import zlib
 from games_fixture import make_fixture, dual32
 from game_format_fixture import make_format_fixture
 from test_images import run
@@ -58,6 +60,78 @@ FORMAT_CASES = (
     "format-cdi-v35-bad-ce-scramble", "format-cdi-v35-bad-ce-plain",
     "format-cdi-v35-bad-footer", "format-cdi-v35-bad-payload",
 )
+CHECKSUM_CASES = (
+    "format-checksum-cooked", "format-checksum-gdi-raw", "format-checksum-iso",
+    "format-checksum-raw-bin", "format-checksum-cue-shared", "format-checksum-cue-2336",
+    "format-checksum-cue-2448", "format-checksum-cdi",
+    "format-checksum-cooked-read-fail", "format-checksum-cooked-short-read",
+    "format-checksum-cooked-cancel-refill", "format-checksum-cue-shared-read-fail",
+    "format-checksum-cue-shared-short-read", "format-checksum-cue-shared-cancel-refill",
+    "format-checksum-cue-shared-cancel-hit", "format-checksum-cue-shared-bad-mode",
+    "format-checksum-cue-shared-bad-ip-header",
+)
+FORMAT_CASES += CHECKSUM_CASES
+
+
+def make_checksum_fixture(folder, case):
+    """Independent exact-byte CRCs and a boot larger than two logical batches.
+
+    The existing generated source sectors/geometry define expected bytes. We
+    modify those sources directly, then copy their span into the backing file;
+    no parser or preparation code computes the expected CRCs.
+    """
+    if "gdi-raw" in case:
+        source_case, backing = "format-gdi-offset-raw", "selected-track.bin"
+    elif "cooked" in case:
+        source_case, backing = "format-gdi-offset-cooked", "selected-track.bin"
+    elif "iso" in case:
+        source_case, backing = "format-iso-cd11700", "selected.iso"
+    elif "raw-bin" in case:
+        source_case, backing = "format-raw-bin", "selected.bin"
+    elif "2336" in case:
+        source_case, backing = "format-cue-2336", "data.bin"
+    elif "2448" in case:
+        source_case, backing = "format-cue-2448", "data.bin"
+    elif "cdi" in case:
+        source_case, backing = "format-cdi-v35", "selected.cdi"
+    else:
+        source_case, backing = "format-cue-shared", "shared tracks.bin"
+    make_format_fixture(folder, source_case)
+    lines = (folder / "format.expect").read_text().splitlines()
+    valid, session, boot_lba, _, flags, count = map(int, lines[1].split())
+    boot_bytes = 65536 + 1001
+    spans = [list(map(int, line.split())) for line in lines[2:]]
+    data_index = next(i for i, span in enumerate(spans) if span[0] == session and span[2] == 4)
+    _, sectors, _, stride, _, header, offset = spans[data_index]
+    source_path = folder / f"expected-track-{data_index + 1:02d}.bin"
+    source = bytearray(source_path.read_bytes())
+    assert sectors == 64 and len(source) == sectors * stride
+    dual32(source, 20 * stride + header + 68 + 10, boot_bytes)
+    boot_sectors = (boot_bytes + 2047) // 2048
+    boot_padded = bytes((n * 73 + (n >> 8) * 19 + 5) & 255 for n in range(boot_sectors * 2048))
+    for sector in range(boot_sectors):
+        at = (boot_lba - session + sector) * stride + header
+        source[at:at + 2048] = boot_padded[sector * 2048:(sector + 1) * 2048]
+    source_path.write_bytes(source)
+    actual_path = folder / backing
+    actual = bytearray(actual_path.read_bytes())
+    actual[offset:offset + len(source)] = source
+    # Damage a late sector after metadata probing, without altering the known
+    # independent expected source. Batch reads must still validate each sector.
+    if case.endswith("bad-mode"):
+        at = offset + 39 * stride + 18
+        actual[at] |= 32
+        actual[at + 4] |= 32
+    if case.endswith("bad-ip-header"):
+        actual[offset + 14 * stride + 1] = 0
+    actual_path.write_bytes(actual)
+    failed = any(word in case for word in ("read-fail", "short-read", "cancel-", "bad-"))
+    lines[1] = f"{int(valid and not failed)} {session} {boot_lba} {boot_bytes} {flags} {count}"
+    (folder / "format.expect").write_text("\n".join(lines) + "\n", encoding="ascii")
+    ip = b"".join(source[n * stride + header:n * stride + header + 2048] for n in range(16))
+    expected_boot = zlib.crc32(boot_padded[:boot_bytes])
+    assert expected_boot != zlib.crc32(boot_padded), "tail must affect CRC coverage"
+    (folder / "checksum.expect").write_text(f"{zlib.crc32(ip):08x} {expected_boot:08x}\n", encoding="ascii")
 
 
 def synthetic_package(ce=False):
@@ -77,7 +151,10 @@ def synthetic_package(ce=False):
 
 def make_retail_fixture(folder, case):
     if case in FORMAT_CASES:
-        make_format_fixture(folder, case)
+        if case in CHECKSUM_CASES:
+            make_checksum_fixture(folder, case)
+        else:
+            make_format_fixture(folder, case)
         (folder / "retail-boot.kui").write_bytes(synthetic_package())
         (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
         return
@@ -143,6 +220,8 @@ def main():
                         help="Only native-title/boot selection and compatibility cases, on MBR FAT32/exFAT")
     parser.add_argument("--formats-only", action="store_true",
                         help="Only generic image-format preparation, on MBR FAT32/exFAT")
+    parser.add_argument("--checksums-only", action="store_true",
+                        help="Only exact CRC batching/fault cases, on MBR FAT32/exFAT")
     args = parser.parse_args()
     for binary in ("mkfs.fat", "mkfs.exfat", "fsck.fat", "fsck.exfat"):
         if not shutil.which(binary):
@@ -157,7 +236,7 @@ def main():
             run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
-            layouts = ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
+            layouts = ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
                 (True, CASES + FORMAT_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
             for partitioned, cases in layouts:
                 clean = partitioned_clean if partitioned else volume
@@ -171,7 +250,16 @@ def main():
                     output = run(BINARY, str(image), str(fixture), "check", case)
                     assert f"PASS retail preparation check {case}; no active-operation writes" in output
                     assert digest(image) == before, f"Retail preparation changed {kind} {layout} in {case}"
-                    if case in SUCCESS_CASES or (case in FORMAT_CASES and "bad" not in case):
+                    if case in CHECKSUM_CASES and not any(word in case for word in (
+                            "read-fail", "short-read", "cancel-", "bad-")):
+                        counters = re.search(r"Checksum batches PASS: IP (\d+) reads, exact 66537-byte boot (\d+) reads; "
+                                             r"max FatFs read (\d+) bytes", output)
+                        assert counters, "missing actual FatFs checksum counters"
+                        ip_calls, boot_calls, largest = map(int, counters.groups())
+                        assert largest == 32768 and boot_calls == (0 if case.endswith("gdi-raw") else 3)
+                        print(f"Checksum I/O {kind} {case}: IP={ip_calls}, boot={boot_calls}, max={largest} bytes", flush=True)
+                    if case in SUCCESS_CASES or (case in FORMAT_CASES and not any(
+                            word in case for word in ("bad", "read-fail", "short-read", "cancel-"))):
                         assert "full IP CRC, exact boot bytes and headers" in output
                         check_fs(image, base / "check-volume.img", kind, partitioned)
                     if case == "cdda-warning":

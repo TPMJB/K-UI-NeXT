@@ -66,6 +66,7 @@ jobs:
                        'src/core/retail_image.c', 'include/kui/retail_image.h', 'tests/test_retail_image.c',
                        'tools/check_retail_instructions.py', 'tools/check_retail_loader_layout.py', 'tests/test_retail_instructions.py',
                        'include/kui/retail_loader_layout.h', 'include/kui/retail_resident.h', 'src/apps/games_retail.c',
+                       'tests/games_retail.c', 'tests/test_games_retail.py',
                        'tools/retail_package.py', 'tools/package.py', 'tests/test_retail_package.py',
                        'src/core/retail_gd.c', 'include/kui/retail_gd.h', 'tests/test_retail_gd.c'}
               if not paths or any(p not in exact and not p.startswith(('src/loader/', 'docs/')) for p in paths):
