@@ -140,11 +140,15 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   L Actions" :
         s->page==KUI_SHELL_GAMES ? (kui_shell_games_view(s)==KUI_GAMES_VIEW_LIST?
             "A Open   Y View   LEFT/RIGHT Page   START More":"A Open   Y View   D-pad Move   START More") :
+        s->page==KUI_SHELL_GAMES_VARIANTS ? "D-pad Select   A Inspect   B Games" :
         s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_retail_ready(s)?
-            (s->games_from_files?"A Launch   X Inspect   B Files":"A Launch   X Inspect   B Games"):
+            (s->games_from_files?"A Launch   X Inspect   B Files":kui_shell_games_variant_label(s)?
+                "A Launch   X Inspect   B Versions":"A Launch   X Inspect   B Games"):
             kui_shell_games_image_ready(s)?
-            (s->games_from_files?"Y Read test   X Inspect   B Files":"Y Read test   X Inspect   B Games"):
-            s->games_from_files?"X Inspect again   B Files":"X Inspect again   B Games") :
+            (s->games_from_files?"Y Read test   X Inspect   B Files":kui_shell_games_variant_label(s)?
+                "Y Read test   X Inspect   B Versions":"Y Read test   X Inspect   B Games"):
+            s->games_from_files?"X Inspect again   B Files":kui_shell_games_variant_label(s)?
+                "X Inspect again   B Versions":"X Inspect again   B Games") :
         s->page==KUI_SHELL_FILES ? "B Up   START Home   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_FILES_ACTIONS ? "D-pad Select   A Choose   B Files" :
         s->page==KUI_SHELL_FILES_PICK ? "B Up   START Cancel   LEFT/RIGHT Page" :
@@ -169,7 +173,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
-    if(!v->video_trial && !s->confirm_storage_test && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM && s->page!=KUI_SHELL_FILES_CONFIRM)
+    if(!v->video_trial && !s->confirm_storage_test && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM && s->page!=KUI_SHELL_GAMES_VARIANTS && s->page!=KUI_SHELL_FILES_CONFIRM)
         label(p,512,430,MUTED,"L Memory");
 }
 static void utility_icon(struct paint *p,enum kui_shell_page app,unsigned x,unsigned y) {
@@ -1236,7 +1240,8 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
             if(i==chosen) panel(p,x,y,284,58,SELECTED);
             entry_art(p,s,v,i,x+4,y+1,KUI_COVER_SMALL);
             words(p,x+70,y+10,x+280,ink,entry_text(e),false);
-            words(p,x+70,y+32,x+280,MUTED,e->directory?"Folder":strcmp(entry_text(e),e->name)?e->name:"GDI image",false);
+            words(p,x+70,y+32,x+280,MUTED,e->directory?"Folder":e->variant_2048_path[0]?
+                "Original / 2048-byte copy":strcmp(entry_text(e),e->name)?e->name:"GDI image",false);
         } else if(view==KUI_GAMES_VIEW_GALLERY) {
             unsigned x=32+(i%4)*144,y=134+(i/4)*130;
             if(i==chosen) panel(p,x+10,y-3,124,130,SELECTED);
@@ -1258,15 +1263,38 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
             l->artwork?"No box art found":"No box art yet");
     }
     if(!count && !v->busy) label(p,40,210,MUTED,"No selectable GDI images or folders in this view.");
-    label(p,40,398,v->busy?CYAN:AMBER,!v->busy && count && !l->artwork?
+    label(p,40,398,v->busy?CYAN:AMBER,!v->busy && count && l->entries[chosen].variant_2048_path[0]?
+        "A chooses Original or 2048-byte copy.":!v->busy && count && !l->artwork?
         "No box art yet: press START, then Scan box art.":l->message);
+}
+static void games_variants(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Games / Choose version");
+    if(s->games_selected<s->games_listing.count)
+        words(p,40,140,608,CYAN,entry_text(&s->games_listing.entries[s->games_selected]),false);
+    static const char *const names[]={"Original","2048-byte copy"};
+    const char *paths[]={s->games_original_path,s->games_2048_path};
+    for(unsigned i=0;i<2;i++) {
+        unsigned y=178+i*96;
+        panel(p,32,y,576,82,s->games_variant_selected==i?SELECTED:PANEL);
+        label(p,48,y+12,s->games_variant_selected==i?WHITE:MUTED,names[i]);
+        words(p,48,y+44,592,MUTED,paths[i],false);
+    }
+    label(p,40,398,MUTED,"Select a version to inspect, then choose its reader.");
+}
+static void games_variant_line(struct paint *p,const struct kui_shell *s,unsigned y) {
+    const char *version=kui_shell_games_variant_label(s);
+    if(version) {
+        char line[64];snprintf(line,sizeof(line),"Version: %s",version);
+        label(p,40,y,CYAN,line);
+    }
 }
 static void game_detail(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_games_detail *d=&s->games_detail;
     title(p,40,108,"Games / Image details");
     label(p,40,140,d->valid?CYAN:AMBER,d->valid?(d->title[0]?d->title:"Untitled image"):
         v->busy?"Inspecting image...":d->stopped?"Inspection stopped":"Could not inspect image");
-    words(p,40,164,608,MUTED,s->games_selected_path,false);
+    words(p,40,kui_shell_games_variant_label(s)?158:164,608,MUTED,s->games_selected_path,false);
+    games_variant_line(p,s,174);
     panel(p,32,190,576,214,PANEL);
     bool art=d->cover && v->game_detail_cover;
     unsigned right=art?428:608;
@@ -1304,6 +1332,7 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         words(p,44,252,right,MUTED,v->busy?"Reading bounded image metadata from SD.":
             "Check the image files, then press X to inspect again.",false);
         words(p,44,284,right,MUTED,s->games_from_files?"B returns to the File Manager.":
+            kui_shell_games_variant_label(s)?"B returns to the version choices.":
             "B returns to your Games list.",false);
     }
 }
@@ -1337,6 +1366,7 @@ static void games_image_probe_confirmation(struct paint *p,const struct kui_shel
         const struct kui_shell_view *v) {
     title(p,40,108,"Games / Test image reads");
     words(p,40,140,608,CYAN,s->games_selected_path,false);
+    games_variant_line(p,s,154);
     panel(p,32,168,576,234,PANEL);
     if(!kui_shell_games_image_ready(s)) {
         label(p,48,186,AMBER,"Image details changed; inspect the image again.");
@@ -1356,6 +1386,7 @@ static void games_image_probe_confirmation(struct paint *p,const struct kui_shel
 static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         const struct kui_shell_view *v) {
     words(p,40,140,608,CYAN,s->games_selected_path,false);
+    games_variant_line(p,s,154);
     if(kui_shell_games_ce_probe_ready(s)) {
         title(p,40,108,"Games / Windows CE boot test");
         panel(p,32,168,576,234,PANEL);
@@ -1776,6 +1807,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_MUSIC: music_player(&p,s,v); break;
     case KUI_SHELL_GAMES: games(&p,s,v); break;
     case KUI_SHELL_GAMES_DETAIL: game_detail(&p,s,v); break;
+    case KUI_SHELL_GAMES_VARIANTS: games_variants(&p,s); break;
     case KUI_SHELL_GAMES_ADVANCED: games_advanced(&p,s); break;
     case KUI_SHELL_GAMES_PROBE_CONFIRM: games_probe_confirmation(&p,v); break;
     case KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM: games_image_probe_confirmation(&p,s,v); break;

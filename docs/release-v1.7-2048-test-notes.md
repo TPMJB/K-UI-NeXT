@@ -17,6 +17,13 @@ resident memory boundaries remain unchanged.
   It refuses unsupported sectors, offsets, overlaps and incomplete tracks.
 - Track format fits existing manifest/TOC storage. Raw-only wire output remains
   compatible, and native/CE memory layout limits remain fixed.
+- Matching `Game` and `Game-2048` single-GDI sibling folders are grouped into
+  one Games entry after bounded track-layout checks. The version picker chooses
+  the exact backing path before inspection; detail and confirmation show the
+  selected version. This does not change any resident reader or storage driver.
+- A converted copy without a matching original remains accessible. Ambiguous,
+  mismatched or unsupported layouts remain ordinary entries rather than being
+  silently hidden. Pairing checks do not hash complete tracks.
 
 Conversion does not guarantee faster loads, Windows CE boot, complete raw-sector
 requests or CD audio playback. Keep the raw image for comparison and fallback.

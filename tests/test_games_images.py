@@ -4,6 +4,7 @@
 from pathlib import Path
 import hashlib
 import shutil
+import sys
 import tempfile
 from test_images import run
 from games_fixture import make_fixture
@@ -15,7 +16,16 @@ CASES = ("valid", "valid-session-size", "listing", "missing-root", "missing-trac
          "connect-fail", "mount-fail", "open-fail", "read-fail", "short-read",
          "seek-fail", "close-fail", "dir-read-fail", "dir-close-fail",
          "cancel-before", "cancel-read", "cancel-list", "invalid-root",
-         "invalid-path", "offset-limit", "long-root")
+         "invalid-path", "offset-limit", "long-root",
+         "variant-pair", "variant-reverse", "variant-pages", "variant-original-only",
+         "variant-converted-only", "variant-invalid", "variant-mismatch-lba",
+         "variant-mismatch-count", "variant-mismatch-length", "variant-raw-data",
+         "variant-ambiguous-original", "variant-ambiguous-converted", "variant-layout-only",
+         "variant-open-fail", "variant-read-fail", "variant-short-read", "variant-seek-fail",
+         "variant-close-fail", "variant-cancel-pair")
+CASES += ("variant-chain", "variant-index-overflow", "variant-pair-read-once",
+          "variant-pair-close-once", "variant-mismatch-control", "variant-missing-track",
+          "variant-reverse-pair-read-once", "variant-reverse-pair-close-once")
 
 
 def digest(path):
@@ -28,6 +38,8 @@ def main():
         base = Path(temp)
         fixture = base / "original-gdi"
         make_fixture(fixture)
+        run(sys.executable,str(ROOT / "tools/gdi_optimize.py"),
+            str(fixture / "disc.gdi"),str(base / "cooked-gdi"))
         for kind in ("fat32", "exfat"):
             clean = base / f"{kind}-clean.img"
             with clean.open("wb") as stream:

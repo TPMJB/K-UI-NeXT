@@ -26,9 +26,11 @@ python3 tools/gdi_optimize.py --batch "/path/to/Games"
 
 The converter searches nested folders and creates a sibling `Game-2048` folder
 for each game with exactly one GDI. `Games/Armada` stays unchanged and gains
-`Games/Armada-2048`. Keep both on the card: the existing Games browser lists
-both folders, so select the original or the 2048 copy before choosing the
-standard/background reader. The experimental 2048 runtime is still required.
+`Games/Armada-2048`. Keep both on the card. The selector test build groups
+matching sibling folders into one Games entry: select **Armada**, then choose
+**Original** or **2048-byte copy** before the usual inspection and launch flow.
+Older builds list the folders separately. The experimental 2048 runtime and
+its matching apps are still required.
 
 Completed conversion folders are excluded from later searches. A rerun leaves
 recognized copies unchanged and does not reverify their contents. Other output
@@ -69,6 +71,22 @@ not support these cooked backing tracks. On-console conversion and an automatic
 ripper conversion option are not part of this first test.
 
 ## Install and compare on the console
+
+The current package's console header reads **K-UI 2048 picker**. A ZIP
+containing only the Python converter does not update the console UI.
+
+Pairing uses the folder names `Game` and `Game-2048` in the same parent. Each
+must contain exactly one visible GDI, with matching track count, LBA starts,
+types and sector counts. The converted data tracks must be 2048-byte tracks.
+These layout checks are not a full content verification. If one copy is absent,
+ambiguous or mismatched, it remains accessible as an ordinary folder/image.
+The pairing index is bounded to 512 candidate converted folders per directory;
+if that budget or its memory allocation is exceeded, all entries remain
+standalone for that listing.
+Selecting a pair opens the version picker; **D-pad** selects, **A** inspects,
+and **B** returns. The detail and launch screens identify the selected copy.
+If your dump is nested under `Armada/extracted`, batch conversion creates
+`Armada/extracted-2048`: open Armada to reach the grouped `extracted` entry.
 
 This is a hardware test build based on 1.7, retaining its accepted SCI reader
 fix. It has not yet demonstrated retail-disc loading speed. Back up your

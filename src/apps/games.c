@@ -34,6 +34,43 @@ static bool split_file(const char *path,char root[KUI_DEST_ROOT_CAP],char name[K
     char joined[KUI_GAMES_FILE_CAP];
     return file_join(joined,root,name) && !strcmp(joined,path);
 }
+#define VARIANT_LIMIT 512u
+struct variant {
+    char original[KUI_DEST_NAME_CAP],cooked[KUI_DEST_NAME_CAP];
+    char original_gdi[KUI_DEST_NAME_CAP],cooked_gdi[KUI_DEST_NAME_CAP];
+    bool paired;
+};
+static bool cooked_folder(const char *name) {
+    size_t size=strlen(name);
+    return size>5u && size<KUI_DEST_NAME_CAP && !strcmp(name+size-5u,"-2048") &&
+        !(size>10u && !strcmp(name+size-10u,"-2048-2048"));
+}
+static bool variant_pair(const char *root,struct variant *pair,kui_cancel_fn cancel);
+/* One bounded directory snapshot avoids probing a sibling for every ordinary
+ * folder. Only suffix candidates allocate memory or need descriptor checks. */
+static bool index_variants(DIR *dir,const char *root,struct variant **out,unsigned *count,kui_cancel_fn cancel) {
+    struct variant *pairs=NULL;unsigned used=0;bool complete=false;
+    for(unsigned scanned=0;scanned<32768u;scanned++) {
+        if(stopped(cancel)) {free(pairs);return false;}
+        FILINFO info;
+        if(f_readdir(dir,&info)!=FR_OK) break;
+        if(!info.fname[0]) {complete=true;break;}
+        if(!(info.fattrib&AM_DIR) || (info.fattrib&(AM_HID|AM_SYS)) ||
+           info.fname[0]=='.' || !cooked_folder(info.fname)) continue;
+        if(used==VARIANT_LIMIT) break;
+        if(!pairs) {pairs=calloc(VARIANT_LIMIT,sizeof(*pairs));if(!pairs) break;}
+        strcpy(pairs[used++].cooked,info.fname);
+    }
+    /* Incomplete discovery, overflow or allocation failure leaves every row
+     * standalone. No partial index may hide an otherwise accessible image. */
+    if(!complete) {free(pairs);pairs=NULL;used=0;}
+    if(f_readdir(dir,NULL)!=FR_OK) {free(pairs);return false;}
+    for(unsigned i=0;i<used;i++) {
+        pairs[i].paired=variant_pair(root,&pairs[i],cancel);
+        if(stopped(cancel)) {free(pairs);return false;}
+    }
+    *out=pairs;*count=used;return true;
+}
 /* Resolve only an unambiguous immediate GDI. A folder with too many entries
  * remains browsable; reaching the budget never establishes uniqueness. */
 bool kui_games_single_gdi(const char *root,char selected[KUI_GAMES_FILE_CAP],kui_cancel_fn cancel) {
@@ -67,6 +104,7 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
     if(stopped(cancel)) {snprintf(out->message,sizeof(out->message),"Games browse stopped");return false;}
     if(!kui_sd_connect()) {snprintf(out->message,sizeof(out->message),"SD card unavailable");return false;}
     FATFS fs;DIR dir;bool opened=false,ok=false;
+    struct variant *pairs=NULL;unsigned pair_count=0;
     const char *problem="Cannot mount SD card";
     char path[KUI_DEST_ROOT_CAP+3];snprintf(path,sizeof(path),"0:%s",out->root);
     if(!kui_mount(&fs,log)) goto done;
@@ -77,6 +115,9 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
         goto done;
     }
     opened=true;
+    if(!index_variants(&dir,out->root,&pairs,&pair_count,cancel)) {
+        problem=stopped(cancel)?"Games browse stopped":"Cannot read Games folder";goto done;
+    }
     /* After the page is full the rest is only counted; a count that cannot
      * finish leaves the total unknown rather than failing the page. */
     bool counting=false,counted=true;unsigned listed=0;
@@ -95,6 +136,14 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
         if(info.fname[0]=='.' || (info.fattrib&(AM_HID|AM_SYS))) continue;
         bool directory=(info.fattrib&AM_DIR)!=0;
         if(!directory && !gdi_name(info.fname)) continue;
+        const struct variant *pair=NULL;bool alternate=false;
+        for(unsigned i=0;directory && i<pair_count;i++) if(pairs[i].paired) {
+            if(!strcmp(info.fname,pairs[i].cooked)) {pair=&pairs[i];alternate=true;break;}
+            if(!strcmp(info.fname,pairs[i].original)) {pair=&pairs[i];break;}
+        }
+        /* Check before counting or skipping a page: a converted folder may
+         * precede its original in the physical directory enumeration. */
+        if(pair && alternate) continue;
         ++listed;
         if(offset) {--offset;continue;}
         if(counting) continue;
@@ -105,7 +154,14 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
             snprintf(entry->name,sizeof(entry->name),"[Name too long]");entry->disabled=true;continue;
         }
         strcpy(entry->name,info.fname);
-        if(directory) {
+        if(pair) {
+            char child[KUI_DEST_ROOT_CAP];
+            entry->directory=false;
+            entry->disabled=!kui_destination_join(child,out->root,pair->original) ||
+                !file_join(entry->path,child,pair->original_gdi) ||
+                !kui_destination_join(child,out->root,pair->cooked) ||
+                !file_join(entry->variant_2048_path,child,pair->cooked_gdi);
+        } else if(directory) {
             char child[KUI_DEST_ROOT_CAP];
             entry->disabled=!kui_destination_join(child,out->root,entry->name);
             if(!entry->disabled) {
@@ -117,6 +173,7 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
     out->total=counted?listed:0;
     ok=true;
 done:
+    free(pairs);
     if(stopped(cancel)) {ok=false;problem="Games browse stopped";}
     if(opened && f_closedir(&dir)!=FR_OK) {ok=false;problem="Cannot close Games folder";}
     if(ok && mounted) mounted(ctx,log,cancel);
@@ -180,6 +237,55 @@ static enum kui_game_result image_read(void *ctx,const char *name,uint64_t offse
     if(r!=FR_OK) result=fs_problem(files,r,name);
     if(stopped(files->cancel)) result=KUI_GAME_CANCELLED;
     return files->last=result;
+}
+static bool read_layout(const char *path,struct kui_game_image *image,struct image_files *files) {
+    char name[KUI_DEST_NAME_CAP];uint64_t bytes=0;
+    if(!split_file(path,files->root,name) || image_stat(files,name,&bytes)!=KUI_GAME_OK ||
+       !bytes || bytes>KUI_GAME_GDI_LIMIT) return false;
+    uint8_t *descriptor=malloc((size_t)bytes);
+    if(!descriptor) return false;
+    struct kui_game_file_ops ops={files,image_stat,image_read};
+    bool ok=image_read(files,name,0,descriptor,(size_t)bytes)==KUI_GAME_OK &&
+        kui_game_image_open(descriptor,(size_t)bytes,&ops,image)==KUI_GAME_OK;
+    free(descriptor);return ok;
+}
+static bool variant_pair(const char *root,struct variant *pair,kui_cancel_fn cancel) {
+    size_t base_bytes=strlen(pair->cooked)-5u;
+    memcpy(pair->original,pair->cooked,base_bytes);pair->original[base_bytes]=0;
+    char original_root[KUI_DEST_ROOT_CAP],cooked_root[KUI_DEST_ROOT_CAP],physical[KUI_DEST_ROOT_CAP+3];
+    if(!kui_destination_join(original_root,root,pair->original) ||
+       !kui_destination_join(cooked_root,root,pair->cooked)) return false;
+    /* Most directories have no sibling; do no descriptor IO in that case. */
+    snprintf(physical,sizeof(physical),"0:%s",original_root);
+    FILINFO info;
+    if(stopped(cancel) || f_stat(physical,&info)!=FR_OK || !(info.fattrib&AM_DIR) ||
+       (info.fattrib&(AM_HID|AM_SYS))) return false;
+    /* Store the actual original name returned by FatFs, including its case. */
+    if(strlen(info.fname)>=sizeof(pair->original) ||
+       !kui_destination_join(original_root,root,info.fname)) return false;
+    strcpy(pair->original,info.fname);
+    char original[KUI_GAMES_FILE_CAP],cooked[KUI_GAMES_FILE_CAP];
+    if(!kui_games_single_gdi(original_root,original,cancel) ||
+       !kui_games_single_gdi(cooked_root,cooked,cancel)) return false;
+    struct kui_game_image *images=malloc(2u*sizeof(*images));
+    if(!images) return false;
+    struct image_files files[2]={{.cancel=cancel},{.cancel=cancel}};
+    bool ok=read_layout(original,&images[0],&files[0]) &&
+        read_layout(cooked,&images[1],&files[1]) && images[0].count==images[1].count;
+    bool data=false;
+    for(unsigned i=0;ok && i<images[0].count;i++) {
+        const struct kui_game_image_track *a=&images[0].tracks[i],*b=&images[1].tracks[i];
+        ok=a->start_lba==b->start_lba && a->end_lba==b->end_lba && a->control==b->control;
+        if(b->control==4) {data=true;ok=ok && b->sector_bytes==KUI_GAME_DATA_BYTES;}
+        else ok=ok && b->sector_bytes==KUI_GAME_RAW_BYTES;
+    }
+    free(images);
+    if(ok && data && !stopped(cancel)) {
+        strcpy(pair->original_gdi,strrchr(original,'/')+1);
+        strcpy(pair->cooked_gdi,strrchr(cooked,'/')+1);
+        return true;
+    }
+    return false;
 }
 struct metadata_reader {const struct kui_game_image *image;struct image_files *files;};
 static enum kui_game_metadata_io_result metadata_sector(void *ctx,uint32_t lba,uint8_t out[2048]) {

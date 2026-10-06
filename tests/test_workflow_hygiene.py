@@ -18,10 +18,10 @@ WORKFLOW = ROOT / ".github/workflows/diagnostic.yml"
 STEP = "name: Compile CD bootstrap and SD runtime"
 
 
-def step_script():
+def step_script(step=STEP):
     """The `run: |` block of the compile step, taken from the workflow text (no YAML library needed)."""
     lines = WORKFLOW.read_text().splitlines()
-    start = next(n for n, line in enumerate(lines) if STEP in line)
+    start = next(n for n, line in enumerate(lines) if step in line)
     run = next(n for n in range(start, len(lines)) if lines[n].strip() == "run: |")
     indent = len(lines[run]) - len(lines[run].lstrip())
     body = []
@@ -78,6 +78,41 @@ class CompileStepLeavesTheTreeClean(unittest.TestCase):
         digest = result.stdout.split("BUILD FAILED", 1)[1]
         self.assertIn("error: something is wrong", digest)          # the error is repeated AFTER the banner
         self.assertIn("*** [Makefile.dc:35", digest)
+
+
+class GamesVariantValidationScope(unittest.TestCase):
+    def run_scope(self, changed_path):
+        with tempfile.TemporaryDirectory() as d:
+            base = pathlib.Path(d)
+            repo = base / "repo"
+            repo.mkdir()
+            (repo / "README").write_text("base\n")
+            git(repo, "init", "-q")
+            git(repo, "add", "-A")
+            git(repo, "commit", "-q", "-m", "base")
+            changed = repo / changed_path
+            changed.parent.mkdir(parents=True, exist_ok=True)
+            changed.write_text("changed\n")
+            git(repo, "add", "-A")
+            git(repo, "commit", "-q", "-m", "Test Games selector\n\nValidation: games-variants")
+            output = base / "scope-output"
+            env = dict(os.environ, KUI_VALIDATION_HEAD=git(repo, "rev-parse", "HEAD").strip(),
+                       GITHUB_OUTPUT=str(output))
+            result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c",
+                                     step_script("name: Select requested validation scope")],
+                                    cwd=repo, env=env, capture_output=True, text=True)
+            return result, output.read_text() if output.exists() else ""
+
+    def test_selector_changes_use_recorded_focused_checks(self):
+        result, output = self.run_scope("include/kui/games.h")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("console_only=true", output)
+
+    def test_reader_changes_cannot_skip_the_broad_host_suite(self):
+        result, output = self.run_scope("src/loader/retail_sd.c")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("outside listing, selector UI", result.stderr)
+        self.assertEqual(output, "")
 
 
 class ExperimentalBuildIsOptIn(unittest.TestCase):

@@ -21,7 +21,10 @@ static struct {
 static FATFS fs;
 static const char *const folder = "0:/Games/Reader Test";
 static const char *const selected = "/Games/Reader Test/disc.gdi";
-static bool fault(const char *name) { return test.active && !strcmp(test.fault, name); }
+static bool fault(const char *name) {
+    return test.active && (!strcmp(test.fault,name) ||
+        (!strncmp(test.fault,"variant-",8) && !strcmp(test.fault+8,name)));
+}
 static void log_line(const char *format, ...) {
     va_list args; va_start(args, format); vprintf(format, args); va_end(args); puts("");
 }
@@ -72,8 +75,10 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *read) {
         ++test.read_calls; test.read_bytes += *read;
         if(file == test.track) test.track_bytes += *read;
         if(fault("read-fail")) { test.injected = true; return FR_DISK_ERR; }
+        if((fault("pair-read-once") || fault("reverse-pair-read-once")) && !test.injected) {test.injected=true;return FR_DISK_ERR;}
         if(fault("short-read") && *read) { --*read; test.injected = true; }
         if(fault("cancel-read") && file == test.track) { test.cancelled = true; test.injected = true; }
+        if(fault("cancel-pair")) { test.cancelled = true; test.injected = true; }
     }
     return result;
 }
@@ -89,6 +94,7 @@ FRESULT __wrap_f_close(FIL *file) {
         assert(test.files); --test.files;
         if(file == test.track) test.track = NULL;
         if(fault("close-fail")) { test.injected = true; return FR_DISK_ERR; }
+        if((fault("pair-close-once") || fault("reverse-pair-close-once")) && !test.injected) {test.injected=true;return FR_DISK_ERR;}
     }
     return result;
 }
@@ -145,7 +151,83 @@ static size_t load_file(const char *path, uint8_t *data, size_t capacity) {
     assert(f_read(&file, data, (UINT)size, &got) == FR_OK && got == size);
     assert(f_close(&file) == FR_OK); return size;
 }
+static void seed_fixture(const char *host,const char *target,bool cooked) {
+    const char *raw_files[]={"disc.gdi","track01.bin","track02.raw","track03.bin"};
+    const char *cooked_files[]={"disc.gdi","track01.iso","track02.raw","track03.iso"};
+    const char *const *files=cooked?cooked_files:raw_files;
+    assert(f_mkdir(target)==FR_OK);
+    for(unsigned i=0;i<4;i++) {
+        char path[1024],card[512];uint8_t data[200000];
+        assert(snprintf(path,sizeof(path),"%s%s/%s",host,cooked?"/../cooked-gdi":"",files[i])<(int)sizeof(path));
+        FILE *file=fopen(path,"rb");assert(file);
+        size_t bytes=fread(data,1,sizeof(data),file);
+        assert(bytes<sizeof(data) && !ferror(file) && !fclose(file));
+        assert(snprintf(card,sizeof(card),"%s/%s",target,files[i])<(int)sizeof(card));
+        write_file(card,data,bytes);
+    }
+}
+static void seed_variants(const char *host) {
+    assert(f_mkdir("0:/Games")==FR_OK);
+    if(!strcmp(test.fault,"variant-pages")) {
+        /* All converted rows precede their originals, including across pages. */
+        for(unsigned pass=0;pass<2;pass++) for(unsigned i=0;i<10;i++) {
+            char path[96];snprintf(path,sizeof(path),"0:/Games/Pair %02u%s",i,pass?"":"-2048");
+            seed_fixture(host,path,!pass);
+        }
+        seed_fixture(host,"0:/Games/Original Only",false);
+        seed_fixture(host,"0:/Games/Cooked Only-2048",true);
+        assert(f_mkdir("0:/Games/Empty Folder")==FR_OK);
+        write_file("0:/Games/Loose.gdi","1\n",2);return;
+    }
+    const char *cooked="0:/Games/Reader Test-2048";
+    bool reverse=!strncmp(test.fault,"variant-reverse",15);
+    if(!strcmp(test.fault,"variant-converted-only")) {seed_fixture(host,cooked,true);return;}
+    if(reverse) seed_fixture(host,cooked,true);
+    seed_fixture(host,folder,false);
+    if(!strcmp(test.fault,"variant-original-only")) return;
+    if(!reverse) seed_fixture(host,cooked,true);
+    if(!strcmp(test.fault,"variant-chain")) seed_fixture(host,"0:/Games/Reader Test-2048-2048",true);
+    if(!strcmp(test.fault,"variant-index-overflow")) {
+        for(unsigned i=0;i<512;i++) {
+            char path[96];snprintf(path,sizeof(path),"0:/Games/Empty %03u-2048",i);
+            assert(f_mkdir(path)==FR_OK);
+        }
+    }
+    const char *descriptor="0:/Games/Reader Test-2048/disc.gdi";
+    if(!strcmp(test.fault,"variant-invalid")) write_file(descriptor,"1\n",2);
+    if(!strcmp(test.fault,"variant-mismatch-lba")) {
+        const char *gdi="3\n1 0 4 2048 track01.iso 0\n2 4 0 2352 track02.raw 0\n3 45001 4 2048 track03.iso 0\n";
+        write_file(descriptor,gdi,strlen(gdi));
+    }
+    if(!strcmp(test.fault,"variant-mismatch-count")) {
+        const char *gdi="2\n1 0 4 2048 track01.iso 0\n2 4 0 2352 track02.raw 0\n";
+        write_file(descriptor,gdi,strlen(gdi));
+    }
+    if(!strcmp(test.fault,"variant-mismatch-length")) {
+        uint8_t data[200000];size_t bytes=load_file("0:/Games/Reader Test-2048/track03.iso",data,sizeof(data));
+        write_file("0:/Games/Reader Test-2048/track03.iso",data,bytes-2048u);
+    }
+    if(!strcmp(test.fault,"variant-mismatch-control")) {
+        const char *gdi="3\n1 0 4 2048 track01.iso 0\n2 4 4 2048 track02.raw 0\n3 45000 4 2048 track03.iso 0\n";
+        uint8_t data[4u*2048u]={0};write_file("0:/Games/Reader Test-2048/track02.raw",data,sizeof(data));
+        write_file(descriptor,gdi,strlen(gdi));
+    }
+    if(!strcmp(test.fault,"variant-missing-track")) assert(f_unlink("0:/Games/Reader Test-2048/track01.iso")==FR_OK);
+    if(!strcmp(test.fault,"variant-raw-data")) {
+        const char *gdi="3\n1 0 4 2352 track01.iso 0\n2 4 0 2352 track02.raw 0\n3 45000 4 2048 track03.iso 0\n";
+        uint8_t data[200000];size_t bytes=load_file("0:/Games/Reader Test/track01.bin",data,sizeof(data));
+        write_file("0:/Games/Reader Test-2048/track01.iso",data,bytes);write_file(descriptor,gdi,strlen(gdi));
+    }
+    if(!strcmp(test.fault,"variant-ambiguous-original")) write_file("0:/Games/Reader Test/other.gdi","1\n",2);
+    if(!strcmp(test.fault,"variant-ambiguous-converted")) write_file("0:/Games/Reader Test-2048/other.gdi","1\n",2);
+    if(!strcmp(test.fault,"variant-layout-only")) {
+        uint8_t data[200000];size_t bytes=load_file("0:/Games/Reader Test-2048/track03.iso",data,sizeof(data));
+        data[0]^=1;write_file("0:/Games/Reader Test-2048/track03.iso",data,bytes);
+        write_file("0:/Games/Reader Test-2048/conversion.json","not trusted metadata",20);
+    }
+}
 static void seed(const char *host) {
+    if(!strncmp(test.fault,"variant-",8)) {seed_variants(host);return;}
     if(!strcmp(test.fault, "missing-root")) return;
     assert(f_mkdir("0:/Games") == FR_OK && f_mkdir(folder) == FR_OK);
     const char *files[] = {"disc.gdi", "track01.bin", "track02.raw", "track03.bin"};
@@ -251,7 +333,88 @@ static void check_listing(void) {
     assert(!test.track_bytes && !test.read_bytes);
 }
 
+static void check_variants(void) {
+    struct kui_games_page page;
+    if(!strcmp(test.fault,"variant-cancel-pair")) {
+        assert(!kui_games_list("/Games",0,&page,log_line,cancel));
+        assert(test.cancelled && test.injected && !page.count && !page.has_more);
+        assert(strstr(page.message,"stopped"));return;
+    }
+    if(!strcmp(test.fault,"variant-index-overflow")) {
+        assert(kui_games_list("/Games",0,&page,log_line,cancel));
+        assert(page.count==KUI_GAMES_ROWS && page.total==514 && page.has_more);
+        assert(!strcmp(page.entries[0].name,"Reader Test") && !page.entries[0].variant_2048_path[0]);
+        assert(!strcmp(page.entries[1].name,"Reader Test-2048") && !page.entries[1].variant_2048_path[0]);
+        assert(kui_games_list("/Games",513,&page,log_line,cancel));
+        assert(page.count==1 && page.total==514 && !page.has_more);
+        assert(!test.read_bytes && !test.track_bytes);return;
+    }
+    if(!strcmp(test.fault,"variant-pages")) {
+        struct kui_games_entry all[16];unsigned count=0,pairs=0;
+        for(unsigned offset=0;;) {
+            assert(kui_games_list("/Games",offset,&page,log_line,cancel));
+            assert(page.total==14 && page.count<=KUI_GAMES_ROWS && count+page.count<=16);
+            for(unsigned i=0;i<page.count;i++) {
+                const struct kui_games_entry *e=&page.entries[i];
+                for(unsigned j=0;j<count;j++) assert(strcmp(e->name,all[j].name));
+                all[count++]=*e;
+                if(!strncmp(e->name,"Pair ",5)) {
+                    char path[128];snprintf(path,sizeof(path),"/Games/%s/disc.gdi",e->name);
+                    assert(!strcmp(e->path,path));snprintf(path,sizeof(path),"/Games/%s-2048/disc.gdi",e->name);
+                    assert(!strcmp(e->variant_2048_path,path) && !e->directory);++pairs;
+                } else assert(!e->variant_2048_path[0]);
+            }
+            offset+=page.count;if(!page.has_more) break;
+            assert(page.count==KUI_GAMES_ROWS);
+        }
+        assert(count==14 && pairs==10);
+        for(unsigned offset=1;offset<14;offset+=3) {
+            assert(kui_games_list("/Games",offset,&page,log_line,cancel));
+            unsigned expected=14-offset<KUI_GAMES_ROWS?14-offset:KUI_GAMES_ROWS;
+            assert(page.count==expected && page.total==14 && page.has_more==(14-offset>KUI_GAMES_ROWS));
+            for(unsigned i=0;i<page.count;i++) {
+                assert(!strcmp(page.entries[i].path,all[offset+i].path));
+                assert(!strcmp(page.entries[i].variant_2048_path,all[offset+i].variant_2048_path));
+            }
+        }
+        assert(kui_games_list("/Games",14,&page,log_line,cancel) && !page.count && !page.has_more && page.total==14);
+        assert(!test.track_bytes && test.read_bytes<65536);return;
+    }
+    assert(kui_games_list("/Games",0,&page,log_line,cancel));
+    bool chain=!strcmp(test.fault,"variant-chain");
+    bool paired=chain || !strcmp(test.fault,"variant-pair") || !strcmp(test.fault,"variant-reverse") ||
+        !strcmp(test.fault,"variant-layout-only");
+    bool original_only=!strcmp(test.fault,"variant-original-only");
+    bool converted_only=!strcmp(test.fault,"variant-converted-only");
+    assert(page.count==(paired || original_only || converted_only?1u:2u)+(chain?1u:0u));
+    assert(page.total==page.count && !page.has_more);
+    bool original=false,converted=false,double_copy=false;
+    for(unsigned i=0;i<page.count;i++) {
+        const struct kui_games_entry *e=&page.entries[i];
+        if(!strcmp(e->name,"Reader Test")) {
+            original=true;
+            if(!strcmp(test.fault,"variant-ambiguous-original")) assert(e->directory && !strcmp(e->path,"/Games/Reader Test"));
+            else assert(!e->directory && !strcmp(e->path,selected));
+            if(paired) assert(!strcmp(e->variant_2048_path,"/Games/Reader Test-2048/disc.gdi"));
+            else assert(!e->variant_2048_path[0]);
+        } else if(chain && !strcmp(e->name,"Reader Test-2048-2048")) {
+            double_copy=true;assert(!e->directory && !e->variant_2048_path[0]);
+            assert(!strcmp(e->path,"/Games/Reader Test-2048-2048/disc.gdi"));
+        } else {
+            assert(!strcmp(e->name,"Reader Test-2048"));converted=true;
+            assert(!e->variant_2048_path[0]);
+            if(!strcmp(test.fault,"variant-ambiguous-converted")) assert(e->directory && !strcmp(e->path,"/Games/Reader Test-2048"));
+            else assert(!e->directory && !strcmp(e->path,"/Games/Reader Test-2048/disc.gdi"));
+        }
+    }
+    assert(original==!converted_only && converted==(!paired && !original_only));
+    assert(double_copy==chain);
+    assert(!test.track_bytes && test.read_bytes<4096);
+    if(original_only || converted_only) assert(!test.read_bytes);
+}
+
 static void check(void) {
+    if(!strncmp(test.fault,"variant-",8)) {check_variants();return;}
     if(!strcmp(test.fault, "listing")) { check_listing(); return; }
     if(!strcmp(test.fault, "missing-root") || !strcmp(test.fault, "cancel-list") ||
        !strcmp(test.fault, "dir-read-fail") || !strcmp(test.fault, "dir-close-fail") ||
@@ -309,6 +472,10 @@ int main(int argc, char **argv) {
            !strcmp(test.fault, "close-fail") || !strcmp(test.fault, "dir-read-fail") ||
            !strcmp(test.fault, "dir-close-fail") || !strcmp(test.fault, "cancel-list") ||
            !strcmp(test.fault, "cancel-read")) assert(test.injected);
+        if(!strncmp(test.fault,"variant-",8) && (fault("open-fail") || fault("read-fail") ||
+            fault("short-read") || fault("seek-fail") || fault("close-fail") || fault("cancel-pair") ||
+            fault("pair-read-once") || fault("pair-close-once") ||
+            fault("reverse-pair-read-once") || fault("reverse-pair-close-once"))) assert(test.injected);
     }
     assert(!fclose(test.image));
     printf("PASS Games %s %s; no active-operation writes\n", argv[3], test.fault);

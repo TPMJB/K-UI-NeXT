@@ -71,6 +71,19 @@ jobs:
               if not paths or any(p not in exact and not p.startswith(('src/loader/', 'docs/')) for p in paths):
                   raise SystemExit('Console-only request includes changes outside the focused retail correction scope')
               print('Console build requested: skipping the broad repeat suite; focused retail checks are recorded with the correction.')
+          variants = 'Validation: games-variants' in message.splitlines()
+          if variants:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
+              exact = {'.github/workflows/diagnostic.yml', 'include/kui/version.h',
+                       'include/kui/games.h', 'include/kui/shell.h',
+                       'src/apps/games.c', 'src/core/shell.c', 'src/dreamcast/shell_draw.c',
+                       'tests/games_image.c', 'tests/test_games_images.py',
+                       'tests/test_shell.c', 'tests/render_shell.c', 'tests/test_workflow_hygiene.py',
+                       'tests/test_retail_package.py'}
+              if not paths or any(p not in exact and not p.startswith('docs/') for p in paths):
+                  raise SystemExit('Games-variants request includes changes outside listing, selector UI and documentation')
+              requested = True
+              print('Games selector: focused shell and FAT32/exFAT Games checks recorded locally; native build and package checks run here.')
           bootstrap = 'Validation: bootstrap-only' in message.splitlines()
           if bootstrap:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()

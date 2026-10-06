@@ -11,6 +11,9 @@ struct kui_games_entry {
     /* Card-root path, without drive prefix. A directory may target its single
      * GDI directly; ambiguous folders remain navigable directories. */
     char path[KUI_GAMES_FILE_CAP];
+    /* Optional sibling cooked-data GDI. path always selects the original;
+     * pairing checks descriptors/layout only, never full track contents. */
+    char variant_2048_path[KUI_GAMES_FILE_CAP];
     /* What lists show: the disc title a box art scan recorded, else the
      * name. Empty from kui_games_list itself. cover: this row's pixels were
      * loaded for the page's view (games_covers.h). */

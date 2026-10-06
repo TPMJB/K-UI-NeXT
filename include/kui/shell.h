@@ -40,7 +40,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FILES, KUI_SHELL_FILES_ACTIONS, KUI_SHELL_FILES_PICK,
     KUI_SHELL_FILES_CONFIRM, KUI_SHELL_FILES_INFO, KUI_SHELL_FILES_VIEW,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
-    KUI_SHELL_SCI_ASYNC_PROBE };
+    KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -100,6 +100,10 @@ struct kui_shell {
     struct kui_cd_audio_status cd_audio;
     unsigned cd_selected;
     char games_path[KUI_DEST_ROOT_CAP], games_selected_path[KUI_GAMES_FILE_CAP];
+    /* A paired game keeps both exact files while details/confirmation are
+     * open; the selected path is set only after the version is chosen. */
+    char games_original_path[KUI_GAMES_FILE_CAP], games_2048_path[KUI_GAMES_FILE_CAP];
+    unsigned games_variant_selected;
     unsigned games_page, games_selected, games_advanced_selected;
     /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
     unsigned games_view;
@@ -193,6 +197,8 @@ void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
 /* The view to draw: the saved view once known, else the list. */
 unsigned kui_shell_games_view(const struct kui_shell *shell);
+/* Selected paired version, or NULL for an ordinary single image. */
+const char *kui_shell_games_variant_label(const struct kui_shell *shell);
 /* Exact initial test profile only; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
 /* A Windows CE image the CE boot test can take: it loads the CE kernel,

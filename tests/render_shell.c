@@ -6,7 +6,8 @@
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
  * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder, home-games,
- * games, games-detail, games-error, games-advanced, games-probe,
+ * games, games-variants, games-variants-2048, games-detail-2048, games-retail-2048,
+ * games-detail, games-error, games-advanced, games-probe,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
  * games-retail, games-retail-loading, games-retail-invalid, games-ce-probe, games-list-art,
  * games-compact, games-gallery, games-scan, games-detail-art, home-files, home-ripper,
@@ -64,6 +65,15 @@ static void library(struct kui_shell *shell,unsigned view) {
     }
     shell->games_selected=1;
     strcpy(l->message,"Select a GDI to inspect and launch.");
+}
+static void game_pair(struct kui_shell *shell,unsigned choice) {
+    strcpy(shell->games_original_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
+    strcpy(shell->games_2048_path,"/Games/Dead or Alive 2-2048/Dead or Alive 2.gdi");
+    shell->games_variant_selected=choice;
+    if(shell->page!=KUI_SHELL_GAMES_VARIANTS) {
+        strcpy(shell->games_selected_path,choice?shell->games_2048_path:shell->games_original_path);
+        strcpy(shell->games_detail.path,shell->games_selected_path);
+    }
 }
 /* A game folder as the File Manager lists it: folders first, then files. */
 static void files_folder(struct kui_shell *shell,bool root) {
@@ -283,6 +293,10 @@ int main(int argc,char **argv) {
         shell.games_listing.entries[0].directory=true;shell.games_selected=1;
         strcpy(shell.games_listing.message,"Choose a GDI image to inspect.");
     } else if(!strcmp(argv[1],"games-list-art")) library(&shell,KUI_GAMES_VIEW_LIST);
+    else if(!strcmp(argv[1],"games-variants") || !strcmp(argv[1],"games-variants-2048")) {
+        library(&shell,KUI_GAMES_VIEW_LIST);shell.page=KUI_SHELL_GAMES_VARIANTS;
+        game_pair(&shell,!strcmp(argv[1],"games-variants-2048"));
+    }
     else if(!strcmp(argv[1],"games-compact")) library(&shell,KUI_GAMES_VIEW_COMPACT);
     else if(!strcmp(argv[1],"games-gallery")) {library(&shell,KUI_GAMES_VIEW_GALLERY);shell.games_selected=5;}
     else if(!strcmp(argv[1],"games-scan")) {
@@ -292,7 +306,8 @@ int main(int argc,char **argv) {
         strcpy(status.lines[0],"Games found: 43");strcpy(status.lines[1],"New covers from discs: 9");
         strcpy(status.lines[2],"New covers from your images: 1");strcpy(status.lines[3],"No artwork found: 1");
         strcpy(status.lines[4],"Unchanged since last scan: 0");
-    } else if(!strcmp(argv[1],"games-detail") || !strcmp(argv[1],"games-error") || !strcmp(argv[1],"games-detail-art")) {
+    } else if(!strcmp(argv[1],"games-detail") || !strcmp(argv[1],"games-error") ||
+            !strcmp(argv[1],"games-detail-art") || !strcmp(argv[1],"games-detail-2048")) {
         shell.page=KUI_SHELL_GAMES_DETAIL;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
@@ -302,6 +317,7 @@ int main(int argc,char **argv) {
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->product,"T-3601N");strcpy(d->region,"JUE");
         strcpy(d->boot_file,"1ST_READ.BIN");strcpy(d->message,"Track file missing: track03.bin");
         if(!strcmp(argv[1],"games-detail-art")) {d->cover=true;make_cover(detail_cover,KUI_COVER_LARGE,1);}
+        if(!strcmp(argv[1],"games-detail-2048")) game_pair(&shell,1);
     } else if(!strcmp(argv[1],"games-advanced")) {
         shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=2;
     } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {
@@ -320,13 +336,15 @@ int main(int argc,char **argv) {
         }
     }
     else if(!strcmp(argv[1],"games-retail") || !strcmp(argv[1],"games-retail-loading") ||
-            !strcmp(argv[1],"games-retail-invalid") || !strcmp(argv[1],"games-ce-probe")) {
+            !strcmp(argv[1],"games-retail-invalid") || !strcmp(argv[1],"games-ce-probe") ||
+            !strcmp(argv[1],"games-retail-2048")) {
         shell.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
         strcpy(d->path,shell.games_selected_path);d->valid=true;d->tracks=3;
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->boot_file,"1ST_READ.BIN");
         d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
+        if(!strcmp(argv[1],"games-retail-2048")) game_pair(&shell,1);
         if(!strcmp(argv[1],"games-retail-loading")) {
             view.busy=true;view.app_status=&status;status.complete=false;
             strcpy(status.message,"Preparing selected game launch...");
