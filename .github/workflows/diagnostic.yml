@@ -27,7 +27,7 @@ permissions:
 env:
   KUI_EXPERIMENTAL: ${{ (inputs.experimental || endsWith(github.ref_name, '-experimental')) && '1' || '' }}
   # A single diagnostic push opts in explicitly; later ordinary builds stay off.
-  KUI_RETAIL_STARTUP_TRACE: ${{ (inputs.startup_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic startup trace')) && '1' || '0' }}
+  KUI_RETAIL_STARTUP_TRACE: "${{ (inputs.startup_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic startup trace')) && '1' || '0' }}"
 
 concurrency:
   group: diagnostic-${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}
