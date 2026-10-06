@@ -18,7 +18,7 @@
 #include <string.h>
 
 static uint32_t get32(const uint8_t *p) {
-#ifdef __sh__
+#if defined(KUI_ON_CONSOLE) && KUI_ON_CONSOLE
     /* Every word parameter/result is obtained with guest(..., alignment=4).
      * The resident is little endian; alias-safe word accesses avoid carrying
      * byte assembly helpers and their calls in its protected low RAM. */
@@ -30,7 +30,7 @@ static uint32_t get32(const uint8_t *p) {
 #endif
 }
 static void put32(uint8_t *p, uint32_t n) {
-#ifdef __sh__
+#if defined(KUI_ON_CONSOLE) && KUI_ON_CONSOLE
     typedef uint32_t word __attribute__((__may_alias__));
     *(word *)p=n;
 #else
