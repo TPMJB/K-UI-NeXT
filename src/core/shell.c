@@ -266,6 +266,7 @@ bool kui_shell_games_ce_probe_ready(const struct kui_shell *s) {
 }
 static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     clear_game_choice(s);
+    s->games_refresh=first;
     if(first) s->games_page=0;
     s->games_selected=0;
     memset(&s->games_listing,0,sizeof(s->games_listing));
@@ -1075,7 +1076,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->page=KUI_SHELL_GAMES_ADVANCED;s->games_advanced_selected=0;
             break;
         }
-        if(buttons&KUI_SHELL_X) return list_games(s,false);
+        if(buttons&KUI_SHELL_X) {
+            enum kui_shell_action action=list_games(s,false);
+            s->games_refresh=true;
+            return action;
+        }
         if(buttons&KUI_SHELL_Y) {
             /* Same page and selection in the next view; its covers differ. */
             unsigned keep=s->games_selected;

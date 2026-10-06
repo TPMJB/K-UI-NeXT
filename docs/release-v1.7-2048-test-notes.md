@@ -24,6 +24,19 @@ resident memory boundaries remain unchanged.
 - A converted copy without a matching original remains accessible. Ambiguous,
   mismatched or unsupported layouts remain ordinary entries rather than being
   silently hidden. Pairing checks do not hash complete tracks.
+- Page and view changes reuse a bounded worker-owned directory snapshot.
+  Ordinary folders resolve when first shown; explicit refresh and leaving Games
+  discard cached discovery. Pair matching preserves enumerated folder names
+  and ignores case instead of replacing them with a file-stat name/alias.
+- Idle Games controls are polled independently of the periodic redraw cadence.
+  Foreground-operation redraw limits and the SCI video handoff remain active.
+
+The first selector console test (`ce7a24a6ed6f`) reported slow Games navigation,
+missing version choices for native games, and a standard-reader black screen
+for Armada. Armada launched through the background reader and felt slightly
+better with 2048-byte data; no timed comparison was supplied. The navigation
+and folder-matching corrections require another console test. No resident
+reader change is included, so the standard CE failure remains unresolved.
 
 Conversion does not guarantee faster loads, Windows CE boot, complete raw-sector
 requests or CD audio playback. Keep the raw image for comparison and fallback.

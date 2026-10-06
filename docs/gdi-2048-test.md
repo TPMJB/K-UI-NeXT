@@ -83,6 +83,13 @@ ambiguous or mismatched, it remains accessible as an ordinary folder/image.
 The pairing index is bounded to 512 candidate converted folders per directory;
 if that budget or its memory allocation is exceeded, all entries remain
 standalone for that listing.
+Folder pairing compares case-insensitively and preserves the name enumerated
+from the directory; a short-name alias returned by a file-stat call must not
+change the selected path. The worker retains a bounded directory snapshot for
+page/view changes, resolves ordinary game folders when first shown, and rebuilds
+on **X Refresh**, a folder change, re-entering Games or other storage work.
+The snapshot holds at most 1024 logical rows; larger folders remain browsable
+without caching. It stores paths and layout decisions, not open files.
 Selecting a pair opens the version picker; **D-pad** selects, **A** inspects,
 and **B** returns. The detail and launch screens identify the selected copy.
 If your dump is nested under `Armada/extracted`, batch conversion creates
@@ -104,8 +111,13 @@ for those games. Conversion alone does not establish Windows CE compatibility.
 Use three versions of the same game: raw GDI on this test build, converted GDI
 on this test build, and its original retail disc through the normal disc boot.
 Keep the card, storage connection, reader mode, clock and game settings the
-same for both GDI tests. First use the standard reader. Once that comparison
-works, repeat with the background SCI reader as a separate comparison.
+same for both GDI tests. First use the standard reader for a native title. Once
+that comparison works, repeat with the background SCI reader as a separate
+comparison. The first selector hardware test launched Armada only with the
+background reader and reported a black screen with the standard reader. Use
+the same working background reader for both Armada copies. That failed standard
+test is still unresolved; the successful background diagnostic does not show
+its stopping point.
 
 For each version, restart the console and time the same loading event three
 times. For example, use the same DOA2 characters and stage, timing from the

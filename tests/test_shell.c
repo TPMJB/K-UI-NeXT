@@ -497,6 +497,7 @@ static void games_controls(void) {
     reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
     assert(s.page==KUI_SHELL_GAMES && !strcmp(s.games_path,"/Games"));
+    assert(s.games_refresh);
     struct kui_games_page page={.count=2,.has_more=true};
     strcpy(page.root,"/Other");strcpy(page.entries[0].name,"Fighting");
     strcpy(page.entries[0].path,"/Games/Fighting");page.entries[0].directory=true;
@@ -507,6 +508,7 @@ static void games_controls(void) {
     assert(s.games_listing.count==2 && !s.games_listing.entries[0].disabled);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
     assert(!strcmp(s.games_path,"/Games/Fighting") && !s.games_listing.count);
+    assert(s.games_refresh);
     kui_shell_set_games_listing(&s,&page);assert(!s.games_listing.count);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
     kui_shell_set_games_listing(&s,&page);press(KUI_SHELL_DOWN,false);
@@ -551,9 +553,12 @@ static void games_controls(void) {
     assert(s.games_selected==1 && s.games_listing.count==2);
     detail.valid=true;kui_shell_set_games_detail(&s,&detail);assert(!s.games_detail.valid);
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_page==1);
+    assert(!s.games_refresh);
     assert(!s.games_listing.count && !s.games_selected);
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LIST && !s.games_page);
+    assert(!s.games_refresh);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_LIST);
+    assert(s.games_refresh);
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
     kui_shell_set_games_listing(&s,&page);assert(!s.games_listing.count);
     press(KUI_SHELL_DOWN,false);
@@ -1169,6 +1174,7 @@ static void games_views(void) {
     s.games_selected=5;
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && s.games_view==KUI_GAMES_VIEW_LIST);
     assert(s.games_selected==5 && !s.games_listing.count && !s.games_page);
+    assert(!s.games_refresh);
     assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.games_view==KUI_GAMES_VIEW_LIST);
     games_page(8,true,KUI_GAMES_VIEW_LIST);assert(s.games_selected==5);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && s.games_view==KUI_GAMES_VIEW_COMPACT);

@@ -20,4 +20,15 @@ static inline bool kui_ui_redraw_due(bool busy, bool was_busy, unsigned hz,
     if(!busy || hz == KUI_OPT_UI_FULL || busy != was_busy) return true;
     return hz && now_ms - last_draw_ms >= 1000u / hz;
 }
+/* Games polls controls faster while idle without repainting the whole screen
+ * on every poll. Input and completed listings/details appear immediately;
+ * operation caps and their start/end edges keep the shared rule above. */
+static inline bool kui_ui_games_redraw_due(bool games, bool busy, bool was_busy,
+        unsigned hz, bool changed, uint64_t now_ms, uint64_t last_draw_ms) {
+    if(!games || busy) return kui_ui_redraw_due(busy,was_busy,hz,now_ms,last_draw_ms);
+    return changed || was_busy || !last_draw_ms || now_ms-last_draw_ms>=33u;
+}
+static inline unsigned kui_ui_poll_delay(bool games, bool busy) {
+    return games && !busy ? 8u : 33u;
+}
 #endif

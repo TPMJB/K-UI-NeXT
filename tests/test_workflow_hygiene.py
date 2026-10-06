@@ -114,6 +114,11 @@ class GamesVariantValidationScope(unittest.TestCase):
         self.assertIn("outside listing, selector UI", result.stderr)
         self.assertEqual(output, "")
 
+    def test_navigation_correction_uses_recorded_focused_checks(self):
+        result, output = self.run_scope("src/dreamcast/main.c")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("console_only=true", output)
+
 
 class ExperimentalBuildIsOptIn(unittest.TestCase):
     """The DMA probe must never be in an ordinary build, and must be reachable without the

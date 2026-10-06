@@ -74,11 +74,11 @@ jobs:
           variants = 'Validation: games-variants' in message.splitlines()
           if variants:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
-              exact = {'.github/workflows/diagnostic.yml', 'include/kui/version.h',
-                       'include/kui/games.h', 'include/kui/shell.h',
-                       'src/apps/games.c', 'src/core/shell.c', 'src/dreamcast/shell_draw.c',
+              exact = {'Makefile', '.github/workflows/diagnostic.yml', 'include/kui/version.h',
+                       'include/kui/games.h', 'include/kui/shell.h', 'include/kui/ui_rate.h',
+                       'src/apps/games.c', 'src/core/shell.c', 'src/dreamcast/shell_draw.c', 'src/dreamcast/main.c',
                        'tests/games_image.c', 'tests/test_games_images.py',
-                       'tests/test_shell.c', 'tests/render_shell.c', 'tests/test_workflow_hygiene.py',
+                       'tests/test_shell.c', 'tests/render_shell.c', 'tests/test_ui_rate.c', 'tests/test_workflow_hygiene.py',
                        'tests/test_retail_package.py'}
               if not paths or any(p not in exact and not p.startswith('docs/') for p in paths):
                   raise SystemExit('Games-variants request includes changes outside listing, selector UI and documentation')

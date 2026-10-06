@@ -108,6 +108,9 @@ struct kui_shell {
     /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
     unsigned games_view;
     bool games_scanning; /* The box art scan runs; a listing ends it. */
+    /* Explicit refresh/first entry rebuilds worker-owned directory discovery;
+     * page and view changes reuse its read-only snapshot. */
+    bool games_refresh;
     /* The launch's reader (enum kui_retail_reader): A launches with the
      * standard one, X with the background SCI reader under test. */
     unsigned games_retail_reader;

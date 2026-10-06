@@ -136,6 +136,7 @@ static unsigned games_offset_pending,games_result_offset;
 static char games_path_pending[KUI_GAMES_FILE_CAP];
 static unsigned games_reader_pending;
 static unsigned games_view_pending;
+static bool games_refresh_pending,games_cache_clear_pending;
 static struct kui_app_status games_scan_status;
 /* Box art for the Games page and image details. Only the worker writes them,
  * and only while the shell draws no cover from them: each job that fills
@@ -1437,6 +1438,12 @@ static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
         action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || (action>=68 && action<=71) || (action>=46 && action<=48);
 }
+static bool games_page(enum kui_shell_page page) {
+    return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
+        page==KUI_SHELL_GAMES_DETAIL || page==KUI_SHELL_GAMES_VARIANTS ||
+        page==KUI_SHELL_GAMES_PROBE_CONFIRM || page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        page==KUI_SHELL_GAMES_RETAIL_CONFIRM;
+}
 #endif
 static void *worker(void *unused) {
     (void)unused;
@@ -1444,7 +1451,16 @@ static void *worker(void *unused) {
         mutex_lock(&lock);
         unsigned action = pending;
         pending = 0;
+#ifdef KUI_SD_RUNTIME
+        bool clear_games_cache=games_cache_clear_pending || (action==54 && games_refresh_pending);
+        games_cache_clear_pending=false;
+#endif
         mutex_unlock(&lock);
+#ifdef KUI_SD_RUNTIME
+        /* The worker exclusively owns cached FatFs discovery. The UI can
+         * request invalidation after leaving Games even without a new job. */
+        if(clear_games_cache) kui_games_cache_clear();
+#endif
         if(!action) {
 #ifdef KUI_SD_RUNTIME
             /* Only this worker touches the drive. A queued foreground action
@@ -1485,6 +1501,9 @@ static void *worker(void *unused) {
 #endif
         }
 #ifdef KUI_SD_RUNTIME
+        /* Other operations may alter card content, reconnect storage or hand
+         * all memory to a game. Only browsing and inspection retain the cache. */
+        if(action && action!=54 && action!=55) kui_games_cache_clear();
         if(action && needs_cd_handoff(action) && !kui_cd_audio_stop_for_io(kui_log)) {
             publish_cd_audio();
             mutex_lock(&lock);
@@ -1752,6 +1771,7 @@ static void *worker(void *unused) {
                     snprintf(page.message,sizeof(page.message),"%s",status.message);
                 mutex_lock(&lock);games_listing=page;games_result_offset=0;
                 ++games_listing_generation;mutex_unlock(&lock);
+                kui_games_cache_clear();
             }
             if(action==60) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -2439,6 +2459,7 @@ int main(void) {
         else if(held && input_at >= repeat_at) { pressed |= held; repeat_at = input_at + 140; }
         /* Preserve Stop/cancel priority even if B was held before an A edge. */
         if(pressed && (buttons & CONT_B)) pressed |= CONT_B;
+        bool games_ui_changed=false;
         publish_music();
         mutex_lock(&lock);
         if(splash_active && input_at>=splash_deadline) {splash_active=false;last_draw=0;}
@@ -2474,6 +2495,7 @@ int main(void) {
             if(shell.games_page*KUI_GAMES_ROWS==games_result_offset)
                 kui_shell_set_games_listing(&shell,&games_listing);
             seen_games_listing=games_listing_generation;
+            games_ui_changed=true;
         }
         if(seen_files_result!=files_result_generation) {
             kui_shell_set_files_status(&shell,&files_result);seen_files_result=files_result_generation;
@@ -2490,6 +2512,7 @@ int main(void) {
         if(seen_games_detail!=games_detail_generation) {
             kui_shell_set_games_detail(&shell,&games_detail);
             seen_games_detail=games_detail_generation;
+            games_ui_changed=true;
         }
         if(seen_clock_generation!=clock_generation) {
             kui_shell_set_clock(&shell,clock_valid?&clock_snapshot:NULL,clock_note);
@@ -2548,12 +2571,15 @@ int main(void) {
             snprintf(system_note,sizeof(system_note),"Video reverted after 10 seconds.");
         }
         enum kui_shell_action requested=KUI_SHELL_NONE;
+        enum kui_shell_page page_before_input=shell.page;
         if(splash_active) {if(pressed&CONT_B) {startup_skip=true;splash_active=false;last_draw=0;}}
         else {
             requested=kui_shell_input(&shell,shell_buttons(pressed),busy);
             if(pressed && !busy && startup_finished)
                 kui_menu_sound_play(pressed&CONT_A?KUI_MENU_SOUND_CONFIRM:KUI_MENU_SOUND_MOVE);
         }
+        if(games_page(page_before_input) && !games_page(shell.page)) games_cache_clear_pending=true;
+        if(page_before_input!=shell.page) games_ui_changed=true;
         if(requested==KUI_SHELL_PREVIEW_VIDEO && !busy) {
             video_prior_safe=safe_video_boot;video_prior_mode=applied_video;
             safe_video_boot=false;
@@ -2674,6 +2700,7 @@ int main(void) {
                 games_reader_pending=shell.games_retail_reader;
             }
             if(action==54 || action==59) games_view_pending=shell.games_view;
+            if(action==54) games_refresh_pending=shell.games_refresh;
             if(action>=60 && action<=63) {
                 files_request_pending=shell.files_request;
                 files_job_pending=shell.files_job;
@@ -2718,6 +2745,7 @@ int main(void) {
             }
         }
         bool is_busy = busy, cd_owned=cd_drive_owned;
+        bool games_ui=games_page(shell.page);
         mutex_unlock(&lock);
         if(requested==KUI_SHELL_MUSIC_NEXT && !cd_owned) music_step(1);
         if(requested==KUI_SHELL_MUSIC_PREVIOUS && !cd_owned) music_step(-1);
@@ -2829,7 +2857,8 @@ int main(void) {
         }
         mutex_lock(&lock);bool is_busy=busy;mutex_unlock(&lock);
 #endif
-        /* Idle: always redraw, as before. Busy: at most ui_hz_busy redraws per
+        /* Games idle controls run independently of the 33 ms redraw cadence.
+         * Other idle pages redraw as before. Busy: at most ui_hz_busy redraws per
          * second, plus one at each start and end so the screen is never stale
          * about what state it is in. The controller is polled every loop either
          * way, so B still stops an operation whatever the cap. Keyed on when
@@ -2838,7 +2867,12 @@ int main(void) {
          * once instead of waiting out the schedule the old value set. */
         unsigned hz = ui_hz_busy;
         uint64_t t = timer_ms_gettime64();
-        bool due = kui_ui_redraw_due(is_busy, was_busy, hz, t, last_draw);
+#ifdef KUI_SD_RUNTIME
+        bool due = kui_ui_games_redraw_due(games_ui,is_busy,was_busy,hz,
+            pressed || games_ui_changed,t,last_draw);
+#else
+        bool due = kui_ui_redraw_due(is_busy,was_busy,hz,t,last_draw);
+#endif
         was_busy = is_busy;
 #ifdef KUI_SD_RUNTIME
         mutex_lock(&lock);
@@ -2864,6 +2898,10 @@ int main(void) {
 #endif
             last_draw = t;
         }
+#ifdef KUI_SD_RUNTIME
+        thd_sleep((int)kui_ui_poll_delay(games_ui,is_busy));
+#else
         thd_sleep(33);
+#endif
     }
 }

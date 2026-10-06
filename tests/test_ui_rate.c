@@ -35,8 +35,37 @@ static unsigned bench_sweep(uint64_t t) {
     uint64_t s = (t - 1000) / 1000;
     return s < 10 ? KUI_OPT_UI_FULL : s < 20 ? 8 : s < 30 ? 2 : s < 40 ? 0 : KUI_OPT_UI_FULL;
 }
+static void games_idle_cadence(void) {
+    assert(kui_ui_poll_delay(true,false)==8);
+    assert(kui_ui_poll_delay(true,true)==33);
+    assert(kui_ui_poll_delay(false,false)==33);
+    assert(kui_ui_poll_delay(false,true)==33);
+    assert(kui_ui_games_redraw_due(true,false,false,0,false,5000,0));
+    assert(!kui_ui_games_redraw_due(true,false,false,0,false,5008,5000));
+    assert(!kui_ui_games_redraw_due(true,false,false,0,false,5032,5000));
+    assert(kui_ui_games_redraw_due(true,false,false,0,false,5033,5000));
+    /* Input and a freshly published list/detail do not wait for the cadence. */
+    assert(kui_ui_games_redraw_due(true,false,false,0,true,5008,5000));
+    assert(kui_ui_games_redraw_due(true,false,true,0,false,5008,5000));
+    /* Faster Games input never overrides busy caps, including a held button. */
+    assert(!kui_ui_games_redraw_due(true,true,true,0,true,6000,5000));
+    assert(!kui_ui_games_redraw_due(true,true,true,2,true,5499,5000));
+    assert(kui_ui_games_redraw_due(true,true,true,2,true,5500,5000));
+    assert(kui_ui_games_redraw_due(true,true,false,0,false,5008,5000));
+    assert(kui_ui_games_redraw_due(false,false,false,0,false,5008,5000));
+    uint64_t last=0;unsigned polls=0,draws=0;
+    for(uint64_t t=1000;t<2000;t+=kui_ui_poll_delay(true,false)) {
+        ++polls;
+        if(kui_ui_games_redraw_due(true,false,false,0,false,t,last)) {
+            if(last) assert(t-last>=33u);
+            last=t;++draws;
+        }
+    }
+    assert(polls==125 && draws==25); /* Controls poll independently of redraws. */
+}
 
 int main(void) {
+    games_idle_cadence();
     /* Idle always redraws, whatever the cap says. */
     assert(kui_ui_redraw_due(false, false, 0, 5000, 5000));
     assert(kui_ui_redraw_due(false, false, 4, 5001, 5000));
@@ -81,6 +110,6 @@ int main(void) {
     assert(draws_in(30, 40) == 0);                              /* 0 Hz: silent, by design */
     assert(draws_in(40, 50) == 250);                            /* restored to full */
 
-    puts("PASS ui rate: idle/full/edges/zero, period, mid-operation rate change, bench sweep");
+    puts("PASS ui rate: Games input/redraw cadence, busy caps, idle/full/edges/zero, period, mid-operation rate change, bench sweep");
     return 0;
 }

@@ -48,6 +48,10 @@ struct kui_games_detail {
  * Listing never creates /Games and never scans/hashes complete track files. */
 bool kui_games_list(const char *root, unsigned offset, struct kui_games_page *out,
                     kui_log_fn log, kui_cancel_fn cancel);
+/* Storage worker only. A directory snapshot is reused across pages/views;
+ * clear when leaving/refreshing Games or changing card/storage/content.
+ * Root changes clear it automatically. No open filesystem handles are kept. */
+void kui_games_cache_clear(void);
 /* Runs while the card is still mounted: after a successful listing, or after
  * an inspection whether or not the image was valid. It may read any file and
  * write under KUI/, and must leave no file or folder open. */

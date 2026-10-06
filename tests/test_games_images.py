@@ -26,6 +26,15 @@ CASES = ("valid", "valid-session-size", "listing", "missing-root", "missing-trac
 CASES += ("variant-chain", "variant-index-overflow", "variant-pair-read-once",
           "variant-pair-close-once", "variant-mismatch-control", "variant-missing-track",
           "variant-reverse-pair-read-once", "variant-reverse-pair-close-once")
+CASES += ("variant-stat-sfn", "variant-stat-case", "variant-case", "variant-descriptor-name",
+          "variant-mixed-original", "variant-all-cooked-original", "variant-many-tracks",
+          "variant-nested", "variant-cache-navigation", "variant-cache-refresh",
+          "variant-cache-root-change", "variant-cache-callback", "variant-cache-dir-read-once",
+          "variant-cache-dir-close-once", "variant-cache-cancel-lazy")
+CASES += ("variant-unicode-case", "variant-unicode-exact", "variant-sfn-alias",
+          "variant-cache-pair-read-once", "variant-cache-pair-close-once",
+          "variant-cache-index-read-once", "variant-list-cache-overflow",
+          "variant-cache-callback-cancel")
 
 
 def digest(path):
