@@ -41,6 +41,10 @@ struct kui_media_ops;
 bool kui_sd_raw_read_ops(struct kui_media_ops *out);
 void kui_disc_probe(void);
 void kui_drive_init_bus(void);
+/* Exclusive optical owner only, with no read in flight. STOP has a 3-second
+ * deadline and 1-second abort recovery; it never resets a poisoned adapter or
+ * submits disc INIT/TOC/read. Cleanup completes even while B is held. */
+bool kui_disc_stop(void);
 void kui_bootstrap_load(kui_cancel_fn cancelled,bool recovery_only);
 /* Caller owns storage exclusively; no diagnostic job may be running. */
 enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,

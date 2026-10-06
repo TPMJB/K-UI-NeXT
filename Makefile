@@ -123,6 +123,7 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-timing
 	./build/test-disc
 	./build/test-disc abort-fail
+	./build/test-disc stop-abort-fail
 	./build/test-disc media-change
 	./build/test-disc guard-failed
 	./build/test-disc guard-before

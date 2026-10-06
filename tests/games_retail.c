@@ -21,7 +21,7 @@ static struct {
     const char *fault;
     FIL *track;
     unsigned writes, connects, disconnects, files, read_calls, physical_reads;
-    unsigned hash_phase,hash_reads[2],hash_max[2],cached_cancel_checks;
+    unsigned hash_phase,hash_reads[2],hash_max[2],between_read_cancel_checks;
     uint64_t hash_begin[2],hash_end[2];
     bool hash_bounded;
     uint32_t first_sector;
@@ -133,10 +133,10 @@ void kui_sd_disconnect(void) {
     test.connected = false; ++test.disconnects; kui_media_set(NULL);
 }
 static bool cancel(void) {
-    /* The refill completed, then a cached sector was copied before the next
-     * refill. Cancellation must still be observed without another FatFs read. */
-    if(test.active && checksum_case() && strstr(test.fault,"cancel-hit") &&
-       test.hash_phase==2 && test.hash_reads[1]==1u && ++test.cached_cancel_checks==3u) {
+    /* Cancel between completed logical-sector reads, before a second FatFs
+     * read. A preparation that is stopped must not publish a launch image. */
+    if(test.active && checksum_case() && strstr(test.fault,"cancel-between-reads") &&
+       test.hash_phase==2 && test.hash_reads[1]==1u && ++test.between_read_cancel_checks==2u) {
         test.cancelled=true;test.injected=true;
     }
     return test.cancelled || fault("cancel-before");
@@ -173,7 +173,7 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
                 if(checksum_case() && phase==1u && test.hash_reads[phase]==2u) {
                     if(strstr(test.fault,"read-fail")) {test.injected=true;return FR_DISK_ERR;}
                     if(strstr(test.fault,"short-read")) {assert(*got);--*got;test.injected=true;}
-                    if(strstr(test.fault,"cancel-refill")) {test.cancelled=test.injected=true;}
+                    if(strstr(test.fault,"cancel-read") && !strstr(test.fault,"cancel-between-reads")) {test.cancelled=test.injected=true;}
                 }
             }
             if(fault("read-fail")) { test.injected = true; return FR_DISK_ERR; }
@@ -652,17 +652,17 @@ static void check(const char *directory) {
         if(result) check_format_mapping(directory, &expected, &image);
         else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
         if(checksum_case()) {
-            assert(test.hash_max[0]<=32768u && test.hash_max[1]<=32768u);
+            unsigned stride=expected.track[expected.count-1u].stride;
+            assert(test.hash_max[0]<=stride && test.hash_max[1]<=stride);
             if(result) {
-                unsigned stride=expected.track[expected.count-1u].stride;
-                assert(test.hash_reads[0]==(stride==2048u?1u:2u) && test.hash_max[0]==32768u);
-                if(expected.flags & KUI_RETAIL_IMAGE_BOOT_CRC) assert(test.hash_reads[1]==3u && test.hash_max[1]==32768u);
+                assert(test.hash_reads[0]==16u && test.hash_max[0]==stride);
+                if(expected.flags & KUI_RETAIL_IMAGE_BOOT_CRC) assert(test.hash_reads[1]==33u && test.hash_max[1]==stride);
                 else assert(!test.hash_reads[1]);
-                printf("Checksum batches PASS: IP %u reads, exact 66537-byte boot %u reads; max FatFs read %u bytes; bounded physical spans\n",
+                printf("Checksum direct reads PASS: IP %u reads, exact 66537-byte boot %u reads; max FatFs read %u bytes; bounded physical spans\n",
                     test.hash_reads[0],test.hash_reads[1],test.hash_max[0]>test.hash_max[1]?test.hash_max[0]:test.hash_max[1]);
-            } else if(strstr(test.fault,"cancel-hit")) {
-                assert(test.injected && test.cancelled && test.hash_reads[1]==1u && test.cached_cancel_checks>=3u);
-            } else if(strstr(test.fault,"read-fail") || strstr(test.fault,"short-read") || strstr(test.fault,"cancel-refill")) {
+            } else if(strstr(test.fault,"cancel-between-reads")) {
+                assert(test.injected && test.cancelled && test.hash_reads[1]==1u && test.between_read_cancel_checks>=2u);
+            } else if(strstr(test.fault,"read-fail") || strstr(test.fault,"short-read") || strstr(test.fault,"cancel-read")) {
                 assert(test.injected && test.hash_reads[1]==2u);
             } else assert(strstr(test.fault,"bad-mode") || strstr(test.fault,"bad-ip-header"));
         }

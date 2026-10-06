@@ -1565,6 +1565,9 @@ static void *worker(void *unused) {
                 uint64_t now=timer_ms_gettime64();
                 if(now>=next_cd_poll) {
                     kui_cd_audio_poll(NULL,kui_log);publish_cd_audio();next_cd_poll=now+1000;
+                    /* A completed track releases ownership but need not stop
+                     * the spindle. Cleanup is exclusive on this same worker. */
+                    if(!kui_cd_audio_owns_drive()) (void)kui_disc_stop();
                 }
             }
             if(idle && !reset && !kui_cd_audio_owns_drive()) {
@@ -2129,8 +2132,16 @@ static void *worker(void *unused) {
         }
 #ifdef KUI_SD_RUNTIME
         if(action!=12 && action!=27 && action!=60) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
-        if(action==1 || (action>=4 && action<=7) || action==22 || (action>=46 && action<=48)) kui_disc_identity_invalidate(&disc_identity);
+        if(action==12 || action==1 || (action>=4 && action<=7) || action==22 ||
+           action==49 || (action>=46 && action<=48)) {
+            if(!kui_cd_audio_owns_drive()) (void)kui_disc_stop();
+            if(action!=12) kui_disc_identity_invalidate(&disc_identity);
+            mutex_lock(&lock);
+            if(!drive_reset_required) disc_snapshot=disc_identity;
+            mutex_unlock(&lock);
+        }
 #else
+        if(action==1 || action==7) (void)kui_disc_stop();
         kui_log("Operation ended. View Log; saving a report is a separate write action.");
 #endif
         mutex_lock(&lock);
@@ -2483,7 +2494,8 @@ int main(void) {
     kui_log("Use a spare test card for write tests. No formatting; existing files preserved.");
 #ifdef KUI_SD_RUNTIME
     kui_system_settings_default(&system_current);system_pending=system_current;
-    kui_music_init(kui_log);kui_disc_identity_init(&disc_identity);disc_snapshot=disc_identity;
+    kui_music_init(kui_log);kui_disc_identity_init(&disc_identity);
+    kui_disc_identity_park(&disc_identity);disc_snapshot=disc_identity;
     safe_video_boot=(controller_buttons()&CONT_Y)!=0;
     kui_settings_default(&settings_current);
     settings_pending = settings_current;
@@ -2499,7 +2511,8 @@ int main(void) {
     kui_log("B returns home while idle; during work it stops and checkpoints.");
     kui_log("New dumps use game-named folders in /Games; duplicates get a number.");
     kui_log("Home/Ripper L/R: previous/next song. Ripper Start: Advanced, destination and settings.");
-    kui_log("Inserted GD-ROM titles appear while idle; no idle polling during operations.");
+    kui_log("Newly inserted GD-ROM titles appear while idle, then the disc stops.");
+    kui_log("The boot disc stays stopped; disc apps start the drive when requested.");
     kui_log("System Settings: video, memory display and menu music. Hold Y on runtime start for safe video.");
     kui_log("Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KUI/).");
     kui_log("Capture defaults: CRC32, no automatic readback. Y Verify rereads saved files.");
@@ -2511,6 +2524,22 @@ int main(void) {
     kui_log("Configured benchmarks use /KUI/bench.cfg; B stops safely.");
     kui_log("Bench SD sections write temporary test files; results auto-save to SD.");
     kui_log("Full capture is available in the updated SD runtime.");
+#endif
+    /* Code, fonts and assets are already in RAM. Show the boot screen before
+     * the bounded STOP; no worker or app can own the drive at this point. Do
+     * not read the boot disc merely to populate the optional idle title. */
+#ifdef KUI_SD_RUNTIME
+    draw_shell();
+#else
+    draw_boot();
+#endif
+    (void)kui_disc_stop();
+    /* A slow STOP must not consume the interval in which input can cancel
+     * automatic startup, nor expire the chime before its worker starts. */
+#ifdef KUI_SD_RUNTIME
+    splash_deadline=timer_ms_gettime64()+3000;
+#else
+    kui_boot_ui_init(&boot_ui,timer_ms_gettime64());
 #endif
     kthread_attr_t attrs = {.stack_size = 64 * 1024, .label = "kui-io"};
     kthread_t *io_worker=thd_create_ex(&attrs,worker,NULL);

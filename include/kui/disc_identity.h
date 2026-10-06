@@ -12,7 +12,8 @@ enum kui_disc_identity_state {
     KUI_DISC_IDENTITY_EMPTY, KUI_DISC_IDENTITY_WAITING,
     KUI_DISC_IDENTITY_NON_GD, KUI_DISC_IDENTITY_PENDING,
     KUI_DISC_IDENTITY_READING, KUI_DISC_IDENTITY_READY,
-    KUI_DISC_IDENTITY_ERROR, KUI_DISC_IDENTITY_RESET_REQUIRED
+    KUI_DISC_IDENTITY_ERROR, KUI_DISC_IDENTITY_RESET_REQUIRED,
+    KUI_DISC_IDENTITY_STOPPED
 };
 struct kui_disc_identity {
     enum kui_disc_identity_state state;
@@ -21,7 +22,7 @@ struct kui_disc_identity {
     int disc_type;
     /* Last BIOS observation, retained for transition-only diagnostic logging. */
     int last_status, last_status_result, last_disc_type;
-    bool observed, armed, needs_identification, startup_attempted, insertion_pending;
+    bool observed, armed, needs_identification, startup_attempted, insertion_pending, parked;
 };
 /* Status values are the pinned KOS cd_stat_t / cd_disc_types_t integers.
  * status returns a nonnegative result when both output words are valid, like
@@ -37,10 +38,14 @@ struct kui_disc_identity_ops {
     bool (*cancelled)(void *ctx);
 };
 void kui_disc_identity_init(struct kui_disc_identity *identity);
+/* Suppress automatic setup/read of the current disc after startup STOP. Status
+ * polling continues; only an observed open/empty transition rearms insertion
+ * identification. This policy does not prohibit explicit optical app I/O. */
+void kui_disc_identity_park(struct kui_disc_identity *identity);
 /* Only the single I/O worker calls these. Passing io_idle=false makes NO
  * firmware call. Cheap status checks are throttled; true requests one title
  * read, which the worker performs only after pausing any music/SD activity.
- * Initial unreadable/uninitialized status and each observed insertion permit
+ * Unless parked, initial unreadable/uninitialized status and each insertion permit
  * one guarded prepare attempt, including a stale pre-INIT CD type;
  * ordinary errors never trigger a polling retry loop. The owner must pass false
  * or skip polling after the drive adapter reports failed recovery/poisoning.
@@ -51,8 +56,8 @@ void kui_disc_identity_read(struct kui_disc_identity *identity,
     const struct kui_disc_identity_ops *ops);
 /* Invalidates presentation after an explicit operation that may have changed
  * media while idle polling was suspended. It never resets the drive adapter.
- * The next stable GD status permits ONE new identification attempt. This
- * preserves the one-time startup allowance; it does not renew that allowance. */
+ * Background setup stays parked until another observed removal/insertion, so
+ * an explicit operation never causes a second idle spin-up of the same disc. */
 void kui_disc_identity_invalidate(struct kui_disc_identity *identity);
 const char *kui_disc_identity_text(enum kui_disc_identity_state state);
 /* Production callbacks use the pinned BIOS status syscall directly and the

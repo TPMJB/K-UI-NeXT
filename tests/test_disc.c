@@ -12,7 +12,7 @@
 
 static struct {
     uint64_t us,last_handoff,max_service_us;
-    unsigned sends,reads,polls,total_polls,sleeps,passes,aborts,modes;
+    unsigned sends,reads,polls,total_polls,sleeps,passes,aborts,modes,bus_inits;
     unsigned target_polls,poll_us,guard;
     int reported_delta,command;
     bool stop,abort_started,submit_busy,submit_always_busy,underfill,fail;
@@ -34,7 +34,7 @@ void thd_pass(void) {
     if(fake.cancel_on_pass) fake.stop=true;
 }
 bool kui_cancelled(void) {return fake.stop;}
-void kui_drive_init_bus(void) {}
+void kui_drive_init_bus(void) {++fake.bus_inits;}
 void kui_log(const char *format,...) {
     va_list args;va_start(args,format);
     int n=vsnprintf(fake.log+fake.used,sizeof(fake.log)-fake.used,format,args);va_end(args);
@@ -45,7 +45,7 @@ int syscall_gdrom_sector_mode(cd_sec_mode_params_t *p) {
     assert(p->size==2352 && p->track_type==0);fake.us+=7;++fake.modes;return fake.mode_fail?-1:0;
 }
 int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
-    assert(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD || code==CD_CMD_INIT);
+    assert(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD || code==CD_CMD_INIT || code==CD_CMD_STOP);
     fake.command=code;fake.us+=13;++fake.sends;
     if(fake.submit_busy || fake.submit_always_busy) {fake.submit_busy=false;return 0;}
     fake.polls=0;fake.abort_started=false;
@@ -71,6 +71,7 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
     if(fake.timeout || fake.cancel) return 1;
     unsigned needed=fake.target_polls?fake.target_polls:((fake.reads&1)?2u:4u);
     if(fake.polls<needed) return 1;
+    if(fake.command==CD_CMD_STOP) {detail->size=0;return 2;}
     assert(fake.command==CD_CMD_PIOREAD || fake.command==CD_CMD_DMAREAD);
     if(fake.command==CD_CMD_DMAREAD) test_cache_note('C',0,0);   /* the transfer is done */
     size_t bytes=(size_t)fake.params.num_sec*KUI_RAW_BYTES;
@@ -103,6 +104,8 @@ static int run_dma_async(const char *mode) {
     reset();
     if(!strcmp(mode,"dma-async-stop")) {
         assert(kui_disc_read_begin(NULL,45150,32,buf));
+        unsigned sends=fake.sends;
+        assert(!kui_disc_stop() && fake.sends==sends && !fake.bus_inits);
         fake.stop=true;                                   /* B pressed with a read in flight */
         assert(kui_disc_read_end(NULL)==KUI_READ_FATAL);
         fake.stop=false;
@@ -234,7 +237,18 @@ int main(int argc,char **argv) {
     memset(out,0xd3,sizeof(out));reset();
     if(argc==2) {
         capture_phase();
-        if(!strcmp(argv[1],"abort-fail")) {
+        if(!strcmp(argv[1],"stop-abort-fail")) {
+            fake.timeout=fake.abort_fail=fake.stop=true;
+            assert(!kui_disc_stop());
+            assert(fake.command==CD_CMD_STOP && fake.reads==0 && fake.modes==0 && fake.bus_inits==1);
+            assert(fake.aborts==1 && fake.us>=4000000 && fake.us<4024000);
+            unsigned sends=fake.sends,bus=fake.bus_inits;
+            fake.stop=fake.timeout=fake.abort_fail=false;
+            assert(!kui_disc_stop() && fake.sends==sends && fake.bus_inits==bus);
+            struct kui_toc sessions[2];
+            assert(!kui_disc_prepare(sessions) && fake.sends==sends && fake.bus_inits==bus);
+            puts("PASS STOP: bounded failed abort remains poisoned; no reset, INIT, read or retry");return 0;
+        } else if(!strcmp(argv[1],"abort-fail")) {
             fake.timeout=fake.abort_fail=true;
             assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_FATAL);
             assert(fake.aborts==1 && fake.us>=6000000 && fake.us<6024000);
@@ -254,6 +268,19 @@ int main(int argc,char **argv) {
         unchanged(out,sizeof(out));check_refused(out);
         puts("PASS optical: failed abort/media change/guard stays refused after profile reset");return 0;
     }
+
+    /* Startup STOP does not discover/read the boot disc. Holding B cannot
+     * cancel required cleanup; both command and abort have finite deadlines. */
+    fake.stop=true;
+    assert(kui_disc_stop());
+    assert(fake.sends==1 && fake.command==CD_CMD_STOP && fake.bus_inits==1);
+    assert(fake.reads==0 && fake.modes==0 && fake.aborts==0 && fake.sleeps>0);
+    fake.timeout=true;fake.cancel_on_sleep=true;
+    uint64_t stop_start=fake.us;
+    assert(!kui_disc_stop());
+    assert(fake.sends==2 && fake.bus_inits==1 && fake.reads==0 && fake.modes==0);
+    assert(fake.aborts==1 && fake.us-stop_start>=3000000 && fake.us-stop_start<3012000);
+    reset();
 
     /* Identification stays paired and byte-identical; short service commands
      * finish without a scheduler tick. Counters remain exclusive and exact. */
@@ -356,6 +383,8 @@ int main(int argc,char **argv) {
     assert(kui_disc_read_raw(NULL,45150,KUI_CAPTURE_CHUNK,out)==KUI_READ_FATAL);
     assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_FATAL && fake.reads==1);
     unchanged(out,sizeof(out));kui_disc_timing_report();expect("opt mismatch=0 guards=1 refused=1");
+    unsigned sends=fake.sends;
+    assert(!kui_disc_stop() && fake.sends==sends && !fake.bus_inits);
     puts("PASS optical: paired identity, single capture, transfer size, bounded fast service, periodic scheduling, busy submit, deadlines, cancel and guards");
     return 0;
 }

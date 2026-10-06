@@ -65,16 +65,16 @@ CHECKSUM_CASES = (
     "format-checksum-raw-bin", "format-checksum-cue-shared", "format-checksum-cue-2336",
     "format-checksum-cue-2448", "format-checksum-cdi",
     "format-checksum-cooked-read-fail", "format-checksum-cooked-short-read",
-    "format-checksum-cooked-cancel-refill", "format-checksum-cue-shared-read-fail",
-    "format-checksum-cue-shared-short-read", "format-checksum-cue-shared-cancel-refill",
-    "format-checksum-cue-shared-cancel-hit", "format-checksum-cue-shared-bad-mode",
+    "format-checksum-cooked-cancel-read", "format-checksum-cue-shared-read-fail",
+    "format-checksum-cue-shared-short-read", "format-checksum-cue-shared-cancel-read",
+    "format-checksum-cue-shared-cancel-between-reads", "format-checksum-cue-shared-bad-mode",
     "format-checksum-cue-shared-bad-ip-header",
 )
 FORMAT_CASES += CHECKSUM_CASES
 
 
 def make_checksum_fixture(folder, case):
-    """Independent exact-byte CRCs and a boot larger than two logical batches.
+    """Independent exact-byte CRCs and a boot spanning 33 logical sectors.
 
     The existing generated source sectors/geometry define expected bytes. We
     modify those sources directly, then copy their span into the backing file;
@@ -117,7 +117,7 @@ def make_checksum_fixture(folder, case):
     actual = bytearray(actual_path.read_bytes())
     actual[offset:offset + len(source)] = source
     # Damage a late sector after metadata probing, without altering the known
-    # independent expected source. Batch reads must still validate each sector.
+    # independent expected source. Checksums must still validate every sector.
     if case.endswith("bad-mode"):
         at = offset + 39 * stride + 18
         actual[at] |= 32
@@ -221,7 +221,7 @@ def main():
     parser.add_argument("--formats-only", action="store_true",
                         help="Only generic image-format preparation, on MBR FAT32/exFAT")
     parser.add_argument("--checksums-only", action="store_true",
-                        help="Only exact CRC batching/fault cases, on MBR FAT32/exFAT")
+                        help="Only exact CRC, physical-bound and fault cases, on MBR FAT32/exFAT")
     args = parser.parse_args()
     for binary in ("mkfs.fat", "mkfs.exfat", "fsck.fat", "fsck.exfat"):
         if not shutil.which(binary):
@@ -252,11 +252,12 @@ def main():
                     assert digest(image) == before, f"Retail preparation changed {kind} {layout} in {case}"
                     if case in CHECKSUM_CASES and not any(word in case for word in (
                             "read-fail", "short-read", "cancel-", "bad-")):
-                        counters = re.search(r"Checksum batches PASS: IP (\d+) reads, exact 66537-byte boot (\d+) reads; "
+                        counters = re.search(r"Checksum direct reads PASS: IP (\d+) reads, exact 66537-byte boot (\d+) reads; "
                                              r"max FatFs read (\d+) bytes", output)
                         assert counters, "missing actual FatFs checksum counters"
                         ip_calls, boot_calls, largest = map(int, counters.groups())
-                        assert largest == 32768 and boot_calls == (0 if case.endswith("gdi-raw") else 3)
+                        assert ip_calls == 16 and largest in (2048, 2336, 2352, 2448)
+                        assert boot_calls == (0 if case.endswith("gdi-raw") else 33)
                         print(f"Checksum I/O {kind} {case}: IP={ip_calls}, boot={boot_calls}, max={largest} bytes", flush=True)
                     if case in SUCCESS_CASES or (case in FORMAT_CASES and not any(
                             word in case for word in ("bad", "read-fail", "short-read", "cancel-"))):

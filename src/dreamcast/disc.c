@@ -116,6 +116,7 @@ static void pause_worker(void *ctx) {
     if(probe_stats) {probe_stats->pause_us+=timer_us_gettime64()-start;++probe_stats->pauses;}
 }
 static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
+static bool never_cancelled(void *ctx) { (void)ctx; return false; }
 static int submit(void *ctx, int command, void *params) {
     (void)ctx;
     uint64_t start=(active_command||probe_stats)?timer_us_gettime64():0;
@@ -148,15 +149,16 @@ static void abort_command(void *ctx, int handle) {
     syscall_gdrom_abort_command(handle);
     if(active_command) {active_command->abort_us+=timer_us_gettime64()-start;++active_command->aborts;}
 }
-static bool command(int code, void *params, uint32_t timeout) {
-    if(poisoned || kui_cancelled()) {
+static bool command_run(int code, void *params, uint32_t timeout,bool can_cancel) {
+    if(poisoned || (can_cancel && kui_cancelled())) {
         if(active_command) ++active_command->result[poisoned?KUI_CMD_RECOVERY_FAILED:KUI_CMD_CANCELLED];
         return false;
     }
     memset(&detail, 0, sizeof(detail));
     fast_pio=code==CD_CMD_PIOREAD;
     last_pass_us=timer_us_gettime64();
-    struct kui_command_ops ops = {NULL, now, pause_worker, cancelled, submit, poll, abort_command};
+    struct kui_command_ops ops = {NULL, now, pause_worker,
+        can_cancel?cancelled:never_cancelled, submit, poll, abort_command};
     enum kui_command_result result = kui_command(&ops, code, params, timeout, 1000);
     fast_pio=false;
     if(active_command) ++active_command->result[result];
@@ -167,6 +169,9 @@ static bool command(int code, void *params, uint32_t timeout) {
     if(result == KUI_CMD_RECOVERY_FAILED) poisoned = true;
     if(detail.err1 == 6 || detail.err1 == 2) media_changed = true;
     return false;
+}
+static bool command(int code,void *params,uint32_t timeout) {
+    return command_run(code,params,timeout,true);
 }
 
 static bool set_mode(int size, int track_type) {
@@ -455,6 +460,20 @@ static unsigned dma_failures;   /* consecutive DMA reads that failed on an uncha
 static uint8_t *dma_target;
 static size_t dma_target_bytes;
 static bool dma_in_flight;
+
+bool kui_disc_stop(void) {
+    /* In particular do not reset/init after failed recovery: static firmware
+     * objects may still be owned. An unfinished DMA must be ended by its owner
+     * before STOP can safely share the command detail/parameter workspace. */
+    if(poisoned || dma_in_flight) return false;
+    if(!initialized) {kui_drive_init_bus();initialized=true;}
+    /* This only initializes the BIOS dispatcher workspace. Disc INIT (24),
+     * which discovers/spins media, remains exclusive to explicit preparation. */
+    bool ok=command_run(CD_CMD_STOP,NULL,3000,false);
+    kui_log(ok?"Disc stopped; idle checks do not initialize or read it.":
+        "Disc stop did not complete; no automatic retry.");
+    return ok;
+}
 
 bool kui_disc_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
     (void)ctx;

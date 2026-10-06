@@ -13,21 +13,13 @@
 #include <string.h>
 
 _Static_assert(KUI_GAME_TRACK_MAX <= KUI_RETAIL_IMAGE_TRACKS, "a launch map holds every GDI's tracks");
-#define CRC_READ_BYTES 32768u
 struct files {
     char root[KUI_DEST_ROOT_CAP], open_name[KUI_GAME_NAME_CAP];
     kui_cancel_fn cancel;
     FIL reader;
     bool reader_open;
-    /* Enabled only while extent_crc hashes an already opened image. */
-    uint8_t *read_ahead;
-    uint64_t read_ahead_offset;
-    size_t read_ahead_bytes;
-    const struct kui_game_image *checksum_image;
-    uint32_t checksum_begin,checksum_end;
 };
 static bool close_reader(struct files *f) {
-    f->read_ahead_bytes=0;
     if(!f->reader_open) return true;
     f->reader_open=false;
     return f_close(&f->reader)==FR_OK;
@@ -59,29 +51,6 @@ static enum kui_game_result stat_file(void *ctx,const char *name,uint64_t *bytes
     if(info.fattrib&AM_DIR) return KUI_GAME_FILE_SIZE;
     *bytes=info.fsize;return KUI_GAME_OK;
 }
-/* A checksum may share its BIN/CDI backing with other tracks or a footer.
- * Prefetch only sectors that this checksum will validate, including the full
- * final physical sector from which its partial logical tail is extracted. */
-static uint64_t checksum_read_limit(const struct files *f,const char *name,
-    uint64_t offset,size_t bytes) {
-    const struct kui_game_image *image=f->checksum_image;
-    if(image) for(unsigned i=0;i<image->count;i++) {
-        const struct kui_game_image_track *t=&image->tracks[i];
-        if(strcmp(name,t->name)) continue;
-        uint32_t begin=f->checksum_begin>t->start_lba?f->checksum_begin:t->start_lba;
-        uint32_t end=f->checksum_end<t->end_lba?f->checksum_end:t->end_lba;
-        if(begin>=end) continue;
-        uint64_t first=t->file_offset+(uint64_t)(begin-t->start_lba)*t->sector_bytes;
-        uint64_t limit=t->file_offset+(uint64_t)(end-t->start_lba)*t->sector_bytes;
-        if(offset>=first && offset<=limit && bytes<=limit-offset) return limit;
-    }
-    return offset+bytes;
-}
-static bool read_at(FIL *file,uint64_t offset,void *out,size_t bytes) {
-    if(f_tell(file)!=offset &&
-       (f_lseek(file,(FSIZE_t)offset)!=FR_OK || f_tell(file)!=offset)) return false;
-    UINT got=0;return f_read(file,out,(UINT)bytes,&got)==FR_OK && got==bytes;
-}
 static enum kui_game_result read_file(void *ctx,const char *name,uint64_t offset,
     void *out,size_t bytes) {
     struct files *f=ctx;char path[KUI_GAMES_FILE_CAP+3];
@@ -97,23 +66,9 @@ static enum kui_game_result read_file(void *ctx,const char *name,uint64_t offset
     }
     FIL *file=&f->reader;
     bool ok=offset<=f_size(file) && bytes<=f_size(file)-offset;
-    if(ok && f->read_ahead && bytes<CRC_READ_BYTES) {
-        bool cached=offset>=f->read_ahead_offset &&
-            offset-f->read_ahead_offset<=f->read_ahead_bytes &&
-            bytes<=f->read_ahead_bytes-(size_t)(offset-f->read_ahead_offset);
-        if(!cached) {
-            f->read_ahead_bytes=0;
-            uint64_t limit=checksum_read_limit(f,name,offset,bytes);
-            if(limit>f_size(file)) limit=f_size(file);
-            size_t take=limit-offset>CRC_READ_BYTES?CRC_READ_BYTES:(size_t)(limit-offset);
-            ok=read_at(file,offset,f->read_ahead,take);
-            if(ok) {f->read_ahead_offset=offset;f->read_ahead_bytes=take;}
-        }
-        if(ok) memcpy(out,f->read_ahead+(size_t)(offset-f->read_ahead_offset),bytes);
-    } else if(ok) {
-        f->read_ahead_bytes=0;
-        ok=read_at(file,offset,out,bytes);
-    }
+    UINT got=0;
+    if(ok && f_tell(file)!=offset) ok=f_lseek(file,(FSIZE_t)offset)==FR_OK && f_tell(file)==offset;
+    if(ok) ok=f_read(file,out,(UINT)bytes,&got)==FR_OK && got==bytes;
     return stopped(f)?KUI_GAME_CANCELLED:ok?KUI_GAME_OK:KUI_GAME_IO;
 }
 static enum kui_game_metadata_io_result metadata_read(void *ctx,uint32_t lba,uint8_t out[2048]) {
@@ -226,37 +181,20 @@ static enum map_result map_tracks(struct files *files,FATFS *fs,const struct kui
 /* Hash exact logical bytes. Raw boot tracks retain their address checks in
  * the stage; a cooked boot has no sector headers, so its expected executable
  * CRC is prepared here and checked against the detached physical read. */
-static enum kui_game_result extent_crc(struct files *files,const struct kui_game_image *image,
+static enum kui_game_result extent_crc(const struct kui_game_image *image,
     uint32_t lba,uint32_t bytes,uint32_t *crc) {
     if(!bytes) return KUI_GAME_INVALID;
-    uint32_t sectors=bytes/2048u+(bytes%2048u!=0u);
-    enum kui_game_result result=kui_game_image_check(image,lba,sectors,
+    enum kui_game_result result=kui_game_image_check(image,lba,(bytes+2047u)/2048u,
         KUI_GAME_SECTOR_MODE1);
     if(result!=KUI_GAME_OK) return result;
-    /* Two bounded heap buffers: logical output plus raw-sector read-ahead.
-     * The core still validates every raw sync/mode/XA header. Low-memory
-     * preparation falls back to the original one-sector read path. */
-    uint8_t *buffer=malloc(2u*CRC_READ_BYTES),sector[2048];uint32_t value=0;
-    uint8_t *data=buffer?buffer:sector;
-    size_t capacity=buffer?CRC_READ_BYTES:sizeof(sector);
-    if(buffer) {
-        files->read_ahead=buffer+CRC_READ_BYTES;files->read_ahead_bytes=0;
-        files->checksum_image=image;files->checksum_begin=lba;files->checksum_end=lba+sectors;
-    }
+    uint8_t sector[2048];uint32_t value=0;
     for(uint32_t done=0;done<bytes;) {
-        if(stopped(files)) {result=KUI_GAME_CANCELLED;break;}
-        uint32_t remaining=bytes-done,count=remaining/2048u+(remaining%2048u!=0u);
-        if(count>capacity/2048u) count=(uint32_t)(capacity/2048u);
-        result=kui_game_image_read(image,lba,count,KUI_GAME_SECTOR_MODE1,data,capacity);
-        if(result!=KUI_GAME_OK) break;
-        uint32_t take=remaining;if(take>count*2048u) take=count*2048u;
-        value=kui_retail_crc32(value,data,take);done+=take;lba+=count;
+        result=kui_game_image_read(image,lba++,1,KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
+        if(result!=KUI_GAME_OK) return result;
+        uint32_t take=bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
+        value=kui_retail_crc32(value,sector,take);done+=take;
     }
-    files->read_ahead=NULL;files->read_ahead_bytes=0;files->checksum_image=NULL;
-    free(buffer);
-    if(stopped(files)) result=KUI_GAME_CANCELLED;
-    if(result==KUI_GAME_OK) *crc=value;
-    return result;
+    *crc=value;return KUI_GAME_OK;
 }
 bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package,
     kui_log_fn log,kui_cancel_fn cancel) {
@@ -354,7 +292,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
             log("Retail warning: CD audio playback is unsupported; the reader accepts audio commands silently, so that music is absent");
             break;
         }
-    r=extent_crc(&files,image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32);
+    r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     r=kui_game_image_check(image,map->boot_lba,(map->boot_bytes+2047u)/2048u,KUI_GAME_SECTOR_MODE1);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
@@ -367,7 +305,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     if(cooked_boot || image->format!=KUI_GAME_IMAGE_GDI) {
         map->flags|=KUI_RETAIL_IMAGE_BOOT_CRC;
         log("Retail boot: checking exact executable CRC before detached launch");
-        r=extent_crc(&files,image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
+        r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
         if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
         log("Retail boot: executable CRC32=%08x",map->boot_crc32);
     }

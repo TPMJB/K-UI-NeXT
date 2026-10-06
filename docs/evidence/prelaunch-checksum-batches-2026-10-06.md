@@ -1,5 +1,11 @@
 # Prelaunch checksum batches
 
+## Hardware rejection and recovery
+
+Build `8f7ea7925344` was rejected on the console: the user reports that all tested games stop at `INVALID RETAIL MAP`, detail `00000001`, immediately after launcher shutdown. It is withdrawn as a working launch build. The failure precedes detached storage initialization. Detail 1 is the generic manifest-invalid result; it does not identify an IP/executable checksum mismatch.
+
+The recovery restores `src/apps/games_retail.c` byte for byte to the previously working `606f74248d5c` source (blob `d521ce7236bd016debb8224e466b890f99027af5`). This includes its original one-sector checksum reads. The exact native corruption mechanism remains unproved. Both detached packages have identical machine code after their build IDs are normalized, and pinned KOS explicitly writes back the staged source before its cache-off handoff; claiming an unflushed map is not supported. The successful host tests below did not exercise that native handoff.
+
 ## Hardware evidence reported by the user
 
 Build `606f74248d5c` enables Power Stone 1 and 2 with fluid gameplay. Games initially takes 5–7 seconds to load, then navigation is fluid. Game preparation before the first bootstrap screen and later bootstrap completion seem slower than older builds.
