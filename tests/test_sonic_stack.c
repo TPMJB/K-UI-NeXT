@@ -32,11 +32,12 @@ static struct {
     uint32_t allocation[4];unsigned publications,reads;
     uint32_t address[8];size_t bytes[8];
     unsigned wait_point;int timeout;
+    uint32_t p2_override,p2_value;unsigned p2_reads;
 } hooks;
 static struct {
     unsigned restores,lines,values,pauses;
     uint32_t detail;
-    const char *line[12];uint32_t row[5][5];
+    const char *line[12],*legend[5];uint32_t row[5][5];
 } calls;
 static uint8_t video[2048],saved_video[2048];
 
@@ -54,6 +55,11 @@ void kui_retail_sonic_stack_publish(uint32_t address,size_t bytes) {
     hooks.bytes[hooks.publications++]=bytes;
 }
 uint32_t kui_retail_sonic_stack_read(uint32_t address) {
+    if(address>=0xac000000u && address<0xad000000u) {
+        assert(!(address&3u) && !calls.restores);++hooks.p2_reads;
+        return address==hooks.p2_override?hooks.p2_value:
+            *(volatile const uint32_t *)(uintptr_t)address;
+    }
     assert(address==0xa05f688cu);
     unsigned n=hooks.reads++;
     uint32_t mask=hooks.wait_point==0u?32u:1u;
@@ -73,7 +79,7 @@ void retail_display_hex(const char *legend,uint32_t value) {
     if(!strcmp(legend,"DETAIL")) calls.detail=value;
 }
 void retail_display_values(const char *legend,const uint32_t *values,unsigned count) {
-    (void)legend;assert(count==5u && calls.values<5u);
+    assert(count==5u && calls.values<5u);calls.legend[calls.values]=legend;
     memcpy(calls.row[calls.values++],values,5u*sizeof(uint32_t));
 }
 void retail_display_pause(uint32_t frames) {assert(frames==30u);++calls.pauses;}
@@ -116,6 +122,7 @@ static uint32_t *fixture(int uncached_frame) {
     memcpy(boot,owner,OWNER_BYTES);memcpy(original_entry,owner,sizeof(original_entry));
     memset(boot,0xcc,ENTRY_PATCH_BYTES);
     exec_bytes=OWNER_BYTES;boot_crc=OWNER_CRC;manifest.ip_crc32=0x22de24d8u;
+    manifest.storage_transport=KUI_STORAGE_SCIF;manifest.reader=KUI_RETAIL_READER_STANDARD;
     resident_blob=reader_blob;resident_bytes=sizeof(reader_blob);
     resident_limit=KUI_RETAIL_STANDARD_LIMIT;
     memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,reader_blob,sizeof(reader_blob));
@@ -192,23 +199,40 @@ static void expect_stop_checkpoint(uint32_t *frame,unsigned point,const char *re
     if(!setjmp(terminal)) {checkpoint(frame,point);abort();}
     assert(calls.restores==1u && has_line("SONIC STACK TEST") && has_line(reason));
     assert(has_line("POWER OFF AND ON TO RETURN") && has_line("STORAGE WAS READ ONLY"));
+    assert(calls.values==5u && !strcmp(calls.legend[2],"FIFO READS BUSY READS G2 NOW") &&
+        !strcmp(calls.legend[3],"READER LOW HIGH BEFORE AFTER RESTORED") &&
+        !strcmp(calls.legend[4],"FILE STATUS HANDLE BYTES LOW LIMIT"));
     assert(!memcmp((const void *)(uintptr_t)FRAME_ADDRESS,entry_frame,sizeof(entry_frame)));
 }
 static void expect_stop_after(uint32_t *frame,const char *reason) {
     expect_terminal=1;
     if(!setjmp(terminal)) {kui_retail_sonic_stack_after(frame,TEST_CCR,&kui_retail_sonic_stack_state);abort();}
     assert(calls.restores==1u && has_line("SONIC STACK TEST") && has_line(reason));
+    if(strcmp(reason,"RESIDENT CHANGED DURING SCOPE"))
+        assert(calls.values==5u && !strcmp(calls.legend[2],"FIFO READS BUSY READS G2 NOW") &&
+            !strcmp(calls.legend[3],"READER LOW HIGH BEFORE AFTER RESTORED") &&
+            !strcmp(calls.legend[4],"FILE STATUS HANDLE BYTES LOW LIMIT"));
 }
 enum scenario {SUCCESS_P1,SUCCESS_P2,GATE_SIZE,GATE_IP,GATE_CRC,
     BAD_RELAY_OWNER,BAD_RELAY_READER,BOUNDS_LOW,BOUNDS_HIGH,BOUNDS_ALIGN,BOUNDS_OVERLAP,
-    BAD_SNAPSHOT_BOUNDS,FIFO_TIMEOUT,BUSY_TIMEOUT,DUPLICATE,INVALID_POINT,INVALID_FRAME,
-    NESTED_SCOPE,BAD_RETURN_SP,BAD_RETURN_CCR,BAD_RETURN_BOUNDS,GUARD_CHANGED,
-    SNAPSHOT_CHANGED,SECOND_RETURN,SCOPE_WITHOUT_WAITS,SCOPE_WITHOUT_ASSET,ASSET_SUCCESS,ASSET_ROUNDUP,
+    BAD_CODE_ZERO,BAD_CODE_TOO_HIGH,BAD_SNAPSHOT_BOUNDS,FIFO_TIMEOUT,BUSY_TIMEOUT,DUPLICATE,INVALID_POINT,INVALID_FRAME,
+    NESTED_SCOPE,BAD_RETURN_SP,BAD_RETURN_CCR,BAD_RETURN_BOUNDS,BAD_RETURN_CODE_END,GUARD_CHANGED,
+    SNAPSHOT_CHANGED,SNAPSHOT_MULTI,SNAPSHOT_CODE,SNAPSHOT_IP,SNAPSHOT_P2,SNAPSHOT_ALL,
+    SECOND_RETURN,SCOPE_WITHOUT_WAITS,SCOPE_WITHOUT_ASSET,ASSET_SUCCESS,ASSET_ROUNDUP,
     ASSET_MAX,ASSET_ZERO,ASSET_OVERSIZE,ASSET_BOOL_FALSE,ASSET_BAD_BOOL,
     ASSET_HANDLE_ZERO,ASSET_FRAME_HIGH,ASSET_NEGATIVE};
 static void run_case(enum scenario which) {
     uint32_t *frame=fixture(which==SUCCESS_P2);
     struct sonic_stack_state *s=&kui_retail_sonic_stack_state;
+    if(which==SNAPSHOT_MULTI || which==SNAPSHOT_CODE || which==SNAPSHOT_IP || which==SNAPSHOT_ALL)
+        manifest.storage_transport=KUI_STORAGE_SCI;
+    if(which==SNAPSHOT_CODE || which==SNAPSHOT_ALL) {
+        manifest.reader=KUI_RETAIL_READER_ASYNC;resident_limit=KUI_RETAIL_ASYNC_LIMIT;
+    }
+    if(which==SNAPSHOT_IP) {
+        manifest.reader=KUI_RETAIL_READER_ASYNC_EAGER;resident_limit=KUI_RETAIL_ASYNC_LIMIT;
+    }
+    if(which==SNAPSHOT_P2) manifest.storage_transport=KUI_STORAGE_IDE;
     if(which>=GATE_SIZE && which<=GATE_CRC) {
         if(which==GATE_SIZE) --exec_bytes;
         if(which==GATE_IP) manifest.ip_crc32^=1u;
@@ -225,10 +249,18 @@ static void run_case(enum scenario which) {
         if(which==BOUNDS_HIGH) hooks.allocation[3]=0x8cf00020u;
         if(which==BOUNDS_ALIGN) ++hooks.allocation[0];
         if(which==BOUNDS_OVERLAP) hooks.allocation[1]=PRIVATE_BOTTOM;
+        if(which==BAD_CODE_ZERO) resident_bytes=0u;
+        if(which==BAD_CODE_TOO_HIGH) resident_bytes=resident_limit-KUI_RETAIL_RESIDENT_ADDRESS+1u;
         if(which==BAD_SNAPSHOT_BOUNDS) resident_limit=KUI_RETAIL_ASYNC_LIMIT+1u;
         expect_terminal=1;
-        if(!setjmp(terminal)) {kui_retail_stage_relay(frame,TEST_CCR);abort();}
+        if(!setjmp(terminal)) {
+            if(which==BAD_CODE_ZERO || which==BAD_CODE_TOO_HIGH) sonic_stack_arm();
+            else kui_retail_stage_relay(frame,TEST_CCR);
+            abort();
+        }
         assert(calls.restores==1u && !hooks.publications && !calls.pauses);
+        if(which==BAD_CODE_ZERO || which==BAD_CODE_TOO_HIGH)
+            assert(has_line("READER SNAPSHOT BOUNDS INVALID"));
         assert(!memcmp(frame,entry_frame,sizeof(entry_frame)));
         return;
     }
@@ -303,14 +335,51 @@ static void run_case(enum scenario which) {
         assert(has_line("SCOPED RETURN FRAME INVALID"));return;
     }
     if(which==BAD_RETURN_BOUNDS) {s->owner_bottom-=32u;expect_stop_after(returned,"SCOPED RETURN FRAME INVALID");return;}
+    if(which==BAD_RETURN_CODE_END) {s->code_end=s->resident_end+1u;expect_stop_after(returned,"SCOPED RETURN FRAME INVALID");return;}
     if(which==GUARD_CHANGED) {
         *(uint32_t *)(uintptr_t)PRIVATE_BOTTOM^=1u;
         expect_stop_after(returned,"PRIVATE STACK GUARD CHANGED");return;
     }
-    if(which==SNAPSHOT_CHANGED) {
-        ((uint8_t *)(uintptr_t)SONIC_STACK_SNAPSHOT_BEGIN)[reader_bytes-1u]^=1u;
+    if(which>=SNAPSHOT_CHANGED && which<=SNAPSHOT_ALL) {
+        uint8_t *live=(uint8_t *)(uintptr_t)SONIC_STACK_SNAPSHOT_BEGIN;
+        size_t first=reader_bytes-1u,last=first;uint32_t count=1u;
+        if(which==SNAPSHOT_MULTI) {first=1041u;last=reader_bytes-2u;count=3u;}
+        if(which==SNAPSHOT_CODE) first=last=KUI_RETAIL_RESIDENT_ADDRESS-SONIC_STACK_SNAPSHOT_BEGIN+33u;
+        if(which==SNAPSHOT_IP) first=last=3u;
+        if(which==SNAPSHOT_P2) first=last=1041u;
+        if(which==SNAPSHOT_ALL) {first=0u;last=reader_bytes-1u;count=(uint32_t)reader_bytes;}
+        if(which==SNAPSHOT_ALL) for(size_t i=0;i<reader_bytes;i++) live[i]^=0xffu;
+        else {
+            live[first]^=1u;
+            if(which==SNAPSHOT_MULTI) {live[first+2u]^=3u;live[last]^=7u;}
+        }
+        uint32_t word_address=(SONIC_STACK_SNAPSHOT_BEGIN+(uint32_t)first)&~3u;
+        uint32_t old_word,new_word;
+        memcpy(&old_word,before_reader+(word_address-SONIC_STACK_SNAPSHOT_BEGIN),4u);
+        memcpy(&new_word,live+(word_address-SONIC_STACK_SNAPSHOT_BEGIN),4u);
+        if(which==SNAPSHOT_P2) {hooks.p2_override=word_address|0x20000000u;hooks.p2_value=0xcafef00du;}
         expect_stop_after(returned,"RESIDENT CHANGED DURING SCOPE");
-        assert(calls.detail==SONIC_STACK_SNAPSHOT_BEGIN+(uint32_t)reader_bytes-1u);
+        assert(calls.detail==SONIC_STACK_SNAPSHOT_BEGIN+(uint32_t)first);
+        assert(calls.values==5u && !strcmp(calls.legend[0],"POINT FRAME SR PR CCR") &&
+            !strcmp(calls.legend[1],"STACK LOW HIGH OLDSP ACTIVE DONE"));
+        assert(!strcmp(calls.legend[2],"TYPE READER CHANGES LAST RESTORED") &&
+            !strcmp(calls.legend[3],"CODE END CODE OLD CODE NEW FULL OLD FULL NEW") &&
+            !strcmp(calls.legend[4],"WORD AT OLD P1 P2 G2 NOW"));
+        assert(calls.row[2][0]==manifest.storage_transport && calls.row[2][1]==manifest.reader);
+        assert(calls.row[2][2]==count && calls.row[2][3]==SONIC_STACK_SNAPSHOT_BEGIN+(uint32_t)last &&
+            calls.row[2][4]==15u);
+        size_t code_bytes=KUI_RETAIL_RESIDENT_ADDRESS+resident_bytes-SONIC_STACK_SNAPSHOT_BEGIN;
+        uint32_t old_code=independent_crc(0,before_reader,code_bytes),
+            new_code=independent_crc(0,live,code_bytes);
+        assert(calls.row[3][0]==KUI_RETAIL_RESIDENT_ADDRESS+resident_bytes &&
+            calls.row[3][1]==old_code && calls.row[3][2]==new_code &&
+            calls.row[3][3]==independent_crc(0,before_reader,reader_bytes) &&
+            calls.row[3][4]==independent_crc(0,live,reader_bytes));
+        if(which==SNAPSHOT_CHANGED || which==SNAPSHOT_MULTI || which==SNAPSHOT_P2) assert(old_code==new_code);
+        else assert(old_code!=new_code);
+        assert(calls.row[4][0]==word_address && calls.row[4][1]==old_word && calls.row[4][2]==new_word &&
+            calls.row[4][3]==(which==SNAPSHOT_P2?0xcafef00du:new_word));
+        assert(hooks.p2_reads==1u);
         assert(s->resident_crc!=s->return_crc && !memcmp(frame,entry_frame,sizeof(entry_frame)));return;
     }
     uint32_t restored=kui_retail_sonic_stack_after(returned,TEST_CCR,s);

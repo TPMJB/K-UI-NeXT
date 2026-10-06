@@ -107,6 +107,9 @@ struct sonic_stack_state {
     uint32_t first[2],last[2],reads[2],ccr[4];
     uint32_t asset_status,asset_handle,asset_bytes;
     uint32_t resident_end,resident_crc,return_crc,mismatch_address;
+    uint32_t transport,reader,changed_bytes,last_changed;
+    uint32_t code_end,code_crc,return_code_crc;
+    uint32_t word_address,word_old,word_p1,word_p2;
     uint8_t saved[4][SONIC_STACK_PATCH_BYTES];
     uint8_t resident[SONIC_STACK_RESIDENT_BYTES];
 };
@@ -663,19 +666,33 @@ static void sonic_stack_report(struct sonic_stack_state *s,const char *message,
         frame?frame[5]:0u,point<4u?s->ccr[point]:s->return_ccr};
     uint32_t bounds[5]={s->owner_bottom,s->owner_top,s->original_sp,
         s->active,s->completed};
-    uint32_t wait[5]={s->last[0],s->reads[0],s->last[1],s->reads[1],
-        kui_retail_sonic_stack_read(0xa05f688cu)};
-    uint32_t resident[5]={SONIC_STACK_SNAPSHOT_BEGIN,s->resident_end,
-        s->resident_crc,s->return_crc,s->restored};
+    uint32_t g2_now=kui_retail_sonic_stack_read(0xa05f688cu);
+    uint32_t rows[3][5];
+    if(s->mismatch_address) {
+        rows[0][0]=s->transport;rows[0][1]=s->reader;
+        rows[0][2]=s->changed_bytes;rows[0][3]=s->last_changed;rows[0][4]=s->restored;
+        rows[1][0]=s->code_end;rows[1][1]=s->code_crc;rows[1][2]=s->return_code_crc;
+        rows[1][3]=s->resident_crc;rows[1][4]=s->return_crc;
+        rows[2][0]=s->word_address;rows[2][1]=s->word_old;rows[2][2]=s->word_p1;
+        rows[2][3]=s->word_p2;rows[2][4]=g2_now;
+    } else {
+        rows[0][0]=s->last[0];rows[0][1]=s->reads[0];rows[0][2]=s->last[1];
+        rows[0][3]=s->reads[1];rows[0][4]=g2_now;
+        rows[1][0]=SONIC_STACK_SNAPSHOT_BEGIN;rows[1][1]=s->resident_end;
+        rows[1][2]=s->resident_crc;rows[1][3]=s->return_crc;rows[1][4]=s->restored;
+        rows[2][0]=s->asset_status;rows[2][1]=s->asset_handle;rows[2][2]=s->asset_bytes;
+        rows[2][3]=0x8cd00000u;rows[2][4]=0x8ce00000u;
+    }
     retail_display_restore(&display);
     retail_display_line("SONIC STACK TEST");
     retail_display_values("POINT FRAME SR PR CCR",cpu,5);
     retail_display_values("STACK LOW HIGH OLDSP ACTIVE DONE",bounds,5);
-    retail_display_values("FIFO READS BUSY READS G2 NOW",wait,5);
-    retail_display_values("READER LOW HIGH BEFORE AFTER RESTORED",resident,5);
-    uint32_t asset[5]={s->asset_status,s->asset_handle,s->asset_bytes,
-        0x8cd00000u,0x8ce00000u};
-    retail_display_values("FILE STATUS HANDLE BYTES LOW LIMIT",asset,5);
+    retail_display_values(s->mismatch_address?"TYPE READER CHANGES LAST RESTORED":
+        "FIFO READS BUSY READS G2 NOW",rows[0],5);
+    retail_display_values(s->mismatch_address?"CODE END CODE OLD CODE NEW FULL OLD FULL NEW":
+        "READER LOW HIGH BEFORE AFTER RESTORED",rows[1],5);
+    retail_display_values(s->mismatch_address?"WORD AT OLD P1 P2 G2 NOW":
+        "FILE STATUS HANDLE BYTES LOW LIMIT",rows[2],5);
     stopped(message,s->mismatch_address?s->mismatch_address:point);
 }
 static int sonic_stack_range(uint32_t begin,uint32_t bytes,uint32_t end) {
@@ -700,8 +717,9 @@ static void sonic_stack_arm(void) {
        !sonic_stack_disjoint(owner,SONIC_STACK_OWNER_BYTES,state,sizeof(*s)) ||
        !sonic_stack_disjoint(book,SONIC_STACK_BOOK_BYTES,state,sizeof(*s)))
         sonic_stack_report(s,"PRIVATE STACK BOUNDS INVALID",3u,NULL);
-    if(resident_limit<KUI_RETAIL_RESIDENT_ADDRESS ||
-       resident_limit-SONIC_STACK_SNAPSHOT_BEGIN>sizeof(s->resident))
+    if((resident_limit&3u) || resident_limit<KUI_RETAIL_RESIDENT_ADDRESS ||
+       resident_limit-SONIC_STACK_SNAPSHOT_BEGIN>sizeof(s->resident) ||
+       !resident_bytes || resident_bytes>resident_limit-KUI_RETAIL_RESIDENT_ADDRESS)
         sonic_stack_report(s,"READER SNAPSHOT BOUNDS INVALID",3u,NULL);
     for(unsigned i=0;i<4u;i++) {
         uint32_t at=sonic_stack_address[i];
@@ -712,6 +730,8 @@ static void sonic_stack_arm(void) {
     s->owner_bottom=owner;s->owner_top=owner+SONIC_STACK_OWNER_BYTES;
     s->book_bottom=book;s->book_top=book+SONIC_STACK_BOOK_BYTES;s->stage_end=end;
     s->resident_end=resident_limit;
+    s->transport=manifest.storage_transport;s->reader=manifest.reader;
+    s->code_end=KUI_RETAIL_RESIDENT_ADDRESS+(uint32_t)resident_bytes;
     /* The unchanged whole-executable CRC identifies the statically audited
      * entry windows: no interior branches, entry literals restored in place.
      * Only our generic stub is embedded; owner instructions come from RAM. */
@@ -779,6 +799,7 @@ uint32_t kui_retail_sonic_stack_checkpoint(uint32_t *frame,unsigned point,
         s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN);
     memcpy(s->resident,sonic_stack_p2(SONIC_STACK_SNAPSHOT_BEGIN),
         s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN);
+    s->code_crc=kui_retail_crc32(0,s->resident,s->code_end-SONIC_STACK_SNAPSHOT_BEGIN);
     uint32_t prepared=s->owner_top-SONIC_STACK_FRAME_BYTES;
     uint32_t *copy=(uint32_t *)sonic_stack_p2(prepared);
     memcpy(copy,frame,SONIC_STACK_FRAME_BYTES);
@@ -799,8 +820,9 @@ uint32_t kui_retail_sonic_stack_after(uint32_t *frame,uint32_t ccr,
        !sonic_stack_range(s->book_bottom,SONIC_STACK_BOOK_BYTES,s->stage_end) ||
        s->book_top!=s->book_bottom+SONIC_STACK_BOOK_BYTES ||
        raw!=s->owner_top-SONIC_STACK_FRAME_BYTES || ccr!=s->entry_ccr ||
-       s->resident_end<KUI_RETAIL_RESIDENT_ADDRESS ||
+       (s->resident_end&3u) || s->resident_end<KUI_RETAIL_RESIDENT_ADDRESS ||
        s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN>sizeof(s->resident) ||
+       s->code_end<=KUI_RETAIL_RESIDENT_ADDRESS || s->code_end>s->resident_end ||
        sonic_stack_p1(s->original_frame)<KUI_RETAIL_HOOK_STACK ||
        sonic_stack_p1(s->original_frame)>KUI_RETAIL_EXEC_ADDRESS-SONIC_STACK_FRAME_BYTES ||
        s->original_sp!=s->original_frame+SONIC_STACK_FRAME_BYTES)
@@ -815,8 +837,17 @@ uint32_t kui_retail_sonic_stack_after(uint32_t *frame,uint32_t ccr,
     const uint8_t *resident=(const uint8_t *)(uintptr_t)SONIC_STACK_SNAPSHOT_BEGIN;
     size_t bytes=s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN;
     s->return_crc=kui_retail_crc32(0,resident,bytes);
+    s->return_code_crc=kui_retail_crc32(0,resident,s->code_end-SONIC_STACK_SNAPSHOT_BEGIN);
     for(size_t i=0;i<bytes;i++) if(resident[i]!=s->resident[i]) {
-        s->mismatch_address=SONIC_STACK_SNAPSHOT_BEGIN+(uint32_t)i;
+        uint32_t changed=SONIC_STACK_SNAPSHOT_BEGIN+(uint32_t)i;
+        if(!s->changed_bytes) s->mismatch_address=changed;
+        ++s->changed_bytes;s->last_changed=changed;
+    }
+    if(s->changed_bytes) {
+        s->word_address=s->mismatch_address&~3u;
+        memcpy(&s->word_old,s->resident+(s->word_address-SONIC_STACK_SNAPSHOT_BEGIN),4u);
+        s->word_p1=*(volatile const uint32_t *)(uintptr_t)s->word_address;
+        s->word_p2=kui_retail_sonic_stack_read((uint32_t)(uintptr_t)sonic_stack_p2(s->word_address));
         sonic_stack_report(s,"RESIDENT CHANGED DURING SCOPE",4u,frame);
     }
     /* Preserve actual callee register results, including R0 and SR. Only PR
