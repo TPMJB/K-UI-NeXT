@@ -107,7 +107,7 @@ for three seconds, whatever is using it stops and says so.
 | --- | --- |
 | No Wi-Fi board answered on the SCI port | Not powered (5 V), no firmware, the chip select on neither GPIO6 nor GPIO7, or MISO/MOSI swapped |
 | The Wi-Fi board answered, but not reliably at any speed | A bad clock, MOSI or MISO connection, or long wires; check the solder points |
-| The Wi-Fi board's firmware speaks protocol N | Update the board's firmware (from a computer, for now) |
+| The Wi-Fi board's firmware speaks protocol N | Install matching firmware; an incompatible link may need USB recovery |
 | ... refused the password | Wrong password: choose the network again |
 | ... not found; the board keeps looking for it | Out of range, a 5 GHz network with "2.4 GHz only" set, or a typo in a typed name |
 | Not online on ... after 30 seconds | The router did not answer: check it, then X to scan again |

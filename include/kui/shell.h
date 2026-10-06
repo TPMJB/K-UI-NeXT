@@ -70,7 +70,7 @@ enum kui_shell_action {
     KUI_SHELL_TEST_BASELINE, KUI_SHELL_SCI_ASYNC_RUN, KUI_SHELL_SCI_ASYNC_STRESS,
     KUI_SHELL_SCI_ASYNC_SCREEN, KUI_SHELL_SCI_ASYNC_SPEED,
     KUI_SHELL_WIFI_REFRESH, KUI_SHELL_WIFI_JOIN, KUI_SHELL_WIFI_FORGET,
-    KUI_SHELL_WIFI_BAND
+    KUI_SHELL_WIFI_BAND, KUI_SHELL_WIFI_UPDATE_CHECK, KUI_SHELL_WIFI_UPDATE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -159,7 +159,7 @@ struct kui_shell {
     unsigned wifi_selected;
     struct kui_wifi_request wifi_request;
     uint8_t wifi_security; /* of the network being joined; 0xff: not known */
-    bool wifi_keyboard, wifi_typing_name, confirm_wifi_forget;
+    bool wifi_keyboard, wifi_typing_name, confirm_wifi_forget, confirm_wifi_update;
 };
 /* Home's apps, top to bottom: A on row home_selected opens
  * kui_shell_home_pages[home_selected]. Drawing looks each app up by page. */

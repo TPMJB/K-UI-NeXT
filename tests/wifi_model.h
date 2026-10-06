@@ -39,6 +39,24 @@ extern struct wifi_model_join wifi_model_joined;
 struct wifi_model_options *wifi_model_live(void);
 /* A real TCP listener has been bound, rather than merely queued on SPI. */
 bool wifi_model_listening(uint16_t port);
+/* Firmware update faults, applied behind the real message/link bridge. */
+struct wifi_model_ota_faults {
+    uint8_t begin_status, data_status, end_status;
+    bool wrong_phase, wrong_written, corrupt_image, corrupt_frame_once, rollback, wrong_version;
+    bool lose_end_reply, never_returns;
+    uint32_t reset_after;
+    unsigned reboot_silent_ms;
+};
+struct wifi_model_ota_result {
+    unsigned begins, writes, ends, reboots, aborts;
+    uint32_t size, written;
+    bool open, committed, checksum_ok;
+    uint8_t expected_sha[32], actual_sha[32];
+};
+void wifi_model_ota_configure(const struct wifi_model_ota_faults *faults);
+const struct wifi_model_ota_result *wifi_model_ota_result(void);
+const uint8_t *wifi_model_ota_bytes(void);
+void wifi_model_firmware(uint8_t chip, const char *version);
 /* Transfers with the board, and transfers nobody answered. */
 extern unsigned wifi_model_transfers, wifi_model_unanswered;
 /* The networks the model's scan finds: "Home 5G" (5 GHz, WPA2, password

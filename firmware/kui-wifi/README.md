@@ -28,8 +28,9 @@ name, select that name with `join "SSID" "password"` after `band 5`.
   sockets on it, much as it does on the W5500, so the FTP server can run
   over either.
 - Also offers the Dreamcast a network list, joining, name lookups, and the
-  time of day (set from the internet). Firmware-update messages exist in
-  the link protocol; K-UI does not yet expose a firmware-update workflow.
+  time of day (set from the internet). K-UI's
+  [console updater](../../docs/wifi-console-update.md) installs checked
+  firmware from the card through the existing SCI link.
 - A USB console for setting it up and checking it from a computer.
 
 The link to the Dreamcast is described in [PROTOCOL.md](PROTOCOL.md); the
@@ -59,8 +60,8 @@ before attaching powered USB: the XIAO's 5V pin is also USB VBUS.
    plugging it in, release it, then try again.
 
 `kui-wifi-esp32c5-update.bin` in the same download is the app on its own,
-for the firmware-update protocol, not initial USB flashing. K-UI's update
-workflow remains to be implemented. `SHA256SUMS` lists checksums. The
+for the console updater, not initial USB flashing. Its `.bin.sha256` sidecar
+supplies the expected digest. `SHA256SUMS` lists checksums. The
 protocol's rollback mechanism keeps an update only once the new firmware
 has started and the Dreamcast has reached it over the link; otherwise the
 board goes back to the firmware it had (see [PROTOCOL.md](PROTOCOL.md)).

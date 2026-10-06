@@ -127,11 +127,19 @@ struct kui_wifi_network {
     int8_t rssi;
     bool five; /* 5 GHz */
 };
-enum kui_wifi_action { KUI_WIFI_REFRESH, KUI_WIFI_JOIN, KUI_WIFI_FORGET, KUI_WIFI_BAND };
+/* The preview pins the image and adapter before a separate confirmation. */
+struct kui_wifi_firmware {
+    uint32_t bytes;
+    uint8_t sha256[32], chip, mac[6];
+    char version[33], path[80];
+};
+enum kui_wifi_action { KUI_WIFI_REFRESH, KUI_WIFI_JOIN, KUI_WIFI_FORGET, KUI_WIFI_BAND,
+    KUI_WIFI_UPDATE_CHECK, KUI_WIFI_UPDATE };
 struct kui_wifi_request {
     enum kui_wifi_action action;
     char ssid[KWM_SSID_MAX + 1], password[KWM_PASSWORD_MAX + 1];
     uint8_t band;
+    struct kui_wifi_firmware firmware;
 };
 struct kui_wifi_view {
     bool found, working, failed;
@@ -141,6 +149,9 @@ struct kui_wifi_view {
     bool scanned;
     struct kui_wifi_network networks[KUI_WIFI_NETWORKS];
     unsigned count;
+    struct kui_wifi_firmware firmware;
+    bool firmware_ready, firmware_updating, firmware_committing;
+    uint32_t firmware_done, firmware_total;
 };
 typedef void (*kui_wifi_publish_fn)(const struct kui_wifi_view *view);
 /* Finds the board, does what was asked (REFRESH: status and a scan), and

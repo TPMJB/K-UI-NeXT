@@ -32,6 +32,19 @@ contain these Wi-Fi changes.
 
 ## Update the existing board
 
+Use the new [console updater](wifi-console-update.md): copy the matching
+KUI folder, including KUI/firmware and its checksum sidecar, to your card.
+In Network press START for Wi-Fi, then START to check the update and A to
+confirm. The installed 0.1.1 board already supports this protocol. The
+console installs 0.1.2 and verifies the adapter after restarting it; saved
+Wi-Fi settings remain. This requires no USB reconnection.
+
+### Optional USB update for the original installation
+
+The following address applies to the original freshly flashed ota_0
+installation. After a console update, the active OTA slot can change;
+do not assume this address still names the running slot.
+
 Stop FTP, shut down and disconnect the board's Dreamcast power and signal
 connections, then attach USB. The XIAO's 5V pin is USB VBUS: do not connect
 USB and Dreamcast 5V together.

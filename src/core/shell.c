@@ -712,6 +712,8 @@ void kui_shell_set_wifi(struct kui_shell *s,const struct kui_wifi_view *view) {
     struct kui_wifi_view next=*view;
     next.message[sizeof(next.message)-1]=0;next.board[sizeof(next.board)-1]=0;
     next.wifi.ssid[sizeof(next.wifi.ssid)-1]=0;
+    next.firmware.version[sizeof(next.firmware.version)-1]=0;
+    next.firmware.path[sizeof(next.firmware.path)-1]=0;
     /* A job that has only just started has not found the board yet: what
      * is shown stays until it has. */
     if(next.working && !next.found && s->wifi.found) {
@@ -723,7 +725,11 @@ void kui_shell_set_wifi(struct kui_shell *s,const struct kui_wifi_view *view) {
     }
     if(next.count>KUI_WIFI_NETWORKS) next.count=KUI_WIFI_NETWORKS;
     for(unsigned i=0;i<next.count;i++) next.networks[i].ssid[sizeof(next.networks[i].ssid)-1]=0;
+    bool preview=next.firmware_ready && !next.working && !next.firmware_updating && !next.failed &&
+        (!s->wifi.firmware_ready || s->wifi.working);
     s->wifi=next;
+    if(s->page==KUI_SHELL_WIFI && preview) s->confirm_wifi_update=true;
+    if(!next.firmware_ready || next.failed || next.firmware_updating) s->confirm_wifi_update=false;
     if(s->wifi_selected>=kui_shell_wifi_rows(s)) s->wifi_selected=0;
 }
 static void wifi_keyboard(struct kui_shell *s,bool name) {
@@ -764,6 +770,12 @@ static enum kui_shell_action wifi_input(struct kui_shell *s,unsigned buttons) {
     s->wifi_selected=move_count(s->wifi_selected,buttons,rows);
     if(buttons&KUI_SHELL_X) return KUI_SHELL_WIFI_REFRESH;
     if(!s->wifi.found) return KUI_SHELL_NONE;
+    if(buttons&KUI_SHELL_START) {
+        s->wifi_request.action=KUI_WIFI_UPDATE_CHECK;
+        s->wifi_request.password[0]=0;
+        s->wifi.firmware_ready=false;
+        return KUI_SHELL_WIFI_UPDATE_CHECK;
+    }
     unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
     if(!s->wifi_selected && (horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)) {
         /* Both bands, 5 GHz only, 2.4 GHz only, and round again. */
@@ -878,11 +890,15 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     /* Stop/back wins even over a simultaneous confirmation or launch. */
     if(buttons & KUI_SHELL_B) {
         if(busy) {
+            /* The boot slot has been selected: finish the restart and link
+             * check before accepting another action. */
+            if(s->page==KUI_SHELL_WIFI && s->wifi.firmware_committing) return KUI_SHELL_NONE;
             s->confirm_storage_test=false;
             s->confirm_new=false; s->confirm_quick_resume=false; s->confirm_gd_boot=false;
             s->confirm_clock=false;s->confirm_defaults=false;s->confirm_vmu_restore=false;
             s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_music_clear=false;s->confirm_restart=false;s->confirm_salvage=false;
             s->confirm_wifi_forget=false;
+            s->confirm_wifi_update=false;
             return KUI_SHELL_STOP;
         }
         if(s->confirm_storage_test) {s->confirm_storage_test=false;return KUI_SHELL_NONE;}
@@ -910,6 +926,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page==KUI_SHELL_SYSTEM_TOOLS) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_FTP) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
         if(s->confirm_wifi_forget) {s->confirm_wifi_forget=false;return KUI_SHELL_NONE;}
+        if(s->confirm_wifi_update) {s->confirm_wifi_update=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_WIFI) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_KEYBOARD && s->wifi_keyboard) {wifi_keyboard_close(s);return KUI_SHELL_NONE;}
         if(s->confirm_vmu_delete) {s->confirm_vmu_delete=false;return KUI_SHELL_NONE;}
@@ -1023,7 +1040,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
-        s->confirm_wifi_forget || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        s->confirm_wifi_forget || s->confirm_wifi_update || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_FILES_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
         unsigned triggers=buttons & (KUI_SHELL_L|KUI_SHELL_R);
@@ -1056,6 +1073,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->confirm_wifi_forget=false;
             s->wifi_request.action=KUI_WIFI_FORGET;s->wifi_request.password[0]=0;
             return KUI_SHELL_WIFI_FORGET;
+        }
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_wifi_update) {
+        if(buttons&KUI_SHELL_A) {
+            s->confirm_wifi_update=false;
+            if(!s->wifi.firmware_ready || s->wifi.failed) return KUI_SHELL_NONE;
+            s->wifi_request.action=KUI_WIFI_UPDATE;
+            s->wifi_request.firmware=s->wifi.firmware;
+            s->wifi_request.password[0]=0;
+            return KUI_SHELL_WIFI_UPDATE;
         }
         return KUI_SHELL_NONE;
     }

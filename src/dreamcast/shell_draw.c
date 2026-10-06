@@ -111,7 +111,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
     rule(p,416);
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
     const char *controls=v->video_trial ? "A Keep mode   B Revert" :
-        v->busy ? (song_page?"B Stop safely   L/R Songs":s->page==KUI_SHELL_FTP?"B Stop the server":"B Stop safely") :
+        v->busy ? (s->page==KUI_SHELL_WIFI && s->wifi.firmware_committing?"Finishing update; keep the console powered on":
+            song_page?"B Stop safely   L/R Songs":s->page==KUI_SHELL_FTP?"B Stop the server":"B Stop safely") :
         s->confirm_gd_boot ? "A Exit to BIOS   B Cancel" :
         s->confirm_quick_resume ? "A Quick resume   B Cancel" :
         s->confirm_new ? "A Start capture   B Cancel" :
@@ -125,6 +126,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_salvage ? "A Start salvage   B Cancel" :
         s->confirm_storage_test ? "A Start test   B Cancel" :
         s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
+        s->confirm_wifi_update ? "A Update firmware   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
@@ -160,7 +162,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "D-pad Select/change   A Open   B Diagnostics") :
         s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Quick   X 60s stress   Y With screen   R Speed   B Back" :
         s->page==KUI_SHELL_STORAGE_TEST_HISTORY ? "A View   Y Baseline   X Refresh   B Back" :
-        s->page==KUI_SHELL_WIFI ? (s->wifi.found?"A Join   X Scan again   Y Forget   B Network":"X Look again   B Network") :
+        s->page==KUI_SHELL_WIFI ? (s->wifi.found?"A Join   X Scan   Y Forget   START Update   B Network":"X Look again   B Network") :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
@@ -751,6 +753,18 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
         label(p,72,276,MUTED,"Placeholders are not repaired or verified sectors.");
         label(p,72,302,MUTED,"Normal dumps and their checkpoints stay intact.");
         label(p,72,334,CYAN,"A Start salvage");
+    } else if(s->confirm_wifi_update) {
+        char line[96],bytes[16];
+        const struct kui_wifi_firmware *f=&s->wifi.firmware;
+        kui_files_size_text(bytes,f->bytes);
+        label(p,72,188,WHITE,"UPDATE WI-FI FIRMWARE?");
+        snprintf(line,sizeof(line),"%s firmware %.32s (%s)",kui_wifi_chip_text(f->chip),f->version,bytes);
+        label(p,72,218,CYAN,line);
+        words(p,72,244,568,MUTED,f->path,false);
+        label(p,72,270,MUTED,"The checked image will be installed on the Wi-Fi board.");
+        label(p,72,294,MUTED,"Keep the console powered on while it finishes.");
+        label(p,72,318,MUTED,"Saved Wi-Fi settings are kept. The board will restart.");
+        label(p,72,350,CYAN,"A Update firmware");
     } else if(s->confirm_wifi_forget) {
         char line[96];
         label(p,72,188,WHITE,"FORGET THIS WI-FI NETWORK?");
@@ -1789,6 +1803,23 @@ static void wifi_page(struct paint *p,const struct kui_shell *s,const struct kui
         return;
     }
     label(p,40,136,MUTED,w->board);
+    if(w->firmware_updating) {
+        panel(p,32,174,576,190,PANEL);
+        label(p,48,190,CYAN,"Updating the Wi-Fi board");
+        label(p,48,222,w->failed?AMBER:WHITE,w->message);
+        char done[16],total[16];
+        kui_files_size_text(done,w->firmware_done);
+        kui_files_size_text(total,w->firmware_total);
+        snprintf(line,sizeof(line),"%s / %s",done,total);
+        label(p,48,258,MUTED,line);
+        unsigned filled=w->firmware_total?(unsigned)((uint64_t)w->firmware_done*536u/w->firmware_total):0;
+        if(filled>536u) filled=536u;
+        box(p,48,284,536,12,EDGE);
+        if(filled) box(p,48,284,filled,12,CYAN);
+        label(p,48,320,MUTED,w->firmware_committing?"Finishing and checking the restarted board...":
+            "B stops before the new firmware is activated.");
+        return;
+    }
     uint16_t color=st->state==KWM_WIFI_ONLINE?CYAN:st->state==KWM_WIFI_BAD_PASSWORD||st->state==KWM_WIFI_NOT_FOUND?AMBER:WHITE;
     if(st->state==KWM_WIFI_ONLINE) snprintf(line,sizeof(line),"Online on %.32s as %u.%u.%u.%u (%s GHz, %d dBm)",st->ssid,
         st->ip[0],st->ip[1],st->ip[2],st->ip[3],st->band==5?"5":"2.4",st->rssi);
@@ -1876,7 +1907,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
        s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
-       s->confirm_wifi_forget) app_confirmation(&p,s);
+       s->confirm_wifi_forget || s->confirm_wifi_update) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);
 }
 

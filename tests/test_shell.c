@@ -1836,7 +1836,7 @@ static void wifi_rendering(void) {
     assert(strstr(drawn,"Bands: 2.4 and 5 GHz") && strstr(drawn,"LEFT/RIGHT"));
     assert(strstr(drawn,"Home 5G") && strstr(drawn,"5 GHz ch 36") && strstr(drawn,"WPA2") && strstr(drawn,"WPA3"));
     assert(strstr(drawn,"2.4 GHz ch 1") && strstr(drawn,"Open") && strstr(drawn,"Other network (type its name)"));
-    assert(strstr(drawn,"3 networks in range") && strstr(drawn,"A Join   X Scan again   Y Forget   B Network"));
+    assert(strstr(drawn,"3 networks in range") && strstr(drawn,"A Join   X Scan   Y Forget   START Update   B Network"));
     view.wifi.state=KWM_WIFI_ONLINE;strcpy(view.wifi.ssid,"Home 5G");view.wifi.band=5;view.wifi.rssi=-48;
     view.wifi.ip[0]=192;view.wifi.ip[1]=168;view.wifi.ip[2]=1;view.wifi.ip[3]=23;
     kui_shell_set_wifi(&s,&view);render(&v);
@@ -1876,7 +1876,80 @@ static void wifi_rendering(void) {
     assert(strstr(drawn,"Wi-Fi connection lost; the board is reconnecting") && !strstr(drawn,"No cable link"));
     puts("PASS shell Wi-Fi rendering: looking, no board, networks, online, scrolling, password keyboard, forget, FTP over Wi-Fi");
 }
+static struct kui_wifi_view firmware_preview(void) {
+    struct kui_wifi_view view=three_networks();
+    view.firmware_ready=true;
+    view.firmware.bytes=128u*1024u;
+    view.firmware.chip=5;
+    strcpy(view.firmware.version,"0.1.2-21d3b1c5");
+    strcpy(view.firmware.path,"/KUI/firmware/kui-wifi-esp32c5-update.bin");
+    for(unsigned i=0;i<sizeof(view.firmware.sha256);i++) view.firmware.sha256[i]=(uint8_t)(i*7u);
+    for(unsigned i=0;i<sizeof(view.firmware.mac);i++) view.firmware.mac[i]=(uint8_t)(i+1u);
+    strcpy(view.message,"Firmware image checked; review before updating");
+    return view;
+}
+static void wifi_update_controls(void) {
+    reset(KUI_SHELL_WIFI);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    struct kui_wifi_view view=three_networks();
+    kui_shell_set_wifi(&s,&view);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_WIFI_UPDATE_CHECK);
+    assert(s.wifi_request.action==KUI_WIFI_UPDATE_CHECK && !s.confirm_wifi_update);
+    /* Looking at an image is a separate action from writing it. Busy A,
+     * START and join controls cannot commit before the preview arrives. */
+    assert(press(KUI_SHELL_A|KUI_SHELL_START|KUI_SHELL_Y,true)==KUI_SHELL_NONE);
+    view=firmware_preview();view.working=true;
+    kui_shell_set_wifi(&s,&view);
+    assert(!s.confirm_wifi_update);
+    view.working=false;kui_shell_set_wifi(&s,&view);
+    assert(s.confirm_wifi_update && kui_shell_wifi_rows(&s)==5);
+    assert(press(KUI_SHELL_X|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    /* Cancel and even A+B must not write or leave the Wi-Fi page. */
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    assert(!s.confirm_wifi_update && s.page==KUI_SHELL_WIFI);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_WIFI_UPDATE_CHECK);
+    kui_shell_set_wifi(&s,&view);
+    assert(s.confirm_wifi_update);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_WIFI_UPDATE);
+    assert(!s.confirm_wifi_update && s.wifi_request.action==KUI_WIFI_UPDATE);
+    assert(!memcmp(&s.wifi_request.firmware,&view.firmware,sizeof(view.firmware)));
+    view.firmware_ready=false;view.firmware_updating=true;view.working=true;
+    kui_shell_set_wifi(&s,&view);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    view.firmware_committing=true;kui_shell_set_wifi(&s,&view);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(s.page==KUI_SHELL_WIFI && !s.confirm_wifi_update);
+    /* Failed or stale image publications cannot offer a commit. */
+    view=firmware_preview();view.failed=true;
+    kui_shell_set_wifi(&s,&view);
+    assert(!s.confirm_wifi_update);
+    reset(KUI_SHELL_NETWORK);view.failed=false;kui_shell_set_wifi(&s,&view);
+    assert(!s.confirm_wifi_update);
+    puts("PASS shell Wi-Fi update: check first, explicit pinned confirmation, cancel priority, commit lock, failed and stale guards");
+}
+static void wifi_update_rendering(void) {
+    struct kui_shell_view v={.build="a1b2c3d4e5f6"};
+    reset(KUI_SHELL_WIFI);
+    struct kui_wifi_view view=firmware_preview();
+    kui_shell_set_wifi(&s,&view);render(&v);
+    assert(strstr(drawn,"UPDATE WI-FI FIRMWARE?") && strstr(drawn,"ESP32-C5 firmware 0.1.2-21d3b1c5"));
+    assert(strstr(drawn,view.firmware.path) && strstr(drawn,"128 KB"));
+    assert(strstr(drawn,"Saved Wi-Fi settings are kept") && strstr(drawn,"A Update firmware   B Cancel"));
+    view.firmware_ready=false;view.firmware_updating=true;view.working=true;
+    view.firmware_total=view.firmware.bytes;view.firmware_done=view.firmware.bytes/2u;
+    strcpy(view.message,"Sending firmware to the Wi-Fi board");
+    kui_shell_set_wifi(&s,&view);v.busy=true;render(&v);
+    assert(strstr(drawn,"Updating the Wi-Fi board") && strstr(drawn,"Sending firmware"));
+    assert(strstr(drawn,"64.0 KB / 128 KB") && strstr(drawn,"B Stop safely"));
+    view.firmware_committing=true;kui_shell_set_wifi(&s,&view);render(&v);
+    assert(strstr(drawn,"Finishing and checking the restarted board") && strstr(drawn,"keep the console powered on"));
+    assert(!strstr(drawn,"B Stop safely"));
+    puts("PASS shell Wi-Fi update rendering: version, image, size, confirmation, transfer progress, finishing state");
+}
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--wifi")) {
+        wifi_controls();wifi_rendering();wifi_update_controls();wifi_update_rendering();return 0;
+    }
     if(argc==2 && !strcmp(argv[1],"--storage-tests")) {
         storage_test_controls();storage_test_rendering();return 0;
     }
@@ -1890,7 +1963,7 @@ int main(int argc,char **argv) {
     music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
     files_controls(); files_rendering();
     ftp_controls(); ftp_rendering();
-    wifi_controls(); wifi_rendering();
+    wifi_controls(); wifi_rendering(); wifi_update_controls(); wifi_update_rendering();
     puts("PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

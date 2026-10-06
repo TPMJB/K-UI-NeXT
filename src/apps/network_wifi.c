@@ -687,6 +687,10 @@ void kui_wifi_run(const struct kui_wifi_port *port, const struct kui_wifi_reques
         ok = kui_wifi_session_band(s, request->band, cancel);
         if(ok) snprintf(text, sizeof(text), "Bands: %s (kept on the board)", kui_wifi_band_text(request->band));
         break;
+    case KUI_WIFI_UPDATE_CHECK: case KUI_WIFI_UPDATE:
+        ok = false;
+        problem(s, "Use the SD firmware updater for this request");
+        break;
     }
     if(!ok) snprintf(text, sizeof(text), "%s", s->problem);
     /* The latest status after a change, successful or not. */

@@ -41,6 +41,12 @@ jobs:
           mkdir -p out
           cp build/kui-wifi-${{ matrix.target }}.bin out/
           cp build/kui-wifi.bin out/kui-wifi-${{ matrix.target }}-update.bin
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          for image in Path('out').glob('*-update.bin'):
+              image.with_suffix('.bin.sha256').write_text(hashlib.sha256(image.read_bytes()).hexdigest() + '\n')
+          PY
           cd out
           sha256sum *.bin > SHA256SUMS
           cat SHA256SUMS

@@ -29,6 +29,7 @@
 #include "kui/viewport.h"
 #include "kui/network_probe.h"
 #include "kui/ftp.h"
+#include "kui/wifi_update.h"
 #include "kui/salvage.h"
 #include "kui/maintenance.h"
 #include "kui/menu_sound.h"
@@ -1596,9 +1597,12 @@ static void *worker(void *unused) {
                 ftp_status.state=KUI_FTP_STOPPED;
                 snprintf(ftp_status.message,sizeof(ftp_status.message),"Stopped before starting");
             }
-            if(action>=72 && action<=75) {
+            if(action>=72 && action<=77) {
                 memset(wifi_request_pending.password,0,sizeof(wifi_request_pending.password));
                 wifi_view.working=false;
+                wifi_view.firmware_updating=false;
+                wifi_view.firmware_ready=false;
+                wifi_view.firmware_committing=false;
                 snprintf(wifi_view.message,sizeof(wifi_view.message),"Stopped before starting");
                 ++wifi_generation;
             }
@@ -1821,6 +1825,17 @@ static void *worker(void *unused) {
                 kui_wifi_run(kui_wifi_console_port(),&wifi_request_pending,&view,kui_log,kui_cancelled,wifi_publish);
                 mutex_lock(&lock);
                 memset(wifi_request_pending.password,0,sizeof(wifi_request_pending.password));
+                mutex_unlock(&lock);
+            }
+            if(action==76 || action==77) {
+                /* Use the boot-selected card, normally SCIF with this SCI
+                 * adapter, and keep all storage/link I/O on this worker. */
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                struct kui_wifi_view view;
+                kui_wifi_update_run(kui_wifi_console_port(),&wifi_request_pending,&view,
+                    kui_log,kui_cancelled,wifi_publish);
+                mutex_lock(&lock);
+                memset(&wifi_request_pending.firmware,0,sizeof(wifi_request_pending.firmware));
                 mutex_unlock(&lock);
             }
             if(action==55) {
@@ -2297,6 +2312,8 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_WIFI_JOIN: return 73;
         case KUI_SHELL_WIFI_FORGET: return 74;
         case KUI_SHELL_WIFI_BAND: return 75;
+        case KUI_SHELL_WIFI_UPDATE_CHECK: return 76;
+        case KUI_SHELL_WIFI_UPDATE: return 77;
         default: return 0;
     }
 }
@@ -2719,12 +2736,24 @@ int main(void) {
                 snprintf(ftp_status.message,sizeof(ftp_status.message),"Starting");
                 ftp_seen=true;
             }
-            if(action>=72 && action<=75) {
+            if(action>=72 && action<=77) {
                 wifi_request_pending=shell.wifi_request;
                 wifi_request_pending.action=action==72?KUI_WIFI_REFRESH:action==73?KUI_WIFI_JOIN:
-                    action==74?KUI_WIFI_FORGET:KUI_WIFI_BAND;
+                    action==74?KUI_WIFI_FORGET:action==75?KUI_WIFI_BAND:
+                    action==76?KUI_WIFI_UPDATE_CHECK:KUI_WIFI_UPDATE;
                 /* The password lives only in the job now. */
                 memset(shell.wifi_request.password,0,sizeof(shell.wifi_request.password));
+                if(action==76 || action==77) {
+                    wifi_view.working=true;
+                    wifi_view.failed=false;
+                    wifi_view.firmware_ready=false;
+                    wifi_view.firmware_updating=action==77;
+                    wifi_view.firmware_committing=false;
+                    wifi_view.firmware_done=wifi_view.firmware_total=0;
+                    snprintf(wifi_view.message,sizeof(wifi_view.message),"%s",action==76?
+                        "Checking the Wi-Fi firmware image on the card":"Preparing Wi-Fi firmware update");
+                    ++wifi_generation;
+                }
             }
             if(action==59) {
                 games_scan_status=(struct kui_app_status){0};

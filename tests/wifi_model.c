@@ -2,6 +2,7 @@
 #define _DEFAULT_SOURCE
 #include "wifi_model.h"
 #include "bridge.h"
+#include "kui/hash.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +30,13 @@ static struct {
     int8_t outcome_rssi;
     uint64_t outcome_at;
     uint32_t rng;
+    uint8_t chip;
+    char version[33], next_version[33];
+    uint8_t *ota;
+    struct wifi_model_ota_faults faults;
+    struct wifi_model_ota_result ota_result;
+    uint64_t boot_until;
+    bool reset_pending, corrupted_frame;
 } m;
 struct wifi_model_join wifi_model_joined;
 unsigned wifi_model_transfers, wifi_model_unanswered;
@@ -76,8 +84,8 @@ static void pf_info(void *ctx, struct kwb_info *out) {
     (void)ctx;
     static const uint8_t mac[6] = {0x02, 0x4b, 0x55, 0x49, 0x00, 0x05};
     memcpy(out->mac, mac, 6);
-    out->chip = 5;
-    snprintf(out->version, sizeof(out->version), "model-1");
+    out->chip = m.chip;
+    snprintf(out->version, sizeof(out->version), "%s", m.version);
 }
 static void pf_status(void *ctx, struct kwb_wifi *out) { (void)ctx; *out = m.wifi; }
 static bool pf_scan(void *ctx) {
@@ -161,19 +169,70 @@ static bool pf_time(void *ctx, uint64_t *ms) {
 }
 static uint8_t pf_ota_begin(void *ctx, uint32_t size, const uint8_t sha256[32]) {
     (void)ctx;
-    (void)size;
-    (void)sha256;
-    return 2;
+    if(m.ota_result.open) ++m.ota_result.aborts;
+    m.ota_result.open = false;
+    free(m.ota);
+    m.ota = NULL;
+    if(!size || size > 0x1e0000u) return 1;
+    ++m.ota_result.begins;
+    if(m.faults.begin_status) return m.faults.begin_status;
+    m.ota = malloc(size);
+    if(!m.ota) return 2;
+    m.ota_result.size = size;
+    m.ota_result.written = 0;
+    m.ota_result.committed = m.ota_result.checksum_ok = false;
+    memcpy(m.ota_result.expected_sha, sha256, 32);
+    m.ota_result.open = true;
+    return 0;
 }
 static uint8_t pf_ota_write(void *ctx, uint32_t offset, const uint8_t *data, size_t len) {
     (void)ctx;
-    (void)offset;
-    (void)data;
-    (void)len;
-    return 1;
+    ++m.ota_result.writes;
+    if(!m.ota_result.open || offset != m.ota_result.written || len > m.ota_result.size - offset) return 1;
+    if(m.faults.data_status) return m.faults.data_status;
+    memcpy(m.ota + offset, data, len);
+    if(m.faults.corrupt_image && !offset && len) m.ota[0] ^= 1;
+    m.ota_result.written += (uint32_t)len;
+    if(m.faults.reset_after && m.ota_result.written >= m.faults.reset_after) {
+        m.reset_pending = true;
+        m.faults.reset_after = 0;
+    }
+    return 0;
 }
-static uint8_t pf_ota_end(void *ctx) { (void)ctx; return 1; }
-static void pf_reboot(void *ctx) { (void)ctx; wifi_model_restart(); }
+static uint8_t pf_ota_end(void *ctx) {
+    (void)ctx;
+    ++m.ota_result.ends;
+    bool complete = m.ota_result.open && m.ota_result.written == m.ota_result.size;
+    m.ota_result.open = false;
+    if(!complete) return 1;
+    struct kui_sha256 hash;
+    kui_sha256_init(&hash);
+    kui_sha256_update(&hash, m.ota, m.ota_result.size);
+    kui_sha256_digest(&hash, m.ota_result.actual_sha);
+    m.ota_result.checksum_ok = !memcmp(m.ota_result.actual_sha, m.ota_result.expected_sha, 32);
+    if(!m.ota_result.checksum_ok) return 3;
+    if(m.faults.end_status) return m.faults.end_status;
+    /* The ESP validates the image; the model checks the descriptor needed
+     * for the next HELLO. Structural validation is exercised on the host. */
+    if(m.ota_result.size < 208u || m.ota[0] != 0xe9 || kwl_get32(m.ota + 32) != 0xabcd5432u) return 4;
+    char version[33], hash_text[65];
+    memcpy(version, m.ota + 48, 32);
+    version[32] = 0;
+    kui_hex(m.ota + 176, 32, hash_text);
+    snprintf(m.next_version, sizeof(m.next_version), "%.20s-%.8s", version, hash_text);
+    m.ota_result.committed = true;
+    return 0;
+}
+static void pf_reboot(void *ctx) {
+    (void)ctx;
+    ++m.ota_result.reboots;
+    if(m.ota_result.committed && !m.faults.rollback) {
+        snprintf(m.version, sizeof(m.version), "%s", m.faults.wrong_version ? "unrelated-ffffffff" : m.next_version);
+    }
+    wifi_model_restart();
+    m.boot_until = clock_ms() + m.faults.reboot_silent_ms;
+    if(m.faults.never_returns) m.options.absent = true;
+}
 static const struct kwb_platform platform = {NULL, pf_now, pf_info, pf_status, pf_scan, pf_scan_results, pf_join,
     pf_leave, pf_band, pf_dns_start, pf_dns_result, pf_time, pf_ota_begin, pf_ota_write, pf_ota_end, pf_reboot};
 
@@ -189,6 +248,26 @@ static void service(void) {
 }
 /* As the firmware: the next transfer is armed as soon as one ends. */
 static void arm(void) {
+    /* Mutate a valid application reply before the real link computes CRC.
+     * This tests host reply checks, independently of transport protection. */
+    for(size_t at = 0; at + KWM_HEADER <= m.bridge.reply_len;) {
+        uint8_t *head = m.bridge.reply + at;
+        size_t len = kwl_get16(head + 2);
+        if(at + KWM_HEADER + len > m.bridge.reply_len) break;
+        if(head[0] == KWM_OTA_R && len >= 8 && head[4] == KWM_OTA_END_PHASE && m.faults.lose_end_reply) {
+            /* Flash/selection succeeded, but its application answer never
+             * leaves the device. Valid link frames continue to arrive. */
+            size_t bytes = KWM_HEADER + len;
+            memmove(head, head + bytes, m.bridge.reply_len - at - bytes);
+            m.bridge.reply_len -= bytes;
+            continue;
+        }
+        if(head[0] == KWM_OTA_R && len >= 8 && head[4] == KWM_OTA_DATA_PHASE) {
+            if(m.faults.wrong_phase) head[4] = KWM_OTA_BEGIN_PHASE;
+            if(m.faults.wrong_written) kwl_put32(head + 8, kwl_get32(head + 8) + 1u);
+        }
+        at += KWM_HEADER + len;
+    }
     size_t n = kwb_frame(&m.bridge, m.armed);
     memset(m.armed + n, 0, KWL_FRAME_MAX - n);
 }
@@ -197,7 +276,7 @@ static bool transfer(void *ctx, const uint8_t *out, uint8_t *in, size_t len, boo
     assert(m.open && len % 4u == 0 && len >= KWL_HEADER && len <= KWL_FRAME_MAX);
     service();
     ++wifi_model_transfers;
-    if(m.options.absent || m.level / WIFI_MODEL_RATES != m.options.select) {
+    if(m.options.absent || clock_ms() < m.boot_until || m.level / WIFI_MODEL_RATES != m.options.select) {
         /* Nobody listens on this chip select. */
         memset(in, 0xff, len);
         *ready = false;
@@ -207,12 +286,20 @@ static bool transfer(void *ctx, const uint8_t *out, uint8_t *in, size_t len, boo
     *ready = !m.options.no_ready;
     memcpy(in, m.armed, len);
     memcpy(m.in, out, len);
+    if(m.faults.corrupt_frame_once && m.ota_result.written && !m.corrupted_frame) {
+        in[12] ^= 1;
+        m.corrupted_frame = true;
+    }
     if(m.level % WIFI_MODEL_RATES < m.options.bad_rates) {
         /* Too fast for these wires: a checksum bit flips each way. */
         in[12 + rnd() % 4u] ^= (uint8_t)(1u << (rnd() % 8u));
         m.in[12 + rnd() % 4u] ^= (uint8_t)(1u << (rnd() % 8u));
     }
     kwb_transfer(&m.bridge, m.in, len);
+    if(m.reset_pending) {
+        m.reset_pending = false;
+        wifi_model_restart();
+    }
     arm();
     return true;
 }
@@ -244,6 +331,8 @@ void wifi_model_start(const struct wifi_model_options *options) {
     wifi_model_transfers = wifi_model_unanswered = 0;
     m.options = *options;
     m.rng = 0x4b554957u;
+    m.chip = 5;
+    snprintf(m.version, sizeof(m.version), "model-1");
     m.wifi.band_mode = KWM_BAND_BOTH;
     if(options->state == KWM_WIFI_ONLINE) {
         online(36, -48, localhost);
@@ -259,7 +348,7 @@ void wifi_model_start(const struct wifi_model_options *options) {
     kwb_init(&m.bridge, &platform, SLOT_BUFFER);
     arm();
 }
-void wifi_model_stop(void) { kwb_release(&m.bridge); }
+void wifi_model_stop(void) { kwb_release(&m.bridge); free(m.ota); m.ota = NULL; }
 struct wifi_model_options *wifi_model_live(void) { return &m.options; }
 bool wifi_model_listening(uint16_t port) {
     for(unsigned i = 0; i < KWM_SLOTS; ++i)
@@ -267,8 +356,18 @@ bool wifi_model_listening(uint16_t port) {
     return false;
 }
 void wifi_model_restart(void) {
+    m.ota_result.open = false;
     kwb_reset(&m.bridge);
     arm();
+}
+void wifi_model_ota_configure(const struct wifi_model_ota_faults *faults) {
+    m.faults = faults ? *faults : (struct wifi_model_ota_faults){0};
+}
+const struct wifi_model_ota_result *wifi_model_ota_result(void) { return &m.ota_result; }
+const uint8_t *wifi_model_ota_bytes(void) { return m.ota; }
+void wifi_model_firmware(uint8_t chip, const char *version) {
+    m.chip = chip;
+    snprintf(m.version, sizeof(m.version), "%s", version);
 }
 void wifi_model_drop(void) {
     offline(KWM_WIFI_LOST);
