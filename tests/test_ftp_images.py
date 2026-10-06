@@ -10,6 +10,7 @@ import ftplib
 import hashlib
 import os
 import random
+import re
 import shutil
 import socket
 import struct
@@ -630,6 +631,14 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     assert code == 0 and "STOPPED state=2" in output, output[-3000:]
     # Every event is logged; the screen shows only the latest.
     assert "LOG FTP: Received /Games/big.bin (20.0 MB)" in output, output[-3000:]
+    if adapter == ("wifi",):
+        batches = [tuple(map(int, match)) for match in re.findall(
+            r"LOG FTP Wi-Fi: (\d+) SPI frames in (\d+) bounded bursts; largest (\d+) frames", output)]
+        large = [(frames, bursts, maximum) for frames, bursts, maximum in batches if frames >= 1024]
+        assert large, "No substantial Wi-Fi transfer emitted burst counters"
+        assert all(0 < maximum <= 8 and frames <= bursts * 8 for frames, bursts, maximum in large), large
+        assert any(frames > bursts and maximum > 1 for frames, bursts, maximum in large), large
+        print("PASS Wi-Fi FTP: real bridge moves several SPI frames per pass; transfer hashes remain exact", flush=True)
     return password, files
 
 

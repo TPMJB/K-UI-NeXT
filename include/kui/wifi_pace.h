@@ -15,6 +15,7 @@
 #define KUI_WIFI_PACE_TRAIN 0x20u
 #define KUI_WIFI_PACE_RECOVER 32u
 #define KUI_WIFI_PACE_STALL 3u
+#define KUI_WIFI_PACE_LEVELS 6u
 
 struct kui_wifi_pace {
     bool trained, wired;
@@ -24,7 +25,7 @@ static inline void kui_wifi_pace_reset(struct kui_wifi_pace *p) {
     *p = (struct kui_wifi_pace){0};
 }
 static inline unsigned kui_wifi_pace_gap_us(const struct kui_wifi_pace *p) {
-    static const unsigned gaps[] = {2000u, 4000u, 8000u, 20000u};
+    static const unsigned gaps[KUI_WIFI_PACE_LEVELS] = {500u, 1000u, 2000u, 4000u, 8000u, 20000u};
     return p->trained && !p->wired ? gaps[p->level] : 20000u;
 }
 static inline void kui_wifi_pace_ready(struct kui_wifi_pace *p) {
@@ -33,7 +34,7 @@ static inline void kui_wifi_pace_ready(struct kui_wifi_pace *p) {
     p->wired = true;
 }
 static inline void kui_wifi_pace_backoff(struct kui_wifi_pace *p) {
-    if(p->level < 3u) ++p->level;
+    if(p->level + 1u < KUI_WIFI_PACE_LEVELS) ++p->level;
     p->stalled = p->stable = 0;
 }
 static inline void kui_wifi_pace_feedback(struct kui_wifi_pace *p, unsigned flags) {

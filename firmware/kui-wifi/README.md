@@ -7,9 +7,12 @@ does, over Wi-Fi instead of a cable. It also builds for the XIAO ESP32-C6
 
 **Status: an ESP32-C5 has joined 5 GHz Wi-Fi and transferred files over
 SCI on a Dreamcast.** The first console upload measured about 65 KiB/s with
-READY omitted. Firmware 0.1.2 is a performance test candidate: 8 KiB socket
-rings keep large link frames flowing, and modem sleep is disabled for the
-console's continuously powered network adapter. Its speed still needs a
+READY omitted. The first performance update reached 226 KiB/s on a console
+upload, with 291 KiB/s measured in the network path. Firmware 0.1.3 keeps
+the 8 KiB socket rings and disabled modem sleep, and arms the next SPI
+frame before polling established sockets. Socket work can then run while
+DMA waits for the next transfer, shortening the gap during which a host
+without READY would find the adapter unarmed. The new timing still needs a
 console measurement. K-UI includes the driver, FTP server and a Wi-Fi page
 to choose a network (see [Wi-Fi](../../docs/wifi.md)). The board can be set
 up and tested on its own from a computer before installation.

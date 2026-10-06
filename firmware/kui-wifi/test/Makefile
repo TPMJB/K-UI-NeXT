@@ -31,6 +31,7 @@ $(BUILD)/test_wifi_band_control: test_wifi_band_control.c ../main/wifi_band_cont
 test: $(BUILD)/test_kwlink $(BUILD)/test_bridge $(BUILD)/test_bridge_throughput $(BUILD)/test_wifi_band_control
 	./$(BUILD)/test_kwlink
 	./$(BUILD)/test_bridge
+	./$(BUILD)/test_bridge --arm-first
 	./$(BUILD)/test_bridge_throughput
 	./$(BUILD)/test_wifi_band_control
 

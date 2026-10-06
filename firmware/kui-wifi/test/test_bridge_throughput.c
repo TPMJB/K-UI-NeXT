@@ -24,7 +24,7 @@ struct fixture {
     struct kwh host;
     uint8_t armed[KWL_FRAME_MAX];
     int peer;
-    bool streaming, damage;
+    bool streaming, damage, arm_first;
     size_t produced, received;
     uint32_t sent_crc, received_crc;
     unsigned transfers, corrupted;
@@ -74,9 +74,16 @@ static bool transfer(void *ctx, const uint8_t *out, uint8_t *in, size_t bytes) {
             ++f->corrupted;
         }
     }
-    refill(f);
-    kwb_transfer(&f->bridge, out, bytes);
-    arm(f);
+    if(f->arm_first) {
+        kwb_receive(&f->bridge, out, bytes);
+        arm(f);
+        refill(f);
+        kwb_service(&f->bridge);
+    } else {
+        refill(f);
+        kwb_transfer(&f->bridge, out, bytes);
+        arm(f);
+    }
     return true;
 }
 static void consume(struct fixture *f) {
@@ -87,10 +94,11 @@ static void consume(struct fixture *f) {
     f->received_crc = kwl_crc32(f->received_crc, data, n);
     f->received += n;
 }
-static struct result run(size_t ring, bool damage) {
+static struct result run(size_t ring, bool damage, bool arm_first) {
     struct fixture *f = calloc(1, sizeof *f);
     CHECK(f);
     f->peer = -1;
+    f->arm_first = arm_first;
     const struct kwb_platform platform = {0};
     kwb_init(&f->bridge, &platform, ring);
     const struct kwh_bus bus = {f, transfer};
@@ -137,13 +145,17 @@ static struct result run(size_t ring, bool damage) {
     return result;
 }
 int main(void) {
-    struct result small = run(4096u, false), large = run(8192u, false), damaged = run(8192u, true);
-    CHECK(small.crc == large.crc && large.crc == damaged.crc);
+    struct result small = run(4096u, false, false), large = run(8192u, false, false),
+                  armed = run(8192u, false, true), damaged = run(8192u, true, true);
+    CHECK(small.crc == large.crc && large.crc == armed.crc && armed.crc == damaged.crc);
     /* An 8 KiB ring should carry over 50% more useful bytes per transfer
      * than the old ring. No scheduler/clock/radio time appears here. */
     CHECK(large.transfers * 3u < small.transfers * 2u);
+    /* Arming before network service must not create steady-state empty
+     * frames. Allow only the short warm-up when the first RX arrives. */
+    CHECK(armed.transfers <= large.transfers + 4u);
     printf("TCP ring throughput: 256 KiB, 4 KiB ring %u transfers; 8 KiB ring %u; "
-           "damaged link %u (%u bad, %u retransmitted); CRC32 %08x\n",
-           small.transfers, large.transfers, damaged.transfers, damaged.bad, damaged.resent, large.crc);
+           "arm before sockets %u; damaged link %u (%u bad, %u retransmitted); CRC32 %08x\n",
+           small.transfers, large.transfers, armed.transfers, damaged.transfers, damaged.bad, damaged.resent, large.crc);
     return 0;
 }

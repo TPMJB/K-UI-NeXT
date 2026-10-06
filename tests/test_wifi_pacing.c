@@ -12,7 +12,7 @@
 #include "../src/dreamcast/wifi_sci.c"
 
 static uint64_t clock_us, armed_us, last_end, last_start;
-static unsigned slave_delay, yields, early, clocks, corrupt;
+static unsigned slave_delay, yields, yield_us, early, clocks, corrupt;
 static bool running, wired, arm_pending, physical_level, dma_available;
 static bool stale_once, hold_idle, wrong_echo;
 static uint8_t previous[KWL_FRAME_MAX], idle_frame[KWL_FRAME_MAX];
@@ -26,7 +26,7 @@ static void armed(void) {
 }
 uint64_t timer_us_gettime64(void) { armed(); return clock_us++; }
 uint64_t timer_ms_gettime64(void) { return clock_us / 1000u; }
-void thd_pass(void) { ++yields; clock_us += 100u; armed(); }
+void thd_pass(void) { ++yields; clock_us += yield_us; armed(); }
 void thd_sleep(unsigned ms) { clock_us += (uint64_t)ms * 1000u; armed(); }
 bool kui_sci_open(unsigned rate, unsigned select) {
     assert(rate < KUI_SCI_RATES);
@@ -93,6 +93,7 @@ static void device(bool ready_wire, unsigned rearm_us, bool with_dma) {
     dma_available = with_dma;
     clock_us = armed_us = last_end = last_start = 0;
     yields = early = clocks = corrupt = 0;
+    yield_us = 100u;
     arm_pending = physical_level = stale_once = hold_idle = wrong_echo = false;
     previous_len = idle_len = 0;
     struct wifi_model_options options = {false, 0, 0, !ready_wire, KWM_WIFI_ONLINE};
@@ -130,17 +131,21 @@ static void training(void) {
     device(false, 300u, true);
     struct kui_app_status view;
     assert(kui_wifi_network_inspect(&view, NULL, never));
-    assert(view.passed && strstr(view.lines[7], "READY absent; transfer gap 2 ms"));
+    assert(view.passed && strstr(view.lines[7], "READY absent; transfer gap 500 us"));
     wifi_model_stop();
     puts("PASS CRC-correct wrong echoes cannot train; inspection reports active fallback gap");
 }
 static void no_ready(void) {
     struct kui_wifi_session *s = start(false, 300u, true);
-    assert(pacing.trained && !pacing.wired && !s->ready_changes && gap_us(NULL) == 2000u);
+    assert(pacing.trained && !pacing.wired && !s->ready_changes && gap_us(NULL) == 500u);
     assert(s->host.counts.hello == 1u && s->host.counts.echo == 4u && yields);
     uint64_t before = last_end;
+    /* A real scheduler handoff can take much longer than the intended gap.
+     * Trained short waits must remain precise even with an 8 ms handoff. */
+    yield_us = 8000u;
+    unsigned previous_yields = yields;
     assert(kui_wifi_session_step(s));
-    assert(last_start >= before + 2000u && last_start < before + 2200u);
+    assert(last_start >= before + 500u && last_start < before + 550u && yields == previous_yields);
     unsigned sleep_gap = gap_us(NULL);
     clock_us += 5000u;
     before = clock_us;
@@ -149,12 +154,13 @@ static void no_ready(void) {
     echo(s);
     assert(!early && !s->host.link.stats.bad);
     finish(s);
-    printf("PASS actual SCI transport trains on HELLO/four echoes and uses 2ms from transfer end\n");
+    printf("PASS full-frame HELLO/echo training; 500us gaps stay precise despite 8ms scheduler handoffs\n");
 }
 static void delayed(void) {
     struct kui_wifi_session *s = start(false, 2500u, false);
     echo(s);
     assert(early && gap_us(NULL) >= 4000u);
+    for(unsigned i = 0; i < 8u && gap_us(NULL) < 4000u; ++i) echo(s);
     unsigned bounded = early;
     for(unsigned i = 0; i < 50u; ++i) echo(s);
     assert(early - bounded < 15u && gap_us(NULL) <= 20000u);
@@ -164,16 +170,17 @@ static void delayed(void) {
 }
 static void errors(void) {
     struct kui_wifi_session *s = start(false, 300u, true);
-    for(unsigned gap = 4000u, i = 0; i < 3u; ++i, gap = i == 2u ? 20000u : gap * 2u) {
+    static const unsigned backoff[] = {1000u, 2000u, 4000u, 8000u, 20000u};
+    for(unsigned i = 0; i < sizeof(backoff) / sizeof(backoff[0]); ++i) {
         corrupt = 1u;
         assert(kui_wifi_session_step(s));
-        assert(gap_us(NULL) == gap);
+        assert(gap_us(NULL) == backoff[i]);
     }
-    assert(s->host.link.stats.bad == 3u);
+    assert(s->host.link.stats.bad == 5u);
     for(unsigned i = 0; i < 50u; ++i) assert(kui_wifi_session_step(s));
     assert(gap_us(NULL) == 20000u); /* idle valid CRCs cannot retrain */
-    for(unsigned i = 0; i < 60u; ++i) echo(s);
-    assert(gap_us(NULL) == 2000u);
+    for(unsigned i = 0; i < 100u; ++i) echo(s);
+    assert(gap_us(NULL) == 500u);
     /* A previously valid ECHO_R cannot be delivered twice, and its CRC is
      * not sufficient proof that an active transfer was accepted. */
     assert(previous[2] & KWL_F_DATA);
@@ -182,11 +189,11 @@ static void errors(void) {
     assert(kwh_echo(&s->host, sample, sizeof sample));
     stale_once = true;
     assert(kui_wifi_session_step(s));
-    assert(s->host.counts.echo == count && s->host.link.stats.duplicates > duplicates && gap_us(NULL) == 4000u);
+    assert(s->host.counts.echo == count && s->host.link.stats.duplicates > duplicates && gap_us(NULL) == 1000u);
     for(unsigned i = 0; i < 32u && s->host.counts.echo == count; ++i) assert(kui_wifi_session_step(s));
     assert(s->host.counts.echo == count + 1u);
     finish(s);
-    printf("PASS CRC failures back off 2/4/8/20ms; genuine progress recovers; stale duplicates do not\n");
+    printf("PASS CRC failures back off 500us/1/2/4/8/20ms; genuine progress recovers; stale duplicates do not\n");
 }
 static void stall_reset(void) {
     struct kui_wifi_session *s = start(false, 300u, true);
@@ -195,7 +202,7 @@ static void stall_reset(void) {
     uint8_t sample[64] = {0};
     assert(kwh_echo(&s->host, sample, sizeof sample));
     hold_idle = true;
-    for(unsigned i = 0; i < 9u; ++i) assert(kui_wifi_session_step(s));
+    for(unsigned i = 0; i < 15u; ++i) assert(kui_wifi_session_step(s));
     assert(gap_us(NULL) == 20000u && !s->host.link.stats.bad);
     hold_idle = false;
     for(unsigned i = 0; i < 20u; ++i) assert(kui_wifi_session_step(s));
@@ -208,7 +215,7 @@ static void stall_reset(void) {
     assert(s->host.ready && !pacing.trained); /* HELLO alone is insufficient */
     kui_wifi_session_end(s);
     assert(kui_wifi_session_find(s, kui_wifi_console_port(), NULL));
-    assert(pacing.trained && gap_us(NULL) == 2000u); /* all four echoes again */
+    assert(pacing.trained && gap_us(NULL) == 500u); /* all four echoes again */
     finish(s);
     printf("PASS active stale ACKs back off, reset requires full HELLO/echo retraining\n");
 }

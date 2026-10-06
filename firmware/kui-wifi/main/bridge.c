@@ -562,13 +562,21 @@ static size_t pending(void *ctx) {
     return n;
 }
 
+static void listeners(struct kwb *b);
+
 size_t kwb_frame(struct kwb *b, uint8_t frame[KWL_FRAME_MAX]) {
     struct kwl_io io = {b, fill, deliver, pending};
     return kwl_build(&b->link, frame, &io);
 }
-void kwb_transfer(struct kwb *b, const uint8_t *in, size_t clocked) {
+void kwb_receive(struct kwb *b, const uint8_t *in, size_t clocked) {
     struct kwl_io io = {b, fill, deliver, pending};
     if(kwl_receive(&b->link, in, clocked, &io) == KWL_SYNCED) forget(b);
+    /* KWM_LISTEN must mean the port really is bound, even when the next
+     * frame is armed before established sockets are polled. */
+    listeners(b);
+}
+void kwb_transfer(struct kwb *b, const uint8_t *in, size_t clocked) {
+    kwb_receive(b, in, clocked);
     kwb_service(b);
 }
 

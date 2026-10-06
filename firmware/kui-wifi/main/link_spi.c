@@ -91,11 +91,15 @@ static void link_task(void *arg) {
         spi_slave_transaction_t *done = NULL;
         if(spi_slave_get_trans_result(LINK_HOST, &done, pdMS_TO_TICKS(2)) == ESP_OK) {
             ++stats.transfers;
-            kwb_transfer(b, rx, done->trans_len / 8u);
+            kwb_receive(b, rx, done->trans_len / 8u);
             if(b->link.live) stats.host_seen = true;
             len = kwb_frame(b, tx);
             memset(tx + len, 0, KWL_FRAME_MAX - len);
             ESP_ERROR_CHECK(spi_slave_queue_trans(LINK_HOST, &transfer, portMAX_DELAY));
+            /* lwIP socket work can run while the next DMA frame is armed.
+             * In particular, do not leave SPI unarmed during select/recv:
+             * the six-wire host cannot see READY and has a fixed gap. */
+            kwb_service(b);
         } else {
             kwb_service(b);
         }

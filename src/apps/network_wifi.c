@@ -11,7 +11,7 @@
 
 #define HELLO_TRANSFERS 12u
 #define ECHO_ROUNDS 4u
-#define ECHO_BYTES 2048u
+#define ECHO_BYTES KWM_BODY_MAX
 #define ECHO_TRANSFERS 16u
 #define ONLINE_MS 20000u
 #define MISSING_MS 10000u
@@ -184,7 +184,7 @@ bool kui_wifi_session_find(struct kui_wifi_session *s, const struct kui_wifi_por
             s->found = true;
             if(log && port->bus->gap_us) {
                 unsigned gap = port->bus->gap_us(port->bus->ctx);
-                if(gap) log("Wi-Fi SCI pacing: READY absent; transfer gap %u ms (adaptive)", gap / 1000u);
+                if(gap) log("Wi-Fi SCI pacing: READY absent; transfer gap %u us (adaptive)", gap);
                 else log("Wi-Fi SCI pacing: READY handshake working; 20 ms timeout");
             }
             return true;
@@ -518,7 +518,7 @@ bool kui_wifi_network_inspect(struct kui_app_status *out, kui_log_fn log, kui_ca
     snprintf(out->lines[7], KUI_APP_LINE_CAP, "No settings were changed");
     if(s->port->bus->gap_us) {
         unsigned gap = s->port->bus->gap_us(s->port->bus->ctx);
-        if(gap) snprintf(out->lines[7], KUI_APP_LINE_CAP, "READY absent; transfer gap %u ms (adaptive)", gap / 1000u);
+        if(gap) snprintf(out->lines[7], KUI_APP_LINE_CAP, "READY absent; transfer gap %u us (adaptive)", gap);
         else snprintf(out->lines[7], KUI_APP_LINE_CAP, "READY handshake working; 20 ms timeout");
     }
     finish(s);

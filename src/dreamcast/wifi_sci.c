@@ -4,8 +4,10 @@
  * by DMA (kui_sci_dma_transfer) from KUI_SCI_DMA_MIN bytes. Its chip select
  * is GPIO6 (the network connector's) or GPIO7 (the usual W5500 point), both
  * tried from the fastest rate down. A working READY line (GPIO5) keeps its
- * handshake; without it, verified HELLO/echo checks permit a bounded 2 ms
- * inter-transfer gap, backed off on checked errors or stalled delivery. A DMA
+ * handshake; without it, verified HELLO/echo checks permit a bounded gap
+ * starting at 500 us, backed off on checked errors or stalled delivery. Short
+ * trained gaps spin with interrupts enabled so scheduler yields cannot extend
+ * them. A DMA
  * transfer that fails is reported as a failed transfer, which the link sends
  * again (it also checks each frame's CRC32); after DMA_GIVE_UP failures in a
  * row, DMA stays off. */
@@ -26,6 +28,7 @@ static unsigned dma_failures;
 /* The board answers within a few hundred microseconds; past that, the
  * wait lets other threads run. */
 #define SPIN_US 200u
+#define PRECISE_GAP_US 1000u
 /* READY's level before the last transfer; -1 when not known. */
 static int seen = -1;
 static struct kui_wifi_pace pacing;
@@ -44,7 +47,7 @@ static bool transfer(void *ctx, const uint8_t *out, uint8_t *in, size_t bytes, b
         while(level == seen) {
             uint64_t t = timer_us_gettime64();
             if(t - from >= limit) break;
-            if(t - start > SPIN_US) thd_pass();
+            if(!(timed && limit <= PRECISE_GAP_US) && t - start > SPIN_US) thd_pass();
             level = kui_sci_ready();
         }
         *ready = level != seen;

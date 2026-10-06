@@ -1,10 +1,17 @@
-# Wi-Fi performance test: current K-UI 1.7 and C5 0.1.2
+# Wi-Fi performance test: current K-UI 1.7 and C5 0.1.3
 
 The first physical C5 test succeeded on 5 GHz channel 161 with signal
 -56 dBm, SCI at 12.5 MHz with DMA, and no READY wire. FTP received one
 16 MB file at 66 KiB/s; the screen reported card 930 KiB/s and network
 71 KiB/s. This establishes a working connection and upload, not a completed
 integrity or sustained-load test.
+
+The subsequent runtime `fbbc3df1dc9e` received a 16 MB file at 226 KiB/s
+on 2.4 GHz channel 1, -63 dBm. Its screen reported card 1021 KiB/s,
+network 291 KiB/s and no overlap. The two operations taking turns account
+for the measured total. The network number includes link and scheduling
+overhead; it is not a measurement of radio throughput. The owner's W5500
+setup reached about 850 KiB/s with SCIF storage.
 
 This experimental build targets that six-wire installation. Keep the existing
 SCIF storage, card filesystem, boot disc and SCI network wiring. Install the
@@ -14,11 +21,22 @@ contain these Wi-Fi changes.
 ## Changes
 
 - A validated no-READY session uses a shorter transfer gap with error/stall
-  backoff. The wired READY path keeps its original bounded wait. Initial
-  discovery and reset recovery stay conservative.
-- C5 firmware 0.1.2 uses 8 KB instead of 4 KB receive/transmit rings per open
+  backoff: 500 us, then 1, 2, 4, 8 or 20 ms when necessary. Four checked
+  full-size echo exchanges are required before enabling it. Gaps of at most
+  1 ms wait with interrupts enabled without an explicit thread yield that
+  can exceed the intended gap. The wired READY path keeps its original
+  bounded wait. Initial discovery and reset recovery stay conservative.
+- FTP services bounded bursts of Wi-Fi frames per pass rather than yielding
+  after each frame. It copies received bytes into the existing upload buffer
+  and queues download data between frames, returning credits promptly.
+  Frame and time limits retain control, cancellation and other-client service.
+- Firmware 0.1.3 arms its next SPI DMA frame before polling established
+  sockets. Listener creation still finishes before its ready response.
+  ACK, CRC, retransmission and socket-credit rules remain the same.
+- C5 firmware retains the 8 KB instead of 4 KB receive/transmit rings per open
   socket. A production-protocol TCP test moved the same 256 KB stream in
-  68 transfers instead of 129, verifying every byte and its CRC. Physical
+  69 transfers with the new arming order instead of 129 with the old 4 KB
+  rings, verifying every byte and its CRC. Physical
   performance depends on the bus, card, radio and scheduling.
 - Firmware disables modem sleep for lower receive latency. This uses more
   power than the previous radio setting.
@@ -36,7 +54,7 @@ Use the new [console updater](wifi-console-update.md): copy the matching
 KUI folder, including KUI/firmware and its checksum sidecar, to your card.
 In Network press START for Wi-Fi, then START to check the update and A to
 confirm. The installed 0.1.1 board already supports this protocol. The
-console installs 0.1.2 and verifies the adapter after restarting it; saved
+console installs 0.1.3 and verifies the adapter after restarting it; saved
 Wi-Fi settings remain. This requires no USB reconnection.
 
 ### Optional USB update for the original installation
@@ -61,7 +79,7 @@ python -m esptool --chip esp32c5 --port "$KUI_WIFI_PORT" --baud 460800 \
 python -m serial.tools.miniterm --raw --eol CR "$KUI_WIFI_PORT" 115200
 ```
 
-Run `version` and `status` inside `kui-wifi>`. Expect firmware **0.1.2**
+Run `version` and `status` inside `kui-wifi>`. Expect firmware **0.1.3**
 and the saved network to reconnect. Exit miniterm with Ctrl+] and unplug
 USB before restoring Dreamcast connections.
 
