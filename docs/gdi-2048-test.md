@@ -16,6 +16,31 @@ shown above. The tool publishes the destination only after every track and the
 new GDI are complete; a normal error or Ctrl+C removes its temporary staging
 folder. It refuses to overwrite existing files or folders.
 
+## Convert a collection
+
+To convert all game folders beneath a collection directory, run:
+
+```sh
+python3 tools/gdi_optimize.py --batch "/path/to/Games"
+```
+
+The converter searches nested folders and creates a sibling `Game-2048` folder
+for each game with exactly one GDI. `Games/Armada` stays unchanged and gains
+`Games/Armada-2048`. Keep both on the card: the existing Games browser lists
+both folders, so select the original or the 2048 copy before choosing the
+standard/background reader. The experimental 2048 runtime is still required.
+
+Completed conversion folders are excluded from later searches. A rerun leaves
+recognized copies unchanged and does not reverify their contents. Other output
+collisions and folders containing multiple GDIs are reported as failures;
+remaining games continue. Put each disc in its own folder for batch conversion.
+Symbolic links and hidden folders are skipped. The summary lists converted,
+skipped and failed jobs; a batch with failures exits with status 1.
+
+Ctrl+C keeps already completed copies and removes the current incomplete staging
+folder. Conversion remains sequential, with bounded memory, and needs enough
+free space for the additional data tracks and unchanged audio.
+
 The converter:
 
 - Checks every raw data sector's sync, Mode 1 marker and address against the GDI.

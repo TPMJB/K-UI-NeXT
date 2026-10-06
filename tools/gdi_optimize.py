@@ -27,6 +27,7 @@ TRACK_LIMIT = 99
 # Matches the console's extended MSF address limit (159:59:74).
 LBA_LIMIT = 719999 - 150 + 1
 COPY_BYTES = RAW_BYTES * 128
+PROFILE = "kui-gdi-mode1-2048-copy-v1"
 SYNC = b"\x00" + b"\xff" * 10 + b"\x00"
 RECORD = re.compile(
     r'[ \t]*(\d+)[ \t]+(\d+)[ \t]+(\d+)[ \t]+(\d+)[ \t]+'
@@ -236,7 +237,7 @@ def optimize(gdi, output_directory, progress=None):
         source_data = sum(t["source"]["bytes"] for t in records if t["control"] == 4)
         output_data = sum(t["output"]["bytes"] for t in records if t["control"] == 4)
         report = {
-            "schema": 1, "profile": "kui-gdi-mode1-2048-copy-v1",
+            "schema": 1, "profile": PROFILE,
             "tool": "tools/gdi_optimize.py", "complete": True,
             "verification": {
                 "raw_mode1_checks": ["sync", "mode", "sector-address"],
@@ -262,11 +263,191 @@ def optimize(gdi, output_directory, progress=None):
             shutil.rmtree(stage)
 
 
+def no_symlink_directories(path):
+    # Check from the filesystem root down, before any child is inspected.
+    for directory in reversed((path, *path.parents)):
+        require(not directory.is_symlink(), f"Symbolic-link directory is not allowed: {directory}")
+
+
+def converted_directory(directory):
+    """A completed report identifies our outputs without relying on suffixes."""
+    marker = directory / "conversion.json"
+    try:
+        info = marker.lstat()
+        if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= 1024 * 1024:
+            return False
+        report = json.loads(marker.read_text(encoding="utf-8"))
+        if not isinstance(report, dict):
+            return False
+        output = report.get("output_gdi", {})
+        name = output.get("file") if isinstance(output, dict) else None
+        if not (report.get("schema") == 1 and report.get("profile") == PROFILE
+                and report.get("complete") is True and isinstance(name, str)
+                and safe_name(name) and Path(name).suffix.lower() == ".gdi"):
+            return False
+        descriptor = directory / name
+        signature = file_signature(descriptor)
+        if not 0 < signature[2] <= GDI_LIMIT or digest(descriptor.read_bytes()) != {
+                key: output.get(key) for key in ("bytes", "crc32", "sha256")}:
+            return False
+        tracks = report.get("tracks")
+        if not isinstance(tracks, list) or not 1 <= len(tracks) <= TRACK_LIMIT:
+            return False
+        for number, track in enumerate(tracks, 1):
+            if not isinstance(track, dict) or track.get("number") != number:
+                return False
+            record = track.get("output")
+            if not isinstance(record, dict) or track.get("control") not in (0, 4):
+                return False
+            size = DATA_BYTES if track["control"] == 4 else RAW_BYTES
+            expected_name = f"track{number:02d}.{'iso' if track['control'] == 4 else 'raw'}"
+            sectors = track.get("sectors")
+            if (not isinstance(sectors, int) or sectors <= 0 or record.get("file") != expected_name
+                    or record.get("sector_bytes") != size or record.get("bytes") != sectors * size
+                    or file_signature(directory / expected_name)[2] != record["bytes"]
+                    or not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sha256")))
+                    or not re.fullmatch(r"[0-9a-f]{8}", str(record.get("crc32")))):
+                return False
+        return True
+    except (OSError, UnicodeError, ValueError):
+        return False
+
+
+def batch_snapshot(root):
+    """Discover before writing, so new outputs cannot become new inputs."""
+    candidates, notices, pending = [], [], [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            no_symlink_directories(directory)
+            if converted_directory(directory):
+                notices.append(("skipped", directory,
+                                "recognized conversion output; left unchanged (not reverified)"))
+                continue
+            if os.path.lexists(directory / "conversion.json"):
+                notices.append(("skipped", directory,
+                                "invalid/unrecognized conversion.json; left unchanged, not verified"))
+                continue
+            with os.scandir(directory) as scan:
+                entries = sorted(scan, key=lambda entry: (entry.name.casefold(), entry.name))
+            descriptors, children = [], []
+            for entry in entries:
+                path = Path(entry.path)
+                if entry.is_symlink():
+                    notices.append(("skipped", path, "symbolic link"))
+                    continue
+                if entry.is_dir(follow_symlinks=False):
+                    if entry.name.startswith("."):
+                        notices.append(("skipped", path, "hidden directory"))
+                    else:
+                        children.append(path)
+                elif not entry.name.startswith(".") and entry.name.lower().endswith(".gdi"):
+                    descriptors.append(path)
+            pending.extend(reversed(children))
+            if len(descriptors) > 1:
+                notices.append(("failed", directory,
+                                "multiple GDI descriptors; choose one with single-file mode"))
+            elif descriptors:
+                candidates.append((descriptors[0], directory.with_name(directory.name + "-2048")))
+        except (ValueError, OSError) as error:
+            notices.append(("failed", directory, str(error)))
+    # A case-insensitive card must not receive two indistinguishable outputs.
+    destinations = {}
+    for gdi, output in candidates:
+        destinations.setdefault(str(output).casefold(), []).append(gdi)
+    unique = []
+    for gdi, output in candidates:
+        if len(destinations[str(output).casefold()]) > 1:
+            notices.append(("failed", gdi, f"case-insensitive output-name collision: {output}"))
+        else:
+            unique.append((gdi, output))
+    return unique, notices
+
+
+def existing_copy_for(gdi, output):
+    if not converted_directory(output):
+        return False
+    report = json.loads((output / "conversion.json").read_text(encoding="utf-8"))
+    source = report.get("source_gdi")
+    if not isinstance(source, dict) or source.get("path") != str(gdi.resolve()):
+        return False
+    if not 0 < file_signature(gdi)[2] <= GDI_LIMIT:
+        return False
+    return digest(gdi.read_bytes()) == {key: source.get(key) for key in ("bytes", "crc32", "sha256")}
+
+
+def optimize_batch(root, progress=None):
+    """Convert independent games; completed copies survive failures or Ctrl+C."""
+    root = Path(root).expanduser().absolute()
+    no_symlink_directories(root)
+    require(root.is_dir(), f"Batch root is not a directory: {root}")
+    root = root.resolve()
+    result = {"converted": 0, "skipped": 0, "failed": 0, "cancelled": False,
+              "saved_data_bytes": 0}
+
+    def notice(status, path, message):
+        result[status] += 1
+        if progress:
+            progress(f"{status.upper()}: {path}: {message}")
+
+    try:
+        candidates, notices = batch_snapshot(root)
+        for status, path, message in notices:
+            notice(status, path, message)
+        for gdi, output in candidates:
+            try:
+                no_symlink_directories(gdi.parent)
+                no_symlink_directories(output.parent)
+                # Also reject a differently-cased existing name before copying.
+                with os.scandir(output.parent) as scan:
+                    occupied = [entry for entry in scan if entry.name.casefold() == output.name.casefold()]
+                if occupied:
+                    if (len(occupied) == 1 and occupied[0].name == output.name
+                            and occupied[0].is_dir(follow_symlinks=False)
+                            and existing_copy_for(gdi, output)):
+                        notice("skipped", gdi, f"existing copy {output} left unchanged (not reverified)")
+                        continue
+                    raise ValueError(f"Output already exists: {output}")
+                emit = (lambda message: progress(f"{gdi.parent}: {message}")) if progress else None
+                report = optimize(gdi, output, progress=emit)
+                result["saved_data_bytes"] += report["saved_data_bytes"]
+                notice("converted", gdi, f"created {output}; originals unchanged")
+            except (ValueError, OSError) as error:
+                notice("failed", gdi, str(error))
+    except KeyboardInterrupt:
+        result["cancelled"] = True
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("gdi", type=Path, help="Original .gdi descriptor")
-    parser.add_argument("output", type=Path, help="New folder outside the original dump folder; must not exist")
+    parser.add_argument("--batch", type=Path, metavar="ROOT",
+                        help="Recursively convert one-GDI folders into sibling <folder>-2048 copies")
+    parser.add_argument("gdi", nargs="?", type=Path, help="Original .gdi descriptor")
+    parser.add_argument("output", nargs="?", type=Path,
+                        help="New folder outside the original dump folder; must not exist")
     args = parser.parse_args()
+    if args.batch is not None:
+        if args.gdi is not None or args.output is not None:
+            parser.error("--batch ROOT cannot be combined with single-file arguments")
+        try:
+            result = optimize_batch(args.batch, progress=print)
+        except (ValueError, OSError) as error:
+            print(f"Batch failed: {error}", file=sys.stderr)
+            return 1
+        except KeyboardInterrupt:
+            print("Batch cancelled before conversion; originals unchanged.", file=sys.stderr)
+            return 130
+        print(f'Batch summary: {result["converted"]} converted, {result["skipped"]} skipped, '
+              f'{result["failed"]} failed; {result["saved_data_bytes"]:,} data bytes saved.')
+        if result["cancelled"]:
+            print("Batch cancelled; completed copies kept, current staging cleaned.", file=sys.stderr)
+            return 130
+        if not any(result[key] for key in ("converted", "skipped", "failed")):
+            print("No GDI descriptors found.")
+        return 1 if result["failed"] else 0
+    if args.gdi is None or args.output is None:
+        parser.error("provide ORIGINAL.gdi OUTPUT_FOLDER, or --batch ROOT")
     try:
         report = optimize(args.gdi, args.output, progress=print)
     except (ValueError, OSError) as error:

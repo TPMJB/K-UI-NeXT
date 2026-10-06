@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -233,6 +234,209 @@ class GdiOptimizeTests(unittest.TestCase):
         repeat = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(repeat.returncode, 1)
         self.assertIn("already exists", repeat.stderr)
+
+
+class GdiOptimizeBatchTests(unittest.TestCase):
+    setUp = GdiOptimizeTests.setUp
+    write_mixed = GdiOptimizeTests.write_mixed
+    snapshot = GdiOptimizeTests.snapshot
+
+    def clone(self, directory):
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(self.source, directory)
+        return directory / self.gdi.name
+
+    def tree_hashes(self, directory):
+        return {str(path.relative_to(directory)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in directory.rglob("*") if path.is_file() and not path.is_symlink()}
+
+    def assert_report_hashes(self, source, output):
+        report = json.loads((output / "conversion.json").read_text())
+        for track in report["tracks"]:
+            for side, directory in (("source", source), ("output", output)):
+                data = (directory / track[side]["file"]).read_bytes()
+                self.assertEqual(track[side]["sha256"], hashlib.sha256(data).hexdigest())
+                self.assertEqual(track[side]["crc32"], f"{zlib.crc32(data):08x}")
+                self.assertEqual(track[side]["bytes"], len(data))
+
+    def test_batch_recursive_raw_cooked_audio_exact_bytes_and_originals(self):
+        second = self.root / "collection" / "Second game"
+        second_gdi = self.clone(second)
+        (second / "data one.bin").write_bytes(self.payloads[0])
+        second_gdi.write_text(second_gdi.read_text().replace("1 0 4 2352", "1 0 4 2048"))
+        before = self.tree_hashes(self.root)
+        result = converter.optimize_batch(self.root)
+        self.assertEqual(result["converted"], 2)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["saved_data_bytes"], 304 * 5)
+        for source in (self.source, second):
+            output = source.with_name(source.name + "-2048")
+            self.assertEqual((output / "track01.iso").read_bytes(), self.payloads[0])
+            self.assertEqual((output / "track03.iso").read_bytes(), b"".join(self.payloads[1:]))
+            self.assertEqual((output / "track02.raw").read_bytes(), self.audio)
+            self.assert_report_hashes(source, output)
+        after = self.tree_hashes(self.root)
+        for path, digest in before.items():
+            self.assertEqual(after[path], digest)
+        self.assertEqual(list(self.root.rglob("*-2048-2048")), [])
+
+    def test_batch_rerun_leaves_outputs_unchanged_without_reconversion(self):
+        self.assertEqual(converter.optimize_batch(self.root)["converted"], 1)
+        before = self.tree_hashes(self.root)
+        messages = []
+        result = converter.optimize_batch(self.root, messages.append)
+        self.assertEqual(result["converted"], 0)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["skipped"], 2)
+        self.assertTrue(all("not reverified" in message for message in messages))
+        self.assertEqual(self.tree_hashes(self.root), before)
+        self.assertFalse((self.root / "original-2048-2048").exists())
+
+    def test_batch_root_can_be_one_game(self):
+        result = converter.optimize_batch(self.source)
+        self.assertEqual(result["converted"], 1)
+        self.assertTrue((self.root / "original-2048" / self.gdi.name).is_file())
+
+    def test_batch_invalid_game_and_ambiguous_folder_do_not_block_good_game(self):
+        bad = self.root / "Bad game"
+        self.clone(bad)
+        damaged = bytearray((bad / "high.bin").read_bytes())
+        damaged[15] = 2
+        (bad / "high.bin").write_bytes(damaged)
+        ambiguous = self.root / "Ambiguous"
+        ambiguous_gdi = self.clone(ambiguous)
+        shutil.copyfile(ambiguous_gdi, ambiguous / "Other.gdi")
+        before = self.tree_hashes(self.root)
+        messages = []
+        result = converter.optimize_batch(self.root, messages.append)
+        self.assertEqual(result["converted"], 1)
+        self.assertEqual(result["failed"], 2)
+        self.assertTrue(any("unsupported sector mode 2" in message for message in messages))
+        self.assertTrue(any("multiple GDI descriptors" in message for message in messages))
+        for path, digest in before.items():
+            self.assertEqual(self.tree_hashes(self.root)[path], digest)
+        self.assertFalse((self.root / "Bad game-2048").exists())
+        self.assertFalse((self.root / "Ambiguous-2048").exists())
+        self.assertEqual(list(self.root.rglob(".*.staging-*")), [])
+
+    def test_batch_never_follows_symbolic_directories_descriptors_or_tracks(self):
+        (self.root / "Linked directory").symlink_to(self.source, target_is_directory=True)
+        (self.root / "Linked.gdi").symlink_to(self.gdi)
+        (self.root / "Broken.gdi").symlink_to(self.root / "missing.gdi")
+        symbolic = self.root / "Symbolic track game"
+        self.clone(symbolic)
+        (symbolic / "high.bin").unlink()
+        (symbolic / "high.bin").symlink_to(self.source / "high.bin")
+        result = converter.optimize_batch(self.root)
+        self.assertEqual(result["converted"], 1)
+        self.assertEqual(result["failed"], 1)
+        self.assertGreaterEqual(result["skipped"], 3)
+        self.assertFalse((self.root / "Linked directory-2048").exists())
+        self.assertFalse((self.root / "Symbolic track game-2048").exists())
+        with self.assertRaisesRegex(ValueError, "Symbolic-link directory"):
+            converter.optimize_batch(self.root / "Linked directory")
+
+    def test_batch_hidden_staging_and_generated_trees_are_pruned(self):
+        self.clone(self.root / ".hidden" / "Never convert")
+        self.clone(self.root / ".unfinished.staging-123")
+        converter.optimize(self.gdi, self.output)
+        self.clone(self.output / "Nested source")
+        result = converter.optimize_batch(self.root)
+        self.assertEqual(result["converted"], 1)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["skipped"], 3)
+        self.assertFalse((self.root / ".hidden" / "Never convert-2048").exists())
+        self.assertFalse((self.output / "Nested source-2048").exists())
+        self.assertFalse((self.root / "optimized-2048").exists())
+
+    def test_batch_invalid_conversion_markers_are_left_unchanged_without_complete_claim(self):
+        cases = ("[]", "not json", json.dumps({"schema": 1, "profile": converter.PROFILE,
+                                              "complete": True, "output_gdi": {"file": "Missing.gdi"}}))
+        for content in cases:
+            with self.subTest(content=content):
+                (self.source / "conversion.json").write_text(content)
+                before = self.snapshot()
+                messages = []
+                result = converter.optimize_batch(self.root, messages.append)
+                self.assertEqual(result["converted"], 0)
+                self.assertEqual(result["skipped"], 1)
+                self.assertIn("invalid/unrecognized", messages[0])
+                self.assertIn("not verified", messages[0])
+                self.assertEqual(self.snapshot(), before)
+                self.assertFalse((self.root / "original-2048").exists())
+
+    def test_batch_corrupted_generated_descriptor_is_not_recognized_as_complete(self):
+        output = self.root / "original-2048"
+        converter.optimize(self.gdi, output)
+        (output / self.gdi.name).write_text("corrupted output")
+        messages = []
+        before = self.tree_hashes(self.root)
+        result = converter.optimize_batch(self.root, messages.append)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["skipped"], 1)
+        self.assertTrue(any("invalid/unrecognized" in message for message in messages))
+        self.assertEqual(self.tree_hashes(self.root), before)
+        self.assertFalse((self.root / "original-2048-2048").exists())
+
+    def test_batch_existing_case_folded_output_never_overwritten(self):
+        output = self.root / "ORIGINAL-2048"
+        output.mkdir()
+        (output / "keep.txt").write_text("existing user data")
+        result = converter.optimize_batch(self.root)
+        self.assertEqual(result["converted"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertFalse((self.root / "original-2048").exists())
+        self.assertEqual((output / "keep.txt").read_text(), "existing user data")
+
+    def test_batch_planned_case_folded_names_fail_both_and_continue(self):
+        self.clone(self.root / "Game")
+        self.clone(self.root / "game")
+        result = converter.optimize_batch(self.root)
+        self.assertEqual(result["converted"], 1)
+        self.assertEqual(result["failed"], 2)
+        self.assertFalse((self.root / "Game-2048").exists())
+        self.assertFalse((self.root / "game-2048").exists())
+
+    def test_batch_cancel_preserves_completed_games_and_cleans_current_staging(self):
+        self.clone(self.root / "z-last")
+        before = self.tree_hashes(self.root)
+
+        def interrupted(message):
+            if "z-last: Track 2/3" in message:
+                raise KeyboardInterrupt
+
+        result = converter.optimize_batch(self.root, interrupted)
+        self.assertTrue(result["cancelled"])
+        self.assertEqual(result["converted"], 1)
+        self.assertTrue((self.root / "original-2048").is_dir())
+        self.assertFalse((self.root / "z-last-2048").exists())
+        self.assertEqual(list(self.root.rglob(".*.staging-*")), [])
+        after = self.tree_hashes(self.root)
+        for path, digest in before.items():
+            self.assertEqual(after[path], digest)
+
+    def test_batch_cli_summary_and_partial_failure_status(self):
+        command = [sys.executable, str(ROOT / "tools/gdi_optimize.py"), "--batch", str(self.root)]
+        run = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("1 converted, 0 skipped, 0 failed", run.stdout)
+        repeat = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(repeat.returncode, 0, repeat.stderr)
+        self.assertIn("0 converted, 2 skipped, 0 failed", repeat.stdout)
+        bad = self.clone(self.root / "Bad")
+        bad.write_text("invalid GDI")
+        failure = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(failure.returncode, 1)
+        self.assertIn("1 failed", failure.stdout)
+
+    def test_batch_cli_invalid_invocations_fail_without_writes(self):
+        tool = [sys.executable, str(ROOT / "tools/gdi_optimize.py")]
+        for arguments in ([], [str(self.gdi)], ["--batch", str(self.root), str(self.gdi)],
+                          ["--batch", str(self.gdi)], ["--batch", str(self.root / "absent")]):
+            with self.subTest(arguments=arguments):
+                run = subprocess.run(tool + arguments, capture_output=True, text=True)
+                self.assertNotEqual(run.returncode, 0)
+        self.assertFalse((self.root / "original-2048").exists())
 
 
 if __name__ == "__main__":

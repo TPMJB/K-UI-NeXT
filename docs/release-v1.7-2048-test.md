@@ -23,6 +23,11 @@ bytes; they do not verify the dump against a catalogue or validate EDC/ECC.
 The original files remain untouched. Full conversion requirements are in the
 [2048-byte test guide](gdi-2048-test.md).
 
+For a whole collection, the updated converter also accepts
+`python3 tools/gdi_optimize.py --batch "/path/to/Games"`. It creates separate
+`Game-2048` folders beside the originals; choose either entry in Games. Batch
+conversion needs no further console update beyond this experimental build.
+
 Copy the new folder alongside the original under `Games`. Inspect its GDI with
 **A**, then press **A** to open launch confirmation. For native games, **A**
 selects the standard reader, **X** selects background SCI with 20-block call
