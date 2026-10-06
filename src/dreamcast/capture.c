@@ -36,7 +36,6 @@ static enum kui_capture_result capture_start(enum kui_capture_mode mode,const ch
     }
     /* These local values live through the synchronous capture call; the engine
      * never borrows the UI's mutable destination buffer. */
-    const struct kui_capture_output output={parent,true};
     struct kui_toc sessions[2];struct kui_capture_plan plan;
     /* Missing configuration is valid; unreadable/rejected configuration must
      * not silently weaken a user's requested verification policy. */
@@ -44,6 +43,7 @@ static enum kui_capture_result capture_start(enum kui_capture_mode mode,const ch
         kui_log("Capture refused: preferences or bench.cfg could not be loaded; no dump writes");
         return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
     }
+    const struct kui_capture_output output={parent,true,kui_options.capture_format};
     kui_disc_timing_reset();
     if(!kui_disc_prepare(sessions) || kui_cancelled())
         return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;

@@ -23,6 +23,7 @@
  * sci-async-quiet-fault. */
 #include "kui/shell.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static uint16_t frame[640*480];
@@ -65,7 +66,7 @@ static void library(struct kui_shell *shell,unsigned view) {
         if(e->cover) make_cover(covers[i],edge,i);
     }
     shell->games_selected=1;
-    strcpy(l->message,"Select a GDI to inspect and launch.");
+    strcpy(l->message,"Choose a game to inspect and launch.");
 }
 static void game_pair(struct kui_shell *shell,unsigned choice) {
     strcpy(shell->games_original_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
@@ -214,7 +215,7 @@ static void storage_tests(struct kui_shell *s,struct kui_shell_view *v,const cha
 }
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
-    struct kui_settings preferences={true,false,true};
+    struct kui_settings preferences={true,false,true,KUI_CAPTURE_FORMAT_GDI};
     struct kui_shell shell; kui_shell_init(&shell,&preferences);
     const char *logs[]={"SD exFAT, 249997312 sectors, cluster=131072 bytes",
         "Volume start=2048 (MBR)","Disc: MDK2", "Track 04: audio",
@@ -292,8 +293,15 @@ int main(int argc,char **argv) {
             "Armada","Grandia II","Sword of the Berserk","A very long game name that clips safely at the right margin"};
         for(unsigned i=0;i<8;i++) snprintf(shell.games_listing.entries[i].name,sizeof(shell.games_listing.entries[i].name),"%s",names[i]);
         shell.games_listing.entries[0].directory=true;shell.games_selected=1;
-        strcpy(shell.games_listing.message,"Choose a GDI image to inspect.");
+        strcpy(shell.games_listing.message,"Choose a game image to inspect.");
     } else if(!strcmp(argv[1],"games-list-art")) library(&shell,KUI_GAMES_VIEW_LIST);
+    else if(!strcmp(argv[1],"games-art-loading")) {
+        library(&shell,KUI_GAMES_VIEW_LIST);shell.games_listing.entries[shell.games_selected].cover=false;
+        shell.games_art_loading=true;
+    } else if(!strcmp(argv[1],"games-rows-loading")) {
+        library(&shell,KUI_GAMES_VIEW_LIST);shell.games_loading=true;view.busy=true;
+        strcpy(shell.games_listing.message,"Reading SD directory...");
+    }
     else if(!strcmp(argv[1],"games-variants") || !strcmp(argv[1],"games-variants-2048")) {
         library(&shell,KUI_GAMES_VIEW_LIST);shell.page=KUI_SHELL_GAMES_VARIANTS;
         game_pair(&shell,!strcmp(argv[1],"games-variants-2048"));
@@ -442,6 +450,12 @@ int main(int argc,char **argv) {
         strcpy(shell.music_listing.message,"Choose a WAV or Ogg file to play.");
     } else if(!strcmp(argv[1],"settings")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=2;}
     else if(!strcmp(argv[1],"ripper-settings")) shell.page=KUI_SHELL_RIPPER_SETTINGS;
+    else if(!strncmp(argv[1],"ripper-format-",14)) {
+        shell.page=KUI_SHELL_RIPPER_SETTINGS;shell.setting_selected=2;
+        unsigned format=(unsigned)strtoul(argv[1]+14,NULL,10);
+        if(format>=KUI_CAPTURE_FORMAT_COUNT) return 2;
+        shell.draft.capture_format=(enum kui_capture_format)format;
+    }
     else if(!strcmp(argv[1],"video")) {
         shell.page=KUI_SHELL_SETTINGS;view.video_trial=true;view.video_seconds=7;
         shell.system_draft.video_mode=KUI_VIDEO_PAL50;
@@ -568,8 +582,11 @@ int main(int argc,char **argv) {
     else if(strcmp(argv[1],"home")) {
         shell.page=KUI_SHELL_RIPPER;
         if(!strcmp(argv[1],"confirm")) shell.confirm_new=true;
+        else if(!strcmp(argv[1],"ripper-export")) {
+            view.busy=true;view.phase=4;view.gdi_name="MDK2.chd";
+        }
         else if(!strcmp(argv[1],"complete") || !strcmp(argv[1],"partial")) {
-            view.phase=4; view.outcome=KUI_SHELL_OUTCOME_COMPLETE;
+            view.phase=5; view.outcome=KUI_SHELL_OUTCOME_COMPLETE;
             view.done=view.total; view.committed=view.total;
             view.track=view.tracks; view.rate_kib=0;
             view.inserted_title="Sword of the Berserk";

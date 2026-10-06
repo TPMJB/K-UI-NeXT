@@ -6,6 +6,7 @@
 #include "kui/known_dumps.h"
 #include "kui/probe.h"
 #include "kui/timing.h"
+#include "kui/capture_format.h"
 #define KUI_CAPTURE_PROFILE "gdi-raw2352-typegap150-v1"
 #define KUI_CAPTURE_CHUNK 32u
 #define KUI_CAPTURE_RETRIES 10u
@@ -24,8 +25,9 @@ bool kui_plan_tracks(const struct kui_toc sessions[2], struct kui_capture_plan *
 const char *kui_bench_fad_note(const struct kui_toc sessions[2], uint32_t fad, bool audio);
 enum kui_read_result { KUI_READ_OK, KUI_READ_RETRY, KUI_READ_FATAL };
 enum kui_capture_mode { KUI_CAPTURE_NEW, KUI_CAPTURE_RESUME, KUI_CAPTURE_VERIFY };
+#define KUI_CAPTURE_INTERNAL_GDI ".capture.gdi"
 enum kui_capture_result { KUI_CAPTURE_FAILED, KUI_CAPTURE_STOPPED, KUI_CAPTURE_COMPLETE };
-enum kui_capture_phase { KUI_IDENTIFY, KUI_PREFIX_CHECK, KUI_CAPTURING, KUI_VERIFYING, KUI_FINISHED };
+enum kui_capture_phase { KUI_IDENTIFY, KUI_PREFIX_CHECK, KUI_CAPTURING, KUI_VERIFYING, KUI_EXPORTING, KUI_FINISHED };
 struct kui_capture_progress {
     enum kui_capture_phase phase;
     unsigned track, tracks;
@@ -37,7 +39,7 @@ struct kui_capture_progress {
  * parent is a bounded card-root path such as /Games; the caller retains it for
  * the run. Existing matching named jobs are resumed in place, with legacy
  * jobs still discoverable when this parent has no matching checkpoint. */
-struct kui_capture_output { const char *parent; bool game_names; };
+struct kui_capture_output { const char *parent; bool game_names; enum kui_capture_format format; };
 /* Runtime choices for the capture engine. All-zero, or no options at all, is the
  * engine exactly as it has always been: SHA-256 and CRC32 per track, every saved
  * byte re-read after capture, a full prefix check on resume, no sampling. They
@@ -80,6 +82,8 @@ struct kui_capture_stats {
     char job_dir[KUI_DEST_JOB_CAP]; /* also used by a benchmark to delete its job */
     char disc_title[129];
     char gdi_name[KUI_DEST_TITLE_CAP+5u];
+    char output_name[KUI_DEST_TITLE_CAP+5u]; /* Primary descriptor or container. */
+    enum kui_capture_format format;
     bool reference_checked; /* distinguishes no lookup yet from CANCELLED=0 */
     struct kui_known_summary reference;
 };
@@ -108,8 +112,13 @@ struct kui_checkpoint {
     uint32_t count, retries;
     char build[13];
     bool crc_only;   /* SHA-256 not recorded; the per-track sha256 fields are zero */
-    struct { uint32_t sectors, crc32; uint8_t sha256[32]; } track[99];
+    enum kui_capture_format format; /* Adopted on Resume/Verify, like hash mode. */
+    struct { uint32_t sectors, crc32; uint8_t sha256[32], sector_mode; } track[99];
 };
+/* Describes exactly the existing raw track files and declared excluded tails.
+ * No pregap bytes, leadout padding, audio swapping or subchannels are invented. */
+bool kui_capture_cue_encode(const struct kui_capture_plan *plan,const uint8_t modes[99],
+    char *out,size_t capacity,size_t *bytes);
 void kui_checkpoint_encode(const struct kui_checkpoint *state, uint8_t record[KUI_CHECKPOINT_BYTES]);
 bool kui_checkpoint_decode(const uint8_t record[KUI_CHECKPOINT_BYTES], const struct kui_capture_plan *plan,
     const uint8_t identity[32], struct kui_checkpoint *out);

@@ -558,6 +558,7 @@ static void test_abort_discards_prefetch(void) {
         CHECK(!R.engine.spill_bytes && !R.engine.piece_set && !kui_sci_stream_busy());
         untouched(ram + OUTPUT - BEGIN, 2048u);
         hw.frozen = false;
+        CHECK(status(token) == (how == 0 ? KUI_GD_FAILED : KUI_GD_NOT_FOUND));
         /* Different source data makes a stale queue visible. */
         token = request(KUI_GD_DMAREAD, 45100, 3, OUTPUT);
         CHECK(finish(token, 8) == KUI_GD_COMPLETED);
@@ -667,6 +668,7 @@ static void test_token_pause_abort(void) {
         (void)gd(KUI_GD_EXEC, 0, 0);
         untouched(ram + OUTPUT - BEGIN, 3u * 2048u);
         hw.frozen = false;
+        CHECK(status(token) == (i == 0 ? KUI_GD_FAILED : KUI_GD_NOT_FOUND));
         card.nac_first = 30;
         token = request(KUI_GD_DMAREAD, 45100, 1, OUTPUT);
         CHECK(card.cmd12 == 1u && card.cmd18 == 2u);

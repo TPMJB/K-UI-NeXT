@@ -17,6 +17,8 @@ LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_fi
 LOADER_OBJECTS += build/dc/src/core/boot_volume.o build/dc/src/core/boot_image.o build/dc/src/core/ext4_boot.o $(LWEXT4_OBJECTS)
 # The CD recovery menu uses the same benchmark runner as SD Diagnostics.
 BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o \
+    build/dc/src/core/capture_export.o build/dc/src/core/capture_export_file.o build/dc/src/core/capture_chd.o \
+    build/dc/third_party/miniz/miniz.o build/dc/third_party/minilzo/minilzo.o \
     build/dc/src/core/timing.o build/dc/src/core/destination.o build/dc/src/core/destination_file.o \
     build/dc/src/core/known_dumps.o build/dc/src/core/crc16.o \
     build/dc/src/core/settings.o build/dc/src/core/settings_file.o \
@@ -49,6 +51,8 @@ all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf bu
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -DKUI_BUILD_ID='"$(BUILD_ID)"'
+CPPFLAGS += -Ithird_party/miniz -Ithird_party/minilzo -DMINIZ_NO_ARCHIVE_APIS \
+    -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_APIS -DMINIZ_NO_MALLOC -DLZO_CFG_NO_UNALIGNED=1
 # Shared freestanding buses also serve the CD bootstrap/runtime. Keep the
 # console guard explicit here rather than importing KOS into their headers.
 build/dc/src/dreamcast/ata_bus.o build/dc/src/loader/sci_sd_bus.o: CPPFLAGS += -DKUI_ON_CONSOLE=1

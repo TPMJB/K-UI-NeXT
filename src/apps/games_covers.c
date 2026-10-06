@@ -17,6 +17,22 @@
 #define PATH_CAP (KUI_GAMES_FILE_CAP + 3u)
 static const char *const view_names[KUI_GAMES_VIEW_COUNT] = {"list", "compact", "gallery"};
 static const char *const user_images[] = {".png", ".jpg", ".jpeg"};
+#define COVER_CACHE_SLOTS 32u
+#define COVER_CACHE_BYTES (512u * 1024u)
+struct cached_cover {
+    struct kui_games_cover_result result;
+    uint16_t *pixels;
+    unsigned used,bytes;
+    bool valid;
+};
+static struct cached_cover covers[COVER_CACHE_SLOTS];
+static unsigned cover_clock,cover_bytes,saved_view;
+static bool view_known,artwork_known,artwork_exists;
+void kui_games_covers_cache_clear(void) {
+    for(unsigned i=0;i<COVER_CACHE_SLOTS;i++) free(covers[i].pixels);
+    memset(covers,0,sizeof(covers));cover_clock=cover_bytes=saved_view=0;
+    view_known=artwork_known=artwork_exists=false;
+}
 
 enum kui_cover_size kui_games_view_size(unsigned view) {
     return view == KUI_GAMES_VIEW_GALLERY ? KUI_COVER_SIZE_MEDIUM :
@@ -100,34 +116,120 @@ static bool record_pixels(FIL *file, enum kui_cover_size size, uint16_t *out) {
     return true;
 }
 
-struct page_job { struct kui_games_page *page; uint16_t (*pixels)[KUI_COVER_PIXELS]; unsigned view; };
-static void page_covers(void *ctx, kui_log_fn log, kui_cancel_fn cancel) {
-    struct page_job *job = ctx;
-    struct kui_games_page *page = job->page;
-    unsigned saved = view_load(), view = job->view < KUI_GAMES_VIEW_COUNT ? job->view : saved;
-    if(view != saved) view_save(view, log);
-    page->view = view;
-    FILINFO info;
-    page->artwork = f_stat(KUI_GAMES_COVERS_FOLDER, &info) == FR_OK && (info.fattrib & AM_DIR);
-    for(unsigned i = 0; i < page->count && i < KUI_GAMES_ROWS; ++i) {
-        struct kui_games_entry *e = &page->entries[i];
-        kui_cover_display_title(NULL, e->name, e->title);
-        if(e->directory || e->disabled || !page->artwork || stopped(cancel)) continue;
-        char key[KUI_COVER_PATH_CAP];
-        FIL file;
-        struct kui_cover_record record;
-        if(!kui_cover_key(e->name, key) || !record_open(key, e->path, &file, &record)) continue;
-        kui_cover_display_title(record.title, e->name, e->title);
-        if(record.source != KUI_COVER_SOURCE_NONE && job->pixels)
-            e->cover = record_pixels(&file, kui_games_view_size(view), job->pixels[i]);
-        f_close(&file);
+static bool same_cover(const struct cached_cover *cover,const struct kui_games_entry *entry) {
+    return cover->valid && !strcmp(cover->result.path,entry->path) && !strcmp(cover->result.name,entry->name);
+}
+struct view_job {unsigned requested,view;};
+static void page_view(void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
+    struct view_job *job=ctx;
+    unsigned saved=view_known?saved_view:view_load();
+    job->view=job->requested<KUI_GAMES_VIEW_COUNT?job->requested:saved;
+    if(!stopped(cancel) && job->view!=saved) view_save(job->view,log);
+}
+bool kui_games_list_rows(const char *root,unsigned offset,unsigned view,
+    struct kui_games_page *out,kui_log_fn log,kui_cancel_fn cancel) {
+    struct view_job job={view,view<KUI_GAMES_VIEW_COUNT?view:saved_view};
+    bool needs_view=!view_known || (view<KUI_GAMES_VIEW_COUNT && view!=saved_view);
+    bool ok=kui_games_list_with(root,offset,out,needs_view?page_view:NULL,&job,log,cancel);
+    if(!out) return false;
+    if(!ok) {out->view=KUI_GAMES_VIEW_SAVED;return false;}
+    saved_view=job.view;view_known=true;out->view=saved_view;
+    out->artwork=artwork_known && artwork_exists;
+    for(unsigned row=0;row<out->count;row++) {
+        struct kui_games_entry *entry=&out->entries[row];
+        kui_cover_display_title(NULL,entry->name,entry->title);entry->cover=false;
+        const struct cached_cover *latest=NULL;
+        for(unsigned i=0;i<COVER_CACHE_SLOTS;i++) if(same_cover(&covers[i],entry) &&
+            (!latest || covers[i].used>latest->used)) latest=&covers[i];
+        if(latest) strcpy(entry->title,latest->result.title);
     }
+    return true;
 }
 bool kui_games_list_covers(const char *root, unsigned offset, unsigned view,
     struct kui_games_page *out, uint16_t (*pixels)[KUI_COVER_PIXELS], kui_log_fn log, kui_cancel_fn cancel) {
-    struct page_job job = {out, pixels, view};
-    bool ok = kui_games_list_with(root, offset, out, page_covers, &job, log, cancel);
-    if(!ok && out) out->view = KUI_GAMES_VIEW_SAVED;
+    (void)pixels;
+    return kui_games_list_rows(root,offset,view,out,log,cancel);
+}
+static void cover_drop(unsigned slot) {
+    cover_bytes-=covers[slot].bytes;free(covers[slot].pixels);memset(&covers[slot],0,sizeof(covers[slot]));
+}
+static unsigned cover_oldest(void) {
+    unsigned oldest=COVER_CACHE_SLOTS;
+    for(unsigned i=0;i<COVER_CACHE_SLOTS;i++) if(covers[i].valid &&
+        (oldest==COVER_CACHE_SLOTS || covers[i].used<covers[oldest].used)) oldest=i;
+    return oldest;
+}
+static void cover_store(const struct kui_games_cover_result *result,const uint16_t *pixels) {
+    unsigned edge=kui_cover_edge(result->size),bytes=result->cover?edge*edge*2u:0;
+    uint16_t *copy=bytes?malloc(bytes):NULL;
+    if(bytes && !copy) return;
+    if(copy) memcpy(copy,pixels,bytes);
+    while(cover_bytes+bytes>COVER_CACHE_BYTES) cover_drop(cover_oldest());
+    unsigned slot=0;
+    while(slot<COVER_CACHE_SLOTS && covers[slot].valid) ++slot;
+    if(slot==COVER_CACHE_SLOTS) {slot=cover_oldest();cover_drop(slot);}
+    covers[slot].result=*result;covers[slot].pixels=copy;covers[slot].bytes=bytes;
+    covers[slot].used=++cover_clock;covers[slot].valid=true;cover_bytes+=bytes;
+}
+bool kui_games_selected_cover(const struct kui_games_entry *entry,enum kui_cover_size size,
+    uint16_t pixels[KUI_COVER_PIXELS],struct kui_games_cover_result *out,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!out) return false;
+    memset(out,0,sizeof(*out));out->size=size;
+    if(!entry || !pixels || (unsigned)size>KUI_COVER_SIZE_SMALL ||
+       !memchr(entry->name,0,sizeof(entry->name)) || !memchr(entry->path,0,sizeof(entry->path))) return false;
+    strcpy(out->name,entry->name);strcpy(out->path,entry->path);
+    kui_cover_display_title(NULL,entry->name,out->title);
+    if(stopped(cancel)) {out->stopped=true;return false;}
+    if(entry->directory || entry->disabled) return true;
+    for(unsigned i=0;i<COVER_CACHE_SLOTS;i++) if(same_cover(&covers[i],entry) && covers[i].result.size==size) {
+        *out=covers[i].result;covers[i].used=++cover_clock;
+        if(out->cover) memcpy(pixels,covers[i].pixels,covers[i].bytes);
+        return true;
+    }
+    char key[KUI_COVER_PATH_CAP],path[PATH_CAP];
+    if(!kui_cover_key(entry->name,key) || !record_path(key,".kcv",path)) return false;
+    bool connected=false,mounted=false,opened=false,ok=false,observed=false,exists=false;
+    FATFS fs;FIL file;
+    const char *problem="SD card unavailable";
+    if(!(connected=kui_sd_connect())) goto done;
+    problem="Cannot mount SD card";
+    if(!(mounted=kui_mount(&fs,log))) goto done;
+    if(stopped(cancel)) goto done;
+    if(!artwork_known) {
+        FILINFO info;FRESULT r=f_stat(KUI_GAMES_COVERS_FOLDER,&info);
+        observed=r==FR_OK || r==FR_NO_FILE || r==FR_NO_PATH;
+        exists=r==FR_OK && (info.fattrib&AM_DIR);
+    }
+    FRESULT r=f_open(&file,path,FA_READ);
+    if(r==FR_NO_FILE || r==FR_NO_PATH) {ok=true;goto done;}
+    problem="Cannot read selected box art";
+    if(r!=FR_OK) goto done;
+    opened=true;
+    uint8_t header[KUI_COVER_HEADER_BYTES];UINT got=0;struct kui_cover_record record;
+    if(stopped(cancel) || f_read(&file,header,sizeof(header),&got)!=FR_OK || got!=sizeof(header) ||
+       !kui_cover_header_decode(&record,header) ||
+       f_size(&file)!=(record.source==KUI_COVER_SOURCE_NONE?KUI_COVER_HEADER_BYTES:KUI_COVER_FILE_BYTES)) goto done;
+    /* A same-name record for a different image is a definite missing cover. */
+    if(strcmp(record.gdi_path,entry->path)) {ok=true;goto done;}
+    kui_cover_display_title(record.title,entry->name,out->title);
+    if(record.source!=KUI_COVER_SOURCE_NONE) {
+        if(stopped(cancel) || !record_pixels(&file,size,pixels)) goto done;
+        out->cover=true;
+    }
+    ok=true;
+done:
+    if(opened && f_close(&file)!=FR_OK) ok=false;
+    if(mounted && f_mount(NULL,"0:",0)!=FR_OK) ok=false;
+    if(connected) kui_sd_disconnect();
+    if(stopped(cancel)) {ok=false;out->stopped=true;}
+    if(ok) {
+        if(observed) {artwork_known=true;artwork_exists=exists;}
+        if(out->cover) {artwork_known=artwork_exists=true;}
+        cover_store(out,pixels);
+    } else {
+        out->cover=false;
+        if(log && !out->stopped) log("Games cover %.72s: %s",entry->name,problem);
+    }
     return ok;
 }
 
@@ -528,6 +630,7 @@ static void summary(struct kui_app_status *status, const struct kui_games_scan_c
 bool kui_games_scan(struct kui_app_status *status, struct kui_games_scan_counts *counts,
     kui_app_progress_fn progress, kui_log_fn log, kui_cancel_fn cancel) {
     if(!status || !counts) return false;
+    kui_games_covers_cache_clear();
     memset(status, 0, sizeof(*status));
     memset(counts, 0, sizeof(*counts));
     struct scan s = {.log = log, .cancel = cancel, .counts = counts};

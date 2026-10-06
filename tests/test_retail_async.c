@@ -257,6 +257,43 @@ static void read_and_compare(uint32_t lba, uint32_t count, unsigned irqs, unsign
     CHECK(get(STATUS + 8) == count * R.shared.service.sector_bytes && get(STATUS + 4) == 0);
     compare(lba, count, OUTPUT);
 }
+static void test_command_acknowledgment(void) {
+    setup(GAME_VBR, X, 2000, false);
+    int32_t token = request(45000, 2, OUTPUT);
+    /* Interrupts deliver the read's bytes; the next GD call publishes its
+     * completion before accepting another request. CHECK must consume it. */
+    CHECK(interrupts(100) && R.engine.cursor.done == R.engine.cursor.count);
+    CHECK(gd(KUI_GD_REQUEST, KUI_GD_NOP, 0) == 0);
+    CHECK(!R.shared.service.pending && R.shared.service.command == KUI_GD_DMAREAD);
+    CHECK(R.shared.service.token == (uint32_t)token);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token + 1u, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS) == 5 && get(STATUS + 4) == 0);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(R.shared.service.command == 0);
+    CHECK(get(STATUS + 8) == 2u * 2048u);
+    compare(45000, 2, OUTPUT);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
+    read_and_compare(45002, 2, 5, 0);
+
+    /* A submission accepted by the GD service can fail immediately when
+     * the adapter cannot claim SCI. That failure owns the slot too. */
+    setup(GAME_VBR, X, 2000, false);
+    hw.busy_bus = true;
+    token = request(45000, 2, OUTPUT);
+    CHECK(!R.shared.service.pending && R.shared.service.error == KUI_GD_ERROR_IO);
+    CHECK(R.shared.service.command == KUI_GD_DMAREAD);
+    CHECK(gd(KUI_GD_REQUEST, KUI_GD_NOP, 0) == 0);
+    CHECK(R.shared.service.command == KUI_GD_DMAREAD);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token + 1u, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS) == 5 && get(STATUS + 4) == 0);
+    CHECK(R.shared.service.token == (uint32_t)token && R.shared.service.error == KUI_GD_ERROR_IO);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(R.shared.service.command == 0);
+    CHECK(get(STATUS + 4) == KUI_GD_ERROR_IO && get(STATUS + 8) == 0);
+    CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
+    hw.busy_bus = false;
+    read_and_compare(45000, 2, 5, 0);
+}
 
 static void test_interrupt_reads(void) {
     setup(GAME_VBR, X, 48, true);
@@ -617,6 +654,7 @@ static void test_cooked_reads(void) {
     cooked_fixture = false;
 }
 int main(void) {
+    test_command_acknowledgment();
     test_interrupt_reads();
     test_levels_while_streaming();
     test_release_and_rehook();

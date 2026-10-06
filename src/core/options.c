@@ -250,6 +250,16 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
     if(KEY("sd_bytes")) return parse_ulist(v, vend, 4096, (unsigned long)KUI_OPT_CHUNK_MAX * KUI_RAW_BYTES,
         512, KUI_OPT_SDBYTES_MAX, o->sd_bytes, &o->sd_bytes_count);
     if(KEY("capture_hash")) return parse_two_words(v, vend, "both", "crc32", o->capture_crc_only, &o->capture_hash_count);
+    if(KEY("capture_format")) {
+        size_t length=(size_t)(vend-v);
+        if(length==3u && !memcmp(v,"gdi",3u)) o->capture_format=KUI_CAPTURE_FORMAT_GDI;
+        else if(length==7u && !memcmp(v,"bin_cue",7u)) o->capture_format=KUI_CAPTURE_FORMAT_BIN_CUE;
+        else if(length==3u && !memcmp(v,"cso",3u)) o->capture_format=KUI_CAPTURE_FORMAT_CSO;
+        else if(length==3u && !memcmp(v,"zso",3u)) o->capture_format=KUI_CAPTURE_FORMAT_ZSO;
+        else if(length==3u && !memcmp(v,"chd",3u)) o->capture_format=KUI_CAPTURE_FORMAT_CHD;
+        else return false;
+        return true;
+    }
     if(KEY("capture_read")) return parse_two_words(v, vend, "pio", "dma", o->capture_dma, &o->capture_read_count);
     if(KEY("end_readback")) return parse_sd_list(v, vend, o->end_readback, &o->end_readback_count, true);
     if(KEY("resume_check")) return parse_two_words(v, vend, "full", "size", o->resume_size, &o->resume_check_count);
@@ -324,7 +334,7 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
             "sweep_service_us", "sweep_sectors", "sweep_verify", "sd_bytes",
             "sweep_mode", "sweep_spin",
             "capture_hash", "end_readback", "resume_check", "sample_readback", "capture_read",
-            "capture_sectors", "capture_fad", "capture_type"};
+            "capture_sectors", "capture_fad", "capture_type", "capture_format"};
         bool is_known = false;
         for(size_t i = 0; i < sizeof(known) / sizeof(known[0]); ++i)
             if(strlen(known[i]) == klen && !memcmp(key, known[i], klen)) is_known = true;
@@ -420,7 +430,10 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
     char reads[16] = "";
     for(unsigned i = 0; i < o->capture_read_count; ++i)
         append_word(reads, sizeof(reads), o->capture_dma[i] ? "dma" : "pio", i == 0);
-    log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s capture_read=%s", hashes, ends, checks, reads);
+    log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s capture_read=%s capture_format=%s",
+        hashes, ends, checks, reads, o->capture_format==KUI_CAPTURE_FORMAT_BIN_CUE?"bin_cue":
+        o->capture_format==KUI_CAPTURE_FORMAT_CSO?"cso":o->capture_format==KUI_CAPTURE_FORMAT_ZSO?"zso":
+        o->capture_format==KUI_CAPTURE_FORMAT_CHD?"chd":"gdi");
     log("OPTIONS sample_readback=%s capture_sectors=%u capture_type=%s", samples, o->capture_sectors,
         o->capture_audio ? "audio" : "data");
     if(o->capture_fad) log("OPTIONS capture_fad=%u", o->capture_fad);

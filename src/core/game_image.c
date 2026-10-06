@@ -114,6 +114,13 @@ static enum kui_game_result parse(const void *gdi, size_t size,
     return row == image->count + 1u ? KUI_GAME_OK : KUI_GAME_SYNTAX;
 }
 
+enum kui_game_result kui_game_gdi_layout(const void *gdi,size_t size,struct kui_game_image *out) {
+    if(!gdi || !size || size>KUI_GAME_GDI_LIMIT || !out) return KUI_GAME_INVALID;
+    struct kui_game_image image={0};
+    enum kui_game_result result=parse(gdi,size,&image);
+    if(result==KUI_GAME_OK) *out=image;
+    return result;
+}
 enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
     const struct kui_game_file_ops *files, struct kui_game_image *out) {
     if(!gdi || !size || size > KUI_GAME_GDI_LIMIT || !files || !files->stat ||

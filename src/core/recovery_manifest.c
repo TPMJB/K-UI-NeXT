@@ -79,14 +79,18 @@ static bool next_key(struct parser *p,char *key,size_t cap,uint32_t *seen,
 }
 static bool track(struct parser *p,struct kui_scan_manifest *m,unsigned index,bool *has_sha) {
     static const char *const keys[]={"number","session","control","start_fad","end_fad",
-        "toc_end_fad","excluded_tail_sectors","file","bytes","crc32","sha256"};
+        "toc_end_fad","excluded_tail_sectors","file","bytes","crc32","sha256","sector_mode"};
     if(index>=99 || !take(p,'{')) return false;
     uint32_t seen=0;uint64_t values[9]={0};char key[32],file[32]={0};uint8_t crc[4]={0};
     for(;;) {
-        int id;if(!next_key(p,key,sizeof(key),&seen,keys,11,&id)) return false;
+        int id;if(!next_key(p,key,sizeof(key),&seen,keys,12,&id)) return false;
         if(id==7) {if(!string(p,file,sizeof(file))) return false;}
         else if(id==9) {if(!hex_bytes(p,crc,4)) return false;}
         else if(id==10) {if(!hex_bytes(p,m->track[index].sha256,32)) return false;}
+        else if(id==11) {
+            uint64_t mode;if(!number(p,&mode) || mode>2u) return false;
+            m->track[index].sector_mode=(uint8_t)mode;m->track[index].mode_recorded=true;
+        }
         else if(!number(p,&values[id])) return false;
         space(p);if(take(p,'}')) break;if(!take(p,',')) return false;
     }
@@ -117,8 +121,8 @@ static bool tracks(struct parser *p,struct kui_scan_manifest *m,bool *sha) {
         if(!take(p,',')) return false;
     }
 }
-static bool descriptor(const char *s) {
-    size_t n=strlen(s);if(n<5 || n>=KUI_DEST_TITLE_CAP+5u || strcmp(s+n-4,".gdi")) return false;
+static bool descriptor(const char *s,const char *extension) {
+    size_t n=strlen(s);if(n<5 || n>=KUI_DEST_TITLE_CAP+5u || strcmp(s+n-4,extension)) return false;
     if(s[0]=='.' || s[n-5]==' ' || s[n-5]=='.') return false;
     for(size_t i=0;i<n;++i)
         if((unsigned char)s[i]<32 || (unsigned char)s[i]>126 || strchr("\\/:*?\"<>|",s[i])) return false;
@@ -126,14 +130,15 @@ static bool descriptor(const char *s) {
 }
 bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_manifest *out) {
     static const char *const keys[]={"schema","complete","profile","identity","capture_build",
-        "title","sector_bytes","audio","tracks","gdi_file","hashes","saved_data_verified","reference"};
+        "title","sector_bytes","audio","tracks","gdi_file","hashes","saved_data_verified","reference","output_format","cue_file",
+        "output_file","output_bytes","output_crc32","output_sha256","output_logical_bytes","output_data_track"};
     if(!data || !size || size>KUI_SCAN_MANIFEST_LIMIT || !out) return false;
     memset(out,0,sizeof(*out));memcpy(out->gdi,"disc.gdi",9);
     struct parser p={(const uint8_t *)data,(const uint8_t *)data+size};
     if(!take(&p,'{')) return false;
     uint32_t seen=0;uint64_t schema=0,sector_bytes=0;bool sha=false;char key[32],value[160];
     for(;;) {
-        int id;if(!next_key(&p,key,sizeof(key),&seen,keys,13,&id)) return false;
+        int id;if(!next_key(&p,key,sizeof(key),&seen,keys,21,&id)) return false;
         switch(id) {
         case 0: if(!number(&p,&schema)) return false;break;
         case 1: case 11: if(!yes(&p)) return false;break;
@@ -146,10 +151,31 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
         case 5: case 7: case 12: if(!string(&p,value,sizeof(value))) return false;break;
         case 6: if(!number(&p,&sector_bytes)) return false;break;
         case 8: if(!tracks(&p,out,&sha)) return false;break;
-        case 9: if(!string(&p,out->gdi,sizeof(out->gdi)) || !descriptor(out->gdi)) return false;break;
+        case 9:
+            if(!string(&p,out->gdi,sizeof(out->gdi)) ||
+               (strcmp(out->gdi,KUI_CAPTURE_INTERNAL_GDI) && !descriptor(out->gdi,".gdi"))) return false;
+            break;
         case 10:
             if(!take(&p,'[') || !string(&p,value,sizeof(value)) || strcmp(value,"crc32") || !take(&p,']')) return false;
             break;
+        case 13:
+            if(!string(&p,value,sizeof(value))) return false;
+            if(!strcmp(value,"bin_cue")) out->format=KUI_CAPTURE_FORMAT_BIN_CUE;
+            else if(!strcmp(value,"cso")) out->format=KUI_CAPTURE_FORMAT_CSO;
+            else if(!strcmp(value,"zso")) out->format=KUI_CAPTURE_FORMAT_ZSO;
+            else if(!strcmp(value,"chd")) out->format=KUI_CAPTURE_FORMAT_CHD;
+            else return false;
+            break;
+        case 14:
+            if(!string(&p,out->cue,sizeof(out->cue)) || !descriptor(out->cue,".cue")) return false;
+            break;
+        case 15:if(!string(&p,out->output,sizeof(out->output))) return false;break;
+        case 16:if(!number(&p,&out->output_bytes) || !out->output_bytes) return false;break;
+        case 17:{uint8_t crc[4];if(!hex_bytes(&p,crc,4)) return false;
+            out->output_crc32=(uint32_t)crc[0]<<24|(uint32_t)crc[1]<<16|(uint32_t)crc[2]<<8|crc[3];break;}
+        case 18:if(!hex_bytes(&p,out->output_sha256,32)) return false;break;
+        case 19:if(!number(&p,&out->logical_bytes) || !out->logical_bytes) return false;break;
+        case 20:{uint64_t track;if(!number(&p,&track) || track>99u) return false;out->data_track=(uint32_t)track;break;}
         default: return false;
         }
         if(take(&p,'}')) break;
@@ -161,9 +187,22 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
        ((seen&(1u<<10))!=0)!=(schema==2) || ((seen&(1u<<11))!=0)!=(schema==1) ||
        ((seen&(1u<<12)) && schema!=1)) return false;
     out->crc_only=schema==2;
+    const uint32_t exported=0x1f8000u; /* output_file through output_data_track. */
+    if(out->format==KUI_CAPTURE_FORMAT_BIN_CUE) {
+        if((seen&((1u<<9)|(1u<<13)|(1u<<14)))!=((1u<<9)|(1u<<13)|(1u<<14)) ||
+           (seen&exported) || strcmp(out->gdi,KUI_CAPTURE_INTERNAL_GDI)) return false;
+    } else if(out->format>=KUI_CAPTURE_FORMAT_CSO) {
+        if((seen&exported)!=exported || (seen&(1u<<14)) || !(seen&(1u<<9)) ||
+           strcmp(out->gdi,KUI_CAPTURE_INTERNAL_GDI) ||
+           !descriptor(out->output,kui_capture_format_extension(out->format))) return false;
+    } else if((seen&((1u<<13)|(1u<<14)|exported)) || !strcmp(out->gdi,KUI_CAPTURE_INTERNAL_GDI)) return false;
     bool high=false;
     for(unsigned i=0;i<out->plan.count;++i) {
         const struct kui_capture_track *t=&out->plan.tracks[i];
+        if(out->format!=KUI_CAPTURE_FORMAT_GDI) {
+            if(!out->track[i].mode_recorded || (t->control==0u?out->track[i].sector_mode!=0u:
+               (out->track[i].sector_mode!=1u && out->track[i].sector_mode!=2u))) return false;
+        } else if(out->track[i].mode_recorded) return false;
         if(!i && (t->start!=150 || t->session!=0)) return false;
         if(i) {
             const struct kui_capture_track *prev=&out->plan.tracks[i-1];
@@ -178,6 +217,14 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
                       t->control!=out->plan.tracks[i+1].control)?150u:0u;
         if(t->toc_end-t->end!=gap) return false;
     }
+    if(out->format==KUI_CAPTURE_FORMAT_CSO || out->format==KUI_CAPTURE_FORMAT_ZSO) {
+        unsigned data=0;
+        for(unsigned i=0;i<out->plan.count;i++) if(out->plan.tracks[i].session && out->plan.tracks[i].control==4u) {
+            const struct kui_capture_track *t=&out->plan.tracks[i];++data;
+            if(t->start!=45150u || out->data_track!=i+1u || out->logical_bytes!=(uint64_t)(t->end-t->start)*2048u) return false;
+        }
+        if(data!=1u) return false;
+    } else if(out->format==KUI_CAPTURE_FORMAT_CHD && (out->data_track || out->logical_bytes%2448u)) return false;
     return high;
 }
 

@@ -20,6 +20,12 @@
 #define KUI_SHELL_WIDTH 640u
 #define KUI_SHELL_HEIGHT 480u
 #define KUI_SHELL_LOG_ROWS 10u
+/* A cover belongs to one published listing and selection. The worker must
+ * echo this key; main publishes pixels only after the same key is accepted. */
+struct kui_shell_games_art_key {
+    unsigned generation,page,view,row;
+    char root[KUI_DEST_ROOT_CAP],path[KUI_GAMES_FILE_CAP];
+};
 enum kui_shell_button {
     KUI_SHELL_UP = 1u << 0, KUI_SHELL_DOWN = 1u << 1,
     KUI_SHELL_LEFT = 1u << 2, KUI_SHELL_RIGHT = 1u << 3,
@@ -107,8 +113,10 @@ struct kui_shell {
     unsigned games_page, games_selected, games_advanced_selected;
     /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
     unsigned games_view;
+    unsigned games_generation;
+    bool games_loading,games_art_loading;
     bool games_scanning; /* The box art scan runs; a listing ends it. */
-    /* Explicit refresh/first entry rebuilds worker-owned directory discovery;
+    /* Explicit refresh rebuilds worker-owned directory discovery; entering,
      * page and view changes reuse its read-only snapshot. */
     bool games_refresh;
     /* The launch's reader (enum kui_retail_reader): A launches with the
@@ -197,10 +205,17 @@ void kui_shell_set_music_listing(struct kui_shell *shell,
  * LIST uses games_path + games_page * ROWS and games_view; INSPECT uses
  * games_selected_path. SCAN covers /Games, then lists its first page. */
 void kui_shell_set_games_listing(struct kui_shell *shell, const struct kui_games_page *page);
+/* Worker publications must match the request that is still on screen. */
+bool kui_shell_set_games_rows(struct kui_shell *,const struct kui_games_page *,
+    unsigned generation,unsigned offset,unsigned requested_view);
 void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
 /* The view to draw: the saved view once known, else the list. */
 unsigned kui_shell_games_view(const struct kui_shell *shell);
+bool kui_shell_games_art_key(const struct kui_shell *,struct kui_shell_games_art_key *);
+bool kui_shell_games_art_same(const struct kui_shell_games_art_key *,const struct kui_shell_games_art_key *);
+bool kui_shell_set_games_art(struct kui_shell *,const struct kui_shell_games_art_key *,
+    const struct kui_games_cover_result *);
 /* Selected paired version, or NULL for an ordinary single image. */
 const char *kui_shell_games_variant_label(const struct kui_shell *shell);
 /* Exact initial test profile only; preparation revalidates files and metadata. */
@@ -269,6 +284,8 @@ struct kui_shell_view {
      * and image details' large cover. Valid only where the listing or
      * detail says cover; NULL draws placeholders. */
     const uint16_t (*game_covers)[KUI_COVER_PIXELS];
+    /* Runtime keeps one selected cover; host previews may still supply rows. */
+    const uint16_t *game_selected_cover;
     const uint16_t *game_detail_cover;
     /* The File Manager's picture, KUI_FILES_PICTURE_EDGE square; drawn only
      * while shell->files_picture says it loaded. */

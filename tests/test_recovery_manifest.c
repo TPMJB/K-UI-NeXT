@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 static char source[KUI_SCAN_MANIFEST_LIMIT+1u],changed[KUI_SCAN_MANIFEST_LIMIT+1u];
+static char compressed[KUI_SCAN_MANIFEST_LIMIT+1u];
 static struct kui_scan_manifest parsed;
 static struct kui_scan_gdi gdi;
 static void gdi_cases(void) {
@@ -31,19 +32,81 @@ static void gdi_cases(void) {
     }
     puts("PASS imported GDI quotes, CRLF, bounds, path escape, aliases, offsets and format rejection");
 }
-static void reject(const char *from,const char *to) {
-    const char *at=strstr(source,from);assert(at);
-    size_t prefix=(size_t)(at-source),suffix=strlen(at+strlen(from));
+static void reject_from(const char *document,const char *from,const char *to) {
+    const char *at=strstr(document,from);assert(at);
+    size_t prefix=(size_t)(at-document),suffix=strlen(at+strlen(from));
     assert(prefix+strlen(to)+suffix<sizeof(changed));
-    memcpy(changed,source,prefix);memcpy(changed+prefix,to,strlen(to));
+    memcpy(changed,document,prefix);memcpy(changed+prefix,to,strlen(to));
     memcpy(changed+prefix+strlen(to),at+strlen(from),suffix+1);
     assert(!kui_recovery_manifest_parse(changed,strlen(changed),&parsed));
+}
+static void reject(const char *from,const char *to) {reject_from(source,from,to);}
+static void compressed_cases(void) {
+    const char *const kinds[]={"cso","zso","chd"};
+    const unsigned modes[]={1u,0u,2u};
+    for(unsigned kind=0;kind<3u;kind++) {
+        unsigned logical=kind==2u?14u*2448u:5u*2048u;
+        int prefix=snprintf(compressed,sizeof(compressed),
+            "{\"output_format\":\"%s\",\"output_file\":\"disc.%s\","
+            "\"gdi_file\":\".capture.gdi\",\"output_bytes\":1234,"
+            "\"output_crc32\":\"12345678\","
+            "\"output_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\","
+            "\"output_logical_bytes\":%u,\"output_data_track\":%u,",
+            kinds[kind],kinds[kind],logical,kind==2u?0u:3u);
+        assert(prefix>0 && (size_t)prefix<sizeof(compressed));
+        size_t used=(size_t)prefix;const char *at=source+1;
+        for(unsigned i=0;i<3u;i++) {
+            const char *crc=strstr(at,"\"crc32\": \"");assert(crc);
+            size_t span=(size_t)(crc-at);assert(used+span<sizeof(compressed));
+            memcpy(compressed+used,at,span);used+=span;
+            int n=snprintf(compressed+used,sizeof(compressed)-used,"\"sector_mode\":%u,",modes[i]);
+            assert(n>0 && (size_t)n<sizeof(compressed)-used);used+=(size_t)n;
+            span=strlen("\"crc32\": \"");assert(used+span<sizeof(compressed));
+            memcpy(compressed+used,crc,span);used+=span;at=crc+span;
+        }
+        assert(used+strlen(at)<sizeof(compressed));strcpy(compressed+used,at);
+        assert(kui_recovery_manifest_parse(compressed,strlen(compressed),&parsed));
+        assert(parsed.format==(enum kui_capture_format)(KUI_CAPTURE_FORMAT_CSO+kind) &&
+               parsed.output_bytes==1234u && parsed.logical_bytes==logical &&
+               parsed.data_track==(kind==2u?0u:3u) && parsed.track[2].sector_mode==2u);
+        char field[96];snprintf(field,sizeof(field),"\"output_file\":\"disc.%s\"",kinds[kind]);
+        reject_from(compressed,field,"\"output_file\":\"../disc.cso\"");
+        reject_from(compressed,field,"\"output_file\":\"disc.iso\"");
+        reject_from(compressed,"\"gdi_file\":\".capture.gdi\"","\"gdi_file\":\"disc.gdi\"");
+        reject_from(compressed,"\"output_bytes\":1234","\"output_bytes\":0");
+        reject_from(compressed,"\"output_crc32\":\"12345678\"","\"output_crc32\":\"1234567x\"");
+        reject_from(compressed,
+            "\"output_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",","");
+        reject_from(compressed,"\"sector_mode\":0","\"sector_mode\":1");
+        reject_from(compressed,"\"sector_mode\":2","\"sector_mode\":0");
+        snprintf(field,sizeof(field),"\"output_logical_bytes\":%u",logical);
+        reject_from(compressed,field,"\"output_logical_bytes\":1");
+        snprintf(field,sizeof(field),"\"output_data_track\":%u",kind==2u?0u:3u);
+        reject_from(compressed,field,"\"output_data_track\":2");
+        snprintf(field,sizeof(field),"\"output_format\":\"%s\"",kinds[kind]);
+        reject_from(compressed,field,"\"output_format\":\"unknown\"");
+        reject_from(compressed,field,"\"output_format\":\"cso\",\"output_format\":\"cso\"");
+        reject_from(compressed,"\"output_bytes\":1234,","\"output_bytes\":1234,\"cue_file\":\"disc.cue\",");
+    }
+    puts("PASS CSO/ZSO/CHD manifest paths, required hashes, modes, geometry and ambiguity rejection");
 }
 int main(int argc,char **argv) {
     gdi_cases();
     assert(argc==2);FILE *file=fopen(argv[1],"rb");assert(file);
     size_t size=fread(source,1,sizeof(source)-1,file);assert(!ferror(file) && !fclose(file));
     assert(kui_recovery_manifest_parse(source,size,&parsed));
+    if(parsed.format==KUI_CAPTURE_FORMAT_BIN_CUE) {
+        assert(!strcmp(parsed.gdi,KUI_CAPTURE_INTERNAL_GDI) && strstr(parsed.cue,".cue"));
+        assert(parsed.plan.count==6u && parsed.track[0].mode_recorded &&
+               (parsed.track[0].sector_mode==1u || parsed.track[0].sector_mode==2u));
+        reject("\"output_format\":\"bin_cue\"","\"output_format\":\"unknown\"");
+        reject("\"cue_file\":\"disc.cue\"","\"cue_file\":\"../disc.cue\"");
+        reject("\"gdi_file\":\".capture.gdi\"","\"gdi_file\":\".other.gdi\"");
+        reject("\"sector_mode\":0","\"sector_mode\":1");
+        reject(strstr(source,"\"sector_mode\":2")?"\"sector_mode\":2":"\"sector_mode\":1","\"sector_mode\":0");
+        puts("PASS BIN/CUE manifest explicit primary/internal paths and sector modes");
+        return 0;
+    }
     assert(parsed.crc_only && parsed.plan.count==3 && parsed.plan.bytes==14u*KUI_RAW_BYTES);
     assert(parsed.plan.tracks[0].start==150 && parsed.plan.tracks[2].start==45150);
     assert(!strcmp(parsed.gdi,"disc.gdi"));
@@ -77,6 +140,7 @@ int main(int argc,char **argv) {
     reject("\"crc32\"\n","\"sha256\"\n");
     memcpy(changed,source,size);changed[size]='x';assert(!kui_recovery_manifest_parse(changed,size+1,&parsed));
     memcpy(changed,source,size);changed[0]=0;assert(!kui_recovery_manifest_parse(changed,size,&parsed));
+    compressed_cases();
     puts("PASS Advanced CRC manifest bounds, duplicate keys, unsafe paths, inconsistent tracks and truncation");
     return 0;
 }

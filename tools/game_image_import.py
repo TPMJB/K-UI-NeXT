@@ -28,6 +28,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import stat
 import struct
@@ -316,7 +317,7 @@ def inspect_chd(path, max_bytes):
         hunk = struct.unpack_from(">I", header, {3: 76, 4: 44, 5: 56}[version])[0]
         require(0 < logical <= max_bytes, "CHD logical size exceeds image size limit")
         require(16 <= hunk <= MAX_BLOCK_BYTES, "CHD hunk size exceeds memory limit")
-        tags, visited, metadata_bytes, subchannel = [], set(), 0, False
+        tags, visited, metadata_bytes, subchannel, gd_layout = [], set(), 0, False, []
         while metadata:
             require(len(visited) < 256 and metadata not in visited, "CHD metadata chain is cyclic or too long")
             require(length <= metadata <= size - 16, "CHD metadata offset is outside the file")
@@ -335,6 +336,19 @@ def inspect_chd(path, max_bytes):
                 pregap_subtype = re.search(rb"(?:^|\s)PGSUB:([^\s\0]+)", payload)
                 if subtype[1] != b"NONE" or (pregap_subtype and pregap_subtype[1] != b"NONE"):
                     subchannel = True
+                if tag in (b"CHGT", b"CHGD"):
+                    fields = {key.decode("ascii"): value.decode("ascii")
+                              for key, value in re.findall(rb"(?:^|\s)([A-Z]+):([^\s\0]+)", payload)}
+                    require(all(key in fields for key in ("TRACK", "TYPE", "FRAMES", "PAD", "PREGAP", "POSTGAP")),
+                            "GD CHD lacks complete track geometry metadata")
+                    for key in ("TRACK", "FRAMES", "PAD", "PREGAP", "POSTGAP"):
+                        require(fields[key].isdigit(), "Invalid GD CHD track geometry")
+                        fields[key] = int(fields[key])
+                    require(0 < fields["FRAMES"] < LBA_LIMIT and 0 <= fields["PAD"] < fields["FRAMES"],
+                            "GD CHD track has no captured frames or exceeds limits")
+                    require(fields["PREGAP"] == 0 and fields["POSTGAP"] == 0,
+                            "GD CHD virtual/stored pregaps or postgaps are unsupported; use a PAD-based image")
+                    gd_layout.append(fields)
             elif tag == b"CHCD":
                 if subchannel is not True:
                     subchannel = None  # Legacy binary metadata; no lossless-export promise.
@@ -342,7 +356,58 @@ def inspect_chd(path, max_bytes):
         return {"version": version, "logical_bytes": logical, "metadata_tags": tags,
                 "gdrom": any(tag in ("CHGT", "CHGD") for tag in tags),
                 "cdrom": any(tag in ("CHCD", "CHTR", "CHT2") for tag in tags),
-                "subchannel_omitted": subchannel}
+                "subchannel_omitted": subchannel, "gd_track_geometry": gd_layout}
+
+
+def validate_gd_geometry(descriptor, stage, layout):
+    """Confirm extractor addresses/counts against authoritative PAD metadata."""
+    require(layout and len(layout) <= 99, "GD CHD lacks track geometry")
+    rows = [shlex.split(line) for line in descriptor.read_text(encoding="utf-8-sig").splitlines()[1:] if line.strip()]
+    require(len(rows) == len(layout), "Extracted GD track count differs from CHD metadata")
+    offset = 0
+    types = {"AUDIO": (0, 2352), "MODE1": (4, 2048), "MODE1_RAW": (4, 2352),
+             "MODE2_FORM1": (4, 2048), "MODE2_RAW": (4, 2352)}
+    for number, (row, track) in enumerate(zip(rows, layout), 1):
+        require(track["TRACK"] == number and track["TYPE"] in types, "Unsupported GD CHD track type/order")
+        control, stride = types[track["TYPE"]]
+        require(tuple(map(int, row[:4])) == (number, offset, control, stride),
+                "Extracted GDI track addresses/types differ from CHD metadata")
+        require((stage / row[4]).stat().st_size == (track["FRAMES"] - track["PAD"]) * stride,
+                "Extracted GDI track length differs from CHD captured-frame metadata")
+        offset += track["FRAMES"]
+        require(offset < LBA_LIMIT, "GD CHD geometry exceeds disc limits")
+
+
+def normalize_legacy_gd_audio(descriptor, stage):
+    """MAME GDI extraction leaves canonical BE audio for CHDv3/v4.
+
+    cdrom_file also canonicalizes CHGT legacy LE storage before extraction.
+    Pair-swapping staged AUDIO files restores the GDI little-endian convention.
+    Data tracks are copied exactly and the original CHD is never changed.
+    """
+    swapped = []
+    for line in descriptor.read_text(encoding="utf-8-sig").splitlines()[1:]:
+        if not line.strip():
+            continue
+        row = shlex.split(line)
+        if int(row[2]) != 0:
+            continue
+        path = stage / row[4]
+        with path.open("r+b") as stream:
+            position = 0
+            while data := stream.read(65536):
+                require(len(data) % 2 == 0, "Odd-length extracted GD audio")
+                samples = array("H", data)
+                require(samples.itemsize == 2, "Host cannot represent 16-bit CDDA samples")
+                samples.byteswap()
+                stream.seek(position)
+                stream.write(samples.tobytes())
+                position += len(data)
+                stream.seek(position)
+            stream.flush()
+            os.fsync(stream.fileno())
+        swapped.append(path.name)
+    return swapped
 
 
 def run_chdman(command, stage, timeout):
@@ -544,7 +609,7 @@ def expand_chd(source, stage, max_bytes, chdman, parent, timeout, drop_subchanne
     metadata = inspect_chd(source, max_bytes)
     if not metadata["cdrom"] and not metadata["gdrom"] and parent:
         parent_metadata = inspect_chd(parent, max_bytes)
-        for key in ("cdrom", "gdrom", "metadata_tags", "subchannel_omitted"):
+        for key in ("cdrom", "gdrom", "metadata_tags", "subchannel_omitted", "gd_track_geometry"):
             metadata[key] = parent_metadata[key]
     require(metadata["cdrom"] or metadata["gdrom"], "CHD is not a CD/GD image (DVD, hard disk and laserdisc are unsupported)")
     require(not (metadata["cdrom"] and metadata["gdrom"]), "CHD has conflicting CD and GD track metadata")
@@ -557,13 +622,34 @@ def expand_chd(source, stage, max_bytes, chdman, parent, timeout, drop_subchanne
     if progress:
         progress("Verifying CHD with chdman")
     run_chdman([executable, "verify", *common], stage, timeout)
+    # GD requires GDI to preserve density/track addresses. GDI is always split,
+    # including older MAME versions that do not implement the -sb option.
     descriptor = stage / ("disc.gdi" if metadata["gdrom"] else "disc.cue")
     if progress:
         progress(f"Extracting CHD to {descriptor.name} and separate tracks")
-    run_chdman([executable, "extractcd", *common, "-o", str(descriptor), "-sb"], stage, timeout)
+    command = [executable, "extractcd", *common, "-o", str(descriptor)]
+    if metadata["gdrom"]:
+        run_chdman(command, stage, timeout)
+    else:
+        try:
+            run_chdman([*command, "-sb"], stage, timeout)
+        except ValueError as error:
+            # Legacy CD extraction may still produce a valid single-track CUE.
+            # The bounded validator rejects unsupported shared/mixed shapes.
+            if "Option '-sb' not valid" not in str(error):
+                raise
+            require(not any(stage.iterdir()), "Legacy chdman left partial output after option rejection")
+            run_chdman(command, stage, timeout)
     tracks, outputs = validate_extracted(stage, descriptor, max_bytes)
+    audio_swapped = []
+    if metadata["gdrom"]:
+        validate_gd_geometry(descriptor, stage, metadata["gd_track_geometry"])
+        if metadata["version"] < 5:
+            audio_swapped = normalize_legacy_gd_audio(descriptor, stage)
+            tracks, outputs = validate_extracted(stage, descriptor, max_bytes)
     return {"format": "CHD", **metadata, "tracks": tracks, "chdman_verified": True,
-            "subchannel_preserved": False}, descriptor.name, outputs
+            "subchannel_preserved": False, "legacy_gd_audio_pair_swapped": audio_swapped,
+            "gd_geometry_verified": metadata["gdrom"]}, descriptor.name, outputs
 
 
 def import_image(source, output_directory, *, max_bytes=MAX_IMAGE_BYTES,

@@ -16,6 +16,36 @@ import sys
 import zlib
 
 PROFILE = "gdi-raw2352-typegap150-v1"
+INTERNAL_GDI = ".capture.gdi"
+
+
+def descriptor_name(name, suffix, *, internal=False):
+    return (internal and name == INTERNAL_GDI) or (
+        isinstance(name, str) and 4 < len(name.encode("utf-8")) <= 100
+        and name.lower().endswith(suffix)
+        and not any(ord(c) < 32 or ord(c) == 127 or c in '/\\:*?"<>|' for c in name)
+        and not name.startswith(".") and not name.endswith((" ", ".")))
+
+
+def cue_lines(tracks):
+    lines = [f"REM CAPTURE_PROFILE {PROFILE}"]
+    previous = None
+    for t in tracks:
+        gap = 0
+        if previous is None:
+            lines.append("REM SINGLE-DENSITY AREA")
+        elif t["session"] != previous["session"]:
+            lines.append("REM HIGH-DENSITY AREA")
+        else:
+            gap = previous["toc_end_fad"] - previous["end_fad"]
+        lines += [f'FILE "{t["file"]}" BINARY',
+                  f'  TRACK {t["number"]:02} ' + (
+                      f'MODE{t["sector_mode"]}/2352' if t["control"] == 4 else "AUDIO")]
+        if gap:
+            lines.append("    PREGAP 00:02:00")
+        lines.append("    INDEX 01 00:00:00")
+        previous = t
+    return lines
 
 
 def require(ok, message):
@@ -40,6 +70,12 @@ def verify(directory):
     m = load_json(directory / "manifest.json")
     require(isinstance(m, dict) and m.get("schema") in (1, 2), "Unsupported manifest schema")
     schema = m["schema"]
+    output_format = m.get("output_format")
+    cue_output = output_format == "bin_cue"
+    compressed_output = output_format in ("cso", "zso", "chd")
+    derivative = cue_output or compressed_output
+    require("output_format" not in m or derivative, "Unsupported capture output format")
+    require(("cue_file" in m) == cue_output, "Inconsistent CUE output metadata")
     if schema == 1:
         require(m.get("complete") is True and m.get("saved_data_verified") is True,
                 "Capture is incomplete or has not passed console readback")
@@ -62,6 +98,11 @@ def verify(directory):
         for key in ("number", "session", "control", "start_fad", "end_fad", "toc_end_fad", "excluded_tail_sectors", "bytes"):
             require(type(t.get(key)) is int, f"Track {i}: invalid {key}")
         require(t["number"] == i and t["control"] in (0, 4) and t["session"] in (0, 1), "Invalid track numbering/type/session")
+        if derivative:
+            require(type(t.get("sector_mode")) is int and t["sector_mode"] in (
+                (1, 2) if t["control"] == 4 else (0,)), f"Track {i}: invalid output sector mode")
+        else:
+            require("sector_mode" not in t, "Unexpected sector mode for GDI output")
         require(150 <= t["start_fad"] < t["end_fad"] <= t["toc_end_fad"] <= 0xFFFFFF, "Invalid track bounds")
         following = tracks[i] if i < len(tracks) else None
         gap = 150 if following and following.get("session") == t["session"] and following.get("control") != t["control"] else 0
@@ -85,7 +126,10 @@ def verify(directory):
         digest = hashlib.sha256()
         crc = 0
         with file.open("rb") as stream:
-            while block := stream.read(1024 * 1024):
+            while block := stream.read(2352 * 512):
+                if derivative and t["control"] == 4:
+                    require(all(mode == t["sector_mode"] for mode in block[15::2352]),
+                            f"{expected_name}: data sector mode differs from output metadata")
                 digest.update(block)
                 crc = zlib.crc32(block, crc)
         crc_text, sha_text = f"{crc:08x}", digest.hexdigest()
@@ -102,14 +146,57 @@ def verify(directory):
     # Older jobs have no explicit descriptor field. Named jobs retain the same
     # track paths and GDI contents; only the descriptor's safe basename changes.
     gdi_name = m.get("gdi_file", "disc.gdi")
-    require(isinstance(gdi_name, str) and 4 < len(gdi_name.encode("utf-8")) <= 100
-            and gdi_name.lower().endswith(".gdi")
-            and not any(ord(c) < 32 or ord(c) == 127 or c in '/\\:*?"<>|' for c in gdi_name)
-            and gdi_name not in (".", "..") and not gdi_name.startswith(".")
-            and not gdi_name.endswith((" ", ".")), "Unsafe GDI filename")
+    require(descriptor_name(gdi_name, ".gdi", internal=derivative), "Unsafe GDI filename")
+    require((gdi_name == INTERNAL_GDI) == derivative, "Inconsistent internal GDI metadata")
     descriptor = directory / gdi_name
     require(descriptor.is_file() and not descriptor.is_symlink() and descriptor.stat().st_size <= 8192, "Missing/unsafe GDI")
     require(descriptor.read_text().splitlines() == lines, "GDI descriptor differs from manifest")
+    if cue_output:
+        cue_name = m["cue_file"]
+        require(descriptor_name(cue_name, ".cue"), "Unsafe CUE filename")
+        cue = directory / cue_name
+        require(cue.is_file() and not cue.is_symlink() and cue.stat().st_size <= 16384, "Missing/unsafe CUE")
+        require(cue.read_text().splitlines() == cue_lines(tracks), "CUE descriptor differs from manifest")
+    exported_keys = {"output_file", "output_bytes", "output_crc32", "output_sha256",
+                     "output_logical_bytes", "output_data_track"}
+    require(exported_keys.issubset(m) if compressed_output else not (exported_keys & m.keys()),
+            "Inconsistent compressed output metadata")
+    if compressed_output:
+        output_name = m["output_file"]
+        require(descriptor_name(output_name, "." + output_format), "Unsafe output filename")
+        for key in ("output_bytes", "output_logical_bytes", "output_data_track"):
+            require(type(m[key]) is int and m[key] >= 0, f"Invalid {key}")
+        require(m["output_bytes"] > 0 and m["output_logical_bytes"] > 0, "Empty compressed output")
+        require(isinstance(m["output_crc32"], str) and re.fullmatch(r"[0-9a-f]{8}", m["output_crc32"]),
+                "Invalid output CRC32")
+        require(isinstance(m["output_sha256"], str) and re.fullmatch(r"[0-9a-f]{64}", m["output_sha256"]),
+                "Invalid output SHA-256")
+        if output_format in ("cso", "zso"):
+            data = [t for t in tracks if t["session"] == 1 and t["control"] == 4]
+            require(len(data) == 1 and data[0]["start_fad"] == 45150 and
+                    m["output_data_track"] == data[0]["number"] and
+                    m["output_logical_bytes"] == (data[0]["end_fad"] - data[0]["start_fad"]) * 2048,
+                    "Compressed data track geometry differs from manifest")
+        else:
+            require(m["output_data_track"] == 0 and m["output_logical_bytes"] % 2448 == 0,
+                    "Invalid CHD logical geometry")
+        output = directory / output_name
+        require(output.is_file() and not output.is_symlink() and output.stat().st_size == m["output_bytes"],
+                "Missing/unsafe compressed output or wrong size")
+        crc, sha = 0, hashlib.sha256()
+        with output.open("rb") as stream:
+            while block := stream.read(1024 * 1024):
+                crc = zlib.crc32(block, crc)
+                sha.update(block)
+        require(f"{crc:08x}" == m["output_crc32"] and sha.hexdigest() == m["output_sha256"],
+                "Compressed output hash mismatch")
+    if derivative:
+        primary = m["cue_file"] if cue_output else m["output_file"]
+        payloads = {t["file"] for t in tracks} | {"checkpoint-a.bin", "checkpoint-b.bin"}
+        selectors = {p.name for p in directory.iterdir() if p.is_file() and not p.name.startswith(".")
+                     and p.name not in payloads and p.suffix.lower() in
+                     (".gdi", ".cue", ".cdi", ".iso", ".bin", ".img", ".cso", ".zso", ".chd")}
+        require(selectors == {primary}, "Capture output has ambiguous game descriptors")
     return results
 
 

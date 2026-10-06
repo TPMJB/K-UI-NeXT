@@ -15,9 +15,8 @@ struct kui_games_entry {
     /* Optional sibling cooked-data GDI. path always selects the original;
      * pairing checks descriptors/layout only, never full track contents. */
     char variant_2048_path[KUI_GAMES_FILE_CAP];
-    /* What lists show: the disc title a box art scan recorded, else the
-     * name. Empty from kui_games_list itself. cover: this row's pixels were
-     * loaded for the page's view (games_covers.h). */
+    /* What lists show: a cached disc title, else the folder/file name.
+     * Empty from kui_games_list itself. cover is selected artwork only. */
     char title[KUI_COVER_TITLE_CAP];
     bool directory, disabled, cover;
 };
@@ -50,9 +49,10 @@ struct kui_games_detail {
  * Listing never creates /Games and never scans/hashes complete track files. */
 bool kui_games_list(const char *root, unsigned offset, struct kui_games_page *out,
                     kui_log_fn log, kui_cancel_fn cancel);
-/* Storage worker only. A directory snapshot is reused across pages/views;
- * clear when leaving/refreshing Games or changing card/storage/content.
- * Root changes clear it automatically. No open filesystem handles are kept. */
+/* Storage worker only. Four roots share a bounded RAM catalogue across
+ * pages/views and leave/return navigation. Explicit card/storage/content
+ * refresh must clear both this cache and kui_games_covers_cache_clear().
+ * No filesystem handles are retained. */
 void kui_games_cache_clear(void);
 /* Runs while the card is still mounted: after a successful listing, or after
  * an inspection whether or not the image was valid. It may read any file and

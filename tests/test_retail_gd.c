@@ -136,6 +136,55 @@ static void mode(uint32_t bytes, uint32_t type) {
     put(PARAM + 8, type); put(PARAM + 12, bytes);
     CHECK(call(KUI_GD_DATATYPE, PARAM, 0) == 0);
 }
+static void command_acknowledgment(void) {
+    reset();
+    int32_t token = call(KUI_GD_REQUEST, KUI_GD_NOP, 0);
+    CHECK(token > 0);
+    /* An invalid handle reports illegal request, without consuming either
+     * a pending command or its completion awaiting acknowledgment. */
+    const uint32_t invalid[] = {0, (uint32_t)token + 1u, UINT32_MAX};
+    for(unsigned i = 0; i < sizeof(invalid) / sizeof(*invalid); ++i) {
+        CHECK(call(KUI_GD_CHECK, invalid[i], STATUS) == KUI_GD_FAILED);
+        CHECK(get(STATUS) == 5 && get(STATUS + 4) == 0 &&
+              get(STATUS + 8) == 0 && get(STATUS + 12) == 0);
+        CHECK(service.pending && service.token == (uint32_t)token);
+    }
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && !service.pending);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_NOP, 0) == 0);
+    CHECK(service.token == (uint32_t)token);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token + 1u, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS) == 5 && get(STATUS + 4) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(get(STATUS) == 0 && get(STATUS + 8) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
+    CHECK(get(STATUS) == 0 && get(STATUS + 4) == 0 &&
+          get(STATUS + 8) == 0 && get(STATUS + 12) == 0);
+
+    /* A failed command also owns the slot until the valid CHECK consumes
+     * its failure. A stale handle must not replace the stored error. */
+    put(PARAM, OUTPUT);
+    token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_GET_VERS, PARAM);
+    CHECK(token > 0);
+    ctx.deny = OUTPUT;
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && !service.pending);
+    ctx.deny = 0;
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_NOP, 0) == 0);
+    CHECK(service.token == (uint32_t)token && service.error == KUI_GD_ERROR_MEMORY);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token - 1u, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS) == 5 && get(STATUS + 4) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS) == 1 && get(STATUS + 4) == KUI_GD_ERROR_MEMORY);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_NOT_FOUND);
+    CHECK(get(STATUS) == 0 && get(STATUS + 4) == 0);
+    int32_t next = call(KUI_GD_REQUEST, KUI_GD_NOP, 0);
+    CHECK(next > token);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
+    CHECK(get(STATUS) == 5 && service.pending);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)next, STATUS) == KUI_GD_COMPLETED);
+    CHECK(ctx.reads == 0 && ctx.checks == 0);
+}
 #ifndef KUI_RETAIL_GD_ASYNC
 static void large_reads(void) {
     reset();
@@ -282,21 +331,30 @@ static void metadata(void) {
     for(unsigned i = 0; i < 4; ++i) put(PARAM + i * 4u, i + 10);
     CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_SET_MODE, PARAM) > 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, service.token, STATUS) == KUI_GD_COMPLETED);
+    CHECK(get(STATUS + 8) == 10);
     put(PARAM, OUTPUT);
     CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_REQ_MODE, PARAM) > 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, service.token, STATUS) == KUI_GD_COMPLETED);
+    /* CHECK reports the GD wire transfer's ten bytes even though the
+     * syscall expands the mode into four words in the guest buffer. */
+    CHECK(get(STATUS + 8) == 10);
     for(unsigned i = 0; i < 4; ++i) CHECK(get(OUTPUT + i * 4u) == i + 10);
     put(PARAM, 45160);
     CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_SEEK, PARAM) > 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, service.token, STATUS) == KUI_GD_COMPLETED);
     for(unsigned i = 0; i < 4; ++i) put(PARAM + i * 4u, OUTPUT + i * 8u);
     CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_REQ_STAT, PARAM) > 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
     CHECK(get(OUTPUT) == 1 && get(OUTPUT + 8) == 3 && get(OUTPUT + 24) == 1);
     CHECK(get(OUTPUT + 16) == (0x14000000u | 45160u));
+    CHECK(call(KUI_GD_CHECK, service.token, STATUS) == KUI_GD_COMPLETED);
     CHECK(ctx.reads == 0);
     CHECK(call(KUI_GD_REQUEST, KUI_GD_STOP, 0) > 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, service.token, STATUS) == KUI_GD_COMPLETED);
     CHECK(call(KUI_GD_DRIVE, STATUS, 0) == 0 && get(STATUS) == 2 && get(STATUS + 4) == 0x80);
     CHECK(call(KUI_GD_RESET, 0, 0) == 0);
     CHECK(call(KUI_GD_DRIVE, STATUS, 0) == 0 && get(STATUS) == 1);
@@ -358,11 +416,14 @@ static void cd_metadata(void) {
     put(PARAM,48155);
     CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_SEEK,PARAM)>0);
     CHECK(call(KUI_GD_EXEC,0,0)==0);
+    CHECK(call(KUI_GD_CHECK,service.token,STATUS)==KUI_GD_COMPLETED);
     for(unsigned i=0;i<4;i++) put(PARAM+i*4u,OUTPUT+i*8u);
     CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_REQ_STAT,PARAM)>0);
     CHECK(call(KUI_GD_EXEC,0,0)==0);
     CHECK(get(OUTPUT+8)==4 && get(OUTPUT+16)==(0x14000000u|48155u));
+    CHECK(call(KUI_GD_CHECK,service.token,STATUS)==KUI_GD_COMPLETED);
     CHECK(call(KUI_GD_REQUEST,KUI_GD_STOP,0)>0 && call(KUI_GD_EXEC,0,0)==0);
+    CHECK(call(KUI_GD_CHECK,service.token,STATUS)==KUI_GD_COMPLETED);
     CHECK(call(KUI_GD_DRIVE,STATUS,0)==0 && get(STATUS)==2 && get(STATUS+4)==0x10);
     CHECK(call(KUI_GD_INIT,0,0)==0 && call(KUI_GD_RESET,0,0)==0);
     CHECK(call(KUI_GD_DRIVE,STATUS,0)==0 && get(STATUS+4)==0x10);
@@ -408,6 +469,7 @@ static void silent_cd_audio(void) {
     CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_PLAY2, 0) == 0);
     CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_PAUSE, 0) > 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, service.token, STATUS) == KUI_GD_COMPLETED);
     CHECK(ctx.reads == 0 && ctx.checks == 0 && service.diag.read_steps == 0);
 }
 static void version_query(void) {
@@ -784,6 +846,7 @@ static void stream_reads(void) {
     CHECK(call(KUI_GD_ABORT, (uint32_t)token, 0) == 0 && !service.xfer_left);
     calls = part.calls;
     CHECK(call(KUI_GD_DMA_CHECK, (uint32_t)token, STATUS) == 0 && part.calls == calls);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_FAILED);
     token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM);
     CHECK(token > 0 && piece(token, OUTPUT, 0x3000) == 0 && service.xfer_left == 0x2000);
     CHECK(call(KUI_GD_INIT, 0, 0) == 0 && !service.xfer_left);
@@ -896,10 +959,12 @@ static void many_tracks(void) {
     put(PARAM, 45000 + 50 * 100 + 5 + 150);
     CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_SEEK, PARAM) > 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, service.token, STATUS) == KUI_GD_COMPLETED);
     for(unsigned i = 0; i < 4; ++i) put(PARAM + i * 4u, OUTPUT + i * 8u);
     CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_REQ_STAT, PARAM) > 0);
     CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
     CHECK(get(OUTPUT + 8) == 53 && get(OUTPUT + 16) == (0x10000000u | 50155u));
+    CHECK(call(KUI_GD_CHECK, service.token, STATUS) == KUI_GD_COMPLETED);
     put(PARAM, 1); put(PARAM + 4, 14); put(PARAM + 8, OUTPUT);
     token = call(KUI_GD_REQUEST, KUI_RETAIL_GD_GETSCD, PARAM);
     CHECK(token > 0); CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
@@ -908,6 +973,7 @@ static void many_tracks(void) {
     CHECK(ctx.reads == 0);
 }
 int main(void) {
+    command_acknowledgment();
     prepared_initialization();
     cd_metadata();
     many_tracks();

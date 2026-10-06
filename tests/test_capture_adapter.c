@@ -18,6 +18,8 @@ static struct {
     unsigned engine_calls, simulated_writes;
     unsigned storage, dma_ends;
     bool exercise_dma, dma_pending;
+    bool load_format;
+    enum kui_capture_format loaded_format;
     char order[32], log[512], destination[KUI_DEST_ROOT_CAP];
     size_t order_size, log_size;
 } fake;
@@ -50,7 +52,11 @@ static void reset(void) {
     for(unsigned i=0;i<KUI_TIME_BUCKETS;++i) fake.stats.capture_bucket_us[i]=2000+i;
 }
 
-bool kui_options_refresh(void) {note('O');return fake.refresh_ok;}
+bool kui_options_refresh(void) {
+    note('O');
+    if(fake.refresh_ok && fake.load_format) kui_options.capture_format=fake.loaded_format;
+    return fake.refresh_ok;
+}
 bool kui_cancelled(void) {return fake.stop;}
 uint64_t timer_ms_gettime64(void) {return 1234;}
 uint64_t timer_us_gettime64(void) {return 1234567;}
@@ -115,6 +121,7 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     assert(ops->options->sample_every==kui_options.sample_readback[0]);
     assert(ops->options->read_dma==kui_options.capture_dma[0]);
     assert(ops->options->output && ops->options->output->game_names);
+    assert(ops->options->output->format==kui_options.capture_format);
     assert(!strcmp(ops->options->output->parent,fake.destination));
     assert(!ops->options->bench);
     if(fake.exercise_dma) {
@@ -189,6 +196,12 @@ int main(void) {
             assert(strstr(fake.log,"Capture refused") && strstr(fake.log,"no dump writes"));
             expect_empty_stats();
         }
+    }
+    /* Output selection comes from the preferences loaded for this operation,
+     * rather than a stale global value from before refresh. */
+    for(unsigned format=0;format<KUI_CAPTURE_FORMAT_COUNT;++format) {
+        reset();fake.load_format=true;fake.loaded_format=(enum kui_capture_format)format;
+        run_success();assert(kui_options.capture_format==fake.loaded_format);
     }
     /* Quick resume overrides only the local options passed to a Resume call.
      * It does not overwrite configured full resume, hash/readback choices, or

@@ -104,10 +104,14 @@ static bool load_checkpoint(struct scan *s) {
     }
     if(!valid) return fail(s,"No valid checkpoint matches this manifest");
     if(s->checkpoint.crc_only!=s->manifest.crc_only) return fail(s,"Checkpoint and manifest hash modes differ");
+    if(s->checkpoint.format!=s->manifest.format) return fail(s,"Checkpoint and manifest output formats differ");
     for(unsigned i=0;i<s->manifest.plan.count;++i) {
         const struct kui_capture_track *t=&s->manifest.plan.tracks[i];
         if(s->checkpoint.track[i].sectors!=t->end-t->start)
             return fail(s,"Job is incomplete; resume its capture before scanning");
+        if(s->manifest.format!=KUI_CAPTURE_FORMAT_GDI &&
+           s->checkpoint.track[i].sector_mode!=s->manifest.track[i].sector_mode)
+            return fail(s,"Checkpoint and manifest sector modes differ");
         if(s->checkpoint.track[i].crc32!=s->manifest.track[i].crc32 ||
            memcmp(s->checkpoint.track[i].sha256,s->manifest.track[i].sha256,32))
             return fail(s,"Checkpoint and manifest hashes differ");

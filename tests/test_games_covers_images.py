@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Box art scan, page covers, saved view and image-details covers on real
+"""Box art scan, selected-cover caches, saved view and image-details covers on real
 FAT32/exFAT images. Original synthetic discs and textures only."""
 from pathlib import Path
 import shutil
@@ -12,7 +12,7 @@ from games_fixture import make_fixture, raw_sector, dual32
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/games-covers-image")
-CASES = ("scan", "cancel", "write-fail", "missing-root", "format-iso", "format-cue",
+CASES = ("scan", "selected-cache", "cancel", "write-fail", "missing-root", "format-iso", "format-cue",
          "format-cdi", "format-compressed", "format-legacy-empty", "format-payloads")
 
 

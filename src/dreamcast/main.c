@@ -133,15 +133,22 @@ static struct kui_games_page games_listing;
 static struct kui_games_detail games_detail;
 static unsigned games_listing_generation,games_detail_generation;
 static unsigned games_offset_pending,games_result_offset;
+static unsigned games_epoch_pending,games_result_epoch,games_result_view;
 static char games_path_pending[KUI_GAMES_FILE_CAP];
 static unsigned games_reader_pending;
 static unsigned games_view_pending;
 static bool games_refresh_pending,games_cache_clear_pending;
+static bool games_warm_done;
+static unsigned games_storage_observed=KUI_STORAGE_AUTO;
+static struct kui_shell_games_art_key games_art_requested,games_art_running,games_art_published,games_art_done;
+static bool games_art_request_valid,games_art_result_ready,games_art_done_valid;
+static struct kui_games_entry games_art_entry,games_art_running_entry;
+static struct kui_games_cover_result games_art_result;
 static struct kui_app_status games_scan_status;
-/* Box art for the Games page and image details. Only the worker writes them,
- * and only while the shell draws no cover from them: each job that fills
- * them starts after the shell cleared the listing or details it replaces. */
-static uint16_t games_covers[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
+/* The worker fills staging pixels; only main publishes them to the selected
+ * cover. A ready result owns staging until main accepts/discards it, so neither
+ * an older visible page nor drawing can race the next artwork read. */
+static uint16_t games_cover_pixels[KUI_COVER_PIXELS],games_cover_staging[KUI_COVER_PIXELS];
 static uint16_t games_detail_cover[KUI_COVER_PIXELS];
 /* File Manager: requests copied from the shell when a job is queued, and
  * results the main loop installs by generation. files_status is the live
@@ -1444,6 +1451,90 @@ static bool games_page(enum kui_shell_page page) {
         page==KUI_SHELL_GAMES_PROBE_CONFIRM || page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         page==KUI_SHELL_GAMES_RETAIL_CONFIRM;
 }
+static void games_cache_invalidate(void) {
+    kui_games_cache_clear();kui_games_covers_cache_clear();games_warm_done=false;
+    mutex_lock(&lock);
+    games_art_done_valid=false;games_art_result_ready=false;
+    mutex_unlock(&lock);
+}
+static void games_storage_observe(void) {
+    /* This is the selected boot device, read without probing the card. A
+     * physical card replacement requires explicit Refresh; no CID is cached
+     * by the runtime reader. The worker alone owns both cache lifetimes. */
+    unsigned selected=kui_storage_selected();
+    if(selected==games_storage_observed) return;
+    if(games_storage_observed!=KUI_STORAGE_AUTO) games_cache_invalidate();
+    games_storage_observed=selected;
+}
+static bool games_action_invalidates(unsigned action) {
+    /* Read-only identity, music, directory and metadata jobs retain discovery.
+     * Writers, transport probes and memory handoffs explicitly invalidate it. */
+    return action==2 || action==3 || (action>=4 && action<=9) || action==11 ||
+        action==14 || action==17 || action==18 || action==19 || action==21 || action==22 ||
+        action==25 || action==30 || action==33 || action==38 || action==40 ||
+        (action>=42 && action<=48) || (action>=56 && action<=59) || action==62 ||
+        action==64 || action==65 || action==67 || (action>=68 && action<=71);
+}
+static bool games_idle_cancelled(void) {
+    mutex_lock(&lock);
+    bool stop=busy || pending || video_preview || cancel_requested || games_cache_clear_pending ||
+        sci_video_quiet.requested || !startup_finished || splash_active || boot_ready || probe_launch_ready;
+    mutex_unlock(&lock);
+    return stop;
+}
+static bool games_art_cancelled(void) {
+    if(games_idle_cancelled()) return true;
+    mutex_lock(&lock);
+    struct kui_shell_games_art_key current;
+    bool stop=!games_art_request_valid || !kui_shell_games_art_key(&shell,&current) ||
+        !kui_shell_games_art_same(&games_art_running,&current);
+    mutex_unlock(&lock);
+    return stop;
+}
+static bool games_art_idle_work(void) {
+    if(kui_cd_audio_owns_drive() || games_idle_cancelled()) return false;
+    mutex_lock(&lock);
+    bool wanted=games_art_request_valid && !games_art_result_ready &&
+        (!games_art_done_valid || !kui_shell_games_art_same(&games_art_requested,&games_art_done));
+    if(wanted) {games_art_running=games_art_requested;games_art_running_entry=games_art_entry;}
+    mutex_unlock(&lock);
+    if(!wanted || games_art_cancelled()) return false;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    struct kui_games_cover_result result={0};
+    bool ok=kui_games_selected_cover(&games_art_running_entry,kui_games_view_size(games_art_running.view),
+        games_cover_staging,&result,kui_log,games_art_cancelled);
+    bool stopped=games_art_cancelled();
+    if(!ok && !stopped && !result.stopped) games_cache_invalidate();
+    mutex_lock(&lock);
+    if(!stopped && games_art_request_valid && !busy && !pending &&
+       kui_shell_games_art_same(&games_art_requested,&games_art_running)) {
+        games_art_result=result;games_art_published=games_art_running;games_art_result_ready=true;
+        games_art_done=games_art_running;games_art_done_valid=true;
+    }
+    mutex_unlock(&lock);
+    return true;
+}
+static bool games_warm_cancelled(void) {
+    if(games_idle_cancelled()) return true;
+    mutex_lock(&lock);
+    bool stop=games_art_request_valid &&
+        (!games_art_done_valid || !kui_shell_games_art_same(&games_art_requested,&games_art_done));
+    mutex_unlock(&lock);
+    return stop;
+}
+static void games_warm_idle_work(void) {
+    if(games_warm_done || kui_cd_audio_owns_drive() || games_warm_cancelled()) return;
+    struct kui_music_status music;kui_music_status_copy(&music);
+    mutex_lock(&lock);bool song_pending=music_requested>=0;mutex_unlock(&lock);
+    if(song_pending || (music.enabled && !music.loaded)) return;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    struct kui_games_page page;
+    bool ok=kui_games_list_rows(KUI_GAMES_SCAN_ROOT,0,KUI_GAMES_VIEW_SAVED,&page,kui_log,games_warm_cancelled);
+    if(!games_warm_cancelled()) {
+        if(!ok) games_cache_invalidate();
+        games_warm_done=true;
+    }
+}
 #endif
 static void *worker(void *unused) {
     (void)unused;
@@ -1457,9 +1548,9 @@ static void *worker(void *unused) {
 #endif
         mutex_unlock(&lock);
 #ifdef KUI_SD_RUNTIME
-        /* The worker exclusively owns cached FatFs discovery. The UI can
-         * request invalidation after leaving Games even without a new job. */
-        if(clear_games_cache) kui_games_cache_clear();
+        /* The worker exclusively owns cached discovery and artwork. */
+        games_storage_observe();
+        if(clear_games_cache) games_cache_invalidate();
 #endif
         if(!action) {
 #ifdef KUI_SD_RUNTIME
@@ -1493,7 +1584,7 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(!action) {
-                if(idle) music_idle_work();
+                if(idle && !games_art_idle_work()) {music_idle_work();games_warm_idle_work();}
                 thd_sleep(16);continue;
             }
 #else
@@ -1503,7 +1594,7 @@ static void *worker(void *unused) {
 #ifdef KUI_SD_RUNTIME
         /* Other operations may alter card content, reconnect storage or hand
          * all memory to a game. Only browsing and inspection retain the cache. */
-        if(action && action!=54 && action!=55) kui_games_cache_clear();
+        if(games_action_invalidates(action)) games_cache_invalidate();
         if(action && needs_cd_handoff(action) && !kui_cd_audio_stop_for_io(kui_log)) {
             publish_cd_audio();
             mutex_lock(&lock);
@@ -1581,7 +1672,8 @@ static void *worker(void *unused) {
                     (int)sizeof(games_listing.root)-1,action==59?KUI_GAMES_SCAN_ROOT:games_path_pending);
                 snprintf(games_listing.message,sizeof(games_listing.message),"%s",action==59?
                     "Box art scan stopped before starting":"Games browse stopped before starting");
-                games_result_offset=action==59?0:games_offset_pending;++games_listing_generation;
+                games_result_offset=action==59?0:games_offset_pending;
+                games_result_epoch=games_epoch_pending;games_result_view=games_view_pending;++games_listing_generation;
             }
             if(action==60 || action==62) {
                 memset(&files_listing_result,0,sizeof(files_listing_result));
@@ -1755,9 +1847,10 @@ static void *worker(void *unused) {
             if(action==54) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_games_page page;
-                kui_games_list_covers(games_path_pending,games_offset_pending,games_view_pending,&page,
-                    games_covers,kui_log,kui_cancelled);
+                bool ok=kui_games_list_rows(games_path_pending,games_offset_pending,games_view_pending,&page,kui_log,kui_cancelled);
+                if(!ok && !kui_cancelled()) games_cache_invalidate();
                 mutex_lock(&lock);games_listing=page;games_result_offset=games_offset_pending;
+                games_result_epoch=games_epoch_pending;games_result_view=games_view_pending;
                 ++games_listing_generation;mutex_unlock(&lock);
             }
             if(action==59) {
@@ -1767,11 +1860,13 @@ static void *worker(void *unused) {
                 /* Show the library either way: finished covers are kept, and
                  * a Stop request already ended the scan itself. */
                 struct kui_games_page page;
-                if(kui_games_list_covers(KUI_GAMES_SCAN_ROOT,0,games_view_pending,&page,games_covers,kui_log,NULL))
+                games_cache_invalidate();
+                if(kui_games_list_rows(KUI_GAMES_SCAN_ROOT,0,games_view_pending,&page,kui_log,NULL))
                     snprintf(page.message,sizeof(page.message),"%s",status.message);
+                else games_cache_invalidate();
                 mutex_lock(&lock);games_listing=page;games_result_offset=0;
+                games_result_epoch=games_epoch_pending;games_result_view=games_view_pending;
                 ++games_listing_generation;mutex_unlock(&lock);
-                kui_games_cache_clear();
             }
             if(action==60) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -2008,16 +2103,19 @@ static void *worker(void *unused) {
                 snprintf(capture_message,sizeof(capture_message),"%s",
                     result==KUI_CAPTURE_FAILED?(drive_reset_required?
                         "Drive reset required. Reboot, then Resume the partial dump.":
+                        capture_status.phase==KUI_EXPORTING?"Raw rip kept; export failed. See Diagnostics, then Resume.":
                         capture_status.phase==KUI_VERIFYING?"Saved-file verification failed. See Diagnostics.":
                         capture_status.phase==KUI_PREFIX_CHECK?"Saved-prefix check failed. See Diagnostics.":
                         "Disc operation failed before verification completed."):
-                    result==KUI_CAPTURE_STOPPED?(capture_summary.job_dir[0]?
+                    result==KUI_CAPTURE_STOPPED?(capture_status.phase==KUI_EXPORTING?
+                        "Raw rip kept; export stopped. Resume to recreate it.":capture_summary.job_dir[0]?
                         "Stopped safely; the committed partial dump is kept.":
                         "Stopped before a dump job was created."):"");
                 mutex_unlock(&lock);
                 kui_log("%s operation ended during %s",stage,
                     capture_status.phase==KUI_VERIFYING?"saved-file verification":
                     capture_status.phase==KUI_CAPTURING?"disc capture":
+                    capture_status.phase==KUI_EXPORTING?"compressed export":
                     capture_status.phase==KUI_PREFIX_CHECK?"resume checks":
                     capture_status.phase==KUI_FINISHED?"completion":"disc identification");
                 kui_ui_set_hz(KUI_OPT_UI_FULL);   /* the cap is for the capture, not the report save */
@@ -2119,7 +2217,7 @@ static void draw_shell(void) {
     struct kui_shell_view view = {.build = KUI_BUILD_ID, .job_dir = path,
         .disc_title = title, .gdi_name = gdi, .settings_notice = notice, .message = message, .log_lines = log_rows,
         .inserted_title=inserted,.music_title=music_title,.music_notice=music_notice,.app_status=&app_status,
-        .game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])games_covers,.game_detail_cover=games_detail_cover,
+        .game_selected_cover=games_cover_pixels,.game_detail_cover=games_detail_cover,
         .files_picture=files_picture_pixels};
     mutex_lock(&lock);
     unsigned max_scroll = line_count > KUI_SHELL_LOG_ROWS ? line_count - KUI_SHELL_LOG_ROWS : 0;
@@ -2140,7 +2238,8 @@ static void draw_shell(void) {
     snprintf(path, sizeof(path), "%s", capture_summary.job_dir);
     snprintf(title, sizeof(title), "%s", capture_summary.disc_title[0]?
         capture_summary.disc_title:capture_display.title);
-    snprintf(gdi, sizeof(gdi), "%s", capture_summary.gdi_name);
+    snprintf(gdi, sizeof(gdi), "%s", capture_summary.output_name[0]?
+        capture_summary.output_name:capture_summary.gdi_name);
     view.reference_checked = capture_summary.reference_checked;
     view.reference = capture_summary.reference;
     snprintf(notice,sizeof(notice),"%s",shell.page==KUI_SHELL_SETTINGS?system_note:settings_note);
@@ -2492,10 +2591,17 @@ int main(void) {
             seen_music_listing=music_listing_generation;
         }
         if(seen_games_listing!=games_listing_generation) {
-            if(shell.games_page*KUI_GAMES_ROWS==games_result_offset)
-                kui_shell_set_games_listing(&shell,&games_listing);
+            (void)kui_shell_set_games_rows(&shell,&games_listing,games_result_epoch,
+                games_result_offset,games_result_view);
             seen_games_listing=games_listing_generation;
             games_ui_changed=true;
+        }
+        if(games_art_result_ready) {
+            if(kui_shell_set_games_art(&shell,&games_art_published,&games_art_result)) {
+                if(games_art_result.cover) memcpy(games_cover_pixels,games_cover_staging,sizeof(games_cover_pixels));
+                games_ui_changed=true;
+            }
+            games_art_result_ready=false;
         }
         if(seen_files_result!=files_result_generation) {
             kui_shell_set_files_status(&shell,&files_result);seen_files_result=files_result_generation;
@@ -2578,7 +2684,6 @@ int main(void) {
             if(pressed && !busy && startup_finished)
                 kui_menu_sound_play(pressed&CONT_A?KUI_MENU_SOUND_CONFIRM:KUI_MENU_SOUND_MOVE);
         }
-        if(games_page(page_before_input) && !games_page(shell.page)) games_cache_clear_pending=true;
         if(page_before_input!=shell.page) games_ui_changed=true;
         if(requested==KUI_SHELL_PREVIEW_VIDEO && !busy) {
             video_prior_safe=safe_video_boot;video_prior_mode=applied_video;
@@ -2699,7 +2804,7 @@ int main(void) {
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
                 games_reader_pending=shell.games_retail_reader;
             }
-            if(action==54 || action==59) games_view_pending=shell.games_view;
+            if(action==54 || action==59) {games_view_pending=shell.games_view;games_epoch_pending=shell.games_generation;}
             if(action==54) games_refresh_pending=shell.games_refresh;
             if(action>=60 && action<=63) {
                 files_request_pending=shell.files_request;
@@ -2744,6 +2849,16 @@ int main(void) {
                 capture_message[0]=0;phase_started_ms=progress_updated_ms=input_at;
             }
         }
+        struct kui_shell_games_art_key art_key;
+        bool art_wanted=!busy && kui_shell_games_art_key(&shell,&art_key);
+        if(art_wanted) {
+            games_art_requested=art_key;
+            games_art_entry=shell.games_listing.entries[art_key.row];
+            bool loading=!games_art_done_valid || !kui_shell_games_art_same(&games_art_done,&art_key);
+            if(shell.games_art_loading!=loading) games_ui_changed=true;
+            shell.games_art_loading=loading;
+        } else shell.games_art_loading=false;
+        games_art_request_valid=art_wanted;
         bool is_busy = busy, cd_owned=cd_drive_owned;
         bool games_ui=games_page(shell.page);
         mutex_unlock(&lock);

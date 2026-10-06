@@ -80,7 +80,7 @@ bool kui_settings_save(const struct kui_settings *settings,kui_log_fn log) {
     struct slot saved;
     if(!read_slot(target,&saved,log) || !saved.valid || saved.sequence!=sequence ||
        saved.settings.crc_only!=settings->crc_only || saved.settings.end_readback!=settings->end_readback ||
-       saved.settings.show_memory!=settings->show_memory) {
+       saved.settings.show_memory!=settings->show_memory || saved.settings.capture_format!=settings->capture_format) {
         if(log) log("Settings reread failed; prior slot retained");
         return false;
     }

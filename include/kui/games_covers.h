@@ -23,11 +23,26 @@ enum kui_games_view {
 enum kui_cover_size kui_games_view_size(unsigned view);
 const char *kui_games_view_name(unsigned view);
 
-/* kui_games_list, then while mounted: every row's display title and each GDI
- * row's cover in the view's size, into pixels[row] (rows without a record
- * are untouched). view SAVED reads the card's choice; any other view is
- * saved when it differs. out->view is SAVED if the listing failed. Cover and
- * view problems never fail the listing. */
+/* Rows and cached display titles only, without artwork reads. SAVED loads the
+ * view preference once; explicit changes save once. Warm rows use RAM only.
+ * Worker only; refresh/card changes invalidate both Games and cover caches. */
+bool kui_games_list_rows(const char *root, unsigned offset, unsigned view,
+    struct kui_games_page *out, kui_log_fn log, kui_cancel_fn cancel);
+struct kui_games_cover_result {
+    char path[KUI_GAMES_FILE_CAP], name[KUI_DEST_NAME_CAP], title[KUI_COVER_TITLE_CAP];
+    enum kui_cover_size size;
+    bool cover, stopped;
+};
+/* A selected game's artwork only. Missing records/artwork are successful
+ * negative results. I/O/cancel failures are not cached. The result echoes the
+ * entry identity/size for publication checks; handles close before return.
+ * A bounded RAM cache keeps positive and negative results per identity/size. */
+bool kui_games_selected_cover(const struct kui_games_entry *entry, enum kui_cover_size size,
+    uint16_t pixels[KUI_COVER_PIXELS], struct kui_games_cover_result *out,
+    kui_log_fn log, kui_cancel_fn cancel);
+void kui_games_covers_cache_clear(void);
+/* Compatibility wrapper: the page contains rows only; pixels is untouched.
+ * All views load artwork separately for their selected entry. */
 bool kui_games_list_covers(const char *root, unsigned offset, unsigned view,
     struct kui_games_page *out, uint16_t (*pixels)[KUI_COVER_PIXELS],
     kui_log_fn log, kui_cancel_fn cancel);

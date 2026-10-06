@@ -38,6 +38,20 @@ before creating its new job. Cancelling browsing or typing keeps the previously
 saved destination. Invalid paths, `..`, reserved names and paths too long to
 represent are rejected with an explanation.
 
+## Choose an output format
+
+Open **Advanced > Ripper settings**, choose **Output format**, then save.
+GDI is the default. BIN/CUE uses the same captured raw tracks with a CUE
+descriptor. CSO, DreamShell-LZO ZSO and CHDv4 are verified post-capture
+exports; they retain the raw capture and its internal `.capture.gdi` for
+resume and verification. CSO/ZSO contain one cooked high-density data track;
+audio stays in the raw files. CHD includes the captured data and audio tracks.
+Compression needs additional space and time. Games still requires importing
+compressed files on a computer. See [Games formats](games-formats-test.md).
+
+Resume and Verify use the job's saved format. Changing the setting affects
+only New. Existing GDI jobs and their reference hashes remain compatible.
+
 ## New output names and existing dumps
 
 For an IP.BIN title of `MDK2`, the first capture produces:
@@ -55,7 +69,7 @@ comparison. New never replaces an existing capture. Unsafe title characters are
 sanitized, long titles are bounded, and an unusable title becomes `DreamcastDisc`.
 
 Named manifests add an optional **`gdi_file`** field naming their descriptor.
-Track names, track bytes and checkpoint encoding are unchanged. Legacy jobs keep
+For default GDI jobs, track names, track bytes and checkpoint encoding are unchanged. Other formats add compatible format/mode flags. Legacy jobs keep
 `disc.gdi` and their existing metadata. The PC verifier reads either form; use the
 updated verifier when checking a newly named job.
 

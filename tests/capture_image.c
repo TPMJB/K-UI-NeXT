@@ -38,6 +38,9 @@ static int write_image(void *p,uint32_t sector,size_t count,const uint8_t *data)
     if(fault("manifest-write-fail") && contains(data,count*512,"\"profile\":\"" KUI_CAPTURE_PROFILE "\"")) {
         test.injected=true;return -1;
     }
+    if(fault("cue-write-fail") && contains(data,count*512,"REM CAPTURE_PROFILE " KUI_CAPTURE_PROFILE)) {
+        test.injected=true;return -1;
+    }
     if(fault("write-fail") && test.phase==KUI_CAPTURING && test.ticks>24) return -1;
     if(fault("corrupt-write") && test.phase==KUI_CAPTURING && !test.injected &&
        count && data[0]==0 && kui_guard_is(data+1,10,255) && data[15]==1) {
@@ -72,6 +75,9 @@ static void progress(void *p,const struct kui_capture_progress *status) {
         if(fault("full-during") && !test.injected) {test.injected=true;exhaust_space();}
     }
     if(fault("stop-verify") && status->phase==KUI_VERIFYING && status->done>=1024*1024) test.stop=true;
+    if(fault("stop-export") && status->phase==KUI_EXPORTING && status->done>=status->total/4u) test.stop=true;
+    if(fault("stop-export-verify") && status->phase==KUI_VERIFYING && !status->track && status->done>=status->total/4u)
+        test.stop=true;
 }
 static void put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(n>>(i*8));}
 static void sector(uint32_t fad,bool data,uint8_t *out) {
@@ -80,14 +86,19 @@ static void sector(uint32_t fad,bool data,uint8_t *out) {
     const char *variant=getenv("KUI_TEST_DISC_VARIANT");
     if(variant) out[124]^=(uint8_t)strtoul(variant,NULL,10);
     if(data) {
-        out[0]=out[11]=0;memset(out+1,255,10);out[12]=0x10;out[13]=out[14]=0;out[15]=1;
+        const char *setting=getenv("KUI_TEST_DATA_MODE");
+        unsigned mode=(setting && !strcmp(setting,"2")) || (fault("mixed-mode") && fad==45250u)?2u:1u;
+        unsigned offset=mode==2u?24u:16u;
+        out[0]=out[11]=0;memset(out+1,255,10);out[12]=0x10;out[13]=out[14]=0;out[15]=(uint8_t)mode;
+        if(mode==2u) memset(out+16,0,8);
         if(fad==45150) {
-            memcpy(out+16,"SEGA SEGAKATANA",14);memset(out+16+128,' ',128);
+            memcpy(out+offset,"SEGA SEGAKATANA",14);memset(out+offset+128,' ',128);
             const char *title=getenv("KUI_TEST_TITLE");
-            if(title) {assert(strlen(title)<=128);memcpy(out+16+128,title,strlen(title));}
-            else memcpy(out+16+128,"KUI SYNTHETIC SIX TRACK DISC",28);
+            if(title) {assert(strlen(title)<=128);memcpy(out+offset+128,title,strlen(title));}
+            else memcpy(out+offset+128,"KUI SYNTHETIC SIX TRACK DISC",28);
         }
-        put32(out+2064,kui_cd_edc(out,2064));
+        if(mode==2u) put32(out+2072,kui_cd_edc(out+16,2056));
+        else put32(out+2064,kui_cd_edc(out,2064));
     }
 }
 static enum kui_read_result read_disc(void *p,uint32_t fad,unsigned count,uint8_t *out) {
@@ -203,6 +214,27 @@ static void mutate(const char *kind) {
     char dir[512],path[1024];assert(first_job(dir));
     if(!strcmp(kind,"prefix")) {snprintf(path,sizeof(path),"%s/track01.bin",dir);flip_byte(path,123);}
     else if(!strcmp(kind,"manifest")) {snprintf(path,sizeof(path),"%s/manifest.json",dir);flip_byte(path,123);}
+    else if(!strcmp(kind,"cue")) {
+        DIR entries;FILINFO info;bool found=false;assert(f_opendir(&entries,dir)==FR_OK);
+        while(f_readdir(&entries,&info)==FR_OK && info.fname[0]) {
+            size_t n=strlen(info.fname);
+            if(n>4u && !strcmp(info.fname+n-4u,".cue")) {
+                assert(n<128u);snprintf(path,sizeof(path),"%s/%.127s",dir,info.fname);found=true;break;
+            }
+        }
+        assert(f_closedir(&entries)==FR_OK && found);flip_byte(path,12);
+    }
+    else if(!strcmp(kind,"gdi-internal")) {snprintf(path,sizeof(path),"%s/%s",dir,KUI_CAPTURE_INTERNAL_GDI);flip_byte(path,12);}
+    else if(!strcmp(kind,"output")) {
+        DIR entries;FILINFO info;bool found=false;assert(f_opendir(&entries,dir)==FR_OK);
+        while(f_readdir(&entries,&info)==FR_OK && info.fname[0]) {
+            size_t n=strlen(info.fname);
+            if(n>4u && (!strcmp(info.fname+n-4u,".cso") || !strcmp(info.fname+n-4u,".zso") || !strcmp(info.fname+n-4u,".chd"))) {
+                assert(n<128u);snprintf(path,sizeof(path),"%s/%.127s",dir,info.fname);found=true;break;
+            }
+        }
+        assert(f_closedir(&entries)==FR_OK && found);flip_byte(path,12);
+    }
     else if(!strcmp(kind,"tail")) {
         snprintf(path,sizeof(path),"%s/track03.bin",dir);FIL f;UINT done;uint8_t junk[4704];memset(junk,0x35,sizeof(junk));
         assert(f_open(&f,path,FA_WRITE)==FR_OK && f_lseek(&f,f_size(&f))==FR_OK);
@@ -229,12 +261,17 @@ static struct kui_capture_options test_options(void) {
     struct kui_capture_options o={0};const char *env=getenv("KUI_TEST_OPTS");
     const char *parent=getenv("KUI_TEST_OUTPUT_ROOT");
     static struct kui_capture_output output;
+    memset(&output,0,sizeof(output));
     if(parent) {
         output.parent=parent;
         const char *names=getenv("KUI_TEST_GAME_NAMES");output.game_names=names && !strcmp(names,"1");
         o.output=&output;
     }
     if(!env) return o;
+    if(strstr(env,"cue")) {output.format=KUI_CAPTURE_FORMAT_BIN_CUE;o.output=&output;}
+    else if(strstr(env,"cso")) {output.format=KUI_CAPTURE_FORMAT_CSO;o.output=&output;}
+    else if(strstr(env,"zso")) {output.format=KUI_CAPTURE_FORMAT_ZSO;o.output=&output;}
+    else if(strstr(env,"chd")) {output.format=KUI_CAPTURE_FORMAT_CHD;o.output=&output;}
     o.crc_only=strstr(env,"crc32")!=NULL;o.skip_end_readback=strstr(env,"noend")!=NULL;
     o.resume_size_only=strstr(env,"size")!=NULL;
     const char *sample=strstr(env,"sample=");if(sample) o.sample_every=(unsigned)atoi(sample+7);
@@ -247,6 +284,7 @@ static void print_stats(const struct kui_capture_stats *st) {
         (unsigned long long)st->phase_us[KUI_TIME_SETUP],(unsigned long long)st->phase_us[KUI_TIME_RESUME],
         (unsigned long long)st->phase_us[KUI_TIME_CAPTURE],(unsigned long long)st->phase_us[KUI_TIME_VERIFY],st->job_dir);
     printf("DISC_TITLE %s\nGDI_NAME %s\n",st->disc_title,st->gdi_name);
+    printf("OUTPUT_NAME %s\nOUTPUT_FORMAT %u\n",st->output_name,(unsigned)st->format);
     printf("REFERENCE checked=%u result=%d catalog=%s\nREFERENCE_NAME %s\n",
         st->reference_checked?1u:0u,st->reference.result,st->reference.catalog,st->reference.name);
 }
@@ -258,6 +296,10 @@ int main(int argc,char **argv) {
     struct kui_media_ops media={NULL,blocks,read_image,write_image,sync_image};kui_media_set(&media);
     struct kui_toc sessions[2]={ {.tracks={{1,4,150,650},{2,0,650,950}},.count=2},
         {.tracks={{3,4,45150,50000},{4,0,50000,50400},{5,0,50400,51000},{6,4,51000,51813}},.count=4} };
+    const char *layout=getenv("KUI_TEST_LAYOUT");
+    if(layout && !strcmp(layout,"single-data")) {
+        sessions[1].count=1u;sessions[1].tracks[0].end=51813u;
+    }
     assert(kui_plan_tracks(sessions,&test.plan));
     int result=0;
     if(!strcmp(argv[2],"bench")) {   /* bench new|resume <sectors>: the benchmark entry point, real engine */

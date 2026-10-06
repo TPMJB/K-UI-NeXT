@@ -1,7 +1,8 @@
 # Games disc formats test
 
 This development build extends the Games browser, metadata reader, covers and
-detached game readers. It retains the Original/2048 picker and cached paging.
+detached game readers and disc-ripper output formats. It retains the
+Original/2048 picker and adds RAM-backed rows and selected-game artwork.
 It is not a final 1.7 release or a promise that every game boots.
 
 ## Install and try
@@ -14,8 +15,24 @@ Put an image and all its referenced track files in a folder under `/Games`.
 Folders with one image select it directly; folders with multiple images remain
 browsable. GDI/CUE track payloads are filtered from the list. Standalone BIN/IMG
 files are hidden in folders containing a CUE; use a separate folder for an
-independent raw image. The first collection scan still validates candidate
-Original/2048 pairs; subsequent pages reuse its snapshot. X refreshes it.
+independent raw image. Discovery reads descriptor relationships without
+opening or checking every backing track. Inspection and launch perform the
+full file/layout validation. X refreshes the RAM snapshots after card or
+collection changes.
+
+## Games navigation
+
+Rows publish before cover reads. Only the highlighted game's artwork loads;
+changing the selection cancels obsolete artwork, and a result for an older
+page cannot replace the current cover. List, compact and gallery retain their
+layouts, with placeholders for unselected games. The ordinary storage worker
+warms `/Games` after startup when foreground work and music startup are idle.
+
+Four recently visited folders share a bounded RAM catalogue, and selected
+covers have a separate bounded pixel cache. Warm pages and cached positive or
+missing covers use no storage I/O. The previous page remains visible during a
+new listing request. Explicit Refresh and operations that change card content
+or storage invalidate both caches. RAM caches are rebuilt after reboot.
 
 | Input | This build |
 | --- | --- |
@@ -43,6 +60,44 @@ Mode1/Mode2 Form1 payloads. Full raw reads are available from2352/2448 sources;
 2448-byte subchannels are omitted. Mode2 Form2, captured subchannel emulation,
 CDDA playback, NRG, MDS/MDF, CCD and arbitrary archives are not implemented.
 Compressed images do not decode inside the resident game reader.
+
+## Disc-ripper output formats
+
+Choose **Advanced > Ripper settings > Output format**, save, then start New.
+Resume and Verify keep the format recorded by that job, regardless of the
+current preference. GDI remains the default.
+
+| Output | What it contains |
+| --- | --- |
+| GDI | Existing raw2352 tracks and GDI descriptor |
+| BIN/CUE | The same raw tracks, with a CUE that describes density areas and declared gaps |
+| CSO | Raw-DEFLATE compressed cooked2048 high-density data-track export |
+| ZSO | DreamShell's LZO dialect of ZSO, containing the same cooked data stream |
+| CHD | CHDv4 with compressed captured mainchannel data and audio tracks |
+
+Compressed outputs are created after full raw-file verification and checked
+by decoding their payload against the capture. Raw tracks, checkpoints and
+the internal `.capture.gdi` remain for Resume, Verify and reference hashes.
+They are never deleted to save space. Keep enough free space for the raw
+capture and the additional export. Compression therefore adds time and card
+space during creation.
+
+CSO/ZSO require one high-density data track; their file does not contain CDDA
+or low-density tracks, which remain in the raw capture. CHD retains all tracks
+captured by the existing `gdi-raw2352-typegap150-v1` profile. Its declared PAD gaps
+and zero subchannel padding do not claim that missing pregaps or subchannels
+were read from the disc. CHDv4 audio is stored in its canonical byte order;
+CUE extraction can recover the captured audio bytes, but older chdman versions
+may emit an unusable GD CUE descriptor. Use the import tool for Games.
+
+Export cancellation keeps the raw capture. Resume recreates an interrupted
+export. Verify checks the raw hashes and the published export without writing
+either. A mismatching existing final export is preserved and reported.
+
+These ripper exports do not add compressed boot support to Games. Use the
+computer import tool below for K-UI. ZSO exports require `--zso-codec lzo`.
+The resident reader still needs a separate compression/index and protected
+memory design before it can read compressed sectors while a game runs.
 
 Native controls retain A standard, X background20, Y background25. Native CD
 confirmation adds Left/Right to choose **Plain** or **Scrambled** executable
@@ -76,8 +131,9 @@ python3 game_image_import.py "Images/Game.chd" "Ready/Game" --chdman /path/to/ch
 DreamShell LZO ZSO requires an installed liblzo2; `--lzo-library PATH` selects
 its shared library/DLL explicitly. Standard ZSO uses the included bounded LZ4
 decoder. CSO/ZSO preserve the exact expanded ISO bytes. CHD uses chdman verify
-before extractcd, choosing GDI for GD metadata and CUE for CD metadata. Use a
-current chdman that preserves session markers. Delta CHDs need `--parent`.
+before extractcd, choosing GDI for GD metadata and CUE for CD metadata. For
+CHDv3/v4 GD images it also restores the extracted audio byte order. Use a
+current chdman for multi-track CD extraction and session markers. Delta CHDs need `--parent`.
 CHDs with stored or unknown subchannel data are rejected unless explicitly
 allowed with `--drop-subchannels`; their export cannot preserve that data.
 

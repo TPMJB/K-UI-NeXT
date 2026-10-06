@@ -17,7 +17,7 @@ static struct {
     FIL *track;
     DIR *lazy_dir,*root_dir;
     unsigned writes, connects, disconnects, files, dirs, read_calls;
-    unsigned dir_calls,stat_calls,block_reads,variant_summaries,variant_failures,callbacks,root_rewinds;
+    unsigned dir_calls,stat_calls,track_stats,block_reads,variant_summaries,variant_failures,callbacks,root_rewinds;
     bool active, connected, injected, cancelled;
 } test;
 static FATFS fs;
@@ -62,7 +62,7 @@ static bool cancel(void) { return test.cancelled || fault("cancel-before"); }
 
 FRESULT __real_f_stat(const TCHAR *path,FILINFO *info);
 FRESULT __wrap_f_stat(const TCHAR *path,FILINFO *info) {
-    if(test.active) ++test.stat_calls;
+    if(test.active) {++test.stat_calls;if(strstr(path,"/track")) ++test.track_stats;}
     FRESULT result=__real_f_stat(path,info);
     if(result==FR_OK && info && (info->fattrib&AM_DIR) && fault("stat-sfn")) {
         strcpy(info->fname,"READER~1");test.injected=true;
@@ -329,6 +329,22 @@ static void seed_iso(const char *host,const char *target,bool cd,bool raw,bool m
 }
 static void seed_formats(const char *host) {
     assert(f_mkdir("0:/Games")==FR_OK);
+    if(!strncmp(test.fault,"format-capture-",15)) {
+        seed_fixture(host,folder,false);
+        bool visible=!strcmp(test.fault,"format-capture-gdi") || !strcmp(test.fault,"format-capture-gdi-malformed");
+        if(visible) write_file("0:/Games/Reader Test/manifest.json","{}",2);
+        else {
+            assert(f_rename("0:/Games/Reader Test/disc.gdi","0:/Games/Reader Test/.capture.gdi")==FR_OK);
+            const char *name=!strcmp(test.fault,"format-capture-zso")?"Reader Test.zso":
+                !strcmp(test.fault,"format-capture-chd")?"Reader Test.chd":"Reader Test.cso";
+            char path[128];snprintf(path,sizeof(path),"%s/%s",folder,name);write_file(path,"container",9);
+        }
+        write_file("0:/Games/Reader Test/checkpoint-a.bin","state",5);
+        write_file("0:/Games/Reader Test/checkpoint-b.bin","state",5);
+        if(strstr(test.fault,"malformed")) write_file(visible?"0:/Games/Reader Test/disc.gdi":"0:/Games/Reader Test/.capture.gdi","1\n",2);
+        if(!strcmp(test.fault,"format-capture-unrelated-bin")) seed_iso(host,"0:/Games/Reader Test/Unrelated.bin",true,true,false);
+        return;
+    }
     if(!strcmp(test.fault,"format-root-extensions")) {
         const char *names[]={"IMAGE.CDI","IMAGE.ISO","IMAGE.BIN","IMAGE.IMG","IMAGE.CSO","IMAGE.ZSO","IMAGE.CHD","ignored.txt"};
         for(unsigned i=0;i<8;i++) {char path[96];snprintf(path,sizeof(path),"0:/Games/%s",names[i]);write_file(path,"bad",3);}return;
@@ -505,7 +521,7 @@ static void check_cache(void) {
         assert(test.dir_calls==dirs && test.read_calls==reads);return;
     }
     assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==8 && page.total==14);
-    assert(test.variant_summaries==1 && !test.track_bytes);
+    assert(test.variant_summaries==1 && !test.track_bytes && !test.track_stats);
     unsigned first_reads=test.read_calls;
     if(!strcmp(test.fault,"variant-cache-refresh")) {
         kui_games_cache_clear();
@@ -513,9 +529,27 @@ static void check_cache(void) {
         assert(test.read_calls>first_reads && test.variant_summaries==2);return;
     }
     if(!strcmp(test.fault,"variant-cache-root-change")) {
+        unsigned connects=test.connects;
         assert(kui_games_list("/Games/Empty Folder",0,&page,log_line,cancel) && !page.count);
         assert(kui_games_list("/Games",0,&page,log_line,cancel));
-        assert(test.read_calls>first_reads && test.variant_summaries==3);return;
+        assert(test.read_calls==first_reads && test.variant_summaries==2 && test.connects==connects+1u);return;
+    }
+    if(!strcmp(test.fault,"variant-cache-root-lru")) {
+        for(unsigned i=0;i<3;i++) {
+            char root[96];snprintf(root,sizeof(root),"/Games/Pair %02u",i);
+            assert(kui_games_list(root,0,&page,log_line,cancel) && page.count==1u && !page.entries[0].directory);
+        }
+        unsigned dirs=test.dir_calls,reads=test.read_calls,blocks=test.block_reads,connects=test.connects;
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.total==14);
+        assert(kui_games_list("/Games/Pair 01",0,&page,log_line,cancel) && page.count==1u);
+        assert(dirs==test.dir_calls && reads==test.read_calls && blocks==test.block_reads && connects==test.connects);
+        assert(kui_games_list("/Games/Pair 03",0,&page,log_line,cancel) && page.count==1u);
+        connects=test.connects;blocks=test.block_reads;
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.total==14u);
+        assert(connects==test.connects && blocks==test.block_reads);
+        assert(kui_games_list("/Games/Pair 00",0,&page,log_line,cancel) && page.count==1u);
+        assert(test.connects==connects+1u && test.block_reads>blocks);
+        puts("PASS four-root catalogue reuse and least-recently-used eviction");return;
     }
     if(!strcmp(test.fault,"variant-cache-callback") || !strcmp(test.fault,"variant-cache-callback-cancel")) {
         unsigned dirs=test.dir_calls,stats=test.stat_calls,reads=test.read_calls,connects=test.connects;
@@ -643,7 +677,8 @@ static void check_variants(void) {
         !strcmp(test.fault,"variant-layout-only") || !strcmp(test.fault,"variant-stat-sfn") ||
         !strcmp(test.fault,"variant-stat-case") || !strcmp(test.fault,"variant-case") ||
         !strcmp(test.fault,"variant-descriptor-name") || !strcmp(test.fault,"variant-mixed-original") ||
-        !strcmp(test.fault,"variant-all-cooked-original") || !strcmp(test.fault,"variant-many-tracks");
+        !strcmp(test.fault,"variant-all-cooked-original") || !strcmp(test.fault,"variant-many-tracks") ||
+        !strcmp(test.fault,"variant-mismatch-length") || !strcmp(test.fault,"variant-missing-track");
     bool original_only=!strcmp(test.fault,"variant-original-only");
     bool converted_only=!strcmp(test.fault,"variant-converted-only");
     bool unavailable=fault("open-fail") || fault("read-fail") || fault("short-read") || fault("seek-fail") || fault("close-fail");
@@ -668,18 +703,45 @@ static void check_variants(void) {
             assert(!strcmp(e->name,"Reader Test-2048"));converted=true;
             assert(!e->variant_2048_path[0]);
             if(!strcmp(test.fault,"variant-ambiguous-converted") || !strcmp(test.fault,"variant-invalid") ||
-               !strcmp(test.fault,"variant-mismatch-count") || !strcmp(test.fault,"variant-missing-track") || unavailable)
+               !strcmp(test.fault,"variant-mismatch-count") || unavailable)
                 assert(e->directory && !strcmp(e->path,"/Games/Reader Test-2048"));
             else assert(!e->directory && !strcmp(e->path,"/Games/Reader Test-2048/disc.gdi"));
         }
     }
     assert(original==!converted_only && converted==(!paired && !original_only));
     assert(double_copy==chain);
-    assert(!test.track_bytes && test.read_bytes<4096);
+    assert(!test.track_bytes && !test.track_stats && test.read_bytes<4096);
+    if(!strcmp(test.fault,"variant-missing-track")) {
+        struct kui_games_detail detail;
+        assert(!kui_games_inspect("/Games/Reader Test-2048/disc.gdi",&detail,log_line,cancel));
+        assert(!detail.valid && !strcmp(detail.message,"Track file missing"));
+    }
     if(original_only || converted_only) assert(test.read_bytes<4096u);
 }
 static void check_formats(void) {
     struct kui_games_page page;
+    if(!strncmp(test.fault,"format-capture-",15)) {
+        bool malformed=strstr(test.fault,"malformed")!=NULL,unrelated=!strcmp(test.fault,"format-capture-unrelated-bin");
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1u);
+        assert(page.entries[0].directory==(malformed || unrelated) && !test.track_stats && !test.track_bytes);
+        if(!malformed && !unrelated) {
+            const char *name=!strcmp(test.fault,"format-capture-zso")?"Reader Test.zso":
+                !strcmp(test.fault,"format-capture-chd")?"Reader Test.chd":
+                !strcmp(test.fault,"format-capture-gdi")?"disc.gdi":"Reader Test.cso";
+            char expected[128];snprintf(expected,sizeof(expected),"/Games/Reader Test/%s",name);
+            assert(!strcmp(page.entries[0].path,expected));
+        }
+        assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel) && page.count==(malformed?5u:unrelated?2u:1u));
+        bool saw_unrelated=false;
+        for(unsigned i=0;i<page.count;i++) {
+            assert(strcmp(page.entries[i].name,".capture.gdi"));
+            if(!strcmp(page.entries[i].name,"Unrelated.bin")) saw_unrelated=true;
+            if(!malformed) assert(strcmp(page.entries[i].name,"checkpoint-a.bin") && strcmp(page.entries[i].name,"checkpoint-b.bin"));
+        }
+        assert(saw_unrelated==unrelated);
+        assert(!test.track_stats && !test.track_bytes);
+        return;
+    }
     if(!strcmp(test.fault,"format-root-extensions")) {
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.total==7 && page.count==7 && !page.has_more);
         for(unsigned i=0;i<page.count;i++) assert(!page.entries[i].directory && !page.entries[i].disabled && !page.entries[i].variant_2048_path[0]);

@@ -9,7 +9,7 @@
 #include <string.h>
 
 static struct kui_shell s;
-static const struct kui_settings defaults={true,false,false};
+static const struct kui_settings defaults={true,false,false,KUI_CAPTURE_FORMAT_GDI};
 static void reset(enum kui_shell_page page) {
     kui_shell_init(&s,&defaults); s.page=page;
 }
@@ -103,12 +103,43 @@ static void settings_transaction(void) {
     press(KUI_SHELL_DOWN,false); press(KUI_SHELL_RIGHT,false);
     assert(s.draft.end_readback);
     press(KUI_SHELL_LEFT,false); assert(!s.draft.end_readback);
-    press(KUI_SHELL_DOWN,false); assert(s.setting_selected==0);
+    press(KUI_SHELL_DOWN,false); assert(s.setting_selected==2);
+    assert(s.draft.capture_format==KUI_CAPTURE_FORMAT_GDI);
+    press(KUI_SHELL_LEFT|KUI_SHELL_RIGHT,false);assert(s.draft.capture_format==KUI_CAPTURE_FORMAT_GDI);
+    press(KUI_SHELL_LEFT,false);assert(s.draft.capture_format==KUI_CAPTURE_FORMAT_COUNT-1 && kui_shell_settings_dirty(&s));
+    press(KUI_SHELL_RIGHT,false);assert(s.draft.capture_format==KUI_CAPTURE_FORMAT_GDI && !kui_shell_settings_dirty(&s));
+    for(unsigned i=1;i<=KUI_CAPTURE_FORMAT_COUNT;i++) {
+        press(KUI_SHELL_RIGHT,false);assert((unsigned)s.draft.capture_format==i%KUI_CAPTURE_FORMAT_COUNT);
+    }
+    press(KUI_SHELL_RIGHT,false);changed=s.draft;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_SETTINGS && s.saved.capture_format==KUI_CAPTURE_FORMAT_GDI);
+    kui_shell_set_preferences(&s,&changed);assert(s.saved.capture_format==KUI_CAPTURE_FORMAT_BIN_CUE && !kui_shell_settings_dirty(&s));
+    press(KUI_SHELL_RIGHT,false);assert(kui_shell_settings_dirty(&s));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISCARD_SETTINGS && s.draft.capture_format==KUI_CAPTURE_FORMAT_BIN_CUE);
     s.draft.show_memory=!s.saved.show_memory;
     assert(!kui_shell_settings_dirty(&s));
-    const struct kui_settings inconsistent={false,false,true};
+    const struct kui_settings inconsistent={false,false,true,(enum kui_capture_format)KUI_CAPTURE_FORMAT_COUNT};
     kui_shell_set_preferences(&s,&inconsistent);
     assert(s.saved.end_readback && s.draft.end_readback);
+    assert(s.saved.capture_format==KUI_CAPTURE_FORMAT_GDI && s.draft.capture_format==KUI_CAPTURE_FORMAT_GDI);
+    /* Compressed formats require effective readback without overwriting the
+     * stored GDI/CUE choice. Returning to GDI restores that exact preference. */
+    reset(KUI_SHELL_RIPPER_SETTINGS);s.setting_selected=2;
+    press(KUI_SHELL_RIGHT,false);press(KUI_SHELL_RIGHT,false);
+    assert(s.draft.capture_format==KUI_CAPTURE_FORMAT_CSO && !s.draft.end_readback);
+    for(unsigned format=KUI_CAPTURE_FORMAT_CSO;format<KUI_CAPTURE_FORMAT_COUNT;format++) {
+        assert((unsigned)s.draft.capture_format==format);
+        press(KUI_SHELL_UP,false);press(KUI_SHELL_RIGHT,false);press(KUI_SHELL_LEFT,false);
+        assert(!s.draft.end_readback);
+        press(KUI_SHELL_DOWN,false);press(KUI_SHELL_RIGHT,false);
+    }
+    assert(s.draft.capture_format==KUI_CAPTURE_FORMAT_GDI && !s.draft.end_readback);
+    changed=s.draft;changed.capture_format=KUI_CAPTURE_FORMAT_CSO;
+    kui_shell_set_preferences(&s,&changed);
+    assert(s.saved.capture_format==KUI_CAPTURE_FORMAT_CSO && !s.saved.end_readback && !s.draft.end_readback);
+    press(KUI_SHELL_LEFT,false);press(KUI_SHELL_LEFT,false);
+    assert(s.draft.capture_format==KUI_CAPTURE_FORMAT_GDI && !s.draft.end_readback);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISCARD_SETTINGS && s.draft.capture_format==KUI_CAPTURE_FORMAT_CSO && !s.draft.end_readback);
     kui_shell_init(&s,NULL); assert(s.saved.show_memory);
 }
 static void system_transaction_and_video(void) {
@@ -281,7 +312,7 @@ static void phase_eta(void) {
     v.progress_age_ms=3001;assert(!kui_shell_phase_eta(&v,&seconds));
     v.progress_age_ms=0;
     for(unsigned phase=0;phase<6;phase++) {
-        v.phase=phase;assert(kui_shell_phase_eta(&v,&seconds)==(phase>=1&&phase<=3));
+        v.phase=phase;assert(kui_shell_phase_eta(&v,&seconds)==(phase>=1&&phase<=4));
     }
     v.phase=2;v.rate_kib=0;assert(!kui_shell_phase_eta(&v,&seconds));
     v.rate_kib=UINT_MAX;v.total=UINT64_MAX;v.done=0;
@@ -497,7 +528,7 @@ static void games_controls(void) {
     reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
     assert(s.page==KUI_SHELL_GAMES && !strcmp(s.games_path,"/Games"));
-    assert(s.games_refresh);
+    assert(!s.games_refresh && s.games_loading);
     struct kui_games_page page={.count=2,.has_more=true};
     strcpy(page.root,"/Other");strcpy(page.entries[0].name,"Fighting");
     strcpy(page.entries[0].path,"/Games/Fighting");page.entries[0].directory=true;
@@ -507,9 +538,9 @@ static void games_controls(void) {
     strcpy(page.root,"/Games");kui_shell_set_games_listing(&s,&page);
     assert(s.games_listing.count==2 && !s.games_listing.entries[0].disabled);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
-    assert(!strcmp(s.games_path,"/Games/Fighting") && !s.games_listing.count);
-    assert(s.games_refresh);
-    kui_shell_set_games_listing(&s,&page);assert(!s.games_listing.count);
+    assert(!strcmp(s.games_path,"/Games/Fighting") && s.games_listing.count==2 && s.games_loading);
+    assert(!s.games_refresh);
+    kui_shell_set_games_listing(&s,&page);assert(s.games_listing.count==2 && s.games_loading);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
     kui_shell_set_games_listing(&s,&page);press(KUI_SHELL_DOWN,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && s.page==KUI_SHELL_GAMES_DETAIL);
@@ -554,13 +585,13 @@ static void games_controls(void) {
     detail.valid=true;kui_shell_set_games_detail(&s,&detail);assert(!s.games_detail.valid);
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_page==1);
     assert(!s.games_refresh);
-    assert(!s.games_listing.count && !s.games_selected);
+    assert(s.games_listing.count==2 && !s.games_selected && s.games_loading);
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LIST && !s.games_page);
     assert(!s.games_refresh);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_LIST);
     assert(s.games_refresh);
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
-    kui_shell_set_games_listing(&s,&page);assert(!s.games_listing.count);
+    kui_shell_set_games_listing(&s,&page);assert(s.games_listing.count==2 && s.games_loading);
     press(KUI_SHELL_DOWN,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/"));
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
@@ -1266,7 +1297,7 @@ static void games_views(void) {
     /* Y moves to the next view on the same page and keeps the selection. */
     s.games_selected=5;
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && s.games_view==KUI_GAMES_VIEW_LIST);
-    assert(s.games_selected==5 && !s.games_listing.count && !s.games_page);
+    assert(s.games_selected==5 && s.games_listing.count==8 && !s.games_page && s.games_loading);
     assert(!s.games_refresh);
     assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.games_view==KUI_GAMES_VIEW_LIST);
     games_page(8,true,KUI_GAMES_VIEW_LIST);assert(s.games_selected==5);
@@ -1319,9 +1350,84 @@ static void games_views(void) {
     strcpy(s.games_path,"/Games/Fighting");s.games_page=3;
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_SCAN && s.page==KUI_SHELL_GAMES && s.games_scanning);
-    assert(!strcmp(s.games_path,"/Games") && !s.games_page && !s.games_listing.count && s.games_listing.message[0]);
+    assert(!strcmp(s.games_path,"/Games") && !s.games_page && s.games_listing.count==2 && s.games_loading && s.games_listing.message[0]);
     assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && s.games_scanning && s.page==KUI_SHELL_GAMES);
     games_page(8,true,KUI_GAMES_VIEW_GALLERY);assert(!s.games_scanning && s.games_listing.count==8);
+}
+static void games_async_publication(void) {
+    reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
+    unsigned generation=s.games_generation,view=s.games_view;
+    struct kui_games_page page={.count=2,.has_more=true,.view=KUI_GAMES_VIEW_LIST};
+    strcpy(page.root,"/Games");
+    strcpy(page.entries[0].name,"One");strcpy(page.entries[0].path,"/Games/One/disc.gdi");
+    strcpy(page.entries[1].name,"Two");strcpy(page.entries[1].path,"/Games/Two/disc.gdi");
+    struct kui_shell_games_art_key first,current;
+    assert(!kui_shell_games_art_key(&s,&first));
+    assert(!kui_shell_set_games_rows(&s,&page,generation-1,0,view));
+    assert(!kui_shell_set_games_rows(&s,&page,generation,8,view));
+    assert(!kui_shell_set_games_rows(&s,&page,generation,0,KUI_GAMES_VIEW_GALLERY));
+    assert(kui_shell_set_games_rows(&s,&page,generation,0,view) && !s.games_loading);
+    assert(kui_shell_games_art_key(&s,&first));
+    struct kui_games_cover_result art={.size=KUI_COVER_SIZE_LARGE,.cover=true};
+    strcpy(art.path,page.entries[0].path);strcpy(art.name,page.entries[0].name);strcpy(art.title,"ONE TITLE");
+    s.games_art_loading=true;
+    assert(kui_shell_set_games_art(&s,&first,&art) && !s.games_art_loading && s.games_listing.entries[0].cover);
+    assert(!strcmp(s.games_listing.entries[0].title,"ONE TITLE"));
+    /* Idle cover work never locks navigation. An old result cannot repaint
+     * the newly selected game, even after returning to the same path. */
+    s.games_art_loading=true;
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.games_selected==1 && !s.games_art_loading);
+    assert(!s.games_listing.entries[0].cover && !kui_shell_set_games_art(&s,&first,&art));
+    assert(kui_shell_games_art_key(&s,&current) && !kui_shell_games_art_same(&first,&current));
+    strcpy(art.path,page.entries[1].path);strcpy(art.name,page.entries[1].name);strcpy(art.title,"TWO TITLE");
+    art.size=KUI_COVER_SIZE_SMALL;assert(!kui_shell_set_games_art(&s,&current,&art));
+    art.size=KUI_COVER_SIZE_LARGE;strcpy(art.name,"One");assert(!kui_shell_set_games_art(&s,&current,&art));
+    strcpy(art.name,"Two");art.stopped=true;assert(!kui_shell_set_games_art(&s,&current,&art));
+    art.stopped=false;assert(kui_shell_set_games_art(&s,&current,&art));
+    assert(!s.games_listing.entries[0].cover && s.games_listing.entries[1].cover);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.games_selected==0);
+    strcpy(art.path,page.entries[0].path);strcpy(art.name,page.entries[0].name);
+    assert(!kui_shell_set_games_art(&s,&first,&art));
+    assert(kui_shell_games_art_key(&s,&current));
+    struct kui_shell_games_art_key malformed=current;
+    memset(malformed.path,'x',sizeof(malformed.path));assert(!kui_shell_set_games_art(&s,&malformed,&art));
+    memset(art.title,'x',sizeof(art.title));assert(!kui_shell_set_games_art(&s,&current,&art));
+    strcpy(art.title,"ONE TITLE");art.cover=false;
+    assert(kui_shell_set_games_art(&s,&current,&art) && !s.games_listing.entries[0].cover);
+    /* Keep visible rows during paging/refresh but never open or decorate
+     * them as if they were the newly requested page. */
+    generation=s.games_generation;view=s.games_view;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_loading && s.games_listing.count==2);
+    assert(!kui_shell_games_art_key(&s,&current));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES);
+    assert(!kui_shell_set_games_rows(&s,&page,generation,0,view));
+    generation=s.games_generation;
+    assert(!kui_shell_set_games_rows(&s,&page,generation,0,view));
+    assert(kui_shell_set_games_rows(&s,&page,generation,8,view));
+    generation=s.games_generation;
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && s.games_view==KUI_GAMES_VIEW_COMPACT);
+    assert(!kui_shell_set_games_rows(&s,&page,generation,8,view));
+    page.view=KUI_GAMES_VIEW_COMPACT;
+    assert(kui_shell_set_games_rows(&s,&page,s.games_generation,8,s.games_view));
+    assert(kui_shell_games_art_key(&s,&current));art.size=KUI_COVER_SIZE_SMALL;art.cover=true;
+    assert(kui_shell_set_games_art(&s,&current,&art));
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST);
+    assert(!kui_shell_set_games_art(&s,&current,&art));
+    page.view=KUI_GAMES_VIEW_GALLERY;
+    assert(kui_shell_set_games_rows(&s,&page,s.games_generation,8,s.games_view));
+    assert(kui_shell_games_art_key(&s,&current));art.size=KUI_COVER_SIZE_MEDIUM;
+    assert(kui_shell_set_games_art(&s,&current,&art));
+    generation=s.games_generation;view=s.games_view;
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_LIST && s.games_refresh);
+    assert(!kui_shell_set_games_rows(&s,&page,generation,8,view));
+    assert(kui_shell_set_games_rows(&s,&page,s.games_generation,8,s.games_view));
+    strcpy(page.root,"/Other");assert(!kui_shell_set_games_rows(&s,&page,s.games_generation,8,s.games_view));
+    /* Launch/inspect the current row without waiting for its artwork. */
+    s.games_art_loading=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && !s.games_art_loading);
+    assert(!strcmp(s.games_selected_path,"/Games/One/disc.gdi"));
+    assert(!kui_shell_set_games_art(&s,&current,&art));
 }
 static void games_rendering(void) {
     struct kui_shell_view view={0};
@@ -1332,13 +1438,13 @@ static void games_rendering(void) {
         snprintf(s.games_listing.entries[i].name,sizeof(s.games_listing.entries[i].name),"Game %u with a long but bounded name",i+1);
         s.games_listing.entries[i].directory=i==0;
     }
-    strcpy(s.games_listing.message,"Choose a GDI image to inspect.");render(&view);
+    strcpy(s.games_listing.message,"Choose a game image to inspect.");render(&view);
     assert(strstr(drawn,"Game 8") && strstr(drawn,"DIR"));
     assert(strstr(drawn,"Page 1 +") && strstr(drawn,"START More") && strstr(drawn,"Y View") && !strstr(drawn,"A Launch"));
     /* Every view names the entries; a GDI without box art gets a hint. */
     s.games_listing.total=19;render(&view);assert(strstr(drawn,"Page 1 of 3") && strstr(drawn,"19 items"));
     assert(strstr(drawn,"No box art yet"));
-    s.games_listing.artwork=true;render(&view);assert(!strstr(drawn,"press START") && strstr(drawn,"Choose a GDI"));
+    s.games_listing.artwork=true;render(&view);assert(!strstr(drawn,"press START") && strstr(drawn,"Choose a game"));
     strcpy(s.games_listing.entries[7].title,"GAME EIGHT TITLE");render(&view);
     assert(strstr(drawn,"GAME EIGHT TITLE") && !strstr(drawn,"Game 8"));
     s.games_view=KUI_GAMES_VIEW_COMPACT;render(&view);
@@ -1422,6 +1528,46 @@ static void games_rendering(void) {
     assert(strstr(drawn,"ARMADA") && strstr(drawn,"A Launch"));
     s.games_detail.native_gd=false;render(&view);
     assert(strstr(drawn,"not ready for native GD launch") && !strstr(drawn,"A Launch"));
+}
+static void games_selected_art_rendering(void) {
+    static uint16_t selected[KUI_COVER_PIXELS],legacy[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
+    for(unsigned i=0;i<KUI_COVER_PIXELS;i++) selected[i]=0x1234;
+    for(unsigned i=0;i<KUI_GAMES_ROWS;i++)
+        for(unsigned j=0;j<KUI_COVER_PIXELS;j++) legacy[i][j]=0x5678;
+    struct kui_shell_view v={.game_selected_cover=selected,
+        .game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])legacy};
+    reset(KUI_SHELL_GAMES);
+    for(unsigned view=0;view<KUI_GAMES_VIEW_COUNT;view++) {
+        s.games_view=view;games_page(2,false,view);s.games_selected=1;
+        render(&v);
+        unsigned x=view==KUI_GAMES_VIEW_LIST?441:view==KUI_GAMES_VIEW_COMPACT?41:201;
+        unsigned y=view==KUI_GAMES_VIEW_LIST?151:view==KUI_GAMES_VIEW_COMPACT?210:141;
+        assert(pixels[1+y*640+x]==0x1234);
+        if(view!=KUI_GAMES_VIEW_LIST) {
+            unsigned other_x=view==KUI_GAMES_VIEW_COMPACT?41:57;
+            unsigned other_y=view==KUI_GAMES_VIEW_COMPACT?148:141;
+            assert(pixels[1+other_y*640+other_x]!=0x1234 && pixels[1+other_y*640+other_x]!=0x5678);
+        }
+    }
+    s.games_view=s.games_listing.view=KUI_GAMES_VIEW_LIST;
+    s.games_listing.entries[1].cover=false;s.games_art_loading=true;render(&v);
+    assert(strstr(drawn,"Loading box art...") && !strstr(drawn,"B Stop safely"));
+}
+static void ripper_export_rendering(void) {
+    struct kui_shell_view v={0};reset(KUI_SHELL_RIPPER_SETTINGS);s.setting_selected=2;
+    for(unsigned format=0;format<KUI_CAPTURE_FORMAT_COUNT;format++) {
+        s.draft.capture_format=(enum kui_capture_format)format;render(&v);
+        assert(strstr(drawn,"Output format") && strstr(drawn,kui_capture_format_name(s.draft.capture_format)));
+        if(format>=KUI_CAPTURE_FORMAT_CSO) {
+            assert(strstr(drawn,"Verify raw rip, then create") && !strstr(drawn,"descriptor changes"));
+            assert(strstr(drawn,format==KUI_CAPTURE_FORMAT_CHD?"includes captured data and audio":"raw audio tracks are kept"));
+            assert(strstr(drawn,"ON (export required)"));
+        } else assert(strstr(drawn,"descriptor changes"));
+    }
+    reset(KUI_SHELL_RIPPER);v.busy=true;v.phase=4;
+    v.total=1048576;v.done=524288;v.rate_kib=256;v.phase_elapsed_ms=5000;
+    render(&v);assert(strstr(drawn,"Creating export") && strstr(drawn,"PHASE ETA 0:02"));
+    assert(!strstr(drawn,"Completed"));
 }
 static void games_variant_rendering(void) {
     struct kui_shell_view view={0};
@@ -1951,10 +2097,10 @@ int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--storage-tests")) {
         storage_test_controls();storage_test_rendering();return 0;
     }
-    games_controls(); games_views(); games_retail_controls(); games_cd_controls(); games_variant_controls(); games_rendering(); games_variant_rendering();
+    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_cd_controls(); games_variant_controls(); games_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     storage_test_controls();storage_test_rendering();
-    launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction();
+    launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();
     system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();

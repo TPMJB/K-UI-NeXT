@@ -2,18 +2,21 @@
 #ifndef KUI_SETTINGS_H
 #define KUI_SETTINGS_H
 #include "kui/probe.h"
+#include "kui/capture_format.h"
 
 struct kui_settings {
     bool crc_only;
     bool end_readback;
     bool show_memory;
+    enum kui_capture_format capture_format;
 };
 #define KUI_SETTINGS_RECORD_SIZE 32u
 #define KUI_SETTINGS_PATH_A "0:/KUI/settings-a.bin"
 #define KUI_SETTINGS_PATH_B "0:/KUI/settings-b.bin"
 
 void kui_settings_default(struct kui_settings *out);
-/* Fixed little-endian version 1 record, independent of compiler padding.
+/* Fixed little-endian record, independent of compiler padding. Version 1
+ * retains the GDI default; version 2 also saves a chosen output format.
  * CRC32 covers every byte except its own final four bytes. Sequence 0 is
  * invalid; the writer refuses to wrap UINT64_MAX. Decode failure preserves
  * the caller's values. */

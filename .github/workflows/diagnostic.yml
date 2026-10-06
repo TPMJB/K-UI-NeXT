@@ -105,9 +105,25 @@ jobs:
                        'tests/games_retail.c', 'tests/test_games_retail.py', 'tests/game_format_fixture.py',
                        'tests/games_covers_image.c', 'tests/test_games_covers_images.py',
                        'tests/test_gdi_optimize.py', 'tests/test_game_image_import.py'}
-              if not paths or any(p not in exact and not p.startswith('docs/') for p in paths):
+              exact.update({'Makefile.dc', 'include/kui/capture.h', 'include/kui/capture_format.h',
+                            'include/kui/capture_export.h', 'include/kui/games_covers.h', 'include/kui/settings.h',
+                            'include/kui/options.h', 'include/kui/recovery_scan.h',
+                            'src/core/capture.c', 'src/core/capture_plan.c', 'src/core/capture_export.c',
+                            'src/core/capture_export_file.c', 'src/core/capture_export_internal.h', 'src/core/capture_chd.c',
+                            'src/core/settings.c', 'src/core/settings_file.c', 'src/core/options.c',
+                            'src/core/recovery_manifest.c', 'src/core/recovery_scan.c',
+                            'src/dreamcast/main.c', 'src/dreamcast/bench.c', 'src/dreamcast/capture.c',
+                            'tests/capture_image.c', 'tests/test_capture_core.c', 'tests/test_capture_cue_images.py',
+                            'tests/test_capture_chd_oracle.py', 'tests/test_capture_export.c',
+                            'tests/test_capture_compressed_images.py', 'tests/test_capture_export.py',
+                            'tests/test_capture_adapter.c',
+                            'tests/test_settings.c', 'tests/settings_image.c', 'tests/destination_image.c',
+                            'tests/test_options.c', 'tests/test_recovery_manifest.c',
+                            'tests/test_retail_async.c', 'tests/test_retail_async_ce.c', 'tools/verify_dump.py',
+                            'third_party/capture-codecs.md'})
+              if not paths or any(p not in exact and not p.startswith(('docs/', 'third_party/miniz/', 'third_party/minilzo/')) for p in paths):
                   raise SystemExit('Games-formats request includes changes outside image formats, readers, Games and their checks')
-              print('Games formats: full portable suite and relevant real FAT32/exFAT launch, listing, covers and probe checks.')
+              print('Games and rip formats: full portable suite and relevant real FAT32/exFAT launch, listing, covers, capture and settings checks.')
           bootstrap = 'Validation: bootstrap-only' in message.splitlines()
           if bootstrap:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
@@ -144,7 +160,7 @@ jobs:
           PY
       - name: Install filesystem test utilities
         if: steps.scope.outputs.console_only != 'true'
-        run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools e2fsprogs
+        run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools e2fsprogs mame-tools liblzo2-2
       - name: Restore pinned FatFs downloads
         if: steps.scope.outputs.console_only != 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -159,12 +175,22 @@ jobs:
         run: make test test-images
       - name: Run Games format checks
         if: steps.scope.outputs.games_formats == 'true'
+        env:
+          KUI_REQUIRE_CODEC_ORACLES: '1'
         run: |
-          make test build/games-retail build/games-image build/games-covers-image build/games-image-probe
+          make test build/games-retail build/games-image build/games-covers-image build/games-image-probe build/capture-image build/settings-image build/destination-image build/bench-image
           python3 tests/test_games_retail.py
           python3 tests/test_games_images.py
           python3 tests/test_games_covers_images.py
           python3 tests/test_games_image_probe.py
+          python3 tests/test_capture_cue_images.py
+          python3 tests/test_capture_compressed_images.py
+          python3 tests/test_capture_chd_oracle.py
+          python3 tests/test_capture_images.py
+          python3 tests/test_capture_options.py
+          python3 tests/test_named_capture_images.py
+          python3 tests/test_destination_images.py
+          python3 tests/test_settings_images.py
 
   dreamcast:
     needs: host

@@ -2,6 +2,7 @@
 #ifndef KUI_OPTIONS_H
 #define KUI_OPTIONS_H
 #include "kui/probe.h"
+#include "kui/capture_format.h"
 
 /* Runtime test options, read from /KUI/bench.cfg on the SD card.
  *
@@ -139,6 +140,7 @@ struct kui_options {
     unsigned sample_readback[KUI_OPT_CAPTURE_MAX], sample_readback_count;
     unsigned capture_sectors, capture_fad;   /* capture_fad 0 = optical_fad */
     bool capture_audio;
+    enum kui_capture_format capture_format;
 };
 
 void kui_options_default(struct kui_options *out);

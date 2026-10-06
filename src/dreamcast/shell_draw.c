@@ -318,7 +318,7 @@ static void memory(struct paint *p, unsigned y, const struct kui_shell_view *v) 
 static void ripper(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     static const char *phases[]={"Identifying disc","Checking saved prefix",
-        "Capturing disc","Verifying saved files","Completed"};
+        "Capturing disc","Verifying saved files","Creating export","Completed"};
     title(p,40,108,"Disc Ripper");
     char title_line[160];
     snprintf(title_line,sizeof(title_line),"%s: %s",v->busy?"Disc":"Inserted",
@@ -338,7 +338,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         v->outcome==KUI_SHELL_OUTCOME_FAILED && !v->busy ? "Operation failed - see diagnostics" :
         v->outcome==KUI_SHELL_OUTCOME_COMPLETE && !v->busy ? "Completed" :
         !v->busy && v->outcome==KUI_SHELL_OUTCOME_NONE ? "Ready for a disc" :
-        v->phase<5 ? phases[v->phase] : "Working";
+        v->phase<sizeof(phases)/sizeof(phases[0]) ? phases[v->phase] : "Working";
     if(v->outcome==KUI_SHELL_OUTCOME_COMPLETE && !v->busy && !v->drive_reset_required &&
        v->disc_title && v->disc_title[0]) {
         snprintf(title_line,sizeof(title_line),"Completed: %.128s",v->disc_title);
@@ -366,7 +366,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         (unsigned long)(v->elapsed_ms/60000),
         (unsigned long)(v->elapsed_ms/1000%60));
     label(p,48,280,MUTED,line);
-    if(v->busy && !v->saving && v->phase>=1 && v->phase<=3) {
+    if(v->busy && !v->saving && v->phase>=1 && v->phase<=4) {
         uint64_t eta;
         if(kui_shell_phase_eta(v,&eta)) {
             if(eta>=360000) snprintf(line,sizeof(line),"PHASE ETA >99h");
@@ -515,10 +515,12 @@ static void ripper_settings(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     title(p,40,108,"Ripper settings");
     label(p,40,134,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
-    const char *names[]={"Capture hashes","Read back saved files"};
+    const char *names[]={"Capture hashes","Read back saved files","Output format"};
     const char *values[]={s->draft.crc_only?"CRC32":"CRC32 + SHA-256",
-        !s->draft.crc_only?"ON (SHA required)":s->draft.end_readback?"ON":"OFF"};
-    for(unsigned i=0;i<2;i++) {
+        s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?"ON (export required)":
+        !s->draft.crc_only?"ON (SHA required)":s->draft.end_readback?"ON":"OFF",
+        kui_capture_format_name(s->draft.capture_format)};
+    for(unsigned i=0;i<3;i++) {
         unsigned y=174+i*48;
         panel(p,32,y,576,40,i==s->setting_selected?SELECTED:PANEL);
         box(p,32,y,4,40,i==s->setting_selected?CYAN:EDGE);
@@ -530,9 +532,17 @@ static void ripper_settings(struct paint *p, const struct kui_shell *s,
         first="CRC32 is the faster capture option.";
         second="SHA-256 jobs always get a full readback.";
     } else if(s->setting_selected==1) {
-        first="Full readback checks every saved byte; it takes time.";
-        second="With it off, use Verify later or check on a PC.";
-    } else {first="";second="";}
+        first=s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?
+            "Compressed exports require a full raw readback.":"Full readback checks every saved byte; it takes time.";
+        second=s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?
+            "Raw files are verified before the export starts.":"With it off, use Verify later or check on a PC.";
+    } else {
+        first=s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?"Verify raw rip, then create the compressed export.":
+            "Both keep raw tracks; only the descriptor changes.";
+        second=s->draft.capture_format==KUI_CAPTURE_FORMAT_CHD?"CHD includes captured data and audio tracks.":
+            s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?"CSO/ZSO store data; raw audio tracks are kept.":
+            "Resume keeps the format chosen for that job.";
+    }
     label(p,40,330,MUTED,first); label(p,40,350,MUTED,second);
     bool dirty=kui_shell_settings_dirty(s);
     const char *notice=v->settings_notice && v->settings_notice[0]?v->settings_notice:NULL;
@@ -1197,8 +1207,8 @@ static const char *entry_text(const struct kui_games_entry *e) {
 }
 static const uint16_t *entry_cover(const struct kui_shell *s,const struct kui_shell_view *v,unsigned i) {
     const struct kui_games_page *l=&s->games_listing;
-    return v->game_covers && i<l->count && l->entries[i].cover && l->view==kui_shell_games_view(s)?
-        v->game_covers[i]:NULL;
+    if(i!=s->games_selected || i>=l->count || !l->entries[i].cover || l->view!=kui_shell_games_view(s)) return NULL;
+    return v->game_selected_cover?v->game_selected_cover:v->game_covers?v->game_covers[i]:NULL;
 }
 static void entry_art(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v,
         unsigned i,unsigned x,unsigned y,unsigned edge) {
@@ -1263,7 +1273,7 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
         if(pixels) cover_image(p,436,146,KUI_COVER_LARGE,pixels);
         else placeholder(p,436,146,KUI_COVER_LARGE,e->directory);
         centred(p,436,316,KUI_COVER_LARGE,MUTED,e->directory?"Folder":pixels?(strcmp(entry_text(e),e->name)?e->name:""):
-            l->artwork?"No box art found":"No box art yet");
+            s->games_art_loading?"Loading box art...":l->artwork?"No box art found":"No box art yet");
     }
     if(!count && !v->busy) label(p,40,210,MUTED,"No selectable disc images or folders in this view.");
     label(p,40,398,v->busy?CYAN:AMBER,!v->busy && count && l->entries[chosen].variant_2048_path[0]?

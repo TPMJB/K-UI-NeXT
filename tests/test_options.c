@@ -189,6 +189,18 @@ int main(int argc, char **argv) {
     o = d; assert(parse(&o, "ui_hz=full") && o.ui_hz[0] == KUI_OPT_UI_FULL);
 
     /* --- capture engine keys ------------------------------------------------ */
+    o = d; assert(d.capture_format==KUI_CAPTURE_FORMAT_GDI);
+    assert(parse(&o,"capture_format=bin_cue") && o.capture_format==KUI_CAPTURE_FORMAT_BIN_CUE);
+    assert(parse(&o,"capture_format=gdi") && o.capture_format==KUI_CAPTURE_FORMAT_GDI);
+    assert(parse(&o,"capture_format=cso") && o.capture_format==KUI_CAPTURE_FORMAT_CSO);
+    assert(parse(&o,"capture_format=zso") && o.capture_format==KUI_CAPTURE_FORMAT_ZSO);
+    assert(parse(&o,"capture_format=chd") && o.capture_format==KUI_CAPTURE_FORMAT_CHD);
+    o = d; assert(!parse(&o,"capture_format=") && !memcmp(&o,&d,sizeof(o)));
+    o = d; assert(!parse(&o,"capture_format=unknown") && !memcmp(&o,&d,sizeof(o)));
+    o = d; assert(!parse(&o,"capture_format=bin_cue,gdi") && !memcmp(&o,&d,sizeof(o)));
+    o = d; assert(parse(&o,"capture_format=bin_cue"));
+    logged=0;transcript[0]=0;kui_options_log(&o,log_line);
+    assert(strstr(transcript,"capture_format=bin_cue"));
     o = d; assert(parse(&o, "capture_hash=both,crc32") && o.capture_hash_count == 2 &&
                   !o.capture_crc_only[0] && o.capture_crc_only[1]);
     o = d; assert(parse(&o, "capture_hash = crc32") && o.capture_hash_count == 1 && o.capture_crc_only[0]);

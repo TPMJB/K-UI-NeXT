@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/capture.h"
+#include "kui/game_image.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -20,6 +21,22 @@ static uint32_t edc_reference(const uint8_t *p,size_t n) {
 }
 static void put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(n>>(i*8));}
 static void seal(uint8_t *record) {put32(record+4092,kui_crc32(0,record,4092));}
+static struct {const struct kui_capture_plan *plan;const char *cue;size_t size;} cue_fixture;
+static enum kui_game_result cue_stat(void *ctx,const char *name,uint64_t *bytes) {
+    (void)ctx;
+    if(!strcmp(name,"disc.cue")) {*bytes=cue_fixture.size;return KUI_GAME_OK;}
+    for(unsigned i=0;i<cue_fixture.plan->count;i++) {
+        char expected[32];const struct kui_capture_track *t=&cue_fixture.plan->tracks[i];
+        snprintf(expected,sizeof(expected),"track%02u.%s",i+1u,t->control==4u?"bin":"raw");
+        if(!strcmp(name,expected)) {*bytes=(uint64_t)(t->end-t->start)*2352u;return KUI_GAME_OK;}
+    }
+    return KUI_GAME_NOT_FOUND;
+}
+static enum kui_game_result cue_read(void *ctx,const char *name,uint64_t offset,void *out,size_t size) {
+    (void)ctx;
+    if(strcmp(name,"disc.cue") || offset>cue_fixture.size || size>cue_fixture.size-offset) return KUI_GAME_RANGE;
+    memcpy(out,cue_fixture.cue+(size_t)offset,size);return KUI_GAME_OK;
+}
 int main(void) {
     digest("",0,1,"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     digest("abc",3,1,"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
@@ -62,11 +79,43 @@ int main(void) {
     kui_checkpoint_encode(&a,record);
     assert(kui_checkpoint_decode(record,&plan,a.identity,&b) && !b.crc_only && b.track[0].sha256[0]==2);
     kui_checkpoint_encode(&c,record);record[96+8]=1;seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
-    kui_checkpoint_encode(&c,record);put32(record+76,2);seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
-    kui_checkpoint_encode(&c,record);put32(record+76,3);seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
+    kui_checkpoint_encode(&c,record);put32(record+76,10);seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
+    kui_checkpoint_encode(&c,record);put32(record+76,16);seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
     kui_checkpoint_encode(&c,record);record[80]=1;seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
     kui_checkpoint_encode(&a,record);put32(record+76,1);seal(record);   /* SHA present but flagged CRC-only */
     assert(!kui_checkpoint_decode(record,&plan,a.identity,&b));
+    c.format=KUI_CAPTURE_FORMAT_BIN_CUE;c.track[0].sector_mode=2u;
+    kui_checkpoint_encode(&c,record);
+    assert(kui_checkpoint_decode(record,&plan,c.identity,&b) && b.format==KUI_CAPTURE_FORMAT_BIN_CUE &&
+           b.track[0].sector_mode==2u && b.track[1].sector_mode==0u);
+    record[80]|=2u;seal(record);assert(!kui_checkpoint_decode(record,&plan,c.identity,&b)); /* Audio mode bit. */
+    kui_checkpoint_encode(&c,record);record[80]|=4u;seal(record);
+    assert(!kui_checkpoint_decode(record,&plan,c.identity,&b)); /* Unsaved data mode bit. */
+    kui_checkpoint_encode(&c,record);record[92]|=0x80u;seal(record);
+    assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
+    kui_checkpoint_encode(&c,record);record[93]=1u;seal(record);
+    assert(!kui_checkpoint_decode(record,&plan,c.identity,&b));
+    for(enum kui_capture_format format=KUI_CAPTURE_FORMAT_BIN_CUE;format<KUI_CAPTURE_FORMAT_COUNT;format++) {
+        c.format=format;kui_checkpoint_encode(&c,record);
+        assert(kui_checkpoint_decode(record,&plan,c.identity,&b) && b.format==format && b.track[0].sector_mode==2u);
+    }
+    uint8_t modes[99]={1u,0u,2u,0u,0u,1u};char cue[16384];size_t cue_size=0;
+    assert(kui_capture_cue_encode(&plan,modes,cue,sizeof(cue),&cue_size) && cue_size==strlen(cue));
+    assert(strstr(cue,"REM SINGLE-DENSITY AREA\nFILE \"track01.bin\" BINARY\n  TRACK 01 MODE1/2352\n"));
+    assert(strstr(cue,"REM HIGH-DENSITY AREA\nFILE \"track03.bin\" BINARY\n  TRACK 03 MODE2/2352\n"));
+    unsigned gaps=0;for(const char *at=cue;(at=strstr(at,"PREGAP 00:02:00"));at++) ++gaps;
+    assert(gaps==3u && !strstr(cue,"INDEX 00"));
+    cue_fixture.plan=&plan;cue_fixture.cue=cue;cue_fixture.size=cue_size;
+    const struct kui_game_file_ops cue_ops={NULL,cue_stat,cue_read};struct kui_game_image cue_image;
+    assert(kui_game_image_open_named("disc.cue",&cue_ops,&cue_image)==KUI_GAME_OK);
+    assert(!cue_image.cd_image && cue_image.data_lba==45000u && cue_image.count==plan.count);
+    for(unsigned i=0;i<plan.count;i++) {
+        assert(cue_image.tracks[i].start_lba==plan.tracks[i].start-150u &&
+               cue_image.tracks[i].end_lba==plan.tracks[i].end-150u && !cue_image.tracks[i].file_offset &&
+               cue_image.tracks[i].sector_mode==modes[i]);
+    }
+    assert(!kui_capture_cue_encode(&plan,modes,cue,32u,&cue_size));
+    modes[2]=0u;assert(!kui_capture_cue_encode(&plan,modes,cue,sizeof(cue),&cue_size));
     /* --- kui_bench_fad_note: is the bench measuring what was asked for? ----------- */
     {
         struct kui_toc s2[2];

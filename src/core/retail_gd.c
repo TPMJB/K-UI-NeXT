@@ -155,7 +155,9 @@ static uint32_t step_count(const struct kui_retail_gd *s, uint32_t remaining) {
     return remaining > step ? step : remaining;
 }
 static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) {
-    if(s->pending) return 0;
+    /* A completed or failed command owns its handle until CHECK acknowledges
+     * it too; accepting another request would discard that terminal result. */
+    if(s->command) return 0;
     uint32_t nparams = 0, p[4] = {0}, bytes = 0, destination = 0, lba = 0;
 #ifdef KUI_RETAIL_CE
     const int stream = cmd == KUI_RETAIL_GD_DMAREAD_STREAM || cmd == KUI_RETAIL_GD_PIOREAD_STREAM;
@@ -391,9 +393,13 @@ static int32_t execute(struct kui_retail_gd *s) {
             else if(s->command == KUI_RETAIL_GD_GET_VERS)
                 memcpy(out, "GDC Version 1.10 1999-03-31\002", 28);
             else toc(s, out);
-            s->completed_bytes = s->command == KUI_RETAIL_GD_GET_VERS ? 0 : s->request_bytes;
+            s->completed_bytes = s->command == KUI_RETAIL_GD_GET_VERS ? 0 :
+                s->command == KUI_RETAIL_GD_REQ_MODE ? 10u : s->request_bytes;
         }
-    } else if(s->command == KUI_RETAIL_GD_SET_MODE) memcpy(s->mode, s->outputs, sizeof(s->mode));
+    } else if(s->command == KUI_RETAIL_GD_SET_MODE) {
+        memcpy(s->mode, s->outputs, sizeof(s->mode));
+        s->completed_bytes = 10u; /* GD wire transfer, independent of four RAM words. */
+    }
     else if(s->command == KUI_RETAIL_GD_SEEK) { s->position_lba = s->lba; s->drive_status = 1; }
     else if(s->command == KUI_GD_STOP) s->drive_status = 2;
     else if(s->command == KUI_GD_COMMAND_INIT) {
@@ -409,7 +415,12 @@ static int32_t check(struct kui_retail_gd *s, uint32_t token, uint32_t address) 
     uint8_t *out = guest(s, address, 16, 4, 1);
     if(!out) return KUI_GD_FAILED;
     if(!token || token != s->token || !s->command) {
-        memset(out, 0, 16); return KUI_GD_NOT_FOUND;
+        memset(out, 0, 16);
+        if(!token || token != s->token) {
+            put32(out, 5u); /* BIOS illegal-request error; never consume the valid handle. */
+            return KUI_GD_FAILED;
+        }
+        return KUI_GD_NOT_FOUND;
     }
     put32(out, s->error ? 1u : 0u); put32(out + 4, s->error);
 #ifdef KUI_RETAIL_CE

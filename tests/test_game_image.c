@@ -680,7 +680,37 @@ static void cdi_sector_codes_and_pregap(void) {
     }
 }
 
+static void discovery_layout(void) {
+    struct kui_game_image image;
+    memset(&image,0xa5,sizeof(image));
+    CHECK(kui_game_gdi_layout(descriptor,sizeof(descriptor)-1u,&image)==KUI_GAME_OK);
+    CHECK(image.count==4u && !image.files.stat && !image.files.read && !image.files.ctx);
+    CHECK(image.tracks[2].start_lba==45000u && image.tracks[2].control==4u &&
+        image.tracks[2].sector_bytes==2352u && image.tracks[2].data_offset==16u);
+    CHECK(!strcmp(image.tracks[2].name,"Track 03.bin"));
+    for(unsigned i=0;i<image.count;++i)
+        CHECK(image.tracks[i].end_lba==0u && image.tracks[i].file_bytes==0u);
+    /* Discovery can pair descriptors before touching potentially large or
+     * absent backing tracks. File existence/length belongs to inspection. */
+    const char cooked[]="1\n1 45000 4 2048 missing.iso 512\n";
+    CHECK(kui_game_gdi_layout(cooked,sizeof(cooked)-1u,&image)==KUI_GAME_OK);
+    CHECK(image.tracks[0].sector_bytes==2048u && image.tracks[0].file_offset==512u);
+    const char *bad[]={"1\n2 0 4 2352 track.bin 0\n", "1\n1 0 4 2352 ../track.bin 0\n",
+        "1\n1 0 4 2352 track.bin 0 junk\n", "2\n1 0 4 2352 track.bin 0\n"};
+    for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);++i) {
+        memset(&image,0xa5,sizeof(image));
+        CHECK(kui_game_gdi_layout(bad[i],strlen(bad[i]),&image)!=KUI_GAME_OK);
+        CHECK(all_is(&image,sizeof(image),0xa5));
+    }
+    memset(&image,0xa5,sizeof(image));
+    CHECK(kui_game_gdi_layout(NULL,1u,&image)==KUI_GAME_INVALID);
+    CHECK(kui_game_gdi_layout(descriptor,0u,&image)==KUI_GAME_INVALID);
+    CHECK(kui_game_gdi_layout(descriptor,KUI_GAME_GDI_LIMIT+1u,&image)==KUI_GAME_INVALID);
+    CHECK(kui_game_gdi_layout(descriptor,sizeof(descriptor)-1u,NULL)==KUI_GAME_INVALID);
+    CHECK(all_is(&image,sizeof(image),0xa5));
+}
 int main(void) {
+    discovery_layout();
     happy_paths();
     preflight();
     syntax();

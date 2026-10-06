@@ -29,16 +29,18 @@ CASES += ("variant-chain", "variant-index-overflow", "variant-pair-read-once",
 CASES += ("variant-stat-sfn", "variant-stat-case", "variant-case", "variant-descriptor-name",
           "variant-mixed-original", "variant-all-cooked-original", "variant-many-tracks",
           "variant-nested", "variant-cache-navigation", "variant-cache-refresh",
-          "variant-cache-root-change", "variant-cache-callback", "variant-cache-dir-read-once",
+          "variant-cache-root-change", "variant-cache-root-lru", "variant-cache-callback", "variant-cache-dir-read-once",
           "variant-cache-dir-close-once", "variant-cache-cancel-lazy")
 CASES += ("variant-unicode-case", "variant-unicode-exact", "variant-sfn-alias",
           "variant-cache-pair-read-once", "variant-cache-pair-close-once",
           "variant-cache-index-read-once", "variant-list-cache-overflow",
           "variant-cache-callback-cancel")
-CASES += ("format-root-extensions", "format-gdi-payload", "format-cue-listing",
+CASES += ("format-root-extensions", "format-gdi-payload", "format-capture-payload", "format-capture-malformed", "format-cue-listing",
           "format-folder-cue", "format-folder-iso", "format-folder-ambiguous",
           "format-inspect-iso", "format-inspect-bin", "format-inspect-mode2",
           "format-cue-shared", "format-compressed", "format-inspect-cdi", "format-inspect-cdi-invalid", "format-bad-boot")
+CASES += ("format-capture-zso", "format-capture-chd", "format-capture-gdi",
+          "format-capture-gdi-malformed", "format-capture-unrelated-bin")
 
 
 def digest(path):

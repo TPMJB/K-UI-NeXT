@@ -480,13 +480,12 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) return 0;
-    uint32_t pending = service.pending;
     kui_retail_async_call(r7);
     int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
     kui_retail_async_after(r7, result);
     if(service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", r7);
-    if(r7 == KUI_GD_REQUEST && !pending && result == 0)
+    if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
         report_fault("GD REQUEST REJECTED", r7);
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
@@ -585,7 +584,7 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
     int32_t result = r7 == KUI_GD_EXEC ? step(r4, r5) :
         kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
-    if(r7 == KUI_GD_REQUEST && !pending && result == 0)
+    if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
         report_fault("GD REQUEST REJECTED", r7);
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))

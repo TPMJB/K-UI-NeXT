@@ -55,19 +55,49 @@ static bool split_file(const char *path,char root[KUI_DEST_ROOT_CAP],char name[K
 }
 #define VARIANT_LIMIT 512u
 #define LIST_CACHE_LIMIT 1024u
+#define CATALOG_ROOTS 4u
+#define CATALOG_ENTRIES 2048u
 struct cached_entry {
     char name[KUI_DEST_NAME_CAP],gdi[KUI_DEST_NAME_CAP];
     char cooked[KUI_DEST_NAME_CAP],cooked_gdi[KUI_DEST_NAME_CAP];
     bool folder,resolved,disabled;
 };
-static struct {
+struct catalogue {
     struct cached_entry *entries;
-    unsigned count;
+    unsigned count,capacity,used;
     bool valid;
     char root[KUI_DEST_ROOT_CAP],diagnostic_root[KUI_DEST_ROOT_CAP];
-} listing_cache;
+};
+static struct catalogue catalogues[CATALOG_ROOTS];
+static unsigned catalogue_active,catalogue_clock;
+#define listing_cache catalogues[catalogue_active]
 void kui_games_cache_clear(void) {
-    free(listing_cache.entries);memset(&listing_cache,0,sizeof(listing_cache));
+    for(unsigned i=0;i<CATALOG_ROOTS;i++) free(catalogues[i].entries);
+    memset(catalogues,0,sizeof(catalogues));catalogue_active=catalogue_clock=0;
+}
+static void catalogue_select(const char *root) {
+    unsigned chosen=CATALOG_ROOTS;
+    for(unsigned i=0;i<CATALOG_ROOTS;i++) if(!strcmp(catalogues[i].root,root)) {chosen=i;break;}
+    if(chosen==CATALOG_ROOTS) {
+        for(unsigned i=0;i<CATALOG_ROOTS;i++) if(!catalogues[i].root[0]) {chosen=i;break;}
+        if(chosen==CATALOG_ROOTS) {
+            chosen=0;for(unsigned i=1;i<CATALOG_ROOTS;i++) if(catalogues[i].used<catalogues[chosen].used) chosen=i;
+        }
+        free(catalogues[chosen].entries);memset(&catalogues[chosen],0,sizeof(catalogues[chosen]));
+        strcpy(catalogues[chosen].root,root);
+    }
+    catalogue_active=chosen;listing_cache.used=++catalogue_clock;
+}
+static void catalogue_room(unsigned capacity) {
+    for(;;) {
+        unsigned total=capacity,oldest=CATALOG_ROOTS;
+        for(unsigned i=0;i<CATALOG_ROOTS;i++) if(i!=catalogue_active) {
+            total+=catalogues[i].capacity;
+            if(catalogues[i].capacity && (oldest==CATALOG_ROOTS || catalogues[i].used<catalogues[oldest].used)) oldest=i;
+        }
+        if(total<=CATALOG_ENTRIES || oldest==CATALOG_ROOTS) return;
+        free(catalogues[oldest].entries);memset(&catalogues[oldest],0,sizeof(catalogues[oldest]));
+    }
 }
 static bool same_component(const char *a,const char *b) {
     while(*a && *b) {
@@ -83,13 +113,15 @@ static bool same_component(const char *a,const char *b) {
 struct selector_index {
     char names[SELECTOR_PAYLOADS][KUI_DEST_NAME_CAP];
     unsigned count;
-    bool cue,retry;
+    bool cue,retry,manifest,capture;
 };
 struct descriptor_names {char names[SELECTOR_DESCRIPTORS][KUI_DEST_NAME_CAP];unsigned count;};
+struct selector_names {char (*names)[KUI_DEST_NAME_CAP];unsigned count,capacity;bool complete;};
 static void descriptor_payloads(const char *root,const struct descriptor_names *sources,
     struct selector_index *index,kui_cancel_fn cancel);
 static bool selected_image(const char *name,const struct selector_index *index) {
     if(!image_name(name)) return false;
+    if(index->capture && (!strcmp(name,"checkpoint-a.bin") || !strcmp(name,"checkpoint-b.bin"))) return false;
     if(index->cue && (extension(name,".bin") || extension(name,".img"))) return false;
     for(unsigned i=0;i<index->count;i++) if(same_component(name,index->names[i])) return false;
     return true;
@@ -98,14 +130,30 @@ static bool selected_image(const char *name,const struct selector_index *index) 
  * tracks. Read bounded descriptors only when standalone payload types coexist.
  * A visible CUE owns BIN/IMG selection; ISO suppression needs a parsed track
  * reference. Failed directory discovery hides nothing and retries next list. */
-static bool index_selectors(DIR *dir,const char *root,unsigned budget,struct selector_index *index,kui_cancel_fn cancel) {
+static bool index_selectors(DIR *dir,const char *root,unsigned budget,struct selector_index *index,
+    struct selector_names *saved,kui_cancel_fn cancel) {
     struct descriptor_names *sources=NULL;bool complete=false,payloads=false,overflow=false;
     for(unsigned scanned=0;scanned<budget;scanned++) {
         if(stopped(cancel)) {free(sources);return false;}
         FILINFO info;FRESULT result=f_readdir(dir,&info);
         if(result!=FR_OK) {index->retry=true;break;}
         if(!info.fname[0]) {complete=true;break;}
-        if(info.fname[0]=='.' || (info.fattrib&(AM_DIR|AM_HID|AM_SYS))) continue;
+        /* The ripper's one fixed internal descriptor is payload metadata,
+         * never a selectable image. Other hidden metadata remains ignored. */
+        bool internal=!strcmp(info.fname,".capture.gdi") && !(info.fattrib&AM_DIR);
+        if((info.fname[0]=='.' && !internal) || (info.fattrib&AM_DIR) ||
+           ((info.fattrib&(AM_HID|AM_SYS)) && !internal)) continue;
+        if(!strcmp(info.fname,"manifest.json")) index->manifest=true;
+        if(saved && !internal && image_name(info.fname)) {
+            if(strlen(info.fname)>=KUI_DEST_NAME_CAP) {free(sources);return false;}
+            if(saved->count==saved->capacity) {
+                unsigned capacity=saved->capacity?saved->capacity*2u:8u;
+                char (*names)[KUI_DEST_NAME_CAP]=realloc(saved->names,capacity*sizeof(*names));
+                if(!names) {free(sources);return false;}
+                saved->names=names;saved->capacity=capacity;
+            }
+            strcpy(saved->names[saved->count++],info.fname);
+        }
         if(payload_name(info.fname)) payloads=true;
         if(!gdi_name(info.fname) && !extension(info.fname,".cue")) continue;
         if(extension(info.fname,".cue")) index->cue=true;
@@ -118,6 +166,7 @@ static bool index_selectors(DIR *dir,const char *root,unsigned budget,struct sel
     else if(payloads && sources && !overflow) descriptor_payloads(root,sources,index,cancel);
     free(sources);
     if(stopped(cancel)) return false;
+    if(saved) {saved->complete=complete;return complete;}
     return f_readdir(dir,NULL)==FR_OK;
 }
 bool kui_games_visit_images(const char *root,kui_games_image_visit_fn visit,void *ctx,kui_cancel_fn cancel) {
@@ -126,7 +175,7 @@ bool kui_games_visit_images(const char *root,kui_games_image_visit_fn visit,void
     snprintf(path,sizeof(path),"0:%s",normalized);
     DIR dir;if(f_opendir(&dir,path)!=FR_OK) return false;
     struct selector_index *index=calloc(1,sizeof(*index));bool complete=false;
-    bool ok=index && index_selectors(&dir,normalized,32768u,index,cancel) && !index->retry;
+    bool ok=index && index_selectors(&dir,normalized,32768u,index,NULL,cancel) && !index->retry;
     for(unsigned scanned=0;ok && scanned<32768u;scanned++) {
         if(stopped(cancel)) {ok=false;break;}
         FILINFO info;
@@ -234,23 +283,20 @@ static enum single_result single_image(const char *root,char selected[KUI_GAMES_
     DIR dir;char path[KUI_GAMES_FILE_CAP+3];snprintf(path,sizeof(path),"0:%s",root);
     if(f_opendir(&dir,path)!=FR_OK) return SINGLE_FAILED;
     struct selector_index *index=calloc(1,sizeof(*index));
-    unsigned matches=0;bool complete=false;
-    bool ok=index && index_selectors(&dir,root,512u,index,cancel);
-    for(unsigned i=0;ok && i<512u;i++) {
+    unsigned matches=0;struct selector_names names={0};
+    bool ok=index && index_selectors(&dir,root,512u,index,&names,cancel);
+    for(unsigned i=0;ok && i<names.count;i++) {
         if(stopped(cancel)) {ok=false;break;}
-        FILINFO info;
-        if(f_readdir(&dir,&info)!=FR_OK) {ok=false;break;}
-        if(!info.fname[0]) {complete=true;break;}
-        if(info.fname[0]=='.' || (info.fattrib&(AM_DIR|AM_HID|AM_SYS)) || !selected_image(info.fname,index)) continue;
+        if(!selected_image(names.names[i],index)) continue;
         if(++matches>1) break;
-        if(!file_join(selected,root,info.fname)) {ok=false;break;}
+        if(!file_join(selected,root,names.names[i])) {ok=false;break;}
     }
     if(index && index->retry) ok=false;
-    free(index);
+    free(index);free(names.names);
     if(f_closedir(&dir)!=FR_OK) ok=false;
     if(!ok) return SINGLE_FAILED;
     if(matches>1) return SINGLE_AMBIGUOUS;
-    if(!complete) return SINGLE_FAILED;
+    if(!names.complete) return SINGLE_FAILED;
     return matches?SINGLE_FOUND:SINGLE_NONE;
 }
 bool kui_games_single_image(const char *root,char selected[KUI_GAMES_FILE_CAP],kui_cancel_fn cancel) {
@@ -309,7 +355,7 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
         snprintf(out->message,sizeof(out->message),"Invalid Games folder/page");return false;
     }
     if(stopped(cancel)) {snprintf(out->message,sizeof(out->message),"Games browse stopped");return false;}
-    if(listing_cache.valid && strcmp(listing_cache.root,out->root)) kui_games_cache_clear();
+    catalogue_select(out->root);
     bool cached=listing_cache.valid;
     if(cached && !mounted && !cached_page_needs_io(offset)) {
         bool ok=cached_page(offset,out,cancel);
@@ -321,7 +367,7 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
     FATFS fs;DIR dir;bool opened=false,ok=false;
     struct variant *pairs=NULL;unsigned pair_count=0;
     struct selector_index *selectors=NULL;
-    struct cached_entry *draft=NULL;bool draft_enabled=true,retry=false;
+    struct cached_entry *draft=NULL;unsigned draft_capacity=0;bool draft_enabled=true,retry=false;
     bool counting=false,counted=true;unsigned listed=0;
     const char *problem="Cannot mount SD card";
     char path[KUI_DEST_ROOT_CAP+3];snprintf(path,sizeof(path),"0:%s",out->root);
@@ -339,7 +385,7 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
     opened=true;
     selectors=calloc(1,sizeof(*selectors));
     if(selectors) {
-        if(!index_selectors(&dir,out->root,32768u,selectors,cancel)) {
+        if(!index_selectors(&dir,out->root,32768u,selectors,NULL,cancel)) {
             problem=stopped(cancel)?"Games browse stopped":"Cannot read Games folder";goto done;
         }
         retry=selectors->retry;
@@ -379,7 +425,15 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
         if(draft_enabled) {
             if(listed>LIST_CACHE_LIMIT) {free(draft);draft=NULL;draft_enabled=false;}
             else {
-                if(!draft) {draft=calloc(LIST_CACHE_LIMIT,sizeof(*draft));if(!draft) draft_enabled=false;}
+                if(listed>draft_capacity) {
+                    unsigned capacity=draft_capacity?draft_capacity*2u:32u;
+                    struct cached_entry *grown=realloc(draft,capacity*sizeof(*draft));
+                    if(!grown) {free(draft);draft=NULL;draft_enabled=false;}
+                    else {
+                        memset(grown+draft_capacity,0,(capacity-draft_capacity)*sizeof(*draft));
+                        draft=grown;draft_capacity=capacity;
+                    }
+                }
                 if(draft) {
                     saved=&draft[listed-1u];saved->folder=directory;
                     saved->disabled=strlen(info.fname)>=sizeof(saved->name);
@@ -436,8 +490,9 @@ done:
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="Cannot release SD filesystem";}
     kui_sd_disconnect();
     if(ok && !cached && counted && draft_enabled && !retry) {
+        catalogue_room(draft_capacity);
         listing_cache.entries=draft;draft=NULL;listing_cache.count=listed;
-        strcpy(listing_cache.root,out->root);listing_cache.valid=true;
+        listing_cache.capacity=draft_capacity;listing_cache.valid=true;
     }
     free(draft);
     if(!ok && !stopped(cancel)) kui_games_cache_clear();
@@ -508,32 +563,67 @@ static enum kui_game_result read_layout(const char *path,struct kui_game_image *
     if(!bytes || bytes>KUI_GAME_GDI_LIMIT) return KUI_GAME_FILE_SIZE;
     uint8_t *descriptor=malloc((size_t)bytes);
     if(!descriptor) {*retry=true;return KUI_GAME_INVALID;}
-    struct kui_game_file_ops ops={files,image_stat,image_read};
     result=image_read(files,name,0,descriptor,(size_t)bytes);
-    if(result==KUI_GAME_OK) result=kui_game_image_open(descriptor,(size_t)bytes,&ops,image);
+    if(result==KUI_GAME_OK) result=kui_game_gdi_layout(descriptor,(size_t)bytes,image);
     free(descriptor);return result;
+}
+static bool add_payload(struct selector_index *index,const char *name) {
+    if(!payload_name(name)) return true;
+    for(unsigned i=0;i<index->count;i++) if(same_component(name,index->names[i])) return true;
+    if(index->count==SELECTOR_PAYLOADS) {index->count=0;index->cue=index->capture=false;return false;}
+    strcpy(index->names[index->count++],name);return true;
+}
+static bool cue_payloads(const uint8_t *data,size_t bytes,struct selector_index *index) {
+    size_t at=0;
+    while(at<bytes) {
+        size_t end=at;while(end<bytes && data[end]!='\n') ++end;
+        size_t p=at;while(p<end && (data[p]==' ' || data[p]=='\t')) ++p;
+        if(end-p>4u && (data[p]|32)=='f' && (data[p+1]|32)=='i' &&
+           (data[p+2]|32)=='l' && (data[p+3]|32)=='e' && (data[p+4]==' ' || data[p+4]=='\t')) {
+            p+=4;while(p<end && (data[p]==' ' || data[p]=='\t')) ++p;
+            bool quoted=p<end && data[p]=='"';if(quoted) ++p;
+            char name[KUI_GAME_NAME_CAP];size_t n=0;
+            while(p<end && (quoted?data[p]!='"':data[p]!=' ' && data[p]!='\t' && data[p]!='\r')) {
+                if(n+1u==sizeof(name)) break;
+                name[n++]=(char)data[p++];
+            }
+            name[n]=0;
+            bool finished=quoted?p<end && data[p++]=='"':p==end || data[p]==' ' || data[p]=='\t' || data[p]=='\r';
+            while(p<end && (data[p]==' ' || data[p]=='\t')) ++p;
+            bool binary=end-p>=6u && (data[p]|32)=='b' && (data[p+1]|32)=='i' &&
+                (data[p+2]|32)=='n' && (data[p+3]|32)=='a' && (data[p+4]|32)=='r' && (data[p+5]|32)=='y' &&
+                (end-p==6u || data[p+6]==' ' || data[p+6]=='\t' || data[p+6]=='\r');
+            if(finished && binary && kui_destination_name_valid(name) && !add_payload(index,name)) return false;
+        }
+        at=end==bytes?bytes:end+1u;
+    }
+    return true;
 }
 static void descriptor_payloads(const char *root,const struct descriptor_names *sources,
     struct selector_index *index,kui_cancel_fn cancel) {
     struct kui_game_image *image=malloc(sizeof(*image));
     if(!image) {index->cue=false;index->retry=true;return;}
     struct image_files files={.cancel=cancel};strcpy(files.root,root);
-    struct kui_game_file_ops ops={&files,image_stat,image_read};
     for(unsigned source=0;source<sources->count;source++) {
-        enum kui_game_result result=kui_game_image_open_named(sources->names[source],&ops,image);
-        if(result==KUI_GAME_IO || result==KUI_GAME_CANCELLED) {
-            index->count=0;index->cue=false;index->retry=true;break;
+        const char *name=sources->names[source];uint64_t bytes=0;
+        enum kui_game_result result=image_stat(&files,name,&bytes);
+        uint8_t *descriptor=NULL;
+        if(result==KUI_GAME_OK && (!bytes || bytes>KUI_GAME_GDI_LIMIT)) result=KUI_GAME_FILE_SIZE;
+        if(result==KUI_GAME_OK && !(descriptor=malloc((size_t)bytes))) result=KUI_GAME_IO;
+        if(result==KUI_GAME_OK) result=image_read(&files,name,0,descriptor,(size_t)bytes);
+        if(result==KUI_GAME_OK && gdi_name(name)) result=kui_game_gdi_layout(descriptor,(size_t)bytes,image);
+        bool complete=true;
+        if(result==KUI_GAME_OK) {
+            if(gdi_name(name)) {
+                if(index->manifest || !strcmp(name,".capture.gdi")) index->capture=true;
+                for(unsigned track=0;track<image->count && complete;track++) complete=add_payload(index,image->tracks[track].name);
+            } else complete=cue_payloads(descriptor,(size_t)bytes,index);
         }
-        if(result!=KUI_GAME_OK) continue;
-        for(unsigned track=0;track<image->count;track++) {
-            const char *name=image->tracks[track].name;
-            if(!payload_name(name)) continue;
-            bool found=false;
-            for(unsigned i=0;i<index->count;i++) if(same_component(name,index->names[i])) {found=true;break;}
-            if(found) continue;
-            if(index->count==SELECTOR_PAYLOADS) {index->count=0;index->cue=false;free(image);return;}
-            strcpy(index->names[index->count++],name);
+        free(descriptor);
+        if(result==KUI_GAME_IO || result==KUI_GAME_CANCELLED || result==KUI_GAME_NOT_FOUND) {
+            index->count=0;index->cue=index->capture=false;index->retry=true;break;
         }
+        if(!complete) break;
     }
     free(image);
 }
@@ -571,7 +661,7 @@ static bool variant_pair(const char *root,struct variant *pair,kui_cancel_fn can
     bool data=false;
     for(unsigned i=0;ok && i<images[0].count;i++) {
         const struct kui_game_image_track *a=&images[0].tracks[i],*b=&images[1].tracks[i];
-        if(a->start_lba!=b->start_lba || a->end_lba!=b->end_lba) {ok=false;*reason="track LBA/sector counts differ";}
+        if(a->number!=b->number || a->start_lba!=b->start_lba) {ok=false;*reason="track numbers/LBAs differ";}
         else if(a->control!=b->control) {ok=false;*reason="track data/audio types differ";}
         if(b->control==4) {
             data=true;

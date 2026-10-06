@@ -9,7 +9,10 @@ LOADER_PROBE = src/core/loader_probe.c
 RESIDENT_IMAGE = src/core/resident_image.c
 GD_SERVICE = src/core/gd_service.c
 DESTINATION = src/core/destination.c src/core/destination_file.c
-CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c
+EXPORT_CODEC_FLAGS = -Ithird_party/miniz -Ithird_party/minilzo -DMINIZ_NO_ARCHIVE_APIS -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_APIS -DMINIZ_NO_MALLOC -DLZO_CFG_NO_UNALIGNED=1
+EXPORT_CODECS = third_party/miniz/miniz.c third_party/minilzo/minilzo.c
+CAPTURE_EXPORT = src/core/capture_export.c src/core/capture_export_file.c src/core/capture_chd.c $(EXPORT_CODECS)
+CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c $(CAPTURE_EXPORT)
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 include config/lwext4.mk
@@ -17,6 +20,7 @@ LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
 
 .PHONY: test test-recovery test-images deps diagnostic clean
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
+test: build/test-capture-export
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
 test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cleanup
@@ -115,6 +119,7 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-shell-font
 	./build/test-capture-adapter
 	./build/test-capture-core
+	./build/test-capture-export
 	./build/test-timing
 	./build/test-disc
 	./build/test-disc abort-fail
@@ -314,9 +319,13 @@ build/test-recovery-manifest: tests/test_recovery_manifest.c src/core/recovery_m
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/recovery_manifest.c tests/test_recovery_manifest.c -o $@
 
-build/test-capture-core: tests/test_capture_core.c src/core/hash.c src/core/capture_plan.c src/core/data.c include/kui/hash.h include/kui/capture.h
+build/test-capture-core: tests/test_capture_core.c src/core/hash.c src/core/capture_plan.c src/core/data.c src/core/game_image.c include/kui/game_image.h include/kui/hash.h include/kui/capture.h
 	@mkdir -p build
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/hash.c src/core/capture_plan.c tests/test_capture_core.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/hash.c src/core/capture_plan.c src/core/game_image.c tests/test_capture_core.c -o $@
+
+build/test-capture-export: tests/test_capture_export.c src/core/capture_export.c src/core/capture_chd.c src/core/hash.c src/core/data.c $(EXPORT_CODECS) include/kui/capture_export.h src/core/capture_export_internal.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(EXPORT_CODEC_FLAGS) src/core/data.c src/core/hash.c src/core/capture_export.c src/core/capture_chd.c $(EXPORT_CODECS) tests/test_capture_export.c -o $@
 
 build/test-options: tests/test_options.c src/core/options.c include/kui/options.h .deps/fatfs/source/ff.h
 	@mkdir -p build
@@ -364,7 +373,7 @@ build/test-disc: tests/test_disc.c src/dreamcast/disc.c src/dreamcast/platform.h
 
 build/capture-image: tests/capture_image.c $(CORE) $(CAPTURE) src/core/storage_probe.c $(FATFS) include/kui/capture.h include/kui/timing.h
 	@mkdir -p build
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(CAPTURE) src/core/storage_probe.c $(FATFS) tests/capture_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(EXPORT_CODEC_FLAGS) $(CORE) $(CAPTURE) src/core/storage_probe.c $(FATFS) tests/capture_image.c -o $@
 
 build/storage-image: tests/storage_image.c $(CORE) src/core/storage_probe.c $(FATFS) include/kui/probe.h
 	@mkdir -p build
@@ -376,7 +385,7 @@ build/runtime-image: tests/runtime_image.c $(CORE) src/core/storage_probe.c src/
 
 build/bench-image: tests/bench_image.c $(CORE) $(CAPTURE) src/core/crc16.c src/core/options.c src/core/bench.c src/core/storage_probe.c $(FATFS) include/kui/bench.h include/kui/options.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(CAPTURE) src/core/crc16.c src/core/options.c src/core/bench.c src/core/storage_probe.c $(FATFS) tests/bench_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(EXPORT_CODEC_FLAGS) $(CORE) $(CAPTURE) src/core/crc16.c src/core/options.c src/core/bench.c src/core/storage_probe.c $(FATFS) tests/bench_image.c -o $@
 
 build/report-image: tests/report_image.c $(CORE) src/core/storage_probe.c src/core/report.c $(FATFS) include/kui/report.h
 	@mkdir -p $(@D)
@@ -415,6 +424,8 @@ test-images: build/storage-test-image build/storage-test-store-image build/ftp-i
 	python3 tests/test_images.py
 	python3 tests/test_runtime_images.py
 	python3 tests/test_capture_images.py
+	python3 tests/test_capture_cue_images.py
+	python3 tests/test_capture_compressed_images.py
 	python3 tests/test_report_images.py
 	python3 tests/test_bench_images.py
 	python3 tests/test_known_images.py

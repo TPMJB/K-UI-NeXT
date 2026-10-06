@@ -134,6 +134,7 @@ bool kui_options_refresh(void) {
             if(ok) {
                 kui_options.capture_crc_only[0] = settings.crc_only;
                 kui_options.end_readback[0] = settings.end_readback;
+                kui_options.capture_format = settings.capture_format;
                 kui_log("Settings: capture_hash=%s end_readback=%s memory=%s",
                     settings.crc_only ? "crc32" : "both", settings.end_readback ? "on" : "off",
                     settings.show_memory ? "on" : "off");

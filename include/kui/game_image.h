@@ -70,6 +70,11 @@ enum kui_game_sector_format { KUI_GAME_SECTOR_RAW, KUI_GAME_SECTOR_MODE1 };
  * failure. GDI is a bounded byte span and need not be NUL-terminated. */
 enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
     const struct kui_game_file_ops *files, struct kui_game_image *out);
+/* Descriptor relationship only: numbers/LBAs/control/stride/names/offsets.
+ * No backing-file callbacks or content validation. end_lba/file_bytes remain
+ * unset; this result is for discovery and cannot be used as an opened image.
+ * Output is unchanged on error. */
+enum kui_game_result kui_game_gdi_layout(const void *gdi,size_t size,struct kui_game_image *out);
 
 /* Open a named GDI/CUE descriptor, ISO, raw BIN/IMG, or DiscJuggler CDI.
  * Descriptor reads are bounded by KUI_GAME_GDI_LIMIT; CDI uses bounded random

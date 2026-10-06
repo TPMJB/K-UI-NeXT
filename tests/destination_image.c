@@ -23,7 +23,7 @@ static const char *slots[] = {KUI_DEST_PATH_A, KUI_DEST_PATH_B};
 static const char *kept[] = {"0:/KUI/dumps/keep/track03.bin", "0:/KUI/dumps/keep/checkpoint-a.bin"};
 static const char sentinel[] = "Existing capture/checkpoint must remain unchanged.\n";
 static const char *previous = "/Saved/Games", *changed = "/New/Collection", *third = "/保存/ゲーム";
-static const struct kui_settings settings[] = {{false, true, false}, {true, false, true}};
+static const struct kui_settings settings[] = {{false, true, false,KUI_CAPTURE_FORMAT_GDI}, {true, false, true,KUI_CAPTURE_FORMAT_GDI}};
 
 static bool fault(const char *name) { return test.fault && !strcmp(test.fault, name); }
 static void log_line(const char *format, ...) {

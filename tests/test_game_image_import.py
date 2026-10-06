@@ -68,6 +68,8 @@ def chd(*, version=5, tag=b"CHGD", subtype=b"NONE", logical=19584, cycle=False):
     struct.pack_into(">Q", header, 48 if version == 5 else 36, length)
     struct.pack_into(">I", header, {3: 76, 4: 44, 5: 56}[version], 19584)
     payload = b"TRACK:1 TYPE:MODE1_RAW SUBTYPE:" + subtype + b" FRAMES:1\0"
+    if tag in (b"CHGD", b"CHGT"):
+        payload = payload[:-1] + b" PAD:0 PREGAP:0 PGTYPE:MODE1 PGSUB:NONE POSTGAP:0\0"
     return header + struct.pack(">4sIQ", tag, len(payload), length if cycle else 0) + payload
 
 
@@ -105,8 +107,8 @@ if args[0] == {fail!r}:
 if args[0] == "extractcd":
     output = Path(args[args.index("-o") + 1])
     name = "../outside.bin" if {unsafe!r} else "track01.bin"
-    if {gdrom!r}:
-        output.write_text('1\\n1 45000 4 2352 "' + name + '" 0\\n')
+    if {gdrom!r} and output.suffix == ".gdi":
+        output.write_text('1\\n1 0 4 2352 "' + name + '" 0\\n')
     else:
         output.write_text('REM SESSION 01\\nFILE "' + name + '" BINARY\\n'
                           '  TRACK 01 MODE1/2352\\n    INDEX 01 00:00:00\\n')
@@ -338,7 +340,7 @@ print("synthetic chdman completed")
         self.assertEqual(list(self.output.iterdir()), [])
         self.assertEqual(list(self.root.glob(".*.staging-*")), [])
 
-    def test_chd_versions_verify_before_extract_to_gdi_and_hash_outputs(self):
+    def test_chd_gd_versions_keep_gdi_addresses_and_hash_normalized_outputs(self):
         executable = self.fake_chdman()
         for version in (3, 4, 5):
             with self.subTest(version=version):
@@ -346,6 +348,7 @@ print("synthetic chdman completed")
                 original = self.source.read_bytes()
                 report = importer.import_image(self.source, self.output, chdman=executable)
                 self.assertEqual(report["launch_file"], "disc.gdi")
+                self.assertTrue(report["image"]["gd_geometry_verified"])
                 self.assertTrue(report["image"]["chdman_verified"])
                 self.assertEqual(report["image"]["version"], version)
                 self.assertEqual(self.source.read_bytes(), original)
@@ -355,7 +358,9 @@ print("synthetic chdman completed")
                     self.assertEqual(record["sha256"], hashlib.sha256(data).hexdigest())
                 calls = [json.loads(line) for line in self.calls.read_text().splitlines()]
                 self.assertEqual([call[0] for call in calls[-2:]], ["verify", "extractcd"])
-                self.assertIn("-sb", calls[-1])
+                self.assertNotIn("-sb", calls[-1])
+                self.assertEqual(Path(calls[-1][calls[-1].index("-o") + 1]).suffix,
+                                 ".gdi")
                 self.assertNotIn("--fix", calls[-2])
                 shutil.rmtree(self.output)
 
