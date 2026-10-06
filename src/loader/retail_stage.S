@@ -324,6 +324,129 @@ C(kui_retail_game_resume):
 /* Owner bootstrap2 calls the uncached executable alias. Resume that same
  * alias while the original entry performs its own cache setup. */
 .Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
+
+#if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
+/* The RAM-only 12-byte checkpoint stub has already saved original R0.
+ * No owner instruction is copied into this image. Each wrapper saves the
+ * remaining relay frame before assigning a checkpoint number. */
+    .macro STARTUP_TRACE_ENTRY name,point
+    .align 2
+    .global C(\name)
+C(\name):
+    mov.l r1,@-r15
+    mov.l r2,@-r15
+    mov.l r3,@-r15
+    mov.l r4,@-r15
+    mov.l r5,@-r15
+    mov.l r6,@-r15
+    mov.l r7,@-r15
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    mov.l r10,@-r15
+    mov.l r11,@-r15
+    mov.l r12,@-r15
+    mov.l r13,@-r15
+    mov.l r14,@-r15
+    sts.l pr,@-r15
+    stc.l sr,@-r15
+    stc.l vbr,@-r15
+    stc.l gbr,@-r15
+    sts.l mach,@-r15
+    sts.l macl,@-r15
+    mov #\point,r10
+    bra .Lstartup_trace_saved
+    nop
+    .endm
+    STARTUP_TRACE_ENTRY kui_retail_startup_trace_scan,0
+    STARTUP_TRACE_ENTRY kui_retail_startup_trace_g2,1
+    STARTUP_TRACE_ENTRY kui_retail_startup_trace_pvr,2
+    STARTUP_TRACE_ENTRY kui_retail_startup_trace_gd,3
+.Lstartup_trace_saved:
+    stc sr,r0
+    or #0xf0,r0
+    ldc r0,sr
+    mov r15,r8
+    mov.l .Lstartup_trace_stack,r15
+    mov.l .Lstartup_trace_ccr,r0
+    mov.l @r0,r9
+/* Publish dirty owner frame/heap state before disabling caches. None of the
+ * first three successful checkpoints writes scanout registers or VRAM. */
+    mov.l .Lstartup_trace_ram,r0
+    mov.l .Lstartup_trace_ramend,r1
+.Lstartup_trace_purge:
+    ocbp @r0
+    add #32,r0
+    cmp/hs r1,r0
+    bf .Lstartup_trace_purge
+    mov.l .Lstartup_trace_ccr,r0
+    mov.l .Lstartup_trace_off,r1
+    mov.l r1,@r0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    mov r8,r4
+    mov r10,r5
+    mov r9,r6
+    mov.l .Lstartup_trace_main,r0
+    jsr @r0
+    nop
+/* Restore the owner cache mode with both caches invalidated. The saved
+ * trace state and restored instructions were written with caches disabled. */
+    mov.l .Lstartup_trace_off,r0
+    or r9,r0
+    mov.l .Lstartup_trace_ccr,r1
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    mov r8,r15
+    lds.l @r15+,macl
+    lds.l @r15+,mach
+    ldc.l @r15+,gbr
+    ldc.l @r15+,vbr
+    add #4,r15
+    lds.l @r15+,pr
+    mov.l @r15+,r14
+    mov.l @r15+,r13
+    mov.l @r15+,r12
+    mov.l @r15+,r11
+    mov.l @r15+,r10
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    mov.l @r15+,r7
+    mov.l @r15+,r6
+    mov.l @r15+,r5
+    mov.l @r15+,r4
+    mov.l @r15+,r3
+    mov.l @r15+,r2
+    mov.l @r15+,r1
+    mov r15,r0
+    add #-64,r0
+    mov.l @r0,r0
+    ldc r0,sr
+    mov.l .Lstartup_trace_resume,r0
+    mov.l @r0,r0
+    jmp @r0
+    mov.l @r15+,r0
+    .align 2
+.Lstartup_trace_stack: .long C(kui_retail_startup_trace_stack)+4096+0x20000000
+.Lstartup_trace_ccr: .long 0xff00001c
+.Lstartup_trace_ram: .long 0x8c000000
+.Lstartup_trace_ramend: .long KUI_RETAIL_RAM_END
+.Lstartup_trace_off: .long 0x00000808
+.Lstartup_trace_main: .long C(kui_retail_startup_trace_checkpoint)+0x20000000
+.Lstartup_trace_resume: .long C(kui_retail_startup_trace_resume)+0x20000000
+#endif
     .section .resident_blob,"a"
     .align 2
     .global __retail_resident_scif_blob_start,__retail_resident_scif_blob_end

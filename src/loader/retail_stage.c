@@ -76,6 +76,58 @@ static const uint8_t *resident_blob;
 static size_t resident_bytes;
 static uint32_t resident_limit;
 
+#if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
+/* Opt-in owner startup diagnosis, entirely in the temporary high stage.
+ * Addresses identify the supplied MK-51000 V1.004 image; instruction bytes
+ * are saved from the verified RAM image, never bundled with K-UI. */
+#define STARTUP_TRACE_BYTES 12u
+#define STARTUP_TRACE_POINTS 4u
+#define STARTUP_TRACE_BUDGET 3000000u
+#define STARTUP_TRACE_STACK_BYTES 4096u
+extern void kui_retail_startup_trace_scan(void);
+extern void kui_retail_startup_trace_g2(void);
+extern void kui_retail_startup_trace_pvr(void);
+extern void kui_retail_startup_trace_gd(void);
+uint8_t kui_retail_startup_trace_stack[STARTUP_TRACE_STACK_BYTES]
+    __attribute__((aligned(32),section(".bss.startup_trace_stack")));
+uint32_t kui_retail_startup_trace_resume;
+static const uint32_t startup_trace_address[STARTUP_TRACE_POINTS] = {
+    0x8c6082d4u,0x8c6083b0u,0x8c6085bcu,0x8c603d78u
+};
+static void (*const startup_trace_target[STARTUP_TRACE_POINTS])(void) = {
+    kui_retail_startup_trace_scan,kui_retail_startup_trace_g2,
+    kui_retail_startup_trace_pvr,kui_retail_startup_trace_gd
+};
+static struct {
+    uint8_t saved[STARTUP_TRACE_POINTS][STARTUP_TRACE_BYTES];
+    uint32_t first[STARTUP_TRACE_POINTS],last[STARTUP_TRACE_POINTS];
+    uint32_t reads[STARTUP_TRACE_POINTS],ccr[STARTUP_TRACE_POINTS];
+    uint32_t armed,passed;
+} startup_trace;
+
+#ifdef KUI_RETAIL_STARTUP_TRACE_TEST
+extern uint32_t kui_retail_startup_trace_read(uint32_t address);
+extern void kui_retail_startup_trace_publish(uint32_t address,size_t bytes);
+extern uint32_t kui_retail_startup_trace_stack_address(void);
+#else
+static uint32_t kui_retail_startup_trace_read(uint32_t address) {
+    return *(volatile const uint32_t *)(uintptr_t)address;
+}
+static uint32_t kui_retail_startup_trace_stack_address(void) {
+    return (uint32_t)(uintptr_t)kui_retail_startup_trace_stack;
+}
+static void kui_retail_startup_trace_publish(uint32_t address,size_t bytes) {
+    uint32_t begin=address&~31u,end=address+(uint32_t)bytes;
+    for(uint32_t line=begin;line<end;line+=32u)
+        __asm__ volatile("ocbi @%0" : : "r"(line) : "memory");
+    /* Both the installer and one-shot wrappers run with caches disabled.
+     * Publish RAM bytes before the wrapper restores the owner's CCR. */
+    __asm__ volatile("" : : : "memory");
+}
+#endif
+static void startup_trace_arm(void);
+#endif
+
 static void select_resident(void) {
     const uint8_t *end;
     resident_limit=KUI_RETAIL_STANDARD_LIMIT;
@@ -482,6 +534,108 @@ static void relay_stopped(const char *message,uint32_t detail) {
 #endif
     stopped(message,detail);
 }
+#if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
+static uint8_t *startup_trace_owner(uint32_t address) {
+    return (uint8_t *)(uintptr_t)((address&0x1fffffffu)|0xa0000000u);
+}
+static void startup_trace_arm(void) {
+    startup_trace.armed=0;
+    startup_trace.passed=0;
+    if(exec_bytes!=6751168u || manifest.ip_crc32!=0x22de24d8u ||
+       boot_crc!=0x73f4277bu) return;
+    uint32_t stack=kui_retail_startup_trace_stack_address();
+    if((stack&31u) || stack<KUI_RETAIL_STAGE_ADDRESS ||
+       stack>0x8cf00000u-STARTUP_TRACE_STACK_BYTES)
+        relay_stopped("STARTUP TRACE STACK INVALID",stack);
+    for(unsigned i=0;i<STARTUP_TRACE_POINTS;i++) {
+        uint32_t address=startup_trace_address[i];
+        if((address&3u) || address<KUI_RETAIL_EXEC_ADDRESS ||
+           address-KUI_RETAIL_EXEC_ADDRESS>exec_bytes-STARTUP_TRACE_BYTES)
+            relay_stopped("STARTUP TRACE ADDRESS INVALID",address);
+    }
+    for(unsigned i=0;i<STARTUP_TRACE_POINTS;i++) {
+        uint32_t address=startup_trace_address[i];
+        uint8_t *owner=startup_trace_owner(address);
+        memcpy(startup_trace.saved[i],owner,STARTUP_TRACE_BYTES);
+        volatile uint16_t *code=(volatile uint16_t *)owner;
+        /* Save original R0 before loading the trace-specific P2 wrapper. */
+        code[0]=0x2f06u;code[1]=0xd001u;code[2]=0x402bu;code[3]=0x0009u;
+        *(volatile uint32_t *)(code+4)=
+            (uint32_t)(uintptr_t)startup_trace_target[i]|0x20000000u;
+        kui_retail_startup_trace_publish(address,STARTUP_TRACE_BYTES);
+        startup_trace.first[i]=startup_trace.last[i]=startup_trace.reads[i]=0;
+        startup_trace.ccr[i]=0;
+    }
+    startup_trace.armed=1;
+}
+static uint32_t startup_trace_sample(unsigned point,uint32_t address) {
+    uint32_t value=kui_retail_startup_trace_read(address);
+    if(!startup_trace.reads[point]) startup_trace.first[point]=value;
+    startup_trace.last[point]=value;
+    ++startup_trace.reads[point];
+    return value;
+}
+static int startup_trace_wait(unsigned point,uint32_t address,
+    uint32_t mask,int set) {
+    for(uint32_t reads=0;reads<STARTUP_TRACE_BUDGET;reads++) {
+        uint32_t value=startup_trace_sample(point,address);
+        if(((value&mask)!=0)==set) return 1;
+    }
+    return 0;
+}
+static void startup_trace_report(const char *message,uint32_t point,
+    const uint32_t *frame) __attribute__((noreturn));
+static void startup_trace_report(const char *message,uint32_t point,
+    const uint32_t *frame) {
+    /* Gather evidence before a terminal diagnostic reclaims video. */
+    uint32_t snapshot[3]={kui_retail_startup_trace_read(0xa05f810cu),
+        kui_retail_startup_trace_read(0xa05f688cu),
+        kui_retail_startup_trace_read(0xa05f6900u)};
+    uint32_t cpu[5]={point,startup_trace.passed,frame?frame[4]:0,frame?frame[3]:0,
+        point<STARTUP_TRACE_POINTS?startup_trace.ccr[point]:0};
+    retail_display_restore(&display);
+    retail_display_line("SONIC STARTUP TRACE - INTENTIONAL STOP");
+    retail_display_values("POINT PASSED SR VBR CCR",cpu,5);
+    for(unsigned i=0;i<3;i++) {
+        uint32_t values[3]={startup_trace.first[i],startup_trace.last[i],
+            startup_trace.reads[i]};
+        retail_display_values(i==0?"SCAN FIRST LAST READS":
+            i==1?"G2 FIRST LAST READS":"PVR FIRST LAST READS",values,3);
+    }
+    retail_display_values("SCAN G2 ISTNRM NOW",snapshot,3);
+    stopped(message,point);
+}
+void kui_retail_startup_trace_checkpoint(const uint32_t *frame,
+    uint32_t point,uint32_t ccr) {
+    uintptr_t address=((uintptr_t)frame&0x1fffffffu)|0x80000000u;
+    if(point>=STARTUP_TRACE_POINTS || !startup_trace.armed ||
+       (address&3u) || address<KUI_RETAIL_HOOK_STACK ||
+       address>KUI_RETAIL_EXEC_ADDRESS-21u*4u)
+        startup_trace_report("STARTUP TRACE STATE INVALID",point,NULL);
+    startup_trace.ccr[point]=ccr;
+    /* Restore this one shot before probing/resuming. Other checkpoints stay
+     * armed. The wrapper invalidates I-cache before restoring the owner CCR. */
+    uint32_t owner=startup_trace_address[point];
+    memcpy(startup_trace_owner(owner),startup_trace.saved[point],STARTUP_TRACE_BYTES);
+    kui_retail_startup_trace_publish(owner,STARTUP_TRACE_BYTES);
+    kui_retail_startup_trace_resume=owner;
+    if(startup_trace.passed!=((1u<<point)-1u))
+        startup_trace_report("STARTUP TRACE ORDER CHANGED",point,frame);
+    if(point==3u)
+        startup_trace_report("FIRST SDK GD INIT REACHED",point,frame);
+    int ready;
+    if(point==0u) {
+        ready=startup_trace_wait(point,0xa05f810cu,0x1ffu,0);
+        if(ready) ready=startup_trace_wait(point,0xa05f810cu,0x1ffu,1);
+    } else if(point==1u) {
+        ready=startup_trace_wait(point,0xa05f688cu,32u,0);
+    } else {
+        ready=startup_trace_wait(point,0xa05f6900u,8u,1);
+    }
+    if(!ready) startup_trace_report("OWNER HARDWARE WAIT TIMED OUT",point,frame);
+    startup_trace.passed|=1u<<point;
+}
+#endif
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #ifdef KUI_RETAIL_CE
     retail_display_restore(&display);
@@ -529,6 +683,10 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
         /* Detail: the offset of the first changed byte. */
         if(resident[i]!=resident_blob[i]) relay_stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)i);
     }
+#if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
+    /* Intentional RAM-only patches follow the unmodified owner CRC check. */
+    startup_trace_arm();
+#endif
 #ifdef KUI_RETAIL_CE
     retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
     retail_display_hex("BODY CRC32",crc);
