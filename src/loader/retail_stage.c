@@ -76,6 +76,73 @@ static const uint8_t *resident_blob;
 static size_t resident_bytes;
 static uint32_t resident_limit;
 
+#ifndef KUI_RETAIL_SONIC_STACK_TEST
+#define KUI_RETAIL_SONIC_STACK_TEST 0
+#endif
+#if KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
+#if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE
+#error Sonic scoped stack and startup trace must be separate builds
+#endif
+/* An exact-owner, RAM-only proof. Keep the caller's frames on its real stack,
+ * and relocate only the one routine whose 0x4004-byte local hits the reader.
+ * Public workspace registration is cleared before return; internal flash
+ * state can retain a stored address until the next operation resets it. */
+#define SONIC_STACK_PATCH_BYTES 12u
+#define SONIC_STACK_FRAME_WORDS 21u
+#define SONIC_STACK_FRAME_BYTES (SONIC_STACK_FRAME_WORDS*4u)
+#define SONIC_STACK_OWNER_BYTES 32768u
+#define SONIC_STACK_BOOK_BYTES 4096u
+#define SONIC_STACK_WAIT_BUDGET 3000000u
+#define SONIC_STACK_GUARD_WORD 0x4b554953u
+#define SONIC_STACK_SNAPSHOT_BEGIN KUI_RETAIL_IP_ADDRESS
+#define SONIC_STACK_RESIDENT_BYTES (KUI_RETAIL_ASYNC_LIMIT-SONIC_STACK_SNAPSHOT_BEGIN)
+uint8_t kui_retail_sonic_owner_stack[SONIC_STACK_OWNER_BYTES]
+    __attribute__((aligned(32),section(".bss.sonic_owner_stack")));
+uint8_t kui_retail_sonic_book_stack[SONIC_STACK_BOOK_BYTES]
+    __attribute__((aligned(32),section(".bss.sonic_book_stack")));
+struct sonic_stack_state {
+    uint32_t resume,armed,restored,active,completed;
+    uint32_t owner_bottom,owner_top,book_bottom,book_top,stage_end;
+    uint32_t original_frame,original_sp,original_pr,entry_ccr,return_ccr;
+    uint32_t first[2],last[2],reads[2],ccr[4];
+    uint32_t asset_status,asset_handle,asset_bytes;
+    uint32_t resident_end,resident_crc,return_crc,mismatch_address;
+    uint8_t saved[4][SONIC_STACK_PATCH_BYTES];
+    uint8_t resident[SONIC_STACK_RESIDENT_BYTES];
+};
+struct sonic_stack_state kui_retail_sonic_stack_state;
+extern void kui_retail_sonic_g2_fifo(void);
+extern void kui_retail_sonic_g2_busy(void);
+extern void kui_retail_sonic_scope_entry(void);
+extern void kui_retail_sonic_scope_return(void);
+extern void kui_retail_sonic_asset_guard(void);
+static const uint32_t sonic_stack_address[4]={0x8c110b00u,0x8c1107ccu,0x8c094c88u,0x8c095b20u};
+static void (*const sonic_stack_target[4])(void)={kui_retail_sonic_g2_fifo,
+    kui_retail_sonic_g2_busy,kui_retail_sonic_scope_entry,kui_retail_sonic_asset_guard};
+#ifdef KUI_RETAIL_SONIC_STACK_TEST_HOST
+extern uint32_t kui_retail_sonic_stack_read(uint32_t address);
+extern void kui_retail_sonic_stack_publish(uint32_t address,size_t bytes);
+extern uint32_t kui_retail_sonic_stack_allocation(unsigned allocation);
+#else
+extern const uint8_t __retail_stage_bss_end[] __asm__("__retail_stage_bss_end");
+static uint32_t kui_retail_sonic_stack_read(uint32_t address) {
+    return *(volatile const uint32_t *)(uintptr_t)address;
+}
+static void kui_retail_sonic_stack_publish(uint32_t address,size_t bytes) {
+    for(uint32_t line=address&~31u;line<address+(uint32_t)bytes;line+=32u)
+        __asm__ volatile("ocbi @%0" : : "r"(line) : "memory");
+    __asm__ volatile("" : : : "memory");
+}
+static uint32_t kui_retail_sonic_stack_allocation(unsigned allocation) {
+    if(allocation==0u) return (uint32_t)(uintptr_t)kui_retail_sonic_owner_stack;
+    if(allocation==1u) return (uint32_t)(uintptr_t)kui_retail_sonic_book_stack;
+    if(allocation==2u) return (uint32_t)(uintptr_t)&kui_retail_sonic_stack_state;
+    return (uint32_t)(uintptr_t)__retail_stage_bss_end;
+}
+#endif
+static void sonic_stack_arm(void);
+#endif
+
 #if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
 /* Opt-in owner startup diagnosis, entirely in the temporary high stage.
  * Addresses identify the supplied MK-51000 V1.004 image; instruction bytes
@@ -550,6 +617,10 @@ void kui_retail_stage_main(const uint8_t *wire) {
     install_resident();
     retail_display_line("READER INSTALLED BEFORE BOOTSTRAP 2");
     retail_display_line("ENTERING OWNER BOOTSTRAP 2");
+#if KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
+    if(exec_bytes==6751168u && manifest.ip_crc32==0x22de24d8u && boot_crc==0x73f4277bu)
+        retail_display_line("SONIC STACK TEST ACTIVE");
+#endif
     retail_display_pause(STEP_PAUSE_FRAMES);
     kui_retail_bootstrap_enter();
 }
@@ -569,6 +640,193 @@ static void relay_stopped(const char *message,uint32_t detail) {
 #endif
     stopped(message,detail);
 }
+#if KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
+static uint32_t sonic_stack_p1(uint32_t address) {
+    return (address&0x1fffffffu)|0x80000000u;
+}
+static uint8_t *sonic_stack_p2(uint32_t address) {
+    return (uint8_t *)(uintptr_t)((address&0x1fffffffu)|0xa0000000u);
+}
+static struct sonic_stack_state *sonic_stack_uncached_state(void) {
+#ifdef KUI_RETAIL_SONIC_STACK_TEST_HOST
+    return &kui_retail_sonic_stack_state;
+#else
+    return (struct sonic_stack_state *)sonic_stack_p2(
+        (uint32_t)(uintptr_t)&kui_retail_sonic_stack_state);
+#endif
+}
+static void sonic_stack_report(struct sonic_stack_state *s,const char *message,
+    unsigned point,const uint32_t *frame) __attribute__((noreturn));
+static void sonic_stack_report(struct sonic_stack_state *s,const char *message,
+    unsigned point,const uint32_t *frame) {
+    uint32_t cpu[5]={point,(uint32_t)(uintptr_t)frame,frame?frame[4]:0u,
+        frame?frame[5]:0u,point<4u?s->ccr[point]:s->return_ccr};
+    uint32_t bounds[5]={s->owner_bottom,s->owner_top,s->original_sp,
+        s->active,s->completed};
+    uint32_t wait[5]={s->last[0],s->reads[0],s->last[1],s->reads[1],
+        kui_retail_sonic_stack_read(0xa05f688cu)};
+    uint32_t resident[5]={SONIC_STACK_SNAPSHOT_BEGIN,s->resident_end,
+        s->resident_crc,s->return_crc,s->restored};
+    retail_display_restore(&display);
+    retail_display_line("SONIC STACK TEST");
+    retail_display_values("POINT FRAME SR PR CCR",cpu,5);
+    retail_display_values("STACK LOW HIGH OLDSP ACTIVE DONE",bounds,5);
+    retail_display_values("FIFO READS BUSY READS G2 NOW",wait,5);
+    retail_display_values("READER LOW HIGH BEFORE AFTER RESTORED",resident,5);
+    uint32_t asset[5]={s->asset_status,s->asset_handle,s->asset_bytes,
+        0x8cd00000u,0x8ce00000u};
+    retail_display_values("FILE STATUS HANDLE BYTES LOW LIMIT",asset,5);
+    stopped(message,s->mismatch_address?s->mismatch_address:point);
+}
+static int sonic_stack_range(uint32_t begin,uint32_t bytes,uint32_t end) {
+    return !(begin&31u) && begin>=KUI_RETAIL_STAGE_ADDRESS &&
+        end<=0x8cf00000u && begin<=end && bytes<=end-begin;
+}
+static int sonic_stack_disjoint(uint32_t a,uint32_t bytes,uint32_t b,uint32_t n) {
+    return a+bytes<=b || b+n<=a;
+}
+static void sonic_stack_arm(void) {
+    struct sonic_stack_state *s=sonic_stack_uncached_state();
+    if(exec_bytes!=6751168u || manifest.ip_crc32!=0x22de24d8u ||
+       boot_crc!=0x73f4277bu) return;
+    uint32_t owner=kui_retail_sonic_stack_allocation(0),
+        book=kui_retail_sonic_stack_allocation(1),
+        state=kui_retail_sonic_stack_allocation(2),
+        end=kui_retail_sonic_stack_allocation(3);
+    if(!sonic_stack_range(owner,SONIC_STACK_OWNER_BYTES,end) ||
+       !sonic_stack_range(book,SONIC_STACK_BOOK_BYTES,end) ||
+       state<KUI_RETAIL_STAGE_ADDRESS || state>end || sizeof(*s)>end-state ||
+       !sonic_stack_disjoint(owner,SONIC_STACK_OWNER_BYTES,book,SONIC_STACK_BOOK_BYTES) ||
+       !sonic_stack_disjoint(owner,SONIC_STACK_OWNER_BYTES,state,sizeof(*s)) ||
+       !sonic_stack_disjoint(book,SONIC_STACK_BOOK_BYTES,state,sizeof(*s)))
+        sonic_stack_report(s,"PRIVATE STACK BOUNDS INVALID",3u,NULL);
+    if(resident_limit<KUI_RETAIL_RESIDENT_ADDRESS ||
+       resident_limit-SONIC_STACK_SNAPSHOT_BEGIN>sizeof(s->resident))
+        sonic_stack_report(s,"READER SNAPSHOT BOUNDS INVALID",3u,NULL);
+    for(unsigned i=0;i<4u;i++) {
+        uint32_t at=sonic_stack_address[i];
+        if((at&3u) || at<KUI_RETAIL_EXEC_ADDRESS ||
+           at-KUI_RETAIL_EXEC_ADDRESS>exec_bytes-SONIC_STACK_PATCH_BYTES)
+            sonic_stack_report(s,"OWNER WINDOW BOUNDS INVALID",i,NULL);
+    }
+    s->owner_bottom=owner;s->owner_top=owner+SONIC_STACK_OWNER_BYTES;
+    s->book_bottom=book;s->book_top=book+SONIC_STACK_BOOK_BYTES;s->stage_end=end;
+    s->resident_end=resident_limit;
+    /* The unchanged whole-executable CRC identifies the statically audited
+     * entry windows: no interior branches, entry literals restored in place.
+     * Only our generic stub is embedded; owner instructions come from RAM. */
+    for(unsigned i=0;i<4u;i++) {
+        uint8_t *p=sonic_stack_p2(sonic_stack_address[i]);
+        memcpy(s->saved[i],p,SONIC_STACK_PATCH_BYTES);
+        volatile uint16_t *code=(volatile uint16_t *)p;
+        code[0]=0x2f06u;code[1]=0xd001u;code[2]=0x402bu;code[3]=0x0009u;
+        *(volatile uint32_t *)(code+4)=
+            (uint32_t)(uintptr_t)sonic_stack_target[i]|0x20000000u;
+        kui_retail_sonic_stack_publish(sonic_stack_address[i],SONIC_STACK_PATCH_BYTES);
+    }
+    s->armed=1u;
+}
+uint32_t kui_retail_sonic_stack_checkpoint(uint32_t *frame,unsigned point,
+    uint32_t ccr,struct sonic_stack_state *s) {
+    uint32_t raw=(uint32_t)(uintptr_t)frame,at=sonic_stack_p1(raw);
+    if(point>=4u || !s->armed || (raw&3u) ||
+       at<KUI_RETAIL_HOOK_STACK || at>KUI_RETAIL_EXEC_ADDRESS-SONIC_STACK_FRAME_BYTES ||
+       s->active || (s->restored&(1u<<point)))
+        sonic_stack_report(s,"STACK CHECKPOINT STATE INVALID",point,NULL);
+    s->ccr[point]=ccr;
+    memcpy(sonic_stack_p2(sonic_stack_address[point]),s->saved[point],SONIC_STACK_PATCH_BYTES);
+    kui_retail_sonic_stack_publish(sonic_stack_address[point],SONIC_STACK_PATCH_BYTES);
+    s->restored|=1u<<point;s->resume=sonic_stack_address[point];
+    if(point==3u) {
+        s->asset_status=frame[20];s->asset_handle=frame[6];
+        /* R0 is the Boolean get-size result, not the byte count. The count
+         * lives at original SP+4, preserving the owner's original alias. */
+        if(at>KUI_RETAIL_EXEC_ADDRESS-92u)
+            sonic_stack_report(s,"ASSET SIZE FRAME INVALID",point,frame);
+        s->asset_bytes=frame[22];
+        if(s->asset_status!=1u || !s->asset_handle || !s->asset_bytes ||
+           s->asset_bytes>0x100000u ||
+           ((s->asset_bytes+0x7ffu)&~0x7ffu)>0x8ce00000u-0x8cd00000u)
+            sonic_stack_report(s,"FIRST ASSET EXCEEDS TEST RAM BOUNDS",point,frame);
+        return raw;
+    }
+    if(point<2u) {
+        uint32_t mask=point==0u?32u:1u;
+        for(uint32_t i=0;i<SONIC_STACK_WAIT_BUDGET;i++) {
+            uint32_t value=kui_retail_sonic_stack_read(0xa05f688cu);
+            if(!i) s->first[point]=value;
+            s->last[point]=value;++s->reads[point];
+            if(!(value&mask)) return raw;
+        }
+        sonic_stack_report(s,"LATE AUDIO G2 WAIT TIMED OUT",point,frame);
+    }
+    if(!(s->restored&8u) || s->asset_status!=1u || !s->asset_handle ||
+       !s->asset_bytes || s->asset_bytes>0x100000u)
+        sonic_stack_report(s,"SCOPED CALL BEFORE ASSET GUARD",point,frame);
+    /* A helper not called on this owner path must not retain a jump into
+     * temporary stage code. Remove every pending entry while caches are
+     * already off, before delegating the scoped original routine. */
+    for(unsigned i=0;i<4u;i++) if(!(s->restored&(1u<<i))) {
+        memcpy(sonic_stack_p2(sonic_stack_address[i]),s->saved[i],SONIC_STACK_PATCH_BYTES);
+        kui_retail_sonic_stack_publish(sonic_stack_address[i],SONIC_STACK_PATCH_BYTES);
+        s->restored|=1u<<i;
+    }
+    s->original_frame=raw;s->original_sp=raw+SONIC_STACK_FRAME_BYTES;
+    s->original_pr=frame[5];s->entry_ccr=ccr;
+    uint32_t *guard=(uint32_t *)sonic_stack_p2(s->owner_bottom);
+    for(unsigned i=0;i<8u;i++) guard[i]=SONIC_STACK_GUARD_WORD;
+    s->resident_crc=kui_retail_crc32(0,sonic_stack_p2(SONIC_STACK_SNAPSHOT_BEGIN),
+        s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN);
+    memcpy(s->resident,sonic_stack_p2(SONIC_STACK_SNAPSHOT_BEGIN),
+        s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN);
+    uint32_t prepared=s->owner_top-SONIC_STACK_FRAME_BYTES;
+    uint32_t *copy=(uint32_t *)sonic_stack_p2(prepared);
+    memcpy(copy,frame,SONIC_STACK_FRAME_BYTES);
+    copy[5]=(uint32_t)(uintptr_t)kui_retail_sonic_scope_return|0x20000000u;
+    s->active=1u;
+    return prepared;
+}
+uint32_t kui_retail_sonic_stack_after(uint32_t *frame,uint32_t ccr,
+    struct sonic_stack_state *s) {
+    uint32_t raw=(uint32_t)(uintptr_t)frame;
+    s->return_ccr=ccr;
+    if(!s->armed || !s->active || s->completed ||
+       s->owner_bottom!=kui_retail_sonic_stack_allocation(0) ||
+       s->book_bottom!=kui_retail_sonic_stack_allocation(1) ||
+       s->stage_end!=kui_retail_sonic_stack_allocation(3) ||
+       !sonic_stack_range(s->owner_bottom,SONIC_STACK_OWNER_BYTES,s->stage_end) ||
+       s->owner_top!=s->owner_bottom+SONIC_STACK_OWNER_BYTES ||
+       !sonic_stack_range(s->book_bottom,SONIC_STACK_BOOK_BYTES,s->stage_end) ||
+       s->book_top!=s->book_bottom+SONIC_STACK_BOOK_BYTES ||
+       raw!=s->owner_top-SONIC_STACK_FRAME_BYTES || ccr!=s->entry_ccr ||
+       s->resident_end<KUI_RETAIL_RESIDENT_ADDRESS ||
+       s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN>sizeof(s->resident) ||
+       sonic_stack_p1(s->original_frame)<KUI_RETAIL_HOOK_STACK ||
+       sonic_stack_p1(s->original_frame)>KUI_RETAIL_EXEC_ADDRESS-SONIC_STACK_FRAME_BYTES ||
+       s->original_sp!=s->original_frame+SONIC_STACK_FRAME_BYTES)
+        sonic_stack_report(s,"SCOPED RETURN FRAME INVALID",4u,NULL);
+    const uint32_t *guard=(const uint32_t *)(uintptr_t)s->owner_bottom;
+    for(unsigned i=0;i<8u;i++) if(guard[i]!=SONIC_STACK_GUARD_WORD)
+        sonic_stack_report(s,"PRIVATE STACK GUARD CHANGED",4u,frame);
+    /* The owner ran through P1; read its coherent P1 reader alias. Do not
+     * purge RAM or change cache modes on return. This strict whole-reader
+     * comparison covers 8000 through the selected resident limit, excluding
+     * the service stack, and reports even unrelated interrupt mutations. */
+    const uint8_t *resident=(const uint8_t *)(uintptr_t)SONIC_STACK_SNAPSHOT_BEGIN;
+    size_t bytes=s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN;
+    s->return_crc=kui_retail_crc32(0,resident,bytes);
+    for(size_t i=0;i<bytes;i++) if(resident[i]!=s->resident[i]) {
+        s->mismatch_address=SONIC_STACK_SNAPSHOT_BEGIN+(uint32_t)i;
+        sonic_stack_report(s,"RESIDENT CHANGED DURING SCOPE",4u,frame);
+    }
+    /* Preserve actual callee register results, including R0 and SR. Only PR
+     * is substituted, and popping this real frame restores the original SP. */
+    uint32_t *original=(uint32_t *)(uintptr_t)s->original_frame;
+    memcpy(original,frame,SONIC_STACK_FRAME_BYTES);original[5]=s->original_pr;
+    s->active=0u;s->completed=1u;
+    return s->original_frame;
+}
+#endif
 #if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
 static uint8_t *startup_trace_owner(uint32_t address) {
     return (uint8_t *)(uintptr_t)((address&0x1fffffffu)|0xa0000000u);
@@ -956,6 +1214,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
     /* Intentional RAM-only patches follow the unmodified owner CRC check. */
     startup_trace_arm();
+#endif
+#if KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
+    sonic_stack_arm();
 #endif
 #ifdef KUI_RETAIL_CE
     retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");

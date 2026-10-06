@@ -23,3 +23,22 @@ All 114 focused UBSan host executions pass: native relay9, CE relay11, startup t
 Strict SH-4 C/assembly compilation, complete mode3 stage link, allocated-section relocation/byte isolation and instruction audit pass. The linked stage contains8,816 audited instructions, with only the explicitly permitted bootstrap FPSCR setup. Observer before/after/report C frames are16/40/116bytes within the4KiB private stack. The stack occupies P1 `0x8ce10b80..0x8ce11b80`, observer state starts `0x8ce109e0`, and stage BSS ends `0x8ce3ece8`, below the supplied owner's heap at `0x8cf00000`. All allocated C/assembly sections and their relocations match the exact parent source for native modes0,1,2 and CE mode3. The delivered GitHub build is recorded in the package; its full native layout/stack/instruction/package checks must pass before delivery.
 
 Test sectors and executable fixtures are synthetic; the owner files and photo remain outside source and deliverables. The new mode needs an owner console test.
+
+
+## Owner hardware result: `c3fc640f1291`
+
+The owner supplied the expected terminal photograph on 2026-10-06. All displayed numbers are hexadecimal:
+
+| Field | Value |
+| --- | --- |
+| Calls, function, command/token, result, caller PR | `0000005c`, `00000001`, `00000017`, `00000002`, `8c648e38` |
+| Mount result, accepted reads, completed reads | `00000000`, `00000015`, `00000015` |
+| Path-table LBA, bytes | `0000afda`, `0000001a` |
+| First PVD CRC32, complete descriptor identifier/version, sector size | `ba3adfae`, `00000001`, `00000800` |
+| Root-directory LBA, bytes | `0000afdc`, `0000a000` |
+| Last read command, FAD, count, physical destination, token | `00000011`, `0000b085`, `00000001`, `0c698460`, `00000017` |
+| Last CHECK result, error1, error2, bytes, ATA | `00000002`, `00000000`, `00000000`, `00000800`, `00000000` |
+
+The SDK mount returned success (R4=0), with all 21 accepted reads completed and no observed failure. The full primary descriptor identifier/version and 2,048-byte block size were valid. Root directory metadata was accepted by the SDK. The photographed PVD CRC agrees with the previous instrumented run, although the supplied startup bundle still contains no original sector bytes for independent disc comparison.
+
+This confirms SDK filesystem setup completes in this instrumented run. It does not establish correct asset reads after mounting or a successful gameplay launch. The next diagnostic boundary should cover subsequent startup/file access and hardware initialization, rather than changing mount or sector handling without evidence.

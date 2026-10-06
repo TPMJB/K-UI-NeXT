@@ -325,6 +325,172 @@ C(kui_retail_game_resume):
  * alias while the original entry performs its own cache setup. */
 .Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
 
+#if defined(KUI_RETAIL_SONIC_STACK_TEST) && KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
+/* All four original-entry stubs have saved R0 before selecting P2. Save
+ * the rest of the real integer CPU frame BEFORE using high bookkeeping.
+ * No FPU instruction is used anywhere in this freestanding stage. */
+    .macro SONIC_STACK_SAVE_REST
+    mov.l r1,@-r15
+    mov.l r2,@-r15
+    mov.l r3,@-r15
+    mov.l r4,@-r15
+    mov.l r5,@-r15
+    mov.l r6,@-r15
+    mov.l r7,@-r15
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    mov.l r10,@-r15
+    mov.l r11,@-r15
+    mov.l r12,@-r15
+    mov.l r13,@-r15
+    mov.l r14,@-r15
+    sts.l pr,@-r15
+    stc.l sr,@-r15
+    stc.l vbr,@-r15
+    stc.l gbr,@-r15
+    sts.l mach,@-r15
+    sts.l macl,@-r15
+    .endm
+    .macro SONIC_STACK_ENTRY name,point
+    .align 2
+    .global C(\name)
+C(\name):
+    SONIC_STACK_SAVE_REST
+    mov #\point,r10
+    bra .Lsonic_stack_saved
+    nop
+    .endm
+    SONIC_STACK_ENTRY kui_retail_sonic_g2_fifo,0
+    SONIC_STACK_ENTRY kui_retail_sonic_g2_busy,1
+    SONIC_STACK_ENTRY kui_retail_sonic_scope_entry,2
+    SONIC_STACK_ENTRY kui_retail_sonic_asset_guard,3
+.Lsonic_stack_saved:
+    stc sr,r0
+    or #0xf0,r0
+    ldc r0,sr
+    mov r15,r8
+    mov.l .Lsonic_stack_book,r15
+    mov.l .Lsonic_stack_ccr,r0
+    mov.l @r0,r9
+    mov.l .Lsonic_stack_ram,r0
+    mov.l .Lsonic_stack_ramend,r1
+.Lsonic_stack_purge:
+    ocbp @r0
+    add #32,r0
+    cmp/hs r1,r0
+    bf .Lsonic_stack_purge
+    mov.l .Lsonic_stack_ccr,r0
+    mov.l .Lsonic_stack_off,r1
+    mov.l r1,@r0
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    mov r8,r4
+    mov r10,r5
+    mov r9,r6
+    mov.l .Lsonic_stack_state,r7
+    mov.l .Lsonic_stack_before,r0
+    jsr @r0
+    nop
+    mov r0,r8
+/* A normal G2 checkpoint returns its untouched native frame. The scope
+ * returns the copied P1 private frame, whose PR alone names our return.
+ * Restore caches before popping that frame through its coherent alias. */
+    mov.l .Lsonic_stack_off,r0
+    or r9,r0
+    mov.l .Lsonic_stack_ccr,r1
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    bra .Lsonic_stack_delegate
+    nop
+    .align 2
+.Lsonic_stack_book: .long C(kui_retail_sonic_book_stack)+4096+0x20000000
+.Lsonic_stack_state: .long C(kui_retail_sonic_stack_state)+0x20000000
+.Lsonic_stack_ccr: .long 0xff00001c
+.Lsonic_stack_ram: .long 0x8c000000
+.Lsonic_stack_ramend: .long KUI_RETAIL_RAM_END
+.Lsonic_stack_off: .long 0x00000808
+.Lsonic_stack_before: .long C(kui_retail_sonic_stack_checkpoint)+0x20000000
+/* Pop every word of the chosen actual frame. SR is restored after all
+ * decisions and flag-changing instructions, and R0 in the final delay slot. */
+    .macro SONIC_STACK_RESTORE
+    mov r8,r15
+    lds.l @r15+,macl
+    lds.l @r15+,mach
+    ldc.l @r15+,gbr
+    ldc.l @r15+,vbr
+    add #4,r15
+    lds.l @r15+,pr
+    mov.l @r15+,r14
+    mov.l @r15+,r13
+    mov.l @r15+,r12
+    mov.l @r15+,r11
+    mov.l @r15+,r10
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    mov.l @r15+,r7
+    mov.l @r15+,r6
+    mov.l @r15+,r5
+    mov.l @r15+,r4
+    mov.l @r15+,r3
+    mov.l @r15+,r2
+    mov.l @r15+,r1
+    mov r15,r0
+    add #-64,r0
+    mov.l @r0,r0
+    ldc r0,sr
+    .endm
+.Lsonic_stack_delegate:
+    SONIC_STACK_RESTORE
+    mov.l .Lsonic_stack_resume,r0
+    mov.l @r0,r0
+    jmp @r0
+    mov.l @r15+,r0
+    .align 2
+.Lsonic_stack_resume: .long C(kui_retail_sonic_stack_state)+0x20000000
+    .align 2
+    .global C(kui_retail_sonic_scope_return)
+C(kui_retail_sonic_scope_return):
+/* Save the REAL callee results on the private owner stack. This preserves
+ * changes to R0, SR and all other CPU words, instead of replaying entry state.
+ * Only IMASK is briefly masked; CCR and all FPU state remain untouched. */
+    mov.l r0,@-r15
+    SONIC_STACK_SAVE_REST
+    stc sr,r0
+    or #0xf0,r0
+    ldc r0,sr
+    mov r15,r8
+    mov.l .Lsonic_return_book,r15
+    mov r8,r4
+    mov.l .Lsonic_return_ccr,r0
+    mov.l @r0,r5
+    mov.l .Lsonic_return_state,r6
+    mov.l .Lsonic_return_after,r0
+    jsr @r0
+    nop
+    mov r0,r8
+    SONIC_STACK_RESTORE
+    rts
+    mov.l @r15+,r0
+    .align 2
+.Lsonic_return_book: .long C(kui_retail_sonic_book_stack)+4096+0x20000000
+.Lsonic_return_ccr: .long 0xff00001c
+.Lsonic_return_state: .long C(kui_retail_sonic_stack_state)+0x20000000
+.Lsonic_return_after: .long C(kui_retail_sonic_stack_after)+0x20000000
+#endif
+
 #if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
 /* The RAM-only 12-byte checkpoint stub has already saved original R0.
  * No owner instruction is copied into this image. Each wrapper saves the
