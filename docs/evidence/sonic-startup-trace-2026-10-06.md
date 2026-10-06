@@ -34,3 +34,17 @@ The production C implementation passes 19 targeted startup cases under UBSan, pl
 Strict SH-4 C/assembly compilation, a temporary native trace-stage link, and its instruction audit pass. That link places the trace stack at `0x8ce10020..0x8ce11020` and the stage BSS end at `0x8ce3e188`, below the heap. Individual trace C frames are at most 68 bytes. Tracing-disabled native and CE allocated sections match the previous source byte-for-byte. GitHub must still complete the full native build, layout, stack, instruction and package checks before delivery. Physical-console behavior is not yet verified.
 
 The workflow enables a clearly suffixed startup-trace artifact for the diagnostic commit or explicit dispatch flag and suppresses its release-asset promotion. The delivered test should use the original raw GDI from the supplied bundle with the standard reader. Photograph the final diagnostic; if the bars return without it, report that outcome and waiting time. This is a localization test, not a Sonic gameplay fix or a BIN/CUE launch-speed change.
+
+## Hardware result for `39cf23167a4e`
+
+The owner supplied a photograph of `FIRST SDK GD INIT REACHED`, point `3`, passed mask `7`. In this instrumented run, owner Bootstrap 2, executable startup, and all three observed hardware waits completed. This deliberately stops before the SDK initializer executes its GD calls; it does not demonstrate that disc initialization or a sector read succeeded.
+
+| Field | Photograph value (hexadecimal) |
+| --- | --- |
+| SR / VBR / CCR | `60000100` / `8c00f400` / `00000105` |
+| Scan first / last / reads | `00003d16` / `00002601` / `0000102e` |
+| G2 first / last / reads | `0000000e` / `0000000e` / `00000001` |
+| PVR first / last / reads | `00000038` / `00000038` / `00000001` |
+| Current scan / G2 / ISTNRM | `00003955` / `0000000e` / `00001038` |
+
+SR's interrupt mask is zero at this checkpoint. The supplied executable clears IMASK immediately before SDK initialization; its first BIOS INIT call precedes the SDK's later interrupt-masking block. Any subsequent call observer must therefore restore the exact original interrupt state before forwarding the real handler, rather than assuming all first-mount calls arrive masked. Static review of INIT, command initialization, drive status, version response, and the first PVD read found no proven native-service contract mismatch. Further observation of actual call results is required.

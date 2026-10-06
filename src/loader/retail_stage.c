@@ -126,6 +126,26 @@ static void kui_retail_startup_trace_publish(uint32_t address,size_t bytes) {
 }
 #endif
 static void startup_trace_arm(void);
+#if KUI_RETAIL_STARTUP_TRACE >= 2
+/* Mutable observer state is accessed only through the explicit P2 pointer
+ * passed by assembly. The native reader, its stack and its service are intact. */
+#define STARTUP_GD_CALL_BUDGET 4096u
+struct startup_gd_state {
+    uint32_t handler,active,calls;
+    uint32_t original[21],frame_address,ccr;
+    uint32_t function,command,caller,result;
+    uint32_t init_result,init_token,init_status;
+    uint32_t drive_result,drive_status,drive_type;
+    uint32_t version_token,version_status,version_destination,version_crc;
+    uint32_t read_command,read_fad,read_count,read_destination,read_token;
+    uint32_t read_status,check[4],pvd_header,pvd_crc;
+    uint32_t candidate_fad,candidate_count,candidate_destination;
+};
+struct startup_gd_state kui_retail_startup_gd_state;
+extern void kui_retail_startup_gd_proxy(void);
+extern void kui_retail_startup_gd_return(void);
+static void startup_gd_install(void);
+#endif
 #endif
 
 static void select_resident(void) {
@@ -605,6 +625,169 @@ static void startup_trace_report(const char *message,uint32_t point,
     retail_display_values("SCAN G2 ISTNRM NOW",snapshot,3);
     stopped(message,point);
 }
+#if KUI_RETAIL_STARTUP_TRACE >= 2
+static int startup_gd_frame_valid(const uint32_t *frame) {
+    uintptr_t address=((uintptr_t)frame&0x1fffffffu)|0x80000000u;
+    return !(address&3u) && address>=KUI_RETAIL_HOOK_STACK &&
+        address<=KUI_RETAIL_EXEC_ADDRESS-21u*4u;
+}
+static int startup_gd_guest(uint32_t address,uint32_t bytes) {
+    uint32_t area=address&0xff000000u;
+    uint32_t p1=(address&0x1fffffffu)|0x80000000u;
+    return (area==0x0c000000u || area==0x8c000000u || area==0xac000000u) &&
+        bytes && p1>=KUI_RETAIL_HOOK_STACK && p1<KUI_RETAIL_STAGE_ADDRESS &&
+        bytes<=KUI_RETAIL_STAGE_ADDRESS-p1;
+}
+static const void *startup_gd_pointer(uint32_t address) {
+    /* GD read parameters use physical RAM destinations. Observe those via
+     * cached P1, as the native reader does before publishing through P2;
+     * owner-supplied P1/P2 pointers keep their original cache alias. */
+    if((address&0xff000000u)==0x0c000000u) address|=0x80000000u;
+    return (const void *)(uintptr_t)address;
+}
+static void startup_gd_report(struct startup_gd_state *s,const char *message)
+    __attribute__((noreturn));
+static void startup_gd_report(struct startup_gd_state *s,const char *message) {
+    uint32_t rows[5][5]={
+        {s->calls,s->function,s->command,s->result,s->caller},
+        {s->init_result,s->init_token,s->init_status,s->version_token,s->version_status},
+        {s->drive_result,s->drive_status,s->drive_type,s->pvd_header,s->pvd_crc},
+        {s->read_command,s->read_fad,s->read_count,s->read_destination,s->read_token},
+        {s->read_status,s->check[0],s->check[1],s->check[2],s->check[3]}
+    };
+    retail_display_restore(&display);
+    retail_display_line("SONIC GD TRACE - INTENTIONAL STOP");
+    retail_display_values("CALLS FN CMD RESULT PR",rows[0],5);
+    retail_display_values("INIT3 INITTOK STAT VERSTOK STAT",rows[1],5);
+    retail_display_values("DRIVERET STATE TYPE PVDWORD PVDCRC",rows[2],5);
+    retail_display_values("CMD FAD COUNT DST TOKEN",rows[3],5);
+    retail_display_values("CHECK ERR1 ERR2 BYTES ATA",rows[4],5);
+    stopped(message,s->calls);
+}
+static void startup_gd_install(void) {
+    /* Point 3 runs after the one-shot wrapper published RAM and disabled
+     * caches. Only the proven native BC vector is replaced, through P2. */
+    const uint8_t *resident=startup_trace_owner(KUI_RETAIL_RESIDENT_ADDRESS);
+    for(size_t i=0;i<resident_bytes;i++)
+        if(resident[i]!=resident_blob[i])
+            relay_stopped("OWNER STARTUP ALTERED READER",(uint32_t)i);
+    volatile uint32_t *vector=(volatile uint32_t *)(uintptr_t)0xac0000bcu;
+    uint32_t handler=*vector,area=handler&0xff000000u;
+    uint32_t p1=(handler&0x1fffffffu)|0x80000000u;
+    if((handler&1u) || (area!=0x8c000000u && area!=0xac000000u) ||
+       p1<KUI_RETAIL_RESIDENT_ADDRESS || !resident_bytes ||
+       p1-KUI_RETAIL_RESIDENT_ADDRESS>=resident_bytes || p1>=resident_limit)
+        relay_stopped("GD TRACE VECTOR INVALID",handler);
+#ifdef KUI_RETAIL_STARTUP_TRACE_TEST
+    struct startup_gd_state *s=&kui_retail_startup_gd_state;
+#else
+    struct startup_gd_state *s=(struct startup_gd_state *)
+        startup_trace_owner((uint32_t)(uintptr_t)&kui_retail_startup_gd_state);
+#endif
+    memset(s,0,sizeof(*s));
+    s->handler=handler;
+    s->init_result=s->init_status=s->version_status=s->read_status=UINT32_MAX;
+    s->drive_result=s->drive_status=s->drive_type=UINT32_MAX;
+    *vector=(uint32_t)(uintptr_t)kui_retail_startup_gd_proxy|0x20000000u;
+    kui_retail_startup_trace_publish(0x8c0000bcu,4u);
+}
+void kui_retail_startup_gd_before(uint32_t *frame,
+    struct startup_gd_state *s,uint32_t ccr) {
+    if(!startup_gd_frame_valid(frame) || s->active!=1u)
+        startup_gd_report(s,"GD TRACE FRAME INVALID");
+    for(unsigned i=0;i<21u;i++) s->original[i]=frame[i];
+    s->frame_address=(uint32_t)(uintptr_t)frame;
+    s->ccr=ccr;
+    s->function=frame[13]; /* R7 */
+    s->command=frame[16]; /* R4: command, token, or function-specific argument. */
+    s->caller=frame[5];
+    s->result=UINT32_MAX;
+    ++s->calls;
+    if(frame[14]!=UINT32_MAX && s->function==0u) { /* R6=-1 is setup. */
+        uint32_t params=frame[15];
+        if(s->command==16u || s->command==17u) {
+            if((params&3u) || !startup_gd_guest(params,16u))
+                startup_gd_report(s,"GD TRACE READ PARAMS INVALID");
+            const volatile uint32_t *p=startup_gd_pointer(params);
+            /* Record a candidate without losing the first accepted request
+             * if a second submission is rejected while it is in flight. */
+            s->candidate_fad=p[0];s->candidate_count=p[1];
+            s->candidate_destination=p[2];
+        } else if(s->command==40u) {
+            if((params&3u) || !startup_gd_guest(params,4u))
+                startup_gd_report(s,"GD TRACE VERSION PARAMS INVALID");
+            s->candidate_destination=*(volatile const uint32_t *)startup_gd_pointer(params);
+        }
+    }
+    /* Assembly resumes the original native stack and register state, with
+     * only PR changed so the actual handler's result can be observed. */
+    frame[5]=(uint32_t)(uintptr_t)kui_retail_startup_gd_return|0x20000000u;
+}
+void kui_retail_startup_gd_after(uint32_t *frame,
+    struct startup_gd_state *s,uint32_t ccr) {
+    if(!startup_gd_frame_valid(frame) || s->active!=1u ||
+       (uint32_t)(uintptr_t)frame!=s->frame_address || ccr!=s->ccr)
+        startup_gd_report(s,"GD TRACE RETURN FRAME INVALID");
+    uint32_t result=frame[20];
+    s->result=result;
+    if(s->original[14]!=UINT32_MAX) {
+        if(s->function==3u) s->init_result=result;
+        else if(s->function==0u) {
+            if(s->command==24u && !s->init_token) s->init_token=result;
+            else if(s->command==40u && !s->version_token && (int32_t)result>0) {
+                s->version_token=result;
+                s->version_destination=s->candidate_destination;
+            } else if((s->command==16u || s->command==17u) && !s->read_token) {
+                s->read_token=(int32_t)result>0?result:0u;s->read_command=s->command;
+                s->read_fad=s->candidate_fad;s->read_count=s->candidate_count;
+                s->read_destination=s->candidate_destination;
+            }
+        } else if(s->function==4u) {
+            uint32_t output=s->original[16];
+            s->drive_result=result;
+            if((output&3u) || !startup_gd_guest(output,8u))
+                startup_gd_report(s,"GD TRACE DRIVE OUTPUT INVALID");
+            const volatile uint32_t *p=startup_gd_pointer(output);
+            s->drive_status=p[0];s->drive_type=p[1];
+        } else if(s->function==1u) {
+            uint32_t output=s->original[15];
+            if((output&3u) || !startup_gd_guest(output,16u))
+                startup_gd_report(s,"GD TRACE CHECK OUTPUT INVALID");
+            if(s->command==s->init_token && s->init_token) s->init_status=result;
+            if(s->command==s->version_token && s->version_token) {
+                s->version_status=result;
+                if(result==2u && startup_gd_guest(s->version_destination,28u))
+                    s->version_crc=kui_retail_crc32(0,
+                        startup_gd_pointer(s->version_destination),28u);
+            }
+            if(s->command==s->read_token && s->read_token) {
+                s->read_status=result;
+                const volatile uint32_t *p=startup_gd_pointer(output);
+                for(unsigned i=0;i<4u;i++) s->check[i]=p[i];
+                if(result==2u) {
+                    if(s->read_count && s->check[2]>=2048u &&
+                       !(s->read_destination&3u) &&
+                       startup_gd_guest(s->read_destination,2048u)) {
+                        s->pvd_header=*(volatile const uint32_t *)startup_gd_pointer(s->read_destination);
+                        s->pvd_crc=kui_retail_crc32(0,
+                            startup_gd_pointer(s->read_destination),2048u);
+                    }
+                    startup_gd_report(s,"FIRST GD READ COMPLETED");
+                }
+            }
+        }
+        if((int32_t)result<0 || (s->function==0u && result==0u))
+            startup_gd_report(s,"GD CALL FAILED OR REJECTED");
+    }
+    if(s->calls>=STARTUP_GD_CALL_BUDGET)
+        startup_gd_report(s,"GD CALL LIMIT - LAST RESULT SHOWN");
+    /* Restore every original CPU word except the actual ABI return in R0.
+     * No floating-point instruction, cache-mode change or GD call is made. */
+    for(unsigned i=0;i<21u;i++) frame[i]=s->original[i];
+    frame[20]=result;
+    s->active=0;
+}
+#endif
 void kui_retail_startup_trace_checkpoint(const uint32_t *frame,
     uint32_t point,uint32_t ccr) {
     uintptr_t address=((uintptr_t)frame&0x1fffffffu)|0x80000000u;
@@ -621,8 +804,15 @@ void kui_retail_startup_trace_checkpoint(const uint32_t *frame,
     kui_retail_startup_trace_resume=owner;
     if(startup_trace.passed!=((1u<<point)-1u))
         startup_trace_report("STARTUP TRACE ORDER CHANGED",point,frame);
-    if(point==3u)
+    if(point==3u) {
+#if KUI_RETAIL_STARTUP_TRACE >= 2
+        startup_gd_install();
+        startup_trace.passed|=1u<<point;
+        return;
+#else
         startup_trace_report("FIRST SDK GD INIT REACHED",point,frame);
+#endif
+    }
     int ready;
     if(point==0u) {
         ready=startup_trace_wait(point,0xa05f810cu,0x1ffu,0);

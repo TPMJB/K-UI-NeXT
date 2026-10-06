@@ -446,6 +446,116 @@ C(\name):
 .Lstartup_trace_off: .long 0x00000808
 .Lstartup_trace_main: .long C(kui_retail_startup_trace_checkpoint)+0x20000000
 .Lstartup_trace_resume: .long C(kui_retail_startup_trace_resume)+0x20000000
+#if KUI_RETAIL_STARTUP_TRACE >= 2
+/* Transparent two-phase BC observer. Each phase saves the full integer CPU
+ * frame on the native caller stack before briefly masking IMASK. CCR, BL,
+ * register banks and all FPU state stay unchanged. Bookkeeping uses a P2
+ * high stack/state; the saved native handler runs on the ORIGINAL stack.
+ * An interrupt reentry while active bypasses bookkeeping and reaches the
+ * real handler with its original PR, preserving its own lock/busy policy. */
+    .macro STARTUP_GD_SAVE
+    mov.l r0,@-r15
+    mov.l r1,@-r15
+    mov.l r2,@-r15
+    mov.l r3,@-r15
+    mov.l r4,@-r15
+    mov.l r5,@-r15
+    mov.l r6,@-r15
+    mov.l r7,@-r15
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    mov.l r10,@-r15
+    mov.l r11,@-r15
+    mov.l r12,@-r15
+    mov.l r13,@-r15
+    mov.l r14,@-r15
+    sts.l pr,@-r15
+    stc.l sr,@-r15
+    stc.l vbr,@-r15
+    stc.l gbr,@-r15
+    sts.l mach,@-r15
+    sts.l macl,@-r15
+    stc sr,r0
+    or #0xf0,r0
+    ldc r0,sr
+    .endm
+/* Restore all words except R0, popped by the final jump/return delay slot.
+ * The original SR is the word 64 bytes below that final saved R0 slot. */
+    .macro STARTUP_GD_RESTORE
+    mov r8,r15
+    lds.l @r15+,macl
+    lds.l @r15+,mach
+    ldc.l @r15+,gbr
+    ldc.l @r15+,vbr
+    add #4,r15
+    lds.l @r15+,pr
+    mov.l @r15+,r14
+    mov.l @r15+,r13
+    mov.l @r15+,r12
+    mov.l @r15+,r11
+    mov.l @r15+,r10
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    mov.l @r15+,r7
+    mov.l @r15+,r6
+    mov.l @r15+,r5
+    mov.l @r15+,r4
+    mov.l @r15+,r3
+    mov.l @r15+,r2
+    mov.l @r15+,r1
+    mov r15,r0
+    add #-64,r0
+    mov.l @r0,r0
+    ldc r0,sr
+    .endm
+    .align 2
+    .global C(kui_retail_startup_gd_proxy)
+C(kui_retail_startup_gd_proxy):
+    STARTUP_GD_SAVE
+    mov r15,r8
+    mov.l .Lstartup_gd_state,r9
+    mov.l @(4,r9),r0
+    tst r0,r0
+    bf .Lstartup_gd_delegate
+    mov #1,r0
+    mov.l r0,@(4,r9)
+    mov.l .Lstartup_gd_stack,r15
+    mov r8,r4
+    mov r9,r5
+    mov.l .Lstartup_gd_ccr,r0
+    mov.l @r0,r6
+    mov.l .Lstartup_gd_before,r0
+    jsr @r0
+    nop
+.Lstartup_gd_delegate:
+    STARTUP_GD_RESTORE
+    mov.l .Lstartup_gd_state,r0
+    mov.l @r0,r0
+    jmp @r0
+    mov.l @r15+,r0
+    .align 2
+    .global C(kui_retail_startup_gd_return)
+C(kui_retail_startup_gd_return):
+    STARTUP_GD_SAVE
+    mov r15,r8
+    mov.l .Lstartup_gd_state,r5
+    mov.l .Lstartup_gd_stack,r15
+    mov r8,r4
+    mov.l .Lstartup_gd_ccr,r0
+    mov.l @r0,r6
+    mov.l .Lstartup_gd_after,r0
+    jsr @r0
+    nop
+    STARTUP_GD_RESTORE
+    rts
+    mov.l @r15+,r0
+    .align 2
+.Lstartup_gd_state: .long C(kui_retail_startup_gd_state)+0x20000000
+.Lstartup_gd_stack: .long C(kui_retail_startup_trace_stack)+4096+0x20000000
+.Lstartup_gd_ccr: .long 0xff00001c
+.Lstartup_gd_before: .long C(kui_retail_startup_gd_before)+0x20000000
+.Lstartup_gd_after: .long C(kui_retail_startup_gd_after)+0x20000000
+#endif
 #endif
     .section .resident_blob,"a"
     .align 2
