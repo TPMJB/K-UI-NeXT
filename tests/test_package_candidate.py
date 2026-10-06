@@ -12,7 +12,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from package import (candidate_evidence, candidate_requested, package_kind, package_metadata,
+from package import (candidate_evidence, candidate_requested, development_experiment, development_notice,
+                     development_test, package_kind, package_metadata,
                      release_metadata, write_release_assets, write_release_bundle,
                      write_release_guides)
 from publish_release import verify_assets
@@ -21,6 +22,8 @@ STABLE_RELEASE = {"version": "1.7", "name": 'K-UI V1.7 "Dáinsleif"',
                   "short_name": "K-UI V1.7", "artifact_prefix": "kui-1.7-dainsleif"}
 TEST_RELEASE = {"version": "1.7-2048-test", "name": 'K-UI V1.7 2048-byte test "Dáinsleif"',
                 "short_name": "K-UI V1.7 2048 test", "artifact_prefix": "kui-1.7-2048-test-dainsleif"}
+FORMATS_RELEASE = {"version": "1.7-formats-test", "name": 'K-UI V1.7 Games formats test "Dáinsleif"',
+                   "short_name": "K-UI V1.7 formats test", "artifact_prefix": "kui-1.7-formats-test-dainsleif"}
 
 
 class CandidateInstallation(unittest.TestCase):
@@ -58,10 +61,13 @@ class CandidateInstallation(unittest.TestCase):
 
     def assemble(self, candidate):
         release = package_metadata(candidate)
+        candidate = candidate and not development_test(release)
         record = {"commit": self.commit, "release": release, "hardware_tested": False,
                   "kind": package_kind(release, candidate)}
         if candidate:
             record.update(candidate=candidate_evidence())
+        if development_test(release):
+            record.update(experiment=development_experiment(release))
         (self.dist / "build.json").write_text(json.dumps(record))
         write_release_guides(self.dist, candidate)
         bundle = write_release_bundle(self.dist, self.sd, self.cdi, self.music, record,
@@ -160,28 +166,41 @@ class CandidateInstallation(unittest.TestCase):
             verify_assets(self.dist / "release-assets", release, self.commit)
 
     def test_experimental_bundle_omits_banner_and_cannot_be_published(self):
+        for release in (TEST_RELEASE, FORMATS_RELEASE):
+            with self.subTest(version=release["version"]):
+                self.check_experimental_bundle(release)
+
+    def check_experimental_bundle(self, test_release):
         # Reuse the destination after a stable bundle to catch stale artwork
         # as well as accidental final-release identity in either archive.
         self.assemble(False)
-        with patch("package.release_metadata", return_value=TEST_RELEASE):
+        with patch("package.release_metadata", return_value=test_release):
             bundle, release = self.assemble(False)
-        self.assertEqual(release, TEST_RELEASE)
+        self.assertEqual(release, test_release)
         self.assertFalse((bundle / "release-banner.jpg").exists())
         self.assertEqual({path.name for path in (bundle / "boot-cd").iterdir()},
                          {release["artifact_prefix"] + ".cdi"})
         record = json.loads((bundle / "build.json").read_text())
         self.assertEqual(record["kind"], "development-test")
         self.assertFalse(record["hardware_tested"])
-        self.assertEqual(record["release"], TEST_RELEASE)
+        self.assertEqual(record["release"], test_release)
+        self.assertEqual(record["experiment"], development_experiment(test_release))
         self.assertIn("experimental hardware test", (bundle / "SOURCE.txt").read_text())
         self.assertIn("not a public release", (bundle / "SOURCE.txt").read_text())
+        if test_release == FORMATS_RELEASE:
+            self.assertIn("GDI, ISO, BIN/CUE, CDI and standalone BIN/IMG", (bundle / "SOURCE.txt").read_text())
+            self.assertNotIn("2048-byte sector hardware test", (bundle / "SOURCE.txt").read_text())
+            self.assertEqual((bundle / "GAMES-FORMATS-TEST.md").read_bytes(),
+                             (ROOT / "docs/games-formats-test.md").read_bytes())
+            self.assertIn("(GAMES-FORMATS-TEST.md)", (bundle / "START-HERE.md").read_text())
         for name in ("START-HERE.md", "RELEASE-NOTES.md", "ANNOUNCEMENTS.md", "SOURCE.txt"):
             self.assertNotIn("— final release", (bundle / name).read_text())
         assets = self.dist / "release-assets"
         with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-source.zip")) as archive:
             source_record = json.loads(archive.read("build.json"))
             self.assertEqual(source_record["kind"], "development-test")
-            self.assertEqual(source_record["release"], TEST_RELEASE)
+            self.assertEqual(source_record["release"], test_release)
+            self.assertEqual(source_record["experiment"], development_experiment(test_release))
         self.assert_checksums(bundle, "SHA256SUMS")
         self.assert_checksums(assets, "SHA256SUMS.txt")
         with self.assertRaisesRegex(SystemExit, "Refusing a diagnostic or candidate package"):
@@ -207,6 +226,15 @@ class CandidateSelection(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "KUI_RELEASE_CANDIDATE"):
             candidate_requested({"KUI_RELEASE_CANDIDATE": "true"})
         self.assertFalse(candidate_requested({"KUI_EXPERIMENTAL": "1"}))
+
+    def test_both_development_versions_stay_outside_candidate_and_public_identity(self):
+        for release in (TEST_RELEASE, FORMATS_RELEASE):
+            with self.subTest(version=release["version"]), patch("package.release_metadata", return_value=release):
+                self.assertTrue(development_test())
+                self.assertEqual(package_metadata(True), release)
+                self.assertEqual(package_kind(release, True), "development-test")
+                self.assertIn(development_experiment(release), development_notice())
+        self.assertFalse(development_test(STABLE_RELEASE))
 
 
 if __name__ == "__main__":

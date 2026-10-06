@@ -250,7 +250,7 @@ static void ce_trace(unsigned earlier) {
 #endif
 static void report_fault(const char *reason, uint32_t function) {
     retail_display_restore(&display);
-    retail_display_line("K-UI GAME READER");
+    retail_display_line("K-UI READER");
     retail_display_line(manifest.title);
 #ifdef KUI_RETAIL_ASYNC
     /* Fifteen rows fit: command, LBA (GETSCD: format), sectors (bytes). */
@@ -285,15 +285,15 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_hex("IO RESULT", (uint32_t)card_result);
     retail_display_hex("BLOCKS READ", image.blocks_read);
 #endif
-    retail_display_line("STOPPED - PHOTOGRAPH THIS SCREEN");
-    retail_display_line("POWER CYCLE TO RETURN");
+    retail_display_line("STOPPED: PHOTO THIS SCREEN");
+    retail_display_line("POWER CYCLE FOR K-UI");
     for(;;) __asm__ volatile("nop");
 }
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
     (void)caller; (void)stack;
     retail_display_restore(&display);
-    retail_display_line("GAME MENU RETURN");
+    retail_display_line("GAME RETURN");
 #ifdef KUI_RETAIL_CE
     /* One value row: this build has no single-value printer (stack budget). */
     static uint32_t counts[3]; /* Static: the stack budget is full. */
@@ -343,7 +343,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     retail_display_hex("PACE COST16",pace.per);
     retail_display_hex("PACE STILL",pace.still);
 #endif
-    retail_display_line("RESTARTING K-UI");
+    retail_display_line("REBOOT K-UI");
     retail_display_pause(900u); /* ~15 seconds at 60 Hz to capture the counters */
     /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts
      * still masked: the console restarts and boots the K-UI disc in the drive.
@@ -383,10 +383,8 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     image.read_run = read_run;
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, read_sectors};
 #endif
-    kui_retail_gd_init_validated(&service, manifest.slots,
-        manifest.track_count, &ops, KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
-    kui_retail_gd_set_disc_type(&service,(manifest.flags & KUI_RETAIL_IMAGE_CD)?0x10u:0x80u,
-        manifest.session_lba);
+    kui_retail_gd_init_prepared(&service, &manifest, &ops,
+        KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
 #if defined(KUI_RETAIL_CE) && defined(KUI_RETAIL_ASYNC)
     service.read_part = kui_retail_async_read_part;
 #elif defined(KUI_RETAIL_CE)

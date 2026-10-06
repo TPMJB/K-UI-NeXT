@@ -18,11 +18,24 @@
 #include <string.h>
 
 static uint32_t get32(const uint8_t *p) {
+#ifdef __sh__
+    /* Every word parameter/result is obtained with guest(..., alignment=4).
+     * The resident is little endian; alias-safe word accesses avoid carrying
+     * byte assembly helpers and their calls in its protected low RAM. */
+    typedef uint32_t word __attribute__((__may_alias__));
+    return *(const word *)p;
+#else
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
         (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+#endif
 }
 static void put32(uint8_t *p, uint32_t n) {
+#ifdef __sh__
+    typedef uint32_t word __attribute__((__may_alias__));
+    *(word *)p=n;
+#else
     for(unsigned i = 0; i < 4; ++i) p[i] = (uint8_t)(n >> (i * 8));
+#endif
 }
 static uint8_t *guest(struct kui_retail_gd *s, uint32_t address,
                       uint32_t bytes, uint32_t align, int writing) {
@@ -104,20 +117,37 @@ void kui_retail_gd_set_disc_type(struct kui_retail_gd *s,uint32_t disc_type,uint
     if(!s || !s->initialized || s->pending || (disc_type!=0x10 && disc_type!=0x80)) return;
     s->disc_type=disc_type;s->position_lba=session_lba;
 }
+void kui_retail_gd_init_prepared(struct kui_retail_gd *s,const struct kui_retail_manifest *m,
+    const struct kui_gd_ops *ops,uint32_t begin,uint32_t end) {
+    s->ops=*ops;s->tracks=m->slots;s->track_count=m->track_count;
+    s->guest_begin=begin;s->guest_end=end;s->initialized=1;
+    s->sector_part=0x2000;s->sector_bytes=2048;s->drive_status=1;
+    s->step=KUI_RETAIL_GD_STEP_SECTORS;
+    s->disc_type=(m->flags & KUI_RETAIL_IMAGE_CD)?0x10u:0x80u;
+    s->position_lba=m->session_lba;
+}
 static int area_bounds(const struct kui_retail_gd *s, uint32_t area,
                        uint32_t *first, uint32_t *last) {
     *first = *last = s->track_count;
     if(area > 1) return -1;
     if(s->disc_type==0x10) {
-        if(area) return -1;
+        /* CD has no high-density area. Its ordinary TOC probe still gets a
+         * token, then completes with UNAVAILABLE; malformed areas reject. */
+        if(area) return 0;
         *first=0;*last=s->track_count-1u;return 0;
     }
-    for(uint32_t i = 0; i < s->track_count; ++i) {
-        if((track_at(s, i)->start_lba >= 45000u) != (area != 0)) continue;
-        if(*first == s->track_count) *first = i;
-        *last = i;
+    /* Validated GD tracks are sorted and cannot cross the density boundary;
+     * its two TOC areas are the prefixes on either side of this one split. */
+    uint32_t split=0;
+    while(split<s->track_count && track_at(s,split)->start_lba<45000u) ++split;
+    if(area) {
+        if(split==s->track_count) return -1;
+        *first=split;*last=s->track_count-1u;
+    } else {
+        if(!split) return -1;
+        *first=0;*last=split-1u;
     }
-    return *first == s->track_count ? -1 : 0;
+    return 0;
 }
 static uint32_t step_count(const struct kui_retail_gd *s, uint32_t remaining) {
     uint32_t step = s->step - 1u < KUI_RETAIL_GD_STEP_MAX ?
@@ -184,8 +214,10 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         if(bytes > p[1]) bytes = p[1];
         destination = p[2];
     } else if(cmd == KUI_RETAIL_GD_GETTOC || cmd == KUI_GD_GETTOC2) {
-        uint32_t first, last;
-        if(area_bounds(s, p[0], &first, &last)) return 0;
+        /* These two parameter slots are unused by TOC. Keep its checked
+         * bounds with the request: tracks and disc type cannot change while
+         * it is pending, so execution need not scan the same map again. */
+        if(area_bounds(s, p[0], &p[2], &p[3])) return 0;
         bytes = KUI_GD_TOC_BYTES; destination = p[1];
     } else if(cmd == KUI_RETAIL_GD_REQ_MODE || cmd == KUI_RETAIL_GD_GET_VERS) {
         bytes = cmd == KUI_RETAIL_GD_GET_VERS ? 28 : 16; destination = p[0];
@@ -220,8 +252,11 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     return (int32_t)s->token;
 }
 static void toc(struct kui_retail_gd *s, uint8_t *out) {
-    uint32_t first, last;
-    if(area_bounds(s, s->area, &first, &last)) return;
+    uint32_t first=s->outputs[2], last=s->outputs[3];
+    if(first==s->track_count) {
+        s->error=KUI_GD_ERROR_UNAVAILABLE;s->request_bytes=0;
+        return;
+    }
     memset(out, 0xff, KUI_GD_TOC_BYTES);
     for(uint32_t i = first; i <= last; ++i) {
         const struct kui_retail_track *t = track_at(s, i);

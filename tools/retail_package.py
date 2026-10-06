@@ -52,7 +52,7 @@ def relocation_header(stage_bytes, ce=False):
     )
 
 
-def inspect_retail(package, ce=False):
+def inspect_retail(package, ce=False, formats=False):
     """Validate shipped bytes, not title compatibility or console acceptance.
 
     Only the console fills the card-specific manifest and reads the owner's
@@ -81,5 +81,6 @@ def inspect_retail(package, ce=False):
         "resident_limit": f"0x{RESIDENT_LIMIT:08x}",
         "manifest_bytes": MAP_BYTES,
         "abi": ("Windows CE placement probe; stops before CE runs" if ce else
+                "Native CD/GD image formats test (GDI, ISO, BIN/CUE, CDI, BIN/IMG); title compatibility requires console testing" if formats else
                 "Native GD-ROM GDI launch; title compatibility requires console testing"),
     }

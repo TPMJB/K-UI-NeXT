@@ -94,8 +94,10 @@ static enum kui_game_result range_check(const struct kui_retail_manifest *m,
          * data 0x84. The data bit therefore identifies Mode 1 eligibility. */
         if(!t->extent_count || (format == KUI_GAME_SECTOR_MODE1 && !(t->control & 4u)))
             return KUI_GAME_AUDIO;
-        if(format == KUI_GAME_SECTOR_RAW && kui_retail_track_sector_bytes(t) != 2352u &&
-           kui_retail_track_sector_bytes(t) != 2448u)
+        /* A validated layout has a 2352/2448-byte stored sector unless one
+         * of these flags selects cooked data or the sync-less 2336 layout. */
+        if(format == KUI_GAME_SECTOR_RAW &&
+           (t->control & (KUI_RETAIL_TRACK_COOKED | KUI_RETAIL_TRACK_2336)))
             return KUI_GAME_UNSUPPORTED;
         cursor = t->end_lba < end ? t->end_lba : end;
     }

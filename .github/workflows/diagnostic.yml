@@ -88,7 +88,7 @@ jobs:
           if formats:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
               exact = {'Makefile', '.github/workflows/diagnostic.yml',
-                       'include/kui/game_image.h', 'include/kui/game_metadata.h', 'include/kui/games.h',
+                       'include/kui/game_image.h', 'include/kui/game_metadata.h', 'include/kui/games.h', 'include/kui/gd_service.h',
                        'include/kui/games_retail.h', 'include/kui/shell.h', 'include/kui/version.h',
                        'include/kui/retail_image.h', 'include/kui/retail_cursor.h', 'include/kui/retail_gd.h',
                        'src/core/game_image.c', 'src/core/game_metadata.c', 'src/core/retail_image.c',
@@ -97,6 +97,7 @@ jobs:
                        'src/apps/games_image_probe.c', 'src/dreamcast/shell_draw.c',
                        'src/loader/retail_boot.h', 'src/loader/retail_stage.c', 'src/loader/retail_resident.c',
                        'src/loader/retail_sd_bench.c', 'tools/gdi_optimize.py', 'tools/game_image_import.py',
+                       'tools/package.py', 'tools/retail_package.py', 'tests/test_package_candidate.py',
                        'tests/test_game_image.c', 'tests/test_game_metadata.c', 'tests/test_retail_image.c',
                        'tests/test_retail_cursor.c', 'tests/test_retail_gd.c', 'tests/test_retail_sd_bench.c',
                        'tests/test_retail_boot.c', 'tests/test_shell.c', 'tests/render_shell.c', 'tests/test_retail_package.py',

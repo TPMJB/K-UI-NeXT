@@ -332,11 +332,29 @@ static void cd_metadata(void) {
         CHECK(get(OUTPUT+404)==(0x41000000u|60150u));
     }
     uint8_t previous[KUI_GD_TOC_BYTES];memcpy(previous,ram+OUTPUT-BEGIN,sizeof(previous));
-    for(uint32_t area=1;area<=2;area++) {
-        put(PARAM,area);put(PARAM+4,OUTPUT);
-        CHECK(call(KUI_GD_REQUEST,KUI_GD_GETTOC2,PARAM)==0 && !service.pending);
+    /* A normal high-density probe on a CD completes without any IO error,
+     * so the resident adapter does not treat its submission as fatal. */
+    for(unsigned command=0;command<2;command++) {
+        put(PARAM,1);put(PARAM+4,OUTPUT);
+        int32_t token=call(KUI_GD_REQUEST,command?KUI_GD_GETTOC2:KUI_RETAIL_GD_GETTOC,PARAM);
+        CHECK(token>0 && service.pending);
+        CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_PROCESSING);
+        CHECK(get(STATUS)==0 && get(STATUS+4)==0 && get(STATUS+8)==0);
+        CHECK(call(KUI_GD_EXEC,0,0)==0);
+        CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_FAILED);
+        CHECK(get(STATUS)==1 && get(STATUS+4)==KUI_GD_ERROR_UNAVAILABLE && get(STATUS+8)==0 && get(STATUS+12)==0);
+        CHECK(service.diag.last_error==KUI_GD_ERROR_UNAVAILABLE && !service.pending);
         CHECK(!memcmp(previous,ram+OUTPUT-BEGIN,sizeof(previous)));
+        CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_NOT_FOUND);
     }
+    put(PARAM,2);put(PARAM+4,OUTPUT);
+    CHECK(call(KUI_GD_REQUEST,KUI_GD_GETTOC2,PARAM)==0 && !service.pending);
+    CHECK(!memcmp(previous,ram+OUTPUT-BEGIN,sizeof(previous)));
+    /* An unavailable area still validates its entire aligned destination. */
+    put(PARAM,1);put(PARAM+4,OUTPUT+1);
+    CHECK(call(KUI_GD_REQUEST,KUI_GD_GETTOC2,PARAM)==0 && !service.pending);
+    put(PARAM+4,END-KUI_GD_TOC_BYTES+4u);
+    CHECK(call(KUI_GD_REQUEST,KUI_GD_GETTOC2,PARAM)==0 && !service.pending);
     put(PARAM,48155);
     CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_SEEK,PARAM)>0);
     CHECK(call(KUI_GD_EXEC,0,0)==0);
@@ -349,6 +367,23 @@ static void cd_metadata(void) {
     CHECK(call(KUI_GD_INIT,0,0)==0 && call(KUI_GD_RESET,0,0)==0);
     CHECK(call(KUI_GD_DRIVE,STATUS,0)==0 && get(STATUS+4)==0x10);
     CHECK(service.sector_bytes==2048 && ctx.reads==0 && ctx.checks==0);
+}
+static void prepared_initialization(void) {
+    static struct kui_retail_manifest m;
+    m.track_count=3;memcpy(m.slots,tracks,sizeof(tracks));
+    for(unsigned cd=0;cd<2;cd++) {
+        m.flags=cd?(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED|KUI_RETAIL_IMAGE_BOOT_CRC):0;
+        m.session_lba=cd?0:45000;
+        struct kui_retail_gd expected;
+        kui_retail_gd_init_validated(&expected,m.slots,m.track_count,&ops,BEGIN,END);
+        kui_retail_gd_set_disc_type(&expected,cd?0x10:0x80,m.session_lba);
+        memset(&service,0,sizeof(service)); /* The resident's _start contract. */
+        kui_retail_gd_init_prepared(&service,&m,&ops,BEGIN,END);
+        CHECK(!memcmp(&service,&expected,sizeof(service)));
+        CHECK(call(KUI_GD_DRIVE,STATUS,0)==0 && get(STATUS+4)==(cd?0x10u:0x80u));
+        CHECK(call(KUI_GD_INIT,0,0)==0 && call(KUI_GD_RESET,0,0)==0);
+        CHECK(service.disc_type==(cd?0x10u:0x80u) && service.position_lba==m.session_lba);
+    }
 }
 static void silent_cd_audio(void) {
     /* Disc audio commands complete at once, without reads, output or a
@@ -873,6 +908,7 @@ static void many_tracks(void) {
     CHECK(ctx.reads == 0);
 }
 int main(void) {
+    prepared_initialization();
     cd_metadata();
     many_tracks();
     /* The physical cooked flag must never leak into a game's disc metadata.

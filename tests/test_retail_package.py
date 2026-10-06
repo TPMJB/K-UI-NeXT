@@ -106,6 +106,15 @@ class RetailPackage(unittest.TestCase):
                 self.assertEqual(result["resident_limit"], "0x8c00bb00")
                 self.assertIn("title compatibility requires console testing", result["abi"])
 
+    def test_formats_test_label_preserves_the_same_validated_native_contract(self):
+        package = self.packaged(self.payload())
+        ordinary = layout.inspect_retail(package)
+        formats = layout.inspect_retail(package, formats=True)
+        self.assertIn("Native CD/GD image formats test (GDI, ISO, BIN/CUE, CDI, BIN/IMG)", formats["abi"])
+        self.assertIn("title compatibility requires console testing", formats["abi"])
+        self.assertEqual({key: value for key, value in formats.items() if key != "abi"},
+                         {key: value for key, value in ordinary.items() if key != "abi"})
+
     def test_ce_probe_package_needs_its_own_header(self):
         data = bytearray(layout.STAGE_BLOB_OFFSET + 16)
         data[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = \

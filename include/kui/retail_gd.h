@@ -101,6 +101,12 @@ int kui_retail_gd_init(struct kui_retail_gd *, const union kui_retail_slot *trac
 void kui_retail_gd_init_validated(struct kui_retail_gd *, const union kui_retail_slot *tracks,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,
     uint32_t guest_end);
+/* Low resident only: _start has zeroed the entire service and the high stage
+ * has validated this immutable manifest. Initializes the same state as the
+ * validated initializer followed by its disc/session setter, without clearing
+ * BSS or constructing an intermediate GD default. */
+void kui_retail_gd_init_prepared(struct kui_retail_gd *, const struct kui_retail_manifest *,
+    const struct kui_gd_ops *, uint32_t guest_begin, uint32_t guest_end);
 /* Configure a validated manifest's disc/session before requests. Protocol
  * INIT/RESET retains this kind; pending commands refuse a reconfiguration. */
 void kui_retail_gd_set_disc_type(struct kui_retail_gd *, uint32_t disc_type,

@@ -42,12 +42,15 @@ static bool header_byte(struct kui_retail_cursor *c,const struct kui_retail_trac
     }
     at-=sub;
     if(at<4) {
-        if(!at) c->subheader=0;
         if(at==2 && (value&0x20u)) return false;
-        c->subheader|=(uint32_t)value<<(at*8u);
+        /* Four shifts replace any old sector's word with this subheader,
+         * even when its halves are split between separate block feeds. */
+        c->subheader=(c->subheader>>8)|((uint32_t)value<<24);
         return true;
     }
-    return value==(uint8_t)(c->subheader>>((at-4u)*8u));
+    if(value!=(uint8_t)c->subheader) return false;
+    c->subheader>>=8;
+    return true;
 }
 enum kui_game_result kui_retail_cursor_begin(struct kui_retail_cursor *c,
     const struct kui_retail_manifest *m, uint32_t lba, uint32_t count,

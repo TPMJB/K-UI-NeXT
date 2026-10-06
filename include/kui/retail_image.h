@@ -64,7 +64,7 @@ static inline uint32_t kui_retail_track_first_extent(const struct kui_retail_tra
     return t->first_extent & 255u;
 }
 static inline uint32_t kui_retail_track_file_offset(const struct kui_retail_track *t) {
-    return (t->first_extent >> 8) | ((t->control & KUI_RETAIL_TRACK_OFFSET_HIGH) ? 256u : 0u);
+    return (t->first_extent >> 8) | ((t->control & KUI_RETAIL_TRACK_OFFSET_HIGH) << 5);
 }
 static inline uint32_t kui_retail_track_sector_bytes(const struct kui_retail_track *t) {
     return (t->control & KUI_RETAIL_TRACK_COOKED) ? KUI_GAME_DATA_BYTES :

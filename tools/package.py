@@ -56,8 +56,13 @@ def candidate_requested(environment=None):
 
 
 def development_test(release=None):
-    """The explicitly versioned cooked-sector experiment is never a public release."""
-    return (release or release_metadata())["version"].endswith("-2048-test")
+    """Explicitly versioned hardware experiments are never public releases."""
+    return (release or release_metadata())["version"].endswith(("-2048-test", "-formats-test"))
+
+
+def development_experiment(release=None):
+    version = (release or release_metadata())["version"]
+    return "Games image formats hardware test" if version.endswith("-formats-test") else "2048-byte sector hardware test"
 
 
 def package_kind(release, candidate=False):
@@ -66,8 +71,11 @@ def package_kind(release, candidate=False):
     return "release-candidate" if candidate else "release"
 
 
-def development_notice():
-    return ("Experimental 2048-byte sector hardware test; not a public release.\n"
+def development_notice(release=None):
+    release = release or release_metadata()
+    formats = release["version"].endswith("-formats-test")
+    return (f"Experimental {development_experiment(release)}; not a public release.\n"
+            + ("Direct launch: GDI, ISO, BIN/CUE, CDI and standalone BIN/IMG.\n" if formats else "") +
             "Dreamcast hardware is untested. No measured loading-speed or compatibility\n"
             "improvement is claimed. Preserve the original dump and back up KUI; install\n"
             "this build's matching runtime and Games payloads together.\n\n")
@@ -78,7 +86,7 @@ def package_metadata(candidate=None):
     if candidate is None:
         candidate = candidate_requested()
     release = release_metadata()
-    if candidate:
+    if candidate and not development_test(release):
         release = {**release,
                    "name": release["name"] + " — ATA readiness candidate",
                    "artifact_prefix": release["artifact_prefix"] + "-ata-readiness-candidate"}
@@ -102,7 +110,7 @@ def candidate_notice():
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery"):
+    for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery", "games-formats-test"):
         # Preserve section anchors while matching the packaged uppercase names.
         text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
                       "(" + name.upper() + ".md", text)
@@ -127,6 +135,8 @@ def write_release_guides(dist, candidate=False):
     if not candidate or experimental:
         (dist / "ANNOUNCEMENTS.md").write_text(
             guide(f"release-v{version}-announcements.md"), encoding="utf-8")
+    if version.endswith("-formats-test"):
+        (dist / "GAMES-FORMATS-TEST.md").write_text(guide("games-formats-test.md"), encoding="utf-8")
 
 
 def resolve_bundle_links(bundle, commit):
@@ -196,6 +206,8 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     shutil.copyfile(splash, bundle / "splash-preview.png")
     for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
+    if release["version"].endswith("-formats-test"):
+        shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", bundle / "GAMES-FORMATS-TEST.md")
     if not candidate or experimental:
         shutil.copyfile(dist / "ANNOUNCEMENTS.md", bundle / "ANNOUNCEMENTS.md")
     if not candidate and not experimental:
@@ -214,7 +226,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
                       "needs the new CDI in boot-cd/ only when changing to SCI or IDE/CF.\n")
     (bundle / "SOURCE.txt").write_text(
         f"{release['name']} ({release['version']}) — {status}\n"
-        + (development_notice() if experimental else candidate_notice() if candidate else "") +
+        + (development_notice(release) if experimental else candidate_notice() if candidate else "") +
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         f"The accompanying {release['artifact_prefix']}-source.zip contains exact K-UI, KOS,\n"
@@ -280,6 +292,7 @@ def main():
         raise SystemExit("Build the Dreamcast diagnostic first")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     release = package_metadata(candidate)
+    candidate = candidate and not development_test(release)
     runtime = ROOT / "build/kui-runtime.elf"
     probe = ROOT / "build/loader/entry.elf"
     image_probe = ROOT / "build/loader/image_entry.elf"
@@ -340,7 +353,7 @@ def main():
     (games / "image-probe.kui").write_bytes(image_package)
     retail_payload, retail_memory = flatten_elf(retail.read_bytes())
     retail_package = envelope(retail_payload, retail_memory, commit[:12])
-    retail_info = inspect_retail(retail_package)
+    retail_info = inspect_retail(retail_package, formats=release["version"].endswith("-formats-test"))
     (games / "retail-boot.kui").write_bytes(retail_package)
     bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
     bench_package = envelope(bench_payload, bench_memory, commit[:12])
@@ -447,7 +460,7 @@ def main():
     if candidate:
         record.update(kind="release-candidate", candidate=candidate_evidence())
     if development_test(release):
-        record.update(kind="development-test", experiment="2048-byte sector hardware test")
+        record.update(kind="development-test", experiment=development_experiment(release))
     (dist / "build.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Existing boot discs need only the small runtime update. Full source and
     # dependency archives remain available in this run's diagnostic artifact.
@@ -472,10 +485,12 @@ def main():
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     for name in ("START-HERE.md", "RELEASE-NOTES.md"):
         shutil.copyfile(dist / name, update / name)
+    if release["version"].endswith("-formats-test"):
+        shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", update / "GAMES-FORMATS-TEST.md")
     bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
                       "needs this run's new bootstrap CD only when changing to SCI or IDE/CF.\n")
     (update / "SOURCE.txt").write_text(
-        (development_notice() if development_test(release) else candidate_notice() if candidate else "") +
+        (development_notice(release) if development_test(release) else candidate_notice() if candidate else "") +
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
