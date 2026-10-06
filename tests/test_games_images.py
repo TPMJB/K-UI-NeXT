@@ -35,6 +35,10 @@ CASES += ("variant-unicode-case", "variant-unicode-exact", "variant-sfn-alias",
           "variant-cache-pair-read-once", "variant-cache-pair-close-once",
           "variant-cache-index-read-once", "variant-list-cache-overflow",
           "variant-cache-callback-cancel")
+CASES += ("format-root-extensions", "format-gdi-payload", "format-cue-listing",
+          "format-folder-cue", "format-folder-iso", "format-folder-ambiguous",
+          "format-inspect-iso", "format-inspect-bin", "format-inspect-mode2",
+          "format-cue-shared", "format-compressed", "format-inspect-cdi", "format-inspect-cdi-invalid", "format-bad-boot")
 
 
 def digest(path):

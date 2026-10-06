@@ -15,13 +15,14 @@ static struct {
     FILE *image;
     uint64_t blocks;
     const char *fault;
-    unsigned writes, connects, disconnects, files, dirs, progress, cancel_after;
+    unsigned writes, connects, disconnects, files, dirs, progress, cancel_after, imports;
     bool active, connected, cancelled;
 } test;
 static FATFS fs;
 static uint16_t pixels[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
 
 static void log_line(const char *format, ...) {
+    if(strstr(format,"compressed image requires offline import")) ++test.imports;
     va_list args; va_start(args, format); vprintf(format, args); va_end(args); puts("");
 }
 static uint64_t blocks(void *ctx) { (void)ctx; return test.blocks; }
@@ -51,6 +52,7 @@ static void progress(const struct kui_app_status *status) {
 
 FRESULT __real_f_open(FIL *file, const TCHAR *path, BYTE flags);
 FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
+    if(test.active && (flags&FA_WRITE)) assert(!strncmp(path,"0:/KUI/",7));
     FRESULT result = __real_f_open(file, path, flags);
     if(test.active && result == FR_OK) ++test.files;
     return result;
@@ -118,6 +120,14 @@ static void seed(const char *host) {
         free(data);
     }
     assert(!fclose(list));
+    if(!strcmp(test.fault,"format-legacy-empty")) {
+        FILINFO info;assert(f_stat("0:/Games/Format Game/selected.iso",&info)==FR_OK);
+        struct kui_cover_record old={0};old.source=KUI_COVER_SOURCE_NONE;
+        strcpy(old.gdi_path,"/Games/Format Game/selected.iso");
+        old.gdi.bytes=info.fsize;old.gdi.date=info.fdate;old.gdi.time=info.ftime;
+        uint8_t header[KUI_COVER_HEADER_BYTES];assert(kui_cover_header_encode(header,&old));
+        write_file("0:/KUI/covers/Format Game.kcv",header,sizeof(header));
+    }
 }
 
 static uint16_t rgb565(unsigned r, unsigned g, unsigned b) {
@@ -256,6 +266,27 @@ static void check_scan(const char *host) {
 }
 
 static void check(const char *host) {
+    if(!strncmp(test.fault,"format-",7)) {
+        struct kui_games_scan_counts c;scan(&c,true);
+        if(!strcmp(test.fault,"format-compressed")) {
+            assert(c.games==1 && c.failed==1 && !c.disc && !c.none && !c.user && records()==0 && test.imports==1);return;
+        }
+        bool ambiguous=!strcmp(test.fault,"format-payloads");unsigned count=ambiguous?2u:1u;
+        assert(c.games==count && c.disc==count && !c.none && !c.user && !c.failed && !c.duplicates && records()==count);
+        struct kui_games_page page;
+        assert(kui_games_list_covers(ambiguous?"/Games/Ambiguous":"/Games",0,KUI_GAMES_VIEW_LIST,&page,pixels,log_line,cancel));
+        assert(page.count==count && page.total==count && !page.has_more);
+        for(unsigned i=0;i<page.count;i++) {
+            assert(!page.entries[i].directory && page.entries[i].cover && !strcmp(page.entries[i].title,"GENERIC BOX ART"));
+            check_split(pixels[i],KUI_COVER_LARGE);
+            struct kui_games_detail detail;static uint16_t large[KUI_COVER_PIXELS];
+            assert(kui_games_inspect_cover(page.entries[i].path,&detail,large,log_line,cancel));
+            assert(detail.valid && detail.cover && detail.native_cd && detail.cd_image);
+            check_split(large,KUI_COVER_LARGE);
+        }
+        test.writes=0;scan(&c,true);assert(c.unchanged==count && !c.disc && !c.failed && !test.writes);
+        return;
+    }
     if(!strcmp(test.fault, "scan")) { check_scan(host); return; }
     struct kui_games_scan_counts c;
     if(!strcmp(test.fault, "cancel")) {
@@ -289,6 +320,7 @@ int main(int argc, char **argv) {
         test.active = true; check(argv[2]);
         assert(!test.files && !test.dirs && !test.connected && test.connects == test.disconnects);
     }
+    kui_games_cache_clear();
     assert(!fclose(test.image));
     printf("PASS Games covers %s %s\n", argv[3], test.fault);
     return 0;

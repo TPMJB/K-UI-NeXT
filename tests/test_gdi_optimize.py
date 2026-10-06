@@ -104,6 +104,66 @@ class GdiOptimizeTests(unittest.TestCase):
         converter.optimize(self.gdi, self.output)
         self.assertEqual((self.output / "track01.iso").read_bytes(), b"".join(payloads))
 
+    def test_bom_blank_lines_and_cr_endings_normalize_without_changing_tracks(self):
+        text = self.gdi.read_text()
+        self.gdi.write_bytes(b"\xef\xbb\xbf" + ("\r \t\r" + text.replace("\n", "\r\r") + "\r").encode("utf-8"))
+        before = self.snapshot()
+        converter.optimize(self.gdi, self.output)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual((self.output / "track03.iso").read_bytes(), b"".join(self.payloads[1:]))
+        self.assertEqual((self.output / "track02.raw").read_bytes(), self.audio)
+        descriptor = (self.output / self.gdi.name).read_bytes()
+        self.assertTrue(descriptor.startswith(b"3\n1 0 4 2048"))
+        self.assertNotIn(b"\r", descriptor)
+        self.assertNotIn(b"\xef\xbb\xbf", descriptor)
+
+    def test_utf8_source_names_are_normalized_to_portable_output_tracks(self):
+        (self.source / "high.bin").rename(self.source / "évolution.bin")
+        self.gdi.write_text(self.gdi.read_text().replace("high.bin", "évolution.bin"), encoding="utf-8")
+        self.gdi = self.gdi.rename(self.source / "Évolution.gdi")
+        before = self.snapshot()
+        report = converter.optimize(self.gdi, self.output)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(report["tracks"][2]["source"]["file"], "évolution.bin")
+        self.assertEqual((self.output / "track03.iso").read_bytes(), b"".join(self.payloads[1:]))
+        self.assertTrue((self.output / "Évolution.gdi").is_file())
+        self.assertTrue(converter.converted_directory(self.output))
+
+    def test_case_mismatched_track_reference_records_actual_file_name(self):
+        self.gdi.write_text(self.gdi.read_text().replace("high.bin", "HIGH.BIN"))
+        before = self.snapshot()
+        report = converter.optimize(self.gdi, self.output)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(report["tracks"][2]["source"]["descriptor_file"], "HIGH.BIN")
+        self.assertEqual((self.source / report["tracks"][2]["source"]["file"]).read_bytes(),
+                         (self.source / "high.bin").read_bytes())
+        self.assertEqual((self.output / "track03.iso").read_bytes(), b"".join(self.payloads[1:]))
+
+    def test_ambiguous_case_match_and_case_matched_symlink_are_refused(self):
+        if (self.source / "HIGH.BIN").exists():
+            self.skipTest("case-insensitive host filesystem")
+        self.gdi.write_text(self.gdi.read_text().replace("high.bin", "HIGH.BIN"))
+        duplicate = self.source / "High.Bin"
+        shutil.copyfile(self.source / "high.bin", duplicate)
+        before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, "ambiguous case-insensitive"):
+            converter.optimize(self.gdi, self.output)
+        self.assertEqual(self.snapshot(), before)
+        self.assert_not_published()
+        duplicate.unlink()
+        actual = self.root / "actual.bin"
+        (self.source / "high.bin").rename(actual)
+        (self.source / "high.bin").symlink_to(actual)
+        with self.assertRaisesRegex(ValueError, "regular file"):
+            converter.optimize(self.gdi, self.output)
+        self.assert_not_published()
+
+    def test_missing_track_reports_track_number_and_descriptor_name(self):
+        (self.source / "high.bin").unlink()
+        with self.assertRaisesRegex(ValueError, "Track 3: track file missing: high.bin"):
+            converter.optimize(self.gdi, self.output)
+        self.assert_not_published()
+
     def test_invalid_sync_mode_and_sector_address_cleanup(self):
         original = (self.source / "high.bin").read_bytes()
         for offset, value, message in ((0, 1, "sync"), (15, 2, "mode"), (13, 0, "address")):
@@ -297,6 +357,22 @@ class GdiOptimizeBatchTests(unittest.TestCase):
         self.assertEqual(result["converted"], 1)
         self.assertTrue((self.root / "original-2048" / self.gdi.name).is_file())
 
+    def test_batch_non_gdi_images_are_reported_instead_of_silently_missed(self):
+        other = self.root / "Evolution 1"
+        other.mkdir()
+        (other / "disc.cdi").write_bytes(b"unparsed disc image")
+        (other / "cover.jpg").write_bytes(b"unparsed cover")
+        before = self.tree_hashes(other)
+        result = converter.optimize_batch(self.root)
+        self.assertEqual((result["converted"], result["skipped"], result["failed"]), (1, 1, 0))
+        entry = next(entry for entry in result["entries"] if entry["path"] == str(other))
+        self.assertEqual(entry["status"], "skipped")
+        self.assertIn("no GDI descriptor", entry["message"])
+        self.assertIn("disc.cdi", entry["message"])
+        self.assertNotIn("cover.jpg", entry["message"])
+        self.assertEqual(self.tree_hashes(other), before)
+        self.assertFalse((self.root / "Evolution 1-2048").exists())
+
     def test_batch_invalid_game_and_ambiguous_folder_do_not_block_good_game(self):
         bad = self.root / "Bad game"
         self.clone(bad)
@@ -428,11 +504,95 @@ class GdiOptimizeBatchTests(unittest.TestCase):
         failure = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(failure.returncode, 1)
         self.assertIn("1 failed", failure.stdout)
+        self.assertIn("Failed games/folders", failure.stderr)
+        self.assertIn(str(bad), failure.stderr)
+        self.assertIn("Invalid GDI track count", failure.stderr)
+
+    def test_batch_json_report_lists_successes_and_failure_reasons(self):
+        collection = self.root / "collection"
+        good = self.clone(collection / "Good")
+        bad = self.clone(collection / "Evolution 2")
+        bad.write_text(bad.read_text().replace("high.bin", "missing.bin"))
+        before = self.tree_hashes(collection)
+        report_path = self.root / "batch-report.json"
+        command = [sys.executable, str(ROOT / "tools/gdi_optimize.py"), "--batch", str(collection),
+                   "--report", str(report_path)]
+        run = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(run.returncode, 1, run.stderr)
+        self.assertIn(f"Batch report: {report_path}", run.stdout)
+        result = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual((result["converted"], result["failed"]), (1, 1))
+        jobs = {entry["path"]: entry for entry in result["entries"]}
+        self.assertEqual(jobs[str(good)]["status"], "converted")
+        self.assertEqual(jobs[str(bad)]["status"], "failed")
+        self.assertIn("Track 3: track file missing: missing.bin", jobs[str(bad)]["message"])
+        self.assertFalse(Path(jobs[str(bad)]["output"]).exists())
+        for path, digest in before.items():
+            self.assertEqual(self.tree_hashes(collection)[path], digest)
+
+    def test_batch_report_collision_and_inside_source_path_fail_before_conversion(self):
+        collection = self.root / "collection"
+        self.clone(collection / "Good")
+        report_path = self.root / "existing-report.json"
+        report_path.write_text("keep existing user data")
+        tool = [sys.executable, str(ROOT / "tools/gdi_optimize.py"), "--batch", str(collection)]
+        before = self.tree_hashes(collection)
+        for path, reason in ((report_path, "Report already exists"),
+                             (collection / "report.json", "outside the original collection")):
+            with self.subTest(path=path):
+                run = subprocess.run(tool + ["--report", str(path)], capture_output=True, text=True)
+                self.assertEqual(run.returncode, 1)
+                self.assertIn(reason, run.stderr)
+                self.assertEqual(self.tree_hashes(collection), before)
+                self.assertFalse((collection / "Good-2048").exists())
+        self.assertEqual(report_path.read_text(), "keep existing user data")
+
+    def test_report_publication_race_never_overwrites_existing_file(self):
+        result = converter.optimize_batch(self.source)
+        report_path = self.root / "report.json"
+        publish = converter.publish_directory
+
+        def intervening_file(stage, output):
+            output.write_text("keep existing user data")
+            publish(stage, output)
+
+        with patch.object(converter, "publish_directory", intervening_file):
+            with self.assertRaises(FileExistsError):
+                converter.write_batch_report(result, report_path)
+        self.assertEqual(report_path.read_text(), "keep existing user data")
+        self.assertEqual(list(self.root.glob(".*.staging-*")), [])
+
+    def test_cancel_report_keeps_completed_and_unattempted_jobs_distinct(self):
+        collection = self.root / "collection"
+        for name in ("a-first", "b-interrupted", "c-last"):
+            self.clone(collection / name)
+        before = self.tree_hashes(collection)
+
+        def interrupted(message):
+            if "b-interrupted: Track 2/3" in message:
+                raise KeyboardInterrupt
+
+        result = converter.optimize_batch(collection, interrupted)
+        self.assertTrue(result["cancelled"])
+        jobs = {Path(entry["path"]).parent.name: entry for entry in result["entries"]}
+        self.assertEqual(jobs["a-first"]["status"], "converted")
+        self.assertEqual(jobs["b-interrupted"]["status"], "cancelled")
+        self.assertEqual(jobs["c-last"]["status"], "not-started")
+        report_path = self.root / "cancelled-report.json"
+        converter.write_batch_report(result, report_path)
+        self.assertEqual(json.loads(report_path.read_text()), result)
+        self.assertTrue((collection / "a-first-2048").is_dir())
+        self.assertFalse((collection / "b-interrupted-2048").exists())
+        self.assertFalse((collection / "c-last-2048").exists())
+        self.assertEqual(list(collection.glob(".*.staging-*")), [])
+        for path, digest in before.items():
+            self.assertEqual(self.tree_hashes(collection)[path], digest)
 
     def test_batch_cli_invalid_invocations_fail_without_writes(self):
         tool = [sys.executable, str(ROOT / "tools/gdi_optimize.py")]
         for arguments in ([], [str(self.gdi)], ["--batch", str(self.root), str(self.gdi)],
-                          ["--batch", str(self.gdi)], ["--batch", str(self.root / "absent")]):
+                          ["--batch", str(self.gdi)], ["--batch", str(self.root / "absent")],
+                          [str(self.gdi), str(self.output), "--report", str(self.root / "report.json")]):
             with self.subTest(arguments=arguments):
                 run = subprocess.run(tool + arguments, capture_output=True, text=True)
                 self.assertNotEqual(run.returncode, 0)

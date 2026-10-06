@@ -81,7 +81,7 @@ class CompileStepLeavesTheTreeClean(unittest.TestCase):
 
 
 class GamesVariantValidationScope(unittest.TestCase):
-    def run_scope(self, changed_path):
+    def run_scope(self, changed_path, scope="games-variants"):
         with tempfile.TemporaryDirectory() as d:
             base = pathlib.Path(d)
             repo = base / "repo"
@@ -94,7 +94,7 @@ class GamesVariantValidationScope(unittest.TestCase):
             changed.parent.mkdir(parents=True, exist_ok=True)
             changed.write_text("changed\n")
             git(repo, "add", "-A")
-            git(repo, "commit", "-q", "-m", "Test Games selector\n\nValidation: games-variants")
+            git(repo, "commit", "-q", "-m", "Test Games change\n\nValidation: " + scope)
             output = base / "scope-output"
             env = dict(os.environ, KUI_VALIDATION_HEAD=git(repo, "rev-parse", "HEAD").strip(),
                        GITHUB_OUTPUT=str(output))
@@ -118,6 +118,26 @@ class GamesVariantValidationScope(unittest.TestCase):
         result, output = self.run_scope("src/dreamcast/main.c")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("console_only=true", output)
+
+
+class GamesFormatsValidationScope(unittest.TestCase):
+    def test_formats_run_portable_and_relevant_filesystem_checks(self):
+        for path in ("src/core/game_image.c", "src/loader/retail_resident.c", "tools/game_image_import.py"):
+            with self.subTest(path=path):
+                result, output = GamesVariantValidationScope().run_scope(path, "games-formats")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("console_only=false", output)
+                self.assertIn("games_formats=true", output)
+        script = step_script("name: Run Games format checks")
+        self.assertIn("make test ", script)
+        for check in ("test_games_retail.py", "test_games_images.py", "test_games_covers_images.py", "test_games_image_probe.py"):
+            self.assertIn(check, script)
+
+    def test_unrelated_transport_changes_require_the_broad_suite(self):
+        result, output = GamesVariantValidationScope().run_scope("src/loader/sci_stream.c", "games-formats")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("outside image formats", result.stderr)
+        self.assertEqual(output, "")
 
 
 class ExperimentalBuildIsOptIn(unittest.TestCase):

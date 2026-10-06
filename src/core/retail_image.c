@@ -68,9 +68,11 @@ static bool tracks_valid(const struct kui_retail_manifest *m) {
     for(uint32_t i = 0; i < m->track_count; ++i) {
         const struct kui_retail_track *t = &m->slots[i].track;
         if(t->start_lba >= t->end_lba || t->end_lba > KUI_GAME_LBA_LIMIT ||
-           (t->start_lba < 45000u && t->end_lba > 45000u) ||
-           (t->control != 0 && t->control != 4 &&
-            t->control != (4u | KUI_RETAIL_TRACK_COOKED)) ||
+           (!(m->flags & KUI_RETAIL_IMAGE_CD) && t->start_lba < 45000u && t->end_lba > 45000u) ||
+           (t->control & 3u) ||
+           (!(t->control & 4u) && (t->control & (KUI_RETAIL_TRACK_COOKED | KUI_RETAIL_TRACK_MODE2 | KUI_RETAIL_TRACK_2336))) ||
+           ((t->control & KUI_RETAIL_TRACK_COOKED) && (t->control & (KUI_RETAIL_TRACK_2336 | KUI_RETAIL_TRACK_2448))) ||
+           ((t->control & KUI_RETAIL_TRACK_2336) && (!(t->control & KUI_RETAIL_TRACK_MODE2) || (t->control & KUI_RETAIL_TRACK_2448))) ||
            (i && m->slots[i - 1].track.end_lba > t->start_lba)) return false;
     }
     return true;
@@ -92,7 +94,8 @@ static enum kui_game_result range_check(const struct kui_retail_manifest *m,
          * data 0x84. The data bit therefore identifies Mode 1 eligibility. */
         if(!t->extent_count || (format == KUI_GAME_SECTOR_MODE1 && !(t->control & 4u)))
             return KUI_GAME_AUDIO;
-        if(format == KUI_GAME_SECTOR_RAW && (int8_t)t->control < 0)
+        if(format == KUI_GAME_SECTOR_RAW && kui_retail_track_sector_bytes(t) != 2352u &&
+           kui_retail_track_sector_bytes(t) != 2448u)
             return KUI_GAME_UNSUPPORTED;
         cursor = t->end_lba < end ? t->end_lba : end;
     }
@@ -109,8 +112,38 @@ enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *m,
     return kui_retail_image_check_validated(m, lba, count, format);
 }
 #if KUI_RETAIL_MANIFEST_SLOTS == KUI_RETAIL_IMAGE_SLOTS
+static const struct kui_retail_track *extent_owner(const struct kui_retail_manifest *m,uint32_t index,uint32_t *owner) {
+    for(uint32_t i=0;i<m->track_count;i++) {
+        const struct kui_retail_track *t=&m->slots[i].track;
+        uint32_t first=kui_retail_track_first_extent(t);
+        if(index>=first && index-first<t->extent_count) {*owner=i;return t;}
+    }
+    return NULL;
+}
+/* A shared container can end one track and begin the next inside the same
+ * allocated block. Only that boundary block may overlap, and its used byte
+ * slices must be disjoint; padding never grants permission for data aliases. */
+static bool shared_boundary(const struct kui_retail_manifest *m,uint32_t ei,uint32_t qi) {
+    const struct kui_retail_extent *e=&m->slots[ei].extent,*q=&m->slots[qi].extent;
+    uint64_t first=e->card_lba>q->card_lba?e->card_lba:q->card_lba;
+    uint64_t last=(uint64_t)e->card_lba+e->blocks;
+    if(last>(uint64_t)q->card_lba+q->blocks) last=(uint64_t)q->card_lba+q->blocks;
+    if(last-first!=1u) return false;
+    uint32_t a,b;
+    const struct kui_retail_track *ta=extent_owner(m,ei,&a),*tb=extent_owner(m,qi,&b);
+    if(!ta || !tb || (a+1u!=b && b+1u!=a)) return false;
+    if(a>b) {const struct kui_retail_track *tt=ta;ta=tb;tb=tt;
+        const struct kui_retail_extent *te=e;e=q;q=te;}
+    uint32_t end=kui_retail_track_file_offset(ta)+(ta->end_lba-ta->start_lba)*kui_retail_track_sector_bytes(ta);
+    uint32_t begin=kui_retail_track_file_offset(tb);
+    return (end & 511u) && begin && (end & 511u)<=begin &&
+        e->file_block+(uint32_t)(first-e->card_lba)==(end-1u)/512u &&
+        q->file_block+(uint32_t)(first-q->card_lba)==0;
+}
 enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manifest *m) {
     if(!tracks_valid(m) || m->storage_transport > KUI_STORAGE_IDE || !m->card_sectors || m->card_sectors > UINT64_C(0x100000000) ||
+       (m->flags & ~(KUI_RETAIL_IMAGE_CD | KUI_RETAIL_IMAGE_SCRAMBLED | KUI_RETAIL_IMAGE_BOOT_CRC)) ||
+       ((m->flags & KUI_RETAIL_IMAGE_SCRAMBLED) && !(m->flags & KUI_RETAIL_IMAGE_CD)) ||
        m->reader > KUI_RETAIL_READER_ASYNC_EAGER || (m->reader != KUI_RETAIL_READER_STANDARD &&
            (m->storage_transport != KUI_STORAGE_SCI || m->track_count > KUI_RETAIL_ASYNC_SLOTS ||
             m->extent_count > KUI_RETAIL_ASYNC_SLOTS - m->track_count)) ||
@@ -126,11 +159,11 @@ enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manife
     for(uint32_t i = 0; i < m->track_count; ++i) {
         const struct kui_retail_track *t = &m->slots[i].track;
         if(kui_retail_track_control(t) == 4 && t->start_lba == m->session_lba &&
-           m->session_lba >= 45000) session_found = true;
-        if(t->first_extent != next_extent || t->extent_count > used - next_extent ||
+           ((m->flags & KUI_RETAIL_IMAGE_CD) || m->session_lba >= 45000)) session_found = true;
+        if(kui_retail_track_first_extent(t) != next_extent || t->extent_count > used - next_extent ||
            (!t->extent_count && kui_retail_track_control(t) == 4)) return KUI_GAME_RANGE;
         if(!t->extent_count) continue; /* Audio listed without its file mapped. */
-        uint32_t bytes = (t->end_lba - t->start_lba) * kui_retail_track_sector_bytes(t);
+        uint32_t bytes = kui_retail_track_file_offset(t)+(t->end_lba - t->start_lba) * kui_retail_track_sector_bytes(t);
         uint32_t blocks = (bytes + 511u) / 512u, next_block = 0;
         for(uint32_t j = 0; j < t->extent_count; ++j) {
             const struct kui_retail_extent *e = &m->slots[next_extent + j].extent;
@@ -156,7 +189,7 @@ enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manife
         for(uint32_t j = m->track_count; j < i; ++j) {
             const struct kui_retail_extent *q = &m->slots[j].extent;
             if((uint64_t)e->card_lba < (uint64_t)q->card_lba + q->blocks &&
-               (uint64_t)q->card_lba < (uint64_t)e->card_lba + e->blocks)
+               (uint64_t)q->card_lba < (uint64_t)e->card_lba + e->blocks && !shared_boundary(m,i,j))
                 return KUI_GAME_OVERLAP;
         }
     }
@@ -168,7 +201,7 @@ enum kui_game_result kui_retail_manifest_encode(const struct kui_retail_manifest
     enum kui_game_result r = kui_retail_manifest_validate(m);
     if(r != KUI_GAME_OK) return r;
     memset(out, 0, KUI_RETAIL_IMAGE_WIRE_BYTES);
-    memcpy(out, "KUIRTI02", 8);
+    memcpy(out, "KUIRTI03", 8);
     put32(out + 8, KUI_RETAIL_IMAGE_VERSION);
     put32(out + 12, KUI_RETAIL_IMAGE_WIRE_BYTES);
     put32(out + 20, m->track_count); put32(out + 24, m->extent_count);
@@ -181,13 +214,14 @@ enum kui_game_result kui_retail_manifest_encode(const struct kui_retail_manifest
     memcpy(out + 216, m->bootfile, 24); memcpy(out + 240, m->region, 16);
     put32(out + 256, m->boot_crc32); put32(out + 260, m->ip_crc32);
     put32(out + 264, m->reader);
+    put32(out + 268, m->flags);
     for(uint32_t i = 0; i < m->track_count + m->extent_count; ++i) {
         uint8_t *p = out + RECORD_BASE + i * RECORD_BYTES;
         if(i < m->track_count) {
             const struct kui_retail_track *t = &m->slots[i].track;
             put32(p, t->start_lba); put32(p + 4, t->end_lba);
-            p[8] = (uint8_t)kui_retail_track_control(t); p[9] = t->extent_count;
-            p[10] = (t->control & KUI_RETAIL_TRACK_COOKED) != 0;
+            p[8] = t->control; p[9] = t->extent_count;
+            p[10] = (uint8_t)kui_retail_track_file_offset(t);
         } else {
             const struct kui_retail_extent *e = &m->slots[i].extent;
             put32(p, e->file_block); put32(p + 4, e->card_lba); put32(p + 8, e->blocks);
@@ -200,11 +234,11 @@ enum kui_game_result kui_retail_manifest_decode(
     const uint8_t wire[KUI_RETAIL_IMAGE_WIRE_BYTES], struct kui_retail_manifest *m) {
     if(!m) return KUI_GAME_INVALID;
     memset(m, 0, sizeof(*m));
-    if(!wire || memcmp(wire, "KUIRTI02", 8) ||
+    if(!wire || memcmp(wire, "KUIRTI03", 8) ||
        get32(wire + 8) != KUI_RETAIL_IMAGE_VERSION ||
        get32(wire + 12) != KUI_RETAIL_IMAGE_WIRE_BYTES ||
        get32(wire + 16) != wire_crc(wire) ||
-       !zeroes(wire + 268, 52))
+       !zeroes(wire + 272, 48))
         return KUI_GAME_INVALID;
     m->track_count = get32(wire + 20); m->extent_count = get32(wire + 24);
     m->storage_transport = get32(wire + 28);
@@ -219,19 +253,19 @@ enum kui_game_result kui_retail_manifest_decode(
     m->gdi_crc32 = get32(wire + 68);
     m->boot_crc32 = get32(wire + 256); m->ip_crc32 = get32(wire + 260);
     m->reader = get32(wire + 264);
+    m->flags = get32(wire + 268);
     memcpy(m->title, wire + 72, 128); memcpy(m->product, wire + 200, 16);
     memcpy(m->bootfile, wire + 216, 24); memcpy(m->region, wire + 240, 16);
     uint32_t next_extent = m->track_count;
     for(uint32_t i = 0; i < used; ++i) {
         const uint8_t *p = wire + RECORD_BASE + i * RECORD_BYTES;
         if(i < m->track_count) {
-            if((p[8] != 0 && p[8] != 4) || p[10] > 1 || p[11] ||
-               (p[10] && p[8] != 4)) goto invalid;
+            if(p[11]) goto invalid;
             struct kui_retail_track *t = &m->slots[i].track;
             t->start_lba = get32(p); t->end_lba = get32(p + 4);
-            t->control = p[8] | (p[10] ? KUI_RETAIL_TRACK_COOKED : 0u);
+            t->control = p[8];
             t->extent_count = p[9];
-            t->first_extent = (uint16_t)next_extent; next_extent += p[9];
+            t->first_extent = (uint16_t)(next_extent | (uint32_t)p[10]<<8); next_extent += p[9];
         } else {
             struct kui_retail_extent *e = &m->slots[i].extent;
             e->file_block = get32(p); e->card_lba = get32(p + 4); e->blocks = get32(p + 8);
@@ -259,6 +293,7 @@ static enum kui_game_result file_read(struct kui_retail_image *image,
     const struct kui_retail_track *track, uint32_t offset, uint8_t *out,
     uint32_t bytes, uint32_t limit) {
     const struct kui_retail_manifest *m = image->manifest;
+    offset += kui_retail_track_file_offset(track);
     /* Private calls follow the full immutable-map request preflight. Their
      * offsets identify a checked sector in this track, and their copy ends
      * within its stored stride (including bounded read_part slices). No file
@@ -268,7 +303,7 @@ static enum kui_game_result file_read(struct kui_retail_image *image,
         uint32_t take = 512u - inside;
         if(take > bytes) take = bytes;
         /* Binary search within this track's extents, ordered by file block. */
-        uint32_t lo = track->first_extent, hi = lo + track->extent_count;
+        uint32_t lo = kui_retail_track_first_extent(track), hi = lo + track->extent_count;
         while(lo + 1 < hi) {
             uint32_t mid = lo + (hi - lo) / 2;
             if(m->slots[mid].extent.file_block <= file_block) lo = mid;
@@ -298,6 +333,24 @@ static enum kui_game_result file_read(struct kui_retail_image *image,
     }
     return KUI_GAME_OK;
 }
+static enum kui_game_result data_header(struct kui_retail_image *image,
+    const struct kui_retail_track *t,uint32_t offset,uint32_t limit) {
+    uint32_t bytes=kui_retail_track_header_bytes(t);
+    if(!bytes) return KUI_GAME_OK;
+    uint8_t header[24];
+    enum kui_game_result r=file_read(image,t,offset,header,bytes,limit);
+    if(r!=KUI_GAME_OK) return r;
+    uint32_t sub=0;
+    if(!(t->control & KUI_RETAIL_TRACK_2336)) {
+        if(header[0] || header[11] || header[15]!=((t->control & KUI_RETAIL_TRACK_MODE2)?2:1))
+            return KUI_GAME_MODE;
+        for(unsigned i=1;i<11;i++) if(header[i]!=255) return KUI_GAME_MODE;
+        if(!(t->control & KUI_RETAIL_TRACK_MODE2)) return KUI_GAME_OK;
+        sub=16;
+    }
+    if(memcmp(header+sub,header+sub+4,4) || (header[sub+2]&0x20u)) return KUI_GAME_MODE;
+    return KUI_GAME_OK;
+}
 enum kui_game_result kui_retail_image_read(struct kui_retail_image *image,
     uint32_t lba, uint32_t count, enum kui_game_sector_format format, void *out, size_t capacity) {
     if(!image || !image->manifest || !image->read_block || !out) return KUI_GAME_INVALID;
@@ -315,17 +368,13 @@ enum kui_game_result kui_retail_image_read(struct kui_retail_image *image,
         uint32_t offset = (current - t->start_lba) * stride;
         uint32_t end = lba + count;
         if(end > t->end_lba) end = t->end_lba;
-        uint32_t last_byte = (end - t->start_lba) * stride;
-        if(format == KUI_GAME_SECTOR_MODE1 && stride == KUI_GAME_RAW_BYTES)
-            last_byte -= KUI_GAME_RAW_BYTES - 16u - KUI_GAME_DATA_BYTES;
+        uint32_t header_bytes=format==KUI_GAME_SECTOR_MODE1?kui_retail_track_header_bytes(t):0;
+        uint32_t last_byte=kui_retail_track_file_offset(t)+(end-1u-t->start_lba)*stride+header_bytes+sector_bytes;
         uint32_t limit = (last_byte + 511u) / 512u;
-        if(format == KUI_GAME_SECTOR_MODE1 && stride == KUI_GAME_RAW_BYTES) {
-            uint8_t header[16];
-            r = file_read(image, t, offset, header, sizeof(header), limit);
+        if(header_bytes) {
+            r = data_header(image,t,offset,limit);
             if(r != KUI_GAME_OK) return r;
-            if(header[0] || header[11] || header[15] != 1) return KUI_GAME_MODE;
-            for(unsigned j = 1; j < 11; ++j) if(header[j] != 255) return KUI_GAME_MODE;
-            offset += sizeof(header);
+            offset += header_bytes;
         }
         r = file_read(image, t, offset, destination, sector_bytes, limit);
         if(r != KUI_GAME_OK) return r;
@@ -356,17 +405,13 @@ enum kui_game_result kui_retail_image_read_part(struct kui_retail_image *image,
         uint32_t offset = (current - t->start_lba) * stride;
         uint32_t end = lba + count;
         if(end > t->end_lba) end = t->end_lba;
-        uint32_t last_byte = (end - t->start_lba) * stride;
-        if(format == KUI_GAME_SECTOR_MODE1 && stride == KUI_GAME_RAW_BYTES)
-            last_byte -= KUI_GAME_RAW_BYTES - 16u - KUI_GAME_DATA_BYTES;
+        uint32_t header_bytes=format==KUI_GAME_SECTOR_MODE1?kui_retail_track_header_bytes(t):0;
+        uint32_t last_byte=kui_retail_track_file_offset(t)+(end-1u-t->start_lba)*stride+header_bytes+sector_bytes;
         uint32_t limit = (last_byte + 511u) / 512u;
-        if(format == KUI_GAME_SECTOR_MODE1 && stride == KUI_GAME_RAW_BYTES) {
-            uint8_t header[16];
-            r = file_read(image, t, offset, header, sizeof(header), limit);
+        if(header_bytes) {
+            r = data_header(image,t,offset,limit);
             if(r != KUI_GAME_OK) return r;
-            if(header[0] || header[11] || header[15] != 1) return KUI_GAME_MODE;
-            for(unsigned j = 1; j < 11; ++j) if(header[j] != 255) return KUI_GAME_MODE;
-            offset += sizeof(header);
+            offset += header_bytes;
         }
         uint32_t take = sector_bytes - skip;
         if(take > bytes) take = bytes;

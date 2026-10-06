@@ -118,6 +118,13 @@ int main(void) {
     expect(KUI_GAME_METADATA_OK); assert(!meta.native_gd && !meta.windows_ce);
     setup(45000); fixture.sectors[0][37] = 'C';
     expect(KUI_GAME_METADATA_OK); assert(!meta.native_gd && !meta.windows_ce);
+    setup(11700); memcpy(fixture.sectors[0]+37,"CD-ROM",6);
+    expect(KUI_GAME_METADATA_OK); assert(meta.native_cd && !meta.native_gd && !meta.windows_ce);
+    assert(meta.boot_lba==11721u);
+    setup(0); memcpy(fixture.sectors[0]+37,"CD-ROM",6);fixture.sectors[0][62]='1';
+    expect(KUI_GAME_METADATA_OK); assert(meta.windows_ce && !meta.native_cd && !meta.native_gd);
+    setup(0); memcpy(fixture.sectors[0]+37,"CD-ROM",6);fixture.sectors[0][60]='G';
+    expect(KUI_GAME_METADATA_OK); assert(!meta.windows_ce && !meta.native_cd && !meta.native_gd);
 
     setup(45000); memset(fixture.sectors[0], 0, 16);
     expect(KUI_GAME_METADATA_IP_HEADER); assert(!meta.ip_valid && fixture.reads == 1);

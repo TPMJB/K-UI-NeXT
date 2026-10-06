@@ -2,6 +2,7 @@
 #include "retail_boot.h"
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define COUNT 3u
 static uint8_t raw[COUNT * KUI_GAME_RAW_BYTES];
@@ -25,6 +26,20 @@ static void prepare(void) {
     memset(output, 0x5a, sizeof(output));
 }
 int main(void) {
+    /* Fixed oracle from KOS scramble's out-of-place descrambler: one2MiB
+     * window, a64KiB tail window and a31byte untouched final slice. This
+     * checks in-place cycles, seed carry and both sides of the max window. */
+    const uint32_t scramble_bytes=2162719u;
+    uint8_t *scrambled=malloc(scramble_bytes);
+    uint16_t *index=malloc(KUI_RETAIL_SCRAMBLE_SLICES*sizeof(*index));
+    uint8_t *seen=malloc(KUI_RETAIL_SCRAMBLE_SLICES/8u);
+    assert(scrambled && index && seen);
+    for(uint32_t i=0;i<scramble_bytes;i++) scrambled[i]=(uint8_t)(i*17u+(i>>8)+(i>>16));
+    kui_retail_boot_descramble(scrambled,scramble_bytes,index,seen);
+    assert(kui_retail_crc32(0,scrambled,scramble_bytes)==0xb3b0910fu);
+    for(uint32_t i=scramble_bytes-31u;i<scramble_bytes;i++)
+        assert(scrambled[i]==(uint8_t)(i*17u+(i>>8)+(i>>16)));
+    free(seen);free(index);free(scrambled);
     uint32_t failed = 0;
     prepare();
     assert(kui_retail_boot_copy(raw, output, 45000, COUNT, KUI_GAME_RAW_BYTES, &failed) ==

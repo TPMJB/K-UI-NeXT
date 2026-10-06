@@ -301,6 +301,55 @@ static void metadata(void) {
     CHECK(call(KUI_GD_RESET, 0, 0) == 0);
     CHECK(call(KUI_GD_DRIVE, STATUS, 0) == 0 && get(STATUS) == 1);
 }
+static void cd_metadata(void) {
+    reset();
+    static const union kui_retail_slot cd[]={
+        {.track={.start_lba=0,.end_lba=8,.control=4|KUI_RETAIL_TRACK_COOKED}},
+        {.track={.start_lba=16,.end_lba=24,.control=KUI_RETAIL_TRACK_2448}},
+        {.track={.start_lba=44000,.end_lba=46000,.control=4|KUI_RETAIL_TRACK_MODE2|KUI_RETAIL_TRACK_OFFSET_HIGH}},
+        {.track={.start_lba=48000,.end_lba=60000,.control=4|KUI_RETAIL_TRACK_MODE2|KUI_RETAIL_TRACK_2336}}
+    };
+    CHECK(kui_retail_gd_init(&service,cd,4,&ops,BEGIN,END)==-1); /* Public initializer remains GD. */
+    kui_retail_gd_init_validated(&service,cd,4,&ops,BEGIN,END);
+    kui_retail_gd_set_disc_type(&service,0x10,44000);
+    CHECK(service.disc_type==0x10 && service.position_lba==44000);
+    kui_retail_gd_set_disc_type(&service,0x20,0);
+    CHECK(service.disc_type==0x10 && service.position_lba==44000);
+    mode(2048,2048); /* Explicit Mode2 Form1 selects the same 2048-byte payload. */
+    for(unsigned command=0;command<2;command++) {
+        put(PARAM,0);put(PARAM+4,OUTPUT);
+        int32_t token=call(KUI_GD_REQUEST,command?KUI_GD_GETTOC2:KUI_RETAIL_GD_GETTOC,PARAM);
+        CHECK(token>0);
+        kui_retail_gd_set_disc_type(&service,0x80,0);CHECK(service.disc_type==0x10);
+        CHECK(call(KUI_GD_DRIVE,STATUS,0)==0 && get(STATUS)==0 && get(STATUS+4)==0x10);
+        CHECK(call(KUI_GD_EXEC,0,0)==0);
+        CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_COMPLETED);
+        CHECK(get(OUTPUT)==(0x41000000u|150u));
+        CHECK(get(OUTPUT+4)==(0x01000000u|166u));
+        CHECK(get(OUTPUT+8)==(0x41000000u|44150u));
+        CHECK(get(OUTPUT+12)==(0x41000000u|48150u));
+        CHECK(get(OUTPUT+396)==0x41010000u && get(OUTPUT+400)==0x41040000u);
+        CHECK(get(OUTPUT+404)==(0x41000000u|60150u));
+    }
+    uint8_t previous[KUI_GD_TOC_BYTES];memcpy(previous,ram+OUTPUT-BEGIN,sizeof(previous));
+    for(uint32_t area=1;area<=2;area++) {
+        put(PARAM,area);put(PARAM+4,OUTPUT);
+        CHECK(call(KUI_GD_REQUEST,KUI_GD_GETTOC2,PARAM)==0 && !service.pending);
+        CHECK(!memcmp(previous,ram+OUTPUT-BEGIN,sizeof(previous)));
+    }
+    put(PARAM,48155);
+    CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_SEEK,PARAM)>0);
+    CHECK(call(KUI_GD_EXEC,0,0)==0);
+    for(unsigned i=0;i<4;i++) put(PARAM+i*4u,OUTPUT+i*8u);
+    CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_REQ_STAT,PARAM)>0);
+    CHECK(call(KUI_GD_EXEC,0,0)==0);
+    CHECK(get(OUTPUT+8)==4 && get(OUTPUT+16)==(0x14000000u|48155u));
+    CHECK(call(KUI_GD_REQUEST,KUI_GD_STOP,0)>0 && call(KUI_GD_EXEC,0,0)==0);
+    CHECK(call(KUI_GD_DRIVE,STATUS,0)==0 && get(STATUS)==2 && get(STATUS+4)==0x10);
+    CHECK(call(KUI_GD_INIT,0,0)==0 && call(KUI_GD_RESET,0,0)==0);
+    CHECK(call(KUI_GD_DRIVE,STATUS,0)==0 && get(STATUS+4)==0x10);
+    CHECK(service.sector_bytes==2048 && ctx.reads==0 && ctx.checks==0);
+}
 static void silent_cd_audio(void) {
     /* Disc audio commands complete at once, without reads, output or a
      * change of drive state, so a game waiting on them keeps running. */
@@ -824,6 +873,7 @@ static void many_tracks(void) {
     CHECK(ctx.reads == 0);
 }
 int main(void) {
+    cd_metadata();
     many_tracks();
     /* The physical cooked flag must never leak into a game's disc metadata.
      * Exercise TOC, drive position and Q subcode through normal GD calls. */

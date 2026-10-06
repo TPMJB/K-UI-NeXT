@@ -7,6 +7,7 @@ import shutil
 import struct
 import tempfile
 from games_fixture import make_fixture, dual32
+from game_format_fixture import make_format_fixture
 from test_images import run
 from test_loader_probe_images import digest, partition_image, check_fs, envelope
 
@@ -40,6 +41,23 @@ SUCCESS_CASES = ("valid", "boot-tail", "fragmented", "other-title",
 # which fits the background reader's 64 slots only with audio left unmapped.
 MANY_TRACKS = {"tracks-31": 31, "tracks-99": 99, "async-tracks-31": 31, "async-tracks-40": 40}
 AUDIO_UNMAPPED = ("tracks-99", "async-tracks-40")
+FORMAT_CASES = (
+    "format-gdi-offset-raw", "format-gdi-offset-cooked",
+    "format-iso-gd", "format-iso-cd11700", "format-iso-cd0",
+    "format-iso-cd11700-bad-size", "format-iso-cd11700-bad-extent",
+    "format-raw-bin", "format-raw-mode2-img",
+    "format-cue-shared", "format-cue-2336", "format-cue-2448", "format-cue-scrambled",
+    "format-cue-gd-density", "format-cue-scrambled-force-plain",
+    "format-cue-shared-fragmented", "format-cue-shared-async", "format-cue-2336-async",
+    "format-cue-bad-offset", "format-cue-bad-form2",
+    "format-cdi-v2", "format-cdi-v3-native", "format-cdi-v35",
+    "format-cdi-v35-pregap150",
+    "format-cdi-v35-2336", "format-cdi-v35-2448",
+    "format-cdi-v35-async",
+    "format-cdi-v35-force-scramble", "format-cdi-v35-bad-encoding",
+    "format-cdi-v35-bad-ce-scramble", "format-cdi-v35-bad-ce-plain",
+    "format-cdi-v35-bad-footer", "format-cdi-v35-bad-payload",
+)
 
 
 def synthetic_package(ce=False):
@@ -58,6 +76,11 @@ def synthetic_package(ce=False):
 
 
 def make_retail_fixture(folder, case):
+    if case in FORMAT_CASES:
+        make_format_fixture(folder, case)
+        (folder / "retail-boot.kui").write_bytes(synthetic_package())
+        (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
+        return
     make_fixture(folder)
     track = folder / "track03.bin"
     data = bytearray(track.read_bytes())
@@ -118,6 +141,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rc-only", action="store_true",
                         help="Only native-title/boot selection and compatibility cases, on MBR FAT32/exFAT")
+    parser.add_argument("--formats-only", action="store_true",
+                        help="Only generic image-format preparation, on MBR FAT32/exFAT")
     args = parser.parse_args()
     for binary in ("mkfs.fat", "mkfs.exfat", "fsck.fat", "fsck.exfat"):
         if not shutil.which(binary):
@@ -132,8 +157,8 @@ def main():
             run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
-            layouts = ((True, RC_CASES),) if args.rc_only else (
-                (True, CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
+            layouts = ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
+                (True, CASES + FORMAT_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
             for partitioned, cases in layouts:
                 clean = partitioned_clean if partitioned else volume
                 layout = "MBR" if partitioned else "superfloppy"
@@ -146,7 +171,7 @@ def main():
                     output = run(BINARY, str(image), str(fixture), "check", case)
                     assert f"PASS retail preparation check {case}; no active-operation writes" in output
                     assert digest(image) == before, f"Retail preparation changed {kind} {layout} in {case}"
-                    if case in SUCCESS_CASES:
+                    if case in SUCCESS_CASES or (case in FORMAT_CASES and "bad" not in case):
                         assert "full IP CRC, exact boot bytes and headers" in output
                         check_fs(image, base / "check-volume.img", kind, partitioned)
                     if case == "cdda-warning":
@@ -174,7 +199,7 @@ def main():
                     if case == "bad-cooked-size":
                         assert "Invalid track length" in output
                     if case in ("cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked"):
-                        assert "checking cooked executable CRC before detached launch" in output
+                        assert "checking exact executable CRC before detached launch" in output
                         assert "Cooked data RAW requests refused before IO; exact boot CRC" in output
                     if case in MANY_TRACKS:
                         unmapped = "audio tracks listed without their files" in output
@@ -182,7 +207,7 @@ def main():
                         assert ("Retail boot reader: background SCI stream" in output) == \
                             case.startswith("async-"), case
                     if case in ("boot-low-density", "boot-overlap-ip"):
-                        assert "boot executable and full IP must be in high-density data tracks" in output
+                        assert "boot executable and full IP must be in the selected data session" in output
                     image.unlink()
                     print(f"PASS {kind} {layout} retail preparation: {case}; whole-card SHA256 unchanged", flush=True)
 

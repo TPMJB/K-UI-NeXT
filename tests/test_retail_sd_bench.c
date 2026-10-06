@@ -6,6 +6,7 @@
 #include <string.h>
 
 static uint32_t clock_value, reads, claims, releases, followups;
+static uint32_t window_begin,window_end;
 static bool owned, last_multi, corrupt_multi, fail_multi, frozen, refuse;
 static uint32_t sequence[128], sequence_count;
 static struct kui_loader_sd card;
@@ -26,7 +27,7 @@ void kui_retail_sd_release(void) {
 static enum kui_loader_sd_result read_mock(struct kui_loader_sd *c, uint32_t lba,
     uint32_t count, void *out, bool multi) {
     assert(c == &card && owned && c->ready);
-    assert(lba >= 1000 && (uint64_t)lba + count <= 1040);
+    assert(lba >= window_begin && (uint64_t)lba + count <= window_end);
     assert(sequence_count < sizeof(sequence) / sizeof(sequence[0]));
     sequence[sequence_count++] = (multi ? 1800 : 1700) + count;
     ++reads;
@@ -52,6 +53,7 @@ static void reset(void) {
     clock_value = UINT32_MAX - 40;
     reads = claims = releases = followups = sequence_count = 0;
     owned = last_multi = corrupt_multi = fail_multi = frozen = refuse = false;
+    window_begin=1000;window_end=1040;
     card.blocks = 2000; card.ready = true;
     manifest.card_sectors = 2000; manifest.partition_start = 100;
     manifest.partition_end = 1900; manifest.track_count = manifest.extent_count = 1;
@@ -85,6 +87,19 @@ int main(void) {
     reset(); manifest.slots[0].track.control |= KUI_RETAIL_TRACK_COOKED;
     manifest.slots[0].track.end_lba = 45010;
     assert(run() == KUI_SD_BENCH_OK && report.lba == 1000); /* Ten: 40. */
+    reset();manifest.slots[0].track.first_extent=(uint16_t)(1u|255u<<8);
+    manifest.slots[0].track.control|=KUI_RETAIL_TRACK_OFFSET_HIGH;
+    window_begin=1001;window_end=1041;
+    assert(run()==KUI_SD_BENCH_OK && report.lba==1001); /* Excludes partial first block. */
+    reset();manifest.slots[0].track.control|=KUI_RETAIL_TRACK_COOKED;
+    manifest.slots[0].track.end_lba=45010;manifest.slots[0].track.first_extent=(uint16_t)(1u|1u<<8);
+    assert(run()==KUI_SD_BENCH_WINDOW && reads==0); /* 40 whole blocks minus partial start. */
+    reset();manifest.flags=KUI_RETAIL_IMAGE_CD;
+    manifest.slots[0].track.start_lba=0;manifest.slots[0].track.end_lba=9;
+    manifest.slots[0].track.control|=KUI_RETAIL_TRACK_MODE2|KUI_RETAIL_TRACK_2336;
+    assert(run()==KUI_SD_BENCH_OK && report.lba==1000); /* CD data need not begin at45000. */
+    reset();manifest.slots[0].track.start_lba=0;manifest.slots[0].track.end_lba=9;
+    assert(run()==KUI_SD_BENCH_WINDOW && reads==0); /* GD's old high-density gate remains. */
     reset(); manifest.slots[1].extent.file_block = 2; /* Last block is padding. */
     assert(run() == KUI_SD_BENCH_WINDOW && reads == 0);
     reset(); manifest.partition_end = 1039;

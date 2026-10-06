@@ -17,19 +17,20 @@ static bool bench_window(const struct kui_retail_manifest *m,
     for(uint32_t i = 0; i < m->track_count; ++i) {
         const struct kui_retail_track *t = &m->slots[i].track;
         const uint32_t used = m->track_count + m->extent_count;
-        if(kui_retail_track_control(t) != 4 || t->start_lba < 45000 || t->end_lba <= t->start_lba ||
-           t->first_extent < m->track_count || t->first_extent >= used ||
-           t->extent_count > used - t->first_extent) continue;
-        uint64_t full_blocks = (uint64_t)(t->end_lba - t->start_lba) *
-            kui_retail_track_sector_bytes(t) / 512;
+        uint32_t first=kui_retail_track_first_extent(t),offset=kui_retail_track_file_offset(t);
+        if(kui_retail_track_control(t) != 4 || (!(m->flags & KUI_RETAIL_IMAGE_CD) && t->start_lba < 45000) || t->end_lba <= t->start_lba ||
+           first < m->track_count || first >= used || t->extent_count > used - first) continue;
+        uint64_t full_blocks = (offset+(uint64_t)(t->end_lba - t->start_lba) *
+            kui_retail_track_sector_bytes(t)) / 512;
         for(uint32_t j = 0; j < t->extent_count; ++j) {
-            const struct kui_retail_extent *e = &m->slots[t->first_extent + j].extent;
-            uint64_t end = (uint64_t)e->card_lba + KUI_SD_BENCH_BLOCKS;
-            if(e->blocks < KUI_SD_BENCH_BLOCKS ||
-               (uint64_t)e->file_block + KUI_SD_BENCH_BLOCKS > full_blocks ||
+            const struct kui_retail_extent *e = &m->slots[first + j].extent;
+            uint32_t skip=offset && !e->file_block?1u:0u;
+            uint64_t end = (uint64_t)e->card_lba + skip + KUI_SD_BENCH_BLOCKS;
+            if(e->blocks < skip+KUI_SD_BENCH_BLOCKS ||
+               (uint64_t)e->file_block + skip + KUI_SD_BENCH_BLOCKS > full_blocks ||
                e->card_lba < m->partition_start || end > m->partition_end ||
                end > (UINT64_C(1) << 32)) continue;
-            *lba = e->card_lba;
+            *lba = e->card_lba+skip;
             return true;
         }
     }

@@ -144,6 +144,9 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_retail_ready(s)?
             (s->games_from_files?"A Launch   X Inspect   B Files":kui_shell_games_variant_label(s)?
                 "A Launch   X Inspect   B Versions":"A Launch   X Inspect   B Games"):
+            kui_shell_games_ce_probe_ready(s)?
+            (s->games_from_files?"A CE test   X Inspect   B Files":kui_shell_games_variant_label(s)?
+                "A CE test   X Inspect   B Versions":"A CE test   X Inspect   B Games"):
             kui_shell_games_image_ready(s)?
             (s->games_from_files?"Y Read test   X Inspect   B Files":kui_shell_games_variant_label(s)?
                 "Y Read test   X Inspect   B Versions":"Y Read test   X Inspect   B Games"):
@@ -169,7 +172,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "A Start test   B Image details":"B Image details") :
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM ? (kui_shell_games_retail_ready(s)?
             "A Launch   X/Y Background reader   B Details":kui_shell_games_ce_probe_ready(s)?
-            "A Start test   X Background reader   B Details":"B Image details") :
+            "A Start test   B Details":"B Image details") :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
@@ -1241,7 +1244,7 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
             entry_art(p,s,v,i,x+4,y+1,KUI_COVER_SMALL);
             words(p,x+70,y+10,x+280,ink,entry_text(e),false);
             words(p,x+70,y+32,x+280,MUTED,e->directory?"Folder":e->variant_2048_path[0]?
-                "Original / 2048-byte copy":strcmp(entry_text(e),e->name)?e->name:"GDI image",false);
+                "Original / 2048-byte copy":strcmp(entry_text(e),e->name)?e->name:"Disc image",false);
         } else if(view==KUI_GAMES_VIEW_GALLERY) {
             unsigned x=32+(i%4)*144,y=134+(i/4)*130;
             if(i==chosen) panel(p,x+10,y-3,124,130,SELECTED);
@@ -1262,7 +1265,7 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
         centred(p,436,316,KUI_COVER_LARGE,MUTED,e->directory?"Folder":pixels?(strcmp(entry_text(e),e->name)?e->name:""):
             l->artwork?"No box art found":"No box art yet");
     }
-    if(!count && !v->busy) label(p,40,210,MUTED,"No selectable GDI images or folders in this view.");
+    if(!count && !v->busy) label(p,40,210,MUTED,"No selectable disc images or folders in this view.");
     label(p,40,398,v->busy?CYAN:AMBER,!v->busy && count && l->entries[chosen].variant_2048_path[0]?
         "A chooses Original or 2048-byte copy.":!v->busy && count && !l->artwork?
         "No box art yet: press START, then Scan box art.":l->message);
@@ -1306,24 +1309,29 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         words(p,44,228,right,WHITE,line,false);
         snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: %u",d->tracks,d->data_tracks,d->audio_tracks);
         words(p,44,254,right,WHITE,line,false);
-        snprintf(line,sizeof(line),"Image size: %llu bytes",(unsigned long long)d->bytes);
+        static const char *const formats[]={"GDI","ISO","CUE/BIN","CDI","BIN/IMG"};
+        const char *format=(unsigned)d->format<sizeof(formats)/sizeof(formats[0])?formats[d->format]:"Unknown";
+        snprintf(line,sizeof(line),"Format: %s   %llu bytes",format,(unsigned long long)d->bytes);
         words(p,44,280,right,WHITE,line,false);
         snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
         words(p,44,306,right,MUTED,line,false);
         if(kui_shell_games_retail_ready(s)) {
-            words(p,44,337,right,CYAN,"A Launch game   Y Advanced read test",false);
+            words(p,44,337,right,CYAN,d->format==KUI_GAME_IMAGE_GDI?
+                "A Launch game   Y Advanced read test":"A Launch game   X Inspect again",false);
             words(p,44,365,right,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
-                "CD audio is unavailable; this game may not run.":
+                "CD audio is unavailable; music may be missing.":
                 "V1.7: game compatibility varies.",false);
         } else if(kui_shell_games_ce_probe_ready(s)) {
-            words(p,44,337,right,CYAN,"A Windows CE boot test   Y Advanced read test",false);
+            words(p,44,337,right,CYAN,d->format==KUI_GAME_IMAGE_GDI?
+                "A Windows CE boot test   Y Advanced read test":"A Windows CE boot test   X Inspect again",false);
             words(p,44,365,right,AMBER,"Windows CE SCI launch test; compatibility varies.",false);
         } else {
             words(p,44,337,right,AMBER,d->windows_ce?"Windows CE SCI launch test; compatibility varies.":
-                !d->native_gd?"This image has no supported native GD boot header.":
+                !(d->native_gd || d->native_cd)?"This image has no supported native boot header.":
                 d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 99 tracks.":
                 "This image exceeds the current launch limits.",false);
-            words(p,44,365,right,MUTED,"Y Advanced read test   X Inspect again",false);
+            words(p,44,365,right,MUTED,d->format==KUI_GAME_IMAGE_GDI?
+                "Y Advanced read test   X Inspect again":"X Inspect again",false);
         }
         words(p,44,386,right,MUTED,art?"Checks do not verify every saved sector.":
             "Metadata checks do not verify every saved sector.",false);
@@ -1340,7 +1348,7 @@ static void games_advanced(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Advanced");
     label(p,40,142,CYAN,"Source: SD card");
     const char *names[]={"Game library","Browse SD folders","Scan box art","Resident loader probe"};
-    const char *details[]={"Open /Games","Find a GDI image elsewhere on the card",
+    const char *details[]={"Open /Games","Find a disc image elsewhere on the card",
         "Covers and titles for every game in /Games","Test SD reads after leaving the launcher"};
     for(unsigned i=0;i<4;i++) {
         unsigned y=166+i*56;
@@ -1396,11 +1404,11 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         label(p,48,244,WHITE,"Loads Windows CE and the selected game.");
         label(p,48,270,WHITE,"Video and audio may still slow or lose sync.");
         label(p,48,302,WHITE,"Needs SCI microSD. SD stays read-only.");
-        label(p,48,328,WHITE,"A: standard reader   X: background reader.");
+        label(p,48,328,WHITE,"Reader: background (SCI microSD).");
         label(p,48,354,AMBER,"Power cycle to return to the launcher.");
         if(v->busy && v->app_status && v->app_status->message[0])
             label(p,48,380,CYAN,v->app_status->message);
-        else label(p,48,380,MUTED,"X: background reader with bounded SCI work.");
+        else label(p,48,380,MUTED,"Photograph any error or the last screen shown.");
         return;
     }
     title(p,40,108,"Games / Launch game");
@@ -1418,7 +1426,9 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
     label(p,48,244,WHITE,"SD access remains read-only.");
     label(p,48,270,WHITE,"The launcher closes before the game starts.");
     label(p,48,302,WHITE,"Keep the SD card inserted while playing.");
-    label(p,48,328,WHITE,"Photograph any error or the last screen shown.");
+    if(kui_shell_games_encoding_ready(s)) label(p,48,328,WHITE,s->games_retail_scrambled?
+        "Boot encoding: Scrambled   L/R Change":"Boot encoding: Plain   L/R Change");
+    else label(p,48,328,WHITE,"Photograph any error or the last screen shown.");
     label(p,48,354,AMBER,"Power cycle to return to the launcher.");
     if(v->busy && v->app_status && v->app_status->message[0])
         label(p,48,380,CYAN,v->app_status->message);

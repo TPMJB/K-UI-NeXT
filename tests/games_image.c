@@ -17,7 +17,7 @@ static struct {
     FIL *track;
     DIR *lazy_dir,*root_dir;
     unsigned writes, connects, disconnects, files, dirs, read_calls;
-    unsigned dir_calls,stat_calls,block_reads,variant_summaries,variant_failures,callbacks;
+    unsigned dir_calls,stat_calls,block_reads,variant_summaries,variant_failures,callbacks,root_rewinds;
     bool active, connected, injected, cancelled;
 } test;
 static FATFS fs;
@@ -128,7 +128,8 @@ FRESULT __wrap_f_opendir(DIR *dir, const TCHAR *path) {
 FRESULT __real_f_readdir(DIR *dir, FILINFO *info);
 FRESULT __wrap_f_readdir(DIR *dir, FILINFO *info) {
     if(test.active) ++test.dir_calls;
-    if(dir==test.root_dir && info && fault("cache-index-read-once") && !test.injected) {test.injected=true;return FR_DISK_ERR;}
+    if(dir==test.root_dir && !info) ++test.root_rewinds;
+    if(dir==test.root_dir && info && test.root_rewinds==1u && fault("cache-index-read-once") && !test.injected) {test.injected=true;return FR_DISK_ERR;}
     if(dir==test.lazy_dir && fault("cache-dir-read-once") && !test.injected) {test.injected=true;return FR_DISK_ERR;}
     if(fault("dir-read-fail")) { test.injected = true; return FR_DISK_ERR; }
     FRESULT result = __real_f_readdir(dir, info);
@@ -298,7 +299,87 @@ static void seed_variants(const char *host) {
         write_file("0:/Games/Reader Test-2048/conversion.json","not trusted metadata",20);
     }
 }
+static void little32(uint8_t *out,uint32_t value) {for(unsigned i=0;i<4;i++) out[i]=(uint8_t)(value>>(i*8));}
+static uint32_t get32(const uint8_t *in) {return (uint32_t)in[0]|(uint32_t)in[1]<<8|(uint32_t)in[2]<<16|(uint32_t)in[3]<<24;}
+static void both32(uint8_t *out,uint32_t value) {
+    little32(out,value);for(unsigned i=0;i<4;i++) out[4+i]=(uint8_t)(value>>((3-i)*8));
+}
+/* Clone only synthetic fixture payloads; CD files rebase recorded ISO extents
+ * and media flags so inspection exercises a real LBA-zero CD boot session. */
+static void seed_iso(const char *host,const char *target,bool cd,bool raw,bool mode2) {
+    char path[1024];assert(snprintf(path,sizeof(path),"%s/../cooked-gdi/track03.iso",host)<(int)sizeof(path));
+    FILE *file=fopen(path,"rb");assert(file);uint8_t cooked[200000];
+    size_t size=fread(cooked,1,sizeof(cooked),file);assert(size<sizeof(cooked) && !ferror(file) && !fclose(file));
+    assert(size==64u*2048u);
+    if(cd) {
+        memcpy(cooked+37,"CD-ROM",6);
+        uint8_t *pvd=cooked+16u*2048u;both32(pvd+80,64);both32(pvd+158,get32(pvd+158)-45000u);
+        uint8_t *directory=cooked+20u*2048u;
+        for(unsigned pos=0;pos<2048u && directory[pos];pos+=directory[pos]) both32(directory+pos+2,get32(directory+pos+2)-45000u);
+    }
+    if(!raw) {write_file(target,cooked,size);return;}
+    uint8_t data[64u*2352u];memset(data,0,sizeof(data));
+    for(unsigned i=0;i<64;i++) {
+        uint8_t *sector=data+i*2352u;memset(sector+1,255,10);sector[15]=mode2?2u:1u;
+        unsigned fad=(cd?0u:45000u)+i+150u,minute=fad/4500u,second=fad/75u%60u,frame=fad%75u;
+        sector[12]=(uint8_t)((minute/10u)*16u+minute%10u);sector[13]=(uint8_t)((second/10u)*16u+second%10u);sector[14]=(uint8_t)((frame/10u)*16u+frame%10u);
+        memcpy(sector+(mode2?24u:16u),cooked+i*2048u,2048u);
+    }
+    write_file(target,data,sizeof(data));
+}
+static void seed_formats(const char *host) {
+    assert(f_mkdir("0:/Games")==FR_OK);
+    if(!strcmp(test.fault,"format-root-extensions")) {
+        const char *names[]={"IMAGE.CDI","IMAGE.ISO","IMAGE.BIN","IMAGE.IMG","IMAGE.CSO","IMAGE.ZSO","IMAGE.CHD","ignored.txt"};
+        for(unsigned i=0;i<8;i++) {char path[96];snprintf(path,sizeof(path),"0:/Games/%s",names[i]);write_file(path,"bad",3);}return;
+    }
+    if(!strcmp(test.fault,"format-gdi-payload")) {
+        seed_fixture(host,folder,true);seed_iso(host,"0:/Games/Reader Test/Independent.ISO",true,false,false);return;
+    }
+    if(!strcmp(test.fault,"format-compressed")) {
+        write_file("0:/Games/Packed.cso","CISO",4);write_file("0:/Games/Packed.zso","ZISO",4);write_file("0:/Games/Packed.chd","MComprHD",8);return;
+    }
+    assert(f_mkdir(folder)==FR_OK);
+    if(!strcmp(test.fault,"format-inspect-cdi-invalid")) {write_file("0:/Games/Reader Test/disc.cdi","truncated",9);return;}
+    if(!strcmp(test.fault,"format-inspect-cdi")) {
+        seed_iso(host,"0:/Games/Reader Test/disc.cdi",true,false,false);
+        uint8_t data[200000];size_t payload=load_file("0:/Games/Reader Test/disc.cdi",data,sizeof(data)),at=payload;
+        static const uint8_t marker[20]={0,0,1,0,0,0,255,255,255,255,0,0,1,0,0,0,255,255,255,255};
+        memset(data+at,0,256);data[at]=1;data[at+2]=1;at+=4;
+        at+=4;memcpy(data+at,marker,sizeof(marker));at+=20;at+=4;at+=1;at+=19;at+=4;at+=2;
+        little32(data+at+4,64);little32(data+at+14,1);little32(data+at+30,150);little32(data+at+34,64);at+=87;at+=12;
+        little32(data+at,0x80000004u);little32(data+at+4,(uint32_t)payload);at+=8;
+        write_file("0:/Games/Reader Test/disc.cdi",data,at);return;
+    }
+    if(!strcmp(test.fault,"format-cue-shared")) {
+        seed_iso(host,"0:/Games/Reader Test/payload.bin",true,true,false);
+        uint8_t data[65u*2352u];memset(data,0,2352);size_t size=load_file("0:/Games/Reader Test/payload.bin",data+2352,sizeof(data)-2352);assert(size==64u*2352u);
+        uint8_t *pvd=data+17u*2352u+16u;both32(pvd+80,65);both32(pvd+158,get32(pvd+158)+1u);
+        uint8_t *directory=data+21u*2352u+16u;
+        for(unsigned pos=0;pos<2048u && directory[pos];pos+=directory[pos]) both32(directory+pos+2,get32(directory+pos+2)+1u);
+        write_file("0:/Games/Reader Test/payload.bin",data,sizeof(data));
+        const char *cue="FILE \"payload.bin\" BINARY\n TRACK 01 AUDIO\n INDEX 01 00:00:00\n TRACK 02 MODE1/2352\n INDEX 01 00:00:01\n";
+        write_file("0:/Games/Reader Test/disc.CUE",cue,strlen(cue));return;
+    }
+    bool iso=!strcmp(test.fault,"format-folder-iso") || !strcmp(test.fault,"format-inspect-iso");
+    bool raw=!strcmp(test.fault,"format-inspect-bin") || !strcmp(test.fault,"format-inspect-mode2") || !strcmp(test.fault,"format-bad-boot");
+    const char *name=iso?"disc.ISO":raw?"disc.bin":"payload.bin";
+    char path[128];snprintf(path,sizeof(path),"%s/%s",folder,name);
+    seed_iso(host,path,true,raw,!strcmp(test.fault,"format-inspect-mode2"));
+    if(!iso && !raw) {
+        const char *cue="FILE \"payload.bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n";
+        write_file("0:/Games/Reader Test/disc.CUE",cue,strlen(cue));
+    }
+    if(!strcmp(test.fault,"format-cue-listing")) {
+        write_file("0:/Games/Reader Test/unrelated.bin","bad",3);write_file("0:/Games/Reader Test/unrelated.img","bad",3);
+    }
+    if(!strcmp(test.fault,"format-folder-ambiguous")) seed_iso(host,"0:/Games/Reader Test/Independent.ISO",true,false,false);
+    if(!strcmp(test.fault,"format-bad-boot")) {
+        uint8_t data[200000];size_t bytes=load_file(path,data,sizeof(data));data[16]='X';write_file(path,data,bytes);
+    }
+}
 static void seed(const char *host) {
+    if(!strncmp(test.fault,"format-",7)) {seed_formats(host);return;}
     if(!strncmp(test.fault,"variant-",8)) {seed_variants(host);return;}
     if(!strcmp(test.fault, "missing-root")) return;
     assert(f_mkdir("0:/Games") == FR_OK && f_mkdir(folder) == FR_OK);
@@ -402,7 +483,7 @@ static void check_listing(void) {
         assert(page.entries[i].disabled == all[3 + i].disabled);
     }
     assert(kui_games_list("/Games/Empty Folder", 0, &page, log_line, cancel) && !page.count);
-    assert(!test.track_bytes && !test.read_bytes);
+    assert(!test.track_bytes && test.read_bytes<32768u);
 }
 
 static void cached_mounted(void *ctx,kui_log_fn log,kui_cancel_fn stop) {
@@ -523,7 +604,7 @@ static void check_variants(void) {
         assert(!strcmp(page.entries[1].name,"Reader Test-2048") && !page.entries[1].variant_2048_path[0]);
         assert(kui_games_list("/Games",513,&page,log_line,cancel));
         assert(page.count==1 && page.total==514 && !page.has_more);
-        assert(!test.read_bytes && !test.track_bytes);return;
+        assert(test.read_bytes<4096u && !test.track_bytes);return;
     }
     if(!strcmp(test.fault,"variant-pages")) {
         struct kui_games_entry all[16];unsigned count=0,pairs=0;
@@ -565,6 +646,7 @@ static void check_variants(void) {
         !strcmp(test.fault,"variant-all-cooked-original") || !strcmp(test.fault,"variant-many-tracks");
     bool original_only=!strcmp(test.fault,"variant-original-only");
     bool converted_only=!strcmp(test.fault,"variant-converted-only");
+    bool unavailable=fault("open-fail") || fault("read-fail") || fault("short-read") || fault("seek-fail") || fault("close-fail");
     assert(page.count==(paired || original_only || converted_only?1u:2u)+(chain?1u:0u));
     assert(page.total==page.count && !page.has_more);
     bool original=false,converted=false,double_copy=false;
@@ -572,7 +654,7 @@ static void check_variants(void) {
         const struct kui_games_entry *e=&page.entries[i];
         if(!strcmp(e->name,"Reader Test")) {
             original=true;
-            if(!strcmp(test.fault,"variant-ambiguous-original")) assert(e->directory && !strcmp(e->path,"/Games/Reader Test"));
+            if(!strcmp(test.fault,"variant-ambiguous-original") || unavailable) assert(e->directory && !strcmp(e->path,"/Games/Reader Test"));
             else assert(!e->directory && !strcmp(e->path,selected));
             const char *expected=!strcmp(test.fault,"variant-case")?"/Games/reader test-2048/disc.gdi":
                 !strcmp(test.fault,"variant-descriptor-name")?"/Games/Reader Test-2048/Converted version.GDI":
@@ -585,17 +667,77 @@ static void check_variants(void) {
         } else {
             assert(!strcmp(e->name,"Reader Test-2048"));converted=true;
             assert(!e->variant_2048_path[0]);
-            if(!strcmp(test.fault,"variant-ambiguous-converted")) assert(e->directory && !strcmp(e->path,"/Games/Reader Test-2048"));
+            if(!strcmp(test.fault,"variant-ambiguous-converted") || !strcmp(test.fault,"variant-invalid") ||
+               !strcmp(test.fault,"variant-mismatch-count") || !strcmp(test.fault,"variant-missing-track") || unavailable)
+                assert(e->directory && !strcmp(e->path,"/Games/Reader Test-2048"));
             else assert(!e->directory && !strcmp(e->path,"/Games/Reader Test-2048/disc.gdi"));
         }
     }
     assert(original==!converted_only && converted==(!paired && !original_only));
     assert(double_copy==chain);
     assert(!test.track_bytes && test.read_bytes<4096);
-    if(original_only || converted_only) assert(!test.read_bytes);
+    if(original_only || converted_only) assert(test.read_bytes<4096u);
+}
+static void check_formats(void) {
+    struct kui_games_page page;
+    if(!strcmp(test.fault,"format-root-extensions")) {
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.total==7 && page.count==7 && !page.has_more);
+        for(unsigned i=0;i<page.count;i++) assert(!page.entries[i].directory && !page.entries[i].disabled && !page.entries[i].variant_2048_path[0]);
+        unsigned reads=test.block_reads,dirs=test.dir_calls;
+        assert(kui_games_list("/Games",0,&page,log_line,cancel));assert(test.block_reads==reads && test.dir_calls==dirs);return;
+    }
+    if(!strcmp(test.fault,"format-compressed")) {
+        const char *names[]={"Packed.cso","Packed.zso","Packed.chd"};
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==3);
+        for(unsigned i=0;i<3;i++) {
+            char path[96];snprintf(path,sizeof(path),"/Games/%s",names[i]);struct kui_games_detail detail;
+            assert(!kui_games_inspect(path,&detail,log_line,cancel) && !detail.valid && !detail.stopped);
+            assert(strstr(detail.message,"offline import") && strstr(detail.message,"direct launch unavailable"));
+        }
+        assert(!test.read_calls);return;
+    }
+    if(!strcmp(test.fault,"format-gdi-payload")) {
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1 && page.entries[0].directory);
+        assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel) && page.count==2 && page.total==2);
+        bool descriptor=false,independent=false;
+        for(unsigned i=0;i<page.count;i++) {
+            if(!strcmp(page.entries[i].name,"disc.gdi")) descriptor=true;
+            else {assert(!strcmp(page.entries[i].name,"Independent.ISO"));independent=true;}
+        }
+        assert(descriptor && independent);return;
+    }
+    bool iso=!strcmp(test.fault,"format-folder-iso") || !strcmp(test.fault,"format-inspect-iso");
+    bool raw=!strcmp(test.fault,"format-inspect-bin") || !strcmp(test.fault,"format-inspect-mode2") || !strcmp(test.fault,"format-bad-boot");
+    if(!strcmp(test.fault,"format-folder-ambiguous")) {
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1 && page.entries[0].directory);
+        assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel) && page.count==2 && page.total==2);return;
+    }
+    if(!strcmp(test.fault,"format-inspect-cdi-invalid")) {
+        struct kui_games_detail detail;
+        assert(!kui_games_inspect("/Games/Reader Test/disc.cdi",&detail,log_line,cancel) && !detail.valid);return;
+    }
+    assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1 && !page.entries[0].directory);
+    bool cdi=!strcmp(test.fault,"format-inspect-cdi");
+    char expected[128];snprintf(expected,sizeof(expected),"/Games/Reader Test/%s",iso?"disc.ISO":raw?"disc.bin":cdi?"disc.cdi":"disc.CUE");
+    assert(!strcmp(page.entries[0].path,expected) && !page.entries[0].variant_2048_path[0]);
+    unsigned dirs=test.dir_calls,reads=test.block_reads;
+    assert(kui_games_list("/Games",0,&page,log_line,cancel));assert(test.dir_calls==dirs && test.block_reads==reads);
+    assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel) && page.count==1 && page.total==1);
+    if(!strcmp(test.fault,"format-cue-listing")) return;
+    struct kui_games_detail detail;bool bad=!strcmp(test.fault,"format-bad-boot");
+    assert(kui_games_inspect(expected,&detail,log_line,cancel)==!bad && detail.valid==!bad);
+    if(bad) return;
+    bool shared=!strcmp(test.fault,"format-cue-shared");
+    assert(detail.native_cd && !detail.native_gd && !detail.windows_ce);
+    assert(!strcmp(detail.title,"Independent Games Fixture") && !strcmp(detail.boot_file,"1ST_READ.BIN"));
+    assert(detail.boot_bytes==4096 && detail.boot_lba==(shared?22u:21u));
+    assert(detail.tracks==(shared?2u:1u) && detail.data_tracks==1 && detail.audio_tracks==(shared?1u:0u));
+    assert(detail.bytes==(shared?65u*2352u:raw?64u*2352u:cdi?64u*2048u+165u:64u*2048u));
+    assert(detail.format==(iso?KUI_GAME_IMAGE_ISO:raw?KUI_GAME_IMAGE_RAW:cdi?KUI_GAME_IMAGE_CDI:KUI_GAME_IMAGE_CUE));
 }
 
 static void check(void) {
+    if(!strncmp(test.fault,"format-",7)) {check_formats();return;}
     if(!strncmp(test.fault,"variant-",8)) {check_variants();return;}
     if(!strcmp(test.fault, "listing")) { check_listing(); return; }
     if(!strcmp(test.fault, "missing-root") || !strcmp(test.fault, "cancel-list") ||
@@ -620,7 +762,7 @@ static void check(void) {
     assert(detail.message[0]);
     if(!strcmp(test.fault, "unsupported-format"))
         assert(!strcmp(detail.message,
-            "GDI needs 2048/2352-byte data, 2352-byte audio and zero offsets"));
+            "Unsupported image layout; offline import may be required"));
     if(valid) {
         assert(!strcmp(detail.path, selected));
         assert(!strcmp(detail.title, "Independent Games Fixture"));

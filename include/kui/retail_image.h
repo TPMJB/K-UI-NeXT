@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define KUI_RETAIL_IMAGE_VERSION 2u
+#define KUI_RETAIL_IMAGE_VERSION 3u
 #define KUI_RETAIL_IMAGE_WIRE_BYTES 4096u
 /* A map holds up to 99 tracks, GD-ROM's limit, and its storage is a table of
  * 12-byte slots shared by tracks and extents: track i (number i + 1) in slot
@@ -35,31 +35,50 @@ enum kui_retail_reader { KUI_RETAIL_READER_STANDARD, KUI_RETAIL_READER_ASYNC,
 #define KUI_RETAIL_IMAGE_MAX_SECTORS 64u
 #define KUI_RETAIL_IMAGE_BOOT_MAX (12u * 1024u * 1024u)
 
-/* 2352-byte raw tracks or 2048-byte Mode 1 data, with zero file offsets.
+/* 2048-byte data and 2336/2352/2448-byte CD sectors. Track extents begin at
+ * floor(container_offset/512); the packed offset is the remaining0..511bytes.
  * The final physical block
  * may contain allocation padding, which is never exposed as file data.
- * Extents exactly cover ceil(file_bytes/512), in file order, without aliases.
+ * Extents exactly cover ceil((offset+track_bytes)/512) in file order. Adjacent
+ * tracks in a shared file may share one boundary block with disjoint bytes.
  * An audio track may have none: it is listed (TOC, position reports) but its
  * sectors are not mapped, and reads of them are refused. K-UI leaves audio
  * unmapped only when a map would not fit otherwise; no audio is played. */
 struct kui_retail_track {
     uint32_t start_lba, end_lba; /* end exclusive */
-    uint16_t first_extent;       /* the slot of its first extent */
+    uint16_t first_extent;       /* low8: slot; high8: track's byte offset low8 */
     uint8_t extent_count;
     uint8_t control;             /* 4 data, 0 audio; optional cooked flag below. */
 };
 /* Keep the resident map's 12-byte slots and memory footprint unchanged. The
  * flag is an internal representation only; TOC control must use the helper. */
 #define KUI_RETAIL_TRACK_COOKED 0x80u
+#define KUI_RETAIL_TRACK_MODE2 0x40u
+#define KUI_RETAIL_TRACK_2336 0x20u
+#define KUI_RETAIL_TRACK_2448 0x10u
+#define KUI_RETAIL_TRACK_OFFSET_HIGH 0x08u
 static inline uint32_t kui_retail_track_control(const struct kui_retail_track *t) {
-    return t->control & ~KUI_RETAIL_TRACK_COOKED;
+    return t->control & 4u;
+}
+static inline uint32_t kui_retail_track_first_extent(const struct kui_retail_track *t) {
+    return t->first_extent & 255u;
+}
+static inline uint32_t kui_retail_track_file_offset(const struct kui_retail_track *t) {
+    return (t->first_extent >> 8) | ((t->control & KUI_RETAIL_TRACK_OFFSET_HIGH) ? 256u : 0u);
 }
 static inline uint32_t kui_retail_track_sector_bytes(const struct kui_retail_track *t) {
-    return (int8_t)t->control < 0 ? KUI_GAME_DATA_BYTES : KUI_GAME_RAW_BYTES;
+    return (t->control & KUI_RETAIL_TRACK_COOKED) ? KUI_GAME_DATA_BYTES :
+        (t->control & KUI_RETAIL_TRACK_2336) ? 2336u :
+        (t->control & KUI_RETAIL_TRACK_2448) ? 2448u : KUI_GAME_RAW_BYTES;
 }
 static inline uint32_t kui_retail_track_header_bytes(const struct kui_retail_track *t) {
-    return (int8_t)t->control < 0 ? 0u : 16u;
+    return (t->control & KUI_RETAIL_TRACK_COOKED) ? 0u :
+        (t->control & KUI_RETAIL_TRACK_2336) ? 8u :
+        (t->control & KUI_RETAIL_TRACK_MODE2) ? 24u : 16u;
 }
+#define KUI_RETAIL_IMAGE_CD 1u
+#define KUI_RETAIL_IMAGE_SCRAMBLED 2u
+#define KUI_RETAIL_IMAGE_BOOT_CRC 4u
 struct kui_retail_extent { uint32_t file_block, card_lba, blocks; };
 union kui_retail_slot {
     struct kui_retail_track track;
@@ -72,6 +91,7 @@ struct kui_retail_manifest {
     uint32_t track_count, extent_count, session_lba, boot_lba, boot_bytes;
     uint32_t storage_transport; /* Wire offset28; old zero field means SCIF. */
     uint32_t reader; /* enum kui_retail_reader; wire offset 264, formerly reserved zero */
+    uint32_t flags; /* CD session, scrambled boot and source CRC; wire offset268. */
     /* Raw boot sectors retain header/address validation. Cooked boot ranges
      * have no headers: boot_crc32 then identifies the exact full bootfile
      * bytes, including a CE prefix, checked during loading (zero is valid). */
@@ -79,10 +99,10 @@ struct kui_retail_manifest {
     char title[128], product[16], bootfile[24], region[16];
     union kui_retail_slot slots[KUI_RETAIL_MANIFEST_SLOTS]; /* last member */
 };
-/* Canonical fixed-size LE wire form with magic KUIRTI02 and CRC32 at byte16
+/* Canonical fixed-size LE wire form with magic KUIRTI03 and CRC32 at byte16
  * covering all 4096 bytes with bytes16..19 zeroed: a 320-byte header, then
  * the used slots as 12-byte records from byte 320 (a track's: start, end,
- * control byte, extent count byte, cooked marker (0 raw, 1 cooked), zero byte;
+ * packed control byte, extent count byte, offset low8bits, zero byte;
  * first extents follow
  * from the counts). Reserved and unused bytes must be zero. No heap or
  * large automatic objects. Decode clears out on error; encode preserves out

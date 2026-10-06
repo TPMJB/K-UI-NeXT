@@ -167,6 +167,7 @@ static bool games_path_in_root(const struct kui_shell *s,const char *path,size_t
 }
 static void clear_game_detail(struct kui_shell *s) {
     s->games_selected_path[0]=0;
+    s->games_retail_scrambled=false;
     memset(&s->games_detail,0,sizeof(s->games_detail));
 }
 static void clear_game_choice(struct kui_shell *s) {
@@ -229,6 +230,7 @@ void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detai
     if(!s || !detail || s->page!=KUI_SHELL_GAMES_DETAIL ||
        !memchr(detail->path,0,sizeof(detail->path)) || strcmp(detail->path,s->games_selected_path)) return;
     s->games_detail=*detail;
+    s->games_retail_scrambled=false;
     s->games_detail.title[sizeof(s->games_detail.title)-1]=0;
     s->games_detail.product[sizeof(s->games_detail.product)-1]=0;
     s->games_detail.region[sizeof(s->games_detail.region)-1]=0;
@@ -247,10 +249,10 @@ bool kui_shell_games_retail_ready(const struct kui_shell *s) {
     return kui_shell_games_image_ready(s) &&
         memchr(s->games_detail.title,0,sizeof(s->games_detail.title)) &&
         memchr(s->games_detail.boot_file,0,sizeof(s->games_detail.boot_file)) &&
-        s->games_detail.native_gd && !s->games_detail.windows_ce &&
+        (s->games_detail.native_gd || s->games_detail.native_cd) && !s->games_detail.windows_ce &&
         s->games_detail.boot_file[0] &&
         s->games_detail.tracks && s->games_detail.tracks<=KUI_RETAIL_IMAGE_TRACKS &&
-        s->games_detail.boot_lba>=45000 && s->games_detail.boot_bytes>=128 &&
+        (s->games_detail.format!=KUI_GAME_IMAGE_GDI || s->games_detail.boot_lba>=45000) && s->games_detail.boot_bytes>=128 &&
         s->games_detail.boot_bytes<=KUI_RETAIL_IMAGE_BOOT_MAX;
 }
 bool kui_shell_games_ce_probe_ready(const struct kui_shell *s) {
@@ -258,11 +260,14 @@ bool kui_shell_games_ce_probe_ready(const struct kui_shell *s) {
     return kui_shell_games_image_ready(s) &&
         memchr(s->games_detail.title,0,sizeof(s->games_detail.title)) &&
         memchr(s->games_detail.boot_file,0,sizeof(s->games_detail.boot_file)) &&
-        s->games_detail.windows_ce && !s->games_detail.native_gd &&
+        s->games_detail.windows_ce && !s->games_detail.native_gd && !s->games_detail.native_cd &&
         s->games_detail.boot_file[0] &&
         s->games_detail.tracks && s->games_detail.tracks<=KUI_RETAIL_IMAGE_TRACKS &&
-        s->games_detail.boot_lba>=45000 && s->games_detail.boot_bytes>2048 &&
+        (s->games_detail.format!=KUI_GAME_IMAGE_GDI || s->games_detail.boot_lba>=45000) && s->games_detail.boot_bytes>2048 &&
         s->games_detail.boot_bytes<=KUI_RETAIL_IMAGE_BOOT_MAX;
+}
+bool kui_shell_games_encoding_ready(const struct kui_shell *s) {
+    return kui_shell_games_retail_ready(s) && s->games_detail.cd_image;
 }
 static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     clear_game_choice(s);
@@ -316,6 +321,7 @@ static bool games_grid(struct kui_shell *s,unsigned buttons,enum kui_shell_actio
     return true;
 }
 static enum kui_shell_action inspect_game(struct kui_shell *s) {
+    s->games_retail_scrambled=false;
     memset(&s->games_detail,0,sizeof(s->games_detail));
     snprintf(s->games_detail.path,sizeof(s->games_detail.path),"%s",s->games_selected_path);
     snprintf(s->games_detail.message,sizeof(s->games_detail.message),"Inspecting image metadata...");
@@ -1145,9 +1151,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_GAMES_DETAIL:
         if((buttons&KUI_SHELL_X) && games_path_safe(s->games_selected_path,sizeof(s->games_selected_path)))
             return inspect_game(s);
-        if((buttons&KUI_SHELL_A) && (kui_shell_games_retail_ready(s) || kui_shell_games_ce_probe_ready(s)))
+        if((buttons&KUI_SHELL_A) && (kui_shell_games_retail_ready(s) || kui_shell_games_ce_probe_ready(s))) {
+            s->games_retail_scrambled=kui_shell_games_encoding_ready(s) && s->games_detail.scrambled;
             s->page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
-        else if((buttons&KUI_SHELL_Y) && kui_shell_games_image_ready(s))
+        } else if((buttons&KUI_SHELL_Y) && kui_shell_games_image_ready(s) && s->games_detail.format==KUI_GAME_IMAGE_GDI)
             s->page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
         break;
     case KUI_SHELL_GAMES_ADVANCED:
@@ -1172,14 +1179,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_A) return KUI_SHELL_GAMES_PROBE;
         break;
     case KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM:
-        if((buttons&KUI_SHELL_A) && kui_shell_games_image_ready(s))
+        if((buttons&KUI_SHELL_A) && kui_shell_games_image_ready(s) && s->games_detail.format==KUI_GAME_IMAGE_GDI)
             return KUI_SHELL_GAMES_IMAGE_PROBE;
         break;
     case KUI_SHELL_GAMES_RETAIL_CONFIRM:
-        if((buttons&(KUI_SHELL_A|KUI_SHELL_X)) && kui_shell_games_ce_probe_ready(s)) {
-            /* X: the background reader, through CE's own interrupts. */
-            s->games_retail_reader=KUI_GAMES_RETAIL_CE_PROBE|
-                (buttons&KUI_SHELL_A?KUI_RETAIL_READER_STANDARD:KUI_RETAIL_READER_ASYNC);
+        if(kui_shell_games_encoding_ready(s)) {
+            unsigned encoding=buttons&(KUI_SHELL_L|KUI_SHELL_R);
+            if(encoding==KUI_SHELL_L || encoding==KUI_SHELL_R) s->games_retail_scrambled=!s->games_retail_scrambled;
+        } else s->games_retail_scrambled=false;
+        if((buttons&KUI_SHELL_A) && kui_shell_games_ce_probe_ready(s)) {
+            /* The working CE path uses its own interrupts for background SD. */
+            s->games_retail_reader=KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC;
             return KUI_SHELL_GAMES_RETAIL;
         }
         if((buttons&(KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y)) && kui_shell_games_retail_ready(s)) {
@@ -1187,6 +1197,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
              * about twice the standard reader's step; Y: 25 blocks. */
             s->games_retail_reader=buttons&KUI_SHELL_A?KUI_RETAIL_READER_STANDARD:
                 buttons&KUI_SHELL_X?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_ASYNC_EAGER;
+            if(kui_shell_games_encoding_ready(s))
+                s->games_retail_reader|=s->games_retail_scrambled?KUI_GAMES_RETAIL_DESCRAMBLE:KUI_GAMES_RETAIL_BOOT_PLAIN;
             return KUI_SHELL_GAMES_RETAIL;
         }
         break;

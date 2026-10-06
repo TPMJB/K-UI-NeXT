@@ -114,6 +114,7 @@ struct kui_shell {
     /* The launch's reader (enum kui_retail_reader): A launches with the
      * standard one, X with the background SCI reader under test. */
     unsigned games_retail_reader;
+    bool games_retail_scrambled; /* Native CD boot encoding chosen at confirmation. */
     struct kui_games_page games_listing;
     struct kui_games_detail games_detail;
     /* Destination is committed only by a successful worker load/save. Browsing
@@ -204,6 +205,7 @@ unsigned kui_shell_games_view(const struct kui_shell *shell);
 const char *kui_shell_games_variant_label(const struct kui_shell *shell);
 /* Exact initial test profile only; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
+bool kui_shell_games_encoding_ready(const struct kui_shell *shell);
 /* A Windows CE image the CE boot test can take: it loads the CE kernel,
  * starts it, and stops at the first disc request K-UI cannot serve. */
 bool kui_shell_games_ce_probe_ready(const struct kui_shell *shell);

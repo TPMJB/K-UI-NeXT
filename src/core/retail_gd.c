@@ -10,7 +10,7 @@
  * cross-checked against that reference and DreamShell ISO Loader syscalls.c
  * get_ver_str (GPL-3.0, Copyright 2009-2023 SWAT). This is a virtual driver
  * compatibility response, not a version query to the physical optical drive.
- * Our backend deliberately supports only Mode1 user data.
+ * The backend supplies 2048-byte Mode1 or Mode2 Form1 user data.
  */
 #include "kui/retail_gd.h"
 #include "kui/retail_image.h"
@@ -78,9 +78,10 @@ int kui_retail_gd_init(struct kui_retail_gd *s,
        end > 0x8d000000u || begin >= end || ((begin | end) & 3u)) return -1;
     for(uint32_t i = 0; i < count; ++i) {
         const struct kui_retail_track *t = &tracks[i].track;
-        if((kui_retail_track_control(t) != 0 && kui_retail_track_control(t) != 4) ||
-           (kui_retail_track_sector_bytes(t) == KUI_GAME_DATA_BYTES &&
-            kui_retail_track_control(t) != 4) ||
+        if((t->control & 3u) ||
+           (!(t->control & 4u) && (t->control & (KUI_RETAIL_TRACK_COOKED | KUI_RETAIL_TRACK_MODE2 | KUI_RETAIL_TRACK_2336))) ||
+           ((t->control & KUI_RETAIL_TRACK_COOKED) && (t->control & (KUI_RETAIL_TRACK_2336 | KUI_RETAIL_TRACK_2448))) ||
+           ((t->control & KUI_RETAIL_TRACK_2336) && (!(t->control & KUI_RETAIL_TRACK_MODE2) || (t->control & KUI_RETAIL_TRACK_2448))) ||
            t->start_lba >= t->end_lba || t->end_lba > 719850u ||
            (t->start_lba < 45000u && t->end_lba > 45000u) ||
            (i && tracks[i - 1].track.end_lba > t->start_lba)) return -1;
@@ -94,14 +95,23 @@ void kui_retail_gd_init_validated(struct kui_retail_gd *s,
     memset(s, 0, sizeof(*s));
     s->ops = *ops; s->tracks = tracks; s->track_count = count;
     s->guest_begin = begin; s->guest_end = end; s->initialized = 1;
+    s->disc_type=0x80;
     s->position_lba = track_at(s, count > 2 ? 2 : 0)->start_lba;
     s->step = KUI_RETAIL_GD_STEP_SECTORS;
     reset(s);
+}
+void kui_retail_gd_set_disc_type(struct kui_retail_gd *s,uint32_t disc_type,uint32_t session_lba) {
+    if(!s || !s->initialized || s->pending || (disc_type!=0x10 && disc_type!=0x80)) return;
+    s->disc_type=disc_type;s->position_lba=session_lba;
 }
 static int area_bounds(const struct kui_retail_gd *s, uint32_t area,
                        uint32_t *first, uint32_t *last) {
     *first = *last = s->track_count;
     if(area > 1) return -1;
+    if(s->disc_type==0x10) {
+        if(area) return -1;
+        *first=0;*last=s->track_count-1u;return 0;
+    }
     for(uint32_t i = 0; i < s->track_count; ++i) {
         if((track_at(s, i)->start_lba >= 45000u) != (area != 0)) continue;
         if(*first == s->track_count) *first = i;
@@ -391,7 +401,7 @@ static int32_t datatype(struct kui_retail_gd *s, uint32_t address) {
         put32(p + 4, s->sector_part); put32(p + 8, s->track_type);
         put32(p + 12, s->sector_bytes); return 0;
     }
-    if(rw || !((part == 0x2000 && (type == 0 || type == 1024) && bytes == 2048) ||
+    if(rw || !((part == 0x2000 && (type == 0 || type == 1024 || type == 2048) && bytes == 2048) ||
                (part == 0x1000 && type == 0 && bytes == 2352))) return -1;
     s->sector_part = part; s->track_type = type; s->sector_bytes = bytes;
     return 0;
@@ -573,7 +583,7 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
     case KUI_GD_DATATYPE: result = datatype(s, r4); break;
     case KUI_GD_DRIVE: {
         uint8_t *out = guest(s, r4, 8, 4, 1);
-        if(out) { put32(out, s->pending ? 0 : s->drive_status); put32(out + 4, 0x80); result = 0; }
+        if(out) { put32(out, s->pending ? 0 : s->drive_status); put32(out + 4, s->disc_type); result = 0; }
         break;
     }
     case KUI_GD_ABORT:

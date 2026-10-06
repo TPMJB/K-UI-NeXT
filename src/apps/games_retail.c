@@ -35,9 +35,7 @@ static bool split(const char *path,struct files *files,char name[KUI_GAME_NAME_C
     if(!path || path[0]!='/' || strlen(path)>=KUI_GAMES_FILE_CAP) return false;
     const char *slash=strrchr(path,'/');size_t n=(size_t)(slash-path),len=strlen(slash+1);
     if(n>=sizeof(files->root) || len<=4 || len>=KUI_GAME_NAME_CAP) return false;
-    const char *ext=slash+1+len-4;
-    if(ext[0]!='.' || (ext[1]!='g'&&ext[1]!='G') ||
-        (ext[2]!='d'&&ext[2]!='D') || (ext[3]!='i'&&ext[3]!='I')) return false;
+    if(!kui_game_image_name_supported(slash+1)) return false;
     char root[KUI_DEST_ROOT_CAP];
     if(!n) strcpy(root,"/");else {memcpy(root,path,n);root[n]=0;}
     if(!kui_destination_normalize(files->root,root) || strcmp(root,files->root) ||
@@ -119,14 +117,21 @@ static enum map_result map_track(struct files *files,FATFS *fs,const struct kui_
     uint32_t capacity,bool mapped) {
     struct kui_retail_track *t=&map->slots[index].track;
     *t=(struct kui_retail_track){.start_lba=track->start_lba,.end_lba=track->end_lba,
-        .first_extent=(uint16_t)(map->track_count+map->extent_count),
+        .first_extent=(uint16_t)((map->track_count+map->extent_count) |
+            ((track->file_offset & 255u) << 8)),
         .control=(uint8_t)(track->control |
-            (track->sector_bytes==KUI_GAME_DATA_BYTES?KUI_RETAIL_TRACK_COOKED:0u))};
+            (track->sector_bytes==KUI_GAME_DATA_BYTES?KUI_RETAIL_TRACK_COOKED:0u) |
+            (track->sector_mode==2 && track->sector_bytes!=KUI_GAME_DATA_BYTES?KUI_RETAIL_TRACK_MODE2:0u) |
+            (track->sector_bytes==2336u?KUI_RETAIL_TRACK_2336:0u) |
+            (track->sector_bytes==2448u?KUI_RETAIL_TRACK_2448:0u) |
+            (track->file_offset & 256u?KUI_RETAIL_TRACK_OFFSET_HIGH:0u))};
     if(!mapped) return stopped(files)?MAP_FAILED:MAP_OK;
     char path[KUI_GAMES_FILE_CAP+3];FIL file;
     if(stopped(files) || !join(files,track->name,path) || f_open(&file,path,FA_READ)!=FR_OK) return MAP_FAILED;
     enum map_result result=f_size(&file)==track->file_bytes && fs->csize?MAP_OK:MAP_FAILED;
-    uint32_t total=(uint32_t)((track->file_bytes+511u)/512u);
+    uint64_t track_bytes=(uint64_t)(track->end_lba-track->start_lba)*track->sector_bytes;
+    uint64_t skip=track->file_offset/512u;
+    uint32_t total=(uint32_t)(((track->file_offset & 511u)+track_bytes+511u)/512u);
     /* The allocation table alone lists the file's contiguous cluster runs:
      * no track data is read (one data read per cluster took seconds). */
     link_map[0]=LINK_MAP_WORDS;file.cltbl=link_map;
@@ -139,6 +144,8 @@ static enum map_result map_track(struct files *files,FATFS *fs,const struct kui_
         if(!run[0] || run[1]<2u || run[1]>=fs->n_fatent) {result=MAP_FAILED;break;}
         uint64_t sect=(uint64_t)fs->database+(uint64_t)(run[1]-2u)*fs->csize;
         uint64_t count=(uint64_t)run[0]*fs->csize;
+        if(skip>=count) {skip-=count;continue;}
+        sect+=skip;count-=skip;skip=0;
         if(count>total-block) count=total-block;
         if(sect<fs->database || sect>=volume->count || sect+count>volume->count) {result=MAP_FAILED;break;}
         uint32_t card=volume->start+(uint32_t)sect,used=map->track_count+map->extent_count;
@@ -199,7 +206,12 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     *package=(struct kui_runtime_image){0};
     if(!log || !cancel) return false;
     const bool ce=(reader&KUI_GAMES_RETAIL_CE_PROBE)!=0;
-    reader&=~KUI_GAMES_RETAIL_CE_PROBE;
+    const bool descramble=(reader&KUI_GAMES_RETAIL_DESCRAMBLE)!=0;
+    const bool plain=(reader&KUI_GAMES_RETAIL_BOOT_PLAIN)!=0;
+    reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE | KUI_GAMES_RETAIL_BOOT_PLAIN);
+    if((ce && (descramble || plain)) || (descramble && plain)) {
+        log("Retail boot: invalid boot encoding choice");return false;
+    }
     struct files files={.cancel=cancel};char name[KUI_GAME_NAME_CAP];
     if(!split(path,&files,name) || stopped(&files)) {log("Retail boot: invalid path or cancelled");return false;}
     if(!kui_sd_connect()) {log("Retail boot: storage unavailable");return false;}
@@ -214,28 +226,29 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         goto done;
     }
     uint64_t size=0;
-    if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size || size>KUI_GAME_GDI_LIMIT) {
-        problem="GDI missing, unreadable or too large";goto done;
+    if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size) {
+        problem="selected image missing or unreadable";goto done;
     }
-    map=calloc(1,sizeof(*map));image=malloc(sizeof(*image));gdi=malloc((size_t)size);
+    size_t fingerprint_bytes=size>KUI_GAME_GDI_LIMIT?KUI_GAME_GDI_LIMIT:(size_t)size;
+    map=calloc(1,sizeof(*map));image=malloc(sizeof(*image));gdi=malloc(fingerprint_bytes);
     if(!map || !image || !gdi) {problem="insufficient memory to prepare selected image";goto done;}
-    if(read_file(&files,name,0,gdi,(size_t)size)!=KUI_GAME_OK) {problem="cannot read GDI";goto done;}
+    if(read_file(&files,name,0,gdi,fingerprint_bytes)!=KUI_GAME_OK) {problem="cannot read image header";goto done;}
     struct kui_game_file_ops file_ops={&files,stat_file,read_file};
-    enum kui_game_result r=kui_game_image_open(gdi,(size_t)size,&file_ops,image);
+    enum kui_game_result r=kui_game_image_open_named(name,&file_ops,image);
     if(r!=KUI_GAME_OK) {
         problem=r==KUI_GAME_UNSUPPORTED?
-            "GDI needs 2048/2352-byte data, 2352-byte audio and zero offsets":kui_game_result_name(r);
+            "unsupported image layout; compressed images need the import tool":kui_game_result_name(r);
         goto done;
     }
     map->storage_transport=kui_storage_active();
     if(map->storage_transport>KUI_STORAGE_IDE) {problem="storage transport not selected";goto done;}
     log("Retail boot storage: %s",map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":
         map->storage_transport==KUI_STORAGE_SCI?"SCI microSD":"IDE / CF");
-    map->track_count=image->count;map->gdi_crc32=kui_retail_crc32(0,gdi,(size_t)size);
-    for(unsigned i=0;i<image->count;i++) if(image->tracks[i].control==4 && image->tracks[i].start_lba>=45000) {
-        map->session_lba=image->tracks[i].start_lba;break;
-    }
-    if(!map->session_lba) {problem="GD-ROM high-density data session required";goto done;}
+    map->track_count=image->count;map->gdi_crc32=kui_retail_crc32(0,gdi,fingerprint_bytes);
+    map->session_lba=image->data_lba;
+    if(image->cd_image)
+        map->flags|=KUI_RETAIL_IMAGE_CD;
+    log("Retail image: %s, session LBA %u",kui_game_image_format_name(image->format),map->session_lba);
     struct kui_game_metadata metadata;struct kui_game_metadata_ops metadata_ops={image,metadata_read,metadata_range};
     enum kui_game_metadata_status ms=kui_game_metadata_read(&metadata_ops,map->session_lba,&metadata);
     if(ms!=KUI_GAME_METADATA_OK) {problem=kui_game_metadata_status_text(ms);goto done;}
@@ -252,7 +265,11 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         }
     } else {
         if(metadata.windows_ce) {problem="Windows CE game launching is not supported";goto done;}
-        if(!metadata.native_gd) {problem="native GD-ROM with valid IP peripheral flags required";goto done;}
+        if(!metadata.native_gd && !metadata.native_cd) {problem="valid native IP peripheral flags required";goto done;}
+        if((image->scrambled && !plain) || descramble) {
+            if(!(map->flags & KUI_RETAIL_IMAGE_CD)) {problem="descrambling requires a CD image";goto done;}
+            map->flags|=KUI_RETAIL_IMAGE_SCRAMBLED;
+        }
     }
     if(metadata.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
         metadata.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
@@ -261,7 +278,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     }
     if(metadata.boot_lba<map->session_lba+16u ||
         kui_game_image_check(image,map->session_lba,16,KUI_GAME_SECTOR_MODE1)!=KUI_GAME_OK) {
-        problem="boot executable and full IP must be in high-density data tracks";goto done;
+        problem="boot executable and full IP must be in the selected data session";goto done;
     }
     map->boot_lba=metadata.boot_lba;map->boot_bytes=metadata.boot_bytes;
     snprintf(map->title,sizeof(map->title),"%.127s",metadata.title[0]?metadata.title:"Untitled game");
@@ -285,11 +302,12 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         if(image->tracks[i].sector_bytes==KUI_GAME_DATA_BYTES &&
             image->tracks[i].start_lba<boot_end && image->tracks[i].end_lba>map->boot_lba)
             cooked_boot=true;
-    if(cooked_boot) {
-        log("Retail boot: checking cooked executable CRC before detached launch");
+    if(cooked_boot || image->format!=KUI_GAME_IMAGE_GDI) {
+        map->flags|=KUI_RETAIL_IMAGE_BOOT_CRC;
+        log("Retail boot: checking exact executable CRC before detached launch");
         r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
         if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
-        log("Retail boot: cooked executable CRC32=%08x",map->boot_crc32);
+        log("Retail boot: executable CRC32=%08x",map->boot_crc32);
     }
     if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
     const struct kui_volume volume=*kui_media_volume();
@@ -306,6 +324,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     if(background) {
         mapped=map_tracks(&files,&fs,&volume,image,map,KUI_RETAIL_ASYNC_SLOTS,&audio);
         if(mapped==MAP_FULL) {
+            if(ce) {problem="Windows CE background map exceeds 64 slots; defragment or use cooked tracks";goto done;}
             log("Retail boot: the map needs more than the background reader's %u slots; using the standard reader",
                 KUI_RETAIL_ASYNC_SLOTS);
             background=false;

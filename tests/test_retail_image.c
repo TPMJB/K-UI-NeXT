@@ -121,11 +121,10 @@ static void wire_tests(void) {
     CHECK(kui_retail_crc32(kui_retail_crc32(0, "1234", 4), "56789", 5) == 0xcbf43926);
     CHECK(kui_retail_crc32(0xabcdef01, NULL, 0) == 0xabcdef01);
     CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
-    /* Golden CRC captured from the original raw-only encoder: every byte of
-     * the canonical raw map, including reserved bytes, remains identical. */
-    CHECK(wire[16] == 0x9a && wire[17] == 0x68 && wire[18] == 0x4b && wire[19] == 0x97);
-    CHECK(!memcmp(wire, "KUIRTI02", 8));
-    CHECK(wire[8] == 2 && wire[12] == 0 && wire[13] == 16 && wire[14] == 0);
+    /* Version3 changes the magic/version, retaining this raw map's records. */
+    CHECK(wire[16] == 0xc2 && wire[17] == 0x3c && wire[18] == 0xed && wire[19] == 0x14);
+    CHECK(!memcmp(wire, "KUIRTI03", 8));
+    CHECK(wire[8] == 3 && wire[12] == 0 && wire[13] == 16 && wire[14] == 0);
     CHECK(wire[20] == 4 && wire[24] == 121 && wire[32] == 0 && wire[33] == 8 && wire[68] == 0xef);
     CHECK(wire[256] == 0x47 && wire[259] == 0x10 && wire[260] == 0x30 && wire[263] == 0x67);
     /* Records from byte 320: a track's start, end, control, extent count and
@@ -177,7 +176,7 @@ static void wire_tests(void) {
         wire[i] ^= 1;
     }
     /* Valid CRC cannot bless noncanonical fields, unused entries or text tails. */
-    const unsigned reserved[] = {31, 265, 268, 319, 331,
+    const unsigned reserved[] = {31, 265, 272, 319, 331,
         320 + (4 + manifest.extent_count) * 12, 3000, 4095,
         72 + sizeof("Original retail image test"), 200 + sizeof("KUITEST"),
         216 + sizeof("1ST_READ.BIN"), 240 + sizeof("JUE")};
@@ -188,7 +187,7 @@ static void wire_tests(void) {
         memcpy(wire, clean_wire, sizeof(wire));
     }
     const unsigned fields[] = {8, 12, 20, 24, 24};
-    const uint32_t values[] = {3, 4097, 100, KUI_RETAIL_IMAGE_SLOTS - 3, 120};
+    const uint32_t values[] = {4, 4097, 100, KUI_RETAIL_IMAGE_SLOTS - 3, 120};
     for(unsigned i = 0; i < sizeof(fields) / sizeof(fields[0]); ++i) {
         put32(wire + fields[i], values[i]); refresh_crc();
         CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
@@ -688,7 +687,7 @@ static void cooked_tests(bool fragmented, bool streaming) {
     fixture_format(fragmented, (1u << 0) | (1u << 2));
     if(streaming) image.read_run = read_run;
     round_trip();
-    CHECK(wire[320 + 8] == 4 && wire[320 + 10] == 1 && wire[320 + 11] == 0);
+    CHECK(wire[320 + 8] == (4u | KUI_RETAIL_TRACK_COOKED) && wire[320 + 10] == 0 && wire[320 + 11] == 0);
     CHECK(wire[320 + 12 + 8] == 0 && wire[320 + 12 + 10] == 0);
     CHECK(sizeof(union kui_retail_slot) == 12);
     compare(0, 3, KUI_GAME_SECTOR_MODE1);
@@ -716,24 +715,118 @@ static void cooked_tests(bool fragmented, bool streaming) {
     CHECK(kui_retail_image_read_part(&image, 45000, 16, 2048, KUI_GAME_SECTOR_RAW, output) == KUI_GAME_UNSUPPORTED);
     CHECK(calls == before);
     for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
-    /* A cooked marker on audio, an unknown marker, or a control flag on the
-     * wire is rejected even with a recomputed CRC. */
+    /* Invalid packed layouts remain rejected even with a recomputed CRC. */
     memcpy(clean_wire, wire, sizeof(wire));
-    wire[320 + 12 + 10] = 1; refresh_crc();
+    wire[320 + 12 + 8] = KUI_RETAIL_TRACK_COOKED; refresh_crc();
     CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
     memcpy(wire, clean_wire, sizeof(wire));
-    wire[320 + 10] = 2; refresh_crc();
+    wire[320 + 8] |= 1u; refresh_crc();
     CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
     memcpy(wire, clean_wire, sizeof(wire));
-    wire[320 + 8] = 4u | KUI_RETAIL_TRACK_COOKED; refresh_crc();
+    wire[320 + 8] |= KUI_RETAIL_TRACK_2336; refresh_crc();
     CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
-    wire[320 + 10] = 0; refresh_crc();
+    memcpy(wire, clean_wire, sizeof(wire));wire[320 + 11] = 1; refresh_crc();
     CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
     TRACK(manifest, 1).control = KUI_RETAIL_TRACK_COOKED;
     CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
 }
 
+static uint8_t payload_byte(uint32_t sector,uint32_t at) {
+    return (uint8_t)(sector*53u+at*17u+(at>>8));
+}
+static void offset_fixture(uint8_t layout,uint32_t offset) {
+    memset(&manifest,0,sizeof(manifest));memset(card,0xf3,sizeof(card));
+    manifest.card_sectors=2048;manifest.partition_start=50;manifest.partition_end=2000;
+    manifest.flags=KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_BOOT_CRC;
+    manifest.track_count=manifest.extent_count=1;manifest.boot_bytes=128;
+    strcpy(manifest.title,"Offset CD");strcpy(manifest.bootfile,"1ST_READ.BIN");
+    struct kui_retail_track *t=&TRACK(manifest,0);
+    *t=(struct kui_retail_track){.end_lba=3,.extent_count=1,
+        .first_extent=(uint16_t)(1u | (offset&255u)<<8),
+        .control=(uint8_t)(4u|layout|(offset&256u?KUI_RETAIL_TRACK_OFFSET_HIGH:0u))};
+    uint32_t stride=kui_retail_track_sector_bytes(t),header=kui_retail_track_header_bytes(t);
+    EXTENT(manifest,0)=(struct kui_retail_extent){0,100,(offset+3u*stride+511u)/512u};
+    for(uint32_t sector=0;sector<3;sector++) {
+        uint8_t *p=card+100u*512u+offset+sector*stride;
+        memset(p,0xee,stride);
+        if(header) {
+            unsigned sub=0;
+            if(!(layout&KUI_RETAIL_TRACK_2336)) {
+                p[0]=p[11]=0;memset(p+1,255,10);p[15]=(layout&KUI_RETAIL_TRACK_MODE2)?2:1;sub=16;
+            }
+            if(layout&KUI_RETAIL_TRACK_MODE2) {
+                const uint8_t sh[]={7,3,8,1};memcpy(p+sub,sh,4);memcpy(p+sub+4,sh,4);
+            }
+        }
+        for(uint32_t i=0;i<2048;i++) p[header+i]=payload_byte(sector,i);
+    }
+    calls=fail_call=edge_source=run_calls=0;
+    CHECK(kui_retail_image_init(&image,&manifest,read_block,card)==KUI_GAME_OK);
+}
+static void offset_layout_tests(void) {
+    static const uint8_t layouts[]={0,KUI_RETAIL_TRACK_COOKED,KUI_RETAIL_TRACK_MODE2,
+        KUI_RETAIL_TRACK_MODE2|KUI_RETAIL_TRACK_2336,KUI_RETAIL_TRACK_2448,
+        KUI_RETAIL_TRACK_MODE2|KUI_RETAIL_TRACK_2448};
+    static const uint32_t offsets[]={1,255,256,491,497,511};
+    for(unsigned l=0;l<sizeof(layouts);l++) for(unsigned o=0;o<sizeof(offsets)/sizeof(*offsets);o++) {
+        offset_fixture(layouts[l],offsets[o]);
+        const struct kui_retail_track *t=&TRACK(manifest,0);
+        CHECK(kui_retail_track_first_extent(t)==1 && kui_retail_track_file_offset(t)==offsets[o]);
+        CHECK(kui_retail_manifest_encode(&manifest,wire)==KUI_GAME_OK);
+        CHECK(wire[268]==manifest.flags && wire[328]==t->control && wire[330]==(offsets[o]&255u));
+        CHECK(kui_retail_manifest_decode(wire,&decoded)==KUI_GAME_OK && !memcmp(&decoded,&manifest,sizeof(manifest)));
+        image.read_run=read_run;
+        memset(output,0x77,sizeof(output));
+        CHECK(kui_retail_image_read(&image,0,3,KUI_GAME_SECTOR_MODE1,output,sizeof(output))==KUI_GAME_OK);
+        for(uint32_t n=0;n<3;n++) for(uint32_t i=0;i<2048;i++) CHECK(output[n*2048u+i]==payload_byte(n,i));
+        CHECK(output[3u*2048u]==0x77);
+        CHECK(kui_retail_image_read_part(&image,0,2047,4097,KUI_GAME_SECTOR_MODE1,output)==KUI_GAME_OK);
+        for(uint32_t i=0;i<4097;i++) CHECK(output[i]==payload_byte((i+2047u)/2048u,(i+2047u)%2048u));
+        uint32_t before=calls,stride=kui_retail_track_sector_bytes(t);
+        enum kui_game_result raw=kui_retail_image_read(&image,0,3,KUI_GAME_SECTOR_RAW,output,sizeof(output));
+        if(stride==2352 || stride==2448) {
+            CHECK(raw==KUI_GAME_OK);
+            for(uint32_t n=0;n<3;n++) CHECK(!memcmp(output+n*2352u,card+100u*512u+offsets[o]+n*stride,2352));
+        } else CHECK(raw==KUI_GAME_UNSUPPORTED && calls==before);
+        if(layouts[l]&KUI_RETAIL_TRACK_MODE2) {
+            uint32_t sub=layouts[l]&KUI_RETAIL_TRACK_2336?0u:16u;
+            uint8_t *p=card+100u*512u+offsets[o];
+            p[sub+4]^=1;image.cache_valid=0;memset(output,0x77,2048);
+            CHECK(kui_retail_image_read(&image,0,1,KUI_GAME_SECTOR_MODE1,output,sizeof(output))==KUI_GAME_MODE && output[0]==0x77);
+            p[sub+4]^=1;p[sub+2]|=0x20;p[sub+6]|=0x20;image.cache_valid=0;
+            CHECK(kui_retail_image_read_part(&image,0,10,100,KUI_GAME_SECTOR_MODE1,output)==KUI_GAME_MODE);
+        }
+    }
+    offset_fixture(0,0);manifest.flags=8;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_INVALID);
+    manifest.flags=KUI_RETAIL_IMAGE_SCRAMBLED;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_INVALID);
+    offset_fixture(0,0);TRACK(manifest,0).start_lba=44999;TRACK(manifest,0).end_lba=45002;
+    manifest.session_lba=manifest.boot_lba=44999;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OK);
+    manifest.flags=0;CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_INVALID);
+}
+static void shared_boundary_tests(void) {
+    offset_fixture(0,123);
+    manifest.track_count=manifest.extent_count=2;
+    TRACK(manifest,0).end_lba=2;TRACK(manifest,0).first_extent=(uint16_t)(2u|123u<<8);
+    TRACK(manifest,1)=(struct kui_retail_track){.start_lba=2,.end_lba=4,
+        .first_extent=(uint16_t)(3u|219u<<8),.extent_count=1,.control=4};
+    EXTENT(manifest,0)=(struct kui_retail_extent){0,100,10};
+    EXTENT(manifest,1)=(struct kui_retail_extent){0,109,10};
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OK);
+    CHECK(kui_retail_manifest_encode(&manifest,wire)==KUI_GAME_OK);
+    CHECK(kui_retail_manifest_decode(wire,&decoded)==KUI_GAME_OK);
+    TRACK(manifest,1).first_extent=(uint16_t)(3u|218u<<8);
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OVERLAP);
+    TRACK(manifest,1).first_extent=(uint16_t)(3u|219u<<8);
+    EXTENT(manifest,1).card_lba=108;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OVERLAP);
+    EXTENT(manifest,1).card_lba=100;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OVERLAP);
+}
 int main(void) {
+    offset_layout_tests();shared_boundary_tests();
     header_tests();
     wire_tests(); invalid_map_tests(); reader_tests(false); reader_tests(true);
     for(unsigned i = 0; i < 4; ++i) part_tests(i & 1u, i >= 2);

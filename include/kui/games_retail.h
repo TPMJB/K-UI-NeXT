@@ -12,6 +12,8 @@
  * the test uses the CE package's background reader, which CE's own interrupt
  * dispatch reaches. */
 #define KUI_GAMES_RETAIL_CE_PROBE 0x100u
+#define KUI_GAMES_RETAIL_DESCRAMBLE 0x200u
+#define KUI_GAMES_RETAIL_BOOT_PLAIN 0x400u
 /* Single storage worker only. Prepare one native GD-ROM launch;
  * complete IP/boot CRCs and bounded physical extent map are read-only. Success
  * owns a patched stage package with all files closed and SD disconnected.

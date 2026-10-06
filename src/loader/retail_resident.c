@@ -385,6 +385,8 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
 #endif
     kui_retail_gd_init_validated(&service, manifest.slots,
         manifest.track_count, &ops, KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);
+    kui_retail_gd_set_disc_type(&service,(manifest.flags & KUI_RETAIL_IMAGE_CD)?0x10u:0x80u,
+        manifest.session_lba);
 #if defined(KUI_RETAIL_CE) && defined(KUI_RETAIL_ASYNC)
     service.read_part = kui_retail_async_read_part;
 #elif defined(KUI_RETAIL_CE)

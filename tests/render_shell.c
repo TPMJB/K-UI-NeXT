@@ -10,6 +10,7 @@
  * games-detail, games-error, games-advanced, games-probe,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
  * games-retail, games-retail-loading, games-retail-invalid, games-ce-probe, games-list-art,
+ * games-retail-cd-plain, games-retail-cd-scrambled,
  * games-compact, games-gallery, games-scan, games-detail-art, home-files, home-ripper,
  * files, files-root, files-actions, files-actions-locked, files-pick,
  * files-copy, files-delete, files-refused, files-info, files-info-file,
@@ -337,13 +338,20 @@ int main(int argc,char **argv) {
     }
     else if(!strcmp(argv[1],"games-retail") || !strcmp(argv[1],"games-retail-loading") ||
             !strcmp(argv[1],"games-retail-invalid") || !strcmp(argv[1],"games-ce-probe") ||
-            !strcmp(argv[1],"games-retail-2048")) {
+            !strcmp(argv[1],"games-retail-2048") || !strcmp(argv[1],"games-retail-cd-plain") ||
+            !strcmp(argv[1],"games-retail-cd-scrambled")) {
         shell.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
         strcpy(d->path,shell.games_selected_path);d->valid=true;d->tracks=3;
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->boot_file,"1ST_READ.BIN");
         d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
+        if(!strcmp(argv[1],"games-retail-cd-plain") || !strcmp(argv[1],"games-retail-cd-scrambled")) {
+            strcpy(shell.games_selected_path,"/Games/CD sample/disc.cue");strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,"CD SAMPLE");d->native_gd=false;d->native_cd=d->cd_image=true;
+            d->format=KUI_GAME_IMAGE_CUE;d->boot_lba=11716;
+            shell.games_retail_scrambled=!strcmp(argv[1],"games-retail-cd-scrambled");
+        }
         if(!strcmp(argv[1],"games-retail-2048")) game_pair(&shell,1);
         if(!strcmp(argv[1],"games-retail-loading")) {
             view.busy=true;view.app_status=&status;status.complete=false;

@@ -9,14 +9,15 @@ static enum kui_game_result locate(struct kui_retail_cursor *c) {
     while(m->slots[c->track].track.end_lba <= sector) ++c->track;
     const struct kui_retail_track *t = &m->slots[c->track].track;
     uint32_t stride = kui_retail_track_sector_bytes(t);
-    /* The checked RAW request can only touch 2352-byte backing tracks. */
-    uint32_t needed = c->raw ? stride :
+    /* RAW never exposes the 96 subchannel bytes of a 2448-byte track. */
+    uint32_t needed = c->raw ? KUI_GAME_RAW_BYTES :
         kui_retail_track_header_bytes(t) + KUI_GAME_DATA_BYTES;
-    uint32_t file_block = ((sector - t->start_lba) * stride + c->offset) / 512u;
+    uint32_t first_byte=kui_retail_track_file_offset(t);
+    uint32_t file_block = (first_byte+(sector - t->start_lba) * stride + c->offset) / 512u;
     uint32_t last = c->lba + c->count;
     if(last > t->end_lba) last = t->end_lba;
-    uint32_t end_block = ((last - 1u - t->start_lba) * stride + needed + 511u) / 512u;
-    uint32_t lo = t->first_extent, hi = lo + t->extent_count;
+    uint32_t end_block = (first_byte+(last - 1u - t->start_lba) * stride + needed + 511u) / 512u;
+    uint32_t lo = kui_retail_track_first_extent(t), hi = lo + t->extent_count;
     while(lo + 1u < hi) {
         uint32_t mid = lo + (hi - lo) / 2u;
         if(m->slots[mid].extent.file_block <= file_block) lo = mid;
@@ -29,6 +30,24 @@ static enum kui_game_result locate(struct kui_retail_cursor *c) {
     c->block = e->card_lba + (file_block - e->file_block);
     c->run = stop - file_block;
     return KUI_GAME_OK;
+}
+static bool header_byte(struct kui_retail_cursor *c,const struct kui_retail_track *t,uint32_t at,uint8_t value) {
+    uint32_t sub=0;
+    if(!(t->control & KUI_RETAIL_TRACK_2336)) {
+        if((at==0 || at==11) && value) return false;
+        if(at>0 && at<11 && value!=255) return false;
+        if(at==15 && value!=((t->control & KUI_RETAIL_TRACK_MODE2)?2:1)) return false;
+        if(at<16 || !(t->control & KUI_RETAIL_TRACK_MODE2)) return true;
+        sub=16;
+    }
+    at-=sub;
+    if(at<4) {
+        if(!at) c->subheader=0;
+        if(at==2 && (value&0x20u)) return false;
+        c->subheader|=(uint32_t)value<<(at*8u);
+        return true;
+    }
+    return value==(uint8_t)(c->subheader>>((at-4u)*8u));
 }
 enum kui_game_result kui_retail_cursor_begin(struct kui_retail_cursor *c,
     const struct kui_retail_manifest *m, uint32_t lba, uint32_t count,
@@ -43,17 +62,18 @@ enum kui_game_result kui_retail_cursor_feed(struct kui_retail_cursor *c, const u
     uint32_t header_bytes = kui_retail_track_header_bytes(t);
     /* Cache these for this feed: the immutable track changes only after
      * the loop breaks at its boundary. RAW preflight excludes cooked data. */
-    uint32_t needed = c->raw ? stride : header_bytes + KUI_GAME_DATA_BYTES;
-    uint32_t base = (c->lba + c->done - t->start_lba) * stride;
+    uint32_t needed = c->raw ? KUI_GAME_RAW_BYTES : header_bytes + KUI_GAME_DATA_BYTES;
+    uint32_t base = kui_retail_track_file_offset(t)+(c->lba + c->done - t->start_lba) * stride;
     uint32_t start = (base + c->offset) & ~511u, end = start + 512u;
     for(;;) {
         uint32_t position = base + c->offset;
         if(position >= end) break;
         const uint8_t *in = block + (position - start);
-        if(!c->raw && header_bytes && !c->offset) {
-            if(in[0] || in[11] || in[15] != 1) return KUI_GAME_MODE;
-            for(unsigned i = 1; i < 11; ++i) if(in[i] != 255) return KUI_GAME_MODE;
-            c->offset = 16u;
+        if(!c->raw && c->offset<header_bytes) {
+            uint32_t take=header_bytes-c->offset;
+            if(take>end-position) take=end-position;
+            for(uint32_t i=0;i<take;i++) if(!header_byte(c,t,c->offset+i,in[i])) return KUI_GAME_MODE;
+            c->offset+=take;
             continue;
         }
         uint32_t take = needed - c->offset;

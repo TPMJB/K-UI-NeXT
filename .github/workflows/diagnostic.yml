@@ -84,6 +84,29 @@ jobs:
                   raise SystemExit('Games-variants request includes changes outside listing, selector UI and documentation')
               requested = True
               print('Games selector: focused shell and FAT32/exFAT Games checks recorded locally; native build and package checks run here.')
+          formats = 'Validation: games-formats' in message.splitlines()
+          if formats:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
+              exact = {'Makefile', '.github/workflows/diagnostic.yml',
+                       'include/kui/game_image.h', 'include/kui/game_metadata.h', 'include/kui/games.h',
+                       'include/kui/games_retail.h', 'include/kui/shell.h', 'include/kui/version.h',
+                       'include/kui/retail_image.h', 'include/kui/retail_cursor.h', 'include/kui/retail_gd.h',
+                       'src/core/game_image.c', 'src/core/game_metadata.c', 'src/core/retail_image.c',
+                       'src/core/retail_cursor.c', 'src/core/retail_gd.c', 'src/core/shell.c',
+                       'src/apps/games.c', 'src/apps/games_covers.c', 'src/apps/games_retail.c',
+                       'src/apps/games_image_probe.c', 'src/dreamcast/shell_draw.c',
+                       'src/loader/retail_boot.h', 'src/loader/retail_stage.c', 'src/loader/retail_resident.c',
+                       'src/loader/retail_sd_bench.c', 'tools/gdi_optimize.py', 'tools/game_image_import.py',
+                       'tests/test_game_image.c', 'tests/test_game_metadata.c', 'tests/test_retail_image.c',
+                       'tests/test_retail_cursor.c', 'tests/test_retail_gd.c', 'tests/test_retail_sd_bench.c',
+                       'tests/test_retail_boot.c', 'tests/test_shell.c', 'tests/render_shell.c', 'tests/test_retail_package.py',
+                       'tests/test_workflow_hygiene.py', 'tests/games_image.c', 'tests/test_games_images.py',
+                       'tests/games_retail.c', 'tests/test_games_retail.py', 'tests/game_format_fixture.py',
+                       'tests/games_covers_image.c', 'tests/test_games_covers_images.py',
+                       'tests/test_gdi_optimize.py', 'tests/test_game_image_import.py'}
+              if not paths or any(p not in exact and not p.startswith('docs/') for p in paths):
+                  raise SystemExit('Games-formats request includes changes outside image formats, readers, Games and their checks')
+              print('Games formats: full portable suite and relevant real FAT32/exFAT launch, listing, covers and probe checks.')
           bootstrap = 'Validation: bootstrap-only' in message.splitlines()
           if bootstrap:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
@@ -116,6 +139,7 @@ jobs:
               print('Release packaging: focused checks recorded locally; native build, layout and packaging checks run here.')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('console_only=' + str(requested).lower() + '\n')
+              out.write('games_formats=' + str(formats).lower() + '\n')
           PY
       - name: Install filesystem test utilities
         if: steps.scope.outputs.console_only != 'true'
@@ -130,8 +154,16 @@ jobs:
         if: steps.scope.outputs.console_only != 'true'
         run: python3 tools/fetch_deps.py --fatfs-only
       - name: Run portable and real filesystem checks
-        if: steps.scope.outputs.console_only != 'true'
+        if: steps.scope.outputs.console_only != 'true' && steps.scope.outputs.games_formats != 'true'
         run: make test test-images
+      - name: Run Games format checks
+        if: steps.scope.outputs.games_formats == 'true'
+        run: |
+          make test build/games-retail build/games-image build/games-covers-image build/games-image-probe
+          python3 tests/test_games_retail.py
+          python3 tests/test_games_images.py
+          python3 tests/test_games_covers_images.py
+          python3 tests/test_games_image_probe.py
 
   dreamcast:
     needs: host

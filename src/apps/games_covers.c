@@ -26,10 +26,6 @@ const char *kui_games_view_name(unsigned view) {
     return view < KUI_GAMES_VIEW_COUNT ? view_names[view] : view_names[0];
 }
 static bool stopped(kui_cancel_fn cancel) { return cancel && cancel(); }
-static bool gdi_name(const char *s) {
-    size_t n = strlen(s);
-    return n > 4 && s[n - 4] == '.' && (s[n - 3] | 32) == 'g' && (s[n - 2] | 32) == 'd' && (s[n - 1] | 32) == 'i';
-}
 static bool record_path(const char *key, const char *extension, char out[PATH_CAP]) {
     int n = snprintf(out, PATH_CAP, "%s/%s%s", KUI_GAMES_COVERS_FOLDER, key, extension);
     return n > 0 && n < (int)PATH_CAP;
@@ -227,33 +223,31 @@ static void add_game(struct scan *s, const char *name, const char *path) {
     s->used += need;
     s->hashes[s->found++] = hash;
 }
-/* Mirrors the Games list: a folder with one GDI is a game named after the
- * folder; other folders are categories; a loose GDI is named after itself. */
-static bool walk(struct scan *s, const char *folder, unsigned depth) {
-    char path[PATH_CAP];
-    snprintf(path, sizeof(path), "0:%s", folder);
-    DIR dir;
-    if(f_opendir(&dir, path) != FR_OK) return false;
-    bool ok = true;
-    for(unsigned scanned = 0; ok && scanned < 32768u; ++scanned) {
-        if(stopped(s->cancel)) { ok = false; break; }
-        FILINFO info;
-        if(f_readdir(&dir, &info) != FR_OK) { ok = false; break; }
-        if(!info.fname[0]) break;
-        if(info.fname[0] == '.' || (info.fattrib & (AM_HID | AM_SYS))) continue;
-        if(info.fattrib & AM_DIR) {
-            char child[KUI_DEST_ROOT_CAP], gdi[KUI_GAMES_FILE_CAP];
-            if(!kui_destination_join(child, folder, info.fname)) continue;
-            if(kui_games_single_gdi(child, gdi, s->cancel)) add_game(s, info.fname, gdi);
-            else if(depth + 1u < KUI_GAMES_SCAN_DEPTH) ok = walk(s, child, depth + 1u) || !stopped(s->cancel);
-        } else if(gdi_name(info.fname)) {
-            char gdi[KUI_GAMES_FILE_CAP];
-            int n = snprintf(gdi, sizeof(gdi), "%s%s%s", folder, strcmp(folder, "/") ? "/" : "", info.fname);
-            if(n > 0 && n < (int)sizeof(gdi)) add_game(s, info.fname, gdi);
+/* Shares the Games payload filter: a folder with one image takes the folder
+ * name; other folders are categories; loose selectors take their filename. */
+struct walk_job {struct scan *scan;const char *folder;unsigned depth;};
+static bool walk(struct scan *s,const char *folder,unsigned depth);
+static bool walk_entry(void *ctx,const char *name,bool directory) {
+    struct walk_job *job=ctx;struct scan *s=job->scan;
+    if(stopped(s->cancel)) return false;
+    if(directory) {
+        char child[KUI_DEST_ROOT_CAP],image[KUI_GAMES_FILE_CAP];
+        if(!kui_destination_join(child,job->folder,name)) return true;
+        if(kui_games_single_image(child,image,s->cancel)) add_game(s,name,image);
+        else if(job->depth+1u<KUI_GAMES_SCAN_DEPTH && !walk(s,child,job->depth+1u)) {
+            if(stopped(s->cancel)) return false;
+            ++s->counts->failed;if(s->log) s->log("Box art: %s: cannot read image folder",child);
         }
+    } else {
+        char image[KUI_GAMES_FILE_CAP];
+        int n=snprintf(image,sizeof(image),"%s%s%s",job->folder,strcmp(job->folder,"/")?"/":"",name);
+        if(n>0 && n<(int)sizeof(image)) add_game(s,name,image);
     }
-    if(f_closedir(&dir) != FR_OK) ok = false;
-    return ok;
+    return !stopped(s->cancel);
+}
+static bool walk(struct scan *s,const char *folder,unsigned depth) {
+    struct walk_job job={s,folder,depth};
+    return kui_games_visit_images(folder,walk_entry,&job,s->cancel);
 }
 
 /* Track reads keep the current file open: reopening would walk its
@@ -372,8 +366,8 @@ static bool user_art(struct scan *s, const char *key, const char *path) {
     kui_cover_image_free(pixels);
     return ok;
 }
-/* The disc's own artwork file, read as raw sectors whose headers must name
- * the expected addresses. False with *io set means a read problem. */
+/* Read cooked user bytes through the image adapter, preserving address checks
+ * for the original raw GDI path. False with *io set means a read problem. */
 static bool disc_art(struct scan *s, const char *key, const struct kui_game_image *image,
                      uint32_t lba, uint32_t bytes, bool *io) {
     uint32_t sectors = (bytes + 2047u) / 2048u;
@@ -381,22 +375,26 @@ static bool disc_art(struct scan *s, const char *key, const struct kui_game_imag
     if(!file) { *io = true; return false; }
     for(uint32_t done = 0; done < sectors;) {
         uint32_t n = sectors - done > 16u ? 16u : sectors - done;
-        enum kui_game_result r = kui_game_image_read(image, lba + done, n, KUI_GAME_SECTOR_RAW,
-                                                     s->raw, (size_t)n * KUI_GAME_RAW_BYTES);
+        bool raw=image->format==KUI_GAME_IMAGE_GDI &&
+            kui_game_image_check(image,lba+done,n,KUI_GAME_SECTOR_RAW)==KUI_GAME_OK;
+        enum kui_game_result r = kui_game_image_read(image, lba + done, n,
+            raw?KUI_GAME_SECTOR_RAW:KUI_GAME_SECTOR_MODE1,s->raw,
+            (size_t)n*(raw?KUI_GAME_RAW_BYTES:KUI_GAME_DATA_BYTES));
         if(r != KUI_GAME_OK) {
             *io = r == KUI_GAME_IO || r == KUI_GAME_CANCELLED;
             if(s->log) s->log("Box art: %s: artwork unreadable: %s", key, kui_game_result_name(r));
             free(file);
             return false;
         }
-        for(uint32_t k = 0; k < n; ++k) {
-            const uint8_t *raw = s->raw + (size_t)k * KUI_GAME_RAW_BYTES;
-            if(kui_retail_sector_header(raw, lba + done + k) != KUI_RETAIL_HEADER_OK) {
+        if(!raw) memcpy(file+(size_t)done*2048u,s->raw,(size_t)n*2048u);
+        else for(uint32_t k = 0; k < n; ++k) {
+            const uint8_t *sector = s->raw + (size_t)k * KUI_GAME_RAW_BYTES;
+            if(kui_retail_sector_header(sector, lba + done + k) != KUI_RETAIL_HEADER_OK) {
                 if(s->log) s->log("Box art: %s: artwork sector %lu is not data", key, (unsigned long)(lba + done + k));
                 free(file);
                 return false;
             }
-            memcpy(file + (size_t)(done + k) * 2048u, raw + 16, 2048);
+            memcpy(file + (size_t)(done + k) * 2048u, sector + 16, 2048);
         }
         done += n;
     }
@@ -436,6 +434,11 @@ static bool record_write(struct scan *s, const char *key, const struct kui_cover
     return r == FR_OK;
 }
 static enum outcome build(struct scan *s, const char *key, const char *gdi_path) {
+    const char *slash = strrchr(gdi_path, '/');
+    if(!slash || !kui_game_image_name_supported(slash+1)) {
+        if(s->log) s->log("Box art: %s: compressed image requires offline import",key);
+        return OUT_FAILED;
+    }
     struct kui_cover_record record;
     memset(&record, 0, sizeof(record));
     char path[PATH_CAP], user[PATH_CAP] = "";
@@ -456,37 +459,31 @@ static enum outcome build(struct scan *s, const char *key, const char *gdi_path)
         struct kui_cover_record old;
         if(record_open(key, gdi_path, &file, &old)) {
             f_close(&file);
-            if(same_stamp(&old.gdi, &record.gdi) && same_stamp(&old.user, &record.user)) return OUT_UNCHANGED;
+            /* Records produced before a layout could be parsed have no disc
+             * title. Retry those so newly supported images can acquire art. */
+            if(old.title[0] && same_stamp(&old.gdi, &record.gdi) && same_stamp(&old.user, &record.user)) return OUT_UNCHANGED;
         }
     }
-    /* The GDI, then its IP header and root directory for the title and art. */
+    /* Bounded image metadata, then IP and the root directory for title/art. */
     struct image_files files = {.cancel = s->cancel};
-    const char *slash = strrchr(gdi_path, '/');
     size_t root = (size_t)(slash - gdi_path);
     if(root >= sizeof(files.root)) return OUT_FAILED;
     if(root) { memcpy(files.root, gdi_path, root); files.root[root] = 0; } else strcpy(files.root, "/");
     struct kui_game_image *image = malloc(sizeof(*image));
-    uint8_t *gdi = NULL;
-    size_t gdi_size = 0;
     bool io = false, have_image = false, art = false;
     struct kui_game_metadata meta;
     memset(&meta, 0, sizeof(meta));
     if(!image) io = true;
-    else if(!read_file(path, KUI_GAME_GDI_LIMIT, &gdi, &gdi_size)) io = true;
     else {
         struct kui_game_file_ops ops = {&files, image_stat, image_read};
-        enum kui_game_result r = kui_game_image_open(gdi, gdi_size, &ops, image);
+        enum kui_game_result r = kui_game_image_open_named(slash+1, &ops, image);
         io = r == KUI_GAME_IO || r == KUI_GAME_CANCELLED || r == KUI_GAME_NOT_FOUND;
         have_image = r == KUI_GAME_OK;
         if(!have_image && !io && s->log) s->log("Box art: %s: %s", key, kui_game_result_name(r));
     }
     struct kui_game_metadata_ops meta_ops = {image, metadata_sector, metadata_range};
     if(have_image) {
-        uint32_t session = 0;
-        for(unsigned i = 0; i < image->count && !session; ++i)
-            if(image->tracks[i].control == 4 && image->tracks[i].start_lba >= 45000u) session = image->tracks[i].start_lba;
-        enum kui_game_metadata_status m = session ? kui_game_metadata_read(&meta_ops, session, &meta) :
-            KUI_GAME_METADATA_UNSUPPORTED;
+        enum kui_game_metadata_status m = kui_game_metadata_read(&meta_ops,image->data_lba,&meta);
         if(m == KUI_GAME_METADATA_IO || m == KUI_GAME_METADATA_CANCELLED) io = true;
         if(meta.ip_valid) {
             snprintf(record.title, sizeof(record.title), "%s", meta.title);
@@ -511,7 +508,6 @@ static enum outcome build(struct scan *s, const char *key, const char *gdi_path)
         else if(m != KUI_GAME_METADATA_OK && s->log) s->log("Box art: %s: no artwork on the disc", key);
     }
     if(!image_close(&files)) io = true;
-    free(gdi);
     free(image);
     if(io || stopped(s->cancel)) return OUT_FAILED;
     if(!record_write(s, key, &record)) return OUT_FAILED;

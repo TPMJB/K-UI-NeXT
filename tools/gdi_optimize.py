@@ -28,6 +28,7 @@ TRACK_LIMIT = 99
 LBA_LIMIT = 719999 - 150 + 1
 COPY_BYTES = RAW_BYTES * 128
 PROFILE = "kui-gdi-mode1-2048-copy-v1"
+OTHER_IMAGE_SUFFIXES = {".cue", ".cdi", ".iso", ".bin", ".img", ".chd", ".cso", ".zso"}
 SYNC = b"\x00" + b"\xff" * 10 + b"\x00"
 RECORD = re.compile(
     r'[ \t]*(\d+)[ \t]+(\d+)[ \t]+(\d+)[ \t]+(\d+)[ \t]+'
@@ -45,6 +46,7 @@ class Track(NamedTuple):
     file_bytes: int
     sectors: int
     signature: tuple
+    descriptor_name: str
 
 
 def require(condition, message):
@@ -59,9 +61,22 @@ def file_signature(path):
 
 
 def safe_name(name):
-    return (0 < len(name) < 128 and not name.startswith((".", " "))
+    return (0 < len(name.encode("utf-8")) < 128 and not name.startswith((".", " "))
             and not name.endswith((".", " "))
-            and all(32 <= ord(c) <= 126 and c not in '\\/:*?"<>|' for c in name))
+            and all(ord(c) >= 32 and not 127 <= ord(c) <= 159
+                    and c not in '\\/:*?"<>|' for c in name))
+
+
+def track_path(directory, name, number):
+    """Resolve harmless case differences without guessing among host files."""
+    exact = directory / name
+    if os.path.lexists(exact):
+        return exact
+    with os.scandir(directory) as scan:
+        matches = [Path(entry.path) for entry in scan if entry.name.casefold() == name.casefold()]
+    require(len(matches) <= 1, f"Track {number}: ambiguous case-insensitive filename: {name}")
+    require(matches, f"Track {number}: track file missing: {name}")
+    return matches[0]
 
 
 def load_gdi(path):
@@ -72,13 +87,13 @@ def load_gdi(path):
         descriptor = source.read(GDI_LIMIT + 1)
     require(len(descriptor) == signature[2], "GDI changed while reading")
     try:
-        text = descriptor.decode("ascii")
+        text = descriptor.decode("utf-8-sig")
     except UnicodeDecodeError as error:
-        raise ValueError("GDI filenames and fields must be ASCII") from error
-    lines = text.split("\n")
-    if lines[-1] == "":
-        lines.pop()
-    lines = [line[:-1] if line.endswith("\r") else line for line in lines]
+        raise ValueError("GDI must be UTF-8 text (an optional UTF-8 BOM is accepted)") from error
+    # Common editors/exporters add blank lines or use CR rather than CRLF.
+    # Output is rebuilt with ASCII fields, normalized track names and LF rows.
+    lines = [line for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+             if line.strip(" \t")]
     require(lines and re.fullmatch(r"[ \t]*[0-9]+[ \t]*", lines[0]),
             "Invalid GDI track count")
     count = int(lines[0])
@@ -98,7 +113,7 @@ def load_gdi(path):
         require(safe_name(name), f"Track {number}: unsafe filename")
         require(name.casefold() not in names, f"Track {number}: duplicate filename")
         require(0 <= lba < LBA_LIMIT, f"Track {number}: LBA out of range")
-        source_path = path.parent / name
+        source_path = track_path(path.parent, name, number)
         source_signature = file_signature(source_path)
         byte_count = source_signature[2]
         require(byte_count > 0 and byte_count % size == 0,
@@ -112,8 +127,8 @@ def load_gdi(path):
             require(previous.start_lba + previous.sectors <= lba,
                     f"Track {number}: overlapping or out-of-order track")
         names.add(name.casefold())
-        tracks.append(Track(number, lba, control, size, name, source_path,
-                            byte_count, sectors, source_signature))
+        tracks.append(Track(number, lba, control, size, source_path.name, source_path,
+                            byte_count, sectors, source_signature, name))
     return descriptor, signature, tracks
 
 
@@ -174,7 +189,8 @@ def stream_track(track, output):
         "control": track.control, "sectors": track.sectors,
         "operation": "extract-mode1-payload" if convert else "copy",
         "raw_mode1_headers_checked": convert,
-        "source": {"file": track.name, "sector_bytes": track.sector_bytes,
+        "source": {"file": track.name, "descriptor_file": track.descriptor_name,
+                   "sector_bytes": track.sector_bytes,
                    "bytes": consumed, "crc32": f"{source_crc:08x}", "sha256": source_sha.hexdigest()},
         "output": {"file": output.name, "sector_bytes": DATA_BYTES if track.control == 4 else RAW_BYTES,
                    "bytes": written, "crc32": f"{output_crc:08x}", "sha256": output_sha.hexdigest()},
@@ -330,7 +346,7 @@ def batch_snapshot(root):
                 continue
             with os.scandir(directory) as scan:
                 entries = sorted(scan, key=lambda entry: (entry.name.casefold(), entry.name))
-            descriptors, children = [], []
+            descriptors, children, other_images = [], [], []
             for entry in entries:
                 path = Path(entry.path)
                 if entry.is_symlink():
@@ -343,12 +359,20 @@ def batch_snapshot(root):
                         children.append(path)
                 elif not entry.name.startswith(".") and entry.name.lower().endswith(".gdi"):
                     descriptors.append(path)
+                elif not entry.name.startswith(".") and path.suffix.lower() in OTHER_IMAGE_SUFFIXES:
+                    other_images.append(entry.name)
             pending.extend(reversed(children))
             if len(descriptors) > 1:
                 notices.append(("failed", directory,
                                 "multiple GDI descriptors; choose one with single-file mode"))
             elif descriptors:
                 candidates.append((descriptors[0], directory.with_name(directory.name + "-2048")))
+            elif other_images:
+                names = ", ".join(other_images[:3])
+                if len(other_images) > 3:
+                    names += f", and {len(other_images) - 3} more"
+                notices.append(("skipped", directory,
+                                f"no GDI descriptor; batch conversion accepts GDI only (found {names})"))
         except (ValueError, OSError) as error:
             notices.append(("failed", directory, str(error)))
     # A case-insensitive card must not receive two indistinguishable outputs.
@@ -382,11 +406,17 @@ def optimize_batch(root, progress=None):
     no_symlink_directories(root)
     require(root.is_dir(), f"Batch root is not a directory: {root}")
     root = root.resolve()
-    result = {"converted": 0, "skipped": 0, "failed": 0, "cancelled": False,
-              "saved_data_bytes": 0}
+    result = {"schema": 1, "tool": "tools/gdi_optimize.py", "root": str(root),
+              "converted": 0, "skipped": 0, "failed": 0, "cancelled": False,
+              "saved_data_bytes": 0, "entries": []}
+    candidates, current = [], None
 
-    def notice(status, path, message):
+    def notice(status, path, message, output=None):
         result[status] += 1
+        entry = {"status": status, "path": str(path), "message": message}
+        if output is not None:
+            entry["output"] = str(output)
+        result["entries"].append(entry)
         if progress:
             progress(f"{status.upper()}: {path}: {message}")
 
@@ -394,7 +424,8 @@ def optimize_batch(root, progress=None):
         candidates, notices = batch_snapshot(root)
         for status, path, message in notices:
             notice(status, path, message)
-        for gdi, output in candidates:
+        for position, (gdi, output) in enumerate(candidates):
+            current = position
             try:
                 no_symlink_directories(gdi.parent)
                 no_symlink_directories(output.parent)
@@ -405,24 +436,78 @@ def optimize_batch(root, progress=None):
                     if (len(occupied) == 1 and occupied[0].name == output.name
                             and occupied[0].is_dir(follow_symlinks=False)
                             and existing_copy_for(gdi, output)):
-                        notice("skipped", gdi, f"existing copy {output} left unchanged (not reverified)")
+                        notice("skipped", gdi, f"existing copy {output} left unchanged (not reverified)", output)
                         continue
                     raise ValueError(f"Output already exists: {output}")
                 emit = (lambda message: progress(f"{gdi.parent}: {message}")) if progress else None
                 report = optimize(gdi, output, progress=emit)
                 result["saved_data_bytes"] += report["saved_data_bytes"]
-                notice("converted", gdi, f"created {output}; originals unchanged")
+                notice("converted", gdi, f"created {output}; originals unchanged", output)
             except (ValueError, OSError) as error:
-                notice("failed", gdi, str(error))
+                notice("failed", gdi, str(error), output)
+            current = None
     except KeyboardInterrupt:
         result["cancelled"] = True
+        if current is None:
+            result["entries"].append({"status": "cancelled", "path": str(root),
+                                      "message": "Batch discovery/reporting was interrupted"})
+            for gdi, output in candidates:
+                result["entries"].append({"status": "not-started", "path": str(gdi),
+                                          "output": str(output),
+                                          "message": "Not attempted after cancellation"})
+        else:
+            for position in range(current, len(candidates)):
+                gdi, output = candidates[position]
+                # A progress callback may interrupt after a job was already
+                # published/reported; never label a completed copy cancelled.
+                if any(entry["path"] == str(gdi) and entry["status"] in ("converted", "skipped", "failed")
+                       for entry in result["entries"]):
+                    continue
+                result["entries"].append({
+                    "status": "cancelled" if position == current else "not-started",
+                    "path": str(gdi), "output": str(output),
+                    "message": "Current conversion interrupted; staging cleaned" if position == current
+                               else "Not attempted after cancellation"})
     return result
+
+
+def batch_report_path(path, root):
+    """Reports live outside the original collection and never replace files."""
+    path = Path(path).expanduser().absolute()
+    no_symlink_directories(path.parent)
+    require(path.parent.is_dir(), f"Report parent directory does not exist: {path.parent}")
+    path = path.parent.resolve() / path.name
+    root = Path(root).expanduser().resolve()
+    require(path != root and root not in path.parents,
+            "Batch report must be outside the original collection directory")
+    require(not os.path.lexists(path), f"Report already exists: {path}")
+    return path
+
+
+def write_batch_report(result, path):
+    """Publish a complete JSON report atomically, without overwriting a target."""
+    path = batch_report_path(path, result["root"])
+    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.staging-", dir=path.parent)
+    stage = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            json.dump(result, output, indent=2, ensure_ascii=False)
+            output.write("\n")
+            output.flush()
+            os.fsync(output.fileno())
+        publish_directory(stage, path)
+    finally:
+        if stage.exists():
+            stage.unlink()
+    return path
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch", type=Path, metavar="ROOT",
                         help="Recursively convert one-GDI folders into sibling <folder>-2048 copies")
+    parser.add_argument("--report", type=Path, metavar="PATH",
+                        help="Write per-game batch results to a new JSON file outside ROOT")
     parser.add_argument("gdi", nargs="?", type=Path, help="Original .gdi descriptor")
     parser.add_argument("output", nargs="?", type=Path,
                         help="New folder outside the original dump folder; must not exist")
@@ -431,6 +516,7 @@ def main():
         if args.gdi is not None or args.output is not None:
             parser.error("--batch ROOT cannot be combined with single-file arguments")
         try:
+            report_path = batch_report_path(args.report, args.batch) if args.report else None
             result = optimize_batch(args.batch, progress=print)
         except (ValueError, OSError) as error:
             print(f"Batch failed: {error}", file=sys.stderr)
@@ -440,12 +526,29 @@ def main():
             return 130
         print(f'Batch summary: {result["converted"]} converted, {result["skipped"]} skipped, '
               f'{result["failed"]} failed; {result["saved_data_bytes"]:,} data bytes saved.')
+        failures = [entry for entry in result["entries"] if entry["status"] == "failed"]
+        if failures:
+            print("Failed games/folders (originals unchanged):", file=sys.stderr)
+            for entry in failures:
+                print(f'  {entry["path"]}: {entry["message"]}', file=sys.stderr)
+        if report_path:
+            try:
+                write_batch_report(result, report_path)
+                print(f"Batch report: {report_path}")
+            except (ValueError, OSError) as error:
+                print(f"Cannot write batch report: {error}; completed copies kept.", file=sys.stderr)
+                return 130 if result["cancelled"] else 1
+            except KeyboardInterrupt:
+                print("Batch report cancelled; completed copies kept, report staging cleaned.", file=sys.stderr)
+                return 130
         if result["cancelled"]:
             print("Batch cancelled; completed copies kept, current staging cleaned.", file=sys.stderr)
             return 130
         if not any(result[key] for key in ("converted", "skipped", "failed")):
             print("No GDI descriptors found.")
         return 1 if result["failed"] else 0
+    if args.report is not None:
+        parser.error("--report PATH requires --batch ROOT")
     if args.gdi is None or args.output is None:
         parser.error("provide ORIGINAL.gdi OUTPUT_FOLDER, or --batch ROOT")
     try:

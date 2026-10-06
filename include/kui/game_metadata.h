@@ -37,7 +37,7 @@ struct kui_game_metadata {
     /* A valid GD-ROM media field and seven hexadecimal peripheral digits
      * identify native versus Windows CE boot. Both false means unsupported
      * media or malformed flags; metadata inspection can still succeed. */
-    bool native_gd, windows_ce;
+    bool native_gd, native_cd, windows_ce;
     char title[129], product[11], version[7], region[9], bootfile[17];
     /* volume_blocks is the recorded volume size, NOT an absolute end LBA.
      * Multisession writers may exclude the session lead-in from that count. */

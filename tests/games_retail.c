@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define _POSIX_C_SOURCE 200809L
 #include "kui/games_retail.h"
+#include "kui/games.h"
 #include "kui/media.h"
 #include "kui/retail_image.h"
+#include "kui/retail_cursor.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -58,6 +60,36 @@ static bool audio_unmapped(void) {
     return !strcmp(test.fault, "tracks-99") || !strcmp(test.fault, "async-tracks-40");
 }
 static bool fault(const char *name) { return test.active && !strcmp(test.fault, name); }
+static bool format_case(void) { return !strncmp(test.fault, "format-", 7); }
+struct format_track {
+    uint32_t lba, sectors, control, stride, mode, header;
+    unsigned long long offset;
+};
+struct format_expect {
+    char selected[KUI_GAME_NAME_CAP];
+    unsigned valid, session, boot_lba, boot_bytes, flags, count;
+    struct format_track track[KUI_GAME_TRACK_MAX];
+};
+static struct format_expect format_expect(const char *directory) {
+    struct format_expect expected = {0};
+    char path[1024];
+    assert(snprintf(path, sizeof(path), "%s/format.expect", directory) < (int)sizeof(path));
+    FILE *file = fopen(path, "r"); assert(file);
+    assert(fgets(expected.selected, sizeof(expected.selected), file));
+    size_t len = strlen(expected.selected);
+    assert(len && expected.selected[len - 1] == '\n'); expected.selected[len - 1] = 0;
+    assert(fscanf(file, "%u %u %u %u %u %u", &expected.valid, &expected.session,
+        &expected.boot_lba, &expected.boot_bytes, &expected.flags, &expected.count) == 6);
+    assert(expected.count && expected.count <= KUI_GAME_TRACK_MAX);
+    for(unsigned i = 0; i < expected.count; ++i) {
+        struct format_track *track = &expected.track[i];
+        assert(fscanf(file, "%u %u %u %u %u %u %llu", &track->lba, &track->sectors,
+            &track->control, &track->stride, &track->mode, &track->header, &track->offset) == 7);
+        assert(track->sectors && track->sectors <= 64);
+    }
+    assert(!ferror(file) && !fclose(file));
+    return expected;
+}
 static void log_line(const char *format, ...) {
     va_list args; va_start(args, format); vprintf(format, args); va_end(args); puts("");
 }
@@ -81,6 +113,7 @@ unsigned kui_storage_active(void) {
     /* The CE boot test needs SCI; ce-probe-scif checks the refusal. */
     return !strcmp(test.fault, "async-on-sci") || !strcmp(test.fault, "async-cooked-2048") ||
         !strncmp(test.fault, "async-tracks", 12) ||
+        (format_case() && strstr(test.fault, "-async")) ||
         (!strncmp(test.fault, "ce-probe", 8) && strcmp(test.fault, "ce-probe-scif")) ?
         KUI_STORAGE_SCI : KUI_STORAGE_SCIF;
 }
@@ -191,6 +224,28 @@ static void write_file(const char *path, const void *data, size_t bytes) {
     assert(f_write(&file, data, (UINT)bytes, &written) == FR_OK && written == bytes);
     assert(f_close(&file) == FR_OK);
 }
+static void write_format_file(const char *path, const void *data, size_t bytes) {
+    if(!strstr(test.fault, "-fragmented") || !strstr(path, ".bin")) {
+        write_file(path, data, bytes);
+        return;
+    }
+    FIL file; assert(f_open(&file, path, FA_WRITE | FA_CREATE_NEW) == FR_OK);
+    size_t chunk = (size_t)fs.csize * 512u;
+    uint8_t *blocker = malloc(chunk); assert(blocker); memset(blocker, 0xAD, chunk);
+    for(size_t offset = 0; offset < bytes; ) {
+        size_t take = bytes - offset; if(take > chunk) take = chunk;
+        UINT written;
+        assert(f_write(&file, (const uint8_t *)data + offset, (UINT)take, &written) == FR_OK && written == take);
+        assert(f_sync(&file) == FR_OK);
+        if(offset / chunk < 32u) {
+            char blocker_path[96];
+            snprintf(blocker_path, sizeof(blocker_path), "0:/Games/format-block-%04u.dat", (unsigned)(offset / chunk));
+            write_file(blocker_path, blocker, chunk);
+        }
+        offset += take;
+    }
+    assert(f_close(&file) == FR_OK); free(blocker);
+}
 static void put32(uint8_t *p, uint32_t value) {
     for(unsigned i = 0; i < 4; ++i) p[i] = (uint8_t)(value >> (8u * i));
 }
@@ -223,6 +278,21 @@ static void seed(const char *directory) {
         data = host_file(directory, "ce-probe.kui", &size);
         write_file(ce_package, data, size); free(data);
     }
+    if(format_case()) {
+        char list_path[1024], name[KUI_GAME_NAME_CAP], path[256];
+        assert(snprintf(list_path, sizeof(list_path), "%s/format.files", directory) < (int)sizeof(list_path));
+        FILE *list = fopen(list_path, "r"); assert(list);
+        while(fgets(name, sizeof(name), list)) {
+            size_t len = strlen(name);
+            assert(len && name[len - 1] == '\n'); name[len - 1] = 0;
+            assert(!strchr(name, '/'));
+            assert(snprintf(path, sizeof(path), "0:/Games/Reader Test/%s", name) < (int)sizeof(path));
+            data = host_file(directory, name, &size);
+            write_format_file(path, data, size); free(data);
+        }
+        assert(!ferror(list) && !fclose(list));
+        return;
+    }
     data = host_file(directory, "disc.gdi", &size);
     write_file("0:/Games/Reader Test/disc.gdi", data, size); free(data);
     for(unsigned i = 0; i < track_count(); ++i) {
@@ -233,7 +303,7 @@ static void seed(const char *directory) {
         data = host_file(directory, name, &size);
         if(i == 2 && !strcmp(test.fault, "bad-ip")) data[16] ^= 1;
         if(i == 2 && !strcmp(test.fault, "bad-bootfile")) data[16 + 96] = 'X';
-        if(i == 2 && !strcmp(test.fault, "bad-media")) data[16 + 37] = 'C';
+        if(i == 2 && !strcmp(test.fault, "bad-media")) data[16 + 37] = 'X';
         if(i == 2 && !strcmp(test.fault, "windows-ce")) data[16 + 62] = '1';
         if(i == 2 && !strcmp(test.fault, "bad-flags")) data[16 + 60] = 'G';
         if(i == 2 && !strcmp(test.fault, "fragment-limit")) {
@@ -267,6 +337,137 @@ static void seed(const char *directory) {
 static int detached_block(void *ctx, uint32_t lba, uint8_t out[512]) {
     (void)ctx; assert(!test.connected && !test.files); ++test.physical_reads;
     return read_image(NULL, lba, 1, out);
+}
+static void cursor_write(void *context, uint32_t offset, const uint8_t *data, uint32_t bytes) {
+    assert(offset <= 64u * KUI_GAME_SUBCHANNEL_BYTES && bytes && bytes <= 512u &&
+        bytes <= 64u * KUI_GAME_SUBCHANNEL_BYTES - offset);
+    memcpy((uint8_t *)context + offset, data, bytes);
+}
+static void detached_cursor_read(const struct kui_retail_manifest *map, uint32_t lba,
+    uint32_t count, enum kui_game_sector_format format, void *out) {
+    struct kui_retail_cursor cursor;
+    assert(kui_retail_cursor_begin(&cursor, map, lba, count, format, cursor_write, out) == KUI_GAME_OK);
+    uint8_t block[512]; unsigned fed = 0;
+    while(cursor.done < count) {
+        bool bounded = false;
+        for(unsigned i = 0; i < map->extent_count; ++i) {
+            const struct kui_retail_extent *extent = &map->slots[map->track_count + i].extent;
+            if(cursor.block >= extent->card_lba && cursor.block - extent->card_lba < extent->blocks &&
+                cursor.run && cursor.run <= extent->blocks - (cursor.block - extent->card_lba))
+                bounded = true;
+        }
+        assert(bounded && ++fed <= 64u * 6u);
+        assert(!detached_block(NULL, cursor.block, block));
+        assert(kui_retail_cursor_feed(&cursor, block) == KUI_GAME_OK);
+    }
+    assert(cursor.done == count);
+}
+static void check_format_mapping(const char *directory, const struct format_expect *expected,
+    const struct kui_runtime_image *image) {
+    struct kui_retail_manifest *map = malloc(sizeof(*map)); assert(map);
+    assert(image->data && image->info.payload_bytes >= 0x2004);
+    assert(kui_retail_manifest_decode((const uint8_t *)image->data + 0x1000, map) == KUI_GAME_OK);
+    assert(map->track_count == expected->count && map->session_lba == expected->session);
+    if(strstr(test.fault, "-fragmented")) assert(map->extent_count > expected->count);
+    assert(map->boot_lba == expected->boot_lba && map->boot_bytes == expected->boot_bytes);
+    assert(map->flags == expected->flags && map->reader == (strstr(test.fault, "-async") ?
+        KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD));
+    assert(map->storage_transport == kui_storage_active());
+    assert(map->partition_end <= map->card_sectors && map->card_sectors <= test.blocks);
+    assert(map->partition_start == 0 || map->partition_start == 2048);
+    assert(map->partition_end - map->partition_start == 96u * 1024u * 1024u / 512u);
+    size_t selected_bytes;
+    uint8_t *selected_data = host_file(directory, expected->selected, &selected_bytes);
+    if(selected_bytes > KUI_GAME_GDI_LIMIT) selected_bytes = KUI_GAME_GDI_LIMIT;
+    assert(map->gdi_crc32 == kui_retail_crc32(0, selected_data, selected_bytes));
+    free(selected_data);
+    struct kui_retail_image reader;
+    assert(kui_retail_image_init(&reader, map, detached_block, NULL) == KUI_GAME_OK);
+    uint8_t *actual = malloc(64u * KUI_GAME_SUBCHANNEL_BYTES); assert(actual);
+    uint32_t expected_boot_crc = 0, expected_ip_crc = 0;
+    bool boot_checked = false, ip_checked = false;
+    for(unsigned i = 0; i < expected->count; ++i) {
+        const struct format_track *e = &expected->track[i];
+        const struct kui_retail_track *t = &map->slots[i].track;
+        char name[64]; size_t bytes;
+        snprintf(name, sizeof(name), "expected-track-%02u.bin", i + 1);
+        uint8_t *source = host_file(directory, name, &bytes);
+        assert(bytes == (size_t)e->sectors * e->stride);
+        assert(t->start_lba == e->lba && t->end_lba == e->lba + e->sectors);
+        assert(kui_retail_track_control(t) == e->control && kui_retail_track_sector_bytes(t) == e->stride);
+        assert(kui_retail_track_header_bytes(t) == e->header);
+        assert(kui_retail_track_file_offset(t) == e->offset % 512u);
+        assert((bool)(t->control & KUI_RETAIL_TRACK_MODE2) == (e->mode == 2));
+        uint32_t mapped_blocks = 0, next_block = 0;
+        assert(t->extent_count);
+        for(unsigned n = 0; n < t->extent_count; ++n) {
+            const struct kui_retail_extent *extent = &map->slots[kui_retail_track_first_extent(t) + n].extent;
+            assert(extent->file_block == next_block && extent->blocks);
+            next_block += extent->blocks; mapped_blocks += extent->blocks;
+        }
+        assert(mapped_blocks == (e->offset % 512u + bytes + 511u) / 512u);
+        if(e->stride == 2352u || e->stride == 2448u) {
+            assert(kui_retail_image_read(&reader, e->lba, e->sectors, KUI_GAME_SECTOR_RAW,
+                actual, 64u * KUI_GAME_SUBCHANNEL_BYTES) == KUI_GAME_OK);
+            for(uint32_t n = 0; n < e->sectors; ++n)
+                assert(!memcmp(actual + n * 2352u, source + n * e->stride, 2352u));
+            detached_cursor_read(map, e->lba, e->sectors, KUI_GAME_SECTOR_RAW, actual);
+            for(uint32_t n = 0; n < e->sectors; ++n)
+                assert(!memcmp(actual + n * 2352u, source + n * e->stride, 2352u));
+        } else {
+            unsigned reads = test.physical_reads;
+            memset(actual, 0x73, 64u * KUI_GAME_SUBCHANNEL_BYTES);
+            assert(kui_retail_image_read(&reader, e->lba, 1, KUI_GAME_SECTOR_RAW,
+                actual, 2352) == KUI_GAME_UNSUPPORTED);
+            assert(test.physical_reads == reads && actual[0] == 0x73);
+        }
+        if(e->control == 4) {
+            assert(kui_retail_image_read(&reader, e->lba, e->sectors, KUI_GAME_SECTOR_MODE1,
+                actual, 64u * KUI_GAME_SUBCHANNEL_BYTES) == KUI_GAME_OK);
+            for(uint32_t n = 0; n < e->sectors; ++n)
+                assert(!memcmp(actual + n * 2048u, source + n * e->stride + e->header, 2048));
+            detached_cursor_read(map, e->lba, e->sectors, KUI_GAME_SECTOR_MODE1, actual);
+            for(uint32_t n = 0; n < e->sectors; ++n)
+                assert(!memcmp(actual + n * 2048u, source + n * e->stride + e->header, 2048));
+            if(e->lba == expected->session) {
+                for(uint32_t n = 0; n < 16; ++n)
+                    expected_ip_crc = kui_retail_crc32(expected_ip_crc, source + n * e->stride + e->header, 2048);
+                assert(kui_retail_image_read(&reader, e->lba, 16, KUI_GAME_SECTOR_MODE1,
+                    actual, 32768) == KUI_GAME_OK);
+                assert(kui_retail_crc32(0, actual, 32768) == expected_ip_crc);
+                ip_checked = true;
+            }
+            if(expected->boot_lba >= e->lba && expected->boot_lba < e->lba + e->sectors) {
+                for(uint32_t done = 0; done < expected->boot_bytes; ) {
+                    uint32_t n = done / 2048u, take = expected->boot_bytes - done;
+                    if(take > 2048u) take = 2048u;
+                    const uint8_t *wanted = source + (expected->boot_lba - e->lba + n) * e->stride + e->header;
+                    assert(kui_retail_image_read(&reader, expected->boot_lba + n, 1,
+                        KUI_GAME_SECTOR_MODE1, actual, 2048) == KUI_GAME_OK);
+                    assert(!memcmp(actual, wanted, take));
+                    expected_boot_crc = kui_retail_crc32(expected_boot_crc, wanted, take);
+                    done += take;
+                }
+                boot_checked = true;
+            }
+        } else {
+            unsigned reads = test.physical_reads;
+            assert(kui_retail_image_read(&reader, e->lba, 1, KUI_GAME_SECTOR_MODE1,
+                actual, 2048) == KUI_GAME_AUDIO);
+            assert(test.physical_reads == reads);
+        }
+        free(source);
+    }
+    assert(ip_checked && boot_checked && test.physical_reads);
+    assert(map->ip_crc32 == expected_ip_crc && map->boot_crc32 ==
+        ((expected->flags & KUI_RETAIL_IMAGE_BOOT_CRC) ? expected_boot_crc : 0));
+    unsigned reads = test.physical_reads;
+    assert(kui_retail_image_read(&reader, map->slots[expected->count - 1].track.end_lba,
+        1, KUI_GAME_SECTOR_MODE1, actual, 2048) == KUI_GAME_RANGE);
+    assert(test.physical_reads == reads);
+    printf("Detached generic format PASS: full IP CRC, exact boot bytes and headers, normalized selected extents; boot CRC %08x, %u SD blocks\n",
+        expected_boot_crc, test.physical_reads);
+    free(actual); free(map);
 }
 static void check_mapping(const char *directory, const struct kui_runtime_image *image) {
     struct kui_retail_manifest *map = malloc(sizeof(*map)); assert(map);
@@ -385,6 +586,26 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
 }
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
+    if(format_case()) {
+        struct format_expect expected = format_expect(directory);
+        char path[KUI_GAMES_FILE_CAP];
+        assert(snprintf(path, sizeof(path), "/Games/Reader Test/%s", expected.selected) < (int)sizeof(path));
+        uint32_t request = strstr(test.fault, "-async") ? KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD;
+        if(strstr(test.fault, "force-scramble")) request |= KUI_GAMES_RETAIL_DESCRAMBLE;
+        if(strstr(test.fault, "force-plain")) request |= KUI_GAMES_RETAIL_BOOT_PLAIN;
+        if(strstr(test.fault, "bad-encoding"))
+            request |= KUI_GAMES_RETAIL_DESCRAMBLE | KUI_GAMES_RETAIL_BOOT_PLAIN;
+        if(strstr(test.fault, "bad-ce-scramble")) request |= KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE;
+        if(strstr(test.fault, "bad-ce-plain")) request |= KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_BOOT_PLAIN;
+        bool result = kui_games_retail_prepare_reader(path, request, &image, log_line, cancel);
+        assert(result == (bool)expected.valid);
+        if(result) check_format_mapping(directory, &expected, &image);
+        else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
+        if(strstr(test.fault, "bad-encoding") || strstr(test.fault, "bad-ce-"))
+            assert(!test.connects && !test.read_calls && !test.physical_reads);
+        kui_runtime_free(&image);
+        return;
+    }
     bool result = !strncmp(test.fault, "ce-probe", 8) ?
         kui_games_retail_prepare_reader(selected, KUI_GAMES_RETAIL_CE_PROBE |
             (!strcmp(test.fault, "ce-probe-async") ? KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD),

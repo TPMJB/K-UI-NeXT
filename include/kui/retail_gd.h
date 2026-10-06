@@ -63,6 +63,7 @@ struct kui_retail_gd {
     uint32_t token, command, lba, count, destination, area, request_bytes;
     uint32_t completed_bytes, error, pending, executing, initialized;
     uint32_t position_lba, drive_status, mode[4], outputs[4];
+    uint32_t disc_type; /* Persistent BIOS disc kind: GD0x80 or CD-ROM0x10. */
     int32_t status;
     /* Sectors one EXEC may read: adapter pacing policy, not drive state.
      * Init sets STEP_SECTORS; values outside 1..STEP_MAX use that default. */
@@ -100,6 +101,10 @@ int kui_retail_gd_init(struct kui_retail_gd *, const union kui_retail_slot *trac
 void kui_retail_gd_init_validated(struct kui_retail_gd *, const union kui_retail_slot *tracks,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,
     uint32_t guest_end);
+/* Configure a validated manifest's disc/session before requests. Protocol
+ * INIT/RESET retains this kind; pending commands refuse a reconfiguration. */
+void kui_retail_gd_set_disc_type(struct kui_retail_gd *, uint32_t disc_type,
+    uint32_t session_lba);
 
 /* Virtual PIOREAD/DMAREAD complete by polling and CPU copy into guest memory;
  * no virtual GD DMA interrupt/callback is generated. The physical sector
@@ -110,8 +115,8 @@ void kui_retail_gd_init_validated(struct kui_retail_gd *, const union kui_retail
  * stream read in the KUI_RETAIL_CE build (see KUI_RETAIL_GD_DMAREAD_STREAM). Callback-clear (r4=0) is a
  * supported no-op; nonzero callback installation is explicitly unsupported.
  * The mode command's four words are virtual drive metadata, not physical SD
- * settings. DATATYPE accepts Mode1/2048 (type0 automatic or1024 explicit) and
- * complete2352 sectors. No audio playback, Mode2 conversion or CDDA emulation:
+ * settings. DATATYPE accepts 2048-byte user data (type0 automatic,1024 Mode1
+ * or2048 Mode2 Form1) and complete2352 sectors. No audio playback or CDDA emulation:
  * PLAY/PLAY2 ({start, end, repeat}), PAUSE and RELEASE are accepted and
  * complete at once, silently, so games that play disc audio run without it.
  * GET_VERS writes the 28-byte driver compatibility response at params[0],

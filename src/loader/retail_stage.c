@@ -65,6 +65,10 @@ static enum kui_loader_sd_result last_card_result;
 static uint8_t raw_boot[BOOT_CHUNK_SECTORS*KUI_GAME_RAW_BYTES];
 static uint32_t boot_crc;
 static uint32_t source_boot_crc, boot_cooked;
+#ifndef KUI_RETAIL_CE
+static uint16_t scramble_index[KUI_RETAIL_SCRAMBLE_SLICES];
+static uint8_t scramble_seen[KUI_RETAIL_SCRAMBLE_SLICES/8u];
+#endif
 /* Bytes of the executable at KUI_RETAIL_EXEC_ADDRESS: the boot file, or for
  * Windows CE its body (the file less its 2048-byte load prefix). */
 static uint32_t exec_bytes;
@@ -173,17 +177,23 @@ static void load_sectors(uint32_t lba,uint32_t sectors,uint32_t file_bytes,uint8
         if(count>BOOT_CHUNK_SECTORS) count=BOOT_CHUNK_SECTORS;
         if(count>track->end_lba-lba-done) count=track->end_lba-lba-done;
         uint32_t stride=kui_retail_track_sector_bytes(track),failed_lba=0;
-        read_sectors(lba+done,count,stride==KUI_GAME_DATA_BYTES?
-            KUI_GAME_SECTOR_MODE1:KUI_GAME_SECTOR_RAW,raw_boot);
         uint8_t *destination=out+(size_t)done*KUI_GAME_DATA_BYTES;
-        enum kui_retail_header header=kui_retail_boot_copy(raw_boot,destination,
-            lba+done,count,stride,&failed_lba);
+        enum kui_retail_header header=KUI_RETAIL_HEADER_OK;
+        if(stride==KUI_GAME_RAW_BYTES && !(track->control & KUI_RETAIL_TRACK_MODE2) &&
+            !(manifest.flags & KUI_RETAIL_IMAGE_CD)) {
+            read_sectors(lba+done,count,KUI_GAME_SECTOR_RAW,raw_boot);
+            header=kui_retail_boot_copy(raw_boot,destination,
+                lba+done,count,stride,&failed_lba);
+        } else {
+            read_sectors(lba+done,count,KUI_GAME_SECTOR_MODE1,raw_boot);
+            memcpy(destination,raw_boot,(size_t)count*KUI_GAME_DATA_BYTES);
+        }
         if(header!=KUI_RETAIL_HEADER_OK) {
             retail_display_hex("BOOT SECTOR LBA",failed_lba);
             stopped(header==KUI_RETAIL_HEADER_ADDRESS?"BOOT SECTOR ADDRESS MISMATCH":
                 "BOOT SECTOR IS NOT MODE 1 DATA",(uint32_t)header);
         }
-        if(boot_cooked) {
+        if(boot_cooked || (manifest.flags & KUI_RETAIL_IMAGE_BOOT_CRC)) {
             uint32_t bytes=count*KUI_GAME_DATA_BYTES;
             uint32_t left=file_bytes-done*KUI_GAME_DATA_BYTES;
             if(bytes>left) bytes=left;
@@ -202,7 +212,7 @@ static void load_sectors(uint32_t lba,uint32_t sectors,uint32_t file_bytes,uint8
  * Returns the body's byte count. */
 static uint8_t ce_prefix[KUI_CE_LOAD_PREFIX_BYTES];
 static bool ip_windows_ce(const uint8_t *ip) {
-    if(memcmp(ip+37,"GD-ROM",6) || ip[63]!=' ') return false;
+    if((memcmp(ip+37,"GD-ROM",6) && memcmp(ip+37,"CD-ROM",6)) || ip[63]!=' ') return false;
     uint32_t flags=0;
     for(unsigned i=56;i<63;i++) {
         unsigned digit=ip[i];
@@ -371,7 +381,7 @@ void kui_retail_stage_main(const uint8_t *wire) {
     select_resident();
     if(manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
-       manifest.session_lba<45000)
+       (!(manifest.flags & KUI_RETAIL_IMAGE_CD) && manifest.session_lba<45000))
         stopped("UNSUPPORTED BOOT LAYOUT",manifest.boot_bytes);
     if(manifest.storage_transport==KUI_STORAGE_SCIF) retire_launcher_serial();
     retail_display_line(kui_retail_storage_name(manifest.storage_transport));
@@ -424,14 +434,23 @@ void kui_retail_stage_main(const uint8_t *wire) {
     exec_bytes=manifest.boot_bytes;
     load_sectors(manifest.boot_lba,(manifest.boot_bytes+2047u)/2048u,manifest.boot_bytes,boot);
 #endif
-    if(boot_cooked && source_boot_crc!=manifest.boot_crc32)
-        stopped("COOKED EXECUTABLE CHECKSUM CHANGED",source_boot_crc);
+    if((boot_cooked || (manifest.flags & KUI_RETAIL_IMAGE_BOOT_CRC)) && source_boot_crc!=manifest.boot_crc32)
+        stopped("EXECUTABLE CHECKSUM CHANGED",source_boot_crc);
+#ifndef KUI_RETAIL_CE
+    if(manifest.flags & KUI_RETAIL_IMAGE_SCRAMBLED) {
+        retail_display_line("DESCRAMBLING EXPLICITLY MARKED CD EXECUTABLE");
+        kui_retail_boot_descramble(boot,exec_bytes,scramble_index,scramble_seen);
+    }
+#else
+    if(manifest.flags & KUI_RETAIL_IMAGE_SCRAMBLED)
+        stopped("SCRAMBLED WINDOWS CE BOOT IS UNSUPPORTED",0);
+#endif
     boot_crc=kui_retail_crc32(0,boot,exec_bytes);
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);
     memcpy(original_entry,boot,ENTRY_PATCH_BYTES);
     memcpy(boot,__retail_trampoline_start,ENTRY_PATCH_BYTES);
-    retail_display_line(boot_cooked?"IP AND COOKED EXECUTABLE CHECKSUMS PASSED":
+    retail_display_line((boot_cooked || (manifest.flags & KUI_RETAIL_IMAGE_BOOT_CRC))?"IP AND EXECUTABLE CHECKSUMS PASSED":
         "IP CHECKSUM AND BOOT SECTOR HEADERS PASSED");
     retail_display_hex("BOOT BYTES",exec_bytes);
     retail_display_hex("STORAGE BLOCKS READ",image.blocks_read);
