@@ -23,3 +23,20 @@ A matching first-read CHECK completion or failure produces a terminal report. A 
 The tests use synthetic RAM and PVD bytes; proprietary owner files and instructions are excluded from source and deliverables. The observation fixture executes the real GD dispatcher alongside an independent baseline service, checking actual results, output bytes, full caller-frame restoration except R0, both photographed unmasked and subsequent masked SR states, physical/cached/uncached aliases, defined parameter lengths, in-flight token preservation, failure reports, nested busy behavior, and the 4,096-call bound. Additional cases verify code corruption is caught before vector installation.
 
 All 71 focused host cases pass under UBSan: 32 GD observer, 19 startup trace, 9 native relay and 11 CE relay. Eleven workflow hygiene checks and YAML parsing pass. Strict SH-4 C/assembly compile, complete mode-2 stage link, and no-FPU instruction audit pass. Observer state, its private stack and the high-stage BSS end remain below the owner heap at `0x8cf00000`. Largest observer C frame is 116 bytes within its 4 KiB stack. Allocated code/data/BSS sections match the previous source byte-for-byte for native mode 0, native mode 1, and CE mode 2. The delivered GitHub build is recorded in the final package; full native layout/stack/instruction/package checks must pass before delivery. Hardware behavior of this new observer remains unverified until the owner tests it.
+
+
+## Owner hardware result: `7f49aec7ba1b`
+
+The owner supplied the terminal photograph on 2026-10-06. This is the expected intentional stop after the real native reader returned the first read's completion. All displayed numbers are hexadecimal:
+
+| Field | Value |
+| --- | --- |
+| Calls, function, command/token, result, caller PR | `0000000c`, `00000001`, `00000003`, `00000002`, `8c648e38` |
+| BIOS INIT result; INIT24 token and completion | `00000000`; `00000001`, `00000002` |
+| GET_VERS40 token and completion | `00000002`, `00000002` |
+| DRIVE result, state, type | `00000000`, `00000001`, `00000080` |
+| First sector word and CRC32 | `30444301`, `ba3adfae` |
+| Read command, FAD, count, physical destination, token | `00000011`, `0000b06e`, `00000001`, `0c698460`, `00000003` |
+| CHECK result, error1, error2, bytes, ATA | `00000002`, `00000000`, `00000000`, `00000800`, `00000000` |
+
+The first 2,048-byte read therefore completed with no reported errors. The little-endian first word is the expected ISO9660 descriptor prefix (`01 43 44 30`); the photo does not display the remaining descriptor identifier bytes. The supplied startup bundle contains no disc sectors, so its reported CRC cannot yet be compared independently with the original PVD. This proves the initial command sequence succeeds in the instrumented run, not that the subsequent mount/parser or later reads succeed. No reader behavior fix is justified by this photograph alone.

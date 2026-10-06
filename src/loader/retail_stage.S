@@ -361,6 +361,9 @@ C(\name):
     STARTUP_TRACE_ENTRY kui_retail_startup_trace_g2,1
     STARTUP_TRACE_ENTRY kui_retail_startup_trace_pvr,2
     STARTUP_TRACE_ENTRY kui_retail_startup_trace_gd,3
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    STARTUP_TRACE_ENTRY kui_retail_startup_trace_mount,4
+#endif
 .Lstartup_trace_saved:
     stc sr,r0
     or #0xf0,r0

@@ -81,7 +81,12 @@ static uint32_t resident_limit;
  * Addresses identify the supplied MK-51000 V1.004 image; instruction bytes
  * are saved from the verified RAM image, never bundled with K-UI. */
 #define STARTUP_TRACE_BYTES 12u
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+#define STARTUP_TRACE_POINTS 5u
+extern void kui_retail_startup_trace_mount(void);
+#else
 #define STARTUP_TRACE_POINTS 4u
+#endif
 #define STARTUP_TRACE_BUDGET 3000000u
 #define STARTUP_TRACE_STACK_BYTES 4096u
 extern void kui_retail_startup_trace_scan(void);
@@ -93,10 +98,16 @@ uint8_t kui_retail_startup_trace_stack[STARTUP_TRACE_STACK_BYTES]
 uint32_t kui_retail_startup_trace_resume;
 static const uint32_t startup_trace_address[STARTUP_TRACE_POINTS] = {
     0x8c6082d4u,0x8c6083b0u,0x8c6085bcu,0x8c603d78u
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    ,0x8c603d4cu /* Common SDK mount epilogue; never resumed. */
+#endif
 };
 static void (*const startup_trace_target[STARTUP_TRACE_POINTS])(void) = {
     kui_retail_startup_trace_scan,kui_retail_startup_trace_g2,
     kui_retail_startup_trace_pvr,kui_retail_startup_trace_gd
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    ,kui_retail_startup_trace_mount
+#endif
 };
 static struct {
     uint8_t saved[STARTUP_TRACE_POINTS][STARTUP_TRACE_BYTES];
@@ -140,6 +151,10 @@ struct startup_gd_state {
     uint32_t read_command,read_fad,read_count,read_destination,read_token;
     uint32_t read_status,check[4],pvd_header,pvd_crc;
     uint32_t candidate_fad,candidate_count,candidate_destination;
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    uint32_t mount_result,read_requests,completed_reads,read_completed,pvd_captured,pvd_valid;
+    uint32_t pvd_sector_bytes,root_lba,root_bytes,path_lba,path_bytes;
+#endif
 };
 struct startup_gd_state kui_retail_startup_gd_state;
 extern void kui_retail_startup_gd_proxy(void);
@@ -650,20 +665,62 @@ static void startup_gd_report(struct startup_gd_state *s,const char *message)
 static void startup_gd_report(struct startup_gd_state *s,const char *message) {
     uint32_t rows[5][5]={
         {s->calls,s->function,s->command,s->result,s->caller},
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+        {s->mount_result,s->read_requests,s->completed_reads,s->path_lba,s->path_bytes},
+        {s->pvd_crc,s->pvd_valid,s->pvd_sector_bytes,s->root_lba,s->root_bytes},
+#else
         {s->init_result,s->init_token,s->init_status,s->version_token,s->version_status},
         {s->drive_result,s->drive_status,s->drive_type,s->pvd_header,s->pvd_crc},
+#endif
         {s->read_command,s->read_fad,s->read_count,s->read_destination,s->read_token},
         {s->read_status,s->check[0],s->check[1],s->check[2],s->check[3]}
     };
     retail_display_restore(&display);
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    retail_display_line("SONIC MOUNT TRACE - INTENTIONAL STOP");
+#else
     retail_display_line("SONIC GD TRACE - INTENTIONAL STOP");
+#endif
     retail_display_values("CALLS FN CMD RESULT PR",rows[0],5);
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    retail_display_values("MOUNT READS DONE PATHLBA BYTES",rows[1],5);
+    retail_display_values("PVDCRC ID SIZE ROOTLBA BYTES",rows[2],5);
+#else
     retail_display_values("INIT3 INITTOK STAT VERSTOK STAT",rows[1],5);
     retail_display_values("DRIVERET STATE TYPE PVDWORD PVDCRC",rows[2],5);
+#endif
     retail_display_values("CMD FAD COUNT DST TOKEN",rows[3],5);
     retail_display_values("CHECK ERR1 ERR2 BYTES ATA",rows[4],5);
     stopped(message,s->calls);
 }
+static struct startup_gd_state *startup_gd_uncached_state(void) {
+#ifdef KUI_RETAIL_STARTUP_TRACE_TEST
+    return &kui_retail_startup_gd_state;
+#else
+    return (struct startup_gd_state *)startup_trace_owner(
+        (uint32_t)(uintptr_t)&kui_retail_startup_gd_state);
+#endif
+}
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+static uint32_t startup_gd_le32(const uint8_t *p) {
+    return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
+}
+static void startup_gd_capture_pvd(struct startup_gd_state *s) {
+    s->pvd_captured=1u;
+    if(!s->read_count || s->check[2]<2048u || (s->read_destination&3u) ||
+       !startup_gd_guest(s->read_destination,2048u)) return;
+    const uint8_t *p=startup_gd_pointer(s->read_destination);
+    s->pvd_header=startup_gd_le32(p);
+    s->pvd_crc=kui_retail_crc32(0,p,2048u);
+    s->pvd_valid=p[0]==1u && p[1]=='C' && p[2]=='D' && p[3]=='0' &&
+        p[4]=='0' && p[5]=='1' && p[6]==1u;
+    s->pvd_sector_bytes=(uint32_t)p[128]|((uint32_t)p[129]<<8);
+    s->path_bytes=startup_gd_le32(p+132);
+    s->path_lba=startup_gd_le32(p+140);
+    s->root_lba=startup_gd_le32(p+158);
+    s->root_bytes=startup_gd_le32(p+166);
+}
+#endif
 static void startup_gd_install(void) {
     /* Point 3 runs after the one-shot wrapper published RAM and disabled
      * caches. Only the proven native BC vector is replaced, through P2. */
@@ -678,16 +735,14 @@ static void startup_gd_install(void) {
        p1<KUI_RETAIL_RESIDENT_ADDRESS || !resident_bytes ||
        p1-KUI_RETAIL_RESIDENT_ADDRESS>=resident_bytes || p1>=resident_limit)
         relay_stopped("GD TRACE VECTOR INVALID",handler);
-#ifdef KUI_RETAIL_STARTUP_TRACE_TEST
-    struct startup_gd_state *s=&kui_retail_startup_gd_state;
-#else
-    struct startup_gd_state *s=(struct startup_gd_state *)
-        startup_trace_owner((uint32_t)(uintptr_t)&kui_retail_startup_gd_state);
-#endif
+    struct startup_gd_state *s=startup_gd_uncached_state();
     memset(s,0,sizeof(*s));
     s->handler=handler;
     s->init_result=s->init_status=s->version_status=s->read_status=UINT32_MAX;
     s->drive_result=s->drive_status=s->drive_type=UINT32_MAX;
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    s->mount_result=UINT32_MAX;
+#endif
     *vector=(uint32_t)(uintptr_t)kui_retail_startup_gd_proxy|0x20000000u;
     kui_retail_startup_trace_publish(0x8c0000bcu,4u);
 }
@@ -737,10 +792,19 @@ void kui_retail_startup_gd_after(uint32_t *frame,
             else if(s->command==40u && !s->version_token && (int32_t)result>0) {
                 s->version_token=result;
                 s->version_destination=s->candidate_destination;
-            } else if((s->command==16u || s->command==17u) && !s->read_token) {
-                s->read_token=(int32_t)result>0?result:0u;s->read_command=s->command;
-                s->read_fad=s->candidate_fad;s->read_count=s->candidate_count;
-                s->read_destination=s->candidate_destination;
+            } else if(s->command==16u || s->command==17u) {
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+                if((int32_t)result>0) ++s->read_requests;
+                if((int32_t)result>0 || !s->read_token) {
+                    s->read_status=UINT32_MAX;s->read_completed=0;
+                    memset(s->check,0,sizeof(s->check));
+#else
+                if(!s->read_token) {
+#endif
+                    s->read_token=(int32_t)result>0?result:0u;s->read_command=s->command;
+                    s->read_fad=s->candidate_fad;s->read_count=s->candidate_count;
+                    s->read_destination=s->candidate_destination;
+                }
             }
         } else if(s->function==4u) {
             uint32_t output=s->original[16];
@@ -765,6 +829,11 @@ void kui_retail_startup_gd_after(uint32_t *frame,
                 const volatile uint32_t *p=startup_gd_pointer(output);
                 for(unsigned i=0;i<4u;i++) s->check[i]=p[i];
                 if(result==2u) {
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+                    if(!s->read_completed) ++s->completed_reads;
+                    s->read_completed=1u;
+                    if(!s->pvd_captured) startup_gd_capture_pvd(s);
+#else
                     if(s->read_count && s->check[2]>=2048u &&
                        !(s->read_destination&3u) &&
                        startup_gd_guest(s->read_destination,2048u)) {
@@ -773,6 +842,7 @@ void kui_retail_startup_gd_after(uint32_t *frame,
                             startup_gd_pointer(s->read_destination),2048u);
                     }
                     startup_gd_report(s,"FIRST GD READ COMPLETED");
+#endif
                 }
             }
         }
@@ -804,6 +874,16 @@ void kui_retail_startup_trace_checkpoint(const uint32_t *frame,
     kui_retail_startup_trace_resume=owner;
     if(startup_trace.passed!=((1u<<point)-1u))
         startup_trace_report("STARTUP TRACE ORDER CHANGED",point,frame);
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    if(point==4u) {
+        struct startup_gd_state *s=startup_gd_uncached_state();
+        /* R4 holds the real mount result at the common epilogue; R0 is the
+         * saved interrupt mask. This checkpoint is terminal and never resumes. */
+        s->mount_result=frame[16];
+        startup_trace.passed|=1u<<point;
+        startup_gd_report(s,"SDK MOUNT RETURN REACHED");
+    }
+#endif
     if(point==3u) {
 #if KUI_RETAIL_STARTUP_TRACE >= 2
         startup_gd_install();

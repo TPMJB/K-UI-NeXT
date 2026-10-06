@@ -24,6 +24,13 @@
 #define RAM_BYTES 0x1000000u
 #define CCR 0x00000909u
 #define GD_BUDGET 4096u
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+#define TRACE_HEADER "SONIC MOUNT TRACE - INTENTIONAL STOP"
+#define FIRST_READ_STOPS false
+#else
+#define TRACE_HEADER "SONIC GD TRACE - INTENTIONAL STOP"
+#define FIRST_READ_STOPS true
+#endif
 static uint8_t *owner,reader[256],pvd[2048];
 static jmp_buf terminal;
 static bool expect_stop;
@@ -46,6 +53,9 @@ void kui_retail_startup_trace_scan(void) {abort();}
 void kui_retail_startup_trace_g2(void) {abort();}
 void kui_retail_startup_trace_pvr(void) {abort();}
 void kui_retail_startup_trace_gd(void) {abort();}
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+void kui_retail_startup_trace_mount(void) {abort();}
+#endif
 void kui_retail_startup_gd_proxy(void) {abort();}
 void kui_retail_startup_gd_return(void) {abort();}
 uint32_t kui_retail_startup_trace_stack_address(void) {return 0x8cefe000u;}
@@ -87,6 +97,9 @@ static uint32_t crc(uint32_t previous,const uint8_t *bytes,size_t count) {
     }
     return ~value;
 }
+static void le32(uint8_t *p,uint32_t value) {
+    for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(value>>(i*8u));
+}
 static void synthetic_owner(void) {
     owner=malloc(OWNER_BYTES);assert(owner);
     for(size_t i=0;i<OWNER_BYTES;i++) owner[i]=(uint8_t)(i*73u+(i>>8)*19u+5u);
@@ -109,6 +122,8 @@ static void synthetic_owner(void) {
     assert(crc(0,owner,OWNER_BYTES)==OWNER_CRC);
     for(unsigned i=0;i<sizeof(pvd);i++) pvd[i]=(uint8_t)(i*13u+19u);
     pvd[0]=1;memcpy(pvd+1,"CD001",5);pvd[6]=1;
+    pvd[128]=0;pvd[129]=8;le32(pvd+132,1234u);le32(pvd+140,45020u);
+    le32(pvd+158,45030u);le32(pvd+166,4096u);
     for(unsigned i=0;i<sizeof(reader);i++) reader[i]=(uint8_t)(i*29u+17u);
 }
 static void put(uint32_t address,uint32_t value) {memcpy((void *)(uintptr_t)address,&value,4);}
@@ -130,7 +145,11 @@ static int backing_read(void *context,uint32_t lba,uint32_t count,uint32_t bytes
         ++backend->nested_calls;
     }
     if(backend->fail_read) return -1;
-    for(unsigned n=0;n<count;n++) memcpy((uint8_t *)out+n*bytes,pvd,bytes);
+    for(unsigned n=0;n<count;n++) {
+        if(lba+n==45016u) memcpy((uint8_t *)out+n*bytes,pvd,bytes);
+        else for(unsigned i=0;i<bytes;i++)
+            ((uint8_t *)out)[n*bytes+i]=(uint8_t)((lba+n)*19u+i*17u+7u);
+    }
     return 0;
 }
 static const union kui_retail_slot tracks[]={{.track={.start_lba=45000,.end_lba=45100,.control=4}}};
@@ -162,8 +181,15 @@ static void installed(uint32_t *frame) {
     uint32_t handler=get(KUI_GD_VECTOR_ADDRESS);
     memcpy(saved,frame,sizeof(saved));kui_retail_stage_relay(frame,CCR);
     for(unsigned point=0;point<4;point++) kui_retail_startup_trace_checkpoint(frame,point,CCR);
-    silent(frame);assert(spy.publishes==9 && spy.pauses==1);
+    silent(frame);assert(spy.publishes==STARTUP_TRACE_POINTS+5u && spy.pauses==1);
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    uint32_t final=startup_trace_address[4]-KUI_RETAIL_EXEC_ADDRESS;
+    assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,owner,final));
+    assert(!memcmp((const void *)(uintptr_t)(KUI_RETAIL_EXEC_ADDRESS+final+12u),owner+final+12u,OWNER_BYTES-final-12u));
+    assert(memcmp((const void *)(uintptr_t)startup_trace_address[4],owner+final,12u));
+#else
     assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,owner,OWNER_BYTES));
+#endif
     assert(get(KUI_GD_VECTOR_ADDRESS)==((uint32_t)(uintptr_t)kui_retail_startup_gd_proxy|0x20000000u));
     memcpy(observer,&kui_retail_startup_gd_state,sizeof(*observer));assert(observer->handler==handler);
 }
@@ -200,7 +226,7 @@ static int32_t observed_call(uint32_t *frame,uint32_t function,uint32_t r4,uint3
     }
     assert(actual.reads==baseline.reads && actual.nested_calls==baseline.nested_calls);
     if(!stop) silent(frame);
-    else assert(spy.restores==1 && line("SONIC GD TRACE - INTENTIONAL STOP") &&
+    else assert(spy.restores==1 && line(TRACE_HEADER) &&
         line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN"));
     return returned;
 }
@@ -216,7 +242,31 @@ static uint32_t submit_read(uint32_t *frame,unsigned area,uint32_t count) {
     if(count) assert(token>0 && observer->read_token==(uint32_t)token);
     return (uint32_t)token;
 }
-static void sequence(uint32_t *frame,unsigned area,bool nested) {
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+static void mount_return(uint32_t *frame,uint32_t result) {
+    /* Assembly supplies the P2 state directly in production. The test uses
+     * a separate mapped state to exercise the same uncached observer calls. */
+    memcpy(&kui_retail_startup_gd_state,observer,sizeof(*observer));
+    frame[16]=result;frame[20]=0x60000100u;frame[4]=0x600001f0u;
+    memcpy(saved,frame,sizeof(saved));
+    unsigned samples[3];memcpy(samples,spy.samples,sizeof(samples));
+    expect_stop=true;
+    if(!setjmp(terminal)) {kui_retail_startup_trace_checkpoint(frame,4,CCR);abort();}
+    assert(line(TRACE_HEADER) && line("SDK MOUNT RETURN REACHED") && spy.restores==1);
+    assert(!memcmp(frame,saved,sizeof(saved)) && !memcmp(samples,spy.samples,sizeof(samples)));
+    assert(kui_retail_startup_gd_state.mount_result==result && spy.values==5);
+    assert(spy.value[1][0]==result && spy.value[1][1]==observer->read_requests && spy.value[1][2]==observer->completed_reads);
+    assert(spy.value[1][3]==observer->path_lba && spy.value[1][4]==observer->path_bytes);
+    assert(spy.value[2][0]==observer->pvd_crc && spy.value[2][1]==observer->pvd_valid && spy.value[2][2]==observer->pvd_sector_bytes);
+    assert(spy.value[2][3]==observer->root_lba && spy.value[2][4]==observer->root_bytes);
+    assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,owner,OWNER_BYTES));
+    assert(startup_trace.passed==31u && spy.publishes==11);
+}
+#endif
+static void sequence(uint32_t *frame,unsigned area,bool nested,bool finish) {
+#if KUI_RETAIL_STARTUP_TRACE < 3
+    (void)finish;
+#endif
     assert(observed_call(frame,KUI_GD_INIT,0,0,0,0,0x60000100u,false)==0 && observer->init_result==0);
     assert(observed_call(frame,KUI_GD_DRIVE,alias(OUTPUT,area),0,BASE_OUTPUT,0,0x600001f0u,false)==0);
     assert(observer->drive_result==0 && observer->drive_status==get(OUTPUT) && observer->drive_type==get(OUTPUT+4));
@@ -240,13 +290,26 @@ static void sequence(uint32_t *frame,unsigned area,bool nested) {
     assert(observer->read_status==1 && observer->check[2]==0);status_equal();
     actual.reenter=baseline.reenter=nested;
     assert(!observed_call(frame,KUI_GD_EXEC,0,0,0,0,0x600001f0u,false));
-    assert(observed_call(frame,KUI_GD_CHECK,token,alias(STATUS,area),token,BASE_STATUS,0x600001f0u,true)==2);
-    assert(line("FIRST GD READ COMPLETED") && observer->read_status==2);
+    assert(observed_call(frame,KUI_GD_CHECK,token,alias(STATUS,area),token,BASE_STATUS,0x600001f0u,FIRST_READ_STOPS)==2);
+    assert(observer->read_status==2);
+#if KUI_RETAIL_STARTUP_TRACE < 3
+    assert(line("FIRST GD READ COMPLETED"));
+#endif
     assert(observer->read_command==KUI_GD_DMAREAD && observer->read_fad==45166 && observer->read_count==1);
     assert(observer->read_destination==alias(OUTPUT,area) && observer->pvd_header==get(OUTPUT));
     assert(observer->pvd_crc==crc(0,pvd,sizeof(pvd)) && !memcmp(observer->check,(const void *)(uintptr_t)STATUS,16));
     assert(!memcmp((const void *)(uintptr_t)OUTPUT,pvd,sizeof(pvd)));
     assert(!memcmp((const void *)(uintptr_t)OUTPUT,(const void *)(uintptr_t)BASE_OUTPUT,sizeof(pvd)));status_equal();
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    assert(observer->read_requests==1 && observer->completed_reads==1 && observer->read_completed);
+    assert(observer->pvd_captured==1 && observer->pvd_valid==(pvd[0]==1 && !memcmp(pvd+1,"CD001",5) && pvd[6]==1));
+    assert(observer->pvd_sector_bytes==2048 && observer->root_lba==45030 && observer->root_bytes==4096);
+    assert(observer->path_lba==45020 && observer->path_bytes==1234 && observer->mount_result==UINT32_MAX);
+    assert(actual.reads==1 && actual.nested_calls==(nested?1u:0u));
+    silent(frame);
+    if(!finish) return;
+    mount_return(frame,0);
+#endif
     assert(spy.values==5 && spy.count[0]==5 && spy.value[0][0]==observer->calls);
     assert(spy.value[0][1]==KUI_GD_CHECK && spy.value[0][2]==token && spy.value[0][3]==2 && spy.value[0][4]==0x8c6086eeu);
     assert(observer->ccr==CCR);
@@ -258,7 +321,13 @@ enum scenario {SEQUENCE_P0,SEQUENCE_P1,SEQUENCE_P2,NESTED_BUSY,INIT_NULL,INIT_SH
     VERSION_SHORT,VERSION_NULL,VERSION_BOUND,READ_NULL,READ_SHORT,READ_ALIGN,READ_LOW,
     READ_AREA,READ_IO_FAIL,READ_REJECTED,CHECK_MISMATCH,INFLIGHT_READ,POLL_LIMIT,
     BEFORE_INACTIVE,AFTER_INACTIVE,RETURN_FRAME,RETURN_CCR,VECTOR_LOW,VECTOR_END,
-    VECTOR_AREA,VECTOR_ODD,VECTOR_P2,CHECK_NOT_FOUND,SETUP_NULL,READER_FIRST,READER_LAST};
+    VECTOR_AREA,VECTOR_ODD,VECTOR_P2,CHECK_NOT_FOUND,SETUP_NULL,READER_FIRST,READER_LAST
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    ,MOUNT_FAILURE_NO_READ,MULTIREAD_P0,MULTIREAD_P1,MULTIREAD_P2,
+    REJECT_AFTER_COMPLETION,SECOND_INFLIGHT_REJECT,SECOND_IO_FAIL,
+    PVD_BAD_TYPE,PVD_BAD_ID,PVD_BAD_VERSION,CHECK_CONSUMED_BEFORE_NEXT_READ
+#endif
+};
 static void stopped_before(uint32_t *frame,const char *message) {
     expect_stop=true;
     if(!setjmp(terminal)) {kui_retail_startup_gd_before(frame,observer,CCR);abort();}
@@ -276,7 +345,7 @@ static void bad_install(uint32_t *frame,const char *message,unsigned corruption)
         ((uint8_t *)(uintptr_t)(KUI_RETAIL_RESIDENT_ADDRESS|0x20000000u))[corruption]^=0x40u;
     expect_stop=true;
     if(!setjmp(terminal)) {kui_retail_startup_trace_checkpoint(frame,3,CCR);abort();}
-    assert(spy.restores==1 && line(message) && spy.publishes==8);
+    assert(spy.restores==1 && line(message) && spy.publishes==STARTUP_TRACE_POINTS+4u);
     if(corruption!=UINT32_MAX) {
         assert(spy.hexes==1 && !strcmp(spy.hex[0],"DETAIL") && spy.hex_value[0]==corruption);
         assert(((const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS)[corruption]==(uint8_t)(reader[corruption]^0x40u));
@@ -319,7 +388,7 @@ static void run_case(enum scenario scenario) {
         assert(!observer->active && !observer->read_token && !actual.reads);return;
     }
     if(scenario<=NESTED_BUSY) {
-        sequence(frame,scenario==SEQUENCE_P0?0u:scenario==SEQUENCE_P2?0xa0000000u:0x80000000u,scenario==NESTED_BUSY);return;
+        sequence(frame,scenario==SEQUENCE_P0?0u:scenario==SEQUENCE_P2?0xa0000000u:0x80000000u,scenario==NESTED_BUSY,true);return;
     }
     if(scenario==VECTOR_P2 || scenario==INIT_NULL || scenario==INIT_SHORT) {
         uint32_t parameter=scenario==INIT_SHORT?KUI_RETAIL_STAGE_ADDRESS-4u:0;
@@ -364,6 +433,61 @@ static void run_case(enum scenario scenario) {
         assert(line("GD CALL FAILED OR REJECTED") && !actual.reads && !observer->read_token);
         assert(observer->read_command==KUI_GD_DMAREAD && observer->read_fad==45166 && observer->read_destination==OUTPUT);return;
     }
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+    if(scenario>=MOUNT_FAILURE_NO_READ) {
+        if(scenario==MOUNT_FAILURE_NO_READ) {
+            assert(observer->mount_result==UINT32_MAX && !observer->calls);
+            mount_return(frame,(uint32_t)-5);return;
+        }
+        if(scenario==PVD_BAD_TYPE || scenario==PVD_BAD_ID || scenario==PVD_BAD_VERSION) {
+            pvd[scenario==PVD_BAD_TYPE?0u:scenario==PVD_BAD_ID?5u:6u]^=1;
+            sequence(frame,0x80000000u,false,true);
+            assert(!observer->pvd_valid);return;
+        }
+        unsigned area=scenario==MULTIREAD_P0?0u:scenario==MULTIREAD_P2?0xa0000000u:0x80000000u;
+        sequence(frame,area,false,false);
+        uint32_t first_crc=observer->pvd_crc,first_header=observer->pvd_header;
+        if(scenario==REJECT_AFTER_COMPLETION) {
+            uint32_t first=observer->read_token;params(45190u,0,OUTPUT+4096u);
+            assert(!observed_call(frame,KUI_GD_REQUEST,KUI_GD_PIOREAD,PARAM,KUI_GD_PIOREAD,BASE_PARAM,0x600001f0u,true));
+            assert(observer->read_token==first && observer->read_fad==45166u && observer->read_destination==alias(OUTPUT,area));
+            assert(observer->read_requests==1 && observer->completed_reads==1 && observer->pvd_crc==first_crc);return;
+        }
+        if(scenario==CHECK_CONSUMED_BEFORE_NEXT_READ) {
+            uint32_t first=observer->read_token;
+            assert(!observed_call(frame,KUI_GD_CHECK,first,STATUS,first,BASE_STATUS,0x600001f0u,false));
+            assert(observer->read_completed && observer->completed_reads==1);status_equal();
+        }
+        params(45170u,1,alias(OUTPUT,area));
+        int32_t path=observed_call(frame,KUI_GD_REQUEST,KUI_GD_PIOREAD,alias(PARAM,area),KUI_GD_PIOREAD,BASE_PARAM,0x600001f0u,false);
+        assert(path>0 && observer->read_token==(uint32_t)path && observer->read_command==KUI_GD_PIOREAD);
+        assert(observer->read_fad==45170u && observer->read_count==1 && observer->read_destination==alias(OUTPUT,area));
+        assert(observer->read_requests==2 && observer->completed_reads==1 && !observer->read_completed && observer->read_status==UINT32_MAX);
+        if(scenario==SECOND_INFLIGHT_REJECT) {
+            params(45180u,2,OUTPUT+4096u);
+            assert(!observed_call(frame,KUI_GD_REQUEST,KUI_GD_DMAREAD,PARAM,KUI_GD_DMAREAD,BASE_PARAM,0x600001f0u,true));
+            assert(observer->read_token==(uint32_t)path && observer->read_fad==45170 && observer->read_command==KUI_GD_PIOREAD);
+            assert(observer->read_requests==2 && observer->completed_reads==1 && observer->pvd_crc==first_crc);return;
+        }
+        if(scenario==SECOND_IO_FAIL) actual.fail_read=baseline.fail_read=1;
+        assert(!observed_call(frame,KUI_GD_EXEC,0,0,0,0,0x600001f0u,false));
+        int32_t result=observed_call(frame,KUI_GD_CHECK,(uint32_t)path,alias(STATUS,area),(uint32_t)path,BASE_STATUS,0x600001f0u,scenario==SECOND_IO_FAIL);
+        if(scenario==SECOND_IO_FAIL) {
+            assert(result==-1 && observer->read_requests==2 && observer->completed_reads==1);
+            assert(observer->pvd_crc==first_crc && observer->pvd_header==first_header && observer->check[1]==KUI_GD_ERROR_IO);return;
+        }
+        assert(result==2 && observer->completed_reads==2 && observer->pvd_crc==first_crc && observer->pvd_header==first_header);
+        assert(get(OUTPUT)!=first_header && !memcmp((const void *)(uintptr_t)OUTPUT,(const void *)(uintptr_t)BASE_OUTPUT,2048));status_equal();
+        params(45180u,2,alias(OUTPUT,area));
+        int32_t root=observed_call(frame,KUI_GD_REQUEST,KUI_GD_DMAREAD,alias(PARAM,area),KUI_GD_DMAREAD,BASE_PARAM,0x600001f0u,false);
+        assert(root>0 && observer->read_token==(uint32_t)root && observer->read_requests==3 && observer->read_count==2 && observer->read_fad==45180);
+        assert(!observed_call(frame,KUI_GD_EXEC,0,0,0,0,0x600001f0u,false));
+        assert(observed_call(frame,KUI_GD_CHECK,(uint32_t)root,alias(STATUS,area),(uint32_t)root,BASE_STATUS,0x600001f0u,false)==2);
+        assert(observer->completed_reads==3 && observer->pvd_crc==first_crc && observer->pvd_header==first_header && observer->check[2]==4096);
+        assert(observer->path_lba==45020 && observer->root_lba==45030 && !memcmp((const void *)(uintptr_t)OUTPUT,(const void *)(uintptr_t)BASE_OUTPUT,4096));
+        status_equal();silent(frame);mount_return(frame,0);return;
+    }
+#endif
     uint32_t token=submit_read(frame,0x80000000u,1);
     if(scenario==READ_IO_FAIL) {
         actual.fail_read=baseline.fail_read=1;
@@ -404,7 +528,13 @@ int main(void) {
     }
     assert(!fclose(backing));synthetic_owner();
     unsigned count=0;
-    for(enum scenario scenario=SEQUENCE_P0;scenario<=READER_LAST;scenario++) {
+    for(enum scenario scenario=SEQUENCE_P0;scenario<=
+#if KUI_RETAIL_STARTUP_TRACE >= 3
+        CHECK_CONSUMED_BEFORE_NEXT_READ
+#else
+        READER_LAST
+#endif
+        ;scenario++) {
         pid_t child=fork();assert(child>=0);
         if(!child) {run_case(scenario);_Exit(0);}
         int status=0;assert(waitpid(child,&status,0)==child);
@@ -415,6 +545,6 @@ int main(void) {
     }
     free(owner);
     for(unsigned i=0;i<2;i++) assert(!munmap((void *)(uintptr_t)aliases[i],RAM_BYTES));
-    printf("PASS GD observer: %u executed cases; real dispatcher/baseline results, safe aliases, exact frames, first read and bounded terminal evidence\n",count);
+    printf("PASS trace mode %u: %u executed cases; real dispatcher/baseline results, safe aliases, exact frames and bounded terminal evidence\n",(unsigned)KUI_RETAIL_STARTUP_TRACE,count);
     return 0;
 }

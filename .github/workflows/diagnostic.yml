@@ -19,6 +19,11 @@ on:
         type: boolean
         default: false
 
+      mount_trace:
+        description: 'Build the Sonic V1.004 GD-call diagnostic through SDK mount return.'
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -31,7 +36,7 @@ permissions:
 env:
   KUI_EXPERIMENTAL: ${{ (inputs.experimental || endsWith(github.ref_name, '-experimental')) && '1' || '' }}
   # A single diagnostic push opts in explicitly; later ordinary builds stay off.
-  KUI_RETAIL_STARTUP_TRACE: "${{ (inputs.gd_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic GD trace')) && '2' || ((inputs.startup_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic startup trace')) && '1' || '0') }}"
+  KUI_RETAIL_STARTUP_TRACE: "${{ (inputs.mount_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic mount trace')) && '3' || ((inputs.gd_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic GD trace')) && '2' || ((inputs.startup_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic startup trace')) && '1' || '0')) }}"
 
 concurrency:
   group: diagnostic-${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}
@@ -317,7 +322,7 @@ jobs:
       - name: Upload diagnostic test artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '') }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}
           path: |
             dist/
             !dist/release-assets/**
@@ -326,28 +331,28 @@ jobs:
       - name: Upload small SD update for existing bootstrap discs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '') }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}
           path: dist/sd-update/
           if-no-files-found: error
           retention-days: 30
       - name: Upload separate read-only SD benchmark
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-sd-benchmark${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '') }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-sd-benchmark${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}
           path: dist/sd-benchmark/
           if-no-files-found: error
           retention-days: 30
       - name: Upload small boot CD refresh
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-bootstrap-cd${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '') }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-bootstrap-cd${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}
           path: dist/bootstrap-cd/
           if-no-files-found: error
           retention-days: 30
       - name: Upload release installation bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-release${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '') }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-release${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}
           path: dist/release/
           if-no-files-found: error
           retention-days: 30
