@@ -473,14 +473,27 @@ void kui_retail_stage_main(const uint8_t *wire) {
  * General registers, SR, VBR, GBR, PR, MAC and cache configuration are restored
  * by assembly; fixed FPU registers, integer division and the linked machine-
  * code audit keep every floating-point register unchanged. */
+static void relay_stopped(const char *message,uint32_t detail) __attribute__((noreturn));
+static void relay_stopped(const char *message,uint32_t detail) {
+#ifndef KUI_RETAIL_CE
+    /* Only a terminal failure may reclaim video after the owner's bootstrap.
+     * Successful native handoff must preserve its scanout and VRAM contents. */
+    retail_display_restore(&display);
+#endif
+    stopped(message,detail);
+}
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
+#ifdef KUI_RETAIL_CE
     retail_display_restore(&display);
     retail_display_line("BOOTSTRAP 2 REACHED GAME ENTRY");
+#else
+    (void)ccr;
+#endif
     uintptr_t address=(uintptr_t)frame;
     address=(address&0x1fffffffu)|0x80000000u;
     if((address&3u) || address<KUI_RETAIL_BOOT2_ADDRESS ||
        address>KUI_RETAIL_EXEC_ADDRESS-21u*4u)
-        stopped("UNSUPPORTED BOOT STACK",(uint32_t)(uintptr_t)frame);
+        relay_stopped("UNSUPPORTED BOOT STACK",(uint32_t)(uintptr_t)frame);
 #ifdef KUI_RETAIL_CE
     /* Bootstrap 2 ran under the stage's exception table with SR.BL clear;
      * the entry gets the conventional boot VBR and BL back. */
@@ -491,42 +504,42 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     }
 #endif
     if(frame[3]!=KUI_RETAIL_BOOT_VBR || !(frame[4]&0x40000000u))
-        stopped("UNSUPPORTED BOOT CPU STATE",frame[3]);
+        relay_stopped("UNSUPPORTED BOOT CPU STATE",frame[3]);
+#ifdef KUI_RETAIL_CE
     retail_display_hex("BOOT STACK",(uint32_t)address+21u*4u);
     retail_display_hex("BOOT SR",frame[4]);
     retail_display_hex("BOOT CACHE",ccr);
+#endif
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     memcpy(boot,original_entry,ENTRY_PATCH_BYTES);
     uint32_t crc=kui_retail_crc32(0,boot,exec_bytes);
-    if(crc!=boot_crc) stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
+    if(crc!=boot_crc) relay_stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     size_t bytes=resident_bytes;
 #ifdef KUI_RETAIL_CE
     /* Except the slot the stage filled with CE's kernel addresses. */
     const size_t slot=KUI_RETAIL_CE_KERNEL-KUI_RETAIL_RESIDENT_ADDRESS;
     if(memcmp(resident+slot,ce_kernel,sizeof(ce_kernel)))
-        stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)slot);
+        relay_stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)slot);
 #endif
     for(size_t i=0;i<bytes;i++) {
 #ifdef KUI_RETAIL_CE
         if(i-slot<sizeof(ce_kernel)) continue;
 #endif
         /* Detail: the offset of the first changed byte. */
-        if(resident[i]!=resident_blob[i]) stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)i);
+        if(resident[i]!=resident_blob[i]) relay_stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)i);
     }
-    retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
 #ifdef KUI_RETAIL_CE
+    retail_display_line("READER INTACT - ORIGINAL ENTRY RESTORED");
     retail_display_hex("BODY CRC32",crc);
     retail_display_line("ENTERING WINDOWS CE");
-#else
-    retail_display_line("ENTERING GAME");
-#endif
     retail_display_line(manifest.title);
     retail_display_line("IF IT STOPS PHOTOGRAPH THE LAST SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
-#ifdef KUI_RETAIL_CE
     retail_display_line("A RESET NOW MEANS WINDOWS CE ITSELF FAILED");
 #endif
+    /* Preserve the existing read-only frame delay for this isolated video
+     * comparison. CPU/cache restoration remains entirely in the assembly. */
     retail_display_pause(STEP_PAUSE_FRAMES);
 }
 #ifdef KUI_RETAIL_CE

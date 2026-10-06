@@ -26,6 +26,7 @@ test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/
 test: build/test-w5500 build/test-network-w5500 build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan build/test-retail-boot
+test: build/test-retail-relay build/test-retail-relay-ce
 test: build/test-retail-cursor build/test-sci-stream build/test-sci-stream-ce build/test-retail-gd-async build/test-retail-gd-ce build/test-retail-async build/test-retail-async-ce
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
@@ -56,6 +57,8 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-retail-sd
 	./build/test-ce-load-plan
 	./build/test-retail-boot
+	./build/test-retail-relay
+	./build/test-retail-relay-ce
 	./build/test-boot-volume
 	./build/test-boot-ui
 	python3 tests/test_ext4_boot.py
@@ -232,6 +235,18 @@ build/test-retail-image: tests/test_retail_image.c src/core/retail_image.c inclu
 build/test-retail-boot: tests/test_retail_boot.c src/loader/retail_boot.h src/core/retail_image.c include/kui/retail_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/core/retail_image.c tests/test_retail_boot.c -o $@
+
+# The real relay uses fixed P1 RAM addresses within ASan's shadow mapping.
+# Keep UBSan and execute the production source rather than relocating its RAM.
+RETAIL_RELAY_FLAGS = -fsanitize=undefined -fno-omit-frame-pointer -ffunction-sections -fdata-sections
+RETAIL_RELAY_DEPS = tests/test_retail_relay.c src/loader/retail_stage.c src/loader/retail_boot.h src/loader/retail_display.h src/loader/retail_storage.h include/kui/retail_loader_layout.h include/kui/retail_image.h src/core/retail_image.c
+build/test-retail-relay: $(RETAIL_RELAY_DEPS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c -Wl,--gc-sections -o $@
+
+build/test-retail-relay-ce: $(RETAIL_RELAY_DEPS) include/kui/ce_load_plan.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -DKUI_RETAIL_CE=1 -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c -Wl,--gc-sections -o $@
 
 build/test-retail-cursor: tests/test_retail_cursor.c src/core/retail_cursor.c src/core/retail_image.c include/kui/retail_cursor.h include/kui/retail_image.h
 	@mkdir -p $(@D)
