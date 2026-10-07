@@ -15,6 +15,11 @@ from types import SimpleNamespace
 import textwrap
 import unittest
 
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORKFLOW = ROOT / ".github/workflows/diagnostic.yml"
 STEP = "name: Compile CD bootstrap and SD runtime"
@@ -256,6 +261,44 @@ class ReleasePublicationWorkflow(unittest.TestCase):
         result, output = GamesVariantValidationScope().run_scope("src/loader/retail_sd.c", "release-only")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(output, "")
+
+
+class WorkflowYamlSyntax(unittest.TestCase):
+    def setUp(self):
+        if yaml is None:
+            if os.environ.get("KUI_REQUIRE_WORKFLOW_YAML") == "1":
+                self.fail("The full CI workflow requires its installed PyYAML parser")
+            self.skipTest("PyYAML is unavailable locally; full CI installs and requires it")
+
+    def test_all_workflows_parse_as_yaml_before_github_creates_jobs(self):
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            with self.subTest(workflow=path.name):
+                document = yaml.safe_load(path.read_text())
+                self.assertIsInstance(document, dict)
+                self.assertIsInstance(document.get("jobs"), dict)
+                self.assertTrue(document["jobs"])
+
+    def test_missing_environment_quote_cannot_pass_syntax_validation(self):
+        text = WORKFLOW.read_text()
+        line = next(line for line in text.splitlines() if line.strip().startswith("KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC:"))
+        self.assertTrue(line.endswith('"'))
+        with self.assertRaises(yaml.YAMLError):
+            yaml.safe_load(text.replace(line, line[:-1], 1))
+
+    def test_release_colon_in_plain_condition_cannot_pass_syntax_validation(self):
+        text = WORKFLOW.read_text()
+        folded = ("        if: >-\n"
+                  "          steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')")
+        plain = "        if: steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')"
+        self.assertIn(folded, text)
+        with self.assertRaises(yaml.YAMLError):
+            yaml.safe_load(text.replace(folded, plain, 1))
+
+    def test_full_ci_installs_and_requires_the_parser(self):
+        text = WORKFLOW.read_text()
+        self.assertIn("liblzo2-2 python3-yaml", text)
+        self.assertIn("KUI_REQUIRE_WORKFLOW_YAML: '1'", text)
+        self.assertIn("run: /usr/bin/python3 tests/test_workflow_hygiene.py", text)
 
 if __name__ == "__main__":
     unittest.main()

@@ -51,7 +51,7 @@ env:
   # Normal native builds retain the hardware-confirmed layout. Historical
   # owner-patching diagnostics require their original placement.
   KUI_RETAIL_LOW_RESIDENT: "${{ (inputs.low_resident || contains(github.event.head_commit.message, 'Diagnostic: Native low resident')) && '1' || ((inputs.sonic_stack || inputs.mount_trace || inputs.gd_trace || inputs.startup_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic scoped stack') || contains(github.event.head_commit.message, 'Diagnostic: Sonic mount trace') || contains(github.event.head_commit.message, 'Diagnostic: Sonic GD trace') || contains(github.event.head_commit.message, 'Diagnostic: Sonic startup trace')) && '0' || '1') }}"
-  KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC: "${{ (inputs.low_resident || contains(github.event.head_commit.message, 'Diagnostic: Native low resident')) && '1' || '0' }}
+  KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC: "${{ (inputs.low_resident || contains(github.event.head_commit.message, 'Diagnostic: Native low resident')) && '1' || '0' }}"
 
 concurrency:
   group: diagnostic-${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}
@@ -209,7 +209,8 @@ jobs:
               out.write('release_only=' + str(candidate).lower() + '\n')
           PY
       - name: Check release publication, installation and splash
-        if: steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')
+        if: >-
+          steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')
         run: |
           python3 tests/test_publish_release.py
           python3 tests/test_package_candidate.py
@@ -231,7 +232,12 @@ jobs:
           python3 tests/test_workflow_hygiene.py
       - name: Install filesystem test utilities
         if: steps.scope.outputs.console_only != 'true'
-        run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools e2fsprogs mame-tools liblzo2-2
+        run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools e2fsprogs mame-tools liblzo2-2 python3-yaml
+      - name: Validate workflow YAML with the installed parser
+        if: steps.scope.outputs.console_only != 'true'
+        env:
+          KUI_REQUIRE_WORKFLOW_YAML: '1'
+        run: /usr/bin/python3 tests/test_workflow_hygiene.py
       - name: Restore pinned FatFs downloads
         if: steps.scope.outputs.console_only != 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
