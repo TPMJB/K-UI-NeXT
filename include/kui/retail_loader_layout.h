@@ -33,10 +33,11 @@
  * stage at 0x8ce00000. This bounds memory use, not a particular title's size. */
 #define KUI_RETAIL_EXEC_MAX_BYTES 0xc00000
 #define KUI_RETAIL_TRAMPOLINE_BYTES 128
-/* Opt-in native firmware-area placement. Keep the complete code/data/stack
+/* Hardware-confirmed native firmware-area placement (normal retail build). Keep the complete code/data/stack
  * reservation below IP.BIN so ordinary owner startup frames can use the
  * lower IP area. The stage checks retained firmware vectors before copying.
- * This is an experiment, not a universal claim about every firmware. */
+ * Hardware confirmation covers the owner console and reported titles,
+ * not every firmware or multidisc path. */
 #ifndef KUI_RETAIL_LOW_RESIDENT
 #define KUI_RETAIL_LOW_RESIDENT 0
 #endif

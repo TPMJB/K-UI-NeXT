@@ -10,6 +10,8 @@ import os
 import pathlib
 import subprocess
 import tempfile
+import re
+from types import SimpleNamespace
 import textwrap
 import unittest
 
@@ -169,19 +171,49 @@ class ExperimentalBuildIsOptIn(unittest.TestCase):
 
 
 class NativeLowResidentWorkflow(unittest.TestCase):
-    def test_low_mode_is_opt_in_and_separately_named(self):
+    def test_low_diagnostic_is_separately_named(self):
         text = WORKFLOW.read_text()
         self.assertIn("low_resident:", text)
-        flag = next(line for line in text.splitlines() if "KUI_RETAIL_LOW_RESIDENT:" in line)
+        flag = next(line for line in text.splitlines() if "KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC:" in line)
         self.assertIn("inputs.low_resident", flag)
         self.assertIn("Diagnostic: Native low resident", flag)
         self.assertRegex(flag, r"&& '1' \|\| '0'")
         self.assertEqual(text.count("&& '-low-resident' || ''"), 5)
-        self.assertIn("env.KUI_RETAIL_LOW_RESIDENT == '0'", text)
+        self.assertIn("env.KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC == '0'", text)
         for line in text.splitlines():
             if "KUI_RETAIL_STARTUP_TRACE:" in line or "KUI_RETAIL_SONIC_STACK_TEST:" in line:
                 self.assertIn("inputs.low_resident", line)
         self.assertIn('KUI_RETAIL_LOW_RESIDENT="$KUI_RETAIL_LOW_RESIDENT"', step_script())
+
+
+    def test_normal_builds_keep_confirmed_layout_and_historical_diagnostics_keep_legacy(self):
+        text = WORKFLOW.read_text()
+        def evaluate(name, chosen=(), message=""):
+            line = next(line for line in text.splitlines() if line.strip().startswith(name + ":"))
+            expression = line.split("${{", 1)[1].split("}}", 1)[0]
+            expression = expression.replace("&&", " and ").replace("||", " or ")
+            expression = re.sub(r"!(?!=)", " not ", expression).strip()
+            inputs = SimpleNamespace(**{key: key in chosen for key in
+                ("low_resident", "sonic_stack", "mount_trace", "gd_trace", "startup_trace")})
+            github = SimpleNamespace(event=SimpleNamespace(head_commit=SimpleNamespace(message=message)))
+            return eval(expression, {"__builtins__": {}},
+                        {"inputs": inputs, "github": github, "contains": lambda text, part: part in text})
+        ordinary = ("KUI_RETAIL_LOW_RESIDENT", "KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC",
+                    "KUI_RETAIL_STARTUP_TRACE", "KUI_RETAIL_SONIC_STACK_TEST")
+        self.assertEqual(tuple(evaluate(name) for name in ordinary), ("1", "0", "0", "0"))
+        for flag, marker, trace, scope in (
+            ("startup_trace", "Sonic startup trace", "1", "0"),
+            ("gd_trace", "Sonic GD trace", "2", "0"),
+            ("mount_trace", "Sonic mount trace", "3", "0"),
+            ("sonic_stack", "Sonic scoped stack", "0", "1")):
+            for chosen, message in (((flag,), ""), ((), "Diagnostic: " + marker)):
+                with self.subTest(flag=flag, chosen=chosen):
+                    self.assertEqual(tuple(evaluate(name, chosen, message) for name in ordinary),
+                                     ("0", "0", trace, scope))
+                    self.assertEqual(tuple(evaluate(name, (*chosen, "low_resident"), message) for name in ordinary),
+                                     ("1", "1", "0", "0"))
+        self.assertEqual(tuple(evaluate(name, (), "Diagnostic: Native low resident") for name in ordinary),
+                         ("1", "1", "0", "0"))
 
     def test_focused_scope_admits_required_checks_and_runs_them(self):
         for path in ("tests/test_retail_low_resident.py", "tools/report_retail_sizes.py",

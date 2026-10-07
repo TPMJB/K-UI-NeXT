@@ -29,7 +29,7 @@ on:
         default: false
 
       low_resident:
-        description: 'Build the native reader below IP.BIN for the Sonic/Grandia stack-collision test.'
+        description: 'Build the separately labeled native low-placement diagnostic; normal builds already use this layout.'
         type: boolean
         default: false
 
@@ -48,7 +48,10 @@ env:
   KUI_RETAIL_STARTUP_TRACE: "${{ ((inputs.low_resident || contains(github.event.head_commit.message, 'Diagnostic: Native low resident')) || inputs.sonic_stack || contains(github.event.head_commit.message, 'Diagnostic: Sonic scoped stack')) && '0' || ((inputs.mount_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic mount trace')) && '3' || ((inputs.gd_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic GD trace')) && '2' || ((inputs.startup_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic startup trace')) && '1' || '0'))) }}"
   KUI_RETAIL_SONIC_STACK_TEST: "${{ !(inputs.low_resident || contains(github.event.head_commit.message, 'Diagnostic: Native low resident')) && (inputs.sonic_stack || contains(github.event.head_commit.message, 'Diagnostic: Sonic scoped stack')) && '1' || '0' }}"
 
-  KUI_RETAIL_LOW_RESIDENT: "${{ (inputs.low_resident || contains(github.event.head_commit.message, 'Diagnostic: Native low resident')) && '1' || '0' }}"
+  # Normal native builds retain the hardware-confirmed layout. Historical
+  # owner-patching diagnostics require their original placement.
+  KUI_RETAIL_LOW_RESIDENT: "${{ (inputs.low_resident || contains(github.event.head_commit.message, 'Diagnostic: Native low resident')) && '1' || ((inputs.sonic_stack || inputs.mount_trace || inputs.gd_trace || inputs.startup_trace || contains(github.event.head_commit.message, 'Diagnostic: Sonic scoped stack') || contains(github.event.head_commit.message, 'Diagnostic: Sonic mount trace') || contains(github.event.head_commit.message, 'Diagnostic: Sonic GD trace') || contains(github.event.head_commit.message, 'Diagnostic: Sonic startup trace')) && '0' || '1') }}"
+  KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC: "${{ (inputs.low_resident || contains(github.event.head_commit.message, 'Diagnostic: Native low resident')) && '1' || '0' }}
 
 concurrency:
   group: diagnostic-${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}
@@ -288,7 +291,7 @@ jobs:
           echo "experimental GD-ROM DMA probe: ${KUI_EXPERIMENTAL_FLAG:-off}"
           echo "Sonic startup checkpoint diagnostic: ${KUI_RETAIL_STARTUP_TRACE}"
           echo "Sonic scoped SDK stack diagnostic: ${KUI_RETAIL_SONIC_STACK_TEST}"
-          echo "Native low resident diagnostic: ${KUI_RETAIL_LOW_RESIDENT}"
+          echo "Native low resident placement: ${KUI_RETAIL_LOW_RESIDENT}"
           make -k diagnostic BUILD_ID="$(git rev-parse --short=12 HEAD)" $KUI_EXPERIMENTAL_FLAG KUI_RETAIL_STARTUP_TRACE="$KUI_RETAIL_STARTUP_TRACE" KUI_RETAIL_SONIC_STACK_TEST="$KUI_RETAIL_SONIC_STACK_TEST" KUI_RETAIL_LOW_RESIDENT="$KUI_RETAIL_LOW_RESIDENT" 2>&1 | tee "$LOG"
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
@@ -352,7 +355,7 @@ jobs:
       - name: Upload diagnostic test artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT == '1' && '-low-resident' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-diagnostic${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC == '1' && '-low-resident' || '' }}
           path: |
             dist/
             !dist/release-assets/**
@@ -361,33 +364,33 @@ jobs:
       - name: Upload small SD update for existing bootstrap discs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT == '1' && '-low-resident' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-sd-update${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC == '1' && '-low-resident' || '' }}
           path: dist/sd-update/
           if-no-files-found: error
           retention-days: 30
       - name: Upload separate read-only SD benchmark
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-sd-benchmark${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT == '1' && '-low-resident' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-sd-benchmark${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC == '1' && '-low-resident' || '' }}
           path: dist/sd-benchmark/
           if-no-files-found: error
           retention-days: 30
       - name: Upload small boot CD refresh
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-bootstrap-cd${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT == '1' && '-low-resident' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-bootstrap-cd${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC == '1' && '-low-resident' || '' }}
           path: dist/bootstrap-cd/
           if-no-files-found: error
           retention-days: 30
       - name: Upload release installation bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.package.outputs.artifact_prefix }}-release${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT == '1' && '-low-resident' || '' }}
+          name: ${{ steps.package.outputs.artifact_prefix }}-release${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}${{ env.KUI_RETAIL_STARTUP_TRACE == '3' && '-mount-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '2' && '-gd-trace' || (env.KUI_RETAIL_STARTUP_TRACE == '1' && '-startup-trace' || '')) }}${{ env.KUI_RETAIL_SONIC_STACK_TEST == '1' && '-sonic-stack' || '' }}${{ env.KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC == '1' && '-low-resident' || '' }}
           path: dist/release/
           if-no-files-found: error
           retention-days: 30
       - name: Upload permanent release assets for promotion
-        if: env.KUI_EXPERIMENTAL == '' && env.KUI_RETAIL_STARTUP_TRACE == '0' && env.KUI_RETAIL_SONIC_STACK_TEST == '0' && env.KUI_RETAIL_LOW_RESIDENT == '0'
+        if: env.KUI_EXPERIMENTAL == '' && env.KUI_RETAIL_STARTUP_TRACE == '0' && env.KUI_RETAIL_SONIC_STACK_TEST == '0' && env.KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC == '0'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.package.outputs.artifact_prefix }}-release-assets

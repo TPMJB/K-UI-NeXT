@@ -1,16 +1,16 @@
-# Native resident below IP: isolated hardware test
+# Native resident below IP: hardware-confirmed correction
 
 ## Observed conflict
 
 Build `d6438f7022ac` still rejects Sonic Adventure's command `0x11` parameter array at `0x8c00b9f4`. The owner supplied Grandia II's actual R5 parameter array at `0x8c00b33c` in the same build. Both are inside the old native reader reservation, `0x8c008300..0x8c00c000`. Sonic's second one-shot scope did not cover the failed invocation. Neither photo identifies whether the hook was consumed earlier, skipped or overwritten.
 
-This diagnostic moves the entire native reader and private service stack below the owner's IP image. Both Sonic-specific scopes and startup instruction patches are disabled. It changes no game instructions and writes no original game files. It is intended for initial testing on the same VA1 console and BIOS used in the reported failures. Hardware compatibility is pending; this is not a universal BIOS or multidisc claim.
+This diagnostic moves the entire native reader and private service stack below the owner's IP image. Both Sonic-specific scopes and startup instruction patches are disabled. It changes no game instructions and writes no original game files. It is intended for initial testing on the same VA1 console and BIOS used in the reported failures. The owner has confirmed the three titles below on this console; this is not a universal BIOS or multidisc claim.
 
 ## Exact layout
 
-`KUI_RETAIL_LOW_RESIDENT=1` is opt-in. Ordinary builds remain at their original addresses.
+`KUI_RETAIL_LOW_RESIDENT=1` was initially opt-in. Following the hardware result below, normal native builds select this layout. Explicit `KUI_RETAIL_LOW_RESIDENT=0` retains the original placement for comparisons; historical owner trace/stack diagnostics select it automatically unless explicitly overridden. Windows CE remains at its original addresses.
 
-| Region | Native ordinary | Native low test |
+| Region | Native legacy comparison | Native current default |
 | --- | --- | --- |
 | Resident entry | `0x8c008300` | `0x8c004000` |
 | Standard code/data limit | `0x8c00bb00` | `0x8c007800` |
@@ -54,6 +54,12 @@ The complete CE entry payload, high stage and all four resident binaries are byt
 
 Four focused host test groups pass, including 44,346 UBSan assertions across native standard/background and legacy/low configurations. The 26 package tests, 13 workflow checks and 23,766 caller-snapshot checks also pass locally. Focused tests cover actual compiled mapping and firmware admission predicates, alias/boundary failures, stopping before any copy, exact native/CE header tuples and selected ELF layout. Native compilation checks all four readers, stack budgets, entry/stage headers and embedded blobs. A matching ordinary build is compared against the previous source, and the complete CE payload is compared at a constant build ID. Cached builds must recompile when layout or diagnostic flags change.
 
-Replace the whole `KUI` folder on the SD card and restart with the existing compatible boot disc. First launch the same original Sonic Adventure GDI with the standard reader, then Grandia II. Report whether each reaches its title/gameplay, or photograph the complete stop screen. No 2048 conversion is required. If both advance, try Power Stone 1/2 and the previously working Dead or Alive 2 as regression checks. These runtime tests remain pending until the owner reports results.
+Replace the whole `KUI` folder on the SD card and restart with the existing compatible boot disc. First launch the same original Sonic Adventure GDI with the standard reader, then Grandia II. Report whether each reaches its title/gameplay, or photograph the complete stop screen. No 2048 conversion is required. If both advance, try Power Stone 1/2 and the previously working Dead or Alive 2 as regression checks. The hardware result below resolves the initial Sonic/Grandia startup tests. Power Stone and Dead or Alive 2 regression tests with the new placement remain pending.
 
 This change does not address BIN/CUE prelaunch CRC latency or the reported FMV read/completion stalls. Windows CE still defaults to its background reader.
+
+## Hardware result: 2026-10-06, 21:31 America/Chicago
+
+The owner reported build `5973741a6077` fixed Grandia II and Sonic Adventure, and that Skies of Arcadia also works. This confirms successful launch/use as reported, not a complete game, disc-change or long-duration compatibility test. The earlier observed parameter collision is cleared by relocating the reader away from the owner startup stack.
+
+The same tested layout is now the normal native build default. Firmware pre-copy admission, exact package layouts and guest floor remain unchanged. Historical owner patch diagnostics retain their original layout; explicit low diagnostics remain labeled separately. CE remains unchanged. The owner can continue using the tested ZIP; changing the build default requires no replacement on the console.
