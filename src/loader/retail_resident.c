@@ -65,6 +65,10 @@ volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT
 #error "Observation is native standard SCI in the original low reservation only"
 #endif
+static enum kui_game_result image_result=(enum kui_game_result)UINT32_MAX;
+static enum kui_loader_sd_result observe_read_card_result=(enum kui_loader_sd_result)UINT32_MAX;
+static enum kui_loader_sd_result observe_stop_result=(enum kui_loader_sd_result)UINT32_MAX;
+static uint32_t observe_read_lba=UINT32_MAX,observe_read_count=UINT32_MAX,observe_card_lba=UINT32_MAX;
 #include "retail_observe.inc"
 #endif
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
@@ -120,6 +124,9 @@ static void video_sample(void) {
 #endif
 static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t output[512]) {
     (void)unused;
+#if KUI_RETAIL_OBSERVE
+    observe_card_lba=lba; /* Last physical block actually attempted, not cached. */
+#endif
     video_sample(); /* Each block is ~1 ms: long steps still count wraps. */
     card_result = kui_retail_storage_read_run(&card, lba, available, output);
     return card_result == KUI_LOADER_SD_OK ? 0 : -1;
@@ -141,15 +148,29 @@ static int check_sectors(void *unused, uint32_t lba, uint32_t count, uint32_t by
 static int read_sectors(void *unused, uint32_t lba, uint32_t count,
                         uint32_t bytes, void *out) {
     (void)unused;
+#if KUI_RETAIL_OBSERVE
+    image_result=(enum kui_game_result)UINT32_MAX;
+    observe_read_card_result=observe_stop_result=(enum kui_loader_sd_result)UINT32_MAX;
+    observe_read_lba=lba;observe_read_count=count;observe_card_lba=UINT32_MAX;
+#endif
     if(bytes != 2048 && bytes != 2352) return -1;
     card_result = kui_retail_storage_acquire(&card);
+#if KUI_RETAIL_OBSERVE
+    observe_read_card_result=card_result;
+#endif
     if(card_result != KUI_LOADER_SD_OK) return -1;
     enum kui_game_result result = kui_retail_image_read(&image, lba, count,
         sector_format(bytes), out, (size_t)count * bytes);
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_RETAIL_OBSERVE
     image_result = result;
 #endif
+#if KUI_RETAIL_OBSERVE
+    observe_read_card_result=card_result;
+#endif
     enum kui_loader_sd_result stopped = kui_retail_storage_stop(&card);
+#if KUI_RETAIL_OBSERVE
+    observe_stop_result=stopped;
+#endif
     if(card_result == KUI_LOADER_SD_OK) card_result = stopped;
     if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
     kui_retail_storage_release(&card);
@@ -298,14 +319,7 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
 #endif
 #if KUI_RETAIL_OBSERVE
 static void report_fault(const char *reason,uint32_t function,uint32_t param) {
-    (void)reason;
-    observe_words[0]=function;observe_words[1]=param;observe_words[2]=kui_retail_hook_fault;
-    retail_display_restore(&display);
-    retail_display_line("14 STOP");
-    observe_values("FN ARG GUARD",observe_words,3);
-    retail_display_pause(1200u);
-    retail_display_restore(&display);
-    observe_report();
+    observe_fault_report(reason,function,param);
     for(;;) __asm__ volatile("nop");
 }
 #else
@@ -575,10 +589,18 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     if(service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", r7, r5);
     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
+#if KUI_RETAIL_OBSERVE
+        report_fault("REQ REFUSED", r7, r5);
+#else
         report_fault("GD REQUEST REJECTED", r7, r5);
+#endif
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
+#if KUI_RETAIL_OBSERVE
+        report_fault("GD UNSUPPORTED", r7, r5);
+#else
         report_fault("GD FUNCTION UNSUPPORTED", r7, r5);
+#endif
 #ifdef KUI_RETAIL_CE
     ce_events(r7);
     meter_call(started);

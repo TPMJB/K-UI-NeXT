@@ -1,9 +1,10 @@
 # Complete-image preflight and retail observation
 
-Use **K-UI-CDDA-Preflight-Fix.zip** for the next run of **13 — image preflight**.
-It replaces only test 13. Keep test 14 from the original
-**K-UI-CDDA-Integration-Tests.zip**; its build remains `324c330bdb6c`.
-The replacement includes no test 14 binary and does not overwrite
+Use **K-UI-CDDA-Preflight-Fix.zip** when **13 — image preflight** is needed.
+It replaces only test 13. For the next test 14 run use the separate
+**K-UI-CDDA-Retail-Diagnostic.zip** and its
+[intro read diagnostic instructions](cdda-observe-fix-test.md).
+The preflight replacement includes no test 14 binary and does not overwrite
 `/KUI/tests/cdda/preflight.cfg`, game files or the normal retail reader.
 
 The original build `324c330bdb6c` reached **PASS, 6 stages / 0 failures** on
@@ -17,10 +18,11 @@ backings in 44 slots and a 32,612-byte private stack watermark. The photo
 sequence shows pages 2–6 followed by page 1. This confirms report rotation;
 it is not an absolute timer calibration or an injected deadline test.
 
-For this verified image/card, proceed with **14 — retail observation**.
+For this verified image/card, proceed with the replacement **14 — intro read diagnostic**.
 For a new image/card, run the replacement 13 and photograph all six pages.
 Install **14 — retail observation** only after a complete PASS report for the original Toy Commander
-image you will launch. Test 14 does not need to be rebuilt or downloaded again.
+image you will launch. The original `324c330bdb6c` observer stopped during
+the intro; it is superseded by the separate read diagnostic.
 The [hardware record](evidence/cdda-preflight-hardware-2026-10-07.md) preserves
 the confirmed result and the original build's reporting limitation.
 
@@ -46,7 +48,8 @@ The replacement ZIP contains no game backing files and installs no GDI
 descriptor or path configuration. Extraction replaces `/KUI/runtime.kui` with
 the corrected 13 and leaves the existing test 14 and `/KUI/apps/games/` alone.
 The original combined ZIP supplied 14 at `observation/14-retail-observe.kui`;
-retain that file for the later observation run.
+retain that immutable file for comparison, rather than reinstalling it for
+the next diagnostic run.
 
 | File in the replacement ZIP | Purpose |
 |---|---|
@@ -120,6 +123,12 @@ and stop there. Restore the working runtime if you want to use the normal
 Games menu; install 14 only after a PASS for the image you intend to launch.
 
 ## Run 14 after PASS
+
+The original `324c330bdb6c` observer has now stopped during Toy Commander's
+intro with an image-service I/O error. For the next run use the separate
+[intro read diagnostic](cdda-observe-fix-test.md), rather than reinstalling
+that original observer. The original installation and report contract below
+is retained for interpreting its supplied hardware evidence.
 
 With the console powered off:
 

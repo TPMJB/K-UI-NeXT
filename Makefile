@@ -300,6 +300,19 @@ build/test-retail-gd: tests/test_retail_gd.c src/core/retail_gd.c include/kui/re
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_gd.c tests/test_retail_gd.c -o $@
 
+.PHONY: test-retail-observe
+test-retail-observe: build/test-retail-observe build/test-retail-observe-fault
+	./build/test-retail-observe
+	./build/test-retail-observe-fault
+
+build/test-retail-observe: tests/test_retail_observe.c src/core/retail_observe.c include/kui/retail_observe.h include/kui/retail_image.h
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude src/core/retail_observe.c tests/test_retail_observe.c -o $@
+
+build/test-retail-observe-fault: tests/test_retail_observe_fault.c src/loader/retail_observe.inc src/core/retail_observe.c include/kui/retail_observe.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/core/retail_observe.c tests/test_retail_observe_fault.c -o $@
+
 build/test-retail-gd-async: tests/test_retail_gd.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_GD_ASYNC=1 src/core/retail_gd.c tests/test_retail_gd.c -o $@

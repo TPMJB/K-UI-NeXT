@@ -303,7 +303,7 @@ def collect(commit, published_tree=None, *, unpublished_source=False):
     observe_config = build_config(observe / 'build-config')
     if (observe_config.get('BUILD') != commit[:12] or observe_config.get('PROFILE') != '14' or
             any(observe_config.get(key) != value for key, value in
-                (('LOW', '1'), ('SLOTS', '64'), ('SCI', '1')))):
+                (('LOW', '1'), ('SLOTS', '64'), ('SCI', '1'), ('AUDIO', '1')))):
         raise ValueError('Wrong source/profile configuration for retail observation')
     retail = read_file(observe / 'retail-observe.kui')
     retail_info = inspect_retail(retail)
