@@ -339,10 +339,19 @@ retail launch. Profile 13 subsequently established all 15 backings and the
 exact boot executable/version fingerprint; profile 14 reached an accepted
 PLAY20 with receive-paced SCI. Retail work still needs proof of resident RAM,
 sound RAM/channel and periodic service ownership. The exact boot executable
-is needed locally to inspect its allocator and sound-driver contract; its
-preflight hash is an identity check, not the executable's contents. The
-[bounded extraction helper](cdda-toy-boot-extract.md) exports only that verified
-boot file from the original GDI. The controlled
+was supplied and matched its preflight SHA-256 and CRC32. Its
+[static memory audit](evidence/cdda-toy-memory-static-2026-10-07.md) identifies
+an early real-allocation bootstrap; the default heap extends to RAM end and
+the executable also contains fixed SDK scratch addresses there. Its
+[retail contract candidate](cdda-toy-retail-contract.md) identifies the game's
+custom 64-port picker and updater, which bypass the generic SDK voice allocator.
+These are concrete integration points, not an enabled or admitted profile.
+The external `AUDIO64.DRV` remains needed to inspect driver cursor, streaming
+and command application semantics; the [bounded driver extractor](cdda-toy-driver-extract.md)
+exports only that file from the same fingerprinted GDI. A looping ring also
+needs an enforceable service deadline or independent sound-side stop/service:
+a game-frame callback cannot stop stale replay while the whole game is stalled.
+The controlled
 engine begins at `0x8c010000`, where the retail executable normally launches;
 its present layout cannot be reused as a retail resident. Its explicitly
 owned AICA initialization and TMU1 clock likewise require a different proven
