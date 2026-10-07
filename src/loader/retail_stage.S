@@ -796,7 +796,11 @@ C(kui_retail_startup_gd_return):
     .align 2
     .global __retail_resident_scif_blob_start,__retail_resident_scif_blob_end
 __retail_resident_scif_blob_start:
+#ifdef KUI_RETAIL_CE
+    .incbin "build/retail-ce/resident-scif.bin"
+#else
     .incbin "build/retail/resident-scif.bin"
+#endif
     .align 2
 __retail_resident_scif_blob_end:
     .section .resident_blob,"a"
@@ -815,7 +819,11 @@ __retail_resident_sci_blob_end:
     .align 2
     .global __retail_resident_ide_blob_start,__retail_resident_ide_blob_end
 __retail_resident_ide_blob_start:
+#ifdef KUI_RETAIL_CE
+    .incbin "build/retail-ce/resident-ide.bin"
+#else
     .incbin "build/retail/resident-ide.bin"
+#endif
     .align 2
 __retail_resident_ide_blob_end:
     .section .resident_blob,"a"

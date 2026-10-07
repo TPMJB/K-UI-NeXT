@@ -38,8 +38,14 @@ class RetailPackage(unittest.TestCase):
             "STAGE_ADDRESS": layout.STAGE_ADDRESS, "STAGE_MAX_BYTES": layout.STAGE_MAX_BYTES,
             "STAGE_MEMORY_END": layout.STAGE_MEMORY_END, "STAGE_STACK": layout.STAGE_STACK,
             "EXEC_ADDRESS": layout.EXEC_ADDRESS, "EXEC_MAX_BYTES": layout.EXEC_MAX_BYTES,
-            "RESIDENT_ADDRESS": layout.RESIDENT_ADDRESS, "STANDARD_LIMIT": layout.RESIDENT_LIMIT,
-            "ASYNC_LIMIT": layout.ASYNC_RESIDENT_LIMIT, "HOOK_STACK": layout.HOOK_STACK,
+            "LEGACY_RESIDENT_ADDRESS": layout.RESIDENT_ADDRESS,
+            "LEGACY_STANDARD_LIMIT": layout.RESIDENT_LIMIT,
+            "LEGACY_ASYNC_LIMIT": layout.ASYNC_RESIDENT_LIMIT,
+            "LEGACY_HOOK_STACK": layout.HOOK_STACK,
+            "LOW_RESIDENT_ADDRESS": layout.LOW_RESIDENT_ADDRESS,
+            "LOW_STANDARD_LIMIT": layout.LOW_RESIDENT_LIMIT,
+            "LOW_ASYNC_LIMIT": layout.LOW_ASYNC_RESIDENT_LIMIT,
+            "LOW_HOOK_STACK": layout.LOW_HOOK_STACK,
             "TRAMPOLINE_BYTES": layout.TRAMPOLINE_BYTES,
         }
         for suffix, value in names.items():
@@ -114,6 +120,28 @@ class RetailPackage(unittest.TestCase):
         self.assertIn("title compatibility requires console testing", formats["abi"])
         self.assertEqual({key: value for key, value in formats.items() if key != "abi"},
                          {key: value for key, value in ordinary.items() if key != "abi"})
+
+    def test_native_low_header_is_an_exact_known_tuple(self):
+        for size in (4, 16, layout.STAGE_MAX_BYTES):
+            data = self.payload(size)
+            data[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = \
+                layout.relocation_header(size, low=True)
+            result = layout.inspect_retail(self.packaged(data))
+            self.assertEqual(result["resident_address"], "0x8c004000")
+            self.assertEqual(result["resident_limit"], "0x8c007800")
+            with self.assertRaisesRegex(ValueError, "relocation header"):
+                layout.inspect_retail(self.packaged(data), ce=True)
+        for base, limit in ((layout.LOW_RESIDENT_ADDRESS, layout.RESIDENT_LIMIT),
+                            (layout.RESIDENT_ADDRESS, layout.LOW_RESIDENT_LIMIT),
+                            (layout.LOW_RESIDENT_ADDRESS, layout.LOW_ASYNC_RESIDENT_LIMIT),
+                            (layout.LOW_RESIDENT_ADDRESS + 4, layout.LOW_RESIDENT_LIMIT),
+                            (layout.LOW_RESIDENT_ADDRESS, layout.LOW_RESIDENT_LIMIT + 4)):
+            data = self.payload()
+            struct.pack_into("<II", data, layout.HEADER_OFFSET + 52, base, limit)
+            with self.subTest(base=base, limit=limit), self.assertRaisesRegex(ValueError, "relocation header"):
+                layout.inspect_retail(self.packaged(data))
+        with self.assertRaisesRegex(ValueError, "Windows CE"):
+            layout.relocation_header(16, ce=True, low=True)
 
     def test_ce_probe_package_needs_its_own_header(self):
         data = bytearray(layout.STAGE_BLOB_OFFSET + 16)
@@ -485,6 +513,7 @@ class RetailLinkedLayout(unittest.TestCase):
             ss[name] += shift
         struct.pack_into("<I", self.payload["stage"], 240, ss["_kui_retail_game_resume"] | 0x20000000)
         self.payload["entry"][layout.STAGE_BLOB_OFFSET:] = self.payload["stage"]
+        self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]), ce=True)
         self.write()
         # Its SCI reader has its own limit and larger stack.
         with self.assertRaisesRegex(ValueError, "resident-sci hook stack"):
@@ -509,6 +538,8 @@ class RetailLinkedLayout(unittest.TestCase):
             check_directory(self.directory, ce=True)
         report = self.directory / "scia/lto/resident-scia.elf.ltrans0.ltrans.ci"
         report.write_text(CallGraphStack.graph(*CallGraphStack.ce_graph()))
+        self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]))
+        self.write()
         with self.assertRaisesRegex(ValueError, "relocation header mismatch"):
             check_directory(self.directory, ce=True)
         self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]), ce=True)

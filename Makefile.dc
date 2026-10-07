@@ -169,12 +169,28 @@ build/loader/image_entry.elf: build/loader/src/loader/image_entry.o src/loader/i
 RETAIL_CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
 KUI_RETAIL_STARTUP_TRACE ?= 0
 KUI_RETAIL_SONIC_STACK_TEST ?= 0
+KUI_RETAIL_LOW_RESIDENT ?= 0
 RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(RETAIL_CPU) -DKUI_RETAIL_FAST_IO=1 -ffreestanding \
     -DKUI_RETAIL_STARTUP_TRACE=$(KUI_RETAIL_STARTUP_TRACE) \
     -DKUI_RETAIL_SONIC_STACK_TEST=$(KUI_RETAIL_SONIC_STACK_TEST) \
+    -DKUI_RETAIL_LOW_RESIDENT=$(KUI_RETAIL_LOW_RESIDENT) \
     -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections -fno-jump-tables \
     -fstack-usage -DKUI_ON_CONSOLE=1 -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
 RETAIL_LINK := $(RETAIL_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+RETAIL_RESIDENT_LD := src/loader/retail_resident$(if $(filter 1,$(KUI_RETAIL_LOW_RESIDENT)),_low).ld
+RETAIL_ASYNC_LD := src/loader/retail_resident_async$(if $(filter 1,$(KUI_RETAIL_LOW_RESIDENT)),_low).ld
+# CE's shared native-ABI SCIF/IDE readers retain their original reservation.
+RETAIL_LEGACY_FLAGS := $(filter-out -DKUI_RETAIL_LOW_RESIDENT=%,$(RETAIL_FLAGS)) -DKUI_RETAIL_LOW_RESIDENT=0
+.PHONY: force-retail-layout
+force-retail-layout:
+build/retail/layout-config: force-retail-layout
+	@mkdir -p $(@D)
+	@printf '%s\n' 'LOW=$(KUI_RETAIL_LOW_RESIDENT) TRACE=$(KUI_RETAIL_STARTUP_TRACE) SONIC=$(KUI_RETAIL_SONIC_STACK_TEST) BUILD=$(BUILD_ID)' > $@.new
+	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
+build/retail-ce/layout-config: force-retail-layout
+	@mkdir -p $(@D)
+	@printf '%s\n' 'LOW=$(KUI_RETAIL_LOW_RESIDENT) TRACE=$(KUI_RETAIL_STARTUP_TRACE) SONIC=$(KUI_RETAIL_SONIC_STACK_TEST) BUILD=$(BUILD_ID)' > $@.new
+	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 # SCI's DMA reader shares the original protected low-memory reservation.
 # Cross-unit optimization and SH call relaxation recover code space without
 # changing the stack boundary. Keep audited entry points and compiler-emitted
@@ -241,8 +257,8 @@ build/retail/scif/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
 build/retail/scif/src/loader/retail_display.o: force-build-id
-build/retail/resident-scif.elf: $(RETAIL_SCIF) src/loader/retail_resident.ld
-	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-scif.map -o $@ $(RETAIL_SCIF) -lgcc
+build/retail/resident-scif.elf: $(RETAIL_SCIF) $(RETAIL_RESIDENT_LD)
+	sh-elf-gcc $(RETAIL_LINK) -T$(RETAIL_RESIDENT_LD) -Wl,-Map,build/retail/resident-scif.map -o $@ $(RETAIL_SCIF) -lgcc
 build/retail/resident-scif.bin: build/retail/resident-scif.elf
 	sh-elf-objcopy -O binary $< $@
 build/retail/sci/%.o: %.c
@@ -252,10 +268,10 @@ build/retail/sci/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
 build/retail/sci/src/loader/retail_display.o: force-build-id
-build/retail/resident-sci.elf: $(RETAIL_SCI) src/loader/retail_resident.ld
+build/retail/resident-sci.elf: $(RETAIL_SCI) $(RETAIL_RESIDENT_LD)
 	@mkdir -p build/retail/sci/lto
 	rm -f build/retail/resident-sci.elf.ltrans*.su build/retail/sci/lto/*.su
-	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-sci.map -o $@ $(RETAIL_SCI) -lgcc
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_LINK) -T$(RETAIL_RESIDENT_LD) -Wl,-Map,build/retail/resident-sci.map -o $@ $(RETAIL_SCI) -lgcc
 	cp build/retail/resident-sci.elf.ltrans*.su build/retail/sci/lto/
 build/retail/resident-sci.bin: build/retail/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@
@@ -266,8 +282,8 @@ build/retail/ide/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
 build/retail/ide/src/loader/retail_display.o: force-build-id
-build/retail/resident-ide.elf: $(RETAIL_IDE) src/loader/retail_resident.ld
-	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail/resident-ide.map -o $@ $(RETAIL_IDE) -lgcc
+build/retail/resident-ide.elf: $(RETAIL_IDE) $(RETAIL_RESIDENT_LD)
+	sh-elf-gcc $(RETAIL_LINK) -T$(RETAIL_RESIDENT_LD) -Wl,-Map,build/retail/resident-ide.map -o $@ $(RETAIL_IDE) -lgcc
 build/retail/resident-ide.bin: build/retail/resident-ide.elf
 	sh-elf-objcopy -O binary $< $@
 build/retail/scia/%.o: %.c
@@ -277,10 +293,10 @@ build/retail/scia/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -MMD -MP -c $< -o $@
 build/retail/scia/src/loader/retail_display.o: force-build-id
-build/retail/resident-scia.elf: $(RETAIL_SCIA) src/loader/retail_resident_async.ld
+build/retail/resident-scia.elf: $(RETAIL_SCIA) $(RETAIL_ASYNC_LD)
 	@mkdir -p build/retail/scia/lto
 	rm -f build/retail/resident-scia.elf.ltrans* build/retail/scia/lto/*
-	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCIA_LINK) -Tsrc/loader/retail_resident_async.ld -Wl,-Map,build/retail/resident-scia.map -o $@ $(RETAIL_SCIA) -lgcc
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCIA_LINK) -T$(RETAIL_ASYNC_LD) -Wl,-Map,build/retail/resident-scia.map -o $@ $(RETAIL_SCIA) -lgcc
 	cp build/retail/resident-scia.elf.ltrans*.su build/retail/resident-scia.elf.ltrans*.ci build/retail/scia/lto/
 build/retail/resident-scia.bin: build/retail/resident-scia.elf
 	sh-elf-objcopy -O binary $< $@
@@ -321,6 +337,30 @@ build/retail-bench/entry.elf: build/retail-bench/retail_entry_asm.o src/loader/r
 # (standard and background) differ. Those (KUI_RETAIL_CE) touch CE's stack
 # only with exceptions enabled and trace CE's calls; the standard one reads a
 # fixed step without pacing.
+RETAIL_CE_SCIF := $(patsubst %.c,build/retail-ce/scif/%.o,$(RETAIL_SCIF_SRC)) build/retail-ce/scif/src/loader/retail_resident_asm.o
+RETAIL_CE_IDE := $(patsubst %.c,build/retail-ce/ide/%.o,$(RETAIL_IDE_SRC)) build/retail-ce/ide/src/loader/retail_resident_asm.o
+build/retail-ce/scif/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_LEGACY_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
+build/retail-ce/scif/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_LEGACY_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
+build/retail-ce/scif/src/loader/retail_display.o: force-build-id
+build/retail-ce/resident-scif.elf: $(RETAIL_CE_SCIF) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail-ce/resident-scif.map -o $@ $(RETAIL_CE_SCIF) -lgcc
+build/retail-ce/resident-scif.bin: build/retail-ce/resident-scif.elf
+	sh-elf-objcopy -O binary $< $@
+build/retail-ce/ide/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_LEGACY_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
+build/retail-ce/ide/%_asm.o: %.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_LEGACY_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
+build/retail-ce/ide/src/loader/retail_display.o: force-build-id
+build/retail-ce/resident-ide.elf: $(RETAIL_CE_IDE) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,build/retail-ce/resident-ide.map -o $@ $(RETAIL_CE_IDE) -lgcc
+build/retail-ce/resident-ide.bin: build/retail-ce/resident-ide.elf
+	sh-elf-objcopy -O binary $< $@
 RETAIL_CE_SCI := $(patsubst %.c,build/retail-ce/sci/%.o,$(RETAIL_SCI_SRC)) build/retail-ce/sci/src/loader/retail_resident_asm.o
 build/retail-ce/sci/%.o: %.c
 	@mkdir -p $(@D)
@@ -354,7 +394,7 @@ build/retail-ce/resident-scia.elf: $(RETAIL_CE_SCIA) src/loader/retail_resident_
 	cp build/retail-ce/resident-scia.elf.ltrans*.su build/retail-ce/resident-scia.elf.ltrans*.ci build/retail-ce/scia/lto/
 build/retail-ce/resident-scia.bin: build/retail-ce/resident-scia.elf
 	sh-elf-objcopy -O binary $< $@
-build/retail-ce/retail_stage_asm.o: src/loader/retail_stage.S $(RETAIL_RESIDENT_BINS) build/retail-ce/resident-sci.bin build/retail-ce/resident-scia.bin
+build/retail-ce/retail_stage_asm.o: src/loader/retail_stage.S build/retail-ce/resident-scif.bin build/retail-ce/resident-ide.bin build/retail-ce/resident-sci.bin build/retail-ce/resident-scia.bin
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
 build/retail-ce/retail_stage.o: src/loader/retail_stage.c
@@ -372,14 +412,14 @@ build/retail-ce/stage.bin: build/retail-ce/stage.elf
 	sh-elf-objcopy -O binary $< $@
 build/retail-ce/retail_entry_asm.o: src/loader/retail_entry.S build/retail-ce/stage.bin
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_RETAIL_STAGE_BIN='"build/retail-ce/stage.bin"' -MMD -MP -c $< -o $@
-build/retail-ce/entry.elf: build/retail-ce/retail_entry_asm.o src/loader/retail_entry.ld build/retail/entry.elf
+build/retail-ce/entry.elf: build/retail-ce/retail_entry_asm.o src/loader/retail_entry.ld
 	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,build/retail-ce/entry.map -o $@ $<
-	for r in scif ide; do cp build/retail/resident-$$r.elf build/retail/resident-$$r.bin build/retail/resident-$$r.map build/retail-ce/; done
-	cp -r build/retail/src build/retail/scif build/retail/ide build/retail-ce/
 	python3 tools/check_retail_instructions.py build/retail-ce
 	python3 tools/check_retail_loader_layout.py --ce build/retail-ce
 	python3 tools/record_build.py $@
 
 -include $(RETAIL_SCIF:.o=.d) $(RETAIL_SCI:.o=.d) $(RETAIL_IDE:.o=.d) $(RETAIL_SCIA:.o=.d) $(RETAIL_STAGE:.o=.d) build/retail/src/loader/retail_entry_asm.d
 -include $(RETAIL_BENCH_STAGE:.o=.d) build/retail-bench/retail_entry_asm.d
--include $(RETAIL_CE_STAGE:.o=.d) $(RETAIL_CE_SCI:.o=.d) $(RETAIL_CE_SCIA:.o=.d) build/retail-ce/retail_entry_asm.d
+$(RETAIL_SCIF) $(RETAIL_SCI) $(RETAIL_IDE) $(RETAIL_SCIA) $(RETAIL_STAGE) build/retail/src/loader/retail_entry_asm.o $(RETAIL_BENCH_STAGE) build/retail-bench/retail_entry_asm.o: build/retail/layout-config
+$(filter-out $(RETAIL_COMMON),$(RETAIL_CE_STAGE)) $(RETAIL_CE_SCI) $(RETAIL_CE_SCIA) $(RETAIL_CE_SCIF) $(RETAIL_CE_IDE) build/retail-ce/retail_entry_asm.o: build/retail-ce/layout-config
+-include $(RETAIL_CE_STAGE:.o=.d) $(RETAIL_CE_SCI:.o=.d) $(RETAIL_CE_SCIA:.o=.d) $(RETAIL_CE_SCIF:.o=.d) $(RETAIL_CE_IDE:.o=.d) build/retail-ce/retail_entry_asm.d

@@ -3,10 +3,11 @@
 #define KUI_RETAIL_LOADER_LAYOUT_H
 
 /* Native-GD launch layout. A temporary high stage loads the owner's
- * IP and executable. The resident replaces the unused lower IP area before
+ * IP and executable. The ordinary resident replaces the lower IP area before
  * entering owner bootstrap2 with explicitly initialized retail CPU state.
  * Firmware, IP metadata/TOC, upper bootstrap/VBR/stack and all normal game RAM
- * are outside the resident reservation. This is not a universal SDK promise. */
+ * are outside that ordinary reservation; opt-in placement is described below.
+ * This is not a universal SDK promise. */
 #define KUI_RETAIL_PACKAGE_MAGIC "KUIRBT01"
 #define KUI_RETAIL_PACKAGE_VERSION 1
 #define KUI_RETAIL_HEADER_OFFSET 0x100
@@ -32,6 +33,27 @@
  * stage at 0x8ce00000. This bounds memory use, not a particular title's size. */
 #define KUI_RETAIL_EXEC_MAX_BYTES 0xc00000
 #define KUI_RETAIL_TRAMPOLINE_BYTES 128
+/* Opt-in native firmware-area placement. Keep the complete code/data/stack
+ * reservation below IP.BIN so ordinary owner startup frames can use the
+ * lower IP area. The stage checks retained firmware vectors before copying.
+ * This is an experiment, not a universal claim about every firmware. */
+#ifndef KUI_RETAIL_LOW_RESIDENT
+#define KUI_RETAIL_LOW_RESIDENT 0
+#endif
+#if KUI_RETAIL_LOW_RESIDENT != 0 && KUI_RETAIL_LOW_RESIDENT != 1
+#error "KUI_RETAIL_LOW_RESIDENT must be 0 or 1"
+#endif
+#if KUI_RETAIL_LOW_RESIDENT && ((defined(KUI_RETAIL_SONIC_STACK_TEST) && KUI_RETAIL_SONIC_STACK_TEST) || (defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE))
+#error "Low resident placement must run without owner RAM trace/stack patches"
+#endif
+#define KUI_RETAIL_LOW_RESIDENT_ADDRESS 0x8c004000
+#define KUI_RETAIL_LOW_STANDARD_LIMIT 0x8c007800
+#define KUI_RETAIL_LOW_ASYNC_LIMIT 0x8c007ba0
+#define KUI_RETAIL_LOW_HOOK_STACK 0x8c007d00
+#define KUI_RETAIL_LEGACY_RESIDENT_ADDRESS 0x8c008300
+#define KUI_RETAIL_LEGACY_STANDARD_LIMIT 0x8c00bb00
+#define KUI_RETAIL_LEGACY_ASYNC_LIMIT 0x8c00bea0
+#define KUI_RETAIL_LEGACY_HOOK_STACK 0x8c00c000
 #define KUI_RETAIL_RESIDENT_ADDRESS 0x8c008300
 /* DOA2 T3601N V1.100 fills C000..F3FF with its startup stack marker.
  * Both resident state and the guarded service stack must stay below C000.
@@ -59,6 +81,14 @@
  * flag and interrupt handler table (retail_resident.S, kui_retail_ce_kernel). */
 #define KUI_RETAIL_CE_KERNEL 0x8c008324
 #define KUI_RETAIL_CE_KERNEL_WORDS 4
+#if KUI_RETAIL_LOW_RESIDENT && !defined(KUI_RETAIL_CE)
+#undef KUI_RETAIL_RESIDENT_ADDRESS
+#undef KUI_RETAIL_STANDARD_LIMIT
+#undef KUI_RETAIL_ASYNC_LIMIT
+#define KUI_RETAIL_RESIDENT_ADDRESS KUI_RETAIL_LOW_RESIDENT_ADDRESS
+#define KUI_RETAIL_STANDARD_LIMIT KUI_RETAIL_LOW_STANDARD_LIMIT
+#define KUI_RETAIL_ASYNC_LIMIT KUI_RETAIL_LOW_ASYNC_LIMIT
+#endif
 #if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)
 #define KUI_RETAIL_RESIDENT_LIMIT KUI_RETAIL_CE_ASYNC_LIMIT
 #elif defined(KUI_RETAIL_ASYNC)
@@ -70,7 +100,11 @@
 #endif
 #define KUI_RETAIL_HOOK_STACK_BOTTOM KUI_RETAIL_RESIDENT_LIMIT
 #ifndef KUI_RETAIL_CE
+#if KUI_RETAIL_LOW_RESIDENT
+#define KUI_RETAIL_HOOK_STACK KUI_RETAIL_LOW_HOOK_STACK
+#else
 #define KUI_RETAIL_HOOK_STACK 0x8c00c000
+#endif
 #elif defined(KUI_RETAIL_ASYNC)
 #define KUI_RETAIL_HOOK_STACK KUI_RETAIL_CE_ASYNC_HOOK_STACK
 #else

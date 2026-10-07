@@ -8,8 +8,8 @@ import subprocess
 import sys
 
 from check_retail_loader_layout import (ASYNC, RESIDENTS, check_async_stack,
-                                        check_stack_usage, resident_limit)
-import retail_package as layout
+                                        check_stack_usage, resident_limit,
+                                        entry_placement, inspect_entry)
 
 
 def symbols(elf):
@@ -25,6 +25,9 @@ def symbols(elf):
 
 def main():
     directory = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("build/retail")
+    ce = "--ce" in sys.argv[2:]
+    placement = entry_placement(inspect_entry(directory), ce)
+    low, resident_address = placement["low"], placement["address"]
     report = {}
     for transport in RESIDENTS:
         elf = directory / f"resident-{transport}.elf"
@@ -36,17 +39,17 @@ def main():
         binary = values["__retail_resident_binary_end"]
         try:
             if transport == ASYNC:
-                stack = check_async_stack(directory / transport)
+                stack = check_async_stack(directory / transport, ce, low)
                 stack["conservative_bytes"] = stack["worst_bytes"]
             else:
-                stack = check_stack_usage(directory / transport, set(values), transport)
+                stack = check_stack_usage(directory / transport, set(values), transport, ce, low)
         except ValueError as error:
             stack = {"conservative_bytes": str(error), "available_bytes": None}
         rows = symbols(elf)
         report[transport] = {
-            "code_data": binary - layout.RESIDENT_ADDRESS,
+            "code_data": binary - resident_address,
             "bss": end - values["__retail_resident_bss_begin"],
-            "free": resident_limit(transport) - end,
+            "free": resident_limit(transport, ce, low) - end,
             "stack": stack["conservative_bytes"], "stack_limit": stack["available_bytes"],
             "top": [[n, s, k] for n, s, k in rows[-16:]] if transport in ("sci", ASYNC) else [],
         }

@@ -90,6 +90,11 @@ static bool layout(const struct kui_runtime_image *image,bool ce) {
         image->info.memory_bytes!=image->info.payload_bytes) return false;
     const uint8_t *h=(const uint8_t *)image->data+KUI_RETAIL_HEADER_OFFSET;
     uint32_t n=le32(h+28);
+    const uint32_t resident=le32(h+52),limit=le32(h+56);
+    bool known_resident=(resident==KUI_RETAIL_LEGACY_RESIDENT_ADDRESS &&
+                         limit==KUI_RETAIL_LEGACY_STANDARD_LIMIT) ||
+                        (!ce && resident==KUI_RETAIL_LOW_RESIDENT_ADDRESS &&
+                         limit==KUI_RETAIL_LOW_STANDARD_LIMIT);
     if(memcmp(h,ce?KUI_RETAIL_CE_PACKAGE_MAGIC:KUI_RETAIL_PACKAGE_MAGIC,8) ||
         le32(h+8)!=KUI_RETAIL_PACKAGE_VERSION ||
         le32(h+12)!=KUI_RETAIL_HEADER_BYTES || le32(h+16)!=KUI_RETAIL_MAP_OFFSET ||
@@ -97,8 +102,7 @@ static bool layout(const struct kui_runtime_image *image,bool ce) {
         !n || n%4 || n>max || begin+n!=image->info.payload_bytes ||
         le32(h+32)!=stage || le32(h+36)!=KUI_RETAIL_EXEC_ADDRESS ||
         le32(h+40)!=KUI_RETAIL_EXEC_MAX_BYTES || le32(h+44)!=KUI_RETAIL_STAGE_STACK ||
-        le32(h+48)!=begin || le32(h+52)!=KUI_RETAIL_RESIDENT_ADDRESS ||
-        le32(h+56)!=KUI_RETAIL_RESIDENT_LIMIT || le32(h+60)) return false;
+        le32(h+48)!=begin || !known_resident || le32(h+60)) return false;
     for(unsigned i=0;i<KUI_RETAIL_IMAGE_WIRE_BYTES;i++)
         if(((const uint8_t *)image->data)[KUI_RETAIL_MAP_OFFSET+i]) return false;
     return true;

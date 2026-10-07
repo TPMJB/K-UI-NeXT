@@ -49,3 +49,11 @@ The production-derived native caller fixture passes 23,766 checks with UBSan, op
 Native and CE linked builds pass layout, embedded-payload, instruction, stack and unresolved-symbol checks. The SCI resident still ends at `0x8c00baf4` with a conservative private-stack bound of 1,184 of 1,232 bytes. All private allocations are aligned and disjoint. Ordinary native trace modes 0–3 and CE modes 0/3 retain the baseline allocated sections and relocations. Native background and CE SCI standard/background resident payloads remain byte-identical. The wrappers preserve the actual 21-word CPU frames and publish restored hooks on the texture return path.
 
 The diagnostic workflow runs both focused host fixtures for the exact commit. Final native audit and exact-commit GitHub build results are recorded with the delivered archive; physical-console validation remains pending.
+
+## Hardware outcome: build d6438f7022ac
+
+The owner supplied a clear Sonic photograph and Grandia II photograph from this build. Both stop on GD function 0, command 0x11, rejection 3 (parameter mapping). Sonic reports SP `0x8c00b9f0`, actual R5 parameter pointer `0x8c00b9f4`, PR `0x8c648d7a`, and raw stack words `0x8c604e50`, `0x8c604c98`, `0x8c09b4de`. This is the same failing chain as the previous build. The failed invocation is outside the active protected scope; this experiment has not solved the collision. The photograph cannot distinguish an earlier invocation consuming the one-shot scope from a skipped or overwritten hook.
+
+Grandia II reports SP `0x8c00b338`, actual R5 parameter pointer `0x8c00b33c`, PR `0x8c07cb22`, and raw stack words `0x8c08529c`, `0x8c0850e4`, `0x8c01138a`. This confirms that its actual parameter array overlaps the legacy reservation, rather than merely showing a nearby caller stack. Its enclosing routine has not been identified.
+
+The next isolated experiment moves the native resident below the complete owner IP image. It disables both Sonic scopes and changes no owner instructions. See `native-low-resident-2026-10-06.md` for the placement contract and firmware admission checks.

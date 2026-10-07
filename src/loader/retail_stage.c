@@ -46,9 +46,11 @@ extern const uint8_t __retail_ce_vbr[] __asm__("__retail_ce_vbr");
 extern void kui_retail_stage_sync(void);
 
 /* High storage is temporary: no pointer to it survives the final handoff.
- * Firmware low32KiB and the owner's IP metadata/TOC stay in place throughout.
+ * The ordinary reader leaves firmware low32KiB in place; the opt-in low
+ * placement preserves its published lower16KiB and checks retained vectors.
+ * The owner's IP metadata/TOC stay in place throughout.
  * Bootstrap2 runs at its original address with the independent reader already
- * installed in the unused lower IP region. No proprietary bootstrap is bundled. */
+ * installed in its reserved RAM. No proprietary bootstrap is bundled. */
 static uint8_t wire_copy[KUI_RETAIL_MAP_BYTES];
 static uint8_t original_entry[KUI_RETAIL_TRAMPOLINE_BYTES];
 static struct kui_retail_manifest manifest;
@@ -526,6 +528,35 @@ void kui_retail_boot_returned(void) {
     stopped("OWNER BOOTSTRAP RETURNED",KUI_RETAIL_BOOT2_ADDRESS);
 }
 
+#if KUI_RETAIL_LOW_RESIDENT && !defined(KUI_RETAIL_CE)
+/* DreamShell's pinned native layout places its loader at RAM+4000 and loads
+ * firmware/syscalls only below it. K-UI retains font/flash/sysinfo and the
+ * original system entry, so reject an unsupported target before the first
+ * copy instead of overwriting a routine those services would still call. */
+static int low_firmware_code(uint32_t address,int gd) {
+    uint32_t area=address&0xff000000u,physical=address&0x1fffffffu;
+    if(address&1u) return 0;
+    if(area==0x0c000000u || area==0x8c000000u || area==0xac000000u)
+        return physical>=0x0c000100u && physical<0x0c004000u;
+    if(gd) return 0;
+    return (area==0u || area==0x80000000u || area==0xa0000000u) &&
+        physical && physical<0x00200000u;
+}
+static void low_firmware_preflight(uint32_t firmware) {
+    const uint32_t vector[4]={0x8c0000b0u,0x8c0000b4u,0x8c0000b8u,0x8c0000e0u};
+    if(!low_firmware_code(firmware,1))
+        stopped("LOW RESIDENT GD VECTOR UNSUPPORTED",firmware);
+    for(unsigned i=0;i<4u;i++) {
+        uint32_t entry=*(volatile const uint32_t *)(uintptr_t)vector[i];
+        if(!low_firmware_code(entry,0)) {
+            retail_display_hex("FIRMWARE VECTOR",vector[i]);
+            stopped("LOW RESIDENT FIRMWARE VECTOR UNSUPPORTED",entry);
+        }
+    }
+    retail_display_line("NATIVE LOW RESIDENT");
+}
+#endif
+
 static void install_resident(void) {
     size_t bytes=resident_bytes;
     if(!bytes || bytes>resident_limit-KUI_RETAIL_RESIDENT_ADDRESS)
@@ -534,6 +565,9 @@ static void install_resident(void) {
     uintptr_t canonical=(firmware&0x1fffffffu)|0x80000000u;
     if((firmware&1u) || canonical<0x8c000100u || canonical>=KUI_RETAIL_IP_ADDRESS)
         stopped("UNSUPPORTED FIRMWARE GD VECTOR",firmware);
+#if KUI_RETAIL_LOW_RESIDENT && !defined(KUI_RETAIL_CE)
+    low_firmware_preflight(firmware);
+#endif
     memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,
            resident_blob,bytes);
 #ifdef KUI_RETAIL_CE

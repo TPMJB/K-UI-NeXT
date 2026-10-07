@@ -29,6 +29,12 @@ HOOK_STACK_BOTTOM = 0x8C00BB00
 ASYNC_RESIDENT_LIMIT = 0x8C00BEA0
 ASYNC_HOOK_STACK_BOTTOM = 0x8C00BEA0
 HOOK_STACK = 0x8C00C000
+# Opt-in native placement below IP.BIN. Header selection is an exact known
+# tuple; callers cannot supply arbitrary resident bounds.
+LOW_RESIDENT_ADDRESS = 0x8C004000
+LOW_RESIDENT_LIMIT = 0x8C007800
+LOW_ASYNC_RESIDENT_LIMIT = 0x8C007BA0
+LOW_HOOK_STACK = 0x8C007D00
 # The Windows CE boot test's SCI reader: image below C800, 2 KiB stack above.
 CE_RESIDENT_LIMIT = 0x8C00C800
 CE_HOOK_STACK = 0x8C00D000
@@ -43,13 +49,36 @@ def stage_address(ce=False):
     return CE_STAGE_ADDRESS if ce else STAGE_ADDRESS
 
 
-def relocation_header(stage_bytes, ce=False):
+def relocation_header(stage_bytes, ce=False, low=False):
+    if ce and low:
+        raise ValueError("Windows CE does not support the native low resident layout")
     stage = stage_address(ce)
     return HEADER.pack(
         CE_MAGIC if ce else MAGIC, VERSION, HEADER_BYTES, MAP_OFFSET, MAP_BYTES, stage,
         stage_bytes, stage, EXEC_ADDRESS, EXEC_MAX_BYTES, STAGE_STACK,
-        STAGE_BLOB_OFFSET, RESIDENT_ADDRESS, RESIDENT_LIMIT, 0,
+        STAGE_BLOB_OFFSET, LOW_RESIDENT_ADDRESS if low else RESIDENT_ADDRESS,
+        LOW_RESIDENT_LIMIT if low else RESIDENT_LIMIT, 0,
     )
+
+
+def resident_layout(header, ce=False):
+    """Select and validate one complete known relocation header."""
+    if len(header) != HEADER_BYTES:
+        raise ValueError("Invalid retail relocation header")
+    fields = HEADER.unpack(header)
+    stage_bytes = fields[6]
+    if not 4 <= stage_bytes <= STAGE_MAX_BYTES or stage_bytes % 4:
+        raise ValueError("Invalid retail relocation header")
+    for low in ((False,) if ce else (False, True)):
+        if header == relocation_header(stage_bytes, ce, low):
+            return {
+                "low": low,
+                "address": LOW_RESIDENT_ADDRESS if low else RESIDENT_ADDRESS,
+                "standard_limit": LOW_RESIDENT_LIMIT if low else RESIDENT_LIMIT,
+                "async_limit": LOW_ASYNC_RESIDENT_LIMIT if low else ASYNC_RESIDENT_LIMIT,
+                "hook_stack": LOW_HOOK_STACK if low else HOOK_STACK,
+            }
+    raise ValueError("Invalid retail relocation header")
 
 
 def inspect_retail(package, ce=False, formats=False):
@@ -66,10 +95,10 @@ def inspect_retail(package, ce=False, formats=False):
             info["memory_bytes"] != len(payload)):
         raise ValueError("Invalid retail staging size")
     header = payload[HEADER_OFFSET:HEADER_OFFSET + HEADER_BYTES]
+    placement = resident_layout(header, ce)
     stage_bytes = HEADER.unpack(header)[6]
     if (not 4 <= stage_bytes <= STAGE_MAX_BYTES or stage_bytes % 4 or
-            stage_bytes + STAGE_BLOB_OFFSET != len(payload) or
-            header != relocation_header(stage_bytes, ce)):
+            stage_bytes + STAGE_BLOB_OFFSET != len(payload)):
         raise ValueError("Invalid retail relocation header")
     if any(payload[MAP_OFFSET:MAP_OFFSET + MAP_BYTES]):
         raise ValueError("Retail package must ship with a blank card-specific manifest")
@@ -77,8 +106,8 @@ def inspect_retail(package, ce=False, formats=False):
         **info,
         "stage_bytes": stage_bytes,
         "stage_address": f"0x{stage_address(ce):08x}",
-        "resident_address": f"0x{RESIDENT_ADDRESS:08x}",
-        "resident_limit": f"0x{RESIDENT_LIMIT:08x}",
+        "resident_address": f"0x{placement['address']:08x}",
+        "resident_limit": f"0x{placement['standard_limit']:08x}",
         "manifest_bytes": MAP_BYTES,
         "abi": ("Windows CE placement probe; stops before CE runs" if ce else
                 "Native CD/GD image formats test (GDI, ISO, BIN/CUE, CDI, BIN/IMG); title compatibility requires console testing" if formats else

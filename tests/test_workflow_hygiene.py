@@ -168,5 +168,31 @@ class ExperimentalBuildIsOptIn(unittest.TestCase):
                           "${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}", self.text)
 
 
+class NativeLowResidentWorkflow(unittest.TestCase):
+    def test_low_mode_is_opt_in_and_separately_named(self):
+        text = WORKFLOW.read_text()
+        self.assertIn("low_resident:", text)
+        flag = next(line for line in text.splitlines() if "KUI_RETAIL_LOW_RESIDENT:" in line)
+        self.assertIn("inputs.low_resident", flag)
+        self.assertIn("Diagnostic: Native low resident", flag)
+        self.assertRegex(flag, r"&& '1' \|\| '0'")
+        self.assertEqual(text.count("&& '-low-resident' || ''"), 5)
+        self.assertIn("env.KUI_RETAIL_LOW_RESIDENT == '0'", text)
+        for line in text.splitlines():
+            if "KUI_RETAIL_STARTUP_TRACE:" in line or "KUI_RETAIL_SONIC_STACK_TEST:" in line:
+                self.assertIn("inputs.low_resident", line)
+        self.assertIn('KUI_RETAIL_LOW_RESIDENT="$KUI_RETAIL_LOW_RESIDENT"', step_script())
+
+    def test_focused_scope_admits_required_checks_and_runs_them(self):
+        for path in ("tests/test_retail_low_resident.py", "tools/report_retail_sizes.py",
+                     "src/loader/retail_resident_low.ld", "tests/test_workflow_hygiene.py"):
+            with self.subTest(path=path):
+                result, output = GamesVariantValidationScope().run_scope(path, "console-only")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("console_only=true", output)
+        script = step_script("name: Check native low resident admission and envelopes")
+        for check in ("test_retail_low_resident.py", "test_retail_package.py", "test_workflow_hygiene.py"):
+            self.assertIn(check, script)
+
 if __name__ == "__main__":
     unittest.main()
