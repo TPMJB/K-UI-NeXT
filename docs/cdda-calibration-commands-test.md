@@ -1,5 +1,10 @@
 # Short CDDA calibration and command tests
 
+**Recorded result:** both profiles completed successfully on the console with
+build `2cb5d25bb97f`, and the owner reported that they sounded successful. See
+the [hardware evidence](evidence/cdda-calibration-commands-hardware-2026-10-07.md).
+These instructions preserve the tested checkpoint; no repeat run is requested.
+
 Run these two new automatic profiles in order: **04 calibration**, then
 **05 commands**. Calibration takes about one minute; commands takes roughly
 20–30 seconds plus initialization. Photograph both final screens. The earlier

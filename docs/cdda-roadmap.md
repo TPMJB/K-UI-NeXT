@@ -2,11 +2,13 @@
 
 Status: the detached SCI/AICA harness passed its baseline, two controls runs,
 15-minute soak and 15-minute serialized read stress with zero reported faults.
-Targeted stereo listening, precise timer/audio calibration, broader job arbitration and retail
-resource/command integration remain open.
-Short profiles 04 and 05 implement matched clock observations and controlled
-command/job checks; their console results are pending. Use the
-[new two-profile checklist](cdda-calibration-commands-test.md) for this step.
+Profiles 04 and 05 also passed their matched clock and controlled-command
+console checks with zero reported failures. Their
+[hardware record](evidence/cdda-calibration-commands-hardware-2026-10-07.md)
+contains the exact endpoints and command counters. The relative clock result
+supports revisiting the nominal timer conversion against the pinned hardware
+contract. Absolute clock/pitch measurement, targeted stereo listening, broader
+job arbitration and retail resource/command integration remain open.
 Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -109,8 +111,10 @@ The [new hardware record](evidence/cdda-controls-soak-stress-hardware-2026-10-07
 includes two expected deadline recoveries across two controls runs and two
 timer wraps per long run. The owner noticed no obvious problem during casual
 listening, but could not distinguish left/right on the TV and did not monitor
-continuity. Targeted audible verification and exact timer/audio endpoint
-calibration remain open; controlled command/job work can proceed meanwhile.
+continuity. The later [paired calibration and command run](evidence/cdda-calibration-commands-hardware-2026-10-07.md)
+completed successfully and sounded successful to the owner. Matched endpoint
+data now replaces the rounded-loop comparison. Absolute pitch and targeted
+channel-order/continuity verification remain open.
 Focused sanitizer
 checks cover raw conversion, both byte orders, offsets, sector/cache boundaries,
 2448-byte subchannel stripping, transactional I/O, seeks/EOF, ring deadlines and
@@ -146,6 +150,32 @@ seconds of audio. Worst complete data job was 32.959 ms; worst verified-job
 completion gap was 151.441 ms. This workload uses two independent file cursors
 on one serialized SCI lease. Randomized game-sized jobs, cancellation/retry
 semantics, fragmented layouts and actual game command latency remain open.
+Profile 05 subsequently passed its controlled command model: 48 accepted
+commands, 27 actions, 12 STATUS checks, two expected invalid/state refusals
+and four stale-token refusals. Those checks cancel staged model actions;
+they do not demonstrate cancellation of an active card or retail DMA job.
+
+**Next controlled profile, planned:** a three-minute mixed workload using
+the existing generated `stereo.raw` and `stress.bin`. Vary logical data
+requests from one byte to 32 KiB, including unaligned offsets, backward seeks,
+sector boundaries and EOF. Split requests into at most 2 KiB physical reads
+and return to audio service between chunks. Give refill work priority and
+retain the measured read/verification admission budget.
+
+Add one cooperative pending-data-job record with unique job/session tokens.
+Cancel before dispatch, between completed chunks and before committing a
+completion. Check tokens before any read or result commit; stale work must
+perform no further reads or alter the current audio session. Exercise audio
+seek, pause/status/resume and stop/restart while data work is queued or partly
+complete. Cancellation occurs between synchronous operations, without a
+claim that an active SCI transfer was interrupted.
+
+Require every request-size class, at least one verified 8 MiB pass, sustained
+data progress, correct played status, the expected cancellation counts and
+zero unexpected failures. Host models must inject slow reads, I/O errors and
+bad data and verify stopped audio before further publication. Build and audit
+the binary before requesting this test; no new user uploads or repeat soak
+runs are needed to prepare it.
 
 Give game data and audio separate cursors/jobs but a single owner of the SCI
 bus, card stream and receive buffers. Switch only after a complete checked
@@ -231,17 +261,17 @@ candidate reader.
 
 ## First steps and ownership
 
-**Agent next:** review the console results from profiles 04 and 05, which
-implement matched timer/audio diagnostics and controlled command semantics.
-Preserve the successful earlier checkpoint while expanding audio/data
-arbitration. Establish periodic service and resource admission before
+**Agent next:** use the matched endpoint evidence and pinned clock contract to
+correct timer conversions in a separately identified experimental build,
+preserving the tested checkpoint and leaving playback pitch unchanged. Then
+add bounded, variable-size data jobs with cancellation and independent byte
+checks under continuous audio. Establish periodic service and resource admission before
 Toy Commander retail integration. The classifier, standalone engine, controls,
 soak/stress fixtures and memory audit are implemented and numerically tested.
 
-**User next:** run [04 calibration and 05 commands](cdda-calibration-commands-test.md)
-in order and photograph their final screens, then restore the preserved 1.8.5
-runtime. Each test uses the existing generated stereo fixture; neither needs
-another game track. A later brief
+**User next:** profiles 04 and 05 are complete; restore the preserved 1.8.5
+runtime while the next experimental build is prepared. No repeat is requested
+for these successful tests. A later brief
 stereo/control check can confirm channel order and silence; no additional
 routine soak is requested now. The [test checklist](cdda-next-test.md) remains available
 for reproducing the earlier successful results. No routine soak repetition
