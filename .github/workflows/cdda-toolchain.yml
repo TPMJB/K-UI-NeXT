@@ -78,11 +78,19 @@ jobs:
           toolchain.mkdir(parents=True, exist_ok=True)
           # Headers, compiler passes, binutils and all libgcc multilib variants.
           # No KOS build, target libc, application or CDDA payload is included.
+          def external_links(directory, names):
+              ignored = []
+              for name in names:
+                  path = Path(directory) / name
+                  if path.is_symlink() and (not path.exists() or
+                          not path.resolve().is_relative_to(prefix.resolve())):
+                      ignored.append(name)
+              return ignored
           for relative in ('bin', 'libexec/gcc', 'lib/gcc', 'sh-elf/bin', 'sh-elf/include'):
               source = prefix / relative
               if source.exists():
                   shutil.copytree(source, toolchain / relative, symlinks=False,
-                                  ignore_dangling_symlinks=True, dirs_exist_ok=True)
+                                  ignore=external_links, dirs_exist_ok=True)
           compiler = toolchain / 'bin/sh-elf-gcc'
           expected = json.loads((root / 'dependencies.json').read_text())['toolchain']['gcc']
           actual = subprocess.check_output([str(compiler), '-dumpfullversion'], text=True).strip()
