@@ -163,6 +163,20 @@ build/test-sci-sd-bus: tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loade
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $@
 
+.PHONY: test-sci-read-compare
+test-sci-read-compare: build/test-sci-read-pio build/test-sci-read-dma build/test-retail-observe-fault
+	./build/test-sci-read-pio
+	./build/test-sci-read-dma
+	./build/test-retail-observe-fault
+
+build/test-sci-read-pio: tests/test_sci_sd_read_compare.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -DKUI_SCI_SD_PIO_ONLY=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_read_compare.c -o $@
+
+build/test-sci-read-dma: tests/test_sci_sd_read_compare.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -DKUI_SCI_SD_PIO_ONLY=0 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_read_compare.c -o $@
+
 build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage.c src/loader/retail_storage.h src/loader/retail_storage_impl.h src/loader/sci_sd_bus.h include/kui/ata.h include/kui/storage.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/loader/retail_storage.c tests/test_retail_storage.c -o $@

@@ -100,9 +100,11 @@ void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out) { if(out) *out = stats; 
 void kui_sci_sd_profile_timer(uint64_t (*now_us)(void *), void *ctx) {
     profile_clock = now_us; profile_context = ctx;
 }
+#if !KUI_SCI_SD_PIO_ONLY
 static uint64_t profile_time(void) {
     return profile_clock ? profile_clock(profile_context) : 0;
 }
+#endif
 #else
 #define COUNT(field) ((void)0)
 #endif
@@ -240,6 +242,7 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
 }
 
 #ifndef KUI_SCI_SD_NO_BLOCK
+#if !KUI_SCI_SD_PIO_ONLY
 static uint32_t mask_interrupts(void) {
 #ifdef KUI_SCI_SD_TEST
     return kui_sci_sd_test_irq_disable();
@@ -429,6 +432,7 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     if(ok && crc_out) *crc_out = crc;
     return ok;
 }
+#endif /* PIO comparison keeps the existing bounded block callback below. */
 
 static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
                            size_t count, bool slow, uint16_t *crc_out) {
@@ -441,10 +445,12 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
     if(!count || count > 512 || (!tx && !rx) || !port.acquired || port.fault)
         return false;
     if(!prepare(slow)) return false;
+#if !KUI_SCI_SD_PIO_ONLY
     if(!slow && count == 512 && (!tx || !rx)) {
         int result = dma_block(tx, rx, crc_out);
         if(result >= 0) return result != 0;
     }
+#endif
     COUNT(polled_blocks);
     /* One byte in flight, so interrupt latency cannot overrun a second
      * receive. Commands and short/unaligned payloads need no DMAC ownership.

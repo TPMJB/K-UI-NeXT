@@ -3,6 +3,15 @@
 #include "kui/retail_observe.h"
 static struct kui_retail_observe observe;
 static uint32_t observe_words[11];
+#if KUI_RETAIL_READ_COMPARE
+#if KUI_SCI_SD_PIO_ONLY
+#define OBSERVE_TITLE "PROFILE14 PIO /"
+#else
+#define OBSERVE_TITLE "PROFILE14 DMA /"
+#endif
+#else
+#define OBSERVE_TITLE "PROFILE14 OBSERVE /"
+#endif
 #ifdef KUI_RETAIL_OBSERVE_HOST_TEST
 extern uint32_t kui_retail_observe_host_read(uint32_t,unsigned);
 extern uint32_t kui_retail_observe_host_cpu(unsigned);
@@ -95,7 +104,7 @@ static void observe_values(const char *legend,const observe_word *values,unsigne
 static void observe_pair_page(const uint32_t *first,unsigned count,unsigned group) {
     const uint32_t *last=first+count;
     observe_words[0]=last[count];observe_words[1]=observe.samples[group];
-    retail_display_line("PROFILE14 OBSERVE /");
+    retail_display_line(OBSERVE_TITLE);
     while(count) {
         unsigned n=count;if(n>5u) n=5u;
         observe_values("F",first,n);observe_values("L",last,n);
@@ -107,7 +116,7 @@ static inline __attribute__((always_inline)) void observe_next_page(void) {
     retail_display_pause(1200u);retail_display_restore(&display);
 }
 static void observe_report(void) {
-    retail_display_line("PROFILE14 OBSERVE /");
+    retail_display_line(OBSERVE_TITLE);
     observe_words[0]=observe.calls;observe_words[1]=observe.play[0];observe_words[2]=observe.play[1];
     observe_words[3]=kui_retail_hook_fault;
 #if KUI_RETAIL_OBSERVE_AUDIO
@@ -135,7 +144,7 @@ static void observe_report(void) {
 #if KUI_RETAIL_OBSERVE_AUDIO
     observe_pair_page(observe.audio_words,8u,KUI_OBSERVE_AICA);observe_values("DMA F L OR CHG",observe.dma_words,4);
 #else
-    retail_display_line("PROFILE14 OBSERVE /");retail_display_line("AUDIO NOT SAMPLED");
+    retail_display_line(OBSERVE_TITLE);retail_display_line("AUDIO NOT SAMPLED");
 #endif
 }
 static void observe_fault_report(const char *reason,uint32_t function,uint32_t param) {

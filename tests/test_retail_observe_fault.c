@@ -19,7 +19,7 @@ static enum kui_game_result image_result;
 static enum kui_loader_sd_result card_result,observe_read_card_result,observe_stop_result;
 static uint32_t observe_read_lba,observe_read_count,observe_card_lba;
 static uint32_t guards[4],expected[21];
-static unsigned restores,pauses,rows,next_row,guard_reads,audio_labels;
+static unsigned restores,pauses,rows,next_row,guard_reads,audio_labels,variant_titles;
 static bool value_pending;
 static const char *const legends[]={"FN ARG FLAG G BAD","CMD LBA N BPS",
     "IO LBA N DONE STEP","IMG PRE STOP SD","DST BLK ERR CARD"};
@@ -59,6 +59,7 @@ void retail_display_line(const char *line) {
     }
     if(next_row<5u && !strcmp(line,legends[next_row])) value_pending=true;
     if(!strcmp(line,"AUDIO NOT SAMPLED")) audio_labels++;
+    if(!strcmp(line,OBSERVE_TITLE)) variant_titles++;
 }
 
 static void fault_case(unsigned kind) {
@@ -82,9 +83,10 @@ static void fault_case(unsigned kind) {
     expected[13]=(uint32_t)image_result;expected[14]=(uint32_t)observe_read_card_result;
     expected[15]=(uint32_t)observe_stop_result;expected[16]=(uint32_t)card_result;
     expected[17]=0x8c500000u;expected[18]=117u;expected[19]=KUI_GD_ERROR_IO;expected[20]=observe_card_lba;
-    restores=pauses=rows=next_row=guard_reads=audio_labels=0u;value_pending=false;
+    restores=pauses=rows=next_row=guard_reads=audio_labels=variant_titles=0u;value_pending=false;
     observe_fault_report("IMAGE READ FAILED",KUI_GD_EXEC,0u);
     assert(!value_pending && rows==5u && restores==5u && pauses==4u && guard_reads==4u && audio_labels==2u);
+    assert(variant_titles==4u);
     assert(!memcmp(image.block+64u,expected,sizeof(expected)));
     for(unsigned i=148u;i<sizeof(image.block);i++) assert(image.block[i]==0x5au);
 }

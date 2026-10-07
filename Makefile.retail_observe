@@ -5,9 +5,11 @@ OBJCOPY = sh-elf-objcopy
 BUILD ?= build/retail-observe
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
 OBSERVE_AUDIO ?= 0
+SCI_PIO ?= 0
+SCI_COMPARE ?= 0
 CPU = -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
 FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) -DKUI_RETAIL_FAST_IO=1 \
- -DKUI_RETAIL_OBSERVE=1 -DKUI_RETAIL_OBSERVE_AUDIO=$(OBSERVE_AUDIO) -DKUI_RETAIL_LOW_RESIDENT=1 -DKUI_RETAIL_STARTUP_TRACE=0 \
+ -DKUI_RETAIL_OBSERVE=1 -DKUI_RETAIL_OBSERVE_AUDIO=$(OBSERVE_AUDIO) -DKUI_RETAIL_READ_COMPARE=$(SCI_COMPARE) -DKUI_SCI_SD_PIO_ONLY=$(SCI_PIO) -DKUI_RETAIL_LOW_RESIDENT=1 -DKUI_RETAIL_STARTUP_TRACE=0 \
  -DKUI_RETAIL_SONIC_STACK_TEST=0 -DKUI_ON_CONSOLE=1 -ffreestanding -fno-builtin \
  -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections -fno-jump-tables \
  -fstack-usage -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -30,7 +32,7 @@ resident: $(BUILD)/resident-sci.bin
 force-config:
 $(BUILD)/build-config: force-config
 	@mkdir -p $(@D)
-	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=14' 'LOW=1' 'SLOTS=64' 'SCI=1' 'AUDIO=$(OBSERVE_AUDIO)' 'OPT=$(RESIDENT_OPT)' > $@.new
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=14' 'LOW=1' 'SLOTS=64' 'SCI=1' 'AUDIO=$(OBSERVE_AUDIO)' 'SCI_COMPARE=$(SCI_COMPARE)' 'SCI_PIO=$(SCI_PIO)' 'SCI_OBSERVE=0' 'STAGE_SCI_OBSERVE=0' 'OPT=$(RESIDENT_OPT)' > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
 $(BUILD)/sci/%.o: %.c
