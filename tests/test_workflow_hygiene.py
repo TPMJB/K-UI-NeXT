@@ -257,6 +257,20 @@ class ReleasePublicationWorkflow(unittest.TestCase):
         for check in ("test_publish_release.py", "test_package_candidate.py", "test_splash_assets.py"):
             self.assertIn(check, script)
 
+    def test_splash_checker_fatfs_headers_are_prepared_before_any_release_scope_consumes_them(self):
+        text = WORKFLOW.read_text()
+        restore = text.index("      - name: Restore pinned FatFs downloads\n")
+        fetch = text.index("      - name: Fetch verified FatFs sources\n")
+        release = text.index("      - name: Check release publication, installation and splash\n")
+        self.assertLess(restore, fetch)
+        self.assertLess(fetch, release)
+        for name in ("Restore pinned FatFs downloads", "Fetch verified FatFs sources"):
+            lines = text[text.index("      - name: " + name + "\n"):].splitlines()
+            self.assertEqual(lines[1].strip(),
+                             "if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true'")
+        self.assertIn("python3 tools/fetch_deps.py --fatfs-only", text[fetch:release])
+        self.assertIn("make build/music-asset-check", step_script("name: Check release publication, installation and splash"))
+
     def test_release_scope_does_not_admit_driver_changes(self):
         result, output = GamesVariantValidationScope().run_scope("src/loader/retail_sd.c", "release-only")
         self.assertNotEqual(result.returncode, 0)

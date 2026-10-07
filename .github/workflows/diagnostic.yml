@@ -208,14 +208,6 @@ jobs:
               out.write('games_formats=' + str(formats).lower() + '\n')
               out.write('release_only=' + str(candidate).lower() + '\n')
           PY
-      - name: Check release publication, installation and splash
-        if: >-
-          steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')
-        run: |
-          python3 tests/test_publish_release.py
-          python3 tests/test_package_candidate.py
-          make build/music-asset-check
-          python3 tests/test_splash_assets.py
       - name: Check Sonic caller-stack capture
         if: env.KUI_RETAIL_SONIC_STACK_TEST == '1' || env.KUI_RETAIL_LOW_RESIDENT == '1'
         run: python3 tests/test_sonic_caller_stack.py
@@ -239,14 +231,22 @@ jobs:
           KUI_REQUIRE_WORKFLOW_YAML: '1'
         run: /usr/bin/python3 tests/test_workflow_hygiene.py
       - name: Restore pinned FatFs downloads
-        if: steps.scope.outputs.console_only != 'true'
+        if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .deps/downloads
           key: fatfs-downloads-v1-${{ hashFiles('dependencies.json') }}
       - name: Fetch verified FatFs sources
-        if: steps.scope.outputs.console_only != 'true'
+        if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true'
         run: python3 tools/fetch_deps.py --fatfs-only
+      - name: Check release publication, installation and splash
+        if: >-
+          steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')
+        run: |
+          python3 tests/test_publish_release.py
+          python3 tests/test_package_candidate.py
+          make build/music-asset-check
+          python3 tests/test_splash_assets.py
       - name: Run portable and real filesystem checks
         if: steps.scope.outputs.console_only != 'true' && steps.scope.outputs.games_formats != 'true'
         run: make test test-images
