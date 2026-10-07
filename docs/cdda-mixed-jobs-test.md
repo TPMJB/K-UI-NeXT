@@ -4,8 +4,10 @@ Run **profile 06 mixed jobs** once and photograph its final screen. It is one
 automatic test lasting about three minutes plus initialization. Profiles 00–05
 already passed their requested numerical checks; no earlier profile or
 15-minute run needs repeating. The [previous short-profile results](evidence/cdda-calibration-commands-hardware-2026-10-07.md)
-remain the tested checkpoint. This new profile is prepared and untested on the
-console until you run it.
+remain separate tested checkpoints. Profile 06 subsequently
+[passed its numerical console checks](evidence/cdda-mixed-jobs-hardware-2026-10-07.md)
+on 2026-10-07 with build `6ec63f97aa0a`. No repeat is needed for that result;
+these instructions remain the reproduction checklist.
 
 The program combines generated audio playback, checked data reads, command
 changes and controlled job cancellation in the detached SCI homebrew harness.
@@ -118,8 +120,9 @@ The generated inputs are unchanged:
 Use `build.json`, `source-url.txt` and `SHA256SUMS` for the exact published source,
 runtime and input identities. The package includes the committed source
 snapshot, exact private FatFs inputs, ELF/map/stack reports, provenance and
-licenses. Host checks establish the implemented model and bounds; they do not
-replace this new console run or admit retail CDDA.
+licenses. Host checks establish the implemented model and bounds. The
+[console result](evidence/cdda-mixed-jobs-hardware-2026-10-07.md) records the
+subsequent tested run; neither evidence set admits retail CDDA.
 
 With the SH-4 toolchain on `PATH` and pinned FatFs sources available, rebuild
 from the published checkout using:

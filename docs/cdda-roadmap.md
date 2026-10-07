@@ -5,9 +5,11 @@ Status: the detached SCI/AICA harness passed its baseline, two controls runs,
 Profiles 04 and 05 also passed their matched clock and controlled-command
 console checks with zero reported failures. Their
 [hardware record](evidence/cdda-calibration-commands-hardware-2026-10-07.md)
-contains the exact endpoints and command counters. The next isolated
-[mixed-jobs test](cdda-mixed-jobs-test.md) is implemented and host-validated;
-its console result is pending. Its timer conversion uses the pinned KOS
+contains the exact endpoints and command counters. The isolated
+[mixed-jobs test](cdda-mixed-jobs-test.md) also
+[passed profile 06 on console](evidence/cdda-mixed-jobs-hardware-2026-10-07.md):
+seven stages, all eight request sizes and zero reported errors or failures.
+Its timer conversion uses the pinned KOS
 12,468,720 Hz TMU reference without changing AICA pitch. Absolute clock/pitch
 measurement, targeted stereo listening, broader job arbitration and retail
 resource/command integration remain open.
@@ -150,14 +152,15 @@ The same hardware record reports 300,892,160 independently verified data
 bytes, 35 complete 8 MiB passes and zero read/check errors during 900 clock
 seconds of audio. Worst complete data job was 32.959 ms; worst verified-job
 completion gap was 151.441 ms. This workload uses two independent file cursors
-on one serialized SCI lease. Randomized game-sized jobs, cancellation/retry
-semantics, fragmented layouts and actual game command latency remain open.
+on one serialized SCI lease. Broader game-job arbitration, active-transfer
+cancellation/retry policy, fragmented layouts and actual game command latency
+remain open.
 Profile 05 subsequently passed its controlled command model: 48 accepted
 commands, 27 actions, 12 STATUS checks, two expected invalid/state refusals
 and four stale-token refusals. Those checks cancel staged model actions;
 they do not demonstrate cancellation of an active card or retail DMA job.
 
-**Next controlled profile, implemented; console test pending:** a three-minute mixed workload using
+**Mixed-job profile implemented and numerically passed on console:** a three-minute workload using
 the existing generated `stereo.raw` and `stress.bin`. Vary logical data
 requests across eight sizes: 1, 31, 511, 512, 513, 2,048, 4,096 and 32,768
 bytes, including unaligned offsets, backward seeks, sector boundaries and
@@ -182,10 +185,20 @@ failures. Host models verify the actual harness with an independent data-job
 ledger, slow reads, I/O errors, bad data and deadline faults; injected failures
 stop audio before further writes. The console binary has a separate
 [memory and instruction audit](evidence/cdda-mixed-jobs-memory-2026-10-07.md).
-Run profile 06 using the
-[mixed-test checklist](cdda-mixed-jobs-test.md); no new user uploads or repeat
-soak runs are needed. These are cooperative cancellation tests between
+The [profile 06 hardware record](evidence/cdda-mixed-jobs-hardware-2026-10-07.md)
+reports 47,709,024 checked bytes, 7,772 completed jobs, at least 971 completions
+per size, 110.702 ms minimum refill margin and zero errors/failures over
+180 documented-clock seconds. All expected command/cancellation counters
+match. Retain the [mixed-test checklist](cdda-mixed-jobs-test.md) for
+reproduction; no repeat run is required. These are cooperative cancellation tests between
 synchronous reads, not cancellation of an active card transfer.
+
+**Next implementation:** define the distinct CDDA package/handoff and owned
+periodic-service contracts in Gate 5. Use a controlled homebrew handoff before
+retail resource admission; preserve the tested engine and ordinary readers.
+Fragmented layouts, retry policy and latency under actual retail scheduling
+remain separate evidence gaps, rather than reasons to repeat this same
+passing numerical workload.
 
 Give game data and audio separate cursors/jobs but a single owner of the SCI
 bus, card stream and receive buffers. Switch only after a complete checked
