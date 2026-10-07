@@ -416,12 +416,39 @@ candidate is actually being prepared for release.
   bandwidth in a later design, but are lossy and require explicit metadata,
   sample/LBA mapping and original raw-track retention. They are not required
   to prove accurate raw CDDA first.
-- SWAT's mature code is valuable reference and a possible credited reuse
-  input after exact license/provenance review. It depends on DreamShell
-  allocator, filesystem, exception/timer and global GD state, so importing
-  `cdda.c` alone is not a drop-in implementation. K-UI's main source is
-  GPL-3.0-only; the MIT Wi-Fi component is a separate project boundary.
-  No upstream code was copied into runtime source for this design.
+
+## Independent implementation and licensing boundary
+
+K-UI must remain its own implementation. Do not import, port, or closely
+translate DreamShell source or binaries into this reader. Renaming functions
+or adding attribution does not make an upstream implementation independent
+or change its license. This also excludes porting DreamShell's allocator
+discovery signatures, adaptive channel-selection algorithms, timer/exception
+machinery, or refill state machine. Similar hardware requirements must be
+implemented from independently documented contracts and K-UI's own design.
+
+At the inspected DreamShell revision
+`4a2b898cbc244b2fb9bd1698b45e5325056232fb`, its README explicitly includes ISO
+Loader under the [PolyForm Noncommercial License 1.0.0](https://github.com/DC-SWAT/DreamShell/blob/4a2b898cbc244b2fb9bd1698b45e5325056232fb/LICENSE).
+The [NOTICE](https://github.com/DC-SWAT/DreamShell/blob/4a2b898cbc244b2fb9bd1698b45e5325056232fb/NOTICE)
+identifies SWAT and a separate commercial-licensing contact. These terms are
+not GPL-3.0-only and must not be replaced by K-UI's license. Earlier wording
+in this design suggesting possible credited code reuse was too broad and is
+withdrawn. This project will implement the feature independently.
+
+Use primary hardware/BIOS documentation, independently licensed KallistiOS
+interfaces, and K-UI's existing code as implementation inputs. Verify exact
+file licenses and preserve required notices for any permitted third-party
+code, following [K-UI's provenance policy](../THIRD_PARTY.md). K-UI's main
+source remains GPL-3.0-only; its MIT Wi-Fi component is a separate boundary.
+
+This research was source-aware: DreamShell implementations were inspected
+to understand practical problems and are cited below. It is not a formal
+clean-room process, and those references must not be presented as evidence
+of independent authorship. No DreamShell code was added to runtime source
+for this design. Subsequent work must record implementation provenance and
+review it before distributing a reader; a feature working on hardware does
+not by itself establish compliance.
 
 ## Research evidence
 
