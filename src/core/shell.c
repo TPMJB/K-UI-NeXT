@@ -518,7 +518,7 @@ static enum kui_shell_action files_keyboard(struct kui_shell *s,enum kui_files_o
         s->keyboard[0]=0;
     }
     memcpy(s->keyboard_original,s->keyboard,sizeof(s->keyboard_original));
-    s->keyboard_selected=0;s->keyboard_upper=false;s->destination_notice[0]=0;
+    s->keyboard_selected=0;s->keyboard_layer=KUI_SHELL_KEYS_LOWER;s->destination_notice[0]=0;
     s->files_keyboard=true;s->page=KUI_SHELL_KEYBOARD;
     return KUI_SHELL_NONE;
 }
@@ -756,24 +756,16 @@ void kui_shell_set_storage_test_history(struct kui_shell *s,const struct kui_sto
         s->storage_test_last_valid=true;
     }
 }
-static enum kui_shell_action keyboard_done(struct kui_shell *s) {
-    if(s->storage_test_keyboard) {
-        snprintf(s->storage_test_request.card_label,sizeof(s->storage_test_request.card_label),
-            "%.23s",s->keyboard);
-        s->storage_test_keyboard=false;s->page=KUI_SHELL_STORAGE_TESTS;
-        s->destination_notice[0]=0;
-        return KUI_SHELL_NONE;
-    }
-    return s->files_keyboard?files_name_done(s):save_destination(s,s->keyboard);
-}
-const char *kui_shell_key_label(unsigned key, bool uppercase) {
+/* Every other printable ASCII character, for Wi-Fi passwords above all. */
+static const char symbol_keys[]="!@#$%^&*()~`=+[]{}<>\\|;:'\",.?/0123456789";
+const char *kui_shell_key_label(unsigned key, unsigned layer) {
     static char character[2];
     if(key>=KUI_SHELL_KEY_COUNT) return "";
     if(key==40) return "SPACE";
     if(key==41) return "BACK";
     if(key==42) return "DONE";
-    char c=keyboard_keys[key];
-    character[0]=uppercase && c>='a' && c<='z' ? (char)(c-'a'+'A') : c;
+    char c=layer==KUI_SHELL_KEYS_SYMBOLS?symbol_keys[key]:keyboard_keys[key];
+    character[0]=layer==KUI_SHELL_KEYS_UPPER && c>='a' && c<='z' ? (char)(c-'a'+'A') : c;
     character[1]=0;
     return character;
 }
@@ -803,22 +795,122 @@ static unsigned keyboard_move(unsigned key,unsigned buttons) {
     }
     return row==4?40+col:row*10+col;
 }
+/* ---- Wi-Fi page ---- */
+unsigned kui_shell_wifi_rows(const struct kui_shell *s) {
+    return s ? 2u+(s->wifi.count<KUI_WIFI_NETWORKS?s->wifi.count:KUI_WIFI_NETWORKS) : 0;
+}
+void kui_shell_set_wifi(struct kui_shell *s,const struct kui_wifi_view *view) {
+    if(!s || !view) return;
+    struct kui_wifi_view next=*view;
+    next.message[sizeof(next.message)-1]=0;next.board[sizeof(next.board)-1]=0;
+    next.wifi.ssid[sizeof(next.wifi.ssid)-1]=0;
+    /* A job that has only just started has not found the board yet: what
+     * is shown stays until it has. */
+    if(next.working && !next.found && s->wifi.found) {
+        memcpy(next.board,s->wifi.board,sizeof(next.board));next.wifi=s->wifi.wifi;next.found=true;
+    }
+    if(!next.scanned && s->wifi.scanned && next.found) {
+        memcpy(next.networks,s->wifi.networks,sizeof(next.networks));
+        next.count=s->wifi.count;next.scanned=true;
+    }
+    if(next.count>KUI_WIFI_NETWORKS) next.count=KUI_WIFI_NETWORKS;
+    for(unsigned i=0;i<next.count;i++) next.networks[i].ssid[sizeof(next.networks[i].ssid)-1]=0;
+    s->wifi=next;
+    if(s->wifi_selected>=kui_shell_wifi_rows(s)) s->wifi_selected=0;
+}
+static void wifi_keyboard(struct kui_shell *s,bool name) {
+    s->keyboard[0]=s->keyboard_original[0]=0;
+    s->keyboard_selected=0;s->keyboard_layer=KUI_SHELL_KEYS_LOWER;s->destination_notice[0]=0;
+    s->wifi_keyboard=true;s->wifi_typing_name=name;s->page=KUI_SHELL_KEYBOARD;
+}
+static void wifi_keyboard_close(struct kui_shell *s) {
+    memset(s->keyboard,0,sizeof(s->keyboard));
+    s->wifi_keyboard=s->wifi_typing_name=false;s->destination_notice[0]=0;s->page=KUI_SHELL_WIFI;
+}
+static enum kui_shell_action wifi_join(struct kui_shell *s,const char *password) {
+    s->wifi_request.action=KUI_WIFI_JOIN;s->wifi_request.band=KWM_BAND_KEEP;
+    snprintf(s->wifi_request.password,sizeof(s->wifi_request.password),"%.64s",password);
+    return KUI_SHELL_WIFI_JOIN;
+}
+static enum kui_shell_action wifi_name_done(struct kui_shell *s) {
+    size_t n=strlen(s->keyboard);
+    if(s->wifi_typing_name) {
+        if(!n) {kui_shell_destination_error(s,"Type the network's name first.");return KUI_SHELL_NONE;}
+        snprintf(s->wifi_request.ssid,sizeof(s->wifi_request.ssid),"%.32s",s->keyboard);
+        s->wifi_typing_name=false;s->keyboard[0]=0;s->keyboard_selected=0;s->destination_notice[0]=0;
+        return KUI_SHELL_NONE;
+    }
+    /* A network known to be secured needs its password: 8 to 63
+     * characters, or 64 hex digits. One typed by name may be open. */
+    bool required=s->wifi_security && s->wifi_security!=0xffu;
+    if((required || n) && (n<8 || n>KWM_PASSWORD_MAX)) {
+        kui_shell_destination_error(s,"A Wi-Fi password has 8 to 63 characters.");
+        return KUI_SHELL_NONE;
+    }
+    enum kui_shell_action action=wifi_join(s,s->keyboard);
+    wifi_keyboard_close(s);
+    return action;
+}
+static enum kui_shell_action wifi_input(struct kui_shell *s,unsigned buttons) {
+    unsigned rows=kui_shell_wifi_rows(s);
+    s->wifi_selected=move_count(s->wifi_selected,buttons,rows);
+    if(buttons&KUI_SHELL_X) return KUI_SHELL_WIFI_REFRESH;
+    if(!s->wifi.found) return KUI_SHELL_NONE;
+    unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+    if(!s->wifi_selected && (horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)) {
+        /* Both bands, 5 GHz only, 2.4 GHz only, and round again. */
+        static const uint8_t order[3]={KWM_BAND_BOTH,KWM_BAND_5,KWM_BAND_24};
+        unsigned at=0;
+        while(at<3 && order[at]!=s->wifi.wifi.band_mode) ++at;
+        at=((at<3?at:0)+(horizontal==KUI_SHELL_LEFT?2u:1u))%3u;
+        s->wifi_request.action=KUI_WIFI_BAND;s->wifi_request.band=order[at];s->wifi_request.password[0]=0;
+        return KUI_SHELL_WIFI_BAND;
+    }
+    if(buttons&KUI_SHELL_Y) {
+        s->confirm_wifi_forget=s->wifi.wifi.saved || s->wifi.wifi.ssid[0];
+        return KUI_SHELL_NONE;
+    }
+    if(!(buttons&KUI_SHELL_A) || !s->wifi_selected) return KUI_SHELL_NONE;
+    if(s->wifi_selected==rows-1) {
+        s->wifi_request.ssid[0]=0;s->wifi_security=0xffu;
+        wifi_keyboard(s,true);
+        return KUI_SHELL_NONE;
+    }
+    const struct kui_wifi_network *n=&s->wifi.networks[s->wifi_selected-1];
+    snprintf(s->wifi_request.ssid,sizeof(s->wifi_request.ssid),"%s",n->ssid);
+    s->wifi_security=n->security;
+    if(!n->security) return wifi_join(s,"");
+    wifi_keyboard(s,false);
+    return KUI_SHELL_NONE;
+}
+static enum kui_shell_action keyboard_done(struct kui_shell *s) {
+    if(s->wifi_keyboard) return wifi_name_done(s);
+    if(s->storage_test_keyboard) {
+        snprintf(s->storage_test_request.card_label,sizeof(s->storage_test_request.card_label),
+            "%.23s",s->keyboard);
+        s->storage_test_keyboard=false;s->page=KUI_SHELL_STORAGE_TESTS;
+        s->destination_notice[0]=0;
+        return KUI_SHELL_NONE;
+    }
+    return s->files_keyboard?files_name_done(s):save_destination(s,s->keyboard);
+}
 static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons) {
     s->keyboard_selected=keyboard_move(s->keyboard_selected,buttons);
     if(buttons&KUI_SHELL_X) keyboard_backspace(s);
-    else if(buttons&KUI_SHELL_Y) s->keyboard_upper=!s->keyboard_upper;
+    else if(buttons&KUI_SHELL_Y) s->keyboard_layer=(s->keyboard_layer+1u)%KUI_SHELL_KEY_LAYERS;
     else if(buttons&KUI_SHELL_START) return keyboard_done(s);
     else if(buttons&KUI_SHELL_A) {
         if(s->keyboard_selected==42) return keyboard_done(s);
         if(s->keyboard_selected==41) keyboard_backspace(s);
         else {
             size_t n=strlen(s->keyboard);
-            size_t limit=s->storage_test_keyboard?sizeof(s->storage_test_request.card_label):sizeof(s->keyboard);
-            if(n+1<limit) {
+            size_t cap=s->storage_test_keyboard?sizeof(s->storage_test_request.card_label)-1:!s->wifi_keyboard?sizeof(s->keyboard)-1:s->wifi_typing_name?KWM_SSID_MAX:KWM_PASSWORD_MAX;
+            if(n<cap) {
                 s->keyboard[n]=s->keyboard_selected==40?' ':
-                    *kui_shell_key_label(s->keyboard_selected,s->keyboard_upper);
+                    *kui_shell_key_label(s->keyboard_selected,s->keyboard_layer);
                 s->keyboard[n+1]=0; s->destination_notice[0]=0;
-            } else kui_shell_destination_error(s,s->storage_test_keyboard?"Card labels allow 23 characters.":
+            } else kui_shell_destination_error(s,s->storage_test_keyboard?"Card labels allow 23 characters.":s->wifi_keyboard?(s->wifi_typing_name?
+                "A network name has at most 32 characters.":"A Wi-Fi password has at most 64 characters."):
                 s->files_keyboard?"This name is too long.":"This folder path is too long.");
         }
     }
@@ -882,6 +974,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->confirm_new=false; s->confirm_quick_resume=false; s->confirm_gd_boot=false;
             s->confirm_clock=false;s->confirm_defaults=false;s->confirm_vmu_restore=false;
             s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_music_clear=false;s->confirm_restart=false;s->confirm_salvage=false;
+            s->confirm_wifi_forget=false;
             return KUI_SHELL_STOP;
         }
         if(s->confirm_storage_test) {s->confirm_storage_test=false;return KUI_SHELL_NONE;}
@@ -908,6 +1001,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->confirm_restart) {s->confirm_restart=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_SYSTEM_TOOLS) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_FTP) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
+        if(s->confirm_wifi_forget) {s->confirm_wifi_forget=false;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_WIFI) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_KEYBOARD && s->wifi_keyboard) {wifi_keyboard_close(s);return KUI_SHELL_NONE;}
         if(s->confirm_vmu_delete) {s->confirm_vmu_delete=false;return KUI_SHELL_NONE;}
         if(s->confirm_vmu_copy) {s->confirm_vmu_copy=false;return KUI_SHELL_NONE;}
         if(s->confirm_music_clear) {s->confirm_music_clear=false;return KUI_SHELL_NONE;}
@@ -1027,7 +1123,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
-        s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        s->confirm_wifi_forget || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_GAMES_VARIANTS || s->page==KUI_SHELL_FILES_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
         unsigned triggers=buttons & (KUI_SHELL_L|KUI_SHELL_R);
@@ -1053,6 +1149,14 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     if(s->confirm_restart) {
         if(buttons&KUI_SHELL_A) {s->confirm_restart=false;return KUI_SHELL_RESTART;}
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_wifi_forget) {
+        if(buttons&KUI_SHELL_A) {
+            s->confirm_wifi_forget=false;
+            s->wifi_request.action=KUI_WIFI_FORGET;s->wifi_request.password[0]=0;
+            return KUI_SHELL_WIFI_FORGET;
+        }
         return KUI_SHELL_NONE;
     }
     if(s->confirm_vmu_delete) {
@@ -1315,7 +1419,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         } else if((buttons & KUI_SHELL_X) && !s->browse_for_scan) {
             snprintf(s->keyboard,sizeof(s->keyboard),"%s",s->browse_path);
             snprintf(s->keyboard_original,sizeof(s->keyboard_original),"%s",s->browse_path);
-            s->keyboard_selected=0; s->keyboard_upper=false;
+            s->keyboard_selected=0; s->keyboard_layer=KUI_SHELL_KEYS_LOWER;
             s->destination_notice[0]=0; s->page=KUI_SHELL_KEYBOARD;
         } else if(buttons & KUI_SHELL_Y) {
             if(s->browse_for_scan) {s->page=KUI_SHELL_CRC_SCAN;return KUI_SHELL_ADVANCED_CRC;}
@@ -1484,10 +1588,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_X) return KUI_SHELL_NETWORK_CONNECT;
         /* The FTP server starts as its page opens; B stops it there. */
         if(buttons&KUI_SHELL_Y) {s->page=KUI_SHELL_FTP;return KUI_SHELL_FTP_START;}
+        /* The Wi-Fi page looks for the board and networks as it opens. */
+        if(buttons&KUI_SHELL_START) {
+            s->page=KUI_SHELL_WIFI;s->wifi_selected=0;s->confirm_wifi_forget=false;
+            return KUI_SHELL_WIFI_REFRESH;
+        }
         break;
     case KUI_SHELL_FTP:
         if(buttons&KUI_SHELL_A) return KUI_SHELL_FTP_START;
         break;
+    case KUI_SHELL_WIFI:
+        return wifi_input(s,buttons);
     case KUI_SHELL_SALVAGE: {
         s->salvage_selected=move_count(s->salvage_selected,buttons,5);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
@@ -1600,7 +1711,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_A) switch(s->storage_test_selected) {
         case 3:
             s->storage_test_keyboard=true;s->files_keyboard=false;
-            s->keyboard_selected=0;s->keyboard_upper=false;
+            s->keyboard_selected=0;s->keyboard_layer=KUI_SHELL_KEYS_LOWER;
             snprintf(s->keyboard,sizeof(s->keyboard),"%s",s->storage_test_request.card_label);
             s->destination_notice[0]=0;s->page=KUI_SHELL_KEYBOARD;break;
         case 4: s->confirm_storage_test=true;break;

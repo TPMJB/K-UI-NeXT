@@ -226,5 +226,36 @@ class NativeLowResidentWorkflow(unittest.TestCase):
         for check in ("test_retail_low_resident.py", "test_retail_package.py", "test_workflow_hygiene.py"):
             self.assertIn(check, script)
 
+
+class ReleasePublicationWorkflow(unittest.TestCase):
+    def test_release_185_reuses_verified_build_without_second_native_compile(self):
+        diagnostic = WORKFLOW.read_text()
+        release = (ROOT / ".github/workflows/release.yml").read_text()
+        self.assertIn("'Release: v1.8.5'", diagnostic)
+        self.assertIn("'Release post: v1.8.5'", diagnostic)
+        self.assertIn("'Release: v1.8.5'", release)
+        self.assertIn("'Release post: v1.8.5'", release)
+        self.assertIn("python3 tools/publish_release.py", release)
+        self.assertNotIn("make ", release)
+
+    def test_release_scope_admits_versioned_artwork_and_runs_publication_checks(self):
+        for path in ("include/kui/version.h", "resources/branding/startup.png",
+                     "resources/branding/startup.json", "resources/branding/boot-red.png",
+                     "resources/branding/release-v1.8.5-banner.jpg",
+                     "tools/publish_release.py", "tests/test_publish_release.py", "tests/test_package_candidate.py"):
+            with self.subTest(path=path):
+                result, output = GamesVariantValidationScope().run_scope(path, "release-only")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("console_only=true", output)
+                self.assertIn("release_only=true", output)
+        script = step_script("name: Check release publication, installation and splash")
+        for check in ("test_publish_release.py", "test_package_candidate.py", "test_splash_assets.py"):
+            self.assertIn(check, script)
+
+    def test_release_scope_does_not_admit_driver_changes(self):
+        result, output = GamesVariantValidationScope().run_scope("src/loader/retail_sd.c", "release-only")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(output, "")
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,22 +1,31 @@
-# K-UI V1.7 "Dáinsleif"
+# K-UI V1.8.5 "Dáinsleif"
 
-An independent Dreamcast environment built directly on upstream KallistiOS.
+An independent Dreamcast shell built directly on upstream KallistiOS, retaining
+the original GD-ROM and using exFAT/FAT32 storage.
 
-**Version 1.7** brings Windows CE game booting on SCI microSD, background
-SCI reads, a graphical multi-transport bootstrap, hardware-tested W5500 FTP
-and a new crimson Dáinsleif splash. It also includes the isolated ATA PIO
-preparation for future IDE/CF testing. The ten-app environment combines game
-launching, verified GD-ROM capture, VMU management, music and system tools.
+**Version 1.8.5 fixes the native reader placement that blocked Sonic Adventure
+and Grandia II; the owner also reports Skies of Arcadia works.** Games adds
+GDI/ISO/BIN-CUE/CDI/raw-image support, an Original/2048 picker, RAM-cached lists
+and selected-title artwork. Disc Ripper adds BIN/CUE and verified CSO/ZSO/CHD
+exports. SCI Wi-Fi integration and separate ESP32-C5/C6 firmware are included.
+The splash identifies 1.8.5 and retains the Dáinsleif artwork.
 
-Download the [1.7 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.7),
-then read the [installation guide](docs/release-v1.7.md) and
-[release notes](docs/release-v1.7-notes.md). Windows CE support is experimental,
-SCI-only and title-dependent; FMV video/audio remain imperfect. The release
-restores the owner-selected 256-byte SCI allowance from `6f14bc529472`.
-ATA hardware is untested and uses synchronous PIO; ATA DMA and CE on IDE
-are future work. Existing exFAT cards and compatible boot CDs remain usable.
-Runtime ext4 support is not included; the bootstrap can read compatible ext4.
-The [1.5.1 notes](docs/release-v1.5.1-notes.md) remain available.
+Download the [1.8.5 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5),
+then read the [installation guide](docs/release-v1.8.5.md) and
+[release notes](docs/release-v1.8.5-notes.md). Install the runtime and complete
+Games payload folder together. Existing exFAT cards, game dumps and compatible
+independent K-UI boot CDs stay usable. DreamShell-based K-UI 1.0 requires the
+supplied new CDI. No reformat, reripping or 2048 conversion is required.
+
+Windows CE defaults to its background SCI reader and remains experimental;
+audio/FMVs and title compatibility are limited. Time Stalkers and some native
+FMV stalls remain unresolved. Compressed games require PC import before launch.
+IDE/CF remains untested synchronous PIO; ATA DMA and CE on IDE/SCIF are future
+work. ext4 is available only to the read-only bootstrap, not runtime apps or
+Games.
+
+The historical [1.7 notes](docs/release-v1.7-notes.md) and
+[1.5.1 notes](docs/release-v1.5.1-notes.md) remain available.
 
 The current SD runtime adds **raw-track GDI capture, saved-file verification and
 controlled resume** to the independently booting hardware diagnostic. It stays
@@ -35,7 +44,8 @@ confirms B selects CD fallback and reports successful cold boots; the boot count
 was not specified. Missing-file detection, checksum rejection and restoring the
 good runtime have now passed by user report; see the
 [hardware evidence](docs/hardware-evidence.md) for remaining coverage.
-New project code uses GPLv3; dependencies retain their own licenses. There is no
+New K-UI shell code uses GPLv3; the Wi-Fi firmware/link library is MIT, and
+dependencies retain their own licenses. There is no
 separate contribution or commercial-relicensing agreement.
 
 ## The ten-app shell
@@ -44,12 +54,13 @@ The SD runtime opens ten apps, in this order on Home: **Games**, **Disc Ripper**
 **VMU Manager**, **File Manager** (new since 1.5.1), **Music Player**, **GD Play**,
 **Memory Test**, **Network**, **Diagnostics** and **Settings**. New captures use a selectable
 parent folder, defaulting to `/Games`, with title-based folders and GDI filenames.
-The hardware-proven acquisition engine remains unchanged.
+The established raw acquisition engine remains in place; new format exports
+have separate host validation and still need console acceptance.
 
-Coming from DreamShell-based K-UI 1.0? Burn the supplied 1.7 CDI; that older
+Coming from DreamShell-based K-UI 1.0? Burn the supplied 1.8.5 CDI; that older
 CD cannot boot this independent runtime. For an existing independent K-UI
 installation, use its compatible bootstrap CD and merge the release package's `KUI` folder
-onto the SD card as described in the [installation guide](docs/release-v1.7.md).
+onto the SD card as described in the [installation guide](docs/release-v1.8.5.md).
 Update the runtime and Games payload together; optional original menu music
 is included.
 See [the current app acceptance round](docs/apps-round-five.md) and
@@ -69,6 +80,8 @@ These new app paths still need physical-console acceptance.
   The startup chime is embedded as Ogg too ([details](docs/music-round-five.md#bundled-menu-songs-as-ogg)).
 - Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
   Start opens Advanced, **Destination folder** and **Capture settings**.
+  Output choices are GDI, BIN/CUE, CSO, DreamShell-LZO ZSO and CHDv4; compressed
+  exports retain the verified raw capture for resume and verification.
   Advanced also offers explicitly confirmed Quick resume (sizes only), preserving
   full Resume and its saved-byte checks. During work, B requests Stop. Reports still save automatically. Idle insertion
   detection shows the disc title; moving capture/verification phases show percentage and ETA.
@@ -97,8 +110,13 @@ These new app paths still need physical-console acceptance.
   W5500 wired to the SCI port (a modification), Network also finds that adapter
   and runs an FTP server for the SD card: uploads take their name only once
   complete, and K-UI's start-up files are protected
-  ([details](docs/ftp.md)). On the owner's console it uploads at about
-  520 KiB/s and downloads at about 380 KiB/s (2026-09-30).
+  ([details](docs/ftp.md)). Earlier overlapping-transfer builds reached about
+  0.8 MiB/s uploads and 0.5 MiB/s downloads in the tested W5500/SCIF setup;
+  these are historical results, not new 1.8.5 measurements.
+  A XIAO ESP32-C5/C6 with the separate K-UI firmware provides SCI Wi-Fi;
+  Network Start opens scan/join and band selection. Storage remains on SCIF
+  while networking owns SCI. Flash firmware by USB from a computer; console
+  firmware updating is not exposed ([setup](docs/wifi.md)).
   Diagnostics retains disc/SD probes, log export,
   mstats and benchmarks. RAM remains visible in the ripper.
 - Music keeps playing from RAM during menu actions and capture; uncached song
@@ -171,38 +189,42 @@ See [the research scope](docs/milestone-1-research.md),
 
 ## Games
 
-Audio-CD playback is now accepted by owner report. The Games foundation adds
-`/Games` browsing, Advanced > Browse SD folders and bounded GDI/boot metadata
-inspection. It accepts GDI-only folders without a manifest and does not scan
-whole tracks. See [the Games hardware guide](docs/games-test.md).
-Games can also show box art and disc titles in List, Compact and Gallery
-views: Advanced > Scan box art reads each disc's own `0GDTEX.PVR`, or your
-PNG/JPEG in `KUI/covers`. See [box art, titles and views](docs/games-covers.md).
-The separate resident SD service and original post-handoff test program passed
-on hardware: build `7a8493ae825e`, ten checks, 84 SD blocks read after launcher
-shutdown. [Evidence](docs/evidence/games-resident-probe-hardware-2026-09-24.json).
-The selected-image GD-vector probe also passed on hardware: build
-`c4cfd4585ec5`, all eleven checks and 93 post-shutdown SD blocks.
-The independent retail loader has a **pinned playable CMD18 DOA2 baseline**:
-`ed31d522c847`, branch `baseline/doa2-cmd18-ed31d522c847`. The owner reports
-substantially better and really playable results, with roughly 32 seconds to
-the first stage after character selection and slowdown at the start of fights
-and FMVs. [Exact package and observations](docs/evidence/games-cmd18-comparison-2026-09-24.md).
-The earlier `baseline/doa2-sd-6c02bd8b22f4` is preserved too.
-V1.5 removes title/boot-filename allowlists while retaining native boot,
-format, memory, allocation and checksum checks. It adds bounded GETSCD
-responses: the owner confirms Evolution 2 now boots, with severe slowdown
-([compatibility evidence](docs/evolution2-getscd-test.md)). The accepted SD
-transport is unchanged. Broader compatibility and physical VMU save/load
-remain console test items; speed optimization is deferred.
-See [the gameplay evidence and performance findings](docs/evidence/games-doa2-gameplay-2026-09-24.md),
-[retail launch guide](docs/games-retail-test.md) and
-[staged Games plan](docs/games-milestone-plan.md).
-The accepted reader stays frozen; the existing boot disc remains in use.
+Games directly launches supported GDI, ISO, BIN/CUE, CDI v2/v3/v3.5 and
+standalone BIN/IMG layouts. The supplied PC importer expands CSO/ZSO and
+extracts CHD; resident compressed boot decoding is not implemented. See
+[format and import limits](docs/games-formats.md).
+
+Matching `Game` and `Game-2048` folders collapse into one Games entry. Choose
+**Original** or **2048-byte copy** after selecting it. The
+[batch converter](docs/gdi-2048-test.md) creates separate copies, preserves
+originals and reports each conversion, skip or failure. Conversion does not
+guarantee compatibility or replace an archival raw dump.
+
+Recent lists remain in RAM. Rows appear before artwork, and only the selected
+game's cover loads. The owner reports the first Games entry takes about
+5–7 seconds on the tested collection and navigation afterward is fluid.
+**X Refresh** rebuilds the cache after library/card changes. See
+[covers and views](docs/games-covers.md).
+
+Native confirmation uses **A** standard, **X** background SCI/20 and **Y**
+background SCI/25. Windows CE uses **A** for its background SCI reader; its
+broken regular reader is no longer offered. The native reader now stays below
+the IP image, clearing startup-stack collisions without changing game code.
+The owner confirms Sonic Adventure, Grandia II and Skies of Arcadia working
+on the tested layout. Power Stone 1/2 worked after earlier GD command fixes.
+These are scoped console results, not full playthroughs or an all-games claim.
+
+Time Stalkers still returns to K-UI, and some titles stall/skip FMVs in both
+Original and 2048 mode. CDDA, Mode 2 Form 2 and subchannel emulation remain
+unsupported. See the [current release notes](docs/release-v1.8.5-notes.md),
+[native placement evidence](docs/evidence/native-low-resident-2026-10-06.md),
+and [historical gameplay development](docs/games-retail-test.md).
 
 ## License and contribution policy
 
-New K-UI code is **GPL-3.0-only**, unless a file states otherwise. Contributions
+New K-UI shell code is **GPL-3.0-only**, unless a file states otherwise.
+The separate Wi-Fi firmware and shared kwlink library are **MIT**; source
+headers and [THIRD_PARTY.md](THIRD_PARTY.md) identify the applicable licenses. Contributions
 use the applicable existing file license. Contributors retain their copyrights;
 there is no separate CLA or grant of proprietary relicensing rights.
 

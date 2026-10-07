@@ -68,7 +68,7 @@ jobs:
     # *-shell feature branches build through their PR, where GitHub permits
     # restoring the base branch's caches. Keep ordinary milestone push builds.
     if: >-
-      ${{ !(github.event_name == 'push' && github.ref_name == 'main' && (contains(github.event.head_commit.message, 'Release: v1.7') || contains(github.event.head_commit.message, 'Release post: v1.7'))) &&
+      ${{ !(github.event_name == 'push' && github.ref_name == 'main' && (contains(github.event.head_commit.message, 'Release: v1.7') || contains(github.event.head_commit.message, 'Release post: v1.7') || contains(github.event.head_commit.message, 'Release: v1.8.5') || contains(github.event.head_commit.message, 'Release post: v1.8.5'))) &&
       (github.event_name != 'push' || !endsWith(github.ref_name, '-shell')) &&
       (github.event_name != 'pull_request' || endsWith(github.head_ref, '-shell') || !startsWith(github.head_ref, 'milestone/') || github.event.pull_request.head.repo.full_name != github.repository) }}
     runs-on: ubuntu-24.04
@@ -89,7 +89,17 @@ jobs:
           head = os.environ['KUI_VALIDATION_HEAD']
           message = subprocess.check_output(['git', 'show', '-s', '--format=%B', head], text=True)
           requested = 'Validation: console-only' in message.splitlines()
-          if requested:
+          network_platform = 'Validation: network-platform-only' in message.splitlines()
+          if network_platform:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
+              exact = {'.github/workflows/diagnostic.yml', 'src/dreamcast/sci_port.c',
+                       'src/dreamcast/sci_port.h', 'src/dreamcast/w5500_sci.c',
+                       'src/dreamcast/wifi_sci.c'}
+              if not paths or any(p not in exact for p in paths):
+                  raise SystemExit('Network-platform-only request includes changes outside the console SCI networking layer')
+              requested = True
+              print('Console SCI networking correction: native compile/link and packaging checks; portable code unchanged.')
+          if requested and not network_platform:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
               exact = {'Makefile', 'Makefile.dc', '.github/workflows/diagnostic.yml',
                        'tests/test_loader_sd.c', 'tests/test_retail_sd.c', 'tests/test_retail_sd_bench.c', 'tests/test_retail_minic.c',
@@ -183,8 +193,10 @@ jobs:
                        'src/loader/retail_stage.c', 'src/loader/retail_display.c',
                        'tests/games_retail.c', 'tests/render_shell.c', 'tests/test_game_metadata.c',
                        'tests/test_games_retail.py', 'tests/test_shell.c', 'tests/test_splash.c', 'tests/test_splash_assets.py',
-                       'resources/branding/boot-red-README.md',
+                       'resources/branding/boot-red-README.md', 'resources/branding/boot-red.png',
+                       'resources/branding/release-v1.8.5-banner.jpg',
                        'tests/test_retail_package.py', 'tests/test_workflow_hygiene.py',
+                       'tests/test_publish_release.py', 'tests/test_package_candidate.py',
                        'tools/build_splash.py', 'tools/render_app_previews.py',
                        'tools/package.py', 'tools/retail_package.py'}
               if not paths or any(p not in exact and not p.startswith(('resources/branding/startup', 'docs/')) for p in paths):
@@ -194,7 +206,15 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write('console_only=' + str(requested).lower() + '\n')
               out.write('games_formats=' + str(formats).lower() + '\n')
+              out.write('release_only=' + str(candidate).lower() + '\n')
           PY
+      - name: Check release publication, installation and splash
+        if: steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')
+        run: |
+          python3 tests/test_publish_release.py
+          python3 tests/test_package_candidate.py
+          make build/music-asset-check
+          python3 tests/test_splash_assets.py
       - name: Check Sonic caller-stack capture
         if: env.KUI_RETAIL_SONIC_STACK_TEST == '1' || env.KUI_RETAIL_LOW_RESIDENT == '1'
         run: python3 tests/test_sonic_caller_stack.py

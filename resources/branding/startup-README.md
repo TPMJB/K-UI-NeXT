@@ -1,8 +1,9 @@
-# K-UI V1.7 Dáinsleif startup
+# K-UI V1.8.5 Dáinsleif startup
 
 `startup.png` is the new 640×480 RGB release splash, identical to the matching
 `boot-red.png` artwork. The built-in image-generation tool created it for
-TPMJB on October 4, 2026 in the established crimson/chrome cyberpunk style.
+TPMJB's October 6, 2026 release, updating the existing version lettering
+in the established crimson/chrome cyberpunk style.
 See [boot-red-README.md](boot-red-README.md) and
 `startup-dainsleif-prompt.txt` for the prompt, TV-safe conversion and exact hashes.
 

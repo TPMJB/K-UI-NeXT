@@ -1,22 +1,22 @@
 # Games: background SCI reader
 
-## Current release status — 1.7 (2026-10-04)
+## Current release status — 1.8.5
 
-Native launch confirmation keeps **A** for the standard reader, **X** for
-background SCI with **20 blocks per call**, and **Y** for background SCI with
-**25 blocks per call**. Y/25 is the owner's preferred recorded DOA2 result;
-other games still need their own compatibility reports.
+Native launch confirmation uses **A** for the standard reader, **X** for
+background SCI with **20 blocks per call**, and **Y** with **25 blocks per call**.
+Y/25 is the owner's preferred recorded DOA2 setting. Compatibility remains
+title-dependent.
 
-Windows CE uses a separate SCI-only reader: **X** on its confirmation selects
-the background path. 1.7 retains the accepted **256-byte token-search
-allowance** from `6f14bc529472`; the later 512-byte experiment is rejected.
-Audio/FMV/sync limitations remain.
+Windows CE uses **A** for its background SCI reader. The regular reader that
+failed recent tests is no longer offered. The accepted **256-byte token-search
+allowance** remains; audio/FMV/sync limitations remain. A CE map exceeding
+64 background slots fails with an explanation rather than falling back.
 
-Use the [1.7 installation guide](release-v1.7.md) and
-[release notes](release-v1.7-notes.md) for the current package. The dated
-console runs, parked proposals and historical comparison procedure below
-record how the reader was developed; they do not request repeating those
-experiments for 1.7.
+The [1.8.5 installation guide](release-v1.8.5.md) and
+[release notes](release-v1.8.5-notes.md) define the current package. Normal native
+readers now stay below the IP image, clearing confirmed Sonic/Grandia startup
+stack collisions; CE keeps its separate layout. Dated runs and parked proposals
+below are historical records, not instructions to repeat those experiments.
 
 The game reader normally reads each EXEC's sectors on the spot, with the
 game's interrupts masked: about 2 sectors (9 card blocks, roughly 4 ms) per
@@ -36,8 +36,7 @@ launch uses the standard reader and the log says why. See
 when it is installed.
 
 Windows CE games have their own build of this reader, reached through CE's
-interrupt handler table instead of vectors: **X** on the Windows CE boot
-test's confirmation. See
+interrupt handler table instead of vectors: **A** on the Windows CE confirmation. See
 [windows-ce-placement-test.md](windows-ce-placement-test.md#background-reader-for-windows-ce-x-on-the-boot-tests-confirmation).
 
 ## How it works

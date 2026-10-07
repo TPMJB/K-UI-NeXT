@@ -124,6 +124,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_restart ? "A Restart console   B Cancel" :
         s->confirm_salvage ? "A Start salvage   B Cancel" :
         s->confirm_storage_test ? "A Start test   B Cancel" :
+        s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
@@ -166,6 +167,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "D-pad Select/change   A Open   B Diagnostics") :
         s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Quick   X 60s stress   Y With screen   R Speed   B Back" :
         s->page==KUI_SHELL_STORAGE_TEST_HISTORY ? "A View   Y Baseline   X Refresh   B Back" :
+        s->page==KUI_SHELL_WIFI ? (s->wifi.found?"A Join   X Scan again   Y Forget   B Network":"X Look again   B Network") :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
@@ -251,7 +253,7 @@ static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
     {KUI_SHELL_MEMORY,"Memory Test","System tools",
         {"Check available application RAM","with data patterns and report","any mismatches found."},-1},
     {KUI_SHELL_NETWORK,"Network","Connectivity",
-        {"Inspect your network adapter","and test the network. Share the","SD card by FTP (W5500 on SCI)."},-1},
+        {"Inspect your network adapter,","set up Wi-Fi and test it. Share","the SD card by FTP."},-1},
     {KUI_SHELL_SETTINGS,"Settings","System preferences",
         {"Choose video, memory display","and background music.","Save preferences to SD."},1},
     {KUI_SHELL_DIAGNOSTICS,"Diagnostics","Diagnostics",
@@ -261,7 +263,7 @@ static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
     {KUI_SHELL_MUSIC,"Music Player","Music",
         {"Play WAV or Ogg music from SD.","Listen to audio CD tracks","or keep music in the background."},-1},
     {KUI_SHELL_GAMES,"Games","SD game library",
-        {"Launch native GD images from SD.","Browse your game library.","V1.7: compatibility varies."},-1},
+        {"Launch native GD images from SD.","Browse your game library.","V" KUI_VERSION ": compatibility varies."},-1},
     {KUI_SHELL_FILES,"File Manager","SD card files",
         {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."},-1}};
 static const struct home_app *home_app(unsigned row) {
@@ -442,9 +444,14 @@ static void destination(struct paint *p,const struct kui_shell *s,
         "The selected destination is saved to SD.");
 }
 static void keyboard(struct paint *p,const struct kui_shell *s) {
-    bool naming=s->files_keyboard;
-    title(p,40,108,s->storage_test_keyboard?"Card nickname":!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
-    label(p,40,136,MUTED,s->storage_test_keyboard?"Label for test reports; START or DONE applies it.":naming?"Name on the SD card; START or DONE applies it.":
+    bool naming=s->files_keyboard,wifi=s->wifi_keyboard;
+    char heading[80];
+    if(wifi && s->wifi_typing_name) snprintf(heading,sizeof(heading),"Wi-Fi network name");
+    else if(wifi) snprintf(heading,sizeof(heading),"Password for %.32s",s->wifi_request.ssid);
+    title(p,40,108,s->storage_test_keyboard?"Card nickname":wifi?heading:!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
+    label(p,40,136,MUTED,s->storage_test_keyboard?"Label for test reports; START or DONE applies it.":wifi?(s->wifi_typing_name?"As the router shows it; START or DONE goes on to its password.":
+        "START or DONE joins; the board keeps the network for next time."):naming?
+        "Name on the SD card; START or DONE applies it.":
         "Folder path on SD; START or DONE saves your choice.");
     panel(p,32,160,576,32,PANEL);
     char input[KUI_DEST_ROOT_CAP+8];
@@ -463,15 +470,17 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
         else { x=40+(key-40)*188; y=340; w=180; }
         bool selected=s->keyboard_selected==key;
         panel(p,x,y,w,28,selected?SELECTED:PANEL);
-        const char *name=kui_shell_key_label(key,s->keyboard_upper);
+        const char *name=kui_shell_key_label(key,s->keyboard_layer);
         unsigned width=kui_shell_font_width(name,false);
         words(p,x+(w-width)/2,y+5,x+w-4,selected?WHITE:MUTED,name,false);
         if(selected) box(p,x+6,y+25,w-12,2,PINK);
     }
-    label(p,40,378,CYAN,s->keyboard_upper?"Y Shift: UPPERCASE":"Y Shift: lowercase");
+    label(p,40,378,CYAN,s->keyboard_layer==KUI_SHELL_KEYS_UPPER?"Y Shift: UPPERCASE":
+        s->keyboard_layer==KUI_SHELL_KEYS_SYMBOLS?"Y Shift: symbols":"Y Shift: lowercase");
     label(p,40,398,s->destination_notice[0]?AMBER:MUTED,
-        s->destination_notice[0]?s->destination_notice:s->storage_test_keyboard?
-        "Up to 23 characters, e.g. Samsung 128GB. Optional.":naming?
+        s->destination_notice[0]?s->destination_notice:s->storage_test_keyboard?"Up to 23 characters, e.g. Samsung 128GB. Optional.":wifi?(s->wifi_typing_name?
+        "Leave the password empty on the next screen for an open network.":
+        "Letters, digits and symbols (Y); 8 to 63 characters."):naming?
         "A name cannot contain / or end with a space or dot.":
         "Example: /Games   New folders are created when used.");
 }
@@ -618,8 +627,9 @@ static void utility_page(struct paint *p,const struct kui_shell *s,const struct 
     bool memory_test=s->page==KUI_SHELL_MEMORY;
     title(p,40,108,memory_test?"Memory Test":"Network");
     label(p,40,138,MUTED,memory_test?"Tests an allocated RAM region using data patterns.":
-        "BBA, LAN adapter, or a W5500 on the SCI port.");
-    label(p,40,160,v->busy?MUTED:WHITE,memory_test?"A Run memory test":"A Inspect adapter   X Test network   Y FTP server");
+        "BBA, LAN adapter, or a W5500 or the Wi-Fi board on the SCI port.");
+    label(p,40,160,v->busy?MUTED:WHITE,memory_test?"A Run memory test":
+        "A Inspect adapter   X Test network   Y FTP server   START Wi-Fi");
     const struct kui_app_status *status=v->app_status;
     panel(p,32,194,576,214,PANEL);
     app_status(p,status,v->busy,202);
@@ -758,6 +768,14 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
         label(p,72,276,MUTED,"Placeholders are not repaired or verified sectors.");
         label(p,72,302,MUTED,"Normal dumps and their checkpoints stay intact.");
         label(p,72,334,CYAN,"A Start salvage");
+    } else if(s->confirm_wifi_forget) {
+        char line[96];
+        label(p,72,188,WHITE,"FORGET THIS WI-FI NETWORK?");
+        snprintf(line,sizeof(line),"%.32s",s->wifi.wifi.ssid[0]?s->wifi.wifi.ssid:"The saved network");
+        label(p,72,222,CYAN,line);
+        label(p,72,248,MUTED,"The board disconnects and drops its saved password.");
+        label(p,72,276,MUTED,"Wi-Fi stays off until you join a network again.");
+        label(p,72,334,CYAN,"A Forget");
     } else if(s->confirm_music_clear) {
         label(p,72,188,WHITE,"CLEAR CACHED MUSIC?");
         label(p,72,226,MUTED,"Playback stops and loaded audio is released from RAM.");
@@ -1330,7 +1348,7 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
                 "A Launch game   Y Advanced read test":"A Launch game   X Inspect again",false);
             words(p,44,365,right,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
                 "CD audio is unavailable; music may be missing.":
-                "V1.7: game compatibility varies.",false);
+                "V" KUI_VERSION ": game compatibility varies.",false);
         } else if(kui_shell_games_ce_probe_ready(s)) {
             words(p,44,337,right,CYAN,d->format==KUI_GAME_IMAGE_GDI?
                 "A Windows CE boot test   Y Advanced read test":"A Windows CE boot test   X Inspect again",false);
@@ -1432,7 +1450,7 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         s->games_detail.title[0]?s->games_detail.title:"Launch selected game?");
     label(p,48,218,AMBER,s->games_detail.high_density_audio?
         "CD audio is unavailable; this game may not run.":
-        "V1.7: game compatibility varies.");
+        "V" KUI_VERSION ": game compatibility varies.");
     label(p,48,244,WHITE,"SD access remains read-only.");
     label(p,48,270,WHITE,"The launcher closes before the game starts.");
     label(p,48,302,WHITE,"Keep the SD card inserted while playing.");
@@ -1749,8 +1767,8 @@ static void ftp_page(struct paint *p,const struct kui_shell_view *v) {
     if(!f || f->state==KUI_FTP_STARTING) {
         panel(p,32,140,576,112,PANEL);
         label(p,48,152,CYAN,f && f->message[0]?f->message:"Starting");
-        label(p,48,180,MUTED,"It needs a W5500 on the SCI port and a cable to your");
-        label(p,48,200,MUTED,"router. The SD card stays on SCIF. B stops it at any time.");
+        label(p,48,180,MUTED,"It needs the Wi-Fi board, or a W5500 and a cable to your router,");
+        label(p,48,200,MUTED,"on the SCI port. The SD card stays on SCIF. B stops it at any time.");
         return;
     }
     bool ready=f->state==KUI_FTP_READY;
@@ -1761,7 +1779,8 @@ static void ftp_page(struct paint *p,const struct kui_shell_view *v) {
         words(p,48,141,592,CYAN,line,true);
         snprintf(line,sizeof(line),"User: kui   Password: %s",f->password);
         words(p,48,167,592,WHITE,line,true);
-        label(p,48,194,f->link?MUTED:AMBER,f->link?f->adapter:"No cable link: check the network cable");
+        label(p,48,194,f->link?MUTED:AMBER,f->link?f->adapter:f->wifi?"Wi-Fi connection lost; the board is reconnecting":
+            "No cable link: check the network cable");
     } else {
         bool failed=f->state==KUI_FTP_FAILED;
         words(p,48,141,592,failed?AMBER:CYAN,failed?"The FTP server stopped":"The FTP server is off",true);
@@ -1797,6 +1816,67 @@ static void ftp_page(struct paint *p,const struct kui_shell_view *v) {
     if(f->last_out[0]) {lines[count]=f->last_out;colors[count++]=CYAN;}
     for(unsigned i=0;i<f->event_count && count<3;i++) {lines[count]=f->events[i];colors[count++]=i?MUTED:WHITE;}
     for(unsigned i=0;i<count;i++) label(p,40,352+i*21,colors[i],lines[i]);
+}
+/* Four bars for a network's signal. */
+static void signal_bars(struct paint *p,unsigned x,unsigned y,int8_t rssi,bool selected) {
+    unsigned bars=rssi>=-55?4u:rssi>=-67?3u:rssi>=-75?2u:1u;
+    for(unsigned i=0;i<4;i++) box(p,x+i*6,y+13-(i+1)*3,4,(i+1)*3,i<bars?(selected?WHITE:CYAN):EDGE);
+}
+#define WIFI_ROWS 8u
+static void wifi_page(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_wifi_view *w=&s->wifi;
+    const struct kwh_wifi *st=&w->wifi;
+    char line[128];
+    title(p,40,108,"Wi-Fi");
+    if(!w->found) {
+        label(p,40,138,MUTED,"The Wi-Fi board on the SCI port (XIAO ESP32-C5 with K-UI's firmware).");
+        panel(p,32,164,576,200,PANEL);
+        label(p,48,176,w->failed?AMBER:CYAN,w->message[0]?w->message:"Looking for the Wi-Fi board");
+        if(!w->working && w->failed) {
+            label(p,48,210,MUTED,"Its select goes to GPIO6 (or GPIO7), READY to GPIO5, and it takes");
+            label(p,48,230,MUTED,"5 V. Load its firmware first: see firmware/kui-wifi on GitHub.");
+            label(p,48,264,MUTED,"X looks again. A W5500 on the port is not affected.");
+        }
+        return;
+    }
+    label(p,40,136,MUTED,w->board);
+    uint16_t color=st->state==KWM_WIFI_ONLINE?CYAN:st->state==KWM_WIFI_BAD_PASSWORD||st->state==KWM_WIFI_NOT_FOUND?AMBER:WHITE;
+    if(st->state==KWM_WIFI_ONLINE) snprintf(line,sizeof(line),"Online on %.32s as %u.%u.%u.%u (%s GHz, %d dBm)",st->ssid,
+        st->ip[0],st->ip[1],st->ip[2],st->ip[3],st->band==5?"5":"2.4",st->rssi);
+    else if(st->state==KWM_WIFI_IDLE) snprintf(line,sizeof(line),"%s",st->saved?"Wi-Fi is off: choose a network below":
+        "No network set up: choose one below");
+    else snprintf(line,sizeof(line),"%.32s: %s",st->ssid,kui_wifi_state_text(st->state));
+    label(p,40,158,color,line);
+    unsigned rows=kui_shell_wifi_rows(s),selected=s->wifi_selected<rows?s->wifi_selected:0;
+    unsigned first=selected>=WIFI_ROWS?selected-WIFI_ROWS+1:0;
+    panel(p,32,182,576,190,PANEL);
+    for(unsigned r=first;r<rows && r<first+WIFI_ROWS;r++) {
+        unsigned y=188+(r-first)*22;
+        bool chosen=r==selected;
+        uint16_t text=chosen?WHITE:MUTED;
+        if(chosen) panel(p,40,y,560,22,SELECTED);
+        if(!r) {
+            snprintf(line,sizeof(line),"Bands: %s",kui_wifi_band_text(st->band_mode));
+            words(p,52,y+2,400,text,line,false);
+            words(p,452,y+2,592,chosen?CYAN:MUTED,"LEFT/RIGHT",false);
+        } else if(r==rows-1) {
+            words(p,52,y+2,592,text,"Other network (type its name)",false);
+        } else {
+            const struct kui_wifi_network *n=&w->networks[r-1];
+            bool here=st->state==KWM_WIFI_ONLINE && !strcmp(n->ssid,st->ssid);
+            words(p,52,y+2,316,here?CYAN:text,n->ssid,false);
+            snprintf(line,sizeof(line),"%s GHz ch %u",n->five?"5":"2.4",n->channel);
+            words(p,324,y+2,440,text,line,false);
+            signal_bars(p,448,y+4,n->rssi,chosen);
+            words(p,482,y+2,592,text,here?"Joined":kui_wifi_security_text(n->security),false);
+        }
+    }
+    if(!w->count) label(p,52,188+22,MUTED,v->busy?"Looking for networks...":"No networks listed yet: X scans.");
+    label(p,40,380,w->failed?AMBER:v->busy?CYAN:MUTED,w->message);
+    if(rows>WIFI_ROWS) {
+        snprintf(line,sizeof(line),"%u networks",w->count);
+        label(p,500,380,MUTED,line);
+    }
 }
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
@@ -1840,13 +1920,15 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_FILES_INFO: files_info(&p,s,v); break;
     case KUI_SHELL_FILES_VIEW: files_view(&p,s,v); break;
     case KUI_SHELL_FTP: ftp_page(&p,v); break;
+    case KUI_SHELL_WIFI: wifi_page(&p,s,v); break;
     }
     footer(&p,s,v);
     if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s->confirm_quick_resume);
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
-       s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage) app_confirmation(&p,s);
+       s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
+       s->confirm_wifi_forget) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);
 }
 

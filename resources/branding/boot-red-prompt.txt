@@ -1,3 +1,10 @@
-New K-UI V1.7 release artwork generated with the built-in image-generation tool on 2026-10-04 for TPMJB. Existing crimson Dáinsleif startup artwork used only as a style/brand reference. Fresh three-quarter visor portrait, dark flowing hair with red fiber-optic highlights, red katana-like laser, atmospheric synthwave grid, deep black and chrome type. Exact text: K-UI / V1.7 / Dáinsleif / by TPMJB. Central TV-safe composition with dark lower area for boot menu. Standalone 16:9 campaign variant includes Independent Dreamcast Environment. No third-party logos or performance claims.
+K-UI V1.8.5 splash edited with the built-in image-generation tool on 2026-10-06 for TPMJB. Input: existing K-UI V1.7 startup.png from the repository.
 
-Deployment conversion: original 1448x1086 RGB splash resized with Lanczos to 576x432, centered on a #090102 640x480 RGB frame. Matching startup.png and boot-red.png use identical bytes. Banner is 1280x720 JPEG quality92 from generated wide original. No lettering changes after generation.
+Use case: text-localization.
+Asset type: Dreamcast K-UI release startup splash, opaque 4:3 image.
+Input image 1 is the edit target, the existing K-UI V1.7 crimson Dáinsleif splash. Change only the existing version lettering from "V1.7" to "V1.8.5". Preserve the same visor portrait, pose, dark flowing hair, red illumination, neon laser, synthwave grid, chrome lettering, composition, dark lower portion, and TV-safe margins. Match the existing bold italic metallic typography and center the wider version under K-UI and above Dáinsleif; keep it readable and contained within the existing safe artwork area. All text must read exactly: "K-UI", "V1.8.5", "Dáinsleif", "by TPMJB". Preserve Dáinsleif's accent. Do not add any other text, logos, objects, border changes, or redesign. Keep all non-version artwork as close to the input as possible.
+
+Deployment conversion: generated 1448x1086 RGB image resized directly to 640x480 RGB with Lanczos; existing generated TV-safe margins retained. Matching startup.png and boot-red.png use identical bytes. No lettering edits after generation. release-v1.8.5-banner.jpg uses the same generated image, resized to 960x720 and centered on a black 1280x720 frame, JPEG quality 92.
+
+Deployment Git blob: a136e6f426140424febf38aebe69169c430ea6aa.
+Deployment SHA-256: bad69f585b46e56872d855b4ec9602c99f7eb671e6a47478e7a9f8a40c5ff232.

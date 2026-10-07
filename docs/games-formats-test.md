@@ -1,5 +1,8 @@
 # Games disc formats test
 
+**Historical development guide.** For release 1.8.5 installation, controls and
+format limits, read [Games image and ripper formats](games-formats.md).
+
 This development build extends the Games browser, metadata reader, covers and
 detached game readers and disc-ripper output formats. It retains the
 Original/2048 picker and adds RAM-backed rows and selected-game artwork.

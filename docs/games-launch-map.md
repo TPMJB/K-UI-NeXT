@@ -1,5 +1,25 @@
 # Launch map: up to 99 tracks
 
+## Current release — 1.8.5
+
+The current map is `KUIRTI03` (version 3), supporting the image geometry in
+[Games formats](games-formats.md). Runtime and game payloads must be installed
+together; version 2 payloads cannot be mixed with them. The standard native
+reader has 160 shared track/physical-extent slots; the background SCI reader
+has 64, with up to 99 tracks subject to the shared budget. Native background
+maps may fall back to standard. Windows CE is background-only in the UI and
+fails when its 64-slot map cannot fit.
+
+Native code/data and private stack now stay below IP at `0x8c004000..0x8c007d00`;
+guest RAM still begins at `0x8c008000`. CE keeps its separate placement. See
+[placement evidence](evidence/native-low-resident-2026-10-06.md).
+
+## Historical version 2 expansion
+
+The measurements and package layout below describe the earlier 99-track
+expansion. They are retained as development evidence, not current byte budgets.
+
+
 A launch reads a game's track files straight from card blocks, through a map
 K-UI builds from the card's allocation table. The map used to hold 16 tracks
 and 128 file pieces (extents), so Bust-a-Move 4 (25 tracks) and MDK2 (31

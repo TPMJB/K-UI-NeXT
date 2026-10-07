@@ -13,7 +13,7 @@ Use the existing bootstrap disc and update the SD runtime as described in
 | Disc Ripper | A opens New confirmation; release and press A again to begin. X resumes; Y verifies saved files. L/R select bundled songs; Start opens Advanced (including Destination folder). B returns home while idle |
 | Destination browser | Up/Down selects; A opens a subfolder; B goes to its parent. Left/Right changes the listing page. Y saves the current folder as the destination. X opens path entry. Start cancels browsing and returns to the ripper |
 | Path entry | Directions select a key; A enters it. X deletes one character; Y changes letter case. Start or the DONE key saves the path. B cancels typing and returns to the browser |
-| Advanced | Up/Down selects Verify, Full Resume, Capture settings, Quick Resume or Destination folder; A opens it; B returns to the ripper |
+| Advanced | Up/Down selects Verify, Full Resume, Capture settings, Quick Resume, Destination folder, Advanced CRC or Salvage; A opens it; B returns to the ripper |
 | Settings | Up/Down selects; Left/Right changes; A saves. B discards unsaved edits and returns to the screen that opened Settings |
 | Diagnostics | A runs disc samples; X runs the SD test; Y saves the log. Up/Down scrolls; Start shows the latest lines. R retains the configured benchmark entry |
 | Active operation | B requests Stop. Wait for the operation and automatic report save to finish before starting another action |
@@ -40,14 +40,14 @@ represent are rejected with an explanation.
 
 ## Choose an output format
 
-Open **Advanced > Ripper settings**, choose **Output format**, then save.
+Open **Start > Capture settings**, choose **Output format**, then save.
 GDI is the default. BIN/CUE uses the same captured raw tracks with a CUE
 descriptor. CSO, DreamShell-LZO ZSO and CHDv4 are verified post-capture
 exports; they retain the raw capture and its internal `.capture.gdi` for
 resume and verification. CSO/ZSO contain one cooked high-density data track;
 audio stays in the raw files. CHD includes the captured data and audio tracks.
 Compression needs additional space and time. Games still requires importing
-compressed files on a computer. See [Games formats](games-formats-test.md).
+compressed files on a computer. See [Games formats](games-formats.md).
 
 Resume and Verify use the job's saved format. Changing the setting affects
 only New. Existing GDI jobs and their reference hashes remain compatible.
@@ -110,7 +110,7 @@ requested. Settings can enable automatic readback or SHA-256; SHA-256 jobs keep
 their existing required full-readback behavior. Explicit `bench.cfg` keys
 continue to override saved preferences.
 
-## Next hardware check
+## Evidence and optional checks
 
 The destination, collision, resume-selection, metadata and reference-result paths
 pass host tests on FAT32 and exFAT. **The new named output flow still needs console
@@ -137,10 +137,12 @@ During the next normal rip:
 4. When another New or a controlled Stop/Resume is needed in normal use, confirm
    it uses a separate numbered folder or resumes the correct existing job.
 
-No new optical benchmark is required for this UI change. Advanced currently
-contains Verify, Resume and Settings. A dedicated salvage/recovery workflow is
-still planned; it is not an available action in this build. Current bounded read
-retries, stop behavior and preservation of partial jobs remain in force.
+No repeat optical benchmark is required for this release. Advanced includes
+Verify, Full Resume, Capture settings, Quick Resume, Destination folder,
+Advanced CRC and Salvage. Salvage is a separate explicit recovery job; it does
+not overwrite normal captures. See [salvage controls and limits](salvage-worker.md).
+Current bounded capture retries, stop behavior and preservation of partial jobs
+remain in force.
 
 ## Implementation boundary
 

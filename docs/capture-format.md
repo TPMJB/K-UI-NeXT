@@ -58,11 +58,14 @@ No data is written from a failed/invalid request and no sectors are zero-filled.
 
 ## Files and checkpoints
 
-New jobs are exclusively created at `/KUI/dumps/d<first-16-identity-hex>-NNNN/`.
-The complete 32-byte identity is checked in checkpoints; the short directory
-prefix is only an index. New capture never replaces an existing job. Resume
-selects the greatest existing NNNN for that fingerprint and refuses corrupt
-state instead of guessing an older job.
+New jobs are exclusively created under the selected parent (default `/Games`)
+as sanitized title folders: `Title`, `Title (2)`, and increasing suffixes. The
+complete 32-byte identity and track plan are checked in checkpoints; folder
+names are only an index. New never replaces an existing job. Resume selects
+the greatest matching named suffix in that parent, with legacy
+`/KUI/dumps/d<first-16-identity-hex>-NNNN/` fallback when no named match exists.
+It refuses corrupt state rather than guessing. See
+[ripper controls](ripper-controls.md).
 
 Track writes must return the exact requested length. Hash/accounting advances
 only then. Every 4,096 sectors (about 9.2 MiB), at track end, and on controlled
@@ -101,10 +104,12 @@ file invariants still hold; arbitrary FAT/exFAT power-loss recovery is not promi
 
 ## Completion and verification
 
-After all tracks are synchronized and checkpointed, unmount/remount FatFs and
-reread every saved byte. Compare exact sizes, CRC32 and SHA-256 to the capture
-stream. Only then publish `disc.gdi` and `manifest.json` through flushed temporary
-files and checked renames. A final-file readback checks metadata too. If stopped
+After all tracks are synchronized and checkpointed, jobs requiring saved-byte
+readback unmount/remount FatFs and reread every saved byte, comparing the
+recorded hashes with the capture stream. SHA-256 jobs and compressed exports
+require this readback; CRC-only GDI/BIN-CUE jobs may explicitly omit it.
+Publication uses the selected descriptor/container and `manifest.json` through
+flushed temporary files and checked renames. A final-file readback checks metadata too. If stopped
 between publishing those files, Resume revalidates and completes finalization;
 the PC verifier requires both. Existing final metadata must match and is never
 silently overwritten. Verify performs no writes.
@@ -124,7 +129,7 @@ started with, because SHA-256 state cannot be resumed from a digest. `verify_dum
 accepts both schemas, always recomputes CRC32 (and SHA-256, for reference) from the
 files, and rejects a schema 2 manifest that carries a claim or a SHA field.
 
-Related options, all defaulting to the old behaviour: `end_readback=off` skips the
+Current defaults are CRC32 with automatic end readback Off. Related options: `end_readback=off` skips the
 re-read after capture (CRC-only jobs only; the report then says `CAPTURED`, never
 `SAVED DATA VERIFIED`, and Verify still works afterwards); `resume_check=size` checks
 file sizes on resume instead of re-reading the committed bytes and continues the

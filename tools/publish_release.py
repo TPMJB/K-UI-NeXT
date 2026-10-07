@@ -12,6 +12,48 @@ import tempfile
 import zipfile
 
 from package import ROOT, release_metadata
+from runtime_package import verify
+from retail_package import inspect_retail
+
+SUPPORTED_RELEASES = {"1.7", "1.8.5"}
+
+
+def release_tag(release):
+    require(release["version"] in SUPPORTED_RELEASES,
+            "This promotion is explicitly scoped to 1.7 and 1.8.5")
+    return "v" + release["version"]
+
+
+def post_allowed_paths(version):
+    require(version in SUPPORTED_RELEASES, "Unsupported release-post version")
+    return {"README.md", f"docs/release-v{version}.md",
+            f"docs/release-v{version}-notes.md", f"docs/release-v{version}-announcements.md",
+            "tools/publish_release.py", ".github/workflows/release.yml",
+            ".github/workflows/diagnostic.yml"}
+
+
+def successful_build(repository, commit, release):
+    """Reuse only a fully successful trusted build of these exact source bytes."""
+    endpoint = "repos/" + repository
+    runs = api(endpoint + "/actions/workflows/diagnostic.yml/runs?status=success&head_sha=" + commit + "&per_page=100")["workflow_runs"]
+    runs = [run for run in runs if run["head_sha"] == commit and
+            (run.get("head_repository") or {}).get("full_name") == repository and
+            run["conclusion"] == "success" and
+            (run.get("event") == "pull_request" or
+             (run.get("event") == "push" and
+              (run.get("head_branch") == "main" or run.get("head_branch", "").startswith("milestone/"))))]
+    artifact_name = release["artifact_prefix"] + "-release-assets"
+    for run in sorted(runs, key=lambda item: item["id"], reverse=True):
+        run_id = str(run["id"])
+        jobs = api(endpoint + "/actions/runs/" + run_id + "/jobs?per_page=100")["jobs"]
+        if not all(any(job["name"] == name and job["conclusion"] == "success"
+                       for job in jobs) for name in ("host", "dreamcast")):
+            continue
+        artifacts = api(endpoint + "/actions/runs/" + run_id + "/artifacts?per_page=100")["artifacts"]
+        artifacts = [item for item in artifacts if item["name"] == artifact_name and not item["expired"]]
+        if len(artifacts) == 1:
+            return run, artifact_name
+    require(False, "No fully successful upstream native build and release assets exist for this exact commit")
 
 
 def gh(*args):
@@ -64,10 +106,45 @@ def verify_assets(directory, release, commit):
                     "Build source identity does not match the promoted commit")
             if name.endswith("-release.zip"):
                 require(record["kind"] == "release", "Refusing a diagnostic or candidate package")
-                for entry in ("KUI/runtime.kui", "KUI/apps/games/retail-boot.kui",
-                              "KUI/apps/games/ce-probe.kui",
-                              f"boot-cd/kui-v{release['version']}.cdi", "START-HERE.md", "RELEASE-NOTES.md"):
+                payloads = ("KUI/runtime.kui", "KUI/apps/games/probe.kui",
+                            "KUI/apps/games/image-probe.kui", "KUI/apps/games/retail-boot.kui",
+                            "KUI/apps/games/ce-probe.kui")
+                for entry in (*payloads, f"boot-cd/kui-v{release['version']}.cdi",
+                              "START-HERE.md", "RELEASE-NOTES.md", "SHA256SUMS"):
                     require(entry in archive.namelist(), "Incomplete release: " + entry)
+                for entry in payloads:
+                    try:
+                        info = verify(archive.read(entry))
+                    except ValueError as error:
+                        require(False, "Invalid release payload " + entry + ": " + str(error))
+                    require(info["build"] == commit[:12], "Release payload source identity mismatch: " + entry)
+                if release["version"] == "1.8.5":
+                    try:
+                        native = inspect_retail(archive.read("KUI/apps/games/retail-boot.kui"))
+                        ce = inspect_retail(archive.read("KUI/apps/games/ce-probe.kui"), ce=True)
+                    except ValueError as error:
+                        require(False, "Invalid release reader: " + str(error))
+                    require((native["resident_address"], native["resident_limit"]) ==
+                            ("0x8c004000", "0x8c007800"), "1.8.5 requires the hardware-confirmed native placement")
+                    require((ce["resident_address"], ce["resident_limit"]) ==
+                            ("0x8c008300", "0x8c00bb00"), "Windows CE release placement changed")
+                    for entry in ("tools/gdi_optimize.py", "tools/game_image_import.py",
+                                  "GAMES-FORMATS.md", "GDI-2048-TEST.md", "RIPPER-CONTROLS.md",
+                                  "CAPTURE-FORMAT.md", "LICENSES/capture-codecs.md",
+                                  "LICENSES/miniz-NOTICES.txt", "LICENSES/minilzo-COPYING",
+                                  "LICENSES/minilzo-README.LZO"):
+                        require(entry in archive.namelist(), "Incomplete release: " + entry)
+                entries = [entry for entry in archive.namelist() if not entry.endswith("/")]
+                require(len(entries) == len(set(entries)), "Duplicate release archive entry")
+                sums = {}
+                for line in archive.read("SHA256SUMS").decode("utf-8").splitlines():
+                    digest, entry = line.split("  ", 1)
+                    require(entry in entries and entry not in sums and entry != "SHA256SUMS",
+                            "Unexpected installed checksum entry")
+                    require(hashlib.sha256(archive.read(entry)).hexdigest() == digest,
+                            "Installed release checksum mismatch: " + entry)
+                    sums[entry] = digest
+                require(set(sums) == set(entries) - {"SHA256SUMS"}, "Incomplete installed checksums")
             else:
                 for entry in ("source/kui-source.tar.gz", "source/kos-source.tar.gz", "LICENSE"):
                     require(entry in archive.namelist(), "Incomplete corresponding source: " + entry)
@@ -84,13 +161,11 @@ def update_post(repository, commit, release, tag, message):
     require(not published["draft"] and not published["prerelease"], "Expected an existing full release")
     tag_before = api(endpoint + "/git/ref/tags/" + tag)["object"]
     require(tag_before["type"] == "commit", "Expected the original lightweight release tag")
-    allowed = {"README.md", "docs/release-v1.7.md", "docs/release-v1.7-notes.md",
-               "docs/release-v1.7-announcements.md", "tools/publish_release.py",
-               ".github/workflows/release.yml", ".github/workflows/diagnostic.yml"}
+    allowed = post_allowed_paths(release["version"])
     paths = subprocess.check_output(["git", "diff", "--name-only", tag_before["sha"], commit],
                                     cwd=ROOT, text=True).splitlines()
     require(paths and all(path in allowed or
-            (path.startswith("resources/release-v1.7/") and path.endswith(".png")) for path in paths),
+            (path.startswith(f"resources/release-v{release['version']}/") and path.endswith(".png")) for path in paths),
             "Release-post update includes changes outside documentation and screenshots")
     old_body = published["body"]
     require("\nSource commit: " in old_body, "Missing original build attribution")
@@ -120,8 +195,7 @@ def main():
     require(repository == "TPMJB/K-UI-NeXT" and os.environ["GITHUB_REF"] == "refs/heads/main",
             "Release publication requires the upstream main branch")
     release = release_metadata()
-    require(release["version"] == "1.7", "This promotion is explicitly scoped to 1.7")
-    tag = "v" + release["version"]
+    tag = release_tag(release)
     message = subprocess.check_output(["git", "show", "-s", "--format=%B", "HEAD"],
                                       cwd=ROOT, text=True)
     if args.update_post:
@@ -131,19 +205,8 @@ def main():
     endpoint = "repos/" + repository
     require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,
             "Main advanced after this promotion; refusing to publish stale artifacts")
-    runs = api(endpoint + "/actions/workflows/diagnostic.yml/runs?event=pull_request&status=success&head_sha=" + commit)["workflow_runs"]
-    runs = [run for run in runs if run["head_sha"] == commit and
-            run["head_repository"]["full_name"] == repository and run["conclusion"] == "success"]
-    require(runs, "No successful native PR build exists for this exact commit")
-    run = max(runs, key=lambda item: item["id"])
+    run, artifact_name = successful_build(repository, commit, release)
     run_id = str(run["id"])
-    jobs = api(endpoint + "/actions/runs/" + run_id + "/jobs")["jobs"]
-    require(any(job["name"] == "dreamcast" and job["conclusion"] == "success" for job in jobs),
-            "Native compilation and packaging did not succeed")
-    artifact_name = release["artifact_prefix"] + "-release-assets"
-    artifacts = api(endpoint + "/actions/runs/" + run_id + "/artifacts")["artifacts"]
-    artifacts = [item for item in artifacts if item["name"] == artifact_name and not item["expired"]]
-    require(len(artifacts) == 1, "Missing or ambiguous release assets")
     with tempfile.TemporaryDirectory(prefix="kui-release-") as temporary:
         directory = Path(temporary)
         gh("run", "download", run_id, "--repo", repository, "--name", artifact_name, "--dir", temporary)
@@ -155,6 +218,8 @@ def main():
         notes_file.write_text(notes, encoding="utf-8")
         # gh creates the release as a draft while uploading assets, then publishes it.
         # An existing tag/release is never moved or overwritten by this script.
+        require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,
+                "Main advanced while release assets were being verified")
         tags = api(endpoint + "/git/matching-refs/tags/" + tag)
         require(not any(item["ref"] == "refs/tags/" + tag for item in tags),
                 "Release tag already exists; refusing to overwrite it")

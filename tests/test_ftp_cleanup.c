@@ -5,6 +5,7 @@
 #include <assert.h>
 
 static struct server server;
+static struct kui_wifi_session wifi_server;
 static struct kui_ftp_status status;
 static struct {
     uint8_t state;
@@ -14,15 +15,15 @@ static struct {
 static unsigned cleanup_logs;
 static char cleanup_log[160];
 
-bool kui_w5500_status(struct kui_w5500 *w, unsigned s, uint8_t *state) {
-    assert(w == &server.net.chip && s < DATA_SOCKETS);
+static bool socket_state(void *ctx, unsigned s, uint8_t *state) {
+    assert(ctx == &server && s < DATA_SOCKETS);
     ++sockets[s].reads;
     /* A failed read can leave zero in the output: it is not CLOSED evidence. */
     *state = sockets[s].readable ? sockets[s].state : KUI_W5500_CLOSED;
     return sockets[s].readable;
 }
-bool kui_w5500_close(struct kui_w5500 *w, unsigned s) {
-    assert(w == &server.net.chip && s < DATA_SOCKETS);
+static bool socket_close(void *ctx, unsigned s) {
+    assert(ctx == &server && s < DATA_SOCKETS);
     ++sockets[s].closes;
     return sockets[s].closable;
 }
@@ -42,6 +43,9 @@ static void reset(void) {
     memset(&status, 0, sizeof(status));
     memset(sockets, 0, sizeof(sockets));
     server.status = &status;
+    server.net.ctx = &server;
+    server.net.state = socket_state;
+    server.net.close = socket_close;
     server.log = log_line;
     cleanup_logs = 0;
     cleanup_log[0] = 0;
@@ -104,6 +108,18 @@ int main(void) {
     assert(strstr(cleanup_log, "1A") && strstr(cleanup_log, "CLOSING timeout"));
     data_poll(&server, 6350);
     assert(sockets[0].closes == 1 && cleanup_logs == 1);
+
+    /* The Wi-Fi bridge's 18 state represents a graceful close still in
+     * progress; it does not share the W5500's observed 1A closing storm. */
+    reset();
+    server.wifi = &wifi_server;
+    server.data_draining[0] = true;
+    sockets[0].state = KUI_NET_CLOSING;
+    data_poll(&server, 1000);
+    data_poll(&server, 1000 + CLOSING_MS);
+    assert(server.data_draining[0] && !sockets[0].closes);
+    data_poll(&server, 1000 + DRAIN_MS + 1);
+    assert(!server.data_draining[0] && sockets[0].closes == 1);
 
     /* Failed reads cannot start the CLOSING clock. Once it starts, failed
      * reads or closes cannot reset the clock or discard cleanup ownership. */
@@ -171,6 +187,34 @@ int main(void) {
     assert(data_take(&server, &server.sessions[0], 2500) == -1);
     for(unsigned j = 0; j < DATA_SOCKETS; ++j)
         assert(server.data_owner[j] == FREE && server.data_draining[j]);
+
+    /* Pressure from a fourth transfer cannot bypass Wi-Fi's closing grace;
+     * the board's TCP stack may still be delivering the retired payload. */
+    reset();
+    server.wifi = &wifi_server;
+    for(unsigned j = 0; j < DATA_SOCKETS; ++j) server.data_draining[j] = true;
+    assert(data_take(&server, &server.sessions[0], 2500) == -1);
+    assert(data_take(&server, &server.sessions[0], 1000 + DRAIN_MS - 1) == -1);
+    for(unsigned j = 0; j < DATA_SOCKETS; ++j)
+        assert(server.data_draining[j] && !sockets[j].closes);
+    assert(data_take(&server, &server.sessions[0], 1000 + DRAIN_MS) == 0);
+    assert(!server.data_draining[0] && server.data_owner[0] == 0 && sockets[0].closes == 1);
+
+    /* A full outgoing queue must not abandon an aborted data listener.
+     * The later poll retries the close before the slot can be reused. */
+    reset();
+    server.wifi = &wifi_server;
+    server.sessions[0].data = 0;
+    server.data_owner[0] = 0;
+    sockets[0].closable = false;
+    data_release(&server, &server.sessions[0], false, 1000);
+    assert(server.sessions[0].data == -1 && server.data_owner[0] == FREE);
+    assert(server.data_draining[0] && server.data_aborting[0] && sockets[0].closes == 1);
+    data_poll(&server, 1001);
+    assert(server.data_draining[0] && server.data_aborting[0] && sockets[0].closes == 2);
+    sockets[0].closable = true;
+    data_poll(&server, 1002);
+    assert(!server.data_draining[0] && !server.data_aborting[0] && sockets[0].closes == 3);
     puts("FTP closing data sockets: ok");
     return 0;
 }

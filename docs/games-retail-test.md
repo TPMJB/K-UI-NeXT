@@ -1,12 +1,17 @@
-# DOA2 launch — SD latency comparison
+# DOA2 launch — historical SD latency comparison
 
-**Current release: 1.5.1, faster launches.** Track maps from the allocation
+This guide records earlier loader development. For release 1.8.5 controls,
+compatibility and installation use the [release guide](release-v1.8.5.md)
+and [current Games formats](games-formats.md). The native reader placement
+is now below the IP image; see [hardware evidence](evidence/native-low-resident-2026-10-06.md).
+
+**Historical release: 1.5.1, faster launches.** Track maps from the allocation
 table, no executable pre-read, half-second handoff screens, silent CD-audio
 commands and A+B+X+Y+Start restarting K-UI. The owner reports DOA2 launch is
 "near instant now" and the restart works; see
 [the launch-speed test](games-launch-speed.md).
 
-**Current playable baseline: `2072b489c378`**, pinned at
+**Historical playable baseline: `2072b489c378`**, pinned at
 `baseline/doa2-pacing-2072b489c378` and on `main`: longer reads while the
 picture is static, all-CMD18 streams and a counter screen on A+B+X+Y+Start.
 The owner reports it worked really well; the first ten seconds of a fight

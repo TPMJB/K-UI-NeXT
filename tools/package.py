@@ -110,7 +110,9 @@ def candidate_notice():
 
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery", "games-formats-test"):
+    for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery",
+                 "games-formats-test", "games-formats", "gdi-2048-test", "capture-format",
+                 "wifi", "wifi-flash-arch", "sci-connector", "ftp"):
         # Preserve section anchors while matching the packaged uppercase names.
         text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
                       "(" + name.upper() + ".md", text)
@@ -176,6 +178,31 @@ def storage_image(elf_data, build, label):
     return package, verify(package)
 
 
+def write_capture_codec_notices(directory):
+    """Retain the vendored codec licenses in every distributable install/source tree."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for source, target in (("third_party/capture-codecs.md", "capture-codecs.md"),
+                           ("third_party/minilzo/COPYING", "minilzo-COPYING"),
+                           ("third_party/minilzo/README.LZO", "minilzo-README.LZO")):
+        shutil.copyfile(ROOT / source, directory / target)
+    # The amalgamation retains several original notices, including Martin
+    # Raiber's copyright and the Unlicense. Copy each distinct notice verbatim.
+    text = (ROOT / "third_party/miniz/miniz.c").read_text(encoding="utf-8")
+    notices = dict.fromkeys(block for block in re.findall(r"/\*[\s\S]*?\*/", text)
+                            if "Copyright" in block or "free and unencumbered software" in block)
+    if not notices or not any("Martin Raiber" in block for block in notices):
+        raise ValueError("Vendored miniz copyright notices are incomplete")
+    (directory / "miniz-NOTICES.txt").write_text("\n\n".join(notices) + "\n", encoding="utf-8")
+
+
+def write_game_tools(bundle):
+    """Ship the independently authored PC converters beside their usage guides."""
+    tools = bundle / "tools"
+    tools.mkdir(exist_ok=True)
+    for name in ("gdi_optimize.py", "game_image_import.py"):
+        shutil.copyfile(ROOT / "tools" / name, tools / name)
+
+
 def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate=False):
     """Assemble the install tree without benchmarks, fixtures or user preferences."""
     release = record["release"]
@@ -204,7 +231,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     shutil.copyfile(cdi, bundle / "boot-cd" / cdi_name)
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
     if release["version"].endswith("-formats-test"):
         shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", bundle / "GAMES-FORMATS-TEST.md")
@@ -213,7 +240,12 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     if not candidate and not experimental:
         shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
                         bundle / "release-banner.jpg")
+    if release["version"] == "1.8.5":
+        for name in ("games-formats", "gdi-2048-test", "ripper-controls", "capture-format"):
+            (bundle / (name.upper() + ".md")).write_text(guide(name + ".md"), encoding="utf-8")
+        write_game_tools(bundle)
     resolve_bundle_links(bundle, commit)
+    write_capture_codec_notices(dist / "LICENSES")
     shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
     bundle_record = {**record, "kind": package_kind(release, candidate),
                         "bootstrap": boot_record["bootstrap"],
@@ -236,6 +268,10 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
         "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
         + bootstrap_note +
+        ("PC converters are included under tools/. See GAMES-FORMATS.md for imported\n"
+         "compressed images, and GDI-2048-TEST.md for batch 2048-byte copies.\n"
+         "RIPPER-CONTROLS.md and CAPTURE-FORMAT.md explain capture exports.\n"
+         if release["version"] == "1.8.5" else "") +
         "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
         "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
         "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
@@ -407,7 +443,7 @@ def main():
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
     write_release_guides(dist, candidate)
-    for name in ("windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("wifi", "wifi-flash-arch", "sci-connector", "ftp", "windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -422,6 +458,7 @@ def main():
         (dist / name).write_text(guide(src))
     shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
     shutil.copytree(ROOT / "LICENSES", dist / "LICENSES", dirs_exist_ok=True)
+    write_capture_codec_notices(dist / "LICENSES")
     shutil.copyfile(ROOT / "data/known-dumps/README.txt", dist / "LICENSES/known-dumps-README.txt")
     kos = ROOT / ".deps/kos"
     shutil.copytree(kos / "doc/license", dist / "LICENSES/KOS", dirs_exist_ok=True)
@@ -480,7 +517,7 @@ def main():
     shutil.copyfile(dist / "GAMES-COVERS.md", update / "GAMES-COVERS.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("WIFI.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     for name in ("START-HERE.md", "RELEASE-NOTES.md"):
@@ -498,6 +535,10 @@ def main():
         "original notices are also included in build.json and LICENSES/.\n\n"
         "Install KUI/runtime.kui and the matching Games payload on your storage card.\n"
         + bootstrap_note +
+        ("PC converters are included under tools/. See GAMES-FORMATS.md for imported\n"
+         "compressed images, and GDI-2048-TEST.md for batch 2048-byte copies.\n"
+         "RIPPER-CONTROLS.md and CAPTURE-FORMAT.md explain capture exports.\n"
+         if release["version"] == "1.8.5" else "") +
         "Read STORAGE-TRANSPORTS.md before testing standalone SCI microSD or IDE/CF.\n"
         "The CD can read compatible ext4, but this runtime still needs FAT32/exFAT.\n"
         "Keep your card's filesystem; EXT4-BOOTSTRAP.md explains future runtime updates.\n"
@@ -513,6 +554,8 @@ def main():
         "See MUSIC-DEMO.md for its format, playback check and composition provenance.\n"
         "Copy KUI/apps/games along with runtime.kui for the Games app.\n"
         "START-HERE.md and RELEASE-NOTES.md describe installation and compatibility limits.\n"
+        "WIFI.md describes the SCI Wi-Fi board; WIFI-FLASH-ARCH.md covers initial C5 flashing.\n"
+        "SCI-CONNECTOR.md has the wiring and FTP.md covers transfers over either adapter.\n"
         "Games: A inspects a GDI; A on its detail opens confirmation; A confirms launch.\n"
         "Update both KUI/runtime.kui and KUI/apps/games/retail-boot.kui from this package.\n"
         "KUI/apps/games/ce-probe.kui is the Windows CE boot test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
@@ -525,6 +568,9 @@ def main():
         "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
         "works as before and reports that nothing was compared. Attribution and licence\n"
         "for both catalogues: LICENSES/known-dumps-README.txt.\n")
+    # Supporting firmware documentation stays online at this exact source
+    # commit; local Wi-Fi/flash/wiring/FTP guides travel with the update.
+    resolve_bundle_links(update, commit)
     update_hashes=[]
     for path in sorted(update.rglob("*")):
         if path.is_file() and path.name != "SHA256SUMS":

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
+#include "kui/version.h"
 #include "kui/games_retail.h"
 #include "kui/retail_image.h"
 #include "kui/shell_font.h"
@@ -61,7 +62,7 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_GAMES_VARIANTS;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_WIFI;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
@@ -779,7 +780,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_FTP;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_WIFI;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -885,7 +886,7 @@ static void new_pages_rendering(void) {
     assert(!strstr(drawn,"Line 3:") && strstr(drawn,"Line 4:") && strstr(drawn,"Line 11:"));
     s.page=KUI_SHELL_NETWORK;render(&v);
     assert(strstr(drawn,"Network") && strstr(drawn,"Inspect adapter") && strstr(drawn,"Y FTP server"));
-    assert(strstr(drawn,"W5500 on the SCI port"));
+    assert(strstr(drawn,"START Wi-Fi") && strstr(drawn,"W5500 or the Wi-Fi board on the SCI port"));
     reset(KUI_SHELL_VMU);s.vmu.present=true;s.vmu.total=8;s.vmu.count=8;
     for(unsigned i=0;i<8;i++) {
         snprintf(s.vmu.entries[i].name,16,"SAVE_%02u",i);s.vmu.entries[i].bytes=32768;
@@ -1432,7 +1433,7 @@ static void games_async_publication(void) {
 static void games_rendering(void) {
     struct kui_shell_view view={0};
     reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);render(&view);
-    assert(strstr(drawn,"Games") && strstr(drawn,"10 applications") && strstr(drawn,"V1.7: compatibility varies"));
+    assert(strstr(drawn,"Games") && strstr(drawn,"10 applications") && strstr(drawn,"V" KUI_VERSION ": compatibility varies"));
     reset(KUI_SHELL_GAMES);s.games_listing.count=8;s.games_listing.has_more=true;s.games_selected=7;
     for(unsigned i=0;i<8;i++) {
         snprintf(s.games_listing.entries[i].name,sizeof(s.games_listing.entries[i].name),"Game %u with a long but bounded name",i+1);
@@ -2093,6 +2094,161 @@ static void storage_test_rendering(void) {
     assert(strstr(drawn,"screen stays still") && strstr(drawn,"controller input stay active") && strstr(drawn,"Hold B"));
     puts("PASS storage tests rendering: progress, rates, safe baseline comparison, metadata, errors and persistence warnings");
 }
+/* Wi-Fi: START on the Network page opens its page, which looks for the
+ * board and networks; rows are the bands, each network, "Other network". */
+static struct kui_wifi_view three_networks(void) {
+    struct kui_wifi_view view;
+    memset(&view,0,sizeof(view));
+    view.found=view.scanned=true;view.count=3;
+    strcpy(view.board,"XIAO ESP32-C5, firmware 0.1.0 (SPI 12.5 MHz, select GPIO6)");
+    strcpy(view.message,"3 networks in range");
+    view.wifi.state=KWM_WIFI_IDLE;view.wifi.band_mode=KWM_BAND_BOTH;
+    struct kui_wifi_network *n=view.networks;
+    strcpy(n[0].ssid,"Home 5G");n[0].security=3;n[0].five=true;n[0].channel=36;n[0].rssi=-48;
+    strcpy(n[1].ssid,"Home");n[1].security=4;n[1].channel=11;n[1].rssi=-66;
+    strcpy(n[2].ssid,"Cafe");n[2].channel=1;n[2].rssi=-80;
+    return view;
+}
+static void wifi_controls(void) {
+    reset(KUI_SHELL_NETWORK);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_WIFI_REFRESH && s.page==KUI_SHELL_WIFI);
+    /* No board yet: X looks again, B leaves; nothing else. */
+    assert(kui_shell_wifi_rows(&s)==2);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.confirm_wifi_forget);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && press(KUI_SHELL_X,false)==KUI_SHELL_WIFI_REFRESH);
+    struct kui_wifi_view view=three_networks();
+    kui_shell_set_wifi(&s,&view);
+    assert(kui_shell_wifi_rows(&s)==5 && s.wifi_selected==0);
+    /* Bands: RIGHT from both to 5 GHz only; LEFT from both to 2.4 GHz only. */
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_WIFI_BAND && s.wifi_request.action==KUI_WIFI_BAND);
+    assert(s.wifi_request.band==KWM_BAND_5);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_WIFI_BAND && s.wifi_request.band==KWM_BAND_24);
+    /* An open network joins at once. */
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.wifi_selected==4);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.wifi_selected==3);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_WIFI_JOIN && s.page==KUI_SHELL_WIFI);
+    assert(!strcmp(s.wifi_request.ssid,"Cafe") && !s.wifi_request.password[0]);
+    assert(s.wifi_request.action==KUI_WIFI_JOIN && s.wifi_request.band==KWM_BAND_KEEP);
+    /* A secured one asks for its password: 8 to 63 characters. */
+    s.wifi_selected=2;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && s.wifi_keyboard);
+    assert(!s.wifi_typing_name && !strcmp(s.wifi_request.ssid,"Home") && !s.keyboard[0]);
+    strcpy(s.keyboard,"short");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && strstr(s.destination_notice,"8 to 63"));
+    /* Y cycles lowercase, uppercase, symbols; the symbols reach passwords. */
+    strcpy(s.keyboard,"correct horse");s.keyboard_selected=0;
+    assert(s.keyboard_layer==KUI_SHELL_KEYS_LOWER);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.keyboard_layer==KUI_SHELL_KEYS_UPPER);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !strcmp(s.keyboard,"correct horseQ"));
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.keyboard_layer==KUI_SHELL_KEYS_SYMBOLS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !strcmp(s.keyboard,"correct horseQ!"));
+    s.keyboard_selected=20;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !strcmp(s.keyboard,"correct horseQ!\\"));
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.keyboard_layer==KUI_SHELL_KEYS_LOWER);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_WIFI_JOIN && s.page==KUI_SHELL_WIFI && !s.wifi_keyboard);
+    assert(!strcmp(s.wifi_request.password,"correct horseQ!\\") && !s.keyboard[0]);
+    /* Passwords stop at 64 characters. */
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD);
+    memset(s.keyboard,'k',64);s.keyboard[64]=0;s.keyboard_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && strlen(s.keyboard)==64 && strstr(s.destination_notice,"at most 64"));
+    /* B leaves the keyboard without joining; what was typed is wiped. */
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_WIFI && !s.wifi_keyboard && !s.keyboard[0]);
+    /* Another network by name, then its password; none: an open network. */
+    s.wifi_selected=4;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && s.wifi_typing_name);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && strstr(s.destination_notice,"name first"));
+    memset(s.keyboard,'n',32);s.keyboard[32]=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && strlen(s.keyboard)==32 && strstr(s.destination_notice,"at most 32"));
+    strcpy(s.keyboard,"Hidden net");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && !s.wifi_typing_name);
+    assert(!strcmp(s.wifi_request.ssid,"Hidden net") && !s.keyboard[0]);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_WIFI_JOIN && s.page==KUI_SHELL_WIFI && !s.wifi_request.password[0]);
+    /* Forget asks first: B cancels, A confirms. */
+    view.wifi.state=KWM_WIFI_ONLINE;strcpy(view.wifi.ssid,"Home");view.wifi.saved=1;
+    kui_shell_set_wifi(&s,&view);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_wifi_forget);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.confirm_wifi_forget);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_wifi_forget && s.page==KUI_SHELL_WIFI);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_wifi_forget);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_WIFI_FORGET && !s.confirm_wifi_forget);
+    assert(s.wifi_request.action==KUI_WIFI_FORGET);
+    /* While a job runs, B stops it and the page stays. */
+    assert(press(KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_RIGHT,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_WIFI);
+    /* A view without a scan keeps the list, as does one just starting;
+     * a board that has gone clears it. */
+    struct kui_wifi_view joined=view;
+    joined.scanned=false;joined.count=0;strcpy(joined.message,"Online on Home");
+    kui_shell_set_wifi(&s,&joined);
+    assert(s.wifi.count==3 && !strcmp(s.wifi.networks[1].ssid,"Home") && !strcmp(s.wifi.message,"Online on Home"));
+    struct kui_wifi_view starting;
+    memset(&starting,0,sizeof(starting));
+    starting.working=true;strcpy(starting.message,"Looking for the Wi-Fi board");
+    kui_shell_set_wifi(&s,&starting);
+    assert(s.wifi.found && s.wifi.count==3 && strstr(s.wifi.board,"ESP32-C5") && s.wifi.working);
+    struct kui_wifi_view gone;
+    memset(&gone,0,sizeof(gone));
+    gone.failed=true;strcpy(gone.message,"No Wi-Fi board answered on the SCI port");
+    s.wifi_selected=4;kui_shell_set_wifi(&s,&gone);
+    assert(!s.wifi.found && !s.wifi.count && s.wifi_selected==0);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_NETWORK);
+    puts("PASS shell Wi-Fi controls: open, bands, open and secured joins, keyboard symbols and limits, by name, forget");
+}
+static void wifi_rendering(void) {
+    struct kui_shell_view v={.build="a1b2c3d4e5f6",.busy=true};
+    reset(KUI_SHELL_WIFI);render(&v);
+    assert(strstr(drawn,"Wi-Fi") && strstr(drawn,"Looking for the Wi-Fi board") && strstr(drawn,"B Stop safely"));
+    struct kui_wifi_view gone;
+    memset(&gone,0,sizeof(gone));
+    gone.failed=true;strcpy(gone.message,"No Wi-Fi board answered on the SCI port");
+    kui_shell_set_wifi(&s,&gone);v.busy=false;render(&v);
+    assert(strstr(drawn,"No Wi-Fi board answered") && strstr(drawn,"READY to GPIO5") && strstr(drawn,"X Look again"));
+    struct kui_wifi_view view=three_networks();
+    kui_shell_set_wifi(&s,&view);render(&v);
+    assert(strstr(drawn,"XIAO ESP32-C5, firmware 0.1.0") && strstr(drawn,"No network set up: choose one below"));
+    assert(strstr(drawn,"Bands: 2.4 and 5 GHz") && strstr(drawn,"LEFT/RIGHT"));
+    assert(strstr(drawn,"Home 5G") && strstr(drawn,"5 GHz ch 36") && strstr(drawn,"WPA2") && strstr(drawn,"WPA3"));
+    assert(strstr(drawn,"2.4 GHz ch 1") && strstr(drawn,"Open") && strstr(drawn,"Other network (type its name)"));
+    assert(strstr(drawn,"3 networks in range") && strstr(drawn,"A Join   X Scan again   Y Forget   B Network"));
+    view.wifi.state=KWM_WIFI_ONLINE;strcpy(view.wifi.ssid,"Home 5G");view.wifi.band=5;view.wifi.rssi=-48;
+    view.wifi.ip[0]=192;view.wifi.ip[1]=168;view.wifi.ip[2]=1;view.wifi.ip[3]=23;
+    kui_shell_set_wifi(&s,&view);render(&v);
+    assert(strstr(drawn,"Online on Home 5G as 192.168.1.23 (5 GHz, -48 dBm)") && strstr(drawn,"Joined"));
+    view.wifi.state=KWM_WIFI_BAD_PASSWORD;kui_shell_set_wifi(&s,&view);render(&v);
+    assert(strstr(drawn,"Home 5G: wrong password"));
+    /* A long list scrolls with the selection. */
+    view.count=KUI_WIFI_NETWORKS;
+    for(unsigned i=3;i<KUI_WIFI_NETWORKS;i++) {
+        snprintf(view.networks[i].ssid,sizeof(view.networks[i].ssid),"Network %02u",i);
+        view.networks[i].channel=6;view.networks[i].rssi=(int8_t)(-60-(int)i);view.networks[i].security=3;
+    }
+    kui_shell_set_wifi(&s,&view);
+    s.wifi_selected=kui_shell_wifi_rows(&s)-1;render(&v);
+    assert(strstr(drawn,"Other network") && strstr(drawn,"Network 23") && !strstr(drawn,"Bands:") && strstr(drawn,"24 networks"));
+    /* The password keyboard, with its symbols. */
+    s.wifi_selected=1;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    s.keyboard_layer=KUI_SHELL_KEYS_SYMBOLS;strcpy(s.keyboard,"p@ss");render(&v);
+    assert(strstr(drawn,"Password for Home 5G") && strstr(drawn,"Y Shift: symbols") && strstr(drawn,"p@ss_"));
+    assert(strstr(drawn,"8 to 63 characters") && strstr(drawn,"#") && strstr(drawn,"DONE"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    s.wifi_selected=kui_shell_wifi_rows(&s)-1;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);render(&v);
+    assert(strstr(drawn,"Wi-Fi network name") && strstr(drawn,"open network"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    view.wifi.state=KWM_WIFI_ONLINE;view.wifi.saved=1;kui_shell_set_wifi(&s,&view);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE);render(&v);
+    assert(strstr(drawn,"FORGET THIS WI-FI NETWORK?") && strstr(drawn,"A Forget") && strstr(drawn,"B Cancel"));
+    /* The FTP page over Wi-Fi. */
+    reset(KUI_SHELL_FTP);
+    struct kui_ftp_status f;
+    memset(&f,0,sizeof(f));
+    f.state=KUI_FTP_READY;f.wifi=true;f.port=KUI_FTP_PORT;f.ip[0]=192;f.ip[1]=168;f.ip[2]=1;f.ip[3]=23;
+    snprintf(f.adapter,sizeof(f.adapter),"Wi-Fi: Home 5G, 5 GHz channel 36, -48 dBm");
+    v.ftp=&f;f.link=true;render(&v);
+    assert(strstr(drawn,"ftp://192.168.1.23") && strstr(drawn,"Wi-Fi: Home 5G, 5 GHz channel 36"));
+    f.link=false;render(&v);
+    assert(strstr(drawn,"Wi-Fi connection lost; the board is reconnecting") && !strstr(drawn,"No cable link"));
+    puts("PASS shell Wi-Fi rendering: looking, no board, networks, online, scrolling, password keyboard, forget, FTP over Wi-Fi");
+}
 int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--storage-tests")) {
         storage_test_controls();storage_test_rendering();return 0;
@@ -2107,6 +2263,7 @@ int main(int argc,char **argv) {
     music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
     files_controls(); files_rendering();
     ftp_controls(); ftp_rendering();
+    wifi_controls(); wifi_rendering();
     puts("PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

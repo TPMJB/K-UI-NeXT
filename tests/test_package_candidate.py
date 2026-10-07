@@ -17,6 +17,8 @@ from package import (candidate_evidence, candidate_requested, development_experi
                      release_metadata, write_release_assets, write_release_bundle,
                      write_release_guides)
 from publish_release import verify_assets
+from runtime_package import envelope
+from retail_package import relocation_header, HEADER_OFFSET, STAGE_BLOB_OFFSET
 
 STABLE_RELEASE = {"version": "1.7", "name": 'K-UI V1.7 "Dáinsleif"',
                   "short_name": "K-UI V1.7", "artifact_prefix": "kui-1.7-dainsleif"}
@@ -47,8 +49,12 @@ class CandidateInstallation(unittest.TestCase):
             path = self.sd / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(("fixture " + name).encode())
+        for name in files:
+            if name.endswith(".kui"):
+                (self.sd / name).write_bytes(envelope(b"\x09\0\x09\0", 4, self.commit[:12]))
         for name in ("STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md",
-                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "LICENSE", "THIRD_PARTY.md"):
+                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-FLASH-ARCH.md",
+                     "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
             (self.dist / name).write_text(name + "\n")
         (self.dist / "LICENSES").mkdir()
         (self.dist / "LICENSES/notice.txt").write_text("fixture license\n")
@@ -98,6 +104,8 @@ class CandidateInstallation(unittest.TestCase):
         for name in ("runtime.kui", "apps/games/retail-boot.kui", "apps/games/ce-probe.kui"):
             self.assertEqual((bundle / "KUI" / name).read_bytes(), (self.sd / name).read_bytes())
         self.assertTrue((bundle / "WINDOWS-CE-PLACEMENT-TEST.md").is_file())
+        for name in ("WIFI.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md"):
+            self.assertEqual((bundle / name).read_bytes(), (self.dist / name).read_bytes())
         self.assertTrue((bundle / "boot-cd" / (release["artifact_prefix"] + ".cdi")).is_file())
         self.assertFalse((bundle / "KUI/preferences.ini").exists())
         self.assertFalse((bundle / "KUI/tests").exists())
@@ -190,8 +198,16 @@ class CandidateInstallation(unittest.TestCase):
         if test_release == FORMATS_RELEASE:
             self.assertIn("GDI, ISO, BIN/CUE, CDI and standalone BIN/IMG", (bundle / "SOURCE.txt").read_text())
             self.assertNotIn("2048-byte sector hardware test", (bundle / "SOURCE.txt").read_text())
-            self.assertEqual((bundle / "GAMES-FORMATS-TEST.md").read_bytes(),
-                             (ROOT / "docs/games-formats-test.md").read_bytes())
+            installed = (bundle / "GAMES-FORMATS-TEST.md").read_text()
+            source = (ROOT / "docs/games-formats-test.md").read_text()
+            self.assertEqual(installed.splitlines()[0], source.splitlines()[0])
+            for label in ("| GDI |", "| ISO |", "| BIN/CUE |", "| CDI |"):
+                self.assertIn(label, installed)
+            # Supporting guides omitted from the old experimental bundle
+            # become links to this exact source commit.
+            self.assertNotIn("](games-formats.md)", installed)
+            if "](games-formats.md)" in source:
+                self.assertIn("/blob/" + self.commit + "/docs/games-formats.md", installed)
             self.assertIn("(GAMES-FORMATS-TEST.md)", (bundle / "START-HERE.md").read_text())
         for name in ("START-HERE.md", "RELEASE-NOTES.md", "ANNOUNCEMENTS.md", "SOURCE.txt"):
             self.assertNotIn("— final release", (bundle / name).read_text())
@@ -205,6 +221,47 @@ class CandidateInstallation(unittest.TestCase):
         self.assert_checksums(assets, "SHA256SUMS.txt")
         with self.assertRaisesRegex(SystemExit, "Refusing a diagnostic or candidate package"):
             verify_assets(assets, release, self.commit)
+
+    def test_185_install_keeps_matching_native_ce_payloads_tools_and_codec_notices(self):
+        release185 = {"version": "1.8.5", "name": 'K-UI V1.8.5 "Dáinsleif"',
+                      "short_name": "K-UI V1.8.5", "artifact_prefix": "kui-1.8.5-dainsleif"}
+        for ce, name in ((False, "retail-boot.kui"), (True, "ce-probe.kui")):
+            payload = bytearray(STAGE_BLOB_OFFSET + 4)
+            payload[HEADER_OFFSET:HEADER_OFFSET + 64] = relocation_header(4, ce=ce, low=not ce)
+            payload[-4:] = b"\x09\0\x09\0"
+            (self.sd / "apps/games" / name).write_bytes(envelope(payload, len(payload), self.commit[:12]))
+        with patch("package.release_metadata", return_value=release185):
+            bundle, release = self.assemble(False)
+        self.assertEqual(release, release185)
+        for name in ("gdi_optimize.py", "game_image_import.py"):
+            self.assertEqual((bundle / "tools" / name).read_bytes(), (ROOT / "tools" / name).read_bytes())
+        for name in ("GAMES-FORMATS.md", "GDI-2048-TEST.md", "RIPPER-CONTROLS.md", "CAPTURE-FORMAT.md"):
+            self.assertTrue((bundle / name).is_file())
+        for name in ("capture-codecs.md", "miniz-NOTICES.txt", "minilzo-COPYING", "minilzo-README.LZO"):
+            self.assertTrue((bundle / "LICENSES" / name).is_file())
+        self.assertIn("Martin Raiber", (bundle / "LICENSES/miniz-NOTICES.txt").read_text())
+        self.assertIn("free and unencumbered", (bundle / "LICENSES/miniz-NOTICES.txt").read_text())
+        self.assertEqual(len(verify_assets(self.dist / "release-assets", release185, self.commit)), 3)
+        self.assert_checksums(bundle, "SHA256SUMS")
+        with zipfile.ZipFile(self.dist / "release-assets" / (release["artifact_prefix"] + "-source.zip")) as archive:
+            self.assertIn("LICENSES/minilzo-COPYING", archive.namelist())
+
+    def test_mixed_payload_build_or_invalid_envelope_is_rejected_even_with_fresh_zip_checksums(self):
+        for corruption in ("wrong-build", "bad-payload"):
+            with self.subTest(corruption=corruption):
+                bundle, release = self.assemble(False)
+                path = bundle / "KUI/apps/games/ce-probe.kui"
+                if corruption == "wrong-build":
+                    path.write_bytes(envelope(b"\x09\0\x09\0", 4, "f" * 12))
+                else:
+                    damaged = bytearray(path.read_bytes())
+                    damaged[-1] ^= 1
+                    path.write_bytes(damaged)
+                write_release_assets(self.dist, bundle, self.source, release)
+                message = "payload source identity" if corruption == "wrong-build" else "Payload checksum"
+                with self.assertRaisesRegex(SystemExit, message):
+                    verify_assets(self.dist / "release-assets", release, self.commit)
+
 
 
 class CandidateSelection(unittest.TestCase):

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "retail_display.h"
+#include "kui/version.h"
 #include <stddef.h>
 #ifndef KUI_BUILD_ID
 #define KUI_BUILD_ID "LOCAL"
@@ -78,7 +79,7 @@ void retail_display_restore(const struct retail_display_state *s) {
     volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)0xa5000000u;
     for(unsigned i=0;i<640u*480u;i++) frame[i]=0x0864;
     row=20;
-    retail_display_line("K-UI V1.5 GAME LAUNCH");
+    retail_display_line("K-UI V" KUI_VERSION " LAUNCH");
     retail_display_line("BUILD " KUI_BUILD_ID);
 #ifdef KUI_RETAIL_CE
     retail_display_line("WINDOWS CE BOOT TEST");

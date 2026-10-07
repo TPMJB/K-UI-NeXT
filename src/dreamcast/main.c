@@ -169,6 +169,11 @@ static uint16_t files_picture_pixels[KUI_FILES_PICTURE_EDGE*KUI_FILES_PICTURE_ED
 /* FTP server: the status it publishes as it runs, drawn on its page. */
 static struct kui_ftp_status ftp_status;
 static bool ftp_seen;
+/* Wi-Fi page: the job copied from the shell (its password wiped once the
+ * job ends) and the view the job publishes as it goes, by generation. */
+static struct kui_wifi_request wifi_request_pending;
+static struct kui_wifi_view wifi_view;
+static unsigned wifi_generation;
 static bool is_capture_action(unsigned action) {
     return (action>=4 && action<=6) || action==22;
 }
@@ -1429,6 +1434,9 @@ static void games_scan_progress(const struct kui_app_status *status) {
 static void ftp_publish(const struct kui_ftp_status *status) {
     mutex_lock(&lock);ftp_status=*status;ftp_seen=true;mutex_unlock(&lock);
 }
+static void wifi_publish(const struct kui_wifi_view *view) {
+    mutex_lock(&lock);wifi_view=*view;++wifi_generation;mutex_unlock(&lock);
+}
 static void files_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);files_status=*status;mutex_unlock(&lock);
 }
@@ -1702,6 +1710,12 @@ static void *worker(void *unused) {
                 ftp_status.state=KUI_FTP_STOPPED;
                 snprintf(ftp_status.message,sizeof(ftp_status.message),"Stopped before starting");
             }
+            if(action>=72 && action<=75) {
+                memset(wifi_request_pending.password,0,sizeof(wifi_request_pending.password));
+                wifi_view.working=false;
+                snprintf(wifi_view.message,sizeof(wifi_view.message),"Stopped before starting");
+                ++wifi_generation;
+            }
             if(action==63) {
                 memset(&files_picture_result,0,sizeof(files_picture_result));
                 memcpy(files_picture_result.path,files_picture_pending,sizeof(files_picture_result.path));
@@ -1902,10 +1916,12 @@ static void *worker(void *unused) {
                 mutex_lock(&lock);files_picture_result=picture;++files_picture_generation;mutex_unlock(&lock);
             }
             if(action==64) {
-                /* The card stays on SCIF; the W5500 has the SCI port. */
+                /* The card stays on SCIF; the network adapter (a W5500 or the
+                 * Wi-Fi board) has the SCI port. */
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_ftp_options options={0};
                 options.seed=(uint32_t)timer_us_gettime64();
+                const struct kui_net_ports ports={kui_w5500_console_port(),kui_wifi_console_port()};
                 struct kui_ftp_status result;
                 /* KOS's SD writes wait out the card's busy time after each
                  * write by polling it at the scheduler's ticks, 10 ms apart
@@ -1913,9 +1929,17 @@ static void *worker(void *unused) {
                  * most. Only while the FTP server runs. */
                 unsigned hz=thd_get_hz();
                 thd_set_hz(1000);
-                kui_ftp_run(kui_w5500_console_port(),&options,&result,kui_log,kui_cancelled,ftp_publish);
+                kui_ftp_run(&ports,&options,&result,kui_log,kui_cancelled,ftp_publish);
                 thd_set_hz(hz);
                 mutex_lock(&lock);ftp_status=result;ftp_seen=true;mutex_unlock(&lock);
+            }
+            if(action>=72 && action<=75) {
+                /* The card is not used: the Wi-Fi board has the SCI port. */
+                struct kui_wifi_view view;
+                kui_wifi_run(kui_wifi_console_port(),&wifi_request_pending,&view,kui_log,kui_cancelled,wifi_publish);
+                mutex_lock(&lock);
+                memset(wifi_request_pending.password,0,sizeof(wifi_request_pending.password));
+                mutex_unlock(&lock);
             }
             if(action==55) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -2399,6 +2423,10 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_SCI_ASYNC_STRESS: return 69;
         case KUI_SHELL_SCI_ASYNC_SCREEN: return 70;
         case KUI_SHELL_SCI_ASYNC_SPEED: return 71;
+        case KUI_SHELL_WIFI_REFRESH: return 72;
+        case KUI_SHELL_WIFI_JOIN: return 73;
+        case KUI_SHELL_WIFI_FORGET: return 74;
+        case KUI_SHELL_WIFI_BAND: return 75;
         default: return 0;
     }
 }
@@ -2571,6 +2599,7 @@ int main(void) {
     unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0;
     unsigned seen_games_listing=0,seen_games_detail=0;
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
+    unsigned seen_wifi_generation=0;
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
@@ -2643,6 +2672,9 @@ int main(void) {
         }
         if(seen_files_picture!=files_picture_generation) {
             kui_shell_set_files_picture(&shell,&files_picture_result);seen_files_picture=files_picture_generation;
+        }
+        if(seen_wifi_generation!=wifi_generation) {
+            kui_shell_set_wifi(&shell,&wifi_view);seen_wifi_generation=wifi_generation;
         }
         if(seen_games_detail!=games_detail_generation) {
             kui_shell_set_games_detail(&shell,&games_detail);
@@ -2847,6 +2879,13 @@ int main(void) {
                 ftp_status=(struct kui_ftp_status){0};
                 snprintf(ftp_status.message,sizeof(ftp_status.message),"Starting");
                 ftp_seen=true;
+            }
+            if(action>=72 && action<=75) {
+                wifi_request_pending=shell.wifi_request;
+                wifi_request_pending.action=action==72?KUI_WIFI_REFRESH:action==73?KUI_WIFI_JOIN:
+                    action==74?KUI_WIFI_FORGET:KUI_WIFI_BAND;
+                /* The password lives only in the job now. */
+                memset(shell.wifi_request.password,0,sizeof(shell.wifi_request.password));
             }
             if(action==59) {
                 games_scan_status=(struct kui_app_status){0};

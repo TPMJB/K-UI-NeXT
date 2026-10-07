@@ -1,16 +1,17 @@
 # SCI connector plan: microSD, W5500 and Wi-Fi
 
 **Standalone storage update:** [storage-transports.md](storage-transports.md)
-describes the development build for one SCI microSD board in place of the
-network board. The shared-bus wiring/software below remains a separate plan;
-it is not required for standalone SCIF/SCI/IDE storage testing.
+describes the implementation for one SCI microSD board in place of the network
+board. SCI storage reserves the whole port: current K-UI refuses network probes
+while that card is selected. Keep storage on **SCIF** for the first Wi-Fi test.
+The shared-bus wiring/software below remains a separate plan; it is not required
+for standalone SCIF/SCI/IDE storage testing.
 
-**Plan; only the W5500 part exists today.** This is the wiring to solder once,
-so that a microSD card, the W5500 and later a Wi-Fi board all plug into the
-same SCI port. Today's build still expects the W5500 alone, with its chip
-select on GPIO7 ([FTP server](ftp.md)). The software for everything else
-below is planned, not written. Solder-point details are still to be checked
-against photos of the owner's VA1 board before anyone solders.
+**The multi-device connector remains a plan.** Network drivers support a W5500
+with chip select on GPIO7 (the usual point) or GPIO6, and the Wi-Fi board on
+GPIO6 or GPIO7 ([FTP server](ftp.md), [Wi-Fi](wifi.md)). The Wi-Fi hardware path
+is untested. Simultaneous SCI storage and networking is not implemented, and the
+extra GPIO solder points still need confirmation against the owner's VA1 board.
 
 ## One bus, several chip selects
 
@@ -55,14 +56,15 @@ network board, either the W5500 or the Wi-Fi board:
 | 6 | MOSI | shared |
 | 7 | MISO | shared |
 | 8 | Network chip select (GPIO6) | 10 kΩ pull-up to 3.3 V |
-| 9 | Ready (GPIO5), active low | 10 kΩ pull-up to 3.3 V |
+| 9 | Ready (GPIO5) | 10 kΩ pull-up to 3.3 V. The W5500 interrupt is active low; the Wi-Fi READY signal changes level each time it is ready for another transfer |
 | 10 | Reset (GPIO0), active low | 10 kΩ pull-up to 3.3 V |
 
 The pull-ups keep every device deselected and running while the console
 boots and while a game runs. The microSD card sits on the same SCLK, MOSI
 and MISO lines with its own chip select, GPIO7, also pulled up. GPIO7 is
 what KallistiOS's SD-over-SCI driver uses, so the SD card gets it and the
-W5500 moves to GPIO6.
+network board would move to GPIO6. A W5500 or Wi-Fi board used alone can keep
+GPIO7 as its select. This layout does not enable shared-bus support in software.
 
 ## The devices
 
@@ -92,8 +94,9 @@ powered from the Robot Retro supply's 5 V.
 ### Wi-Fi: Seeed XIAO ESP32-C5
 
 Dual-band (2.4 and 5 GHz) Wi-Fi 6 with WPA3, 21 × 17.8 mm, powered from
-5 V. It needs K-UI's own firmware, loaded once over its USB-C port; after
-that, K-UI updates it. Pins D2 and D3 are ESP32-C5 strapping pins (GPIO25 and
+5 V. It needs K-UI's own firmware, loaded over its USB-C port. Firmware-update
+messages exist in the link protocol, but K-UI does not yet expose an update
+workflow. Pins D2 and D3 are ESP32-C5 strapping pins (GPIO25 and
 GPIO7), so they are left unused.
 
 | XIAO ESP32-C5 | Connector |
@@ -101,42 +104,47 @@ GPIO7), so they are left unused.
 | D8 (GPIO8) | pin 5, SCLK |
 | D10 (GPIO10) | pin 6, MOSI |
 | D9 (GPIO9) | pin 7, MISO |
-| D0 (GPIO1) | pin 8, network chip select |
-| D1 (GPIO0) | pin 9, ready |
-| D4 (GPIO23) | pin 10, reset request (optional) |
+| D0 (GPIO1) | pin 8, network chip select (Dreamcast GPIO6, or GPIO7 when used alone) |
+| D1 (GPIO0) | pin 9, ready (optional; exact Dreamcast GPIO5 solder point unconfirmed) |
+| D4 (GPIO23) | pin 10, reset request (optional; leave unconnected for the first test) |
 | 5V | pin 1 |
 | GND | pin 2 |
 
 - **Do not connect the XIAO's 3V3 pin.** It makes its own 3.3 V; tying it to
   the console's 3.3 V would put two regulators against each other.
-- **Antenna.** The board has a U.FL connector and no antenna of its own.
-  Reviews say it ships with a 2.4 GHz antenna, so use a dual-band
-  2.4/5 GHz U.FL antenna, placed outside the console's metal shielding (on
-  the case, or through the modem bay with a U.FL to RP-SMA lead).
+- **Antenna.** The board uses an external U.FL antenna. Attach it while the
+  board is unpowered. For 5 GHz testing, use an antenna specified for both
+  2.4 and 5 GHz; the supplied antenna's frequency range has not been verified
+  here. Keep the antenna outside the console's metal shielding.
 - **Power.** Put a capacitor of about 220 µF next to its 5V pin to cover the
   short current spikes when it transmits. The 5V pin is also the XIAO's USB
-  power line, so put a Schottky diode (a 1N5817 or SS14, band toward the
-  XIAO) in the 5 V lead, as Seeed advises for powering a XIAO through that
-  pin. Then USB and the console's 5 V cannot feed each other when firmware
-  is loaded over USB with the board installed. Without the diode, unplug
-  the 5 V lead before connecting USB.
+  power line. For the first test, power it from USB alone with the Dreamcast
+  connections disconnected. Unplug USB before connecting the console's 5 V.
+  A single diode in the console's lead should not be treated as complete
+  isolation between two connected power supplies.
 - The XIAO's reset button is not on its pins. The reset-request line asks
   K-UI's firmware to restart itself; the ESP32-C5's own watchdog covers a
-  hang.
+  hang. Current K-UI does not drive this request line, so D4 can remain
+  unconnected. With D1 omitted, the driver uses a 20 ms wait for each transfer;
+  that fallback is host-tested but its physical timing remains unvalidated.
+- **Firmware:** [firmware/kui-wifi](../firmware/kui-wifi/README.md).
+  [Flash and bench-test it on Arch](wifi-flash-arch.md) before installation.
+- **Sharing MISO:** whether the XIAO releases MISO when deselected still needs
+  to be measured on hardware. Do not assume that adding a second chip select
+  makes the board safe to share with an SCI SD card.
 
-## Software still to write
+## Software status
 
-1. A shared SCI bus layer: one owner for the SCI port, a lock so devices take
-   turns, each device's own clock speed (SD cards start slowly), chip
-   selects on GPIO7 and GPIO6, and the ready and reset lines.
-2. The W5500 on GPIO6.
-3. The microSD on GPIO7 in K-UI (through KallistiOS's SD-over-SCI driver)
-   and in the game loader (an independent SCI reader).
-4. The XIAO ESP32-C5 firmware: SPI in mode 3, Wi-Fi setup and reconnection,
-   network connections of the same kind the W5500 provides (so the FTP
-   server works over either board), and updates from K-UI. Then K-UI's
-   driver for it and a Wi-Fi setup screen (network list, password with the
-   on-screen keyboard).
+1. The network SCI layer is written (`src/dreamcast/sci_port.c`): chip selects
+   on GPIO7 and GPIO6, clock rates, and READY on GPIO5. The storage worker runs
+   one network operation at a time. The reset request is not driven yet.
+2. The W5500 on GPIO6 is implemented; the driver tries GPIO7 first.
+3. Standalone microSD storage on GPIO7 is implemented in K-UI and the detached
+   game loader. Sharing SCI with a network adapter remains future work; the
+   present reservation guard keeps the storage card's port untouched.
+4. The XIAO firmware, K-UI driver, Wi-Fi setup page, and FTP socket backend are
+   implemented and host-tested. Firmware-update messages exist; the K-UI update
+   workflow and all board-level acceptance tests remain to be done.
 
 Everything up to the console itself can be host-tested first, as the W5500
 and FTP code was.
@@ -149,4 +157,4 @@ and FTP code was.
 - [XIAO ESP32-C5 pin map](https://github.com/espressif/arduino-esp32/blob/master/variants/XIAO_ESP32C5/pins_arduino.h)
 - [XIAO ESP32-C5 board description](https://github.com/zephyrproject-rtos/zephyr/blob/main/boards/seeed/xiao_esp32c5/doc/index.rst)
 - [ESP32-C5 strapping pins](https://www.espboards.dev/blog/esp32-strapping-pins/)
-- [XIAO ESP32-C5 getting started, Seeed](https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/) (the 5V pin is the USB power line; power it through a diode. Read through search summaries, as the wiki is blocked from the build environment)
+- [XIAO ESP32-C5 getting started, Seeed](https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/) (pin map, external antenna, and 5V/VBUS input/output)

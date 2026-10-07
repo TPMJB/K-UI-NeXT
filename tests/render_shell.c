@@ -20,7 +20,8 @@
  * storage-test-mismatch, storage-test-history, sci-async-probe, sci-async-result,
  * sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure, sci-async-bus-failure,
  * sci-async-reset-failure, sci-async-stress-result, sci-async-stress-busy, sci-async-stress-failure,
- * sci-async-quiet-fault. */
+ * sci-async-quiet-fault, ftp-wifi, wifi, wifi-online, wifi-joining,
+ * wifi-password, wifi-name, wifi-forget, wifi-absent. */
 #include "kui/shell.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -158,6 +159,56 @@ static void ftp_state(struct kui_shell *shell,struct kui_shell_view *view,const 
         }
     }
 }
+/* The Wi-Fi page in each state it draws. */
+static void wifi_state(struct kui_shell *shell,struct kui_shell_view *view,const char *mode) {
+    static const struct {const char *ssid;uint8_t channel,security;int8_t rssi;} nets[]={
+        {"Home 5G",36,3,-48},{"Home",6,3,-57},{"Upstairs",44,4,-63},{"Neighbours",11,3,-71},{"Cafe",1,0,-80},
+        {"Printer Direct",6,3,-84}};
+    struct kui_wifi_view w;
+    memset(&w,0,sizeof(w));
+    shell->page=KUI_SHELL_WIFI;
+    if(!strcmp(mode,"wifi-absent")) {
+        w.failed=true;snprintf(w.message,sizeof(w.message),"No Wi-Fi board answered on the SCI port");
+        kui_shell_set_wifi(shell,&w);
+        return;
+    }
+    w.found=w.scanned=true;w.count=sizeof(nets)/sizeof(nets[0]);
+    snprintf(w.board,sizeof(w.board),"XIAO ESP32-C5, firmware 0.1.0-3f2a9c1e (SPI 12.5 MHz, select GPIO6)");
+    for(unsigned i=0;i<w.count;i++) {
+        snprintf(w.networks[i].ssid,sizeof(w.networks[i].ssid),"%s",nets[i].ssid);
+        w.networks[i].channel=nets[i].channel;w.networks[i].security=nets[i].security;w.networks[i].rssi=nets[i].rssi;
+        w.networks[i].five=nets[i].channel>14;
+    }
+    w.wifi.band_mode=KWM_BAND_BOTH;
+    snprintf(w.message,sizeof(w.message),"6 networks in range");
+    if(strcmp(mode,"wifi")) {
+        w.wifi.state=KWM_WIFI_ONLINE;w.wifi.saved=1;w.wifi.band=5;w.wifi.channel=36;w.wifi.rssi=-48;
+        snprintf(w.wifi.ssid,sizeof(w.wifi.ssid),"Home 5G");
+        w.wifi.ip[0]=192;w.wifi.ip[1]=168;w.wifi.ip[2]=1;w.wifi.ip[3]=23;
+        snprintf(w.message,sizeof(w.message),"Online on Home 5G as 192.168.1.23; saved on the board");
+    }
+    if(!strcmp(mode,"wifi-joining")) {
+        view->busy=true;w.working=true;
+        w.wifi.state=KWM_WIFI_ASSOCIATED;snprintf(w.wifi.ssid,sizeof(w.wifi.ssid),"Upstairs");
+        memset(w.wifi.ip,0,4);
+        snprintf(w.message,sizeof(w.message),"Wi-Fi: joined Upstairs; waiting for an address");
+    }
+    kui_shell_set_wifi(shell,&w);
+    shell->wifi_selected=strcmp(mode,"wifi-joining")?1:3;
+    if(!strcmp(mode,"wifi-password")) {
+        shell->wifi_selected=3;
+        (void)kui_shell_input(shell,KUI_SHELL_A,false);
+        snprintf(shell->keyboard,sizeof(shell->keyboard),"blue-Heron!42");
+        shell->keyboard_layer=KUI_SHELL_KEYS_SYMBOLS;shell->keyboard_selected=12;
+    }
+    if(!strcmp(mode,"wifi-name")) {
+        shell->wifi_selected=kui_shell_wifi_rows(shell)-1;
+        (void)kui_shell_input(shell,KUI_SHELL_A,false);
+        snprintf(shell->keyboard,sizeof(shell->keyboard),"Garage");
+        shell->keyboard_selected=16;
+    }
+    if(!strcmp(mode,"wifi-forget")) (void)kui_shell_input(shell,KUI_SHELL_Y,false);
+}
 static unsigned home_row(enum kui_shell_page page) {
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(kui_shell_home_pages[i]==page) return i;
     return 0;
@@ -237,7 +288,12 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_RIPPER);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
     else if(!strcmp(argv[1],"network")) shell.page=KUI_SHELL_NETWORK;
-    else if(!strncmp(argv[1],"ftp-",4)) ftp_state(&shell,&view,argv[1]);
+    else if(!strcmp(argv[1],"ftp-wifi")) {
+        ftp_state(&shell,&view,"ftp-ready");
+        ftp.wifi=true;ftp.ip[3]=23;
+        snprintf(ftp.adapter,sizeof(ftp.adapter),"Wi-Fi: Home 5G, 5 GHz channel 36, -48 dBm");
+    } else if(!strncmp(argv[1],"ftp-",4)) ftp_state(&shell,&view,argv[1]);
+    else if(!strncmp(argv[1],"wifi",4)) wifi_state(&shell,&view,argv[1]);
     else if(!strncmp(argv[1],"storage-test",12)) storage_tests(&shell,&view,argv[1]);
     else if(!strcmp(argv[1],"files") || !strcmp(argv[1],"files-root")) {
         files_folder(&shell,!strcmp(argv[1],"files-root"));
