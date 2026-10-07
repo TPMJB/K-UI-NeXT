@@ -66,4 +66,22 @@ The production-derived caller fixture passed 14,066 checks with UBSan, `-O2`, LT
 
 Native background, CE standard and CE background resident payloads match the parent byte for byte. Ordinary native stage modes 0–3 and CE modes 0/3 retain allocated bytes and relocations; scoped assembly is unchanged. The workflow runs the new fixture for Sonic-scoped diagnostics; its existing console-only path gate now admits that fixture. All 11 workflow-hygiene checks and whitespace checks passed.
 
-The delivered archive records the exact GitHub CI run and source commit. Physical-console confirmation of the enclosing routine is pending.
+The delivered archive records the exact GitHub CI run and source commit.
+
+## Caller confirmation and Grandia II
+
+The owner supplied two photographs of build `c942c682187d` on 2026-10-06. Sonic Adventure stopped with the same command and rejection, and all three saved words matched the candidate chain:
+
+| Field | Sonic Adventure | Grandia II |
+| --- | --- | --- |
+| Function / command / rejection | `0` / `11` / `3` | `0` / `11` / `3` |
+| Original caller SP | `8c00b9f0` | `8c00b338` |
+| Original caller PR | `8c648d7a` | `8c07cb22` |
+| Reported PARAM | `8c00b9f4` | `0` |
+| S20 / S36 / S60 | `8c604e50` / `8c604c98` / `8c09b4de` | `0` / `0` / `0` |
+
+Values in this table are hexadecimal. Sonic's three matching words, together with the sole statically identified caller of `0x8c09b45c`, confirm the enclosing routine at `0x8c09b3f0`. The earlier scoped correction at `0x8c094c88` remains necessary; this is a second, later collision.
+
+Grandia's SP also lies inside the resident reservation, and its rejection identifies an unmappable parameter array. This is evidence of the same class of layout conflict, but does not identify its parameter pointer or enclosing routine. The diagnostic recognizes only Sonic's SDK PR when capturing PARAM and raw stack words. Consequently Grandia's four zeros are placeholders, not observations of a null pointer or empty stack. Grandia's executable has not been supplied for a matching call-graph audit.
+
+A permanent jump into temporary high-stage code is unsafe without a separate lifetime proof. Sonic's newly confirmed routine is called repeatedly, and its compressed-input buffer can grow downward from `0x8cf00000` into the stage. A second scoped experiment therefore needs separate retained stack backing, guards before compressed input and decompressed output writes, and removal of every installed hook before its temporary code can be reclaimed. A first-call correction alone does not establish gameplay compatibility.

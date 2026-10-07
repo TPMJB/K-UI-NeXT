@@ -326,7 +326,7 @@ C(kui_retail_game_resume):
 .Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
 
 #if defined(KUI_RETAIL_SONIC_STACK_TEST) && KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
-/* All four original-entry stubs have saved R0 before selecting P2. Save
+/* All seven original-entry stubs have saved R0 before selecting P2. Save
  * the rest of the real integer CPU frame BEFORE using high bookkeeping.
  * No FPU instruction is used anywhere in this freestanding stage. */
     .macro SONIC_STACK_SAVE_REST
@@ -364,6 +364,9 @@ C(\name):
     SONIC_STACK_ENTRY kui_retail_sonic_g2_busy,1
     SONIC_STACK_ENTRY kui_retail_sonic_scope_entry,2
     SONIC_STACK_ENTRY kui_retail_sonic_asset_guard,3
+    SONIC_STACK_ENTRY kui_retail_sonic_texture_entry,4
+    SONIC_STACK_ENTRY kui_retail_sonic_compressed_guard,5
+    SONIC_STACK_ENTRY kui_retail_sonic_decode_guard,6
 .Lsonic_stack_saved:
     stc sr,r0
     or #0xf0,r0
@@ -393,7 +396,15 @@ C(\name):
     mov r8,r4
     mov r10,r5
     mov r9,r6
+    mov #4,r0
+    cmp/hs r0,r10
+    bf .Lsonic_stack_first
+    mov.l .Lsonic_texture_state,r7
+    bra .Lsonic_stack_call
+    nop
+.Lsonic_stack_first:
     mov.l .Lsonic_stack_state,r7
+.Lsonic_stack_call:
     mov.l .Lsonic_stack_before,r0
     jsr @r0
     nop
@@ -418,6 +429,7 @@ C(\name):
     .align 2
 .Lsonic_stack_book: .long C(kui_retail_sonic_book_stack)+4096+0x20000000
 .Lsonic_stack_state: .long C(kui_retail_sonic_stack_state)+0x20000000
+.Lsonic_texture_state: .long C(kui_retail_sonic_texture_state)+0x20000000
 .Lsonic_stack_ccr: .long 0xff00001c
 .Lsonic_stack_ram: .long 0x8c000000
 .Lsonic_stack_ramend: .long KUI_RETAIL_RAM_END
@@ -459,7 +471,7 @@ C(\name):
     jmp @r0
     mov.l @r15+,r0
     .align 2
-.Lsonic_stack_resume: .long C(kui_retail_sonic_stack_state)+0x20000000
+.Lsonic_stack_resume: .long C(kui_retail_sonic_stack_resume)+0x20000000
     .align 2
     .global C(kui_retail_sonic_scope_return)
 C(kui_retail_sonic_scope_return):
@@ -489,6 +501,60 @@ C(kui_retail_sonic_scope_return):
 .Lsonic_return_ccr: .long 0xff00001c
 .Lsonic_return_state: .long C(kui_retail_sonic_stack_state)+0x20000000
 .Lsonic_return_after: .long C(kui_retail_sonic_stack_after)+0x20000000
+    .align 2
+    .global C(kui_retail_sonic_texture_return)
+C(kui_retail_sonic_texture_return):
+/* Distinct backing preserves the earlier flash helper's escaped workspace.
+ * Capture actual returned CPU state before any bookkeeping or cache work. */
+    mov.l r0,@-r15
+    SONIC_STACK_SAVE_REST
+    stc sr,r0
+    or #0xf0,r0
+    ldc r0,sr
+    mov r15,r8
+    mov.l .Ltexture_return_book,r15
+    mov.l .Ltexture_return_ccr,r0
+    mov.l @r0,r9
+    mov r8,r4
+    mov r9,r5
+    mov.l .Ltexture_return_state,r6
+    mov.l .Ltexture_return_after,r0
+    jsr @r0
+    nop
+    mov r0,r8
+/* C has checked immutable RAM through both aliases before this purge. On
+ * early return, a write guard may never have run: publish its restored code
+ * and invalidate both caches before any later owner call can fetch it. */
+    mov.l .Ltexture_return_ram,r0
+    mov.l .Ltexture_return_ramend,r1
+.Ltexture_return_purge:
+    ocbp @r0
+    add #32,r0
+    cmp/hs r1,r0
+    bf .Ltexture_return_purge
+    mov.l .Ltexture_return_off,r0
+    or r9,r0
+    mov.l .Ltexture_return_ccr,r1
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    SONIC_STACK_RESTORE
+    rts
+    mov.l @r15+,r0
+    .align 2
+.Ltexture_return_book: .long C(kui_retail_sonic_book_stack)+4096+0x20000000
+.Ltexture_return_ccr: .long 0xff00001c
+.Ltexture_return_state: .long C(kui_retail_sonic_texture_state)+0x20000000
+.Ltexture_return_after: .long C(kui_retail_sonic_stack_after)+0x20000000
+.Ltexture_return_ram: .long 0x8c000000
+.Ltexture_return_ramend: .long KUI_RETAIL_RAM_END
+.Ltexture_return_off: .long 0x00000808
 #endif
 
 #if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)

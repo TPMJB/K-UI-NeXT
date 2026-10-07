@@ -187,6 +187,11 @@ jobs:
       - name: Check Sonic caller-stack capture
         if: env.KUI_RETAIL_SONIC_STACK_TEST == '1'
         run: python3 tests/test_sonic_caller_stack.py
+      - name: Check Sonic scoped stacks and compressed bounds
+        if: env.KUI_RETAIL_SONIC_STACK_TEST == '1'
+        run: |
+          make build/test-sonic-stack
+          ./build/test-sonic-stack
       - name: Install filesystem test utilities
         if: steps.scope.outputs.console_only != 'true'
         run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools e2fsprogs mame-tools liblzo2-2

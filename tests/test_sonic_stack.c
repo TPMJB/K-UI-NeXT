@@ -21,6 +21,9 @@
 #define PRIVATE_TOP (PRIVATE_BOTTOM+SONIC_STACK_OWNER_BYTES)
 #define BOOK_BOTTOM 0x8ceb9000u
 #define STATE_ADDRESS 0x8ceba000u
+#define TEXTURE_BOTTOM 0x8ce50000u
+#define TEXTURE_TOP (TEXTURE_BOTTOM+SONIC_STACK_OWNER_BYTES)
+#define TEXTURE_STATE_ADDRESS 0x8ce60000u
 #define STAGE_END 0x8cec0000u
 #define TEST_CCR 0x00000909u
 #define MAP_ADDRESS 0x8c00b080u
@@ -31,8 +34,8 @@ static uint32_t entry_frame[21];
 static jmp_buf terminal;
 static int expect_terminal;
 static struct {
-    uint32_t allocation[4];unsigned publications,reads;
-    uint32_t address[8];size_t bytes[8];
+    uint32_t allocation[6];unsigned publications,reads;
+    uint32_t address[16];size_t bytes[16];
     unsigned wait_point;int timeout;
     uint32_t p2_override,p2_value;unsigned p2_reads;
 } hooks;
@@ -48,11 +51,15 @@ void kui_retail_sonic_g2_busy(void) {abort();}
 void kui_retail_sonic_scope_entry(void) {abort();}
 void kui_retail_sonic_scope_return(void) {abort();}
 void kui_retail_sonic_asset_guard(void) {abort();}
+void kui_retail_sonic_texture_entry(void) {abort();}
+void kui_retail_sonic_texture_return(void) {abort();}
+void kui_retail_sonic_compressed_guard(void) {abort();}
+void kui_retail_sonic_decode_guard(void) {abort();}
 uint32_t kui_retail_sonic_stack_allocation(unsigned allocation) {
-    assert(allocation<4u);return hooks.allocation[allocation];
+    assert(allocation<6u);return hooks.allocation[allocation];
 }
 void kui_retail_sonic_stack_publish(uint32_t address,size_t bytes) {
-    assert(hooks.publications<8u);
+    assert(hooks.publications<16u);
     hooks.address[hooks.publications]=address;
     hooks.bytes[hooks.publications++]=bytes;
 }
@@ -119,7 +126,9 @@ static uint32_t *fixture(int uncached_frame) {
     memset(&hooks,0,sizeof(hooks));memset(&calls,0,sizeof(calls));
     hooks.allocation[0]=PRIVATE_BOTTOM;hooks.allocation[1]=BOOK_BOTTOM;
     hooks.allocation[2]=STATE_ADDRESS;hooks.allocation[3]=STAGE_END;
+    hooks.allocation[4]=TEXTURE_BOTTOM;hooks.allocation[5]=TEXTURE_STATE_ADDRESS;
     memset(&kui_retail_sonic_stack_state,0,sizeof(kui_retail_sonic_stack_state));
+    memset(&kui_retail_sonic_texture_state,0,sizeof(kui_retail_sonic_texture_state));
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     memcpy(boot,owner,OWNER_BYTES);memcpy(original_entry,owner,sizeof(original_entry));
     memset(boot,0xcc,ENTRY_PATCH_BYTES);
@@ -161,8 +170,9 @@ static void quiet(void) {
 }
 static void patches(unsigned restored) {
     const uint8_t *boot=(const uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
-    const unsigned sorted[4]={2,3,1,0};uint32_t at=0;
-    for(unsigned i=0;i<4u;i++) {
+    const unsigned sorted[7]={2,3,4,5,6,1,0};uint32_t at=0;
+    restored|=kui_retail_sonic_texture_state.restored;
+    for(unsigned i=0;i<7u;i++) {
         unsigned p=sorted[i];uint32_t offset=sonic_stack_address[p]-KUI_RETAIL_EXEC_ADDRESS;
         assert(!memcmp(boot+at,owner+at,offset-at));
         if(restored&(1u<<p)) assert(!memcmp(boot+offset,owner+offset,12u));
@@ -182,8 +192,8 @@ static int has_line(const char *line) {
 }
 static void arm(uint32_t *frame) {
     kui_retail_stage_relay(frame,TEST_CCR);
-    assert(hooks.publications==4u && calls.pauses==1u);
-    for(unsigned i=0;i<4u;i++) {
+    assert(hooks.publications==7u && calls.pauses==1u);
+    for(unsigned i=0;i<7u;i++) {
         assert(hooks.address[i]==sonic_stack_address[i] && hooks.bytes[i]==12u);
     }
     assert(!memcmp(frame,entry_frame,sizeof(entry_frame)));quiet();patches(0);
@@ -235,7 +245,7 @@ static void expect_stop_after(uint32_t *frame,const char *reason) {
 enum scenario {SUCCESS_P1,SUCCESS_P2,GATE_SIZE,GATE_IP,GATE_CRC,
     BAD_RELAY_OWNER,BAD_RELAY_READER,BOUNDS_LOW,BOUNDS_HIGH,BOUNDS_ALIGN,BOUNDS_OVERLAP,
     BAD_CODE_ZERO,BAD_CODE_TOO_HIGH,BAD_SNAPSHOT_BOUNDS,FIFO_TIMEOUT,BUSY_TIMEOUT,DUPLICATE,INVALID_POINT,INVALID_FRAME,
-    NESTED_SCOPE,BAD_RETURN_SP,BAD_RETURN_CCR,BAD_RETURN_BOUNDS,BAD_RETURN_CODE_END,GUARD_CHANGED,
+    NESTED_SCOPE,BAD_RETURN_SP,BAD_RETURN_CCR,BAD_RETURN_CCR_ZERO,BAD_RETURN_BOUNDS,BAD_RETURN_CODE_END,GUARD_CHANGED,
     SNAPSHOT_CHANGED,SNAPSHOT_MULTI,SNAPSHOT_CODE,SNAPSHOT_IP,SNAPSHOT_P2,SNAPSHOT_ALL,
     SUCCESS_ASYNC,SUCCESS_EAGER,MAP_AT_BEGIN,MAP_AT_END,MAP_MISSING,MAP_DUPLICATE,MAP_MISALIGNED,
     MAP_TRACK_ZERO,MAP_TRACK_HIGH,MAP_EXTENT_ZERO,MAP_ASYNC_COUNT,MAP_ASYNC_TRANSPORT,
@@ -319,12 +329,12 @@ static void run_case(enum scenario which) {
         }
         if(which>=ASSET_ZERO) {
             expect_stop_checkpoint(frame,3u,"FIRST ASSET EXCEEDS TEST RAM BOUNDS");
-            assert(hooks.publications==5u && s->restored==8u);patches(8u);return;
+            assert(hooks.publications==8u && s->restored==8u);patches(8u);return;
         }
         assert(checkpoint(frame,3u)==(uint32_t)(uintptr_t)frame);
         assert(s->asset_status==1u && s->asset_handle==frame[6] && s->asset_bytes==frame[22]);
         assert(!memcmp(frame,entry_frame,sizeof(entry_frame)));
-        assert(s->restored==8u && hooks.publications==5u);quiet();patches(8u);return;
+        assert(s->restored==8u && hooks.publications==8u);quiet();patches(8u);return;
     }
     if(which==FIFO_TIMEOUT || which==BUSY_TIMEOUT) {
         unsigned point=which==FIFO_TIMEOUT?0u:1u;hooks.timeout=1;
@@ -343,7 +353,7 @@ static void run_case(enum scenario which) {
     if(which==DUPLICATE) {
         wait_ready(frame,0u,1u);
         expect_stop_checkpoint(frame,0u,"STACK CHECKPOINT STATE INVALID");
-        assert(hooks.publications==5u);return;
+        assert(hooks.publications==8u);return;
     }
     if(which!=SCOPE_WITHOUT_WAITS) {
         wait_ready(frame,0u,1u);wait_ready(frame,1u,3u);
@@ -377,7 +387,7 @@ static void run_case(enum scenario which) {
         const char *reason=which<=MAP_MISALIGNED?"RESIDENT MAP NOT UNIQUE":
             which<=MAP_ASYNC_TRANSPORT?"RESIDENT MAP SHAPE INVALID":"RESIDENT BSS BOUNDS INVALID";
         expect_stop_checkpoint(frame,2u,reason);
-        assert(!s->active && !s->completed && hooks.publications==8u);return;
+        assert(!s->active && !s->completed && hooks.publications==11u);return;
     }
     uint8_t before_reader[SONIC_STACK_RESIDENT_BYTES];
     size_t reader_bytes=s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN;
@@ -394,10 +404,12 @@ static void run_case(enum scenario which) {
     memset((void *)(uintptr_t)(PRIVATE_TOP-0x4200u),0xa7,0x4004u);
     assert(!memcmp(before_reader,(const void *)(uintptr_t)SONIC_STACK_SNAPSHOT_BEGIN,reader_bytes));
     if(which==BAD_RETURN_SP) {expect_stop_after(returned-1,"SCOPED RETURN FRAME INVALID");return;}
-    if(which==BAD_RETURN_CCR) {
+    if(which==BAD_RETURN_CCR || which==BAD_RETURN_CCR_ZERO) {
+        uint32_t actual_ccr=which==BAD_RETURN_CCR_ZERO?0u:TEST_CCR^1u;
         expect_terminal=1;
-        if(!setjmp(terminal)) {kui_retail_sonic_stack_after(returned,TEST_CCR^1u,s);abort();}
-        assert(has_line("SCOPED RETURN FRAME INVALID"));return;
+        if(!setjmp(terminal)) {kui_retail_sonic_stack_after(returned,actual_ccr,s);abort();}
+        assert(has_line("SCOPED RETURN FRAME INVALID") && calls.row[0][0]==4u &&
+            calls.row[0][4]==actual_ccr && calls.detail==4u);return;
     }
     if(which==BAD_RETURN_BOUNDS) {s->owner_bottom-=32u;expect_stop_after(returned,"SCOPED RETURN FRAME INVALID");return;}
     if(which==BAD_RETURN_CODE_END) {s->code_end=s->resident_end+1u;expect_stop_after(returned,"SCOPED RETURN FRAME INVALID");return;}
@@ -491,6 +503,233 @@ static void run_case(enum scenario which) {
     patches(15u);
     if(which==SECOND_RETURN) expect_stop_after(returned,"SCOPED RETURN FRAME INVALID");
 }
+/* Synthetic compressed streams are assembled from semantic tokens; expected
+ * decoded lengths follow those tokens independently of the production scan. */
+struct encoded_stream {uint8_t bytes[20000];unsigned at,flags,used;};
+static void encode_bit(struct encoded_stream *s,unsigned bit) {
+    if(!s->used) {s->flags=s->at++;s->bytes[s->flags]=0u;}
+    s->bytes[s->flags]|=(uint8_t)((bit&1u)<<s->used);
+    s->used=(s->used+1u)&7u;
+}
+static void encode_literal(struct encoded_stream *s,uint8_t byte) {
+    encode_bit(s,1u);s->bytes[s->at++]=byte;
+}
+static void encode_short(struct encoded_stream *s,unsigned distance,unsigned length) {
+    assert(distance>=1u && distance<=256u && length>=2u && length<=5u);
+    encode_bit(s,0u);encode_bit(s,0u);encode_bit(s,(length-2u)>>1);
+    encode_bit(s,(length-2u)&1u);s->bytes[s->at++]=(uint8_t)(256u-distance);
+}
+static void encode_long(struct encoded_stream *s,unsigned distance,unsigned length) {
+    assert(distance>=1u && distance<=8192u && length>=1u && length<=256u);
+    encode_bit(s,0u);encode_bit(s,1u);
+    uint16_t word=(uint16_t)((8192u-distance)<<3);
+    if(length>=3u && length<=9u) word|=(uint16_t)(length-2u);
+    assert(word);s->bytes[s->at++]=(uint8_t)word;s->bytes[s->at++]=(uint8_t)(word>>8);
+    if(!(word&7u)) s->bytes[s->at++]=(uint8_t)(length-1u);
+}
+static void encode_end(struct encoded_stream *s) {
+    encode_bit(s,0u);encode_bit(s,1u);s->bytes[s->at++]=0u;s->bytes[s->at++]=0u;
+}
+static void parser_cases(void) {
+    uint32_t decoded=0u;
+    const uint8_t empty[3]={2u,0u,0u};
+    assert(sonic_lz_bounds(empty,sizeof(empty),0u,&decoded) && !decoded);
+    struct encoded_stream s={0};unsigned expected=0u;
+    for(unsigned i=0;i<270u;i++) {encode_literal(&s,(uint8_t)i);++expected;}
+    for(unsigned length=2u;length<=5u;length++) {
+        encode_short(&s,256u,length);expected+=length;
+    }
+    for(unsigned length=1u;length<=256u;length++) {
+        encode_long(&s,1u,length);expected+=length;
+    }
+    encode_end(&s);
+    assert(sonic_lz_bounds(s.bytes,s.at,expected,&decoded) && decoded==expected);
+    assert(!sonic_lz_bounds(s.bytes,s.at,expected-1u,&decoded));
+    for(unsigned prefix=0;prefix<s.at;prefix++)
+        assert(!sonic_lz_bounds(s.bytes,prefix,expected,&decoded));
+    memset(&s,0,sizeof(s));encode_short(&s,1u,2u);encode_end(&s);
+    assert(!sonic_lz_bounds(s.bytes,s.at,100u,&decoded));
+    memset(&s,0,sizeof(s));encode_literal(&s,7u);encode_long(&s,2u,256u);encode_end(&s);
+    assert(!sonic_lz_bounds(s.bytes,s.at,1000u,&decoded));
+    uint32_t seed=0x715ac4e3u;
+    for(unsigned trial=0;trial<1000u;trial++) {
+        memset(&s,0,sizeof(s));expected=0u;
+        for(unsigned token=0;token<128u;token++) {
+            seed=seed*1664525u+1013904223u;
+            if(!expected || (seed&3u)==0u) {encode_literal(&s,(uint8_t)seed);++expected;}
+            else if(seed&1u) {
+                unsigned distance=1u+(seed%((expected<256u)?expected:256u));
+                unsigned length=2u+((seed>>16)&3u);
+                encode_short(&s,distance,length);expected+=length;
+            } else {
+                unsigned distance=1u+(seed%((expected<8191u)?expected:8191u));
+                unsigned length=1u+((seed>>16)&255u);
+                encode_long(&s,distance,length);expected+=length;
+            }
+        }
+        encode_end(&s);assert(s.at<sizeof(s.bytes));
+        assert(sonic_lz_bounds(s.bytes,s.at,expected,&decoded) && decoded==expected);
+        assert(!sonic_lz_bounds(s.bytes,s.at,expected-1u,&decoded));
+        /* Remove the terminator's final byte: every generated stream must
+         * fail closed without reading beyond the supplied source length. */
+        assert(!sonic_lz_bounds(s.bytes,s.at-1u,expected,&decoded));
+    }
+}
+enum texture_scenario {TEXTURE_SUCCESS,TEXTURE_P2,TEXTURE_EARLY_RETURN,
+    TEXTURE_BEFORE_FLASH,TEXTURE_CROSS_ACTIVE,TEXTURE_DUPLICATE,
+    TEXTURE_ENTRY_LOW,TEXTURE_ENTRY_HIGH,TEXTURE_OWNER_OVERLAP,TEXTURE_STATE_OVERLAP,
+    TEXTURE_OWNER_ALIGN,TEXTURE_STATE_ALIGN,TEXTURE_STAGE_END,
+    TEXTURE_GUARD_OUTSIDE,TEXTURE_GUARD_HIGH,TEXTURE_SIZE_BOUNDARY,TEXTURE_SIZE_FALSE,TEXTURE_SIZE_ZERO,TEXTURE_SIZE_NEGATIVE,
+    TEXTURE_SIZE_OVERFLOW,TEXTURE_SIZE_STAGE,TEXTURE_SOURCE_MISMATCH,
+    TEXTURE_SECTORS_MISMATCH,TEXTURE_DECODE_WITHOUT_SIZE,TEXTURE_BAD_LZ,
+    TEXTURE_DECODE_TOO_LARGE,TEXTURE_RETURN_GUARD,TEXTURE_RETURN_CCR,TEXTURE_RETURN_CCR_ZERO,
+    TEXTURE_RETURN_FRAME,TEXTURE_RETURN_IMMUTABLE,TEXTURE_SECOND_RETURN};
+static void texture_stop(uint32_t *frame,unsigned point,const char *reason,int after) {
+    struct sonic_stack_state *t=&kui_retail_sonic_texture_state;
+    expect_terminal=1;
+    if(!setjmp(terminal)) {
+        if(after) kui_retail_sonic_stack_after(frame,point,t);
+        else kui_retail_sonic_stack_checkpoint(frame,point,TEST_CCR,t);
+        abort();
+    }
+    assert(has_line("SONIC TEXTURE STACK") && has_line(reason));
+    assert(has_line("STORAGE WAS READ ONLY"));
+    if(after) {
+        assert(calls.row[0][0]==4u && calls.row[0][4]==point);
+        if(!t->mismatch_address) assert(calls.detail==4u);
+    }
+    if(!strcmp(reason,"COMPRESSED SIZE INVALID") ||
+       !strcmp(reason,"COMPRESSED READ OVERLAPS TEST RAM") ||
+       !strcmp(reason,"TEXTURE DECODE EXCEEDS TEST RAM BOUNDS")) {
+        assert(!strcmp(calls.legend[4],"BOOL SOURCE BYTES DECODED STAGEEND"));
+        assert(calls.row[4][0]==t->asset_status && calls.row[4][1]==t->compressed_source &&
+            calls.row[4][2]==t->compressed_bytes && calls.row[4][3]==t->decoded_bytes &&
+            calls.row[4][4]==STAGE_END);
+    }
+}
+static void texture_case(enum texture_scenario which) {
+    uint32_t *first=fixture(0);prepare_resident();
+    struct sonic_stack_state *s=&kui_retail_sonic_stack_state,*t=&kui_retail_sonic_texture_state;
+    if(which==TEXTURE_OWNER_OVERLAP || which==TEXTURE_STATE_OVERLAP ||
+       which==TEXTURE_OWNER_ALIGN || which==TEXTURE_STATE_ALIGN || which==TEXTURE_STAGE_END) {
+        if(which==TEXTURE_OWNER_OVERLAP || which==TEXTURE_STATE_OVERLAP)
+            hooks.allocation[which==TEXTURE_OWNER_OVERLAP?4u:5u]=PRIVATE_BOTTOM;
+        if(which==TEXTURE_OWNER_ALIGN || which==TEXTURE_STATE_ALIGN)
+            hooks.allocation[which==TEXTURE_OWNER_ALIGN?4u:5u]+=4u;
+        if(which==TEXTURE_STAGE_END) hooks.allocation[3]=TEXTURE_STATE_ADDRESS+32u;
+        expect_terminal=1;
+        if(!setjmp(terminal)) {sonic_stack_arm();abort();}
+        assert(has_line("PRIVATE STACK BOUNDS INVALID") && !hooks.publications);return;
+    }
+    arm(first);
+    uint32_t *entry=(uint32_t *)(uintptr_t)(0x8c00f330u|(which==TEXTURE_P2?0x20000000u:0u));
+    uint32_t initial[21];memcpy(initial,entry_frame,sizeof(initial));initial[5]=0x8c0538d8u;
+    if(which==TEXTURE_BEFORE_FLASH) {
+        memcpy(entry,initial,sizeof(initial));texture_stop(entry,4u,"TEXTURE SCOPE BEFORE FLASH RETURN",0);return;
+    }
+    wait_ready(first,0u,1u);wait_ready(first,1u,3u);
+    assert(checkpoint(first,3u)==FRAME_ADDRESS);
+    uint32_t *first_return=scope_entry(first);
+    assert(kui_retail_sonic_stack_after(first_return,TEST_CCR,s)==FRAME_ADDRESS);
+    uint8_t first_backing[SONIC_STACK_OWNER_BYTES];
+    memcpy(first_backing,(const void *)(uintptr_t)PRIVATE_BOTTOM,sizeof(first_backing));
+    struct sonic_stack_state first_state=*s;
+    memcpy(entry,initial,sizeof(initial));
+    if(which==TEXTURE_CROSS_ACTIVE) {
+        s->active=1u;texture_stop(entry,4u,"STACK CHECKPOINT STATE INVALID",0);return;
+    }
+    if(which==TEXTURE_ENTRY_LOW || which==TEXTURE_ENTRY_HIGH) {
+        uint32_t *bad=(uint32_t *)(uintptr_t)(which==TEXTURE_ENTRY_LOW?
+            KUI_RETAIL_HOOK_STACK-4u:KUI_RETAIL_EXEC_ADDRESS-80u);
+        texture_stop(bad,4u,"STACK CHECKPOINT STATE INVALID",0);return;
+    }
+    uint32_t raw=(uint32_t)(uintptr_t)entry;
+    uint32_t prepared=kui_retail_sonic_stack_checkpoint(entry,4u,TEST_CCR,t);
+    assert(prepared==TEXTURE_TOP-84u && t->original_sp==(raw+84u));
+    assert(t->original_sp==(which==TEXTURE_P2?0xac00f384u:0x8c00f384u));
+    assert(t->restored==0x10u && t->active && !t->completed);
+    uint32_t *returned=(uint32_t *)(uintptr_t)prepared;
+    for(unsigned i=0;i<21u;i++) assert(returned[i]==(i==5u?
+        ((uint32_t)(uintptr_t)kui_retail_sonic_texture_return|0x20000000u):initial[i]));
+    assert(!memcmp(entry,initial,sizeof(initial)));patches(15u);
+    if(which==TEXTURE_DUPLICATE) {
+        texture_stop(entry,4u,"STACK CHECKPOINT STATE INVALID",0);return;
+    }
+    uint32_t *guard=(uint32_t *)(uintptr_t)(TEXTURE_TOP-0x3818u-0x120u-84u);
+    memset(guard,0,92u);guard[20]=1u;guard[21]=4u;
+    if(which==TEXTURE_GUARD_OUTSIDE || which==TEXTURE_GUARD_HIGH) {
+        uint32_t *bad=which==TEXTURE_GUARD_HIGH?
+            (uint32_t *)(uintptr_t)(TEXTURE_TOP-84u):entry;
+        texture_stop(bad,5u,"STACK CHECKPOINT STATE INVALID",0);
+        assert(t->restored==0x10u);return;
+    }
+    if(which==TEXTURE_SIZE_BOUNDARY) {
+        guard[21]=0x8cf00000u-STAGE_END;
+        assert(kui_retail_sonic_stack_checkpoint(guard,5u,TEST_CCR,t)==(uint32_t)(uintptr_t)guard);
+        assert(t->compressed_source==STAGE_END && t->restored==0x30u);quiet();return;
+    }
+    if(which==TEXTURE_DECODE_WITHOUT_SIZE) {
+        texture_stop(guard,6u,"COMPRESSED SOURCE INVALID",0);return;
+    }
+    if(which>=TEXTURE_SIZE_FALSE && which<=TEXTURE_SIZE_STAGE) {
+        if(which==TEXTURE_SIZE_FALSE) guard[20]=0u;
+        if(which==TEXTURE_SIZE_ZERO) guard[21]=0u;
+        if(which==TEXTURE_SIZE_NEGATIVE) guard[21]=0xffffffffu;
+        if(which==TEXTURE_SIZE_OVERFLOW) guard[21]=0x7ffff801u;
+        if(which==TEXTURE_SIZE_STAGE) guard[21]=0x8cf00000u-STAGE_END+1u;
+        texture_stop(guard,5u,which==TEXTURE_SIZE_STAGE?
+            "COMPRESSED READ OVERLAPS TEST RAM":"COMPRESSED SIZE INVALID",0);return;
+    }
+    struct encoded_stream stream={0};
+    if(which==TEXTURE_BAD_LZ) {encode_short(&stream,1u,2u);encode_end(&stream);}
+    else if(which==TEXTURE_DECODE_TOO_LARGE) {
+        /* One literal then many overlapping long references: a tiny source
+         * attempts to produce more than the entire CD..CE output region. */
+        encode_literal(&stream,1u);
+        for(unsigned i=0;i<4096u;i++) encode_long(&stream,1u,256u);
+        encode_end(&stream);
+    } else {encode_literal(&stream,0x41u);encode_end(&stream);}
+    guard[21]=stream.at;
+    uint32_t guard_before[23];memcpy(guard_before,guard,sizeof(guard_before));
+    assert(kui_retail_sonic_stack_checkpoint(guard,5u,TEST_CCR,t)==(uint32_t)(uintptr_t)guard);
+    assert(!memcmp(guard,guard_before,sizeof(guard_before)) && t->restored==0x30u);
+    memcpy((void *)(uintptr_t)t->compressed_source,stream.bytes,stream.at);
+    guard[8]=t->compressed_source-0x80000000u;
+    guard[9]=(stream.at+0x7ffu)>>11;
+    if(which==TEXTURE_SOURCE_MISMATCH) guard[8]+=4u;
+    if(which==TEXTURE_SECTORS_MISMATCH) ++guard[9];
+    if(which==TEXTURE_SOURCE_MISMATCH || which==TEXTURE_SECTORS_MISMATCH) {
+        texture_stop(guard,6u,"COMPRESSED SOURCE INVALID",0);return;
+    }
+    if(which==TEXTURE_BAD_LZ || which==TEXTURE_DECODE_TOO_LARGE) {
+        texture_stop(guard,6u,"TEXTURE DECODE EXCEEDS TEST RAM BOUNDS",0);return;
+    }
+    if(which!=TEXTURE_EARLY_RETURN) {
+        memcpy(guard_before,guard,sizeof(guard_before));
+        assert(kui_retail_sonic_stack_checkpoint(guard,6u,TEST_CCR,t)==(uint32_t)(uintptr_t)guard);
+        assert(!memcmp(guard,guard_before,sizeof(guard_before)) && t->decoded_bytes==1u && t->restored==0x70u);
+    }
+    uint32_t actual[21];
+    for(unsigned i=0;i<21u;i++) returned[i]=actual[i]=0x54120000u+i*0x010203u;
+    returned[4]=actual[4]=0x60000201u;returned[20]=actual[20]=0xfeed5a5au;
+    memset((void *)(uintptr_t)(TEXTURE_TOP-0x4000u),0xa7,0x3800u);
+    if(which==TEXTURE_RETURN_GUARD) *(uint32_t *)(uintptr_t)TEXTURE_BOTTOM^=1u;
+    if(which==TEXTURE_RETURN_IMMUTABLE) *(uint8_t *)(uintptr_t)(MAP_ADDRESS+8u)^=1u;
+    if(which==TEXTURE_RETURN_GUARD || which==TEXTURE_RETURN_IMMUTABLE ||
+       which==TEXTURE_RETURN_CCR || which==TEXTURE_RETURN_CCR_ZERO || which==TEXTURE_RETURN_FRAME) {
+        texture_stop(which==TEXTURE_RETURN_FRAME?returned-1:returned,
+            which==TEXTURE_RETURN_CCR_ZERO?0u:which==TEXTURE_RETURN_CCR?TEST_CCR^1u:TEST_CCR,
+            which==TEXTURE_RETURN_GUARD?"PRIVATE STACK GUARD CHANGED":
+            which==TEXTURE_RETURN_IMMUTABLE?"IMMUTABLE READER CHANGED":"SCOPED RETURN FRAME INVALID",1);return;
+    }
+    assert(kui_retail_sonic_stack_after(returned,TEST_CCR,t)==raw);
+    for(unsigned i=0;i<21u;i++) assert(entry[i]==(i==5u?initial[5]:actual[i]));
+    assert(t->completed && !t->active && t->restored==0x70u);
+    assert(!memcmp(s,&first_state,sizeof(*s)));
+    assert(!memcmp(first_backing,(const void *)(uintptr_t)PRIVATE_BOTTOM,sizeof(first_backing)));
+    patches(15u);quiet();
+    if(which==TEXTURE_SECOND_RETURN) texture_stop(returned,TEST_CCR,"SCOPED RETURN FRAME INVALID",1);
+}
 int main(void) {
     FILE *backing=tmpfile();assert(backing && !ftruncate(fileno(backing),RAM_BYTES));
     const uint32_t aliases[2]={0x8c000000u,0xac000000u};
@@ -513,8 +752,18 @@ int main(void) {
         }
         ++count;
     }
+    parser_cases();
+    for(enum texture_scenario which=TEXTURE_SUCCESS;which<=TEXTURE_SECOND_RETURN;which++) {
+        pid_t child=fork();assert(child>=0);
+        if(!child) {texture_case(which);_Exit(0);}
+        int status;assert(waitpid(child,&status,0)==child);
+        if(!WIFEXITED(status) || WEXITSTATUS(status)) {
+            fprintf(stderr,"Sonic texture scenario %u failed: %d\n",which,status);return 1;
+        }
+        ++count;
+    }
     free(owner);
     for(unsigned i=0;i<2u;i++) assert(!munmap((void *)(uintptr_t)aliases[i],RAM_BYTES));
-    printf("PASS Sonic scoped stack: %u synthetic cases, four one-shot RAM entries, bounded waits, actual entry/return frames and resident snapshot\n",count);
+    printf("PASS Sonic scoped stack: %u synthetic cases, seven one-shot RAM entries, independent private stacks, bounded waits/read/decode, actual CPU frames, 1000 generated compressed streams and resident guards\n",count);
     return 0;
 }

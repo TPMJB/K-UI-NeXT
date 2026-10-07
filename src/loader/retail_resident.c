@@ -257,22 +257,24 @@ static void ce_trace(unsigned earlier) {
 /* retail_display_values uses alias-qualified reads of these aligned words. */
 #define terminal_row(legend, snapshot, count) \
     retail_display_values((legend), (const uint32_t *)(const void *)(snapshot), (count))
-static void capture_native_fault(uint32_t function) {
+static void capture_native_fault(uint32_t function, uint32_t current_param) {
     /* These are current caller/request fields. READ parameters were not
      * obtained after a PARAMETERS rejection, so previous LBA/count/destination
-     * are deliberately absent. Only this verified SDK wrapper puts its
-     * parameter array at SP+4. The trace words are offsets, not a claimed chain. */
+     * are deliberately absent. PARAM is the current call's R5, never a guessed
+     * stack offset. The bounded trace words are offsets, not a claimed chain. */
     uint32_t sp = kui_retail_native_caller[1], pr = kui_retail_native_caller[0];
     uint32_t param = 0, s20 = 0, s36 = 0, s60 = 0;
     /* This unsigned interval admits P1 only, excludes anything below the IP,
      * and leaves 64 bytes before RAM end without overflowing an addition. */
-    if(pr == 0x8c648d7au && service.diag.reject_reason == KUI_RETAIL_GD_REJECT_PARAMETERS &&
-       !(sp & 3u) && sp - KUI_RETAIL_IP_ADDRESS <=
-       KUI_RETAIL_RAM_END - KUI_RETAIL_IP_ADDRESS - 64u) {
-        typedef uint32_t owner_word __attribute__((__may_alias__));
-        const volatile owner_word *owner = (const volatile owner_word *)(uintptr_t)sp;
-        s20 = owner[5]; s36 = owner[9]; s60 = owner[15];
-        param = sp + 4u;
+    if(function == KUI_GD_REQUEST &&
+       service.diag.reject_reason == KUI_RETAIL_GD_REJECT_PARAMETERS) {
+        param = current_param;
+        if(!(sp & 3u) && sp - KUI_RETAIL_IP_ADDRESS <=
+           KUI_RETAIL_RAM_END - KUI_RETAIL_IP_ADDRESS - 64u) {
+            typedef uint32_t owner_word __attribute__((__may_alias__));
+            const volatile owner_word *owner = (const volatile owner_word *)(uintptr_t)sp;
+            s20 = owner[5]; s36 = owner[9]; s60 = owner[15];
+        }
     }
     /* All owner reads precede cache reuse even if the two ranges overlap.
      * Claiming video or rendering may also change the private-hook words. */
@@ -288,13 +290,15 @@ static void capture_native_fault(uint32_t function) {
     __asm__ __volatile__("" : : : "memory");
 }
 #endif
-static void report_fault(const char *reason, uint32_t function) {
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
-    capture_native_fault(function);
+static void report_fault(const char *reason, uint32_t function, uint32_t current_param) {
+    capture_native_fault(function, current_param);
+#else
+static void report_fault(const char *reason, uint32_t function) {
 #endif
     retail_display_restore(&display);
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
-    retail_display_line("REQUEST REJECTION DETAILS / SONIC CALLER STACK");
+    retail_display_line("REQUEST REJECTION DETAILS / NATIVE CALLER STACK");
 #else
     retail_display_line("K-UI READER");
 #endif
@@ -335,6 +339,11 @@ static void report_fault(const char *reason, uint32_t function) {
 #endif
     for(;;) __asm__ volatile("nop");
 }
+#if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC)
+/* Current R5 is a standard-native terminal field. Keep the other readers'
+ * original two-argument function and call ABI, including their stack budget. */
+#define report_fault(reason, function, current_param) report_fault((reason), (function))
+#endif
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
     (void)caller; (void)stack;
@@ -500,7 +509,7 @@ static void meter_call(uint32_t started) {
 static void ce_events(uint32_t r7) {
     if(service.interrupts) {
         if(!kui_retail_ce_kernel[0])
-            report_fault("CE KERNEL INTERRUPTS NOT FOUND", r7);
+            report_fault("CE KERNEL INTERRUPTS NOT FOUND", r7, 0);
         if(service.interrupts & KUI_RETAIL_GD_IRQ_DMA_END) ce_raise(21u);
         if(service.interrupts & KUI_RETAIL_GD_IRQ_DRIVE) ce_raise(20u);
         service.interrupts = 0;
@@ -536,12 +545,12 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
     kui_retail_async_after(r7, result);
     if(service.error == KUI_GD_ERROR_IO)
-        report_fault("IMAGE READ FAILED", r7);
+        report_fault("IMAGE READ FAILED", r7, r5);
     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
-        report_fault("GD REQUEST REJECTED", r7);
+        report_fault("GD REQUEST REJECTED", r7, r5);
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
-        report_fault("GD FUNCTION UNSUPPORTED", r7);
+        report_fault("GD FUNCTION UNSUPPORTED", r7, r5);
 #ifdef KUI_RETAIL_CE
     ce_events(r7);
     meter_call(started);
@@ -577,7 +586,7 @@ static int32_t step(uint32_t r4, uint32_t r5) {
     service.step = KUI_RETAIL_GD_STEP_SECTORS;
     int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, KUI_GD_EXEC);
     if(service.error == KUI_GD_ERROR_IO)
-        report_fault("IMAGE READ FAILED", KUI_GD_EXEC);
+        report_fault("IMAGE READ FAILED", KUI_GD_EXEC, 0);
     return result;
 }
 #else
@@ -590,7 +599,7 @@ static int32_t step(uint32_t r4, uint32_t r5) {
                                           KUI_RETAIL_GD_STEP_MAX);
     int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, KUI_GD_EXEC);
     if(service.error == KUI_GD_ERROR_IO)
-        report_fault("IMAGE READ FAILED", KUI_GD_EXEC);
+        report_fault("IMAGE READ FAILED", KUI_GD_EXEC, 0);
     uint32_t sectors = service.diag.sectors_read - before;
     if(sectors) {
         video_sample();
@@ -637,13 +646,13 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     int32_t result = r7 == KUI_GD_EXEC ? step(r4, r5) :
         kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
-        report_fault("GD REQUEST REJECTED", r7);
+        report_fault("GD REQUEST REJECTED", r7, r5);
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
-        report_fault("GD FUNCTION UNSUPPORTED", r7);
+        report_fault("GD FUNCTION UNSUPPORTED", r7, r5);
 #ifdef KUI_RETAIL_CE
     if(service.error == KUI_GD_ERROR_IO)
-        report_fault("IMAGE READ FAILED", r7);
+        report_fault("IMAGE READ FAILED", r7, r5);
     ce_events(r7);
     meter_call(started);
 #endif
