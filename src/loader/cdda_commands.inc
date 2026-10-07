@@ -11,12 +11,12 @@ static uint32_t command_expected_refusals,command_stale_refusals;
 #endif
 static uint32_t command_paused_frame,command_max_loops;
 
-#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
+#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10 && CDDA_TEST_PROFILE != 11 && CDDA_TEST_PROFILE != 12
 static struct kui_cdda_control_request command_request(enum kui_cdda_control_command kind) {
     return (struct kui_cdda_control_request){.command=kind};
 }
 #endif
-#if CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
+#if CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10 && CDDA_TEST_PROFILE != 11 && CDDA_TEST_PROFILE != 12
 static bool command_same_status(const struct kui_cdda_control_status *a,
     const struct kui_cdda_control_status *b) {
     return a->state==b->state && a->first==b->first && a->end==b->end &&
@@ -29,11 +29,20 @@ static bool command_same_status(const struct kui_cdda_control_status *a,
 static bool command_audio_start(const struct kui_cdda_control_action *action) {
     uint32_t bytes;
     ring=(struct kui_cdda_ring){0};
+#if CDDA_TEST_PROFILE == 11 || CDDA_TEST_PROFILE == 12
+    if(!disc_audio_path || cdda_storage_open(disc_audio_path,&bytes)) return false;
+    if(bytes!=disc_audio_source.file_bytes) goto failed;
+    const struct kui_cdda_pcm_source source=disc_audio_source;
+#else
     if(cdda_storage_open("0:/KUI/tests/cdda/stereo.raw",&bytes)) return false;
     if(!bytes || bytes%2352u) goto failed;
     const struct kui_cdda_pcm_source source={bytes,0,2352u,bytes/2352u,false};
+#endif
     if(kui_cdda_pcm_init(&pcm,&source,read_at,NULL)!=KUI_CDDA_PCM_OK ||
-       pcm.total_frames!=command_control.source_frames || action->frame>=action->end ||
+#if CDDA_TEST_PROFILE != 11 && CDDA_TEST_PROFILE != 12
+       pcm.total_frames!=command_control.source_frames ||
+#endif
+       action->frame>=action->end ||
        action->end>pcm.total_frames) goto failed;
     session_first=action->frame;session_frames=action->end-action->frame;
     segment_end=action->end;loop_first=action->first;repeat_audio=action->repeat;
@@ -95,12 +104,12 @@ static bool command_accept(struct kui_cdda_control_request request) {
     command_accepted++;
     return !action.pending || command_finish(action);
 }
-#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
+#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10 && CDDA_TEST_PROFILE != 11 && CDDA_TEST_PROFILE != 12
 static bool command_play(uint32_t first,uint32_t end,bool repeat) {
     return command_accept((struct kui_cdda_control_request){KUI_CDDA_CONTROL_PLAY,first,end,0,repeat});
 }
 #endif
-#if CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
+#if CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10 && CDDA_TEST_PROFILE != 11 && CDDA_TEST_PROFILE != 12
 static bool command_run(uint32_t additional_frames) {
     if(!command_running || !command_sync()) return false;
     if(!command_running) return command_control.current.state==KUI_CDDA_CONTROL_EOF;
@@ -115,7 +124,7 @@ static bool command_run(uint32_t additional_frames) {
     return command_sync();
 }
 #endif
-#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
+#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10 && CDDA_TEST_PROFILE != 11 && CDDA_TEST_PROFILE != 12
 static bool command_status(enum kui_cdda_control_state expected,
     struct kui_cdda_control_status *out) {
     if(!command_sync()) return false;

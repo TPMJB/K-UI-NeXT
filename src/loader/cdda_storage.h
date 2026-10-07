@@ -13,6 +13,10 @@ void cdda_storage_close(void);
 /* Optional competing data traffic, sharing the same serialized SCI lease.
  * Its file position and FatFs read buffer are independent of the audio FIL. */
 int cdda_storage_data_open(uint32_t *file_bytes);
+/* New mapped-disc profiles only. Metadata opens a short-lived independent
+ * FIL; named data retains its own cursor under the same serialized SCI lease. */
+int cdda_storage_named_stat(const char *path, uint32_t *file_bytes);
+int cdda_storage_data_open_path(const char *path, uint32_t *file_bytes);
 int cdda_storage_data_read_at(uint32_t offset, uint8_t *out, uint32_t bytes);
 void cdda_storage_data_close(void);
 void cdda_storage_shutdown(void);

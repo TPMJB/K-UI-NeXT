@@ -219,6 +219,33 @@ int cdda_storage_data_open(uint32_t *bytes) {
     *bytes = data_file_size;
     return 0;
 }
+#if CDDA_TEST_PROFILE == 11 || CDDA_TEST_PROFILE == 12
+int cdda_storage_named_stat(const char *path, uint32_t *bytes) {
+    if(!path || !bytes) return fail("Invalid named file arguments");
+    if(cdda_storage_init()) return -1;
+    FIL metadata;
+    FRESULT result=f_open(&metadata,path,FA_READ);
+    if(result!=FR_OK) return fail(fatfs_failure(result));
+    uint64_t size=f_size(&metadata);
+    result=f_close(&metadata);
+    if(result!=FR_OK) return fail(fatfs_failure(result));
+    if(!size || size>UINT32_MAX) return fail("Named file size");
+    *bytes=(uint32_t)size;return 0;
+}
+int cdda_storage_data_open_path(const char *path,uint32_t *bytes) {
+    if(!path || !bytes) return fail("Invalid named data arguments");
+    cdda_storage_data_close();
+    if(cdda_storage_init()) return -1;
+    failure=NULL;
+    FRESULT result=f_open(&data_file,path,FA_READ);
+    if(result!=FR_OK) return fail(fatfs_failure(result));
+    data_opened=1;
+    if(f_size(&data_file)>UINT32_MAX) {
+        cdda_storage_data_close();return fail("Named data file size");
+    }
+    data_file_size=(uint32_t)f_size(&data_file);*bytes=data_file_size;return 0;
+}
+#endif
 int cdda_storage_data_read_at(uint32_t offset, uint8_t *out, uint32_t bytes) {
     if(!data_opened || offset > data_file_size || bytes > data_file_size - offset || (!out && bytes))
         return fail("Data file read range");

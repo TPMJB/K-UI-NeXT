@@ -120,5 +120,18 @@ Profile 10's separate controlled client intentionally waits beyond the same
 cooperative lease and verifies the resulting stopped audio and confirmed
 prefix. Its expected deadline is tracked separately from unexpected faults;
 it introduces no interrupt watchdog or automatic background servicing.
+Profiles 11/12 add independently written checked disc-map and command-queue
+helpers, a platform adapter and two controlled clients. They extend this
+project's existing GDI parser and its own request/chunk contracts. GETTOC2's
+command number, area parameter and 408-byte structure follow the same pinned
+official KOS `include/dc/syscalls.h`, `include/dc/cdrom.h` and
+`hardware/cdrom.c` interfaces. TOC construction, file-backed extent checks,
+track changes and raw Mode 1 payload extraction are new project code; no
+KOS syscall implementation or third-party loader implementation is imported.
+Ambiguous PLAY21 endpoints remain refused. `tools/cdda_disc_fixture.py`
+generates original square-tone and track-tagged data fixtures. The supplied
+Toy Commander GDI is retained only as factual track names, types and sector
+locations; selected track 14's audio remains external. No game executable,
+music backing or complete retail disc is distributed in these test bundles.
 `tools/cdda_fixture.py` generates original sine-tone test data. The user's Toy
 Commander audio remains external and is excluded from source and test packages.

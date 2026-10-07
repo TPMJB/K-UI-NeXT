@@ -38,6 +38,14 @@ ifeq ($(CDDA_TEST_PROFILE),10)
 CDDA_SCRIPT := src/loader/cdda_batch_fault.ld
 CDDA_SOURCES += src/core/cdda_handoff.c src/core/cdda_bios_batch.c src/loader/cdda_batch_fault_client.c
 endif
+ifeq ($(CDDA_TEST_PROFILE),11)
+CDDA_SCRIPT := src/loader/cdda_disc.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/core/game_image.c src/core/cdda_disc.c src/core/cdda_disc_bios.c src/loader/cdda_disc_client.c src/loader/cdda_disc_libc.c
+endif
+ifeq ($(CDDA_TEST_PROFILE),12)
+CDDA_SCRIPT := src/loader/cdda_disc_toy.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/core/game_image.c src/core/cdda_disc.c src/core/cdda_disc_bios.c src/loader/cdda_disc_toy_client.c src/loader/cdda_disc_libc.c
+endif
 CDDA_OBJECTS := $(patsubst %.c,$(CDDA_BUILD_DIR)/%.o,$(CDDA_SOURCES)) \
     $(CDDA_BUILD_DIR)/src/loader/cdda_start.o $(CDDA_BUILD_DIR)/fatfs/ff.o $(CDDA_BUILD_DIR)/fatfs/ffunicode.o
 ifeq ($(CDDA_TEST_PROFILE),7)
@@ -53,7 +61,11 @@ ifeq ($(CDDA_TEST_PROFILE),10)
 CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o $(CDDA_BUILD_DIR)/src/loader/cdda_vector.o
 endif
 
-.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests cdda-mixed-test cdda-service-test cdda-bios-test cdda-batch-test cdda-batch-fault-test clean force-cdda-config
+ifneq ($(filter 11 12,$(CDDA_TEST_PROFILE)),)
+CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o $(CDDA_BUILD_DIR)/src/loader/cdda_vector.o
+endif
+
+.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests cdda-mixed-test cdda-service-test cdda-bios-test cdda-batch-test cdda-batch-fault-test cdda-disc-test cdda-disc-toy-test clean force-cdda-config
 all: cdda
 cdda: $(CDDA_BUILD_DIR)/cdda-harness.kui $(CDDA_BUILD_DIR)/cdda-harness.bin cdda-check
 
@@ -110,6 +122,10 @@ cdda-batch-test:
 	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=9 CDDA_BUILD_DIR=build/cdda-batch
 cdda-batch-fault-test:
 	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=10 CDDA_BUILD_DIR=build/cdda-batch-fault
+cdda-disc-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=11 CDDA_BUILD_DIR=build/cdda-disc
+cdda-disc-toy-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=12 CDDA_BUILD_DIR=build/cdda-disc-toy
 clean:
 	rm -rf $(CDDA_BUILD_DIR)
 -include $(CDDA_OBJECTS:.o=.d)
