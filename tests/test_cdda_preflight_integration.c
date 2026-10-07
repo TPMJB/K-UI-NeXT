@@ -19,7 +19,8 @@ enum scenario { PASS,COOKED_PASS,PREFIX_PASS,PADDING_CORRUPT,MAP_PARSE,MAP_MISSI
     IP_HEADER,ISO_ENDIAN,BOOT_MISSING,BOOT_EXTENT,PAYLOAD_CORRUPT,CANCEL_BEFORE,
     CANCEL_INSPECT,CANCEL_IP,CANCEL_BOOT,PROGRESS_INSPECT,PROGRESS_IP,PROGRESS_BOOT,CANCEL_LAST,
     GEOMETRY_INVALID,EXTENT_SIZE,RUN_GAP,RUN_ZERO,RUN_PARTITION,RUN_OVERLAP,
-    SLOTS64_PASS,SLOTS65_REFUSED,SLOTS161_REFUSED,DEADLINE_INSPECT,DEADLINE_MAP,STACK_GUARD };
+    SLOTS64_PASS,SLOTS65_REFUSED,SLOTS161_REFUSED,DEADLINE_INSPECT,DEADLINE_MAP,STACK_GUARD,
+    CLOCK_STALLED,CLOCK_CONFIG,CLOCK_STANDBY };
 static enum scenario scenario;
 static const char *fixture_directory;
 static unsigned stats,opens,closes,descriptor_reads,source_reads,probe_reads,blocks,shutdowns,aica_calls;
@@ -28,6 +29,17 @@ static bool initialized,finished,injected,inside_preflight;
 static enum kui_cdda_preflight_phase current_phase;
 static uint32_t current_done;
 static uint64_t clock_value;
+static uint32_t model_tcor=0xabcdef45u,model_tcnt=0x10203040u;
+static uint16_t model_tcr=3u;
+static uint8_t model_tstr=5u,original_tstr;
+static unsigned timer_writes,timer_counter_reads,report_headers,report_polls,report_wraps;
+static unsigned report_step,report_finish_calls;
+static uint32_t report_anchor;
+static bool report_ready,report_active;
+/* Independent duration references; do not derive clock stimuli from the
+ * implementation's threshold macros. */
+#define MODEL_PAGE_TICKS 187030800u
+#define MODEL_DEADLINE_TICKS 2244369600u
 static struct kui_cdda_preflight_report captured;
 static enum kui_cdda_preflight_result captured_result;
 static uint32_t expected_ip_crc,expected_boot_crc;
@@ -46,7 +58,8 @@ static const char *scenario_names[]={"pass","cooked-pass","prefix-pass","padding
     "payload-corrupt","cancel-before","cancel-inspect","cancel-ip","cancel-boot",
     "progress-inspect","progress-ip","progress-boot","cancel-last","geometry-invalid","extent-size",
     "run-gap","run-zero","run-partition","run-overlap","slots64-pass","slots65-refused",
-    "slots161-refused","deadline-inspect","deadline-map","stack-guard"};
+    "slots161-refused","deadline-inspect","deadline-map","stack-guard",
+    "clock-stalled","clock-config","clock-standby"};
 
 volatile struct kui_storage_boot_marker cdda_storage_boot_marker={
     KUI_STORAGE_BOOT_MAGIC1,KUI_STORAGE_BOOT_MAGIC2,1u,KUI_STORAGE_SCI,~(uint32_t)KUI_STORAGE_SCI};
@@ -142,7 +155,11 @@ static int read_slot(uint32_t offset,void *out,uint32_t bytes,bool data) {
     return 0;
 }
 
-int cdda_storage_init(void) {assert(!finished);initialized=true;return 0;}
+int cdda_storage_init(void) {
+    assert(!finished && timer_writes==5u && timer_counter_reads>=2u && (model_tstr&2u) &&
+        preflight_clock_active && storage_cancel && !storage_cancel_context);
+    initialized=true;return 0;
+}
 int cdda_storage_named_stat(const char *path,uint32_t *bytes) {
     assert(initialized && !finished && bytes && !inside_preflight);stats++;
     uint32_t track=track_number(path);
@@ -159,15 +176,81 @@ int cdda_storage_data_open_path(const char *path,uint32_t *bytes) {return open_s
 int cdda_storage_data_read_at(uint32_t offset,uint8_t *out,uint32_t bytes) {return read_slot(offset,out,bytes,true);}
 int cdda_storage_data_open(uint32_t *bytes) {(void)bytes;assert(false);return -1;}
 void cdda_storage_data_close(void) {close_slot(true);}
-void cdda_storage_shutdown(void) {close_slot(false);close_slot(true);initialized=false;shutdowns++;}
+void cdda_storage_shutdown(void) {
+    close_slot(false);close_slot(true);initialized=false;shutdowns++;
+    /* A change to another channel's start bit must survive channel1 cleanup. */
+    if(preflight_clock_owned) model_tstr^=1u;
+}
 uint32_t cdda_storage_blocks_read(void) {return blocks;}
 const char *cdda_storage_last_failure(void) {return "independently injected filesystem failure";}
-uint32_t cdda_preflight_host_ticks(void) {
-    if(!injected && ((scenario==DEADLINE_INSPECT && inside_preflight && source_reads>=1u) ||
-       (scenario==DEADLINE_MAP && !inside_preflight && mapped_track))) {
-        injected=true;clock_value=(uint64_t)preflight_start+PREFLIGHT_DEADLINE_TICKS;
-    } else clock_value+=1000u;
-    return (uint32_t)clock_value;
+uint32_t cdda_preflight_host_clock_read(uint32_t address,unsigned width) {
+    if(address==PREFLIGHT_STBCR) {
+        assert(width==1u);
+        if(scenario==CLOCK_STANDBY) {injected=true;return 4u;}
+        return 0u;
+    }
+    assert(scenario!=CLOCK_STANDBY);
+    if(address==PREFLIGHT_TSTR) {assert(width==1u);return model_tstr;}
+    if(address==PREFLIGHT_TCR1) {assert(width==2u);return model_tcr;}
+    if(address==PREFLIGHT_TCOR1) {assert(width==4u);return model_tcor;}
+    assert(address==PREFLIGHT_TCNT1 && width==4u);
+    if(timer_writes!=5u || !(model_tstr&2u)) return model_tcnt;
+    timer_counter_reads++;
+    if(scenario==CLOCK_STALLED) {
+        injected=true;assert(timer_counter_reads<=1025u);return model_tcnt;
+    }
+    if(report_ready) {
+        assert(preflight_stages==6u && !preflight_failures && !primary.file && !secondary.file &&
+            !storage_cancel && !storage_cancel_context);
+        report_ready=false;report_active=true;
+        clock_value=UINT32_MAX-MODEL_PAGE_TICKS/2u;
+    } else if(report_active) {
+        assert(finished && finish_calls==report_finish_calls && report_step<3u && ++report_polls<=36u);
+        uint32_t before=(uint32_t)clock_value;
+        uint32_t delta=report_step==0u?0u:report_step==1u?MODEL_PAGE_TICKS-1u:MODEL_PAGE_TICKS;
+        clock_value=(uint32_t)(report_anchor+delta);
+        if((uint32_t)clock_value<before) report_wraps++;
+        report_step++;
+    } else if(timer_counter_reads==3u) {
+        /* Start the read deadline near a numerical wrap, after clock proof. */
+        clock_value=UINT32_MAX-100000u;
+    } else {
+        if(!injected && ((scenario==DEADLINE_INSPECT && inside_preflight && source_reads>=1u) ||
+           (scenario==DEADLINE_MAP && !inside_preflight && mapped_track))) {
+            injected=true;clock_value=(uint64_t)preflight_start+MODEL_DEADLINE_TICKS;
+        } else clock_value+=1000u;
+    }
+    model_tcnt=UINT32_MAX-(uint32_t)clock_value;return model_tcnt;
+}
+void cdda_preflight_host_clock_write(uint32_t address,uint32_t value,unsigned width) {
+    assert(scenario!=CLOCK_STANDBY && ++timer_writes<=10u);
+    unsigned step=timer_writes;
+    if(step==1u || step==5u || step==6u || step==10u) {
+        assert(address==PREFLIGHT_TSTR && width==1u && !(value&~7u));
+        uint8_t other=(uint8_t)(original_tstr&~2u);
+        if(step>=6u) {assert(shutdowns==1u && finished);other^=1u;}
+        assert((value&~2u)==other);
+        assert((value&2u)==(step==5u?2u:step==10u?(original_tstr&2u):0u));
+        model_tstr=(uint8_t)value;
+    } else if(step==2u || step==9u) {
+        assert(address==PREFLIGHT_TCR1 && width==2u && value==(step==2u?0u:3u));
+        model_tcr=(uint16_t)value;
+        if(step==2u && scenario==CLOCK_CONFIG) {model_tcr=1u;injected=true;}
+    } else if(step==3u || step==7u) {
+        assert(address==PREFLIGHT_TCOR1 && width==4u && value==(step==3u?UINT32_MAX:0xabcdef45u));
+        model_tcor=value;
+    } else {
+        assert((step==4u || step==8u) && address==PREFLIGHT_TCNT1 && width==4u &&
+            value==(step==4u?UINT32_MAX:0x10203040u));
+        model_tcnt=value;clock_value=UINT32_MAX-value;
+    }
+}
+bool cdda_preflight_host_report_done(void) {
+    assert(report_active && finish_calls && finish_calls<=13u && timer_writes==5u &&
+        (model_tstr&2u) && initialized && !shutdowns);
+    if(finish_calls<13u) return false;
+    assert(report_headers==13u && report_polls==36u && report_wraps>=1u);
+    return true;
 }
 bool cdda_preflight_host_stack(uint32_t *used) {
     assert(used);*used=1000u;
@@ -175,9 +258,20 @@ bool cdda_preflight_host_stack(uint32_t *used) {
     return true;
 }
 void cdda_display_init(void) {}
-void cdda_display_line(const char *text) {assert(text);}
+void cdda_display_line(const char *text) {
+    assert(text);unsigned page;
+    if(sscanf(text,"PROFILE13 PREFLIGHT / page %u of 6",&page)==1) {
+        assert(report_active && page==finish_calls%6u+1u);report_headers++;
+    }
+}
 void cdda_display_number(const char *text,uint32_t value) {(void)value;assert(text);}
-void cdda_display_finish(unsigned count) {finished=true;reported_failures=count;finish_calls++;}
+void cdda_display_finish(unsigned count) {
+    if(report_active) {
+        assert(!count && preflight_stages==6u && (finish_calls?report_step==3u:report_step==0u));
+        report_anchor=(uint32_t)clock_value;report_step=0u;report_finish_calls=finish_calls+1u;
+    }
+    finished=true;reported_failures=count;finish_calls++;
+}
 enum kui_cdda_aica_result kui_cdda_aica_init(void) {aica_calls++;assert(false);return KUI_CDDA_AICA_ARGUMENT;}
 enum kui_cdda_aica_result kui_cdda_aica_start(void) {aica_calls++;assert(false);return KUI_CDDA_AICA_ARGUMENT;}
 enum kui_cdda_aica_result kui_cdda_aica_stop(void) {aica_calls++;assert(false);return KUI_CDDA_AICA_ARGUMENT;}
@@ -256,7 +350,7 @@ int cdda_preflight_storage_extent_run(unsigned index,struct cdda_preflight_stora
     if(mapped_track==2u && scenario==RUN_OVERLAP) {out->first_volume_lba=4096u;injected=true;}
     return 0;
 }
-void cdda_preflight_storage_close(void) {close_slot(false);close_slot(true);mapped_track=0;}
+void cdda_preflight_storage_close(void) {close_slot(false);close_slot(true);mapped_track=0;report_ready=true;}
 
 static bool model_cancelled(void *context) {
     assert(context==&original_ops && inside_preflight);cancel_calls++;
@@ -307,14 +401,18 @@ int main(int argc,char **argv) {
         if(!strcmp(argv[1],scenario_names[i])) {scenario=(enum scenario)i;found=true;break;}
     assert(found);expected_ip_crc=(uint32_t)strtoul(argv[3],NULL,16);digest_bytes(argv[4],expected_ip_sha);
     expected_boot_crc=(uint32_t)strtoul(argv[5],NULL,16);digest_bytes(argv[6],expected_boot_sha);
-    clock_value=UINT32_MAX-100000u;cdda_main();
+    /* Both inherited stopped and running channel1 are covered. */
+    if(scenario==STACK_GUARD) model_tstr=7u;
+    original_tstr=model_tstr;cdda_main();
     assert(finished && !primary.file && !secondary.file && opens==closes &&
         !aica_calls && !inside_preflight && !storage_cancel && !storage_cancel_context);
     bool succeeds=scenario==PASS || scenario==COOKED_PASS || scenario==PREFIX_PASS ||
         scenario==PADDING_CORRUPT || scenario==PAYLOAD_CORRUPT || scenario==SLOTS64_PASS;
     if(succeeds) {
         assert(!preflight_failures && !reported_failures && preflight_stages==6u && initialized &&
-            !shutdowns && finish_calls==6u && preflight_calls==1u && captured_result==KUI_CDDA_PREFLIGHT_OK);
+            !shutdowns && finish_calls==13u && preflight_calls==1u && captured_result==KUI_CDDA_PREFLIGHT_OK &&
+            timer_writes==5u && model_tstr==(uint8_t)(original_tstr|2u) && preflight_clock_owned &&
+            report_headers==13u && report_polls==36u && report_wraps>=1u);
         assert(stats==15u && descriptor_reads==1u && source_reads==22u && progress_calls==25u);
         assert(captured.map.count==15u && captured.map.complete && !captured.map.cd_image &&
             captured.metadata.ip_valid && captured.metadata.boot_valid && captured.metadata.native_gd &&
@@ -346,7 +444,15 @@ int main(int argc,char **argv) {
     } else {
         assert(injected && preflight_failures==1u && reported_failures==1u &&
             !initialized && shutdowns==1u && finish_calls==1u);
-        if(scenario==MAP_PARSE || scenario==MAP_MISSING || scenario==MAP_TRUNCATED ||
+        assert(!preflight_clock_owned && !preflight_clock_active && !report_active &&
+            model_tcor==0xabcdef45u && model_tcnt==0x10203040u && model_tcr==3u);
+        if(scenario==CLOCK_STANDBY) assert(!timer_writes && !timer_counter_reads && model_tstr==original_tstr);
+        else assert(timer_writes==10u && model_tstr==(uint8_t)(original_tstr^1u));
+        if(scenario==CLOCK_STALLED || scenario==CLOCK_CONFIG || scenario==CLOCK_STANDBY) {
+            assert(!preflight_stages && !preflight_calls && !stats && !descriptor_reads && !source_reads &&
+                !opens && !closes && strstr(preflight_failure,"TMU1 clock"));
+            if(scenario==CLOCK_STALLED) assert(timer_counter_reads==1025u);
+        } else if(scenario==MAP_PARSE || scenario==MAP_MISSING || scenario==MAP_TRUNCATED ||
            scenario==MAP_OVERLAP || scenario==DESCRIPTOR_IO) assert(!preflight_calls && !source_reads);
         else if(scenario>=GEOMETRY_INVALID && scenario!=DEADLINE_INSPECT) {
             assert(preflight_calls==1u && captured_result==KUI_CDDA_PREFLIGHT_OK && source_reads==22u);
@@ -363,7 +469,7 @@ int main(int argc,char **argv) {
         }
     }
     printf("preflight13 %s: stages%u failures%u stats%u descriptor%u physical_sectors%u "
-        "progress%u cancellation_checks%u AICA%u\n",argv[1],preflight_stages,preflight_failures,stats,descriptor_reads,
-        source_reads,progress_calls,cancel_calls,aica_calls);
+        "progress%u cancellation_checks%u AICA%u pages%u polls%u wraps%u\n",argv[1],preflight_stages,preflight_failures,stats,descriptor_reads,
+        source_reads,progress_calls,cancel_calls,aica_calls,report_headers,report_polls,report_wraps);
     return 0;
 }

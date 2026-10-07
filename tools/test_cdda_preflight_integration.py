@@ -123,7 +123,8 @@ def main():
              "payload-corrupt", "cancel-before", "cancel-inspect", "cancel-ip", "cancel-boot",
              "progress-inspect", "progress-ip", "progress-boot", "cancel-last", "geometry-invalid", "extent-size",
              "run-gap", "run-zero", "run-partition", "run-overlap", "slots64-pass", "slots65-refused",
-             "slots161-refused", "deadline-inspect", "deadline-map", "stack-guard")
+             "slots161-refused", "deadline-inspect", "deadline-map", "stack-guard",
+             "clock-stalled", "clock-config", "clock-standby")
     if args.case and args.case not in cases:
         parser.error("unknown scenario")
     if args.case:

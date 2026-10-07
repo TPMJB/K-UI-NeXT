@@ -4,14 +4,21 @@
 #include "cdda_storage.h"
 #include "cdda_display.h"
 #include "kui/cdda_preflight.h"
+#include "kui/cdda_clock.h"
 #include "kui/retail_image.h"
 #include "kui/storage_policy.h"
 #include "kui/hash.h"
 #include <string.h>
 
 #define PREFLIGHT_TRACKS 15u
-#define PREFLIGHT_TICKS_SECOND 12500000u
+#define PREFLIGHT_TICKS_SECOND KUI_CDDA_TMU_HZ
 #define PREFLIGHT_DEADLINE_TICKS (180u * PREFLIGHT_TICKS_SECOND)
+#define PREFLIGHT_PAGE_TICKS (15u * PREFLIGHT_TICKS_SECOND)
+#define PREFLIGHT_TSTR 0xffd80004u
+#define PREFLIGHT_TCOR1 0xffd80014u
+#define PREFLIGHT_TCNT1 0xffd80018u
+#define PREFLIGHT_TCR1 0xffd8001cu
+#define PREFLIGHT_STBCR 0xffc00004u
 static struct kui_game_image preflight_image;
 static struct kui_cdda_preflight_report preflight_report;
 static struct kui_retail_manifest preflight_manifest;
@@ -21,21 +28,32 @@ static uint32_t preflight_stages,preflight_failures,preflight_stack_used,preflig
 static unsigned preflight_phase=3u;
 static uint32_t preflight_progress;
 static bool preflight_clock_active,preflight_timed_out;
+static bool preflight_clock_owned;
+static struct {uint32_t reload,count;uint16_t control;uint8_t started;} preflight_saved_clock;
 static const char *preflight_failure;
 static const uint8_t original_gdi_sha256[32]={
     0x96,0xe3,0xa5,0x4b,0x9a,0xa5,0x28,0xc7,0x17,0x21,0x21,0xba,0x3c,0x6c,0xfa,0xbf,
     0x39,0x1a,0xac,0xb5,0xa8,0x4f,0x29,0x2e,0x89,0x84,0x3f,0xf2,0xd8,0x85,0x38,0x03};
 #ifdef CDDA_PREFLIGHT_HOST_TEST
-extern uint32_t cdda_preflight_host_ticks(void);
+extern uint32_t cdda_preflight_host_clock_read(uint32_t,unsigned);
+extern void cdda_preflight_host_clock_write(uint32_t,uint32_t,unsigned);
+extern bool cdda_preflight_host_report_done(void);
 extern bool cdda_preflight_host_stack(uint32_t *);
-static uint32_t preflight_ticks(void) {return cdda_preflight_host_ticks();}
+static uint32_t clock_read(uint32_t address,unsigned width) {return cdda_preflight_host_clock_read(address,width);}
+static void clock_write(uint32_t address,uint32_t value,unsigned width) {cdda_preflight_host_clock_write(address,value,width);}
 static bool preflight_stack(uint32_t *used) {return cdda_preflight_host_stack(used);}
 #else
 extern uint32_t __cdda_stack_bottom[] __asm__("__cdda_stack_bottom");
 extern uint32_t __cdda_stack_top[] __asm__("__cdda_stack_top");
-/* The private SCI lease already owns TMU1. Sampling never writes its registers. */
-static uint32_t preflight_ticks(void) {
-    return UINT32_MAX-*(volatile uint32_t *)(uintptr_t)0xffd80018u;
+static uint32_t clock_read(uint32_t address,unsigned width) {
+    if(width==1u) return *(volatile uint8_t *)(uintptr_t)address;
+    if(width==2u) return *(volatile uint16_t *)(uintptr_t)address;
+    return *(volatile uint32_t *)(uintptr_t)address;
+}
+static void clock_write(uint32_t address,uint32_t value,unsigned width) {
+    if(width==1u) *(volatile uint8_t *)(uintptr_t)address=(uint8_t)value;
+    else if(width==2u) *(volatile uint16_t *)(uintptr_t)address=(uint16_t)value;
+    else *(volatile uint32_t *)(uintptr_t)address=value;
 }
 static bool preflight_stack(uint32_t *used) {
     for(unsigned i=0;i<16u;i++) if(__cdda_stack_bottom[i]!=0x43444441u) return false;
@@ -45,6 +63,41 @@ static bool preflight_stack(uint32_t *used) {
     return *used && *used<=65536u-64u;
 }
 #endif
+/* SCI supplies wire-work counts, not a running hardware timer. This detached
+ * diagnostic owns TMU1 explicitly; interrupts stay disabled and other TMU
+ * channel start bits are preserved. Do not wake the entire TMU module. */
+static bool preflight_clock_init(void) {
+    if(clock_read(PREFLIGHT_STBCR,1u)&4u) return false;
+    preflight_saved_clock.started=(uint8_t)(clock_read(PREFLIGHT_TSTR,1u)&2u);
+    preflight_saved_clock.control=(uint16_t)(clock_read(PREFLIGHT_TCR1,2u)&0x3fu);
+    preflight_saved_clock.reload=clock_read(PREFLIGHT_TCOR1,4u);
+    preflight_saved_clock.count=clock_read(PREFLIGHT_TCNT1,4u);
+    preflight_clock_owned=true;
+    clock_write(PREFLIGHT_TSTR,clock_read(PREFLIGHT_TSTR,1u)&~2u,1u);
+    clock_write(PREFLIGHT_TCR1,0u,2u); /* PCLK/4, no interrupt enable. */
+    clock_write(PREFLIGHT_TCOR1,UINT32_MAX,4u);
+    clock_write(PREFLIGHT_TCNT1,UINT32_MAX,4u);
+    clock_write(PREFLIGHT_TSTR,clock_read(PREFLIGHT_TSTR,1u)|2u,1u);
+    if(!(clock_read(PREFLIGHT_TSTR,1u)&2u) || clock_read(PREFLIGHT_TCR1,2u)!=0u ||
+       clock_read(PREFLIGHT_TCOR1,4u)!=UINT32_MAX) return false;
+    uint32_t first=clock_read(PREFLIGHT_TCNT1,4u);
+    for(unsigned polls=0;polls<1024u;polls++)
+        if(clock_read(PREFLIGHT_TCNT1,4u)!=first) return true;
+    return false;
+}
+static void preflight_clock_close(void) {
+    preflight_clock_active=false;
+    if(!preflight_clock_owned) return;
+    clock_write(PREFLIGHT_TSTR,clock_read(PREFLIGHT_TSTR,1u)&~2u,1u);
+    clock_write(PREFLIGHT_TCOR1,preflight_saved_clock.reload,4u);
+    clock_write(PREFLIGHT_TCNT1,preflight_saved_clock.count,4u);
+    /* Restore control/count only: a prior pending underflow IRQ is not
+     * recreated. This terminal diagnostic never returns to a timer owner. */
+    clock_write(PREFLIGHT_TCR1,preflight_saved_clock.control,2u);
+    clock_write(PREFLIGHT_TSTR,(clock_read(PREFLIGHT_TSTR,1u)&~2u)|preflight_saved_clock.started,1u);
+    preflight_clock_owned=false;
+}
+static uint32_t preflight_ticks(void) {return UINT32_MAX-clock_read(PREFLIGHT_TCNT1,4u);}
 static bool preflight_cancelled(void *ctx) {
     (void)ctx;
     if(preflight_clock_active && (uint32_t)(preflight_ticks()-preflight_start)>=PREFLIGHT_DEADLINE_TICKS)
@@ -148,10 +201,11 @@ static bool preflight_physical_map(void) {
     ++preflight_stages;return true;
 }
 static bool cdda_preflight_test(void) {
-    if(cdda_storage_init()) return preflight_fail(cdda_storage_last_failure());
+    if(!preflight_clock_init()) return preflight_fail("TMU1 clock configuration/progress unavailable");
     preflight_start=preflight_ticks();preflight_clock_active=true;
     cdda_storage_read_cancel(preflight_cancelled,NULL);
     cdda_preflight_storage_cancel(preflight_cancelled,NULL);
+    if(cdda_storage_init()) return preflight_fail(cdda_storage_last_failure());
     if(cdda_preflight_storage_discover()) return preflight_fail(cdda_preflight_storage_failure());
     ++preflight_stages;
     size_t bytes=0;
@@ -252,6 +306,15 @@ static void preflight_page(unsigned page) {
     }
     cdda_display_finish(preflight_failures);
 }
+struct preflight_pages {unsigned page;uint32_t last;};
+static void preflight_pages_start(struct preflight_pages *pages) {
+    pages->page=0u;pages->last=preflight_ticks();preflight_page(pages->page);
+}
+static void preflight_pages_poll(struct preflight_pages *pages) {
+    uint32_t now=preflight_ticks();
+    if((uint32_t)(now-pages->last)<PREFLIGHT_PAGE_TICKS) return;
+    pages->last=now;pages->page=(pages->page+1u)%6u;preflight_page(pages->page);
+}
 void cdda_main(void) {
     cdda_display_init();cdda_display_line("PROFILE13 PREFLIGHT / complete original Toy image");
     cdda_display_line("Finding the full dump already on the SCI card...");
@@ -263,17 +326,20 @@ void cdda_main(void) {
         field("Reason: ",preflight_failure?preflight_failure:"Unknown preflight failure");
         cdda_display_line("Leave game files unchanged; photograph this screen.");
         cdda_display_line("Do not install test14 until this preflight passes.");
-        cdda_display_finish(preflight_failures);cdda_storage_shutdown();
+        cdda_display_finish(preflight_failures);cdda_storage_shutdown();preflight_clock_close();
     }
 #ifdef CDDA_PREFLIGHT_HOST_TEST
-    if(passed) for(unsigned page=0;page<6u;page++) preflight_page(page);
+    if(!passed) return;
 #else
     if(!passed) for(;;) {__asm__ volatile("nop");}
-    /* Keep the read-only SCI lease: its already-owned timer advances pages.
-     * No further filesystem/card operations occur after the report is ready. */
-    unsigned page=0;uint32_t last=preflight_ticks();preflight_page(page);
-    for(;;) if((uint32_t)(preflight_ticks()-last)>=15u*PREFLIGHT_TICKS_SECOND) {
-        last=preflight_ticks();page=(page+1u)%6u;preflight_page(page);
-    }
 #endif
+    /* Keep the explicitly owned clock and read-only SCI lease for reporting.
+     * No further filesystem/card operations occur after the report is ready. */
+    struct preflight_pages pages;preflight_pages_start(&pages);
+    for(;;) {
+#ifdef CDDA_PREFLIGHT_HOST_TEST
+        if(cdda_preflight_host_report_done()) return;
+#endif
+        preflight_pages_poll(&pages);
+    }
 }

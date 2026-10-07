@@ -1,9 +1,23 @@
 # Complete-image preflight and retail observation
 
-Run **13 — image preflight** first. Install **14 — retail observation** only
-after 13 reports PASS for the complete original Toy Commander image you will
-launch. Both tests are supplied together; 14 does not need another package to
-be built after 13's console result.
+Use **K-UI-CDDA-Preflight-Fix.zip** for the next run of **13 — image preflight**.
+It replaces only test 13. Keep test 14 from the original
+**K-UI-CDDA-Integration-Tests.zip**; its build remains `324c330bdb6c`.
+The replacement includes no test 14 binary and does not overwrite
+`/KUI/tests/cdda/preflight.cfg`, game files or the normal retail reader.
+
+The original build `324c330bdb6c` reached **PASS, 6 stages / 0 failures** on
+console, but remained on page 1. Its report timer had never been started, so
+automatic page changes and the intended 180-second read deadline were inactive.
+Only page 1 is confirmed; the other five pages have no console evidence yet.
+The replacement starts the diagnostic's own timer before storage reads and
+keeps it running through report paging. Its console result is pending.
+
+Run the replacement 13 and photograph all six pages. Install **14 — retail
+observation** only after a complete PASS report for the original Toy Commander
+image you will launch. Test 14 does not need to be rebuilt or downloaded again.
+The [hardware record](evidence/cdda-preflight-hardware-2026-10-07.md) preserves
+the confirmed result and the original build's reporting limitation.
 
 13 checks the selected image without launching it or starting audio. 14 uses
 the standard SCI retail reader to observe the game's requests. These tests
@@ -23,22 +37,24 @@ has 451 bytes and SHA-256
 An optimized descriptor, the earlier `/KUI/tests/cdda/` selected-track setup,
 or only `track14.raw` does not satisfy this complete-image check.
 
-The ZIP contains no game backing files and installs no GDI descriptor.
-Extraction replaces `/KUI/runtime.kui` with 13. It places 14 at
-`observation/14-retail-observe.kui` and leaves `/KUI/apps/games/` alone.
+The replacement ZIP contains no game backing files and installs no GDI
+descriptor or path configuration. Extraction replaces `/KUI/runtime.kui` with
+the corrected 13 and leaves the existing test 14 and `/KUI/apps/games/` alone.
+The original combined ZIP supplied 14 at `observation/14-retail-observe.kui`;
+retain that file for the later observation run.
 
-| File in this ZIP | Purpose |
+| File in the replacement ZIP | Purpose |
 |---|---|
 | `KUI/runtime.kui` | Default 13 preflight runtime |
 | `runtimes/13-image-preflight.kui` | Identical 13 runtime for restoring the test |
-| `observation/14-retail-observe.kui` | Separately installed observation reader |
 | `build.json` and `SHA256SUMS` | Source/build identity and package checksums |
 | `evidence/` | Linked ELFs, maps and compiler stack reports |
 | `source-snapshot.tar`, `source-fatfs/`, `LICENSES/` | Corresponding source and notices |
 
 ## Run 13
 
-1. Extract the ZIP at the card root, preserving the directory structure.
+1. Extract **K-UI-CDDA-Preflight-Fix.zip** at the card root, preserving the
+   directory structure. Keep any existing `preflight.cfg` and test 14 file.
 2. Safely eject, boot the existing bootstrap CD and select **SCI**.
 3. Run the card runtime. Its build ID must match `build.json`.
 4. Wait for the final report. On PASS, photograph all six pages, including
@@ -105,7 +121,8 @@ With the console powered off:
 1. Back up the current `/KUI/apps/games/retail-boot.kui` as
    `/KUI/apps/games/retail-boot-before-observe.kui`. Preserve an existing backup
    rather than overwriting it.
-2. Copy `observation/14-retail-observe.kui` to
+2. Copy the retained `observation/14-retail-observe.kui` from the original
+   combined ZIP, build `324c330bdb6c`, to
    `/KUI/apps/games/retail-boot.kui`.
 3. Restore the retained working runtime from `/KUI/runtime-before-cdda.kui`
    to `/KUI/runtime.kui`, keeping the backup.

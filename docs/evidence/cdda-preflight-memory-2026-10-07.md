@@ -1,5 +1,14 @@
 # Profile 13 preflight: native memory and independent validation
 
+Historical audit of the initial profile 13 build. The console later reported
+six completed stages, zero failures and a 32,600-byte stack watermark, but
+the report remained on page 1. That build sampled TMU1 without starting it;
+its automatic page rotation and 180-second hardware deadline were therefore
+not established. The original host adapter rendered all six pages directly
+and did not exercise the timed loop. See
+[the clock correction](cdda-preflight-clock-fix-2026-10-07.md) and
+[the page 1 hardware evidence](cdda-preflight-hardware-2026-10-07.md).
+
 Audit date: 2026-10-07. Scope: the separate `Makefile.cdda_preflight`
 target, `cdda_preflight_main.c`, its read-only storage adapter, and the
 linked profile 13 image. Profile 14 has a separate retail observation audit.
