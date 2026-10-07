@@ -21,9 +21,13 @@ Profiles 09 and 10 also [passed on console](evidence/cdda-batch-hardware-2026-10
 09 checked 8,851,456 bytes in 4,322 chunks across all eight request sizes;
 10 preserved exactly one confirmed 2,048-byte sector through its deliberate
 deadline refusal. Both completed eight stages with zero unexpected failures
-and restored the vector. The next runnable bundle contains
-[11: a generated complete GDI map and 12: selected Toy Commander track 14](cdda-disc-test.md),
-prepared together. Their console results are pending.
+and restored the vector. Profiles
+[11: a generated complete GDI map and 12: selected Toy Commander track 14](cdda-disc-test.md)
+also [passed on console](evidence/cdda-disc-hardware-2026-10-07.md): each
+completed eight stages with zero failures and restored the vector. Profile 11
+checked all 196,608 data bytes in 96 chunks, both TOCs and two actual EOFs;
+profile 12 completed the selected track's pause/resume and actual EOF sequence.
+The current standalone sequence is complete. Retail integration remains open.
 Prepared 2026-10-07 UTC / 2026-10-07 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -271,7 +275,7 @@ required counters and vector restoration. Profile 10's zero refill metrics
 mean no post-start half refill occurred in that short run; they are not a
 new timing-margin measurement.
 
-**Next console checks:** profile 11 derives both TOC areas from a complete
+**Passed console checks:** profile 11 derives both TOC areas from a complete
 generated six-track GDI, validates actual backing extents and gaps, changes
 between unequal-length audio files with nonzero backing offsets, checks two
 actual EOFs and returns cooked/raw Mode 1 data through incremental reads.
@@ -279,8 +283,11 @@ Profile 12 admits only the supplied Toy Commander track 14 and its original
 descriptor, checks the real file-backed FAD range, pauses/resumes at the
 actual played cursor and reaches its exact EOF. Its 150-sector gap before
 track 15 is refused; unavailable Toy backings and complete TOCs are refused.
-The [disc checklist](cdda-disc-test.md) supplies both independent runtimes
-and their eight-stage gates. Portable checks include both actual clients,
+The [disc checklist](cdda-disc-test.md) retains both independent runtimes
+and their eight-stage gates. The
+[hardware record](evidence/cdda-disc-hardware-2026-10-07.md) confirms all
+displayed gates, vector restoration and guarded stack use; no routine repeat
+of either profile is needed. Portable checks include both actual clients,
 25 normal/fault scenarios and a private run against the supplied track 14.
 The [memory record](evidence/cdda-disc-memory-2026-10-07.md) addresses the
 new parser/map and three separate stacks. PLAY21 endpoint semantics, DMA,
@@ -326,7 +333,7 @@ engine begins at `0x8c010000`, where the retail executable normally launches;
 its present layout cannot be reused as a retail resident. Its explicitly
 owned AICA initialization and TMU1 clock likewise require a different proven
 contract before game execution. These are integration work items, not
-reasons to repeat the already passing 00–10 harness runs.
+reasons to repeat the already passing 00–12 harness runs.
 
 Toy Commander has a [reported sound-channel conflict](https://dc-swat.ru/www/forum/thread-4042-post-43645.html) in other loaders, making
 it a harder first retail target. First prove the engine with independently
@@ -362,17 +369,19 @@ candidate reader.
 
 ## First steps and ownership
 
-**Agent next:** evaluate the new disc-map and selected-track console results,
-then establish exact-image identity, regular service and resource ownership
+**Agent next:** establish exact-image identity, regular service and resource ownership
 before Toy Commander retail integration. The classifier,
 standalone engine, clock conversion, controls, soak/stress and variable-size
 mixed jobs are implemented and numerically tested on console. Keep new
 retail scheduling and sound-driver discoveries separate from those results.
 
-**User next:** run [11, then 12](cdda-disc-test.md) from the same bundle,
-photograph both complete final screens and restore the preserved 1.8.5 runtime
-afterward. Stop the sequence if a test reports an unexpected failure.
-Profiles 00–10 need no routine repeat. A later brief stereo/control check can
+**User next:** restore the preserved 1.8.5 runtime after the completed disc
+tests. Profiles 00–12 need no routine repeat. Remaining hardware work has
+three integration stages: exact-image/resource observation, periodic service
+with game sound, and actual Toy Commander music/effects/loading/extended play.
+These are planning stages rather than a guaranteed count of test binaries;
+sound, memory and service findings can require correction and another run.
+A later brief stereo/control check can
 confirm channel order and silence when suitable speakers are available.
 This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed
 **Toy Commander** GDI with every referenced `.raw` track; do not buy another

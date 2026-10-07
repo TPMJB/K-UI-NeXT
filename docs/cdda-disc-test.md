@@ -6,8 +6,11 @@ initialization; profile 12 takes about 42 seconds plus initialization.
 Both profiles are automatic and independent. Profiles 00–10 already passed
 their requested numerical checks; no earlier test or 15-minute run needs
 repeating. The [09/10 console results](evidence/cdda-batch-hardware-2026-10-07.md)
-remain separate checkpoints. These two new profiles are prepared and untested
-on the console until these runs.
+remain separate checkpoints. Both profiles now
+[passed their numerical console gates](evidence/cdda-disc-hardware-2026-10-07.md)
+at build `a0c36063a9ed`; neither needs a routine repeat. The installation
+sequence below is retained for reproduction. The original archive's manifest
+correctly records its pre-test status and remains unchanged.
 
 Profile 11 opens a complete generated six-track GDI, derives both TOC areas,
 plays distinct audio files and checks cooked and raw data extraction during
