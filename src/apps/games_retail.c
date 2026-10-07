@@ -291,11 +291,14 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     snprintf(map->bootfile,sizeof(map->bootfile),"%s",metadata.bootfile);
     log("Retail boot: %.100s; product=%s version=%s region=%s",map->title,metadata.product,
         metadata.version,metadata.region);
-    for(unsigned i=0;i<image->count;i++)
-        if(image->tracks[i].control==0 && image->tracks[i].start_lba>=45000) {
-            log("Retail warning: CD audio playback is unsupported; the reader accepts audio commands silently, so that music is absent");
-            break;
-        }
+    struct kui_game_audio_info audio_info;
+    r=kui_game_image_audio_info(image,&audio_info);
+    if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+    if(audio_info.candidate_tracks)
+        log("Retail warning: CD audio playback is unsupported (%u candidate tracks); commands are acknowledged silently, so music using them is absent",
+            audio_info.candidate_tracks);
+    else if(audio_info.classification==KUI_GAME_AUDIO_UNKNOWN)
+        log("Retail audio: bare ISO/raw image has no original audio-track inventory; CD audio playback remains unsupported");
     r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     r=kui_game_image_check(image,map->boot_lba,(map->boot_bytes+2047u)/2048u,KUI_GAME_SECTOR_MODE1);

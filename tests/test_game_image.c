@@ -118,6 +118,86 @@ static void expect_data(const unsigned char *bytes, unsigned tag, uint32_t secto
     ++checks;
 }
 
+static void expect_audio(const struct kui_game_image *image,
+    enum kui_game_audio_class classification, unsigned audio,
+    unsigned candidates, unsigned warnings) {
+    struct kui_game_audio_info info;
+    CHECK(kui_game_image_audio_info(image, &info) == KUI_GAME_OK);
+    CHECK(info.classification == classification && info.audio_tracks == audio &&
+          info.candidate_tracks == candidates && info.warning_tracks == warnings);
+}
+
+static void audio_inventory(void) {
+    struct fixture fixture;
+    struct kui_game_image image;
+    init(&fixture);
+    CHECK(open_image(&fixture, descriptor, &image) == KUI_GAME_OK);
+    expect_audio(&image, KUI_GAME_AUDIO_GD_LOW_DENSITY_ONLY, 1u, 0u, 1u);
+    CHECK(fixture.stats == 4u && fixture.reads == 0u);
+    const char audio[] =
+        "4\n1 0 4 2352 track01.bin 0\n2 4 0 2352 track02.raw 0\n"
+        "3 45000 4 2352 \"Track 03.bin\" 0\n4 45004 0 2352 track04.bin 0\n";
+    CHECK(open_image(&fixture, audio, &image) == KUI_GAME_OK);
+    expect_audio(&image, KUI_GAME_AUDIO_GD_HIGH_DENSITY, 2u, 1u, 1u);
+    CHECK(fixture.stats == 8u && fixture.reads == 0u);
+    /* Converting data payloads to 2048 bytes keeps both audio tracks. */
+    const char cooked[] =
+        "4\n1 0 4 2048 track01.bin 0\n2 4 0 2352 track02.raw 0\n"
+        "3 45000 4 2048 \"Track 03.bin\" 0\n4 45004 0 2352 track04.bin 0\n";
+    fixture.files[0].bytes = fixture.files[2].bytes = 4u * 2048u;
+    fixture.files[0].stride = fixture.files[2].stride = 2048u;
+    CHECK(open_image(&fixture, cooked, &image) == KUI_GAME_OK);
+    expect_audio(&image, KUI_GAME_AUDIO_GD_HIGH_DENSITY, 2u, 1u, 1u);
+    CHECK(fixture.stats == 12u && fixture.reads == 0u);
+    /* Descriptor discovery has no end_lba, backing lengths or callbacks. */
+    CHECK(kui_game_gdi_layout(cooked, sizeof(cooked) - 1u, &image) == KUI_GAME_OK);
+    expect_audio(&image, KUI_GAME_AUDIO_GD_HIGH_DENSITY, 2u, 1u, 1u);
+    const char boundary[] =
+        "3\n1 0 4 2352 data.bin 0\n2 44999 0 2352 low.raw 0\n"
+        "3 45000 0 2352 high.raw 0\n";
+    CHECK(kui_game_gdi_layout(boundary, sizeof(boundary) - 1u, &image) == KUI_GAME_OK);
+    image.data_lba = 45010u; /* Later boot data never moves the GD boundary. */
+    expect_audio(&image, KUI_GAME_AUDIO_GD_HIGH_DENSITY, 2u, 1u, 1u);
+    image.cd_image = true;
+    expect_audio(&image, KUI_GAME_AUDIO_CD, 2u, 2u, 0u);
+    const char data[] = "1\n1 45000 4 2048 data.iso 0\n";
+    CHECK(kui_game_gdi_layout(data, sizeof(data) - 1u, &image) == KUI_GAME_OK);
+    expect_audio(&image, KUI_GAME_AUDIO_NONE, 0u, 0u, 0u);
+    image.cd_image = true;
+    expect_audio(&image, KUI_GAME_AUDIO_NONE, 0u, 0u, 0u);
+    CHECK(fixture.stats == 12u && fixture.reads == 0u);
+
+    struct kui_game_audio_info info;
+    memset(&info, 0xa5, sizeof(info));
+    CHECK(kui_game_image_audio_info(NULL, &info) == KUI_GAME_INVALID);
+    CHECK(kui_game_image_audio_info(&image, NULL) == KUI_GAME_INVALID);
+    const unsigned counts[] = {0u, KUI_GAME_TRACK_MAX + 1u, UINT32_MAX};
+    for(unsigned i = 0; i < sizeof(counts) / sizeof(counts[0]); ++i) {
+        image.count = counts[i];
+        CHECK(kui_game_image_audio_info(&image, &info) == KUI_GAME_INVALID);
+        CHECK(all_is(&info, sizeof(info), 0xa5));
+    }
+    image.count = 1u;
+    image.format = (enum kui_game_image_format)-1;
+    CHECK(kui_game_image_audio_info(&image, &info) == KUI_GAME_INVALID);
+    image.format = (enum kui_game_image_format)99;
+    CHECK(kui_game_image_audio_info(&image, &info) == KUI_GAME_INVALID);
+    image.format = KUI_GAME_IMAGE_GDI;
+    image.tracks[0].control = 9u;
+    CHECK(kui_game_image_audio_info(&image, &info) == KUI_GAME_INVALID);
+    image.tracks[0].control = 4u;
+    image.tracks[0].number = 0u;
+    CHECK(kui_game_image_audio_info(&image, &info) == KUI_GAME_INVALID);
+    image.tracks[0].number = 1u;
+    image.tracks[0].start_lba = KUI_GAME_LBA_LIMIT;
+    CHECK(kui_game_image_audio_info(&image, &info) == KUI_GAME_INVALID);
+    CHECK(all_is(&info, sizeof(info), 0xa5));
+    CHECK(kui_game_gdi_layout(boundary, sizeof(boundary) - 1u, &image) == KUI_GAME_OK);
+    image.tracks[2].start_lba = image.tracks[1].start_lba;
+    CHECK(kui_game_image_audio_info(&image, &info) == KUI_GAME_INVALID);
+    CHECK(all_is(&info, sizeof(info), 0xa5));
+}
+
 static void happy_paths(void) {
     struct fixture fixture;
     struct kui_game_image image;
@@ -310,6 +390,8 @@ static void upper_bounds(void) {
     }
     CHECK(open_image(&fixture, gdi, &image) == KUI_GAME_OK);
     CHECK(image.count == 99 && fixture.stats == 99);
+    expect_audio(&image, KUI_GAME_AUDIO_NONE, 0u, 0u, 0u);
+    CHECK(fixture.stats == 99u && fixture.reads == 0u);
     CHECK(kui_game_image_check(&image, 0, 99, KUI_GAME_SECTOR_MODE1) == KUI_GAME_OK);
     memset(&fixture, 0, sizeof(fixture));
     add_file(&fixture, "track01.bin", KUI_GAME_LBA_LIMIT);
@@ -445,6 +527,7 @@ static void cue_and_modes(void) {
     add_content(&fixture, "unicode.cue", unicode_cue, sizeof(unicode_cue) - 1u);
     struct kui_game_image unicode_image;
     CHECK(named(&fixture, "unicode.cue", &unicode_image) == KUI_GAME_OK);
+    expect_audio(&unicode_image, KUI_GAME_AUDIO_NONE, 0u, 0u, 0u);
     CHECK(image.format == KUI_GAME_IMAGE_CUE && image.data_lba == 11700u && !image.scrambled && image.cd_image);
     CHECK(image.count == 2 && image.tracks[0].end_lba == 4);
     CHECK(image.tracks[1].file_offset == 6u * 2352u && image.tracks[1].end_lba == 11704u);
@@ -522,6 +605,10 @@ static void cue_sessions(void) {
         CHECK(named(&fixture, "game.cue", &image) == KUI_GAME_OK);
         CHECK(image.data_lba == cases[i].base && image.tracks[0].end_lba == cases[i].audio_end);
         CHECK(image.cd_image == (i != 2u));
+        unsigned stats = fixture.stats, reads = fixture.reads;
+        expect_audio(&image, i == 2u ? KUI_GAME_AUDIO_GD_LOW_DENSITY_ONLY :
+                     KUI_GAME_AUDIO_CD, 1u, i == 2u ? 0u : 1u, i == 2u ? 1u : 0u);
+        CHECK(fixture.stats == stats && fixture.reads == reads);
         CHECK(image.tracks[1].start_lba == cases[i].base && image.tracks[1].end_lba == cases[i].base + 4u);
         CHECK(kui_game_image_check(&image, 450u, 1u, KUI_GAME_SECTOR_MODE1) == KUI_GAME_GAP);
         if(cases[i].shared) CHECK(image.tracks[1].file_offset == 11700u * 2352u);
@@ -550,11 +637,13 @@ static void singles(void) {
     add_content(&fixture, "test.iso", iso, sizeof(iso));
     CHECK(named(&fixture, "test.iso", &image) == KUI_GAME_OK);
     CHECK(image.format == KUI_GAME_IMAGE_ISO && image.data_lba == 45000 && !image.scrambled && !image.cd_image);
+    expect_audio(&image, KUI_GAME_AUDIO_UNKNOWN, 0u, 0u, 0u);
     CHECK(image.tracks[0].start_lba == 45000u && image.tracks[0].end_lba == 45064u);
     CHECK(kui_game_image_read(&image, 45016u, 1, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
     CHECK(!memcmp(out, pvd, sizeof(out)));
     both32_test(root + 2u, 11720u); memcpy(iso + 20u * 2048u, root, 34);
     CHECK(named(&fixture, "test.iso", &image) == KUI_GAME_OK && image.data_lba == 11700u && image.cd_image);
+    expect_audio(&image, KUI_GAME_AUDIO_UNKNOWN, 0u, 0u, 0u);
     both32_test(root + 2u, 20u); memcpy(iso + 20u * 2048u, root, 34);
     CHECK(named(&fixture, "test.iso", &image) == KUI_GAME_OK && image.data_lba == 0);
     iso[20u * 2048u] = 0;
@@ -566,10 +655,12 @@ static void singles(void) {
     add_content(&fixture, "test.img", raw, sizeof(raw));
     CHECK(named(&fixture, "test.img", &image) == KUI_GAME_OK);
     CHECK(image.format == KUI_GAME_IMAGE_RAW && image.data_lba == 0 && image.tracks[0].end_lba == 2u);
+    expect_audio(&image, KUI_GAME_AUDIO_UNKNOWN, 0u, 0u, 0u);
     CHECK(kui_game_image_read(&image, 1u, 1, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
     CHECK(!memcmp(out, raw + 2352u + 16u, sizeof(out)));
     raw[12] = 0x10; raw[13] = 0x02;
     CHECK(named(&fixture, "test.img", &image) == KUI_GAME_OK && image.data_lba == 45000u);
+    expect_audio(&image, KUI_GAME_AUDIO_UNKNOWN, 0u, 0u, 0u);
     raw[12] = 0xfa;
     CHECK(named(&fixture, "test.img", &image) == KUI_GAME_MODE);
     raw[12] = 0;
@@ -620,6 +711,9 @@ static void cdi_containers(void) {
         add_content(&fixture, "test.cdi", container, at);
         CHECK(named(&fixture, "test.cdi", &image) == KUI_GAME_OK);
         CHECK(image.format == KUI_GAME_IMAGE_CDI && image.count == 2 && image.data_lba == 11700 && !image.scrambled && image.cd_image);
+        unsigned stats = fixture.stats, reads = fixture.reads;
+        expect_audio(&image, KUI_GAME_AUDIO_CD, 1u, 1u, 0u);
+        CHECK(fixture.stats == stats && fixture.reads == reads);
         CHECK(image.tracks[0].file_offset == 2352u && image.tracks[0].end_lba == 2u);
         CHECK(image.tracks[1].file_offset == 3u * 2352u + 2336u && image.tracks[1].sector_bytes == 2336u);
         CHECK(image.tracks[1].file_bytes == at);
@@ -670,6 +764,7 @@ static void cdi_sector_codes_and_pregap(void) {
         CHECK(named(&fixture, "pregap.cdi", &image) ==
               (code == 3u ? KUI_GAME_UNSUPPORTED : KUI_GAME_OK));
         if(code != 3u) {
+            expect_audio(&image, KUI_GAME_AUDIO_NONE, 0u, 0u, 0u);
             CHECK(image.data_lba == 0u && image.tracks[0].file_offset == (size_t)pregap * stride);
             CHECK(image.tracks[0].sector_bytes == stride && image.tracks[0].end_lba == 2u);
             unsigned char out[2048];
@@ -710,6 +805,7 @@ static void discovery_layout(void) {
     CHECK(all_is(&image,sizeof(image),0xa5));
 }
 int main(void) {
+    audio_inventory();
     discovery_layout();
     happy_paths();
     preflight();
