@@ -62,11 +62,17 @@ and below the [reviewed conservative bound](cdda-next-memory-2026-10-07.md).
 No stack-guard failure appears. The watermark describes these observed paths;
 it does not replace static bounds or error-path checks.
 
-Listening quality has not yet been explicitly reported. Photographs do not
-establish correct left/right routing, absence of clicks or dropouts, silence
-during pause/stop, or music quality. The repeated controls screen establishes
-a second successful run; its power-cycle and chronological placement are not
-encoded in the displayed counters. These details remain owner confirmation.
+In a follow-up, the owner reported that the audio seemed correct, but they
+were not actively listening and could not differentiate left/right through
+the TV speakers. Record this as **no obvious problem noticed during casual
+listening**. It does not certify channel order, uninterrupted playback,
+pause/stop silence, pitch or music quality. A later short stereo check with
+clearly separated output can verify channel order without repeating the
+15-minute numerical tests. This open listening check does not block exact
+clock diagnostics or controlled command/job development.
+
+The repeated controls screen establishes a second successful run; its
+power-cycle and chronological placement are not encoded in the counters.
 
 Both long runs report **902 one-second source-loop passes against 900 owned
 clock seconds**. The displayed integers differ by about 0.22 percent when
@@ -85,8 +91,9 @@ The released 1.8.5 readers remain the fallback.
 
 ## Next engineering work
 
-1. Obtain the owner's listening confirmation for channel order, continuous
-   stereo, pause/stop silence and unexpected clicks/dropouts.
+1. Retain the limited casual-listening report. Arrange a targeted short
+   stereo/control check before declaring audible retail CDDA verified; do
+   not require another routine 15-minute soak just to establish channel order.
 2. Add matched-endpoint exact played-frame and elapsed-tick diagnostics to
    the next controlled build. Preserve these successful profiles as a
    checkpoint rather than silently changing their timing interpretation.

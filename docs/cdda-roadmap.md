@@ -2,7 +2,7 @@
 
 Status: the detached SCI/AICA harness passed its baseline, two controls runs,
 15-minute soak and 15-minute serialized read stress with zero reported faults.
-Listening, precise timer/audio calibration, broader job arbitration and retail
+Targeted stereo listening, precise timer/audio calibration, broader job arbitration and retail
 resource/command integration remain open.
 Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
 
@@ -104,8 +104,10 @@ and its SD installation instructions exist before asking for hardware tests.
 **Baseline, controls/recovery and 15-minute soak passed their numerical console checks.**
 The [new hardware record](evidence/cdda-controls-soak-stress-hardware-2026-10-07.md)
 includes two expected deadline recoveries across two controls runs and two
-timer wraps per long run. Audible channel order/quality still needs owner
-confirmation; exact timer/audio endpoint calibration remains open.
+timer wraps per long run. The owner noticed no obvious problem during casual
+listening, but could not distinguish left/right on the TV and did not monitor
+continuity. Targeted audible verification and exact timer/audio endpoint
+calibration remain open; controlled command/job work can proceed meanwhile.
 Focused sanitizer
 checks cover raw conversion, both byte orders, offsets, sector/cache boundaries,
 2448-byte subchannel stripping, transactional I/O, seeks/EOF, ring deadlines and
@@ -232,8 +234,9 @@ command semantics. Establish periodic service and resource admission before
 Toy Commander retail integration. The classifier, standalone engine, controls,
 soak/stress fixtures and memory audit are implemented and numerically tested.
 
-**User next:** confirm the audible results and restore the preserved 1.8.5
-runtime after testing. The [test checklist](cdda-next-test.md) remains available
+**User next:** restore the preserved 1.8.5 runtime after testing. A later brief
+stereo/control check can confirm channel order and silence; no additional
+routine soak is requested now. The [test checklist](cdda-next-test.md) remains available
 for reproducing a specific result; the requested new numerical profiles are
 complete and do not require another routine soak repetition.
 This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed

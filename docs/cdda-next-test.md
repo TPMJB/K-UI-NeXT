@@ -3,15 +3,19 @@
 **Results received:** the owner supplied two successful controls screens and
 successful 15-minute soak/stress screens for build `cd207bc06def`, all with
 zero unexpected failures. See the [exact hardware record](evidence/cdda-controls-soak-stress-hardware-2026-10-07.md).
-The numerical request is complete; listening and precise timer/audio
-calibration remain open. Retain the procedure below for targeted reproduction.
+The numerical request is complete. The owner noticed no obvious problem during
+casual listening, but did not actively monitor playback or distinguish
+left/right through the TV speakers. A later brief stereo check and precise
+timer/audio calibration remain open; command/job work can proceed meanwhile.
+Retain the procedure below for targeted reproduction.
 
 The first console screen completed all five stages with zero software failures
 on build `9020d5101c7e`. Its exact counters are in the
-[hardware evidence](evidence/cdda-hardware-2026-10-07.md). Audible output has
-not yet been reported. Confirm what you heard in that run; repeat the short
-baseline only if you need to check its output again. Run controls before either
-15-minute test.
+[hardware evidence](evidence/cdda-hardware-2026-10-07.md). Active listening and
+channel separation remain unverified. Repeat the short baseline later only
+when clearly separated stereo output is available; the numerical results do
+not need another routine long run. The original profile order is retained
+below for reproduction.
 
 These profiles are controlled homebrew experiments on the existing SCI card.
 They do not run Toy Commander, install retail CDDA hooks, or establish ownership
