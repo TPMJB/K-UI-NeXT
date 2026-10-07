@@ -1,6 +1,7 @@
 # CDDA implementation roadmap
 
-Status: experimental foundation started; CDDA playback is not implemented.
+Status: experimental detached SCI/AICA harness implemented and host-tested;
+console playback and retail CDDA support remain unproved.
 Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -68,6 +69,14 @@ binary or audio-playing reader has been produced at this gate.
 
 ## Gate 2: isolated SCI harness and measured memory budget
 
+**Initial implementation and measurements complete; console evidence pending.**
+The [isolated test instructions](cdda-harness-test.md) cover the actual built
+runtime, generated fixture, sample placement and restoring the retained runtime.
+The [memory evidence](evidence/cdda-harness-memory-2026-10-07.md) records a real
+low-link failure without enlarging the ordinary reservation. The controlled
+homebrew image owns its separate code/state/stack region and contains no KOS
+kernel references. This is not a retail high-memory admission.
+
 Create a controlled homebrew program that explicitly grants the experiment
 main RAM, sound RAM, two AICA channels, interrupt behavior and a timing source.
 Exercise the detached reader after normal shell services have stopped;
@@ -86,6 +95,12 @@ payloads are unchanged when compared at a fixed build ID. A runnable harness
 and its SD installation instructions exist before asking for hardware tests.
 
 ## Gate 3: checked raw PCM into an AICA ping-pong ring
+
+**Initial engine implemented; hardware gate remains open.** Focused sanitizer
+checks cover raw conversion, both byte orders, offsets, sector/cache boundaries,
+2448-byte subchannel stripping, transactional I/O, seeks/EOF, ring deadlines and
+AICA MMIO phase/FIFO/active-half refusal. Actual stereo output, measured timing,
+pause/resume and deliberate underrun recovery still need console evidence.
 
 Play independently generated synthetic stereo samples first. Read raw audio
 through checked 512-byte SD blocks, carry partial stereo frames, deinterleave
@@ -192,14 +207,13 @@ candidate reader.
 
 ## First steps and ownership
 
-**Agent next:** specify the detached SCI homebrew harness, implement synthetic
-audio fixtures and produce the first actual memory-budget evidence. Gate 1's
-classifier, launcher integration, focused tests and diff review are complete.
-No unrelated full capture/compression suite is needed for this foundation.
+**Agent next:** review the first harness hardware result, then extend controlled
+pause/resume/underrun and concurrent card-read experiments. Gate 1's classifier
+and the first standalone harness, fixtures and memory audit are implemented.
 
-**User now:** keep using the released 1.8.5 build. There is no CDDA test build
-to install yet, and this stage does not require another boot CD or firmware
-reflash. For the later hardware test, retain a complete, uncompressed
+**User now:** follow [the isolated test's exact instructions](cdda-harness-test.md)
+only with the supplied test archive, preserving the released 1.8.5 runtime.
+This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed
 **Toy Commander** GDI with every referenced `.raw` track; do not buy another
 title for this experiment.
 Retain the original image and descriptor; a data-only ISO/CSO/ZSO copy cannot

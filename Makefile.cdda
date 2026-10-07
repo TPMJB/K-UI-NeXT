@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Standalone SCI/AICA experiment: does not link KOS, newlib or the shell.
+CDDA_CC ?= sh-elf-gcc
+CDDA_OBJCOPY ?= sh-elf-objcopy
+CDDA_NM ?= sh-elf-nm
+CDDA_SIZE ?= sh-elf-size
+CDDA_FATFS_SOURCE ?= .deps/fatfs/source
+CDDA_BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
+CDDA_CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+CDDA_FLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror $(CDDA_CPU) \
+    -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
+    -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
+    -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_FAST_IO=1 \
+    -DKUI_BUILD_ID='"$(CDDA_BUILD_ID)"' -Ibuild/cdda/fatfs -Iinclude -Isrc/loader
+CDDA_LINK := $(CDDA_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+CDDA_SOURCES := src/loader/cdda_main.c src/loader/cdda_display.c \
+    src/core/cdda_pcm.c src/core/cdda_ring.c src/loader/cdda_aica.c src/loader/cdda_storage.c \
+    src/loader/sd_reader.c src/loader/sci_sd_bus.c src/loader/minic.c \
+    src/dreamcast/shell_font.c src/core/boot_volume.c src/core/data.c
+CDDA_OBJECTS := $(patsubst %.c,build/cdda/%.o,$(CDDA_SOURCES)) \
+    build/cdda/src/loader/cdda_start.o build/cdda/fatfs/ff.o build/cdda/fatfs/ffunicode.o
+
+.PHONY: all cdda cdda-fixture cdda-check clean force-cdda-config
+all: cdda
+cdda: build/cdda/cdda-harness.kui build/cdda/cdda-harness.bin cdda-check
+
+# Copy headers/sources: their quoted includes must see this private readonly
+# configuration. Never mutate the runtime's shared dependency or its symlinks.
+force-cdda-config:
+build/cdda/build-config: force-cdda-config
+	@mkdir -p $(@D)
+	@printf '%s\n' 'BUILD=$(CDDA_BUILD_ID)' 'FATFS=$(CDDA_FATFS_SOURCE)' > $@.new
+	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
+build/cdda/fatfs/.configured: config/ffconf.h Makefile.cdda build/cdda/build-config \
+    $(CDDA_FATFS_SOURCE)/ff.c $(CDDA_FATFS_SOURCE)/ff.h \
+    $(CDDA_FATFS_SOURCE)/ffunicode.c $(CDDA_FATFS_SOURCE)/diskio.h
+	@mkdir -p build/cdda/fatfs
+	cp $(CDDA_FATFS_SOURCE)/ff.c $(CDDA_FATFS_SOURCE)/ff.h $(CDDA_FATFS_SOURCE)/ffunicode.c $(CDDA_FATFS_SOURCE)/diskio.h build/cdda/fatfs/
+	python3 -c 'import pathlib,re; p=pathlib.Path("config/ffconf.h").read_text(); v={"FF_FS_READONLY":"1","FF_FS_MINIMIZE":"2","FF_USE_FASTSEEK":"0","FF_USE_EXPAND":"0","FF_USE_CHMOD":"0","FF_FS_NORTC":"1","FF_FS_CRTIME":"0"}; p=re.sub(r"(?m)^#define ("+"|".join(v)+r")\s+[^\n]*",lambda m:"#define "+m[1]+" "+v[m[1]],p); pathlib.Path("build/cdda/fatfs/ffconf.h").write_text(p)'
+	@touch $@
+build/cdda/%.o: %.c build/cdda/fatfs/.configured
+	@mkdir -p $(@D)
+	$(CDDA_CC) $(CDDA_FLAGS) -MMD -MP -c $< -o $@
+build/cdda/%.o: %.S build/cdda/fatfs/.configured
+	@mkdir -p $(@D)
+	$(CDDA_CC) $(CDDA_FLAGS) -MMD -MP -c $< -o $@
+build/cdda/fatfs/%.o: build/cdda/fatfs/%.c build/cdda/fatfs/.configured
+	$(CDDA_CC) $(CDDA_FLAGS) -Wno-unused-function -MMD -MP -c $< -o $@
+build/cdda/fatfs/ff.c build/cdda/fatfs/ffunicode.c: build/cdda/fatfs/.configured
+	@test -f $@
+build/cdda/cdda-harness.elf: $(CDDA_OBJECTS) src/loader/cdda_harness.ld
+	$(CDDA_CC) $(CDDA_LINK) -Tsrc/loader/cdda_harness.ld -Wl,-Map,build/cdda/cdda-harness.map -o $@ $(CDDA_OBJECTS) -lgcc
+build/cdda/cdda-harness.bin: build/cdda/cdda-harness.elf
+	$(CDDA_OBJCOPY) -O binary $< $@
+build/cdda/cdda-harness.kui: build/cdda/cdda-harness.elf tools/runtime_package.py
+	python3 tools/runtime_package.py build $< $@ --build-id $(CDDA_BUILD_ID)
+cdda-check: build/cdda/cdda-harness.elf build/cdda/cdda-harness.kui
+	$(CDDA_SIZE) $<
+	@test -z "$$($(CDDA_NM) -u $<)"
+	python3 tools/runtime_package.py verify build/cdda/cdda-harness.kui
+cdda-fixture:
+	python3 tools/cdda_fixture.py build/cdda/fixture
+clean:
+	rm -rf build/cdda
+-include $(CDDA_OBJECTS:.o=.d)

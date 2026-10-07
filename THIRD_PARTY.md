@@ -74,3 +74,21 @@ FatFs source changes consist of the two official patches. `config/ffconf.h` is
 new project configuration; the block-device adapter and storage probe are new
 project code. A source inventory must be revisited when any new dependency,
 font, bootstrap, catalog or runtime component is added.
+
+## Isolated CDDA harness
+
+The experimental `Makefile.cdda` target links K-UI's own freestanding SCI SD
+transport, a privately configured read-only copy of pinned FatFs, the existing
+font renderer and new PCM/timeline/standalone harness code. It links no KOS
+kernel and no DreamShell source or binaries. `src/loader/cdda_aica.c` uses the
+BSD-licensed register contracts from the same pinned official KallistiOS
+revision: `sound/arm/aica.c`, `hardware/spu.c`, `hardware/g2bus.c`, and
+`include/dc/g2bus.h`/`fifo.h` under `kernel/arch/dreamcast`. The original per-file
+notices are retained in its header and `LICENSES/LICENSE.KOS` applies.
+
+The startup follows K-UI's existing detached cache/stack handoff; the new clock
+uses the documented SH7091 TMU register layout already used by the independent
+SD probe. PCM sector stripping, planar conversion and deadline state are new
+project implementations, not translations of DreamShell refill machinery.
+`tools/cdda_fixture.py` generates original sine-tone test data. The user's Toy
+Commander audio remains external and is excluded from source and test packages.
