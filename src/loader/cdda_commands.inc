@@ -11,12 +11,12 @@ static uint32_t command_expected_refusals,command_stale_refusals;
 #endif
 static uint32_t command_paused_frame,command_max_loops;
 
-#if CDDA_TEST_PROFILE != 8
+#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
 static struct kui_cdda_control_request command_request(enum kui_cdda_control_command kind) {
     return (struct kui_cdda_control_request){.command=kind};
 }
 #endif
-#if CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8
+#if CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
 static bool command_same_status(const struct kui_cdda_control_status *a,
     const struct kui_cdda_control_status *b) {
     return a->state==b->state && a->first==b->first && a->end==b->end &&
@@ -95,12 +95,12 @@ static bool command_accept(struct kui_cdda_control_request request) {
     command_accepted++;
     return !action.pending || command_finish(action);
 }
-#if CDDA_TEST_PROFILE != 8
+#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
 static bool command_play(uint32_t first,uint32_t end,bool repeat) {
     return command_accept((struct kui_cdda_control_request){KUI_CDDA_CONTROL_PLAY,first,end,0,repeat});
 }
 #endif
-#if CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8
+#if CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
 static bool command_run(uint32_t additional_frames) {
     if(!command_running || !command_sync()) return false;
     if(!command_running) return command_control.current.state==KUI_CDDA_CONTROL_EOF;
@@ -115,7 +115,7 @@ static bool command_run(uint32_t additional_frames) {
     return command_sync();
 }
 #endif
-#if CDDA_TEST_PROFILE != 8
+#if CDDA_TEST_PROFILE != 8 && CDDA_TEST_PROFILE != 9 && CDDA_TEST_PROFILE != 10
 static bool command_status(enum kui_cdda_control_state expected,
     struct kui_cdda_control_status *out) {
     if(!command_sync()) return false;

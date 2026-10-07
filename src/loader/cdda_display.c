@@ -24,6 +24,10 @@
 #define CDDA_TITLE "K-UI: CDDA service handoff / SCI"
 #elif CDDA_TEST_PROFILE == 8
 #define CDDA_TITLE "K-UI: CDDA BIOS commands / SCI"
+#elif CDDA_TEST_PROFILE == 9
+#define CDDA_TITLE "K-UI: CDDA BIOS batch reads / SCI"
+#elif CDDA_TEST_PROFILE == 10
+#define CDDA_TITLE "K-UI: CDDA batch deadline / SCI"
 #else
 #define CDDA_TITLE "K-UI: isolated CDDA / SCI test"
 #endif

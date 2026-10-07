@@ -14,10 +14,13 @@ Its timer conversion uses the pinned KOS
 measurement, targeted stereo listening, broader job arbitration and retail
 resource/command integration remain open. Profile 07 also
 [passed its controlled service handoff on console](evidence/cdda-service-hardware-2026-10-07.md),
-with seven stages, 7,285 ABI checks and zero failures. The next runnable profile
-is [08: owned BIOS command vector](cdda-bios-test.md), prepared for a fresh
-console check; its hardware result is pending.
-Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
+with seven stages, 7,285 ABI checks and zero failures. Profile 08 also
+[passed the controlled BIOS vector test](evidence/cdda-bios-hardware-2026-10-07.md):
+eight stages, 7,002,112 checked bytes, 17,150 ABI checks and restored vector.
+The next runnable bundle contains [09: incremental multi-sector BIOS reads and
+10: deliberate deadline refusal](cdda-batch-test.md), prepared together for
+fresh console checks; their hardware results are pending.
+Prepared 2026-10-07 UTC / 2026-10-07 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
 The released [1.8.5 reader](release-v1.8.5.md) stays the fallback. The first
@@ -240,17 +243,27 @@ each call. This uses the existing outer KUIRUN transport without repurposing
 its reserved words. It does not establish a retail ABI, interrupt hook,
 sound-driver coexistence or automatic CDDA launch selection.
 
-**Next console check:** profile 08 routes a separately linked controlled
+**Passed console check:** profile 08 routes a separately linked controlled
 client's PLAY, PAUSE, RELEASE, STOP, NOP and one-sector READ requests through
 the actual owned GD BIOS vector. Its new queue copies parameters, holds one
 terminal result until acknowledgement and commits successful work only after
 the full service lease passes. The synthetic disc uses generated stereo audio
 and independently checked data. It restores the previous vector on success
 and failure. [The BIOS checklist](cdda-bios-test.md) defines eight stages and
-the exact expected refusal counts. A passing console run would establish
-this controlled command route;
-multi-sector/DMA reads, PLAY2 end semantics, retail scheduling and shared
-sound resources still require separate evidence.
+the exact expected refusal counts. Its
+[hardware record](evidence/cdda-bios-hardware-2026-10-07.md) establishes this
+controlled one-sector command route, including vector restoration.
+
+**Next console check:** profile 09 accepts 1–16-sector PIO READ requests,
+servicing one 2,048-byte chunk per EXEC. It checks committed-prefix status,
+whole-request bounds, cancellation/reset between chunks, one sequential
+8MiB pass and all eight selected request sizes while controlled audio runs
+for at least 90 seconds. Independent profile 10 confirms one sector, waits
+200ms without EXEC, then verifies deadline refusal, audio stop and a FAILED
+read retaining exactly that confirmed prefix. Both are supplied in one bundle
+with a [single checklist](cdda-batch-test.md); 10 does not wait for 09's hardware
+result to be built. Disc/track metadata, PLAY2 end semantics, DMA, retail scheduling
+and shared sound resources remain separate evidence gaps.
 
 Define a distinct CDDA package identity and schema rather than extending a
 reserved stable-header word. Validate segment bounds, aliases, overlap,
@@ -317,16 +330,17 @@ candidate reader.
 
 ## First steps and ownership
 
-**Agent next:** interpret profile 08's actual BIOS route, queue and restoration
-counters, then establish independently observed command delivery, regular service and
+**Agent next:** interpret the batch bundle's multi-sector coverage, progress,
+cancellation and expected-deadline counters, then establish actual disc/track handling, regular service and
 resource ownership before Toy Commander retail integration. The classifier,
 standalone engine, clock conversion, controls, soak/stress and variable-size
 mixed jobs are implemented and numerically tested on console. Keep new
 retail scheduling and sound-driver discoveries separate from those results.
 
-**User next:** run only [profile 08](cdda-bios-test.md), photograph the
-complete final screen and restore the preserved 1.8.5 runtime afterward.
-Profiles 00–07 need no routine repeat. A later brief stereo/control check can
+**User next:** run [09, then 10](cdda-batch-test.md) from the same bundle,
+photograph both complete final screens and restore the preserved 1.8.5 runtime
+afterward. Stop the sequence if a test reports an unexpected failure.
+Profiles 00–08 need no routine repeat. A later brief stereo/control check can
 confirm channel order and silence when suitable speakers are available.
 This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed
 **Toy Commander** GDI with every referenced `.raw` track; do not buy another

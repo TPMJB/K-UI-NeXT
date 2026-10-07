@@ -23,6 +23,7 @@ def main():
            ('timing',['-Iinclude'],['src/core/cdda_timing.c','tests/test_cdda_timing.c']),
            ('control',['-Iinclude'],['src/core/cdda_control.c','tests/test_cdda_control.c']),
            ('bios',['-Iinclude'],['src/core/cdda_bios.c','src/core/cdda_control.c','tests/test_cdda_bios.c']),
+           ('batch',['-Iinclude'],['src/core/cdda_bios_batch.c','src/core/cdda_control.c','tests/test_cdda_bios_batch.c']),
            ('stream',['-Iinclude'],['src/core/cdda_stream.c','tests/test_cdda_stream.c']),
            ('ring',['-Iinclude'],['src/core/cdda_ring.c','src/core/cdda_clock.c','tests/test_cdda_ring.c']),
            ('aica',['-Iinclude','-Isrc/loader','-DKUI_CDDA_AICA_TEST'],['src/loader/cdda_aica.c','tests/test_cdda_aica.c'])]
@@ -45,4 +46,10 @@ def main():
     bios=[sys.executable,str(ROOT/'tools/test_cdda_bios_integration.py')]
     if args.sanitize: bios.append('--sanitize')
     subprocess.run(bios,cwd=ROOT,env=env,check=True)
+    batch=[sys.executable,str(ROOT/'tools/test_cdda_batch_integration.py')]
+    if args.sanitize: batch.append('--sanitize')
+    subprocess.run(batch,cwd=ROOT,env=env,check=True)
+    fault=[sys.executable,str(ROOT/'tools/test_cdda_batch_integration.py'),'--profile','10']
+    if args.sanitize: fault.append('--sanitize')
+    subprocess.run(fault,cwd=ROOT,env=env,check=True)
 if __name__=='__main__': main()

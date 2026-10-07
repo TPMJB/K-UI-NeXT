@@ -109,5 +109,16 @@ Its BSD notice remains in [LICENSE.KOS](LICENSES/LICENSE.KOS). No KOS syscall
 implementation is linked or copied into this freestanding harness. Unsupported
 commands and ambiguous PLAY2 ranges are refused rather than inferred from a
 third-party loader. This remains an explicitly owned homebrew vector test.
+Profile 09's incremental multi-sector queue, chunk-identity checks and batch
+client extend K-UI's own controlled implementation in new files. The count
+parameter follows the same pinned KOS `cd_read_params_t`/PIOREAD interface;
+the sector-by-sector scheduling and confirmed-prefix publication rules are
+new project code. Each EXEC performs at most one 2,048-byte data chunk.
+Cancellation is admitted between chunks, with no active-transfer abort,
+retail interrupt or uncached-alias coherence claim.
+Profile 10's separate controlled client intentionally waits beyond the same
+cooperative lease and verifies the resulting stopped audio and confirmed
+prefix. Its expected deadline is tracked separately from unexpected faults;
+it introduces no interrupt watchdog or automatic background servicing.
 `tools/cdda_fixture.py` generates original sine-tone test data. The user's Toy
 Commander audio remains external and is excluded from source and test packages.
