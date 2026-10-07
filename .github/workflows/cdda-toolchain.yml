@@ -3,7 +3,7 @@ name: CDDA toolchain recovery
 
 on:
   push:
-    branches: [feature/cdda-foundation-20261007]
+    branches: [feature/cdda-foundation-20261007, feature/cdda-toolchain-recovery-20261007]
     paths: [.github/workflows/cdda-toolchain.yml]
   workflow_dispatch:
 
