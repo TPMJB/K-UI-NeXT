@@ -96,6 +96,25 @@ void retail_display_hex(const char *label,uint32_t value) {
 }
 /* A legend line, then up to five values in nine-character columns under it. */
 void retail_display_values(const char *legend,const uint32_t *values,unsigned count) {
+#if defined(KUI_RETAIL_TRANSPORT) && !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+    /* All input rows are word-aligned. Terminal snapshots may occupy the
+     * byte-sector cache: alias-qualified reads remain valid under GCC LTO,
+     * as do the ordinary uint32_t arrays used for other diagnostic rows. */
+    typedef uint32_t display_word __attribute__((__may_alias__));
+    const display_word *words = (const display_word *)(const void *)values;
+    char out[50], *next = out;
+    retail_display_line(legend);
+    for(unsigned v=0;v<count && v<5;v++) {
+        uint32_t value = words[v];
+        char *digit = next + 8;
+        while(digit != next) {
+            *--digit = "0123456789ABCDEF"[value & 15u];
+            value >>= 4;
+        }
+        next += 8; *next++ = ' ';
+    }
+    *next = 0; retail_display_line(out);
+#else
     char out[50]; unsigned n=0;
     retail_display_line(legend);
     for(unsigned v=0;v<count && v<5;v++) {
@@ -103,6 +122,7 @@ void retail_display_values(const char *legend,const uint32_t *values,unsigned co
         out[n++]=' ';
     }
     out[n]=0; retail_display_line(out);
+#endif
 }
 #ifdef KUI_RETAIL_CE
 /* Two lines near the top of the frame CE is showing, without changing any

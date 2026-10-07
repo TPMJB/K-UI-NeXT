@@ -49,11 +49,37 @@ enum kui_retail_gd_interrupt {
     KUI_RETAIL_GD_IRQ_DMA_END = 1, KUI_RETAIL_GD_IRQ_DRIVE = 2
 };
 #endif
+/* The extra low-memory fields are confined to the standard native reader.
+ * CE and background reader layouts retain their existing ABI and footprint. */
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC)
+#define KUI_RETAIL_GD_REJECTION_DETAILS 1
+#else
+#define KUI_RETAIL_GD_REJECTION_DETAILS 0
+#endif
+/* Submission diagnostics only: these do not change command/status/error or
+ * the firmware return contract. A nonzero reason describes why REQUEST
+ * returned no handle; NONE also clears the reason after an accepted request. */
+enum kui_retail_gd_rejection {
+    KUI_RETAIL_GD_REJECT_NONE,
+    KUI_RETAIL_GD_REJECT_OWNED,
+    KUI_RETAIL_GD_REJECT_UNSUPPORTED,
+    KUI_RETAIL_GD_REJECT_PARAMETERS,
+    KUI_RETAIL_GD_REJECT_READ_FAD,
+    KUI_RETAIL_GD_REJECT_READ_COUNT,
+    KUI_RETAIL_GD_REJECT_READ_FLAGS,
+    KUI_RETAIL_GD_REJECT_DESTINATION,
+    KUI_RETAIL_GD_REJECT_IMAGE_RANGE,
+    KUI_RETAIL_GD_REJECT_COMMAND_PARAMETERS,
+    KUI_RETAIL_GD_REJECT_FUNCTION_ARGUMENT
+};
 struct kui_retail_gd_diagnostics {
     uint32_t calls, requests, exec_calls, read_steps, sectors_read, rejected;
     uint32_t last_function, last_command, last_lba, last_count, last_destination;
     uint32_t last_error;
     int32_t last_result;
+#if KUI_RETAIL_GD_REJECTION_DETAILS
+    uint32_t reject_reason, read_flags;
+#endif
 };
 struct kui_retail_gd {
     struct kui_gd_ops ops;

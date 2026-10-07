@@ -36,6 +36,11 @@ extern void kui_retail_gd_10f0_hook(void);
 /* Source: 0=BC supervisor vector, 1=C0 raw GD vector, 2/3=direct firmware
  * entries. Assembly publishes this only after acquiring the resident lock. */
 volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+/* Standard native entry captures these before replacing the owner's stack:
+ * word 0 is its PR, word 1 its original SP. Never infer SP from our C frame. */
+volatile uint32_t kui_retail_native_caller[2];
+#endif
 #ifdef KUI_RETAIL_CE
 /* Windows CE boot test: the caller's PR and stack (set by the entry), and
  * the last four calls' R7, R4, R5 and R6, shown if a call fails. */
@@ -248,9 +253,40 @@ static void ce_trace(unsigned earlier) {
         retail_display_values("EARLIER",ce_calls[(ce_count-1u-i)&3u],4);
 }
 #endif
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+/* retail_display_values uses alias-qualified reads of these aligned words. */
+#define terminal_row(legend, snapshot, count) \
+    retail_display_values((legend), (const uint32_t *)(const void *)(snapshot), (count))
+#endif
 static void report_fault(const char *reason, uint32_t function) {
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+    /* Capture all evidence before claiming video or calling the renderer.
+     * The terminal loop never reads the image again: reuse its aligned sector
+     * cache as snapshot workspace, keeping metadata intact and avoiding more
+     * low RAM or service-stack space. LAST CARD is the previous SD result;
+     * REQUEST itself performs no I/O. Alias-safe words may occupy byte storage. */
+    typedef uint32_t terminal_word __attribute__((__may_alias__));
+    terminal_word *terminal = (terminal_word *)(void *)image.block;
+    _Static_assert(sizeof(image.block) >= 16u * sizeof(*terminal), "terminal snapshot");
+    _Static_assert(offsetof(struct kui_retail_gd_diagnostics, last_destination) ==
+                   offsetof(struct kui_retail_gd_diagnostics, last_function) + 16u, "request row");
+    memcpy(terminal, &service.diag.last_function, 20);
+    terminal[0] = function;
+    terminal[5] = service.diag.reject_reason; terminal[6] = service.diag.read_flags;
+    terminal[7] = service.sector_bytes; terminal[8] = service.guest_begin;
+    terminal[9] = service.guest_end; terminal[10] = service.track_count;
+    terminal[11] = (uint32_t)(uintptr_t)service.tracks;
+    terminal[12] = (uint32_t)card_result; terminal[13] = image.blocks_read;
+    terminal[14] = kui_retail_native_caller[1];
+    terminal[15] = kui_retail_native_caller[0];
+    __asm__ __volatile__("" : : : "memory");
+#endif
     retail_display_restore(&display);
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+    retail_display_line("REQUEST REJECTION DETAILS");
+#else
     retail_display_line("K-UI READER");
+#endif
     retail_display_line(manifest.title);
 #ifdef KUI_RETAIL_ASYNC
     /* Fifteen rows fit: command, LBA (GETSCD: format), sectors (bytes). */
@@ -275,23 +311,36 @@ static void report_fault(const char *reason, uint32_t function) {
     io[4]=*(volatile uint32_t *)(uintptr_t)0xffa0002cu;
     retail_display_values("SD       IMAGE    BLOCKS   DMAOR    DMA2 CTL",io,5);
 #else
-    retail_display_line(kui_retail_storage_name(card.transport));
     retail_display_line(reason);
-    retail_display_hex("GD function", function);
-    retail_display_hex("GD COMMAND", service.diag.last_command);
-    retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Format" : "LBA", service.diag.last_lba);
-    retail_display_hex(service.diag.last_command == KUI_RETAIL_GD_GETSCD ? "Bytes" : "Sectors", service.diag.last_count);
-    retail_display_hex("Destination", service.diag.last_destination);
-    retail_display_hex("IO RESULT", (uint32_t)card_result);
-    retail_display_hex("BLOCKS READ", image.blocks_read);
+    terminal_row("FN CMD LBA CNT DST", image.block, 5);
+    terminal_row("REJECT FLAGS BPS LO HI", image.block + 20, 5);
+    terminal_row("TRACKS MAP LASTCARD BLOCKS", image.block + 40, 4);
+    terminal_row("SP PR", image.block + 56, 2);
 #endif
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+    retail_display_line("STOPPED: PHOTO SCREEN");
+    retail_display_line("POWER CYCLE");
+#else
     retail_display_line("STOPPED: PHOTO THIS SCREEN");
     retail_display_line("POWER CYCLE FOR K-UI");
+#endif
     for(;;) __asm__ volatile("nop");
 }
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
     (void)caller; (void)stack;
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+    /* The return path never resumes game I/O. Preserve its nine counters
+     * before claiming video, using the same terminal cache workspace. */
+    typedef uint32_t terminal_word __attribute__((__may_alias__));
+    terminal_word *terminal = (terminal_word *)(void *)image.block;
+    terminal[0] = kui_retail_hook_fault;
+    terminal[1] = service.diag.read_steps; terminal[2] = service.diag.sectors_read;
+    terminal[3] = pacing.paced; terminal[4] = pacing.spun;
+    terminal[5] = pace.period; terminal[6] = pace.vbi;
+    terminal[7] = pace.per; terminal[8] = pace.still;
+    __asm__ __volatile__("" : : : "memory");
+#endif
     retail_display_restore(&display);
     retail_display_line("GAME RETURN");
 #ifdef KUI_RETAIL_CE
@@ -309,7 +358,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
                    offsetof(struct kui_retail_gd_diagnostics, last_command) + 12u, "GD row");
     retail_display_values("COMMAND  LBA      SECTORS  DEST", &service.diag.last_command, 4);
 #endif
-#else
+#elif defined(KUI_RETAIL_ASYNC)
     retail_display_hex("GUARD FAULT",kui_retail_hook_fault);
 #endif
 #if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)
@@ -332,16 +381,10 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     stream_lines();
 #elif !defined(KUI_RETAIL_CE)
     /* How the game drives reads: ABXY+Start after a load shows these. */
-    retail_display_hex("READ STEPS",service.diag.read_steps);
-    retail_display_hex("SECTORS READ",service.diag.sectors_read);
-    retail_display_hex("PACED STEPS",pacing.paced);
-    retail_display_hex("SPIN STEPS",pacing.spun);
+    terminal_row("GUARD STEP SECT PACE SPIN", image.block, 5);
     /* Latest sampled geometry/cost, possibly changed by a title-screen
      * reset. Unlike PACED STEPS, these are not a history of the fight. */
-    retail_display_hex("PACE PERIOD",pace.period);
-    retail_display_hex("PACE VBI",pace.vbi);
-    retail_display_hex("PACE COST16",pace.per);
-    retail_display_hex("PACE STILL",pace.still);
+    terminal_row("PERIOD VBI COST16 STILL", image.block + 20, 4);
 #endif
     retail_display_line("REBOOT K-UI");
     retail_display_pause(900u); /* ~15 seconds at 60 Hz to capture the counters */

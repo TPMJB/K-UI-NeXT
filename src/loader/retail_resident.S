@@ -117,6 +117,15 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov r8,r1
     add #36,r1
     mov.l r1,@(4,r0)
+#elif !defined(KUI_RETAIL_ASYNC)
+    /* Native terminal diagnostics: original PR/SP, under the resident lock
+     * and before the private-stack switch. CE's existing capture is unchanged. */
+    mov.l @(28,r8),r1
+    mov.l .Lnative_caller,r0
+    mov.l r1,@r0
+    mov r8,r1
+    add #36,r1
+    mov.l r1,@(4,r0)
 #endif
     mov.l .Lprivate_stack,r15
     mov.l .Ldispatch,r0
@@ -236,6 +245,8 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 #ifdef KUI_RETAIL_CE
 .Lcaller: .long C_SYMBOL(kui_retail_hook_caller)
 .Ldeferred: .long C_SYMBOL(kui_retail_ce_deferred)
+#elif !defined(KUI_RETAIL_ASYNC)
+.Lnative_caller: .long C_SYMBOL(kui_retail_native_caller)
 #endif
 
 /* Menu command 1 (return to the BIOS menu; A+B+X+Y+Start in most games)

@@ -17,6 +17,16 @@
 #include <stddef.h>
 #include <string.h>
 
+#if KUI_RETAIL_GD_REJECTION_DETAILS
+#define REJECT_REQUEST(reason) do { rejected_reason = (reason); goto rejected; } while(0)
+#define READ_FLAGS(flags) (s->diag.read_flags = (flags))
+#define REJECTION_REASON(reason) (s->diag.reject_reason = (reason))
+#else
+#define REJECT_REQUEST(reason) return 0
+#define READ_FLAGS(flags) ((void)0)
+#define REJECTION_REASON(reason) ((void)0)
+#endif
+
 static uint32_t get32(const uint8_t *p) {
 #if defined(KUI_ON_CONSOLE) && KUI_ON_CONSOLE
     /* Every word parameter/result is obtained with guest(..., alignment=4).
@@ -157,11 +167,15 @@ static uint32_t step_count(const struct kui_retail_gd *s, uint32_t remaining) {
 static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) {
     /* A completed or failed command owns its handle until CHECK acknowledges
      * it too; accepting another request would discard that terminal result. */
-    if(s->command) return 0;
+    READ_FLAGS(0);
+#if KUI_RETAIL_GD_REJECTION_DETAILS
+    uint32_t rejected_reason;
+#endif
+    if(s->command) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_OWNED);
     uint32_t nparams = 0, p[4] = {0}, bytes = 0, destination = 0, lba = 0;
 #ifdef KUI_RETAIL_CE
     const int stream = cmd == KUI_RETAIL_GD_DMAREAD_STREAM || cmd == KUI_RETAIL_GD_PIOREAD_STREAM;
-    if(stream && !s->read_part) return 0;
+    if(stream && !s->read_part) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_UNSUPPORTED);
 #else
     const int stream = 0;
 #endif
@@ -179,39 +193,51 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     case KUI_RETAIL_GD_PLAY: case KUI_RETAIL_GD_PLAY2: nparams = 3; break;
     case KUI_GD_COMMAND_INIT: case KUI_GD_NOP: case KUI_GD_STOP:
     case KUI_RETAIL_GD_PAUSE: case KUI_RETAIL_GD_RELEASE: break;
-    default: return 0;
+    default: REJECT_REQUEST(KUI_RETAIL_GD_REJECT_UNSUPPORTED);
     }
     if(nparams) {
         const uint8_t *params = guest(s, address, nparams * 4u, 4, 0);
-        if(!params) return 0;
+        if(!params) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_PARAMETERS);
         for(uint32_t i = 0; i < nparams; ++i) p[i] = get32(params + i * 4u);
     }
     if(cmd == KUI_GD_PIOREAD || cmd == KUI_GD_DMAREAD || stream) {
         s->diag.last_lba = p[0] >= 150 ? p[0] - 150 : UINT32_MAX;
         s->diag.last_count = p[1]; s->diag.last_destination = p[2];
-        if(p[0] < 150 || p[0] >= 720000u || !p[1] || p[3]) return 0;
+        READ_FLAGS(p[3]);
+#if KUI_RETAIL_GD_REJECTION_DETAILS
+        if(p[0] < 150 || p[0] >= 720000u) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_READ_FAD);
+        if(!p[1]) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_READ_COUNT);
+        if(p[3]) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_READ_FLAGS);
+#else
+        if(p[0] < 150 || p[0] >= 720000u || !p[1] || p[3])
+            return 0;
+#endif
         lba = p[0] - 150;
-        if(p[1] > 719850u - lba || p[1] > UINT32_MAX / s->sector_bytes) return 0;
+        if(p[1] > 719850u - lba || p[1] > UINT32_MAX / s->sector_bytes)
+            REJECT_REQUEST(KUI_RETAIL_GD_REJECT_READ_COUNT);
         bytes = p[1] * s->sector_bytes; destination = p[2];
         /* A stream's destinations arrive with each transfer. */
         if(stream) destination = 0;
 #ifdef KUI_RETAIL_CE
         else if(!(cmd == KUI_GD_DMAREAD ? dma_guest(s, destination, bytes, 32, KUI_RETAIL_MAP_VALIDATE) :
-                  guest(s, destination, bytes, 2, KUI_RETAIL_MAP_VALIDATE))) return 0;
+                  guest(s, destination, bytes, 2, KUI_RETAIL_MAP_VALIDATE)))
+            REJECT_REQUEST(KUI_RETAIL_GD_REJECT_DESTINATION);
 #else
         else if(!guest(s, destination, bytes, cmd == KUI_GD_DMAREAD ? 32 : 2,
-                       KUI_RETAIL_MAP_VALIDATE)) return 0;
+                       KUI_RETAIL_MAP_VALIDATE))
+            REJECT_REQUEST(KUI_RETAIL_GD_REJECT_DESTINATION);
 #endif
         for(uint32_t done = 0; done < p[1];) {
             uint32_t n = p[1] - done;
             if(n > KUI_RETAIL_GD_CHECK_SECTORS) n = KUI_RETAIL_GD_CHECK_SECTORS;
-            if(s->ops.check(s->ops.context, lba + done, n, s->sector_bytes)) return 0;
+            if(s->ops.check(s->ops.context, lba + done, n, s->sector_bytes))
+                REJECT_REQUEST(KUI_RETAIL_GD_REJECT_IMAGE_RANGE);
             done += n;
         }
     } else if(cmd == KUI_RETAIL_GD_GETSCD) {
         s->diag.last_lba = p[0]; /* Format, not a read LBA. */
         s->diag.last_count = p[1]; s->diag.last_destination = p[2];
-        if(p[0] > 2 || !p[1]) return 0;
+        if(p[0] > 2 || !p[1]) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_COMMAND_PARAMETERS);
         bytes = p[0] == 0 ? 100 : p[0] == 1 ? 14 : 24;
         if(bytes > p[1]) bytes = p[1];
         destination = p[2];
@@ -219,27 +245,29 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         /* These two parameter slots are unused by TOC. Keep its checked
          * bounds with the request: tracks and disc type cannot change while
          * it is pending, so execution need not scan the same map again. */
-        if(area_bounds(s, p[0], &p[2], &p[3])) return 0;
+        if(area_bounds(s, p[0], &p[2], &p[3])) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_COMMAND_PARAMETERS);
         bytes = KUI_GD_TOC_BYTES; destination = p[1];
     } else if(cmd == KUI_RETAIL_GD_REQ_MODE || cmd == KUI_RETAIL_GD_GET_VERS) {
         bytes = cmd == KUI_RETAIL_GD_GET_VERS ? 28 : 16; destination = p[0];
     } else if(cmd == KUI_RETAIL_GD_REQ_STAT) {
         for(unsigned i = 0; i < 4; ++i)
-            if(!guest(s, p[i], 4, 4, 1)) return 0;
+            if(!guest(s, p[i], 4, 4, 1)) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_DESTINATION);
     } else if(cmd == KUI_RETAIL_GD_SEEK) {
-        if(p[0] < 150 || p[0] >= 720000u) return 0;
+        if(p[0] < 150 || p[0] >= 720000u) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_COMMAND_PARAMETERS);
         lba = p[0] - 150;
         uint32_t i;
         for(i = 0; i < s->track_count; ++i) {
             const struct kui_retail_track *t = track_at(s, i);
             if(lba >= t->start_lba && lba < t->end_lba) break;
         }
-        if(i == s->track_count) return 0;
+        if(i == s->track_count) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_COMMAND_PARAMETERS);
     }
     if(bytes && cmd != KUI_GD_PIOREAD && cmd != KUI_GD_DMAREAD && !stream &&
        !guest(s, destination, bytes,
               cmd == KUI_RETAIL_GD_GET_VERS || cmd == KUI_RETAIL_GD_GETSCD ? 1 : 4,
-              cmd == KUI_RETAIL_GD_GETSCD ? KUI_RETAIL_MAP_VALIDATE : 1)) return 0;
+              cmd == KUI_RETAIL_GD_GETSCD ? KUI_RETAIL_MAP_VALIDATE : 1))
+        REJECT_REQUEST(KUI_RETAIL_GD_REJECT_DESTINATION);
+    REJECTION_REASON(KUI_RETAIL_GD_REJECT_NONE);
     s->token = s->token >= 0x7fffffffu ? 1 : s->token + 1;
     s->command = cmd; s->lba = lba; s->count = p[1];
     s->destination = destination; s->area = p[0]; s->request_bytes = bytes;
@@ -252,6 +280,11 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
 #endif
     ++s->diag.requests;
     return (int32_t)s->token;
+#if KUI_RETAIL_GD_REJECTION_DETAILS
+rejected:
+    REJECTION_REASON(rejected_reason);
+    return 0;
+#endif
 }
 static void toc(struct kui_retail_gd *s, uint8_t *out) {
     uint32_t first=s->outputs[2], last=s->outputs[3];
@@ -616,8 +649,18 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
     ++s->diag.calls; s->diag.last_function = r7;
     if(r7 == KUI_GD_REQUEST) s->diag.last_command = r4;
     int32_t result = -1;
-    if(r6) goto done;
+    if(r6) {
+        if(r7 == KUI_GD_REQUEST) {
+            READ_FLAGS(0);
+            REJECTION_REASON(KUI_RETAIL_GD_REJECT_FUNCTION_ARGUMENT);
+        }
+        goto done;
+    }
     if(s->executing) {
+        if(r7 == KUI_GD_REQUEST) {
+            READ_FLAGS(0);
+            REJECTION_REASON(KUI_RETAIL_GD_REJECT_OWNED);
+        }
         result = r7 == KUI_GD_REQUEST ? 0 : r7 == KUI_GD_CHECK ? 4 : -1;
         goto done;
     }

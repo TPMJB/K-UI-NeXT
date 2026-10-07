@@ -25,6 +25,11 @@ static const union kui_retail_slot tracks[] = {
     {.track={.start_lba=16, .end_lba=24, .control=0}},
     {.track={.start_lba=45000, .end_lba=60000, .control=4}}
 };
+static const union kui_retail_slot full_tracks[] = {
+    {.track={.start_lba=0, .end_lba=8, .control=4}},
+    {.track={.start_lba=16, .end_lba=24, .control=0}},
+    {.track={.start_lba=45000, .end_lba=719850, .control=4}}
+};
 /* The same tracks with their map's extent fields set: the service ignores them. */
 static const union kui_retail_slot mapped_tracks[] = {
     {.track={.start_lba=0, .end_lba=8, .first_extent=3, .extent_count=11, .control=4}},
@@ -40,9 +45,15 @@ static const union kui_retail_slot mapped_tracks[] = {
 #endif
 static unsigned use_mapped_tracks;
 static unsigned use_cooked_tracks;
+static unsigned use_full_tracks;
 static union kui_retail_slot cooked_tracks[3];
 static unsigned assertions;
 #define CHECK(x) do { ++assertions; assert(x); } while(0)
+#if KUI_RETAIL_GD_REJECTION_DETAILS
+#define CHECK_DIAG(x) CHECK(x)
+#else
+#define CHECK_DIAG(x) ((void)0)
+#endif
 static void put(uint32_t a, uint32_t n) {
     for(unsigned i = 0; i < 4; ++i) ram[a - BEGIN + i] = (uint8_t)(n >> (i * 8));
 }
@@ -79,11 +90,12 @@ static int check(void *unused, uint32_t lba, uint32_t count, uint32_t bytes) {
     (void)unused; ++ctx.checks;
     if(count > ctx.max_checked) ctx.max_checked = count;
     CHECK(count > 0 && count <= KUI_RETAIL_GD_CHECK_SECTORS);
+    const union kui_retail_slot *ranges = use_full_tracks ? full_tracks : tracks;
     for(uint32_t n = 0; n < count; ++n) {
         unsigned i;
         for(i = 0; i < 3; ++i)
-            if(lba + n >= tracks[i].track.start_lba && lba + n < tracks[i].track.end_lba) break;
-        if(i == 3 || (bytes == 2048 && !tracks[i].track.control)) return -1;
+            if(lba + n >= ranges[i].track.start_lba && lba + n < ranges[i].track.end_lba) break;
+        if(i == 3 || (bytes == 2048 && !ranges[i].track.control)) return -1;
     }
     return 0;
 }
@@ -114,7 +126,8 @@ static int32_t call(uint32_t fn, uint32_t a, uint32_t b) {
 }
 static void reset(void) {
     memset(&ctx, 0, sizeof(ctx)); memset(ram, 0xa5, sizeof(ram));
-    const union kui_retail_slot *slots = use_mapped_tracks ? mapped_tracks : tracks;
+    const union kui_retail_slot *slots = use_full_tracks ? full_tracks :
+        use_mapped_tracks ? mapped_tracks : tracks;
     if(use_cooked_tracks) {
         memcpy(cooked_tracks, slots, sizeof(cooked_tracks));
         cooked_tracks[0].track.control |= KUI_RETAIL_TRACK_COOKED;
@@ -135,6 +148,93 @@ static void mode(uint32_t bytes, uint32_t type) {
     put(PARAM, 0); put(PARAM + 4, bytes == 2048 ? 0x2000 : 0x1000);
     put(PARAM + 8, type); put(PARAM + 12, bytes);
     CHECK(call(KUI_GD_DATATYPE, PARAM, 0) == 0);
+}
+/* The photographed Sonic request is legal through every native RAM alias.
+ * CE's DMA destination is physical too, unlike its CPU parameter pointers.
+ * Validate the entire request without I/O; reject flags and protected bounds
+ * without changing the command/status/error that a caller would observe. */
+static void request_rejection_details(void) {
+    const uint32_t lba = 0x82f22u, count = 0x69u, output = 0x8cd00000u;
+    const uint32_t aliases[] = {0, 0x80000000u, 0xa0000000u};
+    use_full_tracks = 1;
+    for(unsigned alias = 0; alias < 3; ++alias) {
+        reset();
+        uint32_t destination = (output & 0x1fffffffu) | aliases[alias];
+        read_params(lba, count, destination);
+        uint32_t mapped_read = ctx.maps[0], mapped_write = ctx.maps[1];
+        int32_t token = call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM);
+        CHECK(token > 0 && service.pending && service.command == KUI_GD_DMAREAD);
+        CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_NONE && !service.diag.read_flags);
+        CHECK(service.diag.last_lba == lba && service.diag.last_count == count &&
+              service.diag.last_destination == destination);
+        CHECK(ctx.validate_address == output && ctx.validate_bytes == count * 2048u);
+        CHECK(ctx.maps[0] == mapped_read + 1 && ctx.maps[1] == mapped_write &&
+              ctx.maps[KUI_RETAIL_MAP_VALIDATE] == 1);
+        CHECK(ctx.checks == 14 && ctx.max_checked == 8 && !ctx.reads && !ctx.sectors);
+        CHECK(ram[output - BEGIN] == 0xa5 && ram[output - BEGIN + count * 2048u - 1] == 0xa5);
+        CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING && !ctx.reads);
+#ifdef KUI_RETAIL_GD_ASYNC
+        CHECK(call(KUI_GD_EXEC, 0, 0) == 0 && !ctx.reads);
+        kui_retail_gd_progress(&service, count, 0);
+#else
+        while(service.pending) CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+        CHECK(ctx.sectors == count && ctx.max_count == KUI_RETAIL_GD_STEP_SECTORS);
+        for(uint32_t n = 0; n < count; ++n)
+            for(uint32_t i = 0; i < 2048u; ++i)
+                CHECK(ram[output - BEGIN + n * 2048u + i] == pattern(lba + n, i));
+#endif
+        CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+        CHECK(get(STATUS) == 0 && get(STATUS + 4) == 0 && get(STATUS + 8) == count * 2048u);
+    }
+    reset();
+    read_params(lba, count, output & 0x1fffffffu); put(PARAM + 12, 0x53u);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_READ_FLAGS && service.diag.read_flags == 0x53u);
+    CHECK(!ctx.reads && !ctx.checks && !ctx.maps[KUI_RETAIL_MAP_VALIDATE]);
+    CHECK(!service.command && !service.pending && !service.error && service.status == KUI_GD_NOT_FOUND);
+    read_params(lba, count, 0x0c00ba5cu);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_DESTINATION && !service.diag.read_flags);
+    CHECK(!ctx.reads && !ctx.checks && !service.error && service.status == KUI_GD_NOT_FOUND);
+    read_params(lba, count, END - 2048u);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_DESTINATION);
+    CHECK(!ctx.reads && !ctx.checks);
+    ctx.deny = output;
+    read_params(lba, count, output);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_DESTINATION);
+    CHECK(!ctx.reads && !ctx.checks);
+    ctx.deny = 0;
+    use_full_tracks = 0;
+    reset(); read_params(lba, count, output);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_IMAGE_RANGE);
+    CHECK(ctx.checks == 1 && !ctx.reads);
+    CHECK(!service.command && !service.pending && !service.error && service.status == KUI_GD_NOT_FOUND);
+    read_params(45000, 1, OUTPUT); put(PARAM, 149);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_READ_FAD);
+    read_params(45000, 0, OUTPUT);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_READ_COUNT);
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM + 1) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_PARAMETERS && !service.diag.read_flags);
+    CHECK(call(KUI_GD_REQUEST, 0xffffffffu, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_UNSUPPORTED);
+    int32_t token = call(KUI_GD_REQUEST, KUI_GD_NOP, 0);
+    CHECK(token > 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_NONE);
+    int32_t status = service.status; uint32_t command = service.command, error = service.error;
+    CHECK(call(KUI_GD_REQUEST, KUI_GD_DMAREAD, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_OWNED);
+    CHECK(service.status == status && service.command == command && service.error == error);
+    CHECK(call(KUI_GD_EXEC, 0, 0) == 0);
+    CHECK(call(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_COMPLETED);
+#ifdef KUI_RETAIL_CE
+    CHECK(call(KUI_GD_REQUEST, KUI_RETAIL_GD_DMAREAD_STREAM, PARAM) == 0);
+    CHECK_DIAG(service.diag.reject_reason == KUI_RETAIL_GD_REJECT_UNSUPPORTED);
+#endif
 }
 static void command_acknowledgment(void) {
     reset();
@@ -973,6 +1073,7 @@ static void many_tracks(void) {
     CHECK(ctx.reads == 0);
 }
 int main(void) {
+    request_rejection_details();
     command_acknowledgment();
     prepared_initialization();
     cd_metadata();
