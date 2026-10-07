@@ -26,6 +26,18 @@ static uint32_t data_file_size;
 static int leased, mounted, opened;
 static int data_opened;
 static const char *failure;
+#if CDDA_TEST_PROFILE == 13
+static bool (*read_cancelled)(void *);
+static void *read_cancel_context;
+void cdda_storage_read_cancel(bool (*cancelled)(void *),void *context) {
+    read_cancelled=cancelled; read_cancel_context=context;
+}
+int cdda_storage_geometry(uint64_t *sectors,uint32_t *start,uint32_t *count) {
+    if(!sectors || !start || !count || !mounted || !card.ready || !volume.count)
+        return -1;
+    *sectors=card.blocks; *start=volume.start; *count=volume.count; return 0;
+}
+#endif
 
 /* Read-only FatFs needs this one additional libc primitive. This image has
  * no libc dependency; keep its implementation local to the detached image. */
@@ -61,6 +73,10 @@ static int raw_read(void *ctx, uint32_t lba, size_t count, uint8_t *out) {
     if(!card.ready || !out || !kui_block_range(lba, count, card.blocks))
         return fail("SD block range");
     while(count) {
+#if CDDA_TEST_PROFILE == 13
+        if(read_cancelled && read_cancelled(read_cancel_context))
+            return fail("Preflight read cancelled");
+#endif
         uint32_t take = count > KUI_LOADER_SD_MAX_READ_BLOCKS ?
             KUI_LOADER_SD_MAX_READ_BLOCKS : (uint32_t)count;
         enum kui_loader_sd_result result = kui_loader_sd_read_multi(&card, lba, take, out);

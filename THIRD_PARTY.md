@@ -135,3 +135,21 @@ locations; selected track 14's audio remains external. No game executable,
 music backing or complete retail disc is distributed in these test bundles.
 `tools/cdda_fixture.py` generates original sine-tone test data. The user's Toy
 Commander audio remains external and is excluded from source and test packages.
+
+## Complete-image preflight and retail observation
+
+The separate `Makefile.cdda_preflight` target uses the same pinned, privately
+configured read-only FatFs source. The bounded card search, logical-cluster
+extent enumeration, exact IP/boot SHA256 and physical-map admission checks are
+new project code. The 15-track Toy Commander descriptor size/SHA256 and geometry
+are factual metadata from the owner's supplied descriptor; no game executable,
+IP payload or audio file is distributed with the tests.
+
+`Makefile.retail_observe` builds a separate standard SCI reader. Its sparse
+read-only observations use the SH7091 registers and the pinned KallistiOS
+AICA/G2 register contracts already listed above. Snapshot accumulation, PLAY
+parameter recording and compact reporting are new project implementations.
+It does not import or translate DreamShell CDDA code, select sound channels,
+write sound registers, install a new IRQ handler or claim a sound-memory lease.
+The earlier source-aware boundary remains unchanged; this is not a formal
+clean-room claim. Existing notices and `LICENSES/LICENSE.KOS` are retained.

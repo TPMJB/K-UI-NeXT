@@ -61,6 +61,12 @@ static int ram_alias(uint32_t address) {
 }
 #endif
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
+#if KUI_RETAIL_OBSERVE
+#if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT
+#error "Observation is native standard SCI in the original low reservation only"
+#endif
+#include "retail_observe.inc"
+#endif
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
 extern uint8_t __retail_resident_bss_end[] __asm__("__retail_resident_bss_end");
 
@@ -253,7 +259,7 @@ static void ce_trace(unsigned earlier) {
         retail_display_values("EARLIER",ce_calls[(ce_count-1u-i)&3u],4);
 }
 #endif
-#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC) && !KUI_RETAIL_OBSERVE
 /* retail_display_values uses alias-qualified reads of these aligned words. */
 #define terminal_row(legend, snapshot, count) \
     retail_display_values((legend), (const uint32_t *)(const void *)(snapshot), (count))
@@ -290,6 +296,19 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
     __asm__ __volatile__("" : : : "memory");
 }
 #endif
+#if KUI_RETAIL_OBSERVE
+static void report_fault(const char *reason,uint32_t function,uint32_t param) {
+    (void)reason;
+    observe_words[0]=function;observe_words[1]=param;observe_words[2]=kui_retail_hook_fault;
+    retail_display_restore(&display);
+    retail_display_line("14 STOP");
+    observe_values("FN ARG GUARD",observe_words,3);
+    retail_display_pause(1200u);
+    retail_display_restore(&display);
+    observe_report();
+    for(;;) __asm__ volatile("nop");
+}
+#else
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
 static void report_fault(const char *reason, uint32_t function, uint32_t current_param) {
     capture_native_fault(function, current_param);
@@ -339,6 +358,7 @@ static void report_fault(const char *reason, uint32_t function) {
 #endif
     for(;;) __asm__ volatile("nop");
 }
+#endif
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC)
 /* Current R5 is a standard-native terminal field. Keep the other readers'
  * original two-argument function and call ABI, including their stack budget. */
@@ -347,6 +367,13 @@ static void report_fault(const char *reason, uint32_t function) {
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
     (void)caller; (void)stack;
+#if KUI_RETAIL_OBSERVE
+    retail_display_restore(&display);
+    observe_report();
+    retail_display_pause(1200u);
+    ((void (*)(void))(uintptr_t)0xa0000000u)();
+    for(;;) __asm__ volatile("nop");
+#else
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
     /* The return path never resumes game I/O. Preserve its nine counters
      * before claiming video, using the same terminal cache workspace. */
@@ -411,6 +438,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
      * No game, reader or vector state is relied on afterwards. */
     ((void (*)(void))(uintptr_t)0xa0000000u)();
     for(;;) __asm__ volatile("nop");
+#endif
 }
 int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     const struct kui_retail_storage *prepared_card, uint32_t original_gd_vector,
@@ -619,6 +647,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * No original GD forwarding remains: those entries now lead back here.
      * Font/flash/system BIOS vectors are independent and unchanged. */
     uint32_t source=kui_retail_hook_source;
+#if KUI_RETAIL_OBSERVE
+    observe_call();
+#endif
 #ifdef KUI_RETAIL_CE
     uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0;
     if(ce_record(source,r4,r5,r6,r7)) return 0;
@@ -645,6 +676,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
     int32_t result = r7 == KUI_GD_EXEC ? step(r4, r5) :
         kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
+#if KUI_RETAIL_OBSERVE
+    observe_result(r7,result);
+#endif
     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
         report_fault("GD REQUEST REJECTED", r7, r5);
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||

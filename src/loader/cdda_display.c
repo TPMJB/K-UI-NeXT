@@ -32,6 +32,8 @@
 #define CDDA_TITLE "K-UI: CDDA checked disc map / SCI"
 #elif CDDA_TEST_PROFILE == 12
 #define CDDA_TITLE "K-UI: CDDA Toy track map / SCI"
+#elif CDDA_TEST_PROFILE == 13
+#define CDDA_TITLE "K-UI: Toy image preflight / SCI"
 #else
 #define CDDA_TITLE "K-UI: isolated CDDA / SCI test"
 #endif
@@ -41,7 +43,11 @@ void cdda_display_init(void) {
     for(unsigned n=0;n<640u*480u;n++) fb[n]=0x0864u;
     kui_shell_font_draw(fb,20,16,0x7fffu,CDDA_TITLE,true);
     kui_shell_font_draw(fb,20,47,0xffffu,"Build " KUI_BUILD_ID,false);
+#if CDDA_TEST_PROFILE == 13
+    kui_shell_font_draw(fb,20,70,0xffffu,"Detached / no audio init / read-only exFAT",false);
+#else
     kui_shell_font_draw(fb,20,70,0xffffu,"Detached / owned AICA / read-only exFAT",false);
+#endif
     row=106;
 }
 void cdda_display_line(const char *text) {
@@ -62,7 +68,13 @@ void cdda_display_number(const char *label,uint32_t value) {
 }
 void cdda_display_finish(unsigned failures) {
     for(unsigned y=425;y<480;y++) for(unsigned x=0;x<640;x++) fb[y*640+x]=0x0864u;
+#if CDDA_TEST_PROFILE == 13
+    kui_shell_font_draw(fb,20,425,failures?0xfba0u:0x87f0u,
+        failures?"PREFLIGHT STOPPED - photograph this screen":"PREFLIGHT PASS - photograph all 6 pages",false);
+    kui_shell_font_draw(fb,20,449,0xffffu,"Pages change every 15s; power off to restore K-UI.",false);
+#else
     kui_shell_font_draw(fb,20,425,failures?0xfba0u:0x87f0u,
         failures?"CDDA TEST STOPPED - photograph this screen":"CDDA TEST COMPLETE - photograph this screen",false);
     kui_shell_font_draw(fb,20,449,0xffffu,"Power off; restore runtime to return to K-UI.",false);
+#endif
 }

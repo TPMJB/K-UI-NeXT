@@ -28,6 +28,14 @@ completed eight stages with zero failures and restored the vector. Profile 11
 checked all 196,608 data bytes in 96 chunks, both TOCs and two actual EOFs;
 profile 12 completed the selected track's pause/resume and actual EOF sequence.
 The current standalone sequence is complete. Retail integration remains open.
+[Profiles 13/14 are prepared together](cdda-preflight-test.md): a read-only
+preflight of the complete original Toy Commander image, followed by a standard
+SCI retail reader that observes accepted PLAY requests and sparse CPU, timer
+and sound state. Console results are pending. Profile 13 requires every backing
+and a complete physical map within 64 slots before 14 may be installed. Profile 14
+fits the existing low reservation and adds no sound or interrupt owner.
+These observations will determine the first actual game playback test; an
+inactive sampled resource does not establish permission to use it.
 Prepared 2026-10-07 UTC / 2026-10-07 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).

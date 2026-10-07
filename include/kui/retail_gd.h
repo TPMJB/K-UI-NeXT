@@ -51,7 +51,7 @@ enum kui_retail_gd_interrupt {
 #endif
 /* The extra low-memory fields are confined to the standard native reader.
  * CE and background reader layouts retain their existing ABI and footprint. */
-#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC)
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC) && !KUI_RETAIL_OBSERVE
 #define KUI_RETAIL_GD_REJECTION_DETAILS 1
 #else
 #define KUI_RETAIL_GD_REJECTION_DETAILS 0

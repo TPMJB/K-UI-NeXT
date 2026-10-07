@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Separate native SCI observation. Never writes ordinary build/retail outputs.
+CC = sh-elf-gcc
+OBJCOPY = sh-elf-objcopy
+BUILD = build/retail-observe
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
+CPU = -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) -DKUI_RETAIL_FAST_IO=1 \
+ -DKUI_RETAIL_OBSERVE=1 -DKUI_RETAIL_LOW_RESIDENT=1 -DKUI_RETAIL_STARTUP_TRACE=0 \
+ -DKUI_RETAIL_SONIC_STACK_TEST=0 -DKUI_ON_CONSOLE=1 -ffreestanding -fno-builtin \
+ -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections -fno-jump-tables \
+ -fstack-usage -Iinclude -Isrc/loader -DKUI_BUILD_ID='"$(BUILD_ID)"'
+LINK = $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+# Avoid SCEV's extra live temporaries in the diagnostic's exact private-stack
+# budget. This affects only this separate observer, never ordinary targets.
+RESIDENT_OPT ?= -Os -fno-tree-scev-cprop
+RESIDENT_FLAGS = $(filter-out -Os,$(FLAGS)) $(RESIDENT_OPT) -flto -mrelax -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_MANIFEST_SLOTS=64
+RESIDENT_SRC = src/loader/retail_resident.c src/core/retail_gd.c src/core/retail_pace.c \
+ src/loader/minic.c src/core/retail_image.c src/loader/retail_display.c \
+ src/loader/sd_reader.c src/loader/retail_sd.c src/loader/sci_sd_bus.c src/core/retail_observe.c
+RESIDENT_OBJ = $(patsubst %.c,$(BUILD)/sci/%.o,$(RESIDENT_SRC)) $(BUILD)/sci/retail_resident_asm.o
+STAGE_SRC = src/loader/retail_stage.c src/loader/sd_reader.c src/loader/retail_sd.c \
+ src/loader/retail_storage.c src/loader/sci_sd_bus.c src/core/ata.c src/dreamcast/ata_bus.c \
+ src/loader/minic.c src/core/retail_image.c src/loader/retail_display.c src/core/retail_observe.c
+STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
+.PHONY: all resident force-config
+all: $(BUILD)/retail-observe.kui
+resident: $(BUILD)/resident-sci.bin
+force-config:
+$(BUILD)/build-config: force-config
+	@mkdir -p $(@D)
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=14' 'LOW=1' 'SLOTS=64' 'SCI=1' 'OPT=$(RESIDENT_OPT)' > $@.new
+	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
+$(BUILD)/sci/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/sci/retail_resident_asm.o: src/loader/retail_resident.S
+	@mkdir -p $(@D)
+	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) src/loader/retail_resident_low.ld
+	@mkdir -p $(BUILD)/sci/lto
+	$(CC) $(LINK) -flto -mrelax $(RESIDENT_OPT) -fstack-usage -save-temps=obj -Wl,--relax \
+	 -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
+	 -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
+	 -Wl,-u,_kui_retail_image_read -Wl,-u,_kui_loader_sd_stream_next \
+	 -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release \
+	 -Tsrc/loader/retail_resident_low.ld -Wl,-Map,$(BUILD)/resident-sci.map -o $@ $(RESIDENT_OBJ) -lgcc
+	cp $(BUILD)/resident-sci.elf.ltrans*.su $(BUILD)/sci/lto/
+$(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/stage/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/stage_asm.o: src/loader/retail_stage.S $(BUILD)/resident-sci.bin
+	$(CC) $(FLAGS) -E -P -x assembler-with-cpp $< -o $(BUILD)/stage_asm.s.original
+	sed 's@build/retail/resident-[^"]*\.bin@$(BUILD)/resident-sci.bin@g' $(BUILD)/stage_asm.s.original > $(BUILD)/stage_asm.s
+	$(CC) $(FLAGS) -c $(BUILD)/stage_asm.s -o $@
+$(BUILD)/stage.elf: $(STAGE_OBJ) src/loader/retail_stage.ld
+	$(CC) $(LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,$(BUILD)/stage.map -o $@ $(STAGE_OBJ) -lgcc
+$(BUILD)/stage.bin: $(BUILD)/stage.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/entry_asm.o: src/loader/retail_entry.S $(BUILD)/stage.bin
+	$(CC) $(FLAGS) -DKUI_RETAIL_STAGE_BIN='"$(BUILD)/stage.bin"' -c $< -o $@
+$(BUILD)/entry.elf: $(BUILD)/entry_asm.o src/loader/retail_entry.ld
+	$(CC) $(LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,$(BUILD)/entry.map -o $@ $<
+$(BUILD)/retail-observe.kui: $(BUILD)/entry.elf
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+-include $(RESIDENT_OBJ:.o=.d) $(STAGE_OBJ:.o=.d)
