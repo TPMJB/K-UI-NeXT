@@ -4,6 +4,10 @@
 build `2cb5d25bb97f`, and the owner reported that they sounded successful. See
 the [hardware evidence](evidence/cdda-calibration-commands-hardware-2026-10-07.md).
 These instructions preserve the tested checkpoint; no repeat run is requested.
+The counters and bounds below belong to that exact revision. Later sources
+use the documented 12,468,720 Hz timer reference instead of its nominal
+12,500,000 Hz conversion. Rebuild the recorded revision to reproduce this
+archive; use the new mixed-test checklist for a later experimental binary.
 
 Run these two new automatic profiles in order: **04 calibration**, then
 **05 commands**. Calibration takes about one minute; commands takes roughly

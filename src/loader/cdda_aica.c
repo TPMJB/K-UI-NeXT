@@ -18,6 +18,7 @@
  * See LICENSES/LICENSE.KOS for retained conditions and disclaimer.
  */
 #include "cdda_aica.h"
+#include "kui/cdda_clock.h"
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -28,7 +29,8 @@
 #define G2_DMA UINT32_C(0xa05f7800)
 #define FIFO_MASK 0x31u /* AICA, G2 and SH-4 */
 #define FIFO_POLLS 10000u
-#define FIFO_TICKS 25000u /* 2ms at 12.5MHz; iteration limit covers stopped TMU */
+#define FIFO_TICKS ((2u*KUI_CDDA_TMU_HZ+999u)/1000u)
+/* Ceil 2ms using the documented timer reference; polls also bound a stopped TMU. */
 #define PHASE_FRAMES 32u
 #define KEY_ON 0x4000u
 #define KEY_EXEC 0x8000u

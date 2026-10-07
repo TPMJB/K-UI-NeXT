@@ -3,12 +3,13 @@
 #define KUI_CDDA_RING_H
 #include <stdbool.h>
 #include <stdint.h>
+#include "kui/cdda_clock.h"
 
 #define KUI_CDDA_RING_FRAMES 16384u
 #define KUI_CDDA_HALF_FRAMES 8192u
-#define KUI_CDDA_CLOCK_HZ 12500000u
-#define KUI_CDDA_HALF_TICKS 2321995u
-#define KUI_CDDA_MARGIN_TICKS 100000u /* 8 ms before an active-half boundary. */
+#define KUI_CDDA_CLOCK_HZ KUI_CDDA_TMU_HZ
+#define KUI_CDDA_HALF_TICKS 2316184u /* Floor of 8192 frames at the fixed reference. */
+#define KUI_CDDA_MARGIN_TICKS 99750u /* Ceil of 8 ms before an active-half boundary. */
 enum kui_cdda_ring_result { KUI_CDDA_RING_OK, KUI_CDDA_RING_ARGUMENT,
     KUI_CDDA_RING_DEADLINE, KUI_CDDA_RING_NOT_READY };
 struct kui_cdda_ring {
@@ -19,7 +20,8 @@ struct kui_cdda_ring {
 /* Positions refer to samples actually played, never the SD prefetch cursor.
  * Require a service observation at least once per half. This conservative
  * limit makes missing a complete ring impossible without a deadline error.
- * A monotonic wrapping 12.5 MHz clock is explicitly owned by the harness. */
+ * The harness explicitly owns a monotonic wrapping TMU clock, converted with
+ * the documented fixed reference in cdda_clock.h. Observe before a full wrap. */
 enum kui_cdda_ring_result kui_cdda_ring_init(struct kui_cdda_ring *, uint32_t now,
                                            uint32_t position);
 enum kui_cdda_ring_result kui_cdda_ring_observe(struct kui_cdda_ring *, uint32_t now,

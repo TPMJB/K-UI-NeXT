@@ -18,6 +18,8 @@
 #define CDDA_TITLE "K-UI: CDDA clock calibration / SCI"
 #elif CDDA_TEST_PROFILE == 5
 #define CDDA_TITLE "K-UI: CDDA command tests / SCI"
+#elif CDDA_TEST_PROFILE == 6
+#define CDDA_TITLE "K-UI: CDDA mixed jobs / SCI"
 #else
 #define CDDA_TITLE "K-UI: isolated CDDA / SCI test"
 #endif

@@ -28,13 +28,14 @@ def main():
         environment.setdefault("ASAN_OPTIONS", "abort_on_error=1:detect_leaks=0")
         environment.setdefault("UBSAN_OPTIONS", "halt_on_error=1:print_stacktrace=1")
     with tempfile.TemporaryDirectory(prefix="kui-cdda-harness-") as temporary:
-        for profile in range(6):
+        for profile in range(7):
             binary = Path(temporary) / f"profile{profile}"
             command = [cc, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                        f"-DCDDA_TEST_PROFILE={profile}", "-I", str(root / "include"),
                        str(root / "tests/test_cdda_harness.c"),
                        str(root / "src/core/cdda_pcm.c"),
-                       str(root / "src/core/cdda_ring.c")]
+                       str(root / "src/core/cdda_ring.c"),
+                       str(root / "src/core/cdda_clock.c")]
             if args.sanitize:
                 command += ["-O1", "-g", "-fsanitize=address,undefined",
                             "-fno-omit-frame-pointer"]
@@ -42,8 +43,10 @@ def main():
                 command.append(str(root / "src/core/cdda_stream.c"))
             if profile == 4:
                 command.append(str(root / "src/core/cdda_timing.c"))
-            if profile == 5:
+            if profile >= 5:
                 command.append(str(root / "src/core/cdda_control.c"))
+            if profile == 6:
+                command.append(str(root / "src/core/cdda_job.c"))
             subprocess.run(command + ["-o", str(binary)], check=True)
             cases = ["pass", "pcm-fail"]
             if profile == 3:
@@ -52,6 +55,9 @@ def main():
                 cases += ["rate-offset", "timing-read-delay"]
             if profile == 5:
                 cases.append("command-reprime-fail")
+            if profile == 6:
+                cases += ["data-slow", "data-fail", "data-corrupt", "data-delay",
+                          "data-starvation", "data-coverage-slow", "command-reprime-fail"]
             for case in cases:
                 subprocess.run([str(binary), case], check=True, timeout=30,
                                env=environment)

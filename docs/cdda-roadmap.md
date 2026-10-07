@@ -5,10 +5,12 @@ Status: the detached SCI/AICA harness passed its baseline, two controls runs,
 Profiles 04 and 05 also passed their matched clock and controlled-command
 console checks with zero reported failures. Their
 [hardware record](evidence/cdda-calibration-commands-hardware-2026-10-07.md)
-contains the exact endpoints and command counters. The relative clock result
-supports revisiting the nominal timer conversion against the pinned hardware
-contract. Absolute clock/pitch measurement, targeted stereo listening, broader
-job arbitration and retail resource/command integration remain open.
+contains the exact endpoints and command counters. The next isolated
+[mixed-jobs test](cdda-mixed-jobs-test.md) is implemented and host-validated;
+its console result is pending. Its timer conversion uses the pinned KOS
+12,468,720 Hz TMU reference without changing AICA pitch. Absolute clock/pitch
+measurement, targeted stereo listening, broader job arbitration and retail
+resource/command integration remain open.
 Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -155,10 +157,11 @@ commands, 27 actions, 12 STATUS checks, two expected invalid/state refusals
 and four stale-token refusals. Those checks cancel staged model actions;
 they do not demonstrate cancellation of an active card or retail DMA job.
 
-**Next controlled profile, planned:** a three-minute mixed workload using
+**Next controlled profile, implemented; console test pending:** a three-minute mixed workload using
 the existing generated `stereo.raw` and `stress.bin`. Vary logical data
-requests from one byte to 32 KiB, including unaligned offsets, backward seeks,
-sector boundaries and EOF. Split requests into at most 2 KiB physical reads
+requests across eight sizes: 1, 31, 511, 512, 513, 2,048, 4,096 and 32,768
+bytes, including unaligned offsets, backward seeks, sector boundaries and
+EOF. Split requests into at most 2 KiB physical reads
 and return to audio service between chunks. Give refill work priority and
 retain the measured read/verification admission budget.
 
@@ -170,12 +173,19 @@ seek, pause/status/resume and stop/restart while data work is queued or partly
 complete. Cancellation occurs between synchronous operations, without a
 claim that an active SCI transfer was interrupted.
 
-Require every request-size class, at least one verified 8 MiB pass, sustained
-data progress, correct played status, the expected cancellation counts and
-zero unexpected failures. Host models must inject slow reads, I/O errors and
-bad data and verify stopped audio before further publication. Build and audit
-the binary before requesting this test; no new user uploads or repeat soak
-runs are needed to prepare it.
+Require exactly one complete verified 8 MiB pass before 120 seconds, at least
+16 completions in every request-size class before 150 seconds, and less than
+five seconds between committed checked chunks. The final screen must show
+seven completed stages, three expected cancellations, six stale refusals,
+seven audio actions, four STATUS checks and zero data errors or unexpected
+failures. Host models verify the actual harness with an independent data-job
+ledger, slow reads, I/O errors, bad data and deadline faults; injected failures
+stop audio before further writes. The console binary has a separate
+[memory and instruction audit](evidence/cdda-mixed-jobs-memory-2026-10-07.md).
+Run profile 06 using the
+[mixed-test checklist](cdda-mixed-jobs-test.md); no new user uploads or repeat
+soak runs are needed. These are cooperative cancellation tests between
+synchronous reads, not cancellation of an active card transfer.
 
 Give game data and audio separate cursors/jobs but a single owner of the SCI
 bus, card stream and receive buffers. Switch only after a complete checked

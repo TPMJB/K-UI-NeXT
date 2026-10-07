@@ -90,5 +90,11 @@ The startup follows K-UI's existing detached cache/stack handoff; the new clock
 uses the documented SH7091 TMU register layout already used by the independent
 SD probe. PCM sector stripping, planar conversion and deadline state are new
 project implementations, not translations of DreamShell refill machinery.
+`include/kui/cdda_clock.h` uses the same pinned KOS `kernel/timer.c` reference:
+measured main clock 199,499,520 Hz, peripheral clock one quarter of that, and
+the owned TMU peripheral-clock/4 selection. The resulting 12,468,720 Hz is a
+documented reference, not an absolute measurement of the running console or
+a feedback adjustment of AICA pitch. The bounded conversion and cooperative
+job/state helpers are independent project implementations.
 `tools/cdda_fixture.py` generates original sine-tone test data. The user's Toy
 Commander audio remains external and is excluded from source and test packages.

@@ -17,11 +17,13 @@ def main():
     flags=['-std=c11','-O2','-Wall','-Wextra','-Werror']
     if args.sanitize: flags+=['-g','-fsanitize=address,undefined','-fno-omit-frame-pointer']
     cases=[('pcm',['-Iinclude'],['src/core/cdda_pcm.c','tests/test_cdda_pcm.c']),
+           ('clock',['-Iinclude'],['src/core/cdda_clock.c','tests/test_cdda_clock.c']),
+           ('job',['-Iinclude'],['src/core/cdda_job.c','tests/test_cdda_job.c']),
            ('timing',['-Iinclude'],['src/core/cdda_timing.c','tests/test_cdda_timing.c']),
            ('control',['-Iinclude'],['src/core/cdda_control.c','tests/test_cdda_control.c']),
            ('stream',['-Iinclude'],['src/core/cdda_stream.c','tests/test_cdda_stream.c']),
-           ('ring',['-Iinclude'],['src/core/cdda_ring.c','tests/test_cdda_ring.c']),
-           ('aica',['-Isrc/loader','-DKUI_CDDA_AICA_TEST'],['src/loader/cdda_aica.c','tests/test_cdda_aica.c'])]
+           ('ring',['-Iinclude'],['src/core/cdda_ring.c','src/core/cdda_clock.c','tests/test_cdda_ring.c']),
+           ('aica',['-Iinclude','-Isrc/loader','-DKUI_CDDA_AICA_TEST'],['src/loader/cdda_aica.c','tests/test_cdda_aica.c'])]
     env=os.environ.copy()
     env['CC']=args.cc
     # This runner performs no allocation leak testing; ptrace prevents LSAN

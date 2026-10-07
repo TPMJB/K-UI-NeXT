@@ -21,8 +21,9 @@ enum kui_cdda_aica_result {
 
 /* Standalone harness only, after KOS teardown with SH-4 interrupts masked.
  * Takes exclusive ownership of the AICA ARM, every sound channel, mixer and
- * the two PCM rings. The caller owns/runs TMU1 as a free-running 12.5 MHz
- * counter and must ensure all G2 DMA channels are idle. The ARM stays reset.
+ * the two PCM rings. The caller owns/runs TMU1 as a free-running counter at
+ * the reference in kui/cdda_clock.h and ensures all G2 DMA channels are idle.
+ * The ARM stays reset.
  * This is not a retail game sound coexistence contract. */
 enum kui_cdda_aica_result kui_cdda_aica_init(void);
 /* The caller must fill both rings before start; no fill tracking is done here.

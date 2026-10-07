@@ -6,7 +6,9 @@
 static struct kui_cdda_control command_control;
 static bool command_running;
 static uint32_t command_accepted,command_completions,command_status_checks;
+#if CDDA_TEST_PROFILE == 5
 static uint32_t command_expected_refusals,command_stale_refusals;
+#endif
 static uint32_t command_paused_frame,command_max_loops;
 
 static struct kui_cdda_control_request command_request(enum kui_cdda_control_command kind) {
@@ -115,6 +117,7 @@ static bool command_status(enum kui_cdda_control_state expected,
     command_accepted++;command_status_checks++;
     return true;
 }
+#if CDDA_TEST_PROFILE == 5
 static bool command_refuse(struct kui_cdda_control_request request,
     enum kui_cdda_control_result expected) {
     if(!command_sync()) return false;
@@ -248,3 +251,4 @@ static void commands_report(void) {
     cdda_display_number("Saved PAUSE played frame: ",command_paused_frame);
     cdda_display_number("Maximum played loop passes: ",command_max_loops);
 }
+#endif

@@ -17,13 +17,14 @@ CDDA_FLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror $(CDDA_CPU) \
 CDDA_LINK := $(CDDA_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
 CDDA_SOURCES := src/loader/cdda_main.c src/loader/cdda_display.c \
     src/core/cdda_pcm.c src/core/cdda_stream.c src/core/cdda_ring.c \
-    src/core/cdda_timing.c src/core/cdda_control.c src/loader/cdda_aica.c src/loader/cdda_storage.c \
+    src/core/cdda_timing.c src/core/cdda_control.c src/core/cdda_clock.c \
+    src/core/cdda_job.c src/loader/cdda_aica.c src/loader/cdda_storage.c \
     src/loader/sd_reader.c src/loader/sci_sd_bus.c src/loader/minic.c \
     src/dreamcast/shell_font.c src/core/boot_volume.c src/core/data.c
 CDDA_OBJECTS := $(patsubst %.c,$(CDDA_BUILD_DIR)/%.o,$(CDDA_SOURCES)) \
     $(CDDA_BUILD_DIR)/src/loader/cdda_start.o $(CDDA_BUILD_DIR)/fatfs/ff.o $(CDDA_BUILD_DIR)/fatfs/ffunicode.o
 
-.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests clean force-cdda-config
+.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests cdda-mixed-test clean force-cdda-config
 all: cdda
 cdda: $(CDDA_BUILD_DIR)/cdda-harness.kui $(CDDA_BUILD_DIR)/cdda-harness.bin cdda-check
 
@@ -70,6 +71,8 @@ cdda-profiles:
 cdda-next-tests:
 	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=4 CDDA_BUILD_DIR=build/cdda-calibration
 	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=5 CDDA_BUILD_DIR=build/cdda-commands
+cdda-mixed-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=6 CDDA_BUILD_DIR=build/cdda-mixed
 clean:
 	rm -rf $(CDDA_BUILD_DIR)
 -include $(CDDA_OBJECTS:.o=.d)
