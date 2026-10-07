@@ -81,7 +81,8 @@ jobs:
           for relative in ('bin', 'libexec/gcc', 'lib/gcc', 'sh-elf/bin', 'sh-elf/include'):
               source = prefix / relative
               if source.exists():
-                  shutil.copytree(source, toolchain / relative, symlinks=False, dirs_exist_ok=True)
+                  shutil.copytree(source, toolchain / relative, symlinks=False,
+                                  ignore_dangling_symlinks=True, dirs_exist_ok=True)
           compiler = toolchain / 'bin/sh-elf-gcc'
           expected = json.loads((root / 'dependencies.json').read_text())['toolchain']['gcc']
           actual = subprocess.check_output([str(compiler), '-dumpfullversion'], text=True).strip()
