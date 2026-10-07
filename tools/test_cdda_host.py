@@ -19,6 +19,7 @@ def main():
     cases=[('pcm',['-Iinclude'],['src/core/cdda_pcm.c','tests/test_cdda_pcm.c']),
            ('clock',['-Iinclude'],['src/core/cdda_clock.c','tests/test_cdda_clock.c']),
            ('job',['-Iinclude'],['src/core/cdda_job.c','tests/test_cdda_job.c']),
+           ('handoff',['-Iinclude'],['src/core/cdda_handoff.c','tests/test_cdda_handoff.c']),
            ('timing',['-Iinclude'],['src/core/cdda_timing.c','tests/test_cdda_timing.c']),
            ('control',['-Iinclude'],['src/core/cdda_control.c','tests/test_cdda_control.c']),
            ('stream',['-Iinclude'],['src/core/cdda_stream.c','tests/test_cdda_stream.c']),
@@ -37,4 +38,7 @@ def main():
     integration=[sys.executable,str(ROOT/'tools/test_cdda_harness.py')]
     if args.sanitize: integration.append('--sanitize')
     subprocess.run(integration,cwd=ROOT,env=env,check=True)
+    service=[sys.executable,str(ROOT/'tools/test_cdda_service.py')]
+    if args.sanitize: service.append('--sanitize')
+    subprocess.run(service,cwd=ROOT,env=env,check=True)
 if __name__=='__main__': main()

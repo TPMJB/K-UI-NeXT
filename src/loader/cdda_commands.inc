@@ -14,12 +14,14 @@ static uint32_t command_paused_frame,command_max_loops;
 static struct kui_cdda_control_request command_request(enum kui_cdda_control_command kind) {
     return (struct kui_cdda_control_request){.command=kind};
 }
+#if CDDA_TEST_PROFILE != 7
 static bool command_same_status(const struct kui_cdda_control_status *a,
     const struct kui_cdda_control_status *b) {
     return a->state==b->state && a->first==b->first && a->end==b->end &&
         a->frame==b->frame && a->loops==b->loops && a->epoch==b->epoch &&
         a->pending_epoch==b->pending_epoch && a->repeat==b->repeat && a->pending==b->pending;
 }
+#endif
 /* Preserve the original selected loop range when resuming/seeking mid-loop.
  * The ring begins at frame, but subsequent wrap returns to first, not frame. */
 static bool command_audio_start(const struct kui_cdda_control_action *action) {
@@ -94,6 +96,7 @@ static bool command_accept(struct kui_cdda_control_request request) {
 static bool command_play(uint32_t first,uint32_t end,bool repeat) {
     return command_accept((struct kui_cdda_control_request){KUI_CDDA_CONTROL_PLAY,first,end,0,repeat});
 }
+#if CDDA_TEST_PROFILE != 7
 static bool command_run(uint32_t additional_frames) {
     if(!command_running || !command_sync()) return false;
     if(!command_running) return command_control.current.state==KUI_CDDA_CONTROL_EOF;
@@ -107,6 +110,7 @@ static bool command_run(uint32_t additional_frames) {
     if(!session_pump(target,false)) return false;
     return command_sync();
 }
+#endif
 static bool command_status(enum kui_cdda_control_state expected,
     struct kui_cdda_control_status *out) {
     if(!command_sync()) return false;

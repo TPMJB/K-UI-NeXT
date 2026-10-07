@@ -96,5 +96,9 @@ the owned TMU peripheral-clock/4 selection. The resulting 12,468,720 Hz is a
 documented reference, not an absolute measurement of the running console or
 a feedback adjustment of AICA pitch. The bounded conversion and cooperative
 job/state helpers are independent project implementations.
+The controlled profile 07 descriptor, cooperative service guard, isolated
+client program and integer SH C-call stack bridge are new project code.
+They exercise explicitly owned homebrew stacks and ordinary integer C ABI;
+they do not install a retail interrupt handler or copy a loader's CDDA hook.
 `tools/cdda_fixture.py` generates original sine-tone test data. The user's Toy
 Commander audio remains external and is excluded from source and test packages.

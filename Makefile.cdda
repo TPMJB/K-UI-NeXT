@@ -15,16 +15,24 @@ CDDA_FLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror $(CDDA_CPU) \
     -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_FAST_IO=1 \
     -DCDDA_TEST_PROFILE=$(CDDA_TEST_PROFILE) -DKUI_BUILD_ID='"$(CDDA_BUILD_ID)"' -I$(CDDA_BUILD_DIR)/fatfs -Iinclude -Isrc/loader
 CDDA_LINK := $(CDDA_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+CDDA_SCRIPT := src/loader/cdda_harness.ld
 CDDA_SOURCES := src/loader/cdda_main.c src/loader/cdda_display.c \
     src/core/cdda_pcm.c src/core/cdda_stream.c src/core/cdda_ring.c \
     src/core/cdda_timing.c src/core/cdda_control.c src/core/cdda_clock.c \
     src/core/cdda_job.c src/loader/cdda_aica.c src/loader/cdda_storage.c \
     src/loader/sd_reader.c src/loader/sci_sd_bus.c src/loader/minic.c \
     src/dreamcast/shell_font.c src/core/boot_volume.c src/core/data.c
+ifeq ($(CDDA_TEST_PROFILE),7)
+CDDA_SCRIPT := src/loader/cdda_service.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/loader/cdda_client.c
+endif
 CDDA_OBJECTS := $(patsubst %.c,$(CDDA_BUILD_DIR)/%.o,$(CDDA_SOURCES)) \
     $(CDDA_BUILD_DIR)/src/loader/cdda_start.o $(CDDA_BUILD_DIR)/fatfs/ff.o $(CDDA_BUILD_DIR)/fatfs/ffunicode.o
+ifeq ($(CDDA_TEST_PROFILE),7)
+CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o
+endif
 
-.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests cdda-mixed-test clean force-cdda-config
+.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests cdda-mixed-test cdda-service-test clean force-cdda-config
 all: cdda
 cdda: $(CDDA_BUILD_DIR)/cdda-harness.kui $(CDDA_BUILD_DIR)/cdda-harness.bin cdda-check
 
@@ -52,8 +60,8 @@ $(CDDA_BUILD_DIR)/fatfs/%.o: $(CDDA_BUILD_DIR)/fatfs/%.c $(CDDA_BUILD_DIR)/fatfs
 	$(CDDA_CC) $(CDDA_FLAGS) -Wno-unused-function -MMD -MP -c $< -o $@
 $(CDDA_BUILD_DIR)/fatfs/ff.c $(CDDA_BUILD_DIR)/fatfs/ffunicode.c: $(CDDA_BUILD_DIR)/fatfs/.configured
 	@test -f $@
-$(CDDA_BUILD_DIR)/cdda-harness.elf: $(CDDA_OBJECTS) src/loader/cdda_harness.ld
-	$(CDDA_CC) $(CDDA_LINK) -Tsrc/loader/cdda_harness.ld -Wl,-Map,$(CDDA_BUILD_DIR)/cdda-harness.map -o $@ $(CDDA_OBJECTS) -lgcc
+$(CDDA_BUILD_DIR)/cdda-harness.elf: $(CDDA_OBJECTS) $(CDDA_SCRIPT)
+	$(CDDA_CC) $(CDDA_LINK) -T$(CDDA_SCRIPT) -Wl,-Map,$(CDDA_BUILD_DIR)/cdda-harness.map -o $@ $(CDDA_OBJECTS) -lgcc
 $(CDDA_BUILD_DIR)/cdda-harness.bin: $(CDDA_BUILD_DIR)/cdda-harness.elf
 	$(CDDA_OBJCOPY) -O binary $< $@
 $(CDDA_BUILD_DIR)/cdda-harness.kui: $(CDDA_BUILD_DIR)/cdda-harness.elf tools/runtime_package.py
@@ -73,6 +81,8 @@ cdda-next-tests:
 	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=5 CDDA_BUILD_DIR=build/cdda-commands
 cdda-mixed-test:
 	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=6 CDDA_BUILD_DIR=build/cdda-mixed
+cdda-service-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=7 CDDA_BUILD_DIR=build/cdda-service
 clean:
 	rm -rf $(CDDA_BUILD_DIR)
 -include $(CDDA_OBJECTS:.o=.d)

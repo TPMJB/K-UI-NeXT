@@ -12,7 +12,9 @@ seven stages, all eight request sizes and zero reported errors or failures.
 Its timer conversion uses the pinned KOS
 12,468,720 Hz TMU reference without changing AICA pitch. Absolute clock/pitch
 measurement, targeted stereo listening, broader job arbitration and retail
-resource/command integration remain open.
+resource/command integration remain open. The next runnable profile is
+[07: controlled client handoff and service](cdda-service-test.md), prepared
+for a fresh console check; its hardware result is pending.
 Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -193,9 +195,14 @@ match. Retain the [mixed-test checklist](cdda-mixed-jobs-test.md) for
 reproduction; no repeat run is required. These are cooperative cancellation tests between
 synchronous reads, not cancellation of an active card transfer.
 
-**Next implementation:** define the distinct CDDA package/handoff and owned
-periodic-service contracts in Gate 5. Use a controlled homebrew handoff before
-retail resource admission; preserve the tested engine and ordinary readers.
+**Next console check:** profile 07 defines a distinct, checked CDDA ownership
+descriptor and calls the engine from a separately linked controlled client.
+The client and service use separate private stacks. Exercise 90 seconds of
+cooperative audio/data service, commands, integer call preservation, refused
+reentry and stale epochs, and one deliberately missed service deadline.
+The [service checklist](cdda-service-test.md) contains the exact final counters.
+This advances the controlled handoff evidence in Gate 5; retail resource
+admission and interrupt scheduling remain unproved.
 Fragmented layouts, retry policy and latency under actual retail scheduling
 remain separate evidence gaps, rather than reasons to repeat this same
 passing numerical workload.
@@ -218,6 +225,16 @@ the stress set. Record maximum service/refill gaps and stream-switch/retry
 costs. An average speed benchmark does not satisfy this gate.
 
 ## Gate 5: separate package, bootstrap and admission rules
+
+**Controlled handoff implemented; console result pending:** profile 07 uses
+an independent 160-byte `KCDDAH1` descriptor with six disjoint canonical main
+RAM regions, exact owned sound resources, read-only SCI rights and a bounded
+service lease. Portable tests reject malformed ranges/rights, stale epochs,
+reentry, overflow and late completions. A separately linked homebrew client
+calls the owned worker on a third private stack and probes r8–r14/PR around
+each call. This uses the existing outer KUIRUN transport without repurposing
+its reserved words. It does not establish a retail ABI, interrupt hook,
+sound-driver coexistence or automatic CDDA launch selection.
 
 Define a distinct CDDA package identity and schema rather than extending a
 reserved stable-header word. Validate segment bounds, aliases, overlap,
@@ -284,21 +301,17 @@ candidate reader.
 
 ## First steps and ownership
 
-**Agent next:** use the matched endpoint evidence and pinned clock contract to
-correct timer conversions in a separately identified experimental build,
-preserving the tested checkpoint and leaving playback pitch unchanged. Then
-add bounded, variable-size data jobs with cancellation and independent byte
-checks under continuous audio. Establish periodic service and resource admission before
-Toy Commander retail integration. The classifier, standalone engine, controls,
-soak/stress fixtures and memory audit are implemented and numerically tested.
+**Agent next:** interpret profile 07's actual handoff, ABI and stack counters,
+then establish independently observed command delivery, regular service and
+resource ownership before Toy Commander retail integration. The classifier,
+standalone engine, clock conversion, controls, soak/stress and variable-size
+mixed jobs are implemented and numerically tested on console. Keep new
+retail scheduling and sound-driver discoveries separate from those results.
 
-**User next:** profiles 04 and 05 are complete; restore the preserved 1.8.5
-runtime while the next experimental build is prepared. No repeat is requested
-for these successful tests. A later brief
-stereo/control check can confirm channel order and silence; no additional
-routine soak is requested now. The [test checklist](cdda-next-test.md) remains available
-for reproducing the earlier successful results. No routine soak repetition
-is requested for this pair of short tests.
+**User next:** run only [profile 07](cdda-service-test.md), photograph the
+complete final screen and restore the preserved 1.8.5 runtime afterward.
+Profiles 00–06 need no routine repeat. A later brief stereo/control check can
+confirm channel order and silence when suitable speakers are available.
 This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed
 **Toy Commander** GDI with every referenced `.raw` track; do not buy another
 title for this experiment.
