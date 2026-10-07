@@ -8,8 +8,8 @@
 #ifndef CDDA_TEST_PROFILE
 #define CDDA_TEST_PROFILE 0
 #endif
-#if CDDA_TEST_PROFILE < 0 || CDDA_TEST_PROFILE > 7
-#error "CDDA_TEST_PROFILE must be 0..7 (baseline through controlled service)"
+#if CDDA_TEST_PROFILE < 0 || CDDA_TEST_PROFILE > 8
+#error "CDDA_TEST_PROFILE must be 0..8 (baseline through BIOS command delivery)"
 #endif
 #if CDDA_TEST_PROFILE > 0
 #include "kui/cdda_stream.h"
@@ -243,7 +243,7 @@ close:
 /* Every restart discards queued PCM and refills from an actual played cursor.
  * The initial hardware sample position is included; ring.played starts at zero
  * at its first observation, rather than assuming that key-on is instantaneous. */
-#if CDDA_TEST_PROFILE != 5 && CDDA_TEST_PROFILE != 6 && CDDA_TEST_PROFILE != 7
+#if CDDA_TEST_PROFILE != 5 && CDDA_TEST_PROFILE != 6 && CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8
 static bool session_open(uint32_t first,uint32_t frames,bool repeat) {
     uint32_t bytes;
     ring=(struct kui_cdda_ring){0};
@@ -274,14 +274,14 @@ static bool session_close(void) {
     if(ring.min_margin_ticks<min_margin_ticks) min_margin_ticks=ring.min_margin_ticks;
     repeat_audio=false;cdda_storage_close();return success;
 }
-#if CDDA_TEST_PROFILE != 4 && CDDA_TEST_PROFILE != 7
+#if CDDA_TEST_PROFILE != 4 && CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8
 static bool played_cursor(uint32_t *frame,uint32_t *loops) {
     if(ring.played>UINT32_MAX-session_initial) return false;
     return kui_cdda_stream_cursor(session_first,session_first+session_frames,
         repeat_audio,session_initial+ring.played,frame,loops);
 }
 #endif
-#if CDDA_TEST_PROFILE == 3 || CDDA_TEST_PROFILE == 4 || CDDA_TEST_PROFILE == 6 || CDDA_TEST_PROFILE == 7
+#if CDDA_TEST_PROFILE == 3 || CDDA_TEST_PROFILE == 4 || CDDA_TEST_PROFILE == 6 || CDDA_TEST_PROFILE == 7 || CDDA_TEST_PROFILE == 8
 static void display_pair(const char *label,uint32_t a,uint32_t b) {
     char text[96],reverse[10];unsigned n=0;
     while(*label && n<60u) text[n++]=*label++;
@@ -339,7 +339,7 @@ static bool stress_job(void) {
     return true;
 }
 #endif
-#if CDDA_TEST_PROFILE != 4 && CDDA_TEST_PROFILE != 7
+#if CDDA_TEST_PROFILE != 4 && CDDA_TEST_PROFILE != 7 && CDDA_TEST_PROFILE != 8
 static bool session_pump(uint32_t frames,bool minimum_duration) {
     uint32_t progress_tick=ticks(),progress=ring.played,idle=0;
     for(;;) {
@@ -543,7 +543,7 @@ failed:
     (void)session_close();return false;
 }
 #endif
-#if CDDA_TEST_PROFILE == 5 || CDDA_TEST_PROFILE == 6 || CDDA_TEST_PROFILE == 7
+#if CDDA_TEST_PROFILE == 5 || CDDA_TEST_PROFILE == 6 || CDDA_TEST_PROFILE == 7 || CDDA_TEST_PROFILE == 8
 #include "cdda_commands.inc"
 #endif
 #if CDDA_TEST_PROFILE == 6
@@ -551,6 +551,9 @@ failed:
 #endif
 #if CDDA_TEST_PROFILE == 7
 #include "cdda_service.inc"
+#endif
+#if CDDA_TEST_PROFILE == 8
+#include "cdda_bios.inc"
 #endif
 #endif
 static bool check_stack(uint32_t *used) {
@@ -628,9 +631,12 @@ void cdda_main(void) {
 #elif CDDA_TEST_PROFILE == 6
     cdda_display_line("PROFILE6 MIXED / audio + bounded data jobs");
     if(!mixed()) failures++;
-#else
+#elif CDDA_TEST_PROFILE == 7
     cdda_display_line("PROFILE7 SERVICE / separate controlled client");
     if(!service_test()) failures++;
+#else
+    cdda_display_line("PROFILE8 BIOS / owned native command vector");
+    if(!cdda_bios_test()) failures++;
 #endif
 finish:
     if(audio_owned && kui_cdda_aica_stop()!=KUI_CDDA_AICA_OK) {
@@ -659,8 +665,10 @@ finish:
     cdda_display_line("PROFILE5 COMMANDS / controlled homebrew");
 #elif CDDA_TEST_PROFILE == 6
     cdda_display_line("PROFILE6 MIXED / controlled audio + data");
-#else
+#elif CDDA_TEST_PROFILE == 7
     cdda_display_line("PROFILE7 SERVICE / owned cooperative calls");
+#else
+    cdda_display_line("PROFILE8 BIOS / controlled command delivery");
 #endif
     cdda_display_number("Completed playback stages: ",completed);
     cdda_display_number("Worst half refill (us): ",us(max_refill_ticks));
@@ -696,6 +704,8 @@ finish:
     mixed_report();
 #elif CDDA_TEST_PROFILE == 7
     service_report();
+#elif CDDA_TEST_PROFILE == 8
+    cdda_bios_report();
 #endif
     cdda_display_number("Failures / stopped audio: ",failures);
     cdda_display_finish(failures);

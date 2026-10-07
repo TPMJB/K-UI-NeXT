@@ -100,5 +100,14 @@ The controlled profile 07 descriptor, cooperative service guard, isolated
 client program and integer SH C-call stack bridge are new project code.
 They exercise explicitly owned homebrew stacks and ordinary integer C ABI;
 they do not install a retail interrupt handler or copy a loader's CDDA hook.
+Profile 08's request queue, separately linked BIOS client and owned-vector
+wrapper are new project implementations. Command numbers, parameter layouts,
+handle/status meanings and the r4/r5/r6/r7 calling convention are taken from
+the same pinned official KallistiOS revision's `include/dc/syscalls.h`,
+`hardware/cdrom.c` and `hardware/syscalls.c` under `kernel/arch/dreamcast`.
+Its BSD notice remains in [LICENSE.KOS](LICENSES/LICENSE.KOS). No KOS syscall
+implementation is linked or copied into this freestanding harness. Unsupported
+commands and ambiguous PLAY2 ranges are refused rather than inferred from a
+third-party loader. This remains an explicitly owned homebrew vector test.
 `tools/cdda_fixture.py` generates original sine-tone test data. The user's Toy
 Commander audio remains external and is excluded from source and test packages.

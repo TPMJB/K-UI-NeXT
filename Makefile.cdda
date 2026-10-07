@@ -26,13 +26,20 @@ ifeq ($(CDDA_TEST_PROFILE),7)
 CDDA_SCRIPT := src/loader/cdda_service.ld
 CDDA_SOURCES += src/core/cdda_handoff.c src/loader/cdda_client.c
 endif
+ifeq ($(CDDA_TEST_PROFILE),8)
+CDDA_SCRIPT := src/loader/cdda_bios.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/core/cdda_bios.c src/loader/cdda_bios_client.c
+endif
 CDDA_OBJECTS := $(patsubst %.c,$(CDDA_BUILD_DIR)/%.o,$(CDDA_SOURCES)) \
     $(CDDA_BUILD_DIR)/src/loader/cdda_start.o $(CDDA_BUILD_DIR)/fatfs/ff.o $(CDDA_BUILD_DIR)/fatfs/ffunicode.o
 ifeq ($(CDDA_TEST_PROFILE),7)
 CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o
 endif
+ifeq ($(CDDA_TEST_PROFILE),8)
+CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o $(CDDA_BUILD_DIR)/src/loader/cdda_vector.o
+endif
 
-.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests cdda-mixed-test cdda-service-test clean force-cdda-config
+.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests cdda-mixed-test cdda-service-test cdda-bios-test clean force-cdda-config
 all: cdda
 cdda: $(CDDA_BUILD_DIR)/cdda-harness.kui $(CDDA_BUILD_DIR)/cdda-harness.bin cdda-check
 
@@ -83,6 +90,8 @@ cdda-mixed-test:
 	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=6 CDDA_BUILD_DIR=build/cdda-mixed
 cdda-service-test:
 	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=7 CDDA_BUILD_DIR=build/cdda-service
+cdda-bios-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=8 CDDA_BUILD_DIR=build/cdda-bios
 clean:
 	rm -rf $(CDDA_BUILD_DIR)
 -include $(CDDA_OBJECTS:.o=.d)

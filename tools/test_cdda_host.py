@@ -22,6 +22,7 @@ def main():
            ('handoff',['-Iinclude'],['src/core/cdda_handoff.c','tests/test_cdda_handoff.c']),
            ('timing',['-Iinclude'],['src/core/cdda_timing.c','tests/test_cdda_timing.c']),
            ('control',['-Iinclude'],['src/core/cdda_control.c','tests/test_cdda_control.c']),
+           ('bios',['-Iinclude'],['src/core/cdda_bios.c','src/core/cdda_control.c','tests/test_cdda_bios.c']),
            ('stream',['-Iinclude'],['src/core/cdda_stream.c','tests/test_cdda_stream.c']),
            ('ring',['-Iinclude'],['src/core/cdda_ring.c','src/core/cdda_clock.c','tests/test_cdda_ring.c']),
            ('aica',['-Iinclude','-Isrc/loader','-DKUI_CDDA_AICA_TEST'],['src/loader/cdda_aica.c','tests/test_cdda_aica.c'])]
@@ -41,4 +42,7 @@ def main():
     service=[sys.executable,str(ROOT/'tools/test_cdda_service.py')]
     if args.sanitize: service.append('--sanitize')
     subprocess.run(service,cwd=ROOT,env=env,check=True)
+    bios=[sys.executable,str(ROOT/'tools/test_cdda_bios_integration.py')]
+    if args.sanitize: bios.append('--sanitize')
+    subprocess.run(bios,cwd=ROOT,env=env,check=True)
 if __name__=='__main__': main()
