@@ -79,5 +79,9 @@ paging issue.
 
 The final twelve-character source/build identity and exact binary checksums
 are recorded in the replacement archive's `build.json` and `SHA256SUMS`.
-Console confirmation of the corrected clock and six repeating pages remains
-pending.
+The supplied console photos now show all six PASS pages for corrected build
+`9fb65a33f235`, in the order 2–6 followed by 1. The reported 32,612-byte private
+stack watermark matches the updated static main/core chain. Report rotation
+is confirmed. The photos do not establish an absolute 15-second calibration
+or an injected 180-second hardware timeout. Full fields and track geometry
+are recorded in [the hardware evidence](cdda-preflight-hardware-2026-10-07.md).

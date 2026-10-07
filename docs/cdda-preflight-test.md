@@ -9,12 +9,17 @@ The replacement includes no test 14 binary and does not overwrite
 The original build `324c330bdb6c` reached **PASS, 6 stages / 0 failures** on
 console, but remained on page 1. Its report timer had never been started, so
 automatic page changes and the intended 180-second read deadline were inactive.
-Only page 1 is confirmed; the other five pages have no console evidence yet.
+For that original build, only page 1 was confirmed.
 The replacement starts the diagnostic's own timer before storage reads and
-keeps it running through report paging. Its console result is pending.
+keeps it running through report paging. Build `9fb65a33f235` subsequently
+reported PASS on all six photographed pages: 6 stages / 0 failures, all 15
+backings in 44 slots and a 32,612-byte private stack watermark. The photo
+sequence shows pages 2–6 followed by page 1. This confirms report rotation;
+it is not an absolute timer calibration or an injected deadline test.
 
-Run the replacement 13 and photograph all six pages. Install **14 — retail
-observation** only after a complete PASS report for the original Toy Commander
+For this verified image/card, proceed with **14 — retail observation**.
+For a new image/card, run the replacement 13 and photograph all six pages.
+Install **14 — retail observation** only after a complete PASS report for the original Toy Commander
 image you will launch. Test 14 does not need to be rebuilt or downloaded again.
 The [hardware record](evidence/cdda-preflight-hardware-2026-10-07.md) preserves
 the confirmed result and the original build's reporting limitation.
