@@ -166,6 +166,8 @@ def collect(commit, published_tree):
                 continue
             relative = path.relative_to(build).as_posix()
             data = remember(path)
+            if path.suffix == '.map' and not data:
+                raise ValueError('Empty linked map evidence for ' + variant['name'] + ': ' + relative)
             evidence[relative] = sha(data)
             add(prefix + relative, data)
         if not all(name in evidence for name in ('entry.elf', 'entry.map', 'stage.elf',
