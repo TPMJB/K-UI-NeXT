@@ -110,6 +110,8 @@ struct sonic_stack_state {
     uint32_t transport,reader,changed_bytes,last_changed;
     uint32_t code_end,code_crc,return_code_crc;
     uint32_t word_address,word_old,word_p1,word_p2;
+    uint32_t bss_begin,bss_end,manifest_address,manifest_bytes,manifest_matches;
+    uint32_t first_changed;
     uint8_t saved[4][SONIC_STACK_PATCH_BYTES];
     uint8_t resident[SONIC_STACK_RESIDENT_BYTES];
 };
@@ -702,6 +704,66 @@ static int sonic_stack_range(uint32_t begin,uint32_t bytes,uint32_t end) {
 static int sonic_stack_disjoint(uint32_t a,uint32_t bytes,uint32_t b,uint32_t n) {
     return a+bytes<=b || b+n<=a;
 }
+static uint32_t sonic_stack_map_bytes(const struct sonic_stack_state *s) {
+    if(s->transport!=manifest.storage_transport || s->reader!=manifest.reader) return 0u;
+    uint32_t slots=KUI_RETAIL_IMAGE_SLOTS;
+    if(s->reader!=KUI_RETAIL_READER_STANDARD) {
+        if(s->reader!=KUI_RETAIL_READER_ASYNC && s->reader!=KUI_RETAIL_READER_ASYNC_EAGER)
+            return 0u;
+        if(s->transport!=KUI_STORAGE_SCI) return 0u;
+        slots=KUI_RETAIL_ASYNC_SLOTS;
+    }
+    if(!manifest.track_count || manifest.track_count>KUI_RETAIL_IMAGE_TRACKS ||
+       manifest.track_count>slots || !manifest.extent_count ||
+       manifest.extent_count>slots-manifest.track_count) return 0u;
+    return slots==KUI_RETAIL_IMAGE_SLOTS?sizeof(manifest):
+        offsetof(struct kui_retail_manifest,slots)+slots*sizeof(union kui_retail_slot);
+}
+static int sonic_stack_map_bounds(const struct sonic_stack_state *s) {
+    return !(s->bss_begin&3u) && !(s->bss_end&3u) &&
+        s->bss_begin>=s->code_end && s->bss_begin<s->bss_end &&
+        s->bss_end<=s->resident_end && s->manifest_bytes && !(s->manifest_bytes&3u) &&
+        s->manifest_bytes<=s->bss_end-s->bss_begin;
+}
+static uint32_t sonic_stack_blob_word(unsigned offset) {
+    uint32_t value;
+    memcpy(&value,resident_blob+offset,4u);
+    return value;
+}
+static void sonic_stack_find_map(struct sonic_stack_state *s,const uint32_t *frame) {
+    /* Owned resident entry literals identify its exact linked BSS. No map
+     * symbol or low-reader ABI change is needed. Discovery runs through P2
+     * after the entry wrapper published RAM and disabled both caches. */
+    s->bss_begin=kui_retail_sonic_stack_read(KUI_RETAIL_RESIDENT_ADDRESS+0x20000018u);
+    s->bss_end=kui_retail_sonic_stack_read(KUI_RETAIL_RESIDENT_ADDRESS+0x2000001cu);
+    s->manifest_bytes=sonic_stack_map_bytes(s);
+    if(!s->manifest_bytes) sonic_stack_report(s,"RESIDENT MAP SHAPE INVALID",2u,frame);
+    if(!sonic_stack_map_bounds(s) || s->bss_begin!=sonic_stack_blob_word(0x18u) ||
+       s->bss_end!=sonic_stack_blob_word(0x1cu))
+        sonic_stack_report(s,"RESIDENT BSS BOUNDS INVALID",2u,frame);
+    for(uint32_t at=s->bss_begin;at<=s->bss_end-s->manifest_bytes;at+=4u) {
+        if(memcmp(sonic_stack_p2(at),&manifest,s->manifest_bytes)) continue;
+        s->manifest_address=at;++s->manifest_matches;
+    }
+    if(s->manifest_matches!=1u)
+        sonic_stack_report(s,"RESIDENT MAP NOT UNIQUE",2u,frame);
+}
+static uint32_t sonic_stack_immutable_change(const struct sonic_stack_state *s,
+    uint32_t begin,uint32_t end) {
+    /* Check both aliases without purging. An old cached map must not hide a
+     * physical RAM change, and a damaged cached map must not reach the reader. */
+    for(uint32_t at=begin;at<end;at+=4u) {
+        uint32_t old;
+        memcpy(&old,s->resident+(at-SONIC_STACK_SNAPSHOT_BEGIN),4u);
+        uint32_t p1=*(volatile const uint32_t *)(uintptr_t)at;
+        uint32_t p2=kui_retail_sonic_stack_read(at|0x20000000u);
+        uint32_t changed=(p1^old)|(p2^old);
+        if(!changed) continue;
+        for(unsigned byte=0;byte<4u;byte++)
+            if(changed&(0xffu<<(byte*8u))) return at+byte;
+    }
+    return 0u;
+}
 static void sonic_stack_arm(void) {
     struct sonic_stack_state *s=sonic_stack_uncached_state();
     if(exec_bytes!=6751168u || manifest.ip_crc32!=0x22de24d8u ||
@@ -719,7 +781,8 @@ static void sonic_stack_arm(void) {
         sonic_stack_report(s,"PRIVATE STACK BOUNDS INVALID",3u,NULL);
     if((resident_limit&3u) || resident_limit<KUI_RETAIL_RESIDENT_ADDRESS ||
        resident_limit-SONIC_STACK_SNAPSHOT_BEGIN>sizeof(s->resident) ||
-       !resident_bytes || resident_bytes>resident_limit-KUI_RETAIL_RESIDENT_ADDRESS)
+       resident_bytes<0x20u || (resident_bytes&3u) ||
+       resident_bytes>resident_limit-KUI_RETAIL_RESIDENT_ADDRESS)
         sonic_stack_report(s,"READER SNAPSHOT BOUNDS INVALID",3u,NULL);
     for(unsigned i=0;i<4u;i++) {
         uint32_t at=sonic_stack_address[i];
@@ -791,6 +854,7 @@ uint32_t kui_retail_sonic_stack_checkpoint(uint32_t *frame,unsigned point,
         kui_retail_sonic_stack_publish(sonic_stack_address[i],SONIC_STACK_PATCH_BYTES);
         s->restored|=1u<<i;
     }
+    sonic_stack_find_map(s,frame);
     s->original_frame=raw;s->original_sp=raw+SONIC_STACK_FRAME_BYTES;
     s->original_pr=frame[5];s->entry_ccr=ccr;
     uint32_t *guard=(uint32_t *)sonic_stack_p2(s->owner_bottom);
@@ -820,35 +884,51 @@ uint32_t kui_retail_sonic_stack_after(uint32_t *frame,uint32_t ccr,
        !sonic_stack_range(s->book_bottom,SONIC_STACK_BOOK_BYTES,s->stage_end) ||
        s->book_top!=s->book_bottom+SONIC_STACK_BOOK_BYTES ||
        raw!=s->owner_top-SONIC_STACK_FRAME_BYTES || ccr!=s->entry_ccr ||
-       (s->resident_end&3u) || s->resident_end<KUI_RETAIL_RESIDENT_ADDRESS ||
+       s->resident_end!=resident_limit || (s->resident_end&3u) || s->resident_end<KUI_RETAIL_RESIDENT_ADDRESS ||
        s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN>sizeof(s->resident) ||
+       s->code_end!=KUI_RETAIL_RESIDENT_ADDRESS+resident_bytes ||
+       s->transport!=manifest.storage_transport || s->reader!=manifest.reader ||
        s->code_end<=KUI_RETAIL_RESIDENT_ADDRESS || s->code_end>s->resident_end ||
+       (s->code_end&3u) || !sonic_stack_map_bounds(s) || s->manifest_matches!=1u ||
+       s->bss_begin!=sonic_stack_blob_word(0x18u) || s->bss_end!=sonic_stack_blob_word(0x1cu) ||
+       s->manifest_bytes!=sonic_stack_map_bytes(s) || (s->manifest_address&3u) ||
+       s->manifest_address<s->bss_begin || s->manifest_address>s->bss_end ||
+       s->manifest_bytes>s->bss_end-s->manifest_address ||
        sonic_stack_p1(s->original_frame)<KUI_RETAIL_HOOK_STACK ||
        sonic_stack_p1(s->original_frame)>KUI_RETAIL_EXEC_ADDRESS-SONIC_STACK_FRAME_BYTES ||
        s->original_sp!=s->original_frame+SONIC_STACK_FRAME_BYTES)
         sonic_stack_report(s,"SCOPED RETURN FRAME INVALID",4u,NULL);
+    /* The unique entry match anchors the pinned address in the saved map.
+     * An in-range metadata shift must not silently skip its leading bytes. */
+    if(memcmp(s->resident+(s->manifest_address-SONIC_STACK_SNAPSHOT_BEGIN),
+        &manifest,s->manifest_bytes))
+        sonic_stack_report(s,"SCOPED RETURN FRAME INVALID",4u,NULL);
     const uint32_t *guard=(const uint32_t *)(uintptr_t)s->owner_bottom;
     for(unsigned i=0;i<8u;i++) if(guard[i]!=SONIC_STACK_GUARD_WORD)
         sonic_stack_report(s,"PRIVATE STACK GUARD CHANGED",4u,frame);
-    /* The owner ran through P1; read its coherent P1 reader alias. Do not
-     * purge RAM or change cache modes on return. This strict whole-reader
-     * comparison covers 8000 through the selected resident limit, excluding
-     * the service stack, and reports even unrelated interrupt mutations. */
+    /* Keep full coherent-P1 change evidence, while protecting only the
+     * immutable IP/code prefix and uniquely pinned validated resident map.
+     * Service counters, sector caches and card state can change during calls.
+     * Neither cache mode nor RAM cache ownership changes on return. */
     const uint8_t *resident=(const uint8_t *)(uintptr_t)SONIC_STACK_SNAPSHOT_BEGIN;
     size_t bytes=s->resident_end-SONIC_STACK_SNAPSHOT_BEGIN;
     s->return_crc=kui_retail_crc32(0,resident,bytes);
     s->return_code_crc=kui_retail_crc32(0,resident,s->code_end-SONIC_STACK_SNAPSHOT_BEGIN);
     for(size_t i=0;i<bytes;i++) if(resident[i]!=s->resident[i]) {
         uint32_t changed=SONIC_STACK_SNAPSHOT_BEGIN+(uint32_t)i;
-        if(!s->changed_bytes) s->mismatch_address=changed;
+        if(!s->changed_bytes) s->first_changed=changed;
         ++s->changed_bytes;s->last_changed=changed;
     }
-    if(s->changed_bytes) {
-        s->word_address=s->mismatch_address&~3u;
+    s->mismatch_address=sonic_stack_immutable_change(s,SONIC_STACK_SNAPSHOT_BEGIN,s->code_end);
+    if(!s->mismatch_address) s->mismatch_address=sonic_stack_immutable_change(s,
+        s->manifest_address,s->manifest_address+s->manifest_bytes);
+    if(s->changed_bytes || s->mismatch_address) {
+        s->word_address=(s->mismatch_address?s->mismatch_address:s->first_changed)&~3u;
         memcpy(&s->word_old,s->resident+(s->word_address-SONIC_STACK_SNAPSHOT_BEGIN),4u);
         s->word_p1=*(volatile const uint32_t *)(uintptr_t)s->word_address;
         s->word_p2=kui_retail_sonic_stack_read((uint32_t)(uintptr_t)sonic_stack_p2(s->word_address));
-        sonic_stack_report(s,"RESIDENT CHANGED DURING SCOPE",4u,frame);
+        if(s->mismatch_address)
+            sonic_stack_report(s,"IMMUTABLE READER CHANGED",4u,frame);
     }
     /* Preserve actual callee register results, including R0 and SR. Only PR
      * is substituted, and popping this real frame restores the original SP. */

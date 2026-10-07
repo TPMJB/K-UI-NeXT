@@ -39,3 +39,20 @@ All 44 focused UBSan cases pass, including changes at multiple scattered bytes, 
 Strict SH-4 compilation/linking and an 8,471-instruction audit pass. Ordinary native trace modes 0–3 and CE modes 0/3 match parent allocated sections and relocations exactly; scoped assembly also matches the preceding candidate. Bookkeeping stack `0x8ce145c0..0x8ce155c0` and owner stack `0x8ce155c0..0x8ce1d5c0` remain disjoint. BSS ends at `0x8ce4a728`, below `0x8cf00000`. Checkpoint/return/report C frames are 56/36/124 bytes, with a maximum report call path of 304 bytes inside the 4 KiB bookkeeping stack. The report still fits the original 16 lines.
 
 The delivered archive records its exact GitHub build and checksum checks. Hardware interpretation remains pending the next owner photo.
+
+## Owner hardware result: `37c7815d8c41`
+
+The owner supplied the next photograph on 2026-10-06. The selected transport was SCI (`1`), using the standard reader (`0`). The scoped routine again reached its return with stack bounds/canary intact and all hook windows restored.
+
+| Field | Photographed value |
+| --- | --- |
+| Point, frame, SR, PR, CCR | `00000004`, `8ce1d56c`, `60000101`, `ace00358`, `00000105` |
+| Private stack low/high, original SP, active/completed | `8ce155c0`, `8ce1d5c0`, `8c00f3a4`, `00000001`, `00000000` |
+| Transport, reader, changed bytes, last change, restored mask | `00000001`, `00000000`, `00000005`, `8c00babc`, `0000000f` |
+| Code end, old/new code CRC, old/new full CRC | `8c00ae80`, `51113e0f`, `51113e0f`, `9da03c11`, `262f0b28` |
+| Aligned word, old, coherent P1, uncached P2, G2 | `8c00af68`, `0000014f`, `00000153`, `00000151`, `0000000e` |
+| First changed address | `8c00af68` |
+
+The exact shipped SCI reader was matched against its local ELF after replacing only the build identifier. `0x8c00af68` is `service.diag.calls`; the coherent value records four more dispatches than the snapshot. The uncached value lags by two calls while the counter is dirty in P1 cache. `0x8c00babc` is `pace.still`, a mutable video-pacing counter. Both are normal reader activity. The unchanged prefix CRC confirms the observed reader code/RO bytes still matched.
+
+This exposes an overly strict diagnostic policy: whole-BSS equality rejects normal GD dispatch/pacing updates. The next candidate preserves the scoped stack and checks immutable code and the exact resident manifest, allowing mutable reader state to evolve. This does not assume that unreported manifest bytes stayed intact; the next guard verifies them explicitly. See [the boot continuation test](sonic-boot-continuation-2026-10-06.md).
