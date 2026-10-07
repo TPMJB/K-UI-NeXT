@@ -28,14 +28,16 @@ completed eight stages with zero failures and restored the vector. Profile 11
 checked all 196,608 data bytes in 96 chunks, both TOCs and two actual EOFs;
 profile 12 completed the selected track's pause/resume and actual EOF sequence.
 The current standalone sequence is complete. Retail integration remains open.
-[Profiles 13/14 are prepared together](cdda-preflight-test.md): a read-only
-preflight of the complete original Toy Commander image, followed by a standard
-SCI retail reader that observes accepted PLAY requests and sparse CPU, timer
-and sound state. Console results are pending. Profile 13 requires every backing
-and a complete physical map within 64 slots before 14 may be installed. Profile 14
-fits the existing low reservation and adds no sound or interrupt owner.
-These observations will determine the first actual game playback test; an
-inactive sampled resource does not establish permission to use it.
+[Profile 13 passed the complete Toy Commander preflight](evidence/cdda-preflight-hardware-2026-10-07.md):
+15 backed tracks, 12 audio tracks and a complete physical map within 64 slots.
+The [retail comparisons](evidence/cdda-retail-read-comparison-hardware-2026-10-07.md)
+now identify an SCI receive overrun in the original DMA feed. The receive-paced
+reader completed 24,846 DMA blocks with no fallback or captured SCI fault and
+accepted one PLAY20 request. The user reported an eventual intro-video freeze
+and skip; the reports do not measure its cause or establish whether it predates
+pacing. The paced path is the current retail CDDA transport candidate, not an
+ordinary-reader replacement or an audible retail music pass. An inactive
+sampled sound resource does not establish permission to use it.
 Prepared 2026-10-07 UTC / 2026-10-07 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -332,11 +334,15 @@ do not infer support for other regions, revisions or repacked images from a
 title name. Suitability still depends on proving its main/sound-memory and
 service contracts in Gate 5.
 
-The selected-track test does not establish that complete image or a retail
-launch. Its original 15-entry GDI and inspected track 14 establish only
-that track's file-backed extent. Retail work still needs the exact boot
-executable/version fingerprint, all referenced backing sizes and proof of
-resident RAM, sound RAM/channel and periodic service ownership. The controlled
+The selected-track test alone does not establish the complete image or a
+retail launch. Profile 13 subsequently established all 15 backings and the
+exact boot executable/version fingerprint; profile 14 reached an accepted
+PLAY20 with receive-paced SCI. Retail work still needs proof of resident RAM,
+sound RAM/channel and periodic service ownership. The exact boot executable
+is needed locally to inspect its allocator and sound-driver contract; its
+preflight hash is an identity check, not the executable's contents. The
+[bounded extraction helper](cdda-toy-boot-extract.md) exports only that verified
+boot file from the original GDI. The controlled
 engine begins at `0x8c010000`, where the retail executable normally launches;
 its present layout cannot be reused as a retail resident. Its explicitly
 owned AICA initialization and TMU1 clock likewise require a different proven
