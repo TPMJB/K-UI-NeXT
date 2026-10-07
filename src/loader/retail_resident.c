@@ -69,7 +69,11 @@ static enum kui_game_result image_result=(enum kui_game_result)UINT32_MAX;
 static enum kui_loader_sd_result observe_read_card_result=(enum kui_loader_sd_result)UINT32_MAX;
 static enum kui_loader_sd_result observe_stop_result=(enum kui_loader_sd_result)UINT32_MAX;
 static uint32_t observe_read_lba=UINT32_MAX,observe_read_count=UINT32_MAX,observe_card_lba=UINT32_MAX;
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+#include "retail_sci_observe.inc"
+#else
 #include "retail_observe.inc"
+#endif
 #endif
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
 extern uint8_t __retail_resident_bss_end[] __asm__("__retail_resident_bss_end");

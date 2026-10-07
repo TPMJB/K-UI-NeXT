@@ -177,6 +177,34 @@ build/test-sci-read-dma: tests/test_sci_sd_read_compare.c tests/test_sci_sd_bus.
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -DKUI_SCI_SD_PIO_ONLY=0 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_read_compare.c -o $@
 
+.PHONY: test-sci-fault
+test-sci-fault: build/test-sci-fault build/test-sci-dma-pacing-baseline build/test-sci-dma-pacing-paced build/test-retail-sci-fault build/test-retail-sci-paced
+	./build/test-sci-fault
+	./build/test-sci-dma-pacing-baseline
+	./build/test-sci-dma-pacing-paced
+	./build/test-retail-sci-fault
+	./build/test-retail-sci-paced
+
+build/test-sci-fault: tests/test_sci_sd_fault.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_fault.c -o $@
+
+build/test-sci-dma-pacing-baseline: tests/test_sci_sd_dma_pacing.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=0 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_dma_pacing.c -o $@
+
+build/test-sci-dma-pacing-paced: tests/test_sci_sd_dma_pacing.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_dma_pacing.c -o $@
+
+build/test-retail-sci-fault: tests/test_retail_sci_fault.c src/loader/retail_sci_observe.inc src/loader/sci_sd_bus.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader tests/test_retail_sci_fault.c -o $@
+
+build/test-retail-sci-paced: tests/test_retail_sci_fault.c src/loader/retail_sci_observe.inc src/loader/sci_sd_bus.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_DMA_PACED=1 -Iinclude -Isrc/loader tests/test_retail_sci_fault.c -o $@
+
 build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage.c src/loader/retail_storage.h src/loader/retail_storage_impl.h src/loader/sci_sd_bus.h include/kui/ata.h include/kui/storage.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/loader/retail_storage.c tests/test_retail_storage.c -o $@
