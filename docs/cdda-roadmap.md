@@ -1,8 +1,9 @@
 # CDDA implementation roadmap
 
-Status: the detached SCI/AICA harness completed its first console run with
-five playback stages and zero reported faults. Listening, longer control and
-concurrent-read tests, and retail CDDA support remain open.
+Status: the detached SCI/AICA harness passed its baseline, two controls runs,
+15-minute soak and 15-minute serialized read stress with zero reported faults.
+Listening, precise timer/audio calibration, broader job arbitration and retail
+resource/command integration remain open.
 Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -100,11 +101,17 @@ and its SD installation instructions exist before asking for hardware tests.
 
 ## Gate 3: checked raw PCM into an AICA ping-pong ring
 
-**Initial engine passed five console stages; the wider hardware gate remains open.** Focused sanitizer
+**Baseline, controls/recovery and 15-minute soak passed their numerical console checks.**
+The [new hardware record](evidence/cdda-controls-soak-stress-hardware-2026-10-07.md)
+includes two expected deadline recoveries across two controls runs and two
+timer wraps per long run. Audible channel order/quality still needs owner
+confirmation; exact timer/audio endpoint calibration remains open.
+Focused sanitizer
 checks cover raw conversion, both byte orders, offsets, sector/cache boundaries,
 2448-byte subchannel stripping, transactional I/O, seeks/EOF, ring deadlines and
-AICA MMIO phase/FIFO/active-half refusal. Actual stereo output, measured timing,
-pause/resume and deliberate underrun recovery still need console evidence.
+AICA MMIO phase/FIFO/active-half refusal. The photographs establish observed
+refill/service margins, completion and expected refusal/recovery counters;
+they do not establish precise pitch, silence or glitch-free stereo by listening.
 
 Play independently generated synthetic stereo samples first. Read raw audio
 through checked 512-byte SD blocks, carry partial stereo frames, deinterleave
@@ -126,6 +133,14 @@ Average card throughput alone is not sufficient: account for checked reads,
 PIO work, tail latency, retries and service jitter.
 
 ## Gate 4: one card arbiter under concurrent read stress
+
+**Initial serialized homebrew stress passed its numerical console checks.**
+The same hardware record reports 300,892,160 independently verified data
+bytes, 35 complete 8 MiB passes and zero read/check errors during 900 clock
+seconds of audio. Worst complete data job was 32.959 ms; worst verified-job
+completion gap was 151.441 ms. This workload uses two independent file cursors
+on one serialized SCI lease. Randomized game-sized jobs, cancellation/retry
+semantics, fragmented layouts and actual game command latency remain open.
 
 Give game data and audio separate cursors/jobs but a single owner of the SCI
 bus, card stream and receive buffers. Switch only after a complete checked
@@ -211,12 +226,16 @@ candidate reader.
 
 ## First steps and ownership
 
-**Agent next:** review the first harness hardware result, then extend controlled
-pause/resume/underrun and concurrent card-read experiments. Gate 1's classifier
-and the first standalone harness, fixtures and memory audit are implemented.
+**Agent next:** preserve the successful console checkpoint, add exact
+timer/audio endpoint diagnostics, then implement explicit audio/data job and
+command semantics. Establish periodic service and resource admission before
+Toy Commander retail integration. The classifier, standalone engine, controls,
+soak/stress fixtures and memory audit are implemented and numerically tested.
 
-**User next:** follow [the next test checklist](cdda-next-test.md) with the
-supplied test archive, preserving the released 1.8.5 runtime.
+**User next:** confirm the audible results and restore the preserved 1.8.5
+runtime after testing. The [test checklist](cdda-next-test.md) remains available
+for reproducing a specific result; the requested new numerical profiles are
+complete and do not require another routine soak repetition.
 This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed
 **Toy Commander** GDI with every referenced `.raw` track; do not buy another
 title for this experiment.
