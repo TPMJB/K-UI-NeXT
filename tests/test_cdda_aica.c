@@ -234,8 +234,41 @@ static void bounded_bus_faults(void) {
     hw.stuck_fifo = false;
     CHECK(kui_cdda_aica_init() == KUI_CDDA_AICA_OK);
 }
+static void restart_and_clock_wrap(void) {
+    int16_t l[128] = {0}, r[128] = {0};
+    init(); CHECK(kui_cdda_aica_start() == KUI_CDDA_AICA_OK);
+    hw.positions[0] = 4567; hw.positions[1] = 4569;
+    uint32_t played_position = 0;
+    CHECK(kui_cdda_aica_position(&played_position) == KUI_CDDA_AICA_OK);
+    CHECK(played_position == 4567);
+    CHECK(kui_cdda_aica_stop() == KUI_CDDA_AICA_OK);
+    /* The caller's saved cursor survives stop. Reprime before a fresh start;
+     * the hardware key-on begins the ring at0, not the previous4567 frames. */
+    CHECK(kui_cdda_aica_write_samples(0, 0, l, r, 128) == KUI_CDDA_AICA_OK);
+    CHECK(kui_cdda_aica_write_samples(1, 0, l, r, 128) == KUI_CDDA_AICA_OK);
+    CHECK(kui_cdda_aica_start() == KUI_CDDA_AICA_OK);
+    uint32_t frame = 999;
+    CHECK(kui_cdda_aica_position(&frame) == KUI_CDDA_AICA_OK && frame == 0);
+    CHECK(played_position == 4567 && hw.starts == 2);
+    /* Stop has no promise to retain a synchronized playback cursor. A legal
+     * monitor state after key-off may have independently frozen channels. */
+    CHECK(kui_cdda_aica_stop() == KUI_CDDA_AICA_OK);
+    hw.positions[0] = 500; hw.positions[1] = 540;
+    frame = 999;
+    CHECK(kui_cdda_aica_position(&frame) == KUI_CDDA_AICA_PHASE && frame == 999);
+    /* Bounded FIFO timeouts must work across the32-bit TMU wrap. */
+    init(); CHECK(kui_cdda_aica_start() == KUI_CDDA_AICA_OK);
+    hw.ticks = UINT32_MAX - 5000u;
+    hw.stuck_fifo = true;
+    unsigned reads = hw.fifo_reads, writes = hw.pcm_writes;
+    CHECK(kui_cdda_aica_position(&frame) == KUI_CDDA_AICA_TIMEOUT && frame == 999);
+    CHECK(hw.ticks < 200000u && hw.fifo_reads - reads < 1500u);
+    CHECK(kui_cdda_aica_write_samples(1, 0, l, r, 128) == KUI_CDDA_AICA_NOT_READY);
+    CHECK(hw.pcm_writes == writes);
+}
 int main(void) {
     setup_and_start(); writes_and_bounds(); position_and_deadlines(); bounded_bus_faults();
+    restart_and_clock_wrap();
     printf("cdda AICA: %u checks passed\n", checks);
     return 0;
 }

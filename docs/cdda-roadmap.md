@@ -1,7 +1,8 @@
 # CDDA implementation roadmap
 
-Status: experimental detached SCI/AICA harness implemented and host-tested;
-console playback and retail CDDA support remain unproved.
+Status: the detached SCI/AICA harness completed its first console run with
+five playback stages and zero reported faults. Listening, longer control and
+concurrent-read tests, and retail CDDA support remain open.
 Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -69,7 +70,10 @@ binary or audio-playing reader has been produced at this gate.
 
 ## Gate 2: isolated SCI harness and measured memory budget
 
-**Initial implementation and measurements complete; console evidence pending.**
+**Initial implementation, measurements and first console counter result complete.**
+The [first hardware evidence](evidence/cdda-hardware-2026-10-07.md) records
+79.4 ms worst half refill, 106.1 ms minimum margin and 5,184 bytes of observed
+stack use. The photograph does not establish audible channel order or quality.
 The [isolated test instructions](cdda-harness-test.md) cover the actual built
 runtime, generated fixture, sample placement and restoring the retained runtime.
 The [memory evidence](evidence/cdda-harness-memory-2026-10-07.md) records a real
@@ -96,7 +100,7 @@ and its SD installation instructions exist before asking for hardware tests.
 
 ## Gate 3: checked raw PCM into an AICA ping-pong ring
 
-**Initial engine implemented; hardware gate remains open.** Focused sanitizer
+**Initial engine passed five console stages; the wider hardware gate remains open.** Focused sanitizer
 checks cover raw conversion, both byte orders, offsets, sector/cache boundaries,
 2448-byte subchannel stripping, transactional I/O, seeks/EOF, ring deadlines and
 AICA MMIO phase/FIFO/active-half refusal. Actual stereo output, measured timing,
@@ -211,8 +215,8 @@ candidate reader.
 pause/resume/underrun and concurrent card-read experiments. Gate 1's classifier
 and the first standalone harness, fixtures and memory audit are implemented.
 
-**User now:** follow [the isolated test's exact instructions](cdda-harness-test.md)
-only with the supplied test archive, preserving the released 1.8.5 runtime.
+**User next:** follow [the next test checklist](cdda-next-test.md) with the
+supplied test archive, preserving the released 1.8.5 runtime.
 This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed
 **Toy Commander** GDI with every referenced `.raw` track; do not buy another
 title for this experiment.

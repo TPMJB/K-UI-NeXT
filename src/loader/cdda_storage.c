@@ -20,8 +20,11 @@ static struct kui_loader_sd card;
 static struct kui_volume volume;
 static FATFS fs;
 static FIL file;
+static FIL data_file;
 static uint32_t successful_blocks, file_size;
+static uint32_t data_file_size;
 static int leased, mounted, opened;
+static int data_opened;
 static const char *failure;
 
 /* Read-only FatFs needs this one additional libc primitive. This image has
@@ -200,8 +203,49 @@ void cdda_storage_close(void) {
     }
     file_size = 0;
 }
+int cdda_storage_data_open(uint32_t *bytes) {
+    if(!bytes) return fail("Invalid data file arguments");
+    cdda_storage_data_close();
+    if(cdda_storage_init()) return -1;
+    failure = NULL;
+    FRESULT result = f_open(&data_file, "0:/KUI/tests/cdda/stress.bin", FA_READ);
+    if(result != FR_OK) return fail(fatfs_failure(result));
+    data_opened = 1;
+    if(f_size(&data_file) > UINT32_MAX) {
+        cdda_storage_data_close();
+        return fail("Data file exceeds 4 GiB harness limit");
+    }
+    data_file_size = (uint32_t)f_size(&data_file);
+    *bytes = data_file_size;
+    return 0;
+}
+int cdda_storage_data_read_at(uint32_t offset, uint8_t *out, uint32_t bytes) {
+    if(!data_opened || offset > data_file_size || bytes > data_file_size - offset || (!out && bytes))
+        return fail("Data file read range");
+    if(!bytes) return 0;
+    failure = NULL;
+    FRESULT result = FR_OK;
+    if(f_tell(&data_file) != offset) result = f_lseek(&data_file, offset);
+    if(result != FR_OK) return fail(fatfs_failure(result));
+    if(f_tell(&data_file) != offset) return fail("Incomplete data file seek");
+    UINT got = 0;
+    result = f_read(&data_file, out, bytes, &got);
+    if(result != FR_OK) {
+        if(!failure) (void)fail(fatfs_failure(result));
+        return -1;
+    }
+    return got == bytes ? 0 : fail("Short data file read");
+}
+void cdda_storage_data_close(void) {
+    if(data_opened) {
+        (void)f_close(&data_file);
+        data_opened = 0;
+    }
+    data_file_size = 0;
+}
 void cdda_storage_shutdown(void) {
     cdda_storage_close();
+    cdda_storage_data_close();
     (void)f_mount(NULL, "0:", 0);
     mounted = 0;
     memset(&volume, 0, sizeof(volume));

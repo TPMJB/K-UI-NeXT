@@ -4,6 +4,15 @@
 #include "cdda_storage.h"
 #include "kui/cdda_pcm.h"
 #include "kui/cdda_ring.h"
+#ifndef CDDA_TEST_PROFILE
+#define CDDA_TEST_PROFILE 0
+#endif
+#if CDDA_TEST_PROFILE < 0 || CDDA_TEST_PROFILE > 3
+#error "CDDA_TEST_PROFILE must be 0=baseline, 1=controls, 2=soak, or 3=stress"
+#endif
+#if CDDA_TEST_PROFILE > 0
+#include "kui/cdda_stream.h"
+#endif
 #include "kui/storage_policy.h"
 #include <stdbool.h>
 #include <stddef.h>
@@ -25,18 +34,48 @@ static struct kui_cdda_ring ring;
 static int16_t left[128],right[128];
 static uint32_t segment_end,max_refill_ticks,max_service_ticks,min_margin_ticks;
 static unsigned failures,completed;
+#ifdef CDDA_HARNESS_HOST_TEST
+extern void cdda_harness_host_clock_init(void);
+extern uint32_t cdda_harness_host_ticks(void);
+#endif
+#if CDDA_TEST_PROFILE > 0
+static uint32_t loop_first,session_first,session_initial,session_frames;
+static uint32_t loop_count,recovered_deadlines,expected_deadline_ticks;
+static bool repeat_audio;
+static struct kui_cdda_stream_clock profile_clock;
+#define TONE_FIRST (6u*44100u+4410u)
+#define TONE_FRAMES 44100u
+#define SOAK_FRAMES (900u*44100u)
+#if CDDA_TEST_PROFILE == 3
+static _Alignas(32) uint8_t data_buffer[2048];
+static uint32_t data_bytes,data_position,data_checked,data_errors,max_data_ticks;
+static uint32_t data_budget_ticks=125000u; /* Initial allowance: 10ms per job. */
+static uint32_t data_checkpoint_seconds,data_checkpoint_bytes;
+static uint32_t data_last_tick,data_max_gap_ticks;
+#endif
+#endif
 
 /* SH7091 TMU1: peripheral clock /4 (nominal12.5MHz), no interrupts. Exclusive
  * clock ownership is granted by this homebrew harness, never a retail game. */
 static void clock_init(void) {
+#ifdef CDDA_HARNESS_HOST_TEST
+    cdda_harness_host_clock_init();
+#else
     uint8_t run=MMIO8(0xffd80004u);
     MMIO8(0xffd80004u)=run & (uint8_t)~2u;
     MMIO16(0xffd8001cu)=0;
     MMIO32(0xffd80014u)=UINT32_MAX;
     MMIO32(0xffd80018u)=UINT32_MAX;
     MMIO8(0xffd80004u)=run | 2u;
+#endif
 }
-static uint32_t ticks(void) {return ~MMIO32(0xffd80018u);}
+static uint32_t ticks(void) {
+#ifdef CDDA_HARNESS_HOST_TEST
+    return cdda_harness_host_ticks();
+#else
+    return ~MMIO32(0xffd80018u);
+#endif
+}
 static uint32_t us(uint32_t t) {return (t/25u)*2u+(t%25u)*2u/25u;}
 static bool read_at(void *ctx,uint32_t at,uint8_t *out,size_t bytes) {
     (void)ctx;
@@ -49,7 +88,14 @@ static bool observe(void) {
         (void)kui_cdda_aica_stop();
         cdda_display_number("AICA fault: ",(uint32_t)a);return false;
     }
-    enum kui_cdda_ring_result r=kui_cdda_ring_observe(&ring,ticks(),frame);
+    uint32_t now=ticks();
+#if CDDA_TEST_PROFILE > 0
+    if(!kui_cdda_stream_clock_update(&profile_clock,now)) {
+        (void)kui_cdda_aica_stop();
+        cdda_display_line("Owned clock accumulation failed.");return false;
+    }
+#endif
+    enum kui_cdda_ring_result r=kui_cdda_ring_observe(&ring,now,frame);
     if(r!=KUI_CDDA_RING_OK) {
         (void)kui_cdda_aica_stop();
         cdda_display_number("Audio deadline/state fault: ",(uint32_t)r);return false;
@@ -59,6 +105,23 @@ static bool observe(void) {
 static bool fill_half(unsigned half,bool playing) {
     uint32_t start=ticks();
     for(unsigned offset=0;offset<KUI_CDDA_HALF_FRAMES;offset+=128u) {
+#if CDDA_TEST_PROFILE > 0
+        size_t done=0;
+        while(done<128u) {
+            if(pcm.position==segment_end && repeat_audio &&
+               kui_cdda_pcm_seek(&pcm,loop_first)!=KUI_CDDA_PCM_OK) return false;
+            size_t count=segment_end-pcm.position;
+            if(count>128u-done) count=128u-done;
+            if(!count) break;
+            size_t got=0;
+            if(kui_cdda_pcm_read_frames(&pcm,left+done,right+done,count,&got)!=KUI_CDDA_PCM_OK || got!=count) {
+                (void)kui_cdda_aica_stop();
+                cdda_display_line("PCM/card read failed; owned audio stopped.");
+                cdda_display_line(cdda_storage_last_failure());return false;
+            }
+            done+=got;
+        }
+#else
         size_t count=segment_end-pcm.position;
         if(count>128) count=128;
         size_t done=0;
@@ -67,6 +130,7 @@ static bool fill_half(unsigned half,bool playing) {
             cdda_display_line("PCM/card read failed; owned audio stopped.");
             cdda_display_line(cdda_storage_last_failure());return false;
         }
+#endif
         for(size_t i=done;i<128;i++) left[i]=right[i]=0;
         /* A card read may have blocked. Check time/positions BEFORE publishing
          * bytes to AICA, including a missed whole ring while the CPU was busy. */
@@ -91,7 +155,11 @@ static bool fill_half(unsigned half,bool playing) {
     }
     return true;
 }
+#if CDDA_TEST_PROFILE <= 1
 static bool play(const char *path,uint32_t first,uint32_t frames) {
+#if CDDA_TEST_PROFILE > 0
+    repeat_audio=false;
+#endif
     ring=(struct kui_cdda_ring){0};
     uint32_t bytes;
     if(cdda_storage_open(path,&bytes)) {
@@ -137,16 +205,273 @@ stop:
 close:
     cdda_storage_close();return success;
 }
+#endif
+#if CDDA_TEST_PROFILE > 0
+/* Every restart discards queued PCM and refills from an actual played cursor.
+ * The initial hardware sample position is included; ring.played starts at zero
+ * at its first observation, rather than assuming that key-on is instantaneous. */
+static bool session_open(uint32_t first,uint32_t frames,bool repeat) {
+    uint32_t bytes;
+    ring=(struct kui_cdda_ring){0};
+    if(cdda_storage_open("0:/KUI/tests/cdda/stereo.raw",&bytes)) {
+        cdda_display_line(cdda_storage_last_failure());return false;
+    }
+    if(!bytes || bytes%2352u) goto failed;
+    const struct kui_cdda_pcm_source source={bytes,0,2352u,bytes/2352u,false};
+    if(kui_cdda_pcm_init(&pcm,&source,read_at,NULL)!=KUI_CDDA_PCM_OK ||
+       !frames || first>=pcm.total_frames || frames>pcm.total_frames-first) goto failed;
+    session_first=first;session_frames=frames;loop_first=first;
+    segment_end=first+frames;repeat_audio=repeat;
+    if(kui_cdda_pcm_seek(&pcm,first)!=KUI_CDDA_PCM_OK ||
+       !fill_half(0,false) || !fill_half(1,false) ||
+       kui_cdda_aica_start()!=KUI_CDDA_AICA_OK ||
+       kui_cdda_aica_position(&session_initial)!=KUI_CDDA_AICA_OK ||
+       session_initial>=frames ||
+       kui_cdda_ring_init(&ring,ticks(),session_initial)!=KUI_CDDA_RING_OK) goto failed;
+    return true;
+failed:
+    (void)kui_cdda_aica_stop();cdda_storage_close();
+    cdda_display_line("Controlled session could not start.");return false;
+}
+static bool session_close(void) {
+    bool success=kui_cdda_aica_stop()==KUI_CDDA_AICA_OK;
+    if(ring.max_service_ticks>max_service_ticks) max_service_ticks=ring.max_service_ticks;
+    if(ring.min_margin_ticks<min_margin_ticks) min_margin_ticks=ring.min_margin_ticks;
+    repeat_audio=false;cdda_storage_close();return success;
+}
+static bool played_cursor(uint32_t *frame,uint32_t *loops) {
+    if(ring.played>UINT32_MAX-session_initial) return false;
+    return kui_cdda_stream_cursor(session_first,session_first+session_frames,
+        repeat_audio,session_initial+ring.played,frame,loops);
+}
+#if CDDA_TEST_PROFILE == 3
+static void display_pair(const char *label,uint32_t a,uint32_t b) {
+    char text[96],reverse[10];unsigned n=0;
+    while(*label && n<60u) text[n++]=*label++;
+    for(unsigned which=0;which<2u;which++) {
+        uint32_t value=which?b:a;unsigned digits=0;
+        do {reverse[digits++]=(char)('0'+value%10u);value/=10u;} while(value);
+        while(digits) text[n++]=reverse[--digits];
+        if(!which) {text[n++]=' ';text[n++]='/';text[n++]=' ';}
+    }
+    text[n]=0;cdda_display_line(text);
+}
+static uint8_t data_pattern(uint32_t offset) {
+    uint32_t x=offset^0x9e3779b9u;
+    x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;x^=x>>16;
+    return (uint8_t)x;
+}
+static bool stress_job(void) {
+    /* Storage calls remain serialized with audio reads. Both halves must be
+     * ready: a data job can never postpone an already-needed audio refill. */
+    if(!ring.ready[0] || !ring.ready[1]) return true;
+    uint32_t margin=(KUI_CDDA_HALF_FRAMES-ring.last_position%KUI_CDDA_HALF_FRAMES)*125000u/441u;
+    if(data_budget_ticks>(UINT32_MAX-KUI_CDDA_MARGIN_TICKS)/2u ||
+       margin<=data_budget_ticks*2u+KUI_CDDA_MARGIN_TICKS) return true;
+    uint32_t count=data_bytes-data_position;
+    if(count>sizeof(data_buffer)) count=sizeof(data_buffer);
+    uint32_t start=ticks();
+    int result=cdda_storage_data_read_at(data_position,data_buffer,count);
+    uint32_t elapsed=ticks()-start;
+    if(elapsed>max_data_ticks) max_data_ticks=elapsed;
+    if(elapsed>data_budget_ticks) data_budget_ticks=elapsed;
+    if(result) data_errors++;
+    /* A blocking read may cross a half boundary, or miss the conservative
+     * scheduler deadline. Observe before another read or any audio write. */
+    if(!observe()) return false;
+    if(result) {cdda_display_line(cdda_storage_last_failure());return false;}
+    for(uint32_t i=0;i<count;i++) {
+        uint32_t at=data_position+i;
+        uint8_t expected=data_pattern(at);
+        if(data_buffer[i]!=expected) {data_errors++;cdda_display_line("Second-file pattern mismatch.");return false;}
+    }
+    data_position+=count;
+    if(data_position==data_bytes) data_position=0;
+    if(count>UINT32_MAX-data_checked) {data_errors++;return false;}
+    data_checked+=count;
+    uint32_t now=ticks(),gap=now-data_last_tick;
+    elapsed=now-start; /* Include position recheck and byte verification in budget. */
+    if(elapsed>max_data_ticks) max_data_ticks=elapsed;
+    if(elapsed>data_budget_ticks) data_budget_ticks=elapsed;
+    if(gap>data_max_gap_ticks) data_max_gap_ticks=gap;
+    data_last_tick=now;
+    return true;
+}
+#endif
+static bool session_pump(uint32_t frames,bool minimum_duration) {
+    uint32_t progress_tick=ticks(),progress=ring.played,idle=0;
+    for(;;) {
+        if(!observe()) return false;
+        if(ring.played>UINT32_MAX-session_initial) return false;
+        uint32_t actual=session_initial+ring.played;
+        if(repeat_audio) loop_count=actual/session_frames;
+#if CDDA_TEST_PROFILE == 3
+        uint32_t data_gap=ticks()-data_last_tick;
+        if(data_gap>data_max_gap_ticks) data_max_gap_ticks=data_gap;
+        if(data_gap>=5u*KUI_CDDA_CLOCK_HZ) {
+            (void)kui_cdda_aica_stop();
+            cdda_display_line("Stress workload starved: no verified job for5s.");return false;
+        }
+        if(profile_clock.seconds-data_checkpoint_seconds>=60u) {
+            if(data_checked-data_checkpoint_bytes<65536u) {
+                (void)kui_cdda_aica_stop();
+                cdda_display_line("Stress admission stalled: below64KiB/minute.");return false;
+            }
+            data_checkpoint_seconds=profile_clock.seconds;data_checkpoint_bytes=data_checked;
+        }
+#endif
+        if(actual>=frames && (!minimum_duration || profile_clock.seconds>=900u)) break;
+        if(ring.played!=progress) {progress=ring.played;progress_tick=ticks();idle=0;}
+        else if(++idle>=1000000u || ticks()-progress_tick>=KUI_CDDA_HALF_TICKS) {
+            (void)kui_cdda_aica_stop();cdda_display_line("AICA/clock progress watchdog.");return false;
+        }
+        unsigned active=ring.last_position/KUI_CDDA_HALF_FRAMES;
+        if(!ring.ready[1u-active] && !fill_half(1u-active,true)) return false;
+#if CDDA_TEST_PROFILE == 3
+        if(!stress_job()) return false;
+#endif
+    }
+    uint32_t frame,loops;
+    if(repeat_audio && !played_cursor(&frame,&loops)) return false;
+    if(repeat_audio) loop_count=loops;
+    return true;
+}
+#if CDDA_TEST_PROFILE == 1
+static bool paused_silence(void) {
+    uint32_t start=ticks();
+    /* Key-off plus master mute is the silence contract. Do not query stopped
+     * channel phase: the sequential stops need not preserve matched positions. */
+    while(ticks()-start<KUI_CDDA_CLOCK_HZ) {
+        if(!kui_cdda_stream_clock_update(&profile_clock,ticks())) return false;
+    }
+    return true;
+}
+static bool pause_resume(void) {
+    if(!session_open(TONE_FIRST,2u*TONE_FRAMES,false)) return false;
+    if(!session_pump(TONE_FRAMES,false) || !observe()) goto failed;
+    uint32_t resume,loops;
+    if(!played_cursor(&resume,&loops) || loops || resume>=segment_end ||
+       resume==pcm.position) goto failed;
+    uint32_t end=segment_end;
+    /* Save before stopping. pcm.position is the deliberately discarded SD
+     * prefetch cursor; resumed audio begins at the observed played frame. */
+    if(!session_close()) return false;
+    cdda_display_line("Muted pause (1s), resume from played cursor.");
+    if(!paused_silence() || !session_open(resume,end-resume,false)) return false;
+    if(!session_pump(end-resume,false)) goto failed;
+    return session_close();
+failed:
+    (void)session_close();return false;
+}
+static bool bounds_and_eof(void) {
+    if(!session_open(TONE_FIRST,TONE_FRAMES,false)) return false;
+    if(!session_pump(TONE_FRAMES,false) || !session_close()) return false;
+    uint32_t bytes;
+    if(cdda_storage_open("0:/KUI/tests/cdda/stereo.raw",&bytes)) return false;
+    const struct kui_cdda_pcm_source source={bytes,0,2352u,bytes/2352u,false};
+    bool success=kui_cdda_pcm_init(&pcm,&source,read_at,NULL)==KUI_CDDA_PCM_OK;
+    size_t done=9;
+    if(success) success=kui_cdda_pcm_seek(&pcm,pcm.total_frames)==KUI_CDDA_PCM_OK &&
+        kui_cdda_pcm_read_frames(&pcm,left,right,128,&done)==KUI_CDDA_PCM_EOF && !done &&
+        kui_cdda_pcm_seek(&pcm,pcm.total_frames+1u)==KUI_CDDA_PCM_INVALID &&
+        pcm.position==pcm.total_frames;
+    cdda_storage_close();
+    return success && play("0:/KUI/tests/cdda/track14.raw",1761648u,44100u);
+}
+static bool deadline_recovery(void) {
+    if(!session_open(TONE_FIRST,TONE_FRAMES,true)) return false;
+    if(!observe()) goto failed;
+    uint32_t before=ring.last_tick;
+    /* 190ms exceeds one185.76ms half, while remaining well below a full ring.
+     * This checks the conservative observation deadline BEFORE a refill write;
+     * it cannot promise no stale audio after arbitrarily long CPU stalls. */
+    while(ticks()-before<2375000u) __asm__ __volatile__("nop");
+    uint32_t position,now=ticks(),regular_gap=ring.max_service_ticks;
+    if(kui_cdda_aica_position(&position)!=KUI_CDDA_AICA_OK ||
+       kui_cdda_ring_observe(&ring,now,position)!=KUI_CDDA_RING_DEADLINE) goto failed;
+    expected_deadline_ticks=now-before;
+    ring.max_service_ticks=regular_gap;
+    /* A rejected observation leaves the ring cursor stale. Never use it as a
+     * resume point or publish a half. Mute, discard it, and start a new session. */
+    if(!session_close()) return false;
+    cdda_display_line("EXPECTED deadline refusal before refill; stopped.");
+    cdda_display_line("Tests 190ms policy; arbitrary stalls can replay audio.");
+    if(!session_open(TONE_FIRST,TONE_FRAMES,false)) return false;
+    if(!session_pump(TONE_FRAMES,false) || !session_close()) return false;
+    recovered_deadlines++;
+    return true;
+failed:
+    (void)session_close();return false;
+}
+static bool controls(void) {
+    cdda_display_line("1/5: play left; automatic seek/restart at1s");
+    if(!session_open(0,3u*44100u,false) || !session_pump(44100u,false) || !session_close()) return false;
+    completed++;
+    cdda_display_line("2/5: restart at right-channel region (1s)");
+    if(!session_open(3u*44100u+4410u,44100u,false) || !session_pump(44100u,false) || !session_close()) return false;
+    completed++;
+    cdda_display_line("3/5: stop, pause silence, resume played cursor");
+    if(!pause_resume()) return false;
+    completed++;
+    cdda_display_line("4/5: EOF/bounds and Toy Commander tail");
+    if(!bounds_and_eof()) return false;
+    completed++;
+    cdda_display_line("5/5: expected deadline and clean recovery");
+    if(!deadline_recovery()) return false;
+    completed++;
+    return true;
+}
+#else
+static bool soak(void) {
+#if CDDA_TEST_PROFILE == 3
+    if(cdda_storage_data_open(&data_bytes) || data_bytes!=8u*1024u*1024u) {
+        cdda_display_line("Stress requires exact8MiB stress.bin.");
+        cdda_storage_data_close();return false;
+    }
+#endif
+    cdda_display_line("15min seamless stereo loop; clock wrap test.");
+#if CDDA_TEST_PROFILE == 3
+    cdda_display_line("Serialized second-file reads; pattern checked.");
+    data_checkpoint_seconds=profile_clock.seconds;data_checkpoint_bytes=data_checked;
+    data_last_tick=ticks();data_max_gap_ticks=0;
+#endif
+    bool success=session_open(TONE_FIRST,TONE_FRAMES,true) && session_pump(SOAK_FRAMES,true);
+    if(!session_close()) success=false;
+    if(profile_clock.wraps<2u || profile_clock.seconds<900u || loop_count<900u) success=false;
+#if CDDA_TEST_PROFILE == 3
+    cdda_storage_data_close();
+    if(data_checked<data_bytes || data_errors) success=false;
+#endif
+    if(success) completed++;
+    return success;
+}
+#endif
+#endif
 static bool check_stack(uint32_t *used) {
+#ifdef CDDA_HARNESS_HOST_TEST
+    *used=0;return true;
+#else
     for(unsigned i=0;i<16;i++) if(__cdda_stack_bottom[i]!=0x43444441u) return false;
     uint32_t *p=__cdda_stack_bottom+16;
     while(p<__cdda_stack_top && *p==0xa5a5a5a5u) p++;
     *used=(uint32_t)((uintptr_t)__cdda_stack_top-(uintptr_t)p);
     return true;
+#endif
 }
 void cdda_main(void) {
     bool audio_owned=false;
+    failures=completed=0;max_refill_ticks=max_service_ticks=0;
     clock_init();cdda_display_init();min_margin_ticks=UINT32_MAX;
+#if CDDA_TEST_PROFILE > 0
+    loop_count=recovered_deadlines=expected_deadline_ticks=0;repeat_audio=false;
+    if(!kui_cdda_stream_clock_init(&profile_clock,ticks(),KUI_CDDA_CLOCK_HZ)) {
+        cdda_display_line("Owned clock could not initialize.");failures++;goto finish;
+    }
+#if CDDA_TEST_PROFILE == 3
+    data_bytes=data_position=data_checked=data_errors=max_data_ticks=0;data_budget_ticks=125000u;
+    data_last_tick=data_max_gap_ticks=data_checkpoint_seconds=data_checkpoint_bytes=0;
+#endif
+#endif
     if(cdda_storage_boot_marker.magic1!=KUI_STORAGE_BOOT_MAGIC1 ||
        cdda_storage_boot_marker.magic2!=KUI_STORAGE_BOOT_MAGIC2 ||
        cdda_storage_boot_marker.version!=1 || cdda_storage_boot_marker.transport!=KUI_STORAGE_SCI ||
@@ -160,6 +485,7 @@ void cdda_main(void) {
     if(cdda_storage_init()) {
         cdda_display_line(cdda_storage_last_failure());failures++;goto finish;
     }
+#if CDDA_TEST_PROFILE == 0
     cdda_display_line("1/5: tones LEFT, RIGHT, STEREO, silence (12s)");
     if(!play("0:/KUI/tests/cdda/stereo.raw",0,0)) {failures++;goto finish;} completed++;
     cdda_display_line("2/5: seek into generated stereo fixture (2s)");
@@ -170,20 +496,61 @@ void cdda_main(void) {
     if(!play("0:/KUI/tests/cdda/track14.raw",0,0)) {failures++;goto finish;} completed++;
     cdda_display_line("5/5: seek near Toy Commander EOF (1s)");
     if(!play("0:/KUI/tests/cdda/track14.raw",1761648,44100)) {failures++;goto finish;} completed++;
+#elif CDDA_TEST_PROFILE == 1
+    cdda_display_line("PROFILE1 CONTROLS / seek-pause-deadline");
+    if(!controls()) failures++;
+#elif CDDA_TEST_PROFILE == 2
+    cdda_display_line("PROFILE2 SOAK /15min continuous audio");
+    if(!soak()) failures++;
+#else
+    cdda_display_line("PROFILE3 STRESS /15min audio + second file");
+    if(!soak()) failures++;
+#endif
 finish:
     if(audio_owned && kui_cdda_aica_stop()!=KUI_CDDA_AICA_OK) {
         cdda_display_line("Final owned-channel stop could not be confirmed.");failures++;
     }
     cdda_storage_shutdown();
+#if CDDA_TEST_PROFILE > 0
+    if(ring.initialized) {
+        if(ring.max_service_ticks>max_service_ticks) max_service_ticks=ring.max_service_ticks;
+        if(ring.min_margin_ticks<min_margin_ticks) min_margin_ticks=ring.min_margin_ticks;
+    }
+#endif
     uint32_t stack_used=0;
     if(!check_stack(&stack_used)) {cdda_display_line("PRIVATE STACK GUARD FAILED");failures++;}
+#if CDDA_TEST_PROFILE == 0
+    cdda_display_line("PROFILE0 BASELINE / original five stages");
+#elif CDDA_TEST_PROFILE == 1
+    cdda_display_line("PROFILE1 CONTROLS / expected fault separate");
+#elif CDDA_TEST_PROFILE == 2
+    cdda_display_line("PROFILE2 SOAK /15min continuous stereo");
+#else
+    cdda_display_line("PROFILE3 STRESS /15min audio + data checks");
+#endif
     cdda_display_number("Completed playback stages: ",completed);
     cdda_display_number("Worst half refill (us): ",us(max_refill_ticks));
     cdda_display_number("Maximum service gap (us): ",us(max_service_ticks));
     cdda_display_number("Minimum refill margin (us): ",min_margin_ticks==UINT32_MAX?0:us(min_margin_ticks));
     cdda_display_number("Checked card blocks: ",cdda_storage_blocks_read());
     cdda_display_number("Observed private stack use (bytes): ",stack_used);
+#if CDDA_TEST_PROFILE > 0
+    cdda_display_number("Played loop passes: ",loop_count);
+    cdda_display_number("Owned clock seconds: ",profile_clock.seconds);
+    cdda_display_number("Observed clock wraps: ",profile_clock.wraps);
+#if CDDA_TEST_PROFILE == 1
+    cdda_display_number("EXPECTED deadline delay (us): ",us(expected_deadline_ticks));
+    cdda_display_number("Recovered EXPECTED deadlines: ",recovered_deadlines);
+#elif CDDA_TEST_PROFILE == 3
+    cdda_display_number("Verified second-file bytes: ",data_checked);
+    cdda_display_number("Verified complete8MiB passes: ",data_bytes?data_checked/data_bytes:0);
+    cdda_display_number("Second-file read/check errors: ",data_errors);
+    display_pair("Data job / completion gap (us): ",us(max_data_ticks),us(data_max_gap_ticks));
+#endif
+#endif
     cdda_display_number("Failures / stopped audio: ",failures);
     cdda_display_finish(failures);
+#ifndef CDDA_HARNESS_HOST_TEST
     for(;;) __asm__ __volatile__("nop");
+#endif
 }

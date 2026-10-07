@@ -51,7 +51,8 @@ def main():
         'evidence/memory-and-source-audit.md':(ROOT/'docs/evidence/cdda-harness-memory-2026-10-07.md').read_bytes(),
         'evidence/cdda-harness.elf':(build/'cdda-harness.elf').read_bytes(),
         'evidence/cdda-harness.map':(build/'cdda-harness.map').read_bytes(),
-        'source-patch.mbox':subprocess.check_output(['git','format-patch','-1','--stdout'],cwd=ROOT),
+        'source-patch.mbox':subprocess.check_output(['git','format-patch',
+            '057f0e13c0c9e4e4e6f7c3365a47002467470277..HEAD','--stdout'],cwd=ROOT),
         'base-source-url.txt':b'https://github.com/TPMJB/K-UI-NeXT/tree/4be17b8d5383a6065e922f53362224405ed9d1e8\n'}
     if args.source_commit:
         files['source-url.txt']=('https://github.com/TPMJB/K-UI-NeXT/tree/'+commit+'\n').encode()

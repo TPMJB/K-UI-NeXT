@@ -5,11 +5,23 @@
 #ifndef KUI_BUILD_ID
 #define KUI_BUILD_ID "local"
 #endif
+#ifndef CDDA_TEST_PROFILE
+#define CDDA_TEST_PROFILE 0
+#endif
+#if CDDA_TEST_PROFILE == 1
+#define CDDA_TITLE "K-UI: CDDA controls / SCI"
+#elif CDDA_TEST_PROFILE == 2
+#define CDDA_TITLE "K-UI: CDDA 15-minute soak / SCI"
+#elif CDDA_TEST_PROFILE == 3
+#define CDDA_TITLE "K-UI: CDDA + card stress / SCI"
+#else
+#define CDDA_TITLE "K-UI: isolated CDDA / SCI test"
+#endif
 static uint16_t *const fb=(uint16_t *)(uintptr_t)0xa5000000u;
 static unsigned row;
 void cdda_display_init(void) {
     for(unsigned n=0;n<640u*480u;n++) fb[n]=0x0864u;
-    kui_shell_font_draw(fb,20,16,0x7fffu,"K-UI: isolated CDDA / SCI test",true);
+    kui_shell_font_draw(fb,20,16,0x7fffu,CDDA_TITLE,true);
     kui_shell_font_draw(fb,20,47,0xffffu,"Build " KUI_BUILD_ID,false);
     kui_shell_font_draw(fb,20,70,0xffffu,"Detached / owned AICA / read-only exFAT",false);
     row=106;

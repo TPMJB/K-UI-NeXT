@@ -12,6 +12,16 @@
 #include <string.h>
 
 static FILE *image;
+#define STRESS_BYTES (8u * 1024u * 1024u)
+static uint8_t stress_byte(uint32_t offset) {
+    uint32_t value = offset ^ UINT32_C(0x9e3779b9);
+    value ^= value >> 16;
+    value *= UINT32_C(0x7feb352d);
+    value ^= value >> 15;
+    value *= UINT32_C(0x846ca68b);
+    value ^= value >> 16;
+    return (uint8_t)value;
+}
 
 #ifdef KUI_CDDA_TEST_POPULATE
 DSTATUS disk_initialize(BYTE drive) { return drive ? STA_NOINIT : 0; }
@@ -50,6 +60,13 @@ int main(int argc, char **argv) {
     }
     assert(!ferror(raw));
     assert(f_close(&file) == FR_OK);
+    assert(f_open(&file, "0:/KUI/tests/cdda/stress.bin", FA_CREATE_ALWAYS | FA_WRITE) == FR_OK);
+    for(uint32_t offset = 0; offset < STRESS_BYTES; offset += sizeof(bytes)) {
+        for(size_t i = 0; i < sizeof(bytes); ++i) bytes[i] = stress_byte(offset + (uint32_t)i);
+        UINT put = 0;
+        assert(f_write(&file, bytes, sizeof(bytes), &put) == FR_OK && put == sizeof(bytes));
+    }
+    assert(f_close(&file) == FR_OK);
     assert(fclose(image) == 0 && fclose(raw) == 0);
     return 0;
 }
@@ -58,12 +75,21 @@ int main(int argc, char **argv) {
 #include "sd_reader.h"
 #include "sci_sd_bus.h"
 #include "kui/storage_policy.h"
+#include "kui/core.h"
 
 extern volatile struct kui_storage_boot_marker cdda_storage_boot_marker;
 
 static unsigned leases, releases, requests, largest, inject_crc;
 static uint64_t blocks;
 static const struct kui_loader_sd_bus bus = {0};
+static int stress_matches(uint32_t offset, const uint8_t *data, uint32_t bytes) {
+    for(uint32_t i = 0; i < bytes; ++i)
+        if(data[i] != stress_byte(offset + i)) return 0;
+    return 1;
+}
+static void check_stress(uint32_t offset, const uint8_t *data, uint32_t bytes) {
+    assert(stress_matches(offset, data, bytes));
+}
 enum kui_loader_sd_result kui_sci_sd_acquire(void) {
     ++leases;
     return KUI_LOADER_SD_OK;
@@ -127,6 +153,36 @@ int main(int argc, char **argv) {
     assert(cdda_storage_open("0:/KUI/tests/cdda/nope.raw", &size) < 0);
     assert(!strcmp(cdda_storage_last_failure(), "File missing"));
     assert(cdda_storage_open("0:/KUI/tests/cdda/stereo.raw", &size) == 0 && size == expected);
+    uint32_t data_size = 0;
+    assert(cdda_storage_data_open(&data_size) == 0 && data_size == STRESS_BYTES);
+    assert(leases == 1); /* Two files retain exactly one SCI owner. */
+    assert(cdda_storage_data_open(NULL) < 0);
+    assert(cdda_storage_data_read_at(data_size, got, 1) < 0);
+    assert(cdda_storage_data_read_at(UINT32_MAX, got, 1) < 0);
+    assert(cdda_storage_data_read_at(1, got, UINT32_MAX) < 0);
+    assert(cdda_storage_data_read_at(data_size, NULL, 0) == 0);
+    assert(cdda_storage_data_read_at(0, NULL, 1) < 0);
+    /* A previous pattern repeated every 128 KiB and would accept this exact
+     * wrong-address sector. Correctly read bytes must reject that alias. */
+    assert(cdda_storage_data_read_at(131072, got, 512) == 0);
+    check_stress(131072, got, 512);
+    assert(!stress_matches(0, got, 512));
+    uint32_t data_crc = 0;
+    for(uint32_t offset = 0; offset < data_size; offset += 65536u) {
+        /* Alternating non-sequential audio seeks and sequential data reads
+         * exercise both independent FIL buffers/cursors on one mounted fs. */
+        uint32_t audio_at = (offset * 13u + 127u) % (size - 8191u);
+        assert(cdda_storage_read_at(audio_at, got + 1, 8191) == 0);
+        assert(!memcmp(got + 1, reference + audio_at, 8191));
+        assert(cdda_storage_data_read_at(offset, got, 65536) == 0);
+        check_stress(offset, got, 65536);
+        data_crc = kui_crc32(data_crc, got, 65536);
+    }
+    /* Independent Python fixture metadata: catches a C/Python mix mismatch
+     * even if this test's C writer and byte checker make the same mistake. */
+    assert(data_crc == UINT32_C(0x41d8d1ae));
+    assert(cdda_storage_data_read_at(127, got + 1, 8191) == 0);
+    check_stress(127, got + 1, 8191);
     assert(cdda_storage_read_at(127, got + 1, 8191) == 0);
     assert(!memcmp(got + 1, reference + 127, 8191));
     assert(cdda_storage_read_at(size, got, 1) < 0);
@@ -136,19 +192,39 @@ int main(int argc, char **argv) {
     inject_crc = 1;
     assert(cdda_storage_read_at(65536, got, 65536) < 0);
     assert(!strcmp(cdda_storage_last_failure(), "CRC"));
+    assert(cdda_storage_data_read_at(32768, got, 8192) == 0);
+    check_stress(32768, got, 8192); /* Audio error does not poison data FIL. */
     /* FatFs latches a failed read in FIL: no implicit retry on that object. */
     assert(cdda_storage_read_at(65536, got, 65536) < 0);
     cdda_storage_close();
     assert(cdda_storage_open("0:/KUI/tests/cdda/stereo.raw", &size) == 0);
     assert(cdda_storage_read_at(65536, got, 65536) == 0);
     assert(!memcmp(got, reference + 65536, 65536));
+    inject_crc = 1;
+    assert(cdda_storage_data_read_at(262144, got, 65536) < 0);
+    assert(!strcmp(cdda_storage_last_failure(), "CRC"));
+    assert(cdda_storage_read_at(127, got, 8191) == 0);
+    assert(!memcmp(got, reference + 127, 8191)); /* Data error leaves audio FIL valid. */
+    assert(cdda_storage_data_read_at(262144, got, 65536) < 0);
+    cdda_storage_data_close();
+    assert(cdda_storage_data_read_at(0, got, 1) < 0);
+    assert(cdda_storage_data_open(&data_size) == 0 && data_size == STRESS_BYTES);
+    assert(cdda_storage_data_read_at(262144, got, 65536) == 0);
+    check_stress(262144, got, 65536);
+    cdda_storage_close();
+    assert(cdda_storage_read_at(0, got, 1) < 0);
+    assert(cdda_storage_data_read_at(512, got, 512) == 0);
+    check_stress(512, got, 512); /* Audio close does not close data file. */
+    assert(cdda_storage_open("0:/KUI/tests/cdda/stereo.raw", &size) == 0);
     assert(cdda_storage_blocks_read() > 0);
     assert(disk_write(0, got, 0, 1) == RES_WRPRT);
     assert(largest >= (unsigned)atoi(argv[3]) && largest <= 128);
     cdda_storage_shutdown();
+    assert(cdda_storage_read_at(0, got, 1) < 0);
+    assert(cdda_storage_data_read_at(0, got, 1) < 0);
     assert(leases == 1 && releases == 1);
     printf("PASS %s: %u exact bytes; %u SD calls, maximum %u blocks; "
-           "missing/range/CRC errors, write protection, lease release\n",
+           "interleaved 8 MiB data, independent errors/cursors, write protection, lease release\n",
            argv[1], size, requests, largest);
     assert(fclose(image) == 0);
     free(reference);

@@ -13,6 +13,7 @@ RATE = 44100
 SECTOR = 2352
 AMPLITUDE = 8192
 SECONDS = 12
+STRESS_BYTES = 8 * 1024 * 1024
 
 
 def make_fixture():
@@ -32,9 +33,44 @@ def make_fixture():
     return data
 
 
+def stress_byte(offset):
+    """Mix every 32-bit offset bit; avoid repeated 128 KiB sector patterns."""
+    value = offset ^ 0x9e3779b9
+    value ^= value >> 16
+    value = value * 0x7feb352d & 0xffffffff
+    value ^= value >> 15
+    value = value * 0x846ca68b & 0xffffffff
+    value ^= value >> 16
+    return value & 255
+
+
+def write_stress_fixture(path):
+    """Write independent file traffic with a position-dependent byte pattern."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sha = hashlib.sha256()
+    crc = 0
+    with path.open("wb") as stream:
+        for start in range(0, STRESS_BYTES, 65536):
+            data = bytes(stress_byte(offset)
+                         for offset in range(start, min(start + 65536, STRESS_BYTES)))
+            stream.write(data)
+            sha.update(data)
+            crc = zlib.crc32(data, crc)
+    metadata = {
+        "file": path.name, "bytes": STRESS_BYTES,
+        "sectors_512": STRESS_BYTES // 512,
+        "pattern": "uint32 x = offset ^ 0x9e3779b9; x ^= x >> 16; x *= 0x7feb352d; x ^= x >> 15; x *= 0x846ca68b; x ^= x >> 16; byte = x & 255",
+        "sha256": sha.hexdigest(), "crc32": f"{crc:08x}",
+    }
+    path.with_suffix(".json").write_text(json.dumps(metadata, indent=2) + "\n")
+    return metadata
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--stress-output", type=Path,
+                        help="also write an 8 MiB deterministic data file at this path")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     data = make_fixture()
@@ -57,6 +93,8 @@ def main():
     }
     (args.output / "stereo.json").write_text(json.dumps(metadata, indent=2) + "\n")
     print(json.dumps(metadata, indent=2))
+    if args.stress_output:
+        print(json.dumps(write_stress_fixture(args.stress_output), indent=2))
 
 
 if __name__ == "__main__":

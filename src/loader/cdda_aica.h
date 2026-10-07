@@ -26,13 +26,16 @@ enum kui_cdda_aica_result {
  * This is not a retail game sound coexistence contract. */
 enum kui_cdda_aica_result kui_cdda_aica_init(void);
 /* The caller must fill both rings before start; no fill tracking is done here.
- * Both channel key-on bits are committed by one shared KYONEX write. */
+ * Both channel key-on bits are committed by one shared KYONEX write. Each
+ * start is a new key-on at ring frame zero; it is not a hardware resume. */
 enum kui_cdda_aica_result kui_cdda_aica_start(void);
 enum kui_cdda_aica_result kui_cdda_aica_stop(void);
 /* Returns the left channel frame, after checking both hardware positions.
  * Sequential observations can differ by <=32 frames. Values are 0..16383.
  * A phase/range fault stops/mutes playback, as does a bounded bus timeout
- * when the bus permits cleanup. Output is unchanged on failure. */
+ * when the bus permits cleanup. Output is unchanged on failure. Capture a
+ * checked played cursor before stop; stopped channel positions are not a
+ * reliable pause/status cursor. */
 enum kui_cdda_aica_result kui_cdda_aica_position(uint32_t *frame);
 /* Planar little-endian signed PCM16. Count 1..128; range must stay inside one
  * half. During playback every <=32-byte stereo burst checks both positions
