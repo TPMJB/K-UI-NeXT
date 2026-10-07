@@ -122,6 +122,10 @@ def main():
             files['LICENSES/' + path.name] = path.read_bytes()
     for name in ('LICENSE', 'THIRD_PARTY.md'):
         files[name] = (ROOT / name).read_bytes()
+    # THIRD_PARTY.md describes the wider source snapshot too. Retain the
+    # catalogue notice at its normal distribution path even though this
+    # standalone executable does not link the known-dump databases.
+    files['LICENSES/known-dumps-README.txt'] = (ROOT / 'data/known-dumps/README.txt').read_bytes()
     for name in ('ff.c', 'ff.h', 'ffconf.h', 'ffunicode.c', 'diskio.h'):
         files['source-fatfs/' + name] = (ROOT / 'build/cdda-controls/fatfs' / name).read_bytes()
     files['SHA256SUMS'] = ''.join(sha(data) + '  ' + name + '\n'
