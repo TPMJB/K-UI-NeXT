@@ -257,33 +257,44 @@ static void ce_trace(unsigned earlier) {
 /* retail_display_values uses alias-qualified reads of these aligned words. */
 #define terminal_row(legend, snapshot, count) \
     retail_display_values((legend), (const uint32_t *)(const void *)(snapshot), (count))
+static void capture_native_fault(uint32_t function) {
+    /* These are current caller/request fields. READ parameters were not
+     * obtained after a PARAMETERS rejection, so previous LBA/count/destination
+     * are deliberately absent. Only this verified SDK wrapper puts its
+     * parameter array at SP+4. The trace words are offsets, not a claimed chain. */
+    uint32_t sp = kui_retail_native_caller[1], pr = kui_retail_native_caller[0];
+    uint32_t param = 0, s20 = 0, s36 = 0, s60 = 0;
+    /* This unsigned interval admits P1 only, excludes anything below the IP,
+     * and leaves 64 bytes before RAM end without overflowing an addition. */
+    if(pr == 0x8c648d7au && service.diag.reject_reason == KUI_RETAIL_GD_REJECT_PARAMETERS &&
+       !(sp & 3u) && sp - KUI_RETAIL_IP_ADDRESS <=
+       KUI_RETAIL_RAM_END - KUI_RETAIL_IP_ADDRESS - 64u) {
+        typedef uint32_t owner_word __attribute__((__may_alias__));
+        const volatile owner_word *owner = (const volatile owner_word *)(uintptr_t)sp;
+        s20 = owner[5]; s36 = owner[9]; s60 = owner[15];
+        param = sp + 4u;
+    }
+    /* All owner reads precede cache reuse even if the two ranges overlap.
+     * Claiming video or rendering may also change the private-hook words. */
+    __asm__ __volatile__("" : : : "memory");
+    /* This path never resumes image I/O. Reuse its aligned byte-sector cache
+     * rather than adding low BSS or a second trace array to the private stack. */
+    typedef uint32_t terminal_word __attribute__((__may_alias__));
+    terminal_word *terminal = (terminal_word *)(void *)image.block;
+    _Static_assert(sizeof(image.block) >= 9u * sizeof(*terminal), "terminal snapshot");
+    terminal[0] = function; terminal[1] = service.diag.last_command;
+    terminal[2] = service.diag.reject_reason; terminal[3] = sp; terminal[4] = param;
+    terminal[5] = pr; terminal[6] = s20; terminal[7] = s36; terminal[8] = s60;
+    __asm__ __volatile__("" : : : "memory");
+}
 #endif
 static void report_fault(const char *reason, uint32_t function) {
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
-    /* Capture all evidence before claiming video or calling the renderer.
-     * The terminal loop never reads the image again: reuse its aligned sector
-     * cache as snapshot workspace, keeping metadata intact and avoiding more
-     * low RAM or service-stack space. LAST CARD is the previous SD result;
-     * REQUEST itself performs no I/O. Alias-safe words may occupy byte storage. */
-    typedef uint32_t terminal_word __attribute__((__may_alias__));
-    terminal_word *terminal = (terminal_word *)(void *)image.block;
-    _Static_assert(sizeof(image.block) >= 16u * sizeof(*terminal), "terminal snapshot");
-    _Static_assert(offsetof(struct kui_retail_gd_diagnostics, last_destination) ==
-                   offsetof(struct kui_retail_gd_diagnostics, last_function) + 16u, "request row");
-    memcpy(terminal, &service.diag.last_function, 20);
-    terminal[0] = function;
-    terminal[5] = service.diag.reject_reason; terminal[6] = service.diag.read_flags;
-    terminal[7] = service.sector_bytes; terminal[8] = service.guest_begin;
-    terminal[9] = service.guest_end; terminal[10] = service.track_count;
-    terminal[11] = (uint32_t)(uintptr_t)service.tracks;
-    terminal[12] = (uint32_t)card_result; terminal[13] = image.blocks_read;
-    terminal[14] = kui_retail_native_caller[1];
-    terminal[15] = kui_retail_native_caller[0];
-    __asm__ __volatile__("" : : : "memory");
+    capture_native_fault(function);
 #endif
     retail_display_restore(&display);
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
-    retail_display_line("REQUEST REJECTION DETAILS");
+    retail_display_line("REQUEST REJECTION DETAILS / SONIC CALLER STACK");
 #else
     retail_display_line("K-UI READER");
 #endif
@@ -312,10 +323,8 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_values("SD       IMAGE    BLOCKS   DMAOR    DMA2 CTL",io,5);
 #else
     retail_display_line(reason);
-    terminal_row("FN CMD LBA CNT DST", image.block, 5);
-    terminal_row("REJECT FLAGS BPS LO HI", image.block + 20, 5);
-    terminal_row("TRACKS MAP LASTCARD BLOCKS", image.block + 40, 4);
-    terminal_row("SP PR", image.block + 56, 2);
+    terminal_row("FN CMD REJECT SP PARAM", image.block, 5);
+    terminal_row("PR S20 S36 S60", image.block + 20, 4);
 #endif
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
     retail_display_line("STOPPED: PHOTO SCREEN");

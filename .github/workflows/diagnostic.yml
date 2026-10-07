@@ -92,7 +92,8 @@ jobs:
                        'src/apps/disc_identity.c', 'include/kui/disc_identity.h',
                        'tests/test_disc.c', 'tests/test_disc_identity.c', 'tests/stubs/dc/syscalls.h',
                        'tools/retail_package.py', 'tools/package.py', 'tests/test_retail_package.py',
-                       'src/core/retail_gd.c', 'include/kui/retail_gd.h', 'tests/test_retail_gd.c'}
+                       'src/core/retail_gd.c', 'include/kui/retail_gd.h', 'tests/test_retail_gd.c',
+                       'tests/test_sonic_caller_stack.py'}
               if not paths or any(p not in exact and not p.startswith(('src/loader/', 'docs/')) for p in paths):
                   raise SystemExit('Console-only request includes changes outside the focused launch and optical idle correction scope')
               print('Console build requested: skipping the broad repeat suite; focused launch/optical checks are recorded with the correction.')
@@ -183,6 +184,9 @@ jobs:
               out.write('console_only=' + str(requested).lower() + '\n')
               out.write('games_formats=' + str(formats).lower() + '\n')
           PY
+      - name: Check Sonic caller-stack capture
+        if: env.KUI_RETAIL_SONIC_STACK_TEST == '1'
+        run: python3 tests/test_sonic_caller_stack.py
       - name: Install filesystem test utilities
         if: steps.scope.outputs.console_only != 'true'
         run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools e2fsprogs mame-tools liblzo2-2
