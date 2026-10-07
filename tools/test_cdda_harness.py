@@ -28,7 +28,7 @@ def main():
         environment.setdefault("ASAN_OPTIONS", "abort_on_error=1:detect_leaks=0")
         environment.setdefault("UBSAN_OPTIONS", "halt_on_error=1:print_stacktrace=1")
     with tempfile.TemporaryDirectory(prefix="kui-cdda-harness-") as temporary:
-        for profile in range(4):
+        for profile in range(6):
             binary = Path(temporary) / f"profile{profile}"
             command = [cc, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                        f"-DCDDA_TEST_PROFILE={profile}", "-I", str(root / "include"),
@@ -40,10 +40,18 @@ def main():
                             "-fno-omit-frame-pointer"]
             if profile:
                 command.append(str(root / "src/core/cdda_stream.c"))
+            if profile == 4:
+                command.append(str(root / "src/core/cdda_timing.c"))
+            if profile == 5:
+                command.append(str(root / "src/core/cdda_control.c"))
             subprocess.run(command + ["-o", str(binary)], check=True)
             cases = ["pass", "pcm-fail"]
             if profile == 3:
                 cases += ["data-fail", "data-corrupt", "data-delay", "data-starvation"]
+            if profile == 4:
+                cases += ["rate-offset", "timing-read-delay"]
+            if profile == 5:
+                cases.append("command-reprime-fail")
             for case in cases:
                 subprocess.run([str(binary), case], check=True, timeout=30,
                                env=environment)

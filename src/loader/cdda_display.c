@@ -14,6 +14,10 @@
 #define CDDA_TITLE "K-UI: CDDA 15-minute soak / SCI"
 #elif CDDA_TEST_PROFILE == 3
 #define CDDA_TITLE "K-UI: CDDA + card stress / SCI"
+#elif CDDA_TEST_PROFILE == 4
+#define CDDA_TITLE "K-UI: CDDA clock calibration / SCI"
+#elif CDDA_TEST_PROFILE == 5
+#define CDDA_TITLE "K-UI: CDDA command tests / SCI"
 #else
 #define CDDA_TITLE "K-UI: isolated CDDA / SCI test"
 #endif

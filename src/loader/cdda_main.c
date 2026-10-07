@@ -7,11 +7,14 @@
 #ifndef CDDA_TEST_PROFILE
 #define CDDA_TEST_PROFILE 0
 #endif
-#if CDDA_TEST_PROFILE < 0 || CDDA_TEST_PROFILE > 3
-#error "CDDA_TEST_PROFILE must be 0=baseline, 1=controls, 2=soak, or 3=stress"
+#if CDDA_TEST_PROFILE < 0 || CDDA_TEST_PROFILE > 5
+#error "CDDA_TEST_PROFILE must be 0=baseline, 1=controls, 2=soak, 3=stress, 4=timing, or 5=commands"
 #endif
 #if CDDA_TEST_PROFILE > 0
 #include "kui/cdda_stream.h"
+#endif
+#if CDDA_TEST_PROFILE == 4
+#include "kui/cdda_timing.h"
 #endif
 #include "kui/storage_policy.h"
 #include <stdbool.h>
@@ -46,6 +49,15 @@ static struct kui_cdda_stream_clock profile_clock;
 #define TONE_FIRST (6u*44100u+4410u)
 #define TONE_FRAMES 44100u
 #define SOAK_FRAMES (900u*44100u)
+#if CDDA_TEST_PROFILE == 4
+#define TIMING_DURATION_TICKS (60u*KUI_CDDA_CLOCK_HZ)
+#define TIMING_READ_LIMIT KUI_CDDA_MARGIN_TICKS
+#define TIMING_ELAPSED_LIMIT (TIMING_DURATION_TICKS+KUI_CDDA_HALF_TICKS+2u*TIMING_READ_LIMIT)
+static struct kui_cdda_timing_snapshot timing_last,timing_start,timing_end;
+static struct kui_cdda_timing_result timing_result;
+static uint16_t timing_tcr_start,timing_tcr_end,timing_frq_start,timing_frq_end;
+static bool timing_valid;
+#endif
 #if CDDA_TEST_PROFILE == 3
 static _Alignas(32) uint8_t data_buffer[2048];
 static uint32_t data_bytes,data_position,data_checked,data_errors,max_data_ticks;
@@ -83,12 +95,21 @@ static bool read_at(void *ctx,uint32_t at,uint8_t *out,size_t bytes) {
 }
 static bool observe(void) {
     uint32_t frame;
+#if CDDA_TEST_PROFILE == 4
+    uint32_t before=ticks();
+#endif
     enum kui_cdda_aica_result a=kui_cdda_aica_position(&frame);
     if(a!=KUI_CDDA_AICA_OK) {
         (void)kui_cdda_aica_stop();
         cdda_display_number("AICA fault: ",(uint32_t)a);return false;
     }
     uint32_t now=ticks();
+#if CDDA_TEST_PROFILE == 4
+    if(now-before>TIMING_READ_LIMIT) {
+        (void)kui_cdda_aica_stop();
+        cdda_display_line("Timing observation window exceeded8ms; stopped.");return false;
+    }
+#endif
 #if CDDA_TEST_PROFILE > 0
     if(!kui_cdda_stream_clock_update(&profile_clock,now)) {
         (void)kui_cdda_aica_stop();
@@ -100,6 +121,11 @@ static bool observe(void) {
         (void)kui_cdda_aica_stop();
         cdda_display_number("Audio deadline/state fault: ",(uint32_t)r);return false;
     }
+#if CDDA_TEST_PROFILE == 4
+    /* Store the SAME position accepted by the ring. Never substitute PCM
+     * prefetch progress or sample the position again for endpoint reporting. */
+    timing_last=(struct kui_cdda_timing_snapshot){before,now,ring.played};
+#endif
     return true;
 }
 static bool fill_half(unsigned half,bool playing) {
@@ -210,6 +236,7 @@ close:
 /* Every restart discards queued PCM and refills from an actual played cursor.
  * The initial hardware sample position is included; ring.played starts at zero
  * at its first observation, rather than assuming that key-on is instantaneous. */
+#if CDDA_TEST_PROFILE != 5
 static bool session_open(uint32_t first,uint32_t frames,bool repeat) {
     uint32_t bytes;
     ring=(struct kui_cdda_ring){0};
@@ -233,18 +260,21 @@ failed:
     (void)kui_cdda_aica_stop();cdda_storage_close();
     cdda_display_line("Controlled session could not start.");return false;
 }
+#endif
 static bool session_close(void) {
     bool success=kui_cdda_aica_stop()==KUI_CDDA_AICA_OK;
     if(ring.max_service_ticks>max_service_ticks) max_service_ticks=ring.max_service_ticks;
     if(ring.min_margin_ticks<min_margin_ticks) min_margin_ticks=ring.min_margin_ticks;
     repeat_audio=false;cdda_storage_close();return success;
 }
+#if CDDA_TEST_PROFILE != 4
 static bool played_cursor(uint32_t *frame,uint32_t *loops) {
     if(ring.played>UINT32_MAX-session_initial) return false;
     return kui_cdda_stream_cursor(session_first,session_first+session_frames,
         repeat_audio,session_initial+ring.played,frame,loops);
 }
-#if CDDA_TEST_PROFILE == 3
+#endif
+#if CDDA_TEST_PROFILE == 3 || CDDA_TEST_PROFILE == 4
 static void display_pair(const char *label,uint32_t a,uint32_t b) {
     char text[96],reverse[10];unsigned n=0;
     while(*label && n<60u) text[n++]=*label++;
@@ -256,6 +286,8 @@ static void display_pair(const char *label,uint32_t a,uint32_t b) {
     }
     text[n]=0;cdda_display_line(text);
 }
+#endif
+#if CDDA_TEST_PROFILE == 3
 static uint8_t data_pattern(uint32_t offset) {
     uint32_t x=offset^0x9e3779b9u;
     x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;x^=x>>16;
@@ -298,6 +330,7 @@ static bool stress_job(void) {
     return true;
 }
 #endif
+#if CDDA_TEST_PROFILE != 4
 static bool session_pump(uint32_t frames,bool minimum_duration) {
     uint32_t progress_tick=ticks(),progress=ring.played,idle=0;
     for(;;) {
@@ -336,7 +369,8 @@ static bool session_pump(uint32_t frames,bool minimum_duration) {
     if(repeat_audio) loop_count=loops;
     return true;
 }
-#if CDDA_TEST_PROFILE == 1
+#endif
+#if CDDA_TEST_PROFILE == 1 || CDDA_TEST_PROFILE == 5
 static bool paused_silence(void) {
     uint32_t start=ticks();
     /* Key-off plus master mute is the silence contract. Do not query stopped
@@ -346,6 +380,8 @@ static bool paused_silence(void) {
     }
     return true;
 }
+#endif
+#if CDDA_TEST_PROFILE == 1
 static bool pause_resume(void) {
     if(!session_open(TONE_FIRST,2u*TONE_FRAMES,false)) return false;
     if(!session_pump(TONE_FRAMES,false) || !observe()) goto failed;
@@ -421,7 +457,7 @@ static bool controls(void) {
     completed++;
     return true;
 }
-#else
+#elif CDDA_TEST_PROFILE == 2 || CDDA_TEST_PROFILE == 3
 static bool soak(void) {
 #if CDDA_TEST_PROFILE == 3
     if(cdda_storage_data_open(&data_bytes) || data_bytes!=8u*1024u*1024u) {
@@ -445,6 +481,57 @@ static bool soak(void) {
     if(success) completed++;
     return success;
 }
+#endif
+#if CDDA_TEST_PROFILE == 4
+static void timing_clock_config(uint16_t *tcr,uint16_t *frq) {
+#ifdef CDDA_HARNESS_HOST_TEST
+    /* The portable simulation does not claim a hardware register reading. */
+    *tcr=*frq=0;
+#else
+    *tcr=MMIO16(0xffd8001cu);
+    *frq=MMIO16(0xffc00000u);
+#endif
+}
+static bool calibration(void) {
+    cdda_display_line("60s paired AICA/TMU observations; no clock retuning.");
+    if(!session_open(TONE_FIRST,TONE_FRAMES,true)) return false;
+    timing_clock_config(&timing_tcr_start,&timing_frq_start);
+    /* TPSC=0 selects peripheral-clock/4. UNF (bit8) may become sticky across
+     * a timer wrap; compare control/divider bits independently of that flag. */
+    if((timing_tcr_start & 0x0007u) || !observe()) goto failed;
+    timing_start=timing_last;
+    uint32_t progress=ring.played,progress_tick=ring.last_tick,idle=0;
+    for(;;) {
+        if(!observe()) goto failed;
+        timing_end=timing_last;
+        uint32_t elapsed=timing_end.after_tick-timing_start.before_tick;
+        if(elapsed>TIMING_ELAPSED_LIMIT) goto failed;
+        /* Lower bound reaches60s: the actual sample-read interval is at least
+         * nominal60s, even with unequal endpoint register-read windows. */
+        if(timing_end.before_tick-timing_start.after_tick>=TIMING_DURATION_TICKS) break;
+        if(ring.played!=progress) {progress=ring.played;progress_tick=ring.last_tick;idle=0;}
+        else if(++idle>=1000000u || ticks()-progress_tick>=KUI_CDDA_HALF_TICKS) {
+            cdda_display_line("Timing AICA/clock progress watchdog.");goto failed;
+        }
+        unsigned active=ring.last_position/KUI_CDDA_HALF_FRAMES;
+        if(!ring.ready[1u-active] && !fill_half(1u-active,true)) goto failed;
+    }
+    /* The final endpoint was observed before key-off; stopping and display
+     * work are deliberately excluded from its bracket. */
+    if(!session_close()) return false;
+    timing_clock_config(&timing_tcr_end,&timing_frq_end);
+    if((timing_tcr_start & (uint16_t)~0x0100u)!=(timing_tcr_end & (uint16_t)~0x0100u) ||
+       timing_frq_start!=timing_frq_end ||
+       !kui_cdda_timing_measure(&timing_start,&timing_end,TIMING_READ_LIMIT,
+                               TIMING_ELAPSED_LIMIT,&timing_result)) return false;
+    timing_valid=true;completed++;
+    return true;
+failed:
+    (void)session_close();return false;
+}
+#endif
+#if CDDA_TEST_PROFILE == 5
+#include "cdda_commands.inc"
 #endif
 #endif
 static bool check_stack(uint32_t *used) {
@@ -470,6 +557,11 @@ void cdda_main(void) {
 #if CDDA_TEST_PROFILE == 3
     data_bytes=data_position=data_checked=data_errors=max_data_ticks=0;data_budget_ticks=125000u;
     data_last_tick=data_max_gap_ticks=data_checkpoint_seconds=data_checkpoint_bytes=0;
+#endif
+#if CDDA_TEST_PROFILE == 4
+    timing_last=timing_start=timing_end=(struct kui_cdda_timing_snapshot){0};
+    timing_result=(struct kui_cdda_timing_result){0};timing_valid=false;
+    timing_tcr_start=timing_tcr_end=timing_frq_start=timing_frq_end=0;
 #endif
 #endif
     if(cdda_storage_boot_marker.magic1!=KUI_STORAGE_BOOT_MAGIC1 ||
@@ -502,9 +594,15 @@ void cdda_main(void) {
 #elif CDDA_TEST_PROFILE == 2
     cdda_display_line("PROFILE2 SOAK /15min continuous audio");
     if(!soak()) failures++;
-#else
+#elif CDDA_TEST_PROFILE == 3
     cdda_display_line("PROFILE3 STRESS /15min audio + second file");
     if(!soak()) failures++;
+#elif CDDA_TEST_PROFILE == 4
+    cdda_display_line("PROFILE4 TIMING / nominal60s paired endpoints");
+    if(!calibration()) failures++;
+#else
+    cdda_display_line("PROFILE5 COMMANDS / generated audio only");
+    if(!commands()) failures++;
 #endif
 finish:
     if(audio_owned && kui_cdda_aica_stop()!=KUI_CDDA_AICA_OK) {
@@ -525,8 +623,12 @@ finish:
     cdda_display_line("PROFILE1 CONTROLS / expected fault separate");
 #elif CDDA_TEST_PROFILE == 2
     cdda_display_line("PROFILE2 SOAK /15min continuous stereo");
-#else
+#elif CDDA_TEST_PROFILE == 3
     cdda_display_line("PROFILE3 STRESS /15min audio + data checks");
+#elif CDDA_TEST_PROFILE == 4
+    cdda_display_line("PROFILE4 TIMING / paired endpoints, nominal60s");
+#else
+    cdda_display_line("PROFILE5 COMMANDS / controlled homebrew");
 #endif
     cdda_display_number("Completed playback stages: ",completed);
     cdda_display_number("Worst half refill (us): ",us(max_refill_ticks));
@@ -534,7 +636,7 @@ finish:
     cdda_display_number("Minimum refill margin (us): ",min_margin_ticks==UINT32_MAX?0:us(min_margin_ticks));
     cdda_display_number("Checked card blocks: ",cdda_storage_blocks_read());
     cdda_display_number("Observed private stack use (bytes): ",stack_used);
-#if CDDA_TEST_PROFILE > 0
+#if CDDA_TEST_PROFILE > 0 && CDDA_TEST_PROFILE < 4
     cdda_display_number("Played loop passes: ",loop_count);
     cdda_display_number("Owned clock seconds: ",profile_clock.seconds);
     cdda_display_number("Observed clock wraps: ",profile_clock.wraps);
@@ -547,6 +649,17 @@ finish:
     cdda_display_number("Second-file read/check errors: ",data_errors);
     display_pair("Data job / completion gap (us): ",us(max_data_ticks),us(data_max_gap_ticks));
 #endif
+#endif
+#if CDDA_TEST_PROFILE == 4
+    cdda_display_number("Paired played frames: ",timing_result.played_frames);
+    display_pair("Elapsed ticks lower / upper: ",timing_result.lower_ticks,timing_result.upper_ticks);
+    display_pair("Read ticks start / end: ",timing_result.start_read_ticks,timing_result.end_read_ticks);
+    display_pair("TMU1 TCR1 start / end: ",timing_tcr_start,timing_tcr_end);
+    display_pair("FRQCR start / end: ",timing_frq_start,timing_frq_end);
+    display_pair("Nominal TMU Hz / configured pitch: ",KUI_CDDA_CLOCK_HZ,0u);
+    cdda_display_line(timing_valid?"Relative-rate data; endpoint quantization +/-1frame.":"Paired timing result unavailable; no rate inferred.");
+#elif CDDA_TEST_PROFILE == 5
+    commands_report();
 #endif
     cdda_display_number("Failures / stopped audio: ",failures);
     cdda_display_finish(failures);

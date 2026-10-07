@@ -4,6 +4,9 @@ Status: the detached SCI/AICA harness passed its baseline, two controls runs,
 15-minute soak and 15-minute serialized read stress with zero reported faults.
 Targeted stereo listening, precise timer/audio calibration, broader job arbitration and retail
 resource/command integration remain open.
+Short profiles 04 and 05 implement matched clock observations and controlled
+command/job checks; their console results are pending. Use the
+[new two-profile checklist](cdda-calibration-commands-test.md) for this step.
 Prepared 2026-10-07 UTC / 2026-10-06 America/Chicago.
 
 This roadmap implements the [separate reader design](cdda-reader-design.md).
@@ -228,17 +231,21 @@ candidate reader.
 
 ## First steps and ownership
 
-**Agent next:** preserve the successful console checkpoint, add exact
-timer/audio endpoint diagnostics, then implement explicit audio/data job and
-command semantics. Establish periodic service and resource admission before
+**Agent next:** review the console results from profiles 04 and 05, which
+implement matched timer/audio diagnostics and controlled command semantics.
+Preserve the successful earlier checkpoint while expanding audio/data
+arbitration. Establish periodic service and resource admission before
 Toy Commander retail integration. The classifier, standalone engine, controls,
 soak/stress fixtures and memory audit are implemented and numerically tested.
 
-**User next:** restore the preserved 1.8.5 runtime after testing. A later brief
+**User next:** run [04 calibration and 05 commands](cdda-calibration-commands-test.md)
+in order and photograph their final screens, then restore the preserved 1.8.5
+runtime. Each test uses the existing generated stereo fixture; neither needs
+another game track. A later brief
 stereo/control check can confirm channel order and silence; no additional
 routine soak is requested now. The [test checklist](cdda-next-test.md) remains available
-for reproducing a specific result; the requested new numerical profiles are
-complete and do not require another routine soak repetition.
+for reproducing the earlier successful results. No routine soak repetition
+is requested for this pair of short tests.
 This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed
 **Toy Commander** GDI with every referenced `.raw` track; do not buy another
 title for this experiment.
