@@ -26,7 +26,7 @@ import retail_package as retail_layout
 from retail_package import inspect_retail
 from runtime_package import flatten_elf
 
-OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot.zip'
+OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Fix.zip'
 README_SOURCE = 'docs/cdda-toy-pilot-test.md'
 BUILD_DIRECTORY = 'build/toy-pilot'
 RUNTIME_FILE = 'pilot/15-toy-finite-stereo.kui'

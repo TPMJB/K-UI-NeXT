@@ -1,5 +1,9 @@
 # Toy Commander finite stereo CDDA pilot
 
+This build corrects the launch refusal in `eb5932c259ee`: raw GDI manifests
+may omit the optional source CRC. The pilot still requires the exact loaded
+executable CRC and SHA-256 before installing hooks.
+
 This is one new, manually installed Toy Commander pilot. It uses the game's
 own ARM sound driver and allocation interfaces. It keeps the working 1.8.5
 runtime and ordinary reader source unchanged. Use the same complete original

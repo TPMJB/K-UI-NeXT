@@ -13,6 +13,7 @@
 #include "kui/retail_observe.h"
 #include "kui/toy_pilot.h"
 #include "kui/toy_pilot_boot.h"
+#include "toy_pilot_admission.h"
 #include "toy_pilot_resident_symbols.h"
 
 #ifndef KUI_TOY_PILOT_WORKER_BIN
@@ -30,8 +31,6 @@ extern const uint8_t toy_worker_blob[] __asm__("__toy_pilot_worker_blob_start");
 extern const uint8_t toy_worker_blob_end[] __asm__("__toy_pilot_worker_blob_end");
 extern const uint8_t __retail_stage_bss_end[] __asm__("__retail_stage_bss_end");
 
-#define TOY_BOOT_BYTES 748444u
-#define TOY_BOOT_CRC UINT32_C(0xcdc493b3)
 #define TOY_IP_CRC UINT32_C(0x38ba2868)
 #define TOY_HEAP_TABLE UINT32_C(0x8c0c5ac8)
 #define TOY_HEAP_HEADER UINT32_C(0x8cfcffe0)
@@ -253,8 +252,7 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     kui_toy_pilot_base_relay(frame,ccr);
     /* The baseline relay has restored the original entry and checked the
      * unmodified entire executable and resident before these RAM patches. */
-    if(exec_bytes!=TOY_BOOT_BYTES || boot_crc!=TOY_BOOT_CRC ||
-       manifest.boot_bytes!=TOY_BOOT_BYTES || manifest.boot_crc32!=TOY_BOOT_CRC ||
+    if(!kui_toy_pilot_boot_identity(&manifest,exec_bytes,boot_crc) ||
        manifest.ip_crc32!=TOY_IP_CRC || !toy_manifest_admit() ||
        !kui_retail_observe_native_ip((const uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS))
         toy_failure(8,exec_bytes);
