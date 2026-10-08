@@ -104,8 +104,10 @@ C(kui_toy_pilot_heap_hook):
 .Linstaller_mask: .long 0x100000f0
 
 /* The game's inherited PR must never return into the temporary high stage.
- * This terminal path uses only low resident code/stack and resets after its
- * numeric report. It never resumes the game or frees an executing lease. */
+ * Exact-title reset registration and authored worker faults also enter here.
+ * This terminal path masks before switching to the low resident stack and
+ * shows numerical pages until power cycle. It never resumes the game,
+ * invokes SDK teardown, resets the ARM, or frees an executing lease. */
     .align 2
     .global C(kui_toy_pilot_return_hook)
 C(kui_toy_pilot_return_hook):

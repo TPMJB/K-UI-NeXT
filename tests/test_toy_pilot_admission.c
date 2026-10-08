@@ -25,6 +25,20 @@ int main(void) {
     raw.boot_crc32 ^= 1u;
     assert(!kui_toy_pilot_boot_identity(&raw,748444u,0xcdc493b3u));
     assert(!kui_toy_pilot_boot_identity(NULL,748444u,0xcdc493b3u));
-    puts("Toy raw-GDI boot admission: 9 checks passed");
+
+    /* The exact reset callback is registered before gameplay and invoked
+     * only after the title decides to return. Admit a linked terminal entry
+     * only while both unchanged call boundaries and the native source agree. */
+    const uint32_t terminal=0x8c006ce8u;
+    assert(kui_toy_pilot_reset_target(0x8c027104u,0x2322u,0x430bu,terminal)==terminal);
+    assert(!kui_toy_pilot_reset_target(0x8c027106u,0x2322u,0x430bu,terminal));
+    assert(!kui_toy_pilot_reset_target(0x8c027104u,0x2320u,0x430bu,terminal));
+    assert(!kui_toy_pilot_reset_target(0x8c027104u,0x2322u,0x4309u,terminal));
+    assert(!kui_toy_pilot_reset_target(0x8c027104u,0x2322u,0x430bu,terminal+1u));
+    assert(!kui_toy_pilot_reset_target(0x8c027104u,0x2322u,0x430bu,0x8c003ffeu));
+    assert(!kui_toy_pilot_reset_target(0x8c027104u,0x2322u,0x430bu,0x8c007800u));
+    assert(!kui_toy_pilot_reset_target(0x8c027104u,0x2322u,0x430bu,0x8cfd0000u));
+    assert(!kui_toy_pilot_reset_target(0x8c027104u,0x2322u,0x430bu,0u));
+    puts("Toy raw-GDI boot and early reset admission: passed");
     return 0;
 }

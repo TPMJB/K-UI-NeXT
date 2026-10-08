@@ -31,7 +31,10 @@ STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
 WORKER_SRC = src/loader/toy_pilot_worker.c src/loader/toy_pilot_bus.c src/loader/toy_pilot_lease.c \
  src/core/toy_pilot.c src/core/hash.c src/loader/minic.c
 WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o
-.PHONY: all resident force-config
+HOST_CC ?= cc
+HOST_TEST_FLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
+.PHONY: all resident force-config test-playback
 .DELETE_ON_ERROR:
 all: $(BUILD)/retail-toy-pilot.kui
 resident: $(BUILD)/resident-sci.bin
@@ -92,4 +95,11 @@ $(BUILD)/entry.elf: $(BUILD)/entry_asm.o src/loader/retail_entry.ld
 	$(CC) $(LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,$(BUILD)/entry.map -o $@ $<
 $(BUILD)/retail-toy-pilot.kui: $(BUILD)/entry.elf
 	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+# Exercise the actual finite adapter across full bank handoffs. Non-PIE keeps
+# host callbacks representable in its console uint32_t configuration ABI.
+test-playback: $(BUILD)/test-playback
+	./$(BUILD)/test-playback
+$(BUILD)/test-playback: tests/test_toy_pilot_playback.c src/loader/toy_pilot_worker.c src/core/toy_pilot.c src/core/hash.c include/kui/toy_pilot.h include/kui/toy_pilot_bus.h include/kui/toy_pilot_lease.h include/kui/toy_pilot_driver_load.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_TEST_FLAGS) $(HOST_SANITIZERS) -fno-pie -no-pie -ffunction-sections -fdata-sections -Iinclude tests/test_toy_pilot_playback.c src/core/toy_pilot.c src/core/hash.c -Wl,--gc-sections -o $@
 -include $(RESIDENT_OBJ:.o=.d) $(STAGE_OBJ:.o=.d) $(WORKER_OBJ:.o=.d)

@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define KUI_TOY_PILOT_MAGIC UINT32_C(0x54595031)
-#define KUI_TOY_PILOT_API 2u
+#define KUI_TOY_PILOT_API 3u
 #define KUI_TOY_PILOT_WORKER_BEGIN UINT32_C(0x8cfd0000)
 #define KUI_TOY_PILOT_WORKER_END UINT32_C(0x8cfe0000)
 #define KUI_TOY_PILOT_MAIN_LEASE_BYTES UINT32_C(0x30000)
@@ -35,11 +35,14 @@ struct kui_toy_pilot_config {
     uint32_t main_lease_begin, main_lease_end;
     uint32_t worker_begin, worker_end;
     uint32_t code_bytes;
+    /* Exact linked low-resident terminal hook. A latched worker fault enters
+     * its numeric report after restoring the caller SR; no game teardown. */
+    uint32_t terminal_entry;
 };
-_Static_assert(sizeof(struct kui_toy_pilot_config)==48u,"Toy config ABI");
+_Static_assert(sizeof(struct kui_toy_pilot_config)==52u,"Toy config ABI");
 
 /* The first 68 bytes of worker.bin. Entry addresses are callable integer SH
- * functions, not offsets. INIT copies the 48-byte config on its own stack.
+ * functions, not offsets. INIT copies the 52-byte config on its own stack.
  * REQUEST(command,p0,p1,p2) is pure mailbox work, safe in the masked GD path;
  * positive means accepted generation, zero refusal. SNAPSHOT returns a pointer
  * to immutable-for-the-current-call numeric telemetry in the main lease. */

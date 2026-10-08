@@ -46,6 +46,7 @@ static struct {
     struct kui_toy_pilot_driver_load driver_load;
     volatile struct mailbox mailbox;
     volatile uint32_t configured, sdk_ready, disabled;
+    uint32_t terminal_reported;
     uint32_t verified_driver_epoch;
     uint32_t handled_generation;
     uint32_t first_fad,end_fad,track,fill_frame,resume_frame,repeat_left;
@@ -68,6 +69,7 @@ static const uint8_t driver_digest[32]={
 extern uint32_t kui_toy_pilot_worker_test_read(uint32_t,unsigned);
 extern uint32_t kui_toy_pilot_worker_test_sr(void);
 extern void kui_toy_pilot_worker_test_set_sr(uint32_t);
+extern void kui_toy_pilot_worker_test_terminal(void);
 static uint32_t word(uint32_t a) { return kui_toy_pilot_worker_test_read(a,4); }
 static uint16_t half(uint32_t a) { return (uint16_t)kui_toy_pilot_worker_test_read(a,2); }
 static uint8_t byte(uint32_t a) { return (uint8_t)kui_toy_pilot_worker_test_read(a,1); }
@@ -110,9 +112,22 @@ static void fault(uint32_t reason) {
     if(!owner.stats.fault) owner.stats.fault=reason;
     owner.stats.state=KUI_TOY_PILOT_FAULT;owner.disabled=1;
     publish();owner.stats.applied_generation=owner.stats.generation;
-    /* Every submitted play is finite. Fault never enables a hardware loop or
-     * writes a potentially active bank. Existing SDK shutdown still owns its
-     * normal all-port teardown; a worker fault cannot replace that teardown. */
+    /* Every submitted play is finite and expires without further writes.
+     * Voluntary SDK shutdown retains its normal all-port teardown; a terminal
+     * worker report does not synthesize a teardown on the faulting bus. */
+}
+/* Fault helpers always return through their bounded SR scopes first. The low
+ * resident entry then owns the nonreturning stack transfer and diagnostic;
+ * the suspended game updater must not resume after a worker fault. */
+static void terminal_dispatch(void) {
+    if(!owner.configured || !owner.stats.fault || owner.terminal_reported) return;
+    owner.terminal_reported=1;
+#ifdef KUI_TOY_PILOT_WORKER_TEST
+    kui_toy_pilot_worker_test_terminal();
+#else
+    ((void (*)(void))(uintptr_t)owner.config.terminal_entry)();
+    __builtin_unreachable();
+#endif
 }
 static void stack_sample(void) {
 #ifndef KUI_TOY_PILOT_WORKER_TEST
@@ -166,6 +181,7 @@ uint32_t kui_toy_pilot_worker_initialize(const struct kui_toy_pilot_config *c) {
        c->read_raw<0x8c000000u || c->read_raw>=0x8c010000u || (c->read_raw&1u) ||
        c->resident_active<0x8c000000u || c->resident_active>=0x8c010000u ||
        c->data_pending<0x8c000000u || c->data_pending>=0x8c010000u ||
+       c->terminal_entry<0x8c004000u || c->terminal_entry>=0x8c007800u || (c->terminal_entry&1u) ||
        (c->resident_active&3u) || (c->data_pending&3u) ||
        c->main_lease_begin!=KUI_TOY_PILOT_WORKER_BEGIN || c->main_lease_end!=0x8d000000u ||
        c->worker_begin!=KUI_TOY_PILOT_WORKER_BEGIN || c->worker_end!=(uint32_t)(uintptr_t)__toy_pilot_worker_end ||
@@ -225,6 +241,7 @@ void kui_toy_pilot_worker_post_load(uint32_t result,uint32_t image) {
     owner.stats.driver_crc=crc;
     if(!digest_matches) { fault(KUI_TOY_PILOT_FAULT_DRIVER);mask_end(sr);return; }
     owner.stats.driver_verified=1;owner.disabled=0;owner.stats.fault=0;
+    owner.terminal_reported=0;
     owner.verified_driver_epoch=ticket.epoch;
     owner.stats.state=KUI_TOY_PILOT_STOPPED;
     owner.stats.sound_generation=owner.stats.driver_generation;
@@ -509,14 +526,23 @@ static void playback_step(uint32_t now) {
      * interval through unsigned underflow before the next service clock check. */
     if(elapsed>CLOCK_GAP_LIMIT) { fault(KUI_TOY_PILOT_FAULT_CLOCK);return; }
     if(elapsed<finite_ticks(owner.model.banks[bank].frames)) return;
-    if(!owner.play_seen) { fault(KUI_TOY_PILOT_FAULT_PHASE);return; }
     if(owner.stats.active_left || owner.stats.active_right) {
         if(elapsed>finite_ticks(owner.model.banks[bank].frames)+APPLY_LIMIT_TICKS)
             fault(KUI_TOY_PILOT_FAULT_PHASE);
         return;
     }
+    /* A game service gap can cover an entire finite voice. Consumption of our
+     * START, the exact nonlooping template, a FULL post-consumption interval,
+     * and both inactive flags prove retirement even if no service sampled the
+     * active flags. This is programmed-end evidence, not an audible-start
+     * observation; started_observed must retain its stricter meaning. */
     uint32_t frames=owner.model.banks[bank].frames,first=owner.model.banks[bank].first_frame;
-    if(!kui_toy_pilot_model_finite_end(&owner.model,bank,owner.model.banks[bank].generation,true,true,true)) {
+    uint32_t generation=owner.model.banks[bank].generation,sr=mask_begin();
+    if(owner.disabled || owner.mailbox.generation!=generation || owner.model.generation!=generation) {
+        mask_end(sr);return;
+    }
+    if(!kui_toy_pilot_model_finite_end(&owner.model,bank,generation,true,true,true)) {
+        mask_end(sr);
         fault(KUI_TOY_PILOT_FAULT_GENERATION);return;
     }
     owner.stats.retired_frames+=frames;owner.resume_frame=first+frames;
@@ -524,6 +550,8 @@ static void playback_step(uint32_t now) {
     ++owner.stats.bank_ends;++owner.stats.finite_ends;owner.play_ack_seen=owner.play_seen=0;
     owner.transaction_bank=NONE;owner.gap_pending=1;owner.last_end_tick=now;
     owner.stats.state=KUI_TOY_PILOT_PREFILL;
+    publish();owner.stats.applied_generation=generation;
+    mask_end(sr);
 }
 static bool copy_plane(uint32_t address,const void *source,uint32_t bytes,uint32_t generation,uint32_t bank) {
     uint32_t sr=mask_begin();
@@ -677,34 +705,35 @@ static bool service_idle(void) {
     mask_end(sr);return idle;
 }
 void kui_toy_pilot_worker_step(void) {
-    if(!owner.configured || owner.disabled) return;
+    if(!owner.configured) return;
+    if(owner.disabled) goto done;
     uint32_t sr=status_register();
-    if(sr&0x10000000u) { ++owner.stats.service_skips;return; }
+    if(sr&0x10000000u) { ++owner.stats.service_skips;goto done; }
     ++owner.stats.service_calls;
-    if(!owner.sdk_ready || word(0x8c0a7318u)!=1u) return;
-    if(service_idle()) return;
+    if(!owner.sdk_ready || word(0x8c0a7318u)!=1u) goto done;
+    if(service_idle()) goto done;
     owner.bus_deferred=0;
-    uint32_t now;if(!clock_sample(&now)) { fault(KUI_TOY_PILOT_FAULT_CLOCK);return; }
-    if(!live_driver()) { if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_DRIVER);return; }
+    uint32_t now;if(!clock_sample(&now)) { fault(KUI_TOY_PILOT_FAULT_CLOCK);goto done; }
+    if(!live_driver()) { if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_DRIVER);goto done; }
     if(!owner.stats.sound_address && !sound_allocate()) {
         if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_HEAP);
-        return;
+        goto done;
     }
     if(!observe_ports()) { if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_PORT);
-        return; }
-    if(!sound_word(SOUND_BASE+0x399cu,&owner.stats.queue_consumer)) return;
-    apply_action(now);if(owner.disabled) return;
-    if(owner.bus_deferred) return;
+        goto done; }
+    if(!sound_word(SOUND_BASE+0x399cu,&owner.stats.queue_consumer)) goto done;
+    apply_action(now);if(owner.disabled) goto done;
+    if(owner.bus_deferred) goto done;
     stop_step(now);if(owner.stop_wait || owner.disabled) {
         if(!owner.bus_deferred) owner.bus_defer_seen=0;
-        stack_sample();return;
+        stack_sample();goto done;
     }
-    playback_step(now);if(owner.disabled) return;
-    if(owner.bus_deferred) return;
+    playback_step(now);if(owner.disabled) goto done;
+    if(owner.bus_deferred) goto done;
     if(owner.stats.state==KUI_TOY_PILOT_PREFILL || owner.stats.state==KUI_TOY_PILOT_PLAYING ||
        owner.stats.state==KUI_TOY_PILOT_START_WAIT) {
-        fill_step();if(owner.disabled) return;
-        if(owner.bus_deferred) return;
+        fill_step();if(owner.disabled) goto done;
+        if(owner.bus_deferred) goto done;
         start_step(now);
         uint32_t total=(owner.end_fad-owner.first_fad)*588u;
         if(owner.fill_frame==total && owner.model.active_bank==NONE && owner.model.pending_bank==NONE &&
@@ -715,6 +744,8 @@ void kui_toy_pilot_worker_step(void) {
     }
     if(!owner.bus_deferred) owner.bus_defer_seen=0;
     maximum(&owner.stats.step_ticks_max,ticks()-now);stack_sample();
+done:
+    terminal_dispatch();
 }
 #ifdef KUI_TOY_PILOT_WORKER_TEST
 /* Fixture drives the actual service function, with mapped registers and

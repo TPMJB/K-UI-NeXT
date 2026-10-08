@@ -2,7 +2,7 @@
 #define C_SYMBOL(name) _ ## name
     .section .toy_exports,"a"
     .align 2
-    .long 0x54595031,2,68
+    .long 0x54595031,3,68
     .long C_SYMBOL(kui_toy_pilot_initialize)
     .long C_SYMBOL(kui_toy_pilot_request)
     .long C_SYMBOL(kui_toy_pilot_service_hook)

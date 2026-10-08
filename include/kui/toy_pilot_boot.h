@@ -28,6 +28,16 @@
 #define KUI_TOY_BOOT_LEASE_BYTES 0x00030000
 #define KUI_TOY_BOOT_WORKER_LIMIT 0x8cfe0000
 
+/* Exact title reset callback registration. This callback runs after the
+ * game's reset decision but before its sound/FS/cache teardown. The ordinary
+ * reader and every other title keep their original reset route. */
+#define KUI_TOY_BOOT_RESET_CALLBACK_POOL 0x8c027a24
+#define KUI_TOY_BOOT_RESET_CALLBACK_NATIVE 0x8c027104
+#define KUI_TOY_BOOT_RESET_REGISTER_SITE 0x8c02798e
+#define KUI_TOY_BOOT_RESET_REGISTER_WORD 0x2322
+#define KUI_TOY_BOOT_RESET_INVOKE_SITE 0x8c04f1ee
+#define KUI_TOY_BOOT_RESET_INVOKE_WORD 0x430b
+
 #ifndef __ASSEMBLER__
 #include <stddef.h>
 #include <stdint.h>

@@ -10,10 +10,13 @@ extern void kui_toy_pilot_worker_step(void);
 extern const struct kui_toy_pilot_snapshot *kui_toy_pilot_snapshot(void);
 /* Uncalled initialization/link boundaries; no actual mapped console RAM. */
 uint8_t __toy_pilot_stack_bottom[64],__toy_pilot_stack_top[64],__toy_pilot_worker_end[32];
-static uint32_t sr=0x40000001u,now,bus_calls,leases,packets;
+static uint32_t sr=0x40000001u,now,bus_calls,leases,packets,reports,entry_sr;
 static enum kui_toy_pilot_bus_result read_result,lease_result,packet_result;
 uint32_t kui_toy_pilot_worker_test_sr(void) { return sr; }
 void kui_toy_pilot_worker_test_set_sr(uint32_t value) { sr=value; }
+void kui_toy_pilot_worker_test_terminal(void) {
+    assert(sr==entry_sr);++reports;
+}
 uint32_t kui_toy_pilot_worker_test_read(uint32_t address,unsigned width) {
     (void)width;
     switch(address) {
@@ -58,11 +61,11 @@ enum kui_toy_pilot_bus_result kui_toy_pilot_bus_copy(uint32_t a,const void *p,ui
 }
 static void prepare(uint32_t state,uint32_t command,bool pending) {
     kui_toy_pilot_worker_test_prepare(state,command,pending);
-    now=bus_calls=leases=packets=0;sr=0x40000001u;
+    now=bus_calls=leases=packets=reports=0;sr=0x40000001u;
     read_result=lease_result=packet_result=KUI_TOY_PILOT_BUS_OK;
 }
 static void step(void) {
-    uint32_t before=sr;kui_toy_pilot_worker_step();assert(sr==before);
+    uint32_t before=entry_sr=sr;kui_toy_pilot_worker_step();assert(sr==before);
 }
 int main(void) {
     const uint32_t idle[]={KUI_TOY_PILOT_STOPPED,KUI_TOY_PILOT_PAUSED,KUI_TOY_PILOT_EOF};
@@ -82,9 +85,11 @@ int main(void) {
     prepare(KUI_TOY_PILOT_STOPPED,20u,true);read_result=KUI_TOY_PILOT_BUS_BUSY;step();
     assert(bus_calls==1 && !leases && !packets && !kui_toy_pilot_snapshot()->fault);
     now+=781251u;step();assert(kui_toy_pilot_snapshot()->fault==KUI_TOY_PILOT_FAULT_BUS);
-    uint32_t count=bus_calls;step();assert(bus_calls==count); /* latched fault cannot retry */
+    assert(reports==1u);
+    uint32_t count=bus_calls;step();assert(bus_calls==count && reports==1u); /* fault cannot retry/report twice */
     prepare(KUI_TOY_PILOT_STOPPED,20u,true);read_result=KUI_TOY_PILOT_BUS_TIMEOUT;step();
     assert(bus_calls==1 && !leases && !packets && kui_toy_pilot_snapshot()->fault==KUI_TOY_PILOT_FAULT_BUS);
+    assert(reports==1u);
     prepare(KUI_TOY_PILOT_STOPPED,20u,true);lease_result=KUI_TOY_PILOT_BUS_TIMEOUT;step();
     assert(bus_calls==4 && leases==1 && !packets && !kui_toy_pilot_snapshot()->sound_address);
     assert(kui_toy_pilot_snapshot()->fault==KUI_TOY_PILOT_FAULT_BUS);

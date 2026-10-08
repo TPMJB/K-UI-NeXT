@@ -1,12 +1,21 @@
 # Toy Commander finite stereo CDDA pilot
 
-This build removes every new pilot call into the game's unbounded sound
-helpers. It uses bounded stable reads, sample copies, packet publication and
-allocation-canary writes. A genuinely stopped, paused or finished pilot does
-no sound-bus access or sound allocation. This directly addresses a verified
-way the pilot could hang with interrupts masked; the latest recording does
-not supply the stalled program counter, so the observed freeze is not yet
-proven resolved on hardware. See the [deep review](evidence/cdda-toy-bounded-bus-static-2026-10-08.md).
+This update fixes finite-bank progress when a delayed game sound-service
+visit misses the bank's active interval. Safe retirement still requires a
+consumed start packet, the matching finite setup, a full elapsed interval,
+and both ports inactive. It does not infer that those samples were audible.
+
+It also routes the title's controller-return callback directly to the report
+before the game's sound teardown, which contains an unbounded queue retry.
+A latched worker fault now enters the same report automatically after the
+worker restores SR. This catches authored worker failures; it cannot recover
+an unrelated original-game hang that prevents the worker from running.
+See the [handoff and return review](evidence/cdda-toy-handoff-return-static-2026-10-08.md).
+
+The bounded sound-bus correction is retained. Every new pilot sound read,
+copy, packet and lease-canary operation has a fixed polling/timer budget,
+and a quiescent pilot performs no sound-bus or allocation work. See the
+[bounded bus review](evidence/cdda-toy-bounded-bus-static-2026-10-08.md).
 
 It retains the earlier correction to GD command progress. The hardware run
 after that correction still froze; it was insufficient on its own.
@@ -90,11 +99,12 @@ Record the outcome in ordinary terms: intro behavior, menu music, gameplay
 music, effects, and the character of any gaps or repeated sound. Counter
 values alone do not establish that the output was audible or stereo.
 
-Then hold **A+B+X+Y+Start** together and photograph all report pages, including
-the build ID. If the reader stops earlier, photograph its failure screen and
-every report page that follows. Keep the two sets distinct if you perform
-another cold boot. There is no numerical PASS target before this pilot has
-run on hardware.
+A worker fault should display the four report pages automatically. If music
+continues, hold **A+B+X+Y+Start** together to enter them through the early
+return callback. Photograph the build ID and each page that is visible.
+An original-game hang may still prevent the reset decision from running;
+that is a distinct unresolved result. There is no numerical PASS target
+before this pilot has run on hardware.
 
 ## Read the four pages
 

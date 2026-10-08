@@ -26,7 +26,7 @@ import retail_package as retail_layout
 from retail_package import inspect_retail
 from runtime_package import flatten_elf
 
-OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Bus-Fix.zip'
+OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Handoff-Fix.zip'
 README_SOURCE = 'docs/cdda-toy-pilot-test.md'
 BUILD_DIRECTORY = 'build/toy-pilot'
 RUNTIME_FILE = 'pilot/15-toy-finite-stereo.kui'
@@ -175,7 +175,7 @@ def inspect_worker(data):
     if not found_symbols:
         raise ValueError('Worker lacks linked symbols')
     exports = WORKER_EXPORTS.unpack_from(payload)
-    if exports[:3] != (0x54595031, 2, 68) or entry != exports[3]:
+    if exports[:3] != (0x54595031, 3, 68) or entry != exports[3]:
         raise ValueError('Worker export ABI or ELF initialization entry differs')
     allocated = allocated_sections(data)
     for address in (*exports[3:9], *exports[15:17]):
@@ -665,6 +665,11 @@ def collect(commit, published_tree):
             'quiescent_service_sound_bus_or_heap_work': False,
             'terminal_snapshot_version': 2,
             'terminal_snapshot_bytes': 256,
+            'worker_config_version': 3,
+            'worker_config_bytes': 52,
+            'worker_fault_report': 'direct low terminal hook after restoring SR; no game teardown',
+            'controller_report': 'exact reset callback before game sound teardown',
+            'missed_finite_active_interval': 'retire only with consumed start, finite template, full elapsed interval and both ports inactive',
             'updater_breadcrumbs_are_a_watchdog': False,
             'GD_audio_completion': 'first EXEC acknowledges accepted mailbox command',
             'GD_audio_completion_waits_for_worker_application': False,

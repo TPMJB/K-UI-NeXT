@@ -45,7 +45,8 @@ static const uint32_t toy_track_ends[15]={7107u,7753u,201750u,219712u,234091u,
 
 struct toy_patch {uint32_t address,original;uint16_t bytes,kind;};
 enum toy_patch_kind {TOY_HEAP,TOY_PICKER,TOY_UPDATER_CAP,TOY_WRAP,
-    TOY_SERVICE,TOY_AM_INIT,TOY_DRIVER_LOAD,TOY_SHUTDOWN,TOY_ALLSTOP,TOY_CHECK};
+    TOY_SERVICE,TOY_AM_INIT,TOY_DRIVER_LOAD,TOY_SHUTDOWN,TOY_ALLSTOP,
+    TOY_RESET_RETURN,TOY_CHECK};
 /* Numerical contracts only; no game instructions or executable are bundled.
  * Every original value is checked as a transaction before the initial hook. */
 static const struct toy_patch toy_patches[]={
@@ -63,7 +64,10 @@ static const struct toy_patch toy_patches[]={
     {0x8c06ab60u,0x8c06ac54u,4,TOY_DRIVER_LOAD},
     {0x8c04a050u,0x8c06aa0eu,4,TOY_SHUTDOWN},
     {0x8c04a04cu,0x8c068a96u,4,TOY_ALLSTOP},
-    {0x8c04a258u,0x8c068a96u,4,TOY_ALLSTOP}
+    {0x8c04a258u,0x8c068a96u,4,TOY_ALLSTOP},
+    {KUI_TOY_BOOT_RESET_CALLBACK_POOL,KUI_TOY_BOOT_RESET_CALLBACK_NATIVE,4,TOY_RESET_RETURN},
+    {KUI_TOY_BOOT_RESET_REGISTER_SITE,KUI_TOY_BOOT_RESET_REGISTER_WORD,2,TOY_CHECK},
+    {KUI_TOY_BOOT_RESET_INVOKE_SITE,KUI_TOY_BOOT_RESET_INVOKE_WORD,2,TOY_CHECK}
 };
 
 static volatile struct kui_toy_pilot_boot_control *toy_control(void) {
@@ -216,7 +220,7 @@ void kui_toy_pilot_stage_install(void) {
         KUI_TOY_PILOT_LOW_MANIFEST,KUI_TOY_PILOT_LOW_READ_RAW,
         KUI_TOY_PILOT_LOW_ACTIVE,KUI_TOY_PILOT_LOW_DATA_PENDING,
         c->lease,c->lease+KUI_TOY_BOOT_LEASE_BYTES,
-        c->lease,e.worker_end,bytes};
+        c->lease,e.worker_end,bytes,KUI_TOY_PILOT_LOW_RETURN_HOOK};
     /* INITIALIZE fills its stack guard and performs its own stack bridge. */
     int (*initialize)(const struct kui_toy_pilot_config *)=
         (int (*)(const struct kui_toy_pilot_config *))(uintptr_t)e.initialize;
@@ -224,6 +228,11 @@ void kui_toy_pilot_stage_install(void) {
         toy_failure(7,e.initialize);
     /* Recheck every original word before the multiword sound transaction. */
     toy_original_patches_check(1);
+    uint32_t reset_target=kui_toy_pilot_reset_target(
+        toy_read(KUI_TOY_BOOT_RESET_CALLBACK_POOL,4),
+        toy_read(KUI_TOY_BOOT_RESET_REGISTER_SITE,2),
+        toy_read(KUI_TOY_BOOT_RESET_INVOKE_SITE,2),KUI_TOY_PILOT_LOW_RETURN_HOOK);
+    if(!reset_target) toy_failure(4,KUI_TOY_BOOT_RESET_CALLBACK_POOL);
     for(unsigned i=0;i<sizeof(toy_patches)/sizeof(toy_patches[0]);i++) {
         const struct toy_patch *p=&toy_patches[i];
         uint32_t value=p->original;
@@ -236,6 +245,10 @@ void kui_toy_pilot_stage_install(void) {
             case TOY_DRIVER_LOAD:value=e.driver_load_hook;break;
             case TOY_SHUTDOWN:value=e.shutdown_hook;break;
             case TOY_ALLSTOP:value=e.allstop_hook;break;
+            /* Preserve the title's reset decision; publish its terminal
+             * callback before normal startup registers it. That callback
+             * must not enter the original unbounded global-stop retry. */
+            case TOY_RESET_RETURN:value=reset_target;break;
             /* Keep the low persistent guard: a repeat call through this
              * exact slot must stop before reinitializing the leased heap. */
             case TOY_HEAP:continue;
