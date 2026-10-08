@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/toy_pilot.h"
+#include "kui/toy_pilot_driver_load.h"
 #include "kui/retail_image.h"
 #include "kui/hash.h"
 #include <stddef.h>
@@ -18,7 +19,6 @@
 #define TIMER_TCNT UINT32_C(0xffd8000c)
 #define CLOCK_FRQCR UINT32_C(0xffc00000)
 #define TIMER_TCR UINT32_C(0xffd80010)
-#define DRIVER_BYTES 20740u
 #define FINITE_GUARD_TICKS 15625u /* 20ms after a FULL nominal finite interval */
 #define CLOCK_GAP_LIMIT 7812500u /* Fail closed on >10s or a clock reset. */
 #define APPLY_LIMIT_TICKS 781250u /* 1s; checked only while game service runs. */
@@ -40,8 +40,10 @@ static struct {
     struct kui_toy_pilot_config config;
     struct kui_toy_pilot_snapshot stats;
     struct kui_toy_pilot_model model;
+    struct kui_toy_pilot_driver_load driver_load;
     volatile struct mailbox mailbox;
     volatile uint32_t configured, sdk_ready, disabled;
+    uint32_t verified_driver_epoch;
     uint32_t handled_generation;
     uint32_t first_fad,end_fad,track,fill_frame,resume_frame,repeat_left;
     uint32_t last_tick,clock_seen,play_ack_tick,play_ack_seen,play_seen;
@@ -105,6 +107,8 @@ static const struct kui_retail_manifest *manifest(void) {
 /* No private-stack selection, allocation or SDK call. Mandatory lifecycle
  * revocation is safe even when it interrupts a suspended worker bridge. */
 void kui_toy_pilot_worker_revoke(void) {
+    kui_toy_pilot_driver_load_clear(&owner.driver_load);
+    owner.verified_driver_epoch=0;
     owner.sdk_ready=0;owner.disabled=1;owner.stats.driver_verified=0;
     owner.stats.sound_generation=0;
     if(owner.mailbox.generation<0x7fffffffu) ++owner.mailbox.generation;
@@ -122,7 +126,7 @@ static bool single_audio(uint32_t track,uint32_t *first,uint32_t *end) {
     return true;
 }
 uint32_t kui_toy_pilot_worker_initialize(const struct kui_toy_pilot_config *c) {
-    if(!c || c->magic!=KUI_TOY_PILOT_MAGIC || c->version!=1u || c->bytes!=sizeof(*c) ||
+    if(!c || c->magic!=KUI_TOY_PILOT_MAGIC || c->version!=KUI_TOY_PILOT_API || c->bytes!=sizeof(*c) ||
        c->manifest<0x8c000000u || c->manifest>=0x8c010000u ||
        c->read_raw<0x8c000000u || c->read_raw>=0x8c010000u || (c->read_raw&1u) ||
        c->resident_active<0x8c000000u || c->resident_active>=0x8c010000u ||
@@ -140,32 +144,70 @@ uint32_t kui_toy_pilot_worker_initialize(const struct kui_toy_pilot_config *c) {
     owner.mailbox.generation=1;owner.handled_generation=1;
     stack_sample();return owner.stats.fault?0u:1u;
 }
-/* Called on the worker stack, BEFORE the original amInit consumes its input. */
+/* amInit has not loaded the driver yet. Remember its allocated destination;
+ * do not read that uninitialized allocation. The lifecycle wrapper already
+ * revoked the old generation on the original game stack before this bridge. */
 void kui_toy_pilot_worker_pre_init(uint32_t image,uint32_t bytes) {
-    owner.sdk_ready=0;owner.disabled=0;owner.stats.driver_verified=0;
+    uint32_t sr=mask_begin();
+    owner.sdk_ready=0;owner.disabled=1;owner.stats.driver_verified=0;
+    owner.verified_driver_epoch=0;
+    owner.stats.driver_crc=0;
     owner.stats.sound_address=owner.stats.sound_bytes=owner.stats.sound_generation=0;
+    kui_toy_pilot_driver_load_clear(&owner.driver_load);
+    if(owner.stats.driver_generation==UINT32_MAX) {
+        fault(KUI_TOY_PILOT_FAULT_GENERATION);mask_end(sr);return;
+    }
     ++owner.stats.driver_generation;
     owner.stats.driver_bytes=bytes;
-    if(!owner.configured || bytes!=DRIVER_BYTES || image<0x8c010000u || image>=0x8cfd0000u ||
-       bytes>0x8cfd0000u-image) { fault(KUI_TOY_PILOT_FAULT_DRIVER);return; }
+    if(!owner.configured || !kui_toy_pilot_driver_load_prepare(&owner.driver_load,
+       image,bytes,owner.stats.driver_generation,owner.mailbox.generation)) {
+        fault(KUI_TOY_PILOT_FAULT_DRIVER);mask_end(sr);return;
+    }
+    mask_end(sr);
+    stack_sample();
+}
+/* The exact original file loader has returned, but amInit has not initialized
+ * the SDK or installed the ARM driver. Its output is now valid for hashing.
+ * Failed, different, repeated or revoked loads never establish an identity. */
+void kui_toy_pilot_worker_post_load(uint32_t result,uint32_t image) {
+    struct kui_toy_pilot_driver_load ticket;
+    uint32_t sr=mask_begin();
+    if(!kui_toy_pilot_driver_load_take(&owner.driver_load,result,image,
+       owner.stats.driver_generation,owner.mailbox.generation,&ticket)) {
+        fault(KUI_TOY_PILOT_FAULT_DRIVER);mask_end(sr);return;
+    }
+    mask_end(sr);
     struct kui_sha256 sha;uint8_t digest[32];
-    kui_sha256_init(&sha);kui_sha256_update(&sha,(const void *)(uintptr_t)image,bytes);
+    kui_sha256_init(&sha);kui_sha256_update(&sha,(const void *)(uintptr_t)image,ticket.bytes);
     kui_sha256_digest(&sha,digest);
-    owner.stats.driver_crc=crc32((const void *)(uintptr_t)image,bytes);
-    if(memcmp(digest,driver_digest,sizeof(digest))) { fault(KUI_TOY_PILOT_FAULT_DRIVER);return; }
-    owner.stats.driver_verified=1;owner.stats.fault=0;owner.stats.state=KUI_TOY_PILOT_STOPPED;
+    uint32_t crc=crc32((const void *)(uintptr_t)image,ticket.bytes);
+    bool digest_matches=!memcmp(digest,driver_digest,sizeof(digest));
+    sr=mask_begin();
+    if(!kui_toy_pilot_driver_load_current(&ticket,owner.stats.driver_generation,
+       owner.mailbox.generation)) {
+        fault(KUI_TOY_PILOT_FAULT_GENERATION);mask_end(sr);return;
+    }
+    owner.stats.driver_crc=crc;
+    if(!digest_matches) { fault(KUI_TOY_PILOT_FAULT_DRIVER);mask_end(sr);return; }
+    owner.stats.driver_verified=1;owner.disabled=0;owner.stats.fault=0;
+    owner.verified_driver_epoch=ticket.epoch;
+    owner.stats.state=KUI_TOY_PILOT_STOPPED;
     owner.stats.sound_generation=owner.stats.driver_generation;
     owner.stop_wait=owner.queue_wait=owner.play_ack_seen=owner.play_seen=0;
     owner.transaction_bank=NONE;owner.clock_seen=0;
     kui_toy_pilot_model_init(&owner.model);
     owner.model.generation=owner.stats.generation;
     owner.handled_generation=owner.mailbox.generation;
+    mask_end(sr);
     stack_sample();
 }
 void kui_toy_pilot_worker_post_init(uint32_t result) {
+    uint32_t sr=mask_begin();
     owner.stats.sdk_init_result=result;
-    owner.sdk_ready=result==1u && owner.stats.driver_verified && !owner.disabled;
+    owner.sdk_ready=result==1u && owner.stats.driver_verified && !owner.disabled &&
+        owner.verified_driver_epoch && owner.verified_driver_epoch==owner.mailbox.generation;
     if(!owner.sdk_ready) fault(KUI_TOY_PILOT_FAULT_DRIVER);
+    mask_end(sr);
     stack_sample();
 }
 void kui_toy_pilot_worker_shutdown(void) {

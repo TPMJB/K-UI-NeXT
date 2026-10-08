@@ -1,8 +1,14 @@
 # Toy Commander finite stereo CDDA pilot
 
-This build corrects the launch refusal in `eb5932c259ee`: raw GDI manifests
-may omit the optional source CRC. The pilot still requires the exact loaded
-executable CRC and SHA-256 before installing hooks.
+This build moves sound-driver verification to the successful file-load
+boundary inside the game's initialization, before SDK installation. Build
+`42bd06d32d16` checked the allocated buffer before it had been filled, so the
+game could boot while CDDA remained disabled. The exact 20,740-byte driver
+SHA-256 remains required; the SDK's alignment padding is excluded.
+
+It also retains the raw-GDI launch correction: manifests may omit the optional
+source CRC, but the exact loaded executable CRC and SHA-256 remain required
+before installing hooks.
 
 This is one new, manually installed Toy Commander pilot. It uses the game's
 own ARM sound driver and allocation interfaces. It keeps the working 1.8.5
@@ -106,7 +112,10 @@ The telemetry header is magic `54595031`, version `00000001`, bytes
 `000000F0`. An all-zero report means that valid worker telemetry was not
 available; it does not mean that audio passed. The expected driver identity
 is 20,740 bytes (`00005104`), CRC32 `70CCEEB2`; `driver_verified` records whether
-the input to the game's sound-driver initialization matched. It is not a
+the successfully loaded file matched before SDK installation. It is cleared
+when the pilot shuts down, so a zero on the return report alone is not proof
+of failed verification. The retained CRC and fill/start counts distinguish
+that case. It is not a
 readback hash of the installed ARM image. `main_begin` is `8CFD0000`, `main_end` is
 `8D000000`, and `worker_end` must remain at or below `8CFE0000`.
 

@@ -17,10 +17,14 @@ base is `0xa0800000`; SH addresses assume boot load base `0x8c010000`.
 Critical ARM memory operations, bit masks and conditional branches were checked
 against the supplied instruction words as well as the private decoder output.
 
-The game calls `amInit` at `0x8c06aa86` with driver main-RAM pointer in `r4`
+The game calls `amInit` at `0x8c06aa86` with an allocated main-RAM destination in `r4`
 and actual file byte length in `r5`. Its one observed call uses the literal at
 `0x8c04a244`, calls at `0x8c04a1a2`, and returns to `0x8c04a1a6`.
-This is a candidate identity-check boundary before the game installs the driver.
+The destination is still unfilled at that call. Inside `amInit`, the file
+loader at `0x8c06ac54` fills it; its exact call target is the literal at
+`0x8c06ab60`, and success returns `1`. Verification belongs after that successful
+load and before SDK initialization and driver installation. Hashing at the
+outer `amInit` entry admits no loaded-file identity.
 `amInit` rounds its internal install length to 32 bytes, so the exact 20740-byte
 identity must be checked before installation, rather than hashing 20768 bytes.
 The installed image contains writable headers, tables and code-local state;

@@ -6,7 +6,7 @@ PHDRS { worker PT_LOAD FLAGS(7); }
 SECTIONS {
     . = 0x8cfd0000;
     .toy_exports : { KEEP(*(.toy_exports)) } :worker
-    ASSERT(SIZEOF(.toy_exports)==64, "Toy exports must be 64 bytes")
+    ASSERT(SIZEOF(.toy_exports)==68, "Toy exports must be 68 bytes")
     .text : { *(.text .text.*) } :worker
     .rodata : { *(.rodata .rodata.*) } :worker
     .data : { *(.data .data.*) } :worker

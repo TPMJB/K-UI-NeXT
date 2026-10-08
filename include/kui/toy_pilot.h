@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define KUI_TOY_PILOT_MAGIC UINT32_C(0x54595031)
-#define KUI_TOY_PILOT_API 1u
+#define KUI_TOY_PILOT_API 2u
 #define KUI_TOY_PILOT_WORKER_BEGIN UINT32_C(0x8cfd0000)
 #define KUI_TOY_PILOT_WORKER_END UINT32_C(0x8cfe0000)
 #define KUI_TOY_PILOT_MAIN_LEASE_BYTES UINT32_C(0x30000)
@@ -38,7 +38,7 @@ struct kui_toy_pilot_config {
 };
 _Static_assert(sizeof(struct kui_toy_pilot_config)==48u,"Toy config ABI");
 
-/* The first 64 bytes of worker.bin. Entry addresses are callable integer SH
+/* The first 68 bytes of worker.bin. Entry addresses are callable integer SH
  * functions, not offsets. INIT copies the 48-byte config on its own stack.
  * REQUEST(command,p0,p1,p2) is pure mailbox work, safe in the masked GD path;
  * positive means accepted generation, zero refusal. SNAPSHOT returns a pointer
@@ -48,9 +48,9 @@ struct kui_toy_pilot_exports {
     uint32_t initialize, request, service_hook, am_init_hook, shutdown_hook;
     uint32_t snapshot;
     uint32_t bss_begin, bss_end, stack_bottom, stack_top, worker_end;
-    uint32_t main_lease_bytes, allstop_hook;
+    uint32_t main_lease_bytes, allstop_hook, driver_load_hook;
 };
-_Static_assert(sizeof(struct kui_toy_pilot_exports)==64u,"Toy exports ABI");
+_Static_assert(sizeof(struct kui_toy_pilot_exports)==68u,"Toy exports ABI");
 
 enum kui_toy_pilot_state {
     KUI_TOY_PILOT_OFF, KUI_TOY_PILOT_STOPPED, KUI_TOY_PILOT_PREFILL,

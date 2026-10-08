@@ -26,7 +26,7 @@ import retail_package as retail_layout
 from retail_package import inspect_retail
 from runtime_package import flatten_elf
 
-OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Fix.zip'
+OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Driver-Fix.zip'
 README_SOURCE = 'docs/cdda-toy-pilot-test.md'
 BUILD_DIRECTORY = 'build/toy-pilot'
 RUNTIME_FILE = 'pilot/15-toy-finite-stereo.kui'
@@ -43,7 +43,7 @@ DRIVER_BYTES = 20740
 DRIVER_SHA256 = '477ede3766c27fa58e4c14d5218c583b7806a29c328a6e0d4965293375b704e5'
 DRIVER_CRC32 = '70cceeb2'
 PILOT_LABEL = b'PILOT PAGE'
-WORKER_EXPORTS = struct.Struct('<16I')
+WORKER_EXPORTS = struct.Struct('<17I')
 SNAPSHOT_WORDS = (
     'magic', 'version', 'bytes', 'state',
     'fault', 'generation', 'applied_generation', 'driver_generation',
@@ -174,10 +174,10 @@ def inspect_worker(data):
     if not found_symbols:
         raise ValueError('Worker lacks linked symbols')
     exports = WORKER_EXPORTS.unpack_from(payload)
-    if exports[:3] != (0x54595031, 1, 64) or entry != exports[3]:
+    if exports[:3] != (0x54595031, 2, 68) or entry != exports[3]:
         raise ValueError('Worker export ABI or ELF initialization entry differs')
     allocated = allocated_sections(data)
-    for address in (*exports[3:9], exports[15]):
+    for address in (*exports[3:9], *exports[15:17]):
         if address % 2 or address < WORKER_BASE + WORKER_EXPORTS.size or not any(
                 item['flags'] & 4 and item['address'] <= address < item['address'] + item['bytes']
                 for item in allocated.values()):
@@ -201,6 +201,7 @@ def inspect_worker(data):
         (5, '_kui_toy_pilot_service_hook'), (6, '_kui_toy_pilot_am_init_hook'),
         (7, '_kui_toy_pilot_shutdown_hook'), (8, '_kui_toy_pilot_snapshot'),
         (15, '_kui_toy_pilot_allstop_hook'),
+        (16, '_kui_toy_pilot_driver_load_hook'),
     )})
     if any(symbols.get(name) != address for name, address in expected_symbols.items()):
         raise ValueError('Worker export reservations disagree with linked symbols')
@@ -610,7 +611,8 @@ def collect(commit, published_tree):
             'runtime_gdi_admission_uses_crc_and_geometry': True,
             'runtime_boot_sha256_checked_before_hooks': True,
             'runtime_manifest_carries_descriptor_sha256': False,
-            'runtime_driver_input_sha256_checked_before_am_init': True,
+            'runtime_driver_input_sha256_checked_after_file_load_before_sdk_install': True,
+            'runtime_driver_hash_bytes_exclude_install_alignment_padding': True,
             'installed_arm_driver_readback_sha256_checked': False,
         },
         'installation': {

@@ -45,7 +45,7 @@ static const uint32_t toy_track_ends[15]={7107u,7753u,201750u,219712u,234091u,
 
 struct toy_patch {uint32_t address,original;uint16_t bytes,kind;};
 enum toy_patch_kind {TOY_HEAP,TOY_PICKER,TOY_UPDATER_CAP,TOY_WRAP,
-    TOY_SERVICE,TOY_AM_INIT,TOY_SHUTDOWN,TOY_ALLSTOP,TOY_CHECK};
+    TOY_SERVICE,TOY_AM_INIT,TOY_DRIVER_LOAD,TOY_SHUTDOWN,TOY_ALLSTOP,TOY_CHECK};
 /* Numerical contracts only; no game instructions or executable are bundled.
  * Every original value is checked as a transaction before the initial hook. */
 static const struct toy_patch toy_patches[]={
@@ -60,6 +60,7 @@ static const struct toy_patch toy_patches[]={
     {0x8c04a5d2u,0x883fu,2,TOY_WRAP},
     {0x8c04ac38u,0x8c04a270u,4,TOY_SERVICE},
     {0x8c04a244u,0x8c06aa86u,4,TOY_AM_INIT},
+    {0x8c06ab60u,0x8c06ac54u,4,TOY_DRIVER_LOAD},
     {0x8c04a050u,0x8c06aa0eu,4,TOY_SHUTDOWN},
     {0x8c04a04cu,0x8c068a96u,4,TOY_ALLSTOP},
     {0x8c04a258u,0x8c068a96u,4,TOY_ALLSTOP}
@@ -157,7 +158,7 @@ static void toy_exports_check(struct kui_toy_pilot_exports *e,uint32_t bytes) {
        !toy_entry(e->initialize,bytes) || !toy_entry(e->request,bytes) ||
        !toy_entry(e->service_hook,bytes) || !toy_entry(e->am_init_hook,bytes) ||
        !toy_entry(e->shutdown_hook,bytes) || !toy_entry(e->snapshot,bytes) ||
-       !toy_entry(e->allstop_hook,bytes))
+       !toy_entry(e->allstop_hook,bytes) || !toy_entry(e->driver_load_hook,bytes))
         toy_failure(3,e->worker_end);
 }
 static void toy_original_patches_check(int installed_heap) {
@@ -232,6 +233,7 @@ void kui_toy_pilot_stage_install(void) {
             case TOY_WRAP:value=0x883du;break;
             case TOY_SERVICE:value=e.service_hook;break;
             case TOY_AM_INIT:value=e.am_init_hook;break;
+            case TOY_DRIVER_LOAD:value=e.driver_load_hook;break;
             case TOY_SHUTDOWN:value=e.shutdown_hook;break;
             case TOY_ALLSTOP:value=e.allstop_hook;break;
             /* Keep the low persistent guard: a repeat call through this

@@ -2,7 +2,7 @@
 #define C_SYMBOL(name) _ ## name
     .section .toy_exports,"a"
     .align 2
-    .long 0x54595031,1,64
+    .long 0x54595031,2,68
     .long C_SYMBOL(kui_toy_pilot_initialize)
     .long C_SYMBOL(kui_toy_pilot_request)
     .long C_SYMBOL(kui_toy_pilot_service_hook)
@@ -13,6 +13,7 @@
     .long __toy_pilot_stack_bottom,__toy_pilot_stack_top
     .long __toy_pilot_worker_end,0x30000
     .long C_SYMBOL(kui_toy_pilot_allstop_hook)
+    .long C_SYMBOL(kui_toy_pilot_driver_load_hook)
 
     .text
     .align 2
@@ -69,6 +70,32 @@ C_SYMBOL(kui_toy_pilot_am_init_hook):
     lds.l @r15+,pr
     rts
     nop
+
+    .global C_SYMBOL(kui_toy_pilot_driver_load_hook)
+    .type C_SYMBOL(kui_toy_pilot_driver_load_hook),@function
+C_SYMBOL(kui_toy_pilot_driver_load_hook):
+    /* The original loader fills the amInit destination on the inherited
+     * SDK caller stack. Hash only after its successful return, before the
+     * original amInit continues with SDK initialization/driver install. */
+    sts.l pr,@-r15
+    mov.l r4,@-r15
+    mov.l r5,@-r15
+    mov.l .Loriginal_driver_load,r0
+    jsr @r0
+    nop
+    mov.l r0,@-r15
+    mov r0,r4
+    mov.l @(4,r15),r5
+    mov.l .Lpost_load,r0
+    bsr .Lbridge
+    nop
+    mov.l @r15+,r0
+    mov.l @r15+,r5
+    mov.l @r15+,r4
+    lds.l @r15+,pr
+    rts
+    nop
+    .size C_SYMBOL(kui_toy_pilot_driver_load_hook),.-C_SYMBOL(kui_toy_pilot_driver_load_hook)
 
     .global C_SYMBOL(kui_toy_pilot_shutdown_hook)
 C_SYMBOL(kui_toy_pilot_shutdown_hook):
@@ -175,11 +202,13 @@ C_SYMBOL(kui_toy_pilot_allstop_hook):
 .Linitialize: .long C_SYMBOL(kui_toy_pilot_worker_initialize)
 .Lservice: .long C_SYMBOL(kui_toy_pilot_worker_step)
 .Lpre_init: .long C_SYMBOL(kui_toy_pilot_worker_pre_init)
+.Lpost_load: .long C_SYMBOL(kui_toy_pilot_worker_post_load)
 .Lrevoke: .long C_SYMBOL(kui_toy_pilot_worker_revoke)
 .Lpost_init: .long C_SYMBOL(kui_toy_pilot_worker_post_init)
 .Lshutdown: .long C_SYMBOL(kui_toy_pilot_worker_shutdown)
 .Lallstop: .long C_SYMBOL(kui_toy_pilot_worker_allstop)
 .Loriginal_updater: .long 0x8c04a270
 .Loriginal_am_init: .long 0x8c06aa86
+.Loriginal_driver_load: .long 0x8c06ac54
 .Loriginal_shutdown: .long 0x8c06aa0e
 .Loriginal_allstop: .long 0x8c068a96
