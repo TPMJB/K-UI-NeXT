@@ -16,10 +16,12 @@ static inline bool kui_toy_pilot_gd_audio_pending(const struct kui_retail_gd *s)
  * Call only for a pending audio command, with the GD serialization held. */
 static inline void kui_toy_pilot_gd_acknowledge(struct kui_retail_gd *s,
     const struct kui_toy_pilot_snapshot *p) {
-    s->pending=0;
-    s->error=!p || p->fault?KUI_GD_ERROR_UNAVAILABLE:
+    uint32_t error=!p || p->fault?KUI_GD_ERROR_UNAVAILABLE:
         p->generation!=s->count?KUI_GD_ERROR_CANCELLED:0u;
-    s->status=s->error?KUI_GD_FAILED:KUI_GD_COMPLETED;
+    /* The ordinary scalar EXEC also owns INIT datatype and STOP drive state.
+     * Audio IDs here cannot enter its image-read paths. */
+    if(!error) (void)kui_retail_gd_dispatch(s,0,0,0,KUI_GD_EXEC);
+    else { s->pending=0;s->error=error;s->status=KUI_GD_FAILED; }
     if(p && p->position_fad>=150u) s->position_lba=p->position_fad-150u;
 }
 #endif

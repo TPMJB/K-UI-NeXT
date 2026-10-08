@@ -28,9 +28,11 @@ STAGE_SRC = src/loader/toy_pilot_stage.c src/loader/sd_reader.c src/loader/retai
  src/loader/minic.c src/core/retail_image.c src/loader/retail_display.c \
  src/core/retail_observe.c src/core/hash.c
 STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
-WORKER_SRC = src/loader/toy_pilot_worker.c src/core/toy_pilot.c src/core/hash.c src/loader/minic.c
+WORKER_SRC = src/loader/toy_pilot_worker.c src/loader/toy_pilot_bus.c src/loader/toy_pilot_lease.c \
+ src/core/toy_pilot.c src/core/hash.c src/loader/minic.c
 WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o
 .PHONY: all resident force-config
+.DELETE_ON_ERROR:
 all: $(BUILD)/retail-toy-pilot.kui
 resident: $(BUILD)/resident-sci.bin
 force-config:

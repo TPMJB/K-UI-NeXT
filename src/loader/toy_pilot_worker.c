@@ -1,13 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/toy_pilot.h"
 #include "kui/toy_pilot_driver_load.h"
+#include "kui/toy_pilot_bus.h"
+#include "kui/toy_pilot_lease.h"
 #include "kui/retail_image.h"
 #include "kui/hash.h"
 #include <stddef.h>
 #include <string.h>
 
-/* An exact Toy profile. All sound writes go through the game's installed
- * SDK. In particular this worker does not reset ARM, master audio or timers. */
+/* Exact installed Toy driver protocol. All new G2 work is bounded; no calls
+ * into the game's unbounded sound helpers, ARM reset or timer programming. */
 #define SOUND_BASE UINT32_C(0xa0800000)
 #define SOUND_END UINT32_C(0xa09f4000)
 #define SOUND_FIRST UINT32_C(0xa0830040)
@@ -34,6 +36,7 @@ extern uint8_t __toy_pilot_stack_bottom[] __asm__("__toy_pilot_stack_bottom");
 extern uint8_t __toy_pilot_stack_top[] __asm__("__toy_pilot_stack_top");
 extern uint8_t __toy_pilot_worker_end[] __asm__("__toy_pilot_worker_end");
 volatile uint32_t kui_toy_pilot_bridge_active,kui_toy_pilot_bridge_skips;
+volatile uint32_t kui_toy_pilot_updater_entries,kui_toy_pilot_updater_returns;
 
 struct mailbox { uint32_t command, p[3], first_fad, end_fad, track, generation; };
 static struct {
@@ -51,6 +54,7 @@ static struct {
     uint32_t queue_tick,stop_tick;
     uint32_t transaction_bank,transaction_step,stop_action;
     uint32_t last_end_tick,gap_pending;
+    uint32_t bus_defer_tick,bus_defer_seen,bus_deferred;
     _Alignas(32) uint8_t raw[8192];
     _Alignas(32) int16_t left[128],right[128];
 } owner;
@@ -60,6 +64,20 @@ static const uint8_t driver_digest[32]={
     0x78,0x06,0xa2,0x9c,0x32,0x8a,0x6e,0x0d,0x49,0x65,0x29,0x33,0x75,0xb7,0x04,0xe5
 };
 
+#ifdef KUI_TOY_PILOT_WORKER_TEST
+extern uint32_t kui_toy_pilot_worker_test_read(uint32_t,unsigned);
+extern uint32_t kui_toy_pilot_worker_test_sr(void);
+extern void kui_toy_pilot_worker_test_set_sr(uint32_t);
+static uint32_t word(uint32_t a) { return kui_toy_pilot_worker_test_read(a,4); }
+static uint16_t half(uint32_t a) { return (uint16_t)kui_toy_pilot_worker_test_read(a,2); }
+static uint8_t byte(uint32_t a) { return (uint8_t)kui_toy_pilot_worker_test_read(a,1); }
+static uint32_t status_register(void) { return kui_toy_pilot_worker_test_sr(); }
+static uint32_t mask_begin(void) {
+    uint32_t sr=status_register();kui_toy_pilot_worker_test_set_sr(sr|0xf0u);return sr;
+}
+static void mask_end(uint32_t sr) { kui_toy_pilot_worker_test_set_sr(sr); }
+static void publish(void) { }
+#else
 static uint32_t word(uint32_t a) { return *(volatile const uint32_t *)(uintptr_t)a; }
 static uint16_t half(uint32_t a) { return *(volatile const uint16_t *)(uintptr_t)a; }
 static uint8_t byte(uint32_t a) { return *(volatile const uint8_t *)(uintptr_t)a; }
@@ -74,6 +92,10 @@ static void mask_end(uint32_t sr) {
     __asm__ __volatile__("ldc %0,sr" : : "r"(sr) : "memory");
 }
 static void publish(void) { __asm__ __volatile__("" : : : "memory"); }
+static uint32_t status_register(void) {
+    uint32_t sr;__asm__ __volatile__("stc sr,%0":"=r"(sr));return sr;
+}
+#endif
 static uint32_t ticks(void) { return ~word(TIMER_TCNT); }
 static void maximum(uint32_t *out,uint32_t value) { if(value>*out) *out=value; }
 static uint32_t crc32(const void *data,uint32_t bytes) {
@@ -93,6 +115,7 @@ static void fault(uint32_t reason) {
      * normal all-port teardown; a worker fault cannot replace that teardown. */
 }
 static void stack_sample(void) {
+#ifndef KUI_TOY_PILOT_WORKER_TEST
     const uint32_t *p=(const uint32_t *)__toy_pilot_stack_bottom;
     const uint32_t *end=(const uint32_t *)__toy_pilot_stack_top;
     for(unsigned i=0;i<16u;i++) if(p[i]!=STACK_PATTERN) {
@@ -100,6 +123,18 @@ static void stack_sample(void) {
     }
     while(p<end && *p==STACK_PATTERN) ++p;
     maximum(&owner.stats.stack_used,(uint32_t)((uintptr_t)end-(uintptr_t)p));
+#endif
+}
+static bool bus_result(enum kui_toy_pilot_bus_result result) {
+    owner.stats.bus_last_result=(uint32_t)result;
+    if(result==KUI_TOY_PILOT_BUS_OK) return true;
+    if(result==KUI_TOY_PILOT_BUS_BUSY) {
+        ++owner.stats.bus_deferrals;owner.bus_deferred=1;
+        uint32_t now=ticks();
+        if(!owner.bus_defer_seen) { owner.bus_defer_seen=1;owner.bus_defer_tick=now; }
+        else if(now-owner.bus_defer_tick>APPLY_LIMIT_TICKS) fault(KUI_TOY_PILOT_FAULT_BUS);
+    } else fault(KUI_TOY_PILOT_FAULT_BUS);
+    return false;
 }
 static const struct kui_retail_manifest *manifest(void) {
     return (const struct kui_retail_manifest *)(uintptr_t)owner.config.manifest;
@@ -138,7 +173,7 @@ uint32_t kui_toy_pilot_worker_initialize(const struct kui_toy_pilot_config *c) {
        c->code_bytes>c->worker_end-c->worker_begin) return 0;
     owner.config=*c;owner.configured=1;owner.transaction_bank=NONE;
     kui_toy_pilot_model_init(&owner.model);
-    owner.stats=(struct kui_toy_pilot_snapshot){.magic=KUI_TOY_PILOT_MAGIC,.version=1,
+    owner.stats=(struct kui_toy_pilot_snapshot){.magic=KUI_TOY_PILOT_MAGIC,.version=2,
         .bytes=sizeof(owner.stats),.state=KUI_TOY_PILOT_STOPPED,.generation=1,
         .main_begin=c->main_lease_begin,.main_end=c->main_lease_end,.worker_end=c->worker_end};
     owner.mailbox.generation=1;owner.handled_generation=1;
@@ -195,6 +230,7 @@ void kui_toy_pilot_worker_post_load(uint32_t result,uint32_t image) {
     owner.stats.sound_generation=owner.stats.driver_generation;
     owner.stop_wait=owner.queue_wait=owner.play_ack_seen=owner.play_seen=0;
     owner.transaction_bank=NONE;owner.clock_seen=0;
+    owner.bus_defer_seen=owner.bus_defer_tick=owner.bus_deferred=0;
     kui_toy_pilot_model_init(&owner.model);
     owner.model.generation=owner.stats.generation;
     owner.handled_generation=owner.mailbox.generation;
@@ -256,19 +292,18 @@ uint32_t kui_toy_pilot_request(uint32_t command,uint32_t p0,uint32_t p1,uint32_t
 }
 const struct kui_toy_pilot_snapshot *kui_toy_pilot_snapshot(void) {
     owner.stats.service_skips=kui_toy_pilot_bridge_skips;
+    owner.stats.updater_entries=kui_toy_pilot_updater_entries;
+    owner.stats.updater_returns=kui_toy_pilot_updater_returns;
     return &owner.stats;
 }
 
-/* Existing SDK scalar G2 observation: stable paired reads with the game's
- * DMA suspend/resume and exact interrupt-mask restoration. Never admit a
- * queue acknowledgement or finite retirement from an unguarded sound load. */
+/* Bounded stable observations refuse concurrent G2 DMA and restore exact SR. */
 static bool sound_word(uint32_t address,uint32_t *out) {
     if(!out || ((uintptr_t)out&3u) || address<SOUND_BASE || address>=SOUND_END || (address&3u)) return false;
     uint32_t sr=mask_begin();
     if(owner.disabled || !owner.sdk_ready) { mask_end(sr);return false; }
-    typedef int (*read_fn)(uint32_t,uint32_t *);
-    int result=((read_fn)(uintptr_t)0x8c0840d6u)(address,out);
-    mask_end(sr);return result==1;
+    enum kui_toy_pilot_bus_result result=kui_toy_pilot_bus_read(address,out);
+    mask_end(sr);return bus_result(result);
 }
 static bool live_driver(void) {
     uint32_t base,active,current,heap;
@@ -294,16 +329,10 @@ static bool clock_sample(uint32_t *now) {
     }
     owner.last_tick=*now;owner.clock_seen=1;return true;
 }
-static uint32_t slot(void) {
-    uint32_t producer=half(0x8c112b0cu);
-    owner.stats.queue_producer=producer;
-    if(!sound_word(SOUND_BASE+0x399cu,&owner.stats.queue_consumer)) fault(KUI_TOY_PILOT_FAULT_PORT);
-    return QUEUE_BASE+16u*(producer&31u);
-}
 static bool consumed(uint32_t address) {
     uint32_t value;
     if(address<QUEUE_BASE || address>=QUEUE_BASE+512u || (address&15u)) return false;
-    if(!sound_word(address,&value)) { fault(KUI_TOY_PILOT_FAULT_PORT);return false; }
+    if(!sound_word(address,&value)) return false;
     /* This SDK refuses occupied slots, so later reuse can delay our zero
      * observation but cannot precede dispatch of our successfully queued packet. */
     return !(value&0xffffu);
@@ -333,43 +362,35 @@ static bool template_matches(uint32_t bank,uint32_t frames,bool playing) {
 static bool sound_allocate(void) {
     uint32_t sr=mask_begin(),generation=owner.stats.driver_generation,address=0;
     if(owner.disabled || !owner.sdk_ready || owner.stats.sound_address) { mask_end(sr);return false; }
-    typedef int (*alloc_fn)(uint32_t *,uint32_t,uint32_t,uint32_t,void *);
-    int result=((alloc_fn)(uintptr_t)0x8c069c00u)(&address,KUI_TOY_PILOT_SOUND_BYTES,32u,1u,NULL);
-    if(!result || owner.disabled || !owner.sdk_ready || owner.stats.driver_generation!=generation ||
+    enum kui_toy_pilot_bus_result result=kui_toy_pilot_lease_allocate(KUI_TOY_PILOT_SOUND_BYTES,32u,&address);
+    if(!bus_result(result) || owner.disabled || !owner.sdk_ready || owner.stats.driver_generation!=generation ||
        address<SOUND_FIRST || address>SOUND_END-KUI_TOY_PILOT_SOUND_BYTES || (address&31u)) {
         mask_end(sr);return false;
     }
     owner.stats.sound_address=address;owner.stats.sound_bytes=KUI_TOY_PILOT_SOUND_BYTES;
     owner.stats.sound_generation=generation;mask_end(sr);return true;
 }
-static bool api_port(uint32_t address,uint32_t port) {
-    return ((int (*)(uint32_t))(uintptr_t)address)(port)!=0;
-}
-static bool api_pair(uint32_t address,uint32_t upper,uint32_t lower) {
-    return ((int (*)(uint32_t,uint32_t))(uintptr_t)address)(upper,lower)!=0;
-}
-static bool api_setting(uint32_t address,uint32_t port,uint32_t setting) {
-    return ((int (*)(uint32_t,uint32_t))(uintptr_t)address)(port,setting)!=0;
-}
 static bool queue_operation(uint32_t bank,uint32_t operation) {
-    uint32_t sr=mask_begin();bool result=false;
+    uint32_t sr=mask_begin(),packet[4]={0},s=0;
     if(owner.disabled || owner.mailbox.generation!=owner.model.generation) { mask_end(sr);return false; }
     switch(operation) {
-    case 0:case 1:result=api_port(0x8c068f20u,62u+operation);break;
+    case 0:case 1:packet[0]=0xff91u | (62u+operation)<<16;break;
     case 2:case 3: {
         uint32_t right=operation-2u;
-        typedef int (*open_fn)(uint32_t,uint32_t,uint32_t,uint32_t,uint32_t);
-        result=((open_fn)(uintptr_t)0x8c068b28u)(62u+right,plane_address(bank,right),
-            owner.model.banks[bank].frames*2u,0u,44100u)!=0;break;
+        packet[0]=0xff90u | (62u+right)<<16;packet[1]=plane_address(bank,right);
+        packet[2]=owner.model.banks[bank].frames*2u;break;
     }
-    case 4:case 5:result=api_setting(0x8c069158u,62u+operation-4u,operation==4u?31u:0u);break;
-    case 6:case 7:result=api_setting(0x8c0690d4u,62u+operation-6u,15u);break;
-    case 8:result=((int (*)(uint32_t,uint32_t,uint32_t))(uintptr_t)0x8c068a04u)(0u,PORT_MASK,0u)!=0;break;
+    case 4:case 5:packet[0]=0xff97u | (62u+operation-4u)<<16 | (operation==4u?31u:0u)<<24;break;
+    case 6:case 7:packet[0]=0xff96u | (62u+operation-6u)<<16 | 15u<<24;break;
+    case 8:packet[0]=0xff9cu;packet[1]=PORT_MASK;break;
     default:mask_end(sr);return false;
     }
-    /* SDK increments producer BEFORE selecting the packet slot. */
-    uint32_t s=result?slot():0u;mask_end(sr);
-    if(!result) { ++owner.stats.queue_errors;return false; }
+    enum kui_toy_pilot_bus_result result=kui_toy_pilot_bus_publish(packet,&s);
+    owner.stats.queue_producer=half(0x8c112b0cu);mask_end(sr);
+    if(!bus_result(result)) {
+        if(result!=KUI_TOY_PILOT_BUS_BUSY) ++owner.stats.queue_errors;
+        return false;
+    }
     owner.queue_slot=s;owner.queue_wait=1;owner.queue_tick=ticks();return true;
 }
 static uint32_t finite_ticks(uint32_t frames) {
@@ -387,9 +408,13 @@ static bool prior_interval_over(uint32_t now) {
 static bool stop_begin(uint32_t action) {
     uint32_t sr=mask_begin();
     if(owner.disabled || owner.mailbox.generation!=owner.model.generation) { mask_end(sr);return false; }
-    bool result=api_pair(0x8c068a96u,PORT_MASK,0u);
-    uint32_t s=result?slot():0u;mask_end(sr);
-    if(!result) { ++owner.stats.queue_errors;return false; }
+    uint32_t packet[4]={0xff9du,PORT_MASK,0u,0u},s=0;
+    enum kui_toy_pilot_bus_result result=kui_toy_pilot_bus_publish(packet,&s);
+    owner.stats.queue_producer=half(0x8c112b0cu);mask_end(sr);
+    if(!bus_result(result)) {
+        if(result!=KUI_TOY_PILOT_BUS_BUSY) ++owner.stats.queue_errors;
+        return false;
+    }
     owner.stop_slot=s;owner.stop_wait=1;owner.stop_action=action;owner.stop_tick=ticks();
     owner.queue_wait=0;owner.transaction_bank=NONE;return true;
 }
@@ -400,7 +425,7 @@ static void apply_action(uint32_t now) {
     m.track=owner.mailbox.track;m.generation=owner.mailbox.generation;mask_end(sr);
     if(m.generation==owner.handled_generation) return;
     if(!kui_toy_pilot_model_reset(&owner.model)) { fault(KUI_TOY_PILOT_FAULT_GENERATION);return; }
-    owner.model.generation=m.generation;owner.handled_generation=m.generation;
+    owner.model.generation=m.generation;
     if(m.command==CMD_PAUSE || m.command==CMD_RELEASE) {
         uint32_t bank=owner.model.active_bank;
         if(bank!=NONE) {
@@ -417,10 +442,12 @@ static void apply_action(uint32_t now) {
     else if(m.command==CMD_SEEK && m.p[0]>=owner.first_fad && m.p[0]<owner.end_fad)
         owner.fill_frame=owner.resume_frame=(m.p[0]-owner.first_fad)*588u;
     if(!stop_begin(m.command==CMD_SEEK?CMD_STOP:m.command)) {
-        if(!owner.disabled && owner.mailbox.generation==owner.model.generation) fault(KUI_TOY_PILOT_FAULT_QUEUE);
-        else ++owner.stats.stale_actions;
+        if(!owner.disabled && owner.mailbox.generation==owner.model.generation) {
+            if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_QUEUE);
+        } else ++owner.stats.stale_actions;
         return;
     }
+    owner.handled_generation=m.generation;
     owner.stats.state=(m.command==CMD_PAUSE)?KUI_TOY_PILOT_PAUSED:KUI_TOY_PILOT_PREFILL;
     (void)now;
 }
@@ -457,9 +484,15 @@ static void playback_step(uint32_t now) {
             ++owner.stats.start_waits;return;
         }
         owner.queue_wait=0;owner.play_ack_seen=1;owner.play_ack_tick=ticks();
-        if(!template_matches(bank,owner.model.banks[bank].frames,true)) { fault(KUI_TOY_PILOT_FAULT_PORT);return; }
+        if(!template_matches(bank,owner.model.banks[bank].frames,true)) {
+            if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_PORT);
+        return;
+        }
     }
-    if(!template_matches(bank,owner.model.banks[bank].frames,true)) { fault(KUI_TOY_PILOT_FAULT_PORT);return; }
+    if(!template_matches(bank,owner.model.banks[bank].frames,true)) {
+        if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_PORT);
+        return;
+    }
     now=ticks();
     if(owner.stats.active_left==255u && owner.stats.active_right==255u && !owner.play_seen) {
         if(!kui_toy_pilot_model_start_applied(&owner.model,bank,owner.model.banks[bank].generation,true,true)) {
@@ -498,16 +531,13 @@ static bool copy_plane(uint32_t address,const void *source,uint32_t bytes,uint32
        owner.stats.sound_generation!=owner.stats.driver_generation ||
        bank==owner.model.active_bank || bank==owner.model.pending_bank) { mask_end(sr);return false; }
     uint32_t started=ticks();
-    /* Generic SDK copy restores SR in r0; it has no boolean success ABI.
-     * Its nonnull/aligned/positive word-count preconditions are ours to prove. */
     if(!source || ((uintptr_t)source&3u) || !bytes || bytes>256u || (bytes&3u) ||
        owner.stats.sound_bytes!=KUI_TOY_PILOT_SOUND_BYTES || address<owner.stats.sound_address ||
        address>owner.stats.sound_address+owner.stats.sound_bytes-bytes || (address&3u)) { mask_end(sr);return false; }
-    typedef void (*copy_fn)(uint32_t,const void *,uint32_t);
-    ((copy_fn)(uintptr_t)0x8c083faeu)(address,source,bytes);
+    enum kui_toy_pilot_bus_result result=kui_toy_pilot_bus_copy(address,source,bytes);
     uint32_t elapsed=ticks()-started;mask_end(sr);
     maximum(&owner.stats.copy_ticks_max,elapsed);++owner.stats.copy_calls;
-    return true;
+    return bus_result(result);
 }
 static void fill_step(void) {
     uint32_t data=word(owner.config.data_pending);
@@ -561,13 +591,15 @@ static void fill_step(void) {
         }
         uint32_t offset=(owner.model.banks[bank].filled+done)*2u;
         if(!copy_plane(plane_address(bank,0)+offset,owner.left,take*2u,generation,bank)) {
-            if(!owner.disabled && owner.mailbox.generation==generation) fault(KUI_TOY_PILOT_FAULT_PORT);
-            else ++owner.stats.stale_actions;
+            if(!owner.disabled && owner.mailbox.generation==generation) {
+                if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_PORT);
+            } else ++owner.stats.stale_actions;
             return;
         }
         if(!copy_plane(plane_address(bank,1)+offset,owner.right,take*2u,generation,bank)) {
-            if(!owner.disabled && owner.mailbox.generation==generation) fault(KUI_TOY_PILOT_FAULT_PORT);
-            else ++owner.stats.stale_actions;
+            if(!owner.disabled && owner.mailbox.generation==generation) {
+                if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_PORT);
+            } else ++owner.stats.stale_actions;
             return;
         }
         if(owner.disabled || owner.mailbox.generation!=generation) { ++owner.stats.stale_actions;return; }
@@ -597,11 +629,13 @@ static void start_step(uint32_t now) {
     }
     uint32_t bank=owner.transaction_bank;
     if(owner.transaction_step==8u && !template_matches(bank,owner.model.banks[bank].frames,false)) {
-        fault(KUI_TOY_PILOT_FAULT_PORT);return;
+        if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_PORT);
+        return;
     }
     if(!queue_operation(bank,owner.transaction_step)) {
-        if(!owner.disabled && owner.mailbox.generation==owner.model.generation) fault(KUI_TOY_PILOT_FAULT_QUEUE);
-        else ++owner.stats.stale_actions;
+        if(!owner.disabled && owner.mailbox.generation==owner.model.generation) {
+            if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_QUEUE);
+        } else ++owner.stats.stale_actions;
         return;
     }
     if(owner.transaction_step++==8u) {
@@ -616,23 +650,61 @@ static void start_step(uint32_t now) {
         owner.play_ack_seen=owner.play_seen=0;
     }
 }
+/* No hardware packet can still be owned in these states. Intentional idle
+ * time does not count as a broken service clock, and stop/reset need no bus. */
+static bool quiescent(void) {
+    return (owner.stats.state==KUI_TOY_PILOT_STOPPED || owner.stats.state==KUI_TOY_PILOT_PAUSED ||
+            owner.stats.state==KUI_TOY_PILOT_EOF) && !owner.stop_wait && !owner.queue_wait &&
+        owner.transaction_bank==NONE && owner.model.active_bank==NONE && owner.model.pending_bank==NONE &&
+        owner.model.banks[0].state==KUI_TOY_PILOT_BANK_EMPTY &&
+        owner.model.banks[1].state==KUI_TOY_PILOT_BANK_EMPTY;
+}
+static bool service_idle(void) {
+    uint32_t sr=mask_begin();bool idle=quiescent();
+    if(idle && owner.mailbox.generation!=owner.handled_generation) {
+        uint32_t command=owner.mailbox.command;
+        if(command==CMD_STOP || command==KUI_TOY_PILOT_RESET || command==CMD_PAUSE) {
+            if(!kui_toy_pilot_model_reset(&owner.model)) fault(KUI_TOY_PILOT_FAULT_GENERATION);
+            else {
+                owner.model.generation=owner.handled_generation=owner.mailbox.generation;
+                (void)kui_toy_pilot_model_stop_applied(&owner.model,owner.model.generation,true,true,true);
+                owner.stats.state=command==CMD_PAUSE?KUI_TOY_PILOT_PAUSED:KUI_TOY_PILOT_STOPPED;
+                publish();owner.stats.applied_generation=owner.model.generation;
+            }
+        } else idle=false;
+    }
+    if(idle) owner.clock_seen=owner.bus_defer_seen=0;
+    mask_end(sr);return idle;
+}
 void kui_toy_pilot_worker_step(void) {
     if(!owner.configured || owner.disabled) return;
-    uint32_t sr;
-    __asm__ __volatile__("stc sr,%0" : "=r"(sr));
+    uint32_t sr=status_register();
     if(sr&0x10000000u) { ++owner.stats.service_skips;return; }
     ++owner.stats.service_calls;
     if(!owner.sdk_ready || word(0x8c0a7318u)!=1u) return;
-    if(!live_driver()) { fault(KUI_TOY_PILOT_FAULT_DRIVER);return; }
+    if(service_idle()) return;
+    owner.bus_deferred=0;
     uint32_t now;if(!clock_sample(&now)) { fault(KUI_TOY_PILOT_FAULT_CLOCK);return; }
-    if(!owner.stats.sound_address && !sound_allocate()) { fault(KUI_TOY_PILOT_FAULT_HEAP);return; }
-    if(!observe_ports()) { fault(KUI_TOY_PILOT_FAULT_PORT);return; }
+    if(!live_driver()) { if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_DRIVER);return; }
+    if(!owner.stats.sound_address && !sound_allocate()) {
+        if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_HEAP);
+        return;
+    }
+    if(!observe_ports()) { if(!owner.bus_deferred) fault(KUI_TOY_PILOT_FAULT_PORT);
+        return; }
+    if(!sound_word(SOUND_BASE+0x399cu,&owner.stats.queue_consumer)) return;
     apply_action(now);if(owner.disabled) return;
-    stop_step(now);if(owner.stop_wait || owner.disabled) { stack_sample();return; }
+    if(owner.bus_deferred) return;
+    stop_step(now);if(owner.stop_wait || owner.disabled) {
+        if(!owner.bus_deferred) owner.bus_defer_seen=0;
+        stack_sample();return;
+    }
     playback_step(now);if(owner.disabled) return;
+    if(owner.bus_deferred) return;
     if(owner.stats.state==KUI_TOY_PILOT_PREFILL || owner.stats.state==KUI_TOY_PILOT_PLAYING ||
        owner.stats.state==KUI_TOY_PILOT_START_WAIT) {
         fill_step();if(owner.disabled) return;
+        if(owner.bus_deferred) return;
         start_step(now);
         uint32_t total=(owner.end_fad-owner.first_fad)*588u;
         if(owner.fill_frame==total && owner.model.active_bank==NONE && owner.model.pending_bank==NONE &&
@@ -641,5 +713,19 @@ void kui_toy_pilot_worker_step(void) {
             else owner.stats.state=KUI_TOY_PILOT_EOF;
         }
     }
+    if(!owner.bus_deferred) owner.bus_defer_seen=0;
     maximum(&owner.stats.step_ticks_max,ticks()-now);stack_sample();
 }
+#ifdef KUI_TOY_PILOT_WORKER_TEST
+/* Fixture drives the actual service function, with mapped registers and
+ * bus/lease adapters supplied by the host regression, never linked to SH. */
+void kui_toy_pilot_worker_test_prepare(uint32_t state,uint32_t command,bool pending) {
+    memset(&owner,0,sizeof(owner));kui_toy_pilot_model_init(&owner.model);
+    owner.configured=owner.sdk_ready=owner.stats.driver_verified=1;
+    owner.stats.driver_generation=owner.stats.sound_generation=1;
+    owner.stats.state=state;owner.stats.generation=owner.handled_generation=1;
+    owner.transaction_bank=NONE;owner.mailbox.generation=pending?2u:1u;
+    owner.stats.generation=owner.mailbox.generation;owner.mailbox.command=command;
+    owner.mailbox.first_fad=200;owner.mailbox.end_fad=210;owner.mailbox.track=2;
+}
+#endif

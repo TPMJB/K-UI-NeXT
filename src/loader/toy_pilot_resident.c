@@ -106,12 +106,12 @@ int32_t kui_retail_resident_dispatch(uint32_t r4,uint32_t r5,uint32_t r6,uint32_
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command;(void)caller;(void)stack;
     const struct kui_toy_pilot_snapshot *p=toy_snapshot();
-    (void)toy_command(KUI_TOY_PILOT_RESET,0,0,0);
     /* The terminal path stops servicing. Finite hardware banks end on their
      * own. Preserve scalar telemetry before display/cache reuse. */
     struct kui_toy_pilot_snapshot *saved=(struct kui_toy_pilot_snapshot *)(void *)image.block;
     _Static_assert(sizeof(*saved)<=sizeof(image.block),"terminal pilot telemetry");
     if(p) memcpy(saved,p,sizeof(*saved));else memset(saved,0,sizeof(*saved));
+    (void)toy_command(KUI_TOY_PILOT_RESET,0,0,0);
     /* Compact numeric pages keep the low firmware reservation unchanged.
      * The package includes the exact sequential word legend for each page. */
     memset(image.block+sizeof(*saved),0,256u-sizeof(*saved));

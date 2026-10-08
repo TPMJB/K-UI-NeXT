@@ -35,9 +35,27 @@ C_SYMBOL(kui_toy_pilot_initialize):
 C_SYMBOL(kui_toy_pilot_service_hook):
     /* This replaces the original updater call, whose r0 is discarded. */
     sts.l pr,@-r15
+    /* Numeric breadcrumbs bracket the untouched original call. Keep its
+     * inherited stack and argument registers exactly as they were. */
+    mov.l r1,@-r15
+    mov.l r2,@-r15
+    mov.l .Lupdater_entries,r1
+    mov.l @r1,r2
+    add #1,r2
+    mov.l r2,@r1
+    mov.l @r15+,r2
+    mov.l @r15+,r1
     mov.l .Loriginal_updater,r0
     jsr @r0
     nop
+    mov.l r1,@-r15
+    mov.l r2,@-r15
+    mov.l .Lupdater_returns,r1
+    mov.l @r1,r2
+    add #1,r2
+    mov.l r2,@r1
+    mov.l @r15+,r2
+    mov.l @r15+,r1
     lds.l @r15+,pr
     mov.l .Lservice,r0
     bra .Lbridge
@@ -199,6 +217,8 @@ C_SYMBOL(kui_toy_pilot_allstop_hook):
 .Lmask: .long 0x000000f0
 .Lbridge_active: .long C_SYMBOL(kui_toy_pilot_bridge_active)
 .Lbridge_skips: .long C_SYMBOL(kui_toy_pilot_bridge_skips)
+.Lupdater_entries: .long C_SYMBOL(kui_toy_pilot_updater_entries)
+.Lupdater_returns: .long C_SYMBOL(kui_toy_pilot_updater_returns)
 .Linitialize: .long C_SYMBOL(kui_toy_pilot_worker_initialize)
 .Lservice: .long C_SYMBOL(kui_toy_pilot_worker_step)
 .Lpre_init: .long C_SYMBOL(kui_toy_pilot_worker_pre_init)

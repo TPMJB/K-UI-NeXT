@@ -63,7 +63,8 @@ enum kui_toy_pilot_fault {
     KUI_TOY_PILOT_FAULT_PORT, KUI_TOY_PILOT_FAULT_QUEUE,
     KUI_TOY_PILOT_FAULT_CARD, KUI_TOY_PILOT_FAULT_RANGE,
     KUI_TOY_PILOT_FAULT_CLOCK, KUI_TOY_PILOT_FAULT_STACK,
-    KUI_TOY_PILOT_FAULT_GENERATION, KUI_TOY_PILOT_FAULT_PHASE
+    KUI_TOY_PILOT_FAULT_GENERATION, KUI_TOY_PILOT_FAULT_PHASE,
+    KUI_TOY_PILOT_FAULT_BUS
 };
 struct kui_toy_pilot_snapshot {
     uint32_t magic, version, bytes, state, fault;
@@ -81,7 +82,9 @@ struct kui_toy_pilot_snapshot {
     /* programmed/source frames retired; this is NOT an audible-frame proof */
     uint32_t retired_frames, filled_frames, queue_producer, queue_consumer;
     uint32_t dma_busy, dma_suspended, hardware_loops, active_bank_writes;
+    uint32_t bus_last_result, bus_deferrals, updater_entries, updater_returns;
 };
+_Static_assert(sizeof(struct kui_toy_pilot_snapshot)==256u,"Toy telemetry v2 ABI");
 
 enum kui_toy_pilot_bank_state {
     KUI_TOY_PILOT_BANK_EMPTY, KUI_TOY_PILOT_BANK_FILLING,

@@ -1,9 +1,15 @@
 # Toy Commander finite stereo CDDA pilot
 
-This build removes a circular wait between GD audio command completion and
-the game's sound update. The game's GD callbacks can poll a command without
-running the sound worker. Waiting for that worker to apply the command can
-therefore freeze the game before it reaches another sound update.
+This build removes every new pilot call into the game's unbounded sound
+helpers. It uses bounded stable reads, sample copies, packet publication and
+allocation-canary writes. A genuinely stopped, paused or finished pilot does
+no sound-bus access or sound allocation. This directly addresses a verified
+way the pilot could hang with interrupts masked; the latest recording does
+not supply the stalled program counter, so the observed freeze is not yet
+proven resolved on hardware. See the [deep review](evidence/cdda-toy-bounded-bus-static-2026-10-08.md).
+
+It retains the earlier correction to GD command progress. The hardware run
+after that correction still froze; it was insufficient on its own.
 
 The first GD `EXEC` now acknowledges a command accepted by the audio mailbox.
 It still reports a missing snapshot, an existing worker fault or a cancelled
@@ -23,7 +29,7 @@ source CRC, but the exact loaded executable CRC and SHA-256 remain required
 before installing hooks.
 
 This is one new, manually installed Toy Commander pilot. It uses the game's
-own ARM sound driver and allocation interfaces. It keeps the working 1.8.5
+own ARM sound driver and tracked sound-heap records. It keeps the working 1.8.5
 runtime and ordinary reader source unchanged. Use the same complete original
 Toy Commander image and card that passed preflight 13; do not repeat tests
 00–14 for this unchanged image.
@@ -118,10 +124,10 @@ The exact word order is:
 | 3 | 1 | `started_observed`, `finite_ends`, `shutdowns`, `sdk_init_result` |
 | 3 | 2 | `retired_frames`, `filled_frames`, `queue_producer`, `queue_consumer` |
 | 3 | 3 | `dma_busy`, `dma_suspended`, `hardware_loops`, `active_bank_writes` |
-| 3 | 4 | Four reserved zero words |
+| 3 | 4 | `bus_last_result`, `bus_deferrals`, `updater_entries`, `updater_returns` |
 
-The telemetry header is magic `54595031`, version `00000001`, bytes
-`000000F0`. An all-zero report means that valid worker telemetry was not
+The telemetry header is magic `54595031`, version `00000002`, bytes
+`00000100`. An all-zero report means that valid worker telemetry was not
 available; it does not mean that audio passed. The expected driver identity
 is 20,740 bytes (`00005104`), CRC32 `70CCEEB2`; `driver_verified` records whether
 the successfully loaded file matched before SDK installation. It is cleared
@@ -136,7 +142,7 @@ readback hash of the installed ARM image. `main_begin` is `8CFD0000`, `main_end`
 or **7**: fault. `fault` is **0**: none, **1**: configuration,
 **2**: driver identity, **3**: heap allocation, **4**: port ownership,
 **5**: command queue, **6**: card read, **7**: track/range,
-**8**: clock, **9**: stack, **A**: stale generation, or **B**: stereo phase.
+**8**: clock, **9**: stack, **A**: stale generation, **B**: stereo phase, or **C**: bounded bus failure.
 
 The generation fields distinguish a requested command from the generation
 the worker actually applied. The service, read, copy, fill/start/end and gap
@@ -148,8 +154,9 @@ compiler stack sum covers authored code and an assembly allowance, rather
 than the game SDK's internals.
 
 `hardware_loops` and `active_bank_writes` describe operations this pilot must
-avoid. `dma_busy` and `dma_suspended` record the worker's interaction with the
-game's live transfer state. Photograph the actual values even when an error
+avoid. `dma_busy` and `dma_suspended` are retained legacy fields and remain zero.
+The worker never suspends or programs DMA; `bus_deferrals` counts refusals
+including enabled/active G2 DMA and occupied queue slots. Photograph the actual values even when an error
 has already occurred. Queue consumption, bank starts and observed active
 channels do not establish audible stereo output by themselves.
 `retired_frames` counts programmed source frames whose bank was safely
@@ -167,7 +174,8 @@ The candidate uses the game's first main-heap allocation: a 192 KiB lease at
 `[0x8cfd0000,0x8d000000)`. Only its lower 64 KiB,
 `[0x8cfd0000,0x8cfe0000)`, holds the worker; the upper part is padding around
 the game's known top-of-RAM scratch references. The sound buffer is a
-128 KiB fixed allocation through the game's sound heap. The observed game
+128 KiB fixed allocation registered in the game's tracked sound-heap tail.
+Its canary is written and drained before publishing allocation metadata. The observed game
 voice picker and updater are restricted to ports 0–61; the pilot uses ports
 62 and 63. These are exact-title contracts, not a general reservation scheme
 for retail games.
@@ -185,10 +193,25 @@ console's 50 MHz peripheral clock divided by 64, nominally 1.28 microseconds
 per tick. Register agreement is not an independent oscillator calibration.
 An incompatible profile produces a clock fault rather than retuning a timer.
 
-The game SDK still has waits without deadlines. The pilot's service checks
-do not make those SDK calls bounded; a stalled call can prevent controller
-return. Finite-bank playback bounds the pilot's music buffers; the game and
-its driver can still stall.
+Each new pilot G2 transaction has a shared 10,000-poll cap and 1,563-TMU0-tick
+cap (nominally 2 ms in the admitted clock profile). It restores exact caller
+SR on every return. Enabled or running G2 DMA causes deferral, with no DMA
+register writes. Repeated unresolved deferrals fault after nominally one
+second of active service. A packet whose command header was published is
+never republished after a final-drain failure. Canary failure publishes no
+heap record. Inactive-bank copies never authorize reuse of a playing bank.
+
+`bus_last_result` is **0**: success, **1**: deferred busy, **2**: deadline or
+poll-cap timeout, **3**: invalid argument, **4**: invalid installed state,
+**5**: command already published when the final drain failed. `bus_deferrals`
+counts busy observations. The updater entry/return counters surround the
+original game updater; they are breadcrumbs, not a watchdog. A difference
+can localize an unfinished original call only if a snapshot can still be
+obtained. The report captures these fields before issuing a reset.
+
+The game and its unchanged SDK still contain waits without deadlines.
+Finite-bank playback bounds the pilot's music buffers. This change does
+not establish that every original game path can recover, or fix slow FMVs.
 
 ## Restore
 

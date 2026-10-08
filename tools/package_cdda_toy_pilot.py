@@ -26,7 +26,7 @@ import retail_package as retail_layout
 from retail_package import inspect_retail
 from runtime_package import flatten_elf
 
-OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Progress-Fix.zip'
+OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Bus-Fix.zip'
 README_SOURCE = 'docs/cdda-toy-pilot-test.md'
 BUILD_DIRECTORY = 'build/toy-pilot'
 RUNTIME_FILE = 'pilot/15-toy-finite-stereo.kui'
@@ -60,6 +60,7 @@ SNAPSHOT_WORDS = (
     'started_observed', 'finite_ends', 'shutdowns', 'sdk_init_result',
     'retired_frames', 'filled_frames', 'queue_producer', 'queue_consumer',
     'dma_busy', 'dma_suspended', 'hardware_loops', 'active_bank_writes',
+    'bus_last_result', 'bus_deferrals', 'updater_entries', 'updater_returns',
 )
 
 
@@ -361,6 +362,18 @@ def pilot_layout(directory, inputs):
         if bad:
             raise ValueError('Unexpected runtime or detached sound owner in ' + name + ': ' + bad[0])
     entry, stage, resident, worker = (images[name] for name in bounds)
+    for name in ('read', 'write', 'copy', 'publish'):
+        if '_kui_toy_pilot_bus_' + name not in worker['symbols']:
+            raise ValueError('Missing linked bounded pilot bus operation: ' + name)
+    if '_kui_toy_pilot_lease_allocate' not in worker['symbols']:
+        raise ValueError('Missing linked bounded tracked sound lease')
+    # Original lifecycle forwarding (including global stop) remains required.
+    # New worker observations/copies/allocations/packets may not call these
+    # previous unbounded helpers. Numerical scan complements the source audit.
+    for address in (0x8c0840d6, 0x8c083fae, 0x8c069c00, 0x8c083d34,
+                    0x8c068f20, 0x8c068b28, 0x8c069158, 0x8c0690d4, 0x8c068a04):
+        if struct.pack('<I', address) in worker['payload']:
+            raise ValueError('Worker retains unbounded sound helper literal: ' + hex(address))
     blobs = {}
     for name in ('stage', 'resident-sci', 'worker'):
         raw = inputs(directory / (name + '.bin'))
@@ -591,7 +604,7 @@ def collect(commit, published_tree):
         'source_snapshot_sha256': sha(snapshot),
         'pilot_source_sha256': source_hashes,
         'compiler': subprocess.check_output(['sh-elf-gcc', '--version'], text=True).splitlines()[0],
-        'scope': 'Exact-title Toy Commander finite stereo CDDA pilot; game ARM driver and allocators',
+        'scope': 'Exact-title Toy Commander finite stereo CDDA pilot; original ARM driver and tracked heaps',
         'profile_number': 15, 'hardware_tested': False, 'numerical_pass_target': None,
         'file': RUNTIME_FILE, 'build': envelope['build'], 'runtime_sha256': sha(runtime),
         'payload_crc32': f'{zlib.crc32(payload):08x}', 'envelope': envelope,
@@ -640,6 +653,19 @@ def collect(commit, published_tree):
             'pilot_cursor_telemetry_establishes_game_GD_position_responses': False,
             'audible_or_stereo_output_established_by_build_checks': False,
             'game_sdk_waits_proved_bounded': False,
+            'new_pilot_sound_operations_call_game_sdk': False,
+            'new_pilot_G2_transactions_bounded': True,
+            'G2_transaction_poll_cap': 10000,
+            'G2_transaction_TMU0_tick_cap': 1563,
+            'G2_transaction_nominal_limit_milliseconds': 2,
+            'G2_DMA_enabled_or_started_action': 'defer; no DMA register writes',
+            'unresolved_BUSY_nominal_limit_seconds': 1,
+            'queue_commit': 'payload first, header last; published-stalled is never retried',
+            'sound_lease': 'tracked native tail record after bounded canary drain',
+            'quiescent_service_sound_bus_or_heap_work': False,
+            'terminal_snapshot_version': 2,
+            'terminal_snapshot_bytes': 256,
+            'updater_breadcrumbs_are_a_watchdog': False,
             'GD_audio_completion': 'first EXEC acknowledges accepted mailbox command',
             'GD_audio_completion_waits_for_worker_application': False,
             'applied_generation_reports_actual_worker_application': True,

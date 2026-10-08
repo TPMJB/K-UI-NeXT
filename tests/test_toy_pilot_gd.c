@@ -57,6 +57,7 @@ int main(void) {
         KUI_RETAIL_GD_PAUSE,KUI_RETAIL_GD_RELEASE,KUI_GD_STOP,KUI_GD_COMMAND_INIT};
     for(unsigned i=0;i<sizeof(commands)/sizeof(*commands);i++) {
         uint32_t token=request(&s,commands[i],p.generation);
+        s.drive_status=9;s.sector_part=0x1234;s.track_type=8;s.sector_bytes=2352;
         assert(kui_retail_gd_dispatch(&s,token,STATUS,0,KUI_GD_CHECK)==KUI_GD_PROCESSING);
         /* Simulate GD polling while the game cannot reach its sound hook:
          * no worker step occurs and applied_generation remains behind. */
@@ -64,6 +65,12 @@ int main(void) {
         execute(&s,&p);
         assert(s.status==KUI_GD_COMPLETED && s.position_lba==20);
         assert(!memcmp(&before,&p,sizeof(p)));
+        if(commands[i]==KUI_GD_COMMAND_INIT)
+            assert(s.drive_status==1 && s.sector_part==0x2000 && !s.track_type && s.sector_bytes==2048);
+        else {
+            assert(s.drive_status==(commands[i]==KUI_GD_STOP?2u:9u));
+            assert(s.sector_part==0x1234 && s.track_type==8 && s.sector_bytes==2352);
+        }
         terminal(&s,token,KUI_GD_COMPLETED,KUI_GD_ERROR_NONE);
     }
     /* Old requests, known faults and absent worker state must still fail,
