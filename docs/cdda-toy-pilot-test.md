@@ -1,6 +1,18 @@
 # Toy Commander finite stereo CDDA pilot
 
-This build moves sound-driver verification to the successful file-load
+This build removes a circular wait between GD audio command completion and
+the game's sound update. The game's GD callbacks can poll a command without
+running the sound worker. Waiting for that worker to apply the command can
+therefore freeze the game before it reaches another sound update.
+
+The first GD `EXEC` now acknowledges a command accepted by the audio mailbox.
+It still reports a missing snapshot, an existing worker fault or a cancelled
+generation as failure. Completion means queued acceptance, not that music has
+started or a pause/stop has reached the sound hardware. `applied_generation`
+continues to report actual worker application. Sound work remains in the
+normal game sound hook, on the worker's private stack.
+
+The build also retains sound-driver verification at the successful file-load
 boundary inside the game's initialization, before SDK installation. Build
 `42bd06d32d16` checked the allocated buffer before it had been filled, so the
 game could boot while CDDA remained disabled. The exact 20,740-byte driver

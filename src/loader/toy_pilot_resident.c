@@ -12,12 +12,13 @@
 #undef kui_retail_menu_return
 #include "kui/toy_pilot.h"
 #include "kui/toy_pilot_boot.h"
+#include "kui/toy_pilot_gd.h"
 
 /* Export initialized pointer words so the stage symbol generator need not
  * depend on compiler names for local LTO objects. */
 const void * const kui_toy_pilot_manifest_pointer=&manifest;
-/* The worker treats only command16/17 as data priority. Keeping an audio
- * handle pending until hardware application must not block its own prefill. */
+/* The worker treats only command16/17 as data priority. An audio mailbox
+ * handoff must not block its own prefill. */
 const void * const kui_toy_pilot_pending_pointer=&service.command;
 const volatile void * const kui_toy_pilot_active_pointer=&kui_retail_hook_active;
 
@@ -83,15 +84,8 @@ int32_t kui_retail_resident_dispatch(uint32_t r4,uint32_t r5,uint32_t r6,uint32_
     int real=kui_retail_hook_source==1u || r6!=UINT32_MAX;
     if(real && (r7==KUI_GD_INIT || r7==KUI_GD_RESET))
         (void)toy_command(KUI_TOY_PILOT_RESET,0,0,0);
-    if(real && r7==KUI_GD_EXEC && service.pending &&
-       (service.command-20u<=4u || service.command==KUI_GD_STOP)) {
-        const struct kui_toy_pilot_snapshot *p=toy_snapshot();
-        if(p && p->generation==service.count && p->applied_generation!=service.count) return 0;
-        service.pending=0;
-        service.error=!p || p->fault?KUI_GD_ERROR_UNAVAILABLE:
-            p->generation!=service.count?KUI_GD_ERROR_CANCELLED:0u;
-        service.status=service.error?KUI_GD_FAILED:KUI_GD_COMPLETED;
-        if(p && p->position_fad>=150u) service.position_lba=p->position_fad-150u;
+    if(real && r7==KUI_GD_EXEC && kui_toy_pilot_gd_audio_pending(&service)) {
+        kui_toy_pilot_gd_acknowledge(&service,toy_snapshot());
         return 0;
     }
     int32_t result=kui_toy_pilot_base_dispatch(r4,r5,r6,r7);

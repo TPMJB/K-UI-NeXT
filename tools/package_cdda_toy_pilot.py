@@ -26,7 +26,7 @@ import retail_package as retail_layout
 from retail_package import inspect_retail
 from runtime_package import flatten_elf
 
-OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Driver-Fix.zip'
+OUTPUT_NAME = 'K-UI-CDDA-Toy-Pilot-Progress-Fix.zip'
 README_SOURCE = 'docs/cdda-toy-pilot-test.md'
 BUILD_DIRECTORY = 'build/toy-pilot'
 RUNTIME_FILE = 'pilot/15-toy-finite-stereo.kui'
@@ -640,6 +640,9 @@ def collect(commit, published_tree):
             'pilot_cursor_telemetry_establishes_game_GD_position_responses': False,
             'audible_or_stereo_output_established_by_build_checks': False,
             'game_sdk_waits_proved_bounded': False,
+            'GD_audio_completion': 'first EXEC acknowledges accepted mailbox command',
+            'GD_audio_completion_waits_for_worker_application': False,
+            'applied_generation_reports_actual_worker_application': True,
         },
         'clock_admission': {
             'read_only': True, 'frequency_or_timer_writes': False,

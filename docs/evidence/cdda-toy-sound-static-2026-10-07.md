@@ -31,10 +31,10 @@ constitutes a resource lease.
 | Sound heap creation | `amInit` obtains first free driver sound memory, then calls `amHeapInit` at `0x8c06a3ba` |
 | Driver cursor table | Game reads sound-RAM word `0xa08000e8` until stable, adds sound-RAM base, and stores the resulting pointer at `0x8c0d9064` |
 
-The game loads the external driver into a temporary ordinary-heap allocation,
-calls `amInit`, and frees that temporary allocation. Its later initialization
-path sends an all-port stop, initializes its own host tables and initializes the
-CD interface before publishing its initialized flag. Therefore a playback start
+The game allocates a temporary ordinary-heap buffer, passes it to `amInit`,
+which loads and installs the external driver, and frees that temporary buffer.
+Its later initialization path sends an all-port stop and initializes its host
+and voice tables before publishing its initialized flag. Therefore a playback start
 inserted immediately after `amInit` would be stopped by the rest of the game
 initializer. Allocation may occur there, but playback must wait until the game
 initializer has completed successfully.
