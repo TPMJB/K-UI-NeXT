@@ -483,31 +483,99 @@ def audit_data_probe(builddir, baseline=None):
 
 
 def review_candidate(builddir, baseline=None):
-    """Print candidate evidence only; this function never grants admission."""
+    """Print diagnostic evidence only; component passes never grant admission."""
     directory = Path(builddir).resolve()
     baseline = Path(baseline or ROOT / 'build/recovered-t-check').resolve()
     config, images, dis = load_profile(directory)
-    low, worker = images['resident-sci'], images['worker']
+    low, worker, stage = (images[name] for name in ('resident-sci', 'worker', 'stage'))
     code = Linked(worker, HIGH, dis['worker'])
+    old_config, old_images, old_dis = trace.load_profile(baseline)
+    old_code = Linked(old_images['worker'], HIGH, old_dis['worker'])
     original = function_symbols((baseline / 'worker.elf').read_bytes())
     names = (function_symbols((directory / 'worker.elf').read_bytes()) - original) | CHANGED_FUNCTIONS
-    functions = {}
-    for name in sorted(names):
-        begin, end, rows = exact_function(code, name)
+
+    def evidence(linked, name):
+        begin, end, rows = exact_function(linked, name)
         literals = []
         for at, opcode, mnemonic, _ in rows:
             if opcode & 0xF000 in (0xD000, 0x9000) and mnemonic in ('mov.l', 'mov.w'):
                 width = 4 if opcode & 0xF000 == 0xD000 else 2
-                address, value = code.literal(at, opcode >> 8 & 15, width)
-                literals.append({'instruction': hex(at), 'address': hex(address),
-                                 'width': width, 'value': hex(value)})
-        functions[name] = {'begin': hex(begin), 'bytes': end - begin,
-                           'candidate_normalized_sha256': trace.normalized_function(code, name),
-                           'instructions': [[hex(at), hex(opcode), mnemonic, operands]
-                                            for at, opcode, mnemonic, operands in rows],
-                           'literals': literals}
+                address, value = linked.literal(at, opcode >> 8 & 15, width)
+                item = {'instruction': hex(at), 'address': hex(address),
+                        'width': width, 'value': hex(value)}
+                physical = trace.physical(value)
+                if linked.base <= physical < linked.base + len(linked.image['payload']):
+                    count = min(64, linked.base + len(linked.image['payload']) - physical)
+                    data = linked.data(value, count)
+                    item['target_preview_hex'] = data.hex()
+                    item['target_preview_ascii'] = data.decode('ascii', errors='backslashreplace')
+                literals.append(item)
+        return {'begin': hex(begin), 'bytes': end - begin,
+                'candidate_normalized_sha256': trace.normalized_function(linked, name),
+                'instructions': [[hex(at), hex(opcode), mnemonic, operands]
+                                 for at, opcode, mnemonic, operands in rows],
+                'literals': literals}
+
+    functions = {name: evidence(code, name) for name in sorted(names)}
+    retained_mismatches = {}
+    for name in sorted(original - CHANGED_FUNCTIONS):
+        before = trace.normalized_function(old_code, name)
+        after = trace.normalized_function(code, name)
+        if before != after:
+            retained_mismatches[name] = {
+                'baseline': evidence(old_code, name), 'candidate': evidence(code, name)}
+
+    diagnostics = {}
+
+    def check(label, operation):
+        try:
+            diagnostics[label] = {'status': 'pass', 'proof': operation()}
+        except (Exception, SystemExit) as error:
+            diagnostics[label] = {'status': 'fail', 'error_type': type(error).__name__,
+                                  'error': str(error)}
+
+    def instructions():
+        for name in images:
+            instruction_audit(name, dis[name])
+        return {'no_FPU_or_unreviewed_retail_instructions': True}
+
+    def thresholds():
+        if (worker['symbol_sizes'].get('_ceilings.0') != 28 or
+                code.data(worker['symbols'].get('_ceilings.0', 0), 28) !=
+                struct.pack('<7I', 782, 1563, 3125, 6250, 12500, 25000, 50000)):
+            raise ValueError('Retained trace histogram thresholds changed in DATA probe')
+        return {'exact_retained_thresholds': True}
+
+    unchanged_trace = {name: identity for name, identity in trace.REVIEWED_TRACE.items()
+                       if name not in CHANGED_FUNCTIONS}
+    check('instructions', instructions)
+    check('exports', lambda: trace.audit_exports(low, worker))
+    check('retained', lambda: audit_retained(directory, config, images, dis, baseline))
+    check('retained_trace_identities', lambda: trace.reviewed_identities(code, unchanged_trace, 'retained trace'))
+    check('retained_trace_graph', lambda: trace.audit_trace_graph(code))
+    check('owned_state', lambda: audit_state(worker))
+    check('retained_thresholds', thresholds)
+    check('DATA_identities', lambda: trace.reviewed_identities(code, REVIEWED_DATA, 'DATA probe'))
+    check('report_identities', lambda: trace.reviewed_identities(code, REVIEWED_REPORT, 'DATA wrapper/report'))
+    check('DATA_graph', lambda: audit_probe_graph(code, low))
+    check('low_bindings', lambda: audit_probe_bindings(directory, low, code))
+    check('retained_cache_audio_heap', lambda: audit_cache_layout(
+        low, worker, stage, dis['resident-sci'], dis['worker'], dis['stage']))
+    check('bridges', lambda: trace.audit_bridges(worker, dis['worker']))
+    check('publication', lambda: trace.audit_boot_publication(
+        low, worker, stage, dis['resident-sci'], dis['stage']))
+    check('stage_identities', lambda: trace.reviewed_identities(
+        Linked(stage, STAGE, dis['stage']), trace.REVIEWED_STAGE, 'stage publication'))
+    check('GD_guard_initialize', lambda: trace.reviewed_identities(
+        code, trace.REVIEWED_INITIALIZE, 'GD guard initialization'))
+    check('adapter', lambda: audit_adapter(worker, dis['worker']))
+    check('actual_probe_stacks', lambda: audit_probe_stacks(directory, low, worker, dis['worker'], baseline))
+
     return {'admitted': False, 'independent_review_required': True,
+            'diagnostic_component_passes_are_not_admission': True,
             'config': config, 'functions': functions,
+            'retained_worker_mismatches': retained_mismatches,
+            'independent_gate_diagnostics': diagnostics,
             'typed_generated_header': (directory / 'toy_pilot_resident_symbols.h').read_text(),
             'DATA_state': {name: {'address': hex(worker['symbols'].get(name, 0)),
                                   'bytes': worker['symbol_sizes'].get(name, 0)}
@@ -518,6 +586,7 @@ def review_candidate(builddir, baseline=None):
                               'payload_bytes': len(image['payload']),
                               'memory_end': hex(image['memory_end'])}
                        for name, image in images.items()}}
+
 
 
 if __name__ == '__main__':
