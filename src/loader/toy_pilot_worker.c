@@ -1111,7 +1111,9 @@ static void fill_step(void) {
             owner.stats.raw_read_ticks_total+=elapsed;
             ++owner.stats.raw_read_timing_calls;
 #else
+#if !KUI_TOY_PILOT_SYNTHETIC_SOURCE
             typedef int (*raw_fn)(uint32_t,uint32_t,void *);
+#endif
 #if KUI_TOY_PILOT_SHARED_SCI
             int lease=kui_toy_pilot_sci_audio_acquire();
             if(lease>0) { data_blocked_sample(data);mask_end(sr);return; }
@@ -1119,7 +1121,16 @@ static void fill_step(void) {
 #endif
             owner.raw_generation=0u;++owner.stats.raw_calls;
             uint32_t read_began=ticks();
+#if KUI_TOY_PILOT_SYNTHETIC_SOURCE
+            /* Explicit storage-cost control: retain source-sector, generation,
+             * PCM upload and playback timing, but replace this one card read
+             * with silent PCM. Counters describe generated source requests;
+             * this timing is generation duration, not a physical SCI read. */
+            memset(owner.raw,0,sizeof(owner.raw));
+            int result=0;
+#else
             int result=((raw_fn)(uintptr_t)owner.config.read_raw)(lba,1u,owner.raw);
+#endif
 #if KUI_TOY_PILOT_SHARED_SCI
             kui_toy_pilot_sci_audio_release();
 #endif

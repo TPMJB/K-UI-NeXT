@@ -3,6 +3,18 @@
 
 ## Decision
 
+**Updated after R and C hardware tests:** neither cache profile produced a
+noticeable improvement. Their normalized RAW and GD timings are essentially
+the same. The next controlled build is an explicit synthetic-source profile
+that preserves PCM16 playback and the CDDA timeline while removing only audio
+RAW card reads. The revised priority is bounded SCI occupancy and independently
+serviced prepared PCM, with packed DATA as a distinct bandwidth experiment.
+See [R/C results and revised decision](toy-cdda-transport-decision-2026-10-09.md)
+and the [silent-source checklist](../cdda-toy-synthetic-source-test.md).
+
+The following sections preserve the reasoning before those tests; private
+cache isolation is now tested and is not the selected performance hypothesis.
+
 Keep the restored, continuous-audio `7b55156aafa2` runtime as the console
 baseline. Investigate private-state cache isolation first, then compare
 passive ARM snapshot batching and AICA DMA as separate factors. A later

@@ -11,6 +11,16 @@ SHARED_SCI ?= 0
 ASYNC_CDDA ?= 0
 PRIVATE_P2 ?= 0
 NATIVE_CACHE ?= 0
+# Causal source-cost control only: preserve playback while generating zero PCM.
+SYNTHETIC_SOURCE ?= 0
+ifneq ($(filter $(SYNTHETIC_SOURCE),0 1),$(SYNTHETIC_SOURCE))
+$(error SYNTHETIC_SOURCE must be 0 or 1)
+endif
+ifeq ($(SYNTHETIC_SOURCE),1)
+ifneq ($(SHARED_SCI),0)
+$(error Synthetic source requires the retained synchronous SCI profile)
+endif
+endif
 ifneq ($(filter $(PRIVATE_P2),0 1),$(PRIVATE_P2))
 $(error PRIVATE_P2 must be 0 or 1)
 endif
@@ -70,6 +80,7 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -DKUI_TOY_PILOT_GD_FIXED_STEP=$(GD_FIXED_STEP) -DKUI_TOY_PILOT_SHARED_SCI=$(SHARED_SCI) \
  -DKUI_TOY_PILOT_ASYNC_CDDA=$(ASYNC_CDDA) \
  -DKUI_TOY_PILOT_PRIVATE_P2=$(PRIVATE_P2) -DKUI_TOY_PILOT_NATIVE_CACHE=$(NATIVE_CACHE) \
+ -DKUI_TOY_PILOT_SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE) \
  -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
  -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
  -Iinclude -Isrc/loader -I$(BUILD) -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -112,7 +123,7 @@ resident: $(BUILD)/resident-sci.bin
 force-config:
 $(BUILD)/build-config: force-config
 	@mkdir -p $(@D)
-	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'OPT=$(RESIDENT_OPT)' > $@.new
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
 $(BUILD)/sci/%.o: %.c

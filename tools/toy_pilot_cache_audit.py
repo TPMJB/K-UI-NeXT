@@ -741,7 +741,7 @@ def audit_cache_layout(resident, worker, stage, resident_disassembly,
     return proof
 
 
-def _load_cache_profile(builddir, *, native_cache=None):
+def _load_cache_profile(builddir, *, native_cache=None, synthetic_source=False):
     directory = Path(builddir)
     config = dict(line.split('=', 1) for line in
                   (directory / 'build-config').read_text().splitlines())
@@ -749,6 +749,8 @@ def _load_cache_profile(builddir, *, native_cache=None):
                 'SCI_REUSE_TDRE': '0', 'GD_FIXED_STEP': '2'}
     if any(config.get(key) != value for key, value in required.items()) or config.get('NATIVE_CACHE') not in ('0', '1'):
         raise ValueError('Cache audit requires exact baseline P2 comparison configuration')
+    if config.get('SYNTHETIC_SOURCE', '0') != str(int(bool(synthetic_source))):
+        raise ValueError('Requested synthetic source audit differs from actual build')
     selected = config['NATIVE_CACHE'] == '1'
     if native_cache is not None and bool(native_cache) != selected:
         raise ValueError('Requested cache audit profile differs from actual build')
@@ -772,15 +774,20 @@ def _load_cache_profile(builddir, *, native_cache=None):
     return selected, images, disassemblies
 
 
-def audit_cache_profiles(builddir, *, native_cache=None):
-    selected, images, disassemblies = _load_cache_profile(builddir, native_cache=native_cache)
-    return audit_cache_layout(images['resident-sci'], images['worker'], images['stage'],
+def audit_cache_profiles(builddir, *, native_cache=None, synthetic_source=False):
+    selected, images, disassemblies = _load_cache_profile(builddir, native_cache=native_cache,
+                                                        synthetic_source=synthetic_source)
+    proof = audit_cache_layout(images['resident-sci'], images['worker'], images['stage'],
         disassemblies['resident-sci'], disassemblies['worker'], disassemblies['stage'],
         native_cache=selected)
+    proof['synthetic_source_control'] = bool(synthetic_source)
+    return proof
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('builddir', type=Path)
+    parser.add_argument('--synthetic-source', action='store_true')
     args = parser.parse_args()
-    print(json.dumps(audit_cache_profiles(args.builddir), indent=2, sort_keys=True))
+    print(json.dumps(audit_cache_profiles(args.builddir, synthetic_source=args.synthetic_source),
+                     indent=2, sort_keys=True))

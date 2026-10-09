@@ -5,6 +5,18 @@
 #include <stdint.h>
 #include "kui/toy_pilot_cache.h"
 
+/* Diagnostic control: remove only audio card reads, retaining the native
+ * AICA playback/timeline and DATA exclusion. This is deliberately silent. */
+#ifndef KUI_TOY_PILOT_SYNTHETIC_SOURCE
+#define KUI_TOY_PILOT_SYNTHETIC_SOURCE 0
+#endif
+#if KUI_TOY_PILOT_SYNTHETIC_SOURCE != 0 && KUI_TOY_PILOT_SYNTHETIC_SOURCE != 1
+#error Toy synthetic source must be 0 or 1
+#endif
+#if KUI_TOY_PILOT_SYNTHETIC_SOURCE && (KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_ASYNC_CDDA)
+#error Toy synthetic source requires the retained synchronous SCI profile
+#endif
+
 #define KUI_TOY_PILOT_MAGIC UINT32_C(0x54595031)
 #define KUI_TOY_PILOT_API 8u
 #define KUI_TOY_PILOT_WORKER_BEGIN UINT32_C(0x8cfd0000)
@@ -148,7 +160,9 @@ struct kui_toy_pilot_snapshot {
     uint32_t reserve_last_sample_age, reserve_last_remaining;
     uint32_t reserve_last_bank, reserve_last_bank_filled;
     uint32_t reserve_last_fill_stream, reserve_last_site;
-    /* Actual raw callback duration only, including failed reads but not
+    /* Source acquisition duration only (generated PCM in the explicit
+     * SYNTHETIC_SOURCE control, actual raw callback otherwise), including
+     * failed reads but not
      * cached sector remnants or callbacks returning to a revoked/stale
      * epoch. The total wraps modulo32 bits. */
     uint32_t raw_read_ticks_last, raw_read_ticks_max;

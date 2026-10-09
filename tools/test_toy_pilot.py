@@ -18,6 +18,9 @@ SUITES = (
     ('ring-evidence', ['tests/test_toy_pilot_ring.c'], []),
     ('ring-worker', ['tests/test_toy_pilot_ring_worker.c', 'src/core/toy_pilot.c',
                      'src/core/hash.c'], []),
+    ('synthetic-source', ['tests/test_toy_pilot_synthetic_source.c',
+                          'src/core/toy_pilot.c', 'src/core/hash.c'],
+                         ['KUI_TOY_PILOT_SYNTHETIC_SOURCE=1']),
     ('block-boundaries', ['tests/test_toy_pilot_block_boundaries.c',
                           'src/core/toy_pilot.c', 'src/core/hash.c'], []),
     ('blocks-worker', ['tests/test_toy_pilot_blocks_worker.c',
@@ -100,7 +103,7 @@ def main():
         target = args.build_dir / ('test-' + name)
         # The independent boundary test shares a larger physical-consumer
         # fixture; uncalled fixture helpers are intentionally retained.
-        extra = ['-Wno-unused-function'] if name in ('block-boundaries', 'blocks-worker',
+        extra = ['-Wno-unused-function'] if name in ('synthetic-source', 'block-boundaries', 'blocks-worker',
                                                     'shared-worker', 'async-audio-engine',
                                                     'async-audio-worker') else []
         subprocess.run(shlex.split(args.cc) + flags + extra + ['-D' + d for d in definitions] +
@@ -121,6 +124,22 @@ def main():
         raise RuntimeError('native cache without private P2 did not fail with the '
                            'required profile diagnostic:\n' + invalid.stderr)
     print('Toy invalid cache profile: native copy-back without private P2 rejected')
+    for definitions, diagnostic in (
+        (['KUI_TOY_PILOT_SYNTHETIC_SOURCE=2'], 'Toy synthetic source must be 0 or 1'),
+        (['KUI_TOY_PILOT_SYNTHETIC_SOURCE=1', 'KUI_TOY_PILOT_SHARED_SCI=1'],
+         'Toy synthetic source requires the retained synchronous SCI profile'),
+        (['KUI_TOY_PILOT_SYNTHETIC_SOURCE=1', 'KUI_TOY_PILOT_ASYNC_CDDA=1'],
+         'Toy synthetic source requires the retained synchronous SCI profile'),
+    ):
+        invalid = subprocess.run(shlex.split(args.cc) + flags +
+                                 ['-D' + value for value in definitions] +
+                                 ['-x', 'c', '-c', '-o', os.devnull, '-'],
+                                 input='#include "kui/toy_pilot.h"\n', cwd=ROOT,
+                                 capture_output=True, text=True)
+        if invalid.returncode == 0 or diagnostic not in invalid.stderr:
+            raise RuntimeError('Synthetic source configuration admitted or failed '
+                               'without required diagnostic:\n' + invalid.stderr)
+    print('Toy synthetic source profile: invalid/shared/async combinations rejected')
     for check in ('scratch', 'gd_chunk', 'report'):
         command = [sys.executable, str(ROOT / ('tests/test_toy_pilot_' + check + '.py')), '--cc', args.cc]
         if args.no_sanitizers:
