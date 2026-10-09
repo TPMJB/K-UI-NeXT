@@ -39,7 +39,7 @@ Attachment: soldered G1 tap on the VA1 mainboard. Preferred mounting is
 above the mainboard near IC501 (BIOS) and CN503, below the installed
 upper metal shield. Both connector rows and assembly height need checking.
 A thin underside tap with a short flex to the top-side board is a fallback;
-the complete board is not assumed to fit underneath. Clearance is unmeasured.
+the complete board is not assumed to fit underneath. Clearance is unconfirmed.
 Optional dual BIOS is in the architecture scope but absent from this sheet.
 An IC501 adapter/tap is a new candidate, with 20 ATA nets in the traced
 schematic. Its continuity, termination and remaining controls are unverified.
@@ -114,7 +114,14 @@ installed height, measure (1) top of IC501 to underside of shield and
 (2) motherboard PCB surface beside IC501 toward CN503 to underside of
 shield. Check several points and record the minimum across the candidate
 footprint, including existing components, insulation and wire exits.
-These measurements remain pending. Do not infer clearance from internet
+The owner reported approximate 8.62 mm, 0.62 mm sheet thickness and 1.4 mm
+additional metal near BIOS/G1, then flagged a possible measurement error.
+Do not adopt the derived 8.0/6.6 mm gaps as confirmed limits: sheet thickness
+is subtracted only from an outer-face measurement, and the extra metal must
+actually project downward into that same gap. Direct inner-face measurements
+remain pending; see the provisional clearance report in
+../docs/controller-ram-bios-disposition-2026-10-09.md.
+Do not infer clearance from internet
 DCDigital figures or assume a socketed C5 fits because a BIOS chip fits.
 Keep the external antenna clear of the surrounding metal shielding; its
 actual location and RF performance need qualification.

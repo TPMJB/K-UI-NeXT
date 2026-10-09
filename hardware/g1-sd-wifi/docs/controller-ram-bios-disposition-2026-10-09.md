@@ -73,11 +73,27 @@ For an x8/x16 64 Mbit NOR such as MX29LV640E in byte mode, Q15/A-1 supplies byte
 
 Session bank selection is a candidate, not a working warm reboot. Stop/drain G1 activity and prevent ROM calls, including fonts and flash services, before switching/programming. Define a complete restart rather than assuming a jump to the reset vector resets all peripherals. Specify separately how ATA SRST, G1 hardware reset, MCU reset, FPGA reconfiguration, console reset and power loss affect the session latch and write gate. Selection must stay stable while games use ROM in place. [KOS font-lock contract](https://github.com/KallistiOS/KallistiOS/blob/master/kernel/arch/dreamcast/include/dc/syscalls.h) confirms exclusive G1 ownership is required for font access. Validate every installed image's boot/unlock/optical behavior; distribute tools and patches rather than BIOS images.
 
+## Provisional shield-clearance report
+
+The owner reported approximately 8.62 mm from motherboard to shield, 0.62 mm shield-sheet thickness, and 1.4 mm of additional metal near IC501/CN503 on 9 October 2026, then flagged a possible measurement mistake. These values are unconfirmed; they are not an accepted layout envelope.
+
+| Reported item | Value | Reference that needs confirmation |
+| --- | --- | --- |
+| Motherboard-to-shield measurement | About 8.62 mm | PCB top surface to shield outer face or inner face? |
+| Main shield sheet | About 0.62 mm | Subtract only when the first measurement reaches the outer face |
+| Extra metal near BIOS/G1 | About 1.4 mm | Actual downward projection into the same gap, and its footprint |
+
+The owner's initial arithmetic gives 8.00 mm below the main shield and 6.60 mm under the additional metal **only if both subtraction conditions hold**. Measuring directly to the inner face already excludes the main sheet thickness; subtracting it again would double-count it. Additional metal thickness alone does not establish how far it projects into the candidate board space. No photo-derived dimension has been verified for this report.
+
+Repeat the measurement with the console unplugged and the shield seated normally. Measure the gap from bare PCB beside IC501 toward CN503 to the nearest metal underside at several points, then separately from the top of IC501. A loose stack of thin nonconductive card can serve as a gauge where direct caliper access is difficult: start below the estimated gap, increase until it just touches without lifting or forcing the shield, and measure the stack outside the console. Record the contact locations and smallest gaps across the proposed footprint, including the extra metal.
+
+Use those direct gaps for the complete stack: mounting/supports and insulation, carrier PCB, lower-side components where present, and socket/module or tallest top-side part. A PCB-to-metal gap is not the spare height above the existing BIOS. No socketed C5, BIOS carrier, component-height limit or PCB outline is approved by the provisional figures. Retain the shield and its normal thermal contacts in the fit check.
+
 ## Evidence and next steps
 
 Claude correctly withdrew the nonexistent-CF-rig assumption and its original PIO-output/DMARQ gate errors. Software logs and a controlled raw-register probe can precede a hardware responder; passive waveform capture does not require a working CF card. However, an IDE failure code does not alone prove which physical device drove the bus. Floating levels, stale state and probe cleanup must be considered. The existing ATA path sends IDENTIFY directly; a silent bridge would need the explicit activation contract discussed previously.
 
-1. Obtain the two installed-shield clearances and IC501 package/orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
+1. Recheck the provisional clearance report above; obtain the two direct installed-shield clearances and IC501 package/orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
 2. Review existing IDE-probe evidence and capture baseline register/data strobes before freezing timing architecture. Any software probe must own/restore the bus and timing; do not sweep values blindly under game/optical activity.
 3. Develop the chosen front-end register file, ownership/reset/interlock model, MCU link and independent stock path. Demonstrate resource/timing closure and isolate the responder before console attachment.
 4. Prove coexistence and hashed PIO reads, then DMA. Qualify writes/cache coherence/flush and power cuts before networking or BIOS programming.

@@ -72,6 +72,8 @@ Planned write protection includes read-only collection access during ordinary pl
 
 The owner's photo shows VA1 mainboard **837-13778-02**, BIOS **IC501** and G1 connector **CN503**. Preferred placement is above the motherboard near IC501/CN503, below the normally seated upper metal shield. The shield is the local height constraint.
 
+The owner has supplied initial height figures but flagged a possible measurement mistake. The [provisional clearance report](docs/controller-ram-bios-disposition-2026-10-09.md#provisional-shield-clearance-report) records them and the required measurement references. The derived 8.0 mm / 6.6 mm gaps are conditional, not confirmed fit limits.
+
 CN503 has two 25-pin rows carrying the required signals. The BIOS-facing tails are visible in the supplied photo; access to the board-edge row is not yet qualified. Logical pin mapping does not establish a practical soldering method. If direct top-side access proves unsuitable, investigate a thin underside tap and short flex to the upper board, with signal integrity and shield clearance checked. The controller/C5 assembly is not assumed to fit under the motherboard.
 
 An additional candidate is an IC501 adapter/tap. The VA1 traced schematic exposes 20 ATA nets at the BIOS footprint, including multiplexed address/data nets; it is not a 16-bit ROM-data-pin connection. The [candidate reference](docs/IC501-candidate-reference.csv) requires continuity checks and signal-integrity review. This path does not automatically eliminate the remaining connector controls or prove a dual-BIOS carrier fits.
