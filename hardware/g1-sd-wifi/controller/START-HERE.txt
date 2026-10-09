@@ -132,8 +132,10 @@ cutout needs actual width-transition locations; pin-run ends do not define
 those transitions. The centered pin run is 24.39 mm long (7.14 mm end margins
 if exactly centered).
 This span does not define pin pitch without contact-center/edge endpoints.
-Obtain its X/Y offset relative to IC501 and identify the large chip used as
-the lower-metal boundary reference. Preserve the CPU/GPU thermal-contact area.
+Obtain its X/Y offset relative to IC501. The inline replacement photo and
+owner confirmation identify the upper SEGA 315-6267 and large chip below it
+with thermal compound. Both contact footprints have zero carrier clearance:
+keep them clear and preserve the installed metal contact.
 Other chips are reported significantly below 2 mm, but parts under solid
 carrier areas still require height allowance or local cutouts. BIOS-top gap
 matters only for a later overhang.
@@ -142,17 +144,20 @@ See the concept-outline and fabrication measurement checklist in
 The owner reaffirmed approximate 8.62 mm, 0.62 mm sheet thickness and 1.4 mm
 additional metal near BIOS/G1 after checking the caliper readings. Initial
 arithmetic gave 8.0 mm generally and 6.6 mm under the extra metal. The owner's
-latest effective working ceiling is 6.0 mm in the lower-metal region and
-8.0 mm outside it. Retain 6.6 mm as earlier report history, not the active
-local assembly budget. The described region runs from the large chip's north
-edge to the south board edge, and its west edge to the east board edge.
+earlier effective working ceiling was 6.0 mm under extra metal and 8.0 mm
+outside. The latest clarification confirms zero clearance over both thermal
+contact footprints and 8.0 mm outside the identified metal area. Reconcile
+whether the earlier 6.0 mm adjacent-area budget still applies around IC501/
+CN503 before fixing that region boundary. Retain 6.6 mm as report history.
+The chip reference is resolved; the precise adjacent-area height map is not.
 The calculation assumes PCB top to shield outer face and actual downward
 projection of the extra metal. The separately measured 1.62 mm motherboard
 thickness is not subtracted from a PCB-top gap. Bracket overlap, cutout
 dimensions and full carrier/socket/module stack remain to be checked.
 The C5 is owner-measured at 4.48 mm total height including USB. After its
-module envelope, 3.52 mm remains in the 8.0 mm region and 1.52 mm in the
-6.0 mm region for carrier elevation, PCB, socket separation and allowance.
+module envelope, 3.52 mm remains in usable 8.0 mm space, or 1.52 mm if the
+6.0 mm adjacent-area budget applies, for carrier elevation, PCB, socket
+separation and allowance. Neither budget applies over thermal-contact chips.
 A 1.6 mm carrier plus that module already exceeds the 6.0 mm working ceiling.
 Keep USB in the baseline. Prefer C5 placement in the 8.0 mm region if its
 footprint permits it; qualify a low-height removable connection. USB removal
