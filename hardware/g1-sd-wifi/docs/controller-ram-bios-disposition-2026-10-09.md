@@ -75,7 +75,7 @@ Session bank selection is a candidate, not a working warm reboot. Stop/drain G1 
 
 ## Provisional shield-clearance report
 
-On 9 October 2026 the owner reported approximately 8.62 mm from motherboard to shield, 0.62 mm shield-sheet thickness and 1.4 mm of additional metal near IC501/CN503. After briefly questioning the readings and checking the motherboard's approximately 1.62 mm thickness with digital calipers, the owner reaffirmed the measurements. Use the resulting 8.00 mm general clearance and 6.60 mm local clearance as **owner-reported planning dimensions**. Complete assembly fit remains pending.
+On 9 October 2026 the owner reported approximately 8.62 mm from motherboard to shield, 0.62 mm shield-sheet thickness and 1.4 mm of additional metal near IC501/CN503. After briefly questioning the readings and checking the motherboard's approximately 1.62 mm thickness with digital calipers, the owner reaffirmed the measurements. The initial arithmetic gives an 8.00 mm general gap and 6.60 mm local gap. The owner later specified **6.00 mm effective working height in the lower-metal region and 8.00 mm outside it**. Use those latest values for the assembly budget; retain 6.60 mm as the earlier calculated/report history, not the active local design ceiling. Complete assembly fit remains pending.
 
 | Reported item | Value | Measurement reference |
 | --- | --- | --- |
@@ -84,7 +84,8 @@ On 9 October 2026 the owner reported approximately 8.62 mm from motherboard to s
 | Extra metal near BIOS/G1 | About 1.4 mm | Calculation assumes downward projection into that same gap |
 | Motherboard PCB thickness | About 1.62 mm | Separate board-thickness reading; not subtracted from a PCB-top clearance |
 | Clearance below main shield | About 8.00 mm | 8.62 - 0.62 |
-| Clearance beneath additional metal | About 6.60 mm | 8.00 - 1.40; applies where that metal overlaps the board |
+| Earlier calculated gap beneath additional metal | About 6.60 mm | 8.00 - 1.40; retained as initial report |
+| Latest effective local working height | About 6.00 mm | Owner-directed planning ceiling in the lower-metal region |
 
 The reference assumptions stay explicit: an inner-face measurement already excludes the shield sheet thickness, and metal thickness must correspond to actual projection into the candidate footprint. A plausible PCB-thickness reading supports the scale of the measurements; it does not independently verify the clearance endpoints. No photo-derived dimension has been verified for this report.
 
@@ -103,19 +104,19 @@ The owner measured the C5 module's total height, including its USB connector, as
 | Clearance region | PCB-to-metal gap | Space remaining after 4.48 mm C5 envelope |
 | --- | --- | --- |
 | Below main shield | 8.00 mm | 3.52 mm |
-| Below extra BIOS/G1 metal | 6.60 mm | 2.12 mm |
+| Lower-metal region, latest working ceiling | 6.00 mm | 1.52 mm |
 
 The remaining space must cover carrier elevation above the motherboard, carrier thickness, the actual gap from carrier top to the module's lowest point, insulation and a fit/tolerance allowance. The owner reports other chips are below approximately 2 mm; wherever the carrier passes over them, their heights determine part of its required elevation and consume this budget. Include lower-side parts or solder where they set either reference surface. A connector's quoted height may use a different datum; use the mounted geometry rather than adding dimensions that overlap.
 
 Illustrative carrier-thickness arithmetic, before every other addition:
 
-| Assumed carrier PCB thickness | Remaining in 8.00 mm region | Remaining in 6.60 mm region |
+| Assumed carrier PCB thickness | Remaining in 8.00 mm region | Remaining in 6.00 mm region |
 | --- | --- | --- |
-| 0.80 mm | 2.72 mm | 1.32 mm |
-| 1.00 mm | 2.52 mm | 1.12 mm |
-| 1.60 mm | 1.92 mm | 0.52 mm |
+| 0.80 mm | 2.72 mm | 0.72 mm |
+| 1.00 mm | 2.52 mm | 0.52 mm |
+| 1.60 mm | 1.92 mm | -0.08 mm (already exceeds ceiling) |
 
-These are planning examples, not a selected PCB stackup or proof that a socket fits. Place the C5 in the 8.00 mm region where the measured footprint permits it, then qualify a low-height removable connection and independent carrier supports. Keep the USB connector in the baseline. The owner is willing to remove it if necessary, but removal helps only if it determines the tallest point; remeasure the remaining module envelope before claiming a reduced height. It does not remove carrier or socket height.
+These are planning examples, not a selected PCB stackup or proof that a socket fits. A 1.60 mm carrier plus the reported C5 envelope already exceeds the latest 6.00 mm local ceiling before supports or a socket are added. Place the C5 in the 8.00 mm region where the measured footprint permits it, then qualify a low-height removable connection and independent carrier supports. Keep the USB connector in the baseline. The owner is willing to remove it if necessary, but removal helps only if it determines the tallest point; remeasure the remaining module envelope before claiming a reduced height. It does not remove carrier or socket height.
 
 ## Owner-reported package and contact dimensions
 
@@ -128,10 +129,20 @@ Additional measurements supplied on 9 October 2026:
 | IC501 outer pin-edge span | 16.66 mm across the width | Full lead envelope for a clearance-only cutout |
 | IC501 height | Roughly 2 mm above motherboard | Excluded from carrier stack where the cutout clears the package |
 | Other chip heights | Significantly below the BIOS height | Component positions/heights still matter beneath solid carrier areas |
+| CN503 reported length × width | 38.67 × 5.03 mm | Initial connector envelope; exact housing/tail width datum still needs qualification |
+| CN503 pin-run length | 24.39 mm, centered within the 38.67 mm length | Initial contact-run location; measurement endpoints not specified |
 | CN503 tail height | Basically flush with motherboard | Near PCB-surface contact plane; qualitative, not a precision 0.00 mm value |
 | General usable area | Outside the CPU/GPU thermal-contact area | Candidate placement region, subject to components, metal geometry and independent supports |
 
 The initial IC501 body rectangle is 26.68 × 12.65 mm. A clearance-only opening must also clear the reported 16.66 mm outer lead span and an assembly/alignment allowance; a narrower opening intended to overlap/tap the leads needs an explicit landing geometry. Do not derive lead pitch from the body dimensions or the difference between body and lead span. These reported sizes establish a concept keepout, not a final routed opening or qualified IC footprint.
+
+## Lower-metal region and connector placement
+
+The owner describes the lower-metal region, in their north/south/east/west orientation, as extending from the **north edge of the reference large chip to the south board edge**, and from that chip's **west edge to the east board edge**. Use **6.00 mm effective working height inside that region and 8.00 mm outside it**, while preserving the CPU/GPU thermal-contact keepouts. The image intended to identify the reference chip, `image-1791585472741.jpg`, was not available for inspection in this session. Its chip identity and orientation are therefore not inferred from the failed attachment.
+
+CN503 is reported as 38.67 mm long and 5.03 mm wide, with a centered 24.39 mm pin run. Centering gives provisional end margins of (38.67 - 24.39) / 2 = **7.14 mm**. This is a plan-location calculation only. The span may be measured over outside edges rather than first/last contact centers; do not divide it by 24 and treat the result as a qualified pin pitch.
+
+The remaining concept-placement input is the X/Y offset between clearly identified CN503 and IC501 reference corners, plus identification of the chip defining the lower-metal boundary. Exact tail-row spacing, contact width/pitch, body-versus-tail envelope and joining tolerances remain footprint/fabrication checks.
 
 ## CN503 cutout and remaining measurements
 
@@ -143,12 +154,12 @@ Evaluate an accessible edge/underside landing with a visible solder fillet, pote
 
 Define lead/pad overlap, solder access, insulation, edge clearance and the precise contact-height tolerance before selecting the joining geometry. Support the carrier independently of the solder joints and connector/BIOS legs.
 
-The architecture proposal can proceed with the reported height budgets. The following measurements are needed to draw a useful carrier outline:
+The architecture proposal can proceed with the reported dimensions and latest height budgets. The following remaining inputs locate and qualify the carrier:
 
 | Measurement bundle | Minimum useful information | Purpose |
 | --- | --- | --- |
-| Connector and relative position | CN503 housing length × width and span of exposed tail rows; X/Y offset relative to an identified IC501 corner | Add the connector cutout to the measured BIOS keepout |
-| Placement/metal map | Bounds of the 6.60 mm metal region, CPU/GPU thermal-contact keepouts and available support locations, referenced to the same parts | Set the board outline and C5 placement |
+| Relative position | X/Y offset between identified CN503 and IC501 corners; use the reported 38.67 × 5.03 mm connector envelope and centered 24.39 mm contact run | Locate both cutouts in one coordinate system |
+| Placement/metal map | Identify the large-chip reference in the owner's region description; retain thermal-contact keepouts and locate available supports | Apply the 6.00 mm / 8.00 mm working regions to board/C5 placement |
 | Components beneath carrier | Positions and heights wherever solid carrier would pass over existing parts | Choose local cutouts or elevation within the height budget |
 | C5 mounted stack | Select socket/contact from a manufacturer drawing; check assembled module height above carrier with carrier thickness/elevation counted separately | Verify the 4.48 mm module within the complete stack |
 
@@ -160,7 +171,7 @@ Before fabrication, qualify CN503 tail pitch, row spacing, tail width/exposed le
 
 Claude correctly withdrew the nonexistent-CF-rig assumption and its original PIO-output/DMARQ gate errors. Software logs and a controlled raw-register probe can precede a hardware responder; passive waveform capture does not require a working CF card. However, an IDE failure code does not alone prove which physical device drove the bus. Floating levels, stale state and probe cleanup must be considered. The existing ATA path sends IDENTIFY directly; a silent bridge would need the explicit activation contract discussed previously.
 
-1. Complete CN503 envelope/relative position and the placement/component map above; choose and check the C5 mounting stack, then qualify contact geometry and physical pin orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
+1. Complete the CN503-to-IC501 relative position and identify the lower-metal reference chip; choose and check the C5 mounting stack, then qualify component clearances, contact geometry and physical pin orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
 2. Review existing IDE-probe evidence and capture baseline register/data strobes before freezing timing architecture. Any software probe must own/restore the bus and timing; do not sweep values blindly under game/optical activity.
 3. Develop the chosen front-end register file, ownership/reset/interlock model, MCU link and independent stock path. Demonstrate resource/timing closure and isolate the responder before console attachment.
 4. Prove coexistence and hashed PIO reads, then DMA. Qualify writes/cache coherence/flush and power cuts before networking or BIOS programming.

@@ -125,23 +125,31 @@ width, 16.66 mm outer pin span, and roughly 2 mm height. Add edge/alignment
 allowance to a clearance cutout; a body-only opening needs designed lead
 landing geometry if it overlaps the pins. Do not infer pin pitch from these.
 CN503 tails are owner-reported basically flush; precise joint geometry still
-needs qualification. Obtain CN503 housing/tail envelope and X/Y position
-relative to IC501, and map the lower metal and CPU/GPU thermal-contact area.
+needs qualification. CN503 is owner-reported 38.67 mm long and 5.03 mm wide,
+with a centered 24.39 mm pin run (7.14 mm end margins if exactly centered).
+This span does not define pin pitch without contact-center/edge endpoints.
+Obtain its X/Y offset relative to IC501 and identify the large chip used as
+the lower-metal boundary reference. Preserve the CPU/GPU thermal-contact area.
 Other chips are reported significantly below 2 mm, but parts under solid
 carrier areas still require height allowance or local cutouts. BIOS-top gap
 matters only for a later overhang.
 See the concept-outline and fabrication measurement checklist in
 ../docs/controller-ram-bios-disposition-2026-10-09.md.
 The owner reaffirmed approximate 8.62 mm, 0.62 mm sheet thickness and 1.4 mm
-additional metal near BIOS/G1 after checking the caliper readings. Use 8.0 mm
-generally and 6.6 mm beneath the extra metal as owner-reported planning gaps.
+additional metal near BIOS/G1 after checking the caliper readings. Initial
+arithmetic gave 8.0 mm generally and 6.6 mm under the extra metal. The owner's
+latest effective working ceiling is 6.0 mm in the lower-metal region and
+8.0 mm outside it. Retain 6.6 mm as earlier report history, not the active
+local assembly budget. The described region runs from the large chip's north
+edge to the south board edge, and its west edge to the east board edge.
 The calculation assumes PCB top to shield outer face and actual downward
 projection of the extra metal. The separately measured 1.62 mm motherboard
 thickness is not subtracted from a PCB-top gap. Bracket overlap, cutout
 dimensions and full carrier/socket/module stack remain to be checked.
 The C5 is owner-measured at 4.48 mm total height including USB. After its
-module envelope, 3.52 mm remains in the 8.0 mm region and 2.12 mm in the
-6.6 mm region for carrier elevation, PCB, socket separation and allowance.
+module envelope, 3.52 mm remains in the 8.0 mm region and 1.52 mm in the
+6.0 mm region for carrier elevation, PCB, socket separation and allowance.
+A 1.6 mm carrier plus that module already exceeds the 6.0 mm working ceiling.
 Keep USB in the baseline. Prefer C5 placement in the 8.0 mm region if its
 footprint permits it; qualify a low-height removable connection. USB removal
 is an optional fallback and needs a new measurement of the remaining module.
