@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Package the isolated Toy asynchronous CDDA and shared SCI experiment."""
+"""Package the isolated Toy queued asynchronous CDDA and shared SCI experiment."""
 import argparse
 import io
 import json
@@ -29,14 +29,19 @@ from runtime_package import envelope, flatten_elf, verify
 from toy_pilot_pause_stack_audit import audit_pause_stack
 from toy_pilot_scratch_audit import audit_native_scratch
 
-OUTPUT_NAME = 'K-UI-Toy-Async-CDDA-SCI-Test.zip'
-README_SOURCE = 'docs/toy-shared-sci-test.md'
+OUTPUT_NAME = 'K-UI-Toy-Queued-CDDA-SCI-Test.zip'
+README_SOURCE = 'docs/toy-queued-sci-test.md'
+QUEUED_EVIDENCE = 'docs/evidence/toy-queued-cdda-scheduling-2026-10-09.md'
+HOST_EVIDENCE = 'docs/evidence/toy-queued-cdda-host-tests.txt'
 CONSOLE_EVIDENCE = 'docs/evidence/toy-shared-sci-console-2026-10-09.md'
 TOPUP_EVIDENCE = 'docs/evidence/toy-shared-sci-topup-console-2026-10-09.md'
 RUNTIME_FILE = 'KUI/apps/games/retail-boot.kui'
 LAUNCHER_FILE = 'KUI/runtime.kui'
 LAUNCHER_BUNDLE_SHA = '821391e91db7150b5a06707c6d8576ae41a0c56040a3147370a241e8cb0cc0b0'
 LAUNCHER_SHA = '70db2b9c5958bd392443d8b763ef7b27658d853a1913981080a2ded386558bae'
+FALLBACK_SHA = '161ea24d655b6531867c6704c57a57c1ee25668e534d2f56dc793a5cd73a80de'
+FALLBACK_BUNDLE_SHA = 'f5404320205916f47db625a388f5759b37f4df8aa416e68570b611f9e5c8641f'
+FALLBACK_FILE = 'fallback/KUI/apps/games/retail-boot.kui'
 SHARED_WORDS = ('calls', 'irq_calls', 'call_blocks', 'irq_blocks',
     'audio_claims', 'audio_pending', 'audio_releases', 'data_resumes',
     'errors', 'retries', 'token_yields', 'polled_blocks',
@@ -283,7 +288,8 @@ def shared_early_cache_policy_audit(stage, worker, stage_disassembly, worker_dis
 def shared_layout(directory, inputs):
     """Keep relocation/memory/identity gates, plus separate shared stack audits."""
     from toy_shared_sci_audit import (audit_shared_bridges, audit_shared_stacks,
-                                    audit_shared_schedule, audit_async_cdda)
+                                    audit_shared_schedule, audit_async_cdda,
+                                    mutation_test, mutation_test_async_cdda)
     bounds = {'entry': (retail_layout.EXEC_ADDRESS,
                         retail_layout.EXEC_ADDRESS + retail_layout.STAGE_BLOB_OFFSET + retail_layout.STAGE_MAX_BYTES),
               'stage': (retail_layout.STAGE_ADDRESS, retail_layout.STAGE_MEMORY_END),
@@ -391,6 +397,9 @@ def shared_layout(directory, inputs):
             'instruction_audit': instructions, 'shared_bridges': bridges, 'stack_audit': stacks,
             'shared_scheduling_audit': schedule,
             'asynchronous_CDDA_audit': async_audio,
+            'linked_mutation_rejections': {'guarded_integer_bridges': mutation_test(worker),
+                'queued_plan_references_and_BSS': mutation_test_async_cdda(ROOT, worker,
+                    disassemblies['worker'])},
             'native_pause_stack_audit': audit_pause_stack(worker),
             'native_scratch_audit': audit_native_scratch(resident, worker),
             'early_cache_policy_audit': shared_early_cache_policy_audit(stage, worker,
@@ -500,7 +509,21 @@ int main(int argc,char **argv) {
         'checked_with': 'actual retained launcher layout C function, ASan/UBSan'}
 
 
-def collect(commit, build_dir, launcher_bundle):
+def native_history(commit):
+    """Preserve exact native build identity, independently of remote import history."""
+    from package_toy_integration_checkpoint import bundle_identity
+    with tempfile.TemporaryDirectory(prefix='kui-queued-source-history-') as temporary:
+        path = Path(temporary) / 'source-history.bundle'
+        subprocess.run(['git', 'bundle', 'create', str(path), 'HEAD'], cwd=ROOT, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        data = path.read_bytes()
+        info = bundle_identity(path, data, commit)
+        if info['refs'] != {'HEAD': commit}:
+            raise ValueError('Native bundle HEAD differs from exact requested source commit')
+    return data, info
+
+
+def collect(commit, build_dir, launcher_bundle, fallback_bundle):
     if git('status', '--porcelain') or git('rev-parse', 'HEAD') != commit:
         raise ValueError('Commit exact reviewed source before packaging')
     tree = git('rev-parse', 'HEAD^{tree}')
@@ -546,8 +569,16 @@ def collect(commit, build_dir, launcher_bundle):
     linked = shared_layout(build, remember)
     bundle_bytes = launcher_bundle.read_bytes()
     launcher, licenses, launcher_evidence, launcher_source, gate = launcher_gate(bundle_bytes, runtime)
+    fallback_bytes = fallback_bundle.read_bytes()
+    if sha(fallback_bytes) != FALLBACK_BUNDLE_SHA:
+        raise ValueError('Fallback checkpoint differs from the retained reviewed delivery')
+    with zipfile.ZipFile(io.BytesIO(fallback_bytes)) as old:
+        fallback = old.read(RUNTIME_FILE)
+    if sha(fallback) != FALLBACK_SHA or inspect_retail(fallback)['build'] != '7b55156aafa2':
+        raise ValueError('Clean CDDA fallback byte identity changed')
     add(RUNTIME_FILE, runtime)
     add(LAUNCHER_FILE, launcher)
+    add(FALLBACK_FILE, fallback)
     add('evidence/launcher-source-snapshot.tar', launcher_source)
     for name, data in launcher_evidence.items():
         add(name, data)
@@ -580,13 +611,16 @@ def collect(commit, build_dir, launcher_bundle):
     add('THIRD_PARTY.md', read_file(ROOT / 'THIRD_PARTY.md'))
     snapshot = subprocess.check_output(['git', 'archive', '--format=tar', commit], cwd=ROOT)
     add('source-snapshot.tar', snapshot)
-    add('source-state.txt', ('Unpublished local source checkpoint; complete source in source-snapshot.tar.\n'
-        'Commit: ' + commit + '\nTree: ' + tree + '\n').encode())
+    history, history_info = native_history(commit)
+    add('source-history.bundle', history)
+    add('source-state.txt', ('Exact source checkpoint; complete source in source-snapshot.tar.\n'
+        'Commit: ' + commit + '\nTree: ' + tree + '\n'
+        'Native commit and complete ancestry: source-history.bundle (git clone source-history.bundle).\n').encode())
     readme = remember(ROOT / README_SOURCE)
-    if b'TOY_SHARED_SCI_CHECKLIST_DRAFT' in readme:
+    if b'TOY_QUEUED_SCI_CHECKLIST_DRAFT' in readme:
         raise ValueError('Freeze checklist against final candidate before packaging')
     add('README.md', readme)
-    tests_log = remember(ROOT / 'docs/evidence/toy-shared-sci-host-tests.txt')
+    tests_log = remember(ROOT / HOST_EVIDENCE)
     from test_toy_pilot import SUITES
     required_audio_suites = {'async-audio-gd', 'async-audio-engine',
                             'async-audio-worker', 'async-audio-stream'}
@@ -597,13 +631,26 @@ def collect(commit, build_dir, launcher_bundle):
     if (not tests_log.rstrip().endswith(footer) or
             b'FAIL' in tests_log):
         raise ValueError('Missing successful recorded host checks')
-    add('evidence/toy-shared-sci-host-tests.txt', tests_log)
+    add('evidence/toy-queued-cdda-host-tests.txt', tests_log)
     if b'foreground high EXEC/CHECK, nonblocking REQUEST' not in tests_log:
         raise ValueError('Missing production GD adapter foreground/nonblocking routing checks')
     for phrase in (b'Shared asynchronous SCI audio:', b'Async CDDA worker:',
             b'Toy async audio GD adapter: scalar/audio EXEC/CHECK services RAW without a data handle'):
         if phrase not in tests_log:
             raise ValueError('Missing recorded complete-sector async audio production checks')
+    for phrase in (b'Queued SCI sustained 60-Hz:', b'Queued SCI bounded-gap:',
+            b'Queued SCI sparse-cadence limit:', b'Queued SCI mixed DATA/RAW:',
+            b'Queued CDDA physical PCM:', b'Queued CDDA sparse cadence limit:'):
+        if phrase not in tests_log:
+            raise ValueError('Missing successful sustained queued transport production checks')
+    queued_evidence = remember(ROOT / QUEUED_EVIDENCE)
+    if (b'TOY_QUEUED_SCI_CHECKLIST_DRAFT' in queued_evidence or
+            b'75 sectors' not in queued_evidence or
+            b'60 sectors' not in queued_evidence):
+        raise ValueError('Missing reviewed sustained queue evidence and original withheld limitation')
+    add('evidence/toy-queued-cdda-scheduling-2026-10-09.md', queued_evidence)
+    add('evidence/toy-async-cdda-scheduling-2026-10-09.md',
+        remember(ROOT / 'docs/evidence/toy-async-cdda-scheduling-2026-10-09.md'))
     console_evidence = remember(ROOT / CONSOLE_EVIDENCE)
     if b'2faa62067610' not in console_evidence or b'369,263' not in console_evidence:
         raise ValueError('Missing recorded asynchronous console regression evidence')
@@ -613,10 +660,11 @@ def collect(commit, build_dir, launcher_bundle):
         raise ValueError('Missing recorded foreground top-up console evidence')
     add('evidence/toy-shared-sci-topup-console-2026-10-09.md', topup_evidence)
     metadata = {'source_commit': commit, 'source_tree': tree, 'source_dirty': False,
-        'source_publication': 'unpublished local checkpoint; complete source snapshot included',
-        'source_snapshot_sha256': sha(snapshot), 'build_configuration': config,
+        'source_publication': 'exact source checkpoint; complete source snapshot included',
+        'source_snapshot_sha256': sha(snapshot), 'native_source_history': history_info,
+        'build_configuration': config,
         'compiler': subprocess.check_output(['sh-elf-gcc', '--version'], text=True).splitlines()[0],
-        'scope': 'Exact Toy Commander asynchronous raw CDDA/shared SCI experiment with bounded foreground progress',
+        'scope': 'Exact Toy Commander queued asynchronous raw CDDA/shared SCI experiment with bounded foreground progress',
         'hardware_tested': False,
         'candidate': {**info, 'file': RUNTIME_FILE, 'sha256': sha(runtime)},
         'launcher': {**verify(launcher), 'file': LAUNCHER_FILE, 'sha256': sha(launcher),
@@ -632,24 +680,30 @@ def collect(commit, build_dir, launcher_bundle):
             'evidence_sha256': sha(topup_evidence),
             'new_candidate_tested': False},
         'raw_audio_delivery': {'asynchronous': True, 'sector_bytes': 2352,
-            'pending_output': 'private staging only; no partial worker buffer delivery',
+            'verified_queue_sectors': 4,
+            'pending_output': 'private queue only; no partial worker buffer delivery',
             'identity': ['LBA', 'mailbox generation', 'stable worker output address'],
             'raw_timing_scope': 'Elapsed request-to-complete-delivery latency including game execution between visits; not CPU blocking time',
-            'sound_ring_policy_changed': False, 'worker_refill_cadence_changed': False},
+            'sound_ring_policy_changed': False, 'worker_refill_cadence_changed': False,
+            'producer_consumer_coupling_removed': True,
+            'scheduling': 'worker publishes ordered plan/reserve; transport prefetches without output authority'},
         'clean_cdda_fallback': {'build': '7b55156aafa2',
             'package': 'K-UI-CDDA-Eight-Block-Test.zip',
             'sha256': 'ffd6628beaf4c964111598d1e19d902363b387c74b4b018ae11e9afeb43e2aae',
-            'included_or_overwritten': False},
+            'overwritten': False,
+            'retained_checkpoint_sha256': FALLBACK_BUNDLE_SHA,
+            'included': True, 'file': FALLBACK_FILE, 'runtime_sha256': sha(fallback)},
         'ordinary_reader_modified': False, 'game_files_included': False,
-        'card_path_configuration_included': False, 'package_revision': 3}
+        'card_path_configuration_included': False, 'package_revision': 4}
     add('build.json', (json.dumps(metadata, indent=2) + '\n').encode())
-    if {name for name in files if name.endswith('.kui')} != {RUNTIME_FILE, LAUNCHER_FILE}:
+    if {name for name in files if name.endswith('.kui')} != {RUNTIME_FILE, LAUNCHER_FILE, FALLBACK_FILE}:
         raise ValueError('Unexpected installable runtime')
     if any(Path(name).suffix.lower() == '.drv' for name in files) or any(
             sha(data) in (BOOT_SHA256, DRIVER_SHA256) for data in files.values()):
         raise ValueError('Retail executable/driver included as archive member')
     if (git('status', '--porcelain') or git('rev-parse', 'HEAD') != commit or
-            git('rev-parse', 'HEAD^{tree}') != tree or launcher_bundle.read_bytes() != bundle_bytes):
+            git('rev-parse', 'HEAD^{tree}') != tree or launcher_bundle.read_bytes() != bundle_bytes or
+            fallback_bundle.read_bytes() != fallback_bytes):
         raise ValueError('Source or retained launcher changed during collection')
     for path, digest in remembered.items():
         if sha(read_file(path)) != digest:
@@ -662,13 +716,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-commit', required=True, type=object_id)
-    parser.add_argument('--build-dir', default='build/shared-sci-async-cdda', type=Path)
+    parser.add_argument('--build-dir', default='build/queued-sci-async-cdda', type=Path)
     parser.add_argument('--launcher-bundle', required=True, type=Path)
+    parser.add_argument('--fallback-bundle', required=True, type=Path)
     args = parser.parse_args()
     try:
         if args.output.is_symlink() or args.output.exists() or args.output.name != OUTPUT_NAME:
             raise ValueError('Use a new ' + OUTPUT_NAME + ' path; preserve previous artifacts')
-        write_archive(args.output.resolve(), collect(args.source_commit, args.build_dir, args.launcher_bundle))
+        write_archive(args.output.resolve(), collect(args.source_commit, args.build_dir,
+            args.launcher_bundle, args.fallback_bundle))
         print(json.dumps({'file': str(args.output.resolve()), 'bytes': args.output.stat().st_size,
             'sha256': sha(args.output.read_bytes()), 'build': args.source_commit[:12]}, indent=2))
     except (OSError, ValueError, UnicodeError, struct.error, subprocess.SubprocessError, zipfile.BadZipFile) as error:

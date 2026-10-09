@@ -1,0 +1,69 @@
+Toy pilot bus: 180 checks passed
+Toy tracked sound lease: bounds, native ownership, canary failure and exact SR checks passed
+Toy GD progress: six audio commands retire without sound service; failures, cancellation and handle ownership preserved
+retail GD service: 668194 checks passed
+Toy pilot ownership: 454 checks passed
+Toy ring scalar evidence: conservative clocks, independently timed stereo publications, delayed capture lower bounds, phase/half boundaries, age and invalid positions pass
+Toy ring worker: physical PCM/block ownership under serial publication, capture-bound pressure/latency diagnostics, eight recovery causes, lifecycle/EOF/control and pause/reset pass
+physical stereo boundaries and intermediate absolute epochs: ok
+eight-block physical PCM and lifecycle regressions: ok
+Toy driver load admission: empty buffer, success/failure, one-use, range and revocation checks passed
+Toy launch options, raw-GDI boot and early reset admission: passed
+Toy actual worker: idle has zero bus/heap activity; busy retries, bounded failure and committed-packet fault preserve progress
+Toy GD audio status: title predicate, logical handoff, pending commands, position and scalar responses pass
+Toy GD adapter: immediate mailbox acceptance, native handle ownership, scalar audio/status layouts, truncation and protected outputs pass
+pause adapter: registered startup handler, native retirement, retained pending work, SDK busy, bounds, post-pump corruption, callback identity, deferred file owner/VBlank retirement, borrowed guest scratch, time/attempt bounds and SR restoration passed
+Toy startup integration: registered callback, real GD acceptance/CHECK, native status translation, retained pending/invalid handle ownership and exact SR pass
+Toy native lifecycle: real GD admission, owner equality, subtype8 status chain, ownerless terminal refusal and exact SR pass
+Toy integrated ring flow: real request/GD acceptance, idle controls, asynchronous ARM, collapsed controls, repeat metadata, native PAUSE drain and EOF pass
+Masked-IRQ time-driven DMA: 32 baseline EXEC/CHECK entries, 8 bounded top-up entries
+Shared asynchronous SCI: 33406 checks passed
+random: blocks 7165 polled 928 starts 231 kept 2 overruns 5 repaired 127 deferred 48 ahead 42 crc 81 token 47
+sci stream: ok
+Toy async GD adapter: low validation, foreground high EXEC/CHECK, nonblocking REQUEST, partial abort fencing, stale tokens and audio mailbox independence pass
+Shared SCI worker: pending lease leaves PCM/generation/raw counters intact; granted callbacks remain once-only and stereo ordered
+Toy async audio GD adapter: scalar/audio EXEC/CHECK services RAW without a data handle; protocol acknowledgement stays unchanged
+Toy async GD adapter: low validation, foreground high EXEC/CHECK, nonblocking REQUEST, partial abort fencing, stale tokens and audio mailbox independence pass
+Sparse masked-IRQ audio-only schedule: 6 worker visits at 80 ms; foreground/IRQ progress is required
+Queued SCI sustained 60-Hz: 150 sectors/2 s, largest worker burst 2, final reserve 8192 frames
+Queued SCI bounded-gap: 150 sectors/2 s, largest worker burst 4, final reserve 8192 frames
+Queued SCI sparse-cadence limit: 96 sectors/2 s, largest worker burst 4, final reserve -23560 frames
+Shared asynchronous SCI audio: 9257627 checks passed
+Queued CDDA physical PCM: ordered_frames=882176 source_frames=882000 elapsed_ticks=16227055 sectors=1500 isolated_80ms_gaps=19 max_sectors_per_visit=4 pass
+Queued CDDA sparse cadence limit: sectors=43 elapsed_ticks=752660 required_sectors_per_second=75; repeated80msvisits still insufficient pass
+Async CDDA worker: delayed/queued complete-sector delivery, exact SR, unchanged pending PCM, cancellation epochs, conservative reserve, finite20s physical stereo EOF, repeated wrap and60Hzclusters/isolated80msgaps pass
+Queued SCI mixed DATA/RAW: 1498 RAW sectors/20 s + 7840 KiB MODE1 data, min/final reserve 5693/7016 of 8192 frames, max worker burst 4, max DATA latency 32977 ticks, first/last-second minima 5693/5693
+Queued SCI mixed DATA/RAW: 1498 RAW sectors/20 s + 7824 KiB MODE1 data, min/final reserve 28501/31592 of 32768 frames, max worker burst 4, max DATA latency 33386 ticks, first/last-second minima 28501/30269 with bounded 80-ms gap
+Shared asynchronous CDDA real-wire integration: 270986694 checks passed
+Toy IRQ scratch: production map/dispatch, token129 Start regression, native retirement, next PAUSE, REQ_STAT, canaries and expired/invalid capability pass
+Toy GD chunk0: exact129-sector payload/progress/handle; maxmask=3200 modeledticks, command=208736 modeledticks, audio-priority/refill recovery checked
+Toy GD chunk2: exact129-sector payload/progress/handle; maxmask=800 modeledticks, command=833744 modeledticks, audio-priority/refill recovery checked
+Toy GD chunk3: exact129-sector payload/progress/handle; maxmask=1200 modeledticks, command=548082 modeledticks, audio-priority/refill recovery checked
+Toy GD mixed chunk2: sectors=1 cadence=13021 first_tail=0 command=6490 maxmask=3222 physical_PCM=148888 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk2: sectors=5 cadence=13021 first_tail=0 command=32414 maxmask=6445 physical_PCM=150083 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk2: sectors=17 cadence=13021 first_tail=0 command=110542 maxmask=6445 physical_PCM=155385 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk2: sectors=17 cadence=13021 first_tail=1 command=110542 maxmask=8162 physical_PCM=155385 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk2: sectors=129 cadence=13021 first_tail=0 command=836762 maxmask=8162 physical_PCM=32489 recovery=7; calibrated assumptions, not console prediction
+Toy GD mixed chunk2: sectors=1 cadence=26042 first_tail=0 command=6490 maxmask=3222 physical_PCM=148888 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk2: sectors=5 cadence=26042 first_tail=0 command=58225 maxmask=6445 physical_PCM=151454 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk2: sectors=17 cadence=26042 first_tail=0 command=214476 maxmask=6445 physical_PCM=161984 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk2: sectors=17 cadence=26042 first_tail=1 command=214476 maxmask=8162 physical_PCM=161984 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=1 cadence=13021 first_tail=0 command=6490 maxmask=3222 physical_PCM=148888 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=5 cadence=13021 first_tail=0 command=22382 maxmask=9667 physical_PCM=146911 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=17 cadence=13021 first_tail=0 command=74468 maxmask=9667 physical_PCM=153039 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=17 cadence=13021 first_tail=1 command=77310 maxmask=12243 physical_PCM=150333 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=129 cadence=13021 first_tail=0 command=558898 maxmask=12243 physical_PCM=32610 recovery=7; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=1 cadence=26042 first_tail=0 command=6490 maxmask=3222 physical_PCM=148888 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=5 cadence=26042 first_tail=0 command=35637 maxmask=9667 physical_PCM=150334 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=17 cadence=26042 first_tail=0 command=139573 maxmask=9667 physical_PCM=155522 recovery=0; calibrated assumptions, not console prediction
+Toy GD mixed chunk3: sectors=17 cadence=26042 first_tail=1 command=139573 maxmask=12243 physical_PCM=155522 recovery=0; calibrated assumptions, not console prediction
+Toy report0 shared0: v8 block geometry, retained prefix/two-extension order, transport/GD insertion, exact snapshot admission, pre-reset retention, terminal fence and workspace guards checked
+Toy report2 shared0: v8 block geometry, retained prefix/two-extension order, transport/GD insertion, exact snapshot admission, pre-reset retention, terminal fence and workspace guards checked
+Toy report3 shared0: v8 block geometry, retained prefix/two-extension order, transport/GD insertion, exact snapshot admission, pre-reset retention, terminal fence and workspace guards checked
+Toy report3 shared1: v8 block geometry, retained prefix/two-extension order, transport/GD insertion, exact snapshot admission, pre-reset retention, terminal fence and workspace guards checked
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.005s
+
+OK
+30 Toy pilot regression suites passed

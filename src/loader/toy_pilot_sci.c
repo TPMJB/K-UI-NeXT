@@ -64,7 +64,10 @@ static struct {
         struct kui_retail_cursor cursor;
         uint32_t lba,generation,active,ready,delivered,error,retry,opened;
         void *output;
-        uint8_t bytes[KUI_GAME_RAW_BYTES] __attribute__((aligned(32)));
+        uint32_t planned,end,consume_lba,producer_lba,head,count,batch_head;
+        uint32_t reserve_frames,reserve_tick,urgent;
+        uint8_t bytes[KUI_TOY_SCI_AUDIO_QUEUE][KUI_GAME_RAW_BYTES]
+            __attribute__((aligned(32)));
     } audio;
 #endif
 } e;
@@ -182,23 +185,62 @@ static void write_out(void *unused,uint32_t offset,const uint8_t *bytes,uint32_t
 }
 #if KUI_TOY_PILOT_ASYNC_CDDA
 static void audio_invalidate(void) {
-    /* Revocation precedes any fence. Only staging, never output, is a DMA
-     * consumer; generation zero makes its old contents unpublishable. */
+    /* Revocation precedes any fence. Only private queue slots are receiver
+     * consumers; generation zero makes every old slot unpublishable. */
     e.audio.active=e.audio.ready=e.audio.delivered=e.audio.generation=0u;
+    e.audio.planned=e.audio.end=e.audio.consume_lba=e.audio.producer_lba=0u;
+    e.audio.head=e.audio.count=e.audio.batch_head=0u;
+    e.audio.reserve_frames=e.audio.reserve_tick=e.audio.urgent=0u;
     e.audio.error=e.audio.retry=0u;e.audio.output=NULL;
     e.audio_waiting=0u;
 }
+static bool audio_priority(void) {
+    if(!e.audio.active)return false;
+    if(!e.audio.planned || !e.active)return true;
+    /* TMU runs at 781250 Hz; one 44100-Hz frame takes >17 ticks. Dividing
+     * by17 conservatively overestimates consumption without 64-bit division
+     * or multiplication overflow. Rounded elapsed consumption never makes
+     * a stale reserve hint healthier than its caller's initial estimate. */
+    uint32_t elapsed=ticks()-e.audio.reserve_tick;
+    uint32_t spent=elapsed/17u+(elapsed%17u!=0u);
+    uint32_t reserve=spent>=e.audio.reserve_frames?0u:e.audio.reserve_frames-spent;
+    if(reserve<=KUI_TOY_SCI_AUDIO_RESERVE_LOW)e.audio.urgent=1u;
+    else if(reserve>=KUI_TOY_SCI_AUDIO_RESERVE_HIGH)e.audio.urgent=0u;
+    /* An explicit missing current sector has to complete even when an old
+     * PCM reserve was high; ready prefetched slots do not force bus switches. */
+    return e.audio.urgent || (e.audio.output && !e.audio.delivered && !e.audio.count);
+}
 static void audio_write(void *unused,uint32_t offset,const uint8_t *bytes,uint32_t count) {
     (void)unused;
-    if(!e.audio.active || !e.audio.generation || offset>KUI_GAME_RAW_BYTES ||
-       count>KUI_GAME_RAW_BYTES-offset) {e.audio.error=1u;return;}
-    memcpy(e.audio.bytes+offset,bytes,count);
+    uint32_t sector=offset/KUI_GAME_RAW_BYTES,within=offset%KUI_GAME_RAW_BYTES;
+    if(!e.audio.active || !e.audio.generation || sector>=e.audio.cursor.count ||
+       sector>=KUI_TOY_SCI_AUDIO_QUEUE || within>KUI_GAME_RAW_BYTES ||
+       count>KUI_GAME_RAW_BYTES-within) {e.audio.error=1u;return;}
+    uint32_t slot=(e.audio.batch_head+sector)%KUI_TOY_SCI_AUDIO_QUEUE;
+    memcpy(e.audio.bytes[slot]+within,bytes,count);
 }
 static int audio_fail(void) {
-    e.audio.active=e.audio.ready=0u;e.audio.error=1u;e.audio_waiting=0u;
+    e.audio.active=e.audio.ready=e.audio.count=0u;e.audio.error=1u;e.audio_waiting=0u;
     ++e.stats.errors;
     if(e.audio.opened)(void)close_bus();
     return KUI_TOY_SCI_FAULT;
+}
+static bool audio_begin(void) {
+    if(e.audio.active || e.audio.error || !e.audio.generation ||
+       e.audio.count==KUI_TOY_SCI_AUDIO_QUEUE || e.audio.producer_lba>=e.audio.end)
+        return e.audio.active!=0u;
+    uint32_t count=e.audio.end-e.audio.producer_lba;
+    uint32_t free=KUI_TOY_SCI_AUDIO_QUEUE-e.audio.count;
+    if(count>free)count=free;
+    /* An unplanned legacy tuple admits exactly one sector. Every planned
+     * interval was preflighted against a single immutable audio track. */
+    if(!e.audio.planned)count=1u;
+    e.audio.batch_head=(e.audio.head+e.audio.count)%KUI_TOY_SCI_AUDIO_QUEUE;
+    if(kui_retail_cursor_begin(&e.audio.cursor,e.manifest,e.audio.producer_lba,count,
+        KUI_GAME_SECTOR_RAW,audio_write,NULL)!=KUI_GAME_OK) {
+        (void)audio_fail();return false;
+    }
+    e.audio.active=1u;return true;
 }
 static bool audio_retry(enum kui_sci_stream_result result) {
     ++e.stats.retries;
@@ -235,15 +277,32 @@ static int audio_work(bool foreground) {
     const uint8_t *block=kui_sci_stream_take(e.audio.cursor.block,&result);
     if(block) {
         e.audio.retry=0u;
+        uint32_t done=e.audio.cursor.done;
         if(kui_retail_cursor_feed(&e.audio.cursor,block)!=KUI_GAME_OK || e.audio.error)
             return audio_fail();
+        uint32_t completed=e.audio.cursor.done-done;
+        if(completed>KUI_TOY_SCI_AUDIO_QUEUE-e.audio.count)return audio_fail();
+        e.audio.count+=completed;e.audio.producer_lba+=completed;
+        e.audio.ready=e.audio.count!=0u;
         if(e.in_irq)++e.stats.irq_blocks;else ++e.stats.call_blocks;
         if(e.verified_since<KUI_TOY_SCI_SERVICE_BLOCKS)++e.verified_since;
-        if(e.audio.cursor.done==1u) {
-            /* Completion is private until a matching worker poll publishes
-             * it. Yield now so delayed worker visits do not hold the card. */
+        if(e.audio.cursor.done==e.audio.cursor.count) {
+            e.audio.active=0u;
+            /* All admitted slots filled, or EOF: no speculative fifth slot
+             * and no idle lease held while the worker is away. */
+            if(!e.audio.planned || e.audio.count==KUI_TOY_SCI_AUDIO_QUEUE ||
+               e.audio.producer_lba==e.audio.end) {
+                if(!close_bus())return audio_fail();
+                return KUI_TOY_SCI_OK;
+            }
+            if(!audio_begin())return e.audio.error?KUI_TOY_SCI_FAULT:KUI_TOY_SCI_OK;
+        }
+        /* The receiver's complete checked512-byte boundary is the sole
+         * handoff point. A healthy reserve can yield even a partial RAW
+         * sector: its cursor and private bytes remain owned by this plan. */
+        if(e.audio.planned && e.active && !audio_priority()) {
             if(!close_bus())return audio_fail();
-            e.audio.active=0u;e.audio.ready=1u;return KUI_TOY_SCI_OK;
+            return KUI_TOY_SCI_PENDING;
         }
     } else if(result==KUI_SCI_STREAM_CRC) {
         if(!audio_retry(result))return KUI_TOY_SCI_FAULT;
@@ -366,20 +425,20 @@ static int data_work(bool foreground) {
 static int pump_work(bool foreground) {
 #if KUI_TOY_PILOT_ASYNC_CDDA
     if(e.audio_held)return KUI_TOY_SCI_PENDING;
-    if(e.audio.opened || (e.audio.active && !e.opened)) {
+    e.audio_waiting=e.audio.active && audio_priority();
+    if(e.audio.opened || (e.audio_waiting && !e.opened)) {
         e.audio_waiting=0u;
         int result=audio_work(foreground);
-        /* One verified RAW block ended this lease. Starting DATA here does
-         * not check another block: open clears the old private ready areas.
-         * It supplies an IRQ even if the next worker visit is far away. */
-        if(!e.audio.opened && !e.audio.active && e.active && !e.transport_fault)
-            (void)data_work(foreground);
+        /* Handoff arms only a fresh receiver; it cannot consume a second
+         * verified payload in this bounded pump. */
+        if(!e.audio.opened && e.active && !e.transport_fault &&
+           (!e.audio.active || !audio_priority()))(void)data_work(foreground);
         return result;
     }
     int result=data_work(foreground);
-    /* The checked DATA boundary can immediately arm RAW without waiting
-     * for another worker visit; RAW's fresh open cannot deliver a payload. */
-    if(e.audio.active && !e.opened && !e.transport_fault) {
+    /* A verified DATA boundary or completed DATA request can arm RAW.
+     * When DATA is absent, every admitted queued sector may make progress. */
+    if(e.audio.active && !e.opened && !e.transport_fault && audio_priority()) {
         e.audio_waiting=0u;return audio_work(foreground);
     }
     return result;
@@ -477,33 +536,105 @@ void kui_toy_pilot_sci_audio_cancel(void) {
 #endif
 }
 #if KUI_TOY_PILOT_ASYNC_CDDA
+/* A fresh private RAW lease has no verified ready payload. This finite
+ * kick only arms its first receiver, allowing independent IRQ progress
+ * after admission or after consuming a previously full queue. DATA-owned
+ * DMA keeps its verified-boundary handoff through normal pump/service. */
+static void audio_arm(void) {
+    if(e.audio.active && !e.opened && !e.audio_held && audio_priority()) {
+        kui_sci_stream_token_budget(true);(void)audio_work(false);
+        /* Waiting denotes DATA boundary arbitration, not an owned RAW
+         * receiver. Audio-only CHECK/EXEC must retain foreground progress. */
+        if(e.audio.opened)e.audio_waiting=0u;
+    }
+}
+int kui_toy_pilot_sci_audio_plan(uint32_t lba,uint32_t end,uint32_t generation,
+    uint32_t reserve_frames) {
+    uint32_t before=ticks();++e.stats.calls;
+    bool valid=e.configured && !e.transport_fault && generation && lba<end;
+    const struct kui_retail_track *track=NULL;
+    if(valid) {
+        for(uint32_t i=0;i<e.manifest->track_count;++i) {
+            const struct kui_retail_track *candidate=&e.manifest->slots[i].track;
+            if(candidate->start_lba<=lba && lba<candidate->end_lba) {track=candidate;break;}
+        }
+        valid=track && !kui_retail_track_control(track) && end<=track->end_lba &&
+            kui_retail_image_check_validated(e.manifest,lba,1u,
+                KUI_GAME_SECTOR_RAW)==KUI_GAME_OK &&
+            kui_retail_image_check_validated(e.manifest,end-1u,1u,
+                KUI_GAME_SECTOR_RAW)==KUI_GAME_OK;
+    }
+    if(!valid) {
+        kui_toy_pilot_sci_audio_cancel();e.audio.error=1u;++e.stats.errors;
+        maximum(&e.stats.work_ticks_max,ticks()-before);return KUI_TOY_SCI_FAULT;
+    }
+    /* After an OK publication consume_lba already names its successor;
+     * while PENDING it still names the demanded head. Neither update can
+     * reinterpret queued bytes as a seek, even with an unchanged epoch. */
+    bool same=e.audio.planned && e.audio.generation==generation &&
+        e.audio.end==end && e.audio.consume_lba==lba;
+    if(!same) {
+        kui_toy_pilot_sci_audio_cancel();
+        e.audio.planned=1u;e.audio.lba=lba;e.audio.generation=generation;
+        e.audio.end=end;e.audio.consume_lba=e.audio.producer_lba=lba;
+    }
+    if(e.audio.error) {
+        maximum(&e.stats.work_ticks_max,ticks()-before);return KUI_TOY_SCI_FAULT;
+    }
+    e.audio.reserve_frames=reserve_frames;e.audio.reserve_tick=ticks();
+    if(reserve_frames<=KUI_TOY_SCI_AUDIO_RESERVE_LOW)e.audio.urgent=1u;
+    else if(reserve_frames>=KUI_TOY_SCI_AUDIO_RESERVE_HIGH)e.audio.urgent=0u;
+    (void)audio_begin();
+    e.audio_waiting=e.audio.active && e.opened && !e.audio.opened && audio_priority();
+    audio_arm();
+    maximum(&e.stats.work_ticks_max,ticks()-before);
+    return e.audio.error?KUI_TOY_SCI_FAULT:KUI_TOY_SCI_OK;
+}
 int kui_toy_pilot_sci_audio_read(uint32_t lba,uint32_t generation,void *output) {
     uint32_t before=ticks();++e.stats.calls;
     if(!generation || !output)return KUI_TOY_SCI_FAULT;
-    if(e.audio.generation!=generation || e.audio.lba!=lba || e.audio.output!=output) {
-        kui_toy_pilot_sci_audio_cancel();
-        e.audio.lba=lba;e.audio.generation=generation;e.audio.output=output;
-        if(!e.configured || e.transport_fault ||
-           kui_retail_image_check_validated(e.manifest,lba,1u,KUI_GAME_SECTOR_RAW)!=KUI_GAME_OK ||
-           kui_retail_cursor_begin(&e.audio.cursor,e.manifest,lba,1u,KUI_GAME_SECTOR_RAW,
-               audio_write,NULL)!=KUI_GAME_OK) {
-            e.audio.error=1u;++e.stats.errors;
-        } else {e.audio.active=1u;e.audio_waiting=1u;}
-    }
-    if(e.audio.active) {
-        /* A worker poll makes one bounded stream step, then gives execution
-         * back. Continued IRQs or frequent GD CHECK/EXEC entries must fill
-         * the sector between worker visits; worker cadence alone is too slow. */
-        kui_sci_stream_token_budget(true);(void)pump_work(false);
+    bool matching=e.audio.generation==generation && e.audio.lba==lba && e.audio.output==output;
+    if(!matching) {
+        bool queued=e.audio.planned && e.audio.generation==generation &&
+            e.audio.consume_lba==lba && lba<e.audio.end &&
+            (!e.audio.output || e.audio.output==output);
+        if(!queued && e.audio.planned) {
+            /* A read cannot expand an explicitly admitted range or turn
+             * stale queued authority into a different RAW request. */
+            kui_toy_pilot_sci_audio_cancel();e.audio.error=1u;++e.stats.errors;
+            return KUI_TOY_SCI_FAULT;
+        }
+        if(!queued) {
+            kui_toy_pilot_sci_audio_cancel();
+            e.audio.end=lba+1u;e.audio.consume_lba=e.audio.producer_lba=lba;
+            e.audio.generation=generation;
+            if(!e.configured || e.transport_fault || lba==UINT32_MAX ||
+               kui_retail_image_check_validated(e.manifest,lba,1u,KUI_GAME_SECTOR_RAW)!=KUI_GAME_OK) {
+                e.audio.error=1u;++e.stats.errors;
+            }
+        }
+        e.audio.lba=lba;e.audio.output=output;e.audio.delivered=0u;
+        if(!e.audio.error)(void)audio_begin();
     }
     int result=KUI_TOY_SCI_PENDING;
     if(e.audio.error || e.transport_fault)result=KUI_TOY_SCI_FAULT;
-    else if(e.audio.ready || e.audio.delivered) {
-        if(!e.audio.delivered) {
-            memcpy(output,e.audio.bytes,KUI_GAME_RAW_BYTES);
-            e.audio.delivered=1u;e.audio.ready=0u;
+    else if(e.audio.delivered)result=KUI_TOY_SCI_OK;
+    else if(e.audio.count) {
+        memcpy(output,e.audio.bytes[e.audio.head],KUI_GAME_RAW_BYTES);
+        e.audio.head=(e.audio.head+1u)%KUI_TOY_SCI_AUDIO_QUEUE;
+        --e.audio.count;++e.audio.consume_lba;e.audio.ready=e.audio.count!=0u;
+        e.audio.delivered=1u;(void)audio_begin();audio_arm();result=KUI_TOY_SCI_OK;
+    } else if(e.audio.active) {
+        /* This single bounded step may finish a sector, but never exposes
+         * partial RAW to PCM. IRQ/GD entries are the independent producer. */
+        kui_sci_stream_token_budget(true);(void)pump_work(false);
+        if(e.audio.error || e.transport_fault)result=KUI_TOY_SCI_FAULT;
+        else if(e.audio.count) {
+            memcpy(output,e.audio.bytes[e.audio.head],KUI_GAME_RAW_BYTES);
+            e.audio.head=(e.audio.head+1u)%KUI_TOY_SCI_AUDIO_QUEUE;
+            --e.audio.count;++e.audio.consume_lba;e.audio.ready=e.audio.count!=0u;
+            e.audio.delivered=1u;(void)audio_begin();audio_arm();result=KUI_TOY_SCI_OK;
         }
-        result=KUI_TOY_SCI_OK;
     }
     maximum(&e.stats.work_ticks_max,ticks()-before);return result;
 }

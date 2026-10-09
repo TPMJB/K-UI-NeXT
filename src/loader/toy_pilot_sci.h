@@ -18,6 +18,10 @@ enum kui_toy_pilot_sci_result {
 #define KUI_TOY_SCI_SERVICE_BLOCKS 4u
 #define KUI_TOY_SCI_SERVICE_STEPS 1024u
 #define KUI_TOY_SCI_SERVICE_TICKS 1500u
+/* Four verified RAW sectors fit inside the unchanged 64-KiB worker lease. */
+#define KUI_TOY_SCI_AUDIO_QUEUE 4u
+#define KUI_TOY_SCI_AUDIO_RESERVE_LOW 4096u
+#define KUI_TOY_SCI_AUDIO_RESERVE_HIGH 8192u
 struct kui_toy_pilot_sci_stats {
     /* Verified physical blocks include DATA and asynchronous RAW work. */
     uint32_t calls, irq_calls, call_blocks, irq_blocks;
@@ -59,15 +63,28 @@ void kui_toy_pilot_sci_audio_release(void);
 #endif
 void kui_toy_pilot_sci_audio_cancel(void);
 #if KUI_TOY_PILOT_ASYNC_CDDA
-/* Fixed 2352-byte raw audio request, called with exact saved SR masked.
- * (lba,generation,output) identifies a request; generation must be nonzero
- * and output is the stable private worker buffer. A new tuple revokes the
- * preceding one before fencing its DMA. PENDING never writes output: IRQ,
- * GD service and this one-step poll fill only engine-owned staging. OK
- * publishes the fully verified sector once; repeated matching calls return
- * OK without copying again. FAULT remains attached to the matching tuple.
- * Completion releases the physical bus before the worker consumes staging.
- * No sound work, generic payload DMA wait or low raw callback is invoked. */
+/* Admit one mapped audio track interval [lba,end), called with saved SR
+ * masked. The immutable manifest must identify audio (control=0), RAW
+ * sectors, and end <= that track's end. Generation must be nonzero. Queue
+ * production is independent of read/output and never crosses this range.
+ * A same-generation plan at the current unconsumed LBA preserves queued
+ * sectors; seek, range or generation change revokes before fencing RAW.
+ * reserve_frames is a conservative playable PCM reserve. Its timestamped
+ * value decays while worker visits are absent; LOW/HIGH hysteresis gives
+ * DATA priority while reserve is healthy, RAW priority as it runs low.
+ * Invalid plans fail closed, revoking old RAW authority. DATA is independent. */
+int kui_toy_pilot_sci_audio_plan(uint32_t lba,uint32_t end,uint32_t generation,
+    uint32_t reserve_frames);
+/* Fixed 2352-byte RAW request. (lba,generation,output) identifies publication;
+ * output must remain the same private worker buffer for a sequential plan.
+ * IRQ/GD service populate only the four private verified queue slots.
+ * PENDING never writes output. OK consumes the ready head once; repeated
+ * matching calls return OK without copying again. The next sequential LBA
+ * retains the queued tail. A mismatching tuple under an explicit plan
+ * revokes before fencing RAW and returns FAULT; replace its plan first.
+ * No plan retains the legacy one-sector request behavior.
+ * Completion/full queue releases the physical bus. No sound SDK, generic
+ * payload DMA wait or low RAW callback runs in the transport producer. */
 int kui_toy_pilot_sci_audio_read(uint32_t lba,uint32_t generation,void *output);
 #endif
 const struct kui_toy_pilot_sci_stats *kui_toy_pilot_sci_snapshot(void);

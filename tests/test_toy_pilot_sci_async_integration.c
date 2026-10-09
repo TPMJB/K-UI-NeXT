@@ -32,11 +32,17 @@
 #define OUT (BEGIN+4096u)
 #define GAME_VBR UINT32_C(0x8c0f0000)
 #define IPRB UINT32_C(0xffd00008)
-#define CARD_BLOCKS 2048u
+#define CARD_BLOCKS 8192u
+#define MIXED_SECONDS 20u
+#define MIXED_AUDIO_END (4u+MIXED_SECONDS*75u+8u)
 #define WIRE_BYTE_TICKS 4u
+/* Cadence trials use one 1.28-us clock tick per wire byte (6.25 MHz),
+ * still slower than SCI's 12.5-MHz raw bus. MMIO never clocks payload. */
+static uint32_t wire_byte_ticks=WIRE_BYTE_TICKS,fixture_audio_end=12u;
 #define CHECK(test) do { ++checks; assert(test); } while(0)
 
 static unsigned checks,waits,active_stops;
+static uint32_t data_completed_tick;
 static uint8_t image_card[CARD_BLOCKS*512u],ram[END-BEGIN];
 static uint8_t expected[32u*2352u];
 static uint8_t raw_output[2352u] __attribute__((aligned(32)));
@@ -70,7 +76,7 @@ void kui_toy_pilot_sci_rehook(void) {}
 
 static void dma_started(void) {
     CHECK(hw.leased && hw.in_entry && m.rx && (m.chcr&1u));
-    hw.next_wire=hw.ticks+WIRE_BYTE_TICKS;
+    hw.next_wire=hw.ticks+wire_byte_ticks;
 }
 static void elapse(uint32_t amount);
 uint32_t kui_sci_stream_test_read(uint32_t address,unsigned width) {
@@ -125,7 +131,7 @@ static void wire_byte(void) {
 static void elapse(uint32_t amount) {
     CHECK(!hw.in_entry || hw.in_fence);uint32_t target=hw.ticks+amount;
     while(m.rx && (int32_t)(target-hw.next_wire)>=0) {
-        hw.ticks=hw.next_wire;wire_byte();hw.next_wire+=WIRE_BYTE_TICKS;
+        hw.ticks=hw.next_wire;wire_byte();hw.next_wire+=wire_byte_ticks;
     }
     hw.ticks=target;
 }
@@ -211,10 +217,11 @@ static int forbidden_read(void *ctx,uint32_t lba,uint32_t count,uint32_t bytes,v
 }
 static void fixture(bool scattered,uint32_t offset) {
     memset(&manifest,0,sizeof(manifest));memset(image_card,0xf3,sizeof(image_card));
-    manifest.card_sectors=CARD_BLOCKS;manifest.partition_start=50u;manifest.partition_end=2000u;
+    manifest.card_sectors=CARD_BLOCKS;manifest.partition_start=50u;
+    manifest.partition_end=fixture_audio_end>164u?8000u:2000u;
     manifest.track_count=3u;manifest.session_lba=45000u;manifest.boot_lba=45001u;manifest.boot_bytes=4567u;
     strcpy(manifest.title,"Real shared RAW SCI test");strcpy(manifest.bootfile,"1ST_READ.BIN");
-    static const uint32_t starts[]={0u,4u,45000u},ends[]={4u,12u,45032u};
+    const uint32_t starts[]={0u,4u,45000u},ends[]={4u,fixture_audio_end,45032u};
     uint32_t used=0u;
     for(unsigned track=0;track<3u;track++) {
         struct kui_retail_track *t=&manifest.slots[track].track;
@@ -224,9 +231,12 @@ static void fixture(bool scattered,uint32_t offset) {
             .first_extent=(uint16_t)((3u+manifest.extent_count)|(first_offset&255u)<<8)};
         uint32_t bytes=(t->end_lba-t->start_lba)*2352u,blocks=(first_offset+bytes+511u)/512u;
         for(uint32_t first=0;first<blocks;) {
-            uint32_t take=blocks-first>7u?7u:blocks-first,index=manifest.extent_count;
-            uint32_t physical=scattered?100u+(index&1u?900u:0u)+(index>>1)*8u:100u+used;
-            CHECK(3u+index<KUI_RETAIL_IMAGE_SLOTS && physical+take<2000u);
+            uint32_t extent_size=fixture_audio_end>164u?256u:7u;
+            uint32_t take=blocks-first>extent_size?extent_size:blocks-first,index=manifest.extent_count;
+            uint32_t separation=fixture_audio_end>164u?4000u:900u;
+            uint32_t distance=fixture_audio_end>164u?256u:8u;
+            uint32_t physical=scattered?100u+(index&1u?separation:0u)+(index>>1)*distance:100u+used;
+            CHECK(3u+index<KUI_RETAIL_IMAGE_SLOTS && physical+take<manifest.partition_end);
             manifest.slots[3u+manifest.extent_count++].extent=(struct kui_retail_extent){first,physical,take};
             ++t->extent_count;
             for(uint32_t p=0;p<take*512u;p++) {
@@ -240,6 +250,7 @@ static void fixture(bool scattered,uint32_t offset) {
     CHECK(kui_retail_image_init(&reference,&manifest,read_block,NULL)==KUI_GAME_OK);
 }
 static void setup(bool scattered,uint32_t offset) {
+    fixture_audio_end=12u;wire_byte_ticks=WIRE_BYTE_TICKS;
     fixture(scattered,offset);memset(&hw,0,sizeof(hw));memset(&card,0,sizeof(card));memset(&m,0,sizeof(m));
     /* Each fixture is a fresh resident boot; SCI BSS/statistics are normally
      * cleared by _start rather than by open(), which preserves a live run. */
@@ -263,15 +274,23 @@ static int audio(uint32_t lba,uint32_t generation,uint8_t *output) {
 static int pump(bool foreground) {
     CHECK(!hw.in_entry);hw.in_entry=true;
     int result=foreground?kui_toy_pilot_sci_service(&service):kui_toy_pilot_sci_pump(&service);
-    hw.in_entry=false;return result;
+    hw.in_entry=false;
+    if(!service.pending && service.completed_bytes && !data_completed_tick)data_completed_tick=hw.ticks;
+    return result;
 }
 static void irq(void) {
     CHECK(!hw.in_entry);hw.in_entry=true;(void)kui_toy_pilot_sci_irq();hw.in_entry=false;
+    if(!service.pending && service.completed_bytes && !data_completed_tick)data_completed_tick=hw.ticks;
 }
 static void cancel(bool all) {
     CHECK(!hw.in_entry);hw.in_entry=true;hw.cancel_allowed=true;
     if(all)kui_toy_pilot_sci_cancel(NULL);else kui_toy_pilot_sci_audio_cancel();
     hw.in_entry=hw.cancel_allowed=false;
+}
+static int plan_audio(uint32_t lba,uint32_t end,uint32_t generation,uint32_t reserve) {
+    CHECK(!hw.in_entry);hw.in_entry=true;
+    int result=kui_toy_pilot_sci_audio_plan(lba,end,generation,reserve);
+    hw.in_entry=false;return result;
 }
 static void pristine(const uint8_t *output) {
     for(unsigned i=0;i<2352u;i++)CHECK(output[i]==0xa5u);
@@ -367,6 +386,7 @@ static void put(uint32_t address,uint32_t value) {
     for(unsigned i=0;i<4u;i++)ram[address-BEGIN+i]=(uint8_t)(value>>(8u*i));
 }
 static uint32_t data_request(uint32_t lba,uint32_t sectors) {
+    data_completed_tick=0u;
     put(PARAM,lba+150u);put(PARAM+4u,sectors);put(PARAM+8u,OUT);put(PARAM+12u,0u);
     int32_t token=kui_retail_gd_dispatch(&service,KUI_GD_DMAREAD,PARAM,0u,KUI_GD_REQUEST);
     CHECK(token>0 && service.pending);return (uint32_t)token;
@@ -399,11 +419,194 @@ static void data_audio_contention(bool abort_data) {
     }
     cleanup();
 }
+static void advance_transport_to(uint32_t deadline) {
+    /* Hardware owns payload arrival; IRQ processing arms successors.
+     * GD service also runs at bounded 1-ms intervals when a token search or
+     * IRQ-deferred repair has no active receiver to generate an interrupt.
+     * Neither producer path consumes a worker output sector. */
+    while((int32_t)(deadline-hw.ticks)>0) {
+        uint32_t remaining=deadline-hw.ticks;
+        if(m.rx) {
+            /* SCI's event is the tail overrun, after DMA's 513 bytes
+             * plus the retained low CRC byte. DMA completion alone is not
+             * this interrupt; invoking it early manufactures tail faults. */
+            uint32_t step=(m.tcr+2u)*wire_byte_ticks;
+            if(step>remaining)step=remaining;
+            elapse(step);
+            if(!m.rx)irq();
+        } else {
+            uint32_t step=remaining>781u?781u:remaining;
+            elapse(step);
+            CHECK(pump(true)!=KUI_TOY_SCI_FAULT);
+        }
+        pristine(raw_output);
+    }
+}
+
+static void queued_real_wire_range_and_cancel(void) {
+    for(unsigned full=0;full<2u;++full) {
+        setup(true,511u);
+        CHECK(plan_audio(4u,12u,71u,0u)!=KUI_TOY_SCI_FAULT);
+        if(full) {
+            advance_transport_to(hw.ticks+100000u);
+            CHECK(!hw.leased && !m.rx);
+            unsigned reads=m.dma_starts;service_audio_only();
+            CHECK(!hw.leased && !m.rx && m.dma_starts==reads);
+        } else {elapse(120u);CHECK(m.rx && m.tcr>0u && m.tcr<513u);}
+        cancel(false);pristine(raw_output);
+        CHECK(!hw.leased && !m.rx);
+        CHECK(plan_audio(8u,12u,72u,0u)!=KUI_TOY_SCI_FAULT);
+        advance_transport_to(hw.ticks+100000u);
+        if(hw.leased || m.rx)fprintf(stderr,"Queued wire range: full=%u leased=%u rx=%u tcr=%u ticks=%u starts=%u crc=%u ssr=%x busy=%u\n",
+            full,hw.leased,m.rx,m.tcr,hw.ticks,m.dma_starts,kui_sci_stream_stats()->crc_errors,m.ssr,kui_sci_stream_busy());
+        if(hw.leased)fprintf(stderr,"engine callblk=%u irqblk=%u retries=%u err=%u polled=%u claim=%u release=%u\n",
+            kui_toy_pilot_sci_snapshot()->call_blocks,kui_toy_pilot_sci_snapshot()->irq_blocks,
+            kui_toy_pilot_sci_snapshot()->retries,kui_toy_pilot_sci_snapshot()->errors,
+            kui_toy_pilot_sci_snapshot()->polled_blocks,kui_toy_pilot_sci_snapshot()->audio_claims,
+            kui_toy_pilot_sci_snapshot()->audio_releases);
+        CHECK(!hw.leased && !m.rx);
+        for(uint32_t lba=8u;lba<12u;++lba) {
+            expected_raw(lba,expected);
+            CHECK(audio(lba,72u,raw_output)==KUI_TOY_SCI_OK);
+            CHECK(!memcmp(raw_output,expected,2352u));memset(raw_output,0xa5,sizeof(raw_output));
+        }
+        unsigned starts=m.dma_starts;advance_transport_to(hw.ticks+100000u);
+        CHECK(m.dma_starts==starts && !hw.leased && !m.rx);
+        CHECK(audio(12u,72u,raw_output)==KUI_TOY_SCI_FAULT);pristine(raw_output);cleanup();
+    }
+}
+static void queued_real_wire_crc_authority(void) {
+    setup(true,511u);card.corrupt_lba=physical_block(4u);card.corrupt_count=1u;
+    CHECK(plan_audio(4u,8u,75u,0u)!=KUI_TOY_SCI_FAULT);
+    advance_transport_to(hw.ticks+100000u);
+    CHECK(!hw.leased && !m.rx && kui_sci_stream_stats()->crc_errors==1u);
+    pristine(raw_output);
+    for(uint32_t lba=4u;lba<8u;++lba) {
+        expected_raw(lba,expected);CHECK(audio(lba,75u,raw_output)==KUI_TOY_SCI_OK);
+        CHECK(!memcmp(raw_output,expected,2352u));memset(raw_output,0xa5,sizeof(raw_output));
+    }
+    CHECK(!waits && !active_stops);cleanup();
+
+    setup(true,511u);card.corrupt_lba=physical_block(4u);card.corrupt_count=100u;
+    CHECK(plan_audio(4u,8u,76u,0u)!=KUI_TOY_SCI_FAULT);
+    for(unsigned n=0;n<100u && hw.leased;++n) {
+        elapse(2200u);irq();service_audio_only();pristine(raw_output);
+    }
+    CHECK(!hw.leased && !m.rx && kui_sci_stream_stats()->crc_errors>1u);
+    CHECK(audio(4u,76u,raw_output)==KUI_TOY_SCI_FAULT);pristine(raw_output);
+    unsigned reads=m.dma_starts;service_audio_only();irq();
+    CHECK(m.dma_starts==reads && !hw.leased);cleanup();
+}
+static void queued_mixed_real_wire_cadence(bool gap) {
+    setup(true,511u);fixture_audio_end=MIXED_AUDIO_END;fixture(true,511u);
+    kui_toy_pilot_sci_init(&manifest,&sd,acquire,release);wire_byte_ticks=1u;
+    uint32_t lba=4u,generation=81u,origin=hw.ticks;
+    const int32_t target_reserve=gap?32768:8192;
+    int32_t reserve=target_reserve,min_reserve=reserve;
+    int32_t first_second_min=reserve,last_second_min=reserve;uint32_t accounted=0u;
+    unsigned deliveries=0u,data_runs=0u,max_burst=0u;
+    uint32_t token=0u,data_started=0u,max_data_ticks=0u;bool catchup=false,gap_resumed=false;
+    const uint32_t gap_start=29u*781250u/60u+78u,gap_end=gap_start+62500u;
+    CHECK(plan_audio(lba,MIXED_AUDIO_END,generation,(uint32_t)reserve)!=KUI_TOY_SCI_FAULT);
+    for(unsigned frame=0;frame<MIXED_SECONDS*60u;++frame) {
+        uint32_t time=(uint32_t)((uint64_t)frame*781250u/60u);
+        /* Keep transport/IRQ progress running during a single absent worker
+         * interval; safe SOUND publication remains the worker's job. */
+        if(gap && time>gap_start && time<gap_end) {
+            advance_transport_to(origin+time);continue;
+        }
+        if(gap && time>=gap_end && !gap_resumed) {time=gap_end;gap_resumed=true;}
+        for(unsigned cluster=0;cluster<2u;++cluster) {
+            uint32_t deadline=origin+time+cluster*78u;
+            advance_transport_to(deadline);
+            uint32_t elapsed=hw.ticks-origin;
+            uint32_t played=(uint32_t)((uint64_t)elapsed*44100u/781250u);
+            reserve-=(int32_t)(played-accounted);accounted=played;
+            if(reserve<min_reserve)min_reserve=reserve;
+            CHECK(reserve>=target_reserve-(gap?10:6)*588);
+            if(elapsed<781250u && reserve<first_second_min)first_second_min=reserve;
+            if(elapsed>=(MIXED_SECONDS-1u)*781250u && reserve<last_second_min)last_second_min=reserve;
+            CHECK(plan_audio(lba,MIXED_AUDIO_END,generation,(uint32_t)reserve)!=KUI_TOY_SCI_FAULT);
+            unsigned burst=0u;
+            while(burst<4u && reserve<=target_reserve-588) {
+                int result=audio(lba,generation,raw_output);CHECK(result!=KUI_TOY_SCI_FAULT);
+                if(result==KUI_TOY_SCI_PENDING) {pristine(raw_output);break;}
+                expected_raw(lba,expected);CHECK(!memcmp(raw_output,expected,2352u));
+                memset(raw_output,0xa5,sizeof(raw_output));++lba;++deliveries;++burst;reserve+=588;
+            }
+            if(burst>max_burst)max_burst=burst;
+            if(gap && time>=gap_end && burst>1u)catchup=true;
+            CHECK(plan_audio(lba,MIXED_AUDIO_END,generation,(uint32_t)reserve)!=KUI_TOY_SCI_FAULT);
+            if(token && !service.pending) {
+                CHECK(!service.error && service.completed_bytes==8u*2048u);
+                CHECK(data_completed_tick);
+                /* Measure transport completion, independent of the delayed
+                 * worker's later CHECK acknowledgement after a gap. */
+                uint32_t data_ticks=data_completed_tick-data_started;
+                if(data_ticks>max_data_ticks)max_data_ticks=data_ticks;
+                if(data_ticks>78125u)fprintf(stderr,"Mixed DATA latency: gap=%u frame=%u ticks=%u reserve=%d runs=%u delivered=%u crc=%u retry=%u\n",
+                    gap,frame,data_ticks,reserve,data_runs,deliveries,kui_sci_stream_stats()->crc_errors,
+                    kui_toy_pilot_sci_snapshot()->retries);
+                CHECK(data_ticks<=78125u); /* Every 16-KiB request completes within 100 ms. */
+                CHECK(kui_retail_image_read(&reference,45000u,8u,KUI_GAME_SECTOR_MODE1,
+                    expected,sizeof(expected))==KUI_GAME_OK);
+                CHECK(!memcmp(ram+OUT-BEGIN,expected,8u*2048u));
+                CHECK(kui_retail_gd_dispatch(&service,token,STATUS,0u,KUI_GD_CHECK)==KUI_GD_COMPLETED);
+                token=0u;++data_runs;
+            }
+            if(!token) {token=data_request(45000u,8u);data_started=hw.ticks;}
+            unsigned blocks=kui_sci_stream_stats()->blocks;
+            uint32_t began=hw.ticks;
+            CHECK(pump(true)!=KUI_TOY_SCI_FAULT);
+            CHECK(kui_sci_stream_stats()->blocks-blocks<=KUI_TOY_SCI_SERVICE_BLOCKS);
+            /* Time checks happen between steps: a command/CRC repair step
+             * can exceed allowance, but no payload is synchronously waited. */
+            CHECK(hw.ticks-began<=KUI_TOY_SCI_SERVICE_TICKS+1024u);
+            pristine(raw_output);
+        }
+    }
+    advance_transport_to(origin+MIXED_SECONDS*781250u);
+    reserve-=(int32_t)(MIXED_SECONDS*44100u-accounted);
+    CHECK(plan_audio(lba,MIXED_AUDIO_END,generation,(uint32_t)reserve)!=KUI_TOY_SCI_FAULT);
+    for(unsigned n=0;n<4u && reserve<=target_reserve-588;++n) {
+        int result=audio(lba,generation,raw_output);CHECK(result!=KUI_TOY_SCI_FAULT);
+        if(result==KUI_TOY_SCI_PENDING) {pristine(raw_output);break;}
+        expected_raw(lba,expected);CHECK(!memcmp(raw_output,expected,2352u));
+        memset(raw_output,0xa5,sizeof(raw_output));++lba;++deliveries;reserve+=588;
+    }
+    if(deliveries<MIXED_SECONDS*75u-2u || reserve<target_reserve-2*588)
+        fprintf(stderr,"Long mixed endpoint: gap=%u delivered=%u reserve=%d min=%d target=%d runs=%u ticks=%u pending=%u\n",
+            gap,deliveries,reserve,min_reserve,target_reserve,data_runs,hw.ticks,service.pending);
+    CHECK(deliveries>=MIXED_SECONDS*75u-2u && reserve>=target_reserve-2*588 && min_reserve>0);
+    /* Compare the same steady cadence bands: initial reserve cannot hide a
+     * persistent producer deficit over twenty seconds of continuous DATA. */
+    CHECK(last_second_min>=first_second_min-588);
+    CHECK(data_runs>=8u && (!gap || catchup) && max_burst>=2u);
+    /* The final token was admitted inside the scored window. Finish
+     * and verify it after scoring; no cancelled tail is counted as DATA. */
+    unsigned scored_runs=data_runs;
+    for(unsigned n=0;n<100u && service.pending;++n) {advance_transport_to(hw.ticks+781u);(void)pump(true);}
+    CHECK(token && !service.pending && !service.error && service.completed_bytes==8u*2048u);
+    CHECK(data_completed_tick && data_completed_tick-data_started<=78125u);
+    CHECK(kui_retail_image_read(&reference,45000u,8u,KUI_GAME_SECTOR_MODE1,
+        expected,sizeof(expected))==KUI_GAME_OK);
+    CHECK(!memcmp(ram+OUT-BEGIN,expected,8u*2048u));
+    CHECK(kui_retail_gd_dispatch(&service,token,STATUS,0u,KUI_GD_CHECK)==KUI_GD_COMPLETED);
+    CHECK(!waits && !active_stops && !kui_sci_stream_stats()->crc_errors);
+    printf("Queued SCI mixed DATA/RAW: %u RAW sectors/%u s + %u KiB MODE1 data, min/final reserve %d/%d of %d frames, max worker burst %u, max DATA latency %u ticks, first/last-second minima %d/%d%s\n",
+        deliveries,MIXED_SECONDS,scored_runs*16u,min_reserve,reserve,target_reserve,max_burst,max_data_ticks,
+        first_second_min,last_second_min,
+        gap?" with bounded 80-ms gap":"");
+    cleanup();
+}
+
 int main(void) {
     raw_geometry(false,0u,4u);raw_geometry(false,0u,5u);
     raw_geometry(true,511u,4u);raw_geometry(true,511u,5u);
     cancel_and_replace_partial_raw();crc_failure_is_private();
     data_audio_contention(false);data_audio_contention(true);
+    queued_real_wire_range_and_cancel();queued_real_wire_crc_authority();
+    queued_mixed_real_wire_cadence(false);queued_mixed_real_wire_cadence(true);
     printf("Shared asynchronous CDDA real-wire integration: %u checks passed\n",checks);
     return 0;
 }

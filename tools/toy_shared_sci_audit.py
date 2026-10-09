@@ -50,6 +50,73 @@ class Linked:
         return at
 
 
+def direct_api_calls(linked, disassembly, target_name, caller_names):
+    """Bind actual direct API references to reviewed linked caller extents."""
+    target = linked.code(target_name)
+    extents = []
+    for name in caller_names:
+        begin = linked.code(name)
+        end = begin + linked.sizes.get(name, 0)
+        if end <= begin:
+            raise ValueError('Missing emitted API caller extent: ' + name)
+        extents.append((begin, end))
+    if not extents:
+        raise ValueError('Missing reviewed API caller')
+    rows, literals = linked_halfwords(disassembly)
+    calls = []
+    for index, row in enumerate(rows):
+        address, opcode, mnemonic, _ = row
+        if address in literals:
+            continue
+        opcode = linked.half(address)
+        call = None
+        if opcode & 0xf000 == 0xd000 and mnemonic == 'mov.l':
+            if linked.word(((address + 4) & ~3) + (opcode & 255) * 4) != target:
+                continue
+            register = opcode >> 8 & 15
+            for following in rows[index + 1:index + 8]:
+                if following[0] in literals:
+                    continue
+                if following[0] - address > 16:
+                    break
+                if linked.half(following[0]) in (0x400b | register << 8, 0x402b | register << 8):
+                    call = following[0]
+                    break
+            if call is None:
+                raise ValueError('API target has unreviewed indirect routing: ' + target_name)
+        elif opcode & 0xf000 in (0xa000, 0xb000):
+            displacement = opcode & 0xfff
+            if displacement & 0x800:
+                displacement -= 0x1000
+            if address + 4 + displacement * 2 != target:
+                continue
+            call = address
+        else:
+            continue
+        if not any(begin <= address < end and begin <= call < end for begin, end in extents):
+            raise ValueError('API target referenced outside reviewed caller: ' + target_name)
+        calls.append({'target_load': f'0x{address:08x}', 'call': f'0x{call:08x}'})
+    if len(calls) != 1:
+        raise ValueError('API must have one reviewed direct call: ' + target_name)
+    return calls
+
+
+def preprocessed_function(source, name):
+    """Read one compiler-preprocessed definition, rejecting declarations."""
+    matches = list(re.finditer(r'\b' + re.escape(name) + r'\s*\([^;{}]*\)\s*\{', source))
+    if len(matches) != 1:
+        raise ValueError('Missing unique preprocessed function: ' + name)
+    begin = matches[0].start()
+    end = matches[0].end()
+    depth = 1
+    while depth:
+        if end >= len(source):
+            raise ValueError('Truncated preprocessed function: ' + name)
+        depth += (source[end] == '{') - (source[end] == '}')
+        end += 1
+    return source[begin:end]
+
+
 def gd_bridge(linked):
     begin = linked.code('_kui_toy_pilot_gd_bridge')
     # Source caller SP holds argument five. Three preserved words then move
@@ -429,31 +496,94 @@ def audit_async_cdda(root, worker, disassembly):
         '-I', str(root / 'include'), '-I', str(root / 'src/loader'),
         *['-D' + item for item in definitions],
         str(root / 'src/loader/toy_pilot_worker.c')], text=True)
-    begin = enabled.find('static void fill_step(void)')
-    if begin < 0:
-        raise ValueError('Missing preprocessed enabled refill function')
-    position = enabled.find('{', begin) + 1
-    depth = 1
-    while depth:
-        if position >= len(enabled):
-            raise ValueError('Truncated preprocessed refill function')
-        depth += (enabled[position] == '{') - (enabled[position] == '}')
-        position += 1
-    body = enabled[begin:position]
+    body = preprocessed_function(enabled, 'fill_step')
     if len(re.findall(r'\bkui_toy_pilot_sci_audio_read\s*\(', body)) != 1:
         raise ValueError('Enabled refill source does not select exactly one async raw API')
     if re.search(r'\braw_fn\b|owner\s*\.\s*config\s*\.\s*read_raw\b|'
             r'\bkui_toy_pilot_sci_audio_(?:acquire|release)\s*\(', body):
         raise ValueError('Enabled refill still invokes the synchronous raw callback/lease path')
+    plan_names = [name for name in linked.symbols
+                  if name == '_queued_audio_plan' or name.startswith('_queued_audio_plan.')]
+    if len(plan_names) != 1:
+        raise ValueError('Queued worker must have one bounded emitted plan helper')
+    plan_calls = direct_api_calls(linked, disassembly, '_kui_toy_pilot_sci_audio_plan', plan_names)
+    helper_calls = direct_api_calls(linked, disassembly, plan_names[0], fill_names)
+    plan_begin = linked.code(plan_names[0])
+    # The reviewed integer ABI keeps incoming LBA in r4, copies generation
+    # from r5 to r6, then constructs exclusive end in r5. owner.end_fad is
+    # byte660 of the admitted shared config68 + snapshot448 + report64
+    # prefix and the reviewed scalar declaration. r7 carries aged reserve.
+    linked.pattern(plan_begin, (None, 0x6653, None, 0x5526, 0x7240,
+        0x5720, 0x2778, None, 0x351c), 'Queued plan integer argument bridge')
+    linked.literal(plan_begin, 2, linked.symbols['_owner'] + 636)
+    linked.literal(plan_begin + 4, 1, 0xff6a, 2)
+    for address, _, mnemonic, operands in rows:
+        if address in literals or not plan_begin <= address < plan_begin + linked.sizes[plan_names[0]]:
+            continue
+        if re.search(r'(?:^|,)\s*r(?:4|6)\s*$', operands) and address != plan_begin + 2:
+            raise ValueError('Queued plan overwrites the incoming LBA/mailbox generation')
+    plan_body = preprocessed_function(enabled, 'queued_audio_plan')
+    compact_plan = re.sub(r'\s+', '', plan_body)
+    if ('kui_toy_pilot_sci_audio_plan(lba,owner.end_fad-150u,generation,audio_reserve_frames())'
+            not in compact_plan or len(re.findall(r'\bkui_toy_pilot_sci_audio_plan\s*\(', plan_body)) != 1 or
+            len(re.findall(r'\bqueued_audio_plan\s*\(\s*lba\s*,\s*generation\s*\)', body)) != 1):
+        raise ValueError('Enabled worker plan does not forward its admitted interval/epoch/reserve')
+    reserve_body = preprocessed_function(enabled, 'audio_reserve_frames')
+    compact_reserve = re.sub(r'\s+', '', reserve_body)
+    for required in ('owner.ring_fill_stream&~(', 'complete-owner.ring_played',
+                     'ticks()-owner.ring_tick', 'kui_toy_ring_ticks(reserve)',
+                     'kui_toy_ring_frames(age)'):
+        if required not in compact_reserve:
+            raise ValueError('Conservative complete-block reserve calculation changed')
+    if 'retired' in reserve_body or 'ring_retired' in reserve_body:
+        raise ValueError('Scheduling reserve is based on retired blocks instead of accepted playback cursor')
+    macros = subprocess.check_output(['sh-elf-gcc', '-E', '-dM', '-x', 'c',
+        '-I', str(root / 'include'), str(root / 'src/loader/toy_pilot_sci.h')], text=True)
+    policy = {}
+    for name, expected in (('KUI_TOY_PILOT_ASYNC_CDDA', 0), ('KUI_TOY_SCI_AUDIO_QUEUE', 4),
+            ('KUI_TOY_SCI_AUDIO_RESERVE_LOW', 4096), ('KUI_TOY_SCI_AUDIO_RESERVE_HIGH', 8192)):
+        values = re.findall(r'^#define\s+' + re.escape(name) + r'\s+([^\n]+)$', macros, re.M)
+        if len(values) != 1 or not re.fullmatch(r'[0-9]+[uUlL]*', values[0]):
+            raise ValueError('Missing unique queued policy constant: ' + name)
+        value = int(re.sub(r'[uUlL]+$', '', values[0]))
+        if value != expected:
+            raise ValueError('Queued policy constant differs from reviewed value: ' + name)
+        policy[name] = value
+    makefile = (root / 'Makefile.toy_pilot').read_text()
+    for name in ('SHARED_SCI', 'ASYNC_CDDA'):
+        if len(re.findall(r'^' + name + r'\s*\?=\s*0\s*$', makefile, re.M)) != 1:
+            raise ValueError('Experiment became an ordinary Toy default: ' + name)
+    engine_address, engine_size = linked.symbols.get('_e', 0), linked.sizes.get('_e', 0)
+    if (engine_size < 4 * 2352 or engine_address < linked.symbols['__toy_pilot_bss_begin'] or
+            engine_address + engine_size > linked.symbols['__toy_pilot_bss_end']):
+        raise ValueError('Four-sector private engine queue is absent from linked BSS')
     return {'API_entry': f'0x{entry:08x}', 'API': 'kui_toy_pilot_sci_audio_read(lba,generation,stable_output)',
         'worker_refill_functions': fill_names, 'linked_calls': calls,
         'enabled_refill_source_sha256': hashlib.sha256(body.encode()).hexdigest(),
         'compiler_preprocessor_definitions': definitions,
         'normal_synchronous_raw_callback_in_enabled_refill': False,
         'retained_low_callback': 'Validated config/bootstrap compatibility; not invoked by enabled refill',
+        'queued_plan': {'API': 'kui_toy_pilot_sci_audio_plan(lba,end_exclusive,generation,reserve_frames)',
+            'helper_functions': plan_names, 'linked_API_calls': plan_calls,
+            'linked_worker_calls': helper_calls, 'policy': policy,
+            'integer_argument_bridge': {'entry': f'0x{plan_begin:08x}',
+                'LBA': 'incoming r4 preserved', 'generation': 'incoming r5 copied to r6',
+                'end_exclusive': 'r5 = admitted owner.end_fad at byte660 minus150',
+                'reserve_frames': 'r7; compiler-preprocessed complete-block/capture-age calculation'},
+            'helper_source_sha256': hashlib.sha256(plan_body.encode()).hexdigest(),
+            'reserve_source_sha256': hashlib.sha256(reserve_body.encode()).hexdigest(),
+            'reserve': 'Complete committed blocks ahead of faster accepted cursor, conservatively aged',
+            'private_engine_BSS': {'address': f'0x{engine_address:08x}', 'bytes': engine_size},
+            'verified_sector_payload_bytes': 4 * 2352,
+            'producer_output_authority': False,
+            'original_single_staging_trial': 'Withheld: 60 sectors/s under clustered 60-Hz worker visits against 75 required'},
         'timing_scope': 'First worker request through complete verified delivery; includes game execution between visits, not CPU blocking time',
         'worker_cadence_changed': False,
         'behavior_checked_by': 'Production async worker fixture with forbidden legacy raw callback, pending PCM preservation, exact SR and cancellation epochs',
+        'behavior_fixture_sha256': {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+            for name in ('tests/test_toy_pilot_sci_async_audio.c',
+                         'tests/test_toy_pilot_sci_async_integration.c',
+                         'tests/test_toy_pilot_async_audio_worker.c', 'tools/test_toy_pilot.py')},
         'scope': 'Actual direct linked API plus enabled compiler-preprocessed refill source; host fixtures test delivery semantics; no hardware continuity guarantee'}
 
 
@@ -541,6 +671,84 @@ def mutation_test(worker):
             cases += 1
         else:
             raise ValueError('Shared audit accepted changed stack/vector/P2 target')
+    return cases
+
+
+def mutation_test_async_cdda(root, worker, disassembly):
+    """Reject corrupted emitted producer-plan references and queue bounds."""
+    baseline = audit_async_cdda(root, worker, disassembly)
+    plan = baseline['queued_plan']
+    sites = plan['linked_API_calls'] + plan['linked_worker_calls']
+    cases = 0
+    argument_begin = int(plan['integer_argument_bridge']['entry'], 16)
+    for offset in (2, 6, 8, 10, 12, 16):
+        broken = copy.deepcopy(worker)
+        blob = bytearray(worker['payload'])
+        at = argument_begin + offset - WORKER_BASE
+        opcode = struct.unpack_from('<H', blob, at)[0]
+        struct.pack_into('<H', blob, at, opcode ^ 0x0100)
+        broken['payload'] = bytes(blob)
+        try:
+            audit_async_cdda(root, broken, disassembly)
+        except ValueError:
+            cases += 1
+        else:
+            raise ValueError('Queue audit accepted changed emitted LBA/end/generation arguments')
+    for offset, width in ((0, 4), (4, 2)):
+        linked = Linked(worker)
+        address = argument_begin + offset
+        opcode = linked.half(address)
+        at = (((address + 4) & ~3) + (opcode & 255) * 4 if width == 4 else
+              address + 4 + (opcode & 255) * 2)
+        broken = copy.deepcopy(worker)
+        blob = bytearray(worker['payload'])
+        struct.pack_into('<I' if width == 4 else '<H', blob, at - WORKER_BASE, 0)
+        broken['payload'] = bytes(blob)
+        try:
+            audit_async_cdda(root, broken, disassembly)
+        except ValueError:
+            cases += 1
+        else:
+            raise ValueError('Queue audit accepted changed emitted end pointer/subtraction')
+    for site in sites:
+        for field in ('target_load', 'call'):
+            address = int(site[field], 16)
+            broken = copy.deepcopy(worker)
+            blob = bytearray(worker['payload'])
+            at = address - WORKER_BASE
+            opcode = struct.unpack_from('<H', blob, at)[0]
+            struct.pack_into('<H', blob, at, opcode ^ 0x0100)
+            broken['payload'] = bytes(blob)
+            try:
+                audit_async_cdda(root, broken, disassembly)
+            except ValueError:
+                cases += 1
+            else:
+                raise ValueError('Queue audit accepted changed producer-plan instruction')
+        linked = Linked(worker)
+        address = int(site['target_load'], 16)
+        opcode = linked.half(address)
+        if opcode & 0xf000 == 0xd000:
+            at = ((address + 4) & ~3) + (opcode & 255) * 4
+            broken = copy.deepcopy(worker)
+            blob = bytearray(worker['payload'])
+            struct.pack_into('<I', blob, at - WORKER_BASE, 0)
+            broken['payload'] = bytes(blob)
+            try:
+                audit_async_cdda(root, broken, disassembly)
+            except ValueError:
+                cases += 1
+            else:
+                raise ValueError('Queue audit accepted changed producer-plan target')
+    for bad_size in (0, 2352, 9407):
+        broken = copy.deepcopy(worker)
+        broken['symbol_sizes']['_e'] = bad_size
+        try:
+            audit_async_cdda(root, broken, disassembly)
+        except ValueError:
+            cases += 1
+        else:
+            raise ValueError('Queue audit accepted an undersized private queue region')
     return cases
 
 
