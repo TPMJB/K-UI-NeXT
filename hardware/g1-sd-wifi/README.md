@@ -72,17 +72,19 @@ Planned write protection includes read-only collection access during ordinary pl
 
 The owner's photo shows VA1 mainboard **837-13778-02**, BIOS **IC501** and G1 connector **CN503**. Preferred placement is above the motherboard near IC501/CN503, below the normally seated upper metal shield. The shield is the local height constraint.
 
-The owner reaffirmed the initial measurements after checking the caliper readings. Use **8.0 mm below the main shield and 6.6 mm beneath the extra metal near BIOS/G1** as owner-reported planning clearances. The [clearance report](docs/controller-ram-bios-disposition-2026-10-09.md#provisional-shield-clearance-report) preserves the raw figures and measurement references. BIOS-top clearance, the extra metal's footprint and complete socket/module assembly fit remain to be checked.
+The owner reaffirmed the initial measurements after checking the caliper readings. Use **8.0 mm below the main shield and 6.6 mm beneath the extra metal near BIOS/G1** as owner-reported planning clearances. The [clearance report](docs/controller-ram-bios-disposition-2026-10-09.md#provisional-shield-clearance-report) preserves the raw figures and measurement references. The extra metal's footprint and complete carrier/socket/module assembly fit remain to be checked.
 
 CN503 has two 25-pin rows carrying the required signals. The BIOS-facing tails are visible in the supplied photo; access to the board-edge row is not yet qualified. Logical pin mapping does not establish a practical soldering method. If direct top-side access proves unsuitable, investigate a thin underside tap and short flex to the upper board, with signal integrity and shield clearance checked. The controller/C5 assembly is not assumed to fit under the motherboard.
 
-An additional candidate is an IC501 adapter/tap. The VA1 traced schematic exposes 20 ATA nets at the BIOS footprint, including multiplexed address/data nets; it is not a 16-bit ROM-data-pin connection. The [candidate reference](docs/IC501-candidate-reference.csv) requires continuity checks and signal-integrity review. This path does not automatically eliminate the remaining connector controls or prove a dual-BIOS carrier fits.
+The preferred IC501 tap carrier has a cutout around the existing BIOS, with short taps soldered to its legs and independent mechanical supports. It avoids stacking the carrier above IC501. The VA1 traced schematic exposes 20 ATA nets at that footprint, including multiplexed address/data nets; the [candidate reference](docs/IC501-candidate-reference.csv) still requires continuity checks and signal-integrity review, and eight controls need other taps.
+
+The owner reports **4.48 mm total C5 module height including USB**. That leaves **3.52 mm in the 8.0 mm region, or 2.12 mm beneath the extra metal**, for carrier elevation, PCB, socket separation, insulation and fit allowance. Prefer the taller region for the C5 where the footprint permits it. Keep USB in the baseline and qualify the complete removable-module stack; [the mounting budget](docs/controller-ram-bios-disposition-2026-10-09.md#bios-cutout-and-c5-stack) records the examples. USB removal is an optional fallback, not a current requirement.
 
 The DragonCity numbered-circle picture discussed in the design conversation is the underside of a **GD-ROM PCB**, not the motherboard. Its numbers refer to **IDE cable pins**, not CN503 contacts or RP2350B GPIOs. Data/control points map to corresponding G1 signals. Its IDE-pin-1-to-3.3-V tie is a reset workaround and is not copied into the MCU design; real G1 reset is A2.
 
 Required physical evidence remains:
 
-- Minimum gap from the top of IC501 to the underside of the installed upper shield.
+- IC501 body/lead rectangle and surrounding component positions for the carrier cutout. BIOS-top gap is needed only if a later layout overhangs the package.
 - Map the reported PCB-to-shield clearance across the candidate footprint, including the extra metal's overlap and existing components.
 - Access to the outer CN503 row; finished carrier, C5 socket/module and SD-socket heights; card, USB and antenna access.
 - Candidate IC501 tap continuity and package orientation, plus separately measured ROM supply and G1 signal levels if pursuing the BIOS adapter.
@@ -93,7 +95,7 @@ Optional dual BIOS requires additional connections and independent stock/custom 
 
 1. Check measurements and candidate tap continuity. Review existing software probe evidence and capture baseline bus timing with a qualified passive hookup before freezing the controller/front-end choice. The earlier CF board is unbuilt and unvalidated; a working CF rig is not a prerequisite assumed to exist.
 2. Close output ownership and timing, then finish G1 buffers/front end, SD/C5 interfaces, console/USB power and power-fail circuits; choose qualified production footprints and run ERC. Default stock BIOS recovery must work independently of MCU and FPGA configuration.
-3. Complete the footprint and BIOS-top measurements and connector access evidence, then choose the attachment, outline and component heights.
+3. Complete the footprint, IC501 cutout dimensions, mounted C5 stack and connector access evidence, then choose the attachment, outline and component heights.
 4. Build a bench prototype: identify, read and hash sectors, test drive coexistence, then qualify DMA and writes.
 5. Demonstrate filesystem recovery and repeated power cuts before adding packet transport and pursuing retail-game networking.
 

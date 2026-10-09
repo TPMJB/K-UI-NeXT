@@ -88,15 +88,40 @@ On 9 October 2026 the owner reported approximately 8.62 mm from motherboard to s
 
 The reference assumptions stay explicit: an inner-face measurement already excludes the shield sheet thickness, and metal thickness must correspond to actual projection into the candidate footprint. A plausible PCB-thickness reading supports the scale of the measurements; it does not independently verify the clearance endpoints. No photo-derived dimension has been verified for this report.
 
-The remaining mechanical work is to map the smallest PCB-to-metal gap across the proposed footprint, locate the extra metal's overlap and measure separately from the top of IC501 to the nearest metal underside. With the console unplugged and shield seated normally, a loose stack of thin nonconductive card can serve as a gauge where caliper access is difficult: increase until it just touches without lifting or forcing the shield, then measure the stack outside the console.
+The remaining mechanical work is to map the smallest PCB-to-metal gap across the proposed footprint and locate the extra metal's overlap. The owner's preferred cutout carrier below avoids placing the board over IC501, so BIOS-top clearance is needed only if a later layout overhangs or stacks anything above that package. With the console unplugged and shield seated normally, a loose stack of thin nonconductive card can serve as a gauge where caliper access is difficult: increase until it just touches without lifting or forcing the shield, then measure the stack outside the console.
 
-Budget the complete stack within those local gaps: mounting/supports and insulation, carrier PCB, lower-side components where present, and socket/module or tallest top-side part. A PCB-to-metal gap is not the spare height above the existing BIOS. The socketed C5 and any BIOS carrier need their actual assembled heights checked before choosing the PCB outline or releasing fabrication files. Retain the shield and its normal thermal contacts in the fit check.
+Budget the complete stack within those local gaps: mounting/supports and insulation, carrier PCB, lower-side components where present, and socket/module or tallest top-side part. A PCB-to-metal gap is not the spare height above the existing BIOS. The socketed C5 needs its actual mounted stack height checked before choosing the PCB outline or releasing fabrication files. Retain the shield and its normal thermal contacts in the fit check.
+
+## BIOS cutout and C5 stack
+
+The owner proposes a carrier with a cutout around the existing IC501 package, with short signal taps soldered to its legs. Adopt this as the preferred mechanical candidate for the BIOS-footprint tap: keep the original BIOS in place and put the carrier in the adjacent free area rather than over the package. Measure the package/lead rectangle, surrounding parts and available board area to define the cutout. Support and retain the carrier independently so its weight, socket insertion and cable forces do not load the BIOS legs. Leg access, continuity, solder-pad geometry and routing remain to be qualified.
+
+This shape does not change the electrical tap map: IC501 exposes 20 candidate ATA nets, while eight controls still need other taps as listed above. Keep added tap routing short and evaluate loading/stubs on the Holly side of the existing connector series resistors. Optional custom BIOS components can occupy adjacent carrier space; stock recovery still needs the independent physical path already specified.
+
+The owner measured the C5 module's total height, including its USB connector, as **4.48 mm** on 9 October 2026. It is a module-envelope measurement, not the complete mounted carrier/socket stack.
+
+| Clearance region | PCB-to-metal gap | Space remaining after 4.48 mm C5 envelope |
+| --- | --- | --- |
+| Below main shield | 8.00 mm | 3.52 mm |
+| Below extra BIOS/G1 metal | 6.60 mm | 2.12 mm |
+
+The remaining space must cover carrier elevation above the motherboard, carrier thickness, the actual gap from carrier top to the module's lowest point, insulation and a fit/tolerance allowance. Include lower-side parts or solder where they set either reference surface. A connector's quoted height may use a different datum; use the mounted geometry rather than adding dimensions that overlap.
+
+Illustrative carrier-thickness arithmetic, before every other addition:
+
+| Assumed carrier PCB thickness | Remaining in 8.00 mm region | Remaining in 6.60 mm region |
+| --- | --- | --- |
+| 0.80 mm | 2.72 mm | 1.32 mm |
+| 1.00 mm | 2.52 mm | 1.12 mm |
+| 1.60 mm | 1.92 mm | 0.52 mm |
+
+These are planning examples, not a selected PCB stackup or proof that a socket fits. Place the C5 in the 8.00 mm region where the measured footprint permits it, then qualify a low-height removable connection and independent carrier supports. Keep the USB connector in the baseline. The owner is willing to remove it if necessary, but removal helps only if it determines the tallest point; remeasure the remaining module envelope before claiming a reduced height. It does not remove carrier or socket height.
 
 ## Evidence and next steps
 
 Claude correctly withdrew the nonexistent-CF-rig assumption and its original PIO-output/DMARQ gate errors. Software logs and a controlled raw-register probe can precede a hardware responder; passive waveform capture does not require a working CF card. However, an IDE failure code does not alone prove which physical device drove the bus. Floating levels, stale state and probe cleanup must be considered. The existing ATA path sends IDENTIFY directly; a silent bridge would need the explicit activation contract discussed previously.
 
-1. Complete the clearance footprint map and BIOS-top measurement from the owner-reported dimensions above; confirm IC501 package/orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
+1. Complete the clearance footprint map, IC501 body/lead dimensions for the cutout and actual mounted C5 stack from the owner-reported dimensions above; confirm IC501 package/orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
 2. Review existing IDE-probe evidence and capture baseline register/data strobes before freezing timing architecture. Any software probe must own/restore the bus and timing; do not sweep values blindly under game/optical activity.
 3. Develop the chosen front-end register file, ownership/reset/interlock model, MCU link and independent stock path. Demonstrate resource/timing closure and isolate the responder before console attachment.
 4. Prove coexistence and hashed PIO reads, then DMA. Qualify writes/cache coherence/flush and power cuts before networking or BIOS programming.
