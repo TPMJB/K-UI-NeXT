@@ -1,0 +1,49 @@
+rp2350b_gpio,proposed_signal,rp_direction,purpose,status
+0,ATA_DD0,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+1,ATA_DD1,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+2,ATA_DD2,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+3,ATA_DD3,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+4,ATA_DD4,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+5,ATA_DD5,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+6,ATA_DD6,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+7,ATA_DD7,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+8,ATA_DD8,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+9,ATA_DD9,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+10,ATA_DD10,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+11,ATA_DD11,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+12,ATA_DD12,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+13,ATA_DD13,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+14,ATA_DD14,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+15,ATA_DD15,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
+16,ATA_DA0,input,Register address bit 0,PROPOSED - NOT FABRICATION APPROVED
+17,ATA_DA1,input,Register address bit 1,PROPOSED - NOT FABRICATION APPROVED
+18,ATA_DA2,input,Register address bit 2,PROPOSED - NOT FABRICATION APPROVED
+19,ATA_CS0n,input,Command register bank select,PROPOSED - NOT FABRICATION APPROVED
+20,ATA_CS1n,input,Control register bank select,PROPOSED - NOT FABRICATION APPROVED
+21,ATA_DIORn,input,Host read strobe,PROPOSED - NOT FABRICATION APPROVED
+22,ATA_DIOWn,input,Host write strobe,PROPOSED - NOT FABRICATION APPROVED
+23,ATA_RESETn,input,"Reset sense; selectable path, behavior to qualify",PROPOSED - NOT FABRICATION APPROVED
+24,ATA_IORDY,output / release,Ready / wait; only drive when permitted,PROPOSED - NOT FABRICATION APPROVED
+25,ATA_INTRQ,output / release,Shared interrupt; selected-device rules apply,PROPOSED - NOT FABRICATION APPROVED
+26,ATA_DMARQ,output / release,DMA request; selected-device rules apply,PROPOSED - NOT FABRICATION APPROVED
+27,ATA_DMACKn,input,DMA acknowledge; required even with CS inactive,PROPOSED - NOT FABRICATION APPROVED
+28,DATA_OEn,output,Data-buffer enable; default disabled,PROPOSED - NOT FABRICATION APPROVED
+29,DATA_DIR,output,Data-buffer direction; exact polarity set by part,PROPOSED - NOT FABRICATION APPROVED
+30,G1_RESP_EN,output,Proposed response gate; hardware interlock required,PROPOSED - NOT FABRICATION APPROVED
+31,PFAILn,input,Early warning from unheld console supply,PROPOSED - NOT FABRICATION APPROVED
+32,SD_CLK,output,Native four-bit SD clock; PIO2,PROPOSED - NOT FABRICATION APPROVED
+33,SD_CMD,bidirectional,Native SD command; PIO2,PROPOSED - NOT FABRICATION APPROVED
+34,SD_D0,bidirectional,SD data bit 0; PIO2,PROPOSED - NOT FABRICATION APPROVED
+35,SD_D1,bidirectional,SD data bit 1; PIO2,PROPOSED - NOT FABRICATION APPROVED
+36,SD_D2,bidirectional,SD data bit 2; PIO2,PROPOSED - NOT FABRICATION APPROVED
+37,SD_D3,bidirectional,SD data bit 3; PIO2,PROPOSED - NOT FABRICATION APPROVED
+38,SD_CDn,input,"Socket card-detect switch, if provided",PROPOSED - NOT FABRICATION APPROVED
+39,STATUS_LED,output,Optional; reclaimable if more isolation pins needed,PROPOSED - NOT FABRICATION APPROVED
+40,C5_MISO,input,SPI1 RX -> XIAO D9 / C5 GPIO9,PROPOSED - NOT FABRICATION APPROVED
+41,C5_CSn,output,SIO-controlled CS -> XIAO D0 / C5 GPIO1,PROPOSED - NOT FABRICATION APPROVED
+42,C5_SCK,output,SPI1 SCK -> XIAO D8 / C5 GPIO8,PROPOSED - NOT FABRICATION APPROVED
+43,C5_MOSI,output,SPI1 TX -> XIAO D10 / C5 GPIO10,PROPOSED - NOT FABRICATION APPROVED
+44,C5_IRQn,input,Proposed packet IRQ -> XIAO D5 / C5 GPIO24,PROPOSED - NOT FABRICATION APPROVED
+45,C5_READY,input,Proposed transaction-ready -> XIAO D4 / C5 GPIO23,PROPOSED - NOT FABRICATION APPROVED
+46,C5_POWER_EN,output,Switched-supply enable; USB/back-power review needed,PROPOSED - NOT FABRICATION APPROVED
+47,SPARE,unassigned,Reserve for extra isolation control or diagnostics,PROPOSED - NOT FABRICATION APPROVED

@@ -1,0 +1,41 @@
+cn503_contact,standard_ide_pin,proposed_signal,rp2350b_gpio,rp_direction,notes
+B11,17,ATA_DD0,0,bidirectional,Logical reference only; actual solder access and continuity unverified
+A11,15,ATA_DD1,1,bidirectional,Logical reference only; actual solder access and continuity unverified
+B9,13,ATA_DD2,2,bidirectional,Logical reference only; actual solder access and continuity unverified
+A9,11,ATA_DD3,3,bidirectional,Logical reference only; actual solder access and continuity unverified
+B6,9,ATA_DD4,4,bidirectional,Logical reference only; actual solder access and continuity unverified
+A6,7,ATA_DD5,5,bidirectional,Logical reference only; actual solder access and continuity unverified
+B4,5,ATA_DD6,6,bidirectional,Logical reference only; actual solder access and continuity unverified
+A4,3,ATA_DD7,7,bidirectional,Logical reference only; actual solder access and continuity unverified
+A5,4,ATA_DD8,8,bidirectional,Logical reference only; actual solder access and continuity unverified
+B5,6,ATA_DD9,9,bidirectional,Logical reference only; actual solder access and continuity unverified
+A7,8,ATA_DD10,10,bidirectional,Logical reference only; actual solder access and continuity unverified
+B7,10,ATA_DD11,11,bidirectional,Logical reference only; actual solder access and continuity unverified
+A10,12,ATA_DD12,12,bidirectional,Logical reference only; actual solder access and continuity unverified
+B10,14,ATA_DD13,13,bidirectional,Logical reference only; actual solder access and continuity unverified
+A12,16,ATA_DD14,14,bidirectional,Logical reference only; actual solder access and continuity unverified
+B12,18,ATA_DD15,15,bidirectional,Logical reference only; actual solder access and continuity unverified
+A19,35,ATA_DA0,16,input,Logical reference only; actual solder access and continuity unverified
+B17,33,ATA_DA1,17,input,Logical reference only; actual solder access and continuity unverified
+B19,36,ATA_DA2,18,input,Logical reference only; actual solder access and continuity unverified
+A20,37,ATA_CS0n,19,input,Logical reference only; actual solder access and continuity unverified
+B20,38,ATA_CS1n,20,input,Logical reference only; actual solder access and continuity unverified
+A15,25,ATA_DIORn,21,input,Logical reference only; actual solder access and continuity unverified
+B14,23,ATA_DIOWn,22,input,Logical reference only; actual solder access and continuity unverified
+A2,1,ATA_RESETn,23,input,Logical reference only; actual solder access and continuity unverified; DragonCity photo ties IDE pin 1 to 3.3 V instead of this reset signal
+B15,27,ATA_IORDY,24,output / release,Logical reference only; actual solder access and continuity unverified
+B16,31,ATA_INTRQ,25,output / release,Logical reference only; actual solder access and continuity unverified
+A14,21,ATA_DMARQ,26,output / release,Logical reference only; actual solder access and continuity unverified
+A16,29,ATA_DMACKn,27,input,Logical reference only; actual solder access and continuity unverified
+A1,,CONSOLE_3V3,,,Supply reference; finished input/isolation circuit pending
+B1,,CONSOLE_3V3,,,Supply reference; finished input/isolation circuit pending
+A3,,CONSOLE_5V,,,Supply reference; separate from 3.3 V G1 signalling
+B3,,CONSOLE_5V,,,Supply reference; separate from 3.3 V G1 signalling
+A8,,GND,,,Return-path reference; attachment and routing pending
+B8,,GND,,,Return-path reference; attachment and routing pending
+A13,,GND,,,Return-path reference; attachment and routing pending
+B13,,GND,,,Return-path reference; attachment and routing pending
+A18,,GND,,,Return-path reference; attachment and routing pending
+B18,,GND,,,Return-path reference; attachment and routing pending
+A21,,GND,,,Return-path reference; attachment and routing pending
+B21,,GND,,,Return-path reference; attachment and routing pending

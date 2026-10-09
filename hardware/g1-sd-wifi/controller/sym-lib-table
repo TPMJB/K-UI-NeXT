@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "KUI_RP_Reference")(type "KiCad")(uri "${KIPRJMOD}/KUI_RP_Reference.kicad_sym")(options "")(descr "Official Raspberry Pi RP2350B reference symbols, MIT"))
+)

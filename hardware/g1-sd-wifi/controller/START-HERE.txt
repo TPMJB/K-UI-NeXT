@@ -1,0 +1,135 @@
+K-UI G1 Bridge Rev A - first controller schematic
+Controller sheet: 6 October 2026 | Review notes updated: 9 October 2026
+Design stage 0.3 | Requires KiCad 10 or newer
+
+OPEN IT
+1. Extract the entire ZIP into one folder.
+2. In KiCad, use File > Open Existing Project and select
+   KUI-G1-Bridge-RevA.kicad_pro.
+3. Open KUI-G1-Bridge-RevA.kicad_sch in the Schematic Editor.
+4. Find U1 (RP2350B), U3 (boot flash), X1 (12 MHz crystal),
+   and the USB / SWD / BOOTSEL / RUN connections.
+
+WHAT THIS FIRST SHEET DOES
+It adapts Raspberry Pi's official RP2350B minimal circuit and applies
+our proposed GPIO allocation. G0_DD0 means GPIO0 assigned to ATA data
+bit 0; it is not Dreamcast connector position 0. Every G0-G47 label is
+a controller-side signal. The accompanying CSV describes the assignments.
+
+The optional secondary flash circuit has been removed to release GPIO0.
+The dedicated QSPI boot flash remains. The SD card holds games; the
+separate boot flash holds the controller firmware.
+
+J2 and J3 are retained reference/bench GPIO breakouts. They are NOT a
+Dreamcast G1 connector, a CF connector, or an approved solder-pad map.
+Do not wire them directly to the Dreamcast bus. Shared data and response
+signals still need the isolation/buffer circuits listed below.
+
+HARDWARE TARGET
+Dreamcast VA1 with original 3.3 V GD-ROM retained as ATA Device 0.
+RP2350B, A4 procurement target, fixed as ATA Device 1 (slave).
+Native four-bit microSD interface and a socketed XIAO ESP32-C5.
+K-UI owns the filesystem; the bridge supplies raw storage sectors.
+Attachment: soldered G1 tap on the VA1 mainboard. Preferred mounting is
+above the mainboard near IC501 (BIOS) and CN503, below the installed
+upper metal shield. Both connector rows and assembly height need checking.
+A thin underside tap with a short flex to the top-side board is a fallback;
+the complete board is not assumed to fit underneath. Clearance is unmeasured.
+Optional dual BIOS is in the architecture scope but absent from this sheet.
+Drive PCB identity is not a prerequisite for this mainboard attachment.
+
+NEXT SCHEMATIC PASS
+1. G1 data buffers and response isolation: data, ready, IRQ and DMA
+   outputs must release the bus whenever the bridge cannot respond.
+   Hardware must force isolation during startup, reset and power failure.
+2. Native microSD socket, pull-ups, decoupling and card detect.
+3. XIAO C5 socket, SPI/handshakes, separately switched supply and
+   programming/USB power isolation. Its 3V3_OUT is not a supply input
+   to join to the controller's 3.3 V rail.
+4. Console supply input, early power-fail detection and hold-up supply
+   for the controller plus SD card. Capacitor size awaits measured
+   card write/flush behavior. The radio stays outside the hold-up load.
+5. Physical G1 attachment and mounting geometry after checking the
+   VA1 mainboard pad orientation, continuity and upper-shield clearances.
+
+POWER REQUIREMENTS FOR THE NEXT PASS
+The proposed inputs are labelled 3V3_IN, 5V_IN and GND. A reviewed
+assembly option will select the controller/SD power path: console 3.3 V
+through isolation, or console 5 V through a 3.3 V regulator and isolation.
+Do not put a 3.3 V input through the retained 5 V bench regulator.
+Do not electrically join the console's 3.3 V and 5 V rails.
+
+The socketed C5 will receive a separately switched 5 V supply. One valid
+configuration therefore uses 3.3 V for the controller/SD and an additional
+5 V wire for Wi-Fi. Another uses a 5 V feed for the entire board, with
+on-board 3.3 V regulation for the controller/SD. Neither requires another
+PSU: the original Dreamcast PSU also provides a 5 V DC rail. Robot Retro
+only makes the user's chosen 5 V connection more convenient.
+
+To operate the complete board from 3.3 V alone, the C5 branch needs a
+qualified 3.3-to-5 V boost stage; that is an optional implementation path,
+not a working capability of this first sheet. Seeed labels the module's
+3V3 pin as 3V3_OUT; it must not be used as our power-input shortcut.
+
+Power input voltage and G1 signal voltage are separate. This VA1 design
+uses 3.3 V G1 signalling even when board power comes from 5 V.
+USB-to-console back-feed prevention and power-fail isolation remain
+required. A 5 V wire is a power source, not stored energy for flushing SD.
+Radio power will shut off on power failure; controller/SD reserve power
+will be designed and sized from measurements. Available PSU headroom
+must be qualified with SD writes and Wi-Fi transmit bursts together.
+
+POWER AND VALIDATION BOUNDARY
+The retained USB-powered reference supply is a bench starting point.
+It is not the finished console/reserve-power circuit. No connection
+between USB and Dreamcast supplies is approved by this starter.
+
+This is an editable first sheet, not a complete board or fabrication
+release. No PCB layout, Gerbers, production BOM, ATA firmware or tested
+power-loss protection is supplied. Official reference component values
+and footprints still require review against the chosen production parts.
+Current validation results are in CHECKS.txt.
+
+PHOTOS AND MEASUREMENTS
+The owner's top-side photo identifies VA1 board 837-13778-02, IC501 and
+CN503. It establishes the BIOS-facing connector row's visible tails, not
+access to every required tail on the board-edge side. Both A/B rows carry
+required storage signals. Reference mapping is in ../docs/CN503-reference.csv.
+It is not a measured solder-pad or mechanical attachment drawing.
+
+With the console unplugged and upper metal shield seated at its normal
+installed height, measure (1) top of IC501 to underside of shield and
+(2) motherboard PCB surface beside IC501 toward CN503 to underside of
+shield. Check several points and record the minimum across the candidate
+footprint, including existing components, insulation and wire exits.
+These measurements remain pending. Do not infer clearance from internet
+DCDigital figures or assume a socketed C5 fits because a BIOS chip fits.
+Keep the external antenna clear of the surrounding metal shielding; its
+actual location and RF performance need qualification.
+
+Read ../README.md and ../docs/REVIEW.md for the current proposal. The PDF
+in ../docs/initial-pin-plan-2026-10-06.pdf is a historical draft; current
+mounting and validation statements in those Markdown files take precedence.
+
+SOURCES AND LICENSING
+Official RP2350B minimal reference, R4-S1, KiCad 10:
+https://pip.raspberrypi.com/categories/1214-rp2350
+Preserve the included LICENSE-Raspberry-Pi-MIT.txt when redistributing the
+adapted reference circuit and symbols. Reference PCB layout was not reused.
+Symbols are bundled locally. Footprints still name Raspberry Pi's custom
+library; select or supply verified production footprints before PCB layout.
+
+VA1 clean scans, traced schematics and GD-ROM PCB references by RDC:
+https://acidmods.com/forum/index.php?topic=44892.0
+These are reverse-engineered references; verify actual installation points.
+
+Original PSU DC rail reference:
+https://mc.pp.se/dc/psu.html
+Official C5 schematic, including VBUS input and 3V3_OUT:
+https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.pdf
+
+GPIO/peripheral and electrical requirements:
+https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf
+https://datasheets.raspberrypi.com/rp2350/hardware-design-with-rp2350.pdf
+https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/
+https://github.com/KallistiOS/KallistiOS/blob/master/kernel/arch/dreamcast/hardware/g1ata.c
