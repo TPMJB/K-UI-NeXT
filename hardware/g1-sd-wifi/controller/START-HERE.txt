@@ -21,9 +21,9 @@ The dedicated QSPI boot flash remains. The SD card holds games; the
 separate boot flash holds the controller firmware.
 
 The controller/CSV allocation is the original MCU-only candidate. A later
-review proposes an FPGA ATA front end and optional QMI PSRAM. Neither is
-implemented here. PSRAM can share the boot flash clock/data wiring with a
-separate chip select; it is not a replacement for the retained boot flash.
+review proposes an FPGA ATA front end and an 8 MiB QMI PSRAM provision,
+with a factory-populated option. Neither is implemented here. PSRAM can share the boot flash clock/data
+wiring with a separate chip select; it is not a replacement for the retained boot flash.
 
 J2 and J3 are retained reference/bench GPIO breakouts. They are NOT a
 Dreamcast G1 connector, a CF connector, or an approved solder-pad map.
@@ -37,13 +37,17 @@ Native four-bit microSD interface and a socketed XIAO ESP32-C5.
 K-UI owns the filesystem; the bridge supplies raw storage sectors.
 Attachment: soldered G1 tap on the VA1 mainboard. Preferred mounting is
 above the mainboard near IC501 (BIOS) and CN503, below the installed
-upper metal shield. The preferred IC501 tap carrier has a cutout around the
+upper metal shield. The preferred carrier has a cutout around the
 existing BIOS, with independent supports. The owner confirms all CN503 pins
 are accessible and basically flush with the motherboard. Prefer a second
 cutout/notch, with an accessible edge/underside landing or thin local tap.
 Ordinary top-side carrier pads would be above these tails; qualify the solder
 cross-section, spacing and alignment before choosing a direct rigid joint.
-Use CN503 for the full G1 bus; BIOS-leg taps remain optional for BIOS features.
+Use CN503 for the full G1 bus; the baseline storage/Wi-Fi bridge does not
+need BIOS-leg soldering. Optional BIOS replacement needs additional ROM
+address/control access and stock-ROM isolation. GDEMU replaces the optical
+drive and boots with the stock BIOS; this ATA slave is not a GD-ROM emulator.
+Plan a disc bootstrap on the retained drive for initial K-UI/DreamShell use.
 A thin underside tap with a short flex to the top-side board is a fallback;
 the complete board is not assumed to fit underneath. Initial clearances are
 owner-reported; complete assembly fit remains unverified.
@@ -169,6 +173,28 @@ Do not infer clearance from internet
 DCDigital figures or assume a socketed C5 fits because a BIOS chip fits.
 Keep the external antenna clear of the surrounding metal shielding; its
 actual location and RF performance need qualification.
+
+REMOTE C5 AND ASSEMBLY TARGET
+The owner is considering a C5 mount near G2, north/west near the PSU, or
+USB connector removal. Keep the G1 front end local; a remote C5 link carries
+its own power/ground, SPI and handshakes, not the ATA bus or a G2 connection.
+Measure the selected site's footprint/height/supports and cable route.
+Do not assume motherboard 8 mm clearance extends beneath the PSU.
+Remeasure module height and retain service access if USB is removed.
+
+Provision 8 MiB PSRAM as a bare SMT chip, with a factory-populated option.
+APS6404L-3SQR-ZR is a candidate: 64 Mbit, 3 x 2 mm USON-8, 0.6 mm max height.
+This is bridge-sector/read-ahead RAM, not additional Dreamcast system RAM.
+The exact QMI circuit, footprint, part sourcing and driver remain to be done.
+
+The remaining layout inputs are CN503-to-IC501 X/Y placement; actual tail
+pitch/row spacing/contact envelope; usable outline/supports/card access; and
+the chosen remote C5 site's geometry/route if used. A dimensioned overhead
+sketch can combine these. Select a removable socket from its drawing first.
+Factory assembly needs the finished PCB files, exact BOM and placement/
+rotation information. This starter is not an assembly-order package.
+The fuller checklist and source links are in
+../docs/controller-ram-bios-disposition-2026-10-09.md.
 
 Read ../README.md and ../docs/REVIEW.md for the current proposal. The PDF
 in ../docs/initial-pin-plan-2026-10-06.pdf is a historical draft; current

@@ -33,7 +33,7 @@ Accept optional read-ahead RAM as a useful direction. It caches raw 512-byte LBA
 
 QMI CS1 permits GPIO 0, 8, 19 or 47. GPIO 47 is available in the original allocation. It is one **additional Bank 0 GPIO**, plus the shared QSPI clock/four data wires, power and decoupling. An FPGA frees allocation choices but does not remove the CS constraint. Configure CS explicitly and disable general CS autodetection, which can toggle ATA-assigned pins. Flash fetches also share QMI. [RP2350 §§4.4/12.14](https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008373-DS-2-rp2350-datasheet.pdf?disposition=inline); [Pico SDK PSRAM setup](https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_psram/psram.c).
 
-For APS6404L-3SQR, package choice matters: **USON ZR is 0.6 mm maximum; SOP SN is 1.45 mm maximum**. Qualify power-up, burst/page and refresh timings for the exact part. [AP Memory datasheet, package drawings and interface requirements](https://www.apmemory.com/en/downloadFiles/032411212009597427). These are component heights; carrier PCB, solder, insulation and sockets still count toward clearance.
+For APS6404L-3SQR, package choice matters: **USON ZR is 3 × 2 mm and 0.6 mm maximum height; SOP SN is 1.45 mm maximum height**. Qualify power-up, burst/page and refresh timings for the exact part. [AP Memory datasheet, package drawings and interface requirements](https://www.apmemory.com/en/downloadFiles/032411212009597427). These are component heights; carrier PCB, solder, insulation and sockets still count toward clearance.
 
 The following are arithmetic budgets, not measured results. MB/s is decimal; MiB/KiB are binary.
 
@@ -62,6 +62,16 @@ The [RDC VA1 drawing](https://consolemods.org/wiki/images/2/27/Dreamcast_VA1_FUL
 DD8 is ROM Q15/A-1; DD9-DD15 are ROM A0-A6. DA0-DA2 are ROM A7-A9, not A0-A2. Q8-Q14 are unconnected. [IC501-candidate-reference.csv](IC501-candidate-reference.csv) joins these points to the logical CN503 map. Eight controls still need separate taps: RESETn, CS0n, CS1n, DIOWn, IORDY, INTRQ, DMARQ and DMACKn. Four are on CN503's B row. This tap is before the existing connector series resistors, so routing/loading needs signal-integrity review. The drawing labels VCC pin 23 as 3.3 V; measure supply and bus levels separately.
 
 No IC501 removal, adapter manufacture or soldering plan is approved by these references. Confirm physical package/orientation and continuity first, then compare this approach with the connector/underside options and the installed shield measurements.
+
+## Connector-only storage and boot behavior
+
+The baseline SD/Wi-Fi bridge takes its complete ATA interface from CN503 and **does not require soldering to IC501**. The BIOS opening is a mechanical clearance feature. The alternate IC501 tap map above is retained for reference, not a requirement for the preferred connector attachment.
+
+Sharing G1 does not expose the complete BIOS interface at CN503. The traced VA1 drawing shows ten additional ROM address lines, A10-A19, absent from the ATA connector, and a separate ROM chip-enable net at IC501 pin 12 rather than ATA CS0/CS1. Optional ROM replacement needs those signals plus mutually exclusive stock/custom enables and the independent recovery path below. Driving CN503 alone cannot reliably replace or disable the existing ROM.
+
+[GDEMU](https://gdemu.wordpress.com/about/) replaces the optical drive and requires no custom BIOS. Its [installation](https://gdemu.wordpress.com/installation/gdemu-installation/) removes the GD-ROM and plugs the replacement into its motherboard socket; its [operation](https://gdemu.wordpress.com/operation/gdemu-operation/) boots image 01 at power-on. The inference is that it supplies the drive and disc behavior expected by the original BIOS, not that it replaces BIOS execution.
+
+Our proposed device-1 ATA sector bridge retains the original GD-ROM as device 0. It is not a GD-ROM emulator and does not by itself create a stock-BIOS boot path. Use a disc bootstrap on the retained drive to start K-UI/DreamShell for initial validation, then access the bridge through compatible software. Optional custom-BIOS boot and a possible future optical-emulation architecture are separate designs; neither is implemented or promised by this proposal.
 
 ## BIOS recovery and programming
 
@@ -179,6 +189,31 @@ The architecture proposal can proceed with the reported dimensions and latest he
 A dimensioned sketch is enough for the first outline; a square-on photo with a metric ruler in the PCB plane can supplement it. If the removable C5 connector is not chosen, select it from a manufacturer drawing first rather than requiring the owner to buy one just to measure. No additional BIOS-top or GD-ROM height measurement is needed for a carrier that clears both bodies and stays below the normally installed shield.
 
 Before fabrication, qualify CN503 tail pitch, row spacing, tail width/exposed length, contact-height tolerance and pin orientation, plus the corresponding IC501 dimensions wherever leg taps are retained. For a uniform 25-contact row, measuring between matching edges of the first and last tail and dividing by 24 is a useful pitch check; it is not a substitute for the complete footprint and alignment tolerance. The existing CSV is a logical net reference, not that mechanical footprint.
+
+## Remote C5, RAM provision and factory assembly
+
+The owner proposes moving the C5 north/west under the PSU, removing its USB connector, or using a ribbon to mount it near G2. Evaluate a **remote removable C5** while keeping the G1 front end close to CN503. The remote link carries C5 power/ground, SPI and handshakes; placement near G2 does not imply connecting to the G2 bus. The ribbon's route, return paths, signal integrity, supply drop, unpowered isolation and tested SPI rate require a concrete design. Extending the ATA bus or relocating the native SD socket would be a different routing decision.
+
+| C5 candidate | Information needed before choosing it |
+| --- | --- |
+| North/west toward PSU | Local footprint, clearance to the installed PSU/metalwork, safe support location and cable/antenna route; the motherboard's 8 mm area does not establish clearance beneath the PSU |
+| USB connector removed | Remeasure tallest remaining point and retain accessible programming/service connections; removal does not eliminate carrier/socket height |
+| Separate mount near G2 | Local length/width/height, support position and practical ribbon route length/bends; check fit with retained modem/expansion hardware |
+
+Provision **8 MiB of bridge PSRAM** in the Rev A requirements, with a factory-populated option and an unpopulated variant. The candidate is **APS6404L-3SQR-ZR**, a 64 Mbit device (8 MiB), in a 3 × 2 mm USON-8 package with 0.6 mm maximum height. It is a bare SMT chip on our carrier, not a separate RAM module. Its function is raw-sector buffering/read-ahead; it does not expand Dreamcast system RAM. QMI wiring, chip-select allocation, sharing with firmware flash, cache coherence and bandwidth still require the design and tests described above. [AP Memory product family](https://www.apmemory.com/en/product/iotram/SPIQSPI); [manufacturer package drawing, mirrored by Mouser](https://www.mouser.com/datasheet/3/4815/1/APS6404L_3SQR.pdf). Reconcile the latest ordering suffix, footprint and pinout before final BOM release.
+
+Custom boards can be ordered with SMT components factory-soldered. The assembly release needs the finished PCB manufacturing files, exact BOM and component placement/rotation data, plus clear polarity/assembly information. [PCBWay assembly requirements](https://www.pcbway.com/helpcenter/pcb_assembly_ordering/What_files_are_requested_for_assembly_production_.html); [JLCPCB part-sourcing/consignment workflow](https://jlcpcb.com/help/article/how-to-use-my-own-parts-for-pcb-assembly-order). Confirm sourcing and package support for the actual BOM; these references are not a stock or price quote. No assembler or order is selected here.
+
+## Remaining inputs before PCB layout
+
+The known body dimensions and zero/6/8 mm height regions are sufficient for architecture and schematic work. Before fixing the outline and console attachment, collect:
+
+1. **Relative placement:** CN503's X/Y offset from IC501. In the existing photo orientation, measure the horizontal gap from the BIOS black body's right edge to the connector housing's left edge, and the signed vertical offset between their top edges. Mark which connector housing edge/end was used.
+2. **Actual solder geometry:** CN503 tail pitch, spacing between the two tail rows and the exposed contact length/width. Use a counted multi-pin span between matching edges divided by the number of intervals, or a verified connector drawing. The 24.39 mm overall pin run is not enough to set pitch.
+3. **Outline and supports:** mark usable board limits, metal steps, existing component keepouts and available independent supports on one dimensioned overhead sketch. Account for component heights beneath solid carrier areas. Set microSD insertion/removal and programming access; internal service access is the baseline.
+4. **Chosen remote C5 site, if used:** local usable length/width/height, supports and the practical ribbon route. Select the removable connector from its drawing, then check the complete mounted stack. No need to buy an unspecified socket just to measure it.
+
+Complete the electrical design, selected front-end/link, production footprints and ERC/DRC before generating an assembly order. The current KiCad foundation and GPIO CSV are not completed versions of the RAM or remote-C5 circuits.
 
 ## Evidence and next steps
 

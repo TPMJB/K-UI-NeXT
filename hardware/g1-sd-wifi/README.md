@@ -29,7 +29,7 @@ This folder makes the proposal available for independent review. It contains the
 | Original GD-ROM | Remains ATA device 0, with normal disc operation retained |
 | RP2350B | ATA device-1 backend; raw-sector SD, buffering, command handling and C5 link |
 | Optional FPGA/CPLD front end | Candidate for ATA cycle timing, register responses and DMA ownership; part and link are not selected |
-| Optional 8 MiB PSRAM | Candidate for read-ahead LBA caching; immediate transfers stay in SRAM/FIFO |
+| 8 MiB PSRAM provision | Planned footprint and factory-populated option for read-ahead LBA caching; immediate transfers stay in SRAM/FIFO |
 | microSD | Native four-bit interface to RP2350B; game sectors stored directly on the card |
 | XIAO ESP32-C5 | Wi-Fi packet transport over a separate SPI link to RP2350B |
 | Optional second BIOS | Independent stock/custom selection and chip-enable isolation; absent from the current schematic |
@@ -40,7 +40,9 @@ Network uploads must pass through K-UI's filesystem owner. The C5 must not indep
 
 Storage is the first implementation milestone. Establish identification, verified PIO reads and coexistence with the original drive before DMA, writes and networking. Schedule packet work around game reads instead of promising a fixed division of bus bandwidth. No sustained throughput or game-compatibility claim has been measured on this hardware.
 
-The [controller/RAM/BIOS follow-up](docs/controller-ram-bios-disposition-2026-10-09.md) makes RP2350B plus a programmable ATA front end the preferred architecture to evaluate. The controller starter and GPIO CSV still describe the original MCU-only allocation. A front end needs a new pin/link allocation and schematic; the existing files are not an implementation of that candidate. PSRAM remains optional, and K-UI remains the filesystem owner.
+The [controller/RAM/BIOS follow-up](docs/controller-ram-bios-disposition-2026-10-09.md) makes RP2350B plus a programmable ATA front end the preferred architecture to evaluate. The controller starter and GPIO CSV still describe the original MCU-only allocation. A front end needs a new pin/link allocation and schematic; the existing files are not an implementation of that candidate. PSRAM has a planned 8 MiB footprint and factory-populated option; it remains absent from the native starter. K-UI remains the filesystem owner.
+
+The baseline bridge uses CN503 and needs no BIOS-leg connections. GDEMU keeps the stock BIOS by emulating a replacement optical drive; our retained-drive ATA slave does not provide that boot behavior. Plan a disc bootstrap for initial K-UI/DreamShell validation. Optional BIOS replacement needs additional ROM address/control access and stock-ROM isolation; see [connector-only storage and boot behavior](docs/controller-ram-bios-disposition-2026-10-09.md#connector-only-storage-and-boot-behavior).
 
 ## GPIO plan and bus behavior
 
@@ -93,6 +95,12 @@ Required physical evidence remains:
 The [remaining measurement checklist](docs/controller-ram-bios-disposition-2026-10-09.md#cn503-cutout-and-remaining-measurements) distinguishes the dimensions needed for a concept outline from a qualified solder-pad footprint.
 
 Optional dual BIOS requires additional connections and independent stock/custom selection. The RP2350B GPIO table is not a BIOS-bus pin allocation. A ROM piggyback alone does not supply every ATA control, DMA and interrupt signal. Fit, wiring and fallback behavior remain to be designed.
+
+## Factory assembly and remaining measurements
+
+The owner wants provision for 8 MiB PSRAM and the option to receive a board with SMT parts factory-soldered. The USON-8 candidate is only 3 × 2 mm and 0.6 mm high; it is a chip on our board, not a plug-in RAM module. Final package sourcing and a finished manufacturing/BOM/placement set are required for assembly.
+
+Evaluate a removable C5 near the G2 area or another measured 8 mm site, linked through C5 power/SPI/handshakes while the G1 front end stays local. A PSU location needs its own clearance check. USB removal remains a candidate after a measured stack review. [The options and layout checklist](docs/controller-ram-bios-disposition-2026-10-09.md#remote-c5-ram-provision-and-factory-assembly) record the remaining relative-position, pin-geometry, support/access and remote-mount inputs.
 
 ## Next deliverables
 
