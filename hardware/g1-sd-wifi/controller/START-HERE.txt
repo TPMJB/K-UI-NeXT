@@ -146,21 +146,22 @@ additional metal near BIOS/G1 after checking the caliper readings. Initial
 arithmetic gave 8.0 mm generally and 6.6 mm under the extra metal. The owner's
 earlier effective working ceiling was 6.0 mm under extra metal and 8.0 mm
 outside. The latest clarification confirms zero clearance over both thermal
-contact footprints and 8.0 mm outside the identified metal area. Reconcile
-whether the earlier 6.0 mm adjacent-area budget still applies around IC501/
-CN503 before fixing that region boundary. Retain 6.6 mm as report history.
-The chip reference is resolved; the precise adjacent-area height map is not.
+contact footprints, 6.0 mm around IC501/CN503 and 8.0 mm outside the lower
+metal area. The chip reference and qualitative height map are resolved;
+transfer them into the measured outline. Retain 6.6 mm as report history.
 The calculation assumes PCB top to shield outer face and actual downward
 projection of the extra metal. The separately measured 1.62 mm motherboard
 thickness is not subtracted from a PCB-top gap. Bracket overlap, cutout
 dimensions and full carrier/socket/module stack remain to be checked.
 The C5 is owner-measured at 4.48 mm total height including USB. After its
-module envelope, 3.52 mm remains in usable 8.0 mm space, or 1.52 mm if the
-6.0 mm adjacent-area budget applies, for carrier elevation, PCB, socket
+module envelope, 3.52 mm remains in usable 8.0 mm space, or 1.52 mm in the
+confirmed 6.0 mm IC501/CN503 area, for carrier elevation, PCB, socket
 separation and allowance. Neither budget applies over thermal-contact chips.
 A 1.6 mm carrier plus that module already exceeds the 6.0 mm working ceiling.
-Keep USB in the baseline. Prefer C5 placement in the 8.0 mm region if its
-footprint permits it; qualify a low-height removable connection. USB removal
+Keep USB and the intact shield in the baseline. Prefer C5 placement in usable
+8.0 mm space on a carrier extension or separate mount with a short link;
+check its routing and low-height removable connection. Metal changes are a
+last-resort option, not a requirement established by the current measurements. USB removal
 is an optional fallback and needs a new measurement of the remaining module.
 See the clearance and mounting budget in
 ../docs/controller-ram-bios-disposition-2026-10-09.md.
