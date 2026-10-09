@@ -42,10 +42,13 @@ NEXT SCHEMATIC PASS
 1. G1 data buffers and response isolation: data, ready, IRQ and DMA
    outputs must release the bus whenever the bridge cannot respond.
    Hardware must force isolation during startup, reset and power failure.
+   Preserve ATA data hold and final-word DMA ownership; see the review
+   disposition before adopting a combinational output-enable gate.
 2. Native microSD socket, pull-ups, decoupling and card detect.
 3. XIAO C5 socket, SPI/handshakes, separately switched supply and
    programming/USB power isolation. Its 3V3_OUT is not a supply input
    to join to the controller's 3.3 V rail.
+   Qualify SPI/IRQ/READY behavior while C5 power is off, too.
 4. Console supply input, early power-fail detection and hold-up supply
    for the controller plus SD card. Capacitor size awaits measured
    card write/flush behavior. The radio stays outside the hold-up load.
@@ -110,6 +113,9 @@ actual location and RF performance need qualification.
 Read ../README.md and ../docs/REVIEW.md for the current proposal. The PDF
 in ../docs/initial-pin-plan-2026-10-06.pdf is a historical draft; current
 mounting and validation statements in those Markdown files take precedence.
+Claude's independent review and its disposition are linked in
+../docs/review-disposition-2026-10-09.md. Its proposed CF measurement session
+needs a qualified fixture first: the earlier CF board is not built or tested.
 
 SOURCES AND LICENSING
 Official RP2350B minimal reference, R4-S1, KiCad 10:

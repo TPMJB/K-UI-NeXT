@@ -11,6 +11,7 @@ This folder makes the proposal available for independent review. It contains the
 | File | Purpose |
 | --- | --- |
 | [REVIEW.md](docs/REVIEW.md) | Self-contained review request for Claude or a hardware engineer |
+| [Review disposition](docs/review-disposition-2026-10-09.md) | Claude's review, accepted requirements, corrections and revised bring-up order |
 | [GPIO allocation](controller/K-UI-G1-GPIO-RevA.csv) | All 48 RP2350B GPIOs; 47 assigned and one spare |
 | [CN503 reference](docs/CN503-reference.csv) | Logical connector-to-ATA-to-MCU mapping, without a qualified physical tap drawing |
 | [START-HERE.txt](controller/START-HERE.txt) | Opening guide and current mounting/power notes |
@@ -49,9 +50,9 @@ Storage is the first implementation milestone. Establish identification, verifie
 | 44-46 | C5 IRQ, ready and switched-power enable |
 | 47 | Spare |
 
-The arithmetic fits the package, but does not prove the PIO programs, pin windows, hardware SPI mux, DMA resources or timing. The LED and card-detect assignment may be reclaimed if the electrical implementation needs more controls. The optional secondary flash circuit from the Raspberry Pi reference was removed to free GPIO0; the dedicated boot flash remains.
+Independent review supports the logical connector mapping, PIO pin windows and SPI1 mux. The concrete PIO programs, output ownership between PIO blocks, DMA resources and response timing remain unproven. See the review disposition before implementing its proposed state-machine split or output gate. The LED and card-detect assignment may be reclaimed if the electrical implementation needs more controls. The optional secondary flash circuit from the Raspberry Pi reference was removed to free GPIO0; the dedicated boot flash remains.
 
-The bridge must track device selection and obey the ATA rules for shared data, IORDY, IRQ and DMA lines. It must not answer device-0 cycles or contend with the drive. Default isolation must be enforced in hardware during MCU boot, reset and power failure, including when MCU pins are unconfigured. DMA acknowledgment must be handled even when register chip selects are inactive. Exact gate topology, timing and supported transfer modes are unresolved.
+The bridge must track device selection and obey the ATA rules for shared data, IORDY, IRQ and DMA lines. It must not answer device-0 cycles or contend with the drive. Default isolation must be enforced in hardware during MCU boot, reset and power failure, including when MCU pins are unconfigured. DMA acknowledgment must be handled even when register chip selects are inactive. The output gate must preserve data hold and the final DMA word after DMARQ is negated. Exact gate topology, timing and supported transfer modes are unresolved.
 
 ## Power and interrupted writes
 
@@ -59,7 +60,7 @@ VA1 G1 signalling is a 3.3 V target. A 5 V supply input is a separate option, no
 
 Plan upstream power-loss detection, isolation and reserve energy for RP2350B plus SD, with C5 switched off first. Reserve capacity awaits measured consumption and SD busy times; no capacitor size or power-loss guarantee is established.
 
-Planned write protection includes read-only collection access during ordinary playback, explicit write sessions for dumping/uploads, temporary files followed by verification and final commit, correct block ordering, honest ATA cache/flush semantics, and ext4 journal recovery before subsequent writes. Journal support must be demonstrated in the actual K-UI port. Reserve energy cannot save data still in Dreamcast RAM, and journaling cannot guarantee against failure inside a consumer SD controller.
+Planned write protection includes read-only collection access during ordinary playback, explicit write sessions for dumping/uploads, temporary files followed by verification and final commit, correct block ordering, honest ATA cache/flush semantics through the entire SD path, and ext4 journal recovery before subsequent writes. Optional SD cache stays disabled until its flush semantics are implemented and qualified. Journal support must be demonstrated in the actual K-UI port. Reserve energy cannot save data still in Dreamcast RAM, and journaling cannot guarantee against failure inside a consumer SD controller.
 
 ## Mounting and attachment: still unresolved
 
@@ -79,7 +80,7 @@ Optional dual BIOS requires additional connections and independent stock/custom 
 
 ## Next deliverables
 
-1. Review the controller/pin plan and settle the ATA timing, shared-line and isolation design.
+1. Close the review's output-ownership and timing questions, design isolation, and qualify a measurement fixture. The earlier CF board is unbuilt and unvalidated; a working CF rig is not a prerequisite assumed to exist.
 2. Finish G1 buffers, SD/C5 interfaces, console/USB power and power-fail circuits; choose qualified production footprints and run ERC.
 3. Obtain measurements and connector access evidence, then choose the attachment, outline and component heights.
 4. Build a bench prototype: identify, read and hash sectors, test drive coexistence, then qualify DMA and writes.

@@ -39,3 +39,13 @@ A18,,GND,,,Return-path reference; attachment and routing pending
 B18,,GND,,,Return-path reference; attachment and routing pending
 A21,,GND,,,Return-path reference; attachment and routing pending
 B21,,GND,,,Return-path reference; attachment and routing pending
+A17,,CD_EMPH,,,DO NOT CONNECT in Rev A; non-ATA audio emphasis signal
+B2,,UNUSED,,,DO NOT CONNECT in Rev A; unconnected on iceGDROM riser; actual board continuity unverified
+A22,,CD_SCK,,,DO NOT CONNECT in Rev A; digital audio serial clock
+A23,,CD_SDAT,,,DO NOT CONNECT in Rev A; digital audio serial data
+A24,,CD_AUDIO_GND,,,DO NOT CONNECT in Rev A; unused audio-area ground contact
+A25,,CONSOLE_12V,,,DO NOT CONNECT in Rev A; +12 V must never reach G1 logic or SD/C5
+B22,,CD_LRCK,,,DO NOT CONNECT in Rev A; digital audio word clock
+B23,,CD_CLK,,,DO NOT CONNECT in Rev A; digital audio master clock
+B24,,CD_AUDIO_GND,,,DO NOT CONNECT in Rev A; unused audio-area ground contact
+B25,,CONSOLE_12V,,,DO NOT CONNECT in Rev A; +12 V must never reach G1 logic or SD/C5
