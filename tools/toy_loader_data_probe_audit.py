@@ -38,6 +38,8 @@ CHANGED_FUNCTIONS = {
 # Independently reviewed against source e50045b242405391ce636fd6f8605d888c68fdb8
 # and the actual final SH ELF evidence from Actions job 114060367229.
 # This table admits only that inspected instruction shape plus relocation.
+# The terminal string-use identity additionally uses the exact scoped rodata
+# rules independently reviewed from Actions job 114065574948.
 # Never derive acceptance identities automatically from candidate binaries.
 REVIEWED_DATA = {
     '_data_probe_metric': '99918b342a22bc5eb3b48b77496a934ec3ae11962ee1c3471de86e0239e7e418',
@@ -52,7 +54,7 @@ REVIEWED_DATA = {
 REVIEWED_REPORT = {
     '_kui_toy_loader_trace_report_capture': '68904a703106483ade130a2012403dc377cfb95bfa671b4e2642dfe8c354a023',
     '_kui_toy_loader_trace_report_page': '9bedad315b29fe9bc0268bae165a70c86c8d027f6d599dc3c303ae05caf73699',
-    '_kui_toy_loader_trace_terminal': 'daa86c755879f30451eb6063c3b76f1ff86200b9d7a42487512646151e669bc9',
+    '_kui_toy_loader_trace_terminal': 'df5de78c2cd64e4377326a92224aa3b0a58d9404d6c4bf40aae339b7b729cb1c',
     '_kui_toy_pilot_gd_dispatch': '529f0b111974fb3c79cd930cada1d21f7e32f1ed0d0a202c802869d70ba46a6a',
 }
 PROBE_MMIO_READS = {at: width for at, width in trace.MMIO_READS.items()
@@ -65,6 +67,133 @@ TRACE_OBJECTS = {'_report': 1664, '_visit': 108, '_request': 96,
                  '_page': 4, '_stopped_display': 56, '_row': 4}
 DATA_OBJECTS = {'_data_probe_report': 768, '_data_probe_scope': 36,
                 '_data_probe_read_state': 88}
+
+
+
+# Manually reviewed literal uses from Actions job 114065574948. Each rule is
+# tied to one authored function and instruction offset/register. Only these
+# exact immutable bytes or independently bounded stack expressions relocate.
+# No generic in-image pointer or arbitrary read-only object is admitted.
+RODATA_BYTES = {
+    'stop_packet': bytes.fromhex('9dff0000000000c00000000000000000'),
+    'display_registers': bytes.fromhex('4800500054005c00cc00d000d400d800dc00e800ec00f0004000'),
+    'launch': b'K-UI V1.8.5 LAUNCH\0',
+    'native_image': b'NATIVE GD IMAGE\0',
+    'digits': b'0123456789ABCDEF\0',
+    'DATA_page': b'DATA PAGE\0',
+    'PILOT_page': b'PILOT PAGE\0',
+    'TRACE_page': b'TRACE PAGE\0',
+    'words': b'WORDS\0',
+}
+REVIEWED_RODATA_USES = {
+    '_fault': {0x48: (5, 'stop_packet')},
+    '_stop_begin': {0x38: (5, 'stop_packet')},
+    '_retail_display_restore': {0x0c: (7, 'display_registers'),
+                                0x40: (4, 'launch'), 0x46: (4, 'BUILD'),
+                                0x4c: (4, 'native_image')},
+    '_retail_display_values': {0x16: (9, 'digits')},
+    '_kui_toy_loader_trace_terminal': {0x50: (4, 'DATA_page'),
+                                      0x56: (4, 'PILOT_page'),
+                                      0x5a: (4, 'TRACE_page'),
+                                      0x6c: (4, 'words')},
+}
+REVIEWED_STACK_USES = {
+    '_kui_toy_pilot_native_pump': {0x06: (0, '__toy_pilot_stack_top', -16, False)},
+    '_kui_toy_pilot_pause_after': {0x14a: (1, '__toy_pilot_stack_top', -16, False)},
+    '_kui_toy_pilot_worker_initialize': {
+        0x9c: (3, '__toy_pilot_stack_top', 0, True),
+        0xbe: (3, '__toy_pilot_stack_bottom', 3, False)},
+}
+
+
+def readonly_ranges(raw):
+    """Exact allocated, initialized, non-executable read-only ELF sections."""
+    header = EH.unpack_from(raw)
+    sections = [SH.unpack_from(raw, header[6] + i * header[11]) for i in range(header[12])]
+    return [(section[3], section[3] + section[5]) for section in sections
+            if section[1] == 1 and section[2] & 7 == 2 and section[5]]
+
+
+def scoped_normalized_function(code, name, build):
+    """Original T identity with only the reviewed U literal uses replaced.
+
+    Every remaining instruction and literal uses T's unchanged normalization.
+    A selected literal must point at exact bytes in its real read-only ELF
+    section or at the exact independently bounded private stack expression.
+    """
+    begin, end, rows = exact_function(code, name)
+    symbols, sizes = code.symbols, code.image['symbol_sizes']
+    ro_rules = REVIEWED_RODATA_USES.get(name, {})
+    stack_rules = REVIEWED_STACK_USES.get(name, {})
+    seen = set()
+
+    def value_identity(value):
+        exact = sorted(label for label, at in symbols.items() if at == value
+                       and not label.startswith('.') and not label.startswith('KUI_'))
+        if exact:
+            return ('symbol', exact[0])
+        containing = [(sizes.get(label, 0), label, value - at)
+                      for label, at in symbols.items() if sizes.get(label, 0)
+                      and at < value < at + sizes[label] and not label.startswith('.')]
+        if containing:
+            _, label, offset = min(containing)
+            return ('inside', label, offset)
+        return ('value', value)
+
+    result = []
+    for at, opcode, mnemonic, _ in rows:
+        offset = at - begin
+        if opcode & 0xF000 in (0xD000, 0x9000) and mnemonic in ('mov.l', 'mov.w'):
+            width = 4 if opcode & 0xF000 == 0xD000 else 2
+            target, value = code.literal(at, opcode >> 8 & 15, width)
+            if begin <= target < end and target not in code.literals:
+                raise ValueError('Reviewed literal overlaps executable trace instructions')
+            identity = value_identity(value)
+            if offset in ro_rules:
+                register, key = ro_rules[offset]
+                expected = (b'BUILD ' + build.encode('ascii') + b'\0'
+                            if key == 'BUILD' else RODATA_BYTES[key])
+                if (width != 4 or opcode & 0xFF00 != 0xD000 | register << 8 or
+                        not HIGH <= value < HIGH_LIMIT or
+                        not any(start <= value and value + len(expected) <= finish
+                                for start, finish in code.image.get('readonly_ranges', ()))):
+                    raise ValueError('Reviewed rodata target left its exact read-only ELF section: ' +
+                                     name + '+' + hex(offset))
+                if code.data(value, len(expected)) != expected:
+                    raise ValueError('Reviewed rodata bytes changed: ' + name + '+' + hex(offset))
+                identity = ('reviewed-rodata', key)
+                seen.add(offset)
+            elif offset in stack_rules:
+                register, symbol, delta, canonical = stack_rules[offset]
+                bottom, top = (symbols.get('__toy_pilot_stack_bottom', 0),
+                               symbols.get('__toy_pilot_stack_top', 0))
+                if (not HIGH + P2 <= bottom < top <= HIGH_LIMIT + P2 or
+                        top - bottom != 8192 or bottom & 31 or top & 31 or
+                        bottom != symbols.get('__toy_pilot_gd_stack_top') or
+                        trace.physical(top) != code.image['memory_end']):
+                    raise ValueError('Reviewed derived literal requires exact owned private stack bounds')
+                expected = symbols[symbol] + delta
+                if canonical:
+                    expected = trace.physical(expected)
+                if width != 4 or opcode & 0xFF00 != 0xD000 | register << 8 or value != expected:
+                    raise ValueError('Reviewed derived stack literal changed: ' + name + '+' + hex(offset))
+                identity = ('reviewed-stack', symbol, delta, canonical)
+                seen.add(offset)
+            result.append((offset, opcode & 0xFF00, width, identity))
+        else:
+            result.append((offset, opcode))
+    if seen != set(ro_rules) | set(stack_rules):
+        raise ValueError('Missing exact reviewed literal-use instructions: ' + name)
+    return hashlib.sha256(json.dumps((end - begin, result), separators=(',', ':')).encode()).hexdigest()
+
+
+def reviewed_report_identities(code, build):
+    observed = {name: scoped_normalized_function(code, name, build) for name in REVIEWED_REPORT}
+    if observed != REVIEWED_REPORT:
+        changed = [name for name in REVIEWED_REPORT if observed[name] != REVIEWED_REPORT[name]]
+        raise ValueError('Changed reviewed linked DATA wrapper/report instructions/literals: ' +
+                         ', '.join(changed))
+    return observed
 
 
 def audit_state(worker):
@@ -109,6 +238,7 @@ def load_profile(directory):
             options.update(entry_symbol='_kui_toy_pilot_initialize', entry_at_base=False)
         image = inspect_elf(raw, base, limit, **options)
         image['symbol_sizes'] = linked_symbol_sizes(raw)
+        image['readonly_ranges'] = readonly_ranges(raw)
         if (directory / (name + '.bin')).read_bytes() != image['payload']:
             raise ValueError(name + '.bin differs from actual ELF load bytes')
         images[name] = image
@@ -141,6 +271,7 @@ def audit_retained(directory, config, images, dis, baseline):
     baseline = Path(baseline).resolve()
     old_config, old_images, old_dis = trace.load_profile(baseline)
     trace.audit_loader_trace(baseline)
+    old_images['worker']['readonly_ranges'] = readonly_ranges((baseline / 'worker.elf').read_bytes())
     old_low, low = old_images['resident-sci'], images['resident-sci']
     old_id, new_id = old_config['BUILD'].encode(), config['BUILD'].encode()
     if old_low['payload'].count(old_id) != 1 or low['payload'].count(new_id) != 1:
@@ -172,8 +303,8 @@ def audit_retained(directory, config, images, dis, baseline):
     names = old_names - CHANGED_FUNCTIONS
     identities = {}
     for name in sorted(names):
-        before = trace.normalized_function(old_code, name)
-        after = trace.normalized_function(code, name)
+        before = scoped_normalized_function(old_code, name, old_config['BUILD'])
+        after = scoped_normalized_function(code, name, config['BUILD'])
         if before != after:
             raise ValueError('DATA probe changed retained worker/audio instructions: ' + name)
         identities[name] = after
@@ -183,6 +314,9 @@ def audit_retained(directory, config, images, dis, baseline):
     return {'low_binary_identical_except_build_string': True,
             'low_canonical_sha256': hashlib.sha256(canonical).hexdigest(),
             'low_symbols_and_reservations_identical': True,
+            'literal_relocations': {'exact_reviewed_readonly_uses': REVIEWED_RODATA_USES,
+                                    'exact_reviewed_stack_uses': REVIEWED_STACK_USES,
+                                    'generic_in_image_pointer_normalization': False},
             'retained_worker_function_identities': identities,
             'baseline_build': old_config['BUILD'], 'retained_audio_instructions_identical': True}
 
@@ -458,7 +592,7 @@ def audit_data_probe(builddir, baseline=None):
         raise ValueError('Retained trace histogram thresholds changed in DATA probe')
     trace_graph = trace.audit_trace_graph(code)
     data_hashes = trace.reviewed_identities(code, REVIEWED_DATA, 'DATA probe')
-    report_hashes = trace.reviewed_identities(code, REVIEWED_REPORT, 'DATA wrapper/report')
+    report_hashes = reviewed_report_identities(code, config['BUILD'])
     probe_graph = audit_probe_graph(code, low)
     bindings = audit_probe_bindings(directory, low, code)
     cache = audit_cache_layout(low, worker, stage, dis['resident-sci'], dis['worker'], dis['stage'])
@@ -490,6 +624,7 @@ def review_candidate(builddir, baseline=None):
     low, worker, stage = (images[name] for name in ('resident-sci', 'worker', 'stage'))
     code = Linked(worker, HIGH, dis['worker'])
     old_config, old_images, old_dis = trace.load_profile(baseline)
+    old_images['worker']['readonly_ranges'] = readonly_ranges((baseline / 'worker.elf').read_bytes())
     old_code = Linked(old_images['worker'], HIGH, old_dis['worker'])
     original = function_symbols((baseline / 'worker.elf').read_bytes())
     names = (function_symbols((directory / 'worker.elf').read_bytes()) - original) | CHANGED_FUNCTIONS
@@ -512,6 +647,8 @@ def review_candidate(builddir, baseline=None):
                 literals.append(item)
         return {'begin': hex(begin), 'bytes': end - begin,
                 'candidate_normalized_sha256': trace.normalized_function(linked, name),
+                'scoped_candidate_sha256': scoped_normalized_function(
+                    linked, name, config['BUILD'] if linked is code else old_config['BUILD']),
                 'instructions': [[hex(at), hex(opcode), mnemonic, operands]
                                  for at, opcode, mnemonic, operands in rows],
                 'literals': literals}
@@ -556,7 +693,7 @@ def review_candidate(builddir, baseline=None):
     check('owned_state', lambda: audit_state(worker))
     check('retained_thresholds', thresholds)
     check('DATA_identities', lambda: trace.reviewed_identities(code, REVIEWED_DATA, 'DATA probe'))
-    check('report_identities', lambda: trace.reviewed_identities(code, REVIEWED_REPORT, 'DATA wrapper/report'))
+    check('report_identities', lambda: reviewed_report_identities(code, config['BUILD']))
     check('DATA_graph', lambda: audit_probe_graph(code, low))
     check('low_bindings', lambda: audit_probe_bindings(directory, low, code))
     check('retained_cache_audio_heap', lambda: audit_cache_layout(
@@ -566,8 +703,10 @@ def review_candidate(builddir, baseline=None):
         low, worker, stage, dis['resident-sci'], dis['stage']))
     check('stage_identities', lambda: trace.reviewed_identities(
         Linked(stage, STAGE, dis['stage']), trace.REVIEWED_STAGE, 'stage publication'))
-    check('GD_guard_initialize', lambda: trace.reviewed_identities(
-        code, trace.REVIEWED_INITIALIZE, 'GD guard initialization'))
+    check('GD_guard_initialize', lambda: {
+        'retained_baseline_gate_and_exact_scoped_identity_required':
+            audit_retained(directory, config, images, dis, baseline)[
+                'retained_worker_function_identities']['_kui_toy_pilot_worker_initialize']})
     check('adapter', lambda: audit_adapter(worker, dis['worker']))
     check('actual_probe_stacks', lambda: audit_probe_stacks(directory, low, worker, dis['worker'], baseline))
 

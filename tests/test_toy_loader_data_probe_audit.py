@@ -100,6 +100,63 @@ class LinkedDataProbeAudit(unittest.TestCase):
         self.assertTrue(proof['low_symbols_and_reservations_identical'])
         self.assertTrue(proof['low_binary_identical_except_build_string'])
 
+
+    def reviewed_literal(self, name, offset):
+        code = self.code()
+        at = code.symbols[name] + offset
+        opcode = code.half(at)
+        return code.literal(at, opcode >> 8 & 15)[0:2]
+
+    def test_reviewed_packet_and_display_bytes_cannot_change(self):
+        # This covers the actual shared packet initializer, thirteen hardware
+        # register offsets, hex digits, and every selected immutable string.
+        for name, rules in audit.REVIEWED_RODATA_USES.items():
+            for offset, (_, key) in rules.items():
+                with self.subTest(name=name, offset=offset, object=key):
+                    _, target = self.reviewed_literal(name, offset)
+                    original = self.code().data(target, 1)[0]
+                    changed = mutate_word(self.images['worker'], audit.HIGH,
+                                          target, original ^ 1, 1)
+                    with self.assertRaisesRegex(ValueError, 'Reviewed rodata bytes changed'):
+                        audit.scoped_normalized_function(self.code(changed), name, self.config['BUILD'])
+
+    def test_rodata_relocation_requires_actual_readonly_section_bounds(self):
+        name, offset = '_fault', 0x48
+        _, target = self.reviewed_literal(name, offset)
+        image = copy.deepcopy(self.images['worker'])
+        # Initialized bytes alone are insufficient: the actual ELF section
+        # must contain the complete sixteen-byte packet.
+        image['readonly_ranges'] = [(target, target + 15)]
+        with self.assertRaisesRegex(ValueError, 'read-only ELF section'):
+            audit.scoped_normalized_function(self.code(image), name, self.config['BUILD'])
+
+    def test_reviewed_derived_stack_pointers_are_exact(self):
+        for name, rules in audit.REVIEWED_STACK_USES.items():
+            for offset in rules:
+                with self.subTest(name=name, offset=offset):
+                    literal, target = self.reviewed_literal(name, offset)
+                    changed = mutate_word(self.images['worker'], audit.HIGH, literal, target + 4, 4)
+                    with self.assertRaisesRegex(ValueError, 'derived stack literal changed'):
+                        audit.scoped_normalized_function(self.code(changed), name, self.config['BUILD'])
+
+    def test_unlisted_pointer_never_uses_scoped_relocation(self):
+        # The shared packet exception cannot admit a shift inside worker
+        # state: this independent literal retains T's exact object+offset.
+        name = '_fault'
+        code = self.code()
+        literal, target = self.reviewed_literal(name, 0x0c)
+        changed = mutate_word(self.images['worker'], audit.HIGH, literal, target + 4, 4)
+        self.assertNotEqual(
+            audit.scoped_normalized_function(code, name, self.config['BUILD']),
+            audit.scoped_normalized_function(self.code(changed), name, self.config['BUILD']))
+
+    def test_changed_opcode_cannot_hide_selected_literal_rule(self):
+        name = '_fault'
+        code = self.code()
+        self.change_instruction(code, code.symbols[name] + 0x48, 0x0009, 'nop', '')
+        with self.assertRaisesRegex(ValueError, 'Missing exact reviewed literal-use'):
+            audit.scoped_normalized_function(code, name, self.config['BUILD'])
+
     def test_wrong_low_read_or_block_callback_rejected(self):
         low = self.images['resident-sci']
         for name, callback in [('_data_probe_read', '_read_sectors'),
