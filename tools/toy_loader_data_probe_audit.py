@@ -149,7 +149,15 @@ def audit_retained(directory, config, images, dis, baseline):
     if canonical != old_low['payload'] or low['memory_end'] != old_low['memory_end']:
         raise ValueError('DATA probe changed retained low bytes/reservations')
     if low['symbols'] != old_low['symbols'] or low['symbol_sizes'] != old_low['symbol_sizes']:
-        raise ValueError('DATA probe changed retained low linked symbols or object sizes')
+        differences = {}
+        for category in ('symbols', 'symbol_sizes'):
+            before, after = old_low[category], low[category]
+            differences[category] = {
+                name: {'baseline': before.get(name), 'candidate': after.get(name)}
+                for name in sorted(set(before) | set(after))
+                if before.get(name) != after.get(name)}
+        raise ValueError('DATA probe changed retained low linked symbols or object sizes: ' +
+                         json.dumps(differences, sort_keys=True))
     old_code = Linked(old_images['worker'], HIGH, old_dis['worker'])
     code = Linked(images['worker'], HIGH, dis['worker'])
     old_names = function_symbols((baseline / 'worker.elf').read_bytes())
