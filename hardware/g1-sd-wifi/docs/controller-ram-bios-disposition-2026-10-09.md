@@ -129,7 +129,8 @@ Additional measurements supplied on 9 October 2026:
 | IC501 outer pin-edge span | 16.66 mm across the width | Full lead envelope for a clearance-only cutout |
 | IC501 height | Roughly 2 mm above motherboard | Excluded from carrier stack where the cutout clears the package |
 | Other chip heights | Significantly below the BIOS height | Component positions/heights still matter beneath solid carrier areas |
-| CN503 reported length × width | 38.67 × 5.03 mm | Initial connector envelope; exact housing/tail width datum still needs qualification |
+| CN503 length × maximum body width | 38.67 × 6.56 mm | Owner-corrected full body envelope; wider end sections |
+| CN503 narrower-section width | 5.03 mm | Initial width at the pin-run section; not maximum body width |
 | CN503 pin-run length | 24.39 mm, centered within the 38.67 mm length | Initial contact-run location; measurement endpoints not specified |
 | CN503 tail height | Basically flush with motherboard | Near PCB-surface contact plane; qualitative, not a precision 0.00 mm value |
 | General usable area | Outside the CPU/GPU thermal-contact area | Candidate placement region, subject to components, metal geometry and independent supports |
@@ -140,7 +141,7 @@ The initial IC501 body rectangle is 26.68 × 12.65 mm. A clearance-only opening 
 
 The owner describes the lower-metal region, in their north/south/east/west orientation, as extending from the **north edge of the reference large chip to the south board edge**, and from that chip's **west edge to the east board edge**. Use **6.00 mm effective working height inside that region and 8.00 mm outside it**, while preserving the CPU/GPU thermal-contact keepouts. The image intended to identify the reference chip, `image-1791585472741.jpg`, was not available for inspection in this session. Its chip identity and orientation are therefore not inferred from the failed attachment.
 
-CN503 is reported as 38.67 mm long and 5.03 mm wide, with a centered 24.39 mm pin run. Centering gives provisional end margins of (38.67 - 24.39) / 2 = **7.14 mm**. This is a plan-location calculation only. The span may be measured over outside edges rather than first/last contact centers; do not divide it by 24 and treat the result as a qualified pin pitch.
+CN503 is reported as 38.67 mm long, 5.03 mm wide in the narrower pin-run section and **6.56 mm at its wider ends**. Use **38.67 × 6.56 mm** as the initial full body keepout, before clearance/alignment allowance. A shaped opening can narrow between the ends only after the actual width-transition positions are measured; do not assume those transitions coincide with the contact-run endpoints. The pin run remains centered and 24.39 mm long. Centering gives provisional end margins of (38.67 - 24.39) / 2 = **7.14 mm**. This is a plan-location calculation only. The span may be measured over outside edges rather than first/last contact centers; do not divide it by 24 and treat the result as a qualified pin pitch.
 
 The remaining concept-placement input is the X/Y offset between clearly identified CN503 and IC501 reference corners, plus identification of the chip defining the lower-metal boundary. Exact tail-row spacing, contact width/pitch, body-versus-tail envelope and joining tolerances remain footprint/fabrication checks.
 
@@ -158,7 +159,7 @@ The architecture proposal can proceed with the reported dimensions and latest he
 
 | Measurement bundle | Minimum useful information | Purpose |
 | --- | --- | --- |
-| Relative position | X/Y offset between identified CN503 and IC501 corners; use the reported 38.67 × 5.03 mm connector envelope and centered 24.39 mm contact run | Locate both cutouts in one coordinate system |
+| Relative position | X/Y offset between identified CN503 and IC501 corners; use the reported 38.67 × 6.56 mm maximum body envelope and centered 24.39 mm contact run | Locate both cutouts in one coordinate system |
 | Placement/metal map | Identify the large-chip reference in the owner's region description; retain thermal-contact keepouts and locate available supports | Apply the 6.00 mm / 8.00 mm working regions to board/C5 placement |
 | Components beneath carrier | Positions and heights wherever solid carrier would pass over existing parts | Choose local cutouts or elevation within the height budget |
 | C5 mounted stack | Select socket/contact from a manufacturer drawing; check assembled module height above carrier with carrier thickness/elevation counted separately | Verify the 4.48 mm module within the complete stack |

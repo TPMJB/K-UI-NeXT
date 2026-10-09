@@ -125,8 +125,12 @@ width, 16.66 mm outer pin span, and roughly 2 mm height. Add edge/alignment
 allowance to a clearance cutout; a body-only opening needs designed lead
 landing geometry if it overlaps the pins. Do not infer pin pitch from these.
 CN503 tails are owner-reported basically flush; precise joint geometry still
-needs qualification. CN503 is owner-reported 38.67 mm long and 5.03 mm wide,
-with a centered 24.39 mm pin run (7.14 mm end margins if exactly centered).
+needs qualification. CN503 is owner-reported 38.67 mm long, 5.03 mm wide at
+its narrower section and 6.56 mm at its wider ends. Use 38.67 x 6.56 mm as
+the initial maximum body keepout, plus clearance/alignment allowance. A shaped
+cutout needs actual width-transition locations; pin-run ends do not define
+those transitions. The centered pin run is 24.39 mm long (7.14 mm end margins
+if exactly centered).
 This span does not define pin pitch without contact-center/edge endpoints.
 Obtain its X/Y offset relative to IC501 and identify the large chip used as
 the lower-metal boundary reference. Preserve the CPU/GPU thermal-contact area.
