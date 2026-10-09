@@ -2,6 +2,13 @@
 #ifndef KUI_TOY_PILOT_CACHE_H
 #define KUI_TOY_PILOT_CACHE_H
 
+#ifndef KUI_TOY_PILOT_LOADER_TRACE
+#define KUI_TOY_PILOT_LOADER_TRACE 0
+#endif
+#if KUI_TOY_PILOT_LOADER_TRACE != 0 && KUI_TOY_PILOT_LOADER_TRACE != 1
+#error Toy loader trace must be zero or one
+#endif
+
 #ifndef KUI_TOY_PILOT_PRIVATE_P2
 #define KUI_TOY_PILOT_PRIVATE_P2 0
 #endif

@@ -5,6 +5,8 @@
 #endif
 #if KUI_TOY_PILOT_SHARED_SCI
 #include "toy_pilot_sci.h"
+#endif
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_LOADER_TRACE
 extern uint8_t __toy_pilot_gd_stack_bottom[] __asm__("__toy_pilot_gd_stack_bottom");
 extern uint8_t __toy_pilot_gd_stack_top[] __asm__("__toy_pilot_gd_stack_top");
 #endif
@@ -326,9 +328,11 @@ uint32_t kui_toy_pilot_worker_initialize(const struct kui_toy_pilot_config *c) {
        c->sci_healthy<0x8c004000u || c->sci_healthy>=0x8c007800u || (c->sci_healthy&1u)) return 0;
 #endif
     owner.config=*c;owner.configured=1;owner.transaction_bank=NONE;
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_LOADER_TRACE
     for(uint32_t *p=(uint32_t *)__toy_pilot_gd_stack_bottom;
         p<(uint32_t *)__toy_pilot_gd_stack_top;p++) *p=UINT32_C(0xa55a4aa5);
+#endif
+#if KUI_TOY_PILOT_SHARED_SCI
     kui_toy_pilot_sci_init(manifest(),(const struct kui_loader_sd *)(uintptr_t)c->sci_card,
         (enum kui_loader_sd_result (*)(void))(uintptr_t)c->sci_acquire,
         (void (*)(void))(uintptr_t)c->sci_release);

@@ -77,8 +77,15 @@ struct kui_toy_pilot_exports {
     uint32_t bss_begin, bss_end, stack_bottom, stack_top, worker_end;
     uint32_t main_lease_bytes, allstop_hook, driver_load_hook;
     uint32_t gd_dispatch, pause_hook;
+#if KUI_TOY_PILOT_LOADER_TRACE
+    uint32_t trace_terminal;
+#endif
 };
+#if KUI_TOY_PILOT_LOADER_TRACE
+_Static_assert(sizeof(struct kui_toy_pilot_exports)==80u,"Toy trace exports ABI");
+#else
 _Static_assert(sizeof(struct kui_toy_pilot_exports)==76u,"Toy exports ABI");
+#endif
 
 enum kui_toy_pilot_state {
     KUI_TOY_PILOT_OFF, KUI_TOY_PILOT_STOPPED, KUI_TOY_PILOT_PREFILL,

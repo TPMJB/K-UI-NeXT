@@ -11,7 +11,7 @@ PHDRS { worker PT_LOAD FLAGS(7); private PT_LOAD FLAGS(6); }
 SECTIONS {
     . = 0x8cfd0000;
     .toy_exports : { KEEP(*(.toy_exports)) } :worker
-    ASSERT(SIZEOF(.toy_exports)==76, "Toy exports must be 76 bytes")
+    ASSERT(SIZEOF(.toy_exports)==(KUI_TOY_TRACE ? 80 : 76), "Toy exports profile size")
     .text : { *(.text .text.*) } :worker
     .rodata : { *(.rodata .rodata.*) } :worker
     .data (__toy_private_offset ? ALIGN(32) + __toy_private_offset : .) :

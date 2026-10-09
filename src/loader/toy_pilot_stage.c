@@ -163,6 +163,9 @@ static void toy_failure(uint32_t error,uint32_t detail) {
     volatile struct kui_toy_pilot_boot_control *c=toy_control();
     c->status=KUI_TOY_BOOT_FAILED;c->error=error;
     c->installer=0;c->stage_stack=0;c->request=0;c->snapshot=0;c->gd_dispatch=0;
+#if KUI_TOY_PILOT_LOADER_TRACE
+    c->trace_terminal=0;
+#endif
     toy_publish((uint32_t)(uintptr_t)c,
         (uint32_t)(uintptr_t)c+sizeof(*c));
     retail_display_restore(&display);
@@ -199,6 +202,9 @@ static void toy_exports_check(struct kui_toy_pilot_exports *e,uint32_t bytes) {
        !toy_entry(e->allstop_hook,bytes) || !toy_entry(e->driver_load_hook,bytes) ||
        !toy_entry(e->gd_dispatch,bytes) || !toy_entry(e->pause_hook,bytes))
         toy_failure(3,e->worker_end);
+#if KUI_TOY_PILOT_LOADER_TRACE
+    if(!toy_entry(e->trace_terminal,bytes)) toy_failure(3,e->trace_terminal);
+#endif
 }
 static void toy_original_patches_check(int installed_heap) {
     for(unsigned i=0;i<sizeof(toy_patches)/sizeof(toy_patches[0]);i++) {
@@ -314,6 +320,9 @@ void kui_toy_pilot_stage_install(void) {
         toy_publish(p->address,p->address+p->bytes);
     }
     c->worker_end=e.worker_end;c->request=e.request;c->snapshot=e.snapshot;c->gd_dispatch=e.gd_dispatch;
+#if KUI_TOY_PILOT_LOADER_TRACE
+    c->trace_terminal=e.trace_terminal;
+#endif
     c->installer=0;c->stage_stack=0;c->status=KUI_TOY_BOOT_INSTALLED;
     toy_publish((uint32_t)(uintptr_t)c,
         (uint32_t)(uintptr_t)c+sizeof(*c));

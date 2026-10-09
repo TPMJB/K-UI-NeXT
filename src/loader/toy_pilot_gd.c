@@ -4,6 +4,7 @@
  * request validation and guest maps; the opt-in high reader owns data work. */
 #include "kui/toy_pilot_gd.h"
 #include "kui/toy_pilot_gd_status.h"
+#include "kui/toy_loader_trace.h"
 #include <stddef.h>
 #if KUI_TOY_PILOT_SHARED_SCI
 #include "toy_pilot_sci.h"
@@ -29,7 +30,11 @@ void kui_toy_pilot_gd_capture(uint32_t owner,uint32_t firstworktoken,uint32_t fl
     kui_toy_pilot_native_diagnostics[4]=flags;
 }
 
+#if KUI_TOY_PILOT_LOADER_TRACE
+static int32_t __attribute__((noinline)) dispatch_body(struct kui_retail_gd *s,
+#else
 int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
+#endif
     uint32_t r4,uint32_t r5,uint32_t r7,uintptr_t base_address) {
     diagnostic_service=s;
     base_fn base=(base_fn)base_address;
@@ -123,3 +128,13 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
     }
     return result;
 }
+
+#if KUI_TOY_PILOT_LOADER_TRACE
+int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
+    uint32_t r4,uint32_t r5,uint32_t r7,uintptr_t base_address) {
+    kui_toy_loader_trace_begin(s,r7,r4,r5);
+    int32_t result=dispatch_body(s,r4,r5,r7,base_address);
+    kui_toy_loader_trace_end(s,r7,r4,r5,result);
+    return result;
+}
+#endif

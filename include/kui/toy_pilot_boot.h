@@ -20,7 +20,12 @@
 #define KUI_TOY_BOOT_WORKER_END 40
 #define KUI_TOY_BOOT_ORIGINAL_PR 44
 #define KUI_TOY_BOOT_GD_DISPATCH 48
+#if KUI_TOY_PILOT_LOADER_TRACE
+#define KUI_TOY_BOOT_TRACE_TERMINAL 52
+#define KUI_TOY_BOOT_CONTROL_BYTES 56
+#else
 #define KUI_TOY_BOOT_CONTROL_BYTES 52
+#endif
 
 #define KUI_TOY_BOOT_HEAP_INIT 0x8c0b3e10
 #define KUI_TOY_BOOT_HEAP_POOL 0x8c04e9b4
@@ -53,6 +58,9 @@ struct kui_toy_pilot_boot_control {
     uint32_t heap_begin, heap_bytes, entry_sp;
     uint32_t request, snapshot, worker_end, original_pr;
     uint32_t gd_dispatch;
+#if KUI_TOY_PILOT_LOADER_TRACE
+    uint32_t trace_terminal;
+#endif
 };
 _Static_assert(sizeof(struct kui_toy_pilot_boot_control)==KUI_TOY_BOOT_CONTROL_BYTES,
     "Toy low bootstrap control ABI");

@@ -74,7 +74,7 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     return result;
 }
 
-#if !KUI_TOY_PILOT_SHARED_SCI
+#if !KUI_TOY_PILOT_SHARED_SCI && !KUI_TOY_PILOT_LOADER_TRACE
 static int toy_command(uint32_t command,uint32_t a,uint32_t b,uint32_t c) {
     uint32_t entry=kui_toy_pilot_boot_control.request;
     /* The stage publishes only validated linked entry addresses, after full
@@ -83,6 +83,7 @@ static int toy_command(uint32_t command,uint32_t a,uint32_t b,uint32_t c) {
     return ((int (*)(uint32_t,uint32_t,uint32_t,uint32_t))(uintptr_t)entry)(command,a,b,c);
 }
 #endif
+#if !KUI_TOY_PILOT_LOADER_TRACE
 static const struct kui_toy_pilot_snapshot *toy_snapshot(void) {
     uint32_t entry=kui_toy_pilot_boot_control.snapshot;
     if(kui_toy_pilot_boot_control.status!=KUI_TOY_BOOT_INSTALLED) return NULL;
@@ -90,6 +91,8 @@ static const struct kui_toy_pilot_snapshot *toy_snapshot(void) {
      * It cannot select a guest-supplied pointer. */
     return ((const struct kui_toy_pilot_snapshot *(*)(void))(uintptr_t)entry)();
 }
+
+#endif
 
 int32_t kui_retail_resident_dispatch(uint32_t r4,uint32_t r5,uint32_t r6,uint32_t r7) {
     /* This entry is masked and uses the existing small GD stack. Only integer
@@ -112,6 +115,18 @@ int32_t kui_retail_resident_dispatch(uint32_t r4,uint32_t r5,uint32_t r6,uint32_
 
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command;(void)caller;(void)stack;
+#if KUI_TOY_PILOT_LOADER_TRACE
+    if(kui_toy_pilot_boot_control.status==KUI_TOY_BOOT_INSTALLED) {
+        typedef void (*terminal)(const struct retail_display_state *,const void *,const void *,uint32_t);
+        ((terminal)(uintptr_t)kui_toy_pilot_boot_control.trace_terminal)(
+            &display,&toy_gd_timing,&service.diag,0u);
+    }
+    for(;;) {
+        retail_display_restore(&display);
+        retail_display_line("TRACE TERMINAL REFUSED");
+        retail_display_pause(1600u);
+    }
+#else
     const struct kui_toy_pilot_snapshot *p=toy_snapshot();
     /* The terminal path stops servicing; an owned ring may repeat until
      * reset. Preserve scalar telemetry before display/cache reuse. */
@@ -159,4 +174,5 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
             retail_display_values("WORDS",words+page*16u+row*4u,4);
         retail_display_pause(900u);
     }
+#endif
 }

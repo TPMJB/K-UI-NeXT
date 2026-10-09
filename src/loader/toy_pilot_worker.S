@@ -3,7 +3,12 @@
 #include "toy_pilot_frame.inc"
     .section .toy_exports,"a"
     .align 2
-    .long 0x54595031,8,76
+    .long 0x54595031,8
+#if KUI_TOY_PILOT_LOADER_TRACE
+    .long 80
+#else
+    .long 76
+#endif
     .long C_SYMBOL(kui_toy_pilot_initialize)
     .long C_SYMBOL(kui_toy_pilot_request)
     .long C_SYMBOL(kui_toy_pilot_service_hook)
@@ -15,12 +20,15 @@
     .long __toy_pilot_worker_end,0x30000
     .long C_SYMBOL(kui_toy_pilot_allstop_hook)
     .long C_SYMBOL(kui_toy_pilot_driver_load_hook)
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_LOADER_TRACE
     .long C_SYMBOL(kui_toy_pilot_gd_bridge)
 #else
     .long C_SYMBOL(kui_toy_pilot_gd_dispatch)
 #endif
     .long C_SYMBOL(kui_toy_pilot_pause_hook)
+#if KUI_TOY_PILOT_LOADER_TRACE
+    .long C_SYMBOL(kui_toy_loader_trace_terminal_bridge)
+#endif
 
     .text
     .align 2
@@ -341,7 +349,7 @@ C_SYMBOL(kui_toy_pilot_worker_bridge):
     TOY_FRAME_HELPER C_SYMBOL(kui_toy_pilot_frame_publish_worker)
 #endif
 
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_LOADER_TRACE
 /* Serialized low GD entry owns the lock and BL mask. Copy its fifth C
  * argument onto the independent high GD stack before calling the adapter.
  * The audio stack may be suspended when a game interrupt calls GD. */
@@ -385,4 +393,49 @@ C_SYMBOL(kui_toy_pilot_gd_bridge):
 .Lgd_pattern: .long 0xa55a4aa5
 .Lgd_dispatch: .long C_SYMBOL(kui_toy_pilot_gd_dispatch)
     .size C_SYMBOL(kui_toy_pilot_gd_bridge),.-C_SYMBOL(kui_toy_pilot_gd_bridge)
+#endif
+
+#if KUI_TOY_PILOT_LOADER_TRACE
+/* Terminal-only bridge. Its trusted low caller supplies display/timing/diag
+ * pointers. Mask before the first save; guard the same separately owned GD
+ * stack. Failure returns to the low refusal display, never retail code. */
+    .text
+    .align 2
+    .global C_SYMBOL(kui_toy_loader_trace_terminal_bridge)
+    .type C_SYMBOL(kui_toy_loader_trace_terminal_bridge),@function
+C_SYMBOL(kui_toy_loader_trace_terminal_bridge):
+    stc sr,r1
+    mov.l .Lterminal_mask,r2
+    or r1,r2
+    ldc r2,sr
+    mov.l r1,@-r15
+    sts.l pr,@-r15
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    mov r15,r8
+    mov.l .Lterminal_guard,r1
+    mov.l @r1,r2
+    mov.l .Lterminal_pattern,r3
+    cmp/eq r2,r3
+    bf .Lterminal_return
+    mov.l .Lterminal_top,r15
+    mov.l .Lterminal_body,r0
+    jsr @r0
+    nop
+.Lterminal_return:
+    mov r8,r15
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    lds.l @r15+,pr
+    mov.l @r15+,r1
+    ldc r1,sr
+    rts
+    nop
+    .align 2
+.Lterminal_mask: .long 0x100000f0
+.Lterminal_guard: .long __toy_pilot_gd_stack_bottom
+.Lterminal_top: .long __toy_pilot_gd_stack_top
+.Lterminal_pattern: .long 0xa55a4aa5
+.Lterminal_body: .long C_SYMBOL(kui_toy_loader_trace_terminal)
+    .size C_SYMBOL(kui_toy_loader_trace_terminal_bridge),.-C_SYMBOL(kui_toy_loader_trace_terminal_bridge)
 #endif
