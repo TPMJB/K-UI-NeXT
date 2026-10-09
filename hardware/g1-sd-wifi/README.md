@@ -12,6 +12,8 @@ This folder makes the proposal available for independent review. It contains the
 | --- | --- |
 | [REVIEW.md](docs/REVIEW.md) | Self-contained review request for Claude or a hardware engineer |
 | [Review disposition](docs/review-disposition-2026-10-09.md) | Claude's review, accepted requirements, corrections and revised bring-up order |
+| [Controller, RAM and BIOS update](docs/controller-ram-bios-disposition-2026-10-09.md) | FPGA and PSRAM candidates, IC501 tap evidence, boot recovery and revised measurements |
+| [IC501 candidate tap reference](docs/IC501-candidate-reference.csv) | Schematic-derived alternate points for 20 ATA signals; continuity and signal integrity remain unverified |
 | [GPIO allocation](controller/K-UI-G1-GPIO-RevA.csv) | All 48 RP2350B GPIOs; 47 assigned and one spare |
 | [CN503 reference](docs/CN503-reference.csv) | Logical connector-to-ATA-to-MCU mapping, without a qualified physical tap drawing |
 | [START-HERE.txt](controller/START-HERE.txt) | Opening guide and current mounting/power notes |
@@ -25,7 +27,9 @@ This folder makes the proposal available for independent review. It contains the
 | --- | --- |
 | Dreamcast SH-4 / K-UI | ATA host; sole owner of the mounted exFAT or ext4 filesystem |
 | Original GD-ROM | Remains ATA device 0, with normal disc operation retained |
-| RP2350B | ATA device 1; raw-sector SD backend, buffering, command handling and bus isolation controls |
+| RP2350B | ATA device-1 backend; raw-sector SD, buffering, command handling and C5 link |
+| Optional FPGA/CPLD front end | Candidate for ATA cycle timing, register responses and DMA ownership; part and link are not selected |
+| Optional 8 MiB PSRAM | Candidate for read-ahead LBA caching; immediate transfers stay in SRAM/FIFO |
 | microSD | Native four-bit interface to RP2350B; game sectors stored directly on the card |
 | XIAO ESP32-C5 | Wi-Fi packet transport over a separate SPI link to RP2350B |
 | Optional second BIOS | Independent stock/custom selection and chip-enable isolation; absent from the current schematic |
@@ -35,6 +39,8 @@ The bridge presents the actual SD card as a block device, rather than requiring 
 Network uploads must pass through K-UI's filesystem owner. The C5 must not independently mount and modify the same card. Retail-game networking is a separate compatibility project: a K-UI G1 packet driver does not make existing games recognize a modem or Broadband Adapter.
 
 Storage is the first implementation milestone. Establish identification, verified PIO reads and coexistence with the original drive before DMA, writes and networking. Schedule packet work around game reads instead of promising a fixed division of bus bandwidth. No sustained throughput or game-compatibility claim has been measured on this hardware.
+
+The [controller/RAM/BIOS follow-up](docs/controller-ram-bios-disposition-2026-10-09.md) makes RP2350B plus a programmable ATA front end the preferred architecture to evaluate. The controller starter and GPIO CSV still describe the original MCU-only allocation. A front end needs a new pin/link allocation and schematic; the existing files are not an implementation of that candidate. PSRAM remains optional, and K-UI remains the filesystem owner.
 
 ## GPIO plan and bus behavior
 
@@ -68,6 +74,8 @@ The owner's photo shows VA1 mainboard **837-13778-02**, BIOS **IC501** and G1 co
 
 CN503 has two 25-pin rows carrying the required signals. The BIOS-facing tails are visible in the supplied photo; access to the board-edge row is not yet qualified. Logical pin mapping does not establish a practical soldering method. If direct top-side access proves unsuitable, investigate a thin underside tap and short flex to the upper board, with signal integrity and shield clearance checked. The controller/C5 assembly is not assumed to fit under the motherboard.
 
+An additional candidate is an IC501 adapter/tap. The VA1 traced schematic exposes 20 ATA nets at the BIOS footprint, including multiplexed address/data nets; it is not a 16-bit ROM-data-pin connection. The [candidate reference](docs/IC501-candidate-reference.csv) requires continuity checks and signal-integrity review. This path does not automatically eliminate the remaining connector controls or prove a dual-BIOS carrier fits.
+
 The DragonCity numbered-circle picture discussed in the design conversation is the underside of a **GD-ROM PCB**, not the motherboard. Its numbers refer to **IDE cable pins**, not CN503 contacts or RP2350B GPIOs. Data/control points map to corresponding G1 signals. Its IDE-pin-1-to-3.3-V tie is a reset workaround and is not copied into the MCU design; real G1 reset is A2.
 
 Required physical evidence remains:
@@ -75,13 +83,14 @@ Required physical evidence remains:
 - Minimum gap from the top of IC501 to the underside of the installed upper shield.
 - Minimum gap from motherboard PCB surface beside IC501 toward CN503 to that shield, accounting for existing components.
 - Access to the outer CN503 row; finished carrier, C5 socket/module and SD-socket heights; card, USB and antenna access.
+- Candidate IC501 tap continuity and package orientation, plus separately measured ROM supply and G1 signal levels if pursuing the BIOS adapter.
 
 Optional dual BIOS requires additional connections and independent stock/custom selection. The RP2350B GPIO table is not a BIOS-bus pin allocation. A ROM piggyback alone does not supply every ATA control, DMA and interrupt signal. Fit, wiring and fallback behavior remain to be designed.
 
 ## Next deliverables
 
-1. Close the review's output-ownership and timing questions, design isolation, and qualify a measurement fixture. The earlier CF board is unbuilt and unvalidated; a working CF rig is not a prerequisite assumed to exist.
-2. Finish G1 buffers, SD/C5 interfaces, console/USB power and power-fail circuits; choose qualified production footprints and run ERC.
+1. Check measurements and candidate tap continuity. Review existing software probe evidence and capture baseline bus timing with a qualified passive hookup before freezing the controller/front-end choice. The earlier CF board is unbuilt and unvalidated; a working CF rig is not a prerequisite assumed to exist.
+2. Close output ownership and timing, then finish G1 buffers/front end, SD/C5 interfaces, console/USB power and power-fail circuits; choose qualified production footprints and run ERC. Default stock BIOS recovery must work independently of MCU and FPGA configuration.
 3. Obtain measurements and connector access evidence, then choose the attachment, outline and component heights.
 4. Build a bench prototype: identify, read and hash sectors, test drive coexistence, then qualify DMA and writes.
 5. Demonstrate filesystem recovery and repeated power cuts before adding packet transport and pursuing retail-game networking.

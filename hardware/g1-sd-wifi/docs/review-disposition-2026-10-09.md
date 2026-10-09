@@ -4,6 +4,8 @@ Updated 9 October 2026. Responds to [Claude's original review](https://github.co
 
 The review supports the architecture and logical pin allocation. It does not establish an electrically complete design, timing closure or fabrication readiness. No native circuit, firmware or PCB was changed in this documentation pass. Shield measurements, connector access and console validation remain pending.
 
+The [later controller/RAM/BIOS disposition](controller-ram-bios-disposition-2026-10-09.md) records Claude's corrections, an IC501 tap candidate and the FPGA/PSRAM options. Its additional constraints apply before implementation.
+
 ## Accepted requirements
 
 | Review items | Disposition |
@@ -37,8 +39,8 @@ The review supports the architecture and logical pin allocation. It does not est
 ## Revised bring-up order
 
 1. Obtain the two shield-clearance measurements and inspect both CN503 rows. Map any underside alternative by continuity with power disconnected.
-2. Finish isolation and power circuitry, output ownership, register behavior and cycle budgets. Qualify a fixture and its probe/load behavior. Use a host-side model to exercise reset, selection, reads, stalls and release before connecting a responder.
-3. Capture baseline console/drive behavior passively. Qualify controlled IORDY and device-1 tests on the fixture. Prove identification and hashed PIO reads with the GD-ROM retained before enabling DMA.
+2. Review existing IDE-probe logs and perform any independently developed software-only register probe with exclusive bus ownership. Capture baseline console/drive behavior using a qualified passive hookup before freezing the responder architecture. Logs alone do not prove absence of contention, and passive capture needs suitable voltage/probe/load qualification but no working CF rig.
+3. Finish isolation and power circuitry, output ownership, register behavior and cycle budgets. Use a host-side model before connecting a responder. Qualify controlled IORDY and device-1 tests, then prove identification and hashed PIO reads with the GD-ROM retained before enabling DMA.
 4. Qualify DMA, writes, ordered flush/recovery and power cuts, then integrate C5 transport. The provisional highest mode and sustained speed follow evidence.
 
 The owner's pending measurements concern the **installed upper shield**, not just the GD-ROM: minimum IC501-top-to-shield and nearby PCB-to-shield clearance across the proposed footprint. They remain the next physical input; no new requirement to own a CF rig or logic analyzer is implied by this review.

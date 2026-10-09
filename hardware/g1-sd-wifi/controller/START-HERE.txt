@@ -20,6 +20,11 @@ The optional secondary flash circuit has been removed to release GPIO0.
 The dedicated QSPI boot flash remains. The SD card holds games; the
 separate boot flash holds the controller firmware.
 
+The controller/CSV allocation is the original MCU-only candidate. A later
+review proposes an FPGA ATA front end and optional QMI PSRAM. Neither is
+implemented here. PSRAM can share the boot flash clock/data wiring with a
+separate chip select; it is not a replacement for the retained boot flash.
+
 J2 and J3 are retained reference/bench GPIO breakouts. They are NOT a
 Dreamcast G1 connector, a CF connector, or an approved solder-pad map.
 Do not wire them directly to the Dreamcast bus. Shared data and response
@@ -36,6 +41,8 @@ upper metal shield. Both connector rows and assembly height need checking.
 A thin underside tap with a short flex to the top-side board is a fallback;
 the complete board is not assumed to fit underneath. Clearance is unmeasured.
 Optional dual BIOS is in the architecture scope but absent from this sheet.
+An IC501 adapter/tap is a new candidate, with 20 ATA nets in the traced
+schematic. Its continuity, termination and remaining controls are unverified.
 Drive PCB identity is not a prerequisite for this mainboard attachment.
 
 NEXT SCHEMATIC PASS
@@ -44,6 +51,8 @@ NEXT SCHEMATIC PASS
    Hardware must force isolation during startup, reset and power failure.
    Preserve ATA data hold and final-word DMA ownership; see the review
    disposition before adopting a combinational output-enable gate.
+   Evaluate the FPGA candidate and define the MCU link/pin allocation before
+   selecting a front end; do not transfer the GPIO CSV to that design.
 2. Native microSD socket, pull-ups, decoupling and card detect.
 3. XIAO C5 socket, SPI/handshakes, separately switched supply and
    programming/USB power isolation. Its 3V3_OUT is not a supply input
@@ -116,6 +125,11 @@ mounting and validation statements in those Markdown files take precedence.
 Claude's independent review and its disposition are linked in
 ../docs/review-disposition-2026-10-09.md. Its proposed CF measurement session
 needs a qualified fixture first: the earlier CF board is not built or tested.
+The later controller/RAM/BIOS update is in
+../docs/controller-ram-bios-disposition-2026-10-09.md. Passive capture can
+precede the final responder schematic; it does not need a working CF card.
+IC501 candidate points are in ../docs/IC501-candidate-reference.csv.
+Preserve a physical stock-ROM path independent of FPGA configuration.
 
 SOURCES AND LICENSING
 Official RP2350B minimal reference, R4-S1, KiCad 10:
