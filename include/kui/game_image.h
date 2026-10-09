@@ -62,6 +62,20 @@ struct kui_game_image {
     struct kui_game_image_track tracks[KUI_GAME_TRACK_MAX];
 };
 
+/* Represented audio is a playback candidate, not proof that a game uses CDDA. */
+enum kui_game_audio_class {
+    KUI_GAME_AUDIO_NONE, KUI_GAME_AUDIO_GD_LOW_DENSITY_ONLY,
+    KUI_GAME_AUDIO_GD_HIGH_DENSITY, KUI_GAME_AUDIO_CD,
+    KUI_GAME_AUDIO_UNKNOWN
+};
+
+struct kui_game_audio_info {
+    enum kui_game_audio_class classification;
+    unsigned audio_tracks; /* All represented audio tracks. */
+    unsigned candidate_tracks; /* All CD audio, or GD audio at LBA >= 45000. */
+    unsigned warning_tracks; /* GD low-density audio; conventionally a warning. */
+};
+
 enum kui_game_sector_format { KUI_GAME_SECTOR_RAW, KUI_GAME_SECTOR_MODE1 };
 
 /* Accept consecutive track numbers and bounded file offsets. Data tracks may contain
@@ -87,6 +101,17 @@ enum kui_game_result kui_game_image_open_named(const char *name,
 /* Recognized direct formats only; case insensitive extension, safe filename. */
 bool kui_game_image_name_supported(const char *name);
 const char *kui_game_image_format_name(enum kui_game_image_format format);
+
+/* Inspect metadata from an opened image or kui_game_gdi_layout result, without
+ * invoking file callbacks. Backing-file lengths and end_lba are not required.
+ * GD uses the fixed LBA 45000 density boundary, not the first data track; all
+ * represented audio on CD media is a candidate, including audio before data.
+ * ISO and standalone RAW contain only data and cannot establish whether the
+ * original disc had audio, so they return UNKNOWN. NONE means no audio in the
+ * supplied track list, not proof about the original disc or audible music.
+ * Classification does not enable CDDA playback. Output is unchanged on error. */
+enum kui_game_result kui_game_image_audio_info(const struct kui_game_image *image,
+    struct kui_game_audio_info *out);
 
 /* Check the entire LBA request without reading data. Explicit gaps (including
  * the low/high-density session gap) are GAP, not implicit zero-fill. Requests

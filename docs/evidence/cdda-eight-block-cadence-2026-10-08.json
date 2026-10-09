@@ -1,0 +1,1522 @@
+{
+  "schema": 1,
+  "date": "2026-10-08",
+  "baseline_revision": "56df22966bbb9093374372f8dad7a2e09a05fcb7",
+  "scope": "Actual C worker with independent synthetic asynchronous ARM publication and stereo PCM consumption; not a console measurement.",
+  "clock_hz": 781250,
+  "pcm_rate_hz": 44100,
+  "profile_parameters": {
+    "updates_per_profile": 300,
+    "hooks_per_update": 2,
+    "cadence_ticks": [
+      26042,
+      30000,
+      32552,
+      35000,
+      37500,
+      39063
+    ],
+    "hook_spacing_ticks": [
+      7813,
+      13021
+    ],
+    "long_hook_gap_ticks": 66732,
+    "long_gap_every_updates": 32,
+    "gap_phases": [
+      0,
+      7,
+      15,
+      31
+    ],
+    "publication_phases": [
+      0,
+      2604,
+      5208
+    ],
+    "publication_period_ticks": 7813,
+    "channel_capture_gap_ticks": 8,
+    "right_publication_delay_ticks": 1000,
+    "raw_regular_ticks": 3589,
+    "raw_tail_ticks": 8830,
+    "raw_tail_every_callbacks": 32,
+    "g2_word_and_copy_operation_ticks": 12,
+    "timer_read_ticks": 1,
+    "source_sectors": 60,
+    "source_repeat": true
+  },
+  "required_invariants": [
+    "All 54 canonical and all 63 expanded baseline successes retained",
+    "Exact independently consumed stereo PCM through first STOP",
+    "Exact sequential raw LBA, including track wrap",
+    "Actual active 4096-frame destination for either channel never copied before or after charged G2 copy",
+    "At most four physical raw callbacks per visit",
+    "No raw errors, queue errors, stale actions, active-bank writes, or assertion failures",
+    "After first recovery STOP, no new raw callback or plane copy throughout twenty additional visits inside full-ring fence"
+  ],
+  "tool_sha256": "d7022d386994e07b4f9ebae4a7cc0a586b6947fefa0e74a64b34ca33e3d354f8",
+  "runs": {
+    "optimized": {
+      "profile_log": "cdda-eight-block-cadence-2026-10-08-optimized.jsonl",
+      "profile_log_sha256": "b87a5cf7aca6b69126ccec42d19052ecd09395397f965145122d93caef33c5e1",
+      "identity": {
+        "baseline": {
+          "kind": "identity",
+          "variant": "baseline",
+          "revision": "56df22966bbb9093374372f8dad7a2e09a05fcb7",
+          "sources": {
+            "include/kui/apps.h": "7dda81be9dd9561fcb1ee6bc437e5f9a0e25abd09fcaa6c759de677e12d516e4",
+            "include/kui/ata.h": "b211d95c271be0b42c509c5554059e419ec70385d10e3af203c6fd87415cd8e6",
+            "include/kui/bench.h": "78992d342709d07055110f602799e76e27196bbee529da359f00d602ac295c37",
+            "include/kui/boot_image.h": "6b03559c3ebe114de0150964677da17d734330cf3be9e7c9a3eb0963cd2406a1",
+            "include/kui/boot_ui.h": "d0ee832c52d38604b56349bc489be600a20383da83c74397dc449483ef58d7d9",
+            "include/kui/boot_volume.h": "2117db60f0d55a8e3fd4e28f1697fd9c7477ddfbfa78944041df56a2dda13882",
+            "include/kui/capture.h": "20e316212c509f588e62317eaf76efc11065aa2b30592e16d544b72607de5f56",
+            "include/kui/capture_display.h": "4c0e2b175d1aa1bb9bfd20388e44ddc5c39fa104dd62c6d4b254478064454350",
+            "include/kui/capture_export.h": "0857a5f3a4377f59b78962e5f42cd9705fc1f1b0df41334ccb970657f455d852",
+            "include/kui/capture_format.h": "c69a80248cb443cb0a484a99b9198f446afb76fd555752df2685d6df0c5d5b4a",
+            "include/kui/cd_audio.h": "f42200c2664cce25734155322c1a73ba55a93830fa40eab90b031080e15e6a3d",
+            "include/kui/cdda_bios.h": "1cebbe401593cf8cf48ec8a1557ffb22f5ac7d91bf1e7c2fe47c72436a0598d8",
+            "include/kui/cdda_bios_batch.h": "373347cd3a724904a26f3a2308ff6b611211f35c9007c389767e654d25f34fbb",
+            "include/kui/cdda_bridge.h": "8f9405b011a342b5d2cd75275a128ccc6706093e1c5c4a13fed49c532dcd93e8",
+            "include/kui/cdda_clock.h": "c6d9d7d87fabbad3ac7c6ed5b332e54763bf5ca78ba81260c292930555d3e55d",
+            "include/kui/cdda_control.h": "bdde416af42bb11cf491188a87e0be918e36cf2506bd9d0d45a9fb88f7ddfcb8",
+            "include/kui/cdda_disc.h": "753106e1ab47aad06878224e8d7401bcad4a69a0e8d4fab03b848f4c5ee8e1d7",
+            "include/kui/cdda_disc_bios.h": "13deaa7a32cb7152a663dd2b02e0e39d93313bc6b9feda82b8c9b30fb4dce57b",
+            "include/kui/cdda_handoff.h": "486aa7e4b150bebc4f08a43a339ec3b0c45674f9a870bd13cf46aeb1c1ef1786",
+            "include/kui/cdda_job.h": "747e009cdc9e336512b83879d88bb8bc0b1cc74b81e9f460c4dad75b4cbafffb",
+            "include/kui/cdda_pcm.h": "6529a6e122d737addcdcd7bf2fa4b32be872e8a4b94678382616ff9a071eddee",
+            "include/kui/cdda_preflight.h": "dd18fc4ec039910c4180701b9c0c5e7df53b31b73699e451235a332274e5db00",
+            "include/kui/cdda_ring.h": "8f91a5ea3cbc10fde7b336941a5e9cbccf6c346d497853cb4b2c45f1a84b6987",
+            "include/kui/cdda_stream.h": "d1363ed3b7477a456056f60ff3554ab275bbeaf71e4b76993b480206bab26074",
+            "include/kui/cdda_timing.h": "b36fe0fb048cd126b373aa1215acaa63fa347f1973d38b60c672972e219ed297",
+            "include/kui/cdda_vector.h": "aa1ec7a5dbaf3132336dfd085870fc947618385338dad6666b65545e27ad9def",
+            "include/kui/ce_load_plan.h": "72b6913d78e51e6c0684da68a971fa6f1b566ed8f162767e3f56ad16368ac457",
+            "include/kui/clock.h": "2387c6a633738764268ebf5ce097eb29fbf8b705c9022871b57c7d567c6d1d41",
+            "include/kui/clock_platform.h": "711a6ee230ffc3b77b8c9b13de64b1f2092aca80294e883d758a6f3b9b6312ac",
+            "include/kui/core.h": "f1265c9f8f2732b67870bf60f0033ca218877f31951afc8445a11e71e7594aa9",
+            "include/kui/cover_image.h": "b47157e8d9874fd2fcb1263b3b2c6514b85e3a294805bed70592c73684f4a74d",
+            "include/kui/crc16.h": "93c355062991aa39337842f547224e84ca40f7b822405c4b26629d0a03b573f9",
+            "include/kui/destination.h": "e4173fb59d6c9d0f13c756a581db200f49043023fed8ba050636ba3e48453062",
+            "include/kui/disc_identity.h": "1f1cbd8bb9e78f8652ef7d481f3865a50e4abfaa03c85a417c575d2996baef58",
+            "include/kui/ext4_boot.h": "eabfb328c8691de81de29cb57751b881ca24bea2eaded14e2f681dd0507f27d7",
+            "include/kui/files.h": "29fbe8bf12f40ac901aba50fa41b04b5e7c78edc6d9b61cce8d06458f93203ac",
+            "include/kui/ftp.h": "f36e2ce4b31fc58f1c2fbca69046d6b20eb1eabf636f887bdc9b8b661256f6b0",
+            "include/kui/game_cover.h": "e71a8f68961497cb17ccd5e17a478e46278972c4ee560d8ec156f3a1432c9225",
+            "include/kui/game_image.h": "1a08b3e17b8b1c6507f2b353692a4a966c755d3f3c0a79ef55fb1cab5878fc50",
+            "include/kui/game_metadata.h": "9be69e775aebad2ab2bc963b368e245594ddc71367e285526c2d41f32a009868",
+            "include/kui/games.h": "599af1fb856e3fed40db66fb6b5bbba94107835725c54843d27e43413f6b6ac7",
+            "include/kui/games_covers.h": "009e8d26c747fb2b70052aeae56e1a02533f4c644f09b8d09ee7023167bb02ae",
+            "include/kui/games_image_probe.h": "1632ec442e6cc5999b1284a6dad4385693ab2903af2256ff603296128ec4e3dc",
+            "include/kui/games_probe.h": "1608e198297b97eb2276fe7d0a9c5103572d5b940b057b6beae0fcf3fff55e0b",
+            "include/kui/games_retail.h": "5bee8fe6def42b84843756940d45c15d2d882a6e57d227928f600d0ca5008b30",
+            "include/kui/gd_play.h": "a5c1bf7b85cad90a20ec9dbfa975217e1c837d118fec272c29ec7e7a02d0f9cb",
+            "include/kui/gd_service.h": "b2d8caf2a6aa7587fcc8d5613a7158bf4a33e89fdfda776726feec65f7ee5bdc",
+            "include/kui/hash.h": "0d010e66a81b0e6e35d5a89ef66ec1856f3f852ae312b6df22de2fcc773152c0",
+            "include/kui/image_client.h": "7809e93b8a796d3c532a8a52eeeae78c23d3b1013d8ace0afcdd84375e93e6d5",
+            "include/kui/image_loader_layout.h": "3b32eb72d325fbb048e65cea2c0e319e78c16e2cbd7ad858dc4b987352341d25",
+            "include/kui/known_dumps.h": "adb80d801efa949538a9222e99af5b331073417107386b8ec89c3877c85934c6",
+            "include/kui/loader_layout.h": "a1b5fa731db6c95b922e897a243b28f7ae3432037f0e26f7626e165258b09027",
+            "include/kui/loader_probe.h": "0b51192eaafc7a07e25bde6efbdf18ffbbb701d40c8a55e9d7bb43366d0ab655",
+            "include/kui/maintenance.h": "a9f6249534d4ad35efdd83a2e15a303c0d7ae54bf86ce9cf986fbd009f33c057",
+            "include/kui/media.h": "adb3b57c8572cb0ac0a6bbb7449adc7c556bff0fa609df46b1d40ae2a480b39b",
+            "include/kui/memory_test.h": "6339a1b041bbdfce2e29ca5a38fe79fc225ef1470432db545e6df0e9415183ce",
+            "include/kui/menu_sound.h": "a84a742a31a1c87106894ead11cb24c28df1ec2f258ada63cd1a03eaf19504ce",
+            "include/kui/music.h": "beeeff6dda84ba504135d3e91454b5093bc580aa9587a86e235c262160fa5487",
+            "include/kui/music_ogg.h": "be0c72266b9be5ba513a8aedecc041efdcf282cfffc6db0c733f6cdbb6a1e552",
+            "include/kui/music_player.h": "a2d60d6fc1066ae318f75810bb8f3a5b3206a8bef0af90558bc947ae17224287",
+            "include/kui/net.h": "7f17b1ffcdd8cb652d4106c3b524d0972a48d286c9da16207c401f8941e246fb",
+            "include/kui/network_probe.h": "10a7250d68d2a95bddde9ed17c3af3e83900388cd0168f576e99a6ff139e9ed6",
+            "include/kui/network_test.h": "22ef20a29cf5bcbb0c591b49564c0d9960e7159b3980e6c058f3e66168079def",
+            "include/kui/network_w5500.h": "74b75f0a352559ce8770541eac1b4cb94db99c5a1bc164c3ca11ca57f53e1319",
+            "include/kui/network_wifi.h": "07f7eee279f711d4cfe33db46ef7d88f8e50291278e0e8ae7e1a98191c26e0b1",
+            "include/kui/options.h": "695bb1cd8f4d4fe6e42beeafdd88498b2bfa39b5f484b60792a7d9f5d25ba8c7",
+            "include/kui/probe.h": "582a6eb24ac40ac7a9c258965271ee7f864e7bd7360d12b412d12a7c4b443010",
+            "include/kui/pvr_texture.h": "3a4c141f803d9ae2e1f2f01e8cc26c2d2faaf4dd8a6b366631d86892b7ee4d9d",
+            "include/kui/recovery_checks.h": "ac4c897a036ca0f6d087602f58a8f3b8ca86383ca9400c48f06267ed9d2dc7dd",
+            "include/kui/recovery_scan.h": "34323cd71578df62db36a056e5378fae9c3974bcfbe19fe51f0ef1bfc583ab08",
+            "include/kui/report.h": "1a0dd1418b0c15654b11b9d910edd85ef25ae6839403b06686cf9442971db6da",
+            "include/kui/resident_image.h": "5e0a31f415e420546aa0803234a88a89ec2151d8686776a850adaf69caf30270",
+            "include/kui/retail_cursor.h": "ccaa8295bc6a9838b5541f3fd984a649978311ece0b7d2b859d340d46c3db958",
+            "include/kui/retail_gd.h": "41f1b591ee5fa53a7ae9c94b12641d829f9404d1bde34cd032b9d3029533ac72",
+            "include/kui/retail_image.h": "c495ad998359559825827e131424686fb977845c06ec9904ea8b7a59c9aa6ce1",
+            "include/kui/retail_loader_layout.h": "c192fdc9cb1cc9e51838959a598c863a0d7c636c6dace17f2b39558e8bfeb085",
+            "include/kui/retail_observe.h": "0a604a4de6f961ec7c4f44dd9eb7d7226bd2c19fc8c65e5c02fb386f062a746a",
+            "include/kui/retail_pace.h": "66711adb2f12574ed4065136a80d52af78c23aed0de88eb7fb74dff3ff37b2cf",
+            "include/kui/retail_resident.h": "93c2d53da2d7a7d13fafe0dae8e63f3ac9624cd9e0e5ff1fe048dba8208b9a13",
+            "include/kui/runtime.h": "01f690a9e7bff0906295a5b907549ed0b9a6f687f2e32ba074ab1d60c80b2524",
+            "include/kui/salvage.h": "ba8ae97fdf5ceff7599c99c37d59b743a3fac5a452e8b275ecdeebfca10a11ec",
+            "include/kui/sci_async_probe.h": "5a9b3ff96089532c404e9273556f0b0dab86a6ba7545b2f9fa209d0665535a9c",
+            "include/kui/sci_video_quiet.h": "e2211b486a6110ab3e02273f763fdbaf21471d50c2fb68e1aaef32cc18542103",
+            "include/kui/settings.h": "0a2a57289d6c9afd6beb973ccfe15e9d5a9271b1b405059f1b791a9ded6c8501",
+            "include/kui/shell.h": "f5424f65e78667031ddc15c11f269f9898e0d5ffb5b1fba5a01ab55a6dc29661",
+            "include/kui/shell_font.h": "804582df2fa8f7909ca63d65eba66fb1772e8ccf61197ab49a89e3fff3facce7",
+            "include/kui/splash.h": "aef6e74f7f752f29cc8051163dca338653a1b07fb5e6cb046992438684c39f9c",
+            "include/kui/storage.h": "792c43ab3e8922ddb49eef23481998f8f9889a0f42b0a3608f1678a8e82d4c35",
+            "include/kui/storage_error.h": "9219b75a9734a93de517d47afc842190efe9cfaf96199cc0993fce8e37eb00b2",
+            "include/kui/storage_policy.h": "f9f5acb38ad9b2ca0af53fe8113404855a464e760d9d687ef57dd440e8b27123",
+            "include/kui/storage_test.h": "8d64c311d727d462475e8f600bca97cab8ae877e786ba8932773f13c356b459d",
+            "include/kui/system_settings.h": "1b12560aa63e6d52aa8484c08be835ab8adc947dbc036554b9403ace4d9ac33c",
+            "include/kui/timing.h": "87ba3be16bbb05a1493e71c9633afd1f6915f1b78595ecb5dbf19185834a5522",
+            "include/kui/toy_pilot.h": "b021598a97e7a2e5d3af5bd7e17c11f6cb553f1037cd5fcf52b9c807da7cc3eb",
+            "include/kui/toy_pilot_boot.h": "251026ae5340f0cdacf7c8cf778864766333f7bfce2b7169f2858e1ac642f424",
+            "include/kui/toy_pilot_bus.h": "20786a16f77295362b24761c7655ec0753d7ac612ff41f0d0617a4fc73ab5f4b",
+            "include/kui/toy_pilot_clock.h": "a4e480e0ab70caf01af89ff52929dc0177b620ab1ba558325271ad5d1a1b6525",
+            "include/kui/toy_pilot_driver_load.h": "1e4788ac09594068a0118b77d0a9f95e136482950f0442ddd93f0e3db8fd992c",
+            "include/kui/toy_pilot_gd.h": "cf9e6c1e491bad218aa71e5f0c7ec07ef300f5eda95a4717f4b81f8687975228",
+            "include/kui/toy_pilot_gd_status.h": "2d6d37042b7cc926bafa44ced4130a226d1382e0f925dc8774bef3df5859cb39",
+            "include/kui/toy_pilot_lease.h": "4191fa03309b689953793c00a27d80dec4e3d6267ddb23049650d99ae0fc7bde",
+            "include/kui/toy_pilot_ring.h": "2366b38a1e95e1fb18c6910d25e54974889d4ec46be7b994f97ddecaec46aa7f",
+            "include/kui/toy_pilot_scratch.h": "3555d223f64786d0d2805a8f768f558e043b05086c3bcae5599b55037765ef3c",
+            "include/kui/ui_rate.h": "57a8b48cb070ffa2f700247a7d59c1bc64a658905498a16dd2f16cfd6fcdc351",
+            "include/kui/version.h": "f2126503d306ef491e9e1d5c419d6c73bcf83742e6dae43d2e0aa0de6fda4ba4",
+            "include/kui/viewport.h": "93419d5f3535261d9e16e0ba2824b0a4a80969d7ef3187ce49531d8c7327091f",
+            "include/kui/w5500.h": "2be4f1ed456b0cf616885fafc2a70cfa04a4c937da56c166416554b96f69bc40",
+            "include/kui/wav.h": "41a0bbf9673efba371233a89bb426e2fa69e9ad7d2ebcdb9454008c06f0965e5",
+            "src/loader/toy_pilot_worker.c": "3613e3c338f6ad4cde3bb03db429e7a5c65baf3122649854da2226bf9d09618c",
+            "src/core/toy_pilot.c": "96975731e3ecd5c4d597c53523716499dabde7746becfd8650d53087047d10e0",
+            "src/core/hash.c": "451f915eb8d85d0c94ef2af91cca2e25604e2eee81072d316ca708982d14485f",
+            "tests/toy_pilot_async_fixture.h": "c261fc9732704d32f977e03b3a6e4d9b32b5d7dea8072f72933c02f1343a3877",
+            "tests/test_toy_pilot_cadence.c": "3d6541b69ac3c450be68e07f1cbfd9880e62cde91dff723dfd2c629bfc072b66"
+          },
+          "binary_sha256": "e4700dea6079b7b90af086f5fd70a29fc644ae7b2da7ef4ecb0a82458838688b",
+          "compile_argv": [
+            "cc",
+            "-std=c11",
+            "-O2",
+            "-g",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wpedantic",
+            "-Wno-unused-function",
+            "-fno-pie",
+            "-no-pie",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-I/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/baseline-source/include",
+            "-I/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/baseline-source/src/loader",
+            "-DTOY_WORKER_SOURCE=\"/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/baseline-source/src/loader/toy_pilot_worker.c\"",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/harness-source/tests/test_toy_pilot_cadence.c",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/baseline-source/src/core/toy_pilot.c",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/baseline-source/src/core/hash.c",
+            "-Wl,--gc-sections",
+            "-o",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/baseline"
+          ]
+        },
+        "candidate": {
+          "kind": "identity",
+          "variant": "candidate",
+          "sources": {
+            "include/kui/apps.h": "7dda81be9dd9561fcb1ee6bc437e5f9a0e25abd09fcaa6c759de677e12d516e4",
+            "include/kui/ata.h": "b211d95c271be0b42c509c5554059e419ec70385d10e3af203c6fd87415cd8e6",
+            "include/kui/bench.h": "78992d342709d07055110f602799e76e27196bbee529da359f00d602ac295c37",
+            "include/kui/boot_image.h": "6b03559c3ebe114de0150964677da17d734330cf3be9e7c9a3eb0963cd2406a1",
+            "include/kui/boot_ui.h": "d0ee832c52d38604b56349bc489be600a20383da83c74397dc449483ef58d7d9",
+            "include/kui/boot_volume.h": "2117db60f0d55a8e3fd4e28f1697fd9c7477ddfbfa78944041df56a2dda13882",
+            "include/kui/capture.h": "20e316212c509f588e62317eaf76efc11065aa2b30592e16d544b72607de5f56",
+            "include/kui/capture_display.h": "4c0e2b175d1aa1bb9bfd20388e44ddc5c39fa104dd62c6d4b254478064454350",
+            "include/kui/capture_export.h": "0857a5f3a4377f59b78962e5f42cd9705fc1f1b0df41334ccb970657f455d852",
+            "include/kui/capture_format.h": "c69a80248cb443cb0a484a99b9198f446afb76fd555752df2685d6df0c5d5b4a",
+            "include/kui/cd_audio.h": "f42200c2664cce25734155322c1a73ba55a93830fa40eab90b031080e15e6a3d",
+            "include/kui/cdda_bios.h": "1cebbe401593cf8cf48ec8a1557ffb22f5ac7d91bf1e7c2fe47c72436a0598d8",
+            "include/kui/cdda_bios_batch.h": "373347cd3a724904a26f3a2308ff6b611211f35c9007c389767e654d25f34fbb",
+            "include/kui/cdda_bridge.h": "8f9405b011a342b5d2cd75275a128ccc6706093e1c5c4a13fed49c532dcd93e8",
+            "include/kui/cdda_clock.h": "c6d9d7d87fabbad3ac7c6ed5b332e54763bf5ca78ba81260c292930555d3e55d",
+            "include/kui/cdda_control.h": "bdde416af42bb11cf491188a87e0be918e36cf2506bd9d0d45a9fb88f7ddfcb8",
+            "include/kui/cdda_disc.h": "753106e1ab47aad06878224e8d7401bcad4a69a0e8d4fab03b848f4c5ee8e1d7",
+            "include/kui/cdda_disc_bios.h": "13deaa7a32cb7152a663dd2b02e0e39d93313bc6b9feda82b8c9b30fb4dce57b",
+            "include/kui/cdda_handoff.h": "486aa7e4b150bebc4f08a43a339ec3b0c45674f9a870bd13cf46aeb1c1ef1786",
+            "include/kui/cdda_job.h": "747e009cdc9e336512b83879d88bb8bc0b1cc74b81e9f460c4dad75b4cbafffb",
+            "include/kui/cdda_pcm.h": "6529a6e122d737addcdcd7bf2fa4b32be872e8a4b94678382616ff9a071eddee",
+            "include/kui/cdda_preflight.h": "dd18fc4ec039910c4180701b9c0c5e7df53b31b73699e451235a332274e5db00",
+            "include/kui/cdda_ring.h": "8f91a5ea3cbc10fde7b336941a5e9cbccf6c346d497853cb4b2c45f1a84b6987",
+            "include/kui/cdda_stream.h": "d1363ed3b7477a456056f60ff3554ab275bbeaf71e4b76993b480206bab26074",
+            "include/kui/cdda_timing.h": "b36fe0fb048cd126b373aa1215acaa63fa347f1973d38b60c672972e219ed297",
+            "include/kui/cdda_vector.h": "aa1ec7a5dbaf3132336dfd085870fc947618385338dad6666b65545e27ad9def",
+            "include/kui/ce_load_plan.h": "72b6913d78e51e6c0684da68a971fa6f1b566ed8f162767e3f56ad16368ac457",
+            "include/kui/clock.h": "2387c6a633738764268ebf5ce097eb29fbf8b705c9022871b57c7d567c6d1d41",
+            "include/kui/clock_platform.h": "711a6ee230ffc3b77b8c9b13de64b1f2092aca80294e883d758a6f3b9b6312ac",
+            "include/kui/core.h": "f1265c9f8f2732b67870bf60f0033ca218877f31951afc8445a11e71e7594aa9",
+            "include/kui/cover_image.h": "b47157e8d9874fd2fcb1263b3b2c6514b85e3a294805bed70592c73684f4a74d",
+            "include/kui/crc16.h": "93c355062991aa39337842f547224e84ca40f7b822405c4b26629d0a03b573f9",
+            "include/kui/destination.h": "e4173fb59d6c9d0f13c756a581db200f49043023fed8ba050636ba3e48453062",
+            "include/kui/disc_identity.h": "1f1cbd8bb9e78f8652ef7d481f3865a50e4abfaa03c85a417c575d2996baef58",
+            "include/kui/ext4_boot.h": "eabfb328c8691de81de29cb57751b881ca24bea2eaded14e2f681dd0507f27d7",
+            "include/kui/files.h": "29fbe8bf12f40ac901aba50fa41b04b5e7c78edc6d9b61cce8d06458f93203ac",
+            "include/kui/ftp.h": "f36e2ce4b31fc58f1c2fbca69046d6b20eb1eabf636f887bdc9b8b661256f6b0",
+            "include/kui/game_cover.h": "e71a8f68961497cb17ccd5e17a478e46278972c4ee560d8ec156f3a1432c9225",
+            "include/kui/game_image.h": "1a08b3e17b8b1c6507f2b353692a4a966c755d3f3c0a79ef55fb1cab5878fc50",
+            "include/kui/game_metadata.h": "9be69e775aebad2ab2bc963b368e245594ddc71367e285526c2d41f32a009868",
+            "include/kui/games.h": "599af1fb856e3fed40db66fb6b5bbba94107835725c54843d27e43413f6b6ac7",
+            "include/kui/games_covers.h": "009e8d26c747fb2b70052aeae56e1a02533f4c644f09b8d09ee7023167bb02ae",
+            "include/kui/games_image_probe.h": "1632ec442e6cc5999b1284a6dad4385693ab2903af2256ff603296128ec4e3dc",
+            "include/kui/games_probe.h": "1608e198297b97eb2276fe7d0a9c5103572d5b940b057b6beae0fcf3fff55e0b",
+            "include/kui/games_retail.h": "5bee8fe6def42b84843756940d45c15d2d882a6e57d227928f600d0ca5008b30",
+            "include/kui/gd_play.h": "a5c1bf7b85cad90a20ec9dbfa975217e1c837d118fec272c29ec7e7a02d0f9cb",
+            "include/kui/gd_service.h": "b2d8caf2a6aa7587fcc8d5613a7158bf4a33e89fdfda776726feec65f7ee5bdc",
+            "include/kui/hash.h": "0d010e66a81b0e6e35d5a89ef66ec1856f3f852ae312b6df22de2fcc773152c0",
+            "include/kui/image_client.h": "7809e93b8a796d3c532a8a52eeeae78c23d3b1013d8ace0afcdd84375e93e6d5",
+            "include/kui/image_loader_layout.h": "3b32eb72d325fbb048e65cea2c0e319e78c16e2cbd7ad858dc4b987352341d25",
+            "include/kui/known_dumps.h": "adb80d801efa949538a9222e99af5b331073417107386b8ec89c3877c85934c6",
+            "include/kui/loader_layout.h": "a1b5fa731db6c95b922e897a243b28f7ae3432037f0e26f7626e165258b09027",
+            "include/kui/loader_probe.h": "0b51192eaafc7a07e25bde6efbdf18ffbbb701d40c8a55e9d7bb43366d0ab655",
+            "include/kui/maintenance.h": "a9f6249534d4ad35efdd83a2e15a303c0d7ae54bf86ce9cf986fbd009f33c057",
+            "include/kui/media.h": "adb3b57c8572cb0ac0a6bbb7449adc7c556bff0fa609df46b1d40ae2a480b39b",
+            "include/kui/memory_test.h": "6339a1b041bbdfce2e29ca5a38fe79fc225ef1470432db545e6df0e9415183ce",
+            "include/kui/menu_sound.h": "a84a742a31a1c87106894ead11cb24c28df1ec2f258ada63cd1a03eaf19504ce",
+            "include/kui/music.h": "beeeff6dda84ba504135d3e91454b5093bc580aa9587a86e235c262160fa5487",
+            "include/kui/music_ogg.h": "be0c72266b9be5ba513a8aedecc041efdcf282cfffc6db0c733f6cdbb6a1e552",
+            "include/kui/music_player.h": "a2d60d6fc1066ae318f75810bb8f3a5b3206a8bef0af90558bc947ae17224287",
+            "include/kui/net.h": "7f17b1ffcdd8cb652d4106c3b524d0972a48d286c9da16207c401f8941e246fb",
+            "include/kui/network_probe.h": "10a7250d68d2a95bddde9ed17c3af3e83900388cd0168f576e99a6ff139e9ed6",
+            "include/kui/network_test.h": "22ef20a29cf5bcbb0c591b49564c0d9960e7159b3980e6c058f3e66168079def",
+            "include/kui/network_w5500.h": "74b75f0a352559ce8770541eac1b4cb94db99c5a1bc164c3ca11ca57f53e1319",
+            "include/kui/network_wifi.h": "07f7eee279f711d4cfe33db46ef7d88f8e50291278e0e8ae7e1a98191c26e0b1",
+            "include/kui/options.h": "695bb1cd8f4d4fe6e42beeafdd88498b2bfa39b5f484b60792a7d9f5d25ba8c7",
+            "include/kui/probe.h": "582a6eb24ac40ac7a9c258965271ee7f864e7bd7360d12b412d12a7c4b443010",
+            "include/kui/pvr_texture.h": "3a4c141f803d9ae2e1f2f01e8cc26c2d2faaf4dd8a6b366631d86892b7ee4d9d",
+            "include/kui/recovery_checks.h": "ac4c897a036ca0f6d087602f58a8f3b8ca86383ca9400c48f06267ed9d2dc7dd",
+            "include/kui/recovery_scan.h": "34323cd71578df62db36a056e5378fae9c3974bcfbe19fe51f0ef1bfc583ab08",
+            "include/kui/report.h": "1a0dd1418b0c15654b11b9d910edd85ef25ae6839403b06686cf9442971db6da",
+            "include/kui/resident_image.h": "5e0a31f415e420546aa0803234a88a89ec2151d8686776a850adaf69caf30270",
+            "include/kui/retail_cursor.h": "ccaa8295bc6a9838b5541f3fd984a649978311ece0b7d2b859d340d46c3db958",
+            "include/kui/retail_gd.h": "41f1b591ee5fa53a7ae9c94b12641d829f9404d1bde34cd032b9d3029533ac72",
+            "include/kui/retail_image.h": "c495ad998359559825827e131424686fb977845c06ec9904ea8b7a59c9aa6ce1",
+            "include/kui/retail_loader_layout.h": "c192fdc9cb1cc9e51838959a598c863a0d7c636c6dace17f2b39558e8bfeb085",
+            "include/kui/retail_observe.h": "0a604a4de6f961ec7c4f44dd9eb7d7226bd2c19fc8c65e5c02fb386f062a746a",
+            "include/kui/retail_pace.h": "66711adb2f12574ed4065136a80d52af78c23aed0de88eb7fb74dff3ff37b2cf",
+            "include/kui/retail_resident.h": "93c2d53da2d7a7d13fafe0dae8e63f3ac9624cd9e0e5ff1fe048dba8208b9a13",
+            "include/kui/runtime.h": "01f690a9e7bff0906295a5b907549ed0b9a6f687f2e32ba074ab1d60c80b2524",
+            "include/kui/salvage.h": "ba8ae97fdf5ceff7599c99c37d59b743a3fac5a452e8b275ecdeebfca10a11ec",
+            "include/kui/sci_async_probe.h": "5a9b3ff96089532c404e9273556f0b0dab86a6ba7545b2f9fa209d0665535a9c",
+            "include/kui/sci_video_quiet.h": "e2211b486a6110ab3e02273f763fdbaf21471d50c2fb68e1aaef32cc18542103",
+            "include/kui/settings.h": "0a2a57289d6c9afd6beb973ccfe15e9d5a9271b1b405059f1b791a9ded6c8501",
+            "include/kui/shell.h": "f5424f65e78667031ddc15c11f269f9898e0d5ffb5b1fba5a01ab55a6dc29661",
+            "include/kui/shell_font.h": "804582df2fa8f7909ca63d65eba66fb1772e8ccf61197ab49a89e3fff3facce7",
+            "include/kui/splash.h": "aef6e74f7f752f29cc8051163dca338653a1b07fb5e6cb046992438684c39f9c",
+            "include/kui/storage.h": "792c43ab3e8922ddb49eef23481998f8f9889a0f42b0a3608f1678a8e82d4c35",
+            "include/kui/storage_error.h": "9219b75a9734a93de517d47afc842190efe9cfaf96199cc0993fce8e37eb00b2",
+            "include/kui/storage_policy.h": "f9f5acb38ad9b2ca0af53fe8113404855a464e760d9d687ef57dd440e8b27123",
+            "include/kui/storage_test.h": "8d64c311d727d462475e8f600bca97cab8ae877e786ba8932773f13c356b459d",
+            "include/kui/system_settings.h": "1b12560aa63e6d52aa8484c08be835ab8adc947dbc036554b9403ace4d9ac33c",
+            "include/kui/timing.h": "87ba3be16bbb05a1493e71c9633afd1f6915f1b78595ecb5dbf19185834a5522",
+            "include/kui/toy_pilot.h": "a10c4f800d938a507fac1fea75c6707ce4e5bb02bca6a4cfe6130f7905190338",
+            "include/kui/toy_pilot_boot.h": "251026ae5340f0cdacf7c8cf778864766333f7bfce2b7169f2858e1ac642f424",
+            "include/kui/toy_pilot_bus.h": "20786a16f77295362b24761c7655ec0753d7ac612ff41f0d0617a4fc73ab5f4b",
+            "include/kui/toy_pilot_clock.h": "a4e480e0ab70caf01af89ff52929dc0177b620ab1ba558325271ad5d1a1b6525",
+            "include/kui/toy_pilot_driver_load.h": "1e4788ac09594068a0118b77d0a9f95e136482950f0442ddd93f0e3db8fd992c",
+            "include/kui/toy_pilot_gd.h": "cf9e6c1e491bad218aa71e5f0c7ec07ef300f5eda95a4717f4b81f8687975228",
+            "include/kui/toy_pilot_gd_status.h": "2d6d37042b7cc926bafa44ced4130a226d1382e0f925dc8774bef3df5859cb39",
+            "include/kui/toy_pilot_lease.h": "4191fa03309b689953793c00a27d80dec4e3d6267ddb23049650d99ae0fc7bde",
+            "include/kui/toy_pilot_ring.h": "d90c9ccb3b6c80110da122e4dfd3b71a046d6c25afb74377ba944ac2e36d2c7f",
+            "include/kui/toy_pilot_scratch.h": "3555d223f64786d0d2805a8f768f558e043b05086c3bcae5599b55037765ef3c",
+            "include/kui/ui_rate.h": "57a8b48cb070ffa2f700247a7d59c1bc64a658905498a16dd2f16cfd6fcdc351",
+            "include/kui/version.h": "f2126503d306ef491e9e1d5c419d6c73bcf83742e6dae43d2e0aa0de6fda4ba4",
+            "include/kui/viewport.h": "93419d5f3535261d9e16e0ba2824b0a4a80969d7ef3187ce49531d8c7327091f",
+            "include/kui/w5500.h": "2be4f1ed456b0cf616885fafc2a70cfa04a4c937da56c166416554b96f69bc40",
+            "include/kui/wav.h": "41a0bbf9673efba371233a89bb426e2fa69e9ad7d2ebcdb9454008c06f0965e5",
+            "src/loader/toy_pilot_worker.c": "2643866843f836ea363b8ee871a4ab7d568c3b59e1f27a1b5852bee8bf58e065",
+            "src/core/toy_pilot.c": "43d672705a3746359c11496998304bfd20ff537366735dcd64ab8651d7dbff4d",
+            "src/core/hash.c": "451f915eb8d85d0c94ef2af91cca2e25604e2eee81072d316ca708982d14485f",
+            "tests/toy_pilot_async_fixture.h": "c261fc9732704d32f977e03b3a6e4d9b32b5d7dea8072f72933c02f1343a3877",
+            "tests/test_toy_pilot_cadence.c": "3d6541b69ac3c450be68e07f1cbfd9880e62cde91dff723dfd2c629bfc072b66"
+          },
+          "binary_sha256": "7e378e18a130683c7e15c9fcbc03f2cffd38d21c0aec5a26a993450c7de6e2b7",
+          "compile_argv": [
+            "cc",
+            "-std=c11",
+            "-O2",
+            "-g",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wpedantic",
+            "-Wno-unused-function",
+            "-fno-pie",
+            "-no-pie",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-I/workspace/scratch/7dca5d4a4305/blocks-sci/include",
+            "-I/workspace/scratch/7dca5d4a4305/blocks-sci/src/loader",
+            "-DTOY_WORKER_SOURCE=\"/workspace/scratch/7dca5d4a4305/blocks-sci/src/loader/toy_pilot_worker.c\"",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/harness-source/tests/test_toy_pilot_cadence.c",
+            "/workspace/scratch/7dca5d4a4305/blocks-sci/src/core/toy_pilot.c",
+            "/workspace/scratch/7dca5d4a4305/blocks-sci/src/core/hash.c",
+            "-Wl,--gc-sections",
+            "-o",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-optimized/candidate"
+          ]
+        }
+      },
+      "summary": {
+        "baseline": {
+          "cells": {
+            "26042/7813": 12,
+            "26042/13021": 7,
+            "30000/7813": 11,
+            "30000/13021": 10,
+            "32552/7813": 7,
+            "32552/13021": 7,
+            "35000/7813": 3,
+            "35000/13021": 6,
+            "37500/7813": 0,
+            "37500/13021": 0,
+            "39063/7813": 0,
+            "39063/13021": 0
+          },
+          "total": 63,
+          "profiles": 144,
+          "lost": [],
+          "gained": [],
+          "assertion_failures": 0
+        },
+        "candidate": {
+          "cells": {
+            "26042/7813": 12,
+            "26042/13021": 12,
+            "30000/7813": 12,
+            "30000/13021": 12,
+            "32552/7813": 12,
+            "32552/13021": 12,
+            "35000/7813": 12,
+            "35000/13021": 12,
+            "37500/7813": 12,
+            "37500/13021": 12,
+            "39063/7813": 0,
+            "39063/13021": 0
+          },
+          "total": 120,
+          "profiles": 144,
+          "lost": [],
+          "gained": [
+            [
+              26042,
+              13021,
+              7,
+              0
+            ],
+            [
+              26042,
+              13021,
+              15,
+              0
+            ],
+            [
+              26042,
+              13021,
+              15,
+              2604
+            ],
+            [
+              26042,
+              13021,
+              15,
+              5208
+            ],
+            [
+              26042,
+              13021,
+              31,
+              5208
+            ],
+            [
+              30000,
+              7813,
+              7,
+              5208
+            ],
+            [
+              30000,
+              13021,
+              15,
+              5208
+            ],
+            [
+              30000,
+              13021,
+              31,
+              5208
+            ],
+            [
+              32552,
+              7813,
+              7,
+              0
+            ],
+            [
+              32552,
+              7813,
+              15,
+              2604
+            ],
+            [
+              32552,
+              7813,
+              15,
+              5208
+            ],
+            [
+              32552,
+              7813,
+              31,
+              0
+            ],
+            [
+              32552,
+              7813,
+              31,
+              5208
+            ],
+            [
+              32552,
+              13021,
+              0,
+              2604
+            ],
+            [
+              32552,
+              13021,
+              15,
+              2604
+            ],
+            [
+              32552,
+              13021,
+              31,
+              0
+            ],
+            [
+              32552,
+              13021,
+              31,
+              2604
+            ],
+            [
+              32552,
+              13021,
+              31,
+              5208
+            ],
+            [
+              35000,
+              7813,
+              0,
+              0
+            ],
+            [
+              35000,
+              7813,
+              0,
+              2604
+            ],
+            [
+              35000,
+              7813,
+              0,
+              5208
+            ],
+            [
+              35000,
+              7813,
+              7,
+              0
+            ],
+            [
+              35000,
+              7813,
+              7,
+              2604
+            ],
+            [
+              35000,
+              7813,
+              15,
+              0
+            ],
+            [
+              35000,
+              7813,
+              15,
+              2604
+            ],
+            [
+              35000,
+              7813,
+              31,
+              0
+            ],
+            [
+              35000,
+              7813,
+              31,
+              2604
+            ],
+            [
+              35000,
+              13021,
+              0,
+              0
+            ],
+            [
+              35000,
+              13021,
+              0,
+              2604
+            ],
+            [
+              35000,
+              13021,
+              0,
+              5208
+            ],
+            [
+              35000,
+              13021,
+              7,
+              0
+            ],
+            [
+              35000,
+              13021,
+              31,
+              0
+            ],
+            [
+              35000,
+              13021,
+              31,
+              5208
+            ],
+            [
+              37500,
+              7813,
+              0,
+              0
+            ],
+            [
+              37500,
+              7813,
+              0,
+              2604
+            ],
+            [
+              37500,
+              7813,
+              0,
+              5208
+            ],
+            [
+              37500,
+              7813,
+              7,
+              0
+            ],
+            [
+              37500,
+              7813,
+              7,
+              2604
+            ],
+            [
+              37500,
+              7813,
+              7,
+              5208
+            ],
+            [
+              37500,
+              7813,
+              15,
+              0
+            ],
+            [
+              37500,
+              7813,
+              15,
+              2604
+            ],
+            [
+              37500,
+              7813,
+              15,
+              5208
+            ],
+            [
+              37500,
+              7813,
+              31,
+              0
+            ],
+            [
+              37500,
+              7813,
+              31,
+              2604
+            ],
+            [
+              37500,
+              7813,
+              31,
+              5208
+            ],
+            [
+              37500,
+              13021,
+              0,
+              0
+            ],
+            [
+              37500,
+              13021,
+              0,
+              2604
+            ],
+            [
+              37500,
+              13021,
+              0,
+              5208
+            ],
+            [
+              37500,
+              13021,
+              7,
+              0
+            ],
+            [
+              37500,
+              13021,
+              7,
+              2604
+            ],
+            [
+              37500,
+              13021,
+              7,
+              5208
+            ],
+            [
+              37500,
+              13021,
+              15,
+              0
+            ],
+            [
+              37500,
+              13021,
+              15,
+              2604
+            ],
+            [
+              37500,
+              13021,
+              15,
+              5208
+            ],
+            [
+              37500,
+              13021,
+              31,
+              0
+            ],
+            [
+              37500,
+              13021,
+              31,
+              2604
+            ],
+            [
+              37500,
+              13021,
+              31,
+              5208
+            ]
+          ],
+          "assertion_failures": 0
+        }
+      },
+      "aggregate": {
+        "baseline": {
+          "recovery_reasons": {
+            "0": 63,
+            "3": 29,
+            "7": 52
+          },
+          "max_visit_ticks": 18843,
+          "max_raw_callbacks_per_visit": 3,
+          "max_observed_service_gap_ticks": 66732
+        },
+        "candidate": {
+          "recovery_reasons": {
+            "0": 120,
+            "3": 24
+          },
+          "max_visit_ticks": 20191,
+          "max_raw_callbacks_per_visit": 3,
+          "max_observed_service_gap_ticks": 66732
+        }
+      }
+    },
+    "sanitized": {
+      "profile_log": "cdda-eight-block-cadence-2026-10-08-sanitized.jsonl",
+      "profile_log_sha256": "be35a2317b32c1eaf7bab26c1cc04f13f3671f03e88b07f7063173bd1ca6e88f",
+      "identity": {
+        "baseline": {
+          "kind": "identity",
+          "variant": "baseline",
+          "revision": "56df22966bbb9093374372f8dad7a2e09a05fcb7",
+          "sources": {
+            "include/kui/apps.h": "7dda81be9dd9561fcb1ee6bc437e5f9a0e25abd09fcaa6c759de677e12d516e4",
+            "include/kui/ata.h": "b211d95c271be0b42c509c5554059e419ec70385d10e3af203c6fd87415cd8e6",
+            "include/kui/bench.h": "78992d342709d07055110f602799e76e27196bbee529da359f00d602ac295c37",
+            "include/kui/boot_image.h": "6b03559c3ebe114de0150964677da17d734330cf3be9e7c9a3eb0963cd2406a1",
+            "include/kui/boot_ui.h": "d0ee832c52d38604b56349bc489be600a20383da83c74397dc449483ef58d7d9",
+            "include/kui/boot_volume.h": "2117db60f0d55a8e3fd4e28f1697fd9c7477ddfbfa78944041df56a2dda13882",
+            "include/kui/capture.h": "20e316212c509f588e62317eaf76efc11065aa2b30592e16d544b72607de5f56",
+            "include/kui/capture_display.h": "4c0e2b175d1aa1bb9bfd20388e44ddc5c39fa104dd62c6d4b254478064454350",
+            "include/kui/capture_export.h": "0857a5f3a4377f59b78962e5f42cd9705fc1f1b0df41334ccb970657f455d852",
+            "include/kui/capture_format.h": "c69a80248cb443cb0a484a99b9198f446afb76fd555752df2685d6df0c5d5b4a",
+            "include/kui/cd_audio.h": "f42200c2664cce25734155322c1a73ba55a93830fa40eab90b031080e15e6a3d",
+            "include/kui/cdda_bios.h": "1cebbe401593cf8cf48ec8a1557ffb22f5ac7d91bf1e7c2fe47c72436a0598d8",
+            "include/kui/cdda_bios_batch.h": "373347cd3a724904a26f3a2308ff6b611211f35c9007c389767e654d25f34fbb",
+            "include/kui/cdda_bridge.h": "8f9405b011a342b5d2cd75275a128ccc6706093e1c5c4a13fed49c532dcd93e8",
+            "include/kui/cdda_clock.h": "c6d9d7d87fabbad3ac7c6ed5b332e54763bf5ca78ba81260c292930555d3e55d",
+            "include/kui/cdda_control.h": "bdde416af42bb11cf491188a87e0be918e36cf2506bd9d0d45a9fb88f7ddfcb8",
+            "include/kui/cdda_disc.h": "753106e1ab47aad06878224e8d7401bcad4a69a0e8d4fab03b848f4c5ee8e1d7",
+            "include/kui/cdda_disc_bios.h": "13deaa7a32cb7152a663dd2b02e0e39d93313bc6b9feda82b8c9b30fb4dce57b",
+            "include/kui/cdda_handoff.h": "486aa7e4b150bebc4f08a43a339ec3b0c45674f9a870bd13cf46aeb1c1ef1786",
+            "include/kui/cdda_job.h": "747e009cdc9e336512b83879d88bb8bc0b1cc74b81e9f460c4dad75b4cbafffb",
+            "include/kui/cdda_pcm.h": "6529a6e122d737addcdcd7bf2fa4b32be872e8a4b94678382616ff9a071eddee",
+            "include/kui/cdda_preflight.h": "dd18fc4ec039910c4180701b9c0c5e7df53b31b73699e451235a332274e5db00",
+            "include/kui/cdda_ring.h": "8f91a5ea3cbc10fde7b336941a5e9cbccf6c346d497853cb4b2c45f1a84b6987",
+            "include/kui/cdda_stream.h": "d1363ed3b7477a456056f60ff3554ab275bbeaf71e4b76993b480206bab26074",
+            "include/kui/cdda_timing.h": "b36fe0fb048cd126b373aa1215acaa63fa347f1973d38b60c672972e219ed297",
+            "include/kui/cdda_vector.h": "aa1ec7a5dbaf3132336dfd085870fc947618385338dad6666b65545e27ad9def",
+            "include/kui/ce_load_plan.h": "72b6913d78e51e6c0684da68a971fa6f1b566ed8f162767e3f56ad16368ac457",
+            "include/kui/clock.h": "2387c6a633738764268ebf5ce097eb29fbf8b705c9022871b57c7d567c6d1d41",
+            "include/kui/clock_platform.h": "711a6ee230ffc3b77b8c9b13de64b1f2092aca80294e883d758a6f3b9b6312ac",
+            "include/kui/core.h": "f1265c9f8f2732b67870bf60f0033ca218877f31951afc8445a11e71e7594aa9",
+            "include/kui/cover_image.h": "b47157e8d9874fd2fcb1263b3b2c6514b85e3a294805bed70592c73684f4a74d",
+            "include/kui/crc16.h": "93c355062991aa39337842f547224e84ca40f7b822405c4b26629d0a03b573f9",
+            "include/kui/destination.h": "e4173fb59d6c9d0f13c756a581db200f49043023fed8ba050636ba3e48453062",
+            "include/kui/disc_identity.h": "1f1cbd8bb9e78f8652ef7d481f3865a50e4abfaa03c85a417c575d2996baef58",
+            "include/kui/ext4_boot.h": "eabfb328c8691de81de29cb57751b881ca24bea2eaded14e2f681dd0507f27d7",
+            "include/kui/files.h": "29fbe8bf12f40ac901aba50fa41b04b5e7c78edc6d9b61cce8d06458f93203ac",
+            "include/kui/ftp.h": "f36e2ce4b31fc58f1c2fbca69046d6b20eb1eabf636f887bdc9b8b661256f6b0",
+            "include/kui/game_cover.h": "e71a8f68961497cb17ccd5e17a478e46278972c4ee560d8ec156f3a1432c9225",
+            "include/kui/game_image.h": "1a08b3e17b8b1c6507f2b353692a4a966c755d3f3c0a79ef55fb1cab5878fc50",
+            "include/kui/game_metadata.h": "9be69e775aebad2ab2bc963b368e245594ddc71367e285526c2d41f32a009868",
+            "include/kui/games.h": "599af1fb856e3fed40db66fb6b5bbba94107835725c54843d27e43413f6b6ac7",
+            "include/kui/games_covers.h": "009e8d26c747fb2b70052aeae56e1a02533f4c644f09b8d09ee7023167bb02ae",
+            "include/kui/games_image_probe.h": "1632ec442e6cc5999b1284a6dad4385693ab2903af2256ff603296128ec4e3dc",
+            "include/kui/games_probe.h": "1608e198297b97eb2276fe7d0a9c5103572d5b940b057b6beae0fcf3fff55e0b",
+            "include/kui/games_retail.h": "5bee8fe6def42b84843756940d45c15d2d882a6e57d227928f600d0ca5008b30",
+            "include/kui/gd_play.h": "a5c1bf7b85cad90a20ec9dbfa975217e1c837d118fec272c29ec7e7a02d0f9cb",
+            "include/kui/gd_service.h": "b2d8caf2a6aa7587fcc8d5613a7158bf4a33e89fdfda776726feec65f7ee5bdc",
+            "include/kui/hash.h": "0d010e66a81b0e6e35d5a89ef66ec1856f3f852ae312b6df22de2fcc773152c0",
+            "include/kui/image_client.h": "7809e93b8a796d3c532a8a52eeeae78c23d3b1013d8ace0afcdd84375e93e6d5",
+            "include/kui/image_loader_layout.h": "3b32eb72d325fbb048e65cea2c0e319e78c16e2cbd7ad858dc4b987352341d25",
+            "include/kui/known_dumps.h": "adb80d801efa949538a9222e99af5b331073417107386b8ec89c3877c85934c6",
+            "include/kui/loader_layout.h": "a1b5fa731db6c95b922e897a243b28f7ae3432037f0e26f7626e165258b09027",
+            "include/kui/loader_probe.h": "0b51192eaafc7a07e25bde6efbdf18ffbbb701d40c8a55e9d7bb43366d0ab655",
+            "include/kui/maintenance.h": "a9f6249534d4ad35efdd83a2e15a303c0d7ae54bf86ce9cf986fbd009f33c057",
+            "include/kui/media.h": "adb3b57c8572cb0ac0a6bbb7449adc7c556bff0fa609df46b1d40ae2a480b39b",
+            "include/kui/memory_test.h": "6339a1b041bbdfce2e29ca5a38fe79fc225ef1470432db545e6df0e9415183ce",
+            "include/kui/menu_sound.h": "a84a742a31a1c87106894ead11cb24c28df1ec2f258ada63cd1a03eaf19504ce",
+            "include/kui/music.h": "beeeff6dda84ba504135d3e91454b5093bc580aa9587a86e235c262160fa5487",
+            "include/kui/music_ogg.h": "be0c72266b9be5ba513a8aedecc041efdcf282cfffc6db0c733f6cdbb6a1e552",
+            "include/kui/music_player.h": "a2d60d6fc1066ae318f75810bb8f3a5b3206a8bef0af90558bc947ae17224287",
+            "include/kui/net.h": "7f17b1ffcdd8cb652d4106c3b524d0972a48d286c9da16207c401f8941e246fb",
+            "include/kui/network_probe.h": "10a7250d68d2a95bddde9ed17c3af3e83900388cd0168f576e99a6ff139e9ed6",
+            "include/kui/network_test.h": "22ef20a29cf5bcbb0c591b49564c0d9960e7159b3980e6c058f3e66168079def",
+            "include/kui/network_w5500.h": "74b75f0a352559ce8770541eac1b4cb94db99c5a1bc164c3ca11ca57f53e1319",
+            "include/kui/network_wifi.h": "07f7eee279f711d4cfe33db46ef7d88f8e50291278e0e8ae7e1a98191c26e0b1",
+            "include/kui/options.h": "695bb1cd8f4d4fe6e42beeafdd88498b2bfa39b5f484b60792a7d9f5d25ba8c7",
+            "include/kui/probe.h": "582a6eb24ac40ac7a9c258965271ee7f864e7bd7360d12b412d12a7c4b443010",
+            "include/kui/pvr_texture.h": "3a4c141f803d9ae2e1f2f01e8cc26c2d2faaf4dd8a6b366631d86892b7ee4d9d",
+            "include/kui/recovery_checks.h": "ac4c897a036ca0f6d087602f58a8f3b8ca86383ca9400c48f06267ed9d2dc7dd",
+            "include/kui/recovery_scan.h": "34323cd71578df62db36a056e5378fae9c3974bcfbe19fe51f0ef1bfc583ab08",
+            "include/kui/report.h": "1a0dd1418b0c15654b11b9d910edd85ef25ae6839403b06686cf9442971db6da",
+            "include/kui/resident_image.h": "5e0a31f415e420546aa0803234a88a89ec2151d8686776a850adaf69caf30270",
+            "include/kui/retail_cursor.h": "ccaa8295bc6a9838b5541f3fd984a649978311ece0b7d2b859d340d46c3db958",
+            "include/kui/retail_gd.h": "41f1b591ee5fa53a7ae9c94b12641d829f9404d1bde34cd032b9d3029533ac72",
+            "include/kui/retail_image.h": "c495ad998359559825827e131424686fb977845c06ec9904ea8b7a59c9aa6ce1",
+            "include/kui/retail_loader_layout.h": "c192fdc9cb1cc9e51838959a598c863a0d7c636c6dace17f2b39558e8bfeb085",
+            "include/kui/retail_observe.h": "0a604a4de6f961ec7c4f44dd9eb7d7226bd2c19fc8c65e5c02fb386f062a746a",
+            "include/kui/retail_pace.h": "66711adb2f12574ed4065136a80d52af78c23aed0de88eb7fb74dff3ff37b2cf",
+            "include/kui/retail_resident.h": "93c2d53da2d7a7d13fafe0dae8e63f3ac9624cd9e0e5ff1fe048dba8208b9a13",
+            "include/kui/runtime.h": "01f690a9e7bff0906295a5b907549ed0b9a6f687f2e32ba074ab1d60c80b2524",
+            "include/kui/salvage.h": "ba8ae97fdf5ceff7599c99c37d59b743a3fac5a452e8b275ecdeebfca10a11ec",
+            "include/kui/sci_async_probe.h": "5a9b3ff96089532c404e9273556f0b0dab86a6ba7545b2f9fa209d0665535a9c",
+            "include/kui/sci_video_quiet.h": "e2211b486a6110ab3e02273f763fdbaf21471d50c2fb68e1aaef32cc18542103",
+            "include/kui/settings.h": "0a2a57289d6c9afd6beb973ccfe15e9d5a9271b1b405059f1b791a9ded6c8501",
+            "include/kui/shell.h": "f5424f65e78667031ddc15c11f269f9898e0d5ffb5b1fba5a01ab55a6dc29661",
+            "include/kui/shell_font.h": "804582df2fa8f7909ca63d65eba66fb1772e8ccf61197ab49a89e3fff3facce7",
+            "include/kui/splash.h": "aef6e74f7f752f29cc8051163dca338653a1b07fb5e6cb046992438684c39f9c",
+            "include/kui/storage.h": "792c43ab3e8922ddb49eef23481998f8f9889a0f42b0a3608f1678a8e82d4c35",
+            "include/kui/storage_error.h": "9219b75a9734a93de517d47afc842190efe9cfaf96199cc0993fce8e37eb00b2",
+            "include/kui/storage_policy.h": "f9f5acb38ad9b2ca0af53fe8113404855a464e760d9d687ef57dd440e8b27123",
+            "include/kui/storage_test.h": "8d64c311d727d462475e8f600bca97cab8ae877e786ba8932773f13c356b459d",
+            "include/kui/system_settings.h": "1b12560aa63e6d52aa8484c08be835ab8adc947dbc036554b9403ace4d9ac33c",
+            "include/kui/timing.h": "87ba3be16bbb05a1493e71c9633afd1f6915f1b78595ecb5dbf19185834a5522",
+            "include/kui/toy_pilot.h": "b021598a97e7a2e5d3af5bd7e17c11f6cb553f1037cd5fcf52b9c807da7cc3eb",
+            "include/kui/toy_pilot_boot.h": "251026ae5340f0cdacf7c8cf778864766333f7bfce2b7169f2858e1ac642f424",
+            "include/kui/toy_pilot_bus.h": "20786a16f77295362b24761c7655ec0753d7ac612ff41f0d0617a4fc73ab5f4b",
+            "include/kui/toy_pilot_clock.h": "a4e480e0ab70caf01af89ff52929dc0177b620ab1ba558325271ad5d1a1b6525",
+            "include/kui/toy_pilot_driver_load.h": "1e4788ac09594068a0118b77d0a9f95e136482950f0442ddd93f0e3db8fd992c",
+            "include/kui/toy_pilot_gd.h": "cf9e6c1e491bad218aa71e5f0c7ec07ef300f5eda95a4717f4b81f8687975228",
+            "include/kui/toy_pilot_gd_status.h": "2d6d37042b7cc926bafa44ced4130a226d1382e0f925dc8774bef3df5859cb39",
+            "include/kui/toy_pilot_lease.h": "4191fa03309b689953793c00a27d80dec4e3d6267ddb23049650d99ae0fc7bde",
+            "include/kui/toy_pilot_ring.h": "2366b38a1e95e1fb18c6910d25e54974889d4ec46be7b994f97ddecaec46aa7f",
+            "include/kui/toy_pilot_scratch.h": "3555d223f64786d0d2805a8f768f558e043b05086c3bcae5599b55037765ef3c",
+            "include/kui/ui_rate.h": "57a8b48cb070ffa2f700247a7d59c1bc64a658905498a16dd2f16cfd6fcdc351",
+            "include/kui/version.h": "f2126503d306ef491e9e1d5c419d6c73bcf83742e6dae43d2e0aa0de6fda4ba4",
+            "include/kui/viewport.h": "93419d5f3535261d9e16e0ba2824b0a4a80969d7ef3187ce49531d8c7327091f",
+            "include/kui/w5500.h": "2be4f1ed456b0cf616885fafc2a70cfa04a4c937da56c166416554b96f69bc40",
+            "include/kui/wav.h": "41a0bbf9673efba371233a89bb426e2fa69e9ad7d2ebcdb9454008c06f0965e5",
+            "src/loader/toy_pilot_worker.c": "3613e3c338f6ad4cde3bb03db429e7a5c65baf3122649854da2226bf9d09618c",
+            "src/core/toy_pilot.c": "96975731e3ecd5c4d597c53523716499dabde7746becfd8650d53087047d10e0",
+            "src/core/hash.c": "451f915eb8d85d0c94ef2af91cca2e25604e2eee81072d316ca708982d14485f",
+            "tests/toy_pilot_async_fixture.h": "c261fc9732704d32f977e03b3a6e4d9b32b5d7dea8072f72933c02f1343a3877",
+            "tests/test_toy_pilot_cadence.c": "3d6541b69ac3c450be68e07f1cbfd9880e62cde91dff723dfd2c629bfc072b66"
+          },
+          "binary_sha256": "76bcdbd88fbca4b42d2fddbd86fb5b8f3b3659ea3f28eb5a5a88dcee0434f3c4",
+          "compile_argv": [
+            "cc",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-std=c11",
+            "-O1",
+            "-g",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wpedantic",
+            "-Wno-unused-function",
+            "-fno-pie",
+            "-no-pie",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-I/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/baseline-source/include",
+            "-I/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/baseline-source/src/loader",
+            "-DTOY_WORKER_SOURCE=\"/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/baseline-source/src/loader/toy_pilot_worker.c\"",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/harness-source/tests/test_toy_pilot_cadence.c",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/baseline-source/src/core/toy_pilot.c",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/baseline-source/src/core/hash.c",
+            "-Wl,--gc-sections",
+            "-o",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/baseline"
+          ]
+        },
+        "candidate": {
+          "kind": "identity",
+          "variant": "candidate",
+          "sources": {
+            "include/kui/apps.h": "7dda81be9dd9561fcb1ee6bc437e5f9a0e25abd09fcaa6c759de677e12d516e4",
+            "include/kui/ata.h": "b211d95c271be0b42c509c5554059e419ec70385d10e3af203c6fd87415cd8e6",
+            "include/kui/bench.h": "78992d342709d07055110f602799e76e27196bbee529da359f00d602ac295c37",
+            "include/kui/boot_image.h": "6b03559c3ebe114de0150964677da17d734330cf3be9e7c9a3eb0963cd2406a1",
+            "include/kui/boot_ui.h": "d0ee832c52d38604b56349bc489be600a20383da83c74397dc449483ef58d7d9",
+            "include/kui/boot_volume.h": "2117db60f0d55a8e3fd4e28f1697fd9c7477ddfbfa78944041df56a2dda13882",
+            "include/kui/capture.h": "20e316212c509f588e62317eaf76efc11065aa2b30592e16d544b72607de5f56",
+            "include/kui/capture_display.h": "4c0e2b175d1aa1bb9bfd20388e44ddc5c39fa104dd62c6d4b254478064454350",
+            "include/kui/capture_export.h": "0857a5f3a4377f59b78962e5f42cd9705fc1f1b0df41334ccb970657f455d852",
+            "include/kui/capture_format.h": "c69a80248cb443cb0a484a99b9198f446afb76fd555752df2685d6df0c5d5b4a",
+            "include/kui/cd_audio.h": "f42200c2664cce25734155322c1a73ba55a93830fa40eab90b031080e15e6a3d",
+            "include/kui/cdda_bios.h": "1cebbe401593cf8cf48ec8a1557ffb22f5ac7d91bf1e7c2fe47c72436a0598d8",
+            "include/kui/cdda_bios_batch.h": "373347cd3a724904a26f3a2308ff6b611211f35c9007c389767e654d25f34fbb",
+            "include/kui/cdda_bridge.h": "8f9405b011a342b5d2cd75275a128ccc6706093e1c5c4a13fed49c532dcd93e8",
+            "include/kui/cdda_clock.h": "c6d9d7d87fabbad3ac7c6ed5b332e54763bf5ca78ba81260c292930555d3e55d",
+            "include/kui/cdda_control.h": "bdde416af42bb11cf491188a87e0be918e36cf2506bd9d0d45a9fb88f7ddfcb8",
+            "include/kui/cdda_disc.h": "753106e1ab47aad06878224e8d7401bcad4a69a0e8d4fab03b848f4c5ee8e1d7",
+            "include/kui/cdda_disc_bios.h": "13deaa7a32cb7152a663dd2b02e0e39d93313bc6b9feda82b8c9b30fb4dce57b",
+            "include/kui/cdda_handoff.h": "486aa7e4b150bebc4f08a43a339ec3b0c45674f9a870bd13cf46aeb1c1ef1786",
+            "include/kui/cdda_job.h": "747e009cdc9e336512b83879d88bb8bc0b1cc74b81e9f460c4dad75b4cbafffb",
+            "include/kui/cdda_pcm.h": "6529a6e122d737addcdcd7bf2fa4b32be872e8a4b94678382616ff9a071eddee",
+            "include/kui/cdda_preflight.h": "dd18fc4ec039910c4180701b9c0c5e7df53b31b73699e451235a332274e5db00",
+            "include/kui/cdda_ring.h": "8f91a5ea3cbc10fde7b336941a5e9cbccf6c346d497853cb4b2c45f1a84b6987",
+            "include/kui/cdda_stream.h": "d1363ed3b7477a456056f60ff3554ab275bbeaf71e4b76993b480206bab26074",
+            "include/kui/cdda_timing.h": "b36fe0fb048cd126b373aa1215acaa63fa347f1973d38b60c672972e219ed297",
+            "include/kui/cdda_vector.h": "aa1ec7a5dbaf3132336dfd085870fc947618385338dad6666b65545e27ad9def",
+            "include/kui/ce_load_plan.h": "72b6913d78e51e6c0684da68a971fa6f1b566ed8f162767e3f56ad16368ac457",
+            "include/kui/clock.h": "2387c6a633738764268ebf5ce097eb29fbf8b705c9022871b57c7d567c6d1d41",
+            "include/kui/clock_platform.h": "711a6ee230ffc3b77b8c9b13de64b1f2092aca80294e883d758a6f3b9b6312ac",
+            "include/kui/core.h": "f1265c9f8f2732b67870bf60f0033ca218877f31951afc8445a11e71e7594aa9",
+            "include/kui/cover_image.h": "b47157e8d9874fd2fcb1263b3b2c6514b85e3a294805bed70592c73684f4a74d",
+            "include/kui/crc16.h": "93c355062991aa39337842f547224e84ca40f7b822405c4b26629d0a03b573f9",
+            "include/kui/destination.h": "e4173fb59d6c9d0f13c756a581db200f49043023fed8ba050636ba3e48453062",
+            "include/kui/disc_identity.h": "1f1cbd8bb9e78f8652ef7d481f3865a50e4abfaa03c85a417c575d2996baef58",
+            "include/kui/ext4_boot.h": "eabfb328c8691de81de29cb57751b881ca24bea2eaded14e2f681dd0507f27d7",
+            "include/kui/files.h": "29fbe8bf12f40ac901aba50fa41b04b5e7c78edc6d9b61cce8d06458f93203ac",
+            "include/kui/ftp.h": "f36e2ce4b31fc58f1c2fbca69046d6b20eb1eabf636f887bdc9b8b661256f6b0",
+            "include/kui/game_cover.h": "e71a8f68961497cb17ccd5e17a478e46278972c4ee560d8ec156f3a1432c9225",
+            "include/kui/game_image.h": "1a08b3e17b8b1c6507f2b353692a4a966c755d3f3c0a79ef55fb1cab5878fc50",
+            "include/kui/game_metadata.h": "9be69e775aebad2ab2bc963b368e245594ddc71367e285526c2d41f32a009868",
+            "include/kui/games.h": "599af1fb856e3fed40db66fb6b5bbba94107835725c54843d27e43413f6b6ac7",
+            "include/kui/games_covers.h": "009e8d26c747fb2b70052aeae56e1a02533f4c644f09b8d09ee7023167bb02ae",
+            "include/kui/games_image_probe.h": "1632ec442e6cc5999b1284a6dad4385693ab2903af2256ff603296128ec4e3dc",
+            "include/kui/games_probe.h": "1608e198297b97eb2276fe7d0a9c5103572d5b940b057b6beae0fcf3fff55e0b",
+            "include/kui/games_retail.h": "5bee8fe6def42b84843756940d45c15d2d882a6e57d227928f600d0ca5008b30",
+            "include/kui/gd_play.h": "a5c1bf7b85cad90a20ec9dbfa975217e1c837d118fec272c29ec7e7a02d0f9cb",
+            "include/kui/gd_service.h": "b2d8caf2a6aa7587fcc8d5613a7158bf4a33e89fdfda776726feec65f7ee5bdc",
+            "include/kui/hash.h": "0d010e66a81b0e6e35d5a89ef66ec1856f3f852ae312b6df22de2fcc773152c0",
+            "include/kui/image_client.h": "7809e93b8a796d3c532a8a52eeeae78c23d3b1013d8ace0afcdd84375e93e6d5",
+            "include/kui/image_loader_layout.h": "3b32eb72d325fbb048e65cea2c0e319e78c16e2cbd7ad858dc4b987352341d25",
+            "include/kui/known_dumps.h": "adb80d801efa949538a9222e99af5b331073417107386b8ec89c3877c85934c6",
+            "include/kui/loader_layout.h": "a1b5fa731db6c95b922e897a243b28f7ae3432037f0e26f7626e165258b09027",
+            "include/kui/loader_probe.h": "0b51192eaafc7a07e25bde6efbdf18ffbbb701d40c8a55e9d7bb43366d0ab655",
+            "include/kui/maintenance.h": "a9f6249534d4ad35efdd83a2e15a303c0d7ae54bf86ce9cf986fbd009f33c057",
+            "include/kui/media.h": "adb3b57c8572cb0ac0a6bbb7449adc7c556bff0fa609df46b1d40ae2a480b39b",
+            "include/kui/memory_test.h": "6339a1b041bbdfce2e29ca5a38fe79fc225ef1470432db545e6df0e9415183ce",
+            "include/kui/menu_sound.h": "a84a742a31a1c87106894ead11cb24c28df1ec2f258ada63cd1a03eaf19504ce",
+            "include/kui/music.h": "beeeff6dda84ba504135d3e91454b5093bc580aa9587a86e235c262160fa5487",
+            "include/kui/music_ogg.h": "be0c72266b9be5ba513a8aedecc041efdcf282cfffc6db0c733f6cdbb6a1e552",
+            "include/kui/music_player.h": "a2d60d6fc1066ae318f75810bb8f3a5b3206a8bef0af90558bc947ae17224287",
+            "include/kui/net.h": "7f17b1ffcdd8cb652d4106c3b524d0972a48d286c9da16207c401f8941e246fb",
+            "include/kui/network_probe.h": "10a7250d68d2a95bddde9ed17c3af3e83900388cd0168f576e99a6ff139e9ed6",
+            "include/kui/network_test.h": "22ef20a29cf5bcbb0c591b49564c0d9960e7159b3980e6c058f3e66168079def",
+            "include/kui/network_w5500.h": "74b75f0a352559ce8770541eac1b4cb94db99c5a1bc164c3ca11ca57f53e1319",
+            "include/kui/network_wifi.h": "07f7eee279f711d4cfe33db46ef7d88f8e50291278e0e8ae7e1a98191c26e0b1",
+            "include/kui/options.h": "695bb1cd8f4d4fe6e42beeafdd88498b2bfa39b5f484b60792a7d9f5d25ba8c7",
+            "include/kui/probe.h": "582a6eb24ac40ac7a9c258965271ee7f864e7bd7360d12b412d12a7c4b443010",
+            "include/kui/pvr_texture.h": "3a4c141f803d9ae2e1f2f01e8cc26c2d2faaf4dd8a6b366631d86892b7ee4d9d",
+            "include/kui/recovery_checks.h": "ac4c897a036ca0f6d087602f58a8f3b8ca86383ca9400c48f06267ed9d2dc7dd",
+            "include/kui/recovery_scan.h": "34323cd71578df62db36a056e5378fae9c3974bcfbe19fe51f0ef1bfc583ab08",
+            "include/kui/report.h": "1a0dd1418b0c15654b11b9d910edd85ef25ae6839403b06686cf9442971db6da",
+            "include/kui/resident_image.h": "5e0a31f415e420546aa0803234a88a89ec2151d8686776a850adaf69caf30270",
+            "include/kui/retail_cursor.h": "ccaa8295bc6a9838b5541f3fd984a649978311ece0b7d2b859d340d46c3db958",
+            "include/kui/retail_gd.h": "41f1b591ee5fa53a7ae9c94b12641d829f9404d1bde34cd032b9d3029533ac72",
+            "include/kui/retail_image.h": "c495ad998359559825827e131424686fb977845c06ec9904ea8b7a59c9aa6ce1",
+            "include/kui/retail_loader_layout.h": "c192fdc9cb1cc9e51838959a598c863a0d7c636c6dace17f2b39558e8bfeb085",
+            "include/kui/retail_observe.h": "0a604a4de6f961ec7c4f44dd9eb7d7226bd2c19fc8c65e5c02fb386f062a746a",
+            "include/kui/retail_pace.h": "66711adb2f12574ed4065136a80d52af78c23aed0de88eb7fb74dff3ff37b2cf",
+            "include/kui/retail_resident.h": "93c2d53da2d7a7d13fafe0dae8e63f3ac9624cd9e0e5ff1fe048dba8208b9a13",
+            "include/kui/runtime.h": "01f690a9e7bff0906295a5b907549ed0b9a6f687f2e32ba074ab1d60c80b2524",
+            "include/kui/salvage.h": "ba8ae97fdf5ceff7599c99c37d59b743a3fac5a452e8b275ecdeebfca10a11ec",
+            "include/kui/sci_async_probe.h": "5a9b3ff96089532c404e9273556f0b0dab86a6ba7545b2f9fa209d0665535a9c",
+            "include/kui/sci_video_quiet.h": "e2211b486a6110ab3e02273f763fdbaf21471d50c2fb68e1aaef32cc18542103",
+            "include/kui/settings.h": "0a2a57289d6c9afd6beb973ccfe15e9d5a9271b1b405059f1b791a9ded6c8501",
+            "include/kui/shell.h": "f5424f65e78667031ddc15c11f269f9898e0d5ffb5b1fba5a01ab55a6dc29661",
+            "include/kui/shell_font.h": "804582df2fa8f7909ca63d65eba66fb1772e8ccf61197ab49a89e3fff3facce7",
+            "include/kui/splash.h": "aef6e74f7f752f29cc8051163dca338653a1b07fb5e6cb046992438684c39f9c",
+            "include/kui/storage.h": "792c43ab3e8922ddb49eef23481998f8f9889a0f42b0a3608f1678a8e82d4c35",
+            "include/kui/storage_error.h": "9219b75a9734a93de517d47afc842190efe9cfaf96199cc0993fce8e37eb00b2",
+            "include/kui/storage_policy.h": "f9f5acb38ad9b2ca0af53fe8113404855a464e760d9d687ef57dd440e8b27123",
+            "include/kui/storage_test.h": "8d64c311d727d462475e8f600bca97cab8ae877e786ba8932773f13c356b459d",
+            "include/kui/system_settings.h": "1b12560aa63e6d52aa8484c08be835ab8adc947dbc036554b9403ace4d9ac33c",
+            "include/kui/timing.h": "87ba3be16bbb05a1493e71c9633afd1f6915f1b78595ecb5dbf19185834a5522",
+            "include/kui/toy_pilot.h": "a10c4f800d938a507fac1fea75c6707ce4e5bb02bca6a4cfe6130f7905190338",
+            "include/kui/toy_pilot_boot.h": "251026ae5340f0cdacf7c8cf778864766333f7bfce2b7169f2858e1ac642f424",
+            "include/kui/toy_pilot_bus.h": "20786a16f77295362b24761c7655ec0753d7ac612ff41f0d0617a4fc73ab5f4b",
+            "include/kui/toy_pilot_clock.h": "a4e480e0ab70caf01af89ff52929dc0177b620ab1ba558325271ad5d1a1b6525",
+            "include/kui/toy_pilot_driver_load.h": "1e4788ac09594068a0118b77d0a9f95e136482950f0442ddd93f0e3db8fd992c",
+            "include/kui/toy_pilot_gd.h": "cf9e6c1e491bad218aa71e5f0c7ec07ef300f5eda95a4717f4b81f8687975228",
+            "include/kui/toy_pilot_gd_status.h": "2d6d37042b7cc926bafa44ced4130a226d1382e0f925dc8774bef3df5859cb39",
+            "include/kui/toy_pilot_lease.h": "4191fa03309b689953793c00a27d80dec4e3d6267ddb23049650d99ae0fc7bde",
+            "include/kui/toy_pilot_ring.h": "d90c9ccb3b6c80110da122e4dfd3b71a046d6c25afb74377ba944ac2e36d2c7f",
+            "include/kui/toy_pilot_scratch.h": "3555d223f64786d0d2805a8f768f558e043b05086c3bcae5599b55037765ef3c",
+            "include/kui/ui_rate.h": "57a8b48cb070ffa2f700247a7d59c1bc64a658905498a16dd2f16cfd6fcdc351",
+            "include/kui/version.h": "f2126503d306ef491e9e1d5c419d6c73bcf83742e6dae43d2e0aa0de6fda4ba4",
+            "include/kui/viewport.h": "93419d5f3535261d9e16e0ba2824b0a4a80969d7ef3187ce49531d8c7327091f",
+            "include/kui/w5500.h": "2be4f1ed456b0cf616885fafc2a70cfa04a4c937da56c166416554b96f69bc40",
+            "include/kui/wav.h": "41a0bbf9673efba371233a89bb426e2fa69e9ad7d2ebcdb9454008c06f0965e5",
+            "src/loader/toy_pilot_worker.c": "2643866843f836ea363b8ee871a4ab7d568c3b59e1f27a1b5852bee8bf58e065",
+            "src/core/toy_pilot.c": "43d672705a3746359c11496998304bfd20ff537366735dcd64ab8651d7dbff4d",
+            "src/core/hash.c": "451f915eb8d85d0c94ef2af91cca2e25604e2eee81072d316ca708982d14485f",
+            "tests/toy_pilot_async_fixture.h": "c261fc9732704d32f977e03b3a6e4d9b32b5d7dea8072f72933c02f1343a3877",
+            "tests/test_toy_pilot_cadence.c": "3d6541b69ac3c450be68e07f1cbfd9880e62cde91dff723dfd2c629bfc072b66"
+          },
+          "binary_sha256": "ebb75fee294f20e2c6b8282cf1086cff71b5c5211350da6ed94bb8e6fbe2d913",
+          "compile_argv": [
+            "cc",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-std=c11",
+            "-O1",
+            "-g",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wpedantic",
+            "-Wno-unused-function",
+            "-fno-pie",
+            "-no-pie",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-I/workspace/scratch/7dca5d4a4305/blocks-sci/include",
+            "-I/workspace/scratch/7dca5d4a4305/blocks-sci/src/loader",
+            "-DTOY_WORKER_SOURCE=\"/workspace/scratch/7dca5d4a4305/blocks-sci/src/loader/toy_pilot_worker.c\"",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/harness-source/tests/test_toy_pilot_cadence.c",
+            "/workspace/scratch/7dca5d4a4305/blocks-sci/src/core/toy_pilot.c",
+            "/workspace/scratch/7dca5d4a4305/blocks-sci/src/core/hash.c",
+            "-Wl,--gc-sections",
+            "-o",
+            "/workspace/scratch/7dca5d4a4305/blocks-model/final-sanitized/candidate"
+          ]
+        }
+      },
+      "summary": {
+        "baseline": {
+          "cells": {
+            "26042/7813": 12,
+            "26042/13021": 7,
+            "30000/7813": 11,
+            "30000/13021": 10,
+            "32552/7813": 7,
+            "32552/13021": 7,
+            "35000/7813": 3,
+            "35000/13021": 6,
+            "37500/7813": 0,
+            "37500/13021": 0,
+            "39063/7813": 0,
+            "39063/13021": 0
+          },
+          "total": 63,
+          "profiles": 144,
+          "lost": [],
+          "gained": [],
+          "assertion_failures": 0
+        },
+        "candidate": {
+          "cells": {
+            "26042/7813": 12,
+            "26042/13021": 12,
+            "30000/7813": 12,
+            "30000/13021": 12,
+            "32552/7813": 12,
+            "32552/13021": 12,
+            "35000/7813": 12,
+            "35000/13021": 12,
+            "37500/7813": 12,
+            "37500/13021": 12,
+            "39063/7813": 0,
+            "39063/13021": 0
+          },
+          "total": 120,
+          "profiles": 144,
+          "lost": [],
+          "gained": [
+            [
+              26042,
+              13021,
+              7,
+              0
+            ],
+            [
+              26042,
+              13021,
+              15,
+              0
+            ],
+            [
+              26042,
+              13021,
+              15,
+              2604
+            ],
+            [
+              26042,
+              13021,
+              15,
+              5208
+            ],
+            [
+              26042,
+              13021,
+              31,
+              5208
+            ],
+            [
+              30000,
+              7813,
+              7,
+              5208
+            ],
+            [
+              30000,
+              13021,
+              15,
+              5208
+            ],
+            [
+              30000,
+              13021,
+              31,
+              5208
+            ],
+            [
+              32552,
+              7813,
+              7,
+              0
+            ],
+            [
+              32552,
+              7813,
+              15,
+              2604
+            ],
+            [
+              32552,
+              7813,
+              15,
+              5208
+            ],
+            [
+              32552,
+              7813,
+              31,
+              0
+            ],
+            [
+              32552,
+              7813,
+              31,
+              5208
+            ],
+            [
+              32552,
+              13021,
+              0,
+              2604
+            ],
+            [
+              32552,
+              13021,
+              15,
+              2604
+            ],
+            [
+              32552,
+              13021,
+              31,
+              0
+            ],
+            [
+              32552,
+              13021,
+              31,
+              2604
+            ],
+            [
+              32552,
+              13021,
+              31,
+              5208
+            ],
+            [
+              35000,
+              7813,
+              0,
+              0
+            ],
+            [
+              35000,
+              7813,
+              0,
+              2604
+            ],
+            [
+              35000,
+              7813,
+              0,
+              5208
+            ],
+            [
+              35000,
+              7813,
+              7,
+              0
+            ],
+            [
+              35000,
+              7813,
+              7,
+              2604
+            ],
+            [
+              35000,
+              7813,
+              15,
+              0
+            ],
+            [
+              35000,
+              7813,
+              15,
+              2604
+            ],
+            [
+              35000,
+              7813,
+              31,
+              0
+            ],
+            [
+              35000,
+              7813,
+              31,
+              2604
+            ],
+            [
+              35000,
+              13021,
+              0,
+              0
+            ],
+            [
+              35000,
+              13021,
+              0,
+              2604
+            ],
+            [
+              35000,
+              13021,
+              0,
+              5208
+            ],
+            [
+              35000,
+              13021,
+              7,
+              0
+            ],
+            [
+              35000,
+              13021,
+              31,
+              0
+            ],
+            [
+              35000,
+              13021,
+              31,
+              5208
+            ],
+            [
+              37500,
+              7813,
+              0,
+              0
+            ],
+            [
+              37500,
+              7813,
+              0,
+              2604
+            ],
+            [
+              37500,
+              7813,
+              0,
+              5208
+            ],
+            [
+              37500,
+              7813,
+              7,
+              0
+            ],
+            [
+              37500,
+              7813,
+              7,
+              2604
+            ],
+            [
+              37500,
+              7813,
+              7,
+              5208
+            ],
+            [
+              37500,
+              7813,
+              15,
+              0
+            ],
+            [
+              37500,
+              7813,
+              15,
+              2604
+            ],
+            [
+              37500,
+              7813,
+              15,
+              5208
+            ],
+            [
+              37500,
+              7813,
+              31,
+              0
+            ],
+            [
+              37500,
+              7813,
+              31,
+              2604
+            ],
+            [
+              37500,
+              7813,
+              31,
+              5208
+            ],
+            [
+              37500,
+              13021,
+              0,
+              0
+            ],
+            [
+              37500,
+              13021,
+              0,
+              2604
+            ],
+            [
+              37500,
+              13021,
+              0,
+              5208
+            ],
+            [
+              37500,
+              13021,
+              7,
+              0
+            ],
+            [
+              37500,
+              13021,
+              7,
+              2604
+            ],
+            [
+              37500,
+              13021,
+              7,
+              5208
+            ],
+            [
+              37500,
+              13021,
+              15,
+              0
+            ],
+            [
+              37500,
+              13021,
+              15,
+              2604
+            ],
+            [
+              37500,
+              13021,
+              15,
+              5208
+            ],
+            [
+              37500,
+              13021,
+              31,
+              0
+            ],
+            [
+              37500,
+              13021,
+              31,
+              2604
+            ],
+            [
+              37500,
+              13021,
+              31,
+              5208
+            ]
+          ],
+          "assertion_failures": 0
+        }
+      },
+      "aggregate": {
+        "baseline": {
+          "recovery_reasons": {
+            "0": 63,
+            "3": 29,
+            "7": 52
+          },
+          "max_visit_ticks": 18843,
+          "max_raw_callbacks_per_visit": 3,
+          "max_observed_service_gap_ticks": 66732
+        },
+        "candidate": {
+          "recovery_reasons": {
+            "0": 120,
+            "3": 24
+          },
+          "max_visit_ticks": 20191,
+          "max_raw_callbacks_per_visit": 3,
+          "max_observed_service_gap_ticks": 66732
+        }
+      }
+    }
+  },
+  "targeted_sanitized_suite": {
+    "source_sha256": {
+      "tests/test_toy_pilot_blocks_worker.c": "b9a9a80794661cc48a4579d150939bbe0ac9d5d24fdc7d22ed9484bf0b6bbe74",
+      "tests/toy_pilot_async_fixture.h": "c261fc9732704d32f977e03b3a6e4d9b32b5d7dea8072f72933c02f1343a3877",
+      "src/loader/toy_pilot_worker.c": "2643866843f836ea363b8ee871a4ab7d568c3b59e1f27a1b5852bee8bf58e065",
+      "src/core/toy_pilot.c": "43d672705a3746359c11496998304bfd20ff537366735dcd64ab8651d7dbff4d",
+      "src/core/hash.c": "451f915eb8d85d0c94ef2af91cca2e25604e2eee81072d316ca708982d14485f",
+      "include/kui/toy_pilot.h": "a10c4f800d938a507fac1fea75c6707ce4e5bb02bca6a4cfe6130f7905190338",
+      "include/kui/toy_pilot_ring.h": "d90c9ccb3b6c80110da122e4dfd3b71a046d6c25afb74377ba944ac2e36d2c7f"
+    },
+    "binary_sha256": "b06460fb2f4d39c0756e64a9f0299c83998000b275608f3ebd101118b74e1890",
+    "exit_code": 0,
+    "stdout": "eight-block physical PCM and lifecycle regressions: ok\n",
+    "stderr": "",
+    "cases": [
+      "Finite source lengths 1, 6, 7, 55, 56 sectors and no post-EOF work",
+      "Repeat 1/7-sector sources, actual stereo skew 0/24/64 frames in both directions, >4 physical wraps",
+      "Delayed accepted observation across 3 blocks; delayed numeric wrap with absolute source order",
+      "Real 4096 capture straddle retaining both PLAYING blocks, plus missing next block in both channel orders",
+      "Missing and stale intermediate block cause STOP even when final destination metadata is intact",
+      "Deferred right plane retries exact tagged raw cache without new raw read or progress commit",
+      "Partial stereo PAUSE retains full 32768-frame STOP fence; revoke admits no further work"
+    ],
+    "compile_argv": [
+      "cc",
+      "-std=c11",
+      "-O1",
+      "-g",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Wpedantic",
+      "-Wno-unused-function",
+      "-fno-pie",
+      "-no-pie",
+      "-ffunction-sections",
+      "-fdata-sections",
+      "-Iinclude",
+      "-Isrc/loader",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "tests/test_toy_pilot_blocks_worker.c",
+      "src/core/toy_pilot.c",
+      "src/core/hash.c",
+      "-Wl,--gc-sections",
+      "-o",
+      "/workspace/scratch/7dca5d4a4305/blocks-model/test-blocks-worker-final"
+    ],
+    "compile_workdir": "/workspace/scratch/7dca5d4a4305/blocks-sci",
+    "environment": {
+      "ASAN_OPTIONS": "detect_leaks=0"
+    }
+  }
+}

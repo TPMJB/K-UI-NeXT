@@ -1,0 +1,787 @@
+diff --git a/docs/evidence/cdda-sci-interleave-cache-prototype-2026-10-08.md b/docs/evidence/cdda-sci-interleave-cache-prototype-2026-10-08.md
+new file mode 100644
+index 0000000..5f5f9fb
+--- /dev/null
++++ b/docs/evidence/cdda-sci-interleave-cache-prototype-2026-10-08.md
+@@ -0,0 +1,117 @@
++# Separate SCI mapper-cache prototype
++
++Base: `56df229`. This experiment is separate from the eight-block-ring
++candidate and is absent from every resident/worker/package build input.
++It changes no ordinary 1.8.5 reader, Start/menu behavior, SCI instruction,
++IRQ integration, raw-sector callback or GD dispatch limit.
++
++The current synchronous callback acquires the shared physical bus, streams
++the validated request with CMD18, stops with CMD12 and restores the previous
++SCI owner before returning. Keeping CMD18 live across returns would also
++require retaining the shared SCI lease across restored-SR intervals. No such
++native-owner exclusion/session contract is established, so this prototype
++preserves every acquisition, stop, deselection and release boundary.
++
++The existing mapper keeps one CRC-checked 512-byte physical block. Adjacent
++2352-byte audio sectors usually share their boundary block. An intervening
++GD data read replaces that cache, causing the next audio callback to reread
++the shared block. The prototype keeps one trailing block per logical
++audio/data owner, restoring the appropriate tail before invoking the exact
++existing mapper and CRC-checking SD protocol. It fetches no extra blocks,
++batches no audio sectors and uses no persistent physical lease.
++
++Each tail has a physical LBA and validity tag. The cache binds an image,
++immutable manifest, image callback/context identity and explicit lifecycle
++epoch. Transport callback/context identity binds on first use. A stale epoch
++or changed identity is rejected before acquisition and cannot silently rebind.
++Reset clears both tails and the existing mapper cache. A callback snapshots
++its transport descriptor so cleanup releases the exact owner it acquired.
++It commits a tail only after the mapper succeeds, stream cleanup succeeds,
++release returns and the lifecycle revision still matches. Acquisition,
++read, header/mode or cleanup failure invalidates both tails. Reset during
++acquire/read/stop/release causes the in-flight result to be refused and prevents
++old-epoch cache publication; it does not asynchronously cancel a synchronous
++transfer already in progress.
++
++As in the existing resident, acquisition failure means the transport left no
++new lease or borrowed controls owned by the caller. The cache does not call
++release after failed acquisition, since that could release another owner's
++lease. Failure cleanup/restoration belongs to the transport; the cache layer
++does not independently prove it.
++
++## Reproduction and physical read counts
++
++From a checkout of the base with this branch's patch applied:
++
++```sh
++python3 tests/test_retail_interleave_cache.py
++```
++
++The script compiles and runs six strict-warning ASan/UBSan configurations:
++the prototype with serial and folded CRC implementations, the unchanged
++mapper, unchanged SD protocol, unchanged ordinary SCI bus, and the pilot's
++unchanged receive-paced SCI diagnostic bus with TDRE reuse disabled.
++The prototype fixture alternates 32 one-sector audio callbacks and 32
++two-sector cooked-data callbacks. It compares every logical output byte
++against independently authored source bytes and checks output guards.
++
++| Zero-offset fixture | Baseline | Separate tails |
++|---|---:|---:|
++| Audio physical 512-byte blocks | 178 | 147 |
++| Data physical 512-byte blocks | 256 | 256 |
++| Total physical 512-byte blocks | 434 | 403 |
++| CMD18 starts, contiguous extents | 64 | 64 |
++| CMD18 starts, three-block fragmented extents | 187 | 177 |
++| Acquisitions / cleanup calls / releases | 64 / 64 / 64 | 64 / 64 / 64 |
++
++In this synthetic interleave, audio block reads fall by 31/178 (approximately
++17.42%) and total block reads by 31/434 (approximately 7.14%). Fragmented
++extents also need ten fewer CMD18 starts. These are exact physical/protocol
++counts in a host model, not hardware elapsed-time or audible-continuity gains.
++
++Tests also cover all 512 container offsets; aligned and unaligned outputs;
++contiguous/fragmented extents; raw/cooked data tracks; scalar and bulk SD
++payload paths; repeated source wraps; non-contiguous seeks; same-owner reads;
++token, CRC, partial-payload, acquisition, mode/header and stop faults;
++recursive entry; lifecycle reset at four callback boundaries; image/map/
++callback/context replacement; transport identity mismatch; descriptor mutation;
++stale epochs; natural revision/epoch wrap; terminal unbind; and preflight
++rejections without bus traffic. Same-owner sequential/wrapped workloads retain
++the baseline physical read count. The actual SD reader supplies CRC validation,
++bounded request/extent runs and CMD12 cleanup; the new helper does not replace
++those protocol rules. The separate unchanged SCI-bus regression checks its
++byte reversal, CRC, pacing, alignment, error handling and ownership restoration.
++
++## Integration limits
++
++The new cache contains 1024 bytes of saved physical payload plus tags/bindings
++and alignment padding (1184 bytes on the host ABI, 1152 bytes on SH-4). The helper performs two
++512-byte SH-memory copies per successful callback when a tail is restored.
++Native code size, BSS placement, stack depth and this copy cost require a
++linked resident/worker audit and console measurement before integration.
++The current low resident ends at `0x8c0077e8`, only 24 bytes below its
++`0x8c007800` owner limit. This additional cache cannot simply be placed in
++that resident. Future integration must explicitly bind leased worker storage
++or establish enough freed resident space and repeat the layout/stack audit.
++An isolated SH-4 GCC 15.2 `-Os -m4-single-only -ffreestanding -fno-builtin`
++compile reports 708 bytes of object text, a 76-byte local read frame and a
++20-byte local reset frame. Those local frames exclude mapper, protocol and
++transport callback depth and are not a linked stack bound.
++
++The immutable-card/map requirement is unchanged. Hot replacement or source
++modification must explicitly reset/rebind the cache with a new lifecycle epoch.
++A same-address physical card replacement cannot be inferred from a physical
++LBA tag. The caller must retain existing SR, resident lock, data priority,
++generation, driver and STOP admission; this helper supplies none of those
++permissions and cannot authorize a raw read in a forbidden context.
++
++Benefits depend on actual interleaving and source alignment. A continuously
++serviced audio owner already enjoys the original tail cache, so this experiment
++does not reduce its physical read count. It does not shorten command setup or
++SCI ownership gaps for contiguous extents, solve sparse service opportunities,
++refresh cursor proofs or prove the hardware's maximum throughput. A persistent
++or asynchronous mixed audio/data stream remains a separate shared-owner
++architecture change.
++
++Only the excluded prototype and reproducible host tests are prepared here.
++No runtime using this cache has been console-linked, packaged or tested.
+diff --git a/include/kui/retail_interleave_cache.h b/include/kui/retail_interleave_cache.h
+new file mode 100644
+index 0000000..513a090
+--- /dev/null
++++ b/include/kui/retail_interleave_cache.h
+@@ -0,0 +1,61 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#ifndef KUI_RETAIL_INTERLEAVE_CACHE_H
++#define KUI_RETAIL_INTERLEAVE_CACHE_H
++#include "kui/retail_image.h"
++
++/* Opt-in host-tested prototype. No standard reader links this translation
++ * unit. These are mapper cache owners, not persistent card/bus leases. */
++enum kui_retail_cache_owner { KUI_RETAIL_CACHE_DATA, KUI_RETAIL_CACHE_AUDIO,
++    KUI_RETAIL_CACHE_OWNERS };
++struct kui_retail_cache_tail {
++    uint32_t valid, lba;
++    _Alignas(32) uint8_t block[512];
++};
++_Static_assert(offsetof(struct kui_retail_cache_tail, block) % 32u == 0,
++    "cached physical sector alignment");
++
++/* acquire/stop return zero on success. An acquire failure must leave no lease
++ * or borrowed bus controls owned by this caller; failure cleanup remains the
++ * transport's responsibility, matching the existing resident acquire contract.
++ * stop must close/deselect every stream,
++ * including failed reads. release restores the previous physical bus owner.
++ * Callers serialize this cache, image and bus with the existing SR/owner scope;
++ * this helper introduces no interrupt, lock, scheduler or persistent lease. */
++struct kui_retail_cache_transport {
++    void *context;
++    int (*acquire)(void *);
++    int (*stop)(void *);
++    void (*release)(void *);
++};
++struct kui_retail_interleave_cache {
++    struct kui_retail_image *image;
++    const struct kui_retail_manifest *manifest;
++    void *image_context;
++    kui_retail_read_block read_block;
++    kui_retail_read_run read_run;
++    struct kui_retail_cache_transport transport;
++    uint32_t epoch, revision, busy, transport_bound;
++    struct kui_retail_cache_tail tails[KUI_RETAIL_CACHE_OWNERS];
++};
++
++/* Zero before first use. Reset binds a validated immutable image/map and a
++ * caller-owned lifecycle epoch. Call on card/map/SDK replacement and STOP,
++ * reset, revoke or menu return; do not memset a live cache. Reset during a
++ * callback invalidates its eventual result/cache commit without prematurely
++ * releasing that callback's bus. Epoch equality is checked before any I/O;
++ * a stale request cannot rebind itself to an older epoch. Image callbacks and
++ * context are also bound here; transport callbacks/context bind on first use
++ * and cannot silently switch to another card owner until reset. */
++void kui_retail_interleave_cache_reset(struct kui_retail_interleave_cache *,
++    struct kui_retail_image *, uint32_t epoch);
++
++/* Same range/type/capacity and partial-output error contract as image_read.
++ * Output must not alias the cache, image or map. Completed transport cleanup
++ * is required before a cache tail is committed; failure invalidates all tails.
++ * All physical reads still use image's original CRC-checking callback and
++ * bounded extent/request limits. No physical prefetch or raw batching occurs. */
++enum kui_game_result kui_retail_interleave_cache_read(
++    struct kui_retail_interleave_cache *, const struct kui_retail_cache_transport *,
++    enum kui_retail_cache_owner, uint32_t epoch, uint32_t lba, uint32_t count,
++    enum kui_game_sector_format, void *output, size_t capacity);
++#endif
+diff --git a/src/core/retail_interleave_cache.c b/src/core/retail_interleave_cache.c
+new file mode 100644
+index 0000000..465770f
+--- /dev/null
++++ b/src/core/retail_interleave_cache.c
+@@ -0,0 +1,89 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++/* Separate experiment: intentionally absent from the ordinary reader build. */
++#include "kui/retail_interleave_cache.h"
++#include <stdbool.h>
++#include <string.h>
++
++static void invalidate(struct kui_retail_interleave_cache *cache) {
++    for(unsigned i=0;i<KUI_RETAIL_CACHE_OWNERS;i++) cache->tails[i].valid=0u;
++    if(cache->image) cache->image->cache_valid=0u;
++}
++
++void kui_retail_interleave_cache_reset(struct kui_retail_interleave_cache *cache,
++    struct kui_retail_image *image,uint32_t epoch) {
++    if(!cache) return;
++    invalidate(cache);
++    cache->image=image;cache->manifest=image?image->manifest:NULL;
++    cache->image_context=image?image->context:NULL;
++    cache->read_block=image?image->read_block:NULL;
++    cache->read_run=image?image->read_run:NULL;
++    cache->transport_bound=0u;
++    cache->epoch=epoch;++cache->revision;
++    /* Preserve busy: a revoked callback still owns its cleanup/release. */
++    invalidate(cache);
++}
++
++static bool current(const struct kui_retail_interleave_cache *cache,
++    const struct kui_retail_image *image,uint32_t epoch,uint32_t revision) {
++    return cache->image==image && cache->manifest==image->manifest &&
++        cache->image_context==image->context && cache->read_block==image->read_block &&
++        cache->read_run==image->read_run &&
++        cache->epoch==epoch && cache->revision==revision;
++}
++static bool same_transport(const struct kui_retail_cache_transport *a,
++    const struct kui_retail_cache_transport *b) {
++    return a->context==b->context && a->acquire==b->acquire &&
++        a->stop==b->stop && a->release==b->release;
++}
++
++enum kui_game_result kui_retail_interleave_cache_read(
++    struct kui_retail_interleave_cache *cache,const struct kui_retail_cache_transport *transport,
++    enum kui_retail_cache_owner owner,uint32_t epoch,uint32_t lba,uint32_t count,
++    enum kui_game_sector_format format,void *output,size_t capacity) {
++    if(!cache || !transport || !transport->acquire || !transport->stop ||
++       !transport->release || (unsigned)owner>=KUI_RETAIL_CACHE_OWNERS ||
++       !cache->image || !cache->manifest || !output) return KUI_GAME_INVALID;
++    struct kui_retail_image *image=cache->image;
++    uint32_t revision=cache->revision;
++    /* A callback can change the external descriptor; cleanup still invokes
++     * the exact owner acquired for this visit, never a replacement release. */
++    const struct kui_retail_cache_transport visit=*transport;
++    if(cache->busy || !current(cache,image,epoch,revision) ||
++       (cache->transport_bound && !same_transport(&cache->transport,&visit)))
++        return KUI_GAME_INVALID;
++    enum kui_game_result result=kui_retail_image_check_validated(image->manifest,lba,count,format);
++    if(result!=KUI_GAME_OK) return result;
++    uint32_t bytes=format==KUI_GAME_SECTOR_RAW?KUI_GAME_RAW_BYTES:KUI_GAME_DATA_BYTES;
++    if(capacity<(size_t)count*bytes) return KUI_GAME_RANGE;
++    if(!image->read_block) return KUI_GAME_INVALID;
++
++    cache->transport=visit;cache->transport_bound=1u;
++    cache->busy=1u;
++    if(visit.acquire(visit.context)) {
++        invalidate(cache);cache->busy=0u;return KUI_GAME_IO;
++    }
++    /* Acquisition may itself revoke the request. It still owns cleanup. */
++    if(current(cache,image,epoch,revision)) {
++        const struct kui_retail_cache_tail *tail=&cache->tails[owner];
++        image->cache_valid=0u;
++        if(tail->valid) {
++            memcpy(image->block,tail->block,sizeof(image->block));
++            image->cached_lba=tail->lba;image->cache_valid=1u;
++        }
++        result=kui_retail_image_read(image,lba,count,format,output,capacity);
++    } else result=KUI_GAME_INVALID;
++    int stopped=visit.stop(visit.context);
++    visit.release(visit.context);
++    if(stopped) result=KUI_GAME_IO;
++    if(!current(cache,image,epoch,revision)) result=KUI_GAME_INVALID;
++    if(result==KUI_GAME_OK && image->cache_valid) {
++        struct kui_retail_cache_tail *tail=&cache->tails[owner];
++        tail->valid=0u;
++        memcpy(tail->block,image->block,sizeof(tail->block));
++        tail->lba=image->cached_lba;tail->valid=1u;
++    } else {
++        image->cache_valid=0u;invalidate(cache);
++    }
++    cache->busy=0u;
++    return result;
++}
+diff --git a/tests/retail_interleave_sd_model.h b/tests/retail_interleave_sd_model.h
+new file mode 100644
+index 0000000..157b92c
+--- /dev/null
++++ b/tests/retail_interleave_sd_model.h
+@@ -0,0 +1,119 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++/* Byte-level read-only CMD18/CMD12 card model for the cache experiment.
++ * SD CRC7/CRC16 use serial polynomial division independently of the loader. */
++#ifndef KUI_RETAIL_INTERLEAVE_SD_MODEL_H
++#define KUI_RETAIL_INTERLEAVE_SD_MODEL_H
++#include "sd_reader.h"
++#include <assert.h>
++#include <string.h>
++
++struct cache_card_model {
++    const uint8_t *disk;
++    uint32_t blocks,now,next_lba,tick_step,fail_lba;
++    unsigned reads,starts,stops,clocks,head,tail,command_bytes;
++    unsigned crc_fault,token_fault,partial_fault,stop_fault;
++    bool selected,streaming,stopping,block_fault;
++    uint8_t command[6],queue[520];
++};
++static uint8_t cache_crc7(const uint8_t *bytes,unsigned count) {
++    unsigned remainder=0;
++    for(unsigned i=0;i<count;i++) for(int b=7;b>=0;b--) {
++        unsigned feedback=((remainder>>6)^(bytes[i]>>b))&1u;
++        remainder=(remainder<<1)&127u;
++        if(feedback) remainder^=9u;
++    }
++    return (uint8_t)((remainder<<1)|1u);
++}
++static uint16_t cache_crc16(const uint8_t *bytes,unsigned count) {
++    uint16_t remainder=0;
++    for(unsigned i=0;i<count;i++) for(int b=7;b>=0;b--) {
++        unsigned feedback=((remainder>>15)^(bytes[i]>>b))&1u;
++        remainder=(uint16_t)(remainder<<1);
++        if(feedback) remainder^=0x1021u;
++    }
++    return remainder;
++}
++static void cache_queue(struct cache_card_model *m,uint8_t value) {
++    assert(m->tail<sizeof(m->queue));m->queue[m->tail++]=value;
++}
++static void cache_card_command(struct cache_card_model *m) {
++    unsigned command=m->command[0]&63u;
++    uint32_t argument=(uint32_t)m->command[1]<<24 | (uint32_t)m->command[2]<<16 |
++        (uint32_t)m->command[3]<<8 | m->command[4];
++    assert(m->command[5]==cache_crc7(m->command,5u));
++    m->head=m->tail=0;
++    if(command==18u) {
++        assert(!m->streaming && argument<m->blocks);
++        ++m->starts;m->streaming=true;m->stopping=false;m->next_lba=argument;
++        cache_queue(m,0u);
++    } else {
++        assert(command==12u && !argument && m->streaming);
++        ++m->stops;m->stopping=true;
++        cache_queue(m,0x3cu); /* CMD12's stuff byte is not its response. */
++        cache_queue(m,m->stop_fault?4u:0u);
++        cache_queue(m,0u);cache_queue(m,0u);cache_queue(m,0xffu);
++        if(!m->stop_fault) m->streaming=false;
++    }
++}
++static void cache_card_block(struct cache_card_model *m) {
++    assert(m->next_lba<m->blocks);m->head=m->tail=0;
++    ++m->reads;
++    if(m->token_fault && m->next_lba==m->fail_lba) {
++        --m->token_fault;cache_queue(m,0x08u);return;
++    }
++    const uint8_t *bytes=m->disk+(size_t)m->next_lba*512u;
++    uint16_t crc=cache_crc16(bytes,512u);
++    cache_queue(m,0xfeu);
++    for(unsigned i=0;i<512u;i++) cache_queue(m,bytes[i]);
++    if(m->crc_fault && m->next_lba==m->fail_lba) { --m->crc_fault;crc^=1u; }
++    cache_queue(m,(uint8_t)(crc>>8));cache_queue(m,(uint8_t)crc);
++    ++m->next_lba;
++}
++static void cache_card_begin(void *context) { (void)context; }
++static void cache_card_end(void *context) { (void)context; }
++static void cache_card_select(void *context,bool selected) {
++    struct cache_card_model *m=context;m->selected=selected;
++    if(!selected) {
++        m->head=m->tail=m->command_bytes=0;
++        m->streaming=m->stopping=false;
++    }
++}
++static uint8_t cache_card_transfer(void *context,uint8_t tx,bool slow) {
++    struct cache_card_model *m=context;assert(!slow);
++    ++m->clocks;m->now+=m->tick_step?m->tick_step:1u;
++    if(!m->selected || m->block_fault) return 0xffu;
++    if(m->head==m->tail && m->streaming && !m->stopping && !m->command_bytes && tx==0xffu)
++        cache_card_block(m);
++    uint8_t rx=m->head<m->tail?m->queue[m->head++]:0xffu;
++    if(m->command_bytes || (tx&0xc0u)==0x40u) {
++        m->command[m->command_bytes++]=tx;
++        if(m->command_bytes==6u) { m->command_bytes=0;cache_card_command(m); }
++    }
++    return rx;
++}
++static bool cache_card_payload(void *context,const uint8_t *tx,uint8_t *rx,
++    size_t bytes,bool slow,uint16_t *crc) {
++    struct cache_card_model *m=context;
++    assert(!tx && rx && !slow && bytes==512u && crc);
++    assert(((uintptr_t)rx&31u)==0u);
++    for(size_t i=0;i<bytes;i++) {
++        if(m->partial_fault && m->next_lba-1u==m->fail_lba && i==77u) {
++            --m->partial_fault;m->block_fault=true;return false;
++        }
++        rx[i]=cache_card_transfer(context,0xffu,false);
++    }
++    *crc=cache_crc16(rx,(unsigned)bytes);return true;
++}
++static uint32_t cache_card_ticks(void *context) {
++    return ((struct cache_card_model *)context)->now;
++}
++static void cache_card_prepare(struct kui_loader_sd *card,struct cache_card_model *m,
++    const uint8_t *disk,uint32_t blocks,bool bulk) {
++    *m=(struct cache_card_model){.disk=disk,.blocks=blocks,.now=UINT32_MAX-1000u,
++        .fail_lba=UINT32_MAX};
++    *card=(struct kui_loader_sd){.blocks=blocks,.ready=true,.high_capacity=true,
++        .bus={.ctx=m,.begin=cache_card_begin,.end=cache_card_end,.select=cache_card_select,
++            .transfer=cache_card_transfer,.ticks=cache_card_ticks,
++            .transfer_block=bulk?cache_card_payload:NULL}};
++}
++#endif
+diff --git a/tests/test_retail_interleave_cache.c b/tests/test_retail_interleave_cache.c
+new file mode 100644
+index 0000000..0eec711
+--- /dev/null
++++ b/tests/test_retail_interleave_cache.c
+@@ -0,0 +1,322 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#include "kui/retail_interleave_cache.h"
++#include "retail_sd.h"
++#include "retail_interleave_sd_model.h"
++#include <stdio.h>
++
++#define DISK_BLOCKS 4096u
++#define AUDIO_SECTORS 32u
++#define DATA_SECTORS 64u
++static uint8_t disk[DISK_BLOCKS*512u],output[8192u];
++static struct kui_retail_manifest manifest,other_manifest;
++static struct kui_retail_image image,other_image;
++static struct kui_retail_interleave_cache cache;
++static struct {
++    struct kui_loader_sd card;
++    struct kui_loader_sd_stream stream;
++    struct cache_card_model model;
++    unsigned acquires,releases,stop_calls,fail_acquire,reset_at,mutate_descriptor;
++    unsigned fake_scr,saved_scr,reenter;
++    enum kui_loader_sd_result last_result;
++    bool leased;
++} io;
++static struct kui_retail_cache_transport transport;
++
++static uint8_t content(unsigned track,uint32_t raw_byte) {
++    uint32_t sector=raw_byte/2352u,inside=raw_byte%2352u;
++    if(track!=1u) {
++        if(inside==0u || inside==11u) return 0u;
++        if(inside<11u) return 255u;
++        if(inside==15u) return 1u;
++    }
++    return (uint8_t)(track*91u+sector*53u+inside*11u+(inside>>8));
++}
++static int acquire(void *context) {
++    assert(context==&io && !io.leased && !io.stream.active);
++    ++io.acquires;
++    if(io.fail_acquire) { --io.fail_acquire;return -1; }
++    if(!io.card.ready) return -1;
++    io.leased=true;io.saved_scr=io.fake_scr;io.fake_scr=0x5au;
++    if(io.reset_at==1u) kui_retail_interleave_cache_reset(&cache,&image,8u);
++    if(io.mutate_descriptor) {
++        io.mutate_descriptor=0u;transport.stop=NULL;transport.release=NULL;
++    }
++    return 0;
++}
++static int stop(void *context) {
++    assert(context==&io && io.leased);++io.stop_calls;
++    io.last_result=kui_loader_sd_stream_stop(&io.card,&io.stream);
++    if(io.reset_at==3u) kui_retail_interleave_cache_reset(&cache,&image,8u);
++    return io.last_result==KUI_LOADER_SD_OK?0:-1;
++}
++static void release(void *context) {
++    assert(context==&io && io.leased && !io.stream.active && !io.model.selected);
++    ++io.releases;io.fake_scr=io.saved_scr;io.leased=false;
++    if(io.reset_at==4u) kui_retail_interleave_cache_reset(&cache,&image,8u);
++}
++static int read_run(void *context,uint32_t lba,uint32_t available,uint8_t bytes[512]) {
++    assert(context==&io && io.leased && available && ((uintptr_t)bytes&31u)==0u);
++    bool valid_extent=false;
++    for(unsigned i=0;i<manifest.extent_count;i++) {
++        const struct kui_retail_extent *e=&manifest.slots[manifest.track_count+i].extent;
++        if(lba>=e->card_lba && lba-e->card_lba<e->blocks) {
++            assert(available<=e->blocks-(lba-e->card_lba));valid_extent=true;
++        }
++    }
++    assert(valid_extent);
++    if(io.reenter) {
++        io.reenter=0;
++        unsigned calls=io.acquires;
++        assert(kui_retail_interleave_cache_read(&cache,&transport,KUI_RETAIL_CACHE_AUDIO,7u,
++            3u,1u,KUI_GAME_SECTOR_RAW,output,sizeof(output))==KUI_GAME_INVALID);
++        assert(io.acquires==calls);
++    }
++    io.last_result=kui_retail_sd_read_run(&io.card,&io.stream,lba,available,bytes);
++    if(io.reset_at==2u) {
++        io.reset_at=0u;kui_retail_interleave_cache_reset(&cache,&image,8u);
++    }
++    return io.last_result==KUI_LOADER_SD_OK?0:-1;
++}
++static int read_block(void *context,uint32_t lba,uint8_t bytes[512]) {
++    return read_run(context,lba,1u,bytes);
++}
++static void fixture(bool fragmented,bool cooked,uint32_t offset,bool bulk) {
++    memset(&manifest,0,sizeof(manifest));memset(disk,0xa5,sizeof(disk));
++    memset(&cache,0,sizeof(cache));memset(&io,0,sizeof(io));
++    manifest.card_sectors=DISK_BLOCKS;manifest.partition_start=50u;manifest.partition_end=4000u;
++    manifest.track_count=3u;manifest.session_lba=45000u;manifest.boot_lba=45001u;
++    manifest.boot_bytes=4567u;manifest.gdi_crc32=0x89abcdefu;
++    strcpy(manifest.title,"Authored mapper interleaving experiment");
++    strcpy(manifest.product,"KUITEST");strcpy(manifest.region,"JUE");strcpy(manifest.bootfile,"1ST_READ.BIN");
++    static const uint32_t starts[3]={0u,3u,45000u},counts[3]={3u,AUDIO_SECTORS,DATA_SECTORS};
++    uint32_t physical=100u;
++    for(unsigned track=0;track<3u;track++) {
++        uint32_t inside=track?offset:0u;
++        bool cooked_track=track==2u && cooked;
++        struct kui_retail_track *t=&manifest.slots[track].track;
++        *t=(struct kui_retail_track){.start_lba=starts[track],.end_lba=starts[track]+counts[track],
++            .first_extent=(uint16_t)((3u+manifest.extent_count)|((inside&255u)<<8)),
++            .control=(uint8_t)((track==1u?0u:4u)|(cooked_track?KUI_RETAIL_TRACK_COOKED:0u)|
++                (inside>=256u?KUI_RETAIL_TRACK_OFFSET_HIGH:0u))};
++        uint32_t stride=cooked_track?2048u:2352u,bytes=counts[track]*stride;
++        uint32_t blocks=(inside+bytes+511u)/512u;
++        for(uint32_t at=0;at<blocks;) {
++            uint32_t take=fragmented && blocks-at>3u?3u:blocks-at;
++            assert(3u+manifest.extent_count<KUI_RETAIL_IMAGE_SLOTS);
++            manifest.slots[3u+manifest.extent_count++].extent=
++                (struct kui_retail_extent){.file_block=at,.card_lba=physical,.blocks=take};
++            ++t->extent_count;
++            for(uint32_t p=0;p<take*512u;p++) {
++                uint32_t file_byte=at*512u+p;
++                if(file_byte>=inside && file_byte-inside<bytes) {
++                    uint32_t stored=file_byte-inside;
++                    uint32_t raw=cooked_track?stored/2048u*2352u+16u+stored%2048u:stored;
++                    disk[(size_t)physical*512u+p]=content(track,raw);
++                }
++            }
++            at+=take;physical+=take+(fragmented?2u:0u);
++        }
++        physical+=7u;
++    }
++    assert(kui_retail_manifest_validate(&manifest)==KUI_GAME_OK);
++    cache_card_prepare(&io.card,&io.model,disk,DISK_BLOCKS,bulk);
++    io.fake_scr=0x84u;
++    transport=(struct kui_retail_cache_transport){.context=&io,.acquire=acquire,.stop=stop,.release=release};
++    assert(kui_retail_image_init(&image,&manifest,read_block,&io)==KUI_GAME_OK);
++    image.read_run=read_run;
++    kui_retail_interleave_cache_reset(&cache,&image,7u);
++}
++static enum kui_game_result request(bool enabled,enum kui_retail_cache_owner owner,uint32_t sector,
++    unsigned alignment) {
++    uint32_t count=owner==KUI_RETAIL_CACHE_AUDIO?1u:2u;
++    uint32_t lba=owner==KUI_RETAIL_CACHE_AUDIO?3u+sector:45000u+sector;
++    enum kui_game_sector_format format=owner==KUI_RETAIL_CACHE_AUDIO?KUI_GAME_SECTOR_RAW:KUI_GAME_SECTOR_MODE1;
++    uint32_t bytes=count*(owner==KUI_RETAIL_CACHE_AUDIO?2352u:2048u);
++    memset(output,0xcc,sizeof(output));void *destination=output+4u+alignment;
++    enum kui_game_result result;
++    if(enabled) result=kui_retail_interleave_cache_read(&cache,&transport,owner,7u,lba,count,
++        format,destination,bytes);
++    else {
++        assert(!acquire(&io));
++        result=kui_retail_image_read(&image,lba,count,format,destination,bytes);
++        int stopped=stop(&io);release(&io);
++        if(stopped) { image.cache_valid=0u;result=KUI_GAME_IO; }
++    }
++    if(result==KUI_GAME_OK) for(uint32_t i=0;i<bytes;i++) {
++        uint32_t raw=owner==KUI_RETAIL_CACHE_AUDIO?sector*2352u+i:
++            (sector+i/2048u)*2352u+16u+i%2048u;
++        assert(output[4u+alignment+i]==content(owner==KUI_RETAIL_CACHE_AUDIO?1u:2u,raw));
++    }
++    for(unsigned i=0;i<4u+alignment;i++) assert(output[i]==0xccu);
++    assert(output[4u+alignment+bytes]==0xccu);
++    assert(!io.leased && !io.stream.active && !io.model.selected && io.fake_scr==0x84u);
++    return result;
++}
++struct measurements { unsigned audio,total,starts,stops; };
++static struct measurements interleaved(bool enabled,bool fragmented,bool cooked,uint32_t offset,bool bulk) {
++    fixture(fragmented,cooked,offset,bulk);unsigned audio=0;
++    for(unsigned i=0;i<AUDIO_SECTORS;i++) {
++        unsigned before=io.model.reads;
++        assert(request(enabled,KUI_RETAIL_CACHE_AUDIO,i,i%4u)==KUI_GAME_OK);
++        audio+=io.model.reads-before;
++        assert(request(enabled,KUI_RETAIL_CACHE_DATA,i*2u,(i+1u)%4u)==KUI_GAME_OK);
++    }
++    assert(io.acquires==64u && io.releases==64u && io.stop_calls==64u);
++    assert(io.model.starts==io.model.stops && image.blocks_read==io.model.reads);
++    return (struct measurements){audio,io.model.reads,io.model.starts,io.model.stops};
++}
++static void count_comparison(void) {
++    static const uint32_t offsets[]={0u,1u,15u,16u,31u,127u,255u,304u,511u};
++    for(unsigned fragmented=0;fragmented<2u;fragmented++) for(unsigned cooked=0;cooked<2u;cooked++)
++        for(unsigned bulk=0;bulk<2u;bulk++) for(unsigned i=0;i<sizeof(offsets)/sizeof(offsets[0]);i++) {
++            struct measurements baseline=interleaved(false,fragmented,cooked,offsets[i],bulk);
++            struct measurements candidate=interleaved(true,fragmented,cooked,offsets[i],bulk);
++            assert(candidate.audio<baseline.audio && candidate.total<=baseline.total);
++            if(!offsets[i] && cooked && bulk) {
++                assert(baseline.audio==178u && candidate.audio==147u);
++                assert(baseline.total==434u && candidate.total==403u);
++                printf("%s extent / audio32 + data32x2: audio %u -> %u, total %u -> %u, CMD18 %u -> %u\n",
++                    fragmented?"fragmented":"contiguous",baseline.audio,candidate.audio,
++                    baseline.total,candidate.total,baseline.starts,candidate.starts);
++            }
++        }
++}
++static void every_alignment(void) {
++    for(uint32_t offset=0;offset<512u;offset++) {
++        fixture(offset%2u,offset%3u!=0u,offset,offset%2u);
++        for(unsigned i=0;i<3u;i++) {
++            assert(request(true,KUI_RETAIL_CACHE_AUDIO,i,offset%4u)==KUI_GAME_OK);
++            assert(request(true,KUI_RETAIL_CACHE_DATA,i*2u,(offset+1u)%4u)==KUI_GAME_OK);
++        }
++    }
++}
++static void same_owner_and_wrap(void) {
++    unsigned reference=0;
++    for(unsigned enabled=0;enabled<2u;enabled++) {
++        fixture(true,true,511u,true);
++        for(unsigned lap=0;lap<3u;lap++) for(unsigned i=0;i<AUDIO_SECTORS;i++)
++            assert(request(enabled,KUI_RETAIL_CACHE_AUDIO,i,0u)==KUI_GAME_OK);
++        if(!enabled) reference=io.model.reads;else assert(io.model.reads==reference);
++    }
++    /* Non-contiguous return uses the physical-LBA tag, not owner identity. */
++    fixture(false,true,31u,true);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,0u,0u)==KUI_GAME_OK);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,20u,0u)==KUI_GAME_OK);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_OK);
++}
++static void errors_and_lifecycle(void) {
++    for(unsigned bulk=0;bulk<2u;bulk++) for(unsigned failure=0;failure<5u;failure++) {
++        if(!bulk && failure==2u) continue;
++        fixture(false,true,0u,bulk);
++        assert(request(true,KUI_RETAIL_CACHE_AUDIO,0u,0u)==KUI_GAME_OK);
++        assert(request(true,KUI_RETAIL_CACHE_DATA,0u,0u)==KUI_GAME_OK);
++        io.model.fail_lba=cache.tails[KUI_RETAIL_CACHE_AUDIO].lba+1u;
++        if(failure==0u) io.model.crc_fault=1u;
++        if(failure==1u) io.model.token_fault=1u;
++        if(failure==2u) { io.model.partial_fault=1u;io.model.tick_step=1000000u; }
++        if(failure==3u) io.model.stop_fault=1u;
++        if(failure==4u) io.fail_acquire=1u;
++        assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_IO);
++        assert(!image.cache_valid && !cache.tails[0].valid && !cache.tails[1].valid && !cache.busy);
++        if(failure==2u || failure==3u) assert(!io.card.ready);
++        if(failure!=4u) assert(io.releases==3u && io.stop_calls==3u);
++        else assert(io.releases==2u && io.stop_calls==2u);
++    }
++    fixture(false,false,0u,true);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,0u,0u)==KUI_GAME_OK);
++    uint32_t data_lba=manifest.slots[kui_retail_track_first_extent(&manifest.slots[2].track)].extent.card_lba;
++    disk[(size_t)data_lba*512u+15u]=2u;
++    assert(request(true,KUI_RETAIL_CACHE_DATA,0u,0u)==KUI_GAME_MODE);
++    assert(!image.cache_valid && !cache.tails[0].valid && !cache.tails[1].valid);
++    for(unsigned point=1u;point<=4u;point++) {
++        fixture(false,true,0u,true);
++        assert(request(true,KUI_RETAIL_CACHE_AUDIO,0u,0u)==KUI_GAME_OK);
++        io.reset_at=point;
++        assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_INVALID);
++        assert(cache.epoch==8u && !cache.busy && !image.cache_valid && !cache.tails[0].valid);
++        unsigned calls=io.acquires;
++        io.reset_at=0u;
++        assert(request(true,KUI_RETAIL_CACHE_AUDIO,2u,0u)==KUI_GAME_INVALID);
++        assert(io.acquires==calls);
++    }
++    fixture(false,true,0u,true);io.reenter=1u;
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,0u,0u)==KUI_GAME_OK);
++    unsigned before=io.model.reads;
++    kui_retail_interleave_cache_reset(&cache,&image,7u);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_OK);
++    assert(io.model.reads-before==6u); /* the shared boundary block was invalidated */
++    fixture(false,true,0u,true);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,0u,0u)==KUI_GAME_OK);
++    io.model.fail_lba=cache.tails[KUI_RETAIL_CACHE_AUDIO].lba;io.model.crc_fault=1u;
++    kui_retail_interleave_cache_reset(&cache,&image,7u);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_IO);
++    assert(!cache.tails[0].valid && !cache.tails[1].valid);
++    fixture(false,true,0u,true);io.mutate_descriptor=1u;
++    /* Cleanup uses the pre-acquire descriptor even if its external object is
++     * modified by the callback. A subsequent malformed descriptor is denied. */
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,0u,0u)==KUI_GAME_OK);
++    assert(io.releases==1u && io.stop_calls==1u);
++    before=io.acquires;
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_INVALID);
++    assert(io.acquires==before);transport=cache.transport;
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_OK);
++    other_manifest=manifest;
++    image.manifest=&other_manifest;
++    before=io.acquires;
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_INVALID);
++    assert(io.acquires==before);
++    image.manifest=&manifest;
++    void *context=image.context;image.context=&manifest;
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_INVALID);
++    assert(io.acquires==before);image.context=context;
++    kui_retail_read_run run=image.read_run;image.read_run=NULL;
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_INVALID);
++    assert(io.acquires==before);image.read_run=run;
++    struct kui_retail_cache_transport foreign=transport;foreign.context=&manifest;
++    assert(kui_retail_interleave_cache_read(&cache,&foreign,KUI_RETAIL_CACHE_AUDIO,7u,
++        4u,1u,KUI_GAME_SECTOR_RAW,output,sizeof(output))==KUI_GAME_INVALID);
++    assert(io.acquires==before);
++    assert(kui_retail_image_init(&other_image,&manifest,read_block,&io)==KUI_GAME_OK);
++    other_image.read_run=read_run;
++    kui_retail_interleave_cache_reset(&cache,&other_image,9u);
++    assert(!image.cache_valid && !other_image.cache_valid);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_INVALID);
++    fixture(false,true,0u,true);
++    cache.revision=UINT32_MAX;
++    kui_retail_interleave_cache_reset(&cache,&image,UINT32_MAX);
++    assert(cache.revision==0u);
++    assert(kui_retail_interleave_cache_read(&cache,&transport,KUI_RETAIL_CACHE_AUDIO,UINT32_MAX,
++        3u,1u,KUI_GAME_SECTOR_RAW,output,sizeof(output))==KUI_GAME_OK);
++    kui_retail_interleave_cache_reset(&cache,&image,0u);
++    before=io.acquires;
++    assert(kui_retail_interleave_cache_read(&cache,&transport,KUI_RETAIL_CACHE_AUDIO,UINT32_MAX,
++        4u,1u,KUI_GAME_SECTOR_RAW,output,sizeof(output))==KUI_GAME_INVALID);
++    assert(io.acquires==before);
++    assert(kui_retail_interleave_cache_read(&cache,&transport,KUI_RETAIL_CACHE_AUDIO,0u,
++        4u,1u,KUI_GAME_SECTOR_RAW,output,sizeof(output))==KUI_GAME_OK);
++    /* Terminal reset binds no image; no old request may revive it. */
++    kui_retail_interleave_cache_reset(&cache,NULL,10u);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_INVALID);
++}
++static void preflight_and_tags(void) {
++    fixture(false,true,0u,true);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,0u,0u)==KUI_GAME_OK);
++    unsigned calls=io.acquires;
++    assert(kui_retail_interleave_cache_read(&cache,&transport,KUI_RETAIL_CACHE_OWNERS,7u,
++        3u,1u,KUI_GAME_SECTOR_RAW,output,sizeof(output))==KUI_GAME_INVALID);
++    assert(kui_retail_interleave_cache_read(&cache,&transport,KUI_RETAIL_CACHE_AUDIO,7u,
++        3u,1u,KUI_GAME_SECTOR_RAW,output,2351u)==KUI_GAME_RANGE);
++    assert(kui_retail_interleave_cache_read(&cache,&transport,KUI_RETAIL_CACHE_AUDIO,7u,
++        3u,0u,KUI_GAME_SECTOR_RAW,output,sizeof(output))!=KUI_GAME_OK);
++    assert(kui_retail_interleave_cache_read(&cache,&transport,KUI_RETAIL_CACHE_AUDIO,7u,
++        45000u,1u,KUI_GAME_SECTOR_RAW,output,sizeof(output))==KUI_GAME_UNSUPPORTED);
++    assert(calls==io.acquires && cache.tails[KUI_RETAIL_CACHE_AUDIO].valid);
++    /* Seeking cannot confuse a retained tail with another physical LBA. */
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,10u,0u)==KUI_GAME_OK);
++    assert(request(true,KUI_RETAIL_CACHE_AUDIO,1u,0u)==KUI_GAME_OK);
++}
++int main(void) {
++    count_comparison();every_alignment();same_owner_and_wrap();errors_and_lifecycle();preflight_and_tags();
++    printf("Interleaved cache prototype: exact bytes, CRC, all512 alignments, owners, wrap, cleanup and revocation passed; cache size %zu\n",sizeof(cache));
++    return 0;
++}
+diff --git a/tests/test_retail_interleave_cache.py b/tests/test_retail_interleave_cache.py
+new file mode 100644
+index 0000000..7a930c1
+--- /dev/null
++++ b/tests/test_retail_interleave_cache.py
+@@ -0,0 +1,43 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: GPL-3.0-only
++"""Reproduce the excluded mapper-cache prototype and baseline component checks."""
++import argparse
++import os
++from pathlib import Path
++import subprocess
++import tempfile
++
++parser = argparse.ArgumentParser(description=__doc__)
++parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
++parser.add_argument("--no-sanitizers", action="store_true")
++args = parser.parse_args()
++root = Path(__file__).resolve().parents[1]
++flags = ["-std=c11", "-O2", "-g", "-Wall", "-Wextra", "-Werror", "-Wpedantic",
++         "-Iinclude", "-Isrc/loader"]
++if not args.no_sanitizers:
++    flags += ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
++prototype = ["src/core/retail_image.c", "src/core/retail_interleave_cache.c",
++             "src/loader/retail_sd.c", "src/loader/sd_reader.c",
++             "tests/test_retail_interleave_cache.c"]
++cases = [
++    ("cache-serial-crc", [], prototype),
++    ("cache-folded-crc", ["-DKUI_RETAIL_FAST_IO=1"], prototype),
++    ("baseline-mapper", [], ["src/core/retail_image.c", "tests/test_retail_image.c"]),
++    ("baseline-sd-protocol", ["-DKUI_RETAIL_FAST_IO=1"],
++     ["src/loader/sd_reader.c", "tests/test_loader_sd.c"]),
++    ("baseline-sci-bus", ["-DKUI_SCI_SD_TEST=1", "-DKUI_SCI_DMA_REUSE_TDRE=0"],
++     ["src/loader/sci_sd_bus.c", "tests/test_sci_sd_bus.c"]),
++    ("baseline-pilot-sci-paced", ["-DKUI_SCI_SD_TEST=1", "-DKUI_RETAIL_TRANSPORT=1",
++     "-DKUI_RETAIL_SCI_DIAGNOSTIC=1", "-DKUI_SCI_DMA_PACED=1", "-DKUI_SCI_DMA_REUSE_TDRE=0"],
++     ["src/loader/sci_sd_bus.c", "tests/test_sci_sd_dma_pacing.c"]),
++]
++environment = dict(os.environ)
++environment.setdefault("ASAN_OPTIONS", "detect_leaks=0")
++with tempfile.TemporaryDirectory(prefix="kui-interleave-cache-") as directory:
++    for name, extra, sources in cases:
++        print(name, flush=True)
++        binary = Path(directory) / name
++        subprocess.run([args.cc, *flags, *extra, *sources, "-o", str(binary)],
++                       cwd=root, check=True)
++        subprocess.run([str(binary)], cwd=root, env=environment, check=True)
++print("All six prototype/baseline configurations passed.", flush=True)

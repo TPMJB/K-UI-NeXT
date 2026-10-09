@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Real FAT32/exFAT Games reads, injected faults and whole-card preservation."""
 from pathlib import Path
+import argparse
 import hashlib
 import shutil
 import sys
@@ -49,6 +50,10 @@ def digest(path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--case", action="append", choices=CASES,
+                        help="Run a selected case on both filesystems; repeat for more cases")
+    cases = parser.parse_args().case or CASES
     with tempfile.TemporaryDirectory(prefix="kui-games-") as temp:
         base = Path(temp)
         fixture = base / "original-gdi"
@@ -63,7 +68,7 @@ def main():
                 run("mkfs.fat", "-F", "32", str(clean))
             else:
                 run("mkfs.exfat", str(clean))
-            for case in CASES:
+            for case in cases:
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(clean, image)
                 run(BINARY, str(image), str(fixture), "seed", case)

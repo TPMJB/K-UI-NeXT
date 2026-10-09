@@ -535,7 +535,7 @@ static void test_crc_reference_vectors(void) {
     assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
     card_content = data_at;
 }
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_TOY_PILOT_SHARED_SCI
 static void test_ce_token_slices(void) {
     const uint32_t slice = KUI_SCI_STREAM_TOKEN_SLICE, lba = 700u;
     reset_model(); open_stream(false); card.nac_first = 3u * slice + 7u;
@@ -604,6 +604,7 @@ static void test_ce_counters(void) {
         assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
         assert(st->stops - before.stops == 1u && card.cmd12 == 1u);
     }
+#ifdef KUI_RETAIL_CE
     /* Synthetic owned, stopped receptions exercise every reported bucket.
      * The CH2/DMAOR values are handoff-time observations, not fault causes. */
     static const uint32_t remaining[] = {0, 128, 129, 385};
@@ -623,6 +624,39 @@ static void test_ce_counters(void) {
         assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
         check_restored(); check_channel_restored();
     }
+#endif
+}
+#endif
+#if KUI_TOY_PILOT_SHARED_SCI
+static uint8_t shared_idle_busy(void *ctx,uint8_t data,bool slow) {
+    uint8_t value=bus_transfer(ctx,data,slow);
+    return m.cs_high?value:0u;
+}
+static uint8_t shared_stop_busy(void *ctx,uint8_t data,bool slow) {
+    uint8_t value=bus_transfer(ctx,data,slow);
+    /* Keep R1's real response, then extend the model's finite busy interval
+     * after its response queue drains. No huge synthetic queue is needed. */
+    return !m.cs_high && card.cmd12 && !card.qlen?0u:value;
+}
+static void test_shared_command_bounds(void) {
+    reset_model();open_stream(false);
+    sd.bus.transfer=shared_idle_busy;
+    unsigned before=bus_bytes;
+    assert(kui_sci_stream_fetch(800u,LIMIT,false)==KUI_SCI_STREAM_COMMAND);
+    assert(bus_bytes-before==4096u && !card.cmd18 && !m.dma_starts);
+    assert(!kui_sci_stream_busy());
+
+    reset_model();open_stream(false);
+    assert(kui_sci_stream_fetch(800u,LIMIT,false)==KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_wait()==KUI_SCI_STREAM_OK);
+    enum kui_sci_stream_result result;
+    check_block(800u,kui_sci_stream_take(800u,&result));
+    assert(result==KUI_SCI_STREAM_OK);
+    sd.bus.transfer=shared_stop_busy;before=bus_bytes;
+    assert(kui_sci_stream_stop()==KUI_SCI_STREAM_COMMAND);
+    /* Six command bytes, stuff, R1, 4096 busy bytes, deselected idle. */
+    assert(bus_bytes-before==4105u && card.cmd12==1u && m.cs_high);
+    assert(!kui_sci_stream_busy());check_restored();check_channel_restored();
 }
 #endif
 int main(void) {
@@ -638,9 +672,12 @@ int main(void) {
     test_bus_fault();
     test_random_faults();
     test_crc_reference_vectors();
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_TOY_PILOT_SHARED_SCI
     test_ce_counters();
     test_ce_token_slices();
+#endif
+#if KUI_TOY_PILOT_SHARED_SCI
+    test_shared_command_bounds();
 #endif
     puts("sci stream: ok");
     return 0;

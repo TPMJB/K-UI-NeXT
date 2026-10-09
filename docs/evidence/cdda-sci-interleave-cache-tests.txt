@@ -1,0 +1,18 @@
+cache-serial-crc
+contiguous extent / audio32 + data32x2: audio 178 -> 147, total 434 -> 403, CMD18 64 -> 64
+fragmented extent / audio32 + data32x2: audio 178 -> 147, total 434 -> 403, CMD18 187 -> 177
+Interleaved cache prototype: exact bytes, CRC, all512 alignments, owners, wrap, cleanup and revocation passed; cache size 1184
+cache-folded-crc
+contiguous extent / audio32 + data32x2: audio 178 -> 147, total 434 -> 403, CMD18 64 -> 64
+fragmented extent / audio32 + data32x2: audio 178 -> 147, total 434 -> 403, CMD18 187 -> 177
+Interleaved cache prototype: exact bytes, CRC, all512 alignments, owners, wrap, cleanup and revocation passed; cache size 1184
+baseline-mapper
+retail image: 6680317 checks passed (canonical wire, fragmented bounds, cached runs, IO, 99 tracks)
+baseline-sd-protocol
+loader SD protocol: 220632 assertions passed
+baseline-sci-bus
+Grouped RX: every byte value in every word position and 36 mixed patterns passed
+SCI SD bus: polled/DMA data, CRC, profiling, bounded faults and ownership restoration passed
+baseline-pilot-sci-paced
+SCI DMA pacing: independent delayed service, exact payload/CRC, guarded fallback and bounded stall PASS
+All six prototype/baseline configurations passed.

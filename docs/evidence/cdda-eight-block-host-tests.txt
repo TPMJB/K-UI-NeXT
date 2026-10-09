@@ -1,0 +1,29 @@
+Toy pilot bus: 180 checks passed
+Toy tracked sound lease: bounds, native ownership, canary failure and exact SR checks passed
+Toy GD progress: six audio commands retire without sound service; failures, cancellation and handle ownership preserved
+retail GD service: 668194 checks passed
+Toy pilot ownership: 454 checks passed
+Toy ring scalar evidence: conservative clocks, independently timed stereo publications, delayed capture lower bounds, phase/half boundaries, age and invalid positions pass
+Toy ring worker: physical PCM/block ownership under serial publication, capture-bound pressure/latency diagnostics, eight recovery causes, lifecycle/EOF/control and pause/reset pass
+physical stereo boundaries and intermediate absolute epochs: ok
+eight-block physical PCM and lifecycle regressions: ok
+Toy driver load admission: empty buffer, success/failure, one-use, range and revocation checks passed
+Toy launch options, raw-GDI boot and early reset admission: passed
+Toy actual worker: idle has zero bus/heap activity; busy retries, bounded failure and committed-packet fault preserve progress
+Toy GD audio status: title predicate, logical handoff, pending commands, position and scalar responses pass
+Toy GD adapter: immediate mailbox acceptance, native handle ownership, scalar audio/status layouts, truncation and protected outputs pass
+pause adapter: registered startup handler, native retirement, retained pending work, SDK busy, bounds, post-pump corruption, callback identity, deferred file owner/VBlank retirement, borrowed guest scratch, time/attempt bounds and SR restoration passed
+Toy startup integration: registered callback, real GD acceptance/CHECK, native status translation, retained pending/invalid handle ownership and exact SR pass
+Toy native lifecycle: real GD admission, owner equality, subtype8 status chain, ownerless terminal refusal and exact SR pass
+Toy integrated ring flow: real request/GD acceptance, idle controls, asynchronous ARM, collapsed controls, repeat metadata, native PAUSE drain and EOF pass
+Toy IRQ scratch: production map/dispatch, token129 Start regression, native retirement, next PAUSE, REQ_STAT, canaries and expired/invalid capability pass
+Toy GD chunk0: exact129-sector payload/progress/handle; maxmask=3200 modeledticks, command=208736 modeledticks, audio-priority/refill recovery checked
+Toy GD chunk2: exact129-sector payload/progress/handle; maxmask=800 modeledticks, command=833744 modeledticks, audio-priority/refill recovery checked
+Toy report0: v8 block geometry, retained prefix/two-extension order, GD insertion, exact snapshot admission, pre-reset retention, workspace guards checked
+Toy report2: v8 block geometry, retained prefix/two-extension order, GD insertion, exact snapshot admission, pre-reset retention, workspace guards checked
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.005s
+
+OK
+22 Toy pilot regression suites passed

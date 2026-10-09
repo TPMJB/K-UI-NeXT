@@ -7,6 +7,11 @@
  */
 #include "sci_sd_bus.h"
 
+#if KUI_SCI_DMA_REUSE_TDRE && (!KUI_SCI_DMA_PACED || !KUI_RETAIL_SCI_DIAGNOSTIC || \
+    (!KUI_RETAIL_TOY_PILOT && !defined(KUI_SCI_SD_TEST)))
+#error "TDRE sample reuse is restricted to the separate paced Toy pilot"
+#endif
+
 #if defined(KUI_ON_CONSOLE) || defined(KUI_SCI_SD_TEST)
 #define SMR UINT32_C(0xffe00000)
 #define BRR UINT32_C(0xffe00004)
@@ -65,6 +70,19 @@ extern void kui_sci_sd_test_cache_purge(void *buffer, size_t count);
 static struct kui_sci_sd_port port;
 #endif
 static bool wait_flag(uint8_t flag);
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+static struct kui_sci_sd_diagnostic diagnostic;
+const struct kui_sci_sd_diagnostic *kui_sci_sd_diagnostic_get(void) { return &diagnostic; }
+static void diagnostic_fault(unsigned phase,unsigned reason,uint32_t expected,
+                             uint8_t status,unsigned polls) {
+    if(diagnostic.phase) return;
+    diagnostic.reason=reason;diagnostic.expected=expected;diagnostic.polls=polls;
+    diagnostic.ssr=status;diagnostic.scr=rd8(SCR);diagnostic.smr=rd8(SMR);diagnostic.brr=rd8(BRR);
+    diagnostic.chcr1=rd32(DMA_CONTROL);diagnostic.tcr1=rd32(DMA_COUNT);diagnostic.dmaor=rd32(DMA_OPERATION);
+    diagnostic.chcr2=rd32(UINT32_C(0xffa0002c));diagnostic.tcr2=rd32(UINT32_C(0xffa00028));
+    diagnostic.phase=phase;
+}
+#endif
 #ifndef KUI_RETAIL_TRANSPORT
 static struct kui_sci_sd_fault first_fault;
 static struct kui_sci_sd_stats stats;
@@ -100,9 +118,11 @@ void kui_sci_sd_stats_get(struct kui_sci_sd_stats *out) { if(out) *out = stats; 
 void kui_sci_sd_profile_timer(uint64_t (*now_us)(void *), void *ctx) {
     profile_clock = now_us; profile_context = ctx;
 }
+#if !KUI_SCI_SD_PIO_ONLY
 static uint64_t profile_time(void) {
     return profile_clock ? profile_clock(profile_context) : 0;
 }
+#endif
 #else
 #define COUNT(field) ((void)0)
 #endif
@@ -137,6 +157,9 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) {
     wr8(BRR, 31); /* 50 MHz / (4 * 32) = 390625 Hz during card setup. */
     delay(1024u); /* >= one slow bit after BRR changes. */
     port.slow = true; port.fault = false; port.acquired = true;
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+    diagnostic.phase=0;
+#endif
 #ifndef KUI_RETAIL_TRANSPORT
     first_fault = (struct kui_sci_sd_fault){0};
 #endif
@@ -193,13 +216,13 @@ static inline __attribute__((always_inline)) uint16_t data_crc(uint16_t crc, uin
     return (uint16_t)((crc << 8) ^ (x << 12) ^ (x << 5) ^ x);
 }
 static bool wait_flag(uint8_t flag) {
-#ifndef KUI_RETAIL_TRANSPORT
+#if !defined(KUI_RETAIL_TRANSPORT) || KUI_RETAIL_SCI_DIAGNOSTIC
     uint8_t last_status = 0;
     unsigned samples = 0;
 #endif
     for(unsigned n = 0; n < POLLS; ++n) {
         uint8_t status = rd8(SSR);
-#ifndef KUI_RETAIL_TRANSPORT
+#if !defined(KUI_RETAIL_TRANSPORT) || KUI_RETAIL_SCI_DIAGNOSTIC
         last_status = status;
         samples = n + 1;
 #endif
@@ -208,6 +231,10 @@ static bool wait_flag(uint8_t flag) {
     }
 #ifndef KUI_RETAIL_TRANSPORT
     record_wait_fault(flag, last_status, samples);
+#endif
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+    diagnostic_fault(KUI_SCI_PHASE_FLAG,(last_status&ERRORS)?KUI_SCI_REASON_SCI:KUI_SCI_REASON_TIMEOUT,
+                     flag,last_status,samples);
 #endif
     port.fault = true;
     wr8(SCR, 0);
@@ -240,6 +267,7 @@ static uint8_t transfer(void *ctx, uint8_t data, bool slow) {
 }
 
 #ifndef KUI_SCI_SD_NO_BLOCK
+#if !KUI_SCI_SD_PIO_ONLY
 static uint32_t mask_interrupts(void) {
 #ifdef KUI_SCI_SD_TEST
     return kui_sci_sd_test_irq_disable();
@@ -283,16 +311,64 @@ static void purge_buffer(void *buffer) {
 static bool feed_read(void) {
     /* TDR retains its value after the shift register takes it. As in the
      * programmed read path, seed once and clear TDRE for each exact byte. */
+#if KUI_SCI_DMA_REUSE_TDRE
+    uint8_t ready_status = 0;
+#endif
     for(unsigned left = 512; left; --left) {
         unsigned n = POLLS;
         for(;;) {
+#if KUI_SCI_DMA_REUSE_TDRE
+            uint8_t status = ready_status;
+            ready_status = 0;
+            if(!(status & TDRE)) status = rd8(SSR);
+#else
             uint8_t status = rd8(SSR);
+#endif
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+            if((status&ERRORS) || (!(status&TDRE) && n==1u)) {
+                diagnostic_fault(KUI_SCI_PHASE_FEED,(status&ERRORS)?KUI_SCI_REASON_SCI:KUI_SCI_REASON_TIMEOUT,
+                                 TDRE,status,POLLS-n+1u);
+                return false;
+            }
+#else
             if(status & ERRORS) return false;
+#endif
             if(status & TDRE) break;
             if(!--n) return false;
         }
         if(left == 512) wr8(TDR, 0xff);
         wr8(SSR, 0x7cu);
+#if KUI_SCI_DMA_PACED
+        /* Diagnostic variant: admit one complete receive before the next
+         * dummy byte. Do not change baud, DMAOR priority or IRQ ownership. */
+        const uint32_t expected=left-1u;
+        for(n=1u;;n++) {
+            uint32_t remaining=rd32(DMA_COUNT);
+            uint8_t status=rd8(SSR);
+            unsigned reason=0;
+            if(status&ERRORS) reason=KUI_SCI_REASON_SCI;
+            else if((rd32(DMA_OPERATION)&7u)!=1u) reason=KUI_SCI_REASON_DMAOR;
+            else if(remaining<expected || remaining>left) reason=KUI_SCI_REASON_COUNT;
+            else if(remaining==expected) {
+#if KUI_SCI_DMA_REUSE_TDRE
+                /* SH7750 hardware manual Rev. 7.02, sections 15.2.7/15.4:
+                 * TDRE sets when TDR enters the transmit shift register;
+                 * receive-DMA progress follows completed reception. With
+                 * this masked, exclusive one-byte feed, no next transmit
+                 * has cleared TDRE. This existing SSR read also satisfies
+                 * the required read of 1 before our next write of 0. Reuse
+                 * only its observed TDRE; a missing bit polls afresh above. */
+                ready_status = status;
+#endif
+                break;
+            }
+            else if(n==POLLS) reason=KUI_SCI_REASON_TIMEOUT;
+            if(reason) {
+                diagnostic_fault(KUI_SCI_PHASE_PACE,reason,expected,status,n);
+                return false;
+            }
+        }
+#endif
     }
     return true;
 }
@@ -343,6 +419,9 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     wr32(DMA_COUNT, 512);
     if(writing) wr8(SCR, 0); /* Change direction only between complete bytes. */
     wr32(DMA_CONTROL, writing ? DMA_TX : DMA_RX);
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+    ++diagnostic.started;
+#endif
     /* The SCI request enable is required on Dreamcast hardware. CPU IRQs
      * remain masked until it is removed; DMAC completion IRQ is disabled. */
 #ifndef KUI_RETAIL_TRANSPORT
@@ -363,12 +442,36 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     }
 #endif
     unsigned n = 0;
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+    while(ok && !(rd32(DMA_CONTROL)&DMA_END)) {
+        uint8_t status=rd8(SSR);
+        unsigned reason=0;
+        ++n;
+        if(status&ERRORS) reason=KUI_SCI_REASON_SCI;
+        else if((rd32(DMA_OPERATION)&7u)!=1u) reason=KUI_SCI_REASON_DMAOR;
+        else if(n==POLLS) reason=KUI_SCI_REASON_TIMEOUT;
+        if(reason) {
+            diagnostic_fault(KUI_SCI_PHASE_COMPLETE,reason,DMA_END,status,n);
+            ok=false;
+        }
+    }
+    if(ok) {
+        unsigned reason=0;
+        if((rd32(DMA_OPERATION)&7u)!=1u) reason=KUI_SCI_REASON_DMAOR;
+        else if(rd32(DMA_COUNT)!=0) reason=KUI_SCI_REASON_COUNT;
+        if(reason) {
+            diagnostic_fault(KUI_SCI_PHASE_POST,reason,0,rd8(SSR),1u);
+            ok=false;
+        } else ok=wait_flag(TEND);
+    }
+#else
     while(ok && !(rd32(DMA_CONTROL) & DMA_END)) {
         if(++n == POLLS || (rd8(SSR) & ERRORS) ||
            (rd32(DMA_OPERATION) & 7u) != 1u) ok = false;
     }
     if(ok) ok = (rd32(DMA_OPERATION) & 7u) == 1u &&
         rd32(DMA_COUNT) == 0 && wait_flag(TEND);
+#endif
     /* TEND can assert during the last bit: allow its final edge before
      * changing mode or returning to token/CRC operations. */
     if(ok) delay(32u);
@@ -412,6 +515,9 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     if(!ok) COUNT(failures);
     else if(writing) COUNT(tx_blocks);
     else COUNT(rx_blocks);
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+    if(ok) ++diagnostic.success;
+#endif
 #ifndef KUI_RETAIL_TRANSPORT
     if(ok && profile_clock) {
         if(writing) {
@@ -429,6 +535,7 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
     if(ok && crc_out) *crc_out = crc;
     return ok;
 }
+#endif /* PIO comparison keeps the existing bounded block callback below. */
 
 static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
                            size_t count, bool slow, uint16_t *crc_out) {
@@ -441,10 +548,15 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
     if(!count || count > 512 || (!tx && !rx) || !port.acquired || port.fault)
         return false;
     if(!prepare(slow)) return false;
+#if !KUI_SCI_SD_PIO_ONLY
     if(!slow && count == 512 && (!tx || !rx)) {
         int result = dma_block(tx, rx, crc_out);
         if(result >= 0) return result != 0;
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+        ++diagnostic.fallback;
+#endif
     }
+#endif
     COUNT(polled_blocks);
     /* One byte in flight, so interrupt latency cannot overrun a second
      * receive. Commands and short/unaligned payloads need no DMAC ownership.

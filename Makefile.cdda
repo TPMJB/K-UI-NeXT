@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Standalone SCI/AICA experiment: does not link KOS, newlib or the shell.
+CDDA_CC ?= sh-elf-gcc
+CDDA_OBJCOPY ?= sh-elf-objcopy
+CDDA_NM ?= sh-elf-nm
+CDDA_SIZE ?= sh-elf-size
+CDDA_FATFS_SOURCE ?= .deps/fatfs/source
+CDDA_BUILD_DIR ?= build/cdda
+CDDA_TEST_PROFILE ?= 0
+CDDA_BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
+CDDA_CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+CDDA_FLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror $(CDDA_CPU) \
+    -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
+    -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
+    -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_FAST_IO=1 \
+    -DCDDA_TEST_PROFILE=$(CDDA_TEST_PROFILE) -DKUI_BUILD_ID='"$(CDDA_BUILD_ID)"' -I$(CDDA_BUILD_DIR)/fatfs -Iinclude -Isrc/loader
+CDDA_LINK := $(CDDA_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+CDDA_SCRIPT := src/loader/cdda_harness.ld
+CDDA_SOURCES := src/loader/cdda_main.c src/loader/cdda_display.c \
+    src/core/cdda_pcm.c src/core/cdda_stream.c src/core/cdda_ring.c \
+    src/core/cdda_timing.c src/core/cdda_control.c src/core/cdda_clock.c \
+    src/core/cdda_job.c src/loader/cdda_aica.c src/loader/cdda_storage.c \
+    src/loader/sd_reader.c src/loader/sci_sd_bus.c src/loader/minic.c \
+    src/dreamcast/shell_font.c src/core/boot_volume.c src/core/data.c
+ifeq ($(CDDA_TEST_PROFILE),7)
+CDDA_SCRIPT := src/loader/cdda_service.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/loader/cdda_client.c
+endif
+ifeq ($(CDDA_TEST_PROFILE),8)
+CDDA_SCRIPT := src/loader/cdda_bios.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/core/cdda_bios.c src/loader/cdda_bios_client.c
+endif
+ifeq ($(CDDA_TEST_PROFILE),9)
+CDDA_SCRIPT := src/loader/cdda_batch.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/core/cdda_bios_batch.c src/loader/cdda_batch_client.c
+endif
+ifeq ($(CDDA_TEST_PROFILE),10)
+CDDA_SCRIPT := src/loader/cdda_batch_fault.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/core/cdda_bios_batch.c src/loader/cdda_batch_fault_client.c
+endif
+ifeq ($(CDDA_TEST_PROFILE),11)
+CDDA_SCRIPT := src/loader/cdda_disc.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/core/game_image.c src/core/cdda_disc.c src/core/cdda_disc_bios.c src/loader/cdda_disc_client.c src/loader/cdda_disc_libc.c
+endif
+ifeq ($(CDDA_TEST_PROFILE),12)
+CDDA_SCRIPT := src/loader/cdda_disc_toy.ld
+CDDA_SOURCES += src/core/cdda_handoff.c src/core/game_image.c src/core/cdda_disc.c src/core/cdda_disc_bios.c src/loader/cdda_disc_toy_client.c src/loader/cdda_disc_libc.c
+endif
+CDDA_OBJECTS := $(patsubst %.c,$(CDDA_BUILD_DIR)/%.o,$(CDDA_SOURCES)) \
+    $(CDDA_BUILD_DIR)/src/loader/cdda_start.o $(CDDA_BUILD_DIR)/fatfs/ff.o $(CDDA_BUILD_DIR)/fatfs/ffunicode.o
+ifeq ($(CDDA_TEST_PROFILE),7)
+CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o
+endif
+ifeq ($(CDDA_TEST_PROFILE),8)
+CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o $(CDDA_BUILD_DIR)/src/loader/cdda_vector.o
+endif
+ifeq ($(CDDA_TEST_PROFILE),9)
+CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o $(CDDA_BUILD_DIR)/src/loader/cdda_vector.o
+endif
+ifeq ($(CDDA_TEST_PROFILE),10)
+CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o $(CDDA_BUILD_DIR)/src/loader/cdda_vector.o
+endif
+
+ifneq ($(filter 11 12,$(CDDA_TEST_PROFILE)),)
+CDDA_OBJECTS += $(CDDA_BUILD_DIR)/src/loader/cdda_client_bridge.o $(CDDA_BUILD_DIR)/src/loader/cdda_vector.o
+endif
+
+.PHONY: all cdda cdda-fixture cdda-check cdda-profiles cdda-next-tests cdda-mixed-test cdda-service-test cdda-bios-test cdda-batch-test cdda-batch-fault-test cdda-disc-test cdda-disc-toy-test clean force-cdda-config
+all: cdda
+cdda: $(CDDA_BUILD_DIR)/cdda-harness.kui $(CDDA_BUILD_DIR)/cdda-harness.bin cdda-check
+
+# Copy headers/sources: their quoted includes must see this private readonly
+# configuration. Never mutate the runtime's shared dependency or its symlinks.
+force-cdda-config:
+$(CDDA_BUILD_DIR)/build-config: force-cdda-config
+	@mkdir -p $(@D)
+	@printf '%s\n' 'BUILD=$(CDDA_BUILD_ID)' 'PROFILE=$(CDDA_TEST_PROFILE)' 'FATFS=$(CDDA_FATFS_SOURCE)' > $@.new
+	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
+$(CDDA_BUILD_DIR)/fatfs/.configured: config/ffconf.h Makefile.cdda $(CDDA_BUILD_DIR)/build-config \
+    $(CDDA_FATFS_SOURCE)/ff.c $(CDDA_FATFS_SOURCE)/ff.h \
+    $(CDDA_FATFS_SOURCE)/ffunicode.c $(CDDA_FATFS_SOURCE)/diskio.h
+	@mkdir -p $(CDDA_BUILD_DIR)/fatfs
+	cp $(CDDA_FATFS_SOURCE)/ff.c $(CDDA_FATFS_SOURCE)/ff.h $(CDDA_FATFS_SOURCE)/ffunicode.c $(CDDA_FATFS_SOURCE)/diskio.h $(CDDA_BUILD_DIR)/fatfs/
+	python3 -c 'import pathlib,re; p=pathlib.Path("config/ffconf.h").read_text(); v={"FF_FS_READONLY":"1","FF_FS_MINIMIZE":"2","FF_USE_FASTSEEK":"0","FF_USE_EXPAND":"0","FF_USE_CHMOD":"0","FF_FS_NORTC":"1","FF_FS_CRTIME":"0"}; p=re.sub(r"(?m)^#define ("+"|".join(v)+r")\s+[^\n]*",lambda m:"#define "+m[1]+" "+v[m[1]],p); pathlib.Path("$(CDDA_BUILD_DIR)/fatfs/ffconf.h").write_text(p)'
+	@touch $@
+$(CDDA_BUILD_DIR)/%.o: %.c $(CDDA_BUILD_DIR)/fatfs/.configured
+	@mkdir -p $(@D)
+	$(CDDA_CC) $(CDDA_FLAGS) -MMD -MP -c $< -o $@
+$(CDDA_BUILD_DIR)/%.o: %.S $(CDDA_BUILD_DIR)/fatfs/.configured
+	@mkdir -p $(@D)
+	$(CDDA_CC) $(CDDA_FLAGS) -MMD -MP -c $< -o $@
+$(CDDA_BUILD_DIR)/fatfs/%.o: $(CDDA_BUILD_DIR)/fatfs/%.c $(CDDA_BUILD_DIR)/fatfs/.configured
+	$(CDDA_CC) $(CDDA_FLAGS) -Wno-unused-function -MMD -MP -c $< -o $@
+$(CDDA_BUILD_DIR)/fatfs/ff.c $(CDDA_BUILD_DIR)/fatfs/ffunicode.c: $(CDDA_BUILD_DIR)/fatfs/.configured
+	@test -f $@
+$(CDDA_BUILD_DIR)/cdda-harness.elf: $(CDDA_OBJECTS) $(CDDA_SCRIPT)
+	$(CDDA_CC) $(CDDA_LINK) -T$(CDDA_SCRIPT) -Wl,-Map,$(CDDA_BUILD_DIR)/cdda-harness.map -o $@ $(CDDA_OBJECTS) -lgcc
+$(CDDA_BUILD_DIR)/cdda-harness.bin: $(CDDA_BUILD_DIR)/cdda-harness.elf
+	$(CDDA_OBJCOPY) -O binary $< $@
+$(CDDA_BUILD_DIR)/cdda-harness.kui: $(CDDA_BUILD_DIR)/cdda-harness.elf tools/runtime_package.py
+	python3 tools/runtime_package.py build $< $@ --build-id $(CDDA_BUILD_ID)
+cdda-check: $(CDDA_BUILD_DIR)/cdda-harness.elf $(CDDA_BUILD_DIR)/cdda-harness.kui
+	$(CDDA_SIZE) $<
+	@test -z "$$($(CDDA_NM) -u $<)"
+	python3 tools/runtime_package.py verify $(CDDA_BUILD_DIR)/cdda-harness.kui
+cdda-fixture:
+	python3 tools/cdda_fixture.py build/cdda/fixture --stress-output build/cdda/fixture/stress.bin
+cdda-profiles:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=1 CDDA_BUILD_DIR=build/cdda-controls
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=2 CDDA_BUILD_DIR=build/cdda-soak
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=3 CDDA_BUILD_DIR=build/cdda-stress
+cdda-next-tests:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=4 CDDA_BUILD_DIR=build/cdda-calibration
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=5 CDDA_BUILD_DIR=build/cdda-commands
+cdda-mixed-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=6 CDDA_BUILD_DIR=build/cdda-mixed
+cdda-service-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=7 CDDA_BUILD_DIR=build/cdda-service
+cdda-bios-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=8 CDDA_BUILD_DIR=build/cdda-bios
+cdda-batch-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=9 CDDA_BUILD_DIR=build/cdda-batch
+cdda-batch-fault-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=10 CDDA_BUILD_DIR=build/cdda-batch-fault
+cdda-disc-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=11 CDDA_BUILD_DIR=build/cdda-disc
+cdda-disc-toy-test:
+	$(MAKE) -f Makefile.cdda cdda CDDA_TEST_PROFILE=12 CDDA_BUILD_DIR=build/cdda-disc-toy
+clean:
+	rm -rf $(CDDA_BUILD_DIR)
+-include $(CDDA_OBJECTS:.o=.d)

@@ -696,6 +696,7 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
     if(!out) return false;
     memset(out,0,sizeof(*out));
+    out->audio.classification=KUI_GAME_AUDIO_UNKNOWN;
     struct image_files files={.cancel=cancel,.log=log};
     char descriptor[KUI_DEST_NAME_CAP];
     if(!split_file(path,files.root,descriptor)) {
@@ -721,9 +722,12 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         goto done;
     }
     uint32_t session=image->data_lba;
+    result=kui_game_image_audio_info(image,&out->audio);
+    if(result!=KUI_GAME_OK) {problem=kui_game_result_name(result);goto done;}
     out->format=image->format;out->scrambled=image->scrambled;
     out->cd_image=image->cd_image;
     out->tracks=image->count;
+    out->audio_tracks=out->audio.audio_tracks;
     for(unsigned i=0;i<image->count;i++) {
         const struct kui_game_image_track *t=&image->tracks[i];
         bool shared=false;
@@ -731,9 +735,6 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         if(!shared) out->bytes+=t->file_bytes;
         if(t->control==4) {
             ++out->data_tracks;
-        } else {
-            ++out->audio_tracks;
-            if(t->start_lba>=session) out->high_density_audio=true;
         }
     }
     if(!out->data_tracks) {problem="No boot-session data track";goto done;}
@@ -765,7 +766,9 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 99 tracks":
         out->boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES || out->boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES?
             "Image inspected; boot executable must be 128 bytes to 12 MiB":
-        out->high_density_audio?"Image inspected; CD audio unsupported, audio requests may stop the game":
+        out->audio.candidate_tracks?"Image inspected; CD audio playback unavailable; music may be missing":
+        out->audio.classification==KUI_GAME_AUDIO_UNKNOWN?
+            "Image inspected; audio track inventory unavailable in this format":
         "Image inspected; native game launch available, compatibility varies";
 done:
     if(stopped(cancel)) {out->valid=false;out->stopped=true;problem="Games inspection stopped";}
@@ -781,6 +784,9 @@ done:
         if(out->valid) {
             log("Games tracks=%u data=%u audio=%u bytes=%llu",out->tracks,out->data_tracks,
                 out->audio_tracks,(unsigned long long)out->bytes);
+            log("Games audio: playback candidates=%u low-density tracks=%u; inventory=%s",
+                out->audio.candidate_tracks,out->audio.warning_tracks,
+                out->audio.classification==KUI_GAME_AUDIO_UNKNOWN?"unknown":"represented by descriptor");
             log("Games boot: %s LBA=%lu bytes=%lu",out->boot_file,
                 (unsigned long)out->boot_lba,(unsigned long)out->boot_bytes);
         }

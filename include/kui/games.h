@@ -38,10 +38,12 @@ struct kui_games_detail {
     uint64_t bytes;
     uint32_t boot_bytes, boot_lba;
     unsigned tracks, audio_tracks, data_tracks;
+    struct kui_game_audio_info audio;
     bool valid, stopped;
     /* Inspection is useful even when this loader cannot boot the image.
-     * CDDA is advisory: data reads may work but audio-play commands do not. */
-    bool native_gd, native_cd, windows_ce, high_density_audio, scrambled, cd_image;
+     * CDDA is advisory: audio-play commands are acknowledged silently.
+     * Bare ISO/raw files do not reveal the original audio-track inventory. */
+    bool native_gd, native_cd, windows_ce, scrambled, cd_image;
     enum kui_game_image_format format;
     bool cover; /* Large box art was loaded for this image. */
 };

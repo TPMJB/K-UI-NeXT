@@ -794,6 +794,13 @@ static void check_formats(void) {
     assert(!strcmp(detail.title,"Independent Games Fixture") && !strcmp(detail.boot_file,"1ST_READ.BIN"));
     assert(detail.boot_bytes==4096 && detail.boot_lba==(shared?22u:21u));
     assert(detail.tracks==(shared?2u:1u) && detail.data_tracks==1 && detail.audio_tracks==(shared?1u:0u));
+    assert(detail.audio.audio_tracks==detail.audio_tracks && !detail.audio.warning_tracks);
+    assert(detail.audio.candidate_tracks==(shared?1u:0u));
+    assert(detail.audio.classification==(shared?KUI_GAME_AUDIO_CD:
+        iso || raw?KUI_GAME_AUDIO_UNKNOWN:KUI_GAME_AUDIO_NONE));
+    if(shared) assert(strstr(detail.message,"CD audio playback unavailable") &&
+        !strstr(detail.message,"stop the game"));
+    if(iso || raw) assert(strstr(detail.message,"audio track inventory unavailable"));
     assert(detail.bytes==(shared?65u*2352u:raw?64u*2352u:cdi?64u*2048u+165u:64u*2048u));
     assert(detail.format==(iso?KUI_GAME_IMAGE_ISO:raw?KUI_GAME_IMAGE_RAW:cdi?KUI_GAME_IMAGE_CDI:KUI_GAME_IMAGE_CUE));
 }
@@ -832,6 +839,10 @@ static void check(void) {
         assert(!strcmp(detail.region, "JUE"));
         assert(!strcmp(detail.boot_file, "1ST_READ.BIN"));
         assert(detail.tracks == 3 && detail.audio_tracks == 1 && detail.data_tracks == 2);
+        assert(detail.audio.classification == KUI_GAME_AUDIO_GD_LOW_DENSITY_ONLY);
+        assert(detail.audio.audio_tracks == 1 && detail.audio.warning_tracks == 1 &&
+            !detail.audio.candidate_tracks);
+        assert(!strstr(detail.message,"CD audio") && !strstr(detail.message,"audio track inventory"));
         assert(detail.bytes == 72u * 2352u && detail.boot_bytes == 4096 && detail.boot_lba == 45021);
         assert(test.track_bytes > 0 && test.track_bytes < 65536);
     }

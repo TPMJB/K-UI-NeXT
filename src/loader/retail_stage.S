@@ -792,6 +792,27 @@ C(kui_retail_startup_gd_return):
 .Lstartup_gd_after: .long C(kui_retail_startup_gd_after)+0x20000000
 #endif
 #endif
+#if KUI_RETAIL_TOY_PILOT
+    /* The Toy pilot has one synchronous SCI resident. Keep the ordinary
+     * selector's symbols as aliases, without embedding four identical copies.
+     * Its stage rejects unsupported launch options before selecting a blob. */
+    .section .resident_blob,"a"
+    .align 2
+    .global __retail_resident_scif_blob_start,__retail_resident_scif_blob_end
+    .global __retail_resident_sci_blob_start,__retail_resident_sci_blob_end
+    .global __retail_resident_ide_blob_start,__retail_resident_ide_blob_end
+    .global __retail_resident_scia_blob_start,__retail_resident_scia_blob_end
+__retail_resident_scif_blob_start:
+__retail_resident_sci_blob_start:
+__retail_resident_ide_blob_start:
+__retail_resident_scia_blob_start:
+    .incbin "build/retail/resident-sci.bin"
+    .align 2
+__retail_resident_scif_blob_end:
+__retail_resident_sci_blob_end:
+__retail_resident_ide_blob_end:
+__retail_resident_scia_blob_end:
+#else
     .section .resident_blob,"a"
     .align 2
     .global __retail_resident_scif_blob_start,__retail_resident_scif_blob_end
@@ -838,6 +859,7 @@ __retail_resident_scia_blob_start:
 #endif
     .align 2
 __retail_resident_scia_blob_end:
+#endif
 
 #ifdef KUI_RETAIL_CE
 /* Windows CE boot test: the exception table bootstrap 2 runs under, matching

@@ -8,6 +8,25 @@
 #include <stddef.h>
 #include <string.h>
 
+#if KUI_TOY_PILOT_GD_FIXED_STEP && !KUI_TOY_PILOT_SHARED_SCI
+#if !KUI_RETAIL_TOY_PILOT || (KUI_TOY_PILOT_GD_FIXED_STEP != 2 && KUI_TOY_PILOT_GD_FIXED_STEP != 3) || defined(KUI_RETAIL_ASYNC) || defined(KUI_RETAIL_CE)
+#error "The fixed GD step is restricted to the separate synchronous Toy test"
+#endif
+#include "kui/toy_pilot_clock.h"
+/* Cumulative data-step measurements, separate from the audio snapshot ABI.
+ * Read only TMU0; reject timing across an incompatible timer profile. */
+static struct {
+    uint32_t steps, sectors, ticks, max_ticks, max_sectors, invalid;
+} toy_gd_timing;
+static int toy_gd_clock_valid(void) {
+    return kui_toy_pilot_clock_profile(
+        *(volatile const uint16_t *)(uintptr_t)0xffc00000u,
+        *(volatile const uint32_t *)(uintptr_t)0xffd80008u,
+        *(volatile const uint16_t *)(uintptr_t)0xffd80010u,
+        *(volatile const uint8_t *)(uintptr_t)0xffd80004u);
+}
+#endif
+
 static struct kui_retail_manifest manifest;
 #ifdef KUI_RETAIL_ASYNC
 /* The background reader keeps these between its interrupt vectors. */
@@ -61,6 +80,20 @@ static int ram_alias(uint32_t address) {
 }
 #endif
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
+#if KUI_RETAIL_OBSERVE
+#if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT
+#error "Observation is native standard SCI in the original low reservation only"
+#endif
+static enum kui_game_result image_result=(enum kui_game_result)UINT32_MAX;
+static enum kui_loader_sd_result observe_read_card_result=(enum kui_loader_sd_result)UINT32_MAX;
+static enum kui_loader_sd_result observe_stop_result=(enum kui_loader_sd_result)UINT32_MAX;
+static uint32_t observe_read_lba=UINT32_MAX,observe_read_count=UINT32_MAX,observe_card_lba=UINT32_MAX;
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+#include "retail_sci_observe.inc"
+#else
+#include "retail_observe.inc"
+#endif
+#endif
 extern uint8_t __retail_resident_bss_begin[] __asm__("__retail_resident_bss_begin");
 extern uint8_t __retail_resident_bss_end[] __asm__("__retail_resident_bss_end");
 
@@ -114,6 +147,9 @@ static void video_sample(void) {
 #endif
 static int read_run(void *unused, uint32_t lba, uint32_t available, uint8_t output[512]) {
     (void)unused;
+#if KUI_RETAIL_OBSERVE
+    observe_card_lba=lba; /* Last physical block actually attempted, not cached. */
+#endif
     video_sample(); /* Each block is ~1 ms: long steps still count wraps. */
     card_result = kui_retail_storage_read_run(&card, lba, available, output);
     return card_result == KUI_LOADER_SD_OK ? 0 : -1;
@@ -135,15 +171,29 @@ static int check_sectors(void *unused, uint32_t lba, uint32_t count, uint32_t by
 static int read_sectors(void *unused, uint32_t lba, uint32_t count,
                         uint32_t bytes, void *out) {
     (void)unused;
+#if KUI_RETAIL_OBSERVE
+    image_result=(enum kui_game_result)UINT32_MAX;
+    observe_read_card_result=observe_stop_result=(enum kui_loader_sd_result)UINT32_MAX;
+    observe_read_lba=lba;observe_read_count=count;observe_card_lba=UINT32_MAX;
+#endif
     if(bytes != 2048 && bytes != 2352) return -1;
     card_result = kui_retail_storage_acquire(&card);
+#if KUI_RETAIL_OBSERVE
+    observe_read_card_result=card_result;
+#endif
     if(card_result != KUI_LOADER_SD_OK) return -1;
     enum kui_game_result result = kui_retail_image_read(&image, lba, count,
         sector_format(bytes), out, (size_t)count * bytes);
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_RETAIL_OBSERVE
     image_result = result;
 #endif
+#if KUI_RETAIL_OBSERVE
+    observe_read_card_result=card_result;
+#endif
     enum kui_loader_sd_result stopped = kui_retail_storage_stop(&card);
+#if KUI_RETAIL_OBSERVE
+    observe_stop_result=stopped;
+#endif
     if(card_result == KUI_LOADER_SD_OK) card_result = stopped;
     if(stopped != KUI_LOADER_SD_OK) image.cache_valid = 0;
     kui_retail_storage_release(&card);
@@ -253,7 +303,7 @@ static void ce_trace(unsigned earlier) {
         retail_display_values("EARLIER",ce_calls[(ce_count-1u-i)&3u],4);
 }
 #endif
-#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC) && !KUI_RETAIL_OBSERVE
 /* retail_display_values uses alias-qualified reads of these aligned words. */
 #define terminal_row(legend, snapshot, count) \
     retail_display_values((legend), (const uint32_t *)(const void *)(snapshot), (count))
@@ -290,6 +340,12 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
     __asm__ __volatile__("" : : : "memory");
 }
 #endif
+#if KUI_RETAIL_OBSERVE
+static void report_fault(const char *reason,uint32_t function,uint32_t param) {
+    observe_fault_report(reason,function,param);
+    for(;;) __asm__ volatile("nop");
+}
+#else
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
 static void report_fault(const char *reason, uint32_t function, uint32_t current_param) {
     capture_native_fault(function, current_param);
@@ -339,6 +395,7 @@ static void report_fault(const char *reason, uint32_t function) {
 #endif
     for(;;) __asm__ volatile("nop");
 }
+#endif
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC)
 /* Current R5 is a standard-native terminal field. Keep the other readers'
  * original two-argument function and call ABI, including their stack budget. */
@@ -347,6 +404,13 @@ static void report_fault(const char *reason, uint32_t function) {
 void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
     (void)command; /* Assembly reaches this only for menu return command 1. */
     (void)caller; (void)stack;
+#if KUI_RETAIL_OBSERVE
+    retail_display_restore(&display);
+    observe_report();
+    retail_display_pause(1200u);
+    ((void (*)(void))(uintptr_t)0xa0000000u)();
+    for(;;) __asm__ volatile("nop");
+#else
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
     /* The return path never resumes game I/O. Preserve its nine counters
      * before claiming video, using the same terminal cache workspace. */
@@ -411,6 +475,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack) {
      * No game, reader or vector state is relied on afterwards. */
     ((void (*)(void))(uintptr_t)0xa0000000u)();
     for(;;) __asm__ volatile("nop");
+#endif
 }
 int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     const struct kui_retail_storage *prepared_card, uint32_t original_gd_vector,
@@ -547,10 +612,18 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     if(service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", r7, r5);
     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
+#if KUI_RETAIL_OBSERVE
+        report_fault("REQ REFUSED", r7, r5);
+#else
         report_fault("GD REQUEST REJECTED", r7, r5);
+#endif
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||
             r7 == KUI_GD_DMA_CALLBACK || r7 == KUI_GD_DMA_TRANSFER || r7 == KUI_GD_DMA_CHECK))
+#if KUI_RETAIL_OBSERVE
+        report_fault("GD UNSUPPORTED", r7, r5);
+#else
         report_fault("GD FUNCTION UNSUPPORTED", r7, r5);
+#endif
 #ifdef KUI_RETAIL_CE
     ce_events(r7);
     meter_call(started);
@@ -592,20 +665,45 @@ static int32_t step(uint32_t r4, uint32_t r5) {
 #else
 /* One EXEC, sized by the pacing policy and timed for the next estimate. */
 static int32_t step(uint32_t r4, uint32_t r5) {
+#if KUI_TOY_PILOT_SHARED_SCI
+    pace.spin=0;service.step=KUI_TOY_PILOT_GD_FIXED_STEP;
+#elif KUI_TOY_PILOT_GD_FIXED_STEP
+    uint32_t before = service.diag.sectors_read;
+    /* Zero is also rejected at a counter-wrap boundary: count that sample
+     * as untimed rather than retaining a separate flag on the small GD stack. */
+    uint32_t started = toy_gd_clock_valid() ?
+        *(volatile const uint32_t *)(uintptr_t)0xffd8000cu : 0u;
+    pace.spin = 0;
+    service.step = KUI_TOY_PILOT_GD_FIXED_STEP;
+#else
     uint32_t frames = pace.frames, line = pace.line, before = service.diag.sectors_read;
     uint32_t epoch = pace.epoch;
     pace.spin = 0;
     service.step = kui_retail_pace_budget(&pace, KUI_RETAIL_GD_STEP_SECTORS,
                                           KUI_RETAIL_GD_STEP_MAX);
+#endif
     int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, KUI_GD_EXEC);
     if(service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", KUI_GD_EXEC, 0);
+#if !KUI_TOY_PILOT_SHARED_SCI
     uint32_t sectors = service.diag.sectors_read - before;
     if(sectors) {
+#if KUI_TOY_PILOT_GD_FIXED_STEP
+        uint32_t elapsed = started - *(volatile const uint32_t *)(uintptr_t)0xffd8000cu;
+        ++toy_gd_timing.steps;
+        toy_gd_timing.sectors += sectors;
+        if(sectors > toy_gd_timing.max_sectors) toy_gd_timing.max_sectors = sectors;
+        if(started && toy_gd_clock_valid() && elapsed) {
+            toy_gd_timing.ticks += elapsed;
+            if(elapsed > toy_gd_timing.max_ticks) toy_gd_timing.max_ticks = elapsed;
+        } else ++toy_gd_timing.invalid;
+#else
         video_sample();
         kui_retail_pace_measure(&pace, frames, line, epoch, sectors);
         if(service.step > KUI_RETAIL_GD_STEP_SECTORS) ++pacing.paced;
+#endif
     }
+#endif
     return result;
 }
 #endif
@@ -619,6 +717,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
      * No original GD forwarding remains: those entries now lead back here.
      * Font/flash/system BIOS vectors are independent and unchanged. */
     uint32_t source=kui_retail_hook_source;
+#if KUI_RETAIL_OBSERVE
+    observe_call();
+#endif
 #ifdef KUI_RETAIL_CE
     uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0;
     if(ce_record(source,r4,r5,r6,r7)) return 0;
@@ -645,6 +746,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
     int32_t result = r7 == KUI_GD_EXEC ? step(r4, r5) :
         kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
+#if KUI_RETAIL_OBSERVE
+    observe_result(r7,result);
+#endif
     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
         report_fault("GD REQUEST REJECTED", r7, r5);
     else if(result < 0 && (r7 > KUI_GD_DATATYPE ||

@@ -29,7 +29,8 @@ enum kui_runtime_result kui_runtime_read(const char *path,
     if(cancelled()) { result = KUI_RUNTIME_CANCELLED; goto close; }
     out->data = malloc(out->info.payload_bytes);
     if(!out->data) { result = KUI_RUNTIME_MEMORY; goto close; }
-    log("Loading SD runtime %s (%" PRIu32 " bytes)", out->info.build, out->info.payload_bytes);
+    log("Loading %s", path + 2);
+    log("Package %s (%" PRIu32 " bytes)", out->info.build, out->info.payload_bytes);
     uint32_t offset = 0, crc = 0;
     while(offset < out->info.payload_bytes) {
         if(cancelled()) { result = KUI_RUNTIME_CANCELLED; goto close; }

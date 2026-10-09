@@ -1,0 +1,418 @@
+# CDDA implementation roadmap
+
+Status: the detached SCI/AICA harness passed its baseline, two controls runs,
+15-minute soak and 15-minute serialized read stress with zero reported faults.
+Profiles 04 and 05 also passed their matched clock and controlled-command
+console checks with zero reported failures. Their
+[hardware record](evidence/cdda-calibration-commands-hardware-2026-10-07.md)
+contains the exact endpoints and command counters. The isolated
+[mixed-jobs test](cdda-mixed-jobs-test.md) also
+[passed profile 06 on console](evidence/cdda-mixed-jobs-hardware-2026-10-07.md):
+seven stages, all eight request sizes and zero reported errors or failures.
+Its timer conversion uses the pinned KOS
+12,468,720 Hz TMU reference without changing AICA pitch. Absolute clock/pitch
+measurement, targeted stereo listening, broader job arbitration and retail
+resource/command integration remain open. Profile 07 also
+[passed its controlled service handoff on console](evidence/cdda-service-hardware-2026-10-07.md),
+with seven stages, 7,285 ABI checks and zero failures. Profile 08 also
+[passed the controlled BIOS vector test](evidence/cdda-bios-hardware-2026-10-07.md):
+eight stages, 7,002,112 checked bytes, 17,150 ABI checks and restored vector.
+Profiles 09 and 10 also [passed on console](evidence/cdda-batch-hardware-2026-10-07.md):
+09 checked 8,851,456 bytes in 4,322 chunks across all eight request sizes;
+10 preserved exactly one confirmed 2,048-byte sector through its deliberate
+deadline refusal. Both completed eight stages with zero unexpected failures
+and restored the vector. Profiles
+[11: a generated complete GDI map and 12: selected Toy Commander track 14](cdda-disc-test.md)
+also [passed on console](evidence/cdda-disc-hardware-2026-10-07.md): each
+completed eight stages with zero failures and restored the vector. Profile 11
+checked all 196,608 data bytes in 96 chunks, both TOCs and two actual EOFs;
+profile 12 completed the selected track's pause/resume and actual EOF sequence.
+The current standalone sequence is complete. Retail integration remains open.
+[Profile 13 passed the complete Toy Commander preflight](evidence/cdda-preflight-hardware-2026-10-07.md):
+15 backed tracks, 12 audio tracks and a complete physical map within 64 slots.
+The [retail comparisons](evidence/cdda-retail-read-comparison-hardware-2026-10-07.md)
+now identify an SCI receive overrun in the original DMA feed. The receive-paced
+reader completed 24,846 DMA blocks with no fallback or captured SCI fault and
+accepted one PLAY20 request. The user reported an eventual intro-video freeze
+and skip; the reports do not measure its cause or establish whether it predates
+pacing. The paced path is the current retail CDDA transport candidate, not an
+ordinary-reader replacement or an audible retail music pass. An inactive
+sampled sound resource does not establish permission to use it.
+Prepared 2026-10-07 UTC / 2026-10-07 America/Chicago.
+
+This roadmap implements the [separate reader design](cdda-reader-design.md).
+The released [1.8.5 reader](release-v1.8.5.md) stays the fallback. The first
+target is native SCI microSD with complete, uncompressed disc-audio tracks;
+Windows CE, IDE and compressed resident playback follow only after that
+path is proven. Gates describe evidence required to advance, not delivery
+dates or promises of broad game compatibility.
+
+## Ground rules
+
+- Work in the experimental branch; preserve the published 1.8.5 reader,
+  release assets and ordinary package validation.
+- Implement from primary hardware/BIOS documentation, independently licensed
+  KallistiOS interfaces and K-UI's existing contracts. Record exact references
+  and retain applicable notices in [the provenance record](../THIRD_PARTY.md).
+- Do not copy, port or closely translate DreamShell code or binaries,
+  including its refill, allocation, timer or channel-selection algorithms.
+  Attribution does not change permission or make a port independent.
+- Prior research inspected DreamShell source. This is source-aware
+  development, not a formal clean-room claim. Its ISO Loader uses PolyForm
+  Noncommercial 1.0.0 at the inspected revision, not K-UI's GPL-3.0-only
+  license; the detailed boundary is in the design document.
+- Reject unsafe or unsupported CDDA configurations explicitly. A memory
+  address that happens to be idle, a currently inactive sound channel and an
+  image containing audio are not compatibility guarantees.
+
+## Gate 1: one metadata classification contract
+
+**Implemented in the foundation branch.** One pure classification function
+over the already parsed image replaces the launcher's two differing audio
+heuristics. Games details and launch warnings use the same result.
+
+Classify supplied audio separately from actual playback usage: intact GD
+high-density audio is a candidate; ordinary low-density GD audio is normally
+the warning track; audio in a CD image is ambiguous and may precede its data
+session. Data-only images cannot supply absent tracks. Keep all classification
+off the page-navigation path: no extra track opens, audio scans or descriptor
+reads while paging.
+
+**Exit evidence:** focused host tests cover warning-only GD, high-density GD
+audio, CD audio before and after data, ambiguous CD tracks, data-only images
+and Original/2048 audio-geometry parity. Existing launch preparation continues
+using the same reader and package contracts. Code review confirms there is no
+new per-page I/O.
+
+**Scope of this foundation:** classification and launcher messages only. It
+does not add playback, install a CDDA reader, enable automatic dispatch or
+make an unsupported game play music. Auto / On / Off and package selection
+remain part of Gate 5.
+
+**Foundation validation:** the image unit target passed 1,027 checks with
+AddressSanitizer and UndefinedBehaviorSanitizer. The Games, retail-preparation
+and shell host targets compiled with strict warnings; shell tests passed.
+Focused FAT32/exFAT runs passed 20 Games inspection/navigation checks and 12
+retail-preparation checks, including audio before data, GD warning-only audio
+and ISO/raw unknown inventory. Whole-card SHA-256 and filesystem checks
+confirmed read-only operation. The image runner now accepts repeated `--case`
+arguments to avoid running unrelated cases for a focused change.
+
+Leak detection alone was disabled because the test runner's ptrace environment
+prevents LeakSanitizer from inspecting `/proc`; address/undefined checks remained
+enabled. This is host evidence, not an on-console CDDA test. No new Dreamcast
+binary or audio-playing reader has been produced at this gate.
+
+## Gate 2: isolated SCI harness and measured memory budget
+
+**Initial implementation, measurements and first console counter result complete.**
+The [first hardware evidence](evidence/cdda-hardware-2026-10-07.md) records
+79.4 ms worst half refill, 106.1 ms minimum margin and 5,184 bytes of observed
+stack use. The photograph does not establish audible channel order or quality.
+The [isolated test instructions](cdda-harness-test.md) cover the actual built
+runtime, generated fixture, sample placement and restoring the retained runtime.
+The [memory evidence](evidence/cdda-harness-memory-2026-10-07.md) records a real
+low-link failure without enlarging the ordinary reservation. The controlled
+homebrew image owns its separate code/state/stack region and contains no KOS
+kernel references. This is not a retail high-memory admission.
+
+Create a controlled homebrew program that explicitly grants the experiment
+main RAM, sound RAM, two AICA channels, interrupt behavior and a timing source.
+Exercise the detached reader after normal shell services have stopped;
+success inside a running KOS music thread would not prove the retail path.
+
+Build a candidate low resident and measure actual text/data/BSS, map storage,
+stack bounds and generated instructions. Do not increase an ordinary reader's
+reservation. If the candidate cannot fit, run the same engine in memory
+explicitly reserved by the homebrew harness. That establishes a development
+environment, not permission to place code in a retail game's high RAM.
+
+**Exit evidence:** a reproducible link map, conservative stack report,
+instruction audit and checked handoff layout; no overlap among copied code,
+temporary stage/stack, final state or harness allocations. Ordinary reader
+payloads are unchanged when compared at a fixed build ID. A runnable harness
+and its SD installation instructions exist before asking for hardware tests.
+
+## Gate 3: checked raw PCM into an AICA ping-pong ring
+
+**Baseline, controls/recovery and 15-minute soak passed their numerical console checks.**
+The [new hardware record](evidence/cdda-controls-soak-stress-hardware-2026-10-07.md)
+includes two expected deadline recoveries across two controls runs and two
+timer wraps per long run. The owner noticed no obvious problem during casual
+listening, but could not distinguish left/right on the TV and did not monitor
+continuity. The later [paired calibration and command run](evidence/cdda-calibration-commands-hardware-2026-10-07.md)
+completed successfully and sounded successful to the owner. Matched endpoint
+data now replaces the rounded-loop comparison. Absolute pitch and targeted
+channel-order/continuity verification remain open.
+Focused sanitizer
+checks cover raw conversion, both byte orders, offsets, sector/cache boundaries,
+2448-byte subchannel stripping, transactional I/O, seeks/EOF, ring deadlines and
+AICA MMIO phase/FIFO/active-half refusal. The photographs establish observed
+refill/service margins, completion and expected refusal/recovery counters;
+they do not establish precise pitch, silence or glitch-free stereo by listening.
+
+Play independently generated synthetic stereo samples first. Read raw audio
+through checked 512-byte SD blocks, carry partial stereo frames, deinterleave
+into left/right samples and fill only the inactive half of explicitly owned
+AICA buffers. Start with bounded G2 PIO rather than introducing a second DMA
+or timer owner. A 64 KiB total stereo ring gives approximately 185.8 ms to
+refill each half; the measured refill deadline needs a safety margin.
+
+Exercise channel order and phase, signed sample/byte order, 2352-byte sectors,
+2448-byte sources with subchannels removed, nonzero backing offsets,
+block/sector/half boundaries, track changes, pause/resume, seek, loop and EOF.
+An underrun must stop or mute owned audio safely rather than loop stale data.
+
+**Exit evidence:** correct output and position for the synthetic fixtures;
+zero active-half overwrites or unexplained sample loss; measured worst refill
+time and maximum service gap remain within the chosen ring budget with a
+recorded margin. Raw CDDA consumes 176,400 bytes/s, about **172.3 KiB/s**.
+Average card throughput alone is not sufficient: account for checked reads,
+PIO work, tail latency, retries and service jitter.
+
+## Gate 4: one card arbiter under concurrent read stress
+
+**Initial serialized homebrew stress passed its numerical console checks.**
+The same hardware record reports 300,892,160 independently verified data
+bytes, 35 complete 8 MiB passes and zero read/check errors during 900 clock
+seconds of audio. Worst complete data job was 32.959 ms; worst verified-job
+completion gap was 151.441 ms. This workload uses two independent file cursors
+on one serialized SCI lease. Broader game-job arbitration, active-transfer
+cancellation/retry policy, fragmented layouts and actual game command latency
+remain open.
+Profile 05 subsequently passed its controlled command model: 48 accepted
+commands, 27 actions, 12 STATUS checks, two expected invalid/state refusals
+and four stale-token refusals. Those checks cancel staged model actions;
+they do not demonstrate cancellation of an active card or retail DMA job.
+
+**Mixed-job profile implemented and numerically passed on console:** a three-minute workload using
+the existing generated `stereo.raw` and `stress.bin`. Vary logical data
+requests across eight sizes: 1, 31, 511, 512, 513, 2,048, 4,096 and 32,768
+bytes, including unaligned offsets, backward seeks, sector boundaries and
+EOF. Split requests into at most 2 KiB physical reads
+and return to audio service between chunks. Give refill work priority and
+retain the measured read/verification admission budget.
+
+Add one cooperative pending-data-job record with unique job/session tokens.
+Cancel before dispatch, between completed chunks and before committing a
+completion. Check tokens before any read or result commit; stale work must
+perform no further reads or alter the current audio session. Exercise audio
+seek, pause/status/resume and stop/restart while data work is queued or partly
+complete. Cancellation occurs between synchronous operations, without a
+claim that an active SCI transfer was interrupted.
+
+Require exactly one complete verified 8 MiB pass before 120 seconds, at least
+16 completions in every request-size class before 150 seconds, and less than
+five seconds between committed checked chunks. The final screen must show
+seven completed stages, three expected cancellations, six stale refusals,
+seven audio actions, four STATUS checks and zero data errors or unexpected
+failures. Host models verify the actual harness with an independent data-job
+ledger, slow reads, I/O errors, bad data and deadline faults; injected failures
+stop audio before further writes. The console binary has a separate
+[memory and instruction audit](evidence/cdda-mixed-jobs-memory-2026-10-07.md).
+The [profile 06 hardware record](evidence/cdda-mixed-jobs-hardware-2026-10-07.md)
+reports 47,709,024 checked bytes, 7,772 completed jobs, at least 971 completions
+per size, 110.702 ms minimum refill margin and zero errors/failures over
+180 documented-clock seconds. All expected command/cancellation counters
+match. Retain the [mixed-test checklist](cdda-mixed-jobs-test.md) for
+reproduction; no repeat run is required. These are cooperative cancellation tests between
+synchronous reads, not cancellation of an active card transfer.
+
+**Passed console check:** profile 07 defines a distinct, checked CDDA ownership
+descriptor and calls the engine from a separately linked controlled client.
+The client and service use separate private stacks. Exercise 90 seconds of
+cooperative audio/data service, commands, integer call preservation, refused
+reentry and stale epochs, and one deliberately missed service deadline.
+The [hardware record](evidence/cdda-service-hardware-2026-10-07.md) confirms
+the required stages, ABI checks, preserved context, expected refusals and zero
+failures. The [service checklist](cdda-service-test.md) retains reproduction details.
+This advances the controlled handoff evidence in Gate 5; retail resource
+admission and interrupt scheduling remain unproved.
+Fragmented layouts, retry policy and latency under actual retail scheduling
+remain separate evidence gaps, rather than reasons to repeat this same
+passing numerical workload.
+
+Give game data and audio separate cursors/jobs but a single owner of the SCI
+bus, card stream and receive buffers. Switch only after a complete checked
+block, preserve speculative-block identity, and bound stream-stop/restart
+work. Audio deadlines must remain separate from ordinary GD tokens; STOP or
+PAUSE must not cancel an unrelated game read.
+
+Run randomized and game-sized reads during playback, including fragmented
+extents, retries, stream switching, prolonged periods without GD calls and
+DMAC contention. Use independent fixture checksums to verify game data.
+Measure both audio deadlines and the effect on game-read latency. Card
+read headroom must cover audio plus game data and switching overhead.
+
+**Exit evidence:** correct game bytes and completion counts, zero stale-job
+copies or false completions, bounded service work and no underruns through
+the stress set. Record maximum service/refill gaps and stream-switch/retry
+costs. An average speed benchmark does not satisfy this gate.
+
+## Gate 5: separate package, bootstrap and admission rules
+
+**Controlled handoff implemented and passed on console:** profile 07 uses
+an independent 160-byte `KCDDAH1` descriptor with six disjoint canonical main
+RAM regions, exact owned sound resources, read-only SCI rights and a bounded
+service lease. Portable tests reject malformed ranges/rights, stale epochs,
+reentry, overflow and late completions. A separately linked homebrew client
+calls the owned worker on a third private stack and probes r8–r14/PR around
+each call. This uses the existing outer KUIRUN transport without repurposing
+its reserved words. It does not establish a retail ABI, interrupt hook,
+sound-driver coexistence or automatic CDDA launch selection.
+
+**Passed console check:** profile 08 routes a separately linked controlled
+client's PLAY, PAUSE, RELEASE, STOP, NOP and one-sector READ requests through
+the actual owned GD BIOS vector. Its new queue copies parameters, holds one
+terminal result until acknowledgement and commits successful work only after
+the full service lease passes. The synthetic disc uses generated stereo audio
+and independently checked data. It restores the previous vector on success
+and failure. [The BIOS checklist](cdda-bios-test.md) defines eight stages and
+the exact expected refusal counts. Its
+[hardware record](evidence/cdda-bios-hardware-2026-10-07.md) establishes this
+controlled one-sector command route, including vector restoration.
+
+**Passed console checks:** profile 09 accepts 1–16-sector PIO READ requests,
+servicing one 2,048-byte chunk per EXEC. It checks committed-prefix status,
+whole-request bounds, cancellation/reset between chunks, one sequential
+8MiB pass and all eight selected request sizes while controlled audio runs
+for at least 90 seconds. Independent profile 10 confirms one sector, waits
+200ms without EXEC, then verifies deadline refusal, audio stop and a FAILED
+read retaining exactly that confirmed prefix. Both are supplied in one bundle
+with a [single checklist](cdda-batch-test.md). Their
+[hardware record](evidence/cdda-batch-hardware-2026-10-07.md) confirms the
+required counters and vector restoration. Profile 10's zero refill metrics
+mean no post-start half refill occurred in that short run; they are not a
+new timing-margin measurement.
+
+**Passed console checks:** profile 11 derives both TOC areas from a complete
+generated six-track GDI, validates actual backing extents and gaps, changes
+between unequal-length audio files with nonzero backing offsets, checks two
+actual EOFs and returns cooked/raw Mode 1 data through incremental reads.
+Profile 12 admits only the supplied Toy Commander track 14 and its original
+descriptor, checks the real file-backed FAD range, pauses/resumes at the
+actual played cursor and reaches its exact EOF. Its 150-sector gap before
+track 15 is refused; unavailable Toy backings and complete TOCs are refused.
+The [disc checklist](cdda-disc-test.md) retains both independent runtimes
+and their eight-stage gates. The
+[hardware record](evidence/cdda-disc-hardware-2026-10-07.md) confirms all
+displayed gates, vector restoration and guarded stack use; no routine repeat
+of either profile is needed. Portable checks include both actual clients,
+25 normal/fault scenarios and a private run against the supplied track 14.
+The [memory record](evidence/cdda-disc-memory-2026-10-07.md) addresses the
+new parser/map and three separate stacks. PLAY21 endpoint semantics, DMA,
+retail scheduling and shared sound resources remain separate evidence gaps.
+
+Define a distinct CDDA package identity and schema rather than extending a
+reserved stable-header word. Validate segment bounds, aliases, overlap,
+stack, cache publication and complete data/audio extent coverage before
+handoff. Required audio extents must never be silently dropped to fit a map.
+
+Add per-image Auto / On / Off selection and explain unavailable or refused
+support. Off selects the stable reader. Initially Auto selects CDDA only for
+a validated profile/backend; On cannot bypass missing tracks, map capacity,
+memory ownership, sound ownership or scheduling requirements.
+
+Establish the periodic service bridge without stealing the game's timer,
+forcing its interrupt mask down, acknowledging its events or resetting its
+sound driver. Preserve original VBR/interrupt dispatch and the full helper
+call ABI. Game-owned main RAM and AICA allocations need a demonstrated
+contract; guards detect corruption but do not reserve memory.
+
+**Exit evidence:** focused package/map/ABI tests reject invalid and incomplete
+launches; link/stack/instruction checks pass; controlled handoff and interrupt
+tests preserve state; standard-reader payload checks remain unchanged. A
+profile must own every resident/code/stack/ring/channel resource it needs.
+No generic high-RAM retail island is admitted by this gate.
+
+## Gate 6: Toy Commander compatibility and a validated retail profile
+
+The user owns **Toy Commander** among the identified CDDA titles, so it is
+our retail target; another game purchase is not a prerequisite. Inspect its
+complete GDI with its raw audio tracks. Pin executable/version/layout identity;
+do not infer support for other regions, revisions or repacked images from a
+title name. Suitability still depends on proving its main/sound-memory and
+service contracts in Gate 5.
+
+The selected-track test alone does not establish the complete image or a
+retail launch. Profile 13 subsequently established all 15 backings and the
+exact boot executable/version fingerprint; profile 14 reached an accepted
+PLAY20 with receive-paced SCI. Retail work still needs proof of resident RAM,
+sound RAM/channel and periodic service ownership. The exact boot executable
+was supplied and matched its preflight SHA-256 and CRC32. Its
+[static memory audit](evidence/cdda-toy-memory-static-2026-10-07.md) identifies
+an early real-allocation bootstrap; the default heap extends to RAM end and
+the executable also contains fixed SDK scratch addresses there. Its
+[retail contract candidate](cdda-toy-retail-contract.md) identifies the game's
+custom 64-port picker and updater, which bypass the generic SDK voice allocator.
+These are concrete integration points, not an enabled or admitted profile.
+The external `AUDIO64.DRV` remains needed to inspect driver cursor, streaming
+and command application semantics; the [bounded driver extractor](cdda-toy-driver-extract.md)
+exports only that file from the same fingerprinted GDI. A looping ring also
+needs an enforceable service deadline or independent sound-side stop/service:
+a game-frame callback cannot stop stale replay while the whole game is stalled.
+The controlled
+engine begins at `0x8c010000`, where the retail executable normally launches;
+its present layout cannot be reused as a retail resident. Its explicitly
+owned AICA initialization and TMU1 clock likewise require a different proven
+contract before game execution. These are integration work items, not
+reasons to repeat the already passing 00–12 harness runs.
+
+Toy Commander has a [reported sound-channel conflict](https://dc-swat.ru/www/forum/thread-4042-post-43645.html) in other loaders, making
+it a harder first retail target. First prove the engine with independently
+generated audio in the controlled harness. Then observe Toy Commander's own
+sound-memory and channel reconfiguration during boot, menus, loading and busy
+gameplay. Establish an independent coexistence method from those observations
+and documented hardware behavior. Reserving a channel in our code does not
+prevent the game from rewriting it; repeatedly forcing our settings back could
+also break its effects. Both music and effects must pass before admitting the
+profile. If safe coexistence remains unproved, keep this title experimental
+rather than weakening admission or requiring a different purchase.
+
+Compare stable-reader and experimental-reader behavior. Check title/menu,
+music, sound effects, gameplay, loading and transitions, controls, pause and
+extended play. Record worst refill/service gaps, ring low-water, underruns,
+ownership conflicts, game-read time and guard failures using bounded
+diagnostics. Save reports after a safe return to the shell, not from an IRQ.
+
+**Exit evidence:** that exact image/profile meets the ownership and timing
+rules and passes the documented hardware checks with audible music and
+working effects. Only then admit it in Auto. One successful game is not a
+claim that CDDA is generally supported.
+
+## Expansion after the first profile
+
+Expand title/revision coverage and fragmented image layouts before changing
+defaults. Consider smaller rings or G2 DMA only when measurements justify
+them. Add CE, IDE/ATA and additional formats as separate tested profiles;
+their interrupt, storage and sound contracts may differ. Compressed or
+lossy audio sidecars are optional later work, not a requirement for accurate
+raw playback. Revisit provenance and release checks when distributing a
+candidate reader.
+
+## First steps and ownership
+
+**Agent next:** establish exact-image identity, regular service and resource ownership
+before Toy Commander retail integration. The classifier,
+standalone engine, clock conversion, controls, soak/stress and variable-size
+mixed jobs are implemented and numerically tested on console. Keep new
+retail scheduling and sound-driver discoveries separate from those results.
+
+**User next:** restore the preserved 1.8.5 runtime after the completed disc
+tests. Profiles 00–12 need no routine repeat. Remaining hardware work has
+three integration stages: exact-image/resource observation, periodic service
+with game sound, and actual Toy Commander music/effects/loading/extended play.
+These are planning stages rather than a guaranteed count of test binaries;
+sound, memory and service findings can require correction and another run.
+A later brief stereo/control check can
+confirm channel order and silence when suitable speakers are available.
+This stage does not require another boot CD or firmware reflash. Retain a complete, uncompressed
+**Toy Commander** GDI with every referenced `.raw` track; do not buy another
+title for this experiment.
+Retain the original image and descriptor; a data-only ISO/CSO/ZSO copy cannot
+test missing disc audio. When the harness is ready, follow its exact SD
+installation and logging instructions before testing a retail reader.
+
+**Agent before requesting a test:** supply the build identity, installation
+paths, expected output, minimal test checklist and a simple return to the
+stable reader. Do not describe a build as available before it exists.

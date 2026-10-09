@@ -2,6 +2,11 @@
 #ifndef KUI_SCI_STREAM_H
 #define KUI_SCI_STREAM_H
 #include "sd_reader.h"
+#if defined(KUI_RETAIL_CE) || KUI_TOY_PILOT_SHARED_SCI
+#define KUI_SCI_STREAM_TOKEN_SLICED 1
+#else
+#define KUI_SCI_STREAM_TOKEN_SLICED 0
+#endif
 
 /* Game-reader CMD18 streaming over SCI with receive-only DMA on channel 1.
  * Each block is 513 bytes of DMA; the receiver then takes the second CRC byte
@@ -42,6 +47,8 @@ struct kui_sci_stream_stats {
     /* Read-only snapshots after the existing stop/handoff, not at the
      * instant of failure; correlation alone does not establish contention. */
     uint32_t incomplete_ch2_active, incomplete_dmaor_bad;
+#endif
+#if KUI_SCI_STREAM_TOKEN_SLICED
     uint32_t token_bytes, token_max; /* all search bytes, including token/error */
     uint32_t stops; /* CMD12 attempts */
     uint32_t token_yields; /* token search paused at an entry's byte budget */
@@ -64,7 +71,7 @@ struct kui_sci_stream_state {
      * (not a byte ahead); after two the card is taken not to resume
      * mid-block as expected, and overruns restart. */
     uint8_t ready[2], wire[2], rdr[2], held[2], hold[2], kept, sptr, unrepaired;
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     uint8_t token_bounded, token_polled;
     uint32_t token_limit, token_used, token_budget;
 #endif
@@ -90,7 +97,7 @@ bool kui_sci_stream_busy(void);
  * in flight): the next one may be fetched before it is taken, and goes into
  * the other area. */
 bool kui_sci_stream_ready(uint32_t lba);
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
 #define KUI_SCI_STREAM_TOKEN_SLICE 256u
 /* Once per external service entry, shared by its before/after work. Before
  * CE's interrupt service is installed, token searches remain unbounded by

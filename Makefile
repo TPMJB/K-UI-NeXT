@@ -163,6 +163,53 @@ build/test-sci-sd-bus: tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loade
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $@
 
+.PHONY: test-sci-read-compare
+test-sci-read-compare: build/test-sci-read-pio build/test-sci-read-dma build/test-retail-observe-fault
+	./build/test-sci-read-pio
+	./build/test-sci-read-dma
+	./build/test-retail-observe-fault
+
+build/test-sci-read-pio: tests/test_sci_sd_read_compare.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -DKUI_SCI_SD_PIO_ONLY=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_read_compare.c -o $@
+
+build/test-sci-read-dma: tests/test_sci_sd_read_compare.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -DKUI_SCI_SD_PIO_ONLY=0 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_read_compare.c -o $@
+
+.PHONY: test-sci-fault
+test-sci-fault: build/test-sci-fault build/test-sci-dma-pacing-baseline build/test-sci-dma-pacing-paced build/test-sci-dma-pacing-reuse build/test-retail-sci-fault build/test-retail-sci-paced
+	./build/test-sci-fault
+	./build/test-sci-dma-pacing-baseline
+	./build/test-sci-dma-pacing-paced
+	./build/test-sci-dma-pacing-reuse
+	./build/test-retail-sci-fault
+	./build/test-retail-sci-paced
+
+build/test-sci-fault: tests/test_sci_sd_fault.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_fault.c -o $@
+
+build/test-sci-dma-pacing-baseline: tests/test_sci_sd_dma_pacing.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=0 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_dma_pacing.c -o $@
+
+build/test-sci-dma-pacing-paced: tests/test_sci_sd_dma_pacing.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_dma_pacing.c -o $@
+
+build/test-sci-dma-pacing-reuse: tests/test_sci_sd_dma_pacing.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=1 -DKUI_SCI_DMA_REUSE_TDRE=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_dma_pacing.c -o $@
+
+build/test-retail-sci-fault: tests/test_retail_sci_fault.c src/loader/retail_sci_observe.inc src/loader/sci_sd_bus.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader tests/test_retail_sci_fault.c -o $@
+
+build/test-retail-sci-paced: tests/test_retail_sci_fault.c src/loader/retail_sci_observe.inc src/loader/sci_sd_bus.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_DMA_PACED=1 -Iinclude -Isrc/loader tests/test_retail_sci_fault.c -o $@
+
 build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage.c src/loader/retail_storage.h src/loader/retail_storage_impl.h src/loader/sci_sd_bus.h include/kui/ata.h include/kui/storage.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/loader/retail_storage.c tests/test_retail_storage.c -o $@
@@ -299,6 +346,19 @@ build/test-ce-load-plan: tests/test_ce_load_plan.c src/core/ce_load_plan.c inclu
 build/test-retail-gd: tests/test_retail_gd.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_gd.c tests/test_retail_gd.c -o $@
+
+.PHONY: test-retail-observe
+test-retail-observe: build/test-retail-observe build/test-retail-observe-fault
+	./build/test-retail-observe
+	./build/test-retail-observe-fault
+
+build/test-retail-observe: tests/test_retail_observe.c src/core/retail_observe.c include/kui/retail_observe.h include/kui/retail_image.h
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude src/core/retail_observe.c tests/test_retail_observe.c -o $@
+
+build/test-retail-observe-fault: tests/test_retail_observe_fault.c src/loader/retail_observe.inc src/core/retail_observe.c include/kui/retail_observe.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/core/retail_observe.c tests/test_retail_observe_fault.c -o $@
 
 build/test-retail-gd-async: tests/test_retail_gd.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_image.h
 	@mkdir -p $(@D)

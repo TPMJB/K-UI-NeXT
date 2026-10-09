@@ -1,0 +1,113 @@
+{
+  "build": "7b55156aafa2",
+  "photos": "62135.jpg through 62142.jpg",
+  "pages": {
+    "0": [
+      "54595031 00000008 000001C0 00000005",
+      "00000000 0000000A 0000000A 00000001",
+      "00000016 00000000 00000000 00000000",
+      "0005BF25 0000000E 0005C24E 8CFD0000"
+    ],
+    "1": [
+      "8D000000 8CFD73C0 00000384 00000000",
+      "00005104 70CCEEB2 00000001 A09D3FE0",
+      "00020000 00000001 00001863 00000000",
+      "0000F819 00004210 00000909 005302B0"
+    ],
+    "2": [
+      "00000000 000058F0 00000029 0000014C",
+      "00000001 00000144 00000000 00000000",
+      "00000002 0000108C 00000000 00000000",
+      "00000000 00000000 00000000 00000000"
+    ],
+    "3": [
+      "00000001 00000000 00000000 00000001",
+      "00144BC0 0014C000 0000001C 0000B3D0",
+      "00000000 00000000 00000001 00000000",
+      "00000000 00000000 0000056A 0000056A"
+    ],
+    "4": [
+      "00000007 00000002 00000002 00000002",
+      "00000000 00000001 00000101 00000002",
+      "00000000 00000000 00000000 00000000",
+      "00000000 00000250 8CFD7114 00000002"
+    ],
+    "5": [
+      "47444D31 00000002 00000A6E 0000148D",
+      "01069842 00001FE2 00000002 00000000",
+      "00002532 00000251 00000012 00000000",
+      "00000000 00000000 00000000 00000000"
+    ],
+    "6": [
+      "00000000 00000000 00000000 00000000",
+      "00000000 00000000 00000000 00000000",
+      "00000000 00000000 00000000 00000000",
+      "00000000 00000000 00000000 00000000"
+    ],
+    "7": [
+      "00000000 00000000 00000000 00000000",
+      "00000000 00000000 00000000 00000000",
+      "00000EA7 00001E23 007A7AD1 00000909",
+      "00000000 00000000 00000000 00000000"
+    ]
+  },
+  "source_commit": "7b55156aafa26a74c0c3ef3f595a9756cba5c73d",
+  "nominal_tick_microseconds": 1.28,
+  "user_audio_observation": "That seemingly fixed CDDA perfectly! Didn't hear any breaks in audio.",
+  "observation_scope": "One Toy Commander natural-intro run; no all-title or extended-gameplay claim.",
+  "audio_worker_sha256": "f3b510df3034634e01e3dd911711f94551062534d6cbf4b635900a366f903d3a",
+  "media_sha256": {
+    "01-62135.jpg": "f64b1f50e10ce50587c5ec7ccddca04051b95cda29fffb2b5bf986d4cf64c6c6",
+    "02-62136.jpg": "45e1dbbb2901d4c0ee9be856c1f3a3d78cae8fa31dd3ec53a0824fe26e83a5bc",
+    "03-62137.jpg": "ad91ec5413a5e9f84a813db09a7c9c2424acd6c4398ecc19d00ea84969868fb5",
+    "04-62138.jpg": "292ecd5c5c22a5ff310eb5b5ab9af6f6baf06850c8f4d4d93cc661149df7328a",
+    "05-62139.jpg": "d430126c8c1890f52838394961747e753927f9a9cbd0926e283f1501e2dc998f",
+    "06-62140.jpg": "7bc53ba58011d2dd592d574058ef8b00522362925acd4df713d08799158eb4b3",
+    "07-62141.jpg": "52a752f06c774e238033a0b3cc87e0f7816b6bdc906117be82e3bab274874f92",
+    "08-62142.jpg": "f1022068ec1c248c253ca431f0eacb6a4a704e42aa8062f55b1d87c0ef3b8ad7",
+    "62134.mp4": "c8aff17a70c4e071354e00bc6be07331deb1140ed1c23475dbe7cfbb7e258b31"
+  },
+  "decoded": {
+    "audio_internal_recoveries": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "handoff_gaps": 0,
+    "hardware_starts": 1,
+    "hardware_loops": 1,
+    "raw_calls": 2313,
+    "raw_bytes": 5440176,
+    "raw_read_mean_ms": 4.442000103761349,
+    "raw_read_max_ms": 9.875200000000001,
+    "raw_read_last_ms": 4.80128,
+    "gd_read_steps": 2670,
+    "gd_read_sectors": 5261,
+    "gd_read_total_seconds": 22.0280448,
+    "gd_read_step_mean_ms": 8.250204044943821,
+    "gd_read_step_max_ms": 10.447360000000002,
+    "gd_step_cap": 2,
+    "gd_invalid_timing_samples": 0,
+    "gd_requests": 593,
+    "gd_rejected_requests": 18,
+    "gd_last_error": 0
+  },
+  "video_observations": {
+    "duration_seconds": 38.4151,
+    "mouth_image_hold_approx_seconds": [
+      5.4,
+      8.9
+    ],
+    "boy_image_hold_approx_seconds": [
+      8.9,
+      13.2
+    ],
+    "known_good_visual_reference_available": false,
+    "intended_shot_motion_established": false
+  }
+}

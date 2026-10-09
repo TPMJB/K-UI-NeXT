@@ -1319,6 +1319,12 @@ static void games_variant_line(struct paint *p,const struct kui_shell *s,unsigne
         label(p,40,y,CYAN,line);
     }
 }
+static const char *games_audio_notice(const struct kui_games_detail *d,const char *fallback) {
+    if(d->audio.candidate_tracks) return "CD audio is unavailable; music may be missing.";
+    if(d->audio.classification==KUI_GAME_AUDIO_UNKNOWN)
+        return "Original disc audio is unknown.";
+    return fallback;
+}
 static void game_detail(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_games_detail *d=&s->games_detail;
     title(p,40,108,"Games / Image details");
@@ -1346,13 +1352,13 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         if(kui_shell_games_retail_ready(s)) {
             words(p,44,337,right,CYAN,d->format==KUI_GAME_IMAGE_GDI?
                 "A Launch game   Y Advanced read test":"A Launch game   X Inspect again",false);
-            words(p,44,365,right,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
-                "CD audio is unavailable; music may be missing.":
-                "V" KUI_VERSION ": game compatibility varies.",false);
+            words(p,44,365,right,d->audio.candidate_tracks?AMBER:MUTED,
+                games_audio_notice(d,"V" KUI_VERSION ": game compatibility varies."),false);
         } else if(kui_shell_games_ce_probe_ready(s)) {
             words(p,44,337,right,CYAN,d->format==KUI_GAME_IMAGE_GDI?
                 "A Windows CE boot test   Y Advanced read test":"A Windows CE boot test   X Inspect again",false);
-            words(p,44,365,right,AMBER,"Windows CE SCI launch test; compatibility varies.",false);
+            words(p,44,365,right,AMBER,
+                games_audio_notice(d,"Windows CE SCI launch test; compatibility varies."),false);
         } else {
             words(p,44,337,right,AMBER,d->windows_ce?"Windows CE SCI launch test; compatibility varies.":
                 !(d->native_gd || d->native_cd)?"This image has no supported native boot header.":
@@ -1428,7 +1434,8 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         panel(p,32,168,576,234,PANEL);
         label(p,48,186,CYAN,v->busy?"Preparing the test...":
             s->games_detail.title[0]?s->games_detail.title:"Test the selected image?");
-        label(p,48,218,AMBER,"Experimental SCI launch; compatibility varies.");
+        label(p,48,218,AMBER,games_audio_notice(&s->games_detail,
+            "Experimental SCI launch; compatibility varies."));
         label(p,48,244,WHITE,"Loads Windows CE and the selected game.");
         label(p,48,270,WHITE,"Video and audio may still slow or lose sync.");
         label(p,48,302,WHITE,"Needs SCI microSD. SD stays read-only.");
@@ -1448,9 +1455,8 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
     }
     label(p,48,186,CYAN,v->busy?"Preparing the launch...":
         s->games_detail.title[0]?s->games_detail.title:"Launch selected game?");
-    label(p,48,218,AMBER,s->games_detail.high_density_audio?
-        "CD audio is unavailable; this game may not run.":
-        "V" KUI_VERSION ": game compatibility varies.");
+    label(p,48,218,AMBER,games_audio_notice(&s->games_detail,
+        "V" KUI_VERSION ": game compatibility varies."));
     label(p,48,244,WHITE,"SD access remains read-only.");
     label(p,48,270,WHITE,"The launcher closes before the game starts.");
     label(p,48,302,WHITE,"Keep the SD card inserted while playing.");

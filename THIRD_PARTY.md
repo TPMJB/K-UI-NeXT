@@ -74,3 +74,82 @@ FatFs source changes consist of the two official patches. `config/ffconf.h` is
 new project configuration; the block-device adapter and storage probe are new
 project code. A source inventory must be revisited when any new dependency,
 font, bootstrap, catalog or runtime component is added.
+
+## Isolated CDDA harness
+
+The experimental `Makefile.cdda` target links K-UI's own freestanding SCI SD
+transport, a privately configured read-only copy of pinned FatFs, the existing
+font renderer and new PCM/timeline/standalone harness code. It links no KOS
+kernel and no DreamShell source or binaries. `src/loader/cdda_aica.c` uses the
+BSD-licensed register contracts from the same pinned official KallistiOS
+revision: `sound/arm/aica.c`, `hardware/spu.c`, `hardware/g2bus.c`, and
+`include/dc/g2bus.h`/`fifo.h` under `kernel/arch/dreamcast`. The original per-file
+notices are retained in its header and `LICENSES/LICENSE.KOS` applies.
+
+The startup follows K-UI's existing detached cache/stack handoff; the new clock
+uses the documented SH7091 TMU register layout already used by the independent
+SD probe. PCM sector stripping, planar conversion and deadline state are new
+project implementations, not translations of DreamShell refill machinery.
+`include/kui/cdda_clock.h` uses the same pinned KOS `kernel/timer.c` reference:
+measured main clock 199,499,520 Hz, peripheral clock one quarter of that, and
+the owned TMU peripheral-clock/4 selection. The resulting 12,468,720 Hz is a
+documented reference, not an absolute measurement of the running console or
+a feedback adjustment of AICA pitch. The bounded conversion and cooperative
+job/state helpers are independent project implementations.
+The controlled profile 07 descriptor, cooperative service guard, isolated
+client program and integer SH C-call stack bridge are new project code.
+They exercise explicitly owned homebrew stacks and ordinary integer C ABI;
+they do not install a retail interrupt handler or copy a loader's CDDA hook.
+Profile 08's request queue, separately linked BIOS client and owned-vector
+wrapper are new project implementations. Command numbers, parameter layouts,
+handle/status meanings and the r4/r5/r6/r7 calling convention are taken from
+the same pinned official KallistiOS revision's `include/dc/syscalls.h`,
+`hardware/cdrom.c` and `hardware/syscalls.c` under `kernel/arch/dreamcast`.
+Its BSD notice remains in [LICENSE.KOS](LICENSES/LICENSE.KOS). No KOS syscall
+implementation is linked or copied into this freestanding harness. Unsupported
+commands and ambiguous PLAY2 ranges are refused rather than inferred from a
+third-party loader. This remains an explicitly owned homebrew vector test.
+Profile 09's incremental multi-sector queue, chunk-identity checks and batch
+client extend K-UI's own controlled implementation in new files. The count
+parameter follows the same pinned KOS `cd_read_params_t`/PIOREAD interface;
+the sector-by-sector scheduling and confirmed-prefix publication rules are
+new project code. Each EXEC performs at most one 2,048-byte data chunk.
+Cancellation is admitted between chunks, with no active-transfer abort,
+retail interrupt or uncached-alias coherence claim.
+Profile 10's separate controlled client intentionally waits beyond the same
+cooperative lease and verifies the resulting stopped audio and confirmed
+prefix. Its expected deadline is tracked separately from unexpected faults;
+it introduces no interrupt watchdog or automatic background servicing.
+Profiles 11/12 add independently written checked disc-map and command-queue
+helpers, a platform adapter and two controlled clients. They extend this
+project's existing GDI parser and its own request/chunk contracts. GETTOC2's
+command number, area parameter and 408-byte structure follow the same pinned
+official KOS `include/dc/syscalls.h`, `include/dc/cdrom.h` and
+`hardware/cdrom.c` interfaces. TOC construction, file-backed extent checks,
+track changes and raw Mode 1 payload extraction are new project code; no
+KOS syscall implementation or third-party loader implementation is imported.
+Ambiguous PLAY21 endpoints remain refused. `tools/cdda_disc_fixture.py`
+generates original square-tone and track-tagged data fixtures. The supplied
+Toy Commander GDI is retained only as factual track names, types and sector
+locations; selected track 14's audio remains external. No game executable,
+music backing or complete retail disc is distributed in these test bundles.
+`tools/cdda_fixture.py` generates original sine-tone test data. The user's Toy
+Commander audio remains external and is excluded from source and test packages.
+
+## Complete-image preflight and retail observation
+
+The separate `Makefile.cdda_preflight` target uses the same pinned, privately
+configured read-only FatFs source. The bounded card search, logical-cluster
+extent enumeration, exact IP/boot SHA256 and physical-map admission checks are
+new project code. The 15-track Toy Commander descriptor size/SHA256 and geometry
+are factual metadata from the owner's supplied descriptor; no game executable,
+IP payload or audio file is distributed with the tests.
+
+`Makefile.retail_observe` builds a separate standard SCI reader. Its sparse
+read-only observations use the SH7091 registers and the pinned KallistiOS
+AICA/G2 register contracts already listed above. Snapshot accumulation, PLAY
+parameter recording and compact reporting are new project implementations.
+It does not import or translate DreamShell CDDA code, select sound channels,
+write sound registers, install a new IRQ handler or claim a sound-memory lease.
+The earlier source-aware boundary remains unchanged; this is not a formal
+clean-room claim. Existing notices and `LICENSES/LICENSE.KOS` are retained.

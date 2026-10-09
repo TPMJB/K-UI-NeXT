@@ -74,7 +74,7 @@ static void fence(const void *area) {
 typedef uint32_t alias_word __attribute__((__may_alias__));
 /* RESUME: stopped mid-block by an overrun in an interrupt, to be resumed. */
 enum { CLOSED, PAUSED, DMA, LOST, RESUME
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     , TOKEN_WAIT
 #endif
 };
@@ -182,7 +182,7 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
 }
 bool kui_sci_stream_busy(void) { return s.state == DMA; }
 bool kui_sci_stream_ready(uint32_t lba) { return s.arrived == lba + 1u; }
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
 void kui_sci_stream_token_budget(bool bounded) {
     s.token_bounded = bounded;
     s.token_budget = KUI_SCI_STREAM_TOKEN_SLICE;
@@ -193,14 +193,14 @@ const struct kui_sci_stream_stats *kui_sci_stream_stats(void) { return &s.stats;
 void kui_sci_stream_discard(void) { s.ready[0] = s.ready[1] = 0; s.kept = 0; s.arrived = 0; }
 
 /* Data token after the card's wait (0xff); TEND before the DMA starts. */
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
 static void token_count(uint32_t bytes) {
     s.stats.token_bytes += bytes;
     if(bytes > s.stats.token_max) s.stats.token_max = bytes;
 }
 #endif
 static enum kui_sci_stream_result token(uint32_t limit) {
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     if(s.state != TOKEN_WAIT) {
         s.token_limit = limit;
         s.token_used = 0;
@@ -251,11 +251,22 @@ static uint8_t command(const uint8_t packet[6], bool stop) {
     for(unsigned i = 0; i < 20u && (value & 0x80u); ++i) value = byte(0xff);
     return value;
 }
+#if KUI_TOY_PILOT_SHARED_SCI
+/* Shared-worker visits must not clock an entire legacy busy timeout while
+ * the game's decoder is paused. Keep the first hardware trial's idle and
+ * CMD12 R1b windows bounded; a timeout is a transport fault, never a grant
+ * to raw audio. Ordinary and CE readers retain their admitted windows. */
+#define START_IDLE_LIMIT 4096u
+#define STOP_BUSY_LAST 4095u
+#else
+#define START_IDLE_LIMIT 50000u
+#define STOP_BUSY_LAST 200000u
+#endif
 /* CMD12 into the stream, its R1b busy, deselection and an idle byte. An
  * idle card answers "illegal command" (0x04): it is stopped all the same. */
 static enum kui_sci_stream_result stop_card(void) {
     static const uint8_t stop[6] = {0x4c, 0, 0, 0, 0, 0x61};
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     if(s.state == TOKEN_WAIT) token_count(s.token_used);
     ++s.stats.stops;
 #endif
@@ -263,7 +274,7 @@ static enum kui_sci_stream_result stop_card(void) {
     enum kui_sci_stream_result result = command(stop, true) & ~0x04u ?
         KUI_SCI_STREAM_COMMAND : KUI_SCI_STREAM_OK;
     for(uint32_t n = 0; byte(0xff) != 0xffu; ++n)
-        if(n >= 200000u || !healthy()) {result = KUI_SCI_STREAM_COMMAND; break;}
+        if(n >= STOP_BUSY_LAST || !healthy()) {result = KUI_SCI_STREAM_COMMAND; break;}
     select(false);
     (void)byte(0xff);
     s.state = result == KUI_SCI_STREAM_OK ? CLOSED : LOST;
@@ -276,12 +287,12 @@ static enum kui_sci_stream_result start(uint32_t lba, uint32_t limit) {
     packet[5] = crc7(packet);
     select(true);
     for(uint32_t n = 0; byte(0xff) != 0xffu;)
-        if(++n >= 50000u || !healthy()) return KUI_SCI_STREAM_COMMAND;
+        if(++n >= START_IDLE_LIMIT || !healthy()) return KUI_SCI_STREAM_COMMAND;
     s.state = LOST; /* from here on, CMD18 may be running */
     ++s.stats.starts;
     uint8_t r1 = command(packet, false);
     if(!healthy()) return KUI_SCI_STREAM_RESET;
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     s.position = lba;
 #endif
     return r1 ? KUI_SCI_STREAM_COMMAND : token(limit);
@@ -384,7 +395,7 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
         if((result = start_dma(s.fill, s.lost[s.fill])) != KUI_SCI_STREAM_OK) s.state = LOST;
         return result;
     }
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     bool pending = s.state == TOKEN_WAIT && s.position == lba;
     if(!pending) s.token_polled = polled;
     else polled = s.token_polled;
@@ -395,7 +406,7 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
         select(true);
         result = token(token_limit);
         if(result != KUI_SCI_STREAM_OK) {
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
             if(result != KUI_SCI_STREAM_PENDING)
 #endif
                 s.state = LOST;

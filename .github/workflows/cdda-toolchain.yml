@@ -1,0 +1,139 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: CDDA toolchain recovery
+
+on:
+  push:
+    branches: [feature/cdda-foundation-20261007, feature/cdda-toolchain-recovery-20261007]
+    paths: [.github/workflows/cdda-toolchain.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cdda-toolchain-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Restore the existing pinned compiler cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          # Keep both paths identical to diagnostic.yml: paths affect cache version.
+          path: |
+            .deps/sh-elf
+            .deps/kos/utils/kos-chain/*.tar.*
+          key: sh-elf-ubuntu24-v1-${{ hashFiles('dependencies.json', 'tools/setup_kos.sh') }}
+          restore-keys: sh-elf-ubuntu24-v1-
+      - name: Build the pinned compiler only when the cache is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -x .deps/sh-elf/bin/sh-elf-gcc && -f .deps/sh-elf/.kui-toolchain-complete ]]; then
+            exit 0
+          fi
+          sudo apt-get update
+          sudo apt-get install -y build-essential git curl wget patch python3 \
+            bison flex texinfo gettext libgmp-dev libmpfr-dev libmpc-dev libisl-dev
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          root = Path.cwd()
+          kos = root / '.deps/kos'
+          lock = json.loads((root / 'dependencies.json').read_text())
+          if not (kos / '.git').exists():
+              subprocess.run(['git', 'init', str(kos)], check=True)
+              subprocess.run(['git', '-C', str(kos), 'remote', 'add', 'origin', lock['kos']['url']], check=True)
+          subprocess.run(['git', '-C', str(kos), 'fetch', '--depth', '1', 'origin', lock['kos']['commit']], check=True)
+          subprocess.run(['git', '-C', str(kos), 'checkout', '--detach', lock['kos']['commit']], check=True)
+          chain = kos / 'utils/kos-chain'
+          config = (chain / 'Makefile.dreamcast.cfg').read_text()
+          for old, new in {
+              'toolchain_path=/opt/toolchains/dc/sh-elf': f'toolchain_path={root}/.deps/sh-elf',
+              'enable_cpp=1': 'enable_cpp=0', 'enable_objc=1': 'enable_objc=0',
+              'enable_objcpp=1': 'enable_objcpp=0',
+          }.items():
+              assert old in config, old
+              config = config.replace(old, new)
+          (chain / 'Makefile.cfg').write_text(config)
+          PY
+          make -C .deps/kos/utils/kos-chain makejobs=4
+          touch .deps/sh-elf/.kui-toolchain-complete
+      - name: Archive the freestanding compiler and its host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, re, shutil, subprocess, tarfile
+          from pathlib import Path
+          root = Path.cwd()
+          prefix = root / '.deps/sh-elf'
+          out = root / 'build/cdda-toolchain-recovery'
+          bundle = out / 'bundle'
+          toolchain = bundle / 'sh-elf'
+          toolchain.mkdir(parents=True, exist_ok=True)
+          # Headers, compiler passes, binutils and all libgcc multilib variants.
+          # No KOS build, target libc, application or CDDA payload is included.
+          def external_links(directory, names):
+              ignored = []
+              for name in names:
+                  path = Path(directory) / name
+                  if path.is_symlink() and (not path.exists() or
+                          not path.resolve().is_relative_to(prefix.resolve())):
+                      ignored.append(name)
+              return ignored
+          for relative in ('bin', 'libexec/gcc', 'lib/gcc', 'sh-elf/bin', 'sh-elf/include'):
+              source = prefix / relative
+              if source.exists():
+                  shutil.copytree(source, toolchain / relative, symlinks=False,
+                                  ignore=external_links, dirs_exist_ok=True)
+          compiler = toolchain / 'bin/sh-elf-gcc'
+          expected = json.loads((root / 'dependencies.json').read_text())['toolchain']['gcc']
+          actual = subprocess.check_output([str(compiler), '-dumpfullversion'], text=True).strip()
+          if actual != expected:
+              raise SystemExit(f'Cached compiler version {actual} differs from pinned {expected}')
+          host_paths = set()
+          for path in toolchain.rglob('*'):
+              if not path.is_file():
+                  continue
+              with path.open('rb') as stream:
+                  elf = stream.read(4) == b'\x7fELF'
+              if not elf:
+                  continue
+              result = subprocess.run(['ldd', str(path)], capture_output=True, text=True)
+              host_paths.update(Path(name) for name in re.findall(r'(/[^\s()]+)', result.stdout)
+                                if Path(name).is_file())
+          for source in sorted(host_paths):
+              target = bundle / 'host-root' / source.relative_to('/')
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(source, target)
+              shutil.copymode(source, target)
+          shutil.copyfile(root / 'dependencies.json', bundle / 'dependencies.json')
+          metadata = {
+              'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'compiler': subprocess.check_output([str(compiler), '--version'], text=True).splitlines()[0],
+              'host_dependencies': [str(path) for path in sorted(host_paths)],
+              'purpose': 'Freestanding SH integer CDDA build; no KOS or CDDA payload included',
+          }
+          (bundle / 'manifest.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          hashes = []
+          for path in sorted(bundle.rglob('*')):
+              if path.is_file():
+                  hashes.append(hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.relative_to(bundle).as_posix())
+          (bundle / 'SHA256SUMS').write_text('\n'.join(hashes) + '\n')
+          archive = out / 'sh-elf-cdda-toolchain.tar.gz'
+          with tarfile.open(archive, 'w:gz') as stream:
+              stream.add(bundle, arcname='cdda-toolchain')
+          print(metadata['compiler'])
+          print(hashlib.sha256(archive.read_bytes()).hexdigest(), archive.name)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cdda-toolchain-recovery-${{ github.run_id }}
+          path: build/cdda-toolchain-recovery/sh-elf-cdda-toolchain.tar.gz
+          if-no-files-found: error
+          retention-days: 7

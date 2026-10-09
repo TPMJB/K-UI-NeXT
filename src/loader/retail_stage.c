@@ -5,6 +5,9 @@
 #include "retail_storage.h"
 #include "retail_display.h"
 #include "retail_boot.h"
+#if KUI_RETAIL_OBSERVE
+#include "kui/retail_observe.h"
+#endif
 #ifdef KUI_RETAIL_SD_BENCH
 #include "retail_sd_bench.h"
 #endif
@@ -585,6 +588,15 @@ void kui_retail_stage_main(const uint8_t *wire) {
     memcpy(wire_copy,wire,sizeof(wire_copy));
     enum kui_game_result result=kui_retail_manifest_decode(wire_copy,&manifest);
     if(result!=KUI_GAME_OK) stopped("INVALID RETAIL MAP",(uint32_t)result);
+#if KUI_RETAIL_TOY_PILOT
+    /* The separate Toy translation unit supplies this check. Unsupported
+     * launcher options must stop before resident selection or storage I/O. */
+    toy_launch_options_check();
+#endif
+#if KUI_RETAIL_OBSERVE
+    if(!kui_retail_observe_admit(&manifest)) stopped("14 TOY SCI MAP REFUSED",manifest.gdi_crc32);
+    retail_display_line("14 TOY RESOURCE OBSERVATION / NO CDDA");
+#endif
     select_resident();
     if(manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
@@ -625,6 +637,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
     read_sectors(manifest.session_lba,16,KUI_GAME_SECTOR_MODE1,ip);
     uint32_t crc=kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES);
     if(crc!=manifest.ip_crc32) stopped("IP CHECKSUM CHANGED",crc);
+#if KUI_RETAIL_OBSERVE
+    if(!kui_retail_observe_native_ip(ip)) stopped("14 NATIVE GD IP REFUSED",crc);
+#endif
     /* Raw maps retain the fast header/address validation. Cooked data has
      * discarded those headers, so preparation fingerprints the executable
      * and the stage checks its exact file bytes after this mapped read. */

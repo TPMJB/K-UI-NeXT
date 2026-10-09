@@ -52,9 +52,18 @@ Run from the repository root with Pillow installed. The generator validates the
 seven hashes above and writes `src/dreamcast/shell_art.inc`. Ordinary Dreamcast
 builds use that committed include and do not need image conversion libraries.
 
-The opaque brand is 128x64 RGB565 pixels against the original navy background.
+The brand occupies the same 128x64 RGB565 header slot. Its derived display crops
+the original helmet and K-UI wordmark to the artwork bounds, scales them to
+128x48 with Lanczos, and centers them vertically. The original dark-blue matte
+is removed and antialiased edges are precomposed against the navy background;
+fully transparent pixels use the renderer's `0xf81f` key. This makes the artwork
+about 27% larger without moving the header text or adding pixel storage. The
+source's tiny raster `by TPMJB` line is omitted from this display because the
+header already draws that credit at a readable size. `launcher-brand.png` remains
+byte-for-byte identical to the input listed above.
+
 Icons are emitted at 128x128 for the detail pane and 24x24 for the app list, in
-disc-ripper/settings/diagnostics order. Bilinear scaling follows the original
+disc-ripper/settings/diagnostics order. Their bilinear scaling follows the original
 launcher's texture scaling. Fully transparent icon pixels use `0xf81f`, which the
 renderer skips; antialiased edges are precomposed against `#121A31`. The arrays
 contain 118,144 bytes of pixel data. They are fixed assets, with no runtime
