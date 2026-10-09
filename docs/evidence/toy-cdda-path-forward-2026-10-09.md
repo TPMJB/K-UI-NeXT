@@ -3,20 +3,24 @@
 
 ## Decision
 
-**Updated after R and C hardware tests:** neither cache profile produced a
-noticeable improvement. Their normalized RAW and GD timings are essentially
-the same. The next controlled build is an explicit synthetic-source profile
-that preserves PCM16 playback and the CDDA timeline while removing only audio
-RAW card reads. The revised priority is bounded SCI occupancy and independently
-serviced prepared PCM, with packed DATA as a distinct bandwidth experiment.
-See [R/C results and revised decision](toy-cdda-transport-decision-2026-10-09.md)
-and the [silent-source checklist](../cdda-toy-synthetic-source-test.md).
+**Updated after R, C and S hardware tests:** freeze working CDDA at the
+owner's request. CDDA begins after the intro FMV, so audio-source reading
+cannot explain that earlier video. S reduced the maximum worker visit to
+8.659 ms while GD steps still averaged 8.621 ms; the intro stayed unchanged.
+The cumulative report does not establish phase timing or FPS. Prioritize
+DATA loading and completion scheduling. The strongest control is the same
+Toy intro through a verified ordinary nonpilot loader. All recent restore
+files retain the pilot; an ordinary backup must be verified before a swap.
+Packed DATA remains a separate loading hypothesis.
+See [R/C/S results and loader priority](toy-cdda-transport-decision-2026-10-09.md).
 
-The following sections preserve the reasoning before those tests; private
-cache isolation is now tested and is not the selected performance hypothesis.
+The following sections preserve historical reasoning. Private cache
+isolation is now tested; additional cursor, transfer and audio-service work
+is deferred. An aggregate intro/menu session does not establish that CDDA
+was active during the FMV.
 
 Keep the restored, continuous-audio `7b55156aafa2` runtime as the console
-baseline. Investigate private-state cache isolation first, then compare
+baseline. The earlier proposal was private-state cache isolation, then
 passive ARM snapshot batching and AICA DMA as separate factors. A later
 storage experiment must include an independently serviced PCM consumer;
 another sector queue alone is not the selected next build.

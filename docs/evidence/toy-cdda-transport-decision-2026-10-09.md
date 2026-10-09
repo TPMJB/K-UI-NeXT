@@ -1,7 +1,63 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Toy CDDA: R/C results and transport decision
+# Toy CDDA: R/C/S results and loader priority
 
-## Hardware result
+## Current decision after S
+
+The owner clarifies that CDDA music begins **after** Toy Commander's intro
+FMV. The intro remained unchanged in S. The owner requests that working CDDA
+be preserved and further audio changes be deferred. Retain the established
+continuous-audio fallback `7b55156aafa2`; S is a silent diagnostic. This
+evidence update changes no runtime code or binaries.
+
+The previous natural-intro comparison conflated two phases. Audio-source
+cost cannot explain a pre-PLAY intro. The production worker's STOPPED,
+quiescent path returns before clock sampling, ARM/port observation, sound
+allocation, RAW reading or AICA copying. Pilot bridge, lifecycle, cache and
+GD hooks remain installed. The cumulative report has no first-PLAY timestamp
+or phase boundary; it cannot independently establish the owner's timing.
+
+S build `b2e2b0e164de`, photos `62216` through `62223`, decodes as:
+
+| Measurement | S | R comparison |
+|---|---:|---:|
+| Source operations | 906 generated | 1,058 physical audio reads |
+| Mean / maximum source operation | 0.119809 / 0.120320 ms | 4.639419 / 6.289920 ms |
+| GD read steps / logical sectors | 2,656 / 5,107 | 2,656 / 5,107 |
+| Mean / maximum GD read step | 8.620889 / 10.689280 ms | 8.612232 / 10.685440 ms |
+| Maximum worker visit | 8.659200 ms | 22.481 ms |
+
+Source last/max/total/calls are `0x5d / 0x5e / 0x14b42 / 0x38a`.
+GD total/max/steps are `0x0110f459 / 0x209f / 0xa60`; worker maximum is
+`0x1a6d`. The nominal timer scale remains 781,250 ticks/s. S generated
+12.08 seconds of source PCM, not elapsed run time. Terminal state is
+intentional PAUSED, command 22. Fault, stack, source, queue,
+active-bank-write, recovery and reserve-denial counters are zero; updater
+entries and returns match at 1,105. No measured FPS is available.
+
+S reduced audio-source and worker costs while GD timings stayed essentially
+unchanged. Its unchanged pre-CDDA intro does not measure that audio benefit.
+The 346-348 ms/s estimate below applies only during active real CDDA reads,
+not to the earlier intro.
+
+Prioritize DATA loading, read/completion scheduling and movie presentation.
+The strongest control is the **same Toy intro** with a verified ordinary
+nonpilot loader, identical image/SCI settings and cold-boot procedure. R, C,
+S and the clean-audio fallback all retain pilot hooks. There is no menu
+toggle that removes those hooks. The historical ordinary backup name
+`retail-boot-before-observe.kui` is documented, but its actual preservation
+has not been verified; do not instruct an unverified runtime swap.
+
+The pilot DATA path includes the ordinary resident reader, but fixes each
+EXEC step at two sectors. The ordinary reader can enlarge steps using its
+pacing policy. Thus this control compares the complete loader configuration,
+not just audio activation. Separate request supply, completion notification
+and presentation before attributing an FMV fault to bandwidth alone.
+
+DOA2 has an owner-reported smooth-FMV baseline and Evolution a separate FMV
+fault; use a second title only as a follow-up ordinary-loader comparison.
+Those observations do not diagnose Toy. Freeze audio implementation work.
+
+## Earlier R/C hardware result
 
 The user reports no noticeable improvement from C or R. Both profiles reached
 the expected cache policy and P2 native CHECK destinations. Neither report
@@ -57,21 +113,24 @@ some proof, admission and preparation work, and boundary splits add calls.
 This comparison supports prioritizing storage occupancy; it does not prove
 that AICA observation is cheap or that DMA cannot help.
 
-## Selected immediate control
+## Completed S control
 
-Build S from the R policy, substituting zero PCM in the existing 2352-byte
+S was built from the R policy, substituting zero PCM in the existing 2352-byte
 RAW staging buffer on a normal source cache miss. Preserve LBA/generation,
 normal `silence=false` frame accounting, source requests, conversion, copy
 proofs, DATA exclusion, playback and controls. No card callback runs for
 audio. The separate end-of-track silence path would freeze track progress
 and is therefore unsuitable for this control.
 
-S distinguishes the contribution of audio source reads while retaining the
+S distinguishes audio source reads **while CDDA is active**, retaining the
 native movie/SFX environment. It is deliberately silent and is not a fix.
-An unchanged result leaves DATA reading and scheduling under investigation.
+The pre-CDDA intro is a separate loader comparison.
 Use the [S checklist](../cdda-toy-synthetic-source-test.md).
 
-## Stronger implementation routes
+## Deferred audio routes and separate loading routes
+
+These remain research options. The owner has asked to freeze working CDDA
+and prioritize the loader; they are not the next selected audio changes.
 
 | Route | Concrete benefit | Constraint before console delivery |
 |---|---|---|
