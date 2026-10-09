@@ -171,9 +171,11 @@ So RAM buys latency hiding:
 2. **The bridge must ignore strobes without CS0-/CS1-** (or its own DMACK-),
    because BIOS, flash and font accesses use the same lines. M1's gate
    already requires this; the FPGA makes it exact.
-3. **Supply level.** The same guides measure the BIOS supply (pin 23)
-   because some boards run it at 5 V. Measure the target board. It sets the
-   G1 signalling level that the buffers and the flash must handle.
+3. **Supply level.** BIOS-mod guides agree that only VA0 runs the BIOS at
+   5 V; VA1 runs it at 3.3 V. Scope Rev A to VA1, with 3.3 V G1 signalling
+   and a 3.3 V NOR. VA0 would need 5 V-capable parts and is out of scope.
+   One meter reading on the target board (pin 23 per the guides) confirms
+   the rail.
 
 ### Proposed design
 
@@ -215,7 +217,7 @@ So RAM buys latency hiding:
 
 - **Step 1 (with the shield measurements):**
   - IC501 package and continuity map, as listed above;
-  - IC501 supply voltage.
+  - confirm IC501 runs at 3.3 V (expected on VA1).
 - **Step 2:**
   - draft the FPGA's ATA register file, DMA-owner latch and BIOS latch;
   - exercise them in the disposition's host-side model before connecting
