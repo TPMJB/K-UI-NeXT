@@ -80,12 +80,13 @@ Neither modeled bandwidth nor service frequency is a measurement of the user's
 card or the game's real cadence. The fresh ASan/UBSan log is retained alongside
 this document. This source revision is not a claim of Dreamcast video quality.
 
-SH-4 cross-build places worker end at `0x8cfdf120`, leaving 3,808 bytes
-under the unchanged `0x8cfe0000` limit. Low resident ends at `0x8c0076e8`, below
-`0x8c007800`. Guarded stack margins are positive: low 64 bytes, SCI 272 bytes,
-GD 2,156 bytes, and audio 3,176 bytes. Final linked audits and source identities
-are emitted into the test ZIP's `build.json`; early dirty-source results are
-not used as the package's exact-build proof. The default GD2/non-shared worker
+Exploratory SH-4 cross-builds left more than 3.5 KiB under the unchanged
+`0x8cfe0000` worker limit, kept the low resident below `0x8c007800`, and retained
+positive guarded stack margins. Exact layout and conservative stack totals can
+shift with the embedded build identity. The final clean-source linked audits
+and source identities are emitted into the test ZIP's `build.json`; early
+dirty-source results are not used as its exact-build proof.
+The default GD2/non-shared worker
 is byte-identical to clean `7b55156aafa2` (SHA-256
 `f3b510df3034634e01e3dd911711f94551062534d6cbf4b635900a366f903d3a`).
 

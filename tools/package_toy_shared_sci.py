@@ -54,7 +54,8 @@ def shared_report_contract():
     if not found:
         raise ValueError('Missing shared transport telemetry ABI')
     words = []
-    for statement in found[1].split(';'):
+    declarations = re.sub(r'/\*.*?\*/|//[^\n]*', '', found[1], flags=re.S)
+    for statement in declarations.split(';'):
         if not statement.strip():
             continue
         declaration = re.fullmatch(r'\s*uint32_t\s+(.+?)\s*', statement, re.S)
