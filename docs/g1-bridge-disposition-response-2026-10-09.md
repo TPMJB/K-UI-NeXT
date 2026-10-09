@@ -32,12 +32,13 @@ must include the synchronizers, DMA arbitration against SD and C5 traffic,
 SRAM bank contention and buffer delay. Two things help:
 - give the ATA DMA channels high priority, and keep the shadow table in an
   SRAM bank no other master streams through;
-- the register strobe is the longer one (290 ns in mode 0, so about 240 ns
-  to valid data), while data-port reads come from an already-filled FIFO
-  with no lookup.
+- data-port reads come from an already-filled FIFO with no lookup.
 
-That only holds if Holly really times the two cycle types differently, which
-is the B3 measurement.
+Correction: ATA allows a longer register strobe (290 ns in mode 0, against
+165 ns for data). But KOS names 0xA05F7490/94 as the PIO *read* and *write*
+access waits, so Holly most likely uses one read strobe for both. Register
+lookups must then meet the data-read deadline. See
+[`g1-bridge-controller-ram-bios-2026-10-09.md`](g1-bridge-controller-ram-bios-2026-10-09.md).
 
 **M1: final DMA word (my error).** My enable term "DMACK- asserted and our
 DMARQ active" would cut the last word, because the device negates DMARQ
