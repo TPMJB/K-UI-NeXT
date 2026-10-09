@@ -219,211 +219,45 @@ static void advance_irq_to(uint32_t deadline) {
     }
     CHECK(deadline>=hw.ticks); advance_clock(deadline-hw.ticks);
 }
-/* Expand only the independent card/map fixture; the production producer,
- * cursor and arbiter remain linked from their ordinary source files. */
-static void setup_long_audio(bool cooked,bool scattered) {
-    setup(cooked,scattered);
-    memset(&manifest,0,sizeof(manifest));memset(card_bytes,0xf3,sizeof(card_bytes));
-    manifest.card_sectors=BLOCKS;manifest.partition_start=50u;manifest.partition_end=2000u;
-    manifest.track_count=3u;manifest.session_lba=45000u;
-    manifest.boot_lba=45001u;manifest.boot_bytes=4567u;
-    strcpy(manifest.title,"Queued audio cadence fixture");strcpy(manifest.bootfile,"1ST_READ.BIN");
-    static const uint32_t starts[]={0u,4u,45000u},ends[]={4u,164u,45032u};
-    uint32_t used=0u;
-    for(unsigned track=0;track<3u;++track) {
-        struct kui_retail_track *t=&manifest.slots[track].track;
-        *t=(struct kui_retail_track){.start_lba=starts[track],.end_lba=ends[track],
-            .control=track==1u?0u:(uint8_t)(4u|(cooked?KUI_RETAIL_TRACK_COOKED:0u)),
-            .first_extent=(uint16_t)(3u+manifest.extent_count)};
-        uint32_t stride=kui_retail_track_sector_bytes(t),bytes=(t->end_lba-t->start_lba)*stride;
-        uint32_t blocks=(bytes+511u)/512u;
-        for(uint32_t first=0;first<blocks;) {
-            uint32_t take=blocks-first>7u?7u:blocks-first,index=manifest.extent_count;
-            uint32_t physical=scattered?100u+(index&1u?900u:0u)+(index>>1)*8u:100u+used;
-            CHECK(3u+index<KUI_RETAIL_IMAGE_SLOTS && physical+take<2000u);
-            manifest.slots[3u+manifest.extent_count++].extent=(struct kui_retail_extent){first,physical,take};
-            ++t->extent_count;
-            for(uint32_t p=0;p<take*512u && first*512u+p<bytes;++p) {
-                uint32_t at=first*512u+p;
-                uint32_t original=stride==2048u?at/2048u*2352u+16u+at%2048u:at;
-                card_bytes[physical*512u+p]=source(track,original);
-            }
-            first+=take;used+=take;
-        }
-    }
-    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OK);
-    CHECK(kui_retail_image_init(&reference,&manifest,read_block,NULL)==KUI_GAME_OK);
-    kui_toy_pilot_sci_init(&manifest,&card,acquire,release);
-    clear_audio(&audio0);clear_audio(&audio1);hw.tick_step=0u;wire.receiver_delay=1u;
-}
-static void plan(uint32_t lba,uint32_t end,uint32_t generation,uint32_t reserve) {
-    CHECK(kui_toy_pilot_sci_audio_plan(lba,end,generation,reserve)!=KUI_TOY_SCI_FAULT);
-    untouched(&audio0);
-}
-static void queued_prefetch_and_exact_range(void) {
-    setup(false,true);clear_audio(&audio0);hw.tick_step=0u;wire.receiver_delay=80u;
-    plan(4u,12u,90u,8192u);
-    /* No worker read has admitted an output address. Independent interrupts
-     * can still produce exactly four verified, complete RAW sectors. */
-    advance_irq_to(10000u);untouched(&audio0);
-    CHECK(!wire.flight && !hw.leased);
-    unsigned reads=wire.fetches;
-    for(unsigned n=0;n<20u;++n) {
-        advance_clock(100u);(void)kui_toy_pilot_sci_service(NULL);untouched(&audio0);
-    }
-    CHECK(wire.fetches==reads && !wire.flight && !hw.leased);
-    for(uint32_t lba=4u;lba<8u;++lba) {
-        CHECK(audio_visit(lba,90u,&audio0)==KUI_TOY_SCI_OK);audio_matches(lba,&audio0);
-        /* Repeated consumption cannot replace a reused PCM buffer. */
-        memset(audio0.bytes,0x73,sizeof(audio0.bytes));
-        CHECK(audio_visit(lba,90u,&audio0)==KUI_TOY_SCI_OK);
-        for(unsigned i=0;i<sizeof(audio0.bytes);++i)CHECK(audio0.bytes[i]==0x73u);
-        clear_audio(&audio0);
-    }
-    /* Consuming a ready head may arm a successor but cannot receive its
-     * unelapsed physical payload or immediately manufacture a fifth head. */
-    CHECK(audio_visit(8u,90u,&audio0)==KUI_TOY_SCI_PENDING);untouched(&audio0);
-    advance_irq_to(hw.ticks+10000u);
-    for(uint32_t lba=8u;lba<12u;++lba) {
-        CHECK(audio_visit(lba,90u,&audio0)==KUI_TOY_SCI_OK);audio_matches(lba,&audio0);
-        clear_audio(&audio0);
-    }
-    reads=wire.fetches;advance_irq_to(hw.ticks+10000u);
-    CHECK(!wire.flight && !hw.leased && wire.fetches==reads);
-    CHECK(audio_visit(12u,90u,&audio0)==KUI_TOY_SCI_FAULT);untouched(&audio0);
-    audio_cleanup();
-
-    setup(false,true);clear_audio(&audio0);hw.tick_step=0u;wire.receiver_delay=80u;
-    plan(4u,8u,92u,0u);advance_irq_to(10000u);
-    for(uint32_t lba=4u;lba<8u;++lba) {
-        CHECK(audio_visit(lba,92u,&audio0)==KUI_TOY_SCI_OK);audio_matches(lba,&audio0);
-        clear_audio(&audio0);
-    }
-    reads=wire.fetches;
-    CHECK(audio_visit(8u,92u,&audio0)==KUI_TOY_SCI_FAULT);
-    /* LBA8 is mapped audio in the same track but outside this plan. */
-    advance_irq_to(hw.ticks+10000u);
-    CHECK(wire.fetches==reads && !wire.flight && !hw.leased);untouched(&audio0);
-    audio_cleanup();
-}
-static void queued_masked_irq_foreground_plan(void) {
-    setup(false,true);clear_audio(&audio0);hw.tick_step=10u;wire.receiver_delay=80u;
-    plan(4u,8u,95u,0u);
-    for(unsigned n=0;n<30u && (wire.flight || hw.leased);++n) {
-        advance_clock(100u);
-        uint32_t blocks=kui_toy_pilot_sci_snapshot()->call_blocks;
-        unsigned budgets=wire.token_budgets;
-        CHECK(kui_toy_pilot_sci_service(NULL)!=KUI_TOY_SCI_FAULT);
-        CHECK(kui_toy_pilot_sci_snapshot()->call_blocks-blocks<=KUI_TOY_SCI_SERVICE_BLOCKS);
-        CHECK(wire.token_budgets==budgets+1u && !wire.waits);
-        untouched(&audio0);
-    }
-    CHECK(!hw.leased && !wire.flight && !kui_toy_pilot_sci_snapshot()->irq_calls);
-    for(uint32_t lba=4u;lba<8u;++lba) {
-        CHECK(audio_visit(lba,95u,&audio0)==KUI_TOY_SCI_OK);audio_matches(lba,&audio0);
-        clear_audio(&audio0);
-    }
-    audio_cleanup();
-}
-static void queued_range_replacement_and_cancellation(void) {
-    /* Test both half-written physical DMA and a full, unconsumed queue.
-     * STOP, seek and generation replacement must discard all older bytes. */
-    for(unsigned ready=0;ready<2u;++ready)for(unsigned action=0;action<3u;++action) {
-        setup(false,true);clear_audio(&audio0);hw.tick_step=0u;wire.receiver_delay=80u;
-        plan(4u,12u,101u,0u);
-        if(ready) {advance_irq_to(10000u);CHECK(!wire.flight && !hw.leased);}
-        else {advance_clock(40u);CHECK(wire.partial_bytes==64u && wire.flight);}
-        unsigned reads=wire.fetches;
-        if(action==0u) {
-            kui_toy_pilot_sci_audio_cancel();advance_clock(1000u);
-            (void)kui_toy_pilot_sci_irq();(void)kui_toy_pilot_sci_service(NULL);
-            CHECK(!wire.flight && !hw.leased && wire.fetches==reads);untouched(&audio0);
-            plan(8u,12u,102u,0u);
-        } else {
-            /* Same-generation nonsequential seek is also a replacement. */
-            plan(8u,12u,action==1u?102u:101u,0u);
-        }
-        CHECK(audio_visit(8u,action==2u?101u:102u,&audio0)==KUI_TOY_SCI_PENDING);
-        advance_irq_to(hw.ticks+10000u);
-        for(uint32_t lba=8u;lba<12u;++lba) {
-            CHECK(audio_visit(lba,action==2u?101u:102u,&audio0)==KUI_TOY_SCI_OK);
-            audio_matches(lba,&audio0);clear_audio(&audio0);
-        }
-        audio_cleanup();
-    }
-    static const uint32_t invalid[][3]={{4u,4u,110u},{4u,13u,110u},
-        {45000u,45001u,110u},{4u,12u,0u},{UINT32_MAX,0u,110u}};
-    for(unsigned n=0;n<sizeof(invalid)/sizeof(invalid[0]);++n) {
-        setup(false,true);clear_audio(&audio0);hw.tick_step=0u;wire.receiver_delay=80u;
-        plan(4u,12u,109u,0u);advance_clock(40u);
-        CHECK(kui_toy_pilot_sci_audio_plan(invalid[n][0],invalid[n][1],invalid[n][2],0u)==KUI_TOY_SCI_FAULT);
-        unsigned reads=wire.fetches;advance_clock(1000u);
-        (void)kui_toy_pilot_sci_irq();(void)kui_toy_pilot_sci_service(NULL);
-        CHECK(!wire.flight && !hw.leased && wire.fetches==reads);untouched(&audio0);
-        audio_cleanup();
-    }
-}
-static unsigned sustained_queued_schedule(bool occasional_gap,bool permanent_gap) {
-    setup_long_audio(false,true);
-    uint32_t lba=4u,last=0u,generation=121u;
-    int32_t reserve=8192,min_reserve=reserve;
-    unsigned deliveries=0u,max_burst=0u;bool saw_catchup=false,gap_resumed=false;
-    const uint32_t gap_start=29u*781250u/60u+78u,gap_end=gap_start+62500u;
-    plan(lba,164u,generation,(uint32_t)reserve);
+static unsigned sustained_worker_schedule(unsigned frames_per_second) {
+    setup(false,true); clear_audio(&audio0); hw.tick_step=0u; wire.receiver_delay=1u;
+    unsigned deliveries=0u; uint32_t lba=4u;
+    /* The first schedule is two worker polls 99.84 us apart each 60-Hz
+     * frame. The other is the same pair each 80-ms updater interval.
+     * Card DMA is deliberately ideal and independent: IRQs complete each
+     * block at its scheduled time, never as a side effect of a worker poll. */
     for(unsigned interval=0;;++interval) {
-        uint32_t first=permanent_gap?interval*62500u:
-            (uint32_t)((uint64_t)interval*781250u/60u);
-        if(first>=2u*781250u)break;
-        /* One bounded absence around 0.5 s, followed by normal cadence.
-         * It is not a claim that four queue slots alone cover 80 ms. */
-        if(occasional_gap && first>gap_start && first<gap_end)continue;
-        if(occasional_gap && first>=gap_end && !gap_resumed) {first=gap_end;gap_resumed=true;}
-        for(unsigned clustered=0;clustered<(permanent_gap?1u:2u);++clustered) {
+        uint32_t first=frames_per_second?
+            (uint32_t)((uint64_t)interval*781250u/frames_per_second):interval*62500u;
+        if(first>=781250u) break;
+        for(unsigned clustered=0;clustered<2u;++clustered) {
             uint32_t when=first+clustered*78u;
-            if(when>=2u*781250u)break;
+            if(when>=781250u) break;
             advance_irq_to(when);
-            reserve-=(int32_t)(((uint64_t)when*44100u/781250u)-((uint64_t)last*44100u/781250u));
-            last=when;if(reserve<min_reserve)min_reserve=reserve;
-            if(!permanent_gap)CHECK(reserve>0);
-            plan(lba,164u,generation,reserve>0?(uint32_t)reserve:0u);
-            unsigned burst=0u;
-            while(burst<4u && reserve<=8192-588) {
-                int result=audio_visit(lba,generation,&audio0);CHECK(result!=KUI_TOY_SCI_FAULT);
-                if(result==KUI_TOY_SCI_PENDING)break;
-                audio_matches(lba,&audio0);clear_audio(&audio0);++lba;++deliveries;++burst;reserve+=588;
+            int result=audio_visit(lba,91u,&audio0);
+            CHECK(result!=KUI_TOY_SCI_FAULT);
+            if(result==KUI_TOY_SCI_OK) {
+                audio_matches(lba,&audio0); ++deliveries;
+                lba=lba==11u?4u:lba+1u;
+                /* A delivered sector advances the worker's LBA. The next
+                 * request can be made only at a subsequent worker visit. */
+                clear_audio(&audio0);
             }
-            if(burst>max_burst)max_burst=burst;
-            if(occasional_gap && first>=gap_end && burst>1u)saw_catchup=true;
-            plan(lba,164u,generation,reserve>0?(uint32_t)reserve:0u);
         }
     }
-    advance_irq_to(2u*781250u);
-    reserve-=(int32_t)(2u*44100u-(uint64_t)last*44100u/781250u);
-    if(!permanent_gap) {
-        /* Score an actual final worker visit, rather than demanding sectors
-         * whose playback deadline occurs after the final 60-Hz visit. */
-        plan(lba,164u,generation,(uint32_t)reserve);
-        for(unsigned n=0;n<4u && reserve<=8192-588;++n) {
-            CHECK(audio_visit(lba,generation,&audio0)==KUI_TOY_SCI_OK);
-            audio_matches(lba,&audio0);clear_audio(&audio0);++lba;++deliveries;reserve+=588;
-        }
-    }
-    if(!permanent_gap) {
-        if(deliveries<149u || reserve<8192-1176 || max_burst<2u)
-            fprintf(stderr,"Queued cadence diagnostics: gap=%u deliveries=%u reserve=%d min=%d burst=%u lba=%u\n",
-                occasional_gap,deliveries,reserve,min_reserve,max_burst,lba);
-        CHECK(deliveries>=149u && reserve>=8192-1176 && min_reserve>0);
-        CHECK(max_burst>=2u && (!occasional_gap || saw_catchup));
-    } else CHECK(deliveries<=25u*4u && reserve<0);
-    printf("%s %u sectors/2 s, largest worker burst %u, final reserve %d frames\n",
-        permanent_gap?"Queued SCI sparse-cadence limit:":occasional_gap?"Queued SCI bounded-gap:":
-        "Queued SCI sustained 60-Hz:",deliveries,max_burst,reserve);
-    audio_cleanup();return deliveries;
+    advance_irq_to(781250u); untouched(&audio0);
+    CHECK(kui_toy_pilot_sci_snapshot()->audio_claims==
+        kui_toy_pilot_sci_snapshot()->audio_releases);
+    CHECK(hw.acquires==hw.releases && !wire.waits && !hw.leased);
+    audio_cleanup(); return deliveries;
 }
-static void sustained_delivery_with_multi_sector_worker(void) {
-    (void)sustained_queued_schedule(false,false);
-    (void)sustained_queued_schedule(true,false);
-    (void)sustained_queued_schedule(false,true);
+static void sustained_delivery_exposes_worker_cadence_limit(void) {
+    unsigned frame_deliveries=sustained_worker_schedule(60u);
+    unsigned slow_deliveries=sustained_worker_schedule(0u);
+    CHECK(frame_deliveries==60u && frame_deliveries<75u);
+    CHECK(slow_deliveries==13u && slow_deliveries<=25u);
+    printf("Ideal independent IRQ transport: %u sectors/1 s with two clustered polls per 60-Hz frame; %u sectors/1 s with 80-ms clusters (CDDA needs 75)\n",
+        frame_deliveries,slow_deliveries);
 }
 
 static void legacy_raw_lease_is_not_admitted(void) {
@@ -529,9 +363,7 @@ int main(void) {
     fragmented_raw_and_audio_only_foreground();
     interrupt_completion_has_no_output_authority(); audio_only_finite_service_and_worker_cadence();
     priority_and_pending_data_handle(); handoff_uses_the_same_service_admission();
-    queued_prefetch_and_exact_range(); queued_masked_irq_foreground_plan();
-    queued_range_replacement_and_cancellation();
-    sustained_delivery_with_multi_sector_worker(); legacy_raw_lease_is_not_admitted();
+    sustained_delivery_exposes_worker_cadence_limit(); legacy_raw_lease_is_not_admitted();
     supersession_cancel_and_private_partial_dma(); high_core_data_revoke_preserves_audio_identity();
     crc_retry_pio_and_failed_sector();
     printf("Shared asynchronous SCI audio: %u checks passed\n",checks);

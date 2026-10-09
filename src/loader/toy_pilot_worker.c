@@ -1028,27 +1028,6 @@ static bool copy_plane(uint32_t address,const void *source,uint32_t bytes,uint32
     maximum(&owner.stats.copy_ticks_max,elapsed);++owner.stats.copy_calls;
     return bus_result(result);
 }
-#if KUI_TOY_PILOT_ASYNC_CDDA
-/* Scheduling hint only: complete committed blocks ahead of the faster
- * accepted cursor, reduced by the conservative capture age. Partial blocks
- * are not playable reserve, and this estimate grants no PCM write permission.
- * The existing ring/cursor/control gates remain authoritative. */
-static uint32_t audio_reserve_frames(void) {
-    if(!owner.ring_running || owner.stop_wait) return 0u;
-    uint32_t complete=owner.ring_fill_stream&~(KUI_TOY_RING_BLOCK-1u);
-    if(complete<=owner.ring_played) return 0u;
-    uint32_t reserve=complete-owner.ring_played;
-    if(reserve>KUI_TOY_RING_FRAMES) reserve=KUI_TOY_RING_FRAMES;
-    uint32_t age=ticks()-owner.ring_tick;
-    if(age>=kui_toy_ring_ticks(reserve)) return 0u;
-    uint32_t advanced=kui_toy_ring_frames(age);
-    return advanced<reserve?reserve-advanced:0u;
-}
-static __attribute__((noinline)) int queued_audio_plan(uint32_t lba,uint32_t generation) {
-    return kui_toy_pilot_sci_audio_plan(lba,owner.end_fad-150u,
-        generation,audio_reserve_frames());
-}
-#endif
 static void fill_step(void) {
     uint32_t data=word(owner.config.data_pending);
 #if KUI_TOY_PILOT_SHARED_SCI
@@ -1106,12 +1085,10 @@ static void fill_step(void) {
                 owner.raw_request_generation=generation;owner.raw_request_lba=lba;
                 owner.raw_request_tick=ticks();
             }
-            /* Grant an explicit, already-admitted source interval. The
-             * transport may queue verified successors independently of this
-             * worker, but cannot cross the selection's exclusive end. */
-            int result=queued_audio_plan(lba,generation);
-            if(result==KUI_TOY_SCI_OK)
-                result=kui_toy_pilot_sci_audio_read(lba,generation,owner.raw);
+            /* One bounded transport visit can arm or consume private DMA
+             * staging. Pending restores the caller's SR and returns to the
+             * game without decoding or publishing any partial sector. */
+            int result=kui_toy_pilot_sci_audio_read(lba,generation,owner.raw);
             if(result==KUI_TOY_SCI_PENDING) {
                 data_blocked_sample(data);mask_end(sr);return;
             }

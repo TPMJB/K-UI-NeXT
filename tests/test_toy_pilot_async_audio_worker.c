@@ -16,55 +16,6 @@ struct async_receiver {
 static struct async_receiver receiver;
 static uint32_t sector_delay,attempts,requests,completions,cancels,synchronous_reads;
 static bool transport_fault;
-/* Four immutable sectors represent completed card receptions. Only the
- * independent game-time producer below fills them; read/plan never produces
- * a sector or advances the fixture clock. A full queue stops card progress
- * instead of accumulating fictitious credit for a later instantaneous fill. */
-#define SOURCE_QUEUE_SECTORS 4u
-struct queued_sector { uint32_t lba,generation;uint8_t pcm[2352]; };
-static struct queued_sector source_queue[SOURCE_QUEUE_SECTORS];
-static uint32_t source_head,source_count,source_next,source_end,source_generation;
-static uint32_t source_due,source_interval,source_produced,source_delivered,source_discarded;
-static uint32_t source_plan_calls,source_last_hint,source_max_hint,source_max_batch;
-static bool queued_source;
-static void queued_revoke(void) {
-    source_discarded+=source_count;
-    source_head=source_count=source_next=source_end=source_generation=source_due=0u;
-}
-static void sector_pcm(uint32_t lba,uint8_t *p) {
-    for(unsigned i=0;i<588u;i++) {
-        uint16_t left=(uint16_t)((lba-50u)*588u+i),right=(uint16_t)~left;
-        p[i*4u]=(uint8_t)left;p[i*4u+1u]=(uint8_t)(left>>8);
-        p[i*4u+2u]=(uint8_t)right;p[i*4u+3u]=(uint8_t)(right>>8);
-    }
-}
-static void queued_produce(void) {
-    while(source_generation && source_next<source_end && source_count<SOURCE_QUEUE_SECTORS &&
-          (int32_t)(now-source_due)>=0) {
-        struct queued_sector *sector=&source_queue[(source_head+source_count)%SOURCE_QUEUE_SECTORS];
-        sector->lba=source_next++;sector->generation=source_generation;
-        sector_pcm(sector->lba,sector->pcm);++source_count;++source_produced;
-        source_due+=source_interval;
-    }
-}
-int kui_toy_pilot_sci_audio_plan(uint32_t lba,uint32_t end,uint32_t generation,uint32_t reserve) {
-    uint32_t entered=now;
-    assert((sr&0xf0u)==0xf0u && generation==owner.model.generation);
-    assert(lba>=50u && lba<end && end==owner.end_fad-150u);
-    assert(end==50u+source_frames/588u && reserve<=KUI_TOY_RING_FRAMES);
-    ++source_plan_calls;source_last_hint=reserve;
-    if(reserve>source_max_hint) source_max_hint=reserve;
-    if(queued_source) {
-        if(!source_generation || source_generation!=generation ||
-           (!source_count && source_next==source_end && lba<source_next)) {
-            queued_revoke();source_next=lba;source_end=end;source_generation=generation;
-            source_due=now+source_interval;
-        }
-        assert(source_end==end && source_generation==generation);
-        assert(source_count?source_queue[source_head].lba==lba:source_next==lba);
-    }
-    assert(now==entered);return KUI_TOY_SCI_OK;
-}
 
 void kui_toy_pilot_sci_init(const struct kui_retail_manifest *m,
     const struct kui_loader_sd *c,enum kui_loader_sd_result (*a)(void),void (*r)(void)) {
@@ -72,9 +23,7 @@ void kui_toy_pilot_sci_init(const struct kui_retail_manifest *m,
 }
 int kui_toy_pilot_sci_pump(struct kui_retail_gd *s) { (void)s;return KUI_TOY_SCI_PENDING; }
 int kui_toy_pilot_sci_service(struct kui_retail_gd *s) { (void)s;return KUI_TOY_SCI_PENDING; }
-void kui_toy_pilot_sci_cancel(struct kui_retail_gd *s) {
-    (void)s;++cancels;receiver.active=false;queued_revoke();
-}
+void kui_toy_pilot_sci_cancel(struct kui_retail_gd *s) { (void)s;++cancels;receiver.active=false; }
 int kui_toy_pilot_sci_audio_acquire(void) {
     assert(!"The async worker must not request the synchronous raw lease");return KUI_TOY_SCI_FAULT;
 }
@@ -82,7 +31,7 @@ void kui_toy_pilot_sci_audio_release(void) {
     assert(!"The async engine owns and releases its own physical lease");
 }
 void kui_toy_pilot_sci_audio_cancel(void) {
-    ++cancels;memset(&receiver,0,sizeof(receiver));queued_revoke();
+    ++cancels;memset(&receiver,0,sizeof(receiver));
 }
 const struct kui_toy_pilot_sci_stats *kui_toy_pilot_sci_snapshot(void) { return &transport; }
 uint32_t kui_toy_pilot_sci_irq(void) { return 1u; }
@@ -96,21 +45,6 @@ int kui_toy_pilot_sci_audio_read(uint32_t lba,uint32_t generation,void *output) 
     assert(generation==owner.model.generation && generation==owner.mailbox.generation);
     uint32_t entered=now;++attempts;
     if(transport_fault) return KUI_TOY_SCI_FAULT;
-    if(queued_source) {
-        if(!source_count) { assert(now==entered);return KUI_TOY_SCI_PENDING; }
-        struct queued_sector *sector=&source_queue[source_head];
-        assert(sector->generation==generation && sector->lba==lba && !stop_queued);
-        if(strict_source_reads) {
-            assert(lba==expected_read_lba);++expected_read_lba;
-            if(expected_read_lba==50u+source_frames/588u && repeat_pcm) expected_read_lba=50u;
-        }
-        memcpy(output,sector->pcm,2352u);
-        bool was_full=source_count==SOURCE_QUEUE_SECTORS;
-        source_head=(source_head+1u)%SOURCE_QUEUE_SECTORS;--source_count;
-        if(was_full) source_due=now+source_interval;
-        ++source_delivered;++completions;++reads;copies_at_last_read=copies;
-        assert(now==entered);return KUI_TOY_SCI_OK;
-    }
     if(!receiver.active || receiver.lba!=lba || receiver.generation!=generation || receiver.output!=output) {
         receiver=(struct async_receiver){.lba=lba,.generation=generation,.ready_tick=now+sector_delay,
             .output=output,.active=true};
@@ -126,15 +60,18 @@ int kui_toy_pilot_sci_audio_read(uint32_t lba,uint32_t generation,void *output) 
         assert(lba==expected_read_lba);++expected_read_lba;
         if(expected_read_lba==50u+source_frames/588u && repeat_pcm) expected_read_lba=50u;
     }
-    sector_pcm(lba,output);
+    uint8_t *p=output;
+    for(unsigned i=0;i<588u;i++) {
+        uint16_t left=(uint16_t)((lba-50u)*588u+i),right=(uint16_t)~left;
+        p[i*4u]=(uint8_t)left;p[i*4u+1u]=(uint8_t)(left>>8);
+        p[i*4u+2u]=(uint8_t)right;p[i*4u+3u]=(uint8_t)(right>>8);
+    }
     receiver.completed=true;++completions;++reads;copies_at_last_read=copies;
     assert(now==entered);return KUI_TOY_SCI_OK;
 }
 static void prepare_audio(uint32_t command,uint32_t sectors) {
-    queued_source=false;queued_revoke();
     memset(&receiver,0,sizeof(receiver));memset(&transport,0,sizeof(transport));
     attempts=requests=completions=cancels=synchronous_reads=0u;transport_fault=false;
-    source_plan_calls=source_last_hint=source_max_hint=0u;
     sector_delay=1000000u;prepare(sectors);data_command=command;
     owner.config.read_raw=(uint32_t)(uintptr_t)forbidden_raw;
     for(unsigned n=0;n<20u;n++) visit(13021u);
@@ -244,155 +181,9 @@ static void physical_pcm_to_eof(void) {
     assert(owner.stats.raw_read_timing_calls==200u && owner.stats.raw_bytes==200u*2352u);
     assert(starts==1u && !owner.stats.raw_errors && !synchronous_reads);
 }
-static void reserve_hint_is_conservative(void) {
-    prepare(200u);now=100000u;
-    owner.ring_fill_stream=3u*KUI_TOY_RING_BLOCK+1777u;
-    owner.ring_played=KUI_TOY_RING_BLOCK+123u;owner.ring_tick=now;
-    /* Prefill and pending STOP have no accepted playback reserve. */
-    assert(audio_reserve_frames()==0u);
-    owner.ring_running=1u;owner.stop_wait=1u;
-    assert(audio_reserve_frames()==0u);owner.stop_wait=0u;
-    owner.ring_tick=now;
-    uint32_t complete=owner.ring_fill_stream&~(KUI_TOY_RING_BLOCK-1u);
-    assert(audio_reserve_frames()==complete-owner.ring_played-kui_toy_ring_frames(1u));
-    /* The partial1777frames do not count. ring_played is already the fast
-     * accepted stereo cursor, not a slower channel or an averaged cursor. */
-    owner.ring_played+=321u;owner.ring_tick=now-1000u;
-    uint32_t expected=complete-owner.ring_played-kui_toy_ring_frames(1001u);
-    assert(audio_reserve_frames()==expected);
-    owner.ring_tick=now-kui_toy_ring_ticks(complete-owner.ring_played);
-    assert(audio_reserve_frames()==0u);
-    owner.ring_played=complete+1u;assert(audio_reserve_frames()==0u);
-    owner.ring_played=0u;owner.ring_fill_stream=3u*KUI_TOY_RING_FRAMES+17u;
-    owner.ring_tick=now;assert(audio_reserve_frames()==KUI_TOY_RING_FRAMES-kui_toy_ring_frames(1u));
-    /* Unsigned elapsed-time arithmetic also accounts for timer wrap. */
-    now=11u;owner.ring_tick=UINT32_MAX-1000u;
-    expected=KUI_TOY_RING_FRAMES-kui_toy_ring_frames(1013u);
-    assert(audio_reserve_frames()==expected);
-}
-static void prepare_queued(uint32_t sectors) {
-    queued_source=true;queued_revoke();
-    memset(&transport,0,sizeof(transport));memset(&receiver,0,sizeof(receiver));
-    attempts=requests=completions=cancels=synchronous_reads=0u;transport_fault=false;
-    source_produced=source_delivered=source_discarded=source_plan_calls=source_last_hint=source_max_hint=source_max_batch=0u;
-    /* 10ms includes5ms of modeled game-data bus demand and5ms of audio
-     * reception. This is an independently paced100-sector/s source, not an
-     * assumption that a4-entryqueue can create extra SD bandwidth. */
-    source_interval=7813u;prepare(sectors>200u?200u:sectors);
-    /* The shared fixture caps its ordinary cases at200sectors. Extend the
-     * finite manifest BEFORE the pending PLAY selection is applied. */
-    admitted.slots[1].track.end_lba=50u+sectors;source_frames=sectors*588u;
-    if(sectors>200u) assert(kui_toy_pilot_request(CMD_PLAY,2u,2u,0u)==3u);
-    data_command=17u;owner.config.read_raw=(uint32_t)(uintptr_t)forbidden_raw;
-    strict_source_reads=true;expected_read_lba=50u;
-}
-static void queued_visit_at(uint32_t time) {
-    if((int32_t)(time-now)>0) advance(time-now);
-    queued_produce();arm_visit();entry_sr=sr;
-    uint32_t before=reads;kui_toy_pilot_worker_step();
-    assert(sr==entry_sr && !owner.stats.fault && !reports && !synchronous_reads);
-    assert(reads-before<=4u);
-    if(reads-before>source_max_batch) source_max_batch=reads-before;
-    assert(source_count<=SOURCE_QUEUE_SECTORS && source_delivered==reads);
-    assert(source_produced==source_delivered+source_count+source_discarded);
-}
-static void queued_pcm_clustered_to_eof(void) {
-    prepare_queued(1500u);uint32_t frame_tick=0u,gaps=0u;
-    for(unsigned frame=0;frame<2000u && owner.stats.state!=KUI_TOY_PILOT_EOF;frame++) {
-        /* Two clustered visits in each60Hzframe. A single80msgame gap
-         * occasionally delays both, followed by ordinary catch-up visits.
-         * Production occurs only before those visits, never inside read. */
-        frame_tick+=13021u;
-        if(frame && !(frame%60u)) { frame_tick+=62500u;++gaps; }
-        queued_visit_at(frame_tick);queued_visit_at(frame_tick+300u);
-    }
-    assert(owner.stats.state==KUI_TOY_PILOT_EOF && !running && starts==1u);
-    assert(checked_frames>=source_frames && gaps>=15u && source_max_batch==4u);
-    assert(reads==1500u && completions==1500u && source_produced==1500u && !source_count);
-    assert(source_next==source_end && expected_read_lba==50u+1500u);
-    assert(source_plan_calls>=reads && source_max_hint>2u*KUI_TOY_RING_BLOCK);
-    assert(!owner.stats.raw_errors && owner.stats.raw_bytes==reads*2352u);
-    /* Twenty seconds crossed the physical ring more than26times. Every
-     * audible left/right sample and every inactive-block copy was checked
-     * by the shared independent physical consumer, including padded EOF. */
-    assert(voice_rendered>26u*KUI_TOY_RING_FRAMES);
-    printf("Queued CDDA physical PCM: ordered_frames=%u source_frames=%u elapsed_ticks=%u sectors=%u isolated_80ms_gaps=%u max_sectors_per_visit=%u pass\n",
-        checked_frames,source_frames,now-voice_started,reads,gaps,source_max_batch);
-}
-static void queued_pending_is_private(void) {
-    prepare_queued(200u);
-    for(unsigned n=0;n<30u && !source_generation;n++) queued_visit_at(now+13021u);
-    assert(owner.stats.state==KUI_TOY_PILOT_PREFILL && source_generation && !source_count);
-    assert(source_plan_calls && source_last_hint==0u && !reads && !copies);
-    uint8_t before[2352];memcpy(before,owner.raw,sizeof(before));
-    uint32_t frame=owner.fill_frame,stream=owner.ring_fill_stream,entry=sr;
-    /* Even when enough time has elapsed, worker polling alone cannot turn
-     * an unfinished source receive into a completed queue entry. */
-    advance(source_interval+1u);
-    for(unsigned n=0;n<40u;n++) {
-        fill_quantum();assert(sr==entry && !reads && !copies && !source_count);
-        assert(owner.fill_frame==frame && owner.ring_fill_stream==stream);
-        assert(!memcmp(before,owner.raw,sizeof(before)) && !owner.raw_generation);
-    }
-    queued_produce();assert(source_count==1u);fill_quantum();
-    assert(sr==entry && reads==1u && copies && owner.fill_frame==588u && !source_count);
-}
-static void permanent_sparse_visits_still_have_a_limit(void) {
-    prepare_queued(1500u);uint32_t visit_tick=0u;
-    for(unsigned frame=0;frame<200u && !running;frame++) {
-        visit_tick+=13021u;queued_visit_at(visit_tick);queued_visit_at(visit_tick+300u);
-    }
-    assert(running && starts==1u);
-    uint32_t before_reads=reads,before_tick=now,before_frames=checked_frames;
-    uint32_t reserve_before=audio_reserve_frames();visit_tick=now;
-    /* This is a disclosed negative scheduling case.4quanta/80ms means at
-     * most50source sectors/s regardless of queueing or available SD speed.
-     * Stay within prebuffer reserve so the independent audible sample
-     * oracle can verify sound before eventual starvation would occur. */
-    for(unsigned visit_number=0;visit_number<12u;visit_number++) {
-        visit_tick+=62500u;queued_visit_at(visit_tick);
-    }
-    uint32_t elapsed=now-before_tick,delivered=reads-before_reads;
-    assert(delivered<=48u && (uint64_t)delivered*781250u<(uint64_t)75u*elapsed);
-    assert(checked_frames-before_frames>40000u && running);
-    assert(audio_reserve_frames()<reserve_before);
-    printf("Queued CDDA sparse cadence limit: sectors=%u elapsed_ticks=%u required_sectors_per_second=75; repeated80msvisits still insufficient pass\n",
-        delivered,elapsed);
-}
-static void queued_repeat_and_generation(void) {
-    prepare_queued(200u);repeat_pcm=true;
-    assert(kui_toy_pilot_request(CMD_PLAY,2u,2u,15u)==3u);
-    uint32_t frame_tick=0u;
-    for(unsigned frame=0;frame<600u;frame++) {
-        frame_tick+=13021u;queued_visit_at(frame_tick);queued_visit_at(frame_tick+300u);
-    }
-    assert(running && starts==1u && reads>3u*200u && checked_frames>3u*source_frames);
-    assert(owner.model.generation==3u && source_generation==3u && source_max_batch>=2u);
-    uint32_t old_generation=source_generation,old_reads=reads,before=cancels;
-    uint8_t raw_before[2352];memcpy(raw_before,owner.raw,sizeof(raw_before));
-    assert(kui_toy_pilot_request(CMD_PAUSE,0u,0u,0u)==4u && cancels==before+1u);
-    assert(!source_count && !source_generation && !owner.raw_request_generation);
-    advance(62500u);queued_produce();
-    assert(!source_count && reads==old_reads && !memcmp(raw_before,owner.raw,sizeof(raw_before)));
-    /* A fresh PLAY cannot reuse any completed old-generation slot. */
-    check_pcm=false; /* An intentional restart resets the audible origin. */
-    expected_read_lba=50u;
-    assert(kui_toy_pilot_request(CMD_PLAY,2u,2u,0u)==5u);
-    for(unsigned n=0;n<1500u && source_generation!=5u;n++) {
-        frame_tick=now+13021u;queued_visit_at(frame_tick);
-    }
-    assert(source_generation==5u && source_generation!=old_generation && source_next==50u);
-    assert(!source_count && reads==old_reads);
-    queued_visit_at(now+source_interval);
-    assert(reads==old_reads+1u && owner.fill_frame==588u && source_generation==5u);
-    assert(owner.raw_request_generation==5u || owner.raw_generation==5u);
-    assert(!owner.raw[0] && !owner.raw[1] && owner.raw[2]==255u && owner.raw[3]==255u);
-}
 int main(void) {
     pending_then_stereo_delivery(16u);pending_then_stereo_delivery(17u);
     cancellation_and_generation();transport_failure();physical_pcm_to_eof();
-    reserve_hint_is_conservative();queued_pending_is_private();queued_pcm_clustered_to_eof();
-    permanent_sparse_visits_still_have_a_limit();queued_repeat_and_generation();
-    puts("Async CDDA worker: delayed/queued complete-sector delivery, exact SR, unchanged pending PCM, cancellation epochs, conservative reserve, finite20s physical stereo EOF, repeated wrap and60Hzclusters/isolated80msgaps pass");
+    puts("Async CDDA worker: delayed complete-sector delivery, exact SR, unchanged pending PCM, cancellation epochs, cached block tails and physical stereo EOF pass");
     return 0;
 }
