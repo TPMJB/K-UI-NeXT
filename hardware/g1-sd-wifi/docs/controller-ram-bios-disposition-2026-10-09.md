@@ -94,9 +94,9 @@ Budget the complete stack within those local gaps: mounting/supports and insulat
 
 ## BIOS cutout and C5 stack
 
-The owner proposes a carrier with a cutout around the existing IC501 package, with short signal taps soldered to its legs. Adopt this as the preferred mechanical candidate for the BIOS-footprint tap: keep the original BIOS in place and put the carrier in the adjacent free area rather than over the package. Measure the package/lead rectangle, surrounding parts and available board area to define the cutout. Support and retain the carrier independently so its weight, socket insertion and cable forces do not load the BIOS legs. Leg access, continuity, solder-pad geometry and routing remain to be qualified.
+The owner proposes a carrier with a cutout around the existing IC501 package, with optional short signal taps soldered to its legs. Keep the original BIOS in place and put the carrier in the adjacent free area rather than over the package. The later confirmation of access to all CN503 contacts makes the connector the preferred full-G1 tap; the BIOS cutout remains part of the mechanical outline. Measure the package/lead rectangle, surrounding parts and available board area to define the cutout. Support and retain the carrier independently so its weight, socket insertion and cable forces do not load the BIOS legs. Leg access, continuity, solder-pad geometry and routing remain to be qualified.
 
-This shape does not change the electrical tap map: IC501 exposes 20 candidate ATA nets, while eight controls still need other taps as listed above. Keep added tap routing short and evaluate loading/stubs on the Holly side of the existing connector series resistors. Optional custom BIOS components can occupy adjacent carrier space; stock recovery still needs the independent physical path already specified.
+The alternative IC501 tap map remains useful: it exposes 20 candidate ATA nets, while eight controls need other taps as listed above. Where BIOS taps are used, keep added routing short and evaluate loading/stubs on the Holly side of the existing connector series resistors. Do not duplicate G1 taps at both IC501 and CN503 without a concrete reason. Optional custom BIOS components can occupy adjacent carrier space; stock recovery still needs the independent physical path already specified.
 
 The owner measured the C5 module's total height, including its USB connector, as **4.48 mm** on 9 October 2026. It is a module-envelope measurement, not the complete mounted carrier/socket stack.
 
@@ -117,11 +117,30 @@ Illustrative carrier-thickness arithmetic, before every other addition:
 
 These are planning examples, not a selected PCB stackup or proof that a socket fits. Place the C5 in the 8.00 mm region where the measured footprint permits it, then qualify a low-height removable connection and independent carrier supports. Keep the USB connector in the baseline. The owner is willing to remove it if necessary, but removal helps only if it determines the tallest point; remeasure the remaining module envelope before claiming a reduced height. It does not remove carrier or socket height.
 
+## CN503 cutout and remaining measurements
+
+The owner reports that **all G1/CN503 pins are accessible**, including both rows. Use a second carrier cutout around CN503 as the preferred direct-attachment candidate, with individually aligned solder pads at the exposed tails. Accessibility is owner-confirmed; the precise footprint and joining geometry are not yet qualified. This makes the full connector bus the preferred source for the bridge. IC501 leg taps are optional for BIOS functions or an alternative attachment, rather than a necessary workaround for an inaccessible connector row.
+
+Pads must align in height as well as in plan view. Measure the actual intended contact height above motherboard PCB top; carrier elevation, thickness and the selected pad face must put the copper at a joinable position. Matching pin coordinates alone does not establish a flush joint. Define pad/lead overlap, solder access and clearance after the measured geometry is available. Support the carrier independently of the solder joints and connector/BIOS legs.
+
+The architecture proposal can proceed with the reported height budgets. The following measurements are needed to draw a useful carrier outline:
+
+| Measurement bundle | Minimum useful information | Purpose |
+| --- | --- | --- |
+| Plan geometry | IC501 body/lead envelope and CN503 body/exposed-tail envelope, each length × width; one clear X/Y offset between identified corners; limits of adjacent free space | Locate both cutouts and the candidate board outline |
+| Contact height | Height above motherboard PCB top at intended CN503 solder contacts; IC501 contact height only if using its legs | Select carrier elevation/thickness and pad face for direct joining |
+| Lower-metal footprint | Where the extra metal's 6.60 mm region begins and ends, referenced to the same connector/BIOS corners | Place C5 and tall components in the 8.00 mm region |
+| C5 mounted stack | Actual socket/contact identity and assembled module height above the carrier; carrier thickness/elevation counted separately | Verify the 4.48 mm module within the complete stack |
+
+A dimensioned sketch is enough for the first outline; a square-on photo with a metric ruler in the PCB plane can supplement it. If the removable C5 connector is not chosen, select it from a manufacturer drawing first rather than requiring the owner to buy one just to measure. No additional BIOS-top or GD-ROM height measurement is needed for a carrier that clears both bodies and stays below the normally installed shield.
+
+Before fabrication, qualify CN503 tail pitch, row spacing, tail width/exposed length, contact-height tolerance and pin orientation, plus the corresponding IC501 dimensions wherever leg taps are retained. For a uniform 25-contact row, measuring between matching edges of the first and last tail and dividing by 24 is a useful pitch check; it is not a substitute for the complete footprint and alignment tolerance. The existing CSV is a logical net reference, not that mechanical footprint.
+
 ## Evidence and next steps
 
 Claude correctly withdrew the nonexistent-CF-rig assumption and its original PIO-output/DMARQ gate errors. Software logs and a controlled raw-register probe can precede a hardware responder; passive waveform capture does not require a working CF card. However, an IDE failure code does not alone prove which physical device drove the bus. Floating levels, stale state and probe cleanup must be considered. The existing ATA path sends IDENTIFY directly; a silent bridge would need the explicit activation contract discussed previously.
 
-1. Complete the clearance footprint map, IC501 body/lead dimensions for the cutout and actual mounted C5 stack from the owner-reported dimensions above; confirm IC501 package/orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
+1. Complete the measurement bundles above for both cutouts, contact height, lower-metal footprint and mounted C5 stack; confirm physical pin orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
 2. Review existing IDE-probe evidence and capture baseline register/data strobes before freezing timing architecture. Any software probe must own/restore the bus and timing; do not sweep values blindly under game/optical activity.
 3. Develop the chosen front-end register file, ownership/reset/interlock model, MCU link and independent stock path. Demonstrate resource/timing closure and isolate the responder before console attachment.
 4. Prove coexistence and hashed PIO reads, then DMA. Qualify writes/cache coherence/flush and power cuts before networking or BIOS programming.
