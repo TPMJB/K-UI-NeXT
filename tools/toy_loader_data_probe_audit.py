@@ -148,10 +148,18 @@ def audit_retained(directory, config, images, dis, baseline):
     canonical = low['payload'].replace(new_id, old_id)
     if canonical != old_low['payload'] or low['memory_end'] != old_low['memory_end']:
         raise ValueError('DATA probe changed retained low bytes/reservations')
-    if low['symbols'] != old_low['symbols'] or low['symbol_sizes'] != old_low['symbol_sizes']:
+    # inspect_elf independently rejects malformed STT_FILE metadata and
+    # excludes only its precisely admitted non-allocated LTO source anchors.
+    # linked_symbol_sizes includes those names, whose random suffixes vary
+    # between byte-identical low builds. Compare every validated runtime
+    # symbol's exact size, while retaining the complete address-map equality.
+    before_sizes = {name: old_low['symbol_sizes'][name] for name in old_low['symbols']}
+    after_sizes = {name: low['symbol_sizes'][name] for name in low['symbols']}
+    if low['symbols'] != old_low['symbols'] or after_sizes != before_sizes:
         differences = {}
-        for category in ('symbols', 'symbol_sizes'):
-            before, after = old_low[category], low[category]
+        for category, before, after in (
+                ('symbols', old_low['symbols'], low['symbols']),
+                ('symbol_sizes', before_sizes, after_sizes)):
             differences[category] = {
                 name: {'baseline': before.get(name), 'candidate': after.get(name)}
                 for name in sorted(set(before) | set(after))

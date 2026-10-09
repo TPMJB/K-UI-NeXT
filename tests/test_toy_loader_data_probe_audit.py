@@ -79,6 +79,27 @@ class LinkedDataProbeAudit(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     audit.read_config(area)
 
+    def test_allocated_low_object_size_change_rejected(self):
+        # Bytes and addresses stay exact; an allocated low object cannot gain
+        # space merely because non-allocated compiler metadata is excluded.
+        images = copy.deepcopy(self.images)
+        images['resident-sci']['symbol_sizes']['_card'] += 4
+        with self.assertRaisesRegex(ValueError, 'changed retained low linked symbols or object sizes'):
+            audit.audit_retained(BUILD, self.config, images, self.dis, BASELINE)
+
+    def test_actual_nonallocated_LTO_metadata_rename_is_not_runtime_change(self):
+        # The observed CI delta was zero-size _minic.c.<random> source anchors.
+        # load_profile/inspect_elf has already excluded them from runtime symbols.
+        images = copy.deepcopy(self.images)
+        low = images['resident-sci']
+        name = next(name for name, size in low['symbol_sizes'].items()
+                    if name.startswith('_minic.c.') and not size and name not in low['symbols'])
+        del low['symbol_sizes'][name]
+        low['symbol_sizes'][name + '_fixture'] = 0
+        proof = audit.audit_retained(BUILD, self.config, images, self.dis, BASELINE)
+        self.assertTrue(proof['low_symbols_and_reservations_identical'])
+        self.assertTrue(proof['low_binary_identical_except_build_string'])
+
     def test_wrong_low_read_or_block_callback_rejected(self):
         low = self.images['resident-sci']
         for name, callback in [('_data_probe_read', '_read_sectors'),
