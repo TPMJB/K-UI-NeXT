@@ -126,9 +126,9 @@ Illustrative carrier-thickness arithmetic, before every other addition:
 | 1.00 mm | 2.52 mm | 0.52 mm |
 | 1.60 mm | 1.92 mm | -0.08 mm (already exceeds ceiling) |
 
-These are planning examples, not a selected PCB stackup or proof that a socket fits. The 6.00 mm column applies around IC501/CN503; it never applies over the two zero-clearance thermal-contact footprints. A 1.60 mm carrier plus the reported C5 envelope already exceeds the latest 6.00 mm local ceiling before supports or a socket are added. Place the C5 in the 8.00 mm region where the measured footprint permits it, then qualify a low-height removable connection and independent carrier supports. Keep the USB connector in the baseline. The owner is willing to remove it if necessary, but removal helps only if it determines the tallest point; remeasure the remaining module envelope before claiming a reduced height. It does not remove carrier or socket height.
+These are planning examples, not a selected PCB stackup or proof that a socket fits. The 6.00 mm column applies around IC501/CN503; it never applies over the two zero-clearance thermal-contact footprints. A 1.60 mm carrier plus the reported C5 envelope already exceeds the latest 6.00 mm local ceiling before supports or a socket are added. Place the C5 in the 8.00 mm region where the measured footprint permits it, then qualify a low-height removable connection and independent carrier supports. The owner subsequently chose **USB connector removal and local C5 mounting on the normal carrier**. The 4.48 mm envelope and budgets above describe the earlier USB-equipped module, not its post-removal height. Remeasure the tallest remaining point and count the carrier, removable connection, elevation and insulation before confirming fit.
 
-The owner is willing to consider physical metal modification as a last resort. Keep the **intact installed shield and stock thermal contacts** as the proposal baseline. First evaluate a thin carrier and low-height removable interface, with the C5 located in a usable 8.00 mm area on a carrier extension or separate small mount with a short interconnect. A concrete placement, mounted stack and routing check must precede deciding that USB removal or metal modification is needed; neither is a prerequisite established by these measurements.
+The owner is willing to consider physical metal modification as a last resort. Keep the **intact installed shield and stock thermal contacts** as the proposal baseline. Evaluate a thin carrier and low-height removable interface with the USB-free C5 mounted locally in the measured usable area. The latest owner decision defers remote C5 sites and their cable-route measurements. Check the complete mounted stack and carrier outline before considering shield changes.
 
 ## Owner-reported package and contact dimensions
 
@@ -148,6 +148,8 @@ Additional measurements supplied on 9 October 2026:
 | General usable area | Outside the CPU/GPU thermal-contact area | Candidate placement region, subject to components, metal geometry and independent supports |
 
 The initial IC501 body rectangle is 26.68 × 12.65 mm. A clearance-only opening must also clear the reported 16.66 mm outer lead span and an assembly/alignment allowance; a narrower opening intended to overlap/tap the leads needs an explicit landing geometry. Do not derive lead pitch from the body dimensions or the difference between body and lead span. These reported sizes establish a concept keepout, not a final routed opening or qualified IC footprint.
+
+A primary [Portelligent Dreamcast teardown](https://dreamcast.wiki/wiki/images/5/5c/150-000105-1e_SegaDreamcast.pdf), parts-list report page 34, lists MPR-21931 as a 44-pin SOP with 0.050-inch pitch: **1.27 mm nominal**. This supports a pitch reference, not a qualified landing pattern for the owner's exact MPR-21931-X2. The baseline clearance-only cutout needs no BIOS solder-pad pitch. If optional BIOS taps are added, confirm actual lead spacing, row/lead envelope and orientation before laying out their pads. Do not reinterpret the reported 26.68 mm body length as a measured first-to-last pin-center span.
 
 ## Lower-metal region and connector placement
 
@@ -184,21 +186,31 @@ The architecture proposal can proceed with the reported dimensions and latest he
 | Relative position | X/Y offset between identified CN503 and IC501 corners; use the reported 38.67 × 6.56 mm maximum body envelope and centered 24.39 mm contact run | Locate both cutouts in one coordinate system |
 | Placement/metal map | Transfer the confirmed zero-clearance footprints, 6.00 mm IC501/CN503 area and 8.00 mm outer area to the measured outline; locate supports | Apply height regions to usable board/C5 placement |
 | Components beneath carrier | Positions and heights wherever solid carrier would pass over existing parts | Choose local cutouts or elevation within the height budget |
-| C5 mounted stack | Select socket/contact from a manufacturer drawing; check assembled module height above carrier with carrier thickness/elevation counted separately | Verify the 4.48 mm module within the complete stack |
+| C5 mounted stack | Select socket/contact from a manufacturer drawing; use the tallest remaining point after USB removal, with carrier thickness/elevation counted separately | Verify the current USB-free module within the complete stack; 4.48 mm is the earlier USB-equipped envelope |
 
 A dimensioned sketch is enough for the first outline; a square-on photo with a metric ruler in the PCB plane can supplement it. If the removable C5 connector is not chosen, select it from a manufacturer drawing first rather than requiring the owner to buy one just to measure. No additional BIOS-top or GD-ROM height measurement is needed for a carrier that clears both bodies and stays below the normally installed shield.
 
 Before fabrication, qualify CN503 tail pitch, row spacing, tail width/exposed length, contact-height tolerance and pin orientation, plus the corresponding IC501 dimensions wherever leg taps are retained. For a uniform 25-contact row, measuring between matching edges of the first and last tail and dividing by 24 is a useful pitch check; it is not a substitute for the complete footprint and alignment tolerance. The existing CSV is a logical net reference, not that mechanical footprint.
 
-## Remote C5, RAM provision and factory assembly
+## Local C5, RAM provision and factory assembly
 
-The owner proposes moving the C5 north/west under the PSU, removing its USB connector, or using a ribbon to mount it near G2. Evaluate a **remote removable C5** while keeping the G1 front end close to CN503. The remote link carries C5 power/ground, SPI and handshakes; placement near G2 does not imply connecting to the G2 bus. The ribbon's route, return paths, signal integrity, supply drop, unpowered isolation and tested SPI rate require a concrete design. Extending the ATA bus or relocating the native SD socket would be a different routing decision.
+The owner now chooses **removing the C5 USB connector and mounting the removable C5 locally on the normal carrier**. Keep the G1 front end close to CN503. The previously discussed PSU/G2 remote mounts are deferred; their cable routes are not required inputs for this layout. USB removal is an owner-selected assembly modification, not proof of fit: use the measured post-removal envelope and the selected low-height connection in the complete stack check. The intact shield and thermal-contact keepouts remain the baseline.
 
-| C5 candidate | Information needed before choosing it |
+### Installed C5 programming
+
+Removing the USB connector does not remove the chip's UART download interface. Provide accessible recovery contacts on the carrier and retain access to BOOT/reset, either directly or through dedicated contacts:
+
+| Service signal | XIAO/C5 connection |
 | --- | --- |
-| North/west toward PSU | Local footprint, clearance to the installed PSU/metalwork, safe support location and cable/antenna route; the motherboard's 8 mm area does not establish clearance beneath the PSU |
-| USB connector removed | Remeasure tallest remaining point and retain accessible programming/service connections; removal does not eliminate carrier/socket height |
-| Separate mount near G2 | Local length/width/height, support position and practical ribbon route length/bends; check fit with retained modem/expansion hardware |
+| UART0 TX | D6 / GPIO11 |
+| UART0 RX | D7 / GPIO12 |
+| Ground | GND |
+| Boot strap | BOOT / GPIO28 |
+| Reset/enable | EN / CHIP_EN |
+
+Use an external programmer with **3.3 V UART logic** for initial programming or recovery while the module remains installed. Hold BOOT/GPIO28 low during reset and preserve GPIO27 high for Joint Download Boot 0. Reserve the UART service path or isolate any other drivers during programming; define console/programmer power ownership rather than joining power sources. [Seeed pin map](https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/); [Seeed schematic](https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.pdf); [Espressif UART and boot guidelines](https://docs.espressif.com/projects/esp-hardware-design-guidelines/en/latest/esp32c5/schematic-checklist.html).
+
+Add **updates initiated from K-UI while installed** to the requirements: K-UI passes a firmware image through RP2350B and the application SPI link to a C5 updater. ESP-IDF's OTA APIs can write the inactive application slot, validate the image and change the boot selection. Define the protocol, two application slots, OTA data partition, validation/rollback and interruption behavior before implementing it. This updater is not present in the existing bridge design or validated firmware. It requires functioning C5 application firmware; retain the hardware recovery contacts. Do not assume the normal SPI packet link automatically provides ROM flashing. [ESP-IDF C5 OTA API](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c5/api-reference/system/ota.html).
 
 Provision **8 MiB of bridge PSRAM** in the Rev A requirements, with a factory-populated option and an unpopulated variant. The candidate is **APS6404L-3SQR-ZR**, a 64 Mbit device (8 MiB), in a 3 × 2 mm USON-8 package with 0.6 mm maximum height. It is a bare SMT chip on our carrier, not a separate RAM module. Its function is raw-sector buffering/read-ahead; it does not expand Dreamcast system RAM. QMI wiring, chip-select allocation, sharing with firmware flash, cache coherence and bandwidth still require the design and tests described above. [AP Memory product family](https://www.apmemory.com/en/product/iotram/SPIQSPI); [manufacturer package drawing, mirrored by Mouser](https://www.mouser.com/datasheet/3/4815/1/APS6404L_3SQR.pdf). Reconcile the latest ordering suffix, footprint and pinout before final BOM release.
 
@@ -211,9 +223,9 @@ The known body dimensions and zero/6/8 mm height regions are sufficient for arch
 1. **Relative placement:** CN503's X/Y offset from IC501. In the existing photo orientation, measure the horizontal gap from the BIOS black body's right edge to the connector housing's left edge, and the signed vertical offset between their top edges. Mark which connector housing edge/end was used.
 2. **Actual solder geometry:** CN503 tail pitch, spacing between the two tail rows and the exposed contact length/width. Use a counted multi-pin span between matching edges divided by the number of intervals, or a verified connector drawing. The 24.39 mm overall pin run is not enough to set pitch.
 3. **Outline and supports:** mark usable board limits, metal steps, existing component keepouts and available independent supports on one dimensioned overhead sketch. Account for component heights beneath solid carrier areas. Set microSD insertion/removal and programming access; internal service access is the baseline.
-4. **Chosen remote C5 site, if used:** local usable length/width/height, supports and the practical ribbon route. Select the removable connector from its drawing, then check the complete mounted stack. No need to buy an unspecified socket just to measure it.
+4. **Local USB-free C5 stack:** measure its remaining module height after connector removal; select the removable connection from its drawing and count the carrier/support height separately. No remote C5 cable-route measurement is requested. No need to buy an unspecified socket just to measure it.
 
-Complete the electrical design, selected front-end/link, production footprints and ERC/DRC before generating an assembly order. The current KiCad foundation and GPIO CSV are not completed versions of the RAM or remote-C5 circuits.
+The owner will supply items 1 and 2 after returning home. Nominal BIOS pitch is documented above; its clearance-only cutout is not waiting on a BIOS pad pitch measurement. Complete the electrical design, selected front-end/link, production footprints and ERC/DRC before generating an assembly order. The current KiCad foundation and GPIO CSV do not implement the RAM, final C5 mount or installed-update/recovery circuits.
 
 ## Evidence and next steps
 
