@@ -183,6 +183,72 @@ drive is disconnected. That would remove:
 It needs a soldered link to the drive connector and a bench check of the
 signals first.
 
+## Update: SWAT's feedback and an RP2350 on the G1 bus
+
+SWAT (DreamShell) commented on the Toy Commander CDDA pilot. Music plays,
+but the game slows down and its sound effects cut out, for two reasons:
+
+1. **Channel-position polling conflicts with the game's ARM sound driver.**
+   Reading a channel's play position is two steps on shared hardware:
+   select the channel (the monitor select, MSLC), then read its position
+   (CA). Sega's SCSP manual, for the Saturn's sound chip that AICA derives
+   from, documents MSLC as write-only, so it cannot even be read back. The
+   game's ARM driver does the same select-and-read continuously in its loop
+   to manage its own voices. When the SH-4 writes the selector too, the last
+   writer wins. The ARM then reads our channel's state as its own, which
+   explains effects ending early. Saving and restoring the selector on the
+   SH-4 side cannot fix this, because the ARM runs concurrently.
+   - **Our own way around it:** never write MSLC. Derive the play position
+     from time instead: key-on time plus a free-running clock the game does
+     not use (the SH-4 performance counter, or a counter on the
+     coprocessor). Leave a margin for drift between the two crystals
+     (100 ppm is about 4.4 samples/s, roughly 26 ms over six minutes), and
+     resynchronize at each key-on, loop or track change. SWAT's own
+     solution is undisclosed; this is not it.
+2. **Slowdown, from CPU writes to sound RAM.** The pilot copies PCM over G2
+   with the CPU (PIO) and splits left from right on the SH-4, inside masked
+   GD calls. SWAT uses DMA. Further reductions:
+   - Store audio **planar** on the card, left and right in ring-half-sized
+     blocks prepared on the PC, so no CPU touches samples.
+   - Move it with G2 DMA. That needs a channel and a small main-RAM staging
+     area that the game does not use; both are ownership questions to prove.
+   - Use ADPCM to cut the volume 4x (section 2).
+
+**The RP2350 on the G1 bus** (the GD-ROM's ATA connector, as with the CF
+board) is a stronger form of option 4 than the serial port:
+- **Flow-controlled.** ATA PIO and DMA wait for the device, so the SCI's
+  one-byte overruns disappear.
+- **The BIOS's own DMA path.** Holly's G1 DMA, which the real BIOS uses for
+  DMAREAD, can move data straight into the game's buffer and raise the
+  completion interrupt the BIOS would.
+- **Faster than the drive.** The 16-bit bus is not limited to SCI's
+  1.5 MB/s. MAME models the real drive at about 1.8 MB/s.
+- **An easy first milestone.** The RP2350 emulates a plain ATA disk backed
+  by microSD, with read-ahead in its RAM. K-UI's g1ata/FatFs path and
+  Astra's ATA game reader then work as they are.
+- **CD Block features later.** Vendor ATA commands could request mapped GD
+  sectors, planar or ADPCM audio and prefetch hints, and tunnel Wi-Fi (the
+  ESP32-C5 behind the RP2350 over the existing SPI link protocol).
+
+**Hardware CDDA becomes plausible there.** Descriptions of the G1-ATA mod
+list an "AICA clock workaround": the GD-ROM drive supplies the AICA's
+33.8688 MHz clock (768 × 44.1 kHz) through its connector. If the same
+connector also carries the drive's CD-DA data into the AICA's external
+inputs (**unverified**; scope the pins while a real audio CD plays), the
+RP2350 could play CDDA exactly as the drive does, clock-locked with no drift.
+That avoids AICA channels, sound RAM, MSLC polling, ARM conflicts and DMA,
+answering both of SWAT's points. It needs a way to stop the idle drive
+driving those lines.
+
+**Risks:**
+- **ATA device timing.** Emulating an ATA device in software is hard.
+  Comparable retro IDE-emulation projects pair a microcontroller with a
+  small FPGA for timing. Check whether Holly's G1 timing registers or IORDY
+  wait states give the RP2350's PIO enough time.
+- **A shared bus.** The RP2350 shares the bus with the GD-ROM as device 1.
+  Device select, INTRQ and DMARQ are shared, and BIOS polling must be
+  checked.
+
 ## What not to expect
 
 - A larger audio ring cannot fix a sustained delivery deficit, only delay
@@ -220,3 +286,10 @@ signals first.
   [GDEMU](https://consolemods.org/wiki/Dreamcast:GDemu).
 - DreamShell CDDA from files (research only; no code reuse, per
   `cdda-reader-design.md`): [audio system overview](https://deepwiki.com/DC-SWAT/DreamShell/5.3-audio-system).
+- Monitor select (MSLC) and position (CA): Sega's
+  [SCSP manual](https://www.infochunk.com/saturn/segahtml_en/hard/scsp/hon/p04_28.htm)
+  (Saturn; AICA's design is closely related, offsets not confirmed here).
+- G1-ATA mod and its AICA clock workaround:
+  [RetroRGB ODE overview](https://retrorgb.com/dreamcastode.html); the drive's
+  33.8688 MHz clock: [bitbuilt thread](https://bitbuilt.net/forums/threads/nolds-alternate-dreamcast-pinouts-workarounds.1822/latest);
+  drive timing model: MAME [`dccons.cpp`](https://git.redump.net/hbmame/tree/src/mame/machine/dccons.cpp).
