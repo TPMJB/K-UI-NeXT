@@ -1,6 +1,6 @@
 # K-UI G1 microSD and Wi-Fi bridge proposal
 
-**Architecture proposal and controller starter, updated 9 October 2026. Physical measurements are pending.**
+**Architecture proposal and controller starter, updated 9 October 2026. Initial clearances are owner-reported; complete assembly fit remains pending.**
 
 Build a custom Dreamcast VA1 board that exposes a microSD card as an ATA slave through an RP2350B, retains the original 3.3 V GD-ROM, and carries a socketed Seeed XIAO ESP32-C5 for Wi-Fi. Optional dual BIOS belongs in the mechanical and electrical planning. This is the successor proposal to the separate [CF board](../cf-board/README.md); the existing CF design remains an independent, unvalidated option.
 
@@ -72,7 +72,7 @@ Planned write protection includes read-only collection access during ordinary pl
 
 The owner's photo shows VA1 mainboard **837-13778-02**, BIOS **IC501** and G1 connector **CN503**. Preferred placement is above the motherboard near IC501/CN503, below the normally seated upper metal shield. The shield is the local height constraint.
 
-The owner has supplied initial height figures but flagged a possible measurement mistake. The [provisional clearance report](docs/controller-ram-bios-disposition-2026-10-09.md#provisional-shield-clearance-report) records them and the required measurement references. The derived 8.0 mm / 6.6 mm gaps are conditional, not confirmed fit limits.
+The owner reaffirmed the initial measurements after checking the caliper readings. Use **8.0 mm below the main shield and 6.6 mm beneath the extra metal near BIOS/G1** as owner-reported planning clearances. The [clearance report](docs/controller-ram-bios-disposition-2026-10-09.md#provisional-shield-clearance-report) preserves the raw figures and measurement references. BIOS-top clearance, the extra metal's footprint and complete socket/module assembly fit remain to be checked.
 
 CN503 has two 25-pin rows carrying the required signals. The BIOS-facing tails are visible in the supplied photo; access to the board-edge row is not yet qualified. Logical pin mapping does not establish a practical soldering method. If direct top-side access proves unsuitable, investigate a thin underside tap and short flex to the upper board, with signal integrity and shield clearance checked. The controller/C5 assembly is not assumed to fit under the motherboard.
 
@@ -83,7 +83,7 @@ The DragonCity numbered-circle picture discussed in the design conversation is t
 Required physical evidence remains:
 
 - Minimum gap from the top of IC501 to the underside of the installed upper shield.
-- Minimum gap from motherboard PCB surface beside IC501 toward CN503 to that shield, accounting for existing components.
+- Map the reported PCB-to-shield clearance across the candidate footprint, including the extra metal's overlap and existing components.
 - Access to the outer CN503 row; finished carrier, C5 socket/module and SD-socket heights; card, USB and antenna access.
 - Candidate IC501 tap continuity and package orientation, plus separately measured ROM supply and G1 signal levels if pursuing the BIOS adapter.
 
@@ -93,7 +93,7 @@ Optional dual BIOS requires additional connections and independent stock/custom 
 
 1. Check measurements and candidate tap continuity. Review existing software probe evidence and capture baseline bus timing with a qualified passive hookup before freezing the controller/front-end choice. The earlier CF board is unbuilt and unvalidated; a working CF rig is not a prerequisite assumed to exist.
 2. Close output ownership and timing, then finish G1 buffers/front end, SD/C5 interfaces, console/USB power and power-fail circuits; choose qualified production footprints and run ERC. Default stock BIOS recovery must work independently of MCU and FPGA configuration.
-3. Obtain measurements and connector access evidence, then choose the attachment, outline and component heights.
+3. Complete the footprint and BIOS-top measurements and connector access evidence, then choose the attachment, outline and component heights.
 4. Build a bench prototype: identify, read and hash sectors, test drive coexistence, then qualify DMA and writes.
 5. Demonstrate filesystem recovery and repeated power cuts before adding packet transport and pursuing retail-game networking.
 

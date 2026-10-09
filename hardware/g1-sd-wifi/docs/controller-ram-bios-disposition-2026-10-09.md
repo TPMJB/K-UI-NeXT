@@ -75,25 +75,28 @@ Session bank selection is a candidate, not a working warm reboot. Stop/drain G1 
 
 ## Provisional shield-clearance report
 
-The owner reported approximately 8.62 mm from motherboard to shield, 0.62 mm shield-sheet thickness, and 1.4 mm of additional metal near IC501/CN503 on 9 October 2026, then flagged a possible measurement mistake. These values are unconfirmed; they are not an accepted layout envelope.
+On 9 October 2026 the owner reported approximately 8.62 mm from motherboard to shield, 0.62 mm shield-sheet thickness and 1.4 mm of additional metal near IC501/CN503. After briefly questioning the readings and checking the motherboard's approximately 1.62 mm thickness with digital calipers, the owner reaffirmed the measurements. Use the resulting 8.00 mm general clearance and 6.60 mm local clearance as **owner-reported planning dimensions**. Complete assembly fit remains pending.
 
-| Reported item | Value | Reference that needs confirmation |
+| Reported item | Value | Measurement reference |
 | --- | --- | --- |
-| Motherboard-to-shield measurement | About 8.62 mm | PCB top surface to shield outer face or inner face? |
-| Main shield sheet | About 0.62 mm | Subtract only when the first measurement reaches the outer face |
-| Extra metal near BIOS/G1 | About 1.4 mm | Actual downward projection into the same gap, and its footprint |
+| Motherboard-to-shield measurement | About 8.62 mm | Calculation assumes PCB top surface to main shield outer face |
+| Main shield sheet | About 0.62 mm | Subtracted from the outer-face measurement |
+| Extra metal near BIOS/G1 | About 1.4 mm | Calculation assumes downward projection into that same gap |
+| Motherboard PCB thickness | About 1.62 mm | Separate board-thickness reading; not subtracted from a PCB-top clearance |
+| Clearance below main shield | About 8.00 mm | 8.62 - 0.62 |
+| Clearance beneath additional metal | About 6.60 mm | 8.00 - 1.40; applies where that metal overlaps the board |
 
-The owner's initial arithmetic gives 8.00 mm below the main shield and 6.60 mm under the additional metal **only if both subtraction conditions hold**. Measuring directly to the inner face already excludes the main sheet thickness; subtracting it again would double-count it. Additional metal thickness alone does not establish how far it projects into the candidate board space. No photo-derived dimension has been verified for this report.
+The reference assumptions stay explicit: an inner-face measurement already excludes the shield sheet thickness, and metal thickness must correspond to actual projection into the candidate footprint. A plausible PCB-thickness reading supports the scale of the measurements; it does not independently verify the clearance endpoints. No photo-derived dimension has been verified for this report.
 
-Repeat the measurement with the console unplugged and the shield seated normally. Measure the gap from bare PCB beside IC501 toward CN503 to the nearest metal underside at several points, then separately from the top of IC501. A loose stack of thin nonconductive card can serve as a gauge where direct caliper access is difficult: start below the estimated gap, increase until it just touches without lifting or forcing the shield, and measure the stack outside the console. Record the contact locations and smallest gaps across the proposed footprint, including the extra metal.
+The remaining mechanical work is to map the smallest PCB-to-metal gap across the proposed footprint, locate the extra metal's overlap and measure separately from the top of IC501 to the nearest metal underside. With the console unplugged and shield seated normally, a loose stack of thin nonconductive card can serve as a gauge where caliper access is difficult: increase until it just touches without lifting or forcing the shield, then measure the stack outside the console.
 
-Use those direct gaps for the complete stack: mounting/supports and insulation, carrier PCB, lower-side components where present, and socket/module or tallest top-side part. A PCB-to-metal gap is not the spare height above the existing BIOS. No socketed C5, BIOS carrier, component-height limit or PCB outline is approved by the provisional figures. Retain the shield and its normal thermal contacts in the fit check.
+Budget the complete stack within those local gaps: mounting/supports and insulation, carrier PCB, lower-side components where present, and socket/module or tallest top-side part. A PCB-to-metal gap is not the spare height above the existing BIOS. The socketed C5 and any BIOS carrier need their actual assembled heights checked before choosing the PCB outline or releasing fabrication files. Retain the shield and its normal thermal contacts in the fit check.
 
 ## Evidence and next steps
 
 Claude correctly withdrew the nonexistent-CF-rig assumption and its original PIO-output/DMARQ gate errors. Software logs and a controlled raw-register probe can precede a hardware responder; passive waveform capture does not require a working CF card. However, an IDE failure code does not alone prove which physical device drove the bus. Floating levels, stale state and probe cleanup must be considered. The existing ATA path sends IDENTIFY directly; a silent bridge would need the explicit activation contract discussed previously.
 
-1. Recheck the provisional clearance report above; obtain the two direct installed-shield clearances and IC501 package/orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
+1. Complete the clearance footprint map and BIOS-top measurement from the owner-reported dimensions above; confirm IC501 package/orientation. Check the candidate continuity map with power disconnected; measure supply/signal levels in a properly qualified setup.
 2. Review existing IDE-probe evidence and capture baseline register/data strobes before freezing timing architecture. Any software probe must own/restore the bus and timing; do not sweep values blindly under game/optical activity.
 3. Develop the chosen front-end register file, ownership/reset/interlock model, MCU link and independent stock path. Demonstrate resource/timing closure and isolate the responder before console attachment.
 4. Prove coexistence and hashed PIO reads, then DMA. Qualify writes/cache coherence/flush and power cuts before networking or BIOS programming.
