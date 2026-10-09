@@ -35,10 +35,26 @@ CHANGED_FUNCTIONS = {
     '_kui_toy_loader_trace_report_page',
     '_kui_toy_loader_trace_terminal',
 }
-# Fill only after independent review of the complete final source and ELF.
-# Never derive acceptance identities automatically from the candidate binary.
-REVIEWED_DATA = {}
-REVIEWED_REPORT = {}
+# Independently reviewed against source e50045b242405391ce636fd6f8605d888c68fdb8
+# and the actual final SH ELF evidence from Actions job 114060367229.
+# This table admits only that inspected instruction shape plus relocation.
+# Never derive acceptance identities automatically from candidate binaries.
+REVIEWED_DATA = {
+    '_data_probe_metric': '99918b342a22bc5eb3b48b77496a934ec3ae11962ee1c3471de86e0239e7e418',
+    '_data_probe_payload': '3c4cb3cbc0c280e0da4feadae41d25d64015937e05fa14f105e07bdbd02a56f8',
+    '_data_probe_read': 'b0e1a424abf8a24f0a444f469f8470e461c8caa314a0508937d35777859869d8',
+    '_data_probe_sample': 'ede5402906f5a7142a372c6637005f1590a4a6fa167b1b497d6375dcbaf5c2e9',
+    '_kui_toy_loader_data_probe_begin': '7d3488247b966a6fbffd6e1d352ced779df03efa4af123fb379e155bfc717788',
+    '_kui_toy_loader_data_probe_end': '74966a3c83f76abf6e01f7e7b2d7468f240e1254a119fb8e14a7c8935449faeb',
+    '_kui_toy_loader_data_probe_freeze': 'a41955de98ee81ab4a2819421839103f93936117de4c1f5ba9cba720b4216645',
+    '_kui_toy_loader_data_probe_words': 'df4126be5e1b73159bdb01b7905e0036dd51762fca926fa6409d8d7f1d802a24',
+}
+REVIEWED_REPORT = {
+    '_kui_toy_loader_trace_report_capture': '68904a703106483ade130a2012403dc377cfb95bfa671b4e2642dfe8c354a023',
+    '_kui_toy_loader_trace_report_page': '9bedad315b29fe9bc0268bae165a70c86c8d027f6d599dc3c303ae05caf73699',
+    '_kui_toy_loader_trace_terminal': 'daa86c755879f30451eb6063c3b76f1ff86200b9d7a42487512646151e669bc9',
+    '_kui_toy_pilot_gd_dispatch': '529f0b111974fb3c79cd930cada1d21f7e32f1ed0d0a202c802869d70ba46a6a',
+}
 PROBE_MMIO_READS = {at: width for at, width in trace.MMIO_READS.items()
                     if at >= 0xFFC00000}
 _signed = trace._signed
@@ -349,11 +365,13 @@ def audit_probe_bindings(directory, low, code):
     for name in ('_kui_retail_hook_sr', '_read_sectors', '_transfer_block'):
         if addresses[name] not in values:
             raise ValueError('DATA probe lost exact linked low binding: ' + name)
-    # Initial reviewed compiler shape shares SR and caller-PR anchor.
-    # A changed shape refuses here until its actual read binding is reviewed.
+    # Reviewed final inline-initializer shape reads saved SR through r3,
+    # then caller PR through the same exact low anchor plus 20 bytes.
+    # r2 holds the independently owned 36-byte high scope object.
     context = code.find('_kui_toy_loader_data_probe_begin',
-                        (None, 0xE501, 0x6012, 0x1D04, 0x5115, 0x1D15))
-    if (code.literal(context, 1)[1] != addresses['_kui_retail_hook_sr'] or
+                        (None, 0xE758, 0x0677, 0x6032, 0x1204,
+                         0x5335, 0x071A, 0x1235))
+    if (code.literal(context, 3)[1] != addresses['_kui_retail_hook_sr'] or
             addresses['_kui_retail_hook_sr'] + 20 != addresses['_kui_retail_native_caller']):
         raise ValueError('DATA saved SR/caller PR read binding changed')
     if not ({addresses['_card'], addresses['_card'] + 4,

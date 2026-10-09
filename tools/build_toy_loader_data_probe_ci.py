@@ -5,11 +5,12 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
 import tarfile
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/data-probe-ci'
@@ -157,6 +158,58 @@ def review():
                   'build/toy-data-probe', '--baseline', 'build/recovered-t-check',
                   '--review-candidate'], OUT / 'U-review-candidate.json')
 
+def hardware_delivery(destination):
+    """Preserve the admitted ZIP and expose exactly its checked file members."""
+    with zipfile.ZipFile(destination, 'r') as archive:
+        records = archive.infolist()
+        files = {}
+        for record in records:
+            name = record.filename
+            relative = PurePosixPath(name)
+            kind = (record.external_attr >> 16) & 0o170000
+            if (not relative.parts or relative.is_absolute() or
+                    relative.as_posix() != name or '..' in relative.parts or
+                    chr(92) in name or ':' in name or record.is_dir() or
+                    kind not in (0, 0o100000) or name in files):
+                raise ValueError('Hardware package has an unsafe/duplicate member: ' + name)
+            files[name] = archive.read(record)
+    manifest = files.get('SHA256SUMS')
+    if manifest is None:
+        raise ValueError('Hardware package has no member checksum manifest')
+    expected = {}
+    for line in manifest.decode('utf-8').splitlines():
+        digest, name = line.split('  ', 1)
+        if (len(digest) != 64 or any(char not in '0123456789abcdef' for char in digest)
+                or name in expected):
+            raise ValueError('Hardware member checksum manifest differs')
+        expected[name] = digest
+    if set(expected) != set(files) - {'SHA256SUMS'}:
+        raise ValueError('Hardware checksum manifest does not cover every file exactly')
+    for name, digest in expected.items():
+        if hashlib.sha256(files[name]).hexdigest() != digest:
+            raise ValueError('Admitted hardware ZIP member changed: ' + name)
+    preserved = OUT / 'validated-hardware-package.zip'
+    shutil.copyfile(destination, preserved)
+    digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+    if hashlib.sha256(preserved.read_bytes()).hexdigest() != digest:
+        raise ValueError('Preserved admitted hardware ZIP changed')
+    target = ROOT / 'dist/hardware-ready'
+    target.mkdir(parents=True, exist_ok=False)
+    for name, data in files.items():
+        path = target / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        if hashlib.sha256(path.read_bytes()).hexdigest() != hashlib.sha256(data).hexdigest():
+            raise ValueError('Hardware delivery member changed: ' + name)
+    proof = {'admitted_inner_archive_SHA256': digest,
+             'preserved_archive': preserved.relative_to(ROOT).as_posix(),
+             'delivery_directory': target.relative_to(ROOT).as_posix(),
+             'checked_member_files': len(files), 'member_checksums': expected,
+             'SHA256SUMS_SHA256': hashlib.sha256(manifest).hexdigest(),
+             'delivery_changes_member_bytes': False}
+    (OUT / 'delivery.json').write_text(json.dumps(proof, indent=2, sort_keys=True) + chr(10))
+    print(json.dumps(proof, indent=2, sort_keys=True), flush=True)
+
 def admit():
     json_command([sys.executable, 'tools/toy_loader_data_probe_audit.py',
                   'build/toy-data-probe', '--baseline', 'build/recovered-t-check'],
@@ -170,6 +223,7 @@ def admit():
          '--default-check', 'build/probe-default-off-check',
          '--restore-r', 'build/probe-default-off-check/retail-toy-pilot.kui',
          '--host-log', 'build/data-probe-ci/host.log', '--out', str(destination)])
+    hardware_delivery(destination)
     print('Hardware test package built only after linked admission.', flush=True)
 
 def main():
