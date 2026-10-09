@@ -74,9 +74,9 @@ The owner's photo shows VA1 mainboard **837-13778-02**, BIOS **IC501** and G1 co
 
 The owner reaffirmed the initial measurements after checking the caliper readings. Use **8.0 mm below the main shield and 6.6 mm beneath the extra metal near BIOS/G1** as owner-reported planning clearances. The [clearance report](docs/controller-ram-bios-disposition-2026-10-09.md#provisional-shield-clearance-report) preserves the raw figures and measurement references. The extra metal's footprint and complete carrier/socket/module assembly fit remain to be checked.
 
-CN503 has two 25-pin rows carrying the required signals. The owner now confirms all pins are accessible. Prefer a second carrier cutout around CN503 with solder pads aligned to its exposed tails, using the full connector bus for the bridge. The pin-contact height must match the chosen carrier/pad geometry as well as its plan coordinates. Logical pin mapping does not establish the mechanical footprint. A thin underside tap with short flex remains a fallback if direct joining proves unsuitable; the controller/C5 assembly is not assumed to fit under the motherboard.
+CN503 has two 25-pin rows carrying the required signals. The owner now confirms all pins are accessible. Prefer a second carrier cutout around CN503 with solder pads aligned to its exposed tails, using the full connector bus for the bridge. The owner reports the tails are basically flush with the motherboard. Ordinary carrier top pads would sit higher, so qualify an edge/underside landing or a thin local landing/short links instead of assuming coplanar top-pad joints. Logical pin mapping does not establish that mechanical footprint. A thin underside tap with short flex remains a fallback if direct joining proves unsuitable; the controller/C5 assembly is not assumed to fit under the motherboard.
 
-The carrier also has a cutout around the existing BIOS, with independent mechanical supports. It avoids stacking above IC501. With the full G1 bus available at CN503, BIOS-leg taps are optional for BIOS features or an alternative attachment. The VA1 traced schematic exposes 20 ATA nets at IC501, including multiplexed address/data nets; the [candidate reference](docs/IC501-candidate-reference.csv) remains unverified electrically and requires eight other control taps if used as the bridge attachment.
+The carrier also has a cutout around the existing BIOS, with independent mechanical supports. The owner measures IC501's black body as **26.68 × 12.65 mm**, its outer pin span as **16.66 mm**, and its height as roughly **2 mm**. The cutout avoids stacking above IC501; a clearance-only opening must account for the lead envelope and alignment allowance. With the full G1 bus available at CN503, BIOS-leg taps are optional for BIOS features or an alternative attachment. The VA1 traced schematic exposes 20 ATA nets at IC501, including multiplexed address/data nets; the [candidate reference](docs/IC501-candidate-reference.csv) remains unverified electrically and requires eight other control taps if used as the bridge attachment.
 
 The owner reports **4.48 mm total C5 module height including USB**. That leaves **3.52 mm in the 8.0 mm region, or 2.12 mm beneath the extra metal**, for carrier elevation, PCB, socket separation, insulation and fit allowance. Prefer the taller region for the C5 where the footprint permits it. Keep USB in the baseline and qualify the complete removable-module stack; [the mounting budget](docs/controller-ram-bios-disposition-2026-10-09.md#bios-cutout-and-c5-stack) records the examples. USB removal is an optional fallback, not a current requirement.
 
@@ -84,9 +84,9 @@ The DragonCity numbered-circle picture discussed in the design conversation is t
 
 Required physical evidence remains:
 
-- IC501 body/lead rectangle and surrounding component positions for the carrier cutout. BIOS-top gap is needed only if a later layout overhangs the package.
-- Map the reported PCB-to-shield clearance across the candidate footprint, including the extra metal's overlap and existing components.
-- CN503 body/tail envelope and position relative to IC501; tail contact height, pitch and row spacing for the proposed pads.
+- Refine the measured IC501 keepout with opening/alignment allowance and surrounding component positions. BIOS-top gap is needed only for a later overhang.
+- Map the extra metal, CPU/GPU thermal-contact keepouts and existing components across the candidate footprint. Parts under solid carrier areas require elevation or local cutouts even if below the roughly 2 mm BIOS height.
+- CN503 housing/tail envelope and position relative to IC501; qualify the joining cross-section, pitch and row spacing at the owner-reported near-PCB contact height.
 - Finished carrier, C5 socket/module and SD-socket stack heights; card, USB and antenna access.
 - Actual tap continuity and pin orientation; ROM supply and G1 signal levels measured separately if pursuing BIOS functions.
 
@@ -98,7 +98,7 @@ Optional dual BIOS requires additional connections and independent stock/custom 
 
 1. Check measurements and candidate tap continuity. Review existing software probe evidence and capture baseline bus timing with a qualified passive hookup before freezing the controller/front-end choice. The earlier CF board is unbuilt and unvalidated; a working CF rig is not a prerequisite assumed to exist.
 2. Close output ownership and timing, then finish G1 buffers/front end, SD/C5 interfaces, console/USB power and power-fail circuits; choose qualified production footprints and run ERC. Default stock BIOS recovery must work independently of MCU and FPGA configuration.
-3. Complete both cutout dimensions and relative position, contact-height geometry, lower-metal footprint and mounted C5 stack, then choose the attachment, outline and component heights.
+3. Complete CN503 dimensions/relative position, the placement/component map, joining geometry and mounted C5 stack, then choose the attachment, outline and component heights.
 4. Build a bench prototype: identify, read and hash sectors, test drive coexistence, then qualify DMA and writes.
 5. Demonstrate filesystem recovery and repeated power cuts before adding packet transport and pursuing retail-game networking.
 

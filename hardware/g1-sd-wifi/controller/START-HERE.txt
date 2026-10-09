@@ -39,8 +39,10 @@ Attachment: soldered G1 tap on the VA1 mainboard. Preferred mounting is
 above the mainboard near IC501 (BIOS) and CN503, below the installed
 upper metal shield. The preferred IC501 tap carrier has a cutout around the
 existing BIOS, with independent supports. The owner confirms all CN503 pins
-are accessible; prefer a second cutout with pads aligned to its exposed tails.
-Both XY alignment and solder-contact height need a measured footprint.
+are accessible and basically flush with the motherboard. Prefer a second
+cutout/notch, with an accessible edge/underside landing or thin local tap.
+Ordinary top-side carrier pads would be above these tails; qualify the solder
+cross-section, spacing and alignment before choosing a direct rigid joint.
 Use CN503 for the full G1 bus; BIOS-leg taps remain optional for BIOS features.
 A thin underside tap with a short flex to the top-side board is a fallback;
 the complete board is not assumed to fit underneath. Initial clearances are
@@ -118,10 +120,16 @@ It is not a measured solder-pad or mechanical attachment drawing.
 With the console unplugged and upper metal shield seated at its normal
 installed height, map motherboard PCB surface to nearest metal underside
 across the candidate footprint, including existing components and wire exits.
-Measure IC501 body/lead and CN503 body/exposed-tail envelopes for the two
-cutouts, their X/Y offset and adjacent free-space limits. Measure intended
-CN503 solder-contact height above PCB top to select carrier/pad geometry.
-Map the lower-metal footprint. BIOS-top gap matters only for a later overhang.
+Owner-reported IC501 dimensions: 26.68 mm body length, 12.65 mm black-body
+width, 16.66 mm outer pin span, and roughly 2 mm height. Add edge/alignment
+allowance to a clearance cutout; a body-only opening needs designed lead
+landing geometry if it overlaps the pins. Do not infer pin pitch from these.
+CN503 tails are owner-reported basically flush; precise joint geometry still
+needs qualification. Obtain CN503 housing/tail envelope and X/Y position
+relative to IC501, and map the lower metal and CPU/GPU thermal-contact area.
+Other chips are reported significantly below 2 mm, but parts under solid
+carrier areas still require height allowance or local cutouts. BIOS-top gap
+matters only for a later overhang.
 See the concept-outline and fabrication measurement checklist in
 ../docs/controller-ram-bios-disposition-2026-10-09.md.
 The owner reaffirmed approximate 8.62 mm, 0.62 mm sheet thickness and 1.4 mm
