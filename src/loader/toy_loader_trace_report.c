@@ -3,6 +3,9 @@
 #include "kui/retail_gd.h"
 #include "kui/toy_loader_trace.h"
 #include "kui/toy_loader_trace_report.h"
+#if KUI_TOY_PILOT_DATA_PROBE
+#include "kui/toy_loader_data_probe.h"
+#endif
 #include "retail_display.h"
 #include <stddef.h>
 #include <string.h>
@@ -21,6 +24,9 @@ void kui_toy_loader_trace_report_capture(const struct retail_display_state *disp
     const uint32_t *timing,const struct kui_retail_gd_diagnostics *diag) {
     stopped_display=*display;
     kui_toy_loader_trace_freeze();
+#if KUI_TOY_PILOT_DATA_PROBE
+    kui_toy_loader_data_probe_freeze();
+#endif
     memset(pilot_words,0,sizeof(pilot_words));
     const struct kui_toy_pilot_snapshot *p=kui_toy_pilot_snapshot();
     _Static_assert(KUI_TOY_PILOT_API==8u && sizeof(*p)==448u,"retained audio report ABI");
@@ -40,6 +46,10 @@ void kui_toy_loader_trace_report_capture(const struct retail_display_state *disp
     (void)kui_toy_pilot_request(KUI_TOY_PILOT_RESET,0u,0u,0u);
 }
 const uint32_t *kui_toy_loader_trace_report_page(unsigned trace,unsigned index) {
+#if KUI_TOY_PILOT_DATA_PROBE
+    if(trace==2u) return index<KUI_TOY_LOADER_DATA_PROBE_WORDS/16u ?
+        kui_toy_loader_data_probe_words()+index*16u : NULL;
+#endif
     if(trace) return index<KUI_TOY_LOADER_TRACE_WORDS/16u ? trace_words+index*16u : NULL;
     return index<8u ? pilot_words+index*16u : NULL;
 }
@@ -48,12 +58,23 @@ void kui_toy_loader_trace_terminal(const struct retail_display_state *display,
     (void)reserved;
     kui_toy_loader_trace_report_capture(display,timing,diag);
     for(;;) {
+#if KUI_TOY_PILOT_DATA_PROBE
+        for(unsigned order=0u;order<3u;order++) {
+            unsigned kind=order?order-1u:2u;
+            const uint32_t pages=kind==2u?KUI_TOY_LOADER_DATA_PROBE_WORDS/16u:
+                (kind?KUI_TOY_LOADER_TRACE_WORDS/16u:8u);
+#else
         for(unsigned kind=0u;kind<2u;kind++) {
             const uint32_t pages=kind?KUI_TOY_LOADER_TRACE_WORDS/16u:8u;
+#endif
             for(page=0u;page<pages;page++) {
                 const uint32_t *words=kui_toy_loader_trace_report_page(kind,page);
                 retail_display_restore(&stopped_display);
+#if KUI_TOY_PILOT_DATA_PROBE
+                retail_display_values(kind==2u?"DATA PAGE":(kind?"TRACE PAGE":"PILOT PAGE"),&page,1u);
+#else
                 retail_display_values(kind?"TRACE PAGE":"PILOT PAGE",&page,1u);
+#endif
                 for(unsigned row=0u;row<4u;row++)
                     retail_display_values("WORDS",words+row*4u,4u);
                 retail_display_pause(120u);

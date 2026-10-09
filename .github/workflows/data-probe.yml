@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: Toy SCI DATA probe candidate
+
+on:
+  push:
+    branches: [experiment/toy-data-probe-2026-10-09]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: toy-data-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/experiment/toy-data-probe-2026-10-09'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Restore the pinned freestanding compiler
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .deps/sh-elf
+            .deps/kos/utils/kos-chain/*.tar.*
+          key: sh-elf-ubuntu24-v1-${{ hashFiles('dependencies.json', 'tools/setup_kos.sh') }}
+          restore-keys: sh-elf-ubuntu24-v1-
+      - name: Recover the compiler archive when the cache is absent
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! -x .deps/sh-elf/bin/sh-elf-gcc || ! -f .deps/sh-elf/.kui-toolchain-complete ]]; then
+            mkdir -p build/compiler-recovery
+            gh api repos/TPMJB/K-UI-NeXT/actions/artifacts/11493202582 > build/compiler-recovery/artifact.json
+            python3 tools/build_toy_loader_data_probe_ci.py check-recovery
+            gh run download 37644910026 --repo TPMJB/K-UI-NeXT --name cdda-toolchain-recovery-37644910026 --dir build/compiler-recovery
+            python3 tools/build_toy_loader_data_probe_ci.py recover
+          fi
+          python3 tools/build_toy_loader_data_probe_ci.py compiler
+          echo "$PWD/.deps/sh-elf/bin" >> "$GITHUB_PATH"
+      - name: Build the exact retained R and T references and the U candidate
+        id: build
+        shell: bash
+        run: python3 tools/build_toy_loader_data_probe_ci.py build
+      - name: Run production differentials and retained sanitizer suites
+        id: host
+        shell: bash
+        run: python3 tools/build_toy_loader_data_probe_ci.py host
+      - name: Emit independently reviewable U instructions and stack evidence
+        if: always() && steps.build.outcome == 'success'
+        shell: bash
+        run: python3 tools/build_toy_loader_data_probe_ci.py review
+      - name: Admit the reviewed U build and create the hardware test ZIP
+        id: admit
+        shell: bash
+        run: python3 tools/build_toy_loader_data_probe_ci.py admit
+      - name: Retain code-only review files and build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: toy-data-probe-review-${{ github.run_id }}
+          path: |
+            build/toy-data-probe/
+            build/recovered-t-check/
+            build/probe-default-off-check/
+            build/probe-trace-only-check/
+            build/data-probe-ci/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload the admitted hardware test ZIP
+        if: success() && steps.admit.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-Toy-Loader-DATA-Probe-${{ github.run_id }}
+          path: dist/K-UI-Toy-Loader-DATA-Probe.zip
+          if-no-files-found: error
+          retention-days: 30

@@ -5,6 +5,9 @@
 #include "kui/toy_pilot_gd.h"
 #include "kui/toy_pilot_gd_status.h"
 #include "kui/toy_loader_trace.h"
+#if KUI_TOY_PILOT_DATA_PROBE
+#include "kui/toy_loader_data_probe.h"
+#endif
 #include <stddef.h>
 #if KUI_TOY_PILOT_SHARED_SCI
 #include "toy_pilot_sci.h"
@@ -133,7 +136,13 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
 int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
     uint32_t r4,uint32_t r5,uint32_t r7,uintptr_t base_address) {
     kui_toy_loader_trace_begin(s,r7,r4,r5);
+#if KUI_TOY_PILOT_DATA_PROBE
+    kui_toy_loader_data_probe_begin(s,r7,kui_toy_loader_trace_words()[7]);
+#endif
     int32_t result=dispatch_body(s,r4,r5,r7,base_address);
+#if KUI_TOY_PILOT_DATA_PROBE
+    kui_toy_loader_data_probe_end(s);
+#endif
     kui_toy_loader_trace_end(s,r7,r4,r5,result);
     return result;
 }

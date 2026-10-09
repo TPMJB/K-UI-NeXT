@@ -15,6 +15,16 @@ NATIVE_CACHE ?= 0
 SYNTHETIC_SOURCE ?= 0
 # High-only passive adapter telemetry; preserves the retained audio algorithm.
 LOADER_TRACE ?= 0
+DATA_PROBE ?= 0
+ifneq ($(filter $(DATA_PROBE),0 1),$(DATA_PROBE))
+$(error DATA_PROBE must be 0 or 1)
+endif
+ifeq ($(DATA_PROBE),1)
+ifneq ($(LOADER_TRACE),1)
+$(error DATA probe requires LOADER_TRACE=1)
+endif
+PROBE_CONFIG = DATA_PROBE=1
+endif
 ifneq ($(filter $(LOADER_TRACE),0 1),$(LOADER_TRACE))
 $(error LOADER_TRACE must be 0 or 1)
 endif
@@ -80,6 +90,9 @@ ifneq ($(SCI_REUSE_TDRE),1)
 $(error SCI_REUSE_TDRE must be 0 or 1)
 endif
 endif
+ifeq ($(DATA_PROBE),1)
+RESIDENT_SYMBOL_FLAGS += --data-probe
+endif
 CPU = -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
 RESIDENT_OPT = -Os -fno-tree-scev-cprop
 FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
@@ -92,7 +105,7 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -DKUI_TOY_PILOT_ASYNC_CDDA=$(ASYNC_CDDA) \
  -DKUI_TOY_PILOT_PRIVATE_P2=$(PRIVATE_P2) -DKUI_TOY_PILOT_NATIVE_CACHE=$(NATIVE_CACHE) \
  -DKUI_TOY_PILOT_SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE) \
- -DKUI_TOY_PILOT_LOADER_TRACE=$(LOADER_TRACE) \
+ -DKUI_TOY_PILOT_LOADER_TRACE=$(LOADER_TRACE) -DKUI_TOY_PILOT_DATA_PROBE=$(DATA_PROBE) \
  -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
  -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
  -Iinclude -Isrc/loader -I$(BUILD) -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -114,6 +127,9 @@ WORKER_SRC = src/loader/toy_pilot_worker.c src/loader/toy_pilot_bus.c src/loader
  src/loader/toy_pilot_gd.c src/loader/toy_pilot_pause.c src/core/toy_pilot.c src/core/hash.c src/loader/minic.c
 ifeq ($(LOADER_TRACE),1)
 WORKER_SRC += src/loader/toy_loader_trace.c src/loader/toy_loader_trace_report.c src/loader/retail_display.c
+endif
+ifeq ($(DATA_PROBE),1)
+WORKER_SRC += src/loader/toy_loader_data_probe.c
 endif
 WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o $(BUILD)/pause_asm.o
 ifeq ($(SHARED_SCI),1)
@@ -138,7 +154,7 @@ resident: $(BUILD)/resident-sci.bin
 force-config:
 $(BUILD)/build-config: force-config
 	@mkdir -p $(@D)
-	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') > $@.new
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(PROBE_CONFIG),'$(PROBE_CONFIG)') > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
 $(BUILD)/sci/%.o: %.c
@@ -166,6 +182,9 @@ $(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
 	$(OBJCOPY) -O binary $< $@
 $(BUILD)/toy_pilot_resident_symbols.h: $(BUILD)/resident-sci.elf tools/toy_pilot_symbols.py tools/check_loader_layout.py
 	python3 tools/toy_pilot_symbols.py $< $@ $(RESIDENT_SYMBOL_FLAGS)
+ifeq ($(DATA_PROBE),1)
+$(BUILD)/worker/src/loader/toy_loader_data_probe.o: $(BUILD)/toy_pilot_resident_symbols.h
+endif
 $(BUILD)/worker/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(FLAGS) $(WORKER_EXTRA_FLAGS) $(BUS_ADMISSION) -MMD -MP -c $< -o $@
