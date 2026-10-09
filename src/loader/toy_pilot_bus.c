@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/toy_pilot_bus.h"
+#include "kui/toy_pilot_cache.h"
 #include <stddef.h>
 
 /* Exact installed Toy driver contract. This owner uses short PIO transfers;
@@ -179,9 +180,11 @@ enum kui_toy_pilot_bus_result kui_toy_pilot_bus_publish(
                 if(!budget(&t)) result = KUI_TOY_PILOT_BUS_TIMEOUT;
                 else {
                     write16(HOST_PRODUCER, next);
+                    kui_toy_pilot_cache_publish(HOST_PRODUCER,2u);
                     write32(candidate, packet[0]);
                     write32(NOTIFY, UINT32_MAX);
                     write32(HOST_COMMANDS, read32(HOST_COMMANDS)+1u);
+                    kui_toy_pilot_cache_publish(HOST_COMMANDS,4u);
                     *slot = candidate;
                     if(!drain(&t)) result = KUI_TOY_PILOT_BUS_PUBLISHED_STALLED;
                 }

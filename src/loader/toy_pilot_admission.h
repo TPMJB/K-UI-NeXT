@@ -27,11 +27,11 @@ static inline uint32_t kui_toy_pilot_launch_refusal(const struct kui_retail_mani
 }
 
 /* The exact title initializes CCR from this data word after handoff. Its
- * movie callbacks discard operand-cache tags. Keep both caches enabled,
- * but require P1 write-through so those callbacks cannot discard dirty
- * authored owner/stack state. No generic cache-mode override is admitted. */
+ * movie callbacks discard operand-cache tags. The retained profile uses
+ * write-through; the isolated private-P2 comparison may retain native
+ * copy-back. Both admit only this title's exact original policy word. */
 static inline uint32_t kui_toy_pilot_cache_policy(uint32_t policy) {
-    return policy==KUI_TOY_BOOT_CACHE_POLICY_NATIVE?KUI_TOY_BOOT_CACHE_POLICY_SAFE:0u;
+    return policy==KUI_TOY_BOOT_CACHE_POLICY_NATIVE?KUI_TOY_PILOT_CACHE_POLICY_SELECTED:0u;
 }
 
 /* The ordinary raw-GDI launcher leaves the optional source CRC unset.

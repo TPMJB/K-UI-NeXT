@@ -3,6 +3,7 @@
 #define JOIN_INNER(a,b) a##b
 #define JOIN(a,b) JOIN_INNER(a,b)
 #define C_SYMBOL(name) JOIN(__USER_LABEL_PREFIX__,name)
+#include "toy_pilot_frame.inc"
 
 /* Called by the high stage before entering the owner's upper IP bootstrap.
  * Do not switch stacks here: state adoption/init use the temporary high stack.
@@ -70,8 +71,13 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov #3,r0
 .Lgd_common:
     stc sr,r1
+#if KUI_TOY_PILOT_PRIVATE_P2
+    mov.l .Lirq_mask,r2
+    or r1,r2
+    ldc r2,sr
+#endif
     mov.l r1,@-r15
-#ifndef KUI_RETAIL_CE
+#if !defined(KUI_RETAIL_CE) && !KUI_TOY_PILOT_PRIVATE_P2
     mov.l .Lirq_mask,r2
     or r2,r1
     ldc r1,sr
@@ -84,6 +90,11 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov.l r12,@-r15
     mov.l r13,@-r15
     mov.l r14,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    /* This SHARED0 dispatch has no native SDK/invalidator callback. BL and
+     * IMASK15 remain held until every inherited save is read and popped;
+     * only then is its exact SR restored. No live frame crosses unmask. */
+#endif
 #ifdef KUI_RETAIL_CE
     mov.l .Lirq_mask,r2
     or r2,r1
@@ -236,8 +247,13 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 #endif
 .Lactive: .long C_SYMBOL(kui_retail_hook_active)
 .Lfault: .long C_SYMBOL(kui_retail_hook_fault)
+#if KUI_TOY_PILOT_PRIVATE_P2
+.Lprivate_stack: .long KUI_RETAIL_HOOK_STACK-16+0x20000000
+.Lguard: .long KUI_RETAIL_HOOK_STACK_BOTTOM+0x20000000
+#else
 .Lprivate_stack: .long KUI_RETAIL_HOOK_STACK-16
 .Lguard: .long KUI_RETAIL_HOOK_STACK_BOTTOM
+#endif
 .Lguard_value: .long 0x4b554947
 .Ldispatch: .long C_SYMBOL(kui_retail_resident_dispatch)
 .Lsource: .long C_SYMBOL(kui_retail_hook_source)
@@ -247,6 +263,10 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Ldeferred: .long C_SYMBOL(kui_retail_ce_deferred)
 #elif !defined(KUI_RETAIL_ASYNC)
 .Lnative_caller: .long C_SYMBOL(kui_retail_native_caller)
+#endif
+
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_HELPER C_SYMBOL(kui_toy_pilot_frame_publish_retail)
 #endif
 
 /* Menu command 1 (return to the BIOS menu; A+B+X+Y+Start in most games)
@@ -288,7 +308,11 @@ C_SYMBOL(kui_retail_menu_hook):
     .align 2
 .Lmenu_original: .long C_SYMBOL(kui_retail_original_menu)
 .Lmenu_mask: .long 0x100000f0
+#if KUI_TOY_PILOT_PRIVATE_P2
+.Lmenu_stack: .long KUI_RETAIL_HOOK_STACK-16+0x20000000
+#else
 .Lmenu_stack: .long KUI_RETAIL_HOOK_STACK-16
+#endif
 .Lmenu_report: .long C_SYMBOL(kui_retail_menu_return)
 
 #if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)

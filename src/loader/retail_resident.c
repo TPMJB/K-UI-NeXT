@@ -516,14 +516,22 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
 #elif defined(KUI_RETAIL_CE)
     service.read_part = read_part;
 #endif
-    volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)KUI_RETAIL_HOOK_STACK_BOTTOM;
+    volatile uint32_t *guard = (volatile uint32_t *)(uintptr_t)(KUI_RETAIL_HOOK_STACK_BOTTOM
+#if defined(KUI_RETAIL_TOY_PILOT) && KUI_RETAIL_TOY_PILOT && KUI_TOY_PILOT_PRIVATE_P2
+        +0x20000000u
+#endif
+        );
     for(unsigned i = 0; i < 4; ++i) guard[i] = 0x4b554947u;
     kui_retail_original_menu=*(volatile uint32_t *)(uintptr_t)0x8c0000e0u;
-    /* The game's first instructions may reinitialize caches. Do not leave
-     * newly decoded manifest/card/guard state only in dirty cache lines. */
+    /* The stage published and invalidated every RAM cache line before _start.
+     * Private P2 initialization never creates a cached mutable alias. */
+#if !(defined(KUI_RETAIL_TOY_PILOT) && KUI_RETAIL_TOY_PILOT && KUI_TOY_PILOT_PRIVATE_P2)
+    /* The game's first instructions may reinitialize caches. Publish P1
+     * manifest/card/guard state before that handoff. */
     purge((uint32_t)(uintptr_t)__retail_resident_bss_begin,
           (uint32_t)(__retail_resident_bss_end - __retail_resident_bss_begin));
     purge(KUI_RETAIL_HOOK_STACK_BOTTOM, 16);
+#endif
     install_hook();
     return KUI_RETAIL_RESIDENT_OK;
 }

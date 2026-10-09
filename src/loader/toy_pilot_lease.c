@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/toy_pilot_lease.h"
+#include "kui/toy_pilot_cache.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -111,6 +112,8 @@ enum kui_toy_pilot_bus_result kui_toy_pilot_lease_allocate(
     barrier();
     write_word(record+12u,1u);
     barrier();
+    kui_toy_pilot_cache_publish(record,RECORD_BYTES);
+    kui_toy_pilot_cache_publish(MANAGER+4u,4u);
     *address=start;
 done:
     barrier();

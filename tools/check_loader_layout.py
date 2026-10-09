@@ -20,12 +20,22 @@ def region(data, offset, count, label):
     return data[offset:offset + count]
 
 
-def inspect_elf(data, base, limit):
+def inspect_elf(data, base, limit, *, private_p2=False,
+                entry_symbol="_start", entry_at_base=True):
+    """Inspect a fixed physical reservation.
+
+    The explicit Toy-only option admits cached P1 code/read-only sections and
+    uncached P2 writable sections with compact P1 LMAs. Returned symbols keep
+    their runtime VMAs; payload offsets and memory_end use the physical P1
+    reservation. The ordinary image contract remains the default.
+    """
+    if private_p2 and not (0x8C000000 <= base < limit <= 0x8D000000):
+        raise ValueError("P2 private data requires a canonical P1 RAM reservation")
     if len(data) < EH.size:
         raise ValueError("Truncated ELF header")
     ident, kind, machine, version, entry, po, so, _, es, ps, pn, ss, sn, _ = EH.unpack_from(data)
     if (ident[:7] != b"\x7fELF\x01\x01\x01" or kind != 2 or machine != 42 or
-            version != 1 or entry != base or es != EH.size or ps != PH.size or
+            version != 1 or (entry_at_base and entry != base) or es != EH.size or ps != PH.size or
             ss != SH.size or not 0 < pn <= 32 or not 0 < sn <= 4096):
         raise ValueError("Requires a static little-endian SH ELF at the fixed entry")
     region(data, po, pn * ps, "program headers")
@@ -37,21 +47,25 @@ def inspect_elf(data, base, limit):
             raise ValueError("Dynamic, interpreted, or TLS image is not freestanding")
         if kind != 1:
             continue
-        if (pa != va or va < base or memory == 0 or size > memory or
-                va + memory > limit):
+        p2 = base + 0x20000000 <= va < limit + 0x20000000
+        expected_pa = va - 0x20000000 if private_p2 and p2 else va
+        if (pa != expected_pa or pa < base or memory == 0 or size > memory or
+                pa + memory > limit or
+                (private_p2 and p2 and (flags & 1 or not flags & 2 or pa % 32))):
             raise ValueError("Load segment is outside its memory reservation")
         content = region(data, offset, size, "load segment")
-        segments.append((va, memory, flags, content))
-    segments.sort()
-    if not segments or segments[0][0] != base or not segments[0][2] & 1 or len(segments[0][3]) < 4:
+        segments.append((pa, va, memory, flags, content))
+    segments.sort(key=lambda segment: segment[0])
+    if not segments or segments[0][0] != base or not segments[0][3] & 1 or len(segments[0][4]) < 4:
         raise ValueError("Entry is not the beginning of executable bytes")
     for previous, current in zip(segments, segments[1:]):
-        if previous[0] + previous[1] > current[0]:
+        if previous[0] + previous[2] > current[0]:
             raise ValueError("Overlapping load segments")
-    file_end = max(va + len(content) for va, _, _, content in segments)
+    file_end = max(pa + len(content) for pa, _, _, _, content in segments
+                   if content or not private_p2)
     payload = bytearray(file_end - base)
-    for va, _, _, content in segments:
-        payload[va - base:va - base + len(content)] = content
+    for pa, _, _, _, content in segments:
+        payload[pa - base:pa - base + len(content)] = content
     sections = [SH.unpack_from(data, so + index * ss) for index in range(sn)]
     symbols = {}
     found_symbols = False
@@ -59,8 +73,23 @@ def inspect_elf(data, base, limit):
         _, kind, flags, address, offset, size, link, _, _, stride = section
         if flags & 0x400:
             raise ValueError("TLS section is not allowed")
-        if flags & 2 and size and (address < base or address + size > limit):
-            raise ValueError("Allocated section is outside its reservation")
+        if flags & 2 and size:
+            p2 = base + 0x20000000 <= address < limit + 0x20000000
+            physical = address - 0x20000000 if private_p2 and p2 else address
+            if physical < base or physical + size > limit:
+                raise ValueError("Allocated section is outside its reservation")
+            if private_p2:
+                if bool(flags & 1) != p2 or (p2 and flags & 4):
+                    raise ValueError("Private layout requires P1 code/read-only and P2 writable sections")
+                if not any(va <= address and address + size <= va + memory
+                           for _, va, memory, _, _ in segments):
+                    raise ValueError("Private section is outside its runtime load segment")
+                if kind != 8:  # SHT_NOBITS has no initialized load bytes.
+                    section_bytes = region(data, offset, size, "private initialized section")
+                    if not any(va <= address and address + size <= va + len(content) and
+                               section_bytes == content[address - va:address - va + size]
+                               for _, va, _, _, content in segments):
+                        raise ValueError("Private initialized section differs from its load bytes")
         if kind != 2:
             continue
         found_symbols = True
@@ -97,10 +126,14 @@ def inspect_elf(data, base, limit):
                     sections[index][3] == 0 and value < sections[index][5]):
                 continue
             symbols[label] = value
-    if not found_symbols or symbols.get("_start") != base:
+    if (not found_symbols or symbols.get(entry_symbol) != entry or
+            (entry_at_base and symbols.get(entry_symbol) != base)):
         raise ValueError("Missing fixed entry symbol")
+    if private_p2 and not any(flags & 1 and va <= entry < va + len(content)
+                              for _, va, _, flags, content in segments):
+        raise ValueError("Private layout entry is outside cached executable bytes")
     return {"payload": bytes(payload), "symbols": symbols,
-            "memory_end": max(va + memory for va, memory, _, _ in segments)}
+            "memory_end": max(pa + memory for pa, _, memory, _, _ in segments)}
 
 
 def padded(data):

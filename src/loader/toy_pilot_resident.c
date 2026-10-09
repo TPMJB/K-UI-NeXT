@@ -66,9 +66,11 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     const struct retail_display_state *saved_display) {
     int result=kui_toy_pilot_base_init(prepared,prepared_card,original_gd_vector,saved_display);
     service.ops.map=toy_map; /* Failed init never enters the game. */
-    /* The original init flushed BSS before returning. Flush the changed
-     * callback too, before bootstrap may alter cache mode. */
+    /* P2 callback state goes straight to RAM after the stage's initial purge.
+     * The retained P1 profile must publish the changed callback. */
+#if !KUI_TOY_PILOT_PRIVATE_P2
     purge((uint32_t)(uintptr_t)&service,sizeof(service));
+#endif
     return result;
 }
 

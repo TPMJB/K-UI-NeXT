@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define C_SYMBOL(name) _ ## name
+#include "toy_pilot_frame.inc"
     .section .toy_exports,"a"
     .align 2
     .long 0x54595031,8,76
@@ -43,11 +44,17 @@ C_SYMBOL(kui_toy_pilot_service_hook):
      * before and one after the SDK updater shorten the finite-bank setup
      * cadence and let an already latched worker fault report before an SDK
      * queue wait. Both visits use the guarded private-stack bridge. */
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     sts.l pr,@-r15
     mov.l r4,@-r15
     mov.l r5,@-r15
     mov.l r6,@-r15
     mov.l r7,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_END 20
+#endif
     mov.l .Lservice,r0
     bsr .Lbridge
     nop
@@ -57,26 +64,38 @@ C_SYMBOL(kui_toy_pilot_service_hook):
     mov.l @r15+,r4
     /* Numeric breadcrumbs bracket the untouched original call. Keep its
      * inherited stack and argument registers exactly as they were. */
+#if !KUI_TOY_PILOT_PRIVATE_P2
     mov.l r1,@-r15
     mov.l r2,@-r15
+#endif
     mov.l .Lupdater_entries,r1
     mov.l @r1,r2
     add #1,r2
     mov.l r2,@r1
+#if !KUI_TOY_PILOT_PRIVATE_P2
     mov.l @r15+,r2
     mov.l @r15+,r1
+#endif
     mov.l .Loriginal_updater,r0
     jsr @r0
     nop
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+    mov.l r0,@-r15
+    TOY_FRAME_END 4
+#else
     mov.l r0,@-r15
     mov.l r1,@-r15
     mov.l r2,@-r15
+#endif
     mov.l .Lupdater_returns,r1
     mov.l @r1,r2
     add #1,r2
     mov.l r2,@r1
+#if !KUI_TOY_PILOT_PRIVATE_P2
     mov.l @r15+,r2
     mov.l @r15+,r1
+#endif
     mov.l .Lservice,r0
     bsr .Lbridge
     nop
@@ -87,12 +106,24 @@ C_SYMBOL(kui_toy_pilot_service_hook):
 
     .global C_SYMBOL(kui_toy_pilot_am_init_hook)
 C_SYMBOL(kui_toy_pilot_am_init_hook):
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     sts.l pr,@-r15
     mov.l r4,@-r15
     mov.l r5,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_HOLD 12
+#endif
     mov.l .Lrevoke,r0
     jsr @r0
     nop
+#if KUI_TOY_PILOT_PRIVATE_P2
+    /* This scalar revocation must run even when a worker is suspended.
+     * SHARED0 has no SDK/bus callback here; its temporary C frame dies
+     * under IMASK15 before the inherited interrupt opportunity returns. */
+    ldc.l @r15+,sr
+#endif
     mov.l @(4,r15),r4
     mov.l @r15,r5
     mov.l .Lpre_init,r0
@@ -103,7 +134,13 @@ C_SYMBOL(kui_toy_pilot_am_init_hook):
     mov.l .Loriginal_am_init,r0
     jsr @r0
     nop
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     mov.l r0,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_END 4
+#endif
     mov r0,r4
     mov.l .Lpost_init,r0
     bsr .Lbridge
@@ -119,13 +156,25 @@ C_SYMBOL(kui_toy_pilot_driver_load_hook):
     /* The original loader fills the amInit destination on the inherited
      * SDK caller stack. Hash only after its successful return, before the
      * original amInit continues with SDK initialization/driver install. */
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     sts.l pr,@-r15
     mov.l r4,@-r15
     mov.l r5,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_END 12
+#endif
     mov.l .Loriginal_driver_load,r0
     jsr @r0
     nop
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     mov.l r0,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_END 4
+#endif
     mov r0,r4
     mov.l @(4,r15),r5
     mov.l .Lpost_load,r0
@@ -141,14 +190,23 @@ C_SYMBOL(kui_toy_pilot_driver_load_hook):
 
     .global C_SYMBOL(kui_toy_pilot_shutdown_hook)
 C_SYMBOL(kui_toy_pilot_shutdown_hook):
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     sts.l pr,@-r15
     mov.l r4,@-r15
     mov.l r5,@-r15
     mov.l r6,@-r15
     mov.l r7,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_HOLD 20
+#endif
     mov.l .Lshutdown,r0
     jsr @r0
     nop
+#if KUI_TOY_PILOT_PRIVATE_P2
+    ldc.l @r15+,sr
+#endif
     mov.l @r15+,r7
     mov.l @r15+,r6
     mov.l @r15+,r5
@@ -160,12 +218,21 @@ C_SYMBOL(kui_toy_pilot_shutdown_hook):
 
     .global C_SYMBOL(kui_toy_pilot_allstop_hook)
 C_SYMBOL(kui_toy_pilot_allstop_hook):
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     sts.l pr,@-r15
     mov.l r4,@-r15
     mov.l r5,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_HOLD 12
+#endif
     mov.l .Lallstop,r0
     jsr @r0
     nop
+#if KUI_TOY_PILOT_PRIVATE_P2
+    ldc.l @r15+,sr
+#endif
     mov.l @r15+,r5
     mov.l @r15+,r4
     lds.l @r15+,pr
@@ -200,7 +267,9 @@ C_SYMBOL(kui_toy_pilot_worker_bridge):
     nop
 2:  mov #1,r3
     mov.l r3,@r2
+#if !KUI_TOY_PILOT_PRIVATE_P2
     ldc r1,sr
+#endif
     mov.l r1,@-r15
     sts.l pr,@-r15
     mov.l r8,@-r15
@@ -210,10 +279,17 @@ C_SYMBOL(kui_toy_pilot_worker_bridge):
     mov.l r12,@-r15
     mov.l r13,@-r15
     mov.l r14,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_PUBLISH 36
+#endif
     mov r15,r8
     mov.l .Lstack_top,r15
     add #-16,r15
     mov.l r8,@r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    mov.l @(32,r8),r1
+    ldc r1,sr
+#endif
     jsr @r0
     nop
     mov.l @r15,r8
@@ -260,6 +336,10 @@ C_SYMBOL(kui_toy_pilot_worker_bridge):
 .Loriginal_driver_load: .long 0x8c06ac54
 .Loriginal_shutdown: .long 0x8c06aa0e
 .Loriginal_allstop: .long 0x8c068a96
+
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_HELPER C_SYMBOL(kui_toy_pilot_frame_publish_worker)
+#endif
 
 #if KUI_TOY_PILOT_SHARED_SCI
 /* Serialized low GD entry owns the lock and BL mask. Copy its fifth C

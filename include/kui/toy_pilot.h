@@ -3,6 +3,7 @@
 #define KUI_TOY_PILOT_H
 #include <stdbool.h>
 #include <stdint.h>
+#include "kui/toy_pilot_cache.h"
 
 #define KUI_TOY_PILOT_MAGIC UINT32_C(0x54595031)
 #define KUI_TOY_PILOT_API 8u

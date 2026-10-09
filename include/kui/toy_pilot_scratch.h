@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "kui/retail_gd.h"
+#include "kui/toy_pilot_cache.h"
 #define KUI_TOY_SCRATCH_BYTES 16u
 #define KUI_TOY_SCRATCH_STACK_BYTES 8192u
 #define KUI_TOY_SCRATCH_GUARD_BYTES 64u
@@ -24,7 +25,12 @@ static inline uint32_t kui_toy_pilot_scratch_capability(uint32_t function,
     if(!((function==KUI_GD_CHECK && pr==0x8c0bd374u) ||
          (function==KUI_GD_REQUEST && command==KUI_RETAIL_GD_REQ_STAT &&
           pr==0x8c0bd57eu))) return 0u;
-    if((sp&3u) || sp!=param ||
+    if((sp&3u) || sp!=param) return 0u;
+#if KUI_TOY_PILOT_PRIVATE_P2
+    if(!kui_toy_pilot_state_address(sp,0x8cfd0000u,0x8cfe0000u)) return 0u;
+    sp-=KUI_TOY_PILOT_DATA_ALIAS; /* Exact P2 worker domain proved above. */
+#endif
+    if(
        sp-(top-KUI_TOY_SCRATCH_STACK_BYTES+KUI_TOY_SCRATCH_GUARD_BYTES+
            KUI_TOY_SCRATCH_CALLER_BYTES)>
        KUI_TOY_SCRATCH_STACK_BYTES-KUI_TOY_SCRATCH_GUARD_BYTES-

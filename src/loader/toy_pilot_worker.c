@@ -309,10 +309,10 @@ static bool single_audio(uint32_t track,uint32_t *first,uint32_t *end) {
 }
 uint32_t kui_toy_pilot_worker_initialize(const struct kui_toy_pilot_config *c) {
     if(!c || c->magic!=KUI_TOY_PILOT_MAGIC || c->version!=KUI_TOY_PILOT_API || c->bytes!=sizeof(*c) ||
-       c->manifest<0x8c000000u || c->manifest>=0x8c010000u ||
+       !kui_toy_pilot_state_address(c->manifest,0x8c000000u,0x8c010000u) ||
        c->read_raw<0x8c000000u || c->read_raw>=0x8c010000u || (c->read_raw&1u) ||
-       c->resident_active<0x8c000000u || c->resident_active>=0x8c010000u ||
-       c->data_pending<0x8c000000u || c->data_pending>=0x8c010000u ||
+       !kui_toy_pilot_state_address(c->resident_active,0x8c000000u,0x8c010000u) ||
+       !kui_toy_pilot_state_address(c->data_pending,0x8c000000u,0x8c010000u) ||
        c->terminal_entry<0x8c004000u || c->terminal_entry>=0x8c007800u || (c->terminal_entry&1u) ||
        (c->resident_active&3u) || (c->data_pending&3u) ||
        c->main_lease_begin!=KUI_TOY_PILOT_WORKER_BEGIN || c->main_lease_end!=0x8d000000u ||

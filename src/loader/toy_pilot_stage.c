@@ -150,12 +150,20 @@ __asm__(".section .text.toy_pilot_stage_bridge,\"ax\"\n"
         "6: .long 0x00000800\n"
         ".previous\n");
 
+static inline void toy_publish(uint32_t begin,uint32_t end) {
+#if KUI_TOY_PILOT_PRIVATE_P2
+    begin=kui_toy_pilot_cached_address(begin);
+    end=kui_toy_pilot_cached_address(end);
+#endif
+    kui_toy_pilot_stage_publish(begin,end);
+}
+
 static void toy_failure(uint32_t error,uint32_t detail) __attribute__((noreturn));
 static void toy_failure(uint32_t error,uint32_t detail) {
     volatile struct kui_toy_pilot_boot_control *c=toy_control();
     c->status=KUI_TOY_BOOT_FAILED;c->error=error;
     c->installer=0;c->stage_stack=0;c->request=0;c->snapshot=0;c->gd_dispatch=0;
-    kui_toy_pilot_stage_publish((uint32_t)(uintptr_t)c,
+    toy_publish((uint32_t)(uintptr_t)c,
         (uint32_t)(uintptr_t)c+sizeof(*c));
     retail_display_restore(&display);
     retail_display_hex("TOY PILOT BOOT FAILURE",error);
@@ -170,12 +178,20 @@ static int toy_entry(uint32_t address,uint32_t bytes) {
 static void toy_exports_check(struct kui_toy_pilot_exports *e,uint32_t bytes) {
     if(bytes<sizeof(*e) || bytes>0x10000u) toy_failure(2,bytes);
     memcpy(e,toy_worker_blob,sizeof(*e));
+    uint32_t bss_begin=kui_toy_pilot_cached_address(e->bss_begin);
+    uint32_t bss_end=kui_toy_pilot_cached_address(e->bss_end);
+    uint32_t stack_bottom=kui_toy_pilot_cached_address(e->stack_bottom);
+    uint32_t stack_top=kui_toy_pilot_cached_address(e->stack_top);
     if(e->magic!=KUI_TOY_PILOT_MAGIC || e->version!=KUI_TOY_PILOT_API || e->bytes!=sizeof(*e) ||
        e->main_lease_bytes!=KUI_TOY_PILOT_MAIN_LEASE_BYTES ||
-       e->bss_begin<KUI_TOY_PILOT_WORKER_BEGIN+bytes || e->bss_begin>e->bss_end ||
-       e->bss_end>e->stack_bottom || e->stack_bottom>e->stack_top ||
+       !kui_toy_pilot_state_address(e->bss_begin,KUI_TOY_PILOT_WORKER_BEGIN,KUI_TOY_PILOT_WORKER_END) ||
+       !kui_toy_pilot_state_address(e->stack_bottom,KUI_TOY_PILOT_WORKER_BEGIN,KUI_TOY_PILOT_WORKER_END) ||
+       e->bss_end!=bss_end+KUI_TOY_PILOT_DATA_ALIAS ||
+       e->stack_top!=stack_top+KUI_TOY_PILOT_DATA_ALIAS ||
+       bss_begin<KUI_TOY_PILOT_WORKER_BEGIN+bytes || bss_begin>bss_end ||
+       bss_end>stack_bottom || stack_bottom>stack_top ||
        e->stack_top-e->stack_bottom!=KUI_TOY_PILOT_STACK_BYTES ||
-       e->stack_top!=e->worker_end || e->worker_end>KUI_TOY_PILOT_WORKER_END ||
+       stack_top!=e->worker_end || e->worker_end>KUI_TOY_PILOT_WORKER_END ||
        ((e->bss_begin|e->bss_end|e->stack_bottom|e->stack_top|e->worker_end)&31u) ||
        !toy_entry(e->initialize,bytes) || !toy_entry(e->request,bytes) ||
        !toy_entry(e->service_hook,bytes) || !toy_entry(e->am_init_hook,bytes) ||
@@ -190,7 +206,7 @@ static void toy_original_patches_check(int installed_heap) {
         uint32_t expected=p->kind==TOY_HEAP && installed_heap?
             KUI_TOY_PILOT_LOW_HEAP_HOOK:p->original;
         if(p->kind==TOY_CACHE_POLICY && installed_heap)
-            expected=KUI_TOY_BOOT_CACHE_POLICY_SAFE;
+            expected=KUI_TOY_PILOT_CACHE_POLICY_SELECTED;
         if(toy_read(p->address,p->bytes)!=expected) toy_failure(4,p->address);
     }
 }
@@ -201,7 +217,7 @@ static void toy_original_patches_check(int installed_heap) {
 void kui_toy_pilot_stage_install(void) {
     volatile struct kui_toy_pilot_boot_control *c=toy_control();
     c->status=KUI_TOY_BOOT_INITIALIZING;
-    if((toy_read(0xff00001cu,4)&0x105u)!=KUI_TOY_BOOT_CACHE_POLICY_SAFE ||
+    if((toy_read(0xff00001cu,4)&0x105u)!=KUI_TOY_PILOT_CACHE_POLICY_SELECTED ||
        c->heap_begin!=KUI_TOY_BOOT_HEAP_BEGIN_VALUE ||
        c->heap_bytes!=KUI_TOY_BOOT_HEAP_BYTES_VALUE ||
        c->entry_sp<0x8c00c100u || c->entry_sp>0x8c00f400u || (c->entry_sp&3u) ||
@@ -233,9 +249,18 @@ void kui_toy_pilot_stage_install(void) {
         toy_failure(6,c->lease);
     c->status=KUI_TOY_BOOT_LEASED;
     memcpy((void *)(uintptr_t)c->lease,toy_worker_blob,bytes);
+#if KUI_TOY_PILOT_PRIVATE_P2
+    /* Remove every old cached alias before the P2 BSS/stack owner starts.
+     * The publication endpoint is physical/P1, never a P2 sweep endpoint. */
+    toy_publish(c->lease,e.worker_end);
     memset((void *)(uintptr_t)e.bss_begin,0,e.bss_end-e.bss_begin);
-    kui_toy_pilot_stage_publish(c->lease,e.bss_end);
-    if(memcmp((const void *)(uintptr_t)c->lease,toy_worker_blob,bytes))
+#else
+    memset((void *)(uintptr_t)e.bss_begin,0,e.bss_end-e.bss_begin);
+    toy_publish(c->lease,e.bss_end);
+#endif
+    /* Verification must not refill a P1 alias of initialized private data. */
+    if(memcmp((const void *)(uintptr_t)(c->lease+KUI_TOY_PILOT_DATA_ALIAS),
+              toy_worker_blob,bytes))
         toy_failure(12,c->lease);
     const struct kui_toy_pilot_config config={
         KUI_TOY_PILOT_MAGIC,KUI_TOY_PILOT_API,sizeof(config),
@@ -286,11 +311,11 @@ void kui_toy_pilot_stage_install(void) {
             default:continue;
         }
         toy_write(p->address,p->bytes,value);
-        kui_toy_pilot_stage_publish(p->address,p->address+p->bytes);
+        toy_publish(p->address,p->address+p->bytes);
     }
     c->worker_end=e.worker_end;c->request=e.request;c->snapshot=e.snapshot;c->gd_dispatch=e.gd_dispatch;
     c->installer=0;c->stage_stack=0;c->status=KUI_TOY_BOOT_INSTALLED;
-    kui_toy_pilot_stage_publish((uint32_t)(uintptr_t)c,
+    toy_publish((uint32_t)(uintptr_t)c,
         (uint32_t)(uintptr_t)c+sizeof(*c));
 }
 
@@ -316,14 +341,14 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
             toy_failure(10,KUI_TOY_PILOT_LOW_CONTROL+4u*i);
     c->installer=(uint32_t)(uintptr_t)kui_toy_pilot_stage_install;
     c->stage_stack=KUI_RETAIL_STAGE_STACK-32u;c->status=KUI_TOY_BOOT_ARMED;
-    kui_toy_pilot_stage_publish((uint32_t)(uintptr_t)c,
+    toy_publish((uint32_t)(uintptr_t)c,
         (uint32_t)(uintptr_t)c+sizeof(*c));
     /* This must precede the first native system initialization. Changing it
      * after heap initialization would leave the active CCR in copy-back. */
     toy_write(KUI_TOY_BOOT_CACHE_POLICY_POOL,4,
         kui_toy_pilot_cache_policy(toy_read(KUI_TOY_BOOT_CACHE_POLICY_POOL,4)));
-    kui_toy_pilot_stage_publish(KUI_TOY_BOOT_CACHE_POLICY_POOL,KUI_TOY_BOOT_CACHE_POLICY_POOL+4u);
+    toy_publish(KUI_TOY_BOOT_CACHE_POLICY_POOL,KUI_TOY_BOOT_CACHE_POLICY_POOL+4u);
     toy_write(KUI_TOY_BOOT_HEAP_POOL,4,KUI_TOY_PILOT_LOW_HEAP_HOOK);
-    kui_toy_pilot_stage_publish(KUI_TOY_BOOT_HEAP_POOL,KUI_TOY_BOOT_HEAP_POOL+4u);
+    toy_publish(KUI_TOY_BOOT_HEAP_POOL,KUI_TOY_BOOT_HEAP_POOL+4u);
     ((uint32_t *)(uintptr_t)frame)[5]=KUI_TOY_PILOT_LOW_RETURN_HOOK;
 }

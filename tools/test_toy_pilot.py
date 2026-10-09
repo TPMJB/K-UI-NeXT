@@ -24,6 +24,20 @@ SUITES = (
                        'src/core/toy_pilot.c', 'src/core/hash.c'], []),
     ('driver-load', ['tests/test_toy_pilot_driver_load.c'], []),
     ('admission', ['tests/test_toy_pilot_admission.c'], []),
+    ('cache-baseline', ['tests/test_toy_pilot_cache.c'],
+                       ['KUI_TOY_TEST_EXPECT_PRIVATE=0', 'KUI_TOY_TEST_EXPECT_NATIVE=0']),
+    ('cache-private', ['tests/test_toy_pilot_cache.c'],
+                      ['KUI_TOY_PILOT_PRIVATE_P2=1', 'KUI_TOY_PILOT_NATIVE_CACHE=0',
+                       'KUI_TOY_TEST_EXPECT_PRIVATE=1', 'KUI_TOY_TEST_EXPECT_NATIVE=0']),
+    ('cache-native', ['tests/test_toy_pilot_cache.c'],
+                     ['KUI_TOY_PILOT_PRIVATE_P2=1', 'KUI_TOY_PILOT_NATIVE_CACHE=1',
+                      'KUI_TOY_TEST_EXPECT_PRIVATE=1', 'KUI_TOY_TEST_EXPECT_NATIVE=1']),
+    ('native-cache-publication', ['tests/test_toy_pilot_native_cache.c',
+                                  'src/loader/toy_pilot_bus.c',
+                                  'src/loader/toy_pilot_lease.c'],
+                                 ['KUI_TOY_PILOT_BUS_TEST', 'KUI_TOY_PILOT_LEASE_TEST',
+                                  'KUI_TOY_PILOT_PRIVATE_P2=1',
+                                  'KUI_TOY_PILOT_CACHE_TEST=1']),
     ('worker', ['tests/test_toy_pilot_worker.c', 'src/loader/toy_pilot_worker.c',
                 'src/core/toy_pilot.c', 'src/core/hash.c', 'src/core/data.c'], ['KUI_TOY_PILOT_WORKER_TEST']),
     ('gd-status', ['tests/test_toy_pilot_gd_status.c', 'src/core/retail_gd.c'], []),
@@ -92,6 +106,21 @@ def main():
         subprocess.run(shlex.split(args.cc) + flags + extra + ['-D' + d for d in definitions] +
                        sources + ['-Wl,--gc-sections', '-o', str(target)], cwd=ROOT, check=True)
         subprocess.run([str(target.resolve())], cwd=ROOT, env=environment, check=True)
+    # Compile the same admitted test source with only the profile changed.
+    # Require its explicit configuration diagnostic, not an unrelated error.
+    invalid = subprocess.run(shlex.split(args.cc) + flags +
+                             ['-DKUI_TOY_PILOT_PRIVATE_P2=0',
+                              '-DKUI_TOY_PILOT_NATIVE_CACHE=1',
+                              '-DKUI_TOY_TEST_EXPECT_PRIVATE=0',
+                              '-DKUI_TOY_TEST_EXPECT_NATIVE=1',
+                              'tests/test_toy_pilot_cache.c', '-Wl,--gc-sections',
+                              '-o', str(args.build_dir / 'test-cache-invalid')],
+                             cwd=ROOT, capture_output=True, text=True)
+    if invalid.returncode == 0 or ('Native Toy copy-back requires the isolated '
+                                   'private-state profile') not in invalid.stderr:
+        raise RuntimeError('native cache without private P2 did not fail with the '
+                           'required profile diagnostic:\n' + invalid.stderr)
+    print('Toy invalid cache profile: native copy-back without private P2 rejected')
     for check in ('scratch', 'gd_chunk', 'report'):
         command = [sys.executable, str(ROOT / ('tests/test_toy_pilot_' + check + '.py')), '--cc', args.cc]
         if args.no_sanitizers:
@@ -99,7 +128,11 @@ def main():
         subprocess.run(command, cwd=ROOT, env=environment, check=True)
     subprocess.run([sys.executable, str(ROOT / 'tests/test_toy_pilot_package.py')],
                    cwd=ROOT, env=environment, check=True)
-    print(f'{len(SUITES)+4} Toy pilot regression suites passed')
+    subprocess.run([sys.executable, str(ROOT / 'tests/test_toy_pilot_cache_audit.py')],
+                   cwd=ROOT, env=environment, check=True)
+    subprocess.run([sys.executable, str(ROOT / 'tests/test_toy_pilot_p2_layout.py')],
+                   cwd=ROOT, env=environment, check=True)
+    print(f'{len(SUITES)+7} Toy pilot regression suites passed')
 
 
 if __name__ == '__main__':

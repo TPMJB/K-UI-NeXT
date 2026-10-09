@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #ifndef KUI_TOY_PILOT_BOOT_H
 #define KUI_TOY_PILOT_BOOT_H
+#include "kui/toy_pilot_cache.h"
 
 /* This control belongs to the low candidate resident. The two temporary
  * stage addresses are erased before the first ordinary game allocation;

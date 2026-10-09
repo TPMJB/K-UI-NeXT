@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define C_SYMBOL(name) _ ## name
+#include "toy_pilot_frame.inc"
     .text
     .align 2
     .global C_SYMBOL(kui_toy_pilot_pause_hook)
@@ -9,11 +10,23 @@ C_SYMBOL(kui_toy_pilot_pause_hook):
      * stack and ABI. Only the authored follow-up uses the shared private
      * worker stack. In particular, a skipped/reentrant bridge must not turn
      * the native -13 retry result into apparent success. */
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     sts.l pr,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_END 4
+#endif
     mov.l .Loriginal_pause,r0
     jsr @r0
     nop
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_BEGIN
+#endif
     mov.l r0,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_END 4
+#endif
     mov r0,r4
     mov.l .Lafter_pause,r0
     mov.l .Lworker_bridge,r1
@@ -54,3 +67,7 @@ C_SYMBOL(kui_toy_pilot_native_pump):
 .Lbridge_anchor: .long __toy_pilot_stack_top-16
 .Lnative_guard_pump: .long 0x8c0b1704
     .size C_SYMBOL(kui_toy_pilot_native_pump),.-C_SYMBOL(kui_toy_pilot_native_pump)
+
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_HELPER C_SYMBOL(kui_toy_pilot_frame_publish_pause)
+#endif
