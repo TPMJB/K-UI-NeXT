@@ -37,19 +37,25 @@ Native four-bit microSD interface and a socketed XIAO ESP32-C5.
 K-UI owns the filesystem; the bridge supplies raw storage sectors.
 Attachment: soldered G1 tap on the VA1 mainboard. Preferred mounting is
 above the mainboard near IC501 (BIOS) and CN503, below the installed
-upper metal shield. The preferred carrier has a cutout around the
-existing BIOS, with independent supports. The owner confirms all CN503 pins
-are accessible and basically flush with the motherboard. Prefer a second
-cutout/notch, with an accessible edge/underside landing or thin local tap.
-Ordinary top-side carrier pads would be above these tails; qualify the solder
-cross-section, spacing and alignment before choosing a direct rigid joint.
+upper metal shield. The supported carrier clears the existing BIOS,
+using a cutout wherever its final outline overlaps the package. The owner confirms all CN503 pins
+are accessible and basically flush with the motherboard. The preferred
+attachment candidate is now a custom local polyimide flex tap, with a short
+tail into a locking low-profile FPC connector on the supported rigid carrier.
+The original GD-ROM connector stays installed. A generic straight FFC needs
+a separate adapter; custom flex lands can match CN503's two-row geometry.
+Ordinary rigid top pads would be above these tails; qualify the flex solder
+cross-section, visible access, coverlay, spacing and alignment before release.
+A direct rigid cutout/edge landing remains an alternative.
 Use CN503 for the full G1 bus; the baseline storage/Wi-Fi bridge does not
 need BIOS-leg soldering. Optional BIOS replacement needs additional ROM
 address/control access and stock-ROM isolation. GDEMU replaces the optical
 drive and boots with the stock BIOS; this ATA slave is not a GD-ROM emulator.
 Plan a disc bootstrap on the retained drive for initial K-UI/DreamShell use.
-A thin underside tap with a short flex to the top-side board is a fallback;
-the complete board is not assumed to fit underneath. Initial clearances are
+Keep the G1 flex short and supported, with nearby ground returns and qualified
+power conductors. Choose FPC count, contact face and reinforced tail thickness
+from its drawing and test retained-drive bus loading/timing. The complete
+controller/C5 board is not assumed to fit underneath the motherboard. Initial clearances are
 owner-reported; complete assembly fit remains unverified.
 Optional dual BIOS is in the architecture scope but absent from this sheet.
 The alternative IC501 leg-tap candidate supplies 20 ATA nets in the traced
@@ -143,10 +149,15 @@ with center spacing estimated near 1.01 mm. Use 1.00 mm working pitch for
 concept placement: 24 intervals plus one contact width give 24.44 mm, only
 0.05 mm from the reported run. The older 0.72 mm rough reading is superseded.
 Qualify the exact solder footprint and contact tolerances before fabrication.
-The BIOS-edge-to-CN503 gap is about 11.7 mm. CN503 passes through the shield,
-so no extra housing-top height measurement is needed. Its north/south position
-relative to the BIOS is still needed in the motherboard plane, using a clear
-contact or housing-edge reference. Two-row spacing/exposed length remain open.
+The printed 1 mm ruler in inline close-up 62258.jpg corroborates the working
+pitch. Use about 12 mm BIOS-body-to-CN503 housing gap; retain 11.7 mm as the
+earlier caliper report. The visible tail row starts near/slightly below the
+BIOS body top, enough for concept placement and a later 1:1 registration check.
+The paper is flat only at one end; do not derive precision coordinates from it.
+The owner reaffirms CN503 tails essentially flush and BIOS body about 2 mm
+above the motherboard. CN503 passes through the shield; no extra top-height
+or exact top-edge offset reading is required for this initial concept.
+The opposite tail row is hidden, so two-row spacing/exposed length remain open.
 Obtain its X/Y offset relative to IC501. The inline replacement photo and
 owner confirmation identify the upper SEGA 315-6267 and large chip below it
 with thermal compound. Both contact footprints have zero carrier clearance:
