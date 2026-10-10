@@ -2,7 +2,7 @@
 <export version="E">
   <design>
     <source>/home/user/g1-design/hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_sch</source>
-    <date>2026-10-10T20:07:45</date>
+    <date>2026-10-10T22:06:57</date>
     <tool>Eeschema 10.0.6</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -6470,35 +6470,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="C219">
-      <value>100nF</value>
-      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
-      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
-      <fields>
-        <field name="MPN">GRM155R71C104KA88D</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
-        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="C219" description=""/>
-      <property name="MPN" value="GRM155R71C104KA88D"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-1"/>
-      <property name="Sheetfile" value="power-bus-1.kicad_sch"/>
-      <sheetpath names="/power-bus-1/" tstamps="/9854b855-bf35-57c9-9b61-cf8289be694a/"/>
-      <tstamps>27fae8ef-5685-5cac-9dc5-314763abcb3f</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="D20">
       <value>Reserve charge Schottky</value>
       <footprint>KUI_Footprints:Nexperia_CFP3_SOD-123W</footprint>
@@ -6520,6 +6491,35 @@
       <property name="dnp"/>
       <sheetpath names="/power-bus-1/" tstamps="/9854b855-bf35-57c9-9b61-cf8289be694a/"/>
       <tstamps>0f4d4f7a-4efa-5901-9a39-9099d51e8284</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="D21">
+      <value>5 V bidirectional TVS</value>
+      <footprint>KUI_Footprints:D_SOD-123F</footprint>
+      <datasheet>https://www.littelfuse.com/products/overvoltage-protection/tvs-diodes/surface-mount/smf</datasheet>
+      <fields>
+        <field name="MPN">SMF5.0CA</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:D_SOD-123F</field>
+        <field name="Datasheet">https://www.littelfuse.com/products/overvoltage-protection/tvs-diodes/surface-mount/smf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="D21" description=""/>
+      <property name="MPN" value="SMF5.0CA"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-1"/>
+      <property name="Sheetfile" value="power-bus-1.kicad_sch"/>
+      <sheetpath names="/power-bus-1/" tstamps="/9854b855-bf35-57c9-9b61-cf8289be694a/"/>
+      <tstamps>7e65a6d5-0474-56b3-8cea-0b9ce7a75bef</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -7397,6 +7397,35 @@
             <pin num="4"/>
             <pin num="2"/>
             <pin num="5"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="C219">
+      <value>100nF</value>
+      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
+      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
+      <fields>
+        <field name="MPN">GRM155R71C104KA88D</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
+        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="C219" description=""/>
+      <property name="MPN" value="GRM155R71C104KA88D"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>27fae8ef-5685-5cac-9dc5-314763abcb3f</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
           </pins>
         </unit>
       </units>
@@ -8619,35 +8648,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R261">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R261" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>7ffeb3dc-013e-5c08-a3cf-a0c5254e1549</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="U31">
       <value>SN74LVC2G04DBVT</value>
       <footprint>KUI_Footprints:SOT-23-6</footprint>
@@ -9104,6 +9104,35 @@
       <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
       <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
       <tstamps>be39e1b3-bbe0-5738-8285-0fe549093544</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="R261">
+      <value>47k</value>
+      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
+      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
+      <fields>
+        <field name="MPN">RC0402FR-0747KL</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
+        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="R261" description=""/>
+      <property name="MPN" value="RC0402FR-0747KL"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-3"/>
+      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
+      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
+      <tstamps>7ffeb3dc-013e-5c08-a3cf-a0c5254e1549</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -12273,6 +12302,19 @@
       <pins>
         <pin num="1" name="K" type="passive"/>
         <pin num="2" name="A" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="KUI_G1" part="D21">
+      <fields>
+        <field name="Reference">D</field>
+        <field name="Value">5 V bidirectional TVS</field>
+        <field name="Footprint">KUI_Footprints:D_SOD-123F</field>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
     <libpart lib="KUI_G1" part="F20">
@@ -16938,6 +16980,7 @@
       <node ref="U10" pin="90" pinfunction="PT16D_90" pintype="input"/>
     </net>
     <net code="124" name="FUSED_5V" class="Default">
+      <node ref="D21" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="F20" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="Q20" pin="3" pinfunction="D_3" pintype="passive"/>
     </net>
@@ -17042,6 +17085,7 @@
       <node ref="C404" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="C405" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="C406" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="D21" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="J10" pin="2" pinfunction="GND_2" pintype="passive"/>
       <node ref="J10" pin="4" pinfunction="GND_4" pintype="passive"/>
       <node ref="J20" pin="2" pinfunction="GND_2" pintype="passive"/>

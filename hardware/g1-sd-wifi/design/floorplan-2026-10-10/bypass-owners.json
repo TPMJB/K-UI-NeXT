@@ -408,5 +408,19 @@
     ],
     "rotation_deg": 90,
     "removed_copper_items": 0
+  },
+  {
+    "cap": "D21",
+    "owner": "F20.2",
+    "net": "FUSED_5V",
+    "placed": true,
+    "before_mm": 1.815,
+    "after_mm": 2.23,
+    "xy_mm": [
+      57.017,
+      107.067
+    ],
+    "rotation_deg": 90,
+    "removed_copper_items": 0
   }
 ]

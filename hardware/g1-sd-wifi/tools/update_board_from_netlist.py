@@ -93,8 +93,17 @@ def main():
         matches = [f for f in list(board.GetFootprints()) if fpid(f) == want]
         template = matches[0] if matches else None
         if template is None:
-            raise ValueError('No on-board template for ' + want)
-        fp = template.Duplicate(False).Cast()
+            # First use of this footprint: load the localized library copy.
+            nick, name = want.split(':', 1)
+            if nick != 'KUI_Footprints':
+                raise ValueError('No on-board template for ' + want)
+            fp = pcbnew.FootprintLoad(str(CAD / 'KUI_Footprints.pretty'), name)
+            fp.SetFPID(pcbnew.LIB_ID(nick, name))
+            # Board convention: reference and value text stay hidden.
+            fp.Reference().SetVisible(False)
+            fp.Value().SetVisible(False)
+        else:
+            fp = template.Duplicate(False).Cast()
         fp.SetReference(ref)
         fp.SetValue(comps[ref]['value'])
         for pad in fp.Pads():

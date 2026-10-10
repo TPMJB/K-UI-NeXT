@@ -41,6 +41,8 @@ OWNERS = {
     'C402': 'U41', 'C403': 'U42', 'C404': 'U43', 'C405': 'U44', 'C406': 'U45',
     'C235': 'U71', 'C236': 'U71', 'C2036': 'K214',
     'C2025': 'J201', 'C2026': 'J201',
+    # Not a bypass capacitor: the input TVS sits on F20's output pad.
+    'D21': 'F20',
 }
 
 

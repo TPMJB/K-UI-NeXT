@@ -1231,11 +1231,11 @@
       "ref": "R202",
       "placed": true,
       "xy_mm": [
-        56.922,
-        107.75
+        35.922,
+        103.75
       ],
-      "rotation_deg": 270,
-      "wire_mm": 8.23,
+      "rotation_deg": 0,
+      "wire_mm": 16.03,
       "nets": [
         "RESERVE_CHARGE"
       ]

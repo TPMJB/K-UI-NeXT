@@ -1,6 +1,6 @@
 {
   "review_date": "2026-10-10",
-  "scope": "Exact component purchasing identities and variant quantities derived from physical circuit contracts. All 53 BASE SMT purchase rows have exact official JLC SMT catalog identity evidence; one BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. This is not an order acceptance or production release.",
+  "scope": "Exact component purchasing identities and variant quantities derived from physical circuit contracts. 52 of the 53 BASE SMT purchase rows have exact official JLC SMT catalog identity evidence; the input TVS SMF5.0CA, added later, still needs its catalog identity confirmed; one BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. This is not an order acceptance or production release.",
   "parts": {
     "046701.5NR": {
       "manufacturer": "Littelfuse",
@@ -1770,6 +1770,17 @@
         "fixture_required_by_catalog": false,
         "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
       }
+    },
+    "SMF5.0CA": {
+      "manufacturer": "Littelfuse",
+      "description": "5 V bidirectional TVS",
+      "physical_package": "SOD-123FL",
+      "electrical_spec": "200 W (10/1000 us), VRWM 5.0 V, bidirectional; breakdown and clamp per datasheet",
+      "manufacturer_sources": [
+        "https://www.littelfuse.com/products/overvoltage-protection/tvs-diodes/surface-mount/smf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected from the manufacturer family; the datasheet and catalog were not reachable from the design environment. Confirm VRWM 5.0 V, breakdown above 6 V, SOD-123FL land pattern and JLC catalog identity before ordering.",
+      "notes": "Added 10 October 2026 at the owner's request as 12-V mis-wiring protection. Supplier identity pending."
     }
   },
   "open_release_items": [

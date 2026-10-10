@@ -6,24 +6,24 @@
     "design/blocks/bios.json": "6c78b14bf1bffda7ebc4ca913427aa4b466e4fa0b61a81a36b96ff39dee9ebe7",
     "design/blocks/controller.json": "d5fa2fa23fa4b1c01efa0ac48c27fdb21b2bb02ef6e40d25a76b317961147bd2",
     "design/blocks/frontend.json": "8756a42cfff6185fc4f77298d7800dd9c5f92a740fce2f05e43822d25e68b386",
-    "design/blocks/power-bus.json": "cf9c06875e63ec1956187e273acb9082b38223129745adcf76fefb9e94d28a6b",
+    "design/blocks/power-bus.json": "c0ef8eafde343a4181703cecf7077146af3ac0684dcb6f9426f3f69a077ed2a0",
     "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
     "tools/generate_design.py": "db60b83477e366aa5ef4bdf9b16b55e87a929e88f17e9bbf5777444d50e96e4c",
     "tools/generate_parts_list.py": "ccd5d715efd4e6ea3a7894859e0a712dd3b6b3e65d0fc441e638d5838a55fd59",
-    "design/procurement-evidence.json": "5fa90ece8118a58cb641609dd71c00219131e58ef3ca326b928a11d10d737ade"
+    "design/procurement-evidence.json": "8d1e17dcf789fd19a02ef9c80a376a25df85c5883f37f3b0910a54dacb131a47"
   },
-  "source_component_refs": 360,
-  "purchased_component_refs": 298,
-  "unique_purchase_rows": 67,
+  "source_component_refs": 361,
+  "purchased_component_refs": 299,
+  "unique_purchase_rows": 68,
   "variant_total_parts": {
-    "BASE": 263,
-    "BIOS": 291,
-    "RESERVE": 269,
-    "BIOS_AND_RESERVE": 297,
-    "BASE_PSRAM_DNP": 262,
-    "BIOS_PSRAM_DNP": 290,
-    "RESERVE_PSRAM_DNP": 268,
-    "BIOS_AND_RESERVE_PSRAM_DNP": 296
+    "BASE": 264,
+    "BIOS": 292,
+    "RESERVE": 270,
+    "BIOS_AND_RESERVE": 298,
+    "BASE_PSRAM_DNP": 263,
+    "BIOS_PSRAM_DNP": 291,
+    "RESERVE_PSRAM_DNP": 269,
+    "BIOS_AND_RESERVE_PSRAM_DNP": 297
   },
   "variant_dnp_purchased_refs": {
     "BASE": [
@@ -192,16 +192,19 @@
     ]
   },
   "supplier_identity_verified_rows": 52,
-  "sourcing_pending_rows": 15,
+  "sourcing_pending_rows": 16,
   "catalog_identity_verified_base_rows": 52,
   "sourcing_pending_base_rows": [
-    "100010048"
+    "100010048",
+    "SMF5.0CA"
   ],
   "manual_base_purchase_rows": [
     "100010048"
   ],
   "jlc_smt_catalog_verified_base_rows": 52,
-  "jlc_assembly_pending_base_rows": [],
+  "jlc_assembly_pending_base_rows": [
+    "SMF5.0CA"
+  ],
   "jlc_fixture_required_base_rows": [
     "ASE-50.000MHZ-LC-T",
     "S7221-45R"

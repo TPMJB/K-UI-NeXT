@@ -1,7 +1,21 @@
 {
-  "added": [],
+  "added": [
+    "D21"
+  ],
   "swapped": [],
   "pad_net_changes": [
+    {
+      "ref": "D21",
+      "pin": "1",
+      "old_net": "",
+      "new_net": "FUSED_5V"
+    },
+    {
+      "ref": "D21",
+      "pin": "2",
+      "old_net": "",
+      "new_net": "GND"
+    },
     {
       "ref": "U10",
       "pin": "1",
@@ -388,5 +402,5 @@
     "R251",
     "R253"
   ],
-  "metadata_synced": 349
+  "metadata_synced": 350
 }

@@ -7171,6 +7171,34 @@
     "on_board": true
   },
   {
+    "ref": "D21",
+    "value": "5 V bidirectional TVS",
+    "mpn": "SMF5.0CA",
+    "footprint": "KUI_Footprints:D_SOD-123F",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FUSED_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.littelfuse.com/products/overvoltage-protection/tvs-diodes/surface-mount/smf"
+    ],
+    "description": "Over-voltage crowbar after F20: a wrong 12-V feed drives it into breakdown and F20 opens. Bidirectional, so a reversed 5-V feed stays below breakdown and Q20 blocks it without blowing F20. Does not hold the rail below downstream absolute maximums during the fault.",
+    "populate": true,
+    "height_max_mm": 1.1,
+    "block": "power-bus",
+    "variant": "BASE",
+    "source_footprint": "Diode_SMD:D_SOD-123F",
+    "on_board": true
+  },
+  {
     "ref": "C200",
     "value": "22uF",
     "mpn": "GRM21BR61A226ME51L",

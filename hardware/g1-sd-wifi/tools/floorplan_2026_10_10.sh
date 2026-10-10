@@ -7,7 +7,7 @@
 # endpoints per design/blocks/frontend.json) and produces the six-layer,
 # placed and fanned-out board ready for routing:
 #   1. pad nets follow the new FPGA pin map; the sixteen BUS_DD biases go
-#      (the FPGA's I/O pull-down replaces them);
+#      (the FPGA's I/O pull-down replaces them); the input TVS D21 arrives;
 #   2. the FPGA cluster moves 2.26 mm north; U35 turns +90 degrees and sits
 #      directly under it, so BUS_DD runs straight from the FPGA's south pins
 #      to U35's A side in matching order; a 10 mm band is then inserted
@@ -15,7 +15,8 @@
 #      59 x 105 mm board was 76 % full and could not route;
 #   3. displaced and badly placed small ICs, then passives, are re-placed by
 #      connectivity (narrow plane fanout cleared first);
-#   4. bypass capacitors go back next to their owners (the moved ones first),
+#   4. bypass capacitors go back next to their owners (the moved ones first)
+#      and D21 next to F20's output,
 #      and the optional reserve bank sits beside the power mux it feeds;
 #   5. the raw-G1 data probes move to U40's pins (same nets, open space);
 #   6. GND and +3V3_LOGIC fanout, six-layer stack.
@@ -31,7 +32,7 @@ BASE=${BASE:-4c525f6}
 git -C "$ROOT" show "$BASE:hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_pcb" > "$B"
 run() { "$PY" "$@" 2>&1 | grep -v -e '^[0-9:]* Debug' -e 'memory leak' || true; }
 
-run "$T/update_board_from_netlist.py" --allow-ref U10 \
+run "$T/update_board_from_netlist.py" --allow-ref U10 --allow-ref D21 --new-at D21=56.5,96.5,90 \
     $(printf -- '--allow-remove %s ' R223 R225 R227 R229 R231 R233 R235 R237 R239 R241 R243 R245 R247 R249 R251 R253) > "$R/pad-net-changes.json"
 run "$T/move_cluster.py" --board "$B" --owner U10 \
     $(printf -- '--member %s ' C100 C101 C102 C106 C107 C108 C109 C110) \
