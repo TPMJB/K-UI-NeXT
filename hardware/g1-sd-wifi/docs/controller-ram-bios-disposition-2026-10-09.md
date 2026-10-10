@@ -167,7 +167,7 @@ The replacement photo is visible inline and supplies placement context. It does 
 
 CN503 is reported as 38.67 mm long, 5.03 mm wide in the narrower pin-run section and **6.56 mm at its wider ends**. Use **38.67 × 6.56 mm** as the initial full body keepout, before clearance/alignment allowance. A shaped opening can narrow between the ends only after the actual width-transition positions are measured; do not assume those transitions coincide with the contact-run endpoints. The pin run remains centered and 24.39 mm long. Centering gives provisional end margins of (38.67 - 24.39) / 2 = **7.14 mm**. This is a plan-location calculation only. The span may be measured over outside edges rather than first/last contact centers; do not divide it by 24 and treat the result as a qualified pin pitch.
 
-The remaining concept-placement input is the X/Y offset between clearly identified CN503 and IC501 reference corners. The chip reference and qualitative zero/6.00/8.00 mm height map are resolved. Exact tail-row spacing, contact width/pitch, body-versus-tail envelope and joining tolerances remain footprint/fabrication checks.
+The owner subsequently reports **about 11.7 mm from the BIOS chip edge to CN503**. Treat this as the provisional horizontal gap requested between the BIOS black body's right edge and the connector housing's left edge; the actual endpoints and whether a narrower or wider housing section was used still need confirmation. The signed vertical offset between their top edges remains missing. The chip reference and qualitative zero/6.00/8.00 mm height map are resolved. Exact tail-row spacing, contact width/pitch, body-versus-tail envelope and joining tolerances remain footprint/fabrication checks.
 
 ## CN503 cutout and remaining measurements
 
@@ -175,7 +175,7 @@ The owner reports that **all G1/CN503 pins are accessible**, including both rows
 
 The owner has now answered the coarse height question: the CN503 tails are essentially at the motherboard surface. Ordinary top-side pads on a carrier laid above that surface would be raised by the carrier thickness and any support/insulation gap. The proposed flush attachment therefore needs a defined solder cross-section, rather than assuming flat top pads will be coplanar with the tails.
 
-Evaluate an accessible edge/underside landing with a visible solder fillet, potentially using an open notch and plated edge contacts. Castellated edges are a documented way to join a daughterboard to mainboard pads or component pins, but their hole, spacing and edge rules depend on the fabricator. [JLCPCB castellation guide](https://jlcpcb.com/blog/castellated-pcbs-introduction-and-design-requirements); [PCBWay half-hole guide](https://www.pcbway.com/pcb_prototype/What_are_Plated_Half_Holes_Castellated_Holes_.html). These generic references do not qualify closed internal-cutout castellations or this connector's unmeasured pitch. Bottom-side overlap contacts need actual installation/solder/inspection access. A thin local landing/flex or very short formed links to the carrier remain alternatives if a direct rigid edge joint is unsuitable.
+Evaluate an accessible edge/underside landing with a visible solder fillet, potentially using an open notch and plated edge contacts. Castellated edges are a documented way to join a daughterboard to mainboard pads or component pins, but their hole, spacing and edge rules depend on the fabricator. [JLCPCB castellation guide](https://jlcpcb.com/blog/castellated-pcbs-introduction-and-design-requirements); [PCBWay half-hole guide](https://www.pcbway.com/pcb_prototype/What_are_Plated_Half_Holes_Castellated_Holes_.html). These generic references do not qualify closed internal-cutout castellations or this connector's unqualified pitch. Bottom-side overlap contacts need actual installation/solder/inspection access. A thin local landing/flex or very short formed links to the carrier remain alternatives if a direct rigid edge joint is unsuitable.
 
 Define lead/pad overlap, solder access, insulation, edge clearance and the precise contact-height tolerance before selecting the joining geometry. Support the carrier independently of the solder joints and connector/BIOS legs.
 
@@ -183,7 +183,7 @@ The architecture proposal can proceed with the reported dimensions and latest he
 
 | Measurement bundle | Minimum useful information | Purpose |
 | --- | --- | --- |
-| Relative position | X/Y offset between identified CN503 and IC501 corners; use the reported 38.67 × 6.56 mm maximum body envelope and centered 24.39 mm contact run | Locate both cutouts in one coordinate system |
+| Relative position | About 11.7 mm BIOS-edge-to-CN503 gap reported; confirm reference edges and obtain the signed top-edge vertical offset | Locate both cutouts in one coordinate system using the 38.67 × 6.56 mm maximum housing envelope |
 | Placement/metal map | Transfer the confirmed zero-clearance footprints, 6.00 mm IC501/CN503 area and 8.00 mm outer area to the measured outline; locate supports | Apply height regions to usable board/C5 placement |
 | Components beneath carrier | Positions and heights wherever solid carrier would pass over existing parts | Choose local cutouts or elevation within the height budget |
 | C5 mounted stack | Select socket/contact from a manufacturer drawing; use the tallest remaining point after USB removal, with carrier thickness/elevation counted separately | Verify the current USB-free module within the complete stack; 4.48 mm is the earlier USB-equipped envelope |
@@ -191,6 +191,19 @@ The architecture proposal can proceed with the reported dimensions and latest he
 A dimensioned sketch is enough for the first outline; a square-on photo with a metric ruler in the PCB plane can supplement it. If the removable C5 connector is not chosen, select it from a manufacturer drawing first rather than requiring the owner to buy one just to measure. No additional BIOS-top or GD-ROM height measurement is needed for a carrier that clears both bodies and stays below the normally installed shield.
 
 Before fabrication, qualify CN503 tail pitch, row spacing, tail width/exposed length, contact-height tolerance and pin orientation, plus the corresponding IC501 dimensions wherever leg taps are retained. For a uniform 25-contact row, measuring between matching edges of the first and last tail and dividing by 24 is a useful pitch check; it is not a substitute for the complete footprint and alignment tolerance. The existing CSV is a logical net reference, not that mechanical footprint.
+
+### Latest reported spacing and placement
+
+The owner reports **about 0.72 mm between pins**, **about 0.44 mm width for one pin**, and **about 11.7 mm from the BIOS chip edge to CN503**. The contact measurements are presumed to concern CN503 in response to the outstanding connector checklist; confirm that identity and the spacing endpoints before assigning them to a footprint. Retain the BIOS's separate 1.27 mm nominal pitch reference.
+
+| Meaning of the reported 0.72 mm | Derived pitch | First-to-last matching-edge span for one uniform 25-contact row |
+| --- | --- | --- |
+| Center-to-center or corresponding-edge distance | 0.72 mm | 24 × 0.72 = 17.28 mm |
+| Clear gap, with 0.44 mm contact width | 0.72 + 0.44 = 1.16 mm | 24 × 1.16 = 27.84 mm |
+
+Neither interpretation reconciles the earlier 24.39 mm reported pin run. If that earlier run measured outside edges, the 0.44 mm width would imply (24.39 - 0.44) / 24 ≈ 0.998 mm pitch; if it measured first-to-last centers, it would imply 24.39 / 24 ≈ 1.016 mm. These are conditional checks, not a selected 1 mm footprint.
+
+The most useful next check is one complete CN503 row: count its contacts, then measure from the same corresponding edge of the first contact to that edge of the last contact. For 25 contacts, divide by 24 intervals. Also obtain the spacing between the two tail rows, exposed tail length and the connector's signed top-edge vertical offset relative to IC501. Do not freeze solder-pad pitch from the ambiguous small-gap readings.
 
 ## Local C5, RAM provision and factory assembly
 
@@ -220,12 +233,12 @@ Custom boards can be ordered with SMT components factory-soldered. The assembly 
 
 The known body dimensions and zero/6/8 mm height regions are sufficient for architecture and schematic work. Before fixing the outline and console attachment, collect:
 
-1. **Relative placement:** CN503's X/Y offset from IC501. In the existing photo orientation, measure the horizontal gap from the BIOS black body's right edge to the connector housing's left edge, and the signed vertical offset between their top edges. Mark which connector housing edge/end was used.
-2. **Actual solder geometry:** CN503 tail pitch, spacing between the two tail rows and the exposed contact length/width. Use a counted multi-pin span between matching edges divided by the number of intervals, or a verified connector drawing. The 24.39 mm overall pin run is not enough to set pitch.
+1. **Relative placement:** about 11.7 mm BIOS-edge-to-CN503 gap is now reported. Confirm it is from the black body's right edge to the housing's left edge, identify that housing section, and provide the signed vertical offset between their top edges.
+2. **Actual solder geometry:** about 0.44 mm contact width and ambiguous 0.72 mm spacing are now reported. Qualify pitch with a counted matching-edge multi-contact span or a verified drawing, plus the two-row spacing and exposed contact length. The earlier 24.39 mm overall run and new small-gap reading are not enough to set pitch.
 3. **Outline and supports:** mark usable board limits, metal steps, existing component keepouts and available independent supports on one dimensioned overhead sketch. Account for component heights beneath solid carrier areas. Set microSD insertion/removal and programming access; internal service access is the baseline.
 4. **Local USB-free C5 stack:** measure its remaining module height after connector removal; select the removable connection from its drawing and count the carrier/support height separately. No remote C5 cable-route measurement is requested. No need to buy an unspecified socket just to measure it.
 
-The owner will supply items 1 and 2 after returning home. Nominal BIOS pitch is documented above; its clearance-only cutout is not waiting on a BIOS pad pitch measurement. Complete the electrical design, selected front-end/link, production footprints and ERC/DRC before generating an assembly order. The current KiCad foundation and GPIO CSV do not implement the RAM, final C5 mount or installed-update/recovery circuits.
+The owner has supplied partial placement/contact measurements in items 1 and 2; the endpoint, pitch and remaining geometry checks above are still open. Nominal BIOS pitch is documented above; its clearance-only cutout is not waiting on a BIOS pad pitch measurement. Complete the electrical design, selected front-end/link, production footprints and ERC/DRC before generating an assembly order. The current KiCad foundation and GPIO CSV do not implement the RAM, final C5 mount or installed-update/recovery circuits.
 
 ## Evidence and next steps
 
