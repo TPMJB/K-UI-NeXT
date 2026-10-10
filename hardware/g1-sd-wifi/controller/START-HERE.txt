@@ -171,13 +171,26 @@ track the exposed contact row without obvious cumulative drift. Accept
 pitch reading or printer tuning is requested. The opposite physical row is
 hidden, so 5.03 mm remains trial row-center spacing rather than a verified
 two-row center measurement. Final pad overlap and tolerances remain to design.
-The opposite row is hidden in the close-up; exposed tail length, overlap and
-final joining tolerances remain open. Use the approximately 12 mm gap and
+The opposite row was hidden in the paper-fit close-up; the later inline
+photos 62264.jpg/62265.jpg now show both CN503 solder rows. A faces the BIOS;
+B faces the east PCB edge. A25/B25 are at the AV/north end; A1/B1 at the
+CN601/south end. These are physical silk labels, not verified net continuity.
+Exposed tail length, overlap and final joining tolerances remain to qualify. Use the approximately 12 mm gap and
 qualitative row/body alignment for initial X/Y placement, then check the
 final registration. The inline replacement photo and
 owner confirmation identify the upper SEGA 315-6267 and large chip below it
 with thermal compound. Both contact footprints have zero carrier clearance:
 keep them clear and preserve the installed metal contact.
+The owner now reports about 7 mm west of BIOS before the large thermal chip
+and about 7 mm east of CN503 to the PCB edge. Overviews 62266.jpg/62267.jpg
+show the surrounding parts, board edges and case hardware for a first outline.
+The east strip includes exposed solder joints; do not assume an empty 7 mm
+carrier rectangle. Keep 5.03 mm row-center spacing provisional: angled photos
+do not establish exact centers, tail lengths or mounting-hole coordinates.
+The requested exposed-motherboard capture is complete. The owner can
+reassemble; no further console-open measurement is required for the first
+flex/carrier draft. Check the complete landing and assembled fit on the
+prototype. USB-free C5 height can be measured off-console later.
 Other chips are reported significantly below 2 mm, but parts under solid
 carrier areas still require height allowance or local cutouts. BIOS-top gap
 matters only for a later overhang.

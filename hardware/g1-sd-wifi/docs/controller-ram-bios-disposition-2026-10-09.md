@@ -146,6 +146,8 @@ Additional measurements supplied on 9 October 2026:
 | CN503 row-separation reference | About 5.03 mm | Owner identifies the narrow-section width as the effective distance between rows; trial centerline spacing for the fit guide, not a qualified pad-center measurement |
 | CN503 pin-run length | 24.39 mm, centered within the 38.67 mm length | Initial contact-run location; measurement endpoints not specified |
 | CN503 tail height | Basically flush with motherboard | Near PCB-surface contact plane; qualitative, not a precision 0.00 mm value |
+| Space west/left of IC501 | About 7 mm before the large thermal-contact chip | Owner-reported lateral outline reference; exact body/lead endpoint not specified |
+| Space east/right of CN503 | About 7 mm from connector's right side to motherboard edge | Owner-reported lateral outline reference; allow for existing solder joints and nearby case hardware |
 | General usable area | Outside the CPU/GPU thermal-contact area | Candidate placement region, subject to components, metal geometry and independent supports |
 
 The initial IC501 body rectangle is 26.68 × 12.65 mm. A clearance-only opening must also clear the reported 16.66 mm outer lead span and an assembly/alignment allowance; a narrower opening intended to overlap/tap the leads needs an explicit landing geometry. Do not derive lead pitch from the body dimensions or the difference between body and lead span. These reported sizes establish a concept keepout, not a final routed opening or qualified IC footprint.
@@ -231,6 +233,21 @@ On 9 October 2026, the owner checks the printed contact guide against CN503 and 
 
 Record this as a **successful visible-row alignment check**. The photo does not show both physical solder-tail rows, so **5.03 mm remains the owner's working row-separation reference**, interpreted as trial centerline spacing rather than a verified two-row center measurement. Perspective and paper placement do not establish numerical alignment error or both printed scale-bar lengths. Exposed-tail length, solder overlap, coverlay and final landing tolerances still belong to footprint qualification before manufacture. The check advances the mechanical draft; the circuit, electrical pin orientation and finished assembly files remain separate work.
 
+### Both-row and placement captures
+
+On 9 October 2026 the owner supplies inline photos **62264.jpg–62267.jpg** and reports **about 7 mm west of the BIOS before the large thermal-contact chip**, plus **about 7 mm east of CN503 to the motherboard edge**. The two close-ups show the solder tails on both sides of CN503; the second supplies the previously missing opposite-row view. The two ruler overviews show the surrounding parts, both thermal-contact chips, board edges and case hardware. Together with the existing package measurements, accepted 1.00 mm pitch and zero/6/8 mm height map, these captures are **sufficient for the first flex and carrier mechanical draft**. No further exposed-motherboard measurement is requested before that draft; the owner can reassemble the console.
+
+| Photo-visible CN503 reference | Orientation in the motherboard plane |
+| --- | --- |
+| A row | Faces IC501 / west |
+| B row | Faces the right/east motherboard edge |
+| A25 and B25 | North end, toward the AV connector |
+| A1 and B1 | South end, toward CN601 / lower board edge |
+
+These are readable physical silkscreen references, not a verified electrical net mapping. The tails are visible close to motherboard level, and the housing projections and end mounting tabs need clearance in the flex contour. The east-side strip contains existing exposed solder joints and approaches case hardware. Treat the two 7 mm reports as lateral boundaries rather than two empty, unobstructed rectangular carrier areas.
+
+Use the overviews for conservative initial placement. Their angle and paper-ruler placement do not establish exact pad coordinates, exposed-tail lengths, actual metal-row center separation, mounting-hole coordinates or a calibrated carrier envelope. Keep **5.03 mm row-center spacing provisional** and qualify the complete landing and assembled fit with the prototype before fabrication release. The USB-free C5 height can be measured separately after console reassembly; chosen connector/support dimensions come from their drawings. No connector removal or new printer tuning is requested for this capture stage.
+
 ## Local C5, RAM provision and factory assembly
 
 The owner now chooses **removing the C5 USB connector and mounting the removable C5 locally on the normal carrier**. Keep the G1 front end close to CN503. The previously discussed PSU/G2 remote mounts are deferred; their cable routes are not required inputs for this layout. USB removal is an owner-selected assembly modification, not proof of fit: use the measured post-removal envelope and the selected low-height connection in the complete stack check. The intact shield and thermal-contact keepouts remain the baseline.
@@ -257,14 +274,14 @@ Custom boards can be ordered with SMT components factory-soldered. The assembly 
 
 ## Remaining inputs before PCB layout
 
-The known body dimensions and zero/6/8 mm height regions are sufficient for architecture and schematic work. Before fixing the outline and console attachment, collect:
+The owner has completed the exposed-motherboard capture needed for the first mechanical draft and can reassemble the console. The body dimensions, accepted pitch, two approximately 7 mm side-space reports, both-row photos and zero/6/8 mm height regions support initial layout. The following are remaining design/prototype and fabrication checks, not additional measurements required before reassembly:
 
 1. **Relative placement:** use about 12 mm BIOS-body-to-CN503 housing gap, retaining the earlier 11.7 mm caliper report. Use the close-up's qualitative row/body alignment for concept placement and check the final cutout/contact registration with a 1:1 fit template. No additional connector-top height or exact top-edge offset measurement is requested for the initial concept.
 2. **Actual solder geometry:** retain the reaffirmed 24.39 mm run and approximately 0.44 mm width. The owner accepts the visible-row paper fit in 62263.jpg, so carry **1.00 mm nominal pitch** into the first flex draft. Keep approximately 5.03 mm as provisional row-center spacing; qualify both physical rows, exposed contact length, overlap and final landing tolerances before fabrication. The paper check supports pitch, while the narrow-section reference remains an interpreted row-center dimension.
-3. **Outline and supports:** mark usable board limits, metal steps, existing component keepouts and available independent supports on one dimensioned overhead sketch. Account for component heights beneath solid carrier areas. Set microSD insertion/removal and programming access; internal service access is the baseline.
-4. **Local USB-free C5 stack:** measure its remaining module height after connector removal; select the removable connection from its drawing and count the carrier/support height separately. No remote C5 cable-route measurement is requested. No need to buy an unspecified socket just to measure it.
+3. **Outline and supports:** use the approximately 7 mm west-of-BIOS and east-of-CN503 references with overviews 62266.jpg/62267.jpg for a conservative first outline. Respect the thermal-contact keepouts, metal steps and existing parts; select independent supports and qualify their coordinates with the prototype. Set microSD insertion/removal and programming access; internal service access is the baseline.
+4. **Local USB-free C5 stack:** measure its remaining module height after connector removal; this can be done off-console after reassembly. Select the removable connection from its drawing and count the carrier/support height separately. No remote C5 cable-route measurement is requested. No need to buy an unspecified socket just to measure it.
 
-The owner has supplied working placement, pitch, width and row-separation references for items 1 and 2 and has now accepted the visible-row template fit. That is sufficient to start the flex mechanical draft without further initial pitch or printer tuning. Final-footprint, exposed-length and remaining geometry checks above are still open. Nominal BIOS pitch is documented above; its clearance-only cutout is not waiting on a BIOS pad pitch measurement. Complete the electrical design, selected front-end/link, production footprints and ERC/DRC before generating an assembly order. The current KiCad foundation and GPIO CSV do not implement the RAM, final C5 mount or installed-update/recovery circuits.
+The owner has supplied working placement, pitch, width and row-separation references, accepted the visible-row template fit, and now provided both-row close-ups and board overviews. Proceed with the first flex/carrier draft without further console-open measurement or printer tuning. Final-footprint, exposed-length and full assembly-fit checks above remain part of prototype qualification. Nominal BIOS pitch is documented above; its clearance-only cutout is not waiting on a BIOS pad pitch measurement. Complete the electrical design, selected front-end/link, production footprints and ERC/DRC before generating an assembly order. The current KiCad foundation and GPIO CSV do not implement the RAM, final C5 mount or installed-update/recovery circuits.
 
 ## Evidence and next steps
 
