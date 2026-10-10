@@ -62,12 +62,20 @@ at most about 3.8 mm including the clamp.
 
 ## Accounts and orders
 
-**6. Ask JLCPCB about two assembly fixtures.** Their catalog flags the Harwin
+**6. Confirm a six-layer 0.8 mm board on the JLCPCB order page.** The
+carrier is now six layers (signal / ground / signal / signal / 3.3 V /
+signal). Four layers could not route this outline. The C5 and connector
+height budget assumes 0.8 mm total thickness, so pick the fabricator's
+standard six-layer stack at 0.8 mm (no impedance control needed). If 0.8 mm
+is not offered for six layers, tell me the thinnest option; 1.0 mm costs
+0.2 mm of the 3.8 mm C5 budget.
+
+**7. Ask JLCPCB about two assembly fixtures.** Their catalog flags the Harwin
 S7221-45R spring contacts (C22445132) and the Abracon ASE oscillator
 (C596955) as needing assembly fixtures. Get their agreement before the
 assembly order.
 
-**7. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
+**8. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
 but a placed-and-routed bitstream and real timing need Lattice's own tools,
 which need a Lattice account and licence file. Open-source tools cannot
 produce a MachXO2 bitstream with timing sign-off.

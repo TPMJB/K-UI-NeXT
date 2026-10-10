@@ -72,8 +72,15 @@ def add_fanout(board, only_refs=None, net_name='GND'):
         if index%10==0:board.BuildConnectivity();conn=board.GetConnectivity()
         if ground_connected(pad,conn):skipped+=1;continue
         a=point(pad.GetPosition());candidate=None
+        angles=[0,90,180,270,45,135,225,315]
+        owner=pad.GetParentFootprint()
+        if len(list(owner.Pads()))>8:
+            # IC pins drop their via inward, under the body, so the escape
+            # side of the pin row stays free for signals.
+            c=point(owner.GetPosition());inward=math.degrees(math.atan2(c[1]-a[1],c[0]-a[0]))
+            angles.sort(key=lambda d:abs((d-inward+180)%360-180))
         for radius in [.60,.75,1.0,1.25,1.5,2.0,2.5,3.0]:
-            for degrees in [0,90,180,270,45,135,225,315]:
+            for degrees in angles:
                 rad=math.radians(degrees);v=(a[0]+radius*math.cos(rad),a[1]+radius*math.sin(rad))
                 vb=(v[0]-VIA_DIAMETER/2,v[1]-VIA_DIAMETER/2,v[0]+VIA_DIAMETER/2,v[1]+VIA_DIAMETER/2)
                 tb=(min(a[0],v[0])-TRACE_WIDTH/2,min(a[1],v[1])-TRACE_WIDTH/2,max(a[0],v[0])+TRACE_WIDTH/2,max(a[1],v[1])+TRACE_WIDTH/2)

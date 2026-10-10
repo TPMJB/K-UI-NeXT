@@ -22,6 +22,9 @@ T=$ROOT/tools
 B=$ROOT/controller/KUI-G1-Bridge-RevA.kicad_pcb
 R=${REPORTS:-$ROOT/design/floorplan-2026-10-10}
 mkdir -p "$R"
+# Start from the last four-layer placement unless told otherwise.
+BASE=${BASE:-4c525f6}
+git -C "$ROOT" show "$BASE:hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_pcb" > "$B"
 run() { "$PY" "$@" 2>&1 | grep -v -e '^[0-9:]* Debug' -e 'memory leak' || true; }
 
 run "$T/update_board_from_netlist.py" --allow-ref U10 > "$R/pad-net-changes.json"

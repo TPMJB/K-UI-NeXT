@@ -104,10 +104,10 @@
     {
       "pad": "U201.41",
       "xy_mm": [
-        44.1375,
-        38.4
+        43.713235931288075,
+        38.224264068711925
       ],
-      "stub_length_mm": 0.6000000000000014,
+      "stub_length_mm": 0.5999999999999989,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
@@ -195,7 +195,7 @@
       "pad": "U205.2",
       "xy_mm": [
         34.875,
-        13.674999999999997
+        16.174999999999997
       ],
       "stub_length_mm": 1.25,
       "via_diameter_mm": 0.5,
@@ -1125,7 +1125,7 @@
       "pad": "U10.46",
       "xy_mm": [
         20.0,
-        40.6525
+        38.1525
       ],
       "stub_length_mm": 1.25,
       "via_diameter_mm": 0.5,
@@ -1220,6 +1220,6 @@
   "already_serviced_pads": 28,
   "native_unconnected_count_after": 500,
   "complete_layout_qualified": false,
-  "input_board_sha256": "0e183fc8f2af246872fbca4f3edac8edde8d0279897c9b644f2838a877da42fe",
-  "output_board_sha256": "53838a8e547f00c166d6365bf73eaf2e1c69ab56a7d4fabca1f241810e7a523a"
+  "input_board_sha256": "9ea045646da6c5a7861763fd264a6fa71c5e746aa55e0539b19e05d9ee4a4deb",
+  "output_board_sha256": "03f3babc53f1537c1b4beec8b60177e12567e03df2d83c8efb4b863b6e39ecaa"
 }

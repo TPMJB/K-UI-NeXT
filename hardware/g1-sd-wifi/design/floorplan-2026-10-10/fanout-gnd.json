@@ -124,7 +124,7 @@
       "pad": "U205.3",
       "xy_mm": [
         35.525000000000006,
-        16.174999999999997
+        13.674999999999997
       ],
       "stub_length_mm": 1.25,
       "via_diameter_mm": 0.5,
@@ -214,7 +214,7 @@
       "pad": "J201.SH",
       "xy_mm": [
         44.760000000000005,
-        17.9625
+        15.962499999999999
       ],
       "stub_length_mm": 1.0,
       "via_diameter_mm": 0.5,
@@ -224,7 +224,7 @@
       "pad": "J201.SH",
       "xy_mm": [
         50.730000000000004,
-        17.9625
+        15.962499999999999
       ],
       "stub_length_mm": 1.0,
       "via_diameter_mm": 0.5,
@@ -363,30 +363,30 @@
     {
       "pad": "U22.1",
       "xy_mm": [
-        37.05,
-        98.6525
+        37.474264068711925,
+        98.82823593128806
       ],
-      "stub_length_mm": 0.5999999999999943,
+      "stub_length_mm": 0.6000000000000039,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
     {
       "pad": "U22.4",
       "xy_mm": [
-        37.05,
-        101.35249999999999
+        37.474264068711925,
+        101.17676406871193
       ],
-      "stub_length_mm": 0.5999999999999943,
+      "stub_length_mm": 0.6000000000000039,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
     {
       "pad": "U22.5",
       "xy_mm": [
-        38.95,
-        101.35249999999999
+        38.525735931288075,
+        101.17676406871193
       ],
-      "stub_length_mm": 0.5999999999999943,
+      "stub_length_mm": 0.6000000000000039,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
@@ -633,7 +633,7 @@
     {
       "pad": "U208.10",
       "xy_mm": [
-        56.3,
+        53.8,
         23.125
       ],
       "stub_length_mm": 1.25,
@@ -793,30 +793,30 @@
     {
       "pad": "U21.1",
       "xy_mm": [
-        47.05,
-        90.6525
+        47.474264068711925,
+        90.82823593128806
       ],
-      "stub_length_mm": 0.5999999999999943,
+      "stub_length_mm": 0.6000000000000039,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
     {
       "pad": "U21.4",
       "xy_mm": [
-        47.05,
-        93.35249999999999
+        47.474264068711925,
+        93.17676406871193
       ],
-      "stub_length_mm": 0.5999999999999943,
+      "stub_length_mm": 0.6000000000000039,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
     {
       "pad": "U21.5",
       "xy_mm": [
-        48.95,
-        93.35249999999999
+        48.525735931288075,
+        93.17676406871193
       ],
-      "stub_length_mm": 0.5999999999999943,
+      "stub_length_mm": 0.6000000000000039,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
@@ -914,7 +914,7 @@
       "pad": "J50.MP",
       "xy_mm": [
         39.95,
-        62.900000000000006
+        60.400000000000006
       ],
       "stub_length_mm": 1.25,
       "via_diameter_mm": 0.5,
@@ -1414,7 +1414,7 @@
       "pad": "J51.MP",
       "xy_mm": [
         39.95,
-        85.9
+        83.4
       ],
       "stub_length_mm": 1.25,
       "via_diameter_mm": 0.5,
@@ -1463,10 +1463,20 @@
     {
       "pad": "J40.13",
       "xy_mm": [
-        20.75,
-        77.7
+        19.75,
+        78.7
       ],
       "stub_length_mm": 1.0,
+      "via_diameter_mm": 0.5,
+      "via_drill_mm": 0.2
+    },
+    {
+      "pad": "J40.14",
+      "xy_mm": [
+        20.85,
+        77.7
+      ],
+      "stub_length_mm": 0.6000000000000014,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
@@ -1483,7 +1493,7 @@
     {
       "pad": "J40.MP",
       "xy_mm": [
-        23.400000000000006,
+        20.900000000000006,
         80.95
       ],
       "stub_length_mm": 1.25,
@@ -2144,7 +2154,7 @@
       "pad": "U10.33",
       "xy_mm": [
         13.5,
-        40.6525
+        38.1525
       ],
       "stub_length_mm": 1.25,
       "via_diameter_mm": 0.5,
@@ -2154,7 +2164,7 @@
       "pad": "U10.44",
       "xy_mm": [
         19.0,
-        40.6525
+        38.1525
       ],
       "stub_length_mm": 1.25,
       "via_diameter_mm": 0.5,
@@ -2314,9 +2324,9 @@
   "unroutable_ground_pads": [
     "U44.2"
   ],
-  "already_serviced_ground_pads": 52,
+  "already_serviced_ground_pads": 51,
   "native_unconnected_count_after": 622,
   "complete_layout_qualified": false,
-  "input_board_sha256": "08a8d111cab6d36c3002242223c795d22334a8adea4041f4efdd5e66df11ba03",
-  "output_board_sha256": "0e183fc8f2af246872fbca4f3edac8edde8d0279897c9b644f2838a877da42fe"
+  "input_board_sha256": "b87b091dd595033da91216f80eb15c98057345933c5c96a640b6d4ecef73e1d5",
+  "output_board_sha256": "9ea045646da6c5a7861763fd264a6fa71c5e746aa55e0539b19e05d9ee4a4deb"
 }
