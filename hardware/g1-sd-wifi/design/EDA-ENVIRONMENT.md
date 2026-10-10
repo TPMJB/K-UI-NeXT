@@ -138,3 +138,43 @@ Each symbol in the child contains a matching project instance with path
 The parent has the root `sheet_instances` path `/` on page 1; children omit
 that root-only section. Global labels with identical names connect across
 the child sheets. Local labels alone do not cross sheets.
+
+## Session notes, 10 October 2026 (routing closure)
+
+These record what was needed to reproduce the toolchain in a managed
+container whose egress policy blocks `ppa.launchpadcontent.net`.
+
+- **KiCad 10.0.6 from source.** The official GitLab tag archive
+  (`gitlab.com/kicad/code/kicad/-/archive/10.0.6`) builds on Ubuntu 24.04
+  with the packages in the source tree's `install-deps.sh`. Configure with
+  `-DKICAD_SCRIPTING_WXPYTHON=OFF -DKICAD_BUILD_QA_TESTS=OFF
+  -DKICAD_BUILD_I18N=OFF` and build only `kicad-cli pcbnew_kiface
+  eeschema_kiface cvpcb_kiface pcbnew/_pcbnew.so` (about one hour on four
+  cores). Run from the build tree with `KICAD_RUN_FROM_BUILD_DIR=1`, the
+  build's `common` library directories on `LD_LIBRARY_PATH`, `pcbnew/` on
+  `PYTHONPATH`, and the built `kicad-cli` first on `PATH` (the flex checker
+  calls `kicad-cli` by name). The Python module is built against the
+  interpreter CMake finds; in that container it was 3.13, so run every
+  `pcbnew` script with that same interpreter.
+- **Footprint library.** `tools/generate_design.py` copies standard
+  footprints into `KUI_Footprints.pretty`. Set `KICAD10_FOOTPRINT_DIR` when
+  the system library is not KiCad 10 (stock Ubuntu ships KiCad 7, whose
+  footprints differ). The KiCad 10.0.6 `kicad-footprints` tag reproduces the
+  committed localized footprints byte for byte. Provenance records the
+  standard `/usr/share/kicad/footprints` location either way.
+- **Freerouting and the In1 rule area.** The native DSN export turns the
+  "In1 reference plane — no routed traces" rule area into a board-wide
+  `wire_keepout`. Freerouting 1.9 treats that keepout as an obstacle for
+  vias (each via has an In1 annulus), so no via could be placed and every
+  route was confined to F.Cu; this is why earlier runs stalled with almost
+  all copper on F.Cu. `generate_board.py export-dsn` now strips that one
+  block. `Headless19Ripup` already deactivates In1 for traces, and native
+  KiCad DRC still enforces the rule area after import.
+- **SWIG object lifetime.** In this build, removing board items from
+  Python and letting their proxies be collected before the board is saved
+  leaves later iterations of the board's containers untyped
+  (`SwigPyObject`). The new placement/update tools keep removed items
+  referenced until the board is saved.
+- **Java.** Temurin 25 downloads were also blocked, so Freerouting 2.5.0
+  could not run; the 1.9.0 JAR (hash above) with `Headless19Ripup` runs on
+  the system Java 21.

@@ -525,6 +525,20 @@ def export_dsn(args):
     b=pcbnew.LoadBoard(str(BOARD));sync_native_metadata(b,args.components,args.netlist)
     edge_routing_obstacles(b);ground_plane(b,b.FindNet('GND'));pcbnew.SaveBoard(str(BOARD),b)
     if not pcbnew.ExportSpecctraDSN(b,str(args.dsn)):raise ValueError('Native DSN export failed')
+    # The In1 "no routed traces" rule area exports as a board-wide
+    # wire_keepout. Freerouting 1.9 treats it as an obstacle for vias too
+    # (every via has an In1 annulus), so no via could ever be placed and all
+    # routing collapsed onto F.Cu. Headless19Ripup already deactivates In1 for
+    # traces, and native KiCad DRC still enforces the rule after import.
+    content=args.dsn.read_text();start=content.find('(wire_keepout "" (polygon In1.Cu')
+    if start<0:raise ValueError('In1 wire_keepout not found; check the DSN exporter output')
+    depth=0
+    for end in range(start,len(content)):
+        depth+=content[end]=='(';depth-=content[end]==')'
+        if depth==0:break
+    content=content[:start]+content[end+1:]
+    if 'wire_keepout' in content:raise ValueError('Unexpected extra wire_keepout in DSN')
+    args.dsn.write_text(content)
     if args.signal_starter:
         # Escape-width trial only. The native POWER netclass remains 0.40 mm;
         # any imported power copper needs explicit widening/current review.
