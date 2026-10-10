@@ -331,6 +331,12 @@
       "+5V_HOLD": [
         "POWER"
       ],
+      "CONSOLE_3V3": [
+        "POWER"
+      ],
+      "CONSOLE_3V3_FLEX": [
+        "POWER"
+      ],
       "CONSOLE_5V": [
         "POWER"
       ],

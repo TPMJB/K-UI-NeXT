@@ -287,7 +287,7 @@ def place(args):
     power_nets=[]
     for name in sorted(set(padnets.values())):
         n=pcbnew.NETINFO_ITEM(board,name);board.Add(n);nets[name]=n
-        if name.startswith('+') or name in ('CONSOLE_5V','MCU_VREG_LX','RESERVE_5V',
+        if name.startswith('+') or name in ('CONSOLE_5V','MCU_VREG_LX','RESERVE_5V','CONSOLE_3V3','CONSOLE_3V3_FLEX',
                                             'FUSED_5V','PRIMARY_5V','SW_LOGIC','SW_STORAGE','MCU_VREG_AVDD'):
             n.SetNetClass(power_nc);assigned=pcbnew.STRINGSET();assigned.insert('POWER');ds.m_NetSettings.AppendNetclassLabelAssignment(name,assigned);power_nets.append(name)
     fps={c['ref']:footprint(c) for c in data}
