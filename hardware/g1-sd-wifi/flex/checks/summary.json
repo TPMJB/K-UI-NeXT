@@ -9,7 +9,11 @@
   "arms": [
     {
       "row": "A",
-      "conductors": 20,
+      "conductors": 18,
+      "unconnected_supply_fingers": [
+        "unconnected-(J2-Pad1)",
+        "unconnected-(J2-Pad3)"
+      ],
       "erc_violations": 0,
       "drc_violations": 0,
       "unconnected_items": 0,
@@ -22,7 +26,7 @@
           "pin": 1,
           "x_mm": 90.5,
           "y_mm": 42.75,
-          "net": "/CN503_A1_CONSOLE_3V3"
+          "net": "unconnected-(J2-Pad1)"
         },
         {
           "pin": 2,
@@ -34,7 +38,7 @@
           "pin": 3,
           "x_mm": 91.5,
           "y_mm": 42.75,
-          "net": "/CN503_A3_CONSOLE_5V"
+          "net": "unconnected-(J2-Pad3)"
         },
         {
           "pin": 4,
@@ -140,24 +144,27 @@
         }
       ],
       "source_sha256": {
-        "flex/KUI-CN503-A-Flex-RevA.kicad_pcb": "8b782e933807131a473f0c999b446254db2cd1844f67fff8e9a802fbe031710c",
-        "flex/KUI-CN503-A-Flex-RevA.kicad_sch": "8ac6f9f3c4732e874a88454c0b0b5fa8ed2a5e5dea0ca89928e7dbf5297b2703",
+        "flex/KUI-CN503-A-Flex-RevA.kicad_pcb": "419097f8d741d4cd7350275c7828d9b32abbfbb58125df10073db7ca58fb78e8",
+        "flex/KUI-CN503-A-Flex-RevA.kicad_sch": "0a39ac85b2737dd12277a92c17b6f9a9006fe2f476ab3673fd2a3e7e785b2cbf",
         "flex/KUI-CN503-A-Flex-RevA.kicad_pro": "2b8d1c8d7de678512a5c59ae67ecb6f1bdafcaae991ff106b14de8156019b884",
         "flex/KUI-CN503-A-Flex-RevA.kicad_dru": "2635b968f3178e324253448a2f279b9cf1d90b6ccfb247f976ee0f649c75e620",
-        "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
+        "design/flex-interface.json": "2fcee6e0acc78c7d8c799e0687c211fa49bbbc1af7ba152ec395a2c623cfa964",
         "docs/CN503-reference.csv": "911c5d970dedfcbba0a9e710056d60141d88308f8f3233394119c827a93a3598",
-        "flex/KUI_Flex.kicad_sym": "cb89b1b8a58e21496987f8de4ec13e103eead53040a5f4e859d6bec20c09410b",
+        "flex/KUI_Flex.kicad_sym": "b9374817bc6cfedf4670ef1f99d0f930357f870f86c1d88c208c4384f4317043",
         "flex/sym-lib-table": "e7ca1d463ad56cd14399ade37b454933e249bfe4ccd7641f522478158bf38d20",
         "flex/fp-lib-table": "187e6180b5805bab8b8c62560539c57c5c8ac489a86d00d60b5018c49fcc3281",
-        "flex/KUI_Flex.pretty/CN503_A_20_SolderLanding_1.00mm.kicad_mod": "0b7c2eccdebbe03dd0c1793bd2769412dcee0d8b6c5297513cb80c140b16a53b",
-        "flex/KUI_Flex.pretty/CN503_B_20_SolderLanding_1.00mm.kicad_mod": "6ace21e4aa2c0c7ba09224dc27ed75e28e9819b71f55c60d1618e1c65986e4c4",
-        "flex/KUI_Flex.pretty/FPC_A_20_Bottom_0.50mm_10.50mm.kicad_mod": "0a6aa294cba464abc833d989a89fe0b6e61c3fb81b7e1986f692dcefad0892b6",
-        "flex/KUI_Flex.pretty/FPC_B_20_Bottom_0.50mm_10.50mm.kicad_mod": "353a9fc7a2dab5643b86875f5d633fdec98c2b872ae1b242d6148ef8c709efe9"
+        "flex/KUI_Flex.pretty/CN503_A_20_SolderLanding_1.00mm.kicad_mod": "06a2d87c56e8afd5899b454de15c97c86ef9e77953a5405240bbda4360adee38",
+        "flex/KUI_Flex.pretty/CN503_B_20_SolderLanding_1.00mm.kicad_mod": "d8d2b059528d698f5bf83142f5ea78853bd7a1a22b230363e51eed97a1b554bf",
+        "flex/KUI_Flex.pretty/FPC_A_20_Bottom_0.50mm_10.50mm.kicad_mod": "833819d3512bffd141f94be02b92910234f2d3fa624976f3bb85f12ffef5411f",
+        "flex/KUI_Flex.pretty/FPC_B_20_Bottom_0.50mm_10.50mm.kicad_mod": "76a6aaf6c46c7f7118fffdfbf0dd050357178a528d851957561a7a10dc04b046"
       }
     },
     {
       "row": "B",
-      "conductors": 20,
+      "conductors": 19,
+      "unconnected_supply_fingers": [
+        "unconnected-(J2-Pad19)"
+      ],
       "erc_violations": 0,
       "drc_violations": 0,
       "unconnected_items": 0,
@@ -278,7 +285,7 @@
           "pin": 19,
           "x_mm": 109.0,
           "y_mm": 42.75,
-          "net": "/CN503_B3_CONSOLE_5V"
+          "net": "unconnected-(J2-Pad19)"
         },
         {
           "pin": 20,
@@ -288,19 +295,19 @@
         }
       ],
       "source_sha256": {
-        "flex/KUI-CN503-B-Flex-RevA.kicad_pcb": "c672f1015c907e1bd1443473bc733cd6976058030c975dd0b5c9f6cbdfb60c04",
-        "flex/KUI-CN503-B-Flex-RevA.kicad_sch": "7d89ea300f9eb8438023f5a14cc986e5a7a798a14898de3001a9c790192b0de3",
+        "flex/KUI-CN503-B-Flex-RevA.kicad_pcb": "4ab09bb504e5bddc080aab45b2a2bd7e210a0e7b5d5dc078077bc39d16f5dbaa",
+        "flex/KUI-CN503-B-Flex-RevA.kicad_sch": "7700d1679ffc7a74404cdfe347c0d09cbb2c6051582b3a9c36927492feb92eac",
         "flex/KUI-CN503-B-Flex-RevA.kicad_pro": "52da9cdd6a777c76b377a026f9b0287b043f2e84e50ae6703c8fe3d8e33c1f48",
         "flex/KUI-CN503-B-Flex-RevA.kicad_dru": "2635b968f3178e324253448a2f279b9cf1d90b6ccfb247f976ee0f649c75e620",
-        "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
+        "design/flex-interface.json": "2fcee6e0acc78c7d8c799e0687c211fa49bbbc1af7ba152ec395a2c623cfa964",
         "docs/CN503-reference.csv": "911c5d970dedfcbba0a9e710056d60141d88308f8f3233394119c827a93a3598",
-        "flex/KUI_Flex.kicad_sym": "cb89b1b8a58e21496987f8de4ec13e103eead53040a5f4e859d6bec20c09410b",
+        "flex/KUI_Flex.kicad_sym": "b9374817bc6cfedf4670ef1f99d0f930357f870f86c1d88c208c4384f4317043",
         "flex/sym-lib-table": "e7ca1d463ad56cd14399ade37b454933e249bfe4ccd7641f522478158bf38d20",
         "flex/fp-lib-table": "187e6180b5805bab8b8c62560539c57c5c8ac489a86d00d60b5018c49fcc3281",
-        "flex/KUI_Flex.pretty/CN503_A_20_SolderLanding_1.00mm.kicad_mod": "0b7c2eccdebbe03dd0c1793bd2769412dcee0d8b6c5297513cb80c140b16a53b",
-        "flex/KUI_Flex.pretty/CN503_B_20_SolderLanding_1.00mm.kicad_mod": "6ace21e4aa2c0c7ba09224dc27ed75e28e9819b71f55c60d1618e1c65986e4c4",
-        "flex/KUI_Flex.pretty/FPC_A_20_Bottom_0.50mm_10.50mm.kicad_mod": "0a6aa294cba464abc833d989a89fe0b6e61c3fb81b7e1986f692dcefad0892b6",
-        "flex/KUI_Flex.pretty/FPC_B_20_Bottom_0.50mm_10.50mm.kicad_mod": "353a9fc7a2dab5643b86875f5d633fdec98c2b872ae1b242d6148ef8c709efe9"
+        "flex/KUI_Flex.pretty/CN503_A_20_SolderLanding_1.00mm.kicad_mod": "06a2d87c56e8afd5899b454de15c97c86ef9e77953a5405240bbda4360adee38",
+        "flex/KUI_Flex.pretty/CN503_B_20_SolderLanding_1.00mm.kicad_mod": "d8d2b059528d698f5bf83142f5ea78853bd7a1a22b230363e51eed97a1b554bf",
+        "flex/KUI_Flex.pretty/FPC_A_20_Bottom_0.50mm_10.50mm.kicad_mod": "833819d3512bffd141f94be02b92910234f2d3fa624976f3bb85f12ffef5411f",
+        "flex/KUI_Flex.pretty/FPC_B_20_Bottom_0.50mm_10.50mm.kicad_mod": "76a6aaf6c46c7f7118fffdfbf0dd050357178a528d851957561a7a10dc04b046"
       }
     }
   ]

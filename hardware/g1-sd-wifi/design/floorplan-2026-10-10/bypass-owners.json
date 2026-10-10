@@ -422,5 +422,19 @@
     ],
     "rotation_deg": 90,
     "removed_copper_items": 0
+  },
+  {
+    "cap": "F21",
+    "owner": "J51.20",
+    "net": "CONSOLE_3V3_FLEX",
+    "placed": true,
+    "before_mm": 2.7,
+    "after_mm": 7.642,
+    "xy_mm": [
+      42.723,
+      77.759
+    ],
+    "rotation_deg": 90,
+    "removed_copper_items": 0
   }
 ]

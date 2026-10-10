@@ -2,7 +2,7 @@
 <export version="E">
   <design>
     <source>/home/user/g1-design/hardware/g1-sd-wifi/flex/KUI-CN503-B-Flex-RevA.kicad_sch</source>
-    <date>2026-10-10T14:57:12</date>
+    <date>2026-10-10T23:29:59</date>
     <tool>Eeschema 10.0.6</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -42,7 +42,6 @@
         <unit name="A">
           <pins>
             <pin num="1"/>
-            <pin num="3"/>
             <pin num="4"/>
             <pin num="5"/>
             <pin num="6"/>
@@ -118,7 +117,6 @@
       </fields>
       <pins>
         <pin num="1" name="1" type="passive"/>
-        <pin num="3" name="3" type="passive"/>
         <pin num="4" name="4" type="passive"/>
         <pin num="5" name="5" type="passive"/>
         <pin num="6" name="6" type="passive"/>
@@ -181,81 +179,80 @@
       <node ref="J1" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="J2" pin="20" pinfunction="20_20" pintype="passive"/>
     </net>
-    <net code="2" name="/CN503_B3_CONSOLE_5V" class="Default">
-      <node ref="J1" pin="3" pinfunction="3_3" pintype="passive"/>
-      <node ref="J2" pin="19" pinfunction="19_19" pintype="passive"/>
-    </net>
-    <net code="3" name="/CN503_B4_ATA_DD6" class="Default">
+    <net code="2" name="/CN503_B4_ATA_DD6" class="Default">
       <node ref="J1" pin="4" pinfunction="4_4" pintype="passive"/>
       <node ref="J2" pin="18" pinfunction="18_18" pintype="passive"/>
     </net>
-    <net code="4" name="/CN503_B5_ATA_DD9" class="Default">
+    <net code="3" name="/CN503_B5_ATA_DD9" class="Default">
       <node ref="J1" pin="5" pinfunction="5_5" pintype="passive"/>
       <node ref="J2" pin="17" pinfunction="17_17" pintype="passive"/>
     </net>
-    <net code="5" name="/CN503_B6_ATA_DD4" class="Default">
+    <net code="4" name="/CN503_B6_ATA_DD4" class="Default">
       <node ref="J1" pin="6" pinfunction="6_6" pintype="passive"/>
       <node ref="J2" pin="16" pinfunction="16_16" pintype="passive"/>
     </net>
-    <net code="6" name="/CN503_B7_ATA_DD11" class="Default">
+    <net code="5" name="/CN503_B7_ATA_DD11" class="Default">
       <node ref="J1" pin="7" pinfunction="7_7" pintype="passive"/>
       <node ref="J2" pin="15" pinfunction="15_15" pintype="passive"/>
     </net>
-    <net code="7" name="/CN503_B8_GND" class="Default">
+    <net code="6" name="/CN503_B8_GND" class="Default">
       <node ref="J1" pin="8" pinfunction="8_8" pintype="passive"/>
       <node ref="J2" pin="14" pinfunction="14_14" pintype="passive"/>
     </net>
-    <net code="8" name="/CN503_B9_ATA_DD2" class="Default">
+    <net code="7" name="/CN503_B9_ATA_DD2" class="Default">
       <node ref="J1" pin="9" pinfunction="9_9" pintype="passive"/>
       <node ref="J2" pin="13" pinfunction="13_13" pintype="passive"/>
     </net>
-    <net code="9" name="/CN503_B10_ATA_DD13" class="Default">
+    <net code="8" name="/CN503_B10_ATA_DD13" class="Default">
       <node ref="J1" pin="10" pinfunction="10_10" pintype="passive"/>
       <node ref="J2" pin="12" pinfunction="12_12" pintype="passive"/>
     </net>
-    <net code="10" name="/CN503_B11_ATA_DD0" class="Default">
+    <net code="9" name="/CN503_B11_ATA_DD0" class="Default">
       <node ref="J1" pin="11" pinfunction="11_11" pintype="passive"/>
       <node ref="J2" pin="11" pinfunction="11_11" pintype="passive"/>
     </net>
-    <net code="11" name="/CN503_B12_ATA_DD15" class="Default">
+    <net code="10" name="/CN503_B12_ATA_DD15" class="Default">
       <node ref="J1" pin="12" pinfunction="12_12" pintype="passive"/>
       <node ref="J2" pin="10" pinfunction="10_10" pintype="passive"/>
     </net>
-    <net code="12" name="/CN503_B13_GND" class="Default">
+    <net code="11" name="/CN503_B13_GND" class="Default">
       <node ref="J1" pin="13" pinfunction="13_13" pintype="passive"/>
       <node ref="J2" pin="9" pinfunction="9_9" pintype="passive"/>
     </net>
-    <net code="13" name="/CN503_B14_ATA_DIOWn" class="Default">
+    <net code="12" name="/CN503_B14_ATA_DIOWn" class="Default">
       <node ref="J1" pin="14" pinfunction="14_14" pintype="passive"/>
       <node ref="J2" pin="8" pinfunction="8_8" pintype="passive"/>
     </net>
-    <net code="14" name="/CN503_B15_ATA_IORDY" class="Default">
+    <net code="13" name="/CN503_B15_ATA_IORDY" class="Default">
       <node ref="J1" pin="15" pinfunction="15_15" pintype="passive"/>
       <node ref="J2" pin="7" pinfunction="7_7" pintype="passive"/>
     </net>
-    <net code="15" name="/CN503_B16_ATA_INTRQ" class="Default">
+    <net code="14" name="/CN503_B16_ATA_INTRQ" class="Default">
       <node ref="J1" pin="16" pinfunction="16_16" pintype="passive"/>
       <node ref="J2" pin="6" pinfunction="6_6" pintype="passive"/>
     </net>
-    <net code="16" name="/CN503_B17_ATA_DA1" class="Default">
+    <net code="15" name="/CN503_B17_ATA_DA1" class="Default">
       <node ref="J1" pin="17" pinfunction="17_17" pintype="passive"/>
       <node ref="J2" pin="5" pinfunction="5_5" pintype="passive"/>
     </net>
-    <net code="17" name="/CN503_B18_GND" class="Default">
+    <net code="16" name="/CN503_B18_GND" class="Default">
       <node ref="J1" pin="18" pinfunction="18_18" pintype="passive"/>
       <node ref="J2" pin="4" pinfunction="4_4" pintype="passive"/>
     </net>
-    <net code="18" name="/CN503_B19_ATA_DA2" class="Default">
+    <net code="17" name="/CN503_B19_ATA_DA2" class="Default">
       <node ref="J1" pin="19" pinfunction="19_19" pintype="passive"/>
       <node ref="J2" pin="3" pinfunction="3_3" pintype="passive"/>
     </net>
-    <net code="19" name="/CN503_B20_ATA_CS1n" class="Default">
+    <net code="18" name="/CN503_B20_ATA_CS1n" class="Default">
       <node ref="J1" pin="20" pinfunction="20_20" pintype="passive"/>
       <node ref="J2" pin="2" pinfunction="2_2" pintype="passive"/>
     </net>
-    <net code="20" name="/CN503_B21_GND" class="Default">
+    <net code="19" name="/CN503_B21_GND" class="Default">
       <node ref="J1" pin="21" pinfunction="21_21" pintype="passive"/>
       <node ref="J2" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="20" name="unconnected-(J2-Pad19)" class="Default">
+      <node ref="J2" pin="19" pinfunction="19_19" pintype="passive+no_connect"/>
     </net>
   </nets>
 </export>

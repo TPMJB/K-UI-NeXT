@@ -40,10 +40,19 @@ def load_components():
     blocks['cn503-interface'] = []
     for conn in fpc['connectors']:
         pins = {}
+        unused = set(fpc['unconnected_supply_contacts'])
         for p in conn['pins']:
             signal = p['signal']
+            if p['cn503_contact'] in unused:
+                # Console supply contacts the carrier does not use have no
+                # flex copper; their socket pins stay bare pads.
+                pins[str(p['pin'])] = {'name': p['cn503_contact'], 'net': None, 'type': 'no_connect'}
+                continue
             if signal == 'CONSOLE_5V':
-                signal = 'FLEX_5V'
+                raise ValueError('Console 5 V must not reach the carrier: ' + p['cn503_contact'])
+            if signal == 'CONSOLE_3V3':
+                # The one host 3.3-V entry feeds fuse F21.
+                signal = 'CONSOLE_3V3_FLEX'
             pins[str(p['pin'])] = {'name': p['cn503_contact'], 'net': signal, 'type': 'passive'}
         # These pads are mechanical hold-downs. They are intentionally grounded.
         pins['MP'] = {'name': 'shield_anchor', 'net': 'GND', 'type': 'passive'}
@@ -51,7 +60,7 @@ def load_components():
             'ref': conn['carrier_reference'], 'value': conn['mpn'], 'mpn': conn['mpn'],
             'footprint': conn['footprint'], 'pins': pins, 'populate': True,
             'height_max_mm': 2.0, 'sources': [fpc['connector_primary_source']],
-            'description': 'Independent CN503 ' + conn['flex_row'] + ' arm. FLEX_5V has no connection to bridge supply.'})
+            'description': 'Independent CN503 ' + conn['flex_row'] + ' arm. Console 5-V contacts are not connected on the carrier; host 3.3 V enters only through F21.'})
     # Power sources behind passive inductors need explicit ERC source declarations.
     # These flags are justified by external supplies and the three regulators;
     # they do not imply that a rail has passed bench qualification.

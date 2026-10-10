@@ -2,7 +2,7 @@
 (property "Reference" "J2" (at 0 0) (layer "F.Fab") (effects (font (size .8 .8)) hide))
 (property "Value" "20-pin bottom-contact FPC tail" (at 0 0) (layer "F.Fab") (effects (font (size .8 .8)) hide))
 (pad "20" smd rect (at 9.5 -57.25) (size .35 3.5) (layers "B.Cu" "B.Mask") (net 1 "/CN503_B1_CONSOLE_3V3") (solder_mask_margin .10) (uuid "9e65396b-e1d5-5717-9ea2-41e1cb49cf2b"))
-(pad "19" smd rect (at 9 -57.25) (size .35 3.5) (layers "B.Cu" "B.Mask") (net 2 "/CN503_B3_CONSOLE_5V") (solder_mask_margin .10) (uuid "e0473a9f-18ad-5553-a3fc-3e8c9fd9f8da"))
+(pad "19" smd rect (at 9 -57.25) (size .35 3.5) (layers "B.Cu" "B.Mask") (net 21 "unconnected-(J2-Pad19)") (solder_mask_margin .10) (uuid "e0473a9f-18ad-5553-a3fc-3e8c9fd9f8da"))
 (pad "18" smd rect (at 8.5 -57.25) (size .35 3.5) (layers "B.Cu" "B.Mask") (net 3 "/CN503_B4_ATA_DD6") (solder_mask_margin .10) (uuid "a7990543-e3e9-56a8-a2d5-d9531d2e859b"))
 (pad "17" smd rect (at 8 -57.25) (size .35 3.5) (layers "B.Cu" "B.Mask") (net 4 "/CN503_B5_ATA_DD9") (solder_mask_margin .10) (uuid "43307ac8-edb4-5588-aabd-04473e81ba21"))
 (pad "16" smd rect (at 7.5 -57.25) (size .35 3.5) (layers "B.Cu" "B.Mask") (net 5 "/CN503_B6_ATA_DD4") (solder_mask_margin .10) (uuid "15f92afd-7d11-5608-810b-8ac4b426e22a"))

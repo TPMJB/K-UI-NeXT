@@ -3,8 +3,6 @@
 (property "Value" "CN503 row B solder contacts" (at 0 0) (layer "F.Fab") (effects (font (size .8 .8)) hide))
 (pad "1" smd rect (at 0.7 0) (size 1.4 .44) (layers "F.Cu" "F.Mask") (net 1 "/CN503_B1_CONSOLE_3V3") (solder_mask_margin .29) (uuid "cb9048bf-54dc-5a11-88f8-97abe4d93783"))
 (pad "1" smd rect (at 0.7 0) (size 1.4 .44) (layers "B.Cu" "B.Mask") (net 1 "/CN503_B1_CONSOLE_3V3") (solder_mask_margin .29) (uuid "acc7fc63-f06f-51b0-b6e1-af5e26a958a2"))
-(pad "3" smd rect (at 0.7 -2) (size 1.4 .44) (layers "F.Cu" "F.Mask") (net 2 "/CN503_B3_CONSOLE_5V") (solder_mask_margin .29) (uuid "994244bb-e246-57dc-bb14-9a062b49ab86"))
-(pad "3" smd rect (at 0.7 -2) (size 1.4 .44) (layers "B.Cu" "B.Mask") (net 2 "/CN503_B3_CONSOLE_5V") (solder_mask_margin .29) (uuid "f1d4897b-ce52-50f4-a4a3-88ef568efde3"))
 (pad "4" smd rect (at 0.7 -3) (size 1.4 .44) (layers "F.Cu" "F.Mask") (net 3 "/CN503_B4_ATA_DD6") (solder_mask_margin .29) (uuid "138263e3-c516-5bd4-a9e9-476ee301f982"))
 (pad "4" smd rect (at 0.7 -3) (size 1.4 .44) (layers "B.Cu" "B.Mask") (net 3 "/CN503_B4_ATA_DD6") (solder_mask_margin .29) (uuid "dd13225f-a0e7-5c52-b10d-6027c05ea11a"))
 (pad "5" smd rect (at 0.7 -4) (size 1.4 .44) (layers "F.Cu" "F.Mask") (net 4 "/CN503_B5_ATA_DD9") (solder_mask_margin .29) (uuid "317227eb-adb5-515c-b1ac-510d6a050c5e"))

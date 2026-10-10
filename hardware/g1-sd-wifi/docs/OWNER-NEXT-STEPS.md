@@ -82,11 +82,16 @@ S7221-45R spring contacts (C22445132) and the Abracon ASE oscillator
 (C596955) as needing assembly fixtures. Get their agreement before the
 assembly order.
 
-**8. Confirm the input TVS D21 (SMF5.0CA) on JLC.** It was added after
-the catalog check, and the maker's and JLC's sites were not reachable from
-the design environment. On the JLC parts page confirm the exact part:
-bidirectional ("CA"), 5.0 V working voltage, breakdown above 6 V, SOD-123FL
-package. Send back its C-number so the purchasing list can record it.
+**8. Confirm two protection parts on JLC.** Both were added after the
+catalog check, and the makers' and JLC's sites were not reachable from the
+design environment. On the JLC parts page confirm:
+
+- D21, input TVS, SMF5.0CA: bidirectional ("CA"), 5.0 V working voltage,
+  breakdown above 6 V, SOD-123FL package.
+- F21, host 3.3 V fuse, Littelfuse 0467.500NR: 0.5 A fast, 0603, the same
+  family as F20 (C99559).
+
+Send back both C-numbers so the purchasing list can record them.
 
 **9. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
 but a placed-and-routed bitstream and real timing need Lattice's own tools,

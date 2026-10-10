@@ -8,14 +8,6 @@
     "route_centerline_length_mm": 62.682
   },
   {
-    "cn503_contact": "B3",
-    "fpc_pin": 19,
-    "net": "/CN503_B3_CONSOLE_5V",
-    "main_layer": "F.Cu",
-    "width_mm": 0.28,
-    "route_centerline_length_mm": 60.597
-  },
-  {
     "cn503_contact": "B4",
     "fpc_pin": 18,
     "net": "/CN503_B4_ATA_DD6",

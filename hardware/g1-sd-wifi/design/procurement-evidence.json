@@ -1,6 +1,6 @@
 {
   "review_date": "2026-10-10",
-  "scope": "Exact component purchasing identities and variant quantities derived from physical circuit contracts. 52 of the 53 BASE SMT purchase rows have exact official JLC SMT catalog identity evidence; the input TVS SMF5.0CA, added later, still needs its catalog identity confirmed; one BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. This is not an order acceptance or production release.",
+  "scope": "Exact component purchasing identities and variant quantities derived from physical circuit contracts. 52 of the 54 BASE SMT purchase rows have exact official JLC SMT catalog identity evidence; the input TVS SMF5.0CA and host 3.3-V fuse 0467.500NR, added later, still need their catalog identities confirmed; one BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. This is not an order acceptance or production release.",
   "parts": {
     "046701.5NR": {
       "manufacturer": "Littelfuse",
@@ -1781,6 +1781,17 @@
       ],
       "spec_review_status": "Exact circuit MPN selected from the manufacturer family; the datasheet and catalog were not reachable from the design environment. Confirm VRWM 5.0 V, breakdown above 6 V, SOD-123FL land pattern and JLC catalog identity before ordering.",
       "notes": "Added 10 October 2026 at the owner's request as 12-V mis-wiring protection. Supplier identity pending."
+    },
+    "0467.500NR": {
+      "manufacturer": "Littelfuse",
+      "description": "0.5A fast fuse",
+      "physical_package": "Littelfuse 467-series SMT fuse, 0603 imperial / 1608 metric",
+      "electrical_spec": "0.5A fast fuse",
+      "manufacturer_sources": [
+        "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d"
+      ],
+      "spec_review_status": "Exact circuit MPN selected from the same 467 family as F20; catalog not reachable from the design environment. Confirm 0.5 A rating, 0603 package and JLC catalog identity before ordering.",
+      "notes": "Added 10 October 2026 as host 3.3-V entry protection. Supplier identity pending."
     }
   },
   "open_release_items": [

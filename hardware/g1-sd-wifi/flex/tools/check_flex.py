@@ -35,6 +35,9 @@ def check():
     require(excluded == set(interface['excluded_contacts']), 'Excluded contact policy changed')
     require({'A25', 'B25'}.issubset(excluded), 'Both+12Vcontacts must be excluded')
     require(len(interface['connectors']) == 2, 'Native flex invariant failed')
+    unused = set(interface['unconnected_supply_contacts'])
+    require(unused == {c for c in useful if by_contact[c]['proposed_signal'] == 'CONSOLE_5V'} | {'A1'},
+            'Unused supply contacts must be both 5-V contacts and A1')
     assigned = []
     CHECKS.mkdir(exist_ok=True)
     results = []
@@ -64,9 +67,16 @@ def check():
         require(not [v for s in e['sheets'] for v in s['violations']], 'Native flex invariant failed')
         require(not d['violations'] and (not d['unconnected_items']) and (not d['schematic_parity']), 'Native flex invariant failed')
         xml = ET.parse(netlist).getroot()
-        actual = {n.attrib['name']: {(z.attrib['ref'], z.attrib['pin']) for z in n.findall('node')} for n in xml.find('nets')}
-        expected = {f"/CN503_{p['cn503_contact']}_{p['signal']}": {('J1', p['cn503_contact'][1:]), ('J2', str(p['pin']))} for p in pins}
+        nets = {n.attrib['name']: {(z.attrib['ref'], z.attrib['pin']) for z in n.findall('node')} for n in xml.find('nets')}
+        actual = {k: v for k, v in nets.items() if not k.startswith('unconnected-')}
+        dead = {k: v for k, v in nets.items() if k.startswith('unconnected-')}
+        expected = {f"/CN503_{p['cn503_contact']}_{p['signal']}": {('J1', p['cn503_contact'][1:]), ('J2', str(p['pin']))}
+                    for p in pins if p['cn503_contact'] not in unused}
         require(actual == expected, f'{row}:native schematic mapping differs from originalCN503/carrier contract')
+        # Unused console supply contacts: a bare mating finger and nothing else.
+        require(dead == {f'unconnected-(J2-Pad{p["pin"]})': {('J2', str(p['pin']))} for p in pins if p['cn503_contact'] in unused},
+                f'{row}: unused supply contacts must end at an unconnected finger')
+        require(not [k for k in actual if k.endswith('_CONSOLE_5V')], f'{row}: console 5 V must not reach the flex')
         # This is a physical handedness check, independent of the logical
         # schematic/netlist checks above. A mirrored tail cannot be inserted
         # into the same bottom-contact socket by silently reversing numbers.
@@ -80,11 +90,11 @@ def check():
         require(all(abs(pcbnew.ToMM(b.GetPosition().x-a.GetPosition().x)-.5) < .000001 for a,b in zip(physical_pads, physical_pads[1:])), f'{row}: mating finger pitch must be0.50mm')
         physical_mapping = [{'pin': int(p.GetNumber()), 'x_mm': pcbnew.ToMM(p.GetPosition().x), 'y_mm': pcbnew.ToMM(p.GetPosition().y), 'net': p.GetNetname()} for p in physical_pads]
         sources = [stem.with_suffix(ext) for ext in ['.kicad_pcb', '.kicad_sch', '.kicad_pro', '.kicad_dru']] + [ROOT / 'design/flex-interface.json', ROOT / 'docs/CN503-reference.csv', FLEX / 'KUI_Flex.kicad_sym', FLEX / 'sym-lib-table', FLEX / 'fp-lib-table'] + sorted((FLEX / 'KUI_Flex.pretty').glob('*.kicad_mod'))
-        results.append({'row': row, 'conductors': len(actual), 'erc_violations': 0, 'drc_violations': 0, 'unconnected_items': 0, 'schematic_parity_issues': 0, 'native_mapping_matches_original_logical_reference': True, 'physical_tail_pin1_left_pin20_right': True, 'physical_mating_datum': 'F.Cu/top viewed from above, tip north, B.Cu gold fingers down; same handedness as unrotated Hirose bottom-contact socket', 'physical_tail_mapping_left_to_right': physical_mapping, 'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}})
+        results.append({'row': row, 'conductors': len(actual), 'unconnected_supply_fingers': sorted(dead), 'erc_violations': 0, 'drc_violations': 0, 'unconnected_items': 0, 'schematic_parity_issues': 0, 'native_mapping_matches_original_logical_reference': True, 'physical_tail_pin1_left_pin20_right': True, 'physical_mating_datum': 'F.Cu/top viewed from above, tip north, B.Cu gold fingers down; same handedness as unrotated Hirose bottom-contact socket', 'physical_tail_mapping_left_to_right': physical_mapping, 'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}})
     require(len(assigned) == len(set(assigned)) == 40 and set(assigned) == useful, 'Native flex invariant failed')
     summary = {'kicad_version': run('kicad-cli', 'version'), 'status': 'CAD consistency checks pass; installed hardware qualification is pending', 'routing_complete': True, 'motherboard_continuity_qualified': False, 'installed_route_qualified': False, 'signal_integrity_qualified': False, 'jlc_production_files_approved': False, 'arms': results}
     (CHECKS / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
-    print('Both flex arms: ERC0, DRC0, unconnected0, schematic parity0; all40contacts match original logical reference.')
+    print('Both flex arms: ERC0, DRC0, unconnected0, schematic parity0; 37 connected contacts match the original logical reference; A1, A3 and B3 end at unconnected fingers.')
     print('No hardware, fit, rail-current or signal-integrity qualification is implied.')
 if __name__ == '__main__':
     try:

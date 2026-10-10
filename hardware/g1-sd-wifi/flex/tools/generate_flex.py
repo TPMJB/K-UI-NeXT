@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'flex'
 INTERFACE = json.loads((ROOT / 'design/flex-interface.json').read_text())
 NS = uuid.UUID('82798121-af87-4f4f-9d4f-778a031c29ce')
+# Console supply contacts the carrier does not use: no landing, no trace,
+# only an unconnected mating finger, so the flex never carries them.
+UNUSED = set(INTERFACE['unconnected_supply_contacts'])
 
 def uid(name): return str(uuid.uuid5(NS, name))
 def q(s): return json.dumps(str(s))
@@ -43,11 +46,12 @@ def schematic(row, pins, landing, tail):
             z.append(f'(pin passive line (at -5.08 {-2.54*(i+1):.2f} 0) (length 5.08) (name "{n}" (effects (font (size 1.0 1.0)))) (number "{n}" (effects (font (size 1.0 1.0)))))')
         return '\n'.join(z)+'))'
     adef=f'CN503_{row}_Landing'; bdef=f'FPC_{row}_20'
-    cn=[int(p['cn503_contact'][1:]) for p in pins]
+    used=[p for p in pins if p['cn503_contact'] not in UNUSED]
+    cn=[int(p['cn503_contact'][1:]) for p in used]
     # Schematic row order follows CN503; FPC numbers follow actual mating
     # position, which is reversed for the mirror-shaped B arm.
     tail_numbers=[p['pin'] for p in pins]
-    symbols=[]; wires=[]; labels=[]
+    symbols=[]; wires=[]; labels=[]; flags=[]
     for ref,val,lib,x,fp,pnums in [('J1',f'CN503 row {row} solder contacts',adef,76.2,landing,cn),('J2','20-pin bottom-contact FPC tail',bdef,177.8,tail,tail_numbers)]:
         z=[f'(symbol (lib_id "KUI_Flex:{lib}") (at {x} 63.5 0) (unit 1) (in_bom no) (on_board yes) (dnp no) (uuid "{uid(name+ref)}")',
            f'(property "Reference" "{ref}" (at {x} 60.5 0) (effects (font (size 1.27 1.27))))',
@@ -57,8 +61,11 @@ def schematic(row, pins, landing, tail):
         for n in pnums: z.append(f'(pin "{n}" (uuid "{uid(name+ref+str(n))}"))')
         z.append(f'(instances (project "{name}" (path "/{skey}" (reference "{ref}") (unit 1)))) )')
         symbols.append('\n'.join(z))
-        for i,p in enumerate(pins):
+        for i,p in enumerate(used if ref=='J1' else pins):
             yy=63.5+2.54*(i+1)
+            if p['cn503_contact'] in UNUSED:
+                flags.append(f'(no_connect (at {x-5.08} {f(yy)}) (uuid "{uid(name+ref+"nc"+str(i))}"))')
+                continue
             wires.append(f'(wire (pts (xy {x-5.08} {f(yy)}) (xy {x-12.7} {f(yy)})) (stroke (width 0) (type default)) (uuid "{uid(name+ref+"wire"+str(i))}"))')
             labels.append(f'(label {q(net_name(p).lstrip('/'))} (at {x-12.7} {f(yy)} 0) (effects (font (size 1 1)) (justify right bottom)) (uuid "{uid(name+ref+"label"+str(i))}"))')
     defs=symbol_def(adef,cn)+symbol_def(bdef,tail_numbers)
@@ -68,6 +75,7 @@ def schematic(row, pins, landing, tail):
 (lib_symbols {defs})
 {chr(10).join(wires)}
 {chr(10).join(labels)}
+{chr(10).join(flags)}
 {chr(10).join(symbols)}
 (sheet_instances (path "/" (page "1")))
 )'''
@@ -80,7 +88,11 @@ def pcb(row,pins):
     ox,oy=100.0,100.0
     def xy(x,y): return (ox+tr(row,x),oy-y)
     def pad_xy(x,y): return (tr(row,x),-y)
-    defs=['(net 0 "")']+[f'(net {i+1} {q(net_name(p))})' for i,p in enumerate(pins)]
+    defs=['(net 0 "")']+[f'(net {i+1} {q(net_name(p))})' for i,p in enumerate(pins) if p['cn503_contact'] not in UNUSED]
+    # KiCad's name for a schematic pin marked no-connect.
+    dead={p['pin']:(len(pins)+k+1, f"unconnected-(J2-Pad{p['pin']})")
+          for k,p in enumerate(p for p in pins if p['cn503_contact'] in UNUSED)}
+    defs+=[f'(net {n} {q(name)})' for n,name in dead.values()]
     footprint_dir=OUT/'KUI_Flex.pretty'; footprint_dir.mkdir(exist_ok=True)
     landing=f'CN503_{row}_20_SolderLanding_1.00mm'; tail=f'FPC_{row}_20_Bottom_0.50mm_10.50mm'
     route=[]; allpads=[]; draw=[]; via=[]; lengths=[]
@@ -101,6 +113,13 @@ def pcb(row,pins):
     for i,p in enumerate(pins):
         n=int(p['cn503_contact'][1:]); y=n-1
         x=.70
+        if p['cn503_contact'] in UNUSED:
+            # Dead mating finger only, at its usual tail position.
+            fx=9.5-i*.5
+            tx,ty=pad_xy(fx,57.25)
+            nc,ncname=dead[p['pin']]
+            tailpads.append(f'(pad "{p["pin"]}" smd rect (at {f(tx)} {f(ty)}) (size .35 3.5) (layers "B.Cu" "B.Mask") (net {nc} {q(ncname)}) (solder_mask_margin .10) (uuid "{uid(name+"tail"+str(i))}"))')
+            continue
         nx,ny=pad_xy(x,y)
         for layer in ['F','B']:
             landingpads.append(f'(pad "{n}" smd rect (at {f(nx)} {f(ny)}) (size 1.4 .44) (layers "{layer}.Cu" "{layer}.Mask") (net {i+1} {q(net_name(p))}) (solder_mask_margin .29) (uuid "{uid(name+"land"+layer+str(n))}"))')

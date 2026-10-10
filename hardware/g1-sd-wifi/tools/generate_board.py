@@ -521,6 +521,33 @@ def refresh_unrouted_nets(args):
                       'tracks_and_vias_preserved':len(list(b.GetTracks())),'dsn':str(args.dsn)}))
 
 
+# Supply nets that can carry up to the F20 fuse rating (1.5 A) or a
+# regulator's current limit. Inner layers are 0.5 oz copper: a 0.25 mm inner
+# track at 1.5 A rises far beyond any safe temperature (IPC-2221), while the
+# same track on a 1 oz outer layer stays near 30 C rise. The router keeps
+# these nets on F.Cu/B.Cu; vias only change between the outer layers.
+OUTER_ONLY_NETS = ['CONSOLE_5V', 'FUSED_5V', 'PRIMARY_5V', '+5V_HOLD', '+5V_C5', 'RESERVE_5V', '+3V3_STORAGE']
+
+
+def restrict_to_outer_layers(content, nets):
+    """Move NETS out of the DSN POWER class into one routed on F.Cu/B.Cu only."""
+    start = content.index('(class POWER ')
+    end = content.index(')\n    )', content.index('(rule', start)) + len(')\n    )')
+    block = content[start:end]
+    names = block[:block.index('(circuit')].split()[2:]
+    missing = [n for n in nets if n not in names]
+    if missing:
+        raise ValueError('Outer-layer nets missing from POWER class: %s' % missing)
+    tail = block[block.index('(circuit'):]
+    keep = [n for n in names if n not in nets]
+    outer = tail.replace('(circuit\n', '(circuit\n        (use_layer F.Cu B.Cu)\n', 1)
+    if outer == tail:
+        raise ValueError('POWER circuit scope not found')
+    replacement = ('(class POWER ' + ' '.join(keep) + '\n      ' + tail + '\n    (class POWER_OUTER '
+                   + ' '.join(nets) + '\n      ' + outer)
+    return content[:start] + replacement + content[end:]
+
+
 def export_dsn(args):
     b=pcbnew.LoadBoard(str(BOARD));sync_native_metadata(b,args.components,args.netlist)
     edge_routing_obstacles(b);ground_plane(b,b.FindNet('GND'));pcbnew.SaveBoard(str(BOARD),b)
@@ -546,8 +573,10 @@ def export_dsn(args):
         content,count=re.subn(r'(\(class POWER\b[\s\S]*?\(rule\s*\(width )400(\))',
                               r'\g<1>%d\2'%round(args.power_width*1000),content,count=1)
         if count!=1:raise ValueError('POWER routing rule not found exactly once')
+        content=restrict_to_outer_layers(content,OUTER_ONLY_NETS)
         args.signal_starter.write_text(content)
     print(json.dumps({'native_dsn':str(args.dsn),'signal_starter_dsn':str(args.signal_starter) if args.signal_starter else None,
+                      'outer_layer_only_nets':OUTER_ONLY_NETS if args.signal_starter else [],
                       'power_widths_qualified':False}))
 
 

@@ -1,9 +1,22 @@
 {
   "added": [
-    "D21"
+    "D21",
+    "F21"
   ],
   "swapped": [],
   "pad_net_changes": [
+    {
+      "ref": "F21",
+      "pin": "1",
+      "old_net": "",
+      "new_net": "CONSOLE_3V3_FLEX"
+    },
+    {
+      "ref": "F21",
+      "pin": "2",
+      "old_net": "",
+      "new_net": "CONSOLE_3V3"
+    },
     {
       "ref": "D21",
       "pin": "1",
@@ -15,6 +28,30 @@
       "pin": "2",
       "old_net": "",
       "new_net": "GND"
+    },
+    {
+      "ref": "J50",
+      "pin": "1",
+      "old_net": "CONSOLE_3V3",
+      "new_net": "unconnected-(J50-A1-Pad1)"
+    },
+    {
+      "ref": "J50",
+      "pin": "3",
+      "old_net": "FLEX_5V",
+      "new_net": "unconnected-(J50-A3-Pad3)"
+    },
+    {
+      "ref": "J51",
+      "pin": "19",
+      "old_net": "FLEX_5V",
+      "new_net": "unconnected-(J51-B3-Pad19)"
+    },
+    {
+      "ref": "J51",
+      "pin": "20",
+      "old_net": "CONSOLE_3V3",
+      "new_net": "CONSOLE_3V3_FLEX"
     },
     {
       "ref": "U10",
@@ -402,5 +439,5 @@
     "R251",
     "R253"
   ],
-  "metadata_synced": 350
+  "metadata_synced": 351
 }

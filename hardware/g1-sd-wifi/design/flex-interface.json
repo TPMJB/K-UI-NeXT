@@ -37,7 +37,7 @@
     "connector_rating_A_per_contact": 0.5,
     "conservative_design_A_per_contact": 0.35,
     "status": "Connector rating only; flex current capacity unqualified. No controller load power over flex in baseline.",
-    "baseline": "Direct fused power harness supplies controller loads. Flex5V links on carrier are DNP; flex3V3 is console rail reference.",
+    "baseline": "Direct fused power harness supplies controller loads. The flex carries no console 5 V. Host 3.3 V enters through contact B1 and carrier fuse F21 (0.5 A) for the host-side buffers only.",
     "rated_ceiling_A_per_supply_pair": 0.7,
     "qualified_flex_current_limit_A": null
   },
@@ -342,5 +342,11 @@
       "installation_orientation_note": "View F.Cu from above with the tip north and B.Cu gold contacts below: tail pin1 is left and pin20 is right, matching the unrotated bottom-contact socket. Mirrored B copper uses reversed tail numbers; carrier pin1 maps B21/GND and pin20 maps B1/CONSOLE_3V3. Rotate the tail and socket together; do not flip the flex."
     }
   ],
-  "tail_numbering_datum": "Viewed from the F.Cu/top side with tip north and B.Cu gold down: both A and B tails pin1 left, pin20 right. Tail shape mirroring does not mirror socket pin numbers."
+  "tail_numbering_datum": "Viewed from the F.Cu/top side with tip north and B.Cu gold down: both A and B tails pin1 left, pin20 right. Tail shape mirroring does not mirror socket pin numbers.",
+  "unconnected_supply_contacts": [
+    "A1",
+    "A3",
+    "B3"
+  ],
+  "unconnected_supply_policy": "Console supply contacts the carrier does not use get no flex copper: no landing pad and no trace, only an unconnected mating finger. The console 5-V contacts A3/B3 therefore never reach the flex, and host 3.3 V reaches the carrier through B1 alone, into fuse F21. A chafed or cut flex cannot short a console supply."
 }

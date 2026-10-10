@@ -53,7 +53,7 @@ def load_sources():
             part.setdefault('populate', True)
             part.setdefault('variant', 'BASE')
     parts = [p for group in blocks.values() for p in group]
-    require(len(parts) == 350, 'Source component count changed; review audit scope.')
+    require(len(parts) == 351, 'Source component count changed; review audit scope.')
     require(len({p['ref'] for p in parts}) == len(parts), 'Duplicate source reference.')
     return blocks, parts
 
@@ -61,7 +61,7 @@ def load_sources():
 def check_native(source, flex):
     native = json.loads(NATIVE.read_text())
     byref = {c['ref']: c for c in native}
-    require(len(byref) == len(native) == 361, 'Native component count or uniqueness failed.')
+    require(len(byref) == len(native) == 362, 'Native component count or uniqueness failed.')
     for part in source:
         require(part['ref'] in byref, 'Missing native component: ' + part['ref'])
         target = byref[part['ref']]
@@ -78,8 +78,20 @@ def check_native(source, flex):
         connector_refs.add(ref)
         part = byref[ref]
         require(part['mpn'] == connector['mpn'], 'CN503 socket MPN mismatch: ' + ref)
-        expected = {str(p['pin']): ('FLEX_5V' if p['signal'] == 'CONSOLE_5V' else p['signal'])
-                    for p in connector['pins']}
+        # Unused console supply contacts are bare pads; the one remaining
+        # host 3.3-V entry feeds F21 (see tools/generate_design.py).
+        unused = set(flex['unconnected_supply_contacts'])
+        require(not [p for c in flex['connectors'] for p in c['pins']
+                     if p['signal'] == 'CONSOLE_5V' and p['cn503_contact'] not in unused],
+                'Console 5 V reaches the carrier.')
+        require(sum(p['signal'] == 'CONSOLE_3V3' and p['cn503_contact'] not in unused
+                    for c in flex['connectors'] for p in c['pins']) == 1,
+                'Host 3.3 V must enter through exactly one contact.')
+        def carrier_net(p):
+            if p['cn503_contact'] in unused:
+                return None
+            return 'CONSOLE_3V3_FLEX' if p['signal'] == 'CONSOLE_3V3' else p['signal']
+        expected = {str(p['pin']): carrier_net(p) for p in connector['pins']}
         expected['MP'] = 'GND'
         require({pin: info['net'] for pin, info in part['pins'].items()} == expected,
                 'CN503 native pin/net mismatch: ' + ref)
@@ -94,7 +106,7 @@ def check_native(source, flex):
     xml = ET.parse(NETLIST).getroot()
     xml_components = xml.findall('components/comp')
     xml_byref = {c.attrib['ref']: c for c in xml_components}
-    require(len(xml_byref) == len(xml_components) == 352, 'XML component count or uniqueness failed.')
+    require(len(xml_byref) == len(xml_components) == 353, 'XML component count or uniqueness failed.')
     require(set(xml_byref) == set(byref) - flag_refs,
             'XML references differ; only the nine ERC flags may be omitted.')
     endpoint = {}

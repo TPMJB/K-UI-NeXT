@@ -1,27 +1,11 @@
 [
   {
-    "cn503_contact": "A1",
-    "fpc_pin": 1,
-    "net": "/CN503_A1_CONSOLE_3V3",
-    "main_layer": "B.Cu",
-    "width_mm": 0.28,
-    "route_centerline_length_mm": 62.682
-  },
-  {
     "cn503_contact": "A2",
     "fpc_pin": 2,
     "net": "/CN503_A2_ATA_RESETn",
     "main_layer": "F.Cu",
     "width_mm": 0.15,
     "route_centerline_length_mm": 61.597
-  },
-  {
-    "cn503_contact": "A3",
-    "fpc_pin": 3,
-    "net": "/CN503_A3_CONSOLE_5V",
-    "main_layer": "B.Cu",
-    "width_mm": 0.28,
-    "route_centerline_length_mm": 60.139
   },
   {
     "cn503_contact": "A4",

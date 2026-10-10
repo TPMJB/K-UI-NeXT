@@ -516,6 +516,10 @@
     "local": "controller/KUI_Footprints.pretty/D_SOD-123F.kicad_mod"
   },
   {
+    "source": "/usr/share/kicad/footprints/Fuse.pretty/Fuse_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Fuse_0603_1608Metric.kicad_mod"
+  },
+  {
     "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
     "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
   },

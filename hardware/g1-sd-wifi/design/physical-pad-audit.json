@@ -1,6 +1,6 @@
 {
   "status": "pass",
-  "components": 350,
+  "components": 351,
   "errors": [],
   "rows": [
     {
@@ -2727,6 +2727,18 @@
     },
     {
       "ref": "D21",
+      "physical_pad_numbers": [
+        "1",
+        "2"
+      ],
+      "schematic_pin_numbers": [
+        "1",
+        "2"
+      ],
+      "match": true
+    },
+    {
+      "ref": "F21",
       "physical_pad_numbers": [
         "1",
         "2"

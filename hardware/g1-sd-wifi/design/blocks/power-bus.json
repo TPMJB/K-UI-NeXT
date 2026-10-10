@@ -101,6 +101,30 @@
     "height_max_mm": 1.1
   },
   {
+    "ref": "F21",
+    "value": "0.5A fast fuse",
+    "mpn": "0467.500NR",
+    "footprint": "Fuse:Fuse_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3_FLEX",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d"
+    ],
+    "description": "Host 3.3-V entry fuse: a short on the carrier's CONSOLE_3V3 opens F21 instead of loading the console's 3.3-V supply through 0.5-A flex contacts.",
+    "populate": true,
+    "height_max_mm": 0.5
+  },
+  {
     "ref": "C200",
     "value": "22uF",
     "mpn": "GRM21BR61A226ME51L",

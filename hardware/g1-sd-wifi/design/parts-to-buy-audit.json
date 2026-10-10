@@ -6,24 +6,24 @@
     "design/blocks/bios.json": "6c78b14bf1bffda7ebc4ca913427aa4b466e4fa0b61a81a36b96ff39dee9ebe7",
     "design/blocks/controller.json": "d5fa2fa23fa4b1c01efa0ac48c27fdb21b2bb02ef6e40d25a76b317961147bd2",
     "design/blocks/frontend.json": "8756a42cfff6185fc4f77298d7800dd9c5f92a740fce2f05e43822d25e68b386",
-    "design/blocks/power-bus.json": "c0ef8eafde343a4181703cecf7077146af3ac0684dcb6f9426f3f69a077ed2a0",
-    "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
-    "tools/generate_design.py": "db60b83477e366aa5ef4bdf9b16b55e87a929e88f17e9bbf5777444d50e96e4c",
+    "design/blocks/power-bus.json": "e498b10684d5ca5f264dbfeee7e0dad1069630c22c2f61d5993f13000b34d11f",
+    "design/flex-interface.json": "2fcee6e0acc78c7d8c799e0687c211fa49bbbc1af7ba152ec395a2c623cfa964",
+    "tools/generate_design.py": "4cb7549ac17aec16969d2dc496c6ff8dfac81f4176726de2e40fe0a4471fbec0",
     "tools/generate_parts_list.py": "ccd5d715efd4e6ea3a7894859e0a712dd3b6b3e65d0fc441e638d5838a55fd59",
-    "design/procurement-evidence.json": "8d1e17dcf789fd19a02ef9c80a376a25df85c5883f37f3b0910a54dacb131a47"
+    "design/procurement-evidence.json": "8f0a57dd23104c6d7770db0e37e21bc19d9cccf34f3cce283756aac7b1b3b38b"
   },
-  "source_component_refs": 361,
-  "purchased_component_refs": 299,
-  "unique_purchase_rows": 68,
+  "source_component_refs": 362,
+  "purchased_component_refs": 300,
+  "unique_purchase_rows": 69,
   "variant_total_parts": {
-    "BASE": 264,
-    "BIOS": 292,
-    "RESERVE": 270,
-    "BIOS_AND_RESERVE": 298,
-    "BASE_PSRAM_DNP": 263,
-    "BIOS_PSRAM_DNP": 291,
-    "RESERVE_PSRAM_DNP": 269,
-    "BIOS_AND_RESERVE_PSRAM_DNP": 297
+    "BASE": 265,
+    "BIOS": 293,
+    "RESERVE": 271,
+    "BIOS_AND_RESERVE": 299,
+    "BASE_PSRAM_DNP": 264,
+    "BIOS_PSRAM_DNP": 292,
+    "RESERVE_PSRAM_DNP": 270,
+    "BIOS_AND_RESERVE_PSRAM_DNP": 298
   },
   "variant_dnp_purchased_refs": {
     "BASE": [
@@ -192,9 +192,10 @@
     ]
   },
   "supplier_identity_verified_rows": 52,
-  "sourcing_pending_rows": 16,
+  "sourcing_pending_rows": 17,
   "catalog_identity_verified_base_rows": 52,
   "sourcing_pending_base_rows": [
+    "0467.500NR",
     "100010048",
     "SMF5.0CA"
   ],
@@ -203,6 +204,7 @@
   ],
   "jlc_smt_catalog_verified_base_rows": 52,
   "jlc_assembly_pending_base_rows": [
+    "0467.500NR",
     "SMF5.0CA"
   ],
   "jlc_fixture_required_base_rows": [
