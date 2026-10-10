@@ -157,8 +157,16 @@ The paper is flat only at one end; do not derive precision coordinates from it.
 The owner reaffirms CN503 tails essentially flush and BIOS body about 2 mm
 above the motherboard. CN503 passes through the shield; no extra top-height
 or exact top-edge offset reading is required for this initial concept.
-The opposite tail row is hidden, so two-row spacing/exposed length remain open.
-Obtain its X/Y offset relative to IC501. The inline replacement photo and
+The owner now identifies the 5.03 mm narrow-section width as the effective
+distance between CN503's two rows. Use about 5.03 mm as trial row-center
+spacing; verify that interpretation with both rows in the actual-size guide:
+../docs/CN503-contact-alignment-RevA.pdf (editable SVG beside it).
+Print at 100%, disable fit-to-page and verify both 20 mm scale bars. Its
+contact marks are an alignment check, not a qualified solder-pad pattern.
+The opposite row is hidden in the close-up; exposed tail length, overlap and
+final joining tolerances remain open. Use the approximately 12 mm gap and
+qualitative row/body alignment for initial X/Y placement, then check the
+final registration. The inline replacement photo and
 owner confirmation identify the upper SEGA 315-6267 and large chip below it
 with thermal compound. Both contact footprints have zero carrier clearance:
 keep them clear and preserve the installed metal contact.
@@ -210,11 +218,14 @@ APS6404L-3SQR-ZR is a candidate: 64 Mbit, 3 x 2 mm USON-8, 0.6 mm max height.
 This is bridge-sector/read-ahead RAM, not additional Dreamcast system RAM.
 The exact QMI circuit, footprint, part sourcing and driver remain to be done.
 
-The remaining layout inputs are CN503-to-IC501 X/Y placement; actual tail
-pitch/row spacing/contact envelope; usable outline/supports/card access; and
-the USB-free C5's remaining height and selected removable-contact stack.
-The owner has supplied partial CN503 placement/contact measurements; confirm
-their endpoints and the remaining geometry described above. A dimensioned overhead sketch can combine the outline information.
+The remaining layout checks are final CN503-to-IC501 X/Y registration;
+qualified tail pitch/row-center spacing, exposed length and landing tolerances;
+usable outline/supports/card access; and the USB-free C5's remaining height
+and selected removable-contact stack. The owner has supplied working CN503
+placement/contact references, including about 5.03 mm effective row separation.
+Check the actual-size template before fixing the flex pattern; no further
+initial row-spacing reading is needed. A dimensioned overhead sketch can
+combine the remaining outline information.
 Nominal BIOS pitch is 1.27 mm per a primary teardown; the clearance-only cutout
 needs no BIOS solder pads. Confirm actual leads if optional BIOS taps are added.
 Select a removable connection from its drawing first.
