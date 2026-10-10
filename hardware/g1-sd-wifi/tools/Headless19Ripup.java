@@ -58,12 +58,15 @@ public final class Headless19Ripup {
     return result;
   }
   public static void main(String[] args) throws Exception {
-    if(args.length<2) throw new IllegalArgumentException("Headless19Ripup input.dsn output.ses [maxPasses=4] [globalSeconds=300] [perItemMillis=800] [fanout=false]");
+    if(args.length<2) throw new IllegalArgumentException("Headless19Ripup input.dsn output.ses [maxPasses=4] [globalSeconds=300] [perItemMillis=800] [fanout=false] [priorityNetRegex]");
     Path input=Paths.get(args[0]),output=Paths.get(args[1]);
     int maxPasses=args.length>2?Integer.parseInt(args[2]):4;
     int globalSeconds=args.length>3?Integer.parseInt(args[3]):300;
     int perItemMillis=args.length>4?Integer.parseInt(args[4]):800;
     boolean fanout=args.length>5&&Boolean.parseBoolean(args[5]);
+    // Optional net-name pattern routed first in every pass, so dense buses
+    // get their corridors before general nets use the space.
+    final java.util.regex.Pattern priority=args.length>6?java.util.regex.Pattern.compile(args[6]):null;
     String design=input.getFileName().toString();
     BoardHandlingHeadless h=new BoardHandlingHeadless(Locale.US,false,0.01f);
     try(InputStream in=Files.newInputStream(input)) {
@@ -113,6 +116,13 @@ public final class Headless19Ripup {
       ArrayList<Pin> pins=new ArrayList<Pin>(b.get_pins());
       // Alternate end ordering without modifying the core route algorithm.
       if(pass%2==0) Collections.reverse(pins);
+      if(priority!=null) {
+        final RoutingBoard rb=b;
+        // Stable sort: pattern nets first, original order otherwise.
+        pins.sort(Comparator.comparingInt((Pin p)->{
+          int n=p.net_count()>0?p.get_net_no(0):0;
+          return n>0&&priority.matcher(rb.rules.nets.get(n).name).find()?0:1;}));
+      }
       for(Pin pin:pins) {
         if(stop.is_stop_requested()) break;
         if(pin.net_count()!=1 || pin.get_unconnected_set(pin.get_net_no(0)).isEmpty()) continue;
