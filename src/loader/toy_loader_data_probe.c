@@ -3,6 +3,15 @@
 #include "kui/toy_pilot_clock.h"
 #if KUI_TOY_PILOT_DATA_PROBE
 #include "retail_storage.h"
+#include "sci_sd_bus.h"
+#if KUI_TOY_PILOT_DATA_PAYLOAD_MODE > 0
+#include "kui/toy_loader_payload_control.h"
+#endif
+
+_Static_assert(sizeof(struct kui_sci_sd_diagnostic)==64u,"DATA probe exact low diagnostic ABI");
+_Static_assert(offsetof(struct kui_sci_sd_diagnostic,started)==52u,"DATA probe DMA started ABI");
+_Static_assert(offsetof(struct kui_sci_sd_diagnostic,success)==56u,"DATA probe DMA success ABI");
+_Static_assert(offsetof(struct kui_sci_sd_diagnostic,fallback)==60u,"DATA probe DMA fallback ABI");
 
 /* Every mutable observation and scratch object is high resident BSS. */
 static struct kui_toy_loader_data_probe_report data_probe_report;
@@ -14,11 +23,13 @@ static struct {
 static struct {
     struct data_probe_stamp start,last,payload_start,payload_end,read_end;
     uint32_t active,payload_active,suppressed,blocks,lba,sectors,invalid;
+    struct {uint32_t started,success,fallback;} dma_before,dma_after;
 } data_probe_read_state;
 
 #ifdef KUI_TOY_LOADER_DATA_PROBE_HOST_TEST
 static struct kui_retail_storage *data_probe_card;
 static const volatile uint32_t *data_probe_sr,*data_probe_caller;
+static const volatile struct kui_sci_sd_diagnostic *data_probe_diagnostic;
 static kui_toy_loader_data_probe_read_fn data_probe_original_read;
 static kui_toy_loader_data_probe_block_fn data_probe_original_block;
 #define DATA_PROBE_READ(a,n) kui_toy_loader_data_probe_host_read((a),(n))
@@ -31,6 +42,7 @@ _Static_assert(offsetof(struct kui_retail_storage,stream)==48u,"DATA probe exact
 #define data_probe_card ((struct kui_retail_storage *)(uintptr_t)KUI_TOY_PILOT_LOW_PROBE_CARD)
 #define data_probe_sr ((volatile const uint32_t *)(uintptr_t)KUI_TOY_PILOT_LOW_PROBE_SR)
 #define data_probe_caller ((volatile const uint32_t *)(uintptr_t)KUI_TOY_PILOT_LOW_PROBE_CALLER)
+#define data_probe_diagnostic ((volatile const struct kui_sci_sd_diagnostic *)(uintptr_t)KUI_TOY_PILOT_LOW_PROBE_DIAGNOSTIC)
 #define data_probe_original_read ((kui_toy_loader_data_probe_read_fn)(uintptr_t)KUI_TOY_PILOT_LOW_PROBE_READ)
 #define data_probe_original_block ((kui_toy_loader_data_probe_block_fn)(uintptr_t)KUI_TOY_PILOT_LOW_PROBE_BLOCK)
 static uint32_t data_probe_mmio(uint32_t address,unsigned bytes) {
@@ -49,8 +61,27 @@ static inline __attribute__((always_inline)) void data_probe_initialize(void) {
     if(data_probe_scope.initialized) return;
     data_probe_scope.initialized=1u;
     data_probe_report.magic=KUI_TOY_LOADER_DATA_PROBE_MAGIC;
-    data_probe_report.version=1u;data_probe_report.words=192u;
+    data_probe_report.version=KUI_TOY_LOADER_DATA_PROBE_VERSION;data_probe_report.words=192u;
     data_probe_report.phase_words=88u;data_probe_report.tick_hz=781250u;
+    data_probe_report.feature_flags=KUI_TOY_LOADER_DATA_PROBE_DMA_ATTRIBUTION;
+    data_probe_report.payload_mode=KUI_TOY_PILOT_DATA_PAYLOAD_MODE;
+#if KUI_TOY_PILOT_DATA_PAYLOAD_MODE == 1
+    data_probe_report.feature_flags|=KUI_TOY_LOADER_DATA_PROBE_CACHED_PAYLOAD;
+#elif KUI_TOY_PILOT_DATA_PAYLOAD_MODE == 2
+    data_probe_report.feature_flags|=KUI_TOY_LOADER_DATA_PROBE_PIO_PAYLOAD;
+#endif
+}
+static inline __attribute__((always_inline)) void data_probe_control_snapshot(void) {
+#if KUI_TOY_PILOT_DATA_PAYLOAD_MODE > 0
+    const struct kui_toy_loader_payload_control_counts *counts=kui_toy_loader_payload_control_counts();
+    data_probe_report.payload_attempts=counts->attempts;
+    data_probe_report.payload_declines=counts->declines;
+    data_probe_report.payload_publications=counts->publications;
+    data_probe_report.payload_failed=counts->failed;
+    if(counts->attempts==UINT32_MAX || counts->declines==UINT32_MAX ||
+       counts->publications==UINT32_MAX || counts->failed==UINT32_MAX)
+        data_probe_report.saturated=1u;
+#endif
 }
 static void data_probe_sample(struct data_probe_stamp *out) {
     out->valid=kui_toy_pilot_clock_profile(DATA_PROBE_READ(0xffc00000u,2u),
@@ -59,7 +90,7 @@ static void data_probe_sample(struct data_probe_stamp *out) {
     if(!out->valid) data_probe_add(&data_probe_scope.epoch,1u);
     out->epoch=data_probe_scope.epoch;
 }
-static int data_probe_interval(const struct data_probe_stamp *a,
+static inline __attribute__((always_inline)) int data_probe_interval(const struct data_probe_stamp *a,
     const struct data_probe_stamp *b) {
     return a->valid && b->valid && a->epoch==b->epoch &&
         a->epoch!=UINT32_MAX && a->tick-b->tick<=UINT32_C(0x7fffffff);
@@ -73,6 +104,42 @@ static void data_probe_metric(struct kui_toy_loader_data_probe_metric *m,
         data_probe_add(&m->samples,1u);data_probe_add(&m->ticks_total,elapsed);
     } else data_probe_add(&data_probe_report.phase[data_probe_scope.phase].invalid_intervals,1u);
 }
+static inline __attribute__((always_inline)) void data_probe_dma_before(void) {
+    if(!data_probe_diagnostic) return;
+    data_probe_read_state.dma_before.started=data_probe_diagnostic->started;
+    data_probe_read_state.dma_before.success=data_probe_diagnostic->success;
+    data_probe_read_state.dma_before.fallback=data_probe_diagnostic->fallback;
+}
+static inline __attribute__((always_inline)) void data_probe_dma_after(void) {
+    if(!data_probe_diagnostic) return;
+    data_probe_read_state.dma_after.started=data_probe_diagnostic->started;
+    data_probe_read_state.dma_after.success=data_probe_diagnostic->success;
+    data_probe_read_state.dma_after.fallback=data_probe_diagnostic->fallback;
+}
+static inline __attribute__((always_inline)) void data_probe_dma_attribute(
+    struct kui_toy_loader_data_probe_phase *p,bool result) {
+    uint32_t started=data_probe_read_state.dma_after.started-data_probe_read_state.dma_before.started;
+    uint32_t success=data_probe_read_state.dma_after.success-data_probe_read_state.dma_before.success;
+    uint32_t fallback=data_probe_read_state.dma_after.fallback-data_probe_read_state.dma_before.fallback;
+    if(!data_probe_diagnostic || data_probe_read_state.invalid ||
+       !data_probe_interval(&data_probe_read_state.payload_start,&data_probe_read_state.payload_end)) {
+        data_probe_add(&p->dma_delta_invalid,1u);return;
+    }
+    if(started==1u && fallback==0u && success==(result?1u:0u)) {
+        data_probe_add(&p->dma_started,1u);
+        if(result) data_probe_add(&p->dma_payload_ok,1u);
+        data_probe_metric(&p->dma_payload_body,&data_probe_read_state.payload_start,&data_probe_read_state.payload_end);
+    } else if(!started && !success && fallback==1u) {
+        data_probe_add(&p->pio_fallback,1u);
+        data_probe_metric(&p->pio_payload_body,&data_probe_read_state.payload_start,&data_probe_read_state.payload_end);
+    } else if(!started && !success && !fallback && !result) {
+        data_probe_add(&p->prestart_failed,1u);
+    } else {data_probe_add(&p->dma_delta_invalid,1u);return;}
+    data_probe_add(&p->dma_counter_wraps,
+        (data_probe_read_state.dma_after.started<data_probe_read_state.dma_before.started?1u:0u)+
+        (data_probe_read_state.dma_after.success<data_probe_read_state.dma_before.success?1u:0u)+
+        (data_probe_read_state.dma_after.fallback<data_probe_read_state.dma_before.fallback?1u:0u));
+}
 static bool data_probe_payload(void *context,const uint8_t *tx,uint8_t *rx,
     size_t count,bool slow,uint16_t *crc) {
     struct kui_toy_loader_data_probe_phase *p=&data_probe_report.phase[data_probe_scope.phase];
@@ -84,9 +151,15 @@ static bool data_probe_payload(void *context,const uint8_t *tx,uint8_t *rx,
     }
     data_probe_read_state.payload_active=1u;
     data_probe_sample(&data_probe_read_state.payload_start);
+    data_probe_dma_before();
+#if KUI_TOY_PILOT_DATA_PAYLOAD_MODE > 0
+    bool result=kui_toy_loader_payload_call(data_probe_original_block,context,tx,rx,count,slow,crc);
+#else
     bool result=data_probe_original_block(context,tx,rx,count,slow,crc);
+#endif
     /* last is only needed after original returns. Reentrant calls bypass it. */
     if(!data_probe_report.frozen) {
+        data_probe_dma_after();
         data_probe_sample(&data_probe_read_state.payload_end);
         data_probe_metric(data_probe_read_state.blocks?&p->inter_payload_gap:&p->first_payload_gap,
             data_probe_read_state.blocks?&data_probe_read_state.last:&data_probe_read_state.start,
@@ -96,6 +169,7 @@ static bool data_probe_payload(void *context,const uint8_t *tx,uint8_t *rx,
         if(count>UINT32_MAX) {p->payload_bytes=UINT32_MAX;data_probe_report.saturated=1u;}
         else data_probe_add(&p->payload_bytes,(uint32_t)count);
         if(count!=512u || tx || !rx || slow) data_probe_add(&p->nonstandard_payload,1u);
+        else data_probe_dma_attribute(p,result);
         data_probe_add(&data_probe_read_state.blocks,1u);
         data_probe_read_state.last.tick=data_probe_read_state.payload_end.tick;
         data_probe_read_state.last.valid=data_probe_read_state.payload_end.valid;
@@ -159,6 +233,14 @@ static int data_probe_read(void *context,uint32_t lba,uint32_t sectors,
 
 void kui_toy_loader_data_probe_begin(struct kui_retail_gd *s,uint32_t function,uint32_t phase) {
     data_probe_initialize();
+#if KUI_TOY_PILOT_DATA_PAYLOAD_MODE > 0
+    /* The retained trace flips phase only after the first accepted PLAY
+     * mailbox. That call has no cooked payload; the next dispatch enters
+     * here before any work and permanently restores the original callbacks.
+     * Rejected PLAY and a refused mailbox leave phase zero and keep startup
+     * controls enabled. Mode zero retains both observational phases. */
+    if(phase>0u) {kui_toy_loader_data_probe_freeze();return;}
+#endif
     if(data_probe_report.frozen) return;
     if(data_probe_scope.active) {
         data_probe_add(&data_probe_report.nested_begin,1u);
@@ -199,11 +281,13 @@ const uint32_t *kui_toy_loader_data_probe_words(void) {
 uint32_t kui_toy_loader_data_probe_word_count(void) {return 192u;}
 void kui_toy_loader_data_probe_freeze(void) {
     data_probe_initialize();
+    if(data_probe_report.frozen) return;
     if(data_probe_scope.service && data_probe_scope.service->ops.read==data_probe_read)
         data_probe_scope.service->ops.read=data_probe_original_read;
     if(data_probe_card && data_probe_card->device.sd.bus.transfer_block==data_probe_payload)
         data_probe_card->device.sd.bus.transfer_block=data_probe_original_block;
-    data_probe_scope.active=0u;data_probe_scope.service=NULL;data_probe_report.frozen=1u;
+    data_probe_scope.active=0u;data_probe_scope.service=NULL;
+    data_probe_control_snapshot();data_probe_report.frozen=1u;
 }
 #ifdef KUI_TOY_LOADER_DATA_PROBE_HOST_TEST
 void kui_toy_loader_data_probe_host_bind(struct kui_retail_storage *card,
@@ -211,6 +295,9 @@ void kui_toy_loader_data_probe_host_bind(struct kui_retail_storage *card,
     kui_toy_loader_data_probe_read_fn read,kui_toy_loader_data_probe_block_fn block) {
     data_probe_card=card;data_probe_sr=sr;data_probe_caller=caller;
     data_probe_original_read=read;data_probe_original_block=block;
+}
+void kui_toy_loader_data_probe_host_bind_diagnostic(const volatile struct kui_sci_sd_diagnostic *diagnostic) {
+    data_probe_diagnostic=diagnostic;
 }
 void kui_toy_loader_data_probe_host_reset(void) {
     kui_toy_loader_data_probe_freeze();
@@ -220,6 +307,7 @@ void kui_toy_loader_data_probe_host_reset(void) {
     data_probe_scope.initialized=0u;data_probe_scope.epoch=0u;data_probe_scope.installed=0u;
     data_probe_read_state.active=0u;data_probe_read_state.payload_active=0u;
     data_probe_read_state.suppressed=0u;
+    data_probe_diagnostic=NULL;
 }
 #endif
 #undef DATA_PROBE_READ

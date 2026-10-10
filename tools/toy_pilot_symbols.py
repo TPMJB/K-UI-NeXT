@@ -38,7 +38,8 @@ def _data_probe_symbols(data,image,private_p2):
     if not private_p2:
         raise ValueError("DATA probe requires the private P2 resident")
     typed=_linked_symbols(data,{"_card","_kui_retail_hook_sr",
-        "_kui_retail_native_caller","_read_sectors","_transfer_block"})
+        "_kui_retail_native_caller","_diagnostic","_image",
+        "_read_sectors","_transfer_block"})
     syms=image["symbols"]
     begin=syms.get("__retail_resident_bss_begin",0)
     end=syms.get("__retail_resident_bss_end",0)
@@ -48,16 +49,22 @@ def _data_probe_symbols(data,image,private_p2):
     # Reviewed SH ABI: storage is 72 bytes, device.sd starts at +4 and is
     # 44 bytes; the stream starts at +48. The generated CARD is the whole
     # storage object, so C users must retain independent offsetof/size asserts.
-    for key,name,size in (("LOW_PROBE_CARD","_card",72),
-                          ("LOW_PROBE_SR","_kui_retail_hook_sr",4),
-                          ("LOW_PROBE_CALLER","_kui_retail_native_caller",8)):
+    # The SCI diagnostic is sixteen uint32_t words; its final three counters
+    # are at +52/+56/+60. The image is exactly 544 bytes and 32-byte aligned;
+    # its isolated 512-byte block begins at +32. Neither admission depends on
+    # untyped names or a masked alias of an arbitrary caller buffer.
+    for key,name,size,alignment in (("LOW_PROBE_CARD","_card",72,4),
+                          ("LOW_PROBE_SR","_kui_retail_hook_sr",4,4),
+                          ("LOW_PROBE_CALLER","_kui_retail_native_caller",8,4),
+                          ("LOW_PROBE_DIAGNOSTIC","_diagnostic",64,4),
+                          ("LOW_PROBE_IMAGE_BLOCK","_image",544,32)):
         at,actual,kind,section=typed.get(name,(0,0,0,None))
-        if (actual!=size or kind!=1 or at%4 or
+        if (actual!=size or kind!=1 or at%alignment or
                 not begin<=at<at+size<=end or section is None or
                 section[1]!=8 or section[2]&7!=3 or
                 not section[3]<=at<at+size<=section[3]+section[5]):
             raise ValueError("DATA probe lacks exact typed low P2 state: "+name)
-        result[key]=at
+        result[key]=at+32 if key=="LOW_PROBE_IMAGE_BLOCK" else at
     for key,name in (("LOW_PROBE_READ","_read_sectors"),
                      ("LOW_PROBE_BLOCK","_transfer_block")):
         at,size,kind,section=typed.get(name,(0,0,0,None))
@@ -94,7 +101,8 @@ def generate(path, *, private_p2=False, data_probe=False):
     state={"LOW_CONTROL","LOW_MANIFEST","LOW_ACTIVE","LOW_DATA_PENDING","LOW_SCI_CARD"}
     if data_probe:
         values.update(_data_probe_symbols(data,image,private_p2))
-        state.update({"LOW_PROBE_CARD","LOW_PROBE_SR","LOW_PROBE_CALLER"})
+        state.update({"LOW_PROBE_CARD","LOW_PROBE_SR","LOW_PROBE_CALLER",
+                      "LOW_PROBE_DIAGNOSTIC","LOW_PROBE_IMAGE_BLOCK"})
     for key,value in values.items():
         offset=0x20000000 if private_p2 and key in state else 0
         alignment=4 if key in state else 2

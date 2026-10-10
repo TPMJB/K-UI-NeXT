@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: Toy SCI V W X next tests
+
+on:
+  push:
+    branches: [experiment/toy-sci-next-2026-10-10]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: toy-sci-next-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/experiment/toy-sci-next-2026-10-10'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Restore the pinned freestanding compiler
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .deps/sh-elf
+            .deps/kos/utils/kos-chain/*.tar.*
+          key: sh-elf-ubuntu24-v1-${{ hashFiles('dependencies.json', 'tools/setup_kos.sh') }}
+          restore-keys: sh-elf-ubuntu24-v1-
+      - name: Recover the compiler archive when the cache is absent
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! -x .deps/sh-elf/bin/sh-elf-gcc || ! -f .deps/sh-elf/.kui-toolchain-complete ]]; then
+            mkdir -p build/compiler-recovery
+            gh api repos/TPMJB/K-UI-NeXT/actions/artifacts/11493202582 > build/compiler-recovery/artifact.json
+            python3 tools/build_toy_loader_data_probe_ci.py check-recovery
+            gh run download 37644910026 --repo TPMJB/K-UI-NeXT --name cdda-toolchain-recovery-37644910026 --dir build/compiler-recovery
+            python3 tools/build_toy_loader_data_probe_ci.py recover
+          fi
+          python3 tools/build_toy_loader_sci_next.py compiler
+          echo "$PWD/.deps/sh-elf/bin" >> "$GITHUB_PATH"
+      - name: Build exact U and disabled R T references and the V W X candidates
+        id: build
+        shell: bash
+        run: python3 tools/build_toy_loader_sci_next.py build
+      - name: Run retained production differentials and payload sanitizer suites
+        id: host
+        shell: bash
+        run: python3 tools/build_toy_loader_sci_next.py host
+      - name: Emit independently reviewable linked candidate evidence
+        if: always() && steps.build.outcome == 'success'
+        shell: bash
+        run: python3 tools/build_toy_loader_sci_next.py review
+      - name: Admit all three candidates and create the hardware test ZIP
+        id: admit
+        shell: bash
+        run: python3 tools/build_toy_loader_sci_next.py admit
+      - name: Retain code-only build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: toy-sci-next-review-${{ github.run_id }}
+          path: |
+            build/sci-next-v/
+            build/sci-next-w/
+            build/sci-next-x/
+            build/toy-u-reference/
+            build/sci-next-r-disabled/
+            build/sci-next-t-disabled/
+            build/sci-next-tests/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload admitted hardware-ready files
+        if: success() && steps.admit.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-Toy-SCI-Next-Tests-${{ github.run_id }}
+          path: |
+            dist/K-UI-Toy-SCI-Next-Tests.zip
+            dist/hardware-ready/
+          if-no-files-found: error
+          retention-days: 30
