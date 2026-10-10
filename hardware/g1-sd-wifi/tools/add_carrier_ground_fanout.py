@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Add short ground stubs/vias to the real In1 reference plane.
 
+With --net, the same check drops stubs/vias from another plane net's SMD pads
+(the +3V3_LOGIC plane): Freerouting 1.9 never ends a route on a plane, so
+plane connections are placed here, locked, before the signal route.
+
 Conservative copper-envelope checks choose candidates; native refill and DRC
 remain mandatory. This does not qualify current loops or mechanical fit.
 """
@@ -52,17 +56,17 @@ def ground_connected(pad,conn):
         pending.extend(conn.GetConnectedItems(item))
     return False
 
-def add_fanout(board, only_refs=None):
+def add_fanout(board, only_refs=None, net_name='GND'):
     footprints=list(board.GetFootprints());allpads=[p for f in footprints for p in f.Pads()]
-    smd=[p for p in allpads if p.GetNetname()=='GND' and p.IsOnLayer(pcbnew.F_Cu) and not p.GetDrillSize().x and (only_refs is None or p.GetParentFootprint().GetReference() in only_refs)]
+    smd=[p for p in allpads if p.GetNetname()==net_name and p.IsOnLayer(pcbnew.F_Cu) and not p.GetDrillSize().x and (only_refs is None or p.GetParentFootprint().GetReference() in only_refs)]
     copperpads=[p for p in allpads if any(p.IsOnLayer(l) for l in g.LAYERS)]
     padboxes=[(p,box(p)) for p in copperpads]
     # Anonymous paste apertures have no copper and are not clearance obstacles.
     holes=[(point(p.GetPosition()),max(pcbnew.ToMM(p.GetDrillSize().x),pcbnew.ToMM(p.GetDrillSize().y))/2) for p in allpads if p.GetDrillSize().x]
-    othertracks=[t for t in board.GetTracks() if t.GetNetname()!='GND']
+    othertracks=[t for t in board.GetTracks() if t.GetNetname()!=net_name]
     for t in board.GetTracks():
         if isinstance(t,pcbnew.PCB_VIA):holes.append((point(t.GetPosition()),pcbnew.ToMM(t.GetDrill())/2))
-    records=[];failed=[];skipped=0;net=next(n for n in board.GetNetInfo().NetsByNetcode().values() if n.GetNetname()=='GND')
+    records=[];failed=[];skipped=0;net=next(n for n in board.GetNetInfo().NetsByNetcode().values() if n.GetNetname()==net_name)
     board.BuildConnectivity();conn=board.GetConnectivity()
     for index,pad in enumerate(smd):
         if index%10==0:board.BuildConnectivity();conn=board.GetConnectivity()
@@ -79,7 +83,7 @@ def add_fanout(board, only_refs=None):
                 for q,b in padboxes:
                     # No new via-in-pad, including same-net SMD lands.
                     if not q.GetDrillSize().x and q.IsOnLayer(pcbnew.F_Cu) and point_rect(v,b)<VIA_DIAMETER/2+.051:bad=True;break
-                    if q.GetNetname()!='GND':
+                    if q.GetNetname()!=net_name:
                         distance=max(0,math.dist(v,point(q.GetPosition()))-pcbnew.ToMM(q.GetSize().x)/2) if q.GetShape()==pcbnew.PAD_SHAPE_CIRCLE else point_rect(v,b)
                         if distance<VIA_DIAMETER/2+CLEAR:bad=True;break
                         if q.IsOnLayer(pcbnew.F_Cu) and line_rect(a,v,b)<TRACE_WIDTH/2+CLEAR:bad=True;break
@@ -100,16 +104,18 @@ def add_fanout(board, only_refs=None):
         track=pcbnew.PCB_TRACK(board);track.SetStart(pad.GetPosition());track.SetEnd(g.p(*candidate));track.SetWidth(g.mm(TRACE_WIDTH));track.SetLayer(pcbnew.F_Cu);track.SetNet(net);track.SetLocked(True);board.Add(track)
         holes.append((candidate,VIA_DRILL/2));records.append({'pad':ref,'xy_mm':candidate,'stub_length_mm':math.dist(a,candidate),'via_diameter_mm':VIA_DIAMETER,'via_drill_mm':VIA_DRILL})
     board.BuildConnectivity();pcbnew.ZONE_FILLER(board).Fill(board.Zones());board.BuildConnectivity();conn=board.GetConnectivity();conn.RecalculateRatsnest()
-    return {'ground_stubs':records,'unroutable_ground_pads':failed,'already_serviced_ground_pads':skipped,'native_unconnected_count_after':conn.GetUnconnectedCount(False),'complete_layout_qualified':False}
+    if net_name=='GND':
+        return {'ground_stubs':records,'unroutable_ground_pads':failed,'already_serviced_ground_pads':skipped,'native_unconnected_count_after':conn.GetUnconnectedCount(False),'complete_layout_qualified':False}
+    return {'net':net_name,'stubs':records,'unroutable_pads':failed,'already_serviced_pads':skipped,'native_unconnected_count_after':conn.GetUnconnectedCount(False),'complete_layout_qualified':False}
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('input',type=pathlib.Path);ap.add_argument('output',type=pathlib.Path);ap.add_argument('--report',type=pathlib.Path,required=True);ap.add_argument('--ref',action='append');a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('input',type=pathlib.Path);ap.add_argument('output',type=pathlib.Path);ap.add_argument('--report',type=pathlib.Path,required=True);ap.add_argument('--ref',action='append');ap.add_argument('--net',default='GND');a=ap.parse_args()
     before=hashlib.sha256(a.input.read_bytes()).hexdigest()
-    board=pcbnew.LoadBoard(str(a.input));report=add_fanout(board,set(a.ref) if a.ref else None);pcbnew.SaveBoard(str(a.output),board)
+    board=pcbnew.LoadBoard(str(a.input));report=add_fanout(board,set(a.ref) if a.ref else None,a.net);pcbnew.SaveBoard(str(a.output),board)
     # A fresh native reload avoids stale connectivity caches after zone refill.
     checked=pcbnew.LoadBoard(str(a.output));checked.BuildConnectivity()
     conn=checked.GetConnectivity();conn.RecalculateRatsnest()
     report['native_unconnected_count_after']=conn.GetUnconnectedCount(False)
     report['input_board_sha256']=before;report['output_board_sha256']=hashlib.sha256(a.output.read_bytes()).hexdigest();a.report.write_text(json.dumps(report,indent=2)+'\n')
-    print(json.dumps({k:v for k,v in report.items() if k!='ground_stubs'}))
+    print(json.dumps({k:v for k,v in report.items() if k not in ('ground_stubs','stubs')}))
 if __name__=='__main__':main()

@@ -184,12 +184,12 @@ def edge_routing_obstacles(board):
 
     Native DSN's default track clearance alone does not carry KiCad's copper
     edge constraint. Rectangular rule areas protect every outline segment,
-    including the BIOS aperture and CN503 notch, on all four copper layers.
+    including the BIOS aperture and CN503 notch, on every copper layer the
+    board has (four or six).
     """
     prefix='Routing edge clearance / '
     existing={z.GetZoneName():z for z in board.Zones()}
-    layers=pcbnew.LSET()
-    for layer in LAYERS:layers.AddLayer(layer)
+    layers=pcbnew.LSET.AllCuMask(board.GetCopperLayerCount())
     for index,edge in enumerate(g for g in board.GetDrawings() if g.GetLayer()==pcbnew.Edge_Cuts):
         a=edge.GetStart();c=edge.GetEnd()
         x0,x1=sorted([pcbnew.ToMM(a.x),pcbnew.ToMM(c.x)])

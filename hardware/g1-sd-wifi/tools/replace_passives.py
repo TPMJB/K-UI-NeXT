@@ -33,6 +33,7 @@ TRACK_GAP = 0.20
 GRID = 0.25
 POWER = {'GND', '+3V3_LOGIC', 'CONSOLE_3V3', '+3V3_STORAGE', '+1V1_MCU', 'PRIMARY_5V', '+5V_HOLD',
          'RESERVE_5V', '+5V_C5', '+3V3_C5_IO', 'FUSED_5V', 'CONSOLE_5V', 'FLEX_5V', 'MCU_VREG_AVDD'}
+PLANE_NETS = {'GND', '+3V3_LOGIC'}
 FAST = re.compile(r'CLK|USB|SD_|QSPI|PSRAM|C5_(SCLK|MOSI|MISO|CSn)|XIN|XOUT|LINK_')
 
 
@@ -68,6 +69,35 @@ def bottom_only(fp):
 def signal_nets(fp):
     return [p.GetNetname() for p in fp.Pads()
             if p.GetNetname() and p.GetNetname() not in POWER and not p.GetNetname().startswith('unconnected')]
+
+
+def plane_fanout(board, fps):
+    """Locked plane-net stubs that join one pad to one via and nothing else."""
+    tracks = list(board.GetTracks())
+    vias = [t for t in tracks if t.Type() == pcbnew.PCB_VIA_T]
+    segs = [t for t in tracks if t.Type() != pcbnew.PCB_VIA_T]
+    result = {}
+    for r, f in fps.items():
+        for p in f.Pads():
+            if p.GetNetname() not in PLANE_NETS:
+                continue
+            for t in segs:
+                if not t.IsLocked() or t.GetNetCode() != p.GetNetCode():
+                    continue
+                if p.HitTest(t.GetStart()):
+                    far = t.GetEnd()
+                elif p.HitTest(t.GetEnd()):
+                    far = t.GetStart()
+                else:
+                    continue
+                via = [v for v in vias if v.GetNetCode() == t.GetNetCode() and v.HitTest(far)]
+                if len(via) != 1:
+                    continue
+                others = [u for u in segs if u is not t and u.GetNetCode() == t.GetNetCode()
+                          and (via[0].HitTest(u.GetStart()) or via[0].HitTest(u.GetEnd()))]
+                if not others:
+                    result.setdefault(r, []).extend([t, via[0]])
+    return result
 
 
 def search(fp, targets, ax, ay, radius, obstacles, copper):
@@ -107,14 +137,21 @@ def main():
     ap.add_argument('--report', type=pathlib.Path)
     ap.add_argument('--radius', type=float, default=10.0)
     ap.add_argument('--keep', action='append', default=[], help='Reference that must not move')
+    ap.add_argument('--lift-plane-fanout', action='store_true',
+                    help='Also lift locked GND/+3V3_LOGIC fanout stubs (pad-to-via only); rerun '
+                         'add_carrier_ground_fanout.py for both nets afterwards')
     args = ap.parse_args()
     board = pcbnew.LoadBoard(str(args.board))
     fps = {f.GetReference(): f for f in list(board.GetFootprints())}
     tracks = list(board.GetTracks())
+    fanout = plane_fanout(board, fps) if args.lift_plane_fanout else {}
+    fanout_items = {id(t) for items in fanout.values() for t in items}
     locked_refs = set()
     for f in fps.values():
         for p in f.Pads():
             for t in tracks:
+                if id(t) in fanout_items:
+                    continue
                 if t.IsLocked() and t.GetNetCode() == p.GetNetCode() and (
                         (t.Type() == pcbnew.PCB_VIA_T and p.HitTest(t.GetPosition())) or
                         (t.Type() != pcbnew.PCB_VIA_T and (p.HitTest(t.GetStart()) or p.HitTest(t.GetEnd())))):
@@ -136,6 +173,7 @@ def main():
             if not [t for t in board.GetTracks() if t.Type() != pcbnew.PCB_VIA_T and t not in own
                     and t.GetNetCode() == v.GetNetCode() and (v.HitTest(t.GetStart()) or v.HitTest(t.GetEnd()))]:
                 own.append(v)
+        own += [t for t in fanout.get(r, []) if t not in own]
         for t in own:
             board.Remove(t)
             graveyard.append(t)
@@ -158,18 +196,15 @@ def main():
         series = len(nets) == 2
         return (0 if fast else 1, 0 if series else 1, r)
 
-    results = []
-    for r in sorted(movable, key=priority):
+    def signal_targets(fp):
+        # Supply pins drop to a plane via or a local rail; only signal
+        # partners decide where the part belongs.
+        return {p.GetNumber(): fixed_pads[p.GetNetname()] for p in fp.Pads()
+                if p.GetNetname() in fixed_pads and p.GetNetname() not in POWER}
+
+    def place(r):
         fp = fps[r]
-        pads = list(fp.Pads())
-        targets = {}
-        for p in pads:
-            n = p.GetNetname()
-            if n in fixed_pads:
-                targets[p.GetNumber()] = fixed_pads[n]
-        if not targets:
-            results.append({'ref': r, 'placed': False, 'reason': 'no fixed partner'})
-            continue
+        targets = signal_targets(fp)
         # Target point: centroid of each pad's nearest-to-centroid fixed partner.
         pts = [pt for v in targets.values() for pt in v]
         cx = sum(x for x, _ in pts) / len(pts)
@@ -187,12 +222,56 @@ def main():
             fp.SetPosition(old[0])
             fp.SetOrientationDegrees(old[1])
             obstacles.append(bbox(fp.GetBoundingBox(False)))
-            results.append({'ref': r, 'placed': False, 'reason': 'no free spot', 'nets': signal_nets(fp)})
-            continue
+            return {'ref': r, 'placed': False, 'reason': 'no free spot', 'nets': signal_nets(fp)}
         cost, x, y, rot, b = chosen
         obstacles.append(b)
-        results.append({'ref': r, 'placed': True, 'xy_mm': [round(x, 3), round(y, 3)], 'rotation_deg': rot,
-                        'wire_mm': round(cost, 2), 'nets': signal_nets(fp)})
+        return {'ref': r, 'placed': True, 'xy_mm': [round(x, 3), round(y, 3)], 'rotation_deg': rot,
+                'wire_mm': round(cost, 2), 'nets': signal_nets(fp)}
+
+    # Parts whose signal partners are all movable wait where they are,
+    # reserved, until those partners have been placed.
+    deferred = [r for r in movable if not signal_targets(fps[r])]
+    reserved = {r: bbox(fps[r].GetBoundingBox(False)) for r in deferred}
+    obstacles.extend(reserved.values())
+    results = [place(r) for r in sorted(set(movable) - set(deferred), key=priority)]
+    for r in [r for r in movable if r not in deferred]:
+        for p in fps[r].Pads():
+            fixed_pads.setdefault(p.GetNetname(), []).append(local(p.GetPosition()))
+    for r in sorted(deferred, key=priority):
+        obstacles.remove(reserved[r])
+        if signal_targets(fps[r]):
+            results.append(place(r))
+        else:
+            obstacles.append(reserved[r])
+            results.append({'ref': r, 'placed': False, 'reason': 'no fixed partner'})
+    # A part that found no spot stays where it was, but parts placed before
+    # it may already sit there; move those again around it.
+    stuck = [fps[x['ref']] for x in results if not x['placed'] and 'reason' in x and x['reason'] == 'no free spot']
+    placed_rows = {x['ref']: x for x in results if x['placed']}
+    for blocker in stuck:
+        bb = bbox(blocker.GetBoundingBox(False))
+        for r, row in list(placed_rows.items()):
+            fp = fps[r]
+            mine = bbox(fp.GetBoundingBox(False))
+            if not overlap(mine, bb, PART_GAP):
+                continue
+            obstacles.remove(next(o for o in obstacles if o == mine))
+            targets = {p.GetNumber(): fixed_pads[p.GetNetname()] for p in fp.Pads()
+                       if p.GetNetname() in fixed_pads and p.GetNetname() not in POWER}
+            pts = [pt for v in targets.values() for pt in v]
+            cx = sum(x for x, _ in pts) / len(pts)
+            cy = sum(y for _, y in pts) / len(pts)
+            chosen = None
+            for radius in (args.radius, args.radius * 2.5, 60.0):
+                chosen = search(fp, targets, cx, cy, radius, obstacles, copper)
+                if chosen is not None:
+                    break
+            if chosen is None:
+                raise ValueError('%s overlaps unplaced %s and cannot move' % (r, blocker.GetReference()))
+            cost, x, y, rot, nb = chosen
+            obstacles.append(nb)
+            row.update({'xy_mm': [round(x, 3), round(y, 3)], 'rotation_deg': rot, 'wire_mm': round(cost, 2),
+                        'moved_off': blocker.GetReference()})
     pcbnew.SaveBoard(str(args.board), board)
     summary = {'movable': len(movable), 'placed': sum(1 for x in results if x['placed']),
                'unplaced': [x['ref'] for x in results if not x['placed']], 'removed_copper_items': removed}
