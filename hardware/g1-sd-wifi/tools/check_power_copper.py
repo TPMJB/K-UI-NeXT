@@ -136,6 +136,20 @@ def net_graph(board, net, pads):
     return edges, via_nodes, pad_nodes
 
 
+def reachable(edges, sources):
+    adj = collections.defaultdict(set)
+    for a, b, _ in edges:
+        adj[a].add(b)
+        adj[b].add(a)
+    seen, stack = set(sources), list(sources)
+    while stack:
+        for m in adj[stack.pop()]:
+            if m not in seen:
+                seen.add(m)
+                stack.append(m)
+    return seen
+
+
 def branch_currents(edges, sources, loads, fault_points=()):
     """Per edge: load current beyond it from the source (all load in a loop),
     and whether a fault point lies beyond it."""
@@ -201,7 +215,14 @@ def main():
         fault_points = [node for n, node in pad_nodes.items() if n.split('.')[0].rstrip('0123456789') in
                         ('C', 'J', 'K', 'TP')]
         loads = {pad_nodes[n]: c for n, c in (spec['loads'] or {}).items()}
-        currents, faulted = branch_currents(edges, [pad_nodes[s] for s in spec['source']], loads, fault_points)
+        sources = [pad_nodes[s] for s in spec['source']]
+        # No vacuous pass: every pad of the net must be fed from the source
+        # through copper (or a plane, for plane nets).
+        fed = reachable(edges, sources)
+        unfed = sorted(n for n, node in pad_nodes.items() if node not in fed)
+        if unfed and net != '+3V3_LOGIC':
+            failures.append({'net': net, 'item': 'not_fed_from_source', 'pads': unfed})
+        currents, faulted = branch_currents(edges, sources, loads, fault_points)
         if not spec['loads']:
             currents = [spec['normal']] * len(edges)
         worst = {'normal_rise_c': 0.0, 'fault_rise_c': 0.0}

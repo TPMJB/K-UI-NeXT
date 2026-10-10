@@ -24,8 +24,11 @@ import pcbnew
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOARD = ROOT / 'controller' / 'KUI-G1-Bridge-RevA.kicad_pcb'
+# Anything a wider segment can newly violate, including rule-area keepouts
+# (board-edge clearance strips, the In1 no-track area).
 CLEARANCE_TYPES = {'clearance', 'hole_clearance', 'copper_edge_clearance', 'tracks_crossing',
-                   'shorting_items', 'solder_mask_bridge', 'track_dangling', 'via_dangling'}
+                   'shorting_items', 'solder_mask_bridge', 'track_dangling', 'via_dangling',
+                   'items_not_allowed', 'silk_over_copper', 'track_width'}
 
 
 def drc(board_path):
