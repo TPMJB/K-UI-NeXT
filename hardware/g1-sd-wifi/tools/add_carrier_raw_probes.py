@@ -13,13 +13,27 @@ f=importlib.util.module_from_spec(spec);spec.loader.exec_module(f);g=f.g
 CLEAR=.151
 ORDER=1
 
-def add_probes(board):
-    data={c['ref']:c for c in g.components(ROOT/'design/integrated-components.json')}
+def remove_probes(board,refs):
+    """Delete probe lands with their tap stub and via so they can be re-placed."""
+    graveyard=[]
+    for fp in [q for q in board.GetFootprints() if q.GetReference() in refs]:
+        at=fp.GetPosition();netcode=list(fp.Pads())[0].GetNetCode()
+        for t in list(board.GetTracks()):
+            if t.GetNetCode()!=netcode:continue
+            if (t.Type()==pcbnew.PCB_VIA_T and t.GetPosition()==at) or (t.Type()!=pcbnew.PCB_VIA_T and at in (t.GetStart(),t.GetEnd())):
+                board.Remove(t);graveyard.append(t)
+        board.Remove(fp);graveyard.append(fp)
+    return graveyard
+
+def add_probes(board,replace=None,components=ROOT/'design/integrated-components.json'):
+    data={c['ref']:c for c in g.components(components)}
     native,padnets=g.read_netlist(ROOT/'controller/checks/netlist.xml')
+    graveyard=remove_probes(board,set(replace)) if replace else []
     fps={q.GetReference():q for q in board.GetFootprints()}
     new=sorted(set(data)-set(fps),key=lambda r:int(r[2:]) if r.startswith('TP') else -1)
     if any(not (r.startswith('TP') and 100<=int(r[2:])<=138) for r in new):raise ValueError('Only reviewed raw-probe additions are accepted')
-    if len(new)!=39:raise ValueError('Expected exactly39 new raw probe refs, got '+str(len(new)))
+    if replace and set(new)!=set(replace):raise ValueError('Re-placement set differs from the removed probes')
+    if not replace and len(new)!=39:raise ValueError('Expected exactly39 new raw probe refs, got '+str(len(new)))
     nets={q.GetNetname():q for q in board.GetNetInfo().NetsByNetcode().values()}
     pads=[q for fp in fps.values() for q in fp.Pads() if any(q.IsOnLayer(l) for l in g.LAYERS)]
     records=[];failed=[]
@@ -85,14 +99,16 @@ def add_probes(board):
         t=pcbnew.PCB_TRACK(board);t.SetStart(src.GetPosition());t.SetEnd(g.p(*candidate));t.SetWidth(g.mm(.15));t.SetLayer(pcbnew.F_Cu);t.SetNet(nets[net]);t.SetLocked(True);board.Add(t)
         records.append({'ref':ref,'net':net,'endpoint':owner+'.'+src.GetNumber(),'xy_mm':candidate,'side':'B.Cu bare copper','added_stub_length_mm':math.dist(a,candidate),'maximum_added_stub_mm':3.0,'native_hierarchy_path':native[ref]['path'],'bench_access':'carrier removed; insulate underside after installation','route_loading_qualified':False})
     if failed:raise ValueError('No compliant short probe placement for '+','.join(failed))
-    g.sync_native_metadata(board,ROOT/'design/integrated-components.json',ROOT/'controller/checks/netlist.xml')
+    g.sync_native_metadata(board,components,ROOT/'controller/checks/netlist.xml')
     return records
 
 def main():
     global ORDER
-    ap=argparse.ArgumentParser();ap.add_argument('--reverse-bank-order',action='store_true');ap.add_argument('input',type=pathlib.Path);ap.add_argument('output',type=pathlib.Path);ap.add_argument('--report',type=pathlib.Path,default=ROOT/'design/raw-g1-probe-placement.json');a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--reverse-bank-order',action='store_true');ap.add_argument('input',type=pathlib.Path);ap.add_argument('output',type=pathlib.Path);ap.add_argument('--report',type=pathlib.Path,default=ROOT/'design/raw-g1-probe-placement.json')
+    ap.add_argument('--replace',action='append',help='Existing probe to remove and place again from the current contract')
+    ap.add_argument('--components',type=pathlib.Path,default=ROOT/'design/integrated-components.json');a=ap.parse_args()
     ORDER=-1 if a.reverse_bank_order else 1
-    board=pcbnew.LoadBoard(str(a.input));records=add_probes(board)
+    board=pcbnew.LoadBoard(str(a.input));records=add_probes(board,a.replace,a.components)
     board.BuildConnectivity();pcbnew.ZONE_FILLER(board).Fill(board.Zones());pcbnew.SaveBoard(str(a.output),board)
     report={'board_sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'fitted_bottom_components':0,'probe_loading_qualified':False,'pads':records}
     a.report.write_text(json.dumps(report,indent=2)+'\n');print(json.dumps({'probes':len(records),'output':str(a.output),'max_added_stub_mm':max(q['added_stub_length_mm'] for q in records)}))

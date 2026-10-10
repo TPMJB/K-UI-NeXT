@@ -137,6 +137,13 @@ def main():
     ap.add_argument('--report', type=pathlib.Path)
     ap.add_argument('--radius', type=float, default=10.0)
     ap.add_argument('--keep', action='append', default=[], help='Reference that must not move')
+    ap.add_argument('--part', action='append', default=[],
+                    help='Also move this part (any pad count, e.g. a small IC); all copper on its '
+                         'pads is dropped. Re-place its bypass capacitors afterwards.')
+    ap.add_argument('--clear-plane-fanout', action='store_true',
+                    help='Before placing, remove every narrow (0.15 mm) GND/+3V3_LOGIC pad-to-via '
+                         'fanout stub on the board so it does not block placement; reviewed wider '
+                         'local stubs stay. Implies --lift-plane-fanout.')
     ap.add_argument('--lift-plane-fanout', action='store_true',
                     help='Also lift locked GND/+3V3_LOGIC fanout stubs (pad-to-via only); rerun '
                          'add_carrier_ground_fanout.py for both nets afterwards')
@@ -144,6 +151,19 @@ def main():
     board = pcbnew.LoadBoard(str(args.board))
     fps = {f.GetReference(): f for f in list(board.GetFootprints())}
     tracks = list(board.GetTracks())
+    cleared = 0
+    if args.clear_plane_fanout:
+        args.lift_plane_fanout = True
+        keep_graveyard = []
+        for items in plane_fanout(board, fps).values():
+            for i in range(0, len(items), 2):
+                stub, via = items[i], items[i + 1]
+                if pcbnew.ToMM(stub.GetWidth()) <= 0.16:
+                    for t in (stub, via):
+                        board.Remove(t)
+                        keep_graveyard.append(t)
+                        cleared += 1
+        tracks = list(board.GetTracks())
     fanout = plane_fanout(board, fps) if args.lift_plane_fanout else {}
     fanout_items = {id(t) for items in fanout.values() for t in items}
     locked_refs = set()
@@ -160,21 +180,34 @@ def main():
     movable = [r for r, f in fps.items()
                if re.fullmatch(r'[RC]\d+', r) and len(list(f.Pads())) == 2 and signal_nets(f)
                and r not in locked_refs and r not in keep and not re.fullmatch(r'[RC]4\d\d', r)]
+    unknown = [r for r in args.part if r not in fps]
+    if unknown:
+        raise ValueError('Unknown --part references: %s' % unknown)
+    movable += [r for r in args.part if r not in movable]
+    forced = set(args.part)
     graveyard = []
     removed = 0
     # Lift movable parts: drop their unlocked stubs (and vias only they fed).
     for r in movable:
         own = [t for p in fps[r].Pads() for t in board.GetTracks() if t.Type() != pcbnew.PCB_VIA_T
-               and not t.IsLocked() and t.GetNetCode() == p.GetNetCode()
+               and (r in forced or not t.IsLocked()) and t.GetNetCode() == p.GetNetCode()
                and (p.HitTest(t.GetStart()) or p.HitTest(t.GetEnd()))]
+        if r in forced:
+            own += [v for p in fps[r].Pads() for v in board.GetTracks() if v.Type() == pcbnew.PCB_VIA_T
+                    and v.GetNetCode() == p.GetNetCode() and p.HitTest(v.GetPosition())]
         ends = {(e.x, e.y) for t in own for e in (t.GetStart(), t.GetEnd())}
-        for v in [v for v in board.GetTracks() if v.Type() == pcbnew.PCB_VIA_T and not v.IsLocked()
+        for v in [v for v in board.GetTracks() if v.Type() == pcbnew.PCB_VIA_T
+                  and (r in forced or not v.IsLocked())
                   and (v.GetPosition().x, v.GetPosition().y) in ends]:
             if not [t for t in board.GetTracks() if t.Type() != pcbnew.PCB_VIA_T and t not in own
                     and t.GetNetCode() == v.GetNetCode() and (v.HitTest(t.GetStart()) or v.HitTest(t.GetEnd()))]:
                 own.append(v)
-        own += [t for t in fanout.get(r, []) if t not in own]
+        own += fanout.get(r, [])
+        # Separate SWIG proxies of one item are not equal; dedupe by UUID.
+        unique = {}
         for t in own:
+            unique.setdefault(t.m_Uuid.AsString(), t)
+        for t in unique.values():
             board.Remove(t)
             graveyard.append(t)
             removed += 1
@@ -194,7 +227,10 @@ def main():
         nets = signal_nets(fps[r])
         fast = any(FAST.search(n) for n in nets)
         series = len(nets) == 2
-        return (0 if fast else 1, 0 if series else 1, r)
+        # Named parts (ICs) are the hardest to fit, so they choose first,
+        # larger ones before smaller.
+        size = -len(list(fps[r].Pads())) if r in forced else 0
+        return (0 if r in forced else 1, size, 0 if fast else 1, 0 if series else 1, r)
 
     def signal_targets(fp):
         # Supply pins drop to a plane via or a local rail; only signal
@@ -274,7 +310,8 @@ def main():
                         'moved_off': blocker.GetReference()})
     pcbnew.SaveBoard(str(args.board), board)
     summary = {'movable': len(movable), 'placed': sum(1 for x in results if x['placed']),
-               'unplaced': [x['ref'] for x in results if not x['placed']], 'removed_copper_items': removed}
+               'unplaced': [x['ref'] for x in results if not x['placed']], 'removed_copper_items': removed,
+               'cleared_fanout_items': cleared}
     if args.report:
         args.report.write_text(json.dumps({'summary': summary, 'parts': results}, indent=2) + '\n')
     print(json.dumps(summary, indent=2))

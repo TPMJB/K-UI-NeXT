@@ -79,6 +79,13 @@ public final class Headless19Ripup {
       // and native KiCad rules independently enforce the same restriction.
       if(b.layer_structure.arr[layer].name.equals("In1.Cu")) settings.autoroute_settings.set_layer_active(layer,false);
     }
+    // Freerouting prices both outer layers at twice the inner trace cost.
+    // The carrier has no bottom-side components, so B.Cu is an open routing
+    // layer; at the default price it stayed almost empty while the inner
+    // layers congested. Price it just above an inner layer.
+    int bottom=b.get_layer_count()-1;
+    settings.autoroute_settings.set_preferred_direction_trace_costs(bottom,1.2);
+    settings.autoroute_settings.set_against_preferred_direction_trace_costs(bottom,2.2);
     Deadline stop=new Deadline(globalSeconds);
     int initial=incomplete(b),best=initial;
     System.out.printf("LOADED pins=%d traces=%d vias=%d incomplete=%d layers=%d%n",b.get_pins().size(),b.get_traces().size(),b.get_vias().size(),initial,b.get_layer_count());
