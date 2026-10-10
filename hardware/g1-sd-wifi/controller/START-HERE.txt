@@ -138,13 +138,15 @@ cutout needs actual width-transition locations; pin-run ends do not define
 those transitions. The centered pin run is 24.39 mm long (7.14 mm end margins
 if exactly centered).
 This span does not define pin pitch without contact-center/edge endpoints.
-The latest owner reports about 11.7 mm BIOS-edge-to-CN503 gap, 0.44 mm
-single-contact width and 0.72 mm spacing, presumed at CN503. Confirm endpoints:
-0.72 mm pitch gives a 17.28 mm first-last span for 25 contacts; 0.72 mm clear
-gap plus 0.44 mm width gives 1.16 mm pitch and 27.84 mm span. Neither matches
-the earlier 24.39 mm run. Measure the same edge of the first and last contacts
-on one counted row, then divide by the number of intervals (24 for 25 pins).
-The top-edge vertical offset, two-row spacing and exposed length remain open.
+The owner reaffirms the 24.39 mm pin run and approximately 0.44 mm width,
+with center spacing estimated near 1.01 mm. Use 1.00 mm working pitch for
+concept placement: 24 intervals plus one contact width give 24.44 mm, only
+0.05 mm from the reported run. The older 0.72 mm rough reading is superseded.
+Qualify the exact solder footprint and contact tolerances before fabrication.
+The BIOS-edge-to-CN503 gap is about 11.7 mm. CN503 passes through the shield,
+so no extra housing-top height measurement is needed. Its north/south position
+relative to the BIOS is still needed in the motherboard plane, using a clear
+contact or housing-edge reference. Two-row spacing/exposed length remain open.
 Obtain its X/Y offset relative to IC501. The inline replacement photo and
 owner confirmation identify the upper SEGA 315-6267 and large chip below it
 with thermal compound. Both contact footprints have zero carrier clearance:
