@@ -37,7 +37,7 @@ module tb_bridge;
         begin da=6;cs1=0;hostword={8'h00,data};hostdrive=1;#80;diow=0;#260;diow=1;#20;hostdrive=0;#220;cs1=1;end
     endtask
     task hr(input[2:0] addr,output[15:0] data);
-        begin da=addr;cs0=0;#80;dior=0;#200;data=dd;check(!oe && dir,"selected read owns output");#100;dior=1;#15;check(dd===data,"ATA data hold after DIOR");#205;cs0=1;end
+        begin da=addr;cs0=0;#80;dior=0;#200;data=dd;check(!oe && dir,"selected read owns output");#99;check(dd===data,"ATA data valid to DIOR rise");#1;dior=1;#1;check(oe && dd===16'hzzzz,"PIO read releases on DIOR rise (t6z)");#219;cs0=1;end
     endtask
     initial begin
         #75;check(oe && !dir && !irq && !drq,"reset is isolated");

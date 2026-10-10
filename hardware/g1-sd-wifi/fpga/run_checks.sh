@@ -26,13 +26,16 @@ mutations={
                                  'always @(posedge FPGA_CLK50) begin'),
     'drop_sticky_safety_cleanup':('if (!drive_safe || soft_reset || safety_event_pending) begin',
                                  'if (!drive_safe || soft_reset) begin'),
+    'pio_read_clocked_hold':('(read_owned & read_was_dma & hold_count!=0)',
+                             '(read_owned & hold_count!=0)','tb_bridge'),
 }
-for name,(old,new) in mutations.items():
+for name,(old,new,*bench) in mutations.items():
+    bench=bench[0] if bench else 'tb_activation'
     assert source.count(old)==1,(name,'mutation anchor must be unique')
     rtl=build/(name+'.v')
     output=build/(name+'.vvp')
     rtl.write_text(source.replace(old,new))
-    subprocess.run(['iverilog','-g2012','-s','tb_activation','-o',str(output),str(rtl),'tb_activation.v'],check=True)
+    subprocess.run(['iverilog','-g2012','-s',bench,'-o',str(output),str(rtl),bench+'.v'],check=True)
     result=subprocess.run(['vvp',str(output)],text=True,capture_output=True,timeout=20)
     failures=sum(line.startswith('FAIL ') for line in result.stdout.splitlines())
     assert result.returncode!=0 and failures>0,(name,'broken behavior escaped regression',result.stdout,result.stderr)

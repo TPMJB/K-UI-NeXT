@@ -156,7 +156,10 @@ module bridge #(
     wire input_window = drive_safe & !BUS_DIOWn &
         ((BUS_DMACKn & !BUS_CS1n & BUS_DA==6) | (!soft_reset &
         ((BUS_DMACKn & !BUS_CS0n) | (selected & !BUS_DMACKn & transfer_mode==2))));
-    wire read_drive = ata_operational & (read_window | (read_owned & hold_count!=0)) & BUS_DIOWn;
+    // PIO reads release on DIOR- negation through the combinational path:
+    // board propagation supplies ATA t6 (5 ns min) and stays inside t6z
+    // (30 ns max). Only a DMA final word keeps the clocked hold.
+    wire read_drive = ata_operational & (read_window | (read_owned & read_was_dma & hold_count!=0)) & BUS_DIOWn;
     assign REQ_DATA_OEn = !(read_drive | input_window);
     assign DATA_DIR = read_drive;
     // BUS_DD is board-side of a separately gated directional transceiver.
@@ -176,7 +179,7 @@ module bridge #(
     wire [15:0] tx_word = {link_write_latch,tx_low};
     bridge_fifo #(.AW(FIFO_AW)) tx_fifo(FPGA_CLK50,link_resetn,clear_fifos,tx_push,tx_word,tx_pop,tx_front,tx_count,tx_full,tx_empty);
     bridge_fifo #(.AW(FIFO_AW)) rx_fifo(FPGA_CLK50,link_resetn,clear_fifos,rx_push,ata_write_latch,rx_pop,rx_front,rx_count,rx_full,rx_empty);
-    reg read_was_data, read_waiting;
+    reg read_was_data, read_was_dma, read_waiting;
     reg [1:0] read_ready_delay;
     reg [15:0] read_data;
     always @* begin
@@ -247,14 +250,14 @@ module bridge #(
             command_pending<=0;intrq_pending<=0;fault<=0;transfer_mode<=0;transfer_done<=0;transfer_words<=0;
             diagnostic_pending<=0;
             bios_write_request<=0;read_owned<=0;read_latch<=0;hold_count<=0;
-            read_was_data<=0;read_waiting<=0;read_ready_delay<=0;fifo_flush<=0;
+            read_was_data<=0;read_was_dma<=0;read_waiting<=0;read_ready_delay<=0;fifo_flush<=0;
         end else begin
             fifo_flush<=0;
             if (hold_count!=0) hold_count<=hold_count-1'b1;
             else if (BUS_DIORn) read_owned<=0;
             if (!drive_safe) begin read_owned<=0;hold_count<=0;bios_write_request<=0;read_waiting<=0;read_ready_delay<=0;end
             if (ata_rd_begin & read_window) begin
-                read_latch<=read_data;read_owned<=1;read_was_data<=data_read;
+                read_latch<=read_data;read_owned<=1;read_was_data<=data_read;read_was_dma<=dma_data_read;
                 read_waiting<=data_read && tx_empty;read_ready_delay<=0;
                 hold_count<=READ_HOLD_CYCLES;
                 if (!BUS_CS0n & BUS_DA==7) intrq_pending<=0;
