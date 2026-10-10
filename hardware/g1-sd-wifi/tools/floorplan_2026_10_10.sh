@@ -20,7 +20,7 @@
 #      and D21 next to F20's output, F21 next to J51's 3.3-V pin,
 #      and the optional reserve bank sits beside the power mux it feeds;
 #   5. the raw-G1 data probes move to U40's pins (same nets, open space);
-#   6. GND and +3V3_LOGIC fanout, six-layer stack.
+#   6. GND and +3V3_LOGIC fanout, power-return and thermal vias, six-layer stack.
 # Needs KiCad 10's Python as $PY and kicad-cli as $KICAD10_CLI.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -53,4 +53,8 @@ run "$T/add_carrier_raw_probes.py" "$B" "$B" \
     $(for n in $(seq 100 115) 128 136; do printf -- '--replace TP%s ' "$n"; done)
 run "$T/add_carrier_ground_fanout.py" "$B" "$B" --report "$R/fanout-gnd.json"
 run "$T/add_carrier_ground_fanout.py" "$B" "$B" --net +3V3_LOGIC --report "$R/fanout-3v3.json"
+# The whole 5-V return enters the ground plane at J20.2, and the buck
+# regulators' exposed pads need a thermal and ground path: locked vias.
+run "$T/add_power_vias.py" --board "$B" --pad J20.2=2x2@0.3/0.6 \
+    --pad U21.9=1x2@0.2/0.5 --pad U22.9=1x2@0.2/0.5 --report "$R/power-vias.json"
 run "$T/set_six_layer_stack.py" --board "$B"
