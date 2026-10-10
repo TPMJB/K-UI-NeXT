@@ -1,0 +1,11 @@
+{
+  "manufacturer": "JLCPCB",
+  "released": false,
+  "copper_layers": 0,
+  "gerber_layers": [],
+  "origin": "plot",
+  "board_type": "rigid",
+  "assembly": true,
+  "drill_files_required": true,
+  "note": "Blocked. Select material, layer stack, board thickness, finish, dimensions, tolerances, assembly side and population variant from finished CAD. Zero layers is an intentional unset value, not a fabrication setting."
+}

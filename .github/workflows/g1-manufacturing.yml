@@ -1,0 +1,59 @@
+name: G1 manufacturing tooling
+
+on:
+  push:
+    branches: ['design/g1-sd-wifi-20261009']
+    paths:
+      - 'hardware/g1-sd-wifi/**'
+      - '.github/workflows/g1-manufacturing.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g1-manufacturing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tooling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Test release preflight and failure handling
+        run: python3 -m unittest discover -s hardware/g1-sd-wifi/manufacturing/tests -p 'test_*.py' -v
+      - name: Report current fabrication inputs
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import sys
+
+          result = subprocess.run(
+              [sys.executable, "hardware/g1-sd-wifi/manufacturing/prepare_jlcpcb_release.py", "--audit", "--json"],
+              capture_output=True, text=True, check=False,
+          )
+          print(result.stdout)
+          if result.stderr:
+              print(result.stderr, file=sys.stderr)
+          if result.returncode not in (0, 2):
+              raise SystemExit(result.returncode)
+          report = json.loads(result.stdout)
+          if bool(report["blocked"]) != (result.returncode == 2):
+              raise SystemExit("Audit exit code disagrees with blocked status")
+          target = pathlib.Path(os.environ["RUNNER_TEMP"]) / "g1-fabrication-preflight.json"
+          target.write_text(result.stdout, encoding="utf-8")
+          if report["blocked"]:
+              print("::warning title=G1 fabrication blocked::The bridge is not ready to order. Passing tooling tests do not mean hardware checks passed.")
+          else:
+              print("::notice title=G1 file preflight only::Actual KiCad export/ERC/DRC and manufacturing review remain separate. This workflow creates no order packages.")
+          PY
+      - name: Save fabrication status report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: g1-fabrication-preflight
+          path: ${{ runner.temp }}/g1-fabrication-preflight.json
+          if-no-files-found: error
+          retention-days: 14

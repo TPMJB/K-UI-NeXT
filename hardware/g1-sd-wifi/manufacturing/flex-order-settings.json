@@ -1,0 +1,11 @@
+{
+  "manufacturer": "JLCPCB",
+  "released": false,
+  "copper_layers": 0,
+  "gerber_layers": [],
+  "origin": "plot",
+  "board_type": "flex",
+  "assembly": false,
+  "drill_files_required": false,
+  "note": "Blocked. Select FPC material/layer stack, finished thickness, selected connector/contact face and matching mating tail, coverlay and any stiffener/adhesive. Add reviewed coverlay/stiffener Gerbers to manifest extra_fabrication_files before release; an empty list is not a decision that none are needed."
+}

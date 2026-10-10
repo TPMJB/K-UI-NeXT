@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "release_id": "KUI-G1-RevA-bringup-prototype",
+  "status": "blocked_missing_circuit_and_layout",
+  "purpose": "Unvalidated first bring-up prototype; not a working product or current order package.",
+  "claude_review_commit": "b207dd659565826ffd757ccf7abe1998f63c9202",
+  "boards": {
+    "rigid": {
+      "schematic": "hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_sch",
+      "pcb": "hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_pcb",
+      "project": "hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_pro",
+      "assembly": true,
+      "bom_csv": "hardware/g1-sd-wifi/manufacturing/rigid-bom.csv",
+      "cpl_csv": "hardware/g1-sd-wifi/manufacturing/rigid-cpl.csv",
+      "order_settings": "hardware/g1-sd-wifi/manufacturing/rigid-order-settings.json",
+      "extra_fabrication_files": []
+    },
+    "flex": {
+      "schematic": "hardware/g1-sd-wifi/flex/KUI-G1-CN503-RevA.kicad_sch",
+      "pcb": "hardware/g1-sd-wifi/flex/KUI-G1-CN503-RevA.kicad_pcb",
+      "project": "hardware/g1-sd-wifi/flex/KUI-G1-CN503-RevA.kicad_pro",
+      "assembly": false,
+      "order_settings": "hardware/g1-sd-wifi/manufacturing/flex-order-settings.json",
+      "extra_fabrication_files": []
+    }
+  },
+  "footprint_libraries": [
+    {
+      "name": "KUI",
+      "path": "hardware/g1-sd-wifi/controller/KUI_Footprints.pretty"
+    },
+    {
+      "name": "KUI_Flex",
+      "path": "hardware/g1-sd-wifi/flex/KUI_Flex.pretty"
+    }
+  ],
+  "extra_inputs": [
+    "hardware/g1-sd-wifi/controller/fp-lib-table",
+    "hardware/g1-sd-wifi/controller/sym-lib-table",
+    "hardware/g1-sd-wifi/controller/KUI_RP_Reference.kicad_sym",
+    "hardware/g1-sd-wifi/flex/fp-lib-table",
+    "hardware/g1-sd-wifi/flex/sym-lib-table",
+    "hardware/g1-sd-wifi/design/front-end-pinplan.csv",
+    "hardware/g1-sd-wifi/design/power-and-isolation.md",
+    "hardware/g1-sd-wifi/design/BIOS-variant.md",
+    "hardware/g1-sd-wifi/fpga/bridge.v",
+    "hardware/g1-sd-wifi/fpga/synthesis-timing-report.txt",
+    "hardware/g1-sd-wifi/manufacturing/flex-fabrication-notes.md",
+    "hardware/g1-sd-wifi/manufacturing/parts-to-buy.csv",
+    "hardware/g1-sd-wifi/manufacturing/BRINGUP.md"
+  ],
+  "review_evidence": "hardware/g1-sd-wifi/manufacturing/review-evidence.json",
+  "requested_provisions": [
+    "Retained original GD-ROM device 0; bridge ATA device 1",
+    "RP2350B and native 4-bit microSD raw-sector backend",
+    "Selected FPGA/CPLD front end with FIFO/SRAM deadline path and synthesized timing",
+    "Hardware-default G1 isolation and reset/brownout/final-word ownership",
+    "8 MiB PSRAM footprint and explicit factory-populated/unpopulated variants",
+    "Local removable USB-free XIAO ESP32-C5 with switched supply and off-state isolation",
+    "C5 UART/BOOT/EN recovery and SPI update hardware",
+    "Power-loss detection, radio cutoff and controller/SD reserve-power provision",
+    "Optional custom/dual BIOS variant explicitly decided, original immutable stock recovery",
+    "CN503 passive flex and independently supported carrier with 6/8 mm/thermal keepouts",
+    "Debug access, conservative bring-up protocol and K-UI filesystem/write ownership"
+  ],
+  "measurement_capture": "Complete for first draft; owner can reassemble. Installed prototype fit/landing qualification remains.",
+  "order_outputs_missing": [
+    "Rigid PCB Gerbers/drills",
+    "Passive flex Gerbers/drills/coverlay/stiffeners",
+    "Approved BOM/CPL",
+    "Compatible production parts list",
+    "Exact order settings",
+    "Programming and bring-up instructions"
+  ]
+}

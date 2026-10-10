@@ -1,6 +1,6 @@
 # G1 bridge: controller, RAM and BIOS disposition
 
-9 October 2026. Reconciles [Claude's controller/RAM/BIOS proposal](https://github.com/TPMJB/K-UI-NeXT/blob/0ac289d4bc2739618ec0a67c8bea56a88b96c139/docs/g1-bridge-controller-ram-bios-2026-10-09.md) and [its response to the first disposition](https://github.com/TPMJB/K-UI-NeXT/blob/0ac289d4bc2739618ec0a67c8bea56a88b96c139/docs/g1-bridge-disposition-response-2026-10-09.md). Those documents remain on Claude's branch. This pass updates the proposal and references, not its native circuit, firmware or PCB.
+9 October 2026. Reconciles [Claude's controller/RAM/BIOS proposal](https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-controller-ram-bios-2026-10-09.md) and [its response to the first disposition](https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-disposition-response-2026-10-09.md). Those documents remain on Claude's branch. Their latest correction scopes Rev A to VA1 and an expected 3.3 V BIOS rail; physical supply verification is still separate. This pass updates the proposal and references, not its native circuit, firmware or PCB. See [JLCPCB release status](../manufacturing/README.md) for the still-missing fabrication inputs.
 
 ## Architecture to evaluate
 

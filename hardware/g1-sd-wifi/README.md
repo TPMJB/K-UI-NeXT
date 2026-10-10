@@ -1,6 +1,6 @@
 # K-UI G1 microSD and Wi-Fi bridge proposal
 
-**Architecture proposal and controller starter, updated 9 October 2026. Initial clearances are owner-reported; complete assembly fit remains pending.**
+**Not ready to order: architecture proposal and controller starter, updated 10 October 2026. No G1 bridge PCB or flex layout exists yet. Initial clearances are owner-reported; complete assembly fit remains pending.**
 
 Build a custom Dreamcast VA1 board that exposes a microSD card as an ATA slave through an RP2350B, retains the original 3.3 V GD-ROM, and carries a socketed Seeed XIAO ESP32-C5 for Wi-Fi. Optional dual BIOS belongs in the mechanical and electrical planning. This is the successor proposal to the separate [CF board](../cf-board/README.md); the existing CF design remains an independent, unvalidated option.
 
@@ -10,6 +10,7 @@ This folder makes the proposal available for independent review. It contains the
 
 | File | Purpose |
 | --- | --- |
+| [JLCPCB release status and preflight](manufacturing/README.md) | Exact missing fabrication inputs, full Claude feature scope and guarded export tooling; not an order package |
 | [REVIEW.md](docs/REVIEW.md) | Self-contained review request for Claude or a hardware engineer |
 | [Review disposition](docs/review-disposition-2026-10-09.md) | Claude's review, accepted requirements, corrections and revised bring-up order |
 | [Controller, RAM and BIOS update](docs/controller-ram-bios-disposition-2026-10-09.md) | FPGA and PSRAM candidates, IC501 tap evidence, boot recovery and revised measurements |
@@ -109,7 +110,7 @@ Use the owner-selected USB-free C5 mounted locally on the carrier; remote mounti
 
 1. Check measurements and candidate tap continuity. Review existing software probe evidence and capture baseline bus timing with a qualified passive hookup before freezing the controller/front-end choice. The earlier CF board is unbuilt and unvalidated; a working CF rig is not a prerequisite assumed to exist.
 2. Close output ownership and timing, then finish G1 buffers/front end, SD/C5 interfaces, console/USB power and power-fail circuits; choose qualified production footprints and run ERC. Default stock BIOS recovery must work independently of MCU and FPGA configuration.
-3. Complete CN503 relative position and transfer the resolved height map, then qualify joining geometry and mounted C5 stack before choosing the outline and component heights.
+3. Use the completed owner measurement/photo capture to draft the carrier and flex; transfer the resolved height map, then qualify joining geometry and mounted C5 stack on the prototype. No further pre-reassembly capture is requested.
 4. Build a bench prototype: identify, read and hash sectors, test drive coexistence, then qualify DMA and writes.
 5. Demonstrate filesystem recovery and repeated power cuts before adding packet transport and pursuing retail-game networking.
 
