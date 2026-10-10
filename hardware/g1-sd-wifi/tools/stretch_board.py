@@ -61,6 +61,11 @@ def main():
             poly.SetVertex(i, down(poly.CVertex(i)))
         zones.append(z.GetZoneName())
     generate_board.edge_routing_obstacles(board)
+    # Gerbers and the placement file are relative to the aux origin, which
+    # sits on the south-west corner of the outline.
+    ds = board.GetDesignSettings()
+    ds.SetAuxOrigin(down(ds.GetAuxOrigin()))
+    ds.SetGridOrigin(down(ds.GetGridOrigin()))
 
     fps = list(board.GetFootprints())
     south = {f.GetReference() for f in fps if f.GetPosition().y > split}
