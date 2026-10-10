@@ -59,6 +59,8 @@ def main():
     ap.add_argument('--netlist', type=pathlib.Path, default=CAD / 'checks' / 'netlist.xml')
     ap.add_argument('--allow-ref', action='append', required=True,
                     help='Reference whose footprint, presence or pad nets may change')
+    ap.add_argument('--allow-remove', action='append', default=[],
+                    help='Reference removed from the circuit whose footprint and pad copper may go')
     ap.add_argument('--new-at', action='append', default=[],
                     help='REF=x,y,rot provisional local position for an added footprint')
     args = ap.parse_args()
@@ -109,8 +111,21 @@ def main():
         board.Add(fp)
         fps[ref] = fp
         report['added'].append(ref)
+    report['removed'] = []
     for ref in sorted(set(fps) - set(data)):
-        raise ValueError('Footprint removed from the circuit: ' + ref)
+        if ref not in args.allow_remove:
+            raise ValueError('Footprint removed from the circuit: ' + ref)
+        fp = fps.pop(ref)
+        for pad in fp.Pads():
+            copper = copper_on_pad(board, pad)
+            copper += dangling_vias(board, copper)
+            for t in copper:
+                report['removed_copper'].append({'ref': ref, 'pin': pad.GetNumber(), 'net': t.GetNetname()})
+                board.Remove(t)
+                graveyard.append(t)
+        board.Remove(fp)
+        graveyard.append(fp)
+        report['removed'].append(ref)
 
     for ref, fp in list(fps.items()):
         want = comps[ref]['footprint']

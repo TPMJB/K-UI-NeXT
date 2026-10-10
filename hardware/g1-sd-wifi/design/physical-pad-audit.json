@@ -1,6 +1,6 @@
 {
   "status": "pass",
-  "components": 365,
+  "components": 349,
   "errors": [],
   "rows": [
     {
@@ -3660,31 +3660,7 @@
       "match": true
     },
     {
-      "ref": "R223",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
       "ref": "R224",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
-      "ref": "R225",
       "physical_pad_numbers": [
         "1",
         "2"
@@ -3708,31 +3684,7 @@
       "match": true
     },
     {
-      "ref": "R227",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
       "ref": "R228",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
-      "ref": "R229",
       "physical_pad_numbers": [
         "1",
         "2"
@@ -3756,31 +3708,7 @@
       "match": true
     },
     {
-      "ref": "R231",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
       "ref": "R232",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
-      "ref": "R233",
       "physical_pad_numbers": [
         "1",
         "2"
@@ -3804,31 +3732,7 @@
       "match": true
     },
     {
-      "ref": "R235",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
       "ref": "R236",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
-      "ref": "R237",
       "physical_pad_numbers": [
         "1",
         "2"
@@ -3852,31 +3756,7 @@
       "match": true
     },
     {
-      "ref": "R239",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
       "ref": "R240",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
-      "ref": "R241",
       "physical_pad_numbers": [
         "1",
         "2"
@@ -3900,31 +3780,7 @@
       "match": true
     },
     {
-      "ref": "R243",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
       "ref": "R244",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
-      "ref": "R245",
       "physical_pad_numbers": [
         "1",
         "2"
@@ -3948,31 +3804,7 @@
       "match": true
     },
     {
-      "ref": "R247",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
       "ref": "R248",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
-      "ref": "R249",
       "physical_pad_numbers": [
         "1",
         "2"
@@ -3996,31 +3828,7 @@
       "match": true
     },
     {
-      "ref": "R251",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
       "ref": "R252",
-      "physical_pad_numbers": [
-        "1",
-        "2"
-      ],
-      "schematic_pin_numbers": [
-        "1",
-        "2"
-      ],
-      "match": true
-    },
-    {
-      "ref": "R253",
       "physical_pad_numbers": [
         "1",
         "2"

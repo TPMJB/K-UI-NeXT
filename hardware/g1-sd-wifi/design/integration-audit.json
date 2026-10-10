@@ -18,7 +18,7 @@
     },
     {
       "path": "design/blocks/power-bus.json",
-      "sha256": "297fbfe6d1ade7debbae6c6bf88021c55565c2939ade4a48bfa03416bcd17d12"
+      "sha256": "cf9c06875e63ec1956187e273acb9082b38223129745adcf76fefb9e94d28a6b"
     },
     {
       "path": "design/flex-interface.json",
@@ -30,31 +30,31 @@
     },
     {
       "path": "fpga/bridge.lpf",
-      "sha256": "9ad86ebd4200ffcc1621b6fbe6c579fa772f7b629b62fe7bb685c221c182500f"
+      "sha256": "f45bfd5cc020f154281a995d0a461e391b8cee62ee876b8a88d631341e5bf9fc"
     },
     {
       "path": "design/integrated-components.json",
-      "sha256": "5e1d4dd61815b2184ae7c7bfcf217341bd965f9b9c8bc4fe3e596db4f84106ed"
+      "sha256": "47d3bf8d058a37f39e6843732734068424d2f446f9507cde7c0beed1011d47f8"
     },
     {
       "path": "controller/checks/netlist.xml",
-      "sha256": "233ed95879fc054212782575d666efb6ac669e7eb29773df2fe77c95b38f19db"
+      "sha256": "46b2f10e1596609dc9e233ed7512627657649b673e2448a5143814740e2a103f"
     },
     {
       "path": "tools/check_integration.py",
-      "sha256": "d47c6ddf955ec4a06d2a6816c1156c8bbaab23d07692ec6257dee20150b3b0f4"
+      "sha256": "4ee1710f685a9f1bfd149f5b4a3f1d613398fd8bd1a52fdbe723f9b3bb01eb47"
     }
   ],
   "components": {
-    "total": 365,
+    "total": 349,
     "by_block": {
       "bios": 33,
       "controller": 112,
       "frontend": 75,
-      "power-bus": 145
+      "power-bus": 129
     },
     "duplicate_refs": [],
-    "native_total_including_cn503_and_erc_flags": 376,
+    "native_total_including_cn503_and_erc_flags": 360,
     "native_extra_cn503_connectors": 2,
     "native_extra_erc_flags": 9
   },
@@ -90,7 +90,7 @@
     {
       "id": "INT-C01",
       "result": "pass",
-      "description": "365 unique reference designators across controller, frontend, power-bus and BIOS source blocks; native generator additionally adds two CN503 FPC connectors and nine ERC declarations. Manufactured probe pads are retained in the native circuit but excluded from purchased parts. Optional BIOS has complete 48-pin NOR mapping."
+      "description": "349 unique reference designators across controller, frontend, power-bus and BIOS source blocks; native generator additionally adds two CN503 FPC connectors and nine ERC declarations. Manufactured probe pads are retained in the native circuit but excluded from purchased parts. Optional BIOS has complete 48-pin NOR mapping."
     },
     {
       "id": "INT-C02",
@@ -153,7 +153,7 @@
     {
       "id": "INT-C13",
       "result": "pass_exported_native_connectivity",
-      "description": "All 365 source components and two native CN503 sockets agree with integrated native pin contracts and exported XML component fields/terminals/nets/types/DNP. Nine ERC flags are omitted from XML; all 50 intended unused endpoints are isolated. Physical bare probe pads remain in XML despite being excluded from purchased BOM. Safety equations are evaluated from exported XML connectivity."
+      "description": "All 349 source components and two native CN503 sockets agree with integrated native pin contracts and exported XML component fields/terminals/nets/types/DNP. Nine ERC flags are omitted from XML; all 50 intended unused endpoints are isolated. Physical bare probe pads remain in XML despite being excluded from purchased BOM. Safety equations are evaluated from exported XML connectivity."
     },
     {
       "id": "INT-C14",
@@ -2728,14 +2728,6 @@
       },
       {
         "block": "power-bus",
-        "ref": "R223",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
         "ref": "U35",
         "pin": "47",
         "name": "1A1",
@@ -2750,14 +2742,6 @@
         "pin": "29",
         "name": "PB6A",
         "type": "bidirectional",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
-        "ref": "R225",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
         "populate": true
       },
       {
@@ -2780,14 +2764,6 @@
       },
       {
         "block": "power-bus",
-        "ref": "R243",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
         "ref": "U35",
         "pin": "33",
         "name": "2A3",
@@ -2802,14 +2778,6 @@
         "pin": "42",
         "name": "PB21A",
         "type": "bidirectional",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
-        "ref": "R245",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
         "populate": true
       },
       {
@@ -2832,14 +2800,6 @@
       },
       {
         "block": "power-bus",
-        "ref": "R247",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
         "ref": "U35",
         "pin": "30",
         "name": "2A5",
@@ -2854,14 +2814,6 @@
         "pin": "45",
         "name": "PB22A",
         "type": "bidirectional",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
-        "ref": "R249",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
         "populate": true
       },
       {
@@ -2884,14 +2836,6 @@
       },
       {
         "block": "power-bus",
-        "ref": "R251",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
         "ref": "U35",
         "pin": "27",
         "name": "2A7",
@@ -2906,14 +2850,6 @@
         "pin": "51",
         "name": "PR14B",
         "type": "bidirectional",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
-        "ref": "R253",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
         "populate": true
       },
       {
@@ -2936,14 +2872,6 @@
       },
       {
         "block": "power-bus",
-        "ref": "R227",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
         "ref": "U35",
         "pin": "44",
         "name": "1A3",
@@ -2958,14 +2886,6 @@
         "pin": "34",
         "name": "PB11A / PCLKT2_0",
         "type": "bidirectional",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
-        "ref": "R229",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
         "populate": true
       },
       {
@@ -2988,14 +2908,6 @@
       },
       {
         "block": "power-bus",
-        "ref": "R231",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
         "ref": "U35",
         "pin": "41",
         "name": "1A5",
@@ -3010,14 +2922,6 @@
         "pin": "36",
         "name": "PB12A",
         "type": "bidirectional",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
-        "ref": "R233",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
         "populate": true
       },
       {
@@ -3040,14 +2944,6 @@
       },
       {
         "block": "power-bus",
-        "ref": "R235",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
         "ref": "U35",
         "pin": "38",
         "name": "1A7",
@@ -3062,14 +2958,6 @@
         "pin": "38",
         "name": "PB16A / PCLKT2_1",
         "type": "bidirectional",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
-        "ref": "R237",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
         "populate": true
       },
       {
@@ -3092,14 +2980,6 @@
       },
       {
         "block": "power-bus",
-        "ref": "R239",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
         "ref": "U35",
         "pin": "36",
         "name": "2A1",
@@ -3114,14 +2994,6 @@
         "pin": "40",
         "name": "PB18A",
         "type": "bidirectional",
-        "populate": true
-      },
-      {
-        "block": "power-bus",
-        "ref": "R241",
-        "pin": "1",
-        "name": "1",
-        "type": "passive",
         "populate": true
       },
       {
@@ -4463,11 +4335,11 @@
     "https://www.macronix.com/Lists/Datasheet/Attachments/8514/MX29LV640E%20T-B%2C%203V%2C%2064Mb%2C%20v1.7.pdf",
     "https://consolemods.org/wiki/images/2/27/Dreamcast_VA1_FULL.pdf"
   ],
-  "revision_note": "Refreshed after the corrected J51 mapping and 39 manufactured debug pads. Reusable checker verifies 376 integrated references, 367 XML references, 365 onboard footprints, all native endpoints, 100 FPGA package functions and 56 LPF pin/net constraints; all 8240 functional Boolean combinations use exported native connectivity. All 39 debug probe mappings are verified from XML. No mechanical, probe loading, timing or assembler fixture release is claimed.",
+  "revision_note": "Refreshed after the corrected J51 mapping and 39 manufactured debug pads. Reusable checker verifies 360 integrated references, 351 XML references, 349 onboard footprints, all native endpoints, 100 FPGA package functions and 56 LPF pin/net constraints; all 8240 functional Boolean combinations use exported native connectivity. All 39 debug probe mappings are verified from XML. No mechanical, probe loading, timing or assembler fixture release is claimed.",
   "native_netlist": {
-    "native_components": 376,
-    "xml_components": 367,
-    "onboard_footprinted_components": 365,
+    "native_components": 360,
+    "xml_components": 351,
+    "onboard_footprinted_components": 349,
     "omitted_erc_flags": [
       "#FLG1",
       "#FLG2",
@@ -4480,7 +4352,7 @@
       "#FLG9"
     ],
     "xml_named_nets": 275,
-    "assigned_pin_endpoints_checked": 1206,
+    "assigned_pin_endpoints_checked": 1174,
     "isolated_no_connect_endpoints_checked": 50
   },
   "automated_proof": {

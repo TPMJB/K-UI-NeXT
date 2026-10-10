@@ -2,7 +2,7 @@
 <export version="E">
   <design>
     <source>/home/user/g1-design/hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_sch</source>
-    <date>2026-10-10T19:03:31</date>
+    <date>2026-10-10T20:07:45</date>
     <tool>Eeschema 10.0.6</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -7517,6 +7517,122 @@
         </unit>
       </units>
     </comp>
+    <comp ref="C224">
+      <value>100nF</value>
+      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
+      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
+      <fields>
+        <field name="MPN">GRM155R71C104KA88D</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
+        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="C224" description=""/>
+      <property name="MPN" value="GRM155R71C104KA88D"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>9401b4ff-e133-5ca4-8c2d-5169bc12d627</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="C225">
+      <value>100nF</value>
+      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
+      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
+      <fields>
+        <field name="MPN">GRM155R71C104KA88D</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
+        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="C225" description=""/>
+      <property name="MPN" value="GRM155R71C104KA88D"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>ee0f2bc2-2869-576e-a801-cfa89a741d4a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="C226">
+      <value>100nF</value>
+      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
+      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
+      <fields>
+        <field name="MPN">GRM155R71C104KA88D</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
+        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="C226" description=""/>
+      <property name="MPN" value="GRM155R71C104KA88D"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>a35f1b7d-1ecf-5078-9d04-f79fcb9c2af8</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="C227">
+      <value>100nF</value>
+      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
+      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
+      <fields>
+        <field name="MPN">GRM155R71C104KA88D</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
+        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="C227" description=""/>
+      <property name="MPN" value="GRM155R71C104KA88D"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>c0b67054-15d8-5724-8a88-1e4f74da2b82</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
     <comp ref="R211">
       <value>10k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -7865,35 +7981,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R223">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R223" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>6dcd00f5-04f9-5f51-86c4-34a6ff2c7152</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="R224">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -7914,35 +8001,6 @@
       <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
       <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
       <tstamps>ad8cb20f-0764-53a6-a006-4d44fc048eb1</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R225">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R225" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>9f2b2ad7-7827-5797-8d78-70d852b11258</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -7981,35 +8039,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R227">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R227" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>e036d2a1-af9e-576c-9038-bec64b700fe1</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="R228">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -8030,35 +8059,6 @@
       <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
       <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
       <tstamps>78382789-3a42-59a6-98bb-d655b1fff2b5</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R229">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R229" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>d0dd7402-9f99-57d8-b8d3-2dc3208a065e</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -8097,35 +8097,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R231">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R231" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>8d7a89e9-d2fa-5afa-bb04-0ae4549c2144</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="R232">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -8146,35 +8117,6 @@
       <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
       <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
       <tstamps>d38ae814-6cb7-52b0-88a9-93a3ffdd7f7e</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R233">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R233" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>8fc0e1c8-6b91-5c21-ac47-4293780fa89b</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -8213,35 +8155,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R235">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R235" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>a1b0791d-a400-50f4-b689-f885f7cb5939</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="R236">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -8262,35 +8175,6 @@
       <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
       <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
       <tstamps>60ddcbf1-b9fb-57b1-813a-d06a0fd7a8a9</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R237">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R237" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>ddafdfdf-f92d-54ae-b0b3-0c1c2bd49c01</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -8329,35 +8213,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R239">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R239" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>3f4d627e-7e58-55ec-a93b-1e034c2867e8</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="R240">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -8378,35 +8233,6 @@
       <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
       <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
       <tstamps>0f39d570-aadd-5417-9fed-b1a1d8509c04</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R241">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R241" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>3a81647a-9b3e-5898-9e26-57ac984afabf</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -8445,35 +8271,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R243">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R243" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>ed90bd11-a628-5bcb-a2f9-fdf84df511a9</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="R244">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -8494,35 +8291,6 @@
       <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
       <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
       <tstamps>d9481f83-f0d7-58a2-858c-792b4c6acebc</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R245">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R245" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>1707a222-c802-5487-9772-92ad970911c6</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -8561,35 +8329,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R247">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R247" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>43284dfa-6c20-5c74-92e3-05fa9cfe9ec2</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="R248">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -8610,35 +8349,6 @@
       <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
       <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
       <tstamps>6fcbc78a-164f-52ba-82b3-8aec40e53711</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R249">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R249" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>1886e41f-6c67-5f10-a8b5-e92046838f17</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -8677,35 +8387,6 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R251">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R251" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-2"/>
-      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
-      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>223168c2-762f-59e9-9a8a-53677f3f16ed</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
     <comp ref="R252">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
@@ -8735,7 +8416,7 @@
         </unit>
       </units>
     </comp>
-    <comp ref="R253">
+    <comp ref="R254">
       <value>47k</value>
       <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
       <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
@@ -8747,14 +8428,217 @@
         <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
         <field name="Description"/>
       </fields>
-      <libsource lib="KUI_G1" part="R253" description=""/>
+      <libsource lib="KUI_G1" part="R254" description=""/>
       <property name="MPN" value="RC0402FR-0747KL"/>
       <property name="LCSC" value=""/>
       <property name="Variant" value="BASE"/>
       <property name="Sheetname" value="power-bus-2"/>
       <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
       <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
-      <tstamps>c2cdaa38-af6f-50bf-bad2-b8a057829628</tstamps>
+      <tstamps>784fae12-2b65-543e-a1b4-bd250ccdf6fc</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="R255">
+      <value>47k</value>
+      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
+      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
+      <fields>
+        <field name="MPN">RC0402FR-0747KL</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
+        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="R255" description=""/>
+      <property name="MPN" value="RC0402FR-0747KL"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>fcdd87a3-3415-5653-85ba-821ee0cc3bf4</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="R256">
+      <value>47k</value>
+      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
+      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
+      <fields>
+        <field name="MPN">RC0402FR-0747KL</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
+        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="R256" description=""/>
+      <property name="MPN" value="RC0402FR-0747KL"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>6cd0f4c9-dbf1-54d5-b226-f3b3743a90dd</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="R257">
+      <value>47k</value>
+      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
+      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
+      <fields>
+        <field name="MPN">RC0402FR-0747KL</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
+        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="R257" description=""/>
+      <property name="MPN" value="RC0402FR-0747KL"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>920c0352-2dfb-5f6d-82d5-c398ff40bfa7</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="R258">
+      <value>47k</value>
+      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
+      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
+      <fields>
+        <field name="MPN">RC0402FR-0747KL</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
+        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="R258" description=""/>
+      <property name="MPN" value="RC0402FR-0747KL"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>ffdf97fa-217f-57ae-a3d1-ff6528fb8ecf</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="R259">
+      <value>47k</value>
+      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
+      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
+      <fields>
+        <field name="MPN">RC0402FR-0747KL</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
+        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="R259" description=""/>
+      <property name="MPN" value="RC0402FR-0747KL"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>890a9ebf-ceda-5dc7-834f-e52a1088a240</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="R260">
+      <value>47k</value>
+      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
+      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
+      <fields>
+        <field name="MPN">RC0402FR-0747KL</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
+        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="R260" description=""/>
+      <property name="MPN" value="RC0402FR-0747KL"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>11b9af39-d07d-5c93-8191-61ada1f290cd</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="R261">
+      <value>47k</value>
+      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
+      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
+      <fields>
+        <field name="MPN">RC0402FR-0747KL</field>
+        <field name="LCSC"/>
+        <field name="Variant">BASE</field>
+        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
+        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="KUI_G1" part="R261" description=""/>
+      <property name="MPN" value="RC0402FR-0747KL"/>
+      <property name="LCSC" value=""/>
+      <property name="Variant" value="BASE"/>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>7ffeb3dc-013e-5c08-a3cf-a0c5254e1549</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -8893,118 +8777,77 @@
         </unit>
       </units>
     </comp>
-    <comp ref="C224">
-      <value>100nF</value>
-      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
-      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
+    <comp ref="U35">
+      <value>SN74LVC16T245</value>
+      <footprint>KUI_Footprints:TSSOP-48_6.1x12.5mm_P0.5mm</footprint>
+      <datasheet>https://www.ti.com/lit/ds/symlink/sn74lvc16t245.pdf</datasheet>
       <fields>
-        <field name="MPN">GRM155R71C104KA88D</field>
+        <field name="MPN">SN74LVC16T245DGGR</field>
         <field name="LCSC"/>
         <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
-        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
+        <field name="Footprint">KUI_Footprints:TSSOP-48_6.1x12.5mm_P0.5mm</field>
+        <field name="Datasheet">https://www.ti.com/lit/ds/symlink/sn74lvc16t245.pdf</field>
         <field name="Description"/>
       </fields>
-      <libsource lib="KUI_G1" part="C224" description=""/>
-      <property name="MPN" value="GRM155R71C104KA88D"/>
+      <libsource lib="KUI_G1" part="U35" description=""/>
+      <property name="MPN" value="SN74LVC16T245DGGR"/>
       <property name="LCSC" value=""/>
       <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>9401b4ff-e133-5ca4-8c2d-5169bc12d627</tstamps>
+      <property name="Sheetname" value="power-bus-2"/>
+      <property name="Sheetfile" value="power-bus-2.kicad_sch"/>
+      <sheetpath names="/power-bus-2/" tstamps="/c45675e8-8bcb-572e-a87b-771a2c1bd03e/"/>
+      <tstamps>5f621bcc-f10f-54e0-8bc7-2db459107c0c</tstamps>
       <units>
         <unit name="A">
           <pins>
             <pin num="1"/>
+            <pin num="24"/>
+            <pin num="48"/>
+            <pin num="25"/>
+            <pin num="47"/>
             <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="C225">
-      <value>100nF</value>
-      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
-      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
-      <fields>
-        <field name="MPN">GRM155R71C104KA88D</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
-        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="C225" description=""/>
-      <property name="MPN" value="GRM155R71C104KA88D"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>ee0f2bc2-2869-576e-a801-cfa89a741d4a</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="C226">
-      <value>100nF</value>
-      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
-      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
-      <fields>
-        <field name="MPN">GRM155R71C104KA88D</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
-        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="C226" description=""/>
-      <property name="MPN" value="GRM155R71C104KA88D"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>a35f1b7d-1ecf-5078-9d04-f79fcb9c2af8</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="C227">
-      <value>100nF</value>
-      <footprint>KUI_Footprints:C_0402_1005Metric</footprint>
-      <datasheet>https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</datasheet>
-      <fields>
-        <field name="MPN">GRM155R71C104KA88D</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:C_0402_1005Metric</field>
-        <field name="Datasheet">https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&amp;partno=GRM155R71C104KA88D</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="C227" description=""/>
-      <property name="MPN" value="GRM155R71C104KA88D"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>c0b67054-15d8-5724-8a88-1e4f74da2b82</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
+            <pin num="46"/>
+            <pin num="3"/>
+            <pin num="44"/>
+            <pin num="5"/>
+            <pin num="43"/>
+            <pin num="6"/>
+            <pin num="41"/>
+            <pin num="8"/>
+            <pin num="40"/>
+            <pin num="9"/>
+            <pin num="38"/>
+            <pin num="11"/>
+            <pin num="37"/>
+            <pin num="12"/>
+            <pin num="36"/>
+            <pin num="13"/>
+            <pin num="35"/>
+            <pin num="14"/>
+            <pin num="33"/>
+            <pin num="16"/>
+            <pin num="32"/>
+            <pin num="17"/>
+            <pin num="30"/>
+            <pin num="19"/>
+            <pin num="29"/>
+            <pin num="20"/>
+            <pin num="27"/>
+            <pin num="22"/>
+            <pin num="26"/>
+            <pin num="23"/>
+            <pin num="31"/>
+            <pin num="42"/>
+            <pin num="7"/>
+            <pin num="18"/>
+            <pin num="4"/>
+            <pin num="10"/>
+            <pin num="15"/>
+            <pin num="21"/>
+            <pin num="28"/>
+            <pin num="34"/>
+            <pin num="45"/>
+            <pin num="39"/>
           </pins>
         </unit>
       </units>
@@ -9261,238 +9104,6 @@
       <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
       <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
       <tstamps>be39e1b3-bbe0-5738-8285-0fe549093544</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R254">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R254" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>784fae12-2b65-543e-a1b4-bd250ccdf6fc</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R255">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R255" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>fcdd87a3-3415-5653-85ba-821ee0cc3bf4</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R256">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R256" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>6cd0f4c9-dbf1-54d5-b226-f3b3743a90dd</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R257">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R257" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>920c0352-2dfb-5f6d-82d5-c398ff40bfa7</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R258">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R258" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>ffdf97fa-217f-57ae-a3d1-ff6528fb8ecf</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R259">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R259" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>890a9ebf-ceda-5dc7-834f-e52a1088a240</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R260">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R260" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>11b9af39-d07d-5c93-8191-61ada1f290cd</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="2"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="R261">
-      <value>47k</value>
-      <footprint>KUI_Footprints:R_0402_1005Metric</footprint>
-      <datasheet>https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</datasheet>
-      <fields>
-        <field name="MPN">RC0402FR-0747KL</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet">https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="R261" description=""/>
-      <property name="MPN" value="RC0402FR-0747KL"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>7ffeb3dc-013e-5c08-a3cf-a0c5254e1549</tstamps>
       <units>
         <unit name="A">
           <pins>
@@ -9926,81 +9537,6 @@
         <unit name="A">
           <pins>
             <pin num="1"/>
-          </pins>
-        </unit>
-      </units>
-    </comp>
-    <comp ref="U35">
-      <value>SN74LVC16T245</value>
-      <footprint>KUI_Footprints:TSSOP-48_6.1x12.5mm_P0.5mm</footprint>
-      <datasheet>https://www.ti.com/lit/ds/symlink/sn74lvc16t245.pdf</datasheet>
-      <fields>
-        <field name="MPN">SN74LVC16T245DGGR</field>
-        <field name="LCSC"/>
-        <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:TSSOP-48_6.1x12.5mm_P0.5mm</field>
-        <field name="Datasheet">https://www.ti.com/lit/ds/symlink/sn74lvc16t245.pdf</field>
-        <field name="Description"/>
-      </fields>
-      <libsource lib="KUI_G1" part="U35" description=""/>
-      <property name="MPN" value="SN74LVC16T245DGGR"/>
-      <property name="LCSC" value=""/>
-      <property name="Variant" value="BASE"/>
-      <property name="Sheetname" value="power-bus-3"/>
-      <property name="Sheetfile" value="power-bus-3.kicad_sch"/>
-      <sheetpath names="/power-bus-3/" tstamps="/f24537ca-bcf2-50d3-8c55-0581d92136e0/"/>
-      <tstamps>5f621bcc-f10f-54e0-8bc7-2db459107c0c</tstamps>
-      <units>
-        <unit name="A">
-          <pins>
-            <pin num="1"/>
-            <pin num="24"/>
-            <pin num="48"/>
-            <pin num="25"/>
-            <pin num="47"/>
-            <pin num="2"/>
-            <pin num="46"/>
-            <pin num="3"/>
-            <pin num="44"/>
-            <pin num="5"/>
-            <pin num="43"/>
-            <pin num="6"/>
-            <pin num="41"/>
-            <pin num="8"/>
-            <pin num="40"/>
-            <pin num="9"/>
-            <pin num="38"/>
-            <pin num="11"/>
-            <pin num="37"/>
-            <pin num="12"/>
-            <pin num="36"/>
-            <pin num="13"/>
-            <pin num="35"/>
-            <pin num="14"/>
-            <pin num="33"/>
-            <pin num="16"/>
-            <pin num="32"/>
-            <pin num="17"/>
-            <pin num="30"/>
-            <pin num="19"/>
-            <pin num="29"/>
-            <pin num="20"/>
-            <pin num="27"/>
-            <pin num="22"/>
-            <pin num="26"/>
-            <pin num="23"/>
-            <pin num="31"/>
-            <pin num="42"/>
-            <pin num="7"/>
-            <pin num="18"/>
-            <pin num="4"/>
-            <pin num="10"/>
-            <pin num="15"/>
-            <pin num="21"/>
-            <pin num="28"/>
-            <pin num="34"/>
-            <pin num="45"/>
-            <pin num="39"/>
           </pins>
         </unit>
       </units>
@@ -14278,33 +13814,7 @@
         <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
-    <libpart lib="KUI_G1" part="R223">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
     <libpart lib="KUI_G1" part="R224">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="KUI_G1" part="R225">
       <fields>
         <field name="Reference">R</field>
         <field name="Value">47k</field>
@@ -14330,33 +13840,7 @@
         <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
-    <libpart lib="KUI_G1" part="R227">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
     <libpart lib="KUI_G1" part="R228">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="KUI_G1" part="R229">
       <fields>
         <field name="Reference">R</field>
         <field name="Value">47k</field>
@@ -14382,33 +13866,7 @@
         <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
-    <libpart lib="KUI_G1" part="R231">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
     <libpart lib="KUI_G1" part="R232">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="KUI_G1" part="R233">
       <fields>
         <field name="Reference">R</field>
         <field name="Value">47k</field>
@@ -14434,33 +13892,7 @@
         <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
-    <libpart lib="KUI_G1" part="R235">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
     <libpart lib="KUI_G1" part="R236">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="KUI_G1" part="R237">
       <fields>
         <field name="Reference">R</field>
         <field name="Value">47k</field>
@@ -14486,33 +13918,7 @@
         <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
-    <libpart lib="KUI_G1" part="R239">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
     <libpart lib="KUI_G1" part="R240">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="KUI_G1" part="R241">
       <fields>
         <field name="Reference">R</field>
         <field name="Value">47k</field>
@@ -14538,33 +13944,7 @@
         <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
-    <libpart lib="KUI_G1" part="R243">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
     <libpart lib="KUI_G1" part="R244">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="KUI_G1" part="R245">
       <fields>
         <field name="Reference">R</field>
         <field name="Value">47k</field>
@@ -14590,33 +13970,7 @@
         <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
-    <libpart lib="KUI_G1" part="R247">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
     <libpart lib="KUI_G1" part="R248">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="KUI_G1" part="R249">
       <fields>
         <field name="Reference">R</field>
         <field name="Value">47k</field>
@@ -14642,33 +13996,7 @@
         <pin num="2" name="2" type="passive"/>
       </pins>
     </libpart>
-    <libpart lib="KUI_G1" part="R251">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
     <libpart lib="KUI_G1" part="R252">
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">47k</field>
-        <field name="Footprint">KUI_Footprints:R_0402_1005Metric</field>
-        <field name="Datasheet"/>
-        <field name="Description"/>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="KUI_G1" part="R253">
       <fields>
         <field name="Reference">R</field>
         <field name="Value">47k</field>
@@ -17232,82 +16560,66 @@
       <node ref="U36" pin="14" pinfunction="1Y3_14" pintype="output"/>
     </net>
     <net code="55" name="BUS_DD0" class="Default">
-      <node ref="R223" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="28" pinfunction="PB5B_28" pintype="bidirectional"/>
       <node ref="U35" pin="47" pinfunction="1A1_47" pintype="bidirectional"/>
     </net>
     <net code="56" name="BUS_DD1" class="Default">
-      <node ref="R225" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="29" pinfunction="PB6A_29" pintype="bidirectional"/>
       <node ref="U35" pin="46" pinfunction="1A2_46" pintype="bidirectional"/>
     </net>
     <net code="57" name="BUS_DD2" class="Default">
-      <node ref="R227" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="30" pinfunction="PB6B_30" pintype="bidirectional"/>
       <node ref="U35" pin="44" pinfunction="1A3_44" pintype="bidirectional"/>
     </net>
     <net code="58" name="BUS_DD3" class="Default">
-      <node ref="R229" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="34" pinfunction="PB11A_34" pintype="bidirectional"/>
       <node ref="U35" pin="43" pinfunction="1A4_43" pintype="bidirectional"/>
     </net>
     <net code="59" name="BUS_DD4" class="Default">
-      <node ref="R231" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="35" pinfunction="PB11B_35" pintype="bidirectional"/>
       <node ref="U35" pin="41" pinfunction="1A5_41" pintype="bidirectional"/>
     </net>
     <net code="60" name="BUS_DD5" class="Default">
-      <node ref="R233" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="36" pinfunction="PB12A_36" pintype="bidirectional"/>
       <node ref="U35" pin="40" pinfunction="1A6_40" pintype="bidirectional"/>
     </net>
     <net code="61" name="BUS_DD6" class="Default">
-      <node ref="R235" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="37" pinfunction="PB12B_37" pintype="bidirectional"/>
       <node ref="U35" pin="38" pinfunction="1A7_38" pintype="bidirectional"/>
     </net>
     <net code="62" name="BUS_DD7" class="Default">
-      <node ref="R237" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="38" pinfunction="PB16A_38" pintype="bidirectional"/>
       <node ref="U35" pin="37" pinfunction="1A8_37" pintype="bidirectional"/>
     </net>
     <net code="63" name="BUS_DD8" class="Default">
-      <node ref="R239" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="39" pinfunction="PB16B_39" pintype="bidirectional"/>
       <node ref="U35" pin="36" pinfunction="2A1_36" pintype="bidirectional"/>
     </net>
     <net code="64" name="BUS_DD9" class="Default">
-      <node ref="R241" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="40" pinfunction="PB18A_40" pintype="bidirectional"/>
       <node ref="U35" pin="35" pinfunction="2A2_35" pintype="bidirectional"/>
     </net>
     <net code="65" name="BUS_DD10" class="Default">
-      <node ref="R243" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="41" pinfunction="PB18B_41" pintype="bidirectional"/>
       <node ref="U35" pin="33" pinfunction="2A3_33" pintype="bidirectional"/>
     </net>
     <net code="66" name="BUS_DD11" class="Default">
-      <node ref="R245" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="42" pinfunction="PB21A_42" pintype="bidirectional"/>
       <node ref="U35" pin="32" pinfunction="2A4_32" pintype="bidirectional"/>
     </net>
     <net code="67" name="BUS_DD12" class="Default">
-      <node ref="R247" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="43" pinfunction="PB21B_43" pintype="bidirectional"/>
       <node ref="U35" pin="30" pinfunction="2A5_30" pintype="bidirectional"/>
     </net>
     <net code="68" name="BUS_DD13" class="Default">
-      <node ref="R249" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="45" pinfunction="PB22A_45" pintype="bidirectional"/>
       <node ref="U35" pin="29" pinfunction="2A6_29" pintype="bidirectional"/>
     </net>
     <net code="69" name="BUS_DD14" class="Default">
-      <node ref="R251" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="47" pinfunction="PB22B_47" pintype="bidirectional"/>
       <node ref="U35" pin="27" pinfunction="2A7_27" pintype="bidirectional"/>
     </net>
     <net code="70" name="BUS_DD15" class="Default">
-      <node ref="R253" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="U10" pin="51" pinfunction="PR14B_51" pintype="bidirectional"/>
       <node ref="U35" pin="26" pinfunction="2A8_26" pintype="bidirectional"/>
     </net>
@@ -17782,37 +17094,21 @@
       <node ref="R217" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R218" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R219" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R223" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R224" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R225" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R226" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R227" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R228" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R229" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R230" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R231" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R232" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R233" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R234" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R235" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R236" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R237" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R238" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R239" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R240" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R241" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R242" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R243" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R244" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R245" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R246" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R247" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R248" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R249" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R250" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R251" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R252" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="R253" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R254" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="R255" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="R256" pin="1" pinfunction="1_1" pintype="passive"/>

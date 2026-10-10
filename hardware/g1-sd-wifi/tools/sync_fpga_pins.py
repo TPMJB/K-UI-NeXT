@@ -21,6 +21,11 @@ BLOCK = ROOT / 'design' / 'blocks' / 'frontend.json'
 PINPLAN = ROOT / 'design' / 'front-end-pinplan.csv'
 LPF = ROOT / 'fpga' / 'bridge.lpf'
 RTL = ROOT / 'fpga' / 'bridge.v'
+# Ports whose LPF enables the I/O's internal pull-down. BUS_DD idles
+# tri-stated between the FPGA and U35's disabled A port; the FPGA's own
+# pull-down replaces sixteen discrete 47 k biases that could not be placed
+# near the bus.
+PULL_DOWN = re.compile(r'BUS_DD\[')
 HEADER = ('# LCMXO2-2000HC-4TG100C, physical allocation only.\n'
           '# External ATA/link setup, hold, latency and recovery constraints remain required.\n'
           '# No global asynchronous false-path exemption is supplied.\n'
@@ -95,8 +100,9 @@ def main():
         pin = by_net.get(net_of(port))
         if pin is None:
             raise ValueError('RTL port %s has no U10 pin' % port)
-        lines.append('LOCATE COMP "%s" SITE "%s";\nIOBUF PORT "%s" IO_TYPE=LVCMOS33 PULLMODE=NONE;\n'
-                     % (port, pin, port))
+        pull = 'DOWN' if PULL_DOWN.match(port) else 'NONE'
+        lines.append('LOCATE COMP "%s" SITE "%s";\nIOBUF PORT "%s" IO_TYPE=LVCMOS33 PULLMODE=%s;\n'
+                     % (port, pin, port, pull))
     LPF.write_text(''.join(lines))
     print(json.dumps({'lpf_constraints': len(lines) - 1, 'pinplan_rows': len(body)}))
 

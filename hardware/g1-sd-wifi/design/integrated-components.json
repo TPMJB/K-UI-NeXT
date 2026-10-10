@@ -9376,34 +9376,6 @@
     "on_board": true
   },
   {
-    "ref": "R223",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD0",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
     "ref": "R224",
     "value": "47k",
     "mpn": "RC0402FR-0747KL",
@@ -9424,34 +9396,6 @@
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
     "description": "ATA data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
-    "ref": "R225",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD1",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
@@ -9488,34 +9432,6 @@
     "on_board": true
   },
   {
-    "ref": "R227",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD2",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
     "ref": "R228",
     "value": "47k",
     "mpn": "RC0402FR-0747KL",
@@ -9536,34 +9452,6 @@
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
     "description": "ATA data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
-    "ref": "R229",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD3",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
@@ -9600,34 +9488,6 @@
     "on_board": true
   },
   {
-    "ref": "R231",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD4",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
     "ref": "R232",
     "value": "47k",
     "mpn": "RC0402FR-0747KL",
@@ -9648,34 +9508,6 @@
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
     "description": "ATA data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
-    "ref": "R233",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD5",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
@@ -9712,34 +9544,6 @@
     "on_board": true
   },
   {
-    "ref": "R235",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD6",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
     "ref": "R236",
     "value": "47k",
     "mpn": "RC0402FR-0747KL",
@@ -9760,34 +9564,6 @@
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
     "description": "ATA data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
-    "ref": "R237",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD7",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
@@ -9824,34 +9600,6 @@
     "on_board": true
   },
   {
-    "ref": "R239",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD8",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
     "ref": "R240",
     "value": "47k",
     "mpn": "RC0402FR-0747KL",
@@ -9872,34 +9620,6 @@
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
     "description": "ATA data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
-    "ref": "R241",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD9",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
@@ -9936,34 +9656,6 @@
     "on_board": true
   },
   {
-    "ref": "R243",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD10",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
     "ref": "R244",
     "value": "47k",
     "mpn": "RC0402FR-0747KL",
@@ -9984,34 +9676,6 @@
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
     "description": "ATA data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
-    "ref": "R245",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD11",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
@@ -10048,34 +9712,6 @@
     "on_board": true
   },
   {
-    "ref": "R247",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD12",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
     "ref": "R248",
     "value": "47k",
     "mpn": "RC0402FR-0747KL",
@@ -10096,34 +9732,6 @@
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
     "description": "ATA data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
-    "ref": "R249",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD13",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
@@ -10160,34 +9768,6 @@
     "on_board": true
   },
   {
-    "ref": "R251",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD14",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
     "ref": "R252",
     "value": "47k",
     "mpn": "RC0402FR-0747KL",
@@ -10208,34 +9788,6 @@
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
     "description": "ATA data input weak bias; accommodates tri-state idle bus",
-    "populate": true,
-    "height_max_mm": 0.65,
-    "block": "power-bus",
-    "variant": "BASE",
-    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
-    "on_board": true
-  },
-  {
-    "ref": "R253",
-    "value": "47k",
-    "mpn": "RC0402FR-0747KL",
-    "footprint": "KUI_Footprints:R_0402_1005Metric",
-    "pins": {
-      "1": {
-        "name": "1",
-        "net": "BUS_DD15",
-        "type": "passive"
-      },
-      "2": {
-        "name": "2",
-        "net": "GND",
-        "type": "passive"
-      }
-    },
-    "sources": [
-      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
-    ],
-    "description": "BUS data input weak bias; accommodates tri-state idle bus",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
