@@ -160,9 +160,17 @@ or exact top-edge offset reading is required for this initial concept.
 The owner now identifies the 5.03 mm narrow-section width as the effective
 distance between CN503's two rows. Use about 5.03 mm as trial row-center
 spacing; verify that interpretation with both rows in the actual-size guide:
-../docs/CN503-contact-alignment-RevA.pdf (editable SVG beside it).
-Print at 100%, disable fit-to-page and verify both 20 mm scale bars. Its
-contact marks are an alignment check, not a qualified solder-pad pattern.
+../docs/CN503-contact-alignment-RevA-US-Letter.pdf (Letter SVG beside it);
+the original A4 PDF/SVG is retained in the same directory.
+Download the actual PDF, select matching paper, print at Actual size / 100%,
+disable fit-to-page and verify both 20 mm scale bars. Its contact marks are
+an alignment check, not a qualified solder-pad pattern.
+The owner now accepts the paper fit in inline photo 62263.jpg: printed marks
+track the exposed contact row without obvious cumulative drift. Accept
+1.00 mm nominal pitch for the first flex mechanical draft. No further initial
+pitch reading or printer tuning is requested. The opposite physical row is
+hidden, so 5.03 mm remains trial row-center spacing rather than a verified
+two-row center measurement. Final pad overlap and tolerances remain to design.
 The opposite row is hidden in the close-up; exposed tail length, overlap and
 final joining tolerances remain open. Use the approximately 12 mm gap and
 qualitative row/body alignment for initial X/Y placement, then check the
@@ -223,8 +231,9 @@ qualified tail pitch/row-center spacing, exposed length and landing tolerances;
 usable outline/supports/card access; and the USB-free C5's remaining height
 and selected removable-contact stack. The owner has supplied working CN503
 placement/contact references, including about 5.03 mm effective row separation.
-Check the actual-size template before fixing the flex pattern; no further
-initial row-spacing reading is needed. A dimensioned overhead sketch can
+The owner has accepted the visible-row template fit for the first draft;
+qualify the complete physical landing before fixing the production flex
+pattern. No further initial pitch or row-spacing reading is needed. A dimensioned overhead sketch can
 combine the remaining outline information.
 Nominal BIOS pitch is 1.27 mm per a primary teardown; the clearance-only cutout
 needs no BIOS solder pads. Confirm actual leads if optional BIOS taps are added.
