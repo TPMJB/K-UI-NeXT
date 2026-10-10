@@ -178,3 +178,25 @@ container whose egress policy blocks `ppa.launchpadcontent.net`.
 - **Java.** Temurin 25 downloads were also blocked, so Freerouting 2.5.0
   could not run; the 1.9.0 JAR (hash above) with `Headless19Ripup` runs on
   the system Java 21.
+- **Planes are never a route target in Freerouting 1.9.** The router
+  routed `+3V3_LOGIC` pins to each other as surface copper and placed no
+  via onto the plane at all (GND only worked because its fanout vias were
+  pre-placed). `tools/add_carrier_ground_fanout.py --net +3V3_LOGIC` now
+  pre-places locked pad-to-via stubs for the power plane the same way as
+  for GND; run it for both nets after placement and before export.
+- **Outer-layer trace cost.** Freerouting prices both outer layers at twice
+  the inner cost. With no bottom-side parts B.Cu then carried about 1% of
+  the routing while the inner layers jammed. `Headless19Ripup` prices B.Cu
+  just above an inner layer.
+- **Router edge keepouts.** `generate_board.py` writes them for every copper
+  layer the board has; the four-layer list had left In3/In4 unprotected on
+  the six-layer board.
+- **Floorplan before layers.** The four-layer board stalled above 290 open
+  connections and a six-layer trial on the same placement near 70. The
+  remaining failures were placement: the FPGA's link bus faced away from
+  the RP2350, the data bus crossed under the RP2350 to reach U35, and small
+  logic sat tens of millimetres from its partners.
+  `tools/floorplan_2026_10_10.sh` records the re-floorplan.
+- **Java 25 is still unavailable.** Amazon Corretto's download host is
+  blocked as well (HTTP 403 from the proxy), so routing stays on
+  Freerouting 1.9.0 with Java 21.

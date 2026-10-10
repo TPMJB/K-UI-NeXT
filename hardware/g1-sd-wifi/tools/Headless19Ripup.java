@@ -95,7 +95,13 @@ public final class Headless19Ripup {
       for(Pin pin:new ArrayList<Pin>(b.get_smd_pins())) {
         if(stop.is_stop_requested()) break;
         b.start_marking_changed_area();
-        AutorouteEngine.AutorouteResult result=b.fanout(pin,settings,settings.autoroute_settings.get_start_ripup_costs(),stop,new TimeLimit(perItemMillis));
+        AutorouteEngine.AutorouteResult result;
+        try {
+          result=b.fanout(pin,settings,settings.autoroute_settings.get_start_ripup_costs(),stop,new TimeLimit(perItemMillis));
+        } catch(RuntimeException e) {
+          System.out.printf("SKIP fanout pin=%d %s%n",pin.get_id_no(),e);
+          result=AutorouteEngine.AutorouteResult.INSERT_ERROR;
+        }
         attempted++;if(result==AutorouteEngine.AutorouteResult.ROUTED) routed++;
       }
       checkpoint(b,output.resolveSibling(output.getFileName().toString()+".fanout.ses"),design);
@@ -113,7 +119,16 @@ public final class Headless19Ripup {
         b.start_marking_changed_area();
         boolean plane=b.rules.nets.get(pin.get_net_no(0)).contains_plane();
         int viaCosts=plane?settings.autoroute_settings.get_plane_via_costs():settings.autoroute_settings.get_via_costs();
-        AutorouteEngine.AutorouteResult result=routeWithRipup(b,pin,settings,viaCosts,pass,stop,perItemMillis);
+        AutorouteEngine.AutorouteResult result;
+        try {
+          result=routeWithRipup(b,pin,settings,viaCosts,pass,stop,perItemMillis);
+        } catch(RuntimeException e) {
+          // Freerouting 1.9 occasionally throws inside trace insertion
+          // (Polyline.projection_line NPE). Count the connection as failed
+          // and keep the pass going rather than losing the whole run.
+          System.out.printf("SKIP pin=%d net=%d %s%n",pin.get_id_no(),pin.get_net_no(0),e);
+          result=AutorouteEngine.AutorouteResult.INSERT_ERROR;
+        }
         attempted++;
         if(result==AutorouteEngine.AutorouteResult.ROUTED) routed++;
         else if(result!=AutorouteEngine.AutorouteResult.ALREADY_CONNECTED) failed++;

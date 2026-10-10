@@ -1,11 +1,13 @@
 {
   "manufacturer": "JLCPCB",
   "released": false,
-  "copper_layers": 4,
+  "copper_layers": 6,
   "gerber_layers": [
     "F.Cu",
     "In1.Cu",
     "In2.Cu",
+    "In3.Cu",
+    "In4.Cu",
     "B.Cu",
     "F.Paste",
     "B.Paste",
@@ -59,5 +61,39 @@
     "diameter_mm": 0.6,
     "drill_mm": 0.3,
     "note": "Keep load-current trunks on adequate copper; use parallel ground/power vias where current requires them."
+  },
+  "stackup": {
+    "order": [
+      "F.Cu signal",
+      "In1.Cu GND plane",
+      "In2.Cu signal",
+      "In3.Cu signal",
+      "In4.Cu +3V3_LOGIC plane",
+      "B.Cu signal"
+    ],
+    "board_thickness_mm": 0.8,
+    "dielectric_plan_mm": [
+      [
+        "prepreg",
+        0.1
+      ],
+      [
+        "core",
+        0.175
+      ],
+      [
+        "prepreg",
+        0.1
+      ],
+      [
+        "core",
+        0.175
+      ],
+      [
+        "prepreg",
+        0.1
+      ]
+    ],
+    "note": "Nominal plan for a 0.8 mm six-layer build. Confirm that the fabricator offers six layers at 0.8 mm and substitute its standard stack of that thickness; the C5 and connector height budget assumes 0.8 mm. No impedance control is requested."
   }
 }
