@@ -8,23 +8,23 @@
     "pins": {
       "1": {
         "name": "PL2A / L_GPLLT_IN",
-        "net": "LINK_D0",
-        "type": "bidirectional"
+        "net": "REQ_DMARQ_OEn",
+        "type": "output"
       },
       "2": {
         "name": "PL2B / L_GPLLC_IN",
-        "net": "LINK_D1",
-        "type": "bidirectional"
+        "net": "REQ_INTRQ_OEn",
+        "type": "output"
       },
       "3": {
         "name": "PL3A / PCLKT5_0",
-        "net": null,
-        "type": "bidirectional"
+        "net": "FPGA_CLK50",
+        "type": "input"
       },
       "4": {
         "name": "PL3B / PCLKC5_0",
-        "net": "LINK_D2",
-        "type": "bidirectional"
+        "net": "BIOS_BANK1",
+        "type": "output"
       },
       "5": {
         "name": "VCCIO5",
@@ -38,23 +38,23 @@
       },
       "7": {
         "name": "PL4A",
-        "net": "LINK_D3",
-        "type": "bidirectional"
+        "net": "BIOS_BANK0",
+        "type": "output"
       },
       "8": {
         "name": "PL4B",
-        "net": "LINK_D4",
-        "type": "bidirectional"
+        "net": "BUS_DA0",
+        "type": "input"
       },
       "9": {
         "name": "PL5A",
-        "net": "LINK_D5",
-        "type": "bidirectional"
+        "net": "BUS_DA1",
+        "type": "input"
       },
       "10": {
         "name": "PL5B",
-        "net": "LINK_D6",
-        "type": "bidirectional"
+        "net": "BUS_DA2",
+        "type": "input"
       },
       "11": {
         "name": "VCCIO4",
@@ -63,53 +63,53 @@
       },
       "12": {
         "name": "PL7C / PCLKT4_0",
-        "net": "LINK_D7",
-        "type": "bidirectional"
+        "net": "BUS_CS0n",
+        "type": "input"
       },
       "13": {
         "name": "PL7D / PCLKC4_0",
-        "net": "LINK_WRn",
+        "net": "BUS_CS1n",
         "type": "input"
       },
       "14": {
         "name": "PL9A",
-        "net": "LINK_RDn",
+        "net": "BUS_DIORn",
         "type": "input"
       },
       "15": {
         "name": "PL9B",
-        "net": "LINK_A0",
+        "net": "BUS_DIOWn",
         "type": "input"
       },
       "16": {
         "name": "PL10A",
-        "net": "LINK_A1",
+        "net": "BUS_DMACKn",
         "type": "input"
       },
       "17": {
         "name": "PL10B",
-        "net": "LINK_IRQ",
-        "type": "output"
+        "net": "BUS_RESETn",
+        "type": "input"
       },
       "18": {
         "name": "PL11A",
-        "net": "LINK_READY",
+        "net": "REQ_INTRQ",
         "type": "output"
       },
       "19": {
         "name": "PL11B",
-        "net": "FPGA_RESETn",
+        "net": "BIOS_RECOVERYn",
         "type": "input"
       },
       "20": {
         "name": "PL12A / PCLKT3_0",
-        "net": "FPGA_CLK50",
-        "type": "input"
+        "net": "BIOS_WR_EN",
+        "type": "output"
       },
       "21": {
         "name": "PL12B / PCLKC3_0",
-        "net": "BRIDGE_ARM",
-        "type": "input"
+        "net": "REQ_DMARQ",
+        "type": "output"
       },
       "22": {
         "name": "GND",
@@ -123,12 +123,12 @@
       },
       "24": {
         "name": "PL14A",
-        "net": "BUS_SAFE",
-        "type": "input"
+        "net": "REQ_IORDY_LOW",
+        "type": "output"
       },
       "25": {
         "name": "PL14B",
-        "net": "PWR_FAILn",
+        "net": "BUS_SAFE",
         "type": "input"
       },
       "26": {
@@ -143,18 +143,18 @@
       },
       "28": {
         "name": "PB5B",
-        "net": "BUS_DA0",
-        "type": "input"
+        "net": "BUS_DD0",
+        "type": "bidirectional"
       },
       "29": {
         "name": "PB6A",
-        "net": "BUS_DA1",
-        "type": "input"
+        "net": "BUS_DD1",
+        "type": "bidirectional"
       },
       "30": {
         "name": "PB6B",
-        "net": "BUS_DA2",
-        "type": "input"
+        "net": "BUS_DD2",
+        "type": "bidirectional"
       },
       "31": {
         "name": "PB8A / MCLK/CCLK",
@@ -173,52 +173,52 @@
       },
       "34": {
         "name": "PB11A / PCLKT2_0",
-        "net": "BUS_CS0n",
-        "type": "input"
+        "net": "BUS_DD3",
+        "type": "bidirectional"
       },
       "35": {
         "name": "PB11B / PCLKC2_0",
-        "net": "BUS_CS1n",
-        "type": "input"
+        "net": "BUS_DD4",
+        "type": "bidirectional"
       },
       "36": {
         "name": "PB12A",
-        "net": "BUS_DIORn",
-        "type": "input"
+        "net": "BUS_DD5",
+        "type": "bidirectional"
       },
       "37": {
         "name": "PB12B",
-        "net": "BUS_DIOWn",
-        "type": "input"
+        "net": "BUS_DD6",
+        "type": "bidirectional"
       },
       "38": {
         "name": "PB16A / PCLKT2_1",
-        "net": "BUS_RESETn",
-        "type": "input"
+        "net": "BUS_DD7",
+        "type": "bidirectional"
       },
       "39": {
         "name": "PB16B / PCLKC2_1",
-        "net": "BUS_DMACKn",
-        "type": "input"
+        "net": "BUS_DD8",
+        "type": "bidirectional"
       },
       "40": {
         "name": "PB18A",
-        "net": "REQ_INTRQ_OEn",
-        "type": "output"
+        "net": "BUS_DD9",
+        "type": "bidirectional"
       },
       "41": {
         "name": "PB18B",
-        "net": "REQ_DMARQ_OEn",
-        "type": "output"
+        "net": "BUS_DD10",
+        "type": "bidirectional"
       },
       "42": {
         "name": "PB21A",
-        "net": null,
+        "net": "BUS_DD11",
         "type": "bidirectional"
       },
       "43": {
         "name": "PB21B",
-        "net": null,
+        "net": "BUS_DD12",
         "type": "bidirectional"
       },
       "44": {
@@ -228,7 +228,7 @@
       },
       "45": {
         "name": "PB22A",
-        "net": null,
+        "net": "BUS_DD13",
         "type": "bidirectional"
       },
       "46": {
@@ -238,7 +238,7 @@
       },
       "47": {
         "name": "PB22B",
-        "net": null,
+        "net": "BUS_DD14",
         "type": "bidirectional"
       },
       "48": {
@@ -258,23 +258,23 @@
       },
       "51": {
         "name": "PR14B",
-        "net": "BUS_DD0",
+        "net": "BUS_DD15",
         "type": "bidirectional"
       },
       "52": {
         "name": "PR14A",
-        "net": "BUS_DD1",
-        "type": "bidirectional"
+        "net": "FPGA_READY",
+        "type": "output"
       },
       "53": {
         "name": "PR12B",
-        "net": "BUS_DD2",
-        "type": "bidirectional"
+        "net": "REQ_DATA_OEn",
+        "type": "output"
       },
       "54": {
         "name": "PR12A",
-        "net": "BUS_DD3",
-        "type": "bidirectional"
+        "net": "DATA_DIR",
+        "type": "output"
       },
       "55": {
         "name": "VCCIO1",
@@ -288,78 +288,78 @@
       },
       "57": {
         "name": "PR11B",
-        "net": "BUS_DD4",
-        "type": "bidirectional"
+        "net": "PWR_FAILn",
+        "type": "input"
       },
       "58": {
         "name": "PR11A",
-        "net": "BUS_DD5",
-        "type": "bidirectional"
+        "net": "BRIDGE_ARM",
+        "type": "input"
       },
       "59": {
         "name": "PR10B",
-        "net": "BUS_DD6",
-        "type": "bidirectional"
+        "net": "FPGA_RESETn",
+        "type": "input"
       },
       "60": {
         "name": "PR10A",
-        "net": "BUS_DD7",
-        "type": "bidirectional"
+        "net": "LINK_READY",
+        "type": "output"
       },
       "61": {
         "name": "PR9A",
-        "net": "BUS_DD8",
-        "type": "bidirectional"
+        "net": "LINK_IRQ",
+        "type": "output"
       },
       "62": {
         "name": "PR7B / PCLKC1_0",
-        "net": "BUS_DD9",
-        "type": "bidirectional"
+        "net": "LINK_A1",
+        "type": "input"
       },
       "63": {
         "name": "PR7A / PCLKT1_0",
-        "net": "BUS_DD10",
-        "type": "bidirectional"
+        "net": "LINK_A0",
+        "type": "input"
       },
       "64": {
         "name": "PR6B",
-        "net": "BUS_DD11",
-        "type": "bidirectional"
+        "net": "LINK_RDn",
+        "type": "input"
       },
       "65": {
         "name": "PR6A",
-        "net": "BUS_DD12",
-        "type": "bidirectional"
+        "net": "LINK_WRn",
+        "type": "input"
       },
       "66": {
         "name": "PR5B",
-        "net": "BUS_DD13",
+        "net": "LINK_D7",
         "type": "bidirectional"
       },
       "67": {
         "name": "PR5A",
-        "net": "BUS_DD14",
+        "net": "LINK_D6",
         "type": "bidirectional"
       },
       "68": {
         "name": "PR4B",
-        "net": "BUS_DD15",
+        "net": "LINK_D5",
         "type": "bidirectional"
       },
       "69": {
         "name": "PR4A",
-        "net": "REQ_DATA_OEn",
-        "type": "output"
+        "net": "LINK_D4",
+        "type": "bidirectional"
       },
       "70": {
         "name": "PR3B",
-        "net": "DATA_DIR",
-        "type": "output"
+        "net": "LINK_D3",
+        "type": "bidirectional"
       },
       "71": {
         "name": "PR3A",
-        "net": "REQ_IORDY_LOW",
-        "type": "output"
+        "net": "LINK_D2",
+        "type": "bidirectional"
       },
       "72": {
         "name": "GND",
@@ -373,13 +373,13 @@
       },
       "74": {
         "name": "PR1B",
-        "net": "REQ_INTRQ",
-        "type": "output"
+        "net": "LINK_D1",
+        "type": "bidirectional"
       },
       "75": {
         "name": "PR1A",
-        "net": "REQ_DMARQ",
-        "type": "output"
+        "net": "LINK_D0",
+        "type": "bidirectional"
       },
       "76": {
         "name": "PT24D / DONE",
@@ -393,8 +393,8 @@
       },
       "78": {
         "name": "PT22A",
-        "net": "BIOS_BANK0",
-        "type": "output"
+        "net": null,
+        "type": "bidirectional"
       },
       "79": {
         "name": "GND",
@@ -418,13 +418,13 @@
       },
       "83": {
         "name": "PT19B",
-        "net": "BIOS_BANK1",
-        "type": "output"
+        "net": null,
+        "type": "bidirectional"
       },
       "84": {
         "name": "PT19A",
-        "net": "BIOS_WR_EN",
-        "type": "output"
+        "net": null,
+        "type": "bidirectional"
       },
       "85": {
         "name": "PT18D / SDA/PCLKC0_0",
@@ -483,13 +483,13 @@
       },
       "96": {
         "name": "PT11B",
-        "net": "BIOS_RECOVERYn",
-        "type": "input"
+        "net": null,
+        "type": "bidirectional"
       },
       "97": {
         "name": "PT11A",
-        "net": "FPGA_READY",
-        "type": "output"
+        "net": null,
+        "type": "bidirectional"
       },
       "98": {
         "name": "PT9B",
@@ -1351,8 +1351,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "2",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "29",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1383,8 +1383,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "3",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "31",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1415,8 +1415,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "5",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "33",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1447,8 +1447,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "6",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "35",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1479,8 +1479,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "8",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "38",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1511,8 +1511,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "9",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "40",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1543,8 +1543,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "11",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "42",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1575,8 +1575,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "12",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "44",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1607,8 +1607,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "13",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "45",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1639,8 +1639,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "14",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "25",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1671,8 +1671,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "16",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "24",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1703,8 +1703,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "17",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "23",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1735,8 +1735,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "19",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "22",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1767,8 +1767,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "20",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "21",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1799,8 +1799,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "22",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "20",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -1831,8 +1831,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "23",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "19",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": "TP136",
@@ -2503,8 +2503,8 @@
     "variant": "BASE",
     "height_max_mm": 0,
     "probe_access": {
-      "endpoint_reference": "U35",
-      "endpoint_pin": "10",
+      "endpoint_reference": "U40",
+      "endpoint_pin": "27",
       "maximum_added_stub_mm": 3.0,
       "minimum_goal_added_stub_mm": 0.0,
       "local_ground_reference": null,

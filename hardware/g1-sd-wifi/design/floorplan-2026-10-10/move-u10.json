@@ -1,0 +1,248 @@
+{
+  "owner": "U10",
+  "to": [
+    16.0,
+    31.74,
+    0.0
+  ],
+  "members": [
+    "C100",
+    "C101",
+    "C102",
+    "C106",
+    "C107",
+    "C108",
+    "C109",
+    "C110"
+  ],
+  "lifted": [
+    "C103",
+    "C104",
+    "C105"
+  ],
+  "moved_islands": [
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C101",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C107",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C109",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C108",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C102",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C110",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C106",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C100",
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C100"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C109"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C101"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C106"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C107"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C110"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C108"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C102"
+      ]
+    }
+  ],
+  "dropped_islands": [
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C103",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C104",
+        "U10"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C105",
+        "U10"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C103"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C104"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C105"
+      ]
+    }
+  ]
+}

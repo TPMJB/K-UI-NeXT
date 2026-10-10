@@ -544,7 +544,7 @@ def export_dsn(args):
         # any imported power copper needs explicit widening/current review.
         content=args.dsn.read_text()
         content,count=re.subn(r'(\(class POWER\b[\s\S]*?\(rule\s*\(width )400(\))',
-                              r'\g<1>150\2',content,count=1)
+                              r'\g<1>%d\2'%round(args.power_width*1000),content,count=1)
         if count!=1:raise ValueError('POWER routing rule not found exactly once')
         args.signal_starter.write_text(content)
     print(json.dumps({'native_dsn':str(args.dsn),'signal_starter_dsn':str(args.signal_starter) if args.signal_starter else None,
@@ -585,6 +585,7 @@ def main():
     q.add_argument('--netlist',type=pathlib.Path,default=CAD/'checks/netlist.xml')
     q.add_argument('--dsn',type=pathlib.Path,default=DESIGN/'carrier-draft.dsn')
     q.add_argument('--signal-starter',type=pathlib.Path)
+    q.add_argument('--power-width',type=float,default=0.15,help='POWER escape width (mm) in the signal-starter DSN')
     q=sub.add_parser('install-local-routes');q.add_argument('--components',type=pathlib.Path,default=DESIGN/'integrated-components.json')
     q.add_argument('--netlist',type=pathlib.Path,default=CAD/'checks/netlist.xml')
     q.add_argument('--source',type=pathlib.Path,default=DESIGN/'carrier-critical-routes.json')

@@ -68,17 +68,24 @@ def main():
                 raise ValueError('Pin %s carries configuration function %s' % (pin, function[1]))
             if info['net'] is not None and info['net'] not in moving:
                 raise ValueError('Pin %s already carries %s' % (pin, info['net']))
+        # A net keeps its direction when it changes pin; freed pins return to
+        # the unused-I/O default.
+        direction = {info['net']: info['type'] for info in pins.values() if info['net'] in moving}
         for info in pins.values():
             if info['net'] in moving:
                 info['net'] = None
+                info['type'] = 'bidirectional'
         for net, pin in moves.items():
             pins[pin]['net'] = net
+            pins[pin]['type'] = direction[net]
         BLOCK.write_text(json.dumps(block, indent=2) + '\n')
     rows = list(csv.reader(PINPLAN.open()))
     head, body = rows[0], rows[1:]
-    col_pin, col_net = head.index('Physical pin'), head.index('Net')
+    col_pin, col_net, col_dir = head.index('Physical pin'), head.index('Net'), head.index('Direction')
     for row in body:
-        row[col_net] = pins[row[col_pin]]['net'] or 'NO_CONNECT'
+        info = pins[row[col_pin]]
+        row[col_net] = info['net'] or 'NO_CONNECT'
+        row[col_dir] = info['type']
     out = io.StringIO()
     csv.writer(out, lineterminator='\n').writerows([head] + body)
     PINPLAN.write_text(out.getvalue())

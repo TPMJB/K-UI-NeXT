@@ -110,6 +110,10 @@ def main():
     ORDER=-1 if a.reverse_bank_order else 1
     board=pcbnew.LoadBoard(str(a.input));records=add_probes(board,a.replace,a.components)
     board.BuildConnectivity();pcbnew.ZONE_FILLER(board).Fill(board.Zones());pcbnew.SaveBoard(str(a.output),board)
+    if a.replace and a.report.exists():
+        # Keep the untouched probes' records; replace only the re-placed ones.
+        kept=[q for q in json.loads(a.report.read_text())['pads'] if q['ref'] not in set(a.replace)]
+        records=sorted(kept+records,key=lambda q:int(q['ref'][2:]))
     report={'board_sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'fitted_bottom_components':0,'probe_loading_qualified':False,'pads':records}
     a.report.write_text(json.dumps(report,indent=2)+'\n');print(json.dumps({'probes':len(records),'output':str(a.output),'max_added_stub_mm':max(q['added_stub_length_mm'] for q in records)}))
 if __name__=='__main__':main()

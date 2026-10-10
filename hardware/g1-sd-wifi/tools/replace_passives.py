@@ -140,6 +140,9 @@ def main():
     ap.add_argument('--part', action='append', default=[],
                     help='Also move this part (any pad count, e.g. a small IC); all copper on its '
                          'pads is dropped. Re-place its bypass capacitors afterwards.')
+    ap.add_argument('--bypass', action='append', default=[],
+                    help='CAP=OWNER: place this supply capacitor early, next to the owner pin on '
+                         'its supply net (priority over ordinary parts)')
     ap.add_argument('--clear-plane-fanout', action='store_true',
                     help='Before placing, remove every narrow (0.15 mm) GND/+3V3_LOGIC pad-to-via '
                          'fanout stub on the board so it does not block placement; reviewed wider '
@@ -184,7 +187,12 @@ def main():
     if unknown:
         raise ValueError('Unknown --part references: %s' % unknown)
     movable += [r for r in args.part if r not in movable]
-    forced = set(args.part)
+    bypass = dict(item.split('=') for item in args.bypass)
+    unknown = [r for r in list(bypass) + list(bypass.values()) if r not in fps]
+    if unknown:
+        raise ValueError('Unknown --bypass references: %s' % unknown)
+    movable += [r for r in bypass if r not in movable]
+    forced = set(args.part) | set(bypass)
     graveyard = []
     removed = 0
     # Lift movable parts: drop their unlocked stubs (and vias only they fed).
@@ -233,10 +241,37 @@ def main():
         return (0 if r in forced else 1, size, 0 if fast else 1, 0 if series else 1, r)
 
     def signal_targets(fp):
+        if fp.GetReference() in bypass:
+            # A bypass capacitor aims its supply pad at the owner's pins on
+            # the same supply net.
+            owner = fps[bypass[fp.GetReference()]]
+            supply = [p for p in fp.Pads() if p.GetNetname() != 'GND']
+            return {p.GetNumber(): [local(q.GetPosition()) for q in owner.Pads()
+                                    if q.GetNetname() == p.GetNetname()] for p in supply}
         # Supply pins drop to a plane via or a local rail; only signal
         # partners decide where the part belongs.
-        return {p.GetNumber(): fixed_pads[p.GetNetname()] for p in fp.Pads()
-                if p.GetNetname() in fixed_pads and p.GetNetname() not in POWER}
+        direct = {p.GetNumber(): fixed_pads[p.GetNetname()] for p in fp.Pads()
+                  if p.GetNetname() in fixed_pads and p.GetNetname() not in POWER}
+        if direct:
+            return direct
+        # Two hops: a part whose only partner is a movable series part (an
+        # oscillator behind its damping resistor) aims at what that part
+        # connects to, so it can claim its spot early instead of last.
+        hop = {}
+        for p in fp.Pads():
+            n = p.GetNetname()
+            if n in POWER or not n:
+                continue
+            for r2 in movable:
+                if r2 == fp.GetReference():
+                    continue
+                q = list(fps[r2].Pads())
+                if len(q) != 2 or n not in {x.GetNetname() for x in q}:
+                    continue
+                other = next(x.GetNetname() for x in q if x.GetNetname() != n)
+                if other in fixed_pads and other not in POWER:
+                    hop.setdefault(p.GetNumber(), []).extend(fixed_pads[other])
+        return hop
 
     def place(r):
         fp = fps[r]

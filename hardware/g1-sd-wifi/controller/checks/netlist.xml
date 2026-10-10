@@ -2,7 +2,7 @@
 <export version="E">
   <design>
     <source>/home/user/g1-design/hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_sch</source>
-    <date>2026-10-10T14:20:14</date>
+    <date>2026-10-10T19:03:31</date>
     <tool>Eeschema 10.0.6</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -15687,47 +15687,47 @@
         <field name="Description"/>
       </fields>
       <pins>
-        <pin num="1" name="PL2A" type="bidirectional"/>
-        <pin num="2" name="PL2B" type="bidirectional"/>
-        <pin num="3" name="PL3A" type="bidirectional"/>
-        <pin num="4" name="PL3B" type="bidirectional"/>
+        <pin num="1" name="PL2A" type="output"/>
+        <pin num="2" name="PL2B" type="output"/>
+        <pin num="3" name="PL3A" type="input"/>
+        <pin num="4" name="PL3B" type="output"/>
         <pin num="5" name="VCCIO5" type="power_in"/>
         <pin num="6" name="GND" type="power_in"/>
-        <pin num="7" name="PL4A" type="bidirectional"/>
-        <pin num="8" name="PL4B" type="bidirectional"/>
-        <pin num="9" name="PL5A" type="bidirectional"/>
-        <pin num="10" name="PL5B" type="bidirectional"/>
+        <pin num="7" name="PL4A" type="output"/>
+        <pin num="8" name="PL4B" type="input"/>
+        <pin num="9" name="PL5A" type="input"/>
+        <pin num="10" name="PL5B" type="input"/>
         <pin num="11" name="VCCIO4" type="power_in"/>
-        <pin num="12" name="PL7C" type="bidirectional"/>
+        <pin num="12" name="PL7C" type="input"/>
         <pin num="13" name="PL7D" type="input"/>
         <pin num="14" name="PL9A" type="input"/>
         <pin num="15" name="PL9B" type="input"/>
         <pin num="16" name="PL10A" type="input"/>
-        <pin num="17" name="PL10B" type="output"/>
+        <pin num="17" name="PL10B" type="input"/>
         <pin num="18" name="PL11A" type="output"/>
         <pin num="19" name="PL11B" type="input"/>
-        <pin num="20" name="PL12A" type="input"/>
-        <pin num="21" name="PL12B" type="input"/>
+        <pin num="20" name="PL12A" type="output"/>
+        <pin num="21" name="PL12B" type="output"/>
         <pin num="22" name="GND" type="power_in"/>
         <pin num="23" name="VCCIO3" type="power_in"/>
-        <pin num="24" name="PL14A" type="input"/>
+        <pin num="24" name="PL14A" type="output"/>
         <pin num="25" name="PL14B" type="input"/>
         <pin num="26" name="VCCIO2" type="power_in"/>
         <pin num="27" name="PB5A" type="bidirectional"/>
-        <pin num="28" name="PB5B" type="input"/>
-        <pin num="29" name="PB6A" type="input"/>
-        <pin num="30" name="PB6B" type="input"/>
+        <pin num="28" name="PB5B" type="bidirectional"/>
+        <pin num="29" name="PB6A" type="bidirectional"/>
+        <pin num="30" name="PB6B" type="bidirectional"/>
         <pin num="31" name="PB8A" type="bidirectional"/>
         <pin num="32" name="PB8B" type="bidirectional"/>
         <pin num="33" name="GND" type="power_in"/>
-        <pin num="34" name="PB11A" type="input"/>
-        <pin num="35" name="PB11B" type="input"/>
-        <pin num="36" name="PB12A" type="input"/>
-        <pin num="37" name="PB12B" type="input"/>
-        <pin num="38" name="PB16A" type="input"/>
-        <pin num="39" name="PB16B" type="input"/>
-        <pin num="40" name="PB18A" type="output"/>
-        <pin num="41" name="PB18B" type="output"/>
+        <pin num="34" name="PB11A" type="bidirectional"/>
+        <pin num="35" name="PB11B" type="bidirectional"/>
+        <pin num="36" name="PB12A" type="bidirectional"/>
+        <pin num="37" name="PB12B" type="bidirectional"/>
+        <pin num="38" name="PB16A" type="bidirectional"/>
+        <pin num="39" name="PB16B" type="bidirectional"/>
+        <pin num="40" name="PB18A" type="bidirectional"/>
+        <pin num="41" name="PB18B" type="bidirectional"/>
         <pin num="42" name="PB21A" type="bidirectional"/>
         <pin num="43" name="PB21B" type="bidirectional"/>
         <pin num="44" name="GND" type="power_in"/>
@@ -15738,39 +15738,39 @@
         <pin num="49" name="PB25B" type="bidirectional"/>
         <pin num="50" name="VCC" type="power_in"/>
         <pin num="51" name="PR14B" type="bidirectional"/>
-        <pin num="52" name="PR14A" type="bidirectional"/>
-        <pin num="53" name="PR12B" type="bidirectional"/>
-        <pin num="54" name="PR12A" type="bidirectional"/>
+        <pin num="52" name="PR14A" type="output"/>
+        <pin num="53" name="PR12B" type="output"/>
+        <pin num="54" name="PR12A" type="output"/>
         <pin num="55" name="VCCIO1" type="power_in"/>
         <pin num="56" name="GND" type="power_in"/>
-        <pin num="57" name="PR11B" type="bidirectional"/>
-        <pin num="58" name="PR11A" type="bidirectional"/>
-        <pin num="59" name="PR10B" type="bidirectional"/>
-        <pin num="60" name="PR10A" type="bidirectional"/>
-        <pin num="61" name="PR9A" type="bidirectional"/>
-        <pin num="62" name="PR7B" type="bidirectional"/>
-        <pin num="63" name="PR7A" type="bidirectional"/>
-        <pin num="64" name="PR6B" type="bidirectional"/>
-        <pin num="65" name="PR6A" type="bidirectional"/>
+        <pin num="57" name="PR11B" type="input"/>
+        <pin num="58" name="PR11A" type="input"/>
+        <pin num="59" name="PR10B" type="input"/>
+        <pin num="60" name="PR10A" type="output"/>
+        <pin num="61" name="PR9A" type="output"/>
+        <pin num="62" name="PR7B" type="input"/>
+        <pin num="63" name="PR7A" type="input"/>
+        <pin num="64" name="PR6B" type="input"/>
+        <pin num="65" name="PR6A" type="input"/>
         <pin num="66" name="PR5B" type="bidirectional"/>
         <pin num="67" name="PR5A" type="bidirectional"/>
         <pin num="68" name="PR4B" type="bidirectional"/>
-        <pin num="69" name="PR4A" type="output"/>
-        <pin num="70" name="PR3B" type="output"/>
-        <pin num="71" name="PR3A" type="output"/>
+        <pin num="69" name="PR4A" type="bidirectional"/>
+        <pin num="70" name="PR3B" type="bidirectional"/>
+        <pin num="71" name="PR3A" type="bidirectional"/>
         <pin num="72" name="GND" type="power_in"/>
         <pin num="73" name="VCCIO1" type="power_in"/>
-        <pin num="74" name="PR1B" type="output"/>
-        <pin num="75" name="PR1A" type="output"/>
+        <pin num="74" name="PR1B" type="bidirectional"/>
+        <pin num="75" name="PR1A" type="bidirectional"/>
         <pin num="76" name="PT24D" type="bidirectional"/>
         <pin num="77" name="PT24C" type="bidirectional"/>
-        <pin num="78" name="PT22A" type="output"/>
+        <pin num="78" name="PT22A" type="bidirectional"/>
         <pin num="79" name="GND" type="power_in"/>
         <pin num="80" name="VCCIO0" type="power_in"/>
         <pin num="81" name="PT20D" type="input"/>
         <pin num="82" name="PT20C" type="input"/>
-        <pin num="83" name="PT19B" type="output"/>
-        <pin num="84" name="PT19A" type="output"/>
+        <pin num="83" name="PT19B" type="bidirectional"/>
+        <pin num="84" name="PT19A" type="bidirectional"/>
         <pin num="85" name="PT18D" type="bidirectional"/>
         <pin num="86" name="PT18C" type="bidirectional"/>
         <pin num="87" name="PT17B" type="bidirectional"/>
@@ -15782,8 +15782,8 @@
         <pin num="93" name="VCCIO0" type="power_in"/>
         <pin num="94" name="PT12D" type="input"/>
         <pin num="95" name="PT12C" type="output"/>
-        <pin num="96" name="PT11B" type="input"/>
-        <pin num="97" name="PT11A" type="output"/>
+        <pin num="96" name="PT11B" type="bidirectional"/>
+        <pin num="97" name="PT11A" type="bidirectional"/>
         <pin num="98" name="PT9B" type="bidirectional"/>
         <pin num="99" name="PT9A" type="bidirectional"/>
         <pin num="100" name="VCC" type="power_in"/>
@@ -17132,12 +17132,12 @@
     </net>
     <net code="35" name="BIOS_BANK0" class="Default">
       <node ref="R403" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="78" pinfunction="PT22A_78" pintype="output"/>
+      <node ref="U10" pin="7" pinfunction="PL4A_7" pintype="output"/>
       <node ref="U41" pin="2" pinfunction="1A_2" pintype="input"/>
     </net>
     <net code="36" name="BIOS_BANK1" class="Default">
       <node ref="R404" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="83" pinfunction="PT19B_83" pintype="output"/>
+      <node ref="U10" pin="4" pinfunction="PL3B_4" pintype="output"/>
       <node ref="U41" pin="5" pinfunction="2A_5" pintype="input"/>
     </net>
     <net code="37" name="BIOS_FLASH_ARMED" class="Default">
@@ -17183,7 +17183,7 @@
       <node ref="R409" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="R410" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="SW40" pin="5" pinfunction="RECOVERY_INTERLOCK_C_5" pintype="passive"/>
-      <node ref="U10" pin="96" pinfunction="PT11B_96" pintype="input"/>
+      <node ref="U10" pin="19" pinfunction="PL11B_19" pintype="input"/>
       <node ref="U29" pin="6" pinfunction="2B_6" pintype="input"/>
       <node ref="U42" pin="1" pinfunction="A_1" pintype="input"/>
     </net>
@@ -17202,136 +17202,136 @@
     </net>
     <net code="48" name="BIOS_WR_EN" class="Default">
       <node ref="R407" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="84" pinfunction="PT19A_84" pintype="output"/>
+      <node ref="U10" pin="20" pinfunction="PL12A_20" pintype="output"/>
       <node ref="U42" pin="6" pinfunction="C_6" pintype="input"/>
     </net>
     <net code="49" name="BRIDGE_ARM" class="Default">
       <node ref="R211" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="21" pinfunction="PL12B_21" pintype="input"/>
+      <node ref="U10" pin="58" pinfunction="PR11A_58" pintype="input"/>
       <node ref="U201" pin="14" pinfunction="GPIO15_14" pintype="bidirectional"/>
       <node ref="U28" pin="5" pinfunction="2A_5" pintype="input"/>
     </net>
     <net code="50" name="BUS_CS0n" class="Default">
-      <node ref="U10" pin="34" pinfunction="PB11A_34" pintype="input"/>
+      <node ref="U10" pin="12" pinfunction="PL7C_12" pintype="input"/>
       <node ref="U36" pin="12" pinfunction="1Y4_12" pintype="output"/>
     </net>
     <net code="51" name="BUS_CS1n" class="Default">
-      <node ref="U10" pin="35" pinfunction="PB11B_35" pintype="input"/>
+      <node ref="U10" pin="13" pinfunction="PL7D_13" pintype="input"/>
       <node ref="U36" pin="9" pinfunction="2Y1_9" pintype="output"/>
     </net>
     <net code="52" name="BUS_DA0" class="Default">
-      <node ref="U10" pin="28" pinfunction="PB5B_28" pintype="input"/>
+      <node ref="U10" pin="8" pinfunction="PL4B_8" pintype="input"/>
       <node ref="U36" pin="18" pinfunction="1Y1_18" pintype="output"/>
     </net>
     <net code="53" name="BUS_DA1" class="Default">
-      <node ref="U10" pin="29" pinfunction="PB6A_29" pintype="input"/>
+      <node ref="U10" pin="9" pinfunction="PL5A_9" pintype="input"/>
       <node ref="U36" pin="16" pinfunction="1Y2_16" pintype="output"/>
     </net>
     <net code="54" name="BUS_DA2" class="Default">
-      <node ref="U10" pin="30" pinfunction="PB6B_30" pintype="input"/>
+      <node ref="U10" pin="10" pinfunction="PL5B_10" pintype="input"/>
       <node ref="U36" pin="14" pinfunction="1Y3_14" pintype="output"/>
     </net>
     <net code="55" name="BUS_DD0" class="Default">
       <node ref="R223" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="51" pinfunction="PR14B_51" pintype="bidirectional"/>
+      <node ref="U10" pin="28" pinfunction="PB5B_28" pintype="bidirectional"/>
       <node ref="U35" pin="47" pinfunction="1A1_47" pintype="bidirectional"/>
     </net>
     <net code="56" name="BUS_DD1" class="Default">
       <node ref="R225" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="52" pinfunction="PR14A_52" pintype="bidirectional"/>
+      <node ref="U10" pin="29" pinfunction="PB6A_29" pintype="bidirectional"/>
       <node ref="U35" pin="46" pinfunction="1A2_46" pintype="bidirectional"/>
     </net>
     <net code="57" name="BUS_DD2" class="Default">
       <node ref="R227" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="53" pinfunction="PR12B_53" pintype="bidirectional"/>
+      <node ref="U10" pin="30" pinfunction="PB6B_30" pintype="bidirectional"/>
       <node ref="U35" pin="44" pinfunction="1A3_44" pintype="bidirectional"/>
     </net>
     <net code="58" name="BUS_DD3" class="Default">
       <node ref="R229" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="54" pinfunction="PR12A_54" pintype="bidirectional"/>
+      <node ref="U10" pin="34" pinfunction="PB11A_34" pintype="bidirectional"/>
       <node ref="U35" pin="43" pinfunction="1A4_43" pintype="bidirectional"/>
     </net>
     <net code="59" name="BUS_DD4" class="Default">
       <node ref="R231" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="57" pinfunction="PR11B_57" pintype="bidirectional"/>
+      <node ref="U10" pin="35" pinfunction="PB11B_35" pintype="bidirectional"/>
       <node ref="U35" pin="41" pinfunction="1A5_41" pintype="bidirectional"/>
     </net>
     <net code="60" name="BUS_DD5" class="Default">
       <node ref="R233" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="58" pinfunction="PR11A_58" pintype="bidirectional"/>
+      <node ref="U10" pin="36" pinfunction="PB12A_36" pintype="bidirectional"/>
       <node ref="U35" pin="40" pinfunction="1A6_40" pintype="bidirectional"/>
     </net>
     <net code="61" name="BUS_DD6" class="Default">
       <node ref="R235" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="59" pinfunction="PR10B_59" pintype="bidirectional"/>
+      <node ref="U10" pin="37" pinfunction="PB12B_37" pintype="bidirectional"/>
       <node ref="U35" pin="38" pinfunction="1A7_38" pintype="bidirectional"/>
     </net>
     <net code="62" name="BUS_DD7" class="Default">
       <node ref="R237" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="60" pinfunction="PR10A_60" pintype="bidirectional"/>
+      <node ref="U10" pin="38" pinfunction="PB16A_38" pintype="bidirectional"/>
       <node ref="U35" pin="37" pinfunction="1A8_37" pintype="bidirectional"/>
     </net>
     <net code="63" name="BUS_DD8" class="Default">
       <node ref="R239" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="61" pinfunction="PR9A_61" pintype="bidirectional"/>
+      <node ref="U10" pin="39" pinfunction="PB16B_39" pintype="bidirectional"/>
       <node ref="U35" pin="36" pinfunction="2A1_36" pintype="bidirectional"/>
     </net>
     <net code="64" name="BUS_DD9" class="Default">
       <node ref="R241" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="62" pinfunction="PR7B_62" pintype="bidirectional"/>
+      <node ref="U10" pin="40" pinfunction="PB18A_40" pintype="bidirectional"/>
       <node ref="U35" pin="35" pinfunction="2A2_35" pintype="bidirectional"/>
     </net>
     <net code="65" name="BUS_DD10" class="Default">
       <node ref="R243" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="63" pinfunction="PR7A_63" pintype="bidirectional"/>
+      <node ref="U10" pin="41" pinfunction="PB18B_41" pintype="bidirectional"/>
       <node ref="U35" pin="33" pinfunction="2A3_33" pintype="bidirectional"/>
     </net>
     <net code="66" name="BUS_DD11" class="Default">
       <node ref="R245" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="64" pinfunction="PR6B_64" pintype="bidirectional"/>
+      <node ref="U10" pin="42" pinfunction="PB21A_42" pintype="bidirectional"/>
       <node ref="U35" pin="32" pinfunction="2A4_32" pintype="bidirectional"/>
     </net>
     <net code="67" name="BUS_DD12" class="Default">
       <node ref="R247" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="65" pinfunction="PR6A_65" pintype="bidirectional"/>
+      <node ref="U10" pin="43" pinfunction="PB21B_43" pintype="bidirectional"/>
       <node ref="U35" pin="30" pinfunction="2A5_30" pintype="bidirectional"/>
     </net>
     <net code="68" name="BUS_DD13" class="Default">
       <node ref="R249" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="66" pinfunction="PR5B_66" pintype="bidirectional"/>
+      <node ref="U10" pin="45" pinfunction="PB22A_45" pintype="bidirectional"/>
       <node ref="U35" pin="29" pinfunction="2A6_29" pintype="bidirectional"/>
     </net>
     <net code="69" name="BUS_DD14" class="Default">
       <node ref="R251" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="67" pinfunction="PR5A_67" pintype="bidirectional"/>
+      <node ref="U10" pin="47" pinfunction="PB22B_47" pintype="bidirectional"/>
       <node ref="U35" pin="27" pinfunction="2A7_27" pintype="bidirectional"/>
     </net>
     <net code="70" name="BUS_DD15" class="Default">
       <node ref="R253" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="68" pinfunction="PR4B_68" pintype="bidirectional"/>
+      <node ref="U10" pin="51" pinfunction="PR14B_51" pintype="bidirectional"/>
       <node ref="U35" pin="26" pinfunction="2A8_26" pintype="bidirectional"/>
     </net>
     <net code="71" name="BUS_DIORn" class="Default">
-      <node ref="U10" pin="36" pinfunction="PB12A_36" pintype="input"/>
+      <node ref="U10" pin="14" pinfunction="PL9A_14" pintype="input"/>
       <node ref="U36" pin="7" pinfunction="2Y2_7" pintype="output"/>
     </net>
     <net code="72" name="BUS_DIOWn" class="Default">
-      <node ref="U10" pin="37" pinfunction="PB12B_37" pintype="input"/>
+      <node ref="U10" pin="15" pinfunction="PL9B_15" pintype="input"/>
       <node ref="U36" pin="5" pinfunction="2Y3_5" pintype="output"/>
     </net>
     <net code="73" name="BUS_DMACKn" class="Default">
-      <node ref="U10" pin="39" pinfunction="PB16B_39" pintype="input"/>
+      <node ref="U10" pin="16" pinfunction="PL10A_16" pintype="input"/>
       <node ref="U36" pin="3" pinfunction="2Y4_3" pintype="output"/>
     </net>
     <net code="74" name="BUS_RESETn" class="Default">
-      <node ref="U10" pin="38" pinfunction="PB16A_38" pintype="input"/>
+      <node ref="U10" pin="17" pinfunction="PL10B_17" pintype="input"/>
       <node ref="U29" pin="1" pinfunction="1A_1" pintype="input"/>
       <node ref="U37" pin="4" pinfunction="Y_4" pintype="output"/>
     </net>
     <net code="75" name="BUS_SAFE" class="Default">
       <node ref="R219" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="TP22" pin="1" pinfunction="BUS_SAFE_1" pintype="passive"/>
-      <node ref="U10" pin="24" pinfunction="PL14A_24" pintype="input"/>
+      <node ref="U10" pin="25" pinfunction="PL14B_25" pintype="input"/>
       <node ref="U30" pin="4" pinfunction="Y_4" pintype="output"/>
       <node ref="U31" pin="1" pinfunction="1A_1" pintype="input"/>
       <node ref="U33" pin="1" pinfunction="A_1" pintype="input"/>
@@ -17521,7 +17521,7 @@
     <net code="102" name="DATA_DIR" class="Default">
       <node ref="R214" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="TP128" pin="1" pinfunction="DATA_DIR_1" pintype="passive"/>
-      <node ref="U10" pin="70" pinfunction="PR3B_70" pintype="output"/>
+      <node ref="U10" pin="54" pinfunction="PR12A_54" pintype="output"/>
       <node ref="U35" pin="1" pinfunction="1DIR_1" pintype="input"/>
       <node ref="U35" pin="24" pinfunction="2DIR_24" pintype="input"/>
     </net>
@@ -17553,7 +17553,7 @@
     </net>
     <net code="108" name="FPGA_CLK50" class="Default">
       <node ref="R110" pin="2" pinfunction="2_2" pintype="passive"/>
-      <node ref="U10" pin="20" pinfunction="PL12A_20" pintype="input"/>
+      <node ref="U10" pin="3" pinfunction="PL3A_3" pintype="input"/>
     </net>
     <net code="109" name="FPGA_CLK50_RAW" class="Default">
       <node ref="R110" pin="1" pinfunction="1_1" pintype="passive"/>
@@ -17584,12 +17584,12 @@
     </net>
     <net code="115" name="FPGA_READY" class="Default">
       <node ref="R212" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="97" pinfunction="PT11A_97" pintype="output"/>
+      <node ref="U10" pin="52" pinfunction="PR14A_52" pintype="output"/>
       <node ref="U28" pin="6" pinfunction="2B_6" pintype="input"/>
     </net>
     <net code="116" name="FPGA_RESETn" class="Default">
       <node ref="R213" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="19" pinfunction="PL11B_19" pintype="input"/>
+      <node ref="U10" pin="59" pinfunction="PR10B_59" pintype="input"/>
       <node ref="U201" pin="13" pinfunction="GPIO14_13" pintype="bidirectional"/>
       <node ref="U29" pin="2" pinfunction="1B_2" pintype="input"/>
     </net>
@@ -17936,59 +17936,59 @@
       <node ref="U70" pin="2" pinfunction="A_2" pintype="input"/>
     </net>
     <net code="130" name="LINK_A0" class="Default">
-      <node ref="U10" pin="15" pinfunction="PL9B_15" pintype="input"/>
+      <node ref="U10" pin="63" pinfunction="PR7A_63" pintype="input"/>
       <node ref="U201" pin="8" pinfunction="GPIO10_8" pintype="bidirectional"/>
     </net>
     <net code="131" name="LINK_A1" class="Default">
-      <node ref="U10" pin="16" pinfunction="PL10A_16" pintype="input"/>
+      <node ref="U10" pin="62" pinfunction="PR7B_62" pintype="input"/>
       <node ref="U201" pin="9" pinfunction="GPIO11_9" pintype="bidirectional"/>
     </net>
     <net code="132" name="LINK_D0" class="Default">
-      <node ref="U10" pin="1" pinfunction="PL2A_1" pintype="bidirectional"/>
+      <node ref="U10" pin="75" pinfunction="PR1A_75" pintype="bidirectional"/>
       <node ref="U201" pin="77" pinfunction="GPIO0_77" pintype="bidirectional"/>
     </net>
     <net code="133" name="LINK_D1" class="Default">
-      <node ref="U10" pin="2" pinfunction="PL2B_2" pintype="bidirectional"/>
+      <node ref="U10" pin="74" pinfunction="PR1B_74" pintype="bidirectional"/>
       <node ref="U201" pin="78" pinfunction="GPIO1_78" pintype="bidirectional"/>
     </net>
     <net code="134" name="LINK_D2" class="Default">
-      <node ref="U10" pin="4" pinfunction="PL3B_4" pintype="bidirectional"/>
+      <node ref="U10" pin="71" pinfunction="PR3A_71" pintype="bidirectional"/>
       <node ref="U201" pin="79" pinfunction="GPIO2_79" pintype="bidirectional"/>
     </net>
     <net code="135" name="LINK_D3" class="Default">
-      <node ref="U10" pin="7" pinfunction="PL4A_7" pintype="bidirectional"/>
+      <node ref="U10" pin="70" pinfunction="PR3B_70" pintype="bidirectional"/>
       <node ref="U201" pin="80" pinfunction="GPIO3_80" pintype="bidirectional"/>
     </net>
     <net code="136" name="LINK_D4" class="Default">
-      <node ref="U10" pin="8" pinfunction="PL4B_8" pintype="bidirectional"/>
+      <node ref="U10" pin="69" pinfunction="PR4A_69" pintype="bidirectional"/>
       <node ref="U201" pin="1" pinfunction="GPIO4_1" pintype="bidirectional"/>
     </net>
     <net code="137" name="LINK_D5" class="Default">
-      <node ref="U10" pin="9" pinfunction="PL5A_9" pintype="bidirectional"/>
+      <node ref="U10" pin="68" pinfunction="PR4B_68" pintype="bidirectional"/>
       <node ref="U201" pin="2" pinfunction="GPIO5_2" pintype="bidirectional"/>
     </net>
     <net code="138" name="LINK_D6" class="Default">
-      <node ref="U10" pin="10" pinfunction="PL5B_10" pintype="bidirectional"/>
+      <node ref="U10" pin="67" pinfunction="PR5A_67" pintype="bidirectional"/>
       <node ref="U201" pin="3" pinfunction="GPIO6_3" pintype="bidirectional"/>
     </net>
     <net code="139" name="LINK_D7" class="Default">
-      <node ref="U10" pin="12" pinfunction="PL7C_12" pintype="bidirectional"/>
+      <node ref="U10" pin="66" pinfunction="PR5B_66" pintype="bidirectional"/>
       <node ref="U201" pin="4" pinfunction="GPIO7_4" pintype="bidirectional"/>
     </net>
     <net code="140" name="LINK_IRQ" class="Default">
-      <node ref="U10" pin="17" pinfunction="PL10B_17" pintype="output"/>
+      <node ref="U10" pin="61" pinfunction="PR9A_61" pintype="output"/>
       <node ref="U201" pin="11" pinfunction="GPIO12_11" pintype="bidirectional"/>
     </net>
     <net code="141" name="LINK_RDn" class="Default">
-      <node ref="U10" pin="14" pinfunction="PL9A_14" pintype="input"/>
+      <node ref="U10" pin="64" pinfunction="PR6B_64" pintype="input"/>
       <node ref="U201" pin="7" pinfunction="GPIO9_7" pintype="bidirectional"/>
     </net>
     <net code="142" name="LINK_READY" class="Default">
-      <node ref="U10" pin="18" pinfunction="PL11A_18" pintype="output"/>
+      <node ref="U10" pin="60" pinfunction="PR10A_60" pintype="output"/>
       <node ref="U201" pin="12" pinfunction="GPIO13_12" pintype="bidirectional"/>
     </net>
     <net code="143" name="LINK_WRn" class="Default">
-      <node ref="U10" pin="13" pinfunction="PL7D_13" pintype="input"/>
+      <node ref="U10" pin="65" pinfunction="PR6A_65" pintype="input"/>
       <node ref="U201" pin="6" pinfunction="GPIO8_6" pintype="bidirectional"/>
     </net>
     <net code="144" name="LOGIC_BUCK_PG" class="Default">
@@ -18076,7 +18076,7 @@
     <net code="161" name="PWR_FAILn" class="Default">
       <node ref="R208" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="TP20" pin="1" pinfunction="PWR_FAILn_1" pintype="passive"/>
-      <node ref="U10" pin="25" pinfunction="PL14B_25" pintype="input"/>
+      <node ref="U10" pin="57" pinfunction="PR11B_57" pintype="input"/>
       <node ref="U201" pin="39" pinfunction="GPIO31_39" pintype="bidirectional"/>
       <node ref="U26" pin="1" pinfunction="RESETn_1" pintype="open_collector"/>
       <node ref="U27" pin="6" pinfunction="2B_6" pintype="input"/>
@@ -18132,35 +18132,35 @@
     <net code="172" name="REQ_DATA_OEn" class="Default">
       <node ref="R220" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="TP132" pin="1" pinfunction="REQ_DATA_OEn_1" pintype="passive"/>
-      <node ref="U10" pin="69" pinfunction="PR4A_69" pintype="output"/>
+      <node ref="U10" pin="53" pinfunction="PR12B_53" pintype="output"/>
       <node ref="U32" pin="2" pinfunction="B_2" pintype="input"/>
     </net>
     <net code="173" name="REQ_DMARQ" class="Default">
       <node ref="R216" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="75" pinfunction="PR1A_75" pintype="output"/>
+      <node ref="U10" pin="21" pinfunction="PL12B_21" pintype="output"/>
       <node ref="U39" pin="2" pinfunction="A_2" pintype="input"/>
     </net>
     <net code="174" name="REQ_DMARQ_OEn" class="Default">
       <node ref="R266" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="TP134" pin="1" pinfunction="REQ_DMARQ_OEn_1" pintype="passive"/>
-      <node ref="U10" pin="41" pinfunction="PB18B_41" pintype="output"/>
+      <node ref="U10" pin="1" pinfunction="PL2A_1" pintype="output"/>
       <node ref="U73" pin="2" pinfunction="B_2" pintype="input"/>
     </net>
     <net code="175" name="REQ_INTRQ" class="Default">
       <node ref="R215" pin="1" pinfunction="1_1" pintype="passive"/>
-      <node ref="U10" pin="74" pinfunction="PR1B_74" pintype="output"/>
+      <node ref="U10" pin="18" pinfunction="PL11A_18" pintype="output"/>
       <node ref="U38" pin="2" pinfunction="A_2" pintype="input"/>
     </net>
     <net code="176" name="REQ_INTRQ_OEn" class="Default">
       <node ref="R264" pin="2" pinfunction="2_2" pintype="passive"/>
       <node ref="TP133" pin="1" pinfunction="REQ_INTRQ_OEn_1" pintype="passive"/>
-      <node ref="U10" pin="40" pinfunction="PB18A_40" pintype="output"/>
+      <node ref="U10" pin="2" pinfunction="PL2B_2" pintype="output"/>
       <node ref="U72" pin="2" pinfunction="B_2" pintype="input"/>
     </net>
     <net code="177" name="REQ_IORDY_LOW" class="Default">
       <node ref="R217" pin="1" pinfunction="1_1" pintype="passive"/>
       <node ref="TP135" pin="1" pinfunction="REQ_IORDY_LOW_1" pintype="passive"/>
-      <node ref="U10" pin="71" pinfunction="PR3A_71" pintype="output"/>
+      <node ref="U10" pin="24" pinfunction="PL14A_24" pintype="output"/>
       <node ref="U33" pin="2" pinfunction="B_2" pintype="input"/>
     </net>
     <net code="178" name="RESERVE_5V" class="Default">
@@ -18400,35 +18400,35 @@
     <net code="231" name="unconnected-(U10-PB8B-Pad32)" class="Default">
       <node ref="U10" pin="32" pinfunction="PB8B_32" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="232" name="unconnected-(U10-PB21A-Pad42)" class="Default">
-      <node ref="U10" pin="42" pinfunction="PB21A_42" pintype="bidirectional+no_connect"/>
-    </net>
-    <net code="233" name="unconnected-(U10-PB21B-Pad43)" class="Default">
-      <node ref="U10" pin="43" pinfunction="PB21B_43" pintype="bidirectional+no_connect"/>
-    </net>
-    <net code="234" name="unconnected-(U10-PB22A-Pad45)" class="Default">
-      <node ref="U10" pin="45" pinfunction="PB22A_45" pintype="bidirectional+no_connect"/>
-    </net>
-    <net code="235" name="unconnected-(U10-PB22B-Pad47)" class="Default">
-      <node ref="U10" pin="47" pinfunction="PB22B_47" pintype="bidirectional+no_connect"/>
-    </net>
-    <net code="236" name="unconnected-(U10-PB25B-Pad49)" class="Default">
+    <net code="232" name="unconnected-(U10-PB25B-Pad49)" class="Default">
       <node ref="U10" pin="49" pinfunction="PB25B_49" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="237" name="unconnected-(U10-PL3A-Pad3)" class="Default">
-      <node ref="U10" pin="3" pinfunction="PL3A_3" pintype="bidirectional+no_connect"/>
-    </net>
-    <net code="238" name="unconnected-(U10-PT9A-Pad99)" class="Default">
+    <net code="233" name="unconnected-(U10-PT9A-Pad99)" class="Default">
       <node ref="U10" pin="99" pinfunction="PT9A_99" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="239" name="unconnected-(U10-PT9B-Pad98)" class="Default">
+    <net code="234" name="unconnected-(U10-PT9B-Pad98)" class="Default">
       <node ref="U10" pin="98" pinfunction="PT9B_98" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="240" name="unconnected-(U10-PT17A-Pad88)" class="Default">
+    <net code="235" name="unconnected-(U10-PT11A-Pad97)" class="Default">
+      <node ref="U10" pin="97" pinfunction="PT11A_97" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="236" name="unconnected-(U10-PT11B-Pad96)" class="Default">
+      <node ref="U10" pin="96" pinfunction="PT11B_96" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="237" name="unconnected-(U10-PT17A-Pad88)" class="Default">
       <node ref="U10" pin="88" pinfunction="PT17A_88" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="241" name="unconnected-(U10-PT17B-Pad87)" class="Default">
+    <net code="238" name="unconnected-(U10-PT17B-Pad87)" class="Default">
       <node ref="U10" pin="87" pinfunction="PT17B_87" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="239" name="unconnected-(U10-PT19A-Pad84)" class="Default">
+      <node ref="U10" pin="84" pinfunction="PT19A_84" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="240" name="unconnected-(U10-PT19B-Pad83)" class="Default">
+      <node ref="U10" pin="83" pinfunction="PT19B_83" pintype="bidirectional+no_connect"/>
+    </net>
+    <net code="241" name="unconnected-(U10-PT22A-Pad78)" class="Default">
+      <node ref="U10" pin="78" pinfunction="PT22A_78" pintype="bidirectional+no_connect"/>
     </net>
     <net code="242" name="unconnected-(U23-CT-Pad4)" class="Default">
       <node ref="U23" pin="4" pinfunction="CT_4" pintype="no_connect"/>

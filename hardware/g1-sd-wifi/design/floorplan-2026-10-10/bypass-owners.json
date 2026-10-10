@@ -1,0 +1,358 @@
+[
+  {
+    "cap": "C119",
+    "owner": "X10.1",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 4.009,
+    "after_mm": 4.091,
+    "xy_mm": [
+      34.055,
+      4.417
+    ],
+    "rotation_deg": 90,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C400",
+    "owner": "U40.37",
+    "net": "CONSOLE_3V3",
+    "placed": true,
+    "before_mm": 7.537,
+    "after_mm": 2.111,
+    "xy_mm": [
+      28.967,
+      91.246
+    ],
+    "rotation_deg": 270,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C401",
+    "owner": "U40.37",
+    "net": "CONSOLE_3V3",
+    "placed": true,
+    "before_mm": 7.019,
+    "after_mm": 3.828,
+    "xy_mm": [
+      30.703,
+      91.496
+    ],
+    "rotation_deg": 270,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C212",
+    "owner": "U23.3",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 9.957,
+    "after_mm": 9.343,
+    "xy_mm": [
+      25.868,
+      49.38
+    ],
+    "rotation_deg": 180,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C213",
+    "owner": "U24.6",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 1.949,
+    "after_mm": 1.949,
+    "xy_mm": [
+      54.621,
+      13.145
+    ],
+    "rotation_deg": 270,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C214",
+    "owner": "U25.6",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 3.931,
+    "after_mm": 3.266,
+    "xy_mm": [
+      32.211,
+      84.641
+    ],
+    "rotation_deg": 270,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C215",
+    "owner": "U26.6",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 38.772,
+    "after_mm": 9.477,
+    "xy_mm": [
+      58.059,
+      30.225
+    ],
+    "rotation_deg": 90,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C216",
+    "owner": "U27",
+    "net": "+3V3_LOGIC",
+    "placed": false,
+    "before_mm": 13.115,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C217",
+    "owner": "U28.8",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 9.638,
+    "after_mm": 8.584,
+    "xy_mm": [
+      25.479,
+      42.67
+    ],
+    "rotation_deg": 180,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C218",
+    "owner": "U29",
+    "net": "+3V3_LOGIC",
+    "placed": false,
+    "before_mm": 24.626,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C219",
+    "owner": "U30.5",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 8.684,
+    "after_mm": 7.29,
+    "xy_mm": [
+      3.662,
+      36.207
+    ],
+    "rotation_deg": 180,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C220",
+    "owner": "U31.5",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 9.848,
+    "after_mm": 3.92,
+    "xy_mm": [
+      1.962,
+      35.729
+    ],
+    "rotation_deg": 90,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C221",
+    "owner": "U32",
+    "net": "+3V3_LOGIC",
+    "placed": false,
+    "before_mm": 29.146,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C222",
+    "owner": "U33.5",
+    "net": "+3V3_LOGIC",
+    "placed": true,
+    "before_mm": 18.949,
+    "after_mm": 1.665,
+    "xy_mm": [
+      1.261,
+      34.079
+    ],
+    "rotation_deg": 180,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C223",
+    "owner": "U34",
+    "net": "+3V3_LOGIC",
+    "placed": false,
+    "before_mm": 59.816,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C229",
+    "owner": "U37",
+    "net": "+3V3_LOGIC",
+    "placed": false,
+    "before_mm": 20.241,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C230",
+    "owner": "U72",
+    "net": "+3V3_LOGIC",
+    "placed": false,
+    "before_mm": 32.11,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C231",
+    "owner": "U38",
+    "net": "CONSOLE_3V3",
+    "placed": false,
+    "before_mm": 35.259,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C232",
+    "owner": "U73",
+    "net": "+3V3_LOGIC",
+    "placed": false,
+    "before_mm": 35.763,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C233",
+    "owner": "U39.5",
+    "net": "CONSOLE_3V3",
+    "placed": true,
+    "before_mm": 6.427,
+    "after_mm": 5.497,
+    "xy_mm": [
+      1.563,
+      46.771
+    ],
+    "rotation_deg": 90,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C234",
+    "owner": "U70.5",
+    "net": "CONSOLE_3V3",
+    "placed": true,
+    "before_mm": 33.454,
+    "after_mm": 1.665,
+    "xy_mm": [
+      39.873,
+      90.589
+    ],
+    "rotation_deg": 180,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C402",
+    "owner": "U41.8",
+    "net": "CONSOLE_3V3",
+    "placed": true,
+    "before_mm": 18.395,
+    "after_mm": 1.886,
+    "xy_mm": [
+      3.275,
+      102.962
+    ],
+    "rotation_deg": 0,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C403",
+    "owner": "U42",
+    "net": "CONSOLE_3V3",
+    "placed": false,
+    "before_mm": 18.98,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C404",
+    "owner": "U43",
+    "net": "CONSOLE_3V3",
+    "placed": false,
+    "before_mm": 24.146,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C405",
+    "owner": "U44",
+    "net": "CONSOLE_3V3",
+    "placed": false,
+    "before_mm": 10.132,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C406",
+    "owner": "U45.3",
+    "net": "CONSOLE_3V3",
+    "placed": true,
+    "before_mm": 3.01,
+    "after_mm": 2.734,
+    "xy_mm": [
+      15.725,
+      99.554
+    ],
+    "rotation_deg": 270,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C235",
+    "owner": "U71.1",
+    "net": "PRIMARY_5V",
+    "placed": true,
+    "before_mm": 5.701,
+    "after_mm": 5.33,
+    "xy_mm": [
+      37.09,
+      68.543
+    ],
+    "rotation_deg": 0,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C236",
+    "owner": "U71",
+    "net": "+5V_C5",
+    "placed": false,
+    "before_mm": 62.803,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C2036",
+    "owner": "K214",
+    "net": "+5V_C5",
+    "placed": false,
+    "before_mm": 12.013,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C2025",
+    "owner": "J201.4",
+    "net": "+3V3_STORAGE",
+    "placed": true,
+    "before_mm": 7.54,
+    "after_mm": 7.54,
+    "xy_mm": [
+      54.584,
+      4.158
+    ],
+    "rotation_deg": 90,
+    "removed_copper_items": 0
+  },
+  {
+    "cap": "C2026",
+    "owner": "J201.4",
+    "net": "+3V3_STORAGE",
+    "placed": true,
+    "before_mm": 9.057,
+    "after_mm": 8.812,
+    "xy_mm": [
+      55.81,
+      1.79
+    ],
+    "rotation_deg": 0,
+    "removed_copper_items": 0
+  }
+]

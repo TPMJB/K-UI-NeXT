@@ -1,0 +1,251 @@
+{
+  "owner": "U35",
+  "to": [
+    16.5,
+    45.95,
+    90.0
+  ],
+  "members": [],
+  "lifted": [
+    "C224",
+    "C225",
+    "C226",
+    "C227"
+  ],
+  "moved_islands": [
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U35"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U35"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U35"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "U35"
+      ]
+    }
+  ],
+  "dropped_islands": [
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C224",
+        "U35"
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "items": 1,
+      "refs": [
+        "C225",
+        "U35"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C226"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C225"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C224"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C227"
+      ]
+    },
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "TP136",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD1",
+      "items": 2,
+      "refs": [
+        "TP101",
+        "U35"
+      ]
+    },
+    {
+      "net": "CONSOLE_3V3",
+      "items": 3,
+      "refs": [
+        "C227",
+        "U35"
+      ]
+    },
+    {
+      "net": "CONSOLE_3V3",
+      "items": 1,
+      "refs": [
+        "C226",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD7",
+      "items": 2,
+      "refs": [
+        "TP107",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD15",
+      "items": 2,
+      "refs": [
+        "TP115",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD14",
+      "items": 2,
+      "refs": [
+        "TP114",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD13",
+      "items": 2,
+      "refs": [
+        "TP113",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD12",
+      "items": 2,
+      "refs": [
+        "TP112",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD11",
+      "items": 2,
+      "refs": [
+        "TP111",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD10",
+      "items": 2,
+      "refs": [
+        "TP110",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD9",
+      "items": 2,
+      "refs": [
+        "TP109",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD0",
+      "items": 2,
+      "refs": [
+        "TP100",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD2",
+      "items": 2,
+      "refs": [
+        "TP102",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD3",
+      "items": 2,
+      "refs": [
+        "TP103",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD4",
+      "items": 2,
+      "refs": [
+        "TP104",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD5",
+      "items": 2,
+      "refs": [
+        "TP105",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD6",
+      "items": 2,
+      "refs": [
+        "TP106",
+        "U35"
+      ]
+    },
+    {
+      "net": "ATA_DD8",
+      "items": 2,
+      "refs": [
+        "TP108",
+        "U35"
+      ]
+    },
+    {
+      "net": "DATA_DIR",
+      "items": 2,
+      "refs": [
+        "TP128",
+        "U35"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,374 @@
+{
+  "added": [],
+  "swapped": [],
+  "pad_net_changes": [
+    {
+      "ref": "U10",
+      "pin": "1",
+      "old_net": "LINK_D0",
+      "new_net": "REQ_DMARQ_OEn"
+    },
+    {
+      "ref": "U10",
+      "pin": "2",
+      "old_net": "LINK_D1",
+      "new_net": "REQ_INTRQ_OEn"
+    },
+    {
+      "ref": "U10",
+      "pin": "3",
+      "old_net": "unconnected-(U10-PL3A-Pad3)",
+      "new_net": "FPGA_CLK50"
+    },
+    {
+      "ref": "U10",
+      "pin": "4",
+      "old_net": "LINK_D2",
+      "new_net": "BIOS_BANK1"
+    },
+    {
+      "ref": "U10",
+      "pin": "7",
+      "old_net": "LINK_D3",
+      "new_net": "BIOS_BANK0"
+    },
+    {
+      "ref": "U10",
+      "pin": "8",
+      "old_net": "LINK_D4",
+      "new_net": "BUS_DA0"
+    },
+    {
+      "ref": "U10",
+      "pin": "9",
+      "old_net": "LINK_D5",
+      "new_net": "BUS_DA1"
+    },
+    {
+      "ref": "U10",
+      "pin": "10",
+      "old_net": "LINK_D6",
+      "new_net": "BUS_DA2"
+    },
+    {
+      "ref": "U10",
+      "pin": "12",
+      "old_net": "LINK_D7",
+      "new_net": "BUS_CS0n"
+    },
+    {
+      "ref": "U10",
+      "pin": "13",
+      "old_net": "LINK_WRn",
+      "new_net": "BUS_CS1n"
+    },
+    {
+      "ref": "U10",
+      "pin": "14",
+      "old_net": "LINK_RDn",
+      "new_net": "BUS_DIORn"
+    },
+    {
+      "ref": "U10",
+      "pin": "15",
+      "old_net": "LINK_A0",
+      "new_net": "BUS_DIOWn"
+    },
+    {
+      "ref": "U10",
+      "pin": "16",
+      "old_net": "LINK_A1",
+      "new_net": "BUS_DMACKn"
+    },
+    {
+      "ref": "U10",
+      "pin": "17",
+      "old_net": "LINK_IRQ",
+      "new_net": "BUS_RESETn"
+    },
+    {
+      "ref": "U10",
+      "pin": "18",
+      "old_net": "LINK_READY",
+      "new_net": "REQ_INTRQ"
+    },
+    {
+      "ref": "U10",
+      "pin": "19",
+      "old_net": "FPGA_RESETn",
+      "new_net": "BIOS_RECOVERYn"
+    },
+    {
+      "ref": "U10",
+      "pin": "20",
+      "old_net": "FPGA_CLK50",
+      "new_net": "BIOS_WR_EN"
+    },
+    {
+      "ref": "U10",
+      "pin": "21",
+      "old_net": "BRIDGE_ARM",
+      "new_net": "REQ_DMARQ"
+    },
+    {
+      "ref": "U10",
+      "pin": "24",
+      "old_net": "BUS_SAFE",
+      "new_net": "REQ_IORDY_LOW"
+    },
+    {
+      "ref": "U10",
+      "pin": "25",
+      "old_net": "PWR_FAILn",
+      "new_net": "BUS_SAFE"
+    },
+    {
+      "ref": "U10",
+      "pin": "28",
+      "old_net": "BUS_DA0",
+      "new_net": "BUS_DD0"
+    },
+    {
+      "ref": "U10",
+      "pin": "29",
+      "old_net": "BUS_DA1",
+      "new_net": "BUS_DD1"
+    },
+    {
+      "ref": "U10",
+      "pin": "30",
+      "old_net": "BUS_DA2",
+      "new_net": "BUS_DD2"
+    },
+    {
+      "ref": "U10",
+      "pin": "34",
+      "old_net": "BUS_CS0n",
+      "new_net": "BUS_DD3"
+    },
+    {
+      "ref": "U10",
+      "pin": "35",
+      "old_net": "BUS_CS1n",
+      "new_net": "BUS_DD4"
+    },
+    {
+      "ref": "U10",
+      "pin": "36",
+      "old_net": "BUS_DIORn",
+      "new_net": "BUS_DD5"
+    },
+    {
+      "ref": "U10",
+      "pin": "37",
+      "old_net": "BUS_DIOWn",
+      "new_net": "BUS_DD6"
+    },
+    {
+      "ref": "U10",
+      "pin": "38",
+      "old_net": "BUS_RESETn",
+      "new_net": "BUS_DD7"
+    },
+    {
+      "ref": "U10",
+      "pin": "39",
+      "old_net": "BUS_DMACKn",
+      "new_net": "BUS_DD8"
+    },
+    {
+      "ref": "U10",
+      "pin": "40",
+      "old_net": "REQ_INTRQ_OEn",
+      "new_net": "BUS_DD9"
+    },
+    {
+      "ref": "U10",
+      "pin": "41",
+      "old_net": "REQ_DMARQ_OEn",
+      "new_net": "BUS_DD10"
+    },
+    {
+      "ref": "U10",
+      "pin": "42",
+      "old_net": "unconnected-(U10-PB21A-Pad42)",
+      "new_net": "BUS_DD11"
+    },
+    {
+      "ref": "U10",
+      "pin": "43",
+      "old_net": "unconnected-(U10-PB21B-Pad43)",
+      "new_net": "BUS_DD12"
+    },
+    {
+      "ref": "U10",
+      "pin": "45",
+      "old_net": "unconnected-(U10-PB22A-Pad45)",
+      "new_net": "BUS_DD13"
+    },
+    {
+      "ref": "U10",
+      "pin": "47",
+      "old_net": "unconnected-(U10-PB22B-Pad47)",
+      "new_net": "BUS_DD14"
+    },
+    {
+      "ref": "U10",
+      "pin": "51",
+      "old_net": "BUS_DD0",
+      "new_net": "BUS_DD15"
+    },
+    {
+      "ref": "U10",
+      "pin": "52",
+      "old_net": "BUS_DD1",
+      "new_net": "FPGA_READY"
+    },
+    {
+      "ref": "U10",
+      "pin": "53",
+      "old_net": "BUS_DD2",
+      "new_net": "REQ_DATA_OEn"
+    },
+    {
+      "ref": "U10",
+      "pin": "54",
+      "old_net": "BUS_DD3",
+      "new_net": "DATA_DIR"
+    },
+    {
+      "ref": "U10",
+      "pin": "57",
+      "old_net": "BUS_DD4",
+      "new_net": "PWR_FAILn"
+    },
+    {
+      "ref": "U10",
+      "pin": "58",
+      "old_net": "BUS_DD5",
+      "new_net": "BRIDGE_ARM"
+    },
+    {
+      "ref": "U10",
+      "pin": "59",
+      "old_net": "BUS_DD6",
+      "new_net": "FPGA_RESETn"
+    },
+    {
+      "ref": "U10",
+      "pin": "60",
+      "old_net": "BUS_DD7",
+      "new_net": "LINK_READY"
+    },
+    {
+      "ref": "U10",
+      "pin": "61",
+      "old_net": "BUS_DD8",
+      "new_net": "LINK_IRQ"
+    },
+    {
+      "ref": "U10",
+      "pin": "62",
+      "old_net": "BUS_DD9",
+      "new_net": "LINK_A1"
+    },
+    {
+      "ref": "U10",
+      "pin": "63",
+      "old_net": "BUS_DD10",
+      "new_net": "LINK_A0"
+    },
+    {
+      "ref": "U10",
+      "pin": "64",
+      "old_net": "BUS_DD11",
+      "new_net": "LINK_RDn"
+    },
+    {
+      "ref": "U10",
+      "pin": "65",
+      "old_net": "BUS_DD12",
+      "new_net": "LINK_WRn"
+    },
+    {
+      "ref": "U10",
+      "pin": "66",
+      "old_net": "BUS_DD13",
+      "new_net": "LINK_D7"
+    },
+    {
+      "ref": "U10",
+      "pin": "67",
+      "old_net": "BUS_DD14",
+      "new_net": "LINK_D6"
+    },
+    {
+      "ref": "U10",
+      "pin": "68",
+      "old_net": "BUS_DD15",
+      "new_net": "LINK_D5"
+    },
+    {
+      "ref": "U10",
+      "pin": "69",
+      "old_net": "REQ_DATA_OEn",
+      "new_net": "LINK_D4"
+    },
+    {
+      "ref": "U10",
+      "pin": "70",
+      "old_net": "DATA_DIR",
+      "new_net": "LINK_D3"
+    },
+    {
+      "ref": "U10",
+      "pin": "71",
+      "old_net": "REQ_IORDY_LOW",
+      "new_net": "LINK_D2"
+    },
+    {
+      "ref": "U10",
+      "pin": "74",
+      "old_net": "REQ_INTRQ",
+      "new_net": "LINK_D1"
+    },
+    {
+      "ref": "U10",
+      "pin": "75",
+      "old_net": "REQ_DMARQ",
+      "new_net": "LINK_D0"
+    },
+    {
+      "ref": "U10",
+      "pin": "78",
+      "old_net": "BIOS_BANK0",
+      "new_net": "unconnected-(U10-PT22A-Pad78)"
+    },
+    {
+      "ref": "U10",
+      "pin": "83",
+      "old_net": "BIOS_BANK1",
+      "new_net": "unconnected-(U10-PT19B-Pad83)"
+    },
+    {
+      "ref": "U10",
+      "pin": "84",
+      "old_net": "BIOS_WR_EN",
+      "new_net": "unconnected-(U10-PT19A-Pad84)"
+    },
+    {
+      "ref": "U10",
+      "pin": "96",
+      "old_net": "BIOS_RECOVERYn",
+      "new_net": "unconnected-(U10-PT11B-Pad96)"
+    },
+    {
+      "ref": "U10",
+      "pin": "97",
+      "old_net": "FPGA_READY",
+      "new_net": "unconnected-(U10-PT11A-Pad97)"
+    }
+  ],
+  "removed_copper": [],
+  "metadata_synced": 365
+}

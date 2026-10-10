@@ -14,7 +14,7 @@
     },
     {
       "path": "design/blocks/frontend.json",
-      "sha256": "186463a09cefce6112bb4732894faf0d26ded704fd38b47998500d6a6cbba572"
+      "sha256": "8756a42cfff6185fc4f77298d7800dd9c5f92a740fce2f05e43822d25e68b386"
     },
     {
       "path": "design/blocks/power-bus.json",
@@ -30,15 +30,15 @@
     },
     {
       "path": "fpga/bridge.lpf",
-      "sha256": "d0a1b804d470ec2b84affe007d386899fb71bfa28b368ad0d18ac262ba7dad1a"
+      "sha256": "9ad86ebd4200ffcc1621b6fbe6c579fa772f7b629b62fe7bb685c221c182500f"
     },
     {
       "path": "design/integrated-components.json",
-      "sha256": "cce9ef7e5912812a7df42d6cb5f1113328d2755d9d8d06ca90fb2cb33221baf5"
+      "sha256": "5e1d4dd61815b2184ae7c7bfcf217341bd965f9b9c8bc4fe3e596db4f84106ed"
     },
     {
       "path": "controller/checks/netlist.xml",
-      "sha256": "4eb110636abce7163c9db642f3e6f1a62bceefa5bf17bd7fa21f90084be1d671"
+      "sha256": "233ed95879fc054212782575d666efb6ac669e7eb29773df2fe77c95b38f19db"
     },
     {
       "path": "tools/check_integration.py",
@@ -2477,8 +2477,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "78",
-        "name": "PT22A",
+        "pin": "7",
+        "name": "PL4A",
         "type": "output",
         "populate": true
       }
@@ -2503,8 +2503,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "83",
-        "name": "PT19B",
+        "pin": "4",
+        "name": "PL3B / PCLKC5_0",
         "type": "output",
         "populate": true
       }
@@ -2553,8 +2553,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "96",
-        "name": "PT11B",
+        "pin": "19",
+        "name": "PL11B",
         "type": "input",
         "populate": true
       },
@@ -2587,8 +2587,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "84",
-        "name": "PT19A",
+        "pin": "20",
+        "name": "PL12A / PCLKT3_0",
         "type": "output",
         "populate": true
       }
@@ -2605,8 +2605,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "21",
-        "name": "PL12B / PCLKC3_0",
+        "pin": "58",
+        "name": "PR11A",
         "type": "input",
         "populate": true
       },
@@ -2631,8 +2631,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "34",
-        "name": "PB11A / PCLKT2_0",
+        "pin": "12",
+        "name": "PL7C / PCLKT4_0",
         "type": "input",
         "populate": true
       },
@@ -2649,8 +2649,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "35",
-        "name": "PB11B / PCLKC2_0",
+        "pin": "13",
+        "name": "PL7D / PCLKC4_0",
         "type": "input",
         "populate": true
       },
@@ -2667,8 +2667,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "28",
-        "name": "PB5B",
+        "pin": "8",
+        "name": "PL4B",
         "type": "input",
         "populate": true
       },
@@ -2685,8 +2685,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "29",
-        "name": "PB6A",
+        "pin": "9",
+        "name": "PL5A",
         "type": "input",
         "populate": true
       },
@@ -2703,8 +2703,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "30",
-        "name": "PB6B",
+        "pin": "10",
+        "name": "PL5B",
         "type": "input",
         "populate": true
       },
@@ -2721,8 +2721,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "51",
-        "name": "PR14B",
+        "pin": "28",
+        "name": "PB5B",
         "type": "bidirectional",
         "populate": true
       },
@@ -2747,8 +2747,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "52",
-        "name": "PR14A",
+        "pin": "29",
+        "name": "PB6A",
         "type": "bidirectional",
         "populate": true
       },
@@ -2773,8 +2773,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "63",
-        "name": "PR7A / PCLKT1_0",
+        "pin": "41",
+        "name": "PB18B",
         "type": "bidirectional",
         "populate": true
       },
@@ -2799,8 +2799,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "64",
-        "name": "PR6B",
+        "pin": "42",
+        "name": "PB21A",
         "type": "bidirectional",
         "populate": true
       },
@@ -2825,8 +2825,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "65",
-        "name": "PR6A",
+        "pin": "43",
+        "name": "PB21B",
         "type": "bidirectional",
         "populate": true
       },
@@ -2851,8 +2851,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "66",
-        "name": "PR5B",
+        "pin": "45",
+        "name": "PB22A",
         "type": "bidirectional",
         "populate": true
       },
@@ -2877,8 +2877,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "67",
-        "name": "PR5A",
+        "pin": "47",
+        "name": "PB22B",
         "type": "bidirectional",
         "populate": true
       },
@@ -2903,8 +2903,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "68",
-        "name": "PR4B",
+        "pin": "51",
+        "name": "PR14B",
         "type": "bidirectional",
         "populate": true
       },
@@ -2929,8 +2929,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "53",
-        "name": "PR12B",
+        "pin": "30",
+        "name": "PB6B",
         "type": "bidirectional",
         "populate": true
       },
@@ -2955,8 +2955,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "54",
-        "name": "PR12A",
+        "pin": "34",
+        "name": "PB11A / PCLKT2_0",
         "type": "bidirectional",
         "populate": true
       },
@@ -2981,8 +2981,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "57",
-        "name": "PR11B",
+        "pin": "35",
+        "name": "PB11B / PCLKC2_0",
         "type": "bidirectional",
         "populate": true
       },
@@ -3007,8 +3007,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "58",
-        "name": "PR11A",
+        "pin": "36",
+        "name": "PB12A",
         "type": "bidirectional",
         "populate": true
       },
@@ -3033,8 +3033,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "59",
-        "name": "PR10B",
+        "pin": "37",
+        "name": "PB12B",
         "type": "bidirectional",
         "populate": true
       },
@@ -3059,8 +3059,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "60",
-        "name": "PR10A",
+        "pin": "38",
+        "name": "PB16A / PCLKT2_1",
         "type": "bidirectional",
         "populate": true
       },
@@ -3085,8 +3085,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "61",
-        "name": "PR9A",
+        "pin": "39",
+        "name": "PB16B / PCLKC2_1",
         "type": "bidirectional",
         "populate": true
       },
@@ -3111,8 +3111,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "62",
-        "name": "PR7B / PCLKC1_0",
+        "pin": "40",
+        "name": "PB18A",
         "type": "bidirectional",
         "populate": true
       },
@@ -3137,8 +3137,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "36",
-        "name": "PB12A",
+        "pin": "14",
+        "name": "PL9A",
         "type": "input",
         "populate": true
       },
@@ -3155,8 +3155,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "37",
-        "name": "PB12B",
+        "pin": "15",
+        "name": "PL9B",
         "type": "input",
         "populate": true
       },
@@ -3173,8 +3173,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "39",
-        "name": "PB16B / PCLKC2_1",
+        "pin": "16",
+        "name": "PL10A",
         "type": "input",
         "populate": true
       },
@@ -3191,8 +3191,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "38",
-        "name": "PB16A / PCLKT2_1",
+        "pin": "17",
+        "name": "PL10B",
         "type": "input",
         "populate": true
       },
@@ -3217,8 +3217,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "24",
-        "name": "PL14A",
+        "pin": "25",
+        "name": "PL14B",
         "type": "input",
         "populate": true
       },
@@ -3647,8 +3647,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "70",
-        "name": "PR3B",
+        "pin": "54",
+        "name": "PR12A",
         "type": "output",
         "populate": true
       },
@@ -3723,8 +3723,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "97",
-        "name": "PT11A",
+        "pin": "52",
+        "name": "PR14A",
         "type": "output",
         "populate": true
       },
@@ -3757,8 +3757,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "19",
-        "name": "PL11B",
+        "pin": "59",
+        "name": "PR10B",
         "type": "input",
         "populate": true
       },
@@ -3859,8 +3859,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "15",
-        "name": "PL9B",
+        "pin": "63",
+        "name": "PR7A / PCLKT1_0",
         "type": "input",
         "populate": true
       }
@@ -3877,8 +3877,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "16",
-        "name": "PL10A",
+        "pin": "62",
+        "name": "PR7B / PCLKC1_0",
         "type": "input",
         "populate": true
       }
@@ -3895,8 +3895,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "1",
-        "name": "PL2A / L_GPLLT_IN",
+        "pin": "75",
+        "name": "PR1A",
         "type": "bidirectional",
         "populate": true
       }
@@ -3913,8 +3913,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "2",
-        "name": "PL2B / L_GPLLC_IN",
+        "pin": "74",
+        "name": "PR1B",
         "type": "bidirectional",
         "populate": true
       }
@@ -3931,8 +3931,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "4",
-        "name": "PL3B / PCLKC5_0",
+        "pin": "71",
+        "name": "PR3A",
         "type": "bidirectional",
         "populate": true
       }
@@ -3949,8 +3949,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "7",
-        "name": "PL4A",
+        "pin": "70",
+        "name": "PR3B",
         "type": "bidirectional",
         "populate": true
       }
@@ -3967,8 +3967,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "8",
-        "name": "PL4B",
+        "pin": "69",
+        "name": "PR4A",
         "type": "bidirectional",
         "populate": true
       }
@@ -3985,8 +3985,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "9",
-        "name": "PL5A",
+        "pin": "68",
+        "name": "PR4B",
         "type": "bidirectional",
         "populate": true
       }
@@ -4003,8 +4003,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "10",
-        "name": "PL5B",
+        "pin": "67",
+        "name": "PR5A",
         "type": "bidirectional",
         "populate": true
       }
@@ -4021,8 +4021,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "12",
-        "name": "PL7C / PCLKT4_0",
+        "pin": "66",
+        "name": "PR5B",
         "type": "bidirectional",
         "populate": true
       }
@@ -4039,8 +4039,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "17",
-        "name": "PL10B",
+        "pin": "61",
+        "name": "PR9A",
         "type": "output",
         "populate": true
       }
@@ -4057,8 +4057,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "14",
-        "name": "PL9A",
+        "pin": "64",
+        "name": "PR6B",
         "type": "input",
         "populate": true
       }
@@ -4075,8 +4075,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "18",
-        "name": "PL11A",
+        "pin": "60",
+        "name": "PR10A",
         "type": "output",
         "populate": true
       }
@@ -4093,8 +4093,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "13",
-        "name": "PL7D / PCLKC4_0",
+        "pin": "65",
+        "name": "PR6A",
         "type": "input",
         "populate": true
       }
@@ -4161,8 +4161,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "25",
-        "name": "PL14B",
+        "pin": "57",
+        "name": "PR11B",
         "type": "input",
         "populate": true
       },
@@ -4211,8 +4211,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "69",
-        "name": "PR4A",
+        "pin": "53",
+        "name": "PR12B",
         "type": "output",
         "populate": true
       },
@@ -4245,8 +4245,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "75",
-        "name": "PR1A",
+        "pin": "21",
+        "name": "PL12B / PCLKC3_0",
         "type": "output",
         "populate": true
       },
@@ -4271,8 +4271,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "41",
-        "name": "PB18B",
+        "pin": "1",
+        "name": "PL2A / L_GPLLT_IN",
         "type": "output",
         "populate": true
       },
@@ -4305,8 +4305,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "74",
-        "name": "PR1B",
+        "pin": "18",
+        "name": "PL11A",
         "type": "output",
         "populate": true
       },
@@ -4331,8 +4331,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "40",
-        "name": "PB18A",
+        "pin": "2",
+        "name": "PL2B / L_GPLLC_IN",
         "type": "output",
         "populate": true
       },
@@ -4365,8 +4365,8 @@
       {
         "block": "frontend",
         "ref": "U10",
-        "pin": "71",
-        "name": "PR3A",
+        "pin": "24",
+        "name": "PL14A",
         "type": "output",
         "populate": true
       },
@@ -4506,128 +4506,128 @@
       {
         "ref": "TP100",
         "net": "ATA_DD0",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "2",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "29",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP101",
         "net": "ATA_DD1",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "3",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "31",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP102",
         "net": "ATA_DD2",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "5",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "33",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP103",
         "net": "ATA_DD3",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "6",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "35",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP104",
         "net": "ATA_DD4",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "8",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "38",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP105",
         "net": "ATA_DD5",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "9",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "40",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP106",
         "net": "ATA_DD6",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "11",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "42",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP107",
         "net": "ATA_DD7",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "12",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "44",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP108",
         "net": "ATA_DD8",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "13",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "45",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP109",
         "net": "ATA_DD9",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "14",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "25",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP110",
         "net": "ATA_DD10",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "16",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "24",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP111",
         "net": "ATA_DD11",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "17",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "23",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP112",
         "net": "ATA_DD12",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "19",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "22",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP113",
         "net": "ATA_DD13",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "20",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "21",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP114",
         "net": "ATA_DD14",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "22",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "20",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
       {
         "ref": "TP115",
         "net": "ATA_DD15",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "23",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "19",
         "local_ground_ref": "TP136",
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
@@ -4794,8 +4794,8 @@
       {
         "ref": "TP136",
         "net": "GND",
-        "endpoint_ref": "U35",
-        "endpoint_pin": "10",
+        "endpoint_ref": "U40",
+        "endpoint_pin": "27",
         "local_ground_ref": null,
         "access_policy": "top or bare bottom copper; removed-carrier bench access"
       },
