@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="215.9mm" height="279.4mm" viewBox="0 0 215.9 279.4">
+<title>CN503 contact alignment trial 01 - US Letter</title>
+<desc>US Letter actual-size contact guide with provisional 1 mm pitch and 5.03 mm trial row-center spacing. Check the 20 mm scale bars. This is not an electrical pinout or manufacturing footprint.</desc>
+<rect x="0" y="0" width="215.9" height="279.4" fill="white"/>
+<text x="18" y="20" font-family="Helvetica,Arial,sans-serif" font-size="5" font-weight="700" fill="#111111">CN503 contact alignment - trial 01</text>
+<text x="18" y="28" font-family="Helvetica,Arial,sans-serif" font-size="3.4" font-weight="400" fill="#111111">US Letter 8.5 x 11 in | Dreamcast VA1 | 9 October 2026</text>
+<text x="18" y="36" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="700" fill="#111111">Print at actual size / 100%. Disable fit-to-page. Check BOTH 20 mm scale bars.</text>
+<text x="18" y="43" font-family="Helvetica,Arial,sans-serif" font-size="3.2" font-weight="400" fill="#111111">Alignment guide only. Electrical pin numbering and a manufacturing footprint are not shown.</text>
+<rect x="53.72" y="68.665" width="6.56" height="38.67" fill="none" stroke="#999999" stroke-width="0.15" stroke-dasharray="0.9 0.7"/>
+<line x1="54.485" y1="74.5" x2="54.485" y2="101.5" fill="none" stroke="#2685ad" stroke-width="0.1" stroke-dasharray="0.5 0.5"/>
+<line x1="53.935" y1="76" x2="55.035" y2="76" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="77" x2="55.035" y2="77" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="78" x2="55.035" y2="78" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="79" x2="55.035" y2="79" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="80" x2="55.035" y2="80" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="81" x2="55.035" y2="81" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="82" x2="55.035" y2="82" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="83" x2="55.035" y2="83" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="84" x2="55.035" y2="84" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="85" x2="55.035" y2="85" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="86" x2="55.035" y2="86" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="87" x2="55.035" y2="87" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="88" x2="55.035" y2="88" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="89" x2="55.035" y2="89" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="90" x2="55.035" y2="90" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="91" x2="55.035" y2="91" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="92" x2="55.035" y2="92" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="93" x2="55.035" y2="93" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="94" x2="55.035" y2="94" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="95" x2="55.035" y2="95" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="96" x2="55.035" y2="96" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="97" x2="55.035" y2="97" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="98" x2="55.035" y2="98" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="99" x2="55.035" y2="99" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="53.935" y1="100" x2="55.035" y2="100" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="59.515" y1="74.5" x2="59.515" y2="101.5" fill="none" stroke="#2685ad" stroke-width="0.1" stroke-dasharray="0.5 0.5"/>
+<line x1="58.965" y1="76" x2="60.065" y2="76" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="77" x2="60.065" y2="77" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="78" x2="60.065" y2="78" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="79" x2="60.065" y2="79" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="80" x2="60.065" y2="80" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="81" x2="60.065" y2="81" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="82" x2="60.065" y2="82" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="83" x2="60.065" y2="83" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="84" x2="60.065" y2="84" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="85" x2="60.065" y2="85" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="86" x2="60.065" y2="86" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="87" x2="60.065" y2="87" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="88" x2="60.065" y2="88" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="89" x2="60.065" y2="89" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="90" x2="60.065" y2="90" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="91" x2="60.065" y2="91" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="92" x2="60.065" y2="92" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="93" x2="60.065" y2="93" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="94" x2="60.065" y2="94" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="95" x2="60.065" y2="95" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="96" x2="60.065" y2="96" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="97" x2="60.065" y2="97" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="98" x2="60.065" y2="98" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="99" x2="60.065" y2="99" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="58.965" y1="100" x2="60.065" y2="100" fill="none" stroke="#111111" stroke-width="0.44"/>
+<line x1="54.485" y1="70.5" x2="59.515" y2="70.5" fill="none" stroke="#111111" stroke-width="0.15"/>
+<line x1="54.485" y1="69.5" x2="54.485" y2="71.5" fill="none" stroke="#111111" stroke-width="0.15"/>
+<line x1="59.515" y1="69.5" x2="59.515" y2="71.5" fill="none" stroke="#111111" stroke-width="0.15"/>
+<line x1="68" y1="76" x2="68" y2="100" fill="none" stroke="#111111" stroke-width="0.15"/>
+<line x1="67" y1="76" x2="69" y2="76" fill="none" stroke="#111111" stroke-width="0.15"/>
+<line x1="67" y1="100" x2="69" y2="100" fill="none" stroke="#111111" stroke-width="0.15"/>
+<text x="82" y="70" font-family="Helvetica,Arial,sans-serif" font-size="3.8" font-weight="700" fill="#111111">Working geometry</text>
+<text x="82" y="78" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">25 contacts per row; 1.00 mm pitch</text>
+<text x="82" y="85" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="700" fill="#111111">5.03 mm BETWEEN TRIAL ROW CENTERS</text>
+<text x="82" y="92" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">Approx. 0.44 mm contact width along row</text>
+<text x="82" y="99" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">24.00 mm center span (calculated)</text>
+<text x="82" y="106" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">24.44 mm outside span (calculated)</text>
+<text x="18" y="121" font-family="Helvetica,Arial,sans-serif" font-size="3.2" font-weight="400" fill="#111111">Black ticks show contact centers and width; tick length is symbolic, not measured tail length.</text>
+<text x="18" y="128" font-family="Helvetica,Arial,sans-serif" font-size="3.2" font-weight="400" fill="#111111">Dashed rectangle: 38.67 x 6.56 mm maximum housing envelope only, not a cutout.</text>
+<text x="18" y="135" font-family="Helvetica,Arial,sans-serif" font-size="3.2" font-weight="400" fill="#111111">The narrower-section width was reported as the approximate 5.03 mm row separation.</text>
+<text x="18" y="142" font-family="Helvetica,Arial,sans-serif" font-size="3.2" font-weight="700" fill="#111111">This drawing uses that value AS center spacing for a fit check; verify alignment of both rows.</text>
+<text x="18" y="151" font-family="Helvetica,Arial,sans-serif" font-size="3.8" font-weight="700" fill="#111111">How to check</text>
+<text x="18" y="159" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">1. Verify that both scale bars below measure 20 mm on the printed sheet.</text>
+<text x="18" y="166" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">2. Compare one trial row with all 25 contacts, then compare the other row.</text>
+<text x="18" y="173" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">3. Check that both rows align together. Keep the paper clear of the connector housing.</text>
+<text x="18" y="180" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">   If the housing prevents a flat overlay, compare separate row strips and their marked spacing.</text>
+<text x="18" y="189" font-family="Helvetica,Arial,sans-serif" font-size="3.8" font-weight="700" fill="#111111">Working owner data</text>
+<text x="18" y="197" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">Pin run: 24.39 mm; contact width: about 0.44 mm; BIOS-to-CN503 gap: about 12 mm.</text>
+<text x="18" y="204" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="400" fill="#111111">CN503 tails: essentially at motherboard surface. BIOS body: about 2 mm above it.</text>
+<text x="18" y="211" font-family="Helvetica,Arial,sans-serif" font-size="3.2" font-weight="400" fill="#111111">Flex pad overlap, exposed tail length, coverlay, solder access and tolerances remain to be designed.</text>
+<line x1="27" y1="236" x2="47" y2="236" fill="none" stroke="#111111" stroke-width="0.3"/>
+<line x1="27" y1="234.7" x2="27" y2="237.3" fill="none" stroke="#111111" stroke-width="0.3"/>
+<line x1="47" y1="234.7" x2="47" y2="237.3" fill="none" stroke="#111111" stroke-width="0.3"/>
+<text x="27" y="242" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="700" fill="#111111">20 mm - horizontal</text>
+<line x1="99" y1="229" x2="99" y2="249" fill="none" stroke="#111111" stroke-width="0.3"/>
+<line x1="97.7" y1="229" x2="100.3" y2="229" fill="none" stroke="#111111" stroke-width="0.3"/>
+<line x1="97.7" y1="249" x2="100.3" y2="249" fill="none" stroke="#111111" stroke-width="0.3"/>
+<text x="104" y="240" font-family="Helvetica,Arial,sans-serif" font-size="3.3" font-weight="700" fill="#111111">20 mm - vertical</text>
+<text x="18" y="259" font-family="Helvetica,Arial,sans-serif" font-size="3.2" font-weight="400" fill="#111111">K-UI G1 bridge proposal | no pin orientation or connector A/B row assignment is implied.</text>
+</svg>
