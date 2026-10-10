@@ -29,8 +29,8 @@ module tb_review;
     task activate;
         begin
             hw(6,16'h00b0);
-            hw(1,16'h004b);hw(2,16'h0055);hw(3,16'h0049);hw(4,16'h0001);hw(5,16'h00a5);hw(7,16'h00f0);
-            hw(1,16'h00b4);hw(2,16'h00aa);hw(3,16'h00b6);hw(4,16'h00fe);hw(5,16'h005a);hw(7,16'h00f0);
+            hw(1,16'h004b);hw(2,16'h0055);hw(3,16'h0049);hw(4,16'h0001);hw(5,16'h00a5);hw(7,16'h0000);
+            hw(1,16'h00b4);hw(2,16'h00aa);hw(3,16'h00b6);hw(4,16'h00fe);hw(5,16'h005a);hw(7,16'h0000);
         end
     endtask
     task hc(input[7:0] data);

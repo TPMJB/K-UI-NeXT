@@ -8,12 +8,12 @@ Vendor activation and shared90h receipt/result contract are implemented in RTL.
 K-UI activation/probe software and RP2350 media/diagnostic firmware remain pending.
 DASP/PDIAG interdevice handshake is absent; full PATA discovery is not qualified.
 
-bridge.v: c8e272ec03d284cad50c7bdfb9be93de4e3aeee80ffafaa0a86ccdfe6831c5e0
+bridge.v: 7394929c95152be95d7190e820574213af514dd6cf0cff738e7d9eeac6832488
 bridge.lpf: d0a1b804d470ec2b84affe007d386899fb71bfa28b368ad0d18ac262ba7dad1a
-tb_bridge.v: cc1828811acaacf4b7578e9cad45bee2e7aa12c1bf16c9627b852414582665b3
+tb_bridge.v: 8c28133cbde66d050ccac1151ad85a8eddd34c4890db0b02278f9b42e388769b
 tb_fifo.v: 8c70c605d13cf931aa86c98976e18250e3341901a1dd796da278da0b0cfd95dc
-tb_review.v: af913bc5125b4b1815df0fe1defca520e30c98dcd574188a4a07d4f643ead438
-tb_activation.v: b50479a91df47613a8075caa89637a3b14ba98191367956868abde023983c705
+tb_review.v: 96384fb2e105da32f98e5763f7398f4129e345a085e624e96a49531f5cda39b7
+tb_activation.v: 8723d2c112d2f35187a2628b3475360334b0184aa2d3eedd66e2074d0ab2b4ec
 run_checks.sh: 4adc96b51b04d7755c989425cbfe23bb40c0d9ceceada2fc70250d18eb3dd138
 
 Actual check output:
@@ -30,13 +30,13 @@ Negative control detected: drop_dev0_diagnostic (14 failed assertions)
 Negative control detected: synchronous_safety_relock (57 failed assertions)
 Negative control detected: drop_sticky_safety_cleanup (15 failed assertions)
 Negative control detected: pio_read_clocked_hold (1 failed assertions)
-Warning: Yosys has only limited support for tri-state logic at the moment. (bridge.v:166)
-Warning: Yosys has only limited support for tri-state logic at the moment. (bridge.v:238)
+Warning: Yosys has only limited support for tri-state logic at the moment. (bridge.v:170)
+Warning: Yosys has only limited support for tri-state logic at the moment. (bridge.v:242)
    Number of cells:                 44
      $mem_v2                         1
    Number of cells:                926
    Number of cells:               1012
      $mem_v2                         2
-End of script. Logfile hash: 52bcf78c51, CPU: user 0.10s system 0.00s, MEM: 17.18 MB peak
-MachXO2 technology mapping: {'CCU2D': 82, 'DP8KC': 2, 'LUT4': 941, 'TRELLIS_FF': 410, 'TRELLIS_IO': 56}
+End of script. Logfile hash: e0687468c1, CPU: user 0.15s system 0.00s, MEM: 17.05 MB peak
+MachXO2 technology mapping: {'CCU2D': 82, 'DP8KC': 2, 'LUT4': 956, 'TRELLIS_FF': 410, 'TRELLIS_IO': 56}
 Resource budget check passed; physical placement and timing not validated.

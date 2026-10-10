@@ -93,12 +93,12 @@ module tb_activation;
     endtask
     task first_frame;
         begin
-            hw(6,8'hb0); fresh_fields(8'h4b,8'h55,8'h49,8'h01,8'ha5); hw(7,8'hf0);
+            hw(6,8'hb0); fresh_fields(8'h4b,8'h55,8'h49,8'h01,8'ha5); hw(7,8'h00);
         end
     endtask
     task second_frame;
         begin
-            hw(6,8'hb0); fresh_fields(8'hb4,8'haa,8'hb6,8'hfe,8'h5a); hw(7,8'hf0);
+            hw(6,8'hb0); fresh_fields(8'hb4,8'haa,8'hb6,8'hfe,8'h5a); hw(7,8'h00);
         end
     endtask
     task activate;
@@ -185,19 +185,19 @@ module tb_activation;
         hw(6,8'hb0); hw(7,8'h20); ir(0,val);
         check(val[6]===0,"ordinary device1 command is ignored until activated");
         hw(6,8'ha0); fresh_fields(8'h4b,8'h55,8'h49,8'h01,8'ha5);
-        hw(6,8'hb0); hw(7,8'hf0); ir(8'h19,val);
+        hw(6,8'hb0); hw(7,8'h00); ir(8'h19,val);
         check(val===0,"keys written with device0 selected cannot become fresh device1 keys");
         // Wrong selection and malformed keys never unlock or acquire output.
-        fresh_fields(8'h4b,8'h55,8'h49,8'h01,8'ha5); hw(6,8'hb1); hw(7,8'hf0);
+        fresh_fields(8'h4b,8'h55,8'h49,8'h01,8'ha5); hw(6,8'hb1); hw(7,8'h00);
         ir(8'h19,val); check(val===0,"vendor frame requires exact DEVICE/HEAD B0h");
-        hw(6,8'hb0); fresh_fields(8'h4b,8'h55,8'h49,8'h01,8'ha4); hw(7,8'hf0);
+        hw(6,8'hb0); fresh_fields(8'h4b,8'h55,8'h49,8'h01,8'ha4); hw(7,8'h00);
         ir(8'h19,val); check(val===0,"one malformed key byte rejects frame");
         second_frame(); ir(8'h19,val); check(val===0,"second key alone cannot activate");
         // Reusing old matching bytes fails: all five fields must be fresh.
         fresh_fields(8'h4b,8'h55,8'h49,8'h01,8'ha5); hw(7,8'h20);
-        hw(1,8'h4b); hw(2,8'h55); hw(3,8'h49); hw(4,8'h01); hw(7,8'hf0);
+        hw(1,8'h4b); hw(2,8'h55); hw(3,8'h49); hw(4,8'h01); hw(7,8'h00);
         ir(8'h19,val); check(val===0,"stale LBA2 invalidates otherwise matching first key");
-        first_frame(); hw(7,8'hf0); ir(8'h19,val);
+        first_frame(); hw(7,8'h00); ir(8'h19,val);
         check(val===0,"command without five new bytes cancels partial sequence");
         first_frame(); hw(7,8'h20); second_frame(); ir(8'h19,val);
         check(val===0,"ordinary intervening command cancels partial sequence");
@@ -217,7 +217,7 @@ module tb_activation;
         hw(7,8'h20); ir(1,val); check(val==8'h20,"activated ordinary ATA command reaches MCU");
         ir(0,val); check(val[6]===1,"activated ordinary command sets pending mailbox");
         iw(8'h13,2); iw(8'h10,8'h40);
-        fresh_fields(8'h4c,8'h4f,8'h43,8'h4b,0); hw(7,8'hf0); ir(8'h19,val);
+        fresh_fields(8'h4c,8'h4f,8'h43,8'h4b,0); hw(7,8'h00); ir(8'h19,val);
         check(val===0,"fresh host LOCK vendor frame disables activation");
         absent_read(7); activate(); iw(8'h19,1); ir(8'h19,val);
         check(val===0,"MCU relock disables active bridge"); absent_read(7);

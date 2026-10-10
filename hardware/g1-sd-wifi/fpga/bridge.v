@@ -97,8 +97,12 @@ module bridge #(
         !status_reg[7] & (!selected | !status_reg[3]) &
         !ata_dma_latch & ata_cs0_latch;
     wire command_write = taskfile_write & (ata_addr_latch==7);
+    // Keyed frames use ATA NOP (00h). Every ATA/ATAPI device must abort NOP
+    // without side effects, so a device0 that ignored DEV would see only a
+    // harmless abort, never a vendor-specific opcode.
+    localparam [7:0] KEY_COMMAND = 8'h00;
     wire vendor_frame = command_write & selected & (dev_head==8'hb0) &
-        (&fresh_fields) & (ata_write_latch[7:0]==8'hf0);
+        (&fresh_fields) & (ata_write_latch[7:0]==KEY_COMMAND);
     wire unlock_first = vendor_frame & (feature==8'h4b) &
         (sector_count==8'h55) & (lba0==8'h49) & (lba1==8'h01) & (lba2==8'ha5);
     wire unlock_second = vendor_frame & (feature==8'hb4) &
@@ -328,7 +332,7 @@ module bridge #(
                     3:lba0<=ata_write_latch[7:0];4:lba1<=ata_write_latch[7:0];5:lba2<=ata_write_latch[7:0];
                     6:dev_head<=ata_write_latch[7:0];
                     7:if(ata_write_latch[7:0]==8'h90 ||
-                        (bridge_active && selected && ata_write_latch[7:0]!=8'hf0))begin
+                        (bridge_active && selected && ata_write_latch[7:0]!=KEY_COMMAND))begin
                         if(command_pending)fault<=1;
                         else begin
                             command<=ata_write_latch[7:0];command_pending<=1;status_reg<=8'h80;
@@ -338,8 +342,8 @@ module bridge #(
                                 fifo_flush<=1;tx_byte_high<=0;rx_byte_high<=0;
                             end
                         end
-                    end else if(bridge_active && selected && ata_write_latch[7:0]==8'hf0 && !relock_frame)begin
-                        // Invalid vendor requests abort only after activation;
+                    end else if(bridge_active && selected && ata_write_latch[7:0]==KEY_COMMAND && !relock_frame)begin
+                        // Unkeyed NOPs abort (as ATA requires) only after activation;
                         // a locked bridge remains absent rather than answering.
                         error_reg<=8'h04;status_reg<=8'h41;intrq_pending<=1;
                     end
