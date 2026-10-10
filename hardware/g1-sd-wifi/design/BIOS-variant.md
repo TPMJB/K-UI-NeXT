@@ -23,7 +23,7 @@ Move this selector only with console power disconnected. The contact diagram is 
 
 In STOCK_RECOVERY, original boot-ROM reads remain possible without MCU firmware, FPGA configuration or controller-rail power. The front-end hardware gate must consume `BIOS_RECOVERYn` directly, so a stuck FPGA response request cannot override this interlock. The original GD-ROM is retained. This is a recovery position, not the base variant's ordinary stock-BIOS-plus-bridge operating mode.
 
-**R410 is BASE_ONLY. Remove R410 before connecting the populated selector harness.** Leaving its 0 Ω tie in place would short the console supply to ground in STOCK_RECOVERY. Base assembly populates R409/R410 but leaves the original motherboard ROM CE connection untouched. Optional assembly keeps R409, omits R410, populates the optional circuit and installs the separate CE/address tap.
+**R410 is BASE_ONLY. Remove R410 before connecting the populated selector harness.** R410 is a 1 kΩ pull-up rather than a 0 Ω tie: if it is forgotten, the STOCK_RECOVERY pole still pulls the interlock low, at a cost of about 3.3 mA from the console 3.3 V supply, instead of shorting that supply to ground. With R409's 10 kΩ pull-down, BASE reads about 3.0 V. Base assembly populates R409/R410 but leaves the original motherboard ROM CE connection untouched. Optional assembly keeps R409, omits R410, populates the optional circuit and installs the separate CE/address tap.
 
 ### Write protection and supply reset
 

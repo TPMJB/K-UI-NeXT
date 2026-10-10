@@ -1044,7 +1044,7 @@
     "sources": [
       "https://www.ti.com/lit/ds/symlink/tps3808.pdf"
     ],
-    "description": "Adjustable upstream-loss threshold nominal 4.358 V; senses before reserve mux; CT open gives 20-ms release delay.",
+    "description": "Adjustable upstream-loss threshold nominal 4.180 V (976k/(100k+4.7k)); senses before reserve mux; CT open gives 20-ms release delay.",
     "populate": true,
     "height_max_mm": 1.45
   },
@@ -1133,6 +1133,30 @@
       },
       "2": {
         "name": "2",
+        "net": "PRIMARY_SENSE_LO",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Loss-monitor lower divider, 1%; in series with R270",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R270",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "PRIMARY_SENSE_LO",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
         "net": "GND",
         "type": "passive"
       }
@@ -1140,7 +1164,7 @@
     "sources": [
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
-    "description": "Loss-monitor lower divider, 1%",
+    "description": "Loss-monitor lower divider trim, 1%; 100k+4.7k sets 4.180 V nominal",
     "populate": true,
     "height_max_mm": 0.65
   },

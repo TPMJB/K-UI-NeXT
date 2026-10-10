@@ -24,9 +24,11 @@ The C5 supply is not retained. U34 forms `C5_SWITCH_EN = PWR_FAILn AND C5_PWR_EN
 
 ## Loss detection, reset and reserve provision
 
-All TPS3808 supervisors are powered from held `+3V3_LOGIC`. U23 monitors logic and drives `LOGIC_RESETn`; U24 monitors storage; U25 monitors the host's unheld `CONSOLE_3V3`. The G33 nominal threshold is 3.07 V. U26 uses TPS3808G01 and the 976-kΩ/100-kΩ divider to monitor **`PRIMARY_5V` before the reserve mux**, nominal threshold:
+All TPS3808 supervisors are powered from held `+3V3_LOGIC`. U23 monitors logic and drives `LOGIC_RESETn`; U24 monitors storage; U25 monitors the host's unheld `CONSOLE_3V3`. The G33 nominal threshold is 3.07 V. U26 uses TPS3808G01 and the 976-kΩ upper / 100-kΩ + 4.7-kΩ lower divider (R209, R210, R270) to monitor **`PRIMARY_5V` before the reserve mux**, nominal threshold:
 
-`Vloss = 0.405 V × (1 + 976/100) = 4.3578 V`.
+`Vloss = 0.405 V × (1 + 976/104.7) = 4.180 V`.
+
+The original 976/100 divider gave 4.358 V. `PRIMARY_5V` sits after the harness, F20 and Q20, whose drops at about 1.2 A total roughly 0.15–0.2 V; with a console 5 V rail at its low tolerance and GD-ROM spin-up sag, that left too little margin against false warnings during disc activity. The two bucks still regulate with about 3.6 V input, so 4.18 V costs no useful warning time. Measure the chosen 5 V tap during GD-ROM spin-up and C5 transmit with the bridge loaded, and adjust R270 if the bench shows otherwise.
 
 Divider tolerance, the supervisor's specified threshold error, supply drop and hysteresis must be included in the bench acceptance band. CT is open on each supervisor, giving the documented nominal 20-ms release delay. Reset assertions follow the supervisor's actual response/pulse requirements rather than an assumed instantaneous detector. U23's output also connects to the RP2350 RUN net in the controller block. U26's low output is an interrupt to MCU/FPGA and a hardware disarm/C5 cut-off; it does **not** reset the held MCU, so the MCU can attempt a bounded stop/flush.
 

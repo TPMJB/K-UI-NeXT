@@ -6,7 +6,7 @@
   "snapshot": [
     {
       "path": "design/blocks/bios.json",
-      "sha256": "46b8b78874334f74b466c2ea5f1a9f80e2fcddd22efefbd881eba2598001dcc3"
+      "sha256": "6c78b14bf1bffda7ebc4ca913427aa4b466e4fa0b61a81a36b96ff39dee9ebe7"
     },
     {
       "path": "design/blocks/controller.json",
@@ -18,7 +18,7 @@
     },
     {
       "path": "design/blocks/power-bus.json",
-      "sha256": "7f3ebc5612b42a29a7b708158260421583022c1732d57c8270601c3702dd955d"
+      "sha256": "297fbfe6d1ade7debbae6c6bf88021c55565c2939ade4a48bfa03416bcd17d12"
     },
     {
       "path": "design/flex-interface.json",
@@ -34,27 +34,27 @@
     },
     {
       "path": "design/integrated-components.json",
-      "sha256": "2b80866bf79a74ff8090cd892e6707b1f3d59beebb03c73473c7dbee46e901ae"
+      "sha256": "cce9ef7e5912812a7df42d6cb5f1113328d2755d9d8d06ca90fb2cb33221baf5"
     },
     {
       "path": "controller/checks/netlist.xml",
-      "sha256": "6b2ed4ba03f8f5bd181fea6182156e810878921cd3a66c4577f09fb8fabb20bb"
+      "sha256": "4eb110636abce7163c9db642f3e6f1a62bceefa5bf17bd7fa21f90084be1d671"
     },
     {
       "path": "tools/check_integration.py",
-      "sha256": "0ec021e652bb4731c8e6249c0c37e29902c814a6ba196f6e04eebc9e762adb9c"
+      "sha256": "d47c6ddf955ec4a06d2a6816c1156c8bbaab23d07692ec6257dee20150b3b0f4"
     }
   ],
   "components": {
-    "total": 364,
+    "total": 365,
     "by_block": {
       "bios": 33,
       "controller": 112,
       "frontend": 75,
-      "power-bus": 144
+      "power-bus": 145
     },
     "duplicate_refs": [],
-    "native_total_including_cn503_and_erc_flags": 375,
+    "native_total_including_cn503_and_erc_flags": 376,
     "native_extra_cn503_connectors": 2,
     "native_extra_erc_flags": 9
   },
@@ -90,7 +90,7 @@
     {
       "id": "INT-C01",
       "result": "pass",
-      "description": "364 unique reference designators across controller, frontend, power-bus and BIOS source blocks; native generator additionally adds two CN503 FPC connectors and nine ERC declarations. Manufactured probe pads are retained in the native circuit but excluded from purchased parts. Optional BIOS has complete 48-pin NOR mapping."
+      "description": "365 unique reference designators across controller, frontend, power-bus and BIOS source blocks; native generator additionally adds two CN503 FPC connectors and nine ERC declarations. Manufactured probe pads are retained in the native circuit but excluded from purchased parts. Optional BIOS has complete 48-pin NOR mapping."
     },
     {
       "id": "INT-C02",
@@ -153,7 +153,7 @@
     {
       "id": "INT-C13",
       "result": "pass_exported_native_connectivity",
-      "description": "All 364 source components and two native CN503 sockets agree with integrated native pin contracts and exported XML component fields/terminals/nets/types/DNP. Nine ERC flags are omitted from XML; all 50 intended unused endpoints are isolated. Physical bare probe pads remain in XML despite being excluded from purchased BOM. Safety equations are evaluated from exported XML connectivity."
+      "description": "All 365 source components and two native CN503 sockets agree with integrated native pin contracts and exported XML component fields/terminals/nets/types/DNP. Nine ERC flags are omitted from XML; all 50 intended unused endpoints are isolated. Physical bare probe pads remain in XML despite being excluded from purchased BOM. Safety equations are evaluated from exported XML connectivity."
     },
     {
       "id": "INT-C14",
@@ -4463,11 +4463,11 @@
     "https://www.macronix.com/Lists/Datasheet/Attachments/8514/MX29LV640E%20T-B%2C%203V%2C%2064Mb%2C%20v1.7.pdf",
     "https://consolemods.org/wiki/images/2/27/Dreamcast_VA1_FULL.pdf"
   ],
-  "revision_note": "Refreshed after the corrected J51 mapping and 39 manufactured debug pads. Reusable checker verifies 375 integrated references, 366 XML references, 364 onboard footprints, all native endpoints, 100 FPGA package functions and 56 LPF pin/net constraints; all 8240 functional Boolean combinations use exported native connectivity. All 39 debug probe mappings are verified from XML. No mechanical, probe loading, timing or assembler fixture release is claimed.",
+  "revision_note": "Refreshed after the corrected J51 mapping and 39 manufactured debug pads. Reusable checker verifies 376 integrated references, 367 XML references, 365 onboard footprints, all native endpoints, 100 FPGA package functions and 56 LPF pin/net constraints; all 8240 functional Boolean combinations use exported native connectivity. All 39 debug probe mappings are verified from XML. No mechanical, probe loading, timing or assembler fixture release is claimed.",
   "native_netlist": {
-    "native_components": 375,
-    "xml_components": 366,
-    "onboard_footprinted_components": 364,
+    "native_components": 376,
+    "xml_components": 367,
+    "onboard_footprinted_components": 365,
     "omitted_erc_flags": [
       "#FLG1",
       "#FLG2",
@@ -4479,8 +4479,8 @@
       "#FLG8",
       "#FLG9"
     ],
-    "xml_named_nets": 274,
-    "assigned_pin_endpoints_checked": 1204,
+    "xml_named_nets": 275,
+    "assigned_pin_endpoints_checked": 1206,
     "isolated_no_connect_endpoints_checked": 50
   },
   "automated_proof": {

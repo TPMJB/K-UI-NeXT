@@ -1,6 +1,6 @@
 {
   "status": "pass",
-  "components": 364,
+  "components": 365,
   "errors": [],
   "rows": [
     {
@@ -3231,6 +3231,18 @@
     },
     {
       "ref": "R210",
+      "physical_pad_numbers": [
+        "1",
+        "2"
+      ],
+      "schematic_pin_numbers": [
+        "1",
+        "2"
+      ],
+      "match": true
+    },
+    {
+      "ref": "R270",
       "physical_pad_numbers": [
         "1",
         "2"

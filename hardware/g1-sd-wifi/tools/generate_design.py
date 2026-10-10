@@ -11,6 +11,7 @@ import collections
 import copy
 import json
 import math
+import os
 import pathlib
 import re
 import shutil
@@ -20,6 +21,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CAD = ROOT / 'controller'
 NAME = 'KUI-G1-Bridge-RevA'
 NAMESPACE = uuid.UUID('d0cfb36b-9f23-5d7c-ad82-05c63133d921')
+# KiCad 10 standard footprints. An older system library (for example KiCad 7
+# on stock Ubuntu 24.04) must never overwrite the localized 10.x footprints.
+FOOTPRINT_DIR = pathlib.Path(os.environ.get('KICAD10_FOOTPRINT_DIR', '/usr/share/kicad/footprints'))
 
 def uid(s):
     return str(uuid.uuid5(NAMESPACE, str(s)))
@@ -84,12 +88,14 @@ def localize_footprints(blocks):
         nick, name = fp.split(':', 1)
         destination = lib / (name + '.kicad_mod')
         if nick not in ('KUI_Footprints', 'KUI_G1', 'KUI'):
-            source = pathlib.Path('/usr/share/kicad/footprints') / (nick + '.pretty') / destination.name
+            source = FOOTPRINT_DIR / (nick + '.pretty') / destination.name
             if not source.exists():
                 missing.append(str(source))
                 continue
             shutil.copyfile(source, destination)
-            copied.append({'source': str(source), 'local': str(destination.relative_to(ROOT))})
+            # Record the standard KiCad 10 install location, not a local mirror.
+            canonical = pathlib.Path('/usr/share/kicad/footprints') / (nick + '.pretty') / destination.name
+            copied.append({'source': str(canonical), 'local': str(destination.relative_to(ROOT))})
         elif not destination.exists():
             missing.append(fp)
         part['source_footprint'] = fp

@@ -988,9 +988,9 @@
     },
     {
       "ref": "R410",
-      "value": "0R",
-      "mpn": "RC0603JR-070RL",
-      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "value": "1k",
+      "mpn": "RC0402FR-071KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
       "pins": {
         "1": {
           "name": "1",
@@ -1004,9 +1004,10 @@
         }
       },
       "sources": [],
-      "description": "BASE_ONLY bypass: permits original installed BIOS plus ATA bridge. MUST REMOVE before connecting populated BIOS selector.",
+      "description": "BASE_ONLY recovery-high pull-up: permits original installed BIOS plus ATA bridge. 1k (not 0R) so a selector harness fitted by mistake draws ~3.3 mA instead of shorting CONSOLE_3V3; remove before connecting the BIOS selector.",
       "populate": true,
-      "variant": "BASE_ONLY"
+      "variant": "BASE_ONLY",
+      "height_max_mm": 0.65
     },
     {
       "ref": "C400",

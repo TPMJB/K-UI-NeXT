@@ -8266,7 +8266,7 @@
     "sources": [
       "https://www.ti.com/lit/ds/symlink/tps3808.pdf"
     ],
-    "description": "Adjustable upstream-loss threshold nominal 4.358 V; senses before reserve mux; CT open gives 20-ms release delay.",
+    "description": "Adjustable upstream-loss threshold nominal 4.180 V (976k/(100k+4.7k)); senses before reserve mux; CT open gives 20-ms release delay.",
     "populate": true,
     "height_max_mm": 1.45,
     "block": "power-bus",
@@ -8371,6 +8371,34 @@
       },
       "2": {
         "name": "2",
+        "net": "PRIMARY_SENSE_LO",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Loss-monitor lower divider, 1%; in series with R270",
+    "populate": true,
+    "height_max_mm": 0.65,
+    "block": "power-bus",
+    "variant": "BASE",
+    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
+    "on_board": true
+  },
+  {
+    "ref": "R270",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "KUI_Footprints:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "PRIMARY_SENSE_LO",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
         "net": "GND",
         "type": "passive"
       }
@@ -8378,7 +8406,7 @@
     "sources": [
       "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
     ],
-    "description": "Loss-monitor lower divider, 1%",
+    "description": "Loss-monitor lower divider trim, 1%; 100k+4.7k sets 4.180 V nominal",
     "populate": true,
     "height_max_mm": 0.65,
     "block": "power-bus",
@@ -12926,9 +12954,9 @@
   },
   {
     "ref": "R410",
-    "value": "0R",
-    "mpn": "RC0603JR-070RL",
-    "footprint": "KUI_Footprints:R_0603_1608Metric",
+    "value": "1k",
+    "mpn": "RC0402FR-071KL",
+    "footprint": "KUI_Footprints:R_0402_1005Metric",
     "pins": {
       "1": {
         "name": "1",
@@ -12942,11 +12970,12 @@
       }
     },
     "sources": [],
-    "description": "BASE_ONLY bypass: permits original installed BIOS plus ATA bridge. MUST REMOVE before connecting populated BIOS selector.",
+    "description": "BASE_ONLY recovery-high pull-up: permits original installed BIOS plus ATA bridge. 1k (not 0R) so a selector harness fitted by mistake draws ~3.3 mA instead of shorting CONSOLE_3V3; remove before connecting the BIOS selector.",
     "populate": true,
     "variant": "BASE_ONLY",
+    "height_max_mm": 0.65,
     "block": "bios",
-    "source_footprint": "Resistor_SMD:R_0603_1608Metric",
+    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
     "on_board": true
   },
   {

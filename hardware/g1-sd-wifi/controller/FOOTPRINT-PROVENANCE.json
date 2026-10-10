@@ -640,6 +640,10 @@
     "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
   },
   {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
     "source": "/usr/share/kicad/footprints/Package_SO.pretty/VSSOP-8_2.3x2mm_P0.5mm.kicad_mod",
     "local": "controller/KUI_Footprints.pretty/VSSOP-8_2.3x2mm_P0.5mm.kicad_mod"
   },
@@ -1148,8 +1152,8 @@
     "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
   },
   {
-    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
-    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
   },
   {
     "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
