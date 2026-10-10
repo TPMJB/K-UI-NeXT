@@ -1,0 +1,304 @@
+{
+  "group": "C5_CARRIER",
+  "module_ref": "U206",
+  "module_width_length_mm": [
+    20.9804,
+    17.8054
+  ],
+  "source_origin": {
+    "source_footprint": "U9",
+    "xy_mm": [
+      108.3977,
+      72.6982
+    ]
+  },
+  "spring_mpn": "S7221-45R",
+  "contact_tip_local_mm": [
+    -0.7,
+    0
+  ],
+  "free_height_mm": 1.23,
+  "working_height_mm": 0.9,
+  "minimum_working_height_mm": 0.63,
+  "positive_stop_height_mm": 0.55,
+  "working_deflection_mm": 0.33,
+  "nominal_contact_min_force_N": 0.39,
+  "contacts_count": 16,
+  "minimum_total_force_at_working_N": 6.24,
+  "retention_contract": "Removable rigid end clamp on insulating supports. Carrier-to-module underside gap0.90mm nominal, hard stops set gap; clamp resists at least6.24N plus tolerances. No board holes assumed. End supports lie outside14 castellated lands; preserve antenna/USB-removed-end access. TargetXYalignment +/-0.10mm. Clamp exactgeometry and8mm-region placement depend on owner envelope measurements.",
+  "height_contract": "Use only measured8mm region. Total installed height=carrier motherboard stand-off+carrierPCBthickness+0.90mm workinggap+measured USB-freeC5totalheight+clamp protrusion. Free-contact/removal envelope uses1.23mm gap. Do not use originalUSB-included4.48mm as exactUSB-freeheight.",
+  "contacts": [
+    {
+      "ref": "K201",
+      "module_terminal": "1",
+      "tip_offset_mm": [
+        7.62,
+        -8.028
+      ],
+      "body_centroid_offset_mm": [
+        7.62,
+        -7.328
+      ],
+      "rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K202",
+      "module_terminal": "2",
+      "tip_offset_mm": [
+        5.08,
+        -8.028
+      ],
+      "body_centroid_offset_mm": [
+        5.08,
+        -7.328
+      ],
+      "rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K203",
+      "module_terminal": "3",
+      "tip_offset_mm": [
+        2.54,
+        -8.028
+      ],
+      "body_centroid_offset_mm": [
+        2.54,
+        -7.328
+      ],
+      "rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K204",
+      "module_terminal": "4",
+      "tip_offset_mm": [
+        0.0,
+        -8.028
+      ],
+      "body_centroid_offset_mm": [
+        0.0,
+        -7.328
+      ],
+      "rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K205",
+      "module_terminal": "5",
+      "tip_offset_mm": [
+        -2.54,
+        -8.028
+      ],
+      "body_centroid_offset_mm": [
+        -2.54,
+        -7.328
+      ],
+      "rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K206",
+      "module_terminal": "6",
+      "tip_offset_mm": [
+        -5.08,
+        -8.028
+      ],
+      "body_centroid_offset_mm": [
+        -5.08,
+        -7.328
+      ],
+      "rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K207",
+      "module_terminal": "7",
+      "tip_offset_mm": [
+        -7.62,
+        -8.028
+      ],
+      "body_centroid_offset_mm": [
+        -7.62,
+        -7.328
+      ],
+      "rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K208",
+      "module_terminal": "8",
+      "tip_offset_mm": [
+        -7.62,
+        8.028
+      ],
+      "body_centroid_offset_mm": [
+        -7.62,
+        7.328
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K209",
+      "module_terminal": "9",
+      "tip_offset_mm": [
+        -5.08,
+        8.028
+      ],
+      "body_centroid_offset_mm": [
+        -5.08,
+        7.328
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K210",
+      "module_terminal": "10",
+      "tip_offset_mm": [
+        -2.54,
+        8.028
+      ],
+      "body_centroid_offset_mm": [
+        -2.54,
+        7.328
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K211",
+      "module_terminal": "11",
+      "tip_offset_mm": [
+        0.0,
+        8.028
+      ],
+      "body_centroid_offset_mm": [
+        0.0,
+        7.328
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K212",
+      "module_terminal": "12",
+      "tip_offset_mm": [
+        2.54,
+        8.028
+      ],
+      "body_centroid_offset_mm": [
+        2.54,
+        7.328
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K213",
+      "module_terminal": "13",
+      "tip_offset_mm": [
+        5.08,
+        8.028
+      ],
+      "body_centroid_offset_mm": [
+        5.08,
+        7.328
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K214",
+      "module_terminal": "14",
+      "tip_offset_mm": [
+        7.62,
+        8.028
+      ],
+      "body_centroid_offset_mm": [
+        7.62,
+        7.328
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K215",
+      "module_terminal": "TP2",
+      "tip_offset_mm": [
+        1.0255,
+        -1.0956
+      ],
+      "body_centroid_offset_mm": [
+        1.0255,
+        -1.7956
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    },
+    {
+      "ref": "K216",
+      "module_terminal": "TP8",
+      "tip_offset_mm": [
+        6.1055,
+        -1.0956
+      ],
+      "body_centroid_offset_mm": [
+        6.1055,
+        -1.7956
+      ],
+      "rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ]
+    }
+  ]
+}

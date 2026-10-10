@@ -1,0 +1,4831 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-10",
+  "status": "PASS_STATIC_LOGICAL_INTEGRATION_WITH_RELEASE_GATES_OPEN",
+  "scope": "Static review of logical component/pin/net source blocks, selected manufacturer pinouts, passive flex interface, FPGA pin constraints and exported native XML connectivity. Boolean proofs use actual XML net names. This is not an assembled-board or fabrication-release validation.",
+  "snapshot": [
+    {
+      "path": "design/blocks/bios.json",
+      "sha256": "46b8b78874334f74b466c2ea5f1a9f80e2fcddd22efefbd881eba2598001dcc3"
+    },
+    {
+      "path": "design/blocks/controller.json",
+      "sha256": "d5fa2fa23fa4b1c01efa0ac48c27fdb21b2bb02ef6e40d25a76b317961147bd2"
+    },
+    {
+      "path": "design/blocks/frontend.json",
+      "sha256": "186463a09cefce6112bb4732894faf0d26ded704fd38b47998500d6a6cbba572"
+    },
+    {
+      "path": "design/blocks/power-bus.json",
+      "sha256": "7f3ebc5612b42a29a7b708158260421583022c1732d57c8270601c3702dd955d"
+    },
+    {
+      "path": "design/flex-interface.json",
+      "sha256": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610"
+    },
+    {
+      "path": "design/sources/machxo2-2000-pinout.csv",
+      "sha256": "ea6e515aa7c1c987d4e84db0cc422801ca5a7c1ceca0da89937813551653e9a7"
+    },
+    {
+      "path": "fpga/bridge.lpf",
+      "sha256": "d0a1b804d470ec2b84affe007d386899fb71bfa28b368ad0d18ac262ba7dad1a"
+    },
+    {
+      "path": "design/integrated-components.json",
+      "sha256": "2b80866bf79a74ff8090cd892e6707b1f3d59beebb03c73473c7dbee46e901ae"
+    },
+    {
+      "path": "controller/checks/netlist.xml",
+      "sha256": "6b2ed4ba03f8f5bd181fea6182156e810878921cd3a66c4577f09fb8fabb20bb"
+    },
+    {
+      "path": "tools/check_integration.py",
+      "sha256": "0ec021e652bb4731c8e6249c0c37e29902c814a6ba196f6e04eebc9e762adb9c"
+    }
+  ],
+  "components": {
+    "total": 364,
+    "by_block": {
+      "bios": 33,
+      "controller": 112,
+      "frontend": 75,
+      "power-bus": 144
+    },
+    "duplicate_refs": [],
+    "native_total_including_cn503_and_erc_flags": 375,
+    "native_extra_cn503_connectors": 2,
+    "native_extra_erc_flags": 9
+  },
+  "corrected_findings": [
+    {
+      "id": "INT-001",
+      "severity": "functional",
+      "owner": "controller",
+      "issue": "Logic supervisor RESET# and MCU RUN used different net names, so the promised hardware MCU reset was absent.",
+      "resolution": "U201.35, reset pullup and service RUN pad now use LOGIC_RESETn, joining U23.1 directly. Upstream PWR_FAILn remains GPIO31 interrupt, allowing held-rail cleanup.",
+      "status": "verified_in_source"
+    },
+    {
+      "id": "INT-002",
+      "severity": "functional",
+      "owner": "power-bus",
+      "issue": "U35 SN74LVC16T245DGGR lacked physical pin39. TI pin-functions ground table omits39, but its package drawing clearly identifies39 as GND.",
+      "resolution": "U35.39 added GND/power_in. All48 physical package pins now represented.",
+      "source": "https://www.ti.com/lit/ds/symlink/sn74lvc16t245.pdf",
+      "source_location": "SCES636B package drawing, printed page4",
+      "status": "verified_in_source"
+    },
+    {
+      "id": "INT-003",
+      "severity": "boot-integrity",
+      "owner": "frontend/bios",
+      "issue": "Changing BIOS banks before first bridge ARM or resetting them at early power-fail warning could change ROM while the CPU fetches it.",
+      "resolution": "Implemented HDL fixes the bank per FPGA configuration; factory bank0 matches external pulldowns. MCU reset, ATA reset and power-fail warning do not write the bank outputs. Nonzero-bank builds and runtime selection remain unqualified until CPU reset or RAM-only restart coordination exists.",
+      "status": "fixed_factory_mode; nonzero_bank_release_gate_open"
+    }
+  ],
+  "checks": [
+    {
+      "id": "INT-C01",
+      "result": "pass",
+      "description": "364 unique reference designators across controller, frontend, power-bus and BIOS source blocks; native generator additionally adds two CN503 FPC connectors and nine ERC declarations. Manufactured probe pads are retained in the native circuit but excluded from purchased parts. Optional BIOS has complete 48-pin NOR mapping."
+    },
+    {
+      "id": "INT-C02",
+      "result": "pass",
+      "description": "All100 U10 physical package pin functions match manufacturer MachXO2-2000 pinout CSV TQFP100 column; FPGA LPF locations map to the same scalar native schematic nets."
+    },
+    {
+      "id": "INT-C03",
+      "result": "pass",
+      "description": "Flex J50/J51 expose exactly28 ATA signals:16 DD,3 DA,6 host-control and3 response signals. No BIOS extra-address or ROM-CE net is incorrectly claimed available on CN503."
+    },
+    {
+      "id": "INT-C04",
+      "result": "pass",
+      "description": "16 raw ATA data nets meet U35 host B-port;16 BUS_DD nets meet FPGA on A-port. Nine host controls are input-only through U36/U37. Response values and ownership OEs are separate."
+    },
+    {
+      "id": "INT-C05",
+      "result": "pass",
+      "description": "Exhaustive8192 combinations evaluated from actual gate pin/net connections: BUS_SAFE equals all9 permit terms; data/IRQ/DMARQ OE releases whenever any term fails; IORDY releases unless BUS_SAFE and low-request both true.",
+      "cases": 8192
+    },
+    {
+      "id": "INT-C06",
+      "result": "pass",
+      "description": "32 combinations of physical selector, program-arm, FPGA write-enable, ROM-CE and host write-strobe: NOR WE# low only when custom selected, physically armed, explicitly authorized and selected write cycle active.",
+      "cases": 32
+    },
+    {
+      "id": "INT-C07",
+      "result": "pass",
+      "description": "16 combinations of power-loss warning/C5 request and storage-good/SD request match physical C5 cutoff AND and SD-isolation NAND.",
+      "cases": 16
+    },
+    {
+      "id": "INT-C08",
+      "result": "pass",
+      "description": "SN74LVC16T245, LVC244 and AXC4T245 selected package pin numbers, channel direction, control rail and ground/supply functions checked against primary TI datasheets."
+    },
+    {
+      "id": "INT-C09",
+      "result": "pass",
+      "description": "Optional BIOS x8 mapping follows A-1 on ATA_DD8, A0..A6 on DD9..DD15, A7..A9 on DA0..DA2, extraA10..A19 tap and physical A20/A21 bank bits. Original mask ROM has no writable connection."
+    },
+    {
+      "id": "INT-C10",
+      "result": "pass",
+      "description": "Base BIOS population consists only of R409 recovery pulldown and R410 high strap. Optional population must omit R410 before installing the physical selector."
+    },
+    {
+      "id": "INT-C11",
+      "result": "pass_static_connections",
+      "description": "Sixteen Harwin contact components map one-for-one to actual C5 side pins1..14 and TP2/TP8. Each is one terminal across its two physical solder lands. Retention, force, height and assembly fixture remain unqualified."
+    },
+    {
+      "id": "INT-C12",
+      "result": "pass_static_connections",
+      "description": "FPGA configuration SDA/SCL have added 4.7 kOhm pullups to +3V3_LOGIC. TPS2116 two VOUT pads share +5V_HOLD, with pin7 passive alias preventing a false duplicate-output ERC claim. J40/J41 physical MP hold-down pads are grounded."
+    },
+    {
+      "id": "INT-C13",
+      "result": "pass_exported_native_connectivity",
+      "description": "All 364 source components and two native CN503 sockets agree with integrated native pin contracts and exported XML component fields/terminals/nets/types/DNP. Nine ERC flags are omitted from XML; all 50 intended unused endpoints are isolated. Physical bare probe pads remain in XML despite being excluded from purchased BOM. Safety equations are evaluated from exported XML connectivity."
+    },
+    {
+      "id": "INT-C14",
+      "result": "pass_exported_probe_connectivity",
+      "description": "All 28 raw G1 signals have distinct bare probe pads joining their actual CN503 socket and named circuit endpoint. Eight added direction/enable/request probes and three ground returns agree with XML; existing BUS_SAFE/DATA_OEn pads are retained. Probe placement/stub/loading targets are not physical qualification."
+    }
+  ],
+  "constraint_duplicates": [],
+  "cross_block_signal_nets": {
+    "+3V3_LOGIC": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "5",
+        "name": "IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "15",
+        "name": "IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "24",
+        "name": "IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "29",
+        "name": "IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "41",
+        "name": "IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "50",
+        "name": "IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "59",
+        "name": "ADC_AVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "60",
+        "name": "IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "64",
+        "name": "VREG_VIN",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "68",
+        "name": "USB_OTP_VDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "69",
+        "name": "QSPI_IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "76",
+        "name": "IOVDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2001",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2001",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2005",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2007",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2008",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2009",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2011",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2012",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2014",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2015",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2016",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2017",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2018",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2019",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2005",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2008",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U202",
+        "pin": "8",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2022",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U203",
+        "pin": "8",
+        "name": "VDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2023",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2024",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2020",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U204",
+        "pin": "1",
+        "name": "VCCA",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U204",
+        "pin": "2",
+        "name": "1DIR",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2027",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U205",
+        "pin": "1",
+        "name": "VCCA",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U205",
+        "pin": "2",
+        "name": "1DIR",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2029",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U207",
+        "pin": "1",
+        "name": "VCCA",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U208",
+        "pin": "1",
+        "name": "VCCA",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U208",
+        "pin": "2",
+        "name": "1DIR",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2031",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2033",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2024",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U209",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2035",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2026",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2027",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2035",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2042",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "J203",
+        "pin": "1",
+        "name": "VTREF",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "5",
+        "name": "VCCIO5",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "11",
+        "name": "VCCIO4",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "23",
+        "name": "VCCIO3",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "26",
+        "name": "VCCIO2",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "46",
+        "name": "VCCIO2",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "50",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "55",
+        "name": "VCCIO1",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "73",
+        "name": "VCCIO1",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "80",
+        "name": "VCCIO0",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "93",
+        "name": "VCCIO0",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "100",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C100",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C101",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C102",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C103",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C104",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C105",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C106",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C107",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C108",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C109",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C110",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C111",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C112",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C113",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C114",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C115",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C116",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C117",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C118",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R100",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R101",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R102",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R103",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R104",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R105",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R106",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R107",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R108",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "X10",
+        "pin": "1",
+        "name": "OE",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "X10",
+        "pin": "4",
+        "name": "VDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "C119",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "J10",
+        "pin": "1",
+        "name": "+3V3_LOGIC",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "R111",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R112",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R200",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U21",
+        "pin": "6",
+        "name": "VOS",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "L20",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C207",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C208",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R203",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U23",
+        "pin": "3",
+        "name": "MRn",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U23",
+        "pin": "5",
+        "name": "SENSE",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U23",
+        "pin": "6",
+        "name": "VDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R205",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C212",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U24",
+        "pin": "3",
+        "name": "MRn",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U24",
+        "pin": "6",
+        "name": "VDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R206",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C213",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U25",
+        "pin": "3",
+        "name": "MRn",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U25",
+        "pin": "6",
+        "name": "VDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R207",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C214",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U26",
+        "pin": "3",
+        "name": "MRn",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U26",
+        "pin": "6",
+        "name": "VDD",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R208",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C215",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U27",
+        "pin": "8",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C216",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U28",
+        "pin": "8",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C217",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U29",
+        "pin": "8",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C218",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U30",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C219",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U31",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C220",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U32",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C221",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U33",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C222",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U34",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C223",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R220",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R221",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C224",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C225",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "31",
+        "name": "VCCA",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "42",
+        "name": "VCCA",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "20",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C228",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U37",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C229",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U72",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C230",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R264",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U73",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C232",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R266",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "+3V3_STORAGE": [
+      {
+        "block": "controller",
+        "ref": "R2011",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2013",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2015",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2017",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2019",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "J201",
+        "pin": "4",
+        "name": "VDD",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2025",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2026",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U207",
+        "pin": "16",
+        "name": "VCCB",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "U208",
+        "pin": "16",
+        "name": "VCCB",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2032",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2034",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U22",
+        "pin": "6",
+        "name": "VOS",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "L21",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C210",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C211",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R204",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U24",
+        "pin": "5",
+        "name": "SENSE",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "+5V_C5": [
+      {
+        "block": "controller",
+        "ref": "U206",
+        "pin": "14",
+        "name": "VBUS",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "C2036",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "K214",
+        "pin": "1",
+        "name": "CONTACT",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U71",
+        "pin": "5",
+        "name": "QOD",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U71",
+        "pin": "6",
+        "name": "VOUT",
+        "type": "power_out",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C236",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "ATA_CS0n": [
+      {
+        "block": "frontend",
+        "ref": "TP119",
+        "pin": "1",
+        "name": "ATA_CS0n",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R258",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "8",
+        "name": "1A4",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "ATA_CS1n": [
+      {
+        "block": "frontend",
+        "ref": "TP120",
+        "pin": "1",
+        "name": "ATA_CS1n",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R259",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "11",
+        "name": "2A1",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "ATA_DA0": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "18",
+        "name": "A7",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP116",
+        "pin": "1",
+        "name": "ATA_DA0",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R255",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "2",
+        "name": "1A1",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "ATA_DA1": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "8",
+        "name": "A8",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP117",
+        "pin": "1",
+        "name": "ATA_DA1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R256",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "4",
+        "name": "1A2",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "ATA_DA2": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "7",
+        "name": "A9",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP118",
+        "pin": "1",
+        "name": "ATA_DA2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R257",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "6",
+        "name": "1A3",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "ATA_DD0": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "29",
+        "name": "DQ0",
+        "type": "bidirectional",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP100",
+        "pin": "1",
+        "name": "ATA_DD0",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R224",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "2",
+        "name": "1B1",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD1": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "31",
+        "name": "DQ1",
+        "type": "bidirectional",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP101",
+        "pin": "1",
+        "name": "ATA_DD1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R226",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "3",
+        "name": "1B2",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD10": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "24",
+        "name": "A1",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP110",
+        "pin": "1",
+        "name": "ATA_DD10",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R244",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "16",
+        "name": "2B3",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD11": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "23",
+        "name": "A2",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP111",
+        "pin": "1",
+        "name": "ATA_DD11",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R246",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "17",
+        "name": "2B4",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD12": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "22",
+        "name": "A3",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP112",
+        "pin": "1",
+        "name": "ATA_DD12",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R248",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "19",
+        "name": "2B5",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD13": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "21",
+        "name": "A4",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP113",
+        "pin": "1",
+        "name": "ATA_DD13",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R250",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "20",
+        "name": "2B6",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD14": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "20",
+        "name": "A5",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP114",
+        "pin": "1",
+        "name": "ATA_DD14",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R252",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "22",
+        "name": "2B7",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD15": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "19",
+        "name": "A6",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP115",
+        "pin": "1",
+        "name": "ATA_DD15",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R254",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "23",
+        "name": "2B8",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD2": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "33",
+        "name": "DQ2",
+        "type": "bidirectional",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP102",
+        "pin": "1",
+        "name": "ATA_DD2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R228",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "5",
+        "name": "1B3",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD3": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "35",
+        "name": "DQ3",
+        "type": "bidirectional",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP103",
+        "pin": "1",
+        "name": "ATA_DD3",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R230",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "6",
+        "name": "1B4",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD4": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "38",
+        "name": "DQ4",
+        "type": "bidirectional",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP104",
+        "pin": "1",
+        "name": "ATA_DD4",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R232",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "8",
+        "name": "1B5",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD5": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "40",
+        "name": "DQ5",
+        "type": "bidirectional",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP105",
+        "pin": "1",
+        "name": "ATA_DD5",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R234",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "9",
+        "name": "1B6",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD6": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "42",
+        "name": "DQ6",
+        "type": "bidirectional",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP106",
+        "pin": "1",
+        "name": "ATA_DD6",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R236",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "11",
+        "name": "1B7",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD7": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "44",
+        "name": "DQ7",
+        "type": "bidirectional",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP107",
+        "pin": "1",
+        "name": "ATA_DD7",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R238",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "12",
+        "name": "1B8",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD8": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "45",
+        "name": "DQ15/A-1",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP108",
+        "pin": "1",
+        "name": "ATA_DD8",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R240",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "13",
+        "name": "2B1",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DD9": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "25",
+        "name": "A0",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP109",
+        "pin": "1",
+        "name": "ATA_DD9",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R242",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "14",
+        "name": "2B2",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "ATA_DIORn": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "28",
+        "name": "OE#",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP121",
+        "pin": "1",
+        "name": "ATA_DIORn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R260",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "13",
+        "name": "2A2",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "ATA_DIOWn": [
+      {
+        "block": "bios",
+        "ref": "U44",
+        "pin": "1",
+        "name": "A",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "TP122",
+        "pin": "1",
+        "name": "ATA_DIOWn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R261",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "15",
+        "name": "2A3",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "ATA_DMACKn": [
+      {
+        "block": "frontend",
+        "ref": "TP124",
+        "pin": "1",
+        "name": "ATA_DMACKn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R262",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "17",
+        "name": "2A4",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "ATA_DMARQ": [
+      {
+        "block": "frontend",
+        "ref": "TP125",
+        "pin": "1",
+        "name": "ATA_DMARQ",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U39",
+        "pin": "4",
+        "name": "Y",
+        "type": "tri_state",
+        "populate": true
+      }
+    ],
+    "ATA_INTRQ": [
+      {
+        "block": "frontend",
+        "ref": "TP127",
+        "pin": "1",
+        "name": "ATA_INTRQ",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U38",
+        "pin": "4",
+        "name": "Y",
+        "type": "tri_state",
+        "populate": true
+      }
+    ],
+    "ATA_IORDY": [
+      {
+        "block": "frontend",
+        "ref": "TP126",
+        "pin": "1",
+        "name": "ATA_IORDY",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U70",
+        "pin": "4",
+        "name": "Y",
+        "type": "open_collector",
+        "populate": true
+      }
+    ],
+    "ATA_RESETn": [
+      {
+        "block": "frontend",
+        "ref": "TP123",
+        "pin": "1",
+        "name": "ATA_RESETn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U37",
+        "pin": "2",
+        "name": "A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R263",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "BIOS_BANK0": [
+      {
+        "block": "bios",
+        "ref": "U41",
+        "pin": "2",
+        "name": "1A",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R403",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "78",
+        "name": "PT22A",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BIOS_BANK1": [
+      {
+        "block": "bios",
+        "ref": "U41",
+        "pin": "5",
+        "name": "2A",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R404",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "83",
+        "name": "PT19B",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BIOS_RECOVERYn": [
+      {
+        "block": "bios",
+        "ref": "U42",
+        "pin": "1",
+        "name": "A",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "J41",
+        "pin": "5",
+        "name": "RECOVERY_INTERLOCK_COMMON",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "SW40",
+        "pin": "5",
+        "name": "RECOVERY_INTERLOCK_COMMON",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R409",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "bios",
+        "ref": "R410",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "96",
+        "name": "PT11B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U29",
+        "pin": "6",
+        "name": "2B",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "BIOS_WR_EN": [
+      {
+        "block": "bios",
+        "ref": "U42",
+        "pin": "6",
+        "name": "C",
+        "type": "input",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R407",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "84",
+        "name": "PT19A",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BRIDGE_ARM": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "14",
+        "name": "GPIO15",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "21",
+        "name": "PL12B / PCLKC3_0",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U28",
+        "pin": "5",
+        "name": "2A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R211",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "BUS_CS0n": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "34",
+        "name": "PB11A / PCLKT2_0",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "12",
+        "name": "1Y4",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_CS1n": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "35",
+        "name": "PB11B / PCLKC2_0",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "9",
+        "name": "2Y1",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_DA0": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "28",
+        "name": "PB5B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "18",
+        "name": "1Y1",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_DA1": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "29",
+        "name": "PB6A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "16",
+        "name": "1Y2",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_DA2": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "30",
+        "name": "PB6B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "14",
+        "name": "1Y3",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_DD0": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "51",
+        "name": "PR14B",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R223",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "47",
+        "name": "1A1",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD1": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "52",
+        "name": "PR14A",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R225",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "46",
+        "name": "1A2",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD10": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "63",
+        "name": "PR7A / PCLKT1_0",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R243",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "33",
+        "name": "2A3",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD11": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "64",
+        "name": "PR6B",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R245",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "32",
+        "name": "2A4",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD12": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "65",
+        "name": "PR6A",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R247",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "30",
+        "name": "2A5",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD13": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "66",
+        "name": "PR5B",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R249",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "29",
+        "name": "2A6",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD14": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "67",
+        "name": "PR5A",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R251",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "27",
+        "name": "2A7",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD15": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "68",
+        "name": "PR4B",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R253",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "26",
+        "name": "2A8",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD2": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "53",
+        "name": "PR12B",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R227",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "44",
+        "name": "1A3",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD3": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "54",
+        "name": "PR12A",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R229",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "43",
+        "name": "1A4",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD4": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "57",
+        "name": "PR11B",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R231",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "41",
+        "name": "1A5",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD5": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "58",
+        "name": "PR11A",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R233",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "40",
+        "name": "1A6",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD6": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "59",
+        "name": "PR10B",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R235",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "38",
+        "name": "1A7",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD7": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "60",
+        "name": "PR10A",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R237",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "37",
+        "name": "1A8",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD8": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "61",
+        "name": "PR9A",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R239",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "36",
+        "name": "2A1",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DD9": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "62",
+        "name": "PR7B / PCLKC1_0",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R241",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "35",
+        "name": "2A2",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "BUS_DIORn": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "36",
+        "name": "PB12A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "7",
+        "name": "2Y2",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_DIOWn": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "37",
+        "name": "PB12B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "5",
+        "name": "2Y3",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_DMACKn": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "39",
+        "name": "PB16B / PCLKC2_1",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U36",
+        "pin": "3",
+        "name": "2Y4",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_RESETn": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "38",
+        "name": "PB16A / PCLKT2_1",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U29",
+        "pin": "1",
+        "name": "1A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U37",
+        "pin": "4",
+        "name": "Y",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "BUS_SAFE": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "24",
+        "name": "PL14A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U30",
+        "pin": "4",
+        "name": "Y",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U31",
+        "pin": "1",
+        "name": "1A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U33",
+        "pin": "1",
+        "name": "A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R219",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "TP22",
+        "pin": "1",
+        "name": "BUS_SAFE",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "C5_PWR_EN": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "57",
+        "name": "GPIO46_ADC6",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2043",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U34",
+        "pin": "2",
+        "name": "B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R218",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "CONSOLE_3V3": [
+      {
+        "block": "bios",
+        "ref": "U40",
+        "pin": "37",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "U41",
+        "pin": "8",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "U42",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "U43",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "U44",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "U45",
+        "pin": "3",
+        "name": "VDD",
+        "type": "power_in",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "J41",
+        "pin": "6",
+        "name": "CUSTOM_3V3",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "SW40",
+        "pin": "6",
+        "name": "CUSTOM_3V3",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R400",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R401",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R402",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R412",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R413",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R414",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "R410",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "bios",
+        "ref": "C400",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "C402",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "C403",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "C404",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "C405",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "C406",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "bios",
+        "ref": "C401",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "power-bus",
+        "ref": "U25",
+        "pin": "5",
+        "name": "SENSE",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R222",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C226",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C227",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "7",
+        "name": "VCCB",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "18",
+        "name": "VCCB",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R258",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R259",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R260",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R261",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R262",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R265",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U38",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C231",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R267",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U39",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C233",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U70",
+        "pin": "5",
+        "name": "VCC",
+        "type": "power_in",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R268",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "C234",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "TP26",
+        "pin": "1",
+        "name": "CONSOLE_3V3",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "DATA_DIR": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "70",
+        "name": "PR3B",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "TP128",
+        "pin": "1",
+        "name": "DATA_DIR",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R214",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "1",
+        "name": "1DIR",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U35",
+        "pin": "24",
+        "name": "2DIR",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "DMARQ_OEn": [
+      {
+        "block": "frontend",
+        "ref": "TP130",
+        "pin": "1",
+        "name": "DMARQ_OEn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U73",
+        "pin": "4",
+        "name": "Y",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R267",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U39",
+        "pin": "1",
+        "name": "OEn",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "FPGA_READY": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "97",
+        "name": "PT11A",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U28",
+        "pin": "6",
+        "name": "2B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R212",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "FPGA_RESETn": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "13",
+        "name": "GPIO14",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "19",
+        "name": "PL11B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U29",
+        "pin": "2",
+        "name": "1B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R213",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "INTRQ_OEn": [
+      {
+        "block": "frontend",
+        "ref": "TP129",
+        "pin": "1",
+        "name": "INTRQ_OEn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U72",
+        "pin": "4",
+        "name": "Y",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R265",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U38",
+        "pin": "1",
+        "name": "OEn",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "IORDY_RELEASE": [
+      {
+        "block": "frontend",
+        "ref": "TP131",
+        "pin": "1",
+        "name": "IORDY_RELEASE",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U31",
+        "pin": "4",
+        "name": "2Y",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U70",
+        "pin": "2",
+        "name": "A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R268",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "LINK_A0": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "8",
+        "name": "GPIO10",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "15",
+        "name": "PL9B",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "LINK_A1": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "9",
+        "name": "GPIO11",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "16",
+        "name": "PL10A",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "LINK_D0": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "77",
+        "name": "GPIO0",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "1",
+        "name": "PL2A / L_GPLLT_IN",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "LINK_D1": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "78",
+        "name": "GPIO1",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "2",
+        "name": "PL2B / L_GPLLC_IN",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "LINK_D2": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "79",
+        "name": "GPIO2",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "4",
+        "name": "PL3B / PCLKC5_0",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "LINK_D3": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "80",
+        "name": "GPIO3",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "7",
+        "name": "PL4A",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "LINK_D4": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "1",
+        "name": "GPIO4",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "8",
+        "name": "PL4B",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "LINK_D5": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "2",
+        "name": "GPIO5",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "9",
+        "name": "PL5A",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "LINK_D6": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "3",
+        "name": "GPIO6",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "10",
+        "name": "PL5B",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "LINK_D7": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "4",
+        "name": "GPIO7",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "12",
+        "name": "PL7C / PCLKT4_0",
+        "type": "bidirectional",
+        "populate": true
+      }
+    ],
+    "LINK_IRQ": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "11",
+        "name": "GPIO12",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "17",
+        "name": "PL10B",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "LINK_RDn": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "7",
+        "name": "GPIO9",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "14",
+        "name": "PL9A",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "LINK_READY": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "12",
+        "name": "GPIO13",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "18",
+        "name": "PL11A",
+        "type": "output",
+        "populate": true
+      }
+    ],
+    "LINK_WRn": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "6",
+        "name": "GPIO8",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "13",
+        "name": "PL7D / PCLKC4_0",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "LOGIC_RESETn": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "35",
+        "name": "RUN",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2042",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "J203",
+        "pin": "5",
+        "name": "RUNn",
+        "type": "passive",
+        "populate": false
+      },
+      {
+        "block": "power-bus",
+        "ref": "U23",
+        "pin": "1",
+        "name": "RESETn",
+        "type": "open_collector",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R205",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U27",
+        "pin": "1",
+        "name": "1A",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "PWR_FAILn": [
+      {
+        "block": "controller",
+        "ref": "U201",
+        "pin": "39",
+        "name": "GPIO31",
+        "type": "bidirectional",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "25",
+        "name": "PL14B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U26",
+        "pin": "1",
+        "name": "RESETn",
+        "type": "open_collector",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R208",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U27",
+        "pin": "6",
+        "name": "2B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U34",
+        "pin": "1",
+        "name": "A",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "TP20",
+        "pin": "1",
+        "name": "PWR_FAILn",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "REQ_DATA_OEn": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "69",
+        "name": "PR4A",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "TP132",
+        "pin": "1",
+        "name": "REQ_DATA_OEn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U32",
+        "pin": "2",
+        "name": "B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R220",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "REQ_DMARQ": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "75",
+        "name": "PR1A",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R216",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U39",
+        "pin": "2",
+        "name": "A",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "REQ_DMARQ_OEn": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "41",
+        "name": "PB18B",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "TP134",
+        "pin": "1",
+        "name": "REQ_DMARQ_OEn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U73",
+        "pin": "2",
+        "name": "B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R266",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "REQ_INTRQ": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "74",
+        "name": "PR1B",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R215",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U38",
+        "pin": "2",
+        "name": "A",
+        "type": "input",
+        "populate": true
+      }
+    ],
+    "REQ_INTRQ_OEn": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "40",
+        "name": "PB18A",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "TP133",
+        "pin": "1",
+        "name": "REQ_INTRQ_OEn",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U72",
+        "pin": "2",
+        "name": "B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R264",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "REQ_IORDY_LOW": [
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "71",
+        "name": "PR3A",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "TP135",
+        "pin": "1",
+        "name": "REQ_IORDY_LOW",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U33",
+        "pin": "2",
+        "name": "B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R217",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      }
+    ],
+    "STORAGE_PGOOD": [
+      {
+        "block": "controller",
+        "ref": "U209",
+        "pin": "2",
+        "name": "B",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "controller",
+        "ref": "R2025",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U24",
+        "pin": "1",
+        "name": "RESETn",
+        "type": "open_collector",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "R206",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "power-bus",
+        "ref": "U27",
+        "pin": "2",
+        "name": "1B",
+        "type": "input",
+        "populate": true
+      }
+    ]
+  },
+  "intentional_external_or_unpopulated_nodes": [
+    "CONSOLE_3V3 and raw ATA nets terminate through the separate flex J50/J51 interface, added by the native generator.",
+    "CONSOLE_5V controller power comes from dedicated J20 wire pads; flex5V baseline links remain DNP.",
+    "ROM_A10..ROM_A19, ROM_CEn and STOCK_CEn are optional J40 motherboard tap nodes. Stock CE pad and isolated leg must remain distinct.",
+    "SW40 is an offboard physical switch with no carrier footprint. J41 is its carrier FPC harness interface.",
+    "FPGA_CCLK, SPISI, SPISO, SDA and SCL are unused configuration capabilities; factory FPGA programming uses explicit JTAG service pads.",
+    "LINK data and strobes may be high-impedance while MCU/FPGA held reset. Firmware must establish idle strobes and directions before releasing FPGA_RESETn and asserting BRIDGE_ARM."
+  ],
+  "release_gates_open": [
+    "Native ERC/DRC, routing, package-pad validation, Gerber inspection and optional variant placement remain separate checks.",
+    "Console continuity/polarity, 3.3V signal levels, host IORDY pullup and retained GD-ROM ownership must be measured.",
+    "Slow ramp/rail-order/power-fail waveforms and transceiver OE/turnaround timing require bench qualification; static Ioff/Boolean review does not establish transient behavior.",
+    "Bank0-only factory BIOS option still needs console-first-fetch versus FPGA/NOR reset timing capture. No nonzero-bank or warm-switch qualification claimed.",
+    "Storage durability and bounded flush do not follow from reserve capacitor population; firmware completion contract and interruption tests remain required.",
+    "C5 contact retention, BOOT/EN service contacts, FPC bend/actuator clearance and measured shield clearance require physical installation validation.",
+    "Optional reserve charge resistor pulse-overload and all MLCC DC-bias/temperature/aging derating remain procurement/bench release checks; no card-flush guarantee."
+  ],
+  "primary_sources": [
+    "https://www.ti.com/lit/ds/symlink/sn74lvc16t245.pdf",
+    "https://www.ti.com/lit/ds/symlink/sn74lvc244a.pdf",
+    "https://www.ti.com/lit/ds/symlink/sn74axc4t245.pdf",
+    "https://www.ti.com/lit/ds/symlink/tps2116.pdf",
+    "https://www.macronix.com/Lists/Datasheet/Attachments/8514/MX29LV640E%20T-B%2C%203V%2C%2064Mb%2C%20v1.7.pdf",
+    "https://consolemods.org/wiki/images/2/27/Dreamcast_VA1_FULL.pdf"
+  ],
+  "revision_note": "Refreshed after the corrected J51 mapping and 39 manufactured debug pads. Reusable checker verifies 375 integrated references, 366 XML references, 364 onboard footprints, all native endpoints, 100 FPGA package functions and 56 LPF pin/net constraints; all 8240 functional Boolean combinations use exported native connectivity. All 39 debug probe mappings are verified from XML. No mechanical, probe loading, timing or assembler fixture release is claimed.",
+  "native_netlist": {
+    "native_components": 375,
+    "xml_components": 366,
+    "onboard_footprinted_components": 364,
+    "omitted_erc_flags": [
+      "#FLG1",
+      "#FLG2",
+      "#FLG3",
+      "#FLG4",
+      "#FLG5",
+      "#FLG6",
+      "#FLG7",
+      "#FLG8",
+      "#FLG9"
+    ],
+    "xml_named_nets": 274,
+    "assigned_pin_endpoints_checked": 1204,
+    "isolated_no_connect_endpoints_checked": 50
+  },
+  "automated_proof": {
+    "bus_ownership_cases": 8192,
+    "bios_write_interlock_cases": 32,
+    "c5_sd_enable_cases": 16,
+    "total_cases": 8240,
+    "connectivity_basis": "controller/checks/netlist.xml; all native component pin nets and types checked before gate evaluation",
+    "fpga_package_pin_functions_checked": 100,
+    "fpga_lpf_pin_net_constraints_checked": 56,
+    "command": "python hardware/g1-sd-wifi/tools/check_integration.py --check"
+  },
+  "debug_probe_access": {
+    "raw_g1_pads": 28,
+    "added_enable_direction_request_pads": 8,
+    "added_local_ground_pads": 3,
+    "existing_safety_enable_pads": [
+      "TP22",
+      "TP23"
+    ],
+    "native_xml_probe_endpoint_checks": 39,
+    "mappings": [
+      {
+        "ref": "TP100",
+        "net": "ATA_DD0",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "2",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP101",
+        "net": "ATA_DD1",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "3",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP102",
+        "net": "ATA_DD2",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "5",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP103",
+        "net": "ATA_DD3",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "6",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP104",
+        "net": "ATA_DD4",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "8",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP105",
+        "net": "ATA_DD5",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "9",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP106",
+        "net": "ATA_DD6",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "11",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP107",
+        "net": "ATA_DD7",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "12",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP108",
+        "net": "ATA_DD8",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "13",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP109",
+        "net": "ATA_DD9",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "14",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP110",
+        "net": "ATA_DD10",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "16",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP111",
+        "net": "ATA_DD11",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "17",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP112",
+        "net": "ATA_DD12",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "19",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP113",
+        "net": "ATA_DD13",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "20",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP114",
+        "net": "ATA_DD14",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "22",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP115",
+        "net": "ATA_DD15",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "23",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP116",
+        "net": "ATA_DA0",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "2",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP117",
+        "net": "ATA_DA1",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "4",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP118",
+        "net": "ATA_DA2",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "6",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP119",
+        "net": "ATA_CS0n",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "8",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP120",
+        "net": "ATA_CS1n",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "11",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP121",
+        "net": "ATA_DIORn",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "13",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP122",
+        "net": "ATA_DIOWn",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "15",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP123",
+        "net": "ATA_RESETn",
+        "endpoint_ref": "U37",
+        "endpoint_pin": "2",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP124",
+        "net": "ATA_DMACKn",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "17",
+        "local_ground_ref": "TP137",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP125",
+        "net": "ATA_DMARQ",
+        "endpoint_ref": "U39",
+        "endpoint_pin": "4",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP126",
+        "net": "ATA_IORDY",
+        "endpoint_ref": "U70",
+        "endpoint_pin": "4",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP127",
+        "net": "ATA_INTRQ",
+        "endpoint_ref": "U38",
+        "endpoint_pin": "4",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP128",
+        "net": "DATA_DIR",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "1",
+        "local_ground_ref": "TP136",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP129",
+        "net": "INTRQ_OEn",
+        "endpoint_ref": "U38",
+        "endpoint_pin": "1",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP130",
+        "net": "DMARQ_OEn",
+        "endpoint_ref": "U39",
+        "endpoint_pin": "1",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP131",
+        "net": "IORDY_RELEASE",
+        "endpoint_ref": "U70",
+        "endpoint_pin": "2",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP132",
+        "net": "REQ_DATA_OEn",
+        "endpoint_ref": "U32",
+        "endpoint_pin": "2",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP133",
+        "net": "REQ_INTRQ_OEn",
+        "endpoint_ref": "U72",
+        "endpoint_pin": "2",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP134",
+        "net": "REQ_DMARQ_OEn",
+        "endpoint_ref": "U73",
+        "endpoint_pin": "2",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP135",
+        "net": "REQ_IORDY_LOW",
+        "endpoint_ref": "U33",
+        "endpoint_pin": "2",
+        "local_ground_ref": "TP138",
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP136",
+        "net": "GND",
+        "endpoint_ref": "U35",
+        "endpoint_pin": "10",
+        "local_ground_ref": null,
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP137",
+        "net": "GND",
+        "endpoint_ref": "U36",
+        "endpoint_pin": "10",
+        "local_ground_ref": null,
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      },
+      {
+        "ref": "TP138",
+        "net": "GND",
+        "endpoint_ref": "U38",
+        "endpoint_pin": "3",
+        "local_ground_ref": null,
+        "access_policy": "top or bare bottom copper; removed-carrier bench access"
+      }
+    ],
+    "qualification": "Static exported-net connectivity and probe metadata only; physical placement, stub length, access and probe loading remain layout/bench checks.",
+    "negative_controls": {
+      "rejected_cases": 4,
+      "expected_rejections": {
+        "swapped_data_labels": "Probe is connected to a different physical endpoint net: TP100",
+        "buffered_endpoint_substitution": "Probe is connected to a different physical endpoint net: TP100",
+        "wrong_ground_return": "Probe ground reference is absent or not GND: TP100",
+        "purchased_probe_header": "Debug pad must be manufactured bare copper, not a purchased connector: TP100"
+      },
+      "basis": "In-memory mutations of verified native XML endpoints; no design files changed."
+    }
+  }
+}

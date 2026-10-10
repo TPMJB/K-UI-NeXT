@@ -1,105 +1,57 @@
-# G1 bridge JLCPCB release
+# Rev A fabrication status
 
-**Not ready to order — 10 October 2026.** This directory contains a fabrication preflight, not a finished bridge, BOM or Gerber package. The design branch still contains the RP2350B controller starter. It has no rigid PCB, flex CAD, FPGA circuit/HDL or production assembly data. Nothing here should be uploaded as an order.
+**The hardware design is implemented; fabrication is not released yet.** The carrier now has a complete native circuit and a four-layer layout draft. Both independent CN503 flex arms are routed. The parts list and candidate assembly placement derive from the selected physical components. Remaining fabrication blockers are carrier routing/layout review, mechanically supported fit and assembler rotation/fixture review. FPGA device timing and completed firmware remain bring-up limitations.
 
-The owner's requested measurements and photos are sufficient for the first mechanical draft, and the Dreamcast can be reassembled. The remaining work is circuit and layout engineering. The paper contact guide is a fit aid; the older CF board is a different design.
-
-## Requested hardware and Claude's additions
-
-The source review is Claude's three G1 documents at [b207dd659565826ffd757ccf7abe1998f63c9202](https://github.com/TPMJB/K-UI-NeXT/tree/b207dd659565826ffd757ccf7abe1998f63c9202/docs), including the latest VA1-only, expected 3.3 V BIOS correction. The existing [review disposition](../docs/review-disposition-2026-10-09.md) and [controller/RAM/BIOS disposition](../docs/controller-ram-bios-disposition-2026-10-09.md) record the corrections. The items below remain in scope; recording them does not implement their circuits.
-
-| Item | Native implementation now | Work before first fabrication |
-| --- | --- | --- |
-| RP2350B, native four-bit microSD | MCU/boot-flash/clock starter only | Complete SD circuit and revised allocation |
-| Small FPGA/CPLD ATA front end | None; MachXO2 candidates unselected | Exact part, usable I/O/FIFO budget, clocks, configuration/JTAG, MCU link, pin map and synthesized timing/ownership logic |
-| G1 data/control buffers | None | Qualified off-state isolation, default-disable, turnaround and reset/brownout behavior |
-| Retained GD-ROM device 0; bridge device 1 | Proposal only | Device selection, optical IRQ/DMA coexistence, activation/relock, register semantics and shared-line ownership |
-| FIFO/SRAM path and DMA | Proposal only | Handshake/backpressure; final DMA word and hold-time ownership; conservative mode/timing contract |
-| 8 MiB PSRAM provision | Absent | Exact part/footprint, shared QSPI plus legal CS1, decoupling, populated and unpopulated variants; FIFO/SRAM remains the immediate path |
-| Console and USB power | Bench foundation only | Regulator/source isolation, current/thermal budget, no USB backfeed |
-| Local removable XIAO ESP32-C5, USB removed | Absent | Low-height removable contacts, switched supply, SPI/IRQ/READY off-state isolation, antenna and service access |
-| USB-free C5 programming | Absent | UART TX/RX/GND and BOOT/EN recovery contacts with safe strap/power behavior; installed SPI updater remains software work |
-| Power-loss handling | Absent | Early detection, radio cutoff, isolated controller/SD reserve domain and sizing/qualification plan |
-| Optional custom/dual BIOS | Absent; still an open hardware variant | Additional ROM address/control taps, exact NOR/adapter, immutable original-ROM path, independent physical selection, exclusive enables and protected programming |
-| CN503 flex and supported carrier | Contact-guide artwork only | Routed CAD, joining geometry, FPC contact face/thickness, ground returns, coverlay/stiffeners, independently supported carrier |
-| Debug and bring-up access | Bench headers in starter | Accessible 28 G1 signals and buffer enables; production bench-header population explicitly excluded |
-| Write integrity and filesystem ownership | Requirements only | K-UI remains sole exFAT/ext4 owner; define write-through/flush and recovery behavior; no durability claim before power-cut testing |
-
-The optional BIOS circuit is not provided by CN503 alone. It must be explicitly accounted for in the chosen fabrication variant; it has not been silently removed. No BIOS bypass, validated dual-bank recovery, extra Dreamcast system RAM or peak-transfer claim exists. The PSRAM is bridge cache memory.
-
-CN503's remaining audio/+12 V contacts are deliberately unused in the baseline. Hardware CDDA and replacing retail-game modem/BBA interfaces are later projects, not implicit features of this order.
-
-## What constitutes the first order
-
-The first hardware release will be an **unvalidated bring-up prototype**, not a working product. Before manufacturing it, select the actual components, implement complete fail-safe power/reset/bus ownership and service circuits, finish rigid and flex layout, resolve footprints, review the BOM/rotations, run real ERC/DRC and inspect the plotted fabrication layers. A programming/recovery and initial bench bring-up procedure must accompany it.
-
-Higher DMA modes, PSRAM caching, C5 OTA, final SD power-cut qualification and optional BIOS programming can be staged after prototype manufacture only when the required hardware is present and the release explicitly states what is unimplemented. This is a staging option, not authorization to omit the owner's requested provisions. A working-product claim needs the subsequent console tests.
-
-A finished order package must contain:
-
-| Deliverable | Use |
+| Item | Actual state |
 | --- | --- |
-| Rigid-board Gerber/drill ZIP | FR-4 fabrication order |
-| Rigid-board production BOM and CPL | JLC SMT assembly, exact population variant |
-| Separate flex Gerber/drill/coverlay/stiffener ZIP | Passive custom FPC order |
-| Exact order settings for each | Layer count, material, thickness, finish, dimensions and assembly selection matching the CAD |
-| Separate-purchase parts list | Removable C5, card, supports, programming/service items and any parts not supplied by assembly |
-| Programming and bring-up instructions | Exact firmware/FPGA images, bench power sequence, recovery and first tests |
-| Review/check reports and input hashes | Tie fabrication exports to the reviewed sources |
+| Integrated native circuit | KiCad10 ERC0; physical package-pin/footprint-pad audit passes |
+| FlexA and flexB | Each ERC0, DRC0, unconnected0, parity0; independent native mapping check passes |
+| FPGA logic | Original source and regressions; MachXO2 technology mapping fits; vendor place/route timing still open |
+| Carrier PCB | Four-layer0.8 mm native placement/routing draft; actual checks and placement reports accompany CAD |
+| C5 mount | Sixteen discrete Harwin S7221 contacts,0.90 mm supported working gap; clamp/installed height unqualified |
+| Procurement | All53 BASE carrier SMT part types have exact catalog identities; manual C5 and optional-variant sourcing remain separate |
+| Assembly/release | BASE candidate BOM has277 SMT parts; actual native CPL exists; manufacturer rotation/fixture preview and reviewed release still pending |
 
-There is no populated purchase list yet. An empty BOM or guessed connector would make this package misleading.
+The first release will be a bring-up prototype. It retains GD-ROM device0 and provides a device1 block backend, native four-bit SD,8 MiB bridge PSRAM, local USB-free removable C5 recovery/isolation, power-loss detection, a DNP reserve bank and a DNP BIOS option. K-UI owns the filesystem. Audio/+12 V, GDEMU/ATAPI emulation and retail-game modem/BBA compatibility are outside this hardware release.
 
-## JLC-specific design constraints
+## Order files
 
-Use **separate rigid and flex orders**. JLC's current capabilities do not support integrated rigid-flex. The passive flex requires no assembly BOM/CPL. Rigid SMT assembly requires a production BOM and placement file from the final design.
+There are **three separate fabrication orders**, rather than integrated rigid-flex: rigid carrier, flexA and flexB. The passive flex needs no assembly BOM/CPL. Rigid assembly uses the BASE population with BIOS_OPTION and reserve components DNP. The C5 is manually installed in the retained spring-contact fixture.
 
-The accepted 1.00 mm working CN503 pitch and approximately 0.44 mm lead width do not define a finished copper pad. At a 0.44 mm pad width with 0.10 mm coverlay expansion per side, the remaining web is `1.00 - (0.44 + 0.20) = 0.36 mm`, below JLC's 0.50 mm minimum. Choose an explicit shared solder window or qualify narrower landing pads; do not assume coverlay between every joint.
+The alternative **BASE_PSRAM_DNP** uses the same fabricated PCB and omits only U203. Its separate candidates are [rigid-psram-dnp-bom.csv](rigid-psram-dnp-bom.csv), [rigid-psram-dnp-cpl.csv](rigid-psram-dnp-cpl.csv) and [assembly-psram-dnp-draft-report.json](assembly-psram-dnp-draft-report.json): 276 SMT parts in 52 exact catalog types. Boot flash, CS1 pullup and bypass capacitors remain fitted. Its firmware must disable PSRAM/cache mapping and must not probe or assert CS1/GPIO47. Generate this candidate with `/usr/bin/python3 hardware/g1-sd-wifi/tools/generate_assembly_draft.py --variant BASE_PSRAM_DNP`; the default invocation generates the populated 8 MiB BASE candidate. Submit one matching population's BOM and CPL together.
 
-Choose the FPC connector before its finished mating-tail thickness and stiffener. State stiffener material, side, thickness and filled outline in dedicated fabrication layers. Check copper-to-outline/slot clearance, gold-finger setback and the installed bend radius. JLC's plotted production-file review remains a separate step after upload.
+Draft settings are in [rigid-order-settings.json](rigid-order-settings.json) and [flex-order-settings.json](flex-order-settings.json). Rigid: FR-4,4 layers,0.8 mm, ENIG,1 oz outer/0.5 oz inner copper, top-side assembly. Its0.20 mm QFN thermal drills use0.50 mm pads, an absolute0.15 mm annular ring; signal routing vias are0.20/0.50 mm and power vias are0.30/0.60 mm. Open thermal-via/paste-window behavior needs assembly review. Flex: two layers,0.12 mm nominal base,0.5 oz copper, ENIG,0.20 mm top PI tail stiffeners, bottom-contact0.5 mm pitch/10.5 mm tails. Supplier must verify the exposed-finger finished0.30 ±0.05 mm tail and required width tolerance. Shared coverlay windows avoid subminimum webs between CN503 solder fingers.
 
-Mechanical engineering uses the owner's 6 mm BIOS/CN503 region, 8 mm general region and zero-clearance thermal-contact footprints. The roughly 7 mm strips contain existing parts/solder/case features; neither is a blank rectangular mounting area. The housing-derived 5.03 mm trial row separation and solder-tail landing geometry still require prototype qualification. No new console teardown is being requested.
+Power is a separate fused5 V/GND pair at J20. The flex's5 V contacts do not supply the assembled bridge. The chosen FPC contact-current budget cannot be silently used for the full C5/SD/controller load.
 
-## Candidate sourcing only
+[parts-to-buy.csv](parts-to-buy.csv) is a sourcing list, with exact manufacturer numbers and explicit population variants. Catalog identities do not promise inventory or assembly availability. [rigid-bom.csv](rigid-bom.csv) and [rigid-cpl.csv](rigid-cpl.csv) are BASE candidates, with source hashes and their unapproved placement status in [assembly-draft-report.json](assembly-draft-report.json). CPL coordinates must be compared with native PCB pads and JLC's actual assembly preview, including spring contacts and connector pin1. The exact catalog records for Harwin S7221-45R contacts (C22445132) and Abracon ASE-50.000MHZ-LC-T oscillator (C596955) require factory assembly fixtures; the installed C5 clamp is a separate mechanical part. Both notices and URLs are preserved in the purchasing worksheet. Do not order an earlier MCU-only starter or the independent CF board for this design.
 
-These catalog references are research, **not an approved BOM or shopping list**. The FPGA is not selected; package capacity, circuit compatibility, timing and current stock still need qualification.
+## Checks and export
 
-| Candidate | JLC catalog reference |
-| --- | --- |
-| LCMXO2-1200HC-4TG100C, TQFP100 | [C453479](https://jlcpcb.com/partdetail/Lattice-LCMXO2_1200HC4TG100C/C453479) |
-| LCMXO2-2000HC-4TG100C, TQFP100 | [C1521632](https://jlcpcb.com/partdetail/LCMXO2-2000HC-4TG100C/C1521632) |
-| APS6404L-3SQR-ZR, USON8 3 × 2 mm | [C3040877](https://jlcpcb.com/partdetail/APMemory-APS6404L_3SQRZR/C3040877) |
-
-## Preflight
-
-`release-manifest.json` lists the intended native inputs and engineering review topics. Its initial status is blocked. The script's audit mode needs Python only and must report that state; it does not fabricate blank order files. Export mode additionally needs KiCad 10 and completed, reviewed inputs.
-
-Run from a repository checkout:
+From the repository root:
 
 ```sh
-python3 hardware/g1-sd-wifi/manufacturing/prepare_jlcpcb_release.py --audit --json
+/usr/bin/python3 hardware/g1-sd-wifi/tools/generate_design.py
+hardware/g1-sd-wifi/fpga/run_checks.sh
+/usr/bin/python3 hardware/g1-sd-wifi/flex/tools/check_flex.py
 python3 -m unittest discover -s hardware/g1-sd-wifi/manufacturing/tests -p 'test_*.py' -v
+python3 hardware/g1-sd-wifi/manufacturing/prepare_jlcpcb_release.py --audit --json
 ```
 
-Audit exits 2 while blocked and emits the exact missing inputs. After design completion, the manifest status must be `approved_for_prototype_fabrication`, each order-settings file must have `released: true`, and `review-evidence.json` must record accepted reviews of all eight design-closure topics for the SHA-256 inventory produced by the audit. The reviewer, timestamp and substantive notes are required for each topic. Changing a native project, footprint, manufacturing input, manifest, script or review invalidates the corresponding snapshot; reacquire actual reviews rather than regenerating flags automatically.
+The audit remains blocked until the actual design review is accepted. `release-manifest.json` records exact native inputs. `review-evidence.json` must describe substantive reviews for the SHA-256 inventory. The exporter additionally executes actual KiCad ERC/DRC and schematic parity; a failed check produces no order package. Manufacturing-tool tests use synthetic fixtures and do not qualify this hardware.
 
-The script standardizes BOM CSV headers to exactly `Comment,Designator,Footprint,LCSC Part #` and CPL headers to exactly `Designator,Mid X,Mid Y,Layer,Rotation`. CPL coordinates are millimeters, with top/bottom side and reviewed rotation. The purchase list must retain exact manufacturer part numbers as well as the assembly catalog codes. A matching ref set and valid numbers do not prove PCB coordinates or part rotation; `assembly_bom_cpl` review must compare the final placement and JLC preview.
-
-With every input and review complete, export to a **new** directory:
+After completion, set only reviewed matching settings to released:true and the manifest to approved_for_prototype_fabrication. Export into a new directory:
 
 ```sh
 python3 hardware/g1-sd-wifi/manufacturing/prepare_jlcpcb_release.py --export --output /new/path/jlc-revA
 ```
 
-This runs actual KiCad 10 ERC/DRC (including schematic parity) and exports separate fabrication archives. Failed checks must leave no order package. The [branch tooling workflow](../../../.github/workflows/g1-manufacturing.yml) tests failure handling with synthetic fixtures and saves the current blocked preflight; it does not run KiCad or publish order files.
+A complete release contains three Gerber/drill archives, native coverlay/stiffener files, reviewed BASE BOM/CPL, separate manual-purchase list, programming/bring-up instructions, source hashes and the actual checks. Bring-up instructions must state which firmware/images are available and which tests remain; no dummy bitstream or firmware is supplied.
 
-Checks and review records are engineering controls, not proof of game compatibility, durability or installed fit. A green tooling test does not mean the bridge is ready. The manifest must not be changed to ready merely to suppress missing-file errors.
+## Primary fabrication references
 
-## Primary manufacturing references
-
-Checked 10 October 2026:
-
-- [JLC KiCad BOM/CPL preparation](https://jlcpcb.com/help/article/how-to-generate-the-bom-and-centroid-file-from-kicad)
-- [JLC Gerber preparation](https://jlcpcb.com/help/article/gerber-files-preparation)
+- [JLC rigid capabilities](https://jlcpcb.com/capabilities/pcb-capabilities/)
 - [JLC flex capabilities](https://jlcpcb.com/capabilities/flex-pcb-capabilities)
-- [JLC FPC stiffeners and layer naming](https://jlcpcb.com/help/article/fpc-stiffener-emi-guide)
-- [KiCad 10 command-line reference](https://docs.kicad.org/10.0/en/cli/cli.html)
+- [FPC stiffener layer naming](https://jlcpcb.com/help/article/fpc-stiffener-emi-guide)
+- [KiCad BOM/CPL preparation](https://jlcpcb.com/help/article/how-to-generate-the-bom-and-centroid-file-from-kicad)
+- [KiCad10 command-line reference](https://docs.kicad.org/10.0/en/cli/cli.html)

@@ -1,0 +1,543 @@
+{
+  "status": "SOURCING_WORKSHEET; NOT_A_PRODUCTION_RELEASE",
+  "evidence_review_date": "2026-10-10",
+  "quantity_basis": "Full component quantities for one complete assembly per variant; no scrap allowance, reel/MOQ rounding or inventory promise.",
+  "source_sha256": {
+    "design/blocks/bios.json": "46b8b78874334f74b466c2ea5f1a9f80e2fcddd22efefbd881eba2598001dcc3",
+    "design/blocks/controller.json": "d5fa2fa23fa4b1c01efa0ac48c27fdb21b2bb02ef6e40d25a76b317961147bd2",
+    "design/blocks/frontend.json": "186463a09cefce6112bb4732894faf0d26ded704fd38b47998500d6a6cbba572",
+    "design/blocks/power-bus.json": "7f3ebc5612b42a29a7b708158260421583022c1732d57c8270601c3702dd955d",
+    "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
+    "tools/generate_design.py": "13cbe2d27eb6e8639f95692a276c45e5f6fb4bdb96f1bf853313b50dc82d7993",
+    "tools/generate_parts_list.py": "ccd5d715efd4e6ea3a7894859e0a712dd3b6b3e65d0fc441e638d5838a55fd59",
+    "design/procurement-evidence.json": "5fa90ece8118a58cb641609dd71c00219131e58ef3ca326b928a11d10d737ade"
+  },
+  "source_component_refs": 375,
+  "purchased_component_refs": 313,
+  "unique_purchase_rows": 68,
+  "variant_total_parts": {
+    "BASE": 278,
+    "BIOS": 306,
+    "RESERVE": 284,
+    "BIOS_AND_RESERVE": 312,
+    "BASE_PSRAM_DNP": 277,
+    "BIOS_PSRAM_DNP": 305,
+    "RESERVE_PSRAM_DNP": 283,
+    "BIOS_AND_RESERVE_PSRAM_DNP": 311
+  },
+  "variant_dnp_purchased_refs": {
+    "BASE": [
+      "C202",
+      "C203",
+      "C204",
+      "C205",
+      "C400",
+      "C401",
+      "C402",
+      "C403",
+      "C404",
+      "C405",
+      "C406",
+      "D20",
+      "J40",
+      "J41",
+      "R202",
+      "R400",
+      "R401",
+      "R402",
+      "R403",
+      "R404",
+      "R405",
+      "R406",
+      "R407",
+      "R408",
+      "R411",
+      "R412",
+      "R413",
+      "R414",
+      "SW40",
+      "U40",
+      "U41",
+      "U42",
+      "U43",
+      "U44",
+      "U45"
+    ],
+    "BIOS": [
+      "C202",
+      "C203",
+      "C204",
+      "C205",
+      "D20",
+      "R202",
+      "R410"
+    ],
+    "RESERVE": [
+      "C400",
+      "C401",
+      "C402",
+      "C403",
+      "C404",
+      "C405",
+      "C406",
+      "J40",
+      "J41",
+      "R400",
+      "R401",
+      "R402",
+      "R403",
+      "R404",
+      "R405",
+      "R406",
+      "R407",
+      "R408",
+      "R411",
+      "R412",
+      "R413",
+      "R414",
+      "SW40",
+      "U40",
+      "U41",
+      "U42",
+      "U43",
+      "U44",
+      "U45"
+    ],
+    "BIOS_AND_RESERVE": [
+      "R410"
+    ],
+    "BASE_PSRAM_DNP": [
+      "C202",
+      "C203",
+      "C204",
+      "C205",
+      "C400",
+      "C401",
+      "C402",
+      "C403",
+      "C404",
+      "C405",
+      "C406",
+      "D20",
+      "J40",
+      "J41",
+      "R202",
+      "R400",
+      "R401",
+      "R402",
+      "R403",
+      "R404",
+      "R405",
+      "R406",
+      "R407",
+      "R408",
+      "R411",
+      "R412",
+      "R413",
+      "R414",
+      "SW40",
+      "U40",
+      "U41",
+      "U42",
+      "U43",
+      "U44",
+      "U45",
+      "U203"
+    ],
+    "BIOS_PSRAM_DNP": [
+      "C202",
+      "C203",
+      "C204",
+      "C205",
+      "D20",
+      "R202",
+      "R410",
+      "U203"
+    ],
+    "RESERVE_PSRAM_DNP": [
+      "C400",
+      "C401",
+      "C402",
+      "C403",
+      "C404",
+      "C405",
+      "C406",
+      "J40",
+      "J41",
+      "R400",
+      "R401",
+      "R402",
+      "R403",
+      "R404",
+      "R405",
+      "R406",
+      "R407",
+      "R408",
+      "R411",
+      "R412",
+      "R413",
+      "R414",
+      "SW40",
+      "U40",
+      "U41",
+      "U42",
+      "U43",
+      "U44",
+      "U45",
+      "U203"
+    ],
+    "BIOS_AND_RESERVE_PSRAM_DNP": [
+      "R410",
+      "U203"
+    ]
+  },
+  "supplier_identity_verified_rows": 53,
+  "sourcing_pending_rows": 15,
+  "catalog_identity_verified_base_rows": 53,
+  "sourcing_pending_base_rows": [
+    "100010048"
+  ],
+  "manual_base_purchase_rows": [
+    "100010048"
+  ],
+  "jlc_smt_catalog_verified_base_rows": 53,
+  "jlc_assembly_pending_base_rows": [],
+  "jlc_fixture_required_base_rows": [
+    "ASE-50.000MHZ-LC-T",
+    "S7221-45R"
+  ],
+  "excluded": [
+    {
+      "ref": "J10",
+      "mpn": "",
+      "reason": "Unpopulated JTAG pogo pads; no header fitted"
+    },
+    {
+      "ref": "TP100",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP101",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP102",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP103",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP104",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP105",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP106",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP107",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP108",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP109",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP110",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP111",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP112",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP113",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP114",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP115",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP116",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP117",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP118",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP119",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP120",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP121",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP122",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP123",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP124",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP125",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP126",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP127",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP128",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP129",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP130",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP131",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP132",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP133",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP134",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP135",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP136",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP137",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP138",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "J202",
+      "mpn": "CUSTOM_USB_SERVICE_PADS",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "J203",
+      "mpn": "CUSTOM_SWD_SERVICE_PADS",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "J204",
+      "mpn": "CUSTOM_C5_SERVICE_PADS",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "J20",
+      "mpn": "PCB solder pads; no fitted connector",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP20",
+      "mpn": "PCB test point",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP21",
+      "mpn": "PCB test point",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP22",
+      "mpn": "PCB test point",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP23",
+      "mpn": "PCB test point",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP24",
+      "mpn": "PCB test point",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP25",
+      "mpn": "PCB test point",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP26",
+      "mpn": "PCB test point",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "JP40",
+      "mpn": "PCB_SOLDER_BRIDGE",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "TP40",
+      "mpn": "PCB_TEST_PAD",
+      "reason": "Fabricated PCB copper; purchase through PCB fabrication, not parts order"
+    },
+    {
+      "ref": "#FLG1",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    },
+    {
+      "ref": "#FLG2",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    },
+    {
+      "ref": "#FLG3",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    },
+    {
+      "ref": "#FLG4",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    },
+    {
+      "ref": "#FLG5",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    },
+    {
+      "ref": "#FLG6",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    },
+    {
+      "ref": "#FLG7",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    },
+    {
+      "ref": "#FLG8",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    },
+    {
+      "ref": "#FLG9",
+      "mpn": "",
+      "reason": "ERC declaration, not a physical purchased component"
+    }
+  ],
+  "population_rules": {
+    "BIOS": "Populate BIOS_OPTION; omit BASE_ONLY R410; retain ALL R409. Offboard mechanical selector is included as a manual purchased part.",
+    "RESERVE": "Populate R202, D20 and C202-C205. Effective reserve capacitance and usable hold-up remain unqualified.",
+    "BASE": "Optional BIOS and reserve components are DNP; no JTAG header is purchased.",
+    "BASE_PSRAM_DNP": "Omit only U203; retain R2007 CS1 link, R2008 4.7k pullup and existing bypass capacitors. Also available with every BIOS/reserve combination; BASE remains PSRAM populated."
+  },
+  "psram_dnp_firmware_requirements": [
+    "Build or configure firmware for no external PSRAM; use internal SRAM/FIFOs for sectors and cache.",
+    "Keep GPIO47/CS1 inactive high; do not issue QMI CS1 memory accesses or enable CS autodetection.",
+    "Do not expose absent PSRAM in the MCU memory map or treat floating reads as detected RAM. Firmware qualification remains pending."
+  ],
+  "open_release_items": [
+    "Carrier PCB is a design draft; procurement worksheet does not authorize fabrication or assembly release.",
+    "Obtain assembler confirmation and live sourcing for every selected MPN; blank supplier codes intentionally remain sourcing_pending.",
+    "Verify capacitor effective capacitance versus DC bias, temperature, tolerance and aging, especially 22 uF converter outputs and optional 100 uF reserve bank.",
+    "Qualify switcher current peaks/thermal behavior and native RP235x marked-inductor orientation after placement/routing.",
+    "Optional reserve charge resistor RC0805FR-0722RL needs pulse-overload qualification: ideal initial 1.14 W, approximately 5 mJ at 400 uF and 5 V; continuous wattage is insufficient evidence.",
+    "Complete assembly orientation/footprint and shield-clearance review; C5 module is modified and installed manually. Harwin spring contacts are SMT parts requiring an assembler-approved support fixture.",
+    "Optional BIOS requires separate mechanical/timing installation qualification, isolated stock CE, R410 removal and externally verified bank-0 preprogramming; no onboard flasher is provided.",
+    "CN503 flex, optional BIOS FPC/selector harness, power leads, mounting/insulation fixture and microSD media are separate fabrication/installation items, not guessed catalog stock parts.",
+    "JLC explicitly lists assembly support fixture requirements for Harwin S7221-45R C22445132 and Abracon ASE-50.000MHZ-LC-T C596955; confirm fixture process before assembly order release."
+  ]
+}

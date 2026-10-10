@@ -1,11 +1,63 @@
 {
   "manufacturer": "JLCPCB",
   "released": false,
-  "copper_layers": 0,
-  "gerber_layers": [],
+  "copper_layers": 4,
+  "gerber_layers": [
+    "F.Cu",
+    "In1.Cu",
+    "In2.Cu",
+    "B.Cu",
+    "F.Paste",
+    "B.Paste",
+    "F.SilkS",
+    "B.SilkS",
+    "F.Mask",
+    "B.Mask",
+    "Edge.Cuts"
+  ],
   "origin": "plot",
   "board_type": "rigid",
   "assembly": true,
+  "assembly_sides": [
+    "top"
+  ],
   "drill_files_required": true,
-  "note": "Blocked. Select material, layer stack, board thickness, finish, dimensions, tolerances, assembly side and population variant from finished CAD. Zero layers is an intentional unset value, not a fabrication setting."
+  "material": "FR-4",
+  "board_thickness_mm": 0.8,
+  "supplier_thickness_tolerance_mm": 0.1,
+  "outer_copper_oz": 1,
+  "inner_copper_oz": 0.5,
+  "surface_finish": "ENIG",
+  "soldermask": "green",
+  "silkscreen": "white",
+  "dimensions_mm": [
+    59,
+    105
+  ],
+  "outline_status": "Draft corridor with BIOS cutout and CN503 notch; placement and installed fit not signed off",
+  "minimum_track_width_mm": 0.15,
+  "minimum_copper_clearance_mm": 0.15,
+  "minimum_mechanical_drill_mm": 0.2,
+  "minimum_annular_ring_mm": 0.15,
+  "routing_via_diameter_mm": 0.5,
+  "routing_via_drill_mm": 0.2,
+  "QFN_thermal_vias": {
+    "diameter_mm": 0.5,
+    "drill_mm": 0.2,
+    "annular_ring_mm": 0.15,
+    "note": "KiCad RP2350 QFN footprint; paste-window/reflow and open thermal via treatment require assembly review"
+  },
+  "population": "BASE: BIOS_OPTION and reserve bank DNP; C5 module manual assembly; sixteen Harwin contacts separately placed",
+  "mount_datum": {
+    "motherboard_top_to_carrier_underside_mm": 2.5,
+    "carrier_nominal_top_mm": 3.3,
+    "status": "Support fixture and motherboard obstacle checks pending"
+  },
+  "primary_capability_source": "https://jlcpcb.com/capabilities/pcb-capabilities/",
+  "note": "Draft fabrication settings matching native CAD. released:false until route, assembly, mechanical and engineering review close. No order ZIP is approved.",
+  "power_vias": {
+    "diameter_mm": 0.6,
+    "drill_mm": 0.3,
+    "note": "Keep load-current trunks on adequate copper; use parallel ground/power vias where current requires them."
+  }
 }

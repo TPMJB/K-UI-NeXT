@@ -1,0 +1,6 @@
+(version 1)
+# JLC requires0.30mm copper-edge clearance generally but allows0.20mm
+# for exposed mating gold fingers. This is only the J2 matingtail footprint.
+(rule "Goldfinger boardedge clearance"
+ (condition "A.memberOfFootprint('J2')")
+ (constraint edge_clearance (min 0.20mm)))

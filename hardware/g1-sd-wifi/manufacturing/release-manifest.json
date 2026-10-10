@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "release_id": "KUI-G1-RevA-bringup-prototype",
-  "status": "blocked_missing_circuit_and_layout",
-  "purpose": "Unvalidated first bring-up prototype; not a working product or current order package.",
+  "status": "blocked_carrier_layout_and_mechanical_assembly_review",
+  "purpose": "Native circuit and flex implementation; carrier layout draft and prototype fabrication qualification in progress.",
   "claude_review_commit": "b207dd659565826ffd757ccf7abe1998f63c9202",
   "boards": {
     "rigid": {
@@ -15,10 +15,18 @@
       "order_settings": "hardware/g1-sd-wifi/manufacturing/rigid-order-settings.json",
       "extra_fabrication_files": []
     },
-    "flex": {
-      "schematic": "hardware/g1-sd-wifi/flex/KUI-G1-CN503-RevA.kicad_sch",
-      "pcb": "hardware/g1-sd-wifi/flex/KUI-G1-CN503-RevA.kicad_pcb",
-      "project": "hardware/g1-sd-wifi/flex/KUI-G1-CN503-RevA.kicad_pro",
+    "flex_a": {
+      "schematic": "hardware/g1-sd-wifi/flex/KUI-CN503-A-Flex-RevA.kicad_sch",
+      "pcb": "hardware/g1-sd-wifi/flex/KUI-CN503-A-Flex-RevA.kicad_pcb",
+      "project": "hardware/g1-sd-wifi/flex/KUI-CN503-A-Flex-RevA.kicad_pro",
+      "assembly": false,
+      "order_settings": "hardware/g1-sd-wifi/manufacturing/flex-order-settings.json",
+      "extra_fabrication_files": []
+    },
+    "flex_b": {
+      "schematic": "hardware/g1-sd-wifi/flex/KUI-CN503-B-Flex-RevA.kicad_sch",
+      "pcb": "hardware/g1-sd-wifi/flex/KUI-CN503-B-Flex-RevA.kicad_pcb",
+      "project": "hardware/g1-sd-wifi/flex/KUI-CN503-B-Flex-RevA.kicad_pro",
       "assembly": false,
       "order_settings": "hardware/g1-sd-wifi/manufacturing/flex-order-settings.json",
       "extra_fabrication_files": []
@@ -26,7 +34,7 @@
   },
   "footprint_libraries": [
     {
-      "name": "KUI",
+      "name": "KUI_Footprints",
       "path": "hardware/g1-sd-wifi/controller/KUI_Footprints.pretty"
     },
     {
@@ -37,7 +45,6 @@
   "extra_inputs": [
     "hardware/g1-sd-wifi/controller/fp-lib-table",
     "hardware/g1-sd-wifi/controller/sym-lib-table",
-    "hardware/g1-sd-wifi/controller/KUI_RP_Reference.kicad_sym",
     "hardware/g1-sd-wifi/flex/fp-lib-table",
     "hardware/g1-sd-wifi/flex/sym-lib-table",
     "hardware/g1-sd-wifi/design/front-end-pinplan.csv",
@@ -47,13 +54,72 @@
     "hardware/g1-sd-wifi/fpga/synthesis-timing-report.txt",
     "hardware/g1-sd-wifi/manufacturing/flex-fabrication-notes.md",
     "hardware/g1-sd-wifi/manufacturing/parts-to-buy.csv",
-    "hardware/g1-sd-wifi/manufacturing/BRINGUP.md"
+    "hardware/g1-sd-wifi/manufacturing/BRINGUP.md",
+    "hardware/g1-sd-wifi/flex/KUI_Flex.kicad_sym",
+    "hardware/g1-sd-wifi/design/flex-interface.json",
+    "hardware/g1-sd-wifi/docs/CN503-reference.csv",
+    "hardware/g1-sd-wifi/flex/tools/generate_flex.py",
+    "hardware/g1-sd-wifi/flex/tools/check_flex.py",
+    "hardware/g1-sd-wifi/flex/checks/summary.json",
+    "hardware/g1-sd-wifi/controller/KUI_G1.kicad_sym",
+    "hardware/g1-sd-wifi/design/blocks/frontend.json",
+    "hardware/g1-sd-wifi/design/blocks/controller.json",
+    "hardware/g1-sd-wifi/design/blocks/power-bus.json",
+    "hardware/g1-sd-wifi/design/blocks/bios.json",
+    "hardware/g1-sd-wifi/design/integrated-components.json",
+    "hardware/g1-sd-wifi/design/physical-pad-audit.json",
+    "hardware/g1-sd-wifi/design/controller-implementation.md",
+    "hardware/g1-sd-wifi/tools/generate_design.py",
+    "hardware/g1-sd-wifi/tools/generate_board.py",
+    "hardware/g1-sd-wifi/fpga/bridge.lpf",
+    "hardware/g1-sd-wifi/fpga/tb_bridge.v",
+    "hardware/g1-sd-wifi/fpga/tb_fifo.v",
+    "hardware/g1-sd-wifi/fpga/run_checks.sh",
+    "hardware/g1-sd-wifi/fpga/tb_review.v",
+    "hardware/g1-sd-wifi/fpga/tb_activation.v",
+    "hardware/g1-sd-wifi/tools/generate_assembly_draft.py",
+    "hardware/g1-sd-wifi/tools/generate_parts_list.py",
+    "hardware/g1-sd-wifi/tools/generate_carrier_template.py",
+    "hardware/g1-sd-wifi/manufacturing/assembly-draft-report.json",
+    "hardware/g1-sd-wifi/design/procurement-evidence.json",
+    "hardware/g1-sd-wifi/design/parts-to-buy-audit.json",
+    "hardware/g1-sd-wifi/design/integration-audit.json",
+    "hardware/g1-sd-wifi/design/INDEPENDENT-REVIEW.md",
+    "hardware/g1-sd-wifi/design/carrier-netclass-contract.json",
+    "hardware/g1-sd-wifi/design/CARRIER-LAYOUT-REVIEW.md",
+    "hardware/g1-sd-wifi/design/carrier-layout-review-evidence.json",
+    "hardware/g1-sd-wifi/design/IMPLEMENTATION-STATUS-2026-10-10.md",
+    "hardware/g1-sd-wifi/design/sources/xiao-c5-carrier-contact-coordinates.json",
+    "hardware/g1-sd-wifi/design/sources/xiao-c5-spring-contact-placement.json",
+    "hardware/g1-sd-wifi/controller/FOOTPRINT-PROVENANCE.json",
+    "hardware/g1-sd-wifi/mechanical/template-provenance.json",
+    "hardware/g1-sd-wifi/mechanical/carrier-fit-US-Letter.pdf",
+    "hardware/g1-sd-wifi/mechanical/carrier-fit-A4.pdf",
+    "hardware/g1-sd-wifi/tools/check_integration.py",
+    "hardware/g1-sd-wifi/flex/checks/handedness-correction.json",
+    "hardware/g1-sd-wifi/tools/audit_carrier_routing.py",
+    "hardware/g1-sd-wifi/design/raw-g1-debug.md",
+    "hardware/g1-sd-wifi/design/sources/raw-g1-probe-footprint.json",
+    "hardware/g1-sd-wifi/manufacturing/rigid-psram-dnp-bom.csv",
+    "hardware/g1-sd-wifi/manufacturing/rigid-psram-dnp-cpl.csv",
+    "hardware/g1-sd-wifi/manufacturing/assembly-psram-dnp-draft-report.json",
+    "hardware/g1-sd-wifi/tools/add_carrier_ground_fanout.py",
+    "hardware/g1-sd-wifi/tools/add_carrier_raw_probes.py",
+    "hardware/g1-sd-wifi/tools/snapshot_carrier_placement.py",
+    "hardware/g1-sd-wifi/design/carrier-critical-routes.json",
+    "hardware/g1-sd-wifi/design/carrier-ground-fanout.json",
+    "hardware/g1-sd-wifi/design/carrier-placement.json",
+    "hardware/g1-sd-wifi/design/raw-g1-probe-placement.json",
+    "hardware/g1-sd-wifi/controller/checks/carrier-routing-audit.json",
+    "hardware/g1-sd-wifi/controller/checks/drc-placed.json",
+    "hardware/g1-sd-wifi/controller/checks/carrier-ground-reference.svg",
+    "hardware/g1-sd-wifi/controller/FOOTPRINT-LICENSES.md"
   ],
   "review_evidence": "hardware/g1-sd-wifi/manufacturing/review-evidence.json",
   "requested_provisions": [
     "Retained original GD-ROM device 0; bridge ATA device 1",
     "RP2350B and native 4-bit microSD raw-sector backend",
-    "Selected FPGA/CPLD front end with FIFO/SRAM deadline path and synthesized timing",
+    "Selected FPGA/CPLD front end with FIFO/SRAM deadline path, tested logic and resource synthesis; device timing remains open",
     "Hardware-default G1 isolation and reset/brownout/final-word ownership",
     "8 MiB PSRAM footprint and explicit factory-populated/unpopulated variants",
     "Local removable USB-free XIAO ESP32-C5 with switched supply and off-state isolation",
@@ -65,11 +131,19 @@
   ],
   "measurement_capture": "Complete for first draft; owner can reassemble. Installed prototype fit/landing qualification remains.",
   "order_outputs_missing": [
-    "Rigid PCB Gerbers/drills",
-    "Passive flex Gerbers/drills/coverlay/stiffeners",
-    "Approved BOM/CPL",
-    "Compatible production parts list",
-    "Exact order settings",
-    "Programming and bring-up instructions"
-  ]
+    "Released rigid carrier Gerber/drill archive",
+    "Released flex-A/flex-B Gerber/drill/coverlay/stiffener archives",
+    "Reviewed BASE assembly placement/fixture acceptance",
+    "Approved matching-hash engineering release"
+  ],
+  "implemented_cad": {
+    "flex_a": "Native schematic and 20-conductor two-layer routing; ERC/DRC/parity pass",
+    "flex_b": "Native schematic and 20-conductor two-layer routing; ERC/DRC/parity pass",
+    "physical_continuity": "unqualified",
+    "installed_route": "unqualified",
+    "rigid_schematic": "Complete native hierarchy; ERC 0 and physical pad-number audit pass",
+    "rigid_layout": "4-layer 0.8mm carrier placement/routing in progress; prototype mechanics unqualified",
+    "fpga": "Original tested synthesizable logic; MachXO2 resource mapping passes, device P&R/timing open",
+    "assembly": "53 exact catalog-matched BASE SMT part types, 277 physical parts, native placement candidate; manufacturer rotation and fixture review pending"
+  }
 }

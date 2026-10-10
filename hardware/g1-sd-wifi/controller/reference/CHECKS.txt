@@ -1,0 +1,70 @@
+Validation of controller starter (6 October 2026)
+
+PASS: schematic S-expression parses fully; project JSON parses.
+PASS: every placed symbol has an embedded symbol definition.
+PASS: unique component references and placed-symbol UUIDs.
+PASS: all 48 MCU GPIO pins connect to exactly their proposed named nets.
+PASS: MCU GPIOs are distinct local wire/label networks.
+PASS: optional secondary flash U4, pull-up R13 and GP0 flash mux R9 absent.
+PASS: dedicated boot flash U3 and crystal X1 retained.
+
+This checks file structure and local GPIO wiring only. KiCad 10 ERC,
+rendering, production footprints, PCB DRC, electrical bus behavior and
+hardware operation have not been validated. No fabrication approval.
+
+Resolved MCU GPIO labels:
+GPIO00: G0_DD0
+GPIO01: G1_DD1
+GPIO02: G2_DD2
+GPIO03: G3_DD3
+GPIO04: G4_DD4
+GPIO05: G5_DD5
+GPIO06: G6_DD6
+GPIO07: G7_DD7
+GPIO08: G8_DD8
+GPIO09: G9_DD9
+GPIO10: G10_DD10
+GPIO11: G11_DD11
+GPIO12: G12_DD12
+GPIO13: G13_DD13
+GPIO14: G14_DD14
+GPIO15: G15_DD15
+GPIO16: G16_DA0
+GPIO17: G17_DA1
+GPIO18: G18_DA2
+GPIO19: G19_CS0n
+GPIO20: G20_CS1n
+GPIO21: G21_DIORn
+GPIO22: G22_DIOWn
+GPIO23: G23_RESETn
+GPIO24: G24_IORDY
+GPIO25: G25_INTRQ
+GPIO26: G26_DMARQ
+GPIO27: G27_DMACKn
+GPIO28: G28_DATA_OEn
+GPIO29: G29_DATA_DIR
+GPIO30: G30_RESP_EN
+GPIO31: G31_PFAILn
+GPIO32: G32_SD_CLK
+GPIO33: G33_SD_CMD
+GPIO34: G34_SD_D0
+GPIO35: G35_SD_D1
+GPIO36: G36_SD_D2
+GPIO37: G37_SD_D3
+GPIO38: G38_SD_CDn
+GPIO39: G39_LED
+GPIO40: G40_C5_MISO
+GPIO41: G41_C5_CSn
+GPIO42: G42_C5_SCK
+GPIO43: G43_C5_MOSI
+GPIO44: G44_C5_IRQn
+GPIO45: G45_C5_READY
+GPIO46: G46_C5_PWR_EN
+GPIO47: G47_SPARE
+
+Repository import (9 October 2026)
+The controller schematic, project, symbols and GPIO CSV are recovered from
+the saved 6 October starter. This import updates only review/mounting notes.
+The original PASS lines above record the earlier structural checks; they
+do not certify complete bus circuitry, PIO programs or electrical timing.
+No new ERC, PCB DRC, hardware or power-cut results are claimed.

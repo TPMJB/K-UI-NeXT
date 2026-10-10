@@ -1,0 +1,41 @@
+G1 bridge synthesis/simulation checks — 2026-10-10
+Status: PASS
+Tools: Icarus Verilog12.0; Yosys0.33
+
+Device place-and-route / Diamond timing: NOT RUN; no timing-closed bitstream.
+Resource mapping and simulation are independent of hardware behavior/throughput.
+Vendor activation and shared90h receipt/result contract are implemented in RTL.
+K-UI activation/probe software and RP2350 media/diagnostic firmware remain pending.
+DASP/PDIAG interdevice handshake is absent; full PATA discovery is not qualified.
+
+bridge.v: 0cf6f4084b336741d83bfda29abec1ce058b9020c69de1121072aa90204558d8
+bridge.lpf: d0a1b804d470ec2b84affe007d386899fb71bfa28b368ad0d18ac262ba7dad1a
+tb_bridge.v: ac12d284393673ab5f06304d22b3006e9c4003faf15d4a5f1018b95f3b5ee4f2
+tb_fifo.v: 8c70c605d13cf931aa86c98976e18250e3341901a1dd796da278da0b0cfd95dc
+tb_review.v: f26db176ba9303280b861656e96a661b1c419e3ca957520181db93b27e46b895
+tb_activation.v: b50479a91df47613a8075caa89637a3b14ba98191367956868abde023983c705
+run_checks.sh: eae21a32744fecf8abe328089c691b2a92e3754a6bf447a98a035e56f6c06be6
+
+Actual check output:
+PASS: 60 bridge assertions
+tb_bridge.v:93: $finish called at 51697000 (1ps)
+PASS: 521 FIFO scoreboarding cycles
+tb_fifo.v:35: $finish called at 10471000 (1ps)
+PASS: 20 independent review assertions
+tb_review.v:75: $finish called at 30095000 (1ps)
+PASS: 703 independent activation/diagnostic assertions
+tb_activation.v:291: $finish called at 2441164000 (1ps)
+Negative control detected: activation_bypass (64 failed assertions)
+Negative control detected: drop_dev0_diagnostic (14 failed assertions)
+Negative control detected: synchronous_safety_relock (57 failed assertions)
+Negative control detected: drop_sticky_safety_cleanup (15 failed assertions)
+Warning: Yosys has only limited support for tri-state logic at the moment. (bridge.v:163)
+Warning: Yosys has only limited support for tri-state logic at the moment. (bridge.v:235)
+   Number of cells:                 44
+     $mem_v2                         1
+   Number of cells:                923
+   Number of cells:               1009
+     $mem_v2                         2
+End of script. Logfile hash: e5031a4999, CPU: user 0.09s system 0.01s, MEM: 15.14 MB peak
+MachXO2 technology mapping: {'CCU2D': 82, 'DP8KC': 2, 'LUT4': 966, 'TRELLIS_FF': 409, 'TRELLIS_IO': 56}
+Resource budget check passed; physical placement and timing not validated.

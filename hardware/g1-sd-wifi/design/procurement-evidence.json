@@ -1,0 +1,1786 @@
+{
+  "review_date": "2026-10-10",
+  "scope": "Exact component purchasing identities and variant quantities derived from physical circuit contracts. All 53 BASE SMT purchase rows have exact official JLC SMT catalog identity evidence; one BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. This is not an order acceptance or production release.",
+  "parts": {
+    "046701.5NR": {
+      "manufacturer": "Littelfuse",
+      "description": "1.5A fast fuse",
+      "physical_package": "Littelfuse 467-series SMT fuse, 0603 imperial / 1608 metric",
+      "electrical_spec": "1.5A fast fuse",
+      "manufacturer_sources": [
+        "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Exact NR suffix retained. Separate halogen-free NRHF supplier listing is not selected.",
+      "supplier_identity": {
+        "lcsc_code": "C99559",
+        "url": "https://www.lcsc.com/product-detail/C99559.html",
+        "verified_mpn": "046701.5NR",
+        "verified_manufacturer": "Littelfuse",
+        "verified_package_or_nominal": "0603, 1.5 A fuse",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/Littelfuse-0467015NR/C99559",
+        "verified_mpn": "046701.5NR",
+        "verified_lcsc_code": "C99559",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "100010048": {
+      "manufacturer": "Seeed Studio",
+      "description": "XIAO ESP32-C5 USB removed",
+      "physical_package": "Seeed Studio XIAO ESP32C5 module, 21 x 17.8 mm; modified manual installation",
+      "electrical_spec": "Seeed Studio XIAO ESP32C5 assembled radio module",
+      "manufacturer_sources": [
+        "https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C5-p-6609.html",
+        "https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.zip",
+        "https://wiki.seeedstudio.com/xiao_esp32c5_wifi_usage/"
+      ],
+      "spec_review_status": "Official maker SKU/package and board connection sources reviewed; modified-module qualification pending",
+      "notes": "Manual module purchase. Remove USB connector and factory header protrusions according to fixture plan; no battery. Underside recovery pads use spring contacts. Removal/height/RF/mechanical verification pending. Manufacturer Wi-Fi instructions confirm a supplied external FPC antenna and U.FL connection. Use that included antenna outside the metal shield; installed cable route, bend/strain relief and dual-band RF qualification remain open. No separate unverified antenna purchase is added.",
+      "assembly_method": "Manual offboard installation; excluded from carrier SMT placement"
+    },
+    "1040310811": {
+      "manufacturer": "Molex",
+      "description": "microSD push-pull 1.42mm",
+      "physical_package": "Molex 104031-0811 SMT microSD socket, 1.42 mm maximum height",
+      "electrical_spec": "microSD push-pull 1.42mm",
+      "manufacturer_sources": [
+        "https://www.molex.com/content/dam/molex/molex-dot-com/products/automated/en-us/salesdrawingpdf/104/104031/1040310811_sd.pdf",
+        "https://www.molex.com/en-us/products/part-detail/1040310811"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C585350",
+        "url": "https://www.lcsc.com/product-detail/C585350.html",
+        "verified_mpn": "1040310811",
+        "verified_manufacturer": "Molex",
+        "verified_package_or_nominal": "Molex microSD SMT socket, 1.42 mm height",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/MOLEX-1040310811/C585350",
+        "verified_mpn": "1040310811",
+        "verified_lcsc_code": "C585350",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "2N7002,215": {
+      "manufacturer": "Nexperia",
+      "description": "C5 recovery pull-down",
+      "physical_package": "SOT-23",
+      "electrical_spec": "Nexperia 2N7002 N-channel MOSFET, SOT23, tape code 215",
+      "manufacturer_sources": [
+        "https://assets.nexperia.com/documents/data-sheet/2N7002.pdf"
+      ],
+      "spec_review_status": "Manufacturer exact ordering code and physical pinout reviewed; circuit bench qualification pending",
+      "notes": "Exact Nexperia part, gate1/source2/drain3. C5 recovery sink only; logic-level pull-down behavior at actual MCU drive must be bench checked.",
+      "supplier_identity": {
+        "lcsc_code": "C65189",
+        "url": "https://www.lcsc.com/product-detail/C65189.html",
+        "verified_mpn": "2N7002,215",
+        "verified_manufacturer": "Nexperia",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/2N7002,215/C65189",
+        "verified_mpn": "2N7002,215",
+        "verified_lcsc_code": "C65189",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "7201SYZBE": {
+      "manufacturer": "C&K",
+      "description": "STOCK_RECOVERY / CUSTOM (OFFBOARD)",
+      "physical_package": "C&K 7000-series DPDT ON-ON panel toggle, offboard solder-lug termination",
+      "electrical_spec": "Gold-contact DPDT ON-ON physical stock/custom selector",
+      "manufacturer_sources": [
+        "https://www.ckswitches.com/media/1394/7000toggle.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Optional offboard installation; always change with whole console powered off. Stock CE path is physical and independent of MCU/FPGA. Remove R410 before populated selector connection.",
+      "assembly_method": "Manual offboard installation; excluded from carrier SMT placement"
+    },
+    "ABM8-272-T3": {
+      "manufacturer": "Abracon",
+      "description": "12MHz",
+      "physical_package": "Crystal SMD 3225-4Pin 3.2x2.5mm",
+      "electrical_spec": "12 MHz crystal, CL10 pF, 3.2 x 2.5 x 0.8 mm, four pad",
+      "manufacturer_sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf",
+        "https://datasheet.lcsc.com/datasheet/pdf/d5520a242c89eeaef42f6496027f72da.pdf?productCode=C20625731"
+      ],
+      "spec_review_status": "Manufacturer ABM8-272-T3 drawing and exact supplier nominal/package reviewed; oscillator margin qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C20625731",
+        "url": "https://www.lcsc.com/product-detail/C20625731.html",
+        "verified_mpn": "ABM8-272-T3",
+        "verified_manufacturer": "Abracon",
+        "verified_package_or_nominal": "3225 four-pad crystal, 12 MHz CL10 pF",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/AbraconLLC-ABM8_272T3/C20625731",
+        "verified_mpn": "ABM8-272-T3",
+        "verified_lcsc_code": "C20625731",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "AOTA-B201610S3R3-101-T": {
+      "manufacturer": "Abracon",
+      "description": "3.3uH",
+      "physical_package": "Marked shielded SMT inductor, 2.0 x 1.6 x 1.0 mm",
+      "electrical_spec": "3.3 uH +/-20%; DCR 115 mOhm typical / 140 mOhm maximum; marked winding orientation",
+      "manufacturer_sources": [
+        "https://abracon.com/datasheets/AOTA-B201610S3R3-101-T.pdf"
+      ],
+      "spec_review_status": "Manufacturer electrical/package table reviewed; RP235x-approved part; operating qualification pending",
+      "notes": "Preserve RP235x reference winding polarity. Isat table lists 2.8 A typical and 2.4 A in Max column (30% L drop); Irms 2.3 A typical and 2.1 A in Max column (40 C rise). These labels are not a guaranteed minimum-current claim. Catalog availability is not reserved.",
+      "supplier_identity": {
+        "lcsc_code": "C42411119",
+        "url": "https://www.lcsc.com/product-detail/C42411119.html",
+        "verified_mpn": "AOTA-B201610S3R3-101-T",
+        "verified_manufacturer": "Abracon",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/AbraconLlc-AOTA_B201610S3R3_101T/C42411119",
+        "verified_mpn": "AOTA-B201610S3R3-101-T",
+        "verified_lcsc_code": "C42411119",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "APS6404L-3SQR-ZR": {
+      "manufacturer": "AP Memory",
+      "description": "8MiB QSPI PSRAM",
+      "physical_package": "USON-8L ZR, 3 x 2 mm, 0.5 mm maximum height, 0.5 mm pitch",
+      "electrical_spec": "64 Mbit QSPI PSRAM, 3.3 V grade, ZR USON-8L",
+      "manufacturer_sources": [
+        "https://www.apmemory.com/en/downloadFiles/032411212009597427"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Retain ZR 3 x 2 mm package. No fabricated center-pad terminal; all eight actual pins in physical contract.",
+      "supplier_identity": {
+        "lcsc_code": "C3040877",
+        "url": "https://www.lcsc.com/product-detail/C3040877.html",
+        "verified_mpn": "APS6404L-3SQR-ZR",
+        "verified_manufacturer": "AP Memory",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/APMEMORY-APS6404L_3SQRZR/C3040877",
+        "verified_mpn": "APS6404L-3SQR-ZR",
+        "verified_lcsc_code": "C3040877",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "ASE-50.000MHZ-LC-T": {
+      "manufacturer": "Abracon",
+      "description": "50MHz 3.3V",
+      "physical_package": "Oscillator SMD Abracon ASE-4Pin 3.2x2.5mm",
+      "electrical_spec": "50 MHz 3.3 V CMOS oscillator, SMD 3.2 x 2.5 mm",
+      "manufacturer_sources": [
+        "https://abracon.com/Oscillators/ASEseries.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "JLC exact part page explicitly requires a PCB assembly fixture to protect/support the part; obtain assembler fixture agreement before order release.",
+      "supplier_identity": {
+        "lcsc_code": "C596955",
+        "url": "https://www.lcsc.com/product-detail/C596955.html",
+        "verified_mpn": "ASE-50.000MHZ-LC-T",
+        "verified_manufacturer": "Abracon",
+        "verified_package_or_nominal": "3225 four-pad oscillator, 50 MHz 3.3 V",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/AbraconLLC-ASE_50_000MHZ_LCT/C596955",
+        "verified_mpn": "ASE-50.000MHZ-LC-T",
+        "verified_lcsc_code": "C596955",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": true,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "CC0603KRX7R9BB104": {
+      "manufacturer": "Yageo",
+      "description": "100nF",
+      "physical_package": "0603 imperial / 1608 metric SMT chip",
+      "electrical_spec": "100 nF +/-10%, 50 V, X7R, 0603; 0.9 mm maximum height",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/CC0603KRX7R9BB104"
+      ],
+      "spec_review_status": "Yageo exact manufacturer specification reviewed; operating qualification pending",
+      "notes": ""
+    },
+    "CL05B103KB5NNNC": {
+      "manufacturer": "Samsung Electro-Mechanics",
+      "description": "10nF",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "10 nF +/-10%, 50 V, X7R, 0402; 0.55 mm maximum height",
+      "manufacturer_sources": [
+        "https://product.samsungsem.com/mlcc/CL05B103KB5NNN.do"
+      ],
+      "spec_review_status": "Samsung exact NC packaging variant and nominal specification reviewed; operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C15195",
+        "url": "https://www.lcsc.com/product-detail/C15195.html",
+        "verified_mpn": "CL05B103KB5NNNC",
+        "verified_manufacturer": "Samsung Electro-Mechanics",
+        "verified_package_or_nominal": "0402, 10 nF +/-10%, 50 V X7R",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/C15195",
+        "verified_mpn": "CL05B103KB5NNNC",
+        "verified_lcsc_code": "C15195",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "CL05B104KO5NNNC": {
+      "manufacturer": "Samsung Electro-Mechanics",
+      "description": "100nF",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "100 nF +/-10%, 16 V, X7R, 0402; 0.55 mm maximum height",
+      "manufacturer_sources": [
+        "https://product.samsungsem.com/mlcc/CL05B104KO5NNN.do"
+      ],
+      "spec_review_status": "Samsung exact NC packaging variant and nominal specification reviewed; operating qualification pending",
+      "notes": "16 V rated. No 50 V substitution implied.",
+      "supplier_identity": {
+        "lcsc_code": "C1525",
+        "url": "https://www.lcsc.com/product-detail/C1525.html",
+        "verified_mpn": "CL05B104KO5NNNC",
+        "verified_manufacturer": "Samsung Electro-Mechanics",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/C1525",
+        "verified_mpn": "CL05B104KO5NNNC",
+        "verified_lcsc_code": "C1525",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "CL10A106MQ8NNNC": {
+      "manufacturer": "Samsung Electro-Mechanics",
+      "description": "10uF",
+      "physical_package": "0603 imperial / 1608 metric SMT chip",
+      "electrical_spec": "10 uF +/-20%, 6.3 V, X5R, 0603; 0.8 +/-0.1 mm height",
+      "manufacturer_sources": [
+        "https://product.samsungsem.com/mlcc/CL10A106MQ8NNN.do"
+      ],
+      "spec_review_status": "Samsung exact NC packaging variant and nominal specification reviewed; DC-bias qualification pending",
+      "notes": "Use on 3.3 V rail. Effective capacitance at 3.3 V is not verified; nominal voltage rating alone does not establish usable capacitance.",
+      "supplier_identity": {
+        "lcsc_code": "C1691",
+        "url": "https://www.lcsc.com/product-detail/C1691.html",
+        "verified_mpn": "CL10A106MQ8NNNC",
+        "verified_manufacturer": "Samsung Electro-Mechanics",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/2043-CL10A106MQ8NNNC/C1691",
+        "verified_mpn": "CL10A106MQ8NNNC",
+        "verified_lcsc_code": "C1691",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "FH12-14S-0.5SH(55)": {
+      "manufacturer": "Hirose",
+      "description": "BIOS additional-address / isolated-CE tap",
+      "physical_package": "Hirose FH12 horizontal bottom-contact FPC, 14 positions, 0.5 mm pitch, 2.0 mm height",
+      "electrical_spec": "BIOS additional-address / isolated-CE tap",
+      "manufacturer_sources": [
+        "https://www.hirose.com/en/product/p/CL0586-0533-0-55"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": ""
+    },
+    "FH12-20S-0.5SH(55)": {
+      "manufacturer": "Hirose",
+      "description": "FH12-20S-0.5SH(55)",
+      "physical_package": "Hirose FH12 horizontal bottom-contact FPC, 20 positions, 0.5 mm pitch, 2.0 mm height",
+      "electrical_spec": "FH12-20S-0.5SH(55)",
+      "manufacturer_sources": [
+        "https://www.hirose.com/en/product/p/CL0586-0524-9-55"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Exact parenthetical (55) selected. JLC C597980 punctuation-normalized listing is not silently substituted for exact LCSC C596730. Assembler sourcing/rotation confirmation pending.",
+      "supplier_identity": {
+        "lcsc_code": "C596730",
+        "url": "https://www.lcsc.com/product-detail/C596730.html",
+        "verified_mpn": "FH12-20S-0.5SH(55)",
+        "verified_manufacturer": "Hirose",
+        "verified_package_or_nominal": "20 positions, 0.5 mm pitch, 2 mm height, horizontal bottom-contact FPC",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/HRS_Hirose-FH12_20S_0_5SH_55/C596730",
+        "verified_mpn": "FH12-20S-0.5SH(55)",
+        "verified_lcsc_code": "C596730",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "FH12-6S-0.5SH(55)": {
+      "manufacturer": "Hirose",
+      "description": "External DPDT recovery selector harness",
+      "physical_package": "Hirose FH12 horizontal bottom-contact FPC, 6 positions, 0.5 mm pitch, 2.0 mm height",
+      "electrical_spec": "External DPDT recovery selector harness",
+      "manufacturer_sources": [
+        "https://www.hirose.com/en/product/p/CL0586-0582-5-55"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": ""
+    },
+    "GRM1555C1H150JA01D": {
+      "manufacturer": "Murata",
+      "description": "15p",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "15 pF +/-5%, 50 V, C0G, 0402",
+      "manufacturer_sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Crystal load includes PCB and pin stray capacitance; verify oscillator margin.",
+      "supplier_identity": {
+        "lcsc_code": "C76950",
+        "url": "https://www.lcsc.com/product-detail/C76950.html",
+        "verified_mpn": "GRM1555C1H150JA01D",
+        "verified_manufacturer": "Murata",
+        "verified_package_or_nominal": "0402, 15 pF +/-5%, 50 V C0G",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/MurataElectronics-GRM1555C1H150JA01D/C76950",
+        "verified_mpn": "GRM1555C1H150JA01D",
+        "verified_lcsc_code": "C76950",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_method": "Live official JLC catalog search by exact MPN, followed by opening exact product detail page and checking maker, MPN, C-code, nominal specifications, package and assembly labels. Text-only web retrieval errors did not establish absence.",
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. No stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "GRM155R60J475ME47D": {
+      "manufacturer": "Murata",
+      "description": "4.7u",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "4.7 uF +/-20%, 6.3 V, X5R, 0402",
+      "manufacturer_sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "spec_review_status": "RP235x reference-design selected exact MPN; DC-bias qualification pending",
+      "notes": "Native RP235x converter input/output capacitor selection; no value/package substitution without RP235x stability review.",
+      "supplier_identity": {
+        "lcsc_code": "C82453",
+        "url": "https://www.lcsc.com/product-detail/C82453.html",
+        "verified_mpn": "GRM155R60J475ME47D",
+        "verified_manufacturer": "Murata",
+        "verified_package_or_nominal": "0402, 4.7 uF +/-20%, 6.3 V X5R",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/MurataElectronics-GRM155R60J475ME47D/C82453",
+        "verified_mpn": "GRM155R60J475ME47D",
+        "verified_lcsc_code": "C82453",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "GRM155R61A105KE15D": {
+      "manufacturer": "Murata",
+      "description": "1u",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "1 uF +/-10%, 10 V, X5R, 0402",
+      "manufacturer_sources": [
+        "https://www.apmemory.com/en/downloadFiles/032411212009597427"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Manufacturer bias and actual rail-transient qualification pending.",
+      "supplier_identity": {
+        "lcsc_code": "C76999",
+        "url": "https://www.lcsc.com/product-detail/C76999.html",
+        "verified_mpn": "GRM155R61A105KE15D",
+        "verified_manufacturer": "Murata",
+        "verified_package_or_nominal": "0402, 1 uF +/-10%, 10 V X5R",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/MurataElectronics-GRM155R61A105KE15D/C76999",
+        "verified_mpn": "GRM155R61A105KE15D",
+        "verified_lcsc_code": "C76999",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_method": "Live official JLC catalog search by exact MPN, followed by opening exact product detail page and checking maker, MPN, C-code, nominal specifications, package and assembly labels. Text-only web retrieval errors did not establish absence.",
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. No stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "GRM155R71C104KA88D": {
+      "manufacturer": "Murata",
+      "description": "100nF",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "100 nF +/-10%, 16 V, X7R, 0402",
+      "manufacturer_sources": [
+        "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+      ],
+      "spec_review_status": "Exact distributor nominal/package identity reviewed; manufacturer operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C71629",
+        "url": "https://www.lcsc.com/product-detail/C71629.html",
+        "verified_mpn": "GRM155R71C104KA88D",
+        "verified_manufacturer": "Murata",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/MurataElectronics-GRM155R71C104KA88D/C71629",
+        "verified_mpn": "GRM155R71C104KA88D",
+        "verified_lcsc_code": "C71629",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "GRM155R71E104KE14D": {
+      "manufacturer": "Murata",
+      "description": "100n",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "100 nF +/-10%, 25 V, X7R, 0402",
+      "manufacturer_sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "spec_review_status": "Exact distributor nominal/package identity reviewed; manufacturer operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C77014",
+        "url": "https://www.lcsc.com/product-detail/C77014.html",
+        "verified_mpn": "GRM155R71E104KE14D",
+        "verified_manufacturer": "Murata",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/MurataElectronics-GRM155R71E104KE14D/C77014",
+        "verified_mpn": "GRM155R71E104KE14D",
+        "verified_lcsc_code": "C77014",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "GRM188R60J475KE19D": {
+      "manufacturer": "Murata",
+      "description": "4.7uF",
+      "physical_package": "0603 imperial / 1608 metric SMT chip",
+      "electrical_spec": "4.7 uF +/-10%, 6.3 V, X5R, 0603",
+      "manufacturer_sources": [
+        "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM188R60J475KE19D"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Optional BIOS 3.3 V bypass; effective capacitance not qualified."
+    },
+    "GRM21BR61A226ME51L": {
+      "manufacturer": "Murata",
+      "description": "22uF",
+      "physical_package": "0805 imperial / 2012 metric SMT chip",
+      "electrical_spec": "22 uF +/-20%, 10 V, X5R, 0805; 1.4 mm maximum height",
+      "manufacturer_sources": [
+        "https://ds.murata.com/mpst/?lcid=ja",
+        "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+      ],
+      "spec_review_status": "Murata manufacturer part table and distributor exact identity reviewed; DC-bias qualification pending",
+      "notes": "Nominal 22 uF is not effective 22 uF at 3.3 V or 5 V. Obtain SimSurfing bias/temp/aging data and verify converter stability before release. L packaging suffix retained.",
+      "supplier_identity": {
+        "lcsc_code": "C77074",
+        "url": "https://www.lcsc.com/product-detail/C77074.html",
+        "verified_mpn": "GRM21BR61A226ME51L",
+        "verified_manufacturer": "Murata",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/MurataElectronics-GRM21BR61A226ME51L/C77074",
+        "verified_mpn": "GRM21BR61A226ME51L",
+        "verified_lcsc_code": "C77074",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_method": "Live official JLC catalog search by exact MPN, followed by opening exact product detail page and checking maker, MPN, C-code, 22 uF +/-20% 10 V X5R 0805 and assembly labels. Text-only web retrieval errors did not establish absence.",
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. No stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "GRM21BR61C106KE15L": {
+      "manufacturer": "Murata",
+      "description": "10u",
+      "physical_package": "0805 imperial / 2012 metric SMT chip",
+      "electrical_spec": "10 uF +/-10%, 16 V, X5R, 0805",
+      "manufacturer_sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Manufacturer bias and actual rail-transient qualification pending.",
+      "supplier_identity": {
+        "lcsc_code": "C77075",
+        "url": "https://www.lcsc.com/product-detail/C77075.html",
+        "verified_mpn": "GRM21BR61C106KE15L",
+        "verified_manufacturer": "Murata",
+        "verified_package_or_nominal": "0805, 10 uF +/-10%, 16 V X5R",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/MurataElectronics-GRM21BR61C106KE15L/C77075",
+        "verified_mpn": "GRM21BR61C106KE15L",
+        "verified_lcsc_code": "C77075",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "GRM32ER61A107ME20L": {
+      "manufacturer": "Murata",
+      "description": "100uF",
+      "physical_package": "1210 imperial / 3225 metric SMT chip",
+      "electrical_spec": "100 uF +/-20%, 10 V, X5R, 1210; 2.7 mm maximum height",
+      "manufacturer_sources": [
+        "https://ds.murata.com/simsurfing/mlcc.html?oripartnumbers=%5B%22GRM32ER60G337ME05L%22%5D&partnumbers=%5B%22GRM32ER60G337ME05%22%5D&rgear=jomoqke&rgearinfo=de&videoId=5970368749001",
+        "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM32ER61A107ME20L"
+      ],
+      "spec_review_status": "Murata table nominal/body data reviewed; optional reserve DC-bias and hold-up qualification pending",
+      "notes": "Reserve DNP in factory base. Four parts provide 400 uF nominal; usable hold-up and card flush time are not established. Obtain actual effective-C curves at 5 V."
+    },
+    "LCMXO2-2000HC-4TG100C": {
+      "manufacturer": "Lattice Semiconductor",
+      "description": "LCMXO2-2000HC-4TG100C",
+      "physical_package": "TQFP-100, 14 x 14 mm body, 0.5 mm pitch",
+      "electrical_spec": "LCMXO2-2000HC-4TG100C",
+      "manufacturer_sources": [
+        "https://www.latticesemi.com/view_document?document_id=42568",
+        "https://www.latticesemi.com/view_document?document_id=38834",
+        "https://www.latticesemi.com/view_document?document_id=39095"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C1521632",
+        "url": "https://jlcpcb.com/partdetail/LCMXO2-2000HC-4TG100C/C1521632",
+        "verified_mpn": "LCMXO2-2000HC-4TG100C",
+        "verified_manufacturer": "Lattice Semiconductor",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/LCMXO2-2000HC-4TG100C/C1521632",
+        "verified_mpn": "LCMXO2-2000HC-4TG100C",
+        "verified_lcsc_code": "C1521632",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "MX29LV640ETTI-70G": {
+      "manufacturer": "Macronix",
+      "description": "MX29LV640ETTI-70G x8 / 4 x 2MiB",
+      "physical_package": "TSOP-I-48, 18.4 x 12 mm body, 0.5 mm pitch, normal pin orientation",
+      "electrical_spec": "64 Mbit 3 V parallel NOR, 70 ns industrial top-boot TSOP-48, x8/x16; optional",
+      "manufacturer_sources": [
+        "https://www.macronix.com/Lists/Datasheet/Attachments/8514/MX29LV640E%20T-B%2C%203V%2C%2064Mb%2C%20v1.7.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Factory BIOS DNP. External verified bank-0 preprogramming required for populated prototype; byte-mode bank pins are physical A20/A21. JP40 normally open. Original mask ROM never writable."
+    },
+    "PMEG2010ER,115": {
+      "manufacturer": "Nexperia",
+      "description": "Reserve charge Schottky",
+      "physical_package": "Nexperia CFP3 SOD-123W",
+      "electrical_spec": "Reserve charge Schottky",
+      "manufacturer_sources": [
+        "https://assets.nexperia.com/documents/data-sheet/PMEG2010ER.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": ""
+    },
+    "PMV48XP,215": {
+      "manufacturer": "Nexperia",
+      "description": "PMV48XP reverse polarity",
+      "physical_package": "SOT-23",
+      "electrical_spec": "PMV48XP reverse polarity",
+      "manufacturer_sources": [
+        "https://assets.nexperia.com/documents/data-sheet/PMV48XP.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C75560",
+        "url": "https://www.lcsc.com/product-detail/C75560.html",
+        "verified_mpn": "PMV48XP,215",
+        "verified_manufacturer": "Nexperia",
+        "verified_package_or_nominal": "Nexperia SOT-23",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/Nexperia-PMV48XP215/C75560",
+        "verified_mpn": "PMV48XP,215",
+        "verified_lcsc_code": "C75560",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-07100KL": {
+      "manufacturer": "Yageo",
+      "description": "100k",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "100k ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-07100KL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C60491",
+        "url": "https://www.lcsc.com/product-detail/C60491.html",
+        "verified_mpn": "RC0402FR-07100KL",
+        "verified_manufacturer": "Yageo",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/RC0402FR-07100KL/C60491",
+        "verified_mpn": "RC0402FR-07100KL",
+        "verified_lcsc_code": "C60491",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-0710KL": {
+      "manufacturer": "Yageo",
+      "description": "10k",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "10k ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-0710KL"
+      ],
+      "spec_review_status": "Yageo exact manufacturer specification reviewed: 1%, 50 V, 0.063 W; operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C60490",
+        "url": "https://www.lcsc.com/product-detail/C60490.html",
+        "verified_mpn": "RC0402FR-0710KL",
+        "verified_manufacturer": "Yageo",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/RC0402FR-0710KL/C60490",
+        "verified_mpn": "RC0402FR-0710KL",
+        "verified_lcsc_code": "C60490",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-071KL": {
+      "manufacturer": "Yageo",
+      "description": "1k",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "1k ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-071KL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C106235",
+        "url": "https://www.lcsc.com/product-detail/C106235.html",
+        "verified_mpn": "RC0402FR-071KL",
+        "verified_manufacturer": "Yageo",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/YAGEO-RC0402FR071KL/C106235",
+        "verified_mpn": "RC0402FR-071KL",
+        "verified_lcsc_code": "C106235",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-071ML": {
+      "manufacturer": "Yageo",
+      "description": "1M",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "1M ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-071ML"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C138033",
+        "url": "https://www.lcsc.com/product-detail/C138033.html",
+        "verified_mpn": "RC0402FR-071ML",
+        "verified_manufacturer": "Yageo",
+        "verified_package_or_nominal": "0402, 1 Mohm +/-1%, 62.5 mW",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/YAGEO-RC0402FR071ML/C138033",
+        "verified_mpn": "RC0402FR-071ML",
+        "verified_lcsc_code": "C138033",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-0727RL": {
+      "manufacturer": "Yageo",
+      "description": "27",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "27 ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-0727RL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C138021",
+        "url": "https://www.lcsc.com/product-detail/C138021.html",
+        "verified_mpn": "RC0402FR-0727RL",
+        "verified_manufacturer": "Yageo",
+        "verified_package_or_nominal": "0402, 27 ohm +/-1%, 62.5 mW",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/YAGEO-RC0402FR0727RL/C138021",
+        "verified_mpn": "RC0402FR-0727RL",
+        "verified_lcsc_code": "C138021",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_method": "Live official JLC catalog search by exact MPN, followed by opening exact product detail page and checking maker, MPN, C-code, nominal specifications, package and assembly labels. Text-only web retrieval errors did not establish absence.",
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. No stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-0733RL": {
+      "manufacturer": "Yageo",
+      "description": "33",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "33 ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-0733RL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C138002",
+        "url": "https://www.lcsc.com/product-detail/C138002.html",
+        "verified_mpn": "RC0402FR-0733RL",
+        "verified_manufacturer": "Yageo",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/YAGEO-RC0402FR0733RL/C138002",
+        "verified_mpn": "RC0402FR-0733RL",
+        "verified_lcsc_code": "C138002",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-0747KL": {
+      "manufacturer": "Yageo",
+      "description": "47k",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "47k ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-0747KL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C93943",
+        "url": "https://www.lcsc.com/product-detail/C93943.html",
+        "verified_mpn": "RC0402FR-0747KL",
+        "verified_manufacturer": "Yageo",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/Yageo-RC0402FR0747KL/C93943",
+        "verified_mpn": "RC0402FR-0747KL",
+        "verified_lcsc_code": "C93943",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-074K7L": {
+      "manufacturer": "Yageo",
+      "description": "4.7k",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "4.7k ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-074K7L"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C105871",
+        "url": "https://www.lcsc.com/product-detail/C105871.html",
+        "verified_mpn": "RC0402FR-074K7L",
+        "verified_manufacturer": "Yageo",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/RC0402FR-074K7L/C105871",
+        "verified_mpn": "RC0402FR-074K7L",
+        "verified_lcsc_code": "C105871",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-07976KL": {
+      "manufacturer": "Yageo",
+      "description": "976k",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "976k ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-07976KL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Original exact 976k ohm divider retained. Chinese official LCSC identity and live official JLC SMT part listing both verified. No resistor ratio or warning-threshold change.",
+      "supplier_identity": {
+        "lcsc_code": "C273699",
+        "url": "https://jlcpcb.com/partdetail/YAGEO-RC0402FR07976KL/C273699",
+        "verified_mpn": "RC0402FR-07976KL",
+        "verified_manufacturer": "Yageo",
+        "verified_package_or_nominal": "0402, 976 kohm +/-1%, 62.5 mW",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Exact Yageo MPN, 976k ohm +/-1%, 0402 and code verified in official Chinese LCSC and live JLC catalog; no stock or assembly-order guarantee.",
+        "catalog_region": "Chinese official LCSC catalog; global JLC import acceptance pending"
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/YAGEO-RC0402FR07976KL/C273699",
+        "verified_mpn": "RC0402FR-07976KL",
+        "verified_lcsc_code": "C273699",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_method": "Live official JLC catalog search by exact MPN, followed by opening exact product detail page and checking maker, MPN, C-code, nominal specifications, package and assembly labels. Text-only web retrieval errors did not establish absence.",
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. No stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402JR-070RL": {
+      "manufacturer": "Yageo",
+      "description": "0",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "0 ohm; zero-ohm jumper",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402JR-070RL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C60485",
+        "url": "https://www.lcsc.com/product-detail/C60485.html",
+        "verified_mpn": "RC0402JR-070RL",
+        "verified_manufacturer": "Yageo",
+        "verified_package_or_nominal": "0402, zero-ohm jumper",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/RC0402JR-070RL/C60485",
+        "verified_mpn": "RC0402JR-070RL",
+        "verified_lcsc_code": "C60485",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0603FR-07100KL": {
+      "manufacturer": "Yageo",
+      "description": "100k",
+      "physical_package": "0603 imperial / 1608 metric SMT chip",
+      "electrical_spec": "100k ohm; 1% thick-film; nominal power 0.1 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0603FR-07100KL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution."
+    },
+    "RC0603FR-0710KL": {
+      "manufacturer": "Yageo",
+      "description": "10k",
+      "physical_package": "0603 imperial / 1608 metric SMT chip",
+      "electrical_spec": "10k ohm; 1% thick-film; nominal power 0.1 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0603FR-0710KL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C98220",
+        "url": "https://www.lcsc.com/product-detail/C98220.html",
+        "verified_mpn": "RC0603FR-0710KL",
+        "verified_manufacturer": "Yageo",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/RC0603FR-0710KL/C98220",
+        "verified_mpn": "RC0603FR-0710KL",
+        "verified_lcsc_code": "C98220",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0603JR-070RL": {
+      "manufacturer": "Yageo",
+      "description": "0R",
+      "physical_package": "0603 imperial / 1608 metric SMT chip",
+      "electrical_spec": "0R ohm; zero-ohm jumper",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0603JR-070RL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. Supply paths require resistor pulse/temperature review; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C95177",
+        "url": "https://www.lcsc.com/product-detail/C95177.html",
+        "verified_mpn": "RC0603JR-070RL",
+        "verified_manufacturer": "Yageo",
+        "verified_package_or_nominal": "0603, zero-ohm jumper",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/YAGEO-RC0603JR070RL/C95177",
+        "verified_mpn": "RC0603JR-070RL",
+        "verified_lcsc_code": "C95177",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0805FR-0722RL": {
+      "manufacturer": "Yageo",
+      "description": "22",
+      "physical_package": "0805 imperial / 2012 metric SMT chip",
+      "electrical_spec": "22 ohm; 1% thick-film; nominal power 0.125 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0805FR-0722RL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Optional reserve DNP. At 5 V with 22 ohm: initial current about 227 mA, peak resistor power about 1.14 W; 400 uF nominal charge tau about 8.8 ms and resistor loss about 5 mJ (6 mJ for +20% C). These ideal estimates exceed continuous 0.125 W rating and require manufacturer pulse-overload/temperature qualification before fitting."
+    },
+    "RP2350B": {
+      "manufacturer": "Raspberry Pi",
+      "description": "RP2350B",
+      "physical_package": "QFN-80 with exposed pad, 10 x 10 mm, 0.4 mm pitch",
+      "electrical_spec": "RP2350B",
+      "manufacturer_sources": [
+        "https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf",
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C9900138392",
+        "url": "https://jlcpcb.com/partdetail/RASPBERRY-RP2350B/C9900138392",
+        "verified_mpn": "RP2350B",
+        "verified_manufacturer": "Raspberry Pi",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/RASPBERRY-RP2350B/C9900138392",
+        "verified_mpn": "RP2350B",
+        "verified_lcsc_code": "C9900138392",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised.",
+        "catalog_manufacturer_note": "Page manufacturer/service label is JLCPCB Assembly; exact RP2350B and QFN-80 package were matched to Raspberry Pi primary design. Do not infer a different silicon manufacturer."
+      }
+    },
+    "S7221-45R": {
+      "manufacturer": "Harwin",
+      "description": "C5 removable compression contact",
+      "physical_package": "Harwin SMT spring contact, 1.23 mm free / 0.90 mm working height",
+      "electrical_spec": "Free height 1.23 mm; working height 0.90 mm; minimum working 0.63 mm; mechanical stop 0.55 mm",
+      "manufacturer_sources": [
+        "https://www.harwin.com/products/S7221-45R"
+      ],
+      "spec_review_status": "Manufacturer product/drawing geometry reviewed; contact force and fixture qualification pending",
+      "notes": "Sixteen individual SMT contacts for C5 carrier. One electrical terminal across two solder lands; custom manufacturer body-origin footprint. Clamp/strain relief required; contact-only total does not include fixture. JLC exact part page explicitly requires a PCB assembly fixture to protect/support the part; obtain assembler fixture agreement before order release.",
+      "supplier_identity": {
+        "lcsc_code": "C22445132",
+        "url": "https://www.lcsc.com/product-detail/C22445132.html",
+        "verified_mpn": "S7221-45R",
+        "verified_manufacturer": "Harwin",
+        "verified_package_or_nominal": "SMT spring contact, 1.23 mm free / 0.90 mm working",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/Harwin-S722145R/C22445132",
+        "verified_mpn": "S7221-45R",
+        "verified_lcsc_code": "C22445132",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": true,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74AXC4T245PWR": {
+      "manufacturer": "Texas Instruments",
+      "description": "C5 off-state isolation",
+      "physical_package": "TSSOP-16 4.4x5mm P0.65mm",
+      "electrical_spec": "C5 off-state isolation",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74axc4t245.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C2867798",
+        "url": "https://www.lcsc.com/product-detail/C2867798.html",
+        "verified_mpn": "SN74AXC4T245PWR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74AXC4T245PWR/C2867798",
+        "verified_mpn": "SN74AXC4T245PWR",
+        "verified_lcsc_code": "C2867798",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC16T245DGGR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC16T245",
+      "physical_package": "TSSOP-48 6.1x12.5mm P0.5mm",
+      "electrical_spec": "SN74LVC16T245",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc16t245.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C148170",
+        "url": "https://www.lcsc.com/product-detail/C148170.html",
+        "verified_mpn": "SN74LVC16T245DGGR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC16T245DGGR/C148170",
+        "verified_mpn": "SN74LVC16T245DGGR",
+        "verified_lcsc_code": "C148170",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC1G00DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SD enable/power-good NAND",
+      "physical_package": "SOT-23-5",
+      "electrical_spec": "SD enable/power-good NAND",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g00.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C7826",
+        "url": "https://www.lcsc.com/product-detail/C7826.html",
+        "verified_mpn": "SN74LVC1G00DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SOT-23-5",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/C7826",
+        "verified_mpn": "SN74LVC1G00DBVR",
+        "verified_lcsc_code": "C7826",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC1G04DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC1G04 write-block inverter",
+      "physical_package": "SOT-23-5",
+      "electrical_spec": "SN74LVC1G04 write-block inverter",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g04.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": ""
+    },
+    "SN74LVC1G07DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC1G07 open-drain IORDY",
+      "physical_package": "SOT-23-5",
+      "electrical_spec": "SN74LVC1G07 open-drain IORDY",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g07.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C7829",
+        "url": "https://www.lcsc.com/product-detail/C7829.html",
+        "verified_mpn": "SN74LVC1G07DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SOT-23-5",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC1G07DBVR/C7829",
+        "verified_mpn": "SN74LVC1G07DBVR",
+        "verified_lcsc_code": "C7829",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC1G08DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC1G08DBVR",
+      "physical_package": "SOT-23-5",
+      "electrical_spec": "SN74LVC1G08DBVR",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g08.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C7666",
+        "url": "https://www.lcsc.com/product-detail/C7666.html",
+        "verified_mpn": "SN74LVC1G08DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SOT-23-5",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/SN74LVC1G08DBVR/C7666",
+        "verified_mpn": "SN74LVC1G08DBVR",
+        "verified_lcsc_code": "C7666",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC1G11DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC1G11DBVR",
+      "physical_package": "SOT-23-6",
+      "electrical_spec": "SN74LVC1G11DBVR",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g11.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C22046",
+        "url": "https://www.lcsc.com/product-detail/C22046.html",
+        "verified_mpn": "SN74LVC1G11DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC1G11DBVR/C22046",
+        "verified_mpn": "SN74LVC1G11DBVR",
+        "verified_lcsc_code": "C22046",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC1G125DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC1G125 qualified ATA_INTRQ",
+      "physical_package": "SOT-23-5",
+      "electrical_spec": "SN74LVC1G125 qualified ATA_INTRQ",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g125.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C23654",
+        "url": "https://www.lcsc.com/product-detail/C23654.html",
+        "verified_mpn": "SN74LVC1G125DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/SN74LVC1G125DBVR/C23654",
+        "verified_mpn": "SN74LVC1G125DBVR",
+        "verified_lcsc_code": "C23654",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC1G17DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC1G17 host RESETn",
+      "physical_package": "SOT-23-5",
+      "electrical_spec": "SN74LVC1G17 host RESETn",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g17.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C7836",
+        "url": "https://www.lcsc.com/product-detail/C7836.html",
+        "verified_mpn": "SN74LVC1G17DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SOT-23-5",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/SN74LVC1G17DBVR/C7836",
+        "verified_mpn": "SN74LVC1G17DBVR",
+        "verified_lcsc_code": "C7836",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC1G32DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC1G32DBVR",
+      "physical_package": "SOT-23-5",
+      "electrical_spec": "SN74LVC1G32DBVR",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g32.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C10096",
+        "url": "https://www.lcsc.com/product-detail/C10096.html",
+        "verified_mpn": "SN74LVC1G32DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC1G32DBVR/C10096",
+        "verified_mpn": "SN74LVC1G32DBVR",
+        "verified_lcsc_code": "C10096",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC1G332DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC1G332 NOR WE qualifier",
+      "physical_package": "SOT-23-6",
+      "electrical_spec": "SN74LVC1G332 NOR WE qualifier",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g332.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": ""
+    },
+    "SN74LVC244APWR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC244A host controls",
+      "physical_package": "TSSOP-20 4.4x6.5mm P0.65mm",
+      "electrical_spec": "SN74LVC244A host controls",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc244a.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C7668",
+        "url": "https://www.lcsc.com/product-detail/C7668.html",
+        "verified_mpn": "SN74LVC244APWR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC244APWR/C7668",
+        "verified_mpn": "SN74LVC244APWR",
+        "verified_lcsc_code": "C7668",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC2G04DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC2G04DBVR",
+      "physical_package": "SOT-23-6",
+      "electrical_spec": "SN74LVC2G04DBVR",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc2g04.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C10428",
+        "url": "https://www.lcsc.com/product-detail/C10428.html",
+        "verified_mpn": "SN74LVC2G04DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SOT-23-6",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      }
+    },
+    "SN74LVC2G08DCUR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC2G08DCUR",
+      "physical_package": "VSSOP-8 2.3x2mm P0.5mm",
+      "electrical_spec": "SN74LVC2G08DCUR",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc2g08.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C91875",
+        "url": "https://www.lcsc.com/product-detail/C91875.html",
+        "verified_mpn": "SN74LVC2G08DCUR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "VSSOP-8, 0.5 mm pitch",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC2G08DCUR/C91875",
+        "verified_mpn": "SN74LVC2G08DCUR",
+        "verified_lcsc_code": "C91875",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC2G125DCTR": {
+      "manufacturer": "Texas Instruments",
+      "description": "SN74LVC2G125 bank-domain buffer",
+      "physical_package": "SOT-23-8",
+      "electrical_spec": "SN74LVC2G125 bank-domain buffer",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc2g125.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": ""
+    },
+    "TLV803EB29DBZR": {
+      "manufacturer": "Texas Instruments",
+      "description": "TLV803EB29 console-rail NOR reset",
+      "physical_package": "SOT-23",
+      "electrical_spec": "TLV803EB29 console-rail NOR reset",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/tlv803e.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": ""
+    },
+    "TPS2116DRLR": {
+      "manufacturer": "Texas Instruments",
+      "description": "TPS2116 automatic mux",
+      "physical_package": "TI DRL0008A SOT-5X3-8, 1.6 x 2.1 mm, 0.5 mm pitch",
+      "electrical_spec": "TPS2116 automatic mux",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/tps2116.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C3235557",
+        "url": "https://www.lcsc.com/product-detail/C3235557.html",
+        "verified_mpn": "TPS2116DRLR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SOT-583 / TI DRL8",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-TPS2116DRLR/C3235557",
+        "verified_mpn": "TPS2116DRLR",
+        "verified_lcsc_code": "C3235557",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "TPS22919DCKR": {
+      "manufacturer": "Texas Instruments",
+      "description": "TPS22919 Wi-Fi input switch",
+      "physical_package": "SOT-363 SC-70-6",
+      "electrical_spec": "TPS22919 Wi-Fi input switch",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/tps22919.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C2149796",
+        "url": "https://www.lcsc.com/product-detail/C2149796.html",
+        "verified_mpn": "TPS22919DCKR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SC-70-6",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/C2149796",
+        "verified_mpn": "TPS22919DCKR",
+        "verified_lcsc_code": "C2149796",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "TPS3808G01DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "TPS3808G01DBVR",
+      "physical_package": "SOT-23-6",
+      "electrical_spec": "TPS3808G01DBVR",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/tps3808.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C19653",
+        "url": "https://www.lcsc.com/product-detail/C19653.html",
+        "verified_mpn": "TPS3808G01DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SOT-23-6",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-TPS3808G01DBVR/C19653",
+        "verified_mpn": "TPS3808G01DBVR",
+        "verified_lcsc_code": "C19653",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "TPS3808G33DBVR": {
+      "manufacturer": "Texas Instruments",
+      "description": "TPS3808G33DBVR",
+      "physical_package": "SOT-23-6",
+      "electrical_spec": "TPS3808G33DBVR",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/tps3808.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "",
+      "supplier_identity": {
+        "lcsc_code": "C43698",
+        "url": "https://www.lcsc.com/product-detail/C43698.html",
+        "verified_mpn": "TPS3808G33DBVR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-TPS3808G33DBVR/C43698",
+        "verified_mpn": "TPS3808G33DBVR",
+        "verified_lcsc_code": "C43698",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "TPS62162DSGR": {
+      "manufacturer": "Texas Instruments",
+      "description": "TPS62162 3.3V 1A",
+      "physical_package": "TI DSG0008A WSON-8 with exposed pad, 2 x 2 mm, 0.5 mm pitch",
+      "electrical_spec": "Fixed 3.3 V synchronous buck, 3-17 V input, 1 A nominal output, 2.25 MHz nominal",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+      ],
+      "spec_review_status": "TI package, fixed-output order code and passive selection tables reviewed; layout/bench qualification pending",
+      "notes": "TI recommends 2.2 uH XFL3012-222MEC, 10 uF input and 22 uF X5R/X7R output. Two fitted 22 uF parts are 44 uF nominal, not 44 uF effective. Qualify effective capacitance at actual bias/temp/tolerance and converter stability.",
+      "supplier_identity": {
+        "lcsc_code": "C40256",
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-TPS62162DSGR/C40256",
+        "verified_mpn": "TPS62162DSGR",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-TPS62162DSGR/C40256",
+        "verified_mpn": "TPS62162DSGR",
+        "verified_lcsc_code": "C40256",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "W25Q128JVSIQ": {
+      "manufacturer": "Winbond",
+      "description": "16MiB boot NOR",
+      "physical_package": "SOIC-8 5.3x5.3mm P1.27mm",
+      "electrical_spec": "128 Mbit serial NOR, 2.7-3.6 V",
+      "manufacturer_sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf",
+        "https://www.winbond.com/resource-files/w25q128jv%20revf%2003272018%20plus.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Exact SI SOIC-8 208 mil package. Catalog C113767 selected; do not use a narrower SOIC-8 or alternate density.",
+      "supplier_identity": {
+        "lcsc_code": "C113767",
+        "url": "https://www.lcsc.com/product-detail/C113767.html",
+        "verified_mpn": "W25Q128JVSIQ",
+        "verified_manufacturer": "Winbond",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/WinbondElec-W25Q128JVSIQ/C113767",
+        "verified_mpn": "W25Q128JVSIQ",
+        "verified_lcsc_code": "C113767",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "XFL3012-222MEC": {
+      "manufacturer": "Coilcraft",
+      "description": "2.2uH shielded",
+      "physical_package": "Shielded SMT power inductor, 3 x 3 mm, 1.3 mm maximum height",
+      "electrical_spec": "2.2 uH +/-20%; DCR 81 mOhm nominal / 97 mOhm maximum; Isat 1.0/1.3/1.6 A at 10/20/30% L drop",
+      "manufacturer_sources": [
+        "https://www.coilcraft.com/getmedia/f76a3c9b-4fff-4397-8028-ef8e043eb200/xfl3012.pdf",
+        "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+      ],
+      "spec_review_status": "Coilcraft specification and TI recommended-inductor table reviewed; operating qualification pending",
+      "notes": "Irms 1.4 A at 20 C rise / 1.9 A at 40 C rise. TI TPS6216x table recommends this exact inductor. At 5 V to 3.3 V and nominal 2.25 MHz, minimum 1.76 uH gives about 0.283 A peak-to-peak ripple (ideal inference). Test peak current/temperature and transients; do not assume full-load qualification.",
+      "supplier_identity": {
+        "lcsc_code": "C3911432",
+        "url": "https://www.lcsc.com/product-detail/C3911432.html",
+        "verified_mpn": "XFL3012-222MEC",
+        "verified_manufacturer": "Coilcraft",
+        "verified_package_or_nominal": "Shielded SMT 2.2 uH, 3 x 3 mm body",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official catalog exact MPN, manufacturer and physical package/nominal identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/Coilcraft-XFL3012222MEC/C3911432",
+        "verified_mpn": "XFL3012-222MEC",
+        "verified_lcsc_code": "C3911432",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "SN74LVC2G04DBVT": {
+      "manufacturer": "Texas Instruments",
+      "description": "Dual inverter, DBV six-pin package, 250-unit reel order option",
+      "physical_package": "SOT-23-6",
+      "electrical_spec": "SN74LVC2G04, DBV SOT-23-6, -40 to +125 C; same circuit and pinout as DBVR",
+      "manufacturer_sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc2g04.pdf"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "U31 supplier order code changed from DBVR to DBVT after exact JLC verification. TI package addendum lists identical package, terminals, finish and operating range; T/R distinguishes 250/3000 reel quantity. No pin, footprint or logic change.",
+      "supplier_identity": {
+        "lcsc_code": "C2860342",
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC2G04DBVT/C2860342",
+        "verified_mpn": "SN74LVC2G04DBVT",
+        "verified_manufacturer": "Texas Instruments",
+        "verified_package_or_nominal": "SOT-23-6 (DBV)",
+        "verified_on": "2026-10-10",
+        "verification_scope": "Official JLC exact MPN, manufacturer, package and SMT listing; no inventory, allocation or assembly-order acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC2G04DBVT/C2860342",
+        "verified_mpn": "SN74LVC2G04DBVT",
+        "verified_lcsc_code": "C2860342",
+        "verified_on": "2026-10-10",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    }
+  },
+  "open_release_items": [
+    "Carrier PCB is a design draft; procurement worksheet does not authorize fabrication or assembly release.",
+    "Obtain assembler confirmation and live sourcing for every selected MPN; blank supplier codes intentionally remain sourcing_pending.",
+    "Verify capacitor effective capacitance versus DC bias, temperature, tolerance and aging, especially 22 uF converter outputs and optional 100 uF reserve bank.",
+    "Qualify switcher current peaks/thermal behavior and native RP235x marked-inductor orientation after placement/routing.",
+    "Optional reserve charge resistor RC0805FR-0722RL needs pulse-overload qualification: ideal initial 1.14 W, approximately 5 mJ at 400 uF and 5 V; continuous wattage is insufficient evidence.",
+    "Complete assembly orientation/footprint and shield-clearance review; C5 module is modified and installed manually. Harwin spring contacts are SMT parts requiring an assembler-approved support fixture.",
+    "Optional BIOS requires separate mechanical/timing installation qualification, isolated stock CE, R410 removal and externally verified bank-0 preprogramming; no onboard flasher is provided.",
+    "CN503 flex, optional BIOS FPC/selector harness, power leads, mounting/insulation fixture and microSD media are separate fabrication/installation items, not guessed catalog stock parts.",
+    "JLC explicitly lists assembly support fixture requirements for Harwin S7221-45R C22445132 and Abracon ASE-50.000MHZ-LC-T C596955; confirm fixture process before assembly order release."
+  ]
+}

@@ -1,0 +1,2580 @@
+[
+  {
+    "ref": "U10",
+    "value": "LCMXO2-2000HC-4TG100C",
+    "mpn": "LCMXO2-2000HC-4TG100C",
+    "lcsc": "C1521632",
+    "footprint": "Package_QFP:TQFP-100_14x14mm_P0.5mm",
+    "pins": {
+      "1": {
+        "name": "PL2A / L_GPLLT_IN",
+        "net": "LINK_D0",
+        "type": "bidirectional"
+      },
+      "2": {
+        "name": "PL2B / L_GPLLC_IN",
+        "net": "LINK_D1",
+        "type": "bidirectional"
+      },
+      "3": {
+        "name": "PL3A / PCLKT5_0",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "4": {
+        "name": "PL3B / PCLKC5_0",
+        "net": "LINK_D2",
+        "type": "bidirectional"
+      },
+      "5": {
+        "name": "VCCIO5",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "6": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "7": {
+        "name": "PL4A",
+        "net": "LINK_D3",
+        "type": "bidirectional"
+      },
+      "8": {
+        "name": "PL4B",
+        "net": "LINK_D4",
+        "type": "bidirectional"
+      },
+      "9": {
+        "name": "PL5A",
+        "net": "LINK_D5",
+        "type": "bidirectional"
+      },
+      "10": {
+        "name": "PL5B",
+        "net": "LINK_D6",
+        "type": "bidirectional"
+      },
+      "11": {
+        "name": "VCCIO4",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "12": {
+        "name": "PL7C / PCLKT4_0",
+        "net": "LINK_D7",
+        "type": "bidirectional"
+      },
+      "13": {
+        "name": "PL7D / PCLKC4_0",
+        "net": "LINK_WRn",
+        "type": "input"
+      },
+      "14": {
+        "name": "PL9A",
+        "net": "LINK_RDn",
+        "type": "input"
+      },
+      "15": {
+        "name": "PL9B",
+        "net": "LINK_A0",
+        "type": "input"
+      },
+      "16": {
+        "name": "PL10A",
+        "net": "LINK_A1",
+        "type": "input"
+      },
+      "17": {
+        "name": "PL10B",
+        "net": "LINK_IRQ",
+        "type": "output"
+      },
+      "18": {
+        "name": "PL11A",
+        "net": "LINK_READY",
+        "type": "output"
+      },
+      "19": {
+        "name": "PL11B",
+        "net": "FPGA_RESETn",
+        "type": "input"
+      },
+      "20": {
+        "name": "PL12A / PCLKT3_0",
+        "net": "FPGA_CLK50",
+        "type": "input"
+      },
+      "21": {
+        "name": "PL12B / PCLKC3_0",
+        "net": "BRIDGE_ARM",
+        "type": "input"
+      },
+      "22": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "23": {
+        "name": "VCCIO3",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "24": {
+        "name": "PL14A",
+        "net": "BUS_SAFE",
+        "type": "input"
+      },
+      "25": {
+        "name": "PL14B",
+        "net": "PWR_FAILn",
+        "type": "input"
+      },
+      "26": {
+        "name": "VCCIO2",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "27": {
+        "name": "PB5A / CSSPIN",
+        "net": "FPGA_CSSPIN",
+        "type": "bidirectional"
+      },
+      "28": {
+        "name": "PB5B",
+        "net": "BUS_DA0",
+        "type": "input"
+      },
+      "29": {
+        "name": "PB6A",
+        "net": "BUS_DA1",
+        "type": "input"
+      },
+      "30": {
+        "name": "PB6B",
+        "net": "BUS_DA2",
+        "type": "input"
+      },
+      "31": {
+        "name": "PB8A / MCLK/CCLK",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "32": {
+        "name": "PB8B / SO/SPISO",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "33": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "34": {
+        "name": "PB11A / PCLKT2_0",
+        "net": "BUS_CS0n",
+        "type": "input"
+      },
+      "35": {
+        "name": "PB11B / PCLKC2_0",
+        "net": "BUS_CS1n",
+        "type": "input"
+      },
+      "36": {
+        "name": "PB12A",
+        "net": "BUS_DIORn",
+        "type": "input"
+      },
+      "37": {
+        "name": "PB12B",
+        "net": "BUS_DIOWn",
+        "type": "input"
+      },
+      "38": {
+        "name": "PB16A / PCLKT2_1",
+        "net": "BUS_RESETn",
+        "type": "input"
+      },
+      "39": {
+        "name": "PB16B / PCLKC2_1",
+        "net": "BUS_DMACKn",
+        "type": "input"
+      },
+      "40": {
+        "name": "PB18A",
+        "net": "REQ_INTRQ_OEn",
+        "type": "output"
+      },
+      "41": {
+        "name": "PB18B",
+        "net": "REQ_DMARQ_OEn",
+        "type": "output"
+      },
+      "42": {
+        "name": "PB21A",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "43": {
+        "name": "PB21B",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "44": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "45": {
+        "name": "PB22A",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "46": {
+        "name": "VCCIO2",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "47": {
+        "name": "PB22B",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "48": {
+        "name": "PB25A / SN",
+        "net": "FPGA_SN",
+        "type": "bidirectional"
+      },
+      "49": {
+        "name": "PB25B / SI/SISPI",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "50": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "51": {
+        "name": "PR14B",
+        "net": "BUS_DD0",
+        "type": "bidirectional"
+      },
+      "52": {
+        "name": "PR14A",
+        "net": "BUS_DD1",
+        "type": "bidirectional"
+      },
+      "53": {
+        "name": "PR12B",
+        "net": "BUS_DD2",
+        "type": "bidirectional"
+      },
+      "54": {
+        "name": "PR12A",
+        "net": "BUS_DD3",
+        "type": "bidirectional"
+      },
+      "55": {
+        "name": "VCCIO1",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "56": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "57": {
+        "name": "PR11B",
+        "net": "BUS_DD4",
+        "type": "bidirectional"
+      },
+      "58": {
+        "name": "PR11A",
+        "net": "BUS_DD5",
+        "type": "bidirectional"
+      },
+      "59": {
+        "name": "PR10B",
+        "net": "BUS_DD6",
+        "type": "bidirectional"
+      },
+      "60": {
+        "name": "PR10A",
+        "net": "BUS_DD7",
+        "type": "bidirectional"
+      },
+      "61": {
+        "name": "PR9A",
+        "net": "BUS_DD8",
+        "type": "bidirectional"
+      },
+      "62": {
+        "name": "PR7B / PCLKC1_0",
+        "net": "BUS_DD9",
+        "type": "bidirectional"
+      },
+      "63": {
+        "name": "PR7A / PCLKT1_0",
+        "net": "BUS_DD10",
+        "type": "bidirectional"
+      },
+      "64": {
+        "name": "PR6B",
+        "net": "BUS_DD11",
+        "type": "bidirectional"
+      },
+      "65": {
+        "name": "PR6A",
+        "net": "BUS_DD12",
+        "type": "bidirectional"
+      },
+      "66": {
+        "name": "PR5B",
+        "net": "BUS_DD13",
+        "type": "bidirectional"
+      },
+      "67": {
+        "name": "PR5A",
+        "net": "BUS_DD14",
+        "type": "bidirectional"
+      },
+      "68": {
+        "name": "PR4B",
+        "net": "BUS_DD15",
+        "type": "bidirectional"
+      },
+      "69": {
+        "name": "PR4A",
+        "net": "REQ_DATA_OEn",
+        "type": "output"
+      },
+      "70": {
+        "name": "PR3B",
+        "net": "DATA_DIR",
+        "type": "output"
+      },
+      "71": {
+        "name": "PR3A",
+        "net": "REQ_IORDY_LOW",
+        "type": "output"
+      },
+      "72": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "73": {
+        "name": "VCCIO1",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "74": {
+        "name": "PR1B",
+        "net": "REQ_INTRQ",
+        "type": "output"
+      },
+      "75": {
+        "name": "PR1A",
+        "net": "REQ_DMARQ",
+        "type": "output"
+      },
+      "76": {
+        "name": "PT24D / DONE",
+        "net": "FPGA_DONE",
+        "type": "bidirectional"
+      },
+      "77": {
+        "name": "PT24C / INITN",
+        "net": "FPGA_INITn",
+        "type": "bidirectional"
+      },
+      "78": {
+        "name": "PT22A",
+        "net": "BIOS_BANK0",
+        "type": "output"
+      },
+      "79": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "80": {
+        "name": "VCCIO0",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "81": {
+        "name": "PT20D / PROGRAMN",
+        "net": "FPGA_PROGRAMn",
+        "type": "input"
+      },
+      "82": {
+        "name": "PT20C / JTAGENB",
+        "net": "FPGA_JTAGEN",
+        "type": "input"
+      },
+      "83": {
+        "name": "PT19B",
+        "net": "BIOS_BANK1",
+        "type": "output"
+      },
+      "84": {
+        "name": "PT19A",
+        "net": "BIOS_WR_EN",
+        "type": "output"
+      },
+      "85": {
+        "name": "PT18D / SDA/PCLKC0_0",
+        "net": "FPGA_SDA",
+        "type": "bidirectional"
+      },
+      "86": {
+        "name": "PT18C / SCL/PCLKT0_0",
+        "net": "FPGA_SCL",
+        "type": "bidirectional"
+      },
+      "87": {
+        "name": "PT17B / PCLKC0_1",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "88": {
+        "name": "PT17A / PCLKT0_1",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "89": {
+        "name": "NC",
+        "net": null,
+        "type": "no_connect"
+      },
+      "90": {
+        "name": "PT16D / TMS",
+        "net": "FPGA_TMS",
+        "type": "input"
+      },
+      "91": {
+        "name": "PT16C / TCK",
+        "net": "FPGA_TCK",
+        "type": "input"
+      },
+      "92": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "93": {
+        "name": "VCCIO0",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "94": {
+        "name": "PT12D / TDI",
+        "net": "FPGA_TDI",
+        "type": "input"
+      },
+      "95": {
+        "name": "PT12C / TDO",
+        "net": "FPGA_TDO",
+        "type": "output"
+      },
+      "96": {
+        "name": "PT11B",
+        "net": "BIOS_RECOVERYn",
+        "type": "input"
+      },
+      "97": {
+        "name": "PT11A",
+        "net": "FPGA_READY",
+        "type": "output"
+      },
+      "98": {
+        "name": "PT9B",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "99": {
+        "name": "PT9A",
+        "net": null,
+        "type": "bidirectional"
+      },
+      "100": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=42568",
+      "https://www.latticesemi.com/view_document?document_id=38834",
+      "https://www.latticesemi.com/view_document?document_id=39095",
+      "https://jlcpcb.com/partdetail/LCMXO2-2000HC-4TG100C/C1521632"
+    ],
+    "description": "HC FPGA, 3.3 V core and all six I/O banks. Exact physical 100-TQFP pinout from Lattice CSV. Reserved sysCONFIG pins are not assigned application functions. Vendor fit/timing remains required.",
+    "populate": true
+  },
+  {
+    "ref": "C100",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 5",
+    "populate": true
+  },
+  {
+    "ref": "C101",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 11",
+    "populate": true
+  },
+  {
+    "ref": "C102",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 23",
+    "populate": true
+  },
+  {
+    "ref": "C103",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 26",
+    "populate": true
+  },
+  {
+    "ref": "C104",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 46",
+    "populate": true
+  },
+  {
+    "ref": "C105",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 50",
+    "populate": true
+  },
+  {
+    "ref": "C106",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 55",
+    "populate": true
+  },
+  {
+    "ref": "C107",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 73",
+    "populate": true
+  },
+  {
+    "ref": "C108",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 80",
+    "populate": true
+  },
+  {
+    "ref": "C109",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 93",
+    "populate": true
+  },
+  {
+    "ref": "C110",
+    "value": "100nF",
+    "mpn": "CL05B104KO5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA decoupling; place adjacent to U10 pin 100",
+    "populate": true
+  },
+  {
+    "ref": "C111",
+    "value": "10uF",
+    "mpn": "CL10A106MQ8NNNC",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA bulk decoupling",
+    "populate": true
+  },
+  {
+    "ref": "C112",
+    "value": "10uF",
+    "mpn": "CL10A106MQ8NNNC",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA bulk decoupling",
+    "populate": true
+  },
+  {
+    "ref": "C113",
+    "value": "10uF",
+    "mpn": "CL10A106MQ8NNNC",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA bulk decoupling",
+    "populate": true
+  },
+  {
+    "ref": "C114",
+    "value": "10uF",
+    "mpn": "CL10A106MQ8NNNC",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA bulk decoupling",
+    "populate": true
+  },
+  {
+    "ref": "C115",
+    "value": "10uF",
+    "mpn": "CL10A106MQ8NNNC",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA bulk decoupling",
+    "populate": true
+  },
+  {
+    "ref": "C116",
+    "value": "10uF",
+    "mpn": "CL10A106MQ8NNNC",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA bulk decoupling",
+    "populate": true
+  },
+  {
+    "ref": "C117",
+    "value": "10uF",
+    "mpn": "CL10A106MQ8NNNC",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA bulk decoupling",
+    "populate": true
+  },
+  {
+    "ref": "C118",
+    "value": "10uF",
+    "mpn": "CL10A106MQ8NNNC",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "FPGA bulk decoupling",
+    "populate": true
+  },
+  {
+    "ref": "R100",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_PROGRAMn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R101",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_INITn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R102",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_DONE",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R103",
+    "value": "1k",
+    "mpn": "RC0402FR-071KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_JTAGEN",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R104",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_SN",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R105",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_CSSPIN",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R106",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_TMS",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R107",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_TDI",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R108",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_TDO",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "External sysCONFIG/JTAG pull-up per Lattice hardware checklist",
+    "populate": true
+  },
+  {
+    "ref": "R109",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_TCK",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "Recommended JTAG clock pull-down",
+    "populate": true
+  },
+  {
+    "ref": "X10",
+    "value": "50MHz 3.3V",
+    "mpn": "ASE-50.000MHZ-LC-T",
+    "footprint": "Oscillator:Oscillator_SMD_Abracon_ASE-4Pin_3.2x2.5mm",
+    "pins": {
+      "1": {
+        "name": "OE",
+        "net": "+3V3_LOGIC",
+        "type": "input"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "3": {
+        "name": "OUT",
+        "net": "FPGA_CLK50_RAW",
+        "type": "output"
+      },
+      "4": {
+        "name": "VDD",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://abracon.com/Oscillators/ASEseries.pdf"
+    ],
+    "description": "3.3 V CMOS oscillator, 1.2 mm max height; 50 MHz feeds U10 global-clock pin 20 through R110",
+    "populate": true
+  },
+  {
+    "ref": "R110",
+    "value": "33",
+    "mpn": "RC0402FR-0733RL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_CLK50_RAW",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_CLK50",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "Source termination at oscillator; tune only from measured waveforms",
+    "populate": true
+  },
+  {
+    "ref": "C119",
+    "value": "10nF",
+    "mpn": "CL05B103KB5NNNC",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://abracon.com/Oscillators/ASEseries.pdf"
+    ],
+    "description": "Oscillator-local bypass per Abracon",
+    "populate": true
+  },
+  {
+    "ref": "J10",
+    "value": "FPGA JTAG pogo pads",
+    "mpn": "",
+    "footprint": "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical",
+    "pins": {
+      "1": {
+        "name": "+3V3_LOGIC",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "passive"
+      },
+      "3": {
+        "name": "FPGA_TCK",
+        "net": "FPGA_TCK",
+        "type": "passive"
+      },
+      "4": {
+        "name": "GND",
+        "net": "GND",
+        "type": "passive"
+      },
+      "5": {
+        "name": "FPGA_TMS",
+        "net": "FPGA_TMS",
+        "type": "passive"
+      },
+      "6": {
+        "name": "FPGA_TDI",
+        "net": "FPGA_TDI",
+        "type": "passive"
+      },
+      "7": {
+        "name": "FPGA_TDO",
+        "net": "FPGA_TDO",
+        "type": "passive"
+      },
+      "8": {
+        "name": "FPGA_PROGRAMn",
+        "net": "FPGA_PROGRAMn",
+        "type": "passive"
+      },
+      "9": {
+        "name": "FPGA_INITn",
+        "net": "FPGA_INITn",
+        "type": "passive"
+      },
+      "10": {
+        "name": "FPGA_DONE",
+        "net": "FPGA_DONE",
+        "type": "passive"
+      }
+    },
+    "sources": [],
+    "description": "Factory DNP connector. Unpopulated 1.27 mm pogo-access pads: programmer is target-powered 3.3 V logic and must not source VREF. No connector installed under shield.",
+    "populate": false
+  },
+  {
+    "ref": "R111",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_SDA",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "Hold default-enabled sysCONFIG I2C pin high. No external I2C connector or user I2C function is present.",
+    "populate": true
+  },
+  {
+    "ref": "R112",
+    "value": "4.7k",
+    "mpn": "RC0402FR-074K7L",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_SCL",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39095"
+    ],
+    "description": "Hold default-enabled sysCONFIG I2C pin high. No external I2C connector or user I2C function is present.",
+    "populate": true
+  },
+  {
+    "ref": "TP100",
+    "value": "ATA_DD0",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD0",
+        "net": "ATA_DD0",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "2",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP101",
+    "value": "ATA_DD1",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD1",
+        "net": "ATA_DD1",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "3",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP102",
+    "value": "ATA_DD2",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD2",
+        "net": "ATA_DD2",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "5",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP103",
+    "value": "ATA_DD3",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD3",
+        "net": "ATA_DD3",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "6",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP104",
+    "value": "ATA_DD4",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD4",
+        "net": "ATA_DD4",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "8",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP105",
+    "value": "ATA_DD5",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD5",
+        "net": "ATA_DD5",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "9",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP106",
+    "value": "ATA_DD6",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD6",
+        "net": "ATA_DD6",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "11",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP107",
+    "value": "ATA_DD7",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD7",
+        "net": "ATA_DD7",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "12",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP108",
+    "value": "ATA_DD8",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD8",
+        "net": "ATA_DD8",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "13",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP109",
+    "value": "ATA_DD9",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD9",
+        "net": "ATA_DD9",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "14",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP110",
+    "value": "ATA_DD10",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD10",
+        "net": "ATA_DD10",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "16",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP111",
+    "value": "ATA_DD11",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD11",
+        "net": "ATA_DD11",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "17",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP112",
+    "value": "ATA_DD12",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD12",
+        "net": "ATA_DD12",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "19",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP113",
+    "value": "ATA_DD13",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD13",
+        "net": "ATA_DD13",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "20",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP114",
+    "value": "ATA_DD14",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD14",
+        "net": "ATA_DD14",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "22",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP115",
+    "value": "ATA_DD15",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DD15",
+        "net": "ATA_DD15",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw bidirectional G1 data. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "23",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP116",
+    "value": "ATA_DA0",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DA0",
+        "net": "ATA_DA0",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 control. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "2",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP117",
+    "value": "ATA_DA1",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DA1",
+        "net": "ATA_DA1",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 control. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "4",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP118",
+    "value": "ATA_DA2",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DA2",
+        "net": "ATA_DA2",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 control. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "6",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP119",
+    "value": "ATA_CS0n",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_CS0n",
+        "net": "ATA_CS0n",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 control. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "8",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP120",
+    "value": "ATA_CS1n",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_CS1n",
+        "net": "ATA_CS1n",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 control. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "11",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP121",
+    "value": "ATA_DIORn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DIORn",
+        "net": "ATA_DIORn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 control. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "13",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP122",
+    "value": "ATA_DIOWn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DIOWn",
+        "net": "ATA_DIOWn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 control. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "15",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP123",
+    "value": "ATA_RESETn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_RESETn",
+        "net": "ATA_RESETn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 reset. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U37",
+      "endpoint_pin": "2",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP124",
+    "value": "ATA_DMACKn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DMACKn",
+        "net": "ATA_DMACKn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw host G1 DMA acknowledge. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "17",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP137",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP125",
+    "value": "ATA_DMARQ",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_DMARQ",
+        "net": "ATA_DMARQ",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw device G1 DMA request. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U39",
+      "endpoint_pin": "4",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP126",
+    "value": "ATA_IORDY",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_IORDY",
+        "net": "ATA_IORDY",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw open-drain G1 ready. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U70",
+      "endpoint_pin": "4",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP127",
+    "value": "ATA_INTRQ",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "ATA_INTRQ",
+        "net": "ATA_INTRQ",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Raw device G1 interrupt. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U38",
+      "endpoint_pin": "4",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP128",
+    "value": "DATA_DIR",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "DATA_DIR",
+        "net": "DATA_DIR",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Actual data direction:1 device-to-host;0 host-to-device. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "1",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP136",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP129",
+    "value": "INTRQ_OEn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "INTRQ_OEn",
+        "net": "INTRQ_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Final qualified interrupt output enable, active low. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U38",
+      "endpoint_pin": "1",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP130",
+    "value": "DMARQ_OEn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "DMARQ_OEn",
+        "net": "DMARQ_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Final qualified DMA request output enable, active low. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U39",
+      "endpoint_pin": "1",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP131",
+    "value": "IORDY_RELEASE",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "IORDY_RELEASE",
+        "net": "IORDY_RELEASE",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Final open-drain ready gate:HIGH releases IORDY;LOW pulls IORDY low. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U70",
+      "endpoint_pin": "2",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP132",
+    "value": "REQ_DATA_OEn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "REQ_DATA_OEn",
+        "net": "REQ_DATA_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "FPGA data output-enable request before BUS_SAFE gating, active low. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U32",
+      "endpoint_pin": "2",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP133",
+    "value": "REQ_INTRQ_OEn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "REQ_INTRQ_OEn",
+        "net": "REQ_INTRQ_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "FPGA interrupt output-enable request before BUS_SAFE gating, active low. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U72",
+      "endpoint_pin": "2",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP134",
+    "value": "REQ_DMARQ_OEn",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "REQ_DMARQ_OEn",
+        "net": "REQ_DMARQ_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "FPGA DMA request output-enable request before BUS_SAFE gating, active low. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U73",
+      "endpoint_pin": "2",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP135",
+    "value": "REQ_IORDY_LOW",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "REQ_IORDY_LOW",
+        "net": "REQ_IORDY_LOW",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "FPGA request to pull IORDY low before BUS_SAFE gating, active high. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U33",
+      "endpoint_pin": "2",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": "TP138",
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP136",
+    "value": "GND",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "GND",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Data-group short probe return. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U35",
+      "endpoint_pin": "10",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": null,
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP137",
+    "value": "GND",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "GND",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Control-group short probe return. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U36",
+      "endpoint_pin": "10",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": null,
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  },
+  {
+    "ref": "TP138",
+    "value": "GND",
+    "mpn": "PCB_TEST_PAD",
+    "footprint": "KUI_Footprints:RawProbe_Pad_D1.0mm_NoPaste",
+    "pins": {
+      "1": {
+        "name": "GND",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT/blob/b207dd659565826ffd757ccf7abe1998f63c9202/docs/g1-bridge-review-2026-10-09.md"
+    ],
+    "description": "Device-response and enable-group short probe return. Bare fabricated copper; no fitted header or purchased component. Place next to the named endpoint with a short inline tap, not a debug cable branch.",
+    "populate": true,
+    "in_bom": false,
+    "on_board": true,
+    "variant": "BASE",
+    "height_max_mm": 0,
+    "probe_access": {
+      "endpoint_reference": "U38",
+      "endpoint_pin": "3",
+      "maximum_added_stub_mm": 3.0,
+      "minimum_goal_added_stub_mm": 0.0,
+      "local_ground_reference": null,
+      "placement_side": "top or bare bottom copper; removed-carrier bench access",
+      "placement_policy": "Adjacent to the existing endpoint, inline with its route when possible; avoid a separate routed debug strip",
+      "qualification": "Layout target only; route and probe loading must be reviewed on final native PCB"
+    }
+  }
+]

@@ -1,0 +1,118 @@
+{
+  "purpose": "Gerber/drill export smoke test after B handedness correction, not release approval or supplier production-file approval",
+  "kicad_version": "10.0.6",
+  "arms": [
+    {
+      "row": "A",
+      "gerber_count": 7,
+      "pth_drill_hits": 30,
+      "source_sha256": {
+        "flex/KUI-CN503-A-Flex-RevA.kicad_pcb": "8b782e933807131a473f0c999b446254db2cd1844f67fff8e9a802fbe031710c",
+        "flex/KUI-CN503-A-Flex-RevA.kicad_sch": "8ac6f9f3c4732e874a88454c0b0b5fa8ed2a5e5dea0ca89928e7dbf5297b2703",
+        "flex/KUI-CN503-A-Flex-RevA.kicad_pro": "2b8d1c8d7de678512a5c59ae67ecb6f1bdafcaae991ff106b14de8156019b884",
+        "flex/KUI-CN503-A-Flex-RevA.kicad_dru": "2635b968f3178e324253448a2f279b9cf1d90b6ccfb247f976ee0f649c75e620",
+        "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
+        "flex/tools/generate_flex.py": "74e6ffd0aaf206338e941eaeeca9f4bd50534debe3aec0b37d91fcdf5e885925",
+        "flex/tools/check_flex.py": "5c88a0b3682d258c4d08f3dd3990b9bab4ac5d1719b64f58a8a365ec6351aeb9"
+      },
+      "files": {
+        "KUI-CN503-A-Flex-RevA-B_Cu.gbr": {
+          "bytes": 9645,
+          "sha256": "5ca12b31e0dea6c668e856665915463acc679ad89eb4bc4a5e5280fa2649d690"
+        },
+        "KUI-CN503-A-Flex-RevA-B_Mask.gbr": {
+          "bytes": 2281,
+          "sha256": "77f8e89df1ebbb8478181fa68a2dd209cf334b68177a8659208567507aa0dfb0"
+        },
+        "KUI-CN503-A-Flex-RevA-Edge_Cuts.gbr": {
+          "bytes": 1185,
+          "sha256": "91a2e6ceec238975c4f22b541eef411c9cafd3c8b48a5e413bffbf8f26011367"
+        },
+        "KUI-CN503-A-Flex-RevA-F_Cu.gbr": {
+          "bytes": 7244,
+          "sha256": "8dcd4b65ce04585a1fb37867169c1e839264919068da1ba1439a3ee77ca68d6c"
+        },
+        "KUI-CN503-A-Flex-RevA-F_Mask.gbr": {
+          "bytes": 1673,
+          "sha256": "bfe3bd90ca90f7334fe78dffd76fa4fe25e49cd980d4a6b05ffb3f9778afe6fc"
+        },
+        "KUI-CN503-A-Flex-RevA-F_Silkscreen.gbr": {
+          "bytes": 684,
+          "sha256": "378965c8d514ca45571b1c7246f387cb9146a2221415bea4de869def0735f11f"
+        },
+        "KUI-CN503-A-Flex-RevA-NPTH.drl": {
+          "bytes": 306,
+          "sha256": "9e6d26c74e9c4200dec4c43f5f9518c09ab0af59d60523e5fdb5c74cb56d1820"
+        },
+        "KUI-CN503-A-Flex-RevA-PI_TOP_0_20.gbr": {
+          "bytes": 773,
+          "sha256": "c2fbf315421ecd580496e77ddab178b05260283a6720f2eb7f386006464263f0"
+        },
+        "KUI-CN503-A-Flex-RevA-PTH.drl": {
+          "bytes": 718,
+          "sha256": "9848818e09f0803d7cc10b342a4c885d319124216f8d46dd33c7ea50e4bbf313"
+        },
+        "KUI-CN503-A-Flex-RevA-job.gbrjob": {
+          "bytes": 2517,
+          "sha256": "0e865529b0af19db6fc474cf2175fc3a965d901869ad40d393fed7f719ee1e67"
+        }
+      }
+    },
+    {
+      "row": "B",
+      "gerber_count": 7,
+      "pth_drill_hits": 30,
+      "source_sha256": {
+        "flex/KUI-CN503-B-Flex-RevA.kicad_pcb": "c672f1015c907e1bd1443473bc733cd6976058030c975dd0b5c9f6cbdfb60c04",
+        "flex/KUI-CN503-B-Flex-RevA.kicad_sch": "7d89ea300f9eb8438023f5a14cc986e5a7a798a14898de3001a9c790192b0de3",
+        "flex/KUI-CN503-B-Flex-RevA.kicad_pro": "52da9cdd6a777c76b377a026f9b0287b043f2e84e50ae6703c8fe3d8e33c1f48",
+        "flex/KUI-CN503-B-Flex-RevA.kicad_dru": "2635b968f3178e324253448a2f279b9cf1d90b6ccfb247f976ee0f649c75e620",
+        "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
+        "flex/tools/generate_flex.py": "74e6ffd0aaf206338e941eaeeca9f4bd50534debe3aec0b37d91fcdf5e885925",
+        "flex/tools/check_flex.py": "5c88a0b3682d258c4d08f3dd3990b9bab4ac5d1719b64f58a8a365ec6351aeb9"
+      },
+      "files": {
+        "KUI-CN503-B-Flex-RevA-B_Cu.gbr": {
+          "bytes": 9870,
+          "sha256": "956cf6a60d18213eccf91996a57fd0893f97877da99bb4e8baca724796291029"
+        },
+        "KUI-CN503-B-Flex-RevA-B_Mask.gbr": {
+          "bytes": 2320,
+          "sha256": "366f0729ec5c401cca187ba81116a2c8b7bcdaf368e961b28f05dd9c7bdde3ca"
+        },
+        "KUI-CN503-B-Flex-RevA-Edge_Cuts.gbr": {
+          "bytes": 1187,
+          "sha256": "9f9b0137f3e93c08737a1f7ac17fe3eaf84803218fee28674f36aa0f779415ce"
+        },
+        "KUI-CN503-B-Flex-RevA-F_Cu.gbr": {
+          "bytes": 7486,
+          "sha256": "3d04e3f90b510210e091a2dde38cd9bd020a3ffaec67da4bb6a4d13af9ffb3c4"
+        },
+        "KUI-CN503-B-Flex-RevA-F_Mask.gbr": {
+          "bytes": 1693,
+          "sha256": "21cf3cd160b1c8f376e30bb50c56336a28e9f24e2300670504de4af6af3362fe"
+        },
+        "KUI-CN503-B-Flex-RevA-F_Silkscreen.gbr": {
+          "bytes": 1440,
+          "sha256": "367aa088c0c6bb5d19991c11fd31bbed9508df761b4a28eb6f84f308b86168d8"
+        },
+        "KUI-CN503-B-Flex-RevA-NPTH.drl": {
+          "bytes": 306,
+          "sha256": "60c21ad361dd2951a85456f98b0b98a19676bf37d542ae1f5d8f6eb913b8df6c"
+        },
+        "KUI-CN503-B-Flex-RevA-PI_TOP_0_20.gbr": {
+          "bytes": 772,
+          "sha256": "a3cf533473ab2d6833d9a83795bd0f74e1fe1151edae9144666f0c946a97e3a8"
+        },
+        "KUI-CN503-B-Flex-RevA-PTH.drl": {
+          "bytes": 747,
+          "sha256": "19f2a5e2fb505deb25e022f603b1a874047ee1b85fba4605003448efb729baa8"
+        },
+        "KUI-CN503-B-Flex-RevA-job.gbrjob": {
+          "bytes": 2517,
+          "sha256": "d2e142029b1afefd962f2132500e06e2c756fe06a152f2de7635045dc748db89"
+        }
+      }
+    }
+  ]
+}

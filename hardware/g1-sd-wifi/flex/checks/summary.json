@@ -1,0 +1,307 @@
+{
+  "kicad_version": "10.0.6",
+  "status": "CAD consistency checks pass; installed hardware qualification is pending",
+  "routing_complete": true,
+  "motherboard_continuity_qualified": false,
+  "installed_route_qualified": false,
+  "signal_integrity_qualified": false,
+  "jlc_production_files_approved": false,
+  "arms": [
+    {
+      "row": "A",
+      "conductors": 20,
+      "erc_violations": 0,
+      "drc_violations": 0,
+      "unconnected_items": 0,
+      "schematic_parity_issues": 0,
+      "native_mapping_matches_original_logical_reference": true,
+      "physical_tail_pin1_left_pin20_right": true,
+      "physical_mating_datum": "F.Cu/top viewed from above, tip north, B.Cu gold fingers down; same handedness as unrotated Hirose bottom-contact socket",
+      "physical_tail_mapping_left_to_right": [
+        {
+          "pin": 1,
+          "x_mm": 90.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A1_CONSOLE_3V3"
+        },
+        {
+          "pin": 2,
+          "x_mm": 91.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A2_ATA_RESETn"
+        },
+        {
+          "pin": 3,
+          "x_mm": 91.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A3_CONSOLE_5V"
+        },
+        {
+          "pin": 4,
+          "x_mm": 92.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A4_ATA_DD7"
+        },
+        {
+          "pin": 5,
+          "x_mm": 92.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A5_ATA_DD8"
+        },
+        {
+          "pin": 6,
+          "x_mm": 93.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A6_ATA_DD5"
+        },
+        {
+          "pin": 7,
+          "x_mm": 93.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A7_ATA_DD10"
+        },
+        {
+          "pin": 8,
+          "x_mm": 94.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A8_GND"
+        },
+        {
+          "pin": 9,
+          "x_mm": 94.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A9_ATA_DD3"
+        },
+        {
+          "pin": 10,
+          "x_mm": 95.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A10_ATA_DD12"
+        },
+        {
+          "pin": 11,
+          "x_mm": 95.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A11_ATA_DD1"
+        },
+        {
+          "pin": 12,
+          "x_mm": 96.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A12_ATA_DD14"
+        },
+        {
+          "pin": 13,
+          "x_mm": 96.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A13_GND"
+        },
+        {
+          "pin": 14,
+          "x_mm": 97.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A14_ATA_DMARQ"
+        },
+        {
+          "pin": 15,
+          "x_mm": 97.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A15_ATA_DIORn"
+        },
+        {
+          "pin": 16,
+          "x_mm": 98.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A16_ATA_DMACKn"
+        },
+        {
+          "pin": 17,
+          "x_mm": 98.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A18_GND"
+        },
+        {
+          "pin": 18,
+          "x_mm": 99.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A19_ATA_DA0"
+        },
+        {
+          "pin": 19,
+          "x_mm": 99.5,
+          "y_mm": 42.75,
+          "net": "/CN503_A20_ATA_CS0n"
+        },
+        {
+          "pin": 20,
+          "x_mm": 100.0,
+          "y_mm": 42.75,
+          "net": "/CN503_A21_GND"
+        }
+      ],
+      "source_sha256": {
+        "flex/KUI-CN503-A-Flex-RevA.kicad_pcb": "8b782e933807131a473f0c999b446254db2cd1844f67fff8e9a802fbe031710c",
+        "flex/KUI-CN503-A-Flex-RevA.kicad_sch": "8ac6f9f3c4732e874a88454c0b0b5fa8ed2a5e5dea0ca89928e7dbf5297b2703",
+        "flex/KUI-CN503-A-Flex-RevA.kicad_pro": "2b8d1c8d7de678512a5c59ae67ecb6f1bdafcaae991ff106b14de8156019b884",
+        "flex/KUI-CN503-A-Flex-RevA.kicad_dru": "2635b968f3178e324253448a2f279b9cf1d90b6ccfb247f976ee0f649c75e620",
+        "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
+        "docs/CN503-reference.csv": "911c5d970dedfcbba0a9e710056d60141d88308f8f3233394119c827a93a3598",
+        "flex/KUI_Flex.kicad_sym": "cb89b1b8a58e21496987f8de4ec13e103eead53040a5f4e859d6bec20c09410b",
+        "flex/sym-lib-table": "e7ca1d463ad56cd14399ade37b454933e249bfe4ccd7641f522478158bf38d20",
+        "flex/fp-lib-table": "187e6180b5805bab8b8c62560539c57c5c8ac489a86d00d60b5018c49fcc3281",
+        "flex/KUI_Flex.pretty/CN503_A_20_SolderLanding_1.00mm.kicad_mod": "0b7c2eccdebbe03dd0c1793bd2769412dcee0d8b6c5297513cb80c140b16a53b",
+        "flex/KUI_Flex.pretty/CN503_B_20_SolderLanding_1.00mm.kicad_mod": "6ace21e4aa2c0c7ba09224dc27ed75e28e9819b71f55c60d1618e1c65986e4c4",
+        "flex/KUI_Flex.pretty/FPC_A_20_Bottom_0.50mm_10.50mm.kicad_mod": "0a6aa294cba464abc833d989a89fe0b6e61c3fb81b7e1986f692dcefad0892b6",
+        "flex/KUI_Flex.pretty/FPC_B_20_Bottom_0.50mm_10.50mm.kicad_mod": "353a9fc7a2dab5643b86875f5d633fdec98c2b872ae1b242d6148ef8c709efe9"
+      }
+    },
+    {
+      "row": "B",
+      "conductors": 20,
+      "erc_violations": 0,
+      "drc_violations": 0,
+      "unconnected_items": 0,
+      "schematic_parity_issues": 0,
+      "native_mapping_matches_original_logical_reference": true,
+      "physical_tail_pin1_left_pin20_right": true,
+      "physical_mating_datum": "F.Cu/top viewed from above, tip north, B.Cu gold fingers down; same handedness as unrotated Hirose bottom-contact socket",
+      "physical_tail_mapping_left_to_right": [
+        {
+          "pin": 1,
+          "x_mm": 100.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B21_GND"
+        },
+        {
+          "pin": 2,
+          "x_mm": 100.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B20_ATA_CS1n"
+        },
+        {
+          "pin": 3,
+          "x_mm": 101.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B19_ATA_DA2"
+        },
+        {
+          "pin": 4,
+          "x_mm": 101.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B18_GND"
+        },
+        {
+          "pin": 5,
+          "x_mm": 102.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B17_ATA_DA1"
+        },
+        {
+          "pin": 6,
+          "x_mm": 102.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B16_ATA_INTRQ"
+        },
+        {
+          "pin": 7,
+          "x_mm": 103.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B15_ATA_IORDY"
+        },
+        {
+          "pin": 8,
+          "x_mm": 103.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B14_ATA_DIOWn"
+        },
+        {
+          "pin": 9,
+          "x_mm": 104.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B13_GND"
+        },
+        {
+          "pin": 10,
+          "x_mm": 104.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B12_ATA_DD15"
+        },
+        {
+          "pin": 11,
+          "x_mm": 105.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B11_ATA_DD0"
+        },
+        {
+          "pin": 12,
+          "x_mm": 105.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B10_ATA_DD13"
+        },
+        {
+          "pin": 13,
+          "x_mm": 106.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B9_ATA_DD2"
+        },
+        {
+          "pin": 14,
+          "x_mm": 106.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B8_GND"
+        },
+        {
+          "pin": 15,
+          "x_mm": 107.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B7_ATA_DD11"
+        },
+        {
+          "pin": 16,
+          "x_mm": 107.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B6_ATA_DD4"
+        },
+        {
+          "pin": 17,
+          "x_mm": 108.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B5_ATA_DD9"
+        },
+        {
+          "pin": 18,
+          "x_mm": 108.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B4_ATA_DD6"
+        },
+        {
+          "pin": 19,
+          "x_mm": 109.0,
+          "y_mm": 42.75,
+          "net": "/CN503_B3_CONSOLE_5V"
+        },
+        {
+          "pin": 20,
+          "x_mm": 109.5,
+          "y_mm": 42.75,
+          "net": "/CN503_B1_CONSOLE_3V3"
+        }
+      ],
+      "source_sha256": {
+        "flex/KUI-CN503-B-Flex-RevA.kicad_pcb": "c672f1015c907e1bd1443473bc733cd6976058030c975dd0b5c9f6cbdfb60c04",
+        "flex/KUI-CN503-B-Flex-RevA.kicad_sch": "7d89ea300f9eb8438023f5a14cc986e5a7a798a14898de3001a9c790192b0de3",
+        "flex/KUI-CN503-B-Flex-RevA.kicad_pro": "52da9cdd6a777c76b377a026f9b0287b043f2e84e50ae6703c8fe3d8e33c1f48",
+        "flex/KUI-CN503-B-Flex-RevA.kicad_dru": "2635b968f3178e324253448a2f279b9cf1d90b6ccfb247f976ee0f649c75e620",
+        "design/flex-interface.json": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
+        "docs/CN503-reference.csv": "911c5d970dedfcbba0a9e710056d60141d88308f8f3233394119c827a93a3598",
+        "flex/KUI_Flex.kicad_sym": "cb89b1b8a58e21496987f8de4ec13e103eead53040a5f4e859d6bec20c09410b",
+        "flex/sym-lib-table": "e7ca1d463ad56cd14399ade37b454933e249bfe4ccd7641f522478158bf38d20",
+        "flex/fp-lib-table": "187e6180b5805bab8b8c62560539c57c5c8ac489a86d00d60b5018c49fcc3281",
+        "flex/KUI_Flex.pretty/CN503_A_20_SolderLanding_1.00mm.kicad_mod": "0b7c2eccdebbe03dd0c1793bd2769412dcee0d8b6c5297513cb80c140b16a53b",
+        "flex/KUI_Flex.pretty/CN503_B_20_SolderLanding_1.00mm.kicad_mod": "6ace21e4aa2c0c7ba09224dc27ed75e28e9819b71f55c60d1618e1c65986e4c4",
+        "flex/KUI_Flex.pretty/FPC_A_20_Bottom_0.50mm_10.50mm.kicad_mod": "0a6aa294cba464abc833d989a89fe0b6e61c3fb81b7e1986f692dcefad0892b6",
+        "flex/KUI_Flex.pretty/FPC_B_20_Bottom_0.50mm_10.50mm.kicad_mod": "353a9fc7a2dab5643b86875f5d633fdec98c2b872ae1b242d6148ef8c709efe9"
+      }
+    }
+  ]
+}

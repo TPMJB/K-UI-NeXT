@@ -1,0 +1,5 @@
+LOADED pins=1218 traces=6 vias=0 incomplete=945 layers=4
+PASS 1 attempted=1146 routed=511 failed=624 incomplete=448 best=448 traces=882 vias=143 seconds=104.948 checkpoint=/workspace/scratch/671921c7e6ab/carrier-headless19.ses.pass1.ses
+PASS 2 attempted=1095 routed=13 failed=1071 incomplete=435 best=435 traces=911 vias=154 seconds=243.299 checkpoint=/workspace/scratch/671921c7e6ab/carrier-headless19.ses.pass2.ses
+PASS 3 attempted=12 routed=0 failed=12 incomplete=435 best=435 traces=911 vias=154 seconds=11.717 checkpoint=/workspace/scratch/671921c7e6ab/carrier-headless19.ses.pass3.ses
+DONE initial=945 best_incomplete=435 stopped=true output=/workspace/scratch/671921c7e6ab/carrier-headless19.ses

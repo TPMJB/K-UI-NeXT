@@ -1,0 +1,19 @@
+{
+  "pcb_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+  "status": "unqualified_fit_check_draft",
+  "native_edges_and_pad_positions": true,
+  "scale": 1,
+  "board_envelope_mm": [
+    59,
+    105
+  ],
+  "calibration_mm": [
+    50,
+    50
+  ],
+  "motherboard_references": "Provisional registration from owner dimensions; not a measured complete obstacle map",
+  "files": [
+    "carrier-fit-US-Letter.pdf",
+    "carrier-fit-A4.pdf"
+  ]
+}

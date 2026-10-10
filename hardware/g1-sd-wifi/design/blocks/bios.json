@@ -1,0 +1,1214 @@
+{
+  "name": "Optional dual BIOS and independent stock recovery",
+  "schema_version": 1,
+  "default_variant": "BASE_BIOS_DNP",
+  "components": [
+    {
+      "ref": "U40",
+      "value": "MX29LV640ETTI-70G x8 / 4 x 2MiB",
+      "mpn": "MX29LV640ETTI-70G",
+      "footprint": "Package_SO:TSOP-I-48_18.4x12mm_P0.5mm",
+      "pins": {
+        "1": {
+          "name": "A15",
+          "net": "ROM_A15",
+          "type": "input"
+        },
+        "2": {
+          "name": "A14",
+          "net": "ROM_A14",
+          "type": "input"
+        },
+        "3": {
+          "name": "A13",
+          "net": "ROM_A13",
+          "type": "input"
+        },
+        "4": {
+          "name": "A12",
+          "net": "ROM_A12",
+          "type": "input"
+        },
+        "5": {
+          "name": "A11",
+          "net": "ROM_A11",
+          "type": "input"
+        },
+        "6": {
+          "name": "A10",
+          "net": "ROM_A10",
+          "type": "input"
+        },
+        "7": {
+          "name": "A9",
+          "net": "ATA_DA2",
+          "type": "input"
+        },
+        "8": {
+          "name": "A8",
+          "net": "ATA_DA1",
+          "type": "input"
+        },
+        "9": {
+          "name": "A19",
+          "net": "ROM_A19",
+          "type": "input"
+        },
+        "10": {
+          "name": "A20",
+          "net": "BIOS_NOR_BANK0",
+          "type": "input"
+        },
+        "11": {
+          "name": "WE#",
+          "net": "BIOS_NOR_WEn",
+          "type": "input"
+        },
+        "12": {
+          "name": "RESET#",
+          "net": "BIOS_NOR_RESETn",
+          "type": "input"
+        },
+        "13": {
+          "name": "A21",
+          "net": "BIOS_NOR_BANK1",
+          "type": "input"
+        },
+        "14": {
+          "name": "WP#/ACC",
+          "net": "BIOS_WP_ACC",
+          "type": "input"
+        },
+        "15": {
+          "name": "RY/BY#",
+          "net": "BIOS_NOR_RBYn",
+          "type": "open_collector"
+        },
+        "16": {
+          "name": "A18",
+          "net": "ROM_A18",
+          "type": "input"
+        },
+        "17": {
+          "name": "A17",
+          "net": "ROM_A17",
+          "type": "input"
+        },
+        "18": {
+          "name": "A7",
+          "net": "ATA_DA0",
+          "type": "input"
+        },
+        "19": {
+          "name": "A6",
+          "net": "ATA_DD15",
+          "type": "input"
+        },
+        "20": {
+          "name": "A5",
+          "net": "ATA_DD14",
+          "type": "input"
+        },
+        "21": {
+          "name": "A4",
+          "net": "ATA_DD13",
+          "type": "input"
+        },
+        "22": {
+          "name": "A3",
+          "net": "ATA_DD12",
+          "type": "input"
+        },
+        "23": {
+          "name": "A2",
+          "net": "ATA_DD11",
+          "type": "input"
+        },
+        "24": {
+          "name": "A1",
+          "net": "ATA_DD10",
+          "type": "input"
+        },
+        "25": {
+          "name": "A0",
+          "net": "ATA_DD9",
+          "type": "input"
+        },
+        "26": {
+          "name": "CE#",
+          "net": "BIOS_NOR_CEn",
+          "type": "input"
+        },
+        "27": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "28": {
+          "name": "OE#",
+          "net": "ATA_DIORn",
+          "type": "input"
+        },
+        "29": {
+          "name": "DQ0",
+          "net": "ATA_DD0",
+          "type": "bidirectional"
+        },
+        "30": {
+          "name": "DQ8",
+          "net": null,
+          "type": "no_connect"
+        },
+        "31": {
+          "name": "DQ1",
+          "net": "ATA_DD1",
+          "type": "bidirectional"
+        },
+        "32": {
+          "name": "DQ9",
+          "net": null,
+          "type": "no_connect"
+        },
+        "33": {
+          "name": "DQ2",
+          "net": "ATA_DD2",
+          "type": "bidirectional"
+        },
+        "34": {
+          "name": "DQ10",
+          "net": null,
+          "type": "no_connect"
+        },
+        "35": {
+          "name": "DQ3",
+          "net": "ATA_DD3",
+          "type": "bidirectional"
+        },
+        "36": {
+          "name": "DQ11",
+          "net": null,
+          "type": "no_connect"
+        },
+        "37": {
+          "name": "VCC",
+          "net": "CONSOLE_3V3",
+          "type": "power_in"
+        },
+        "38": {
+          "name": "DQ4",
+          "net": "ATA_DD4",
+          "type": "bidirectional"
+        },
+        "39": {
+          "name": "DQ12",
+          "net": null,
+          "type": "no_connect"
+        },
+        "40": {
+          "name": "DQ5",
+          "net": "ATA_DD5",
+          "type": "bidirectional"
+        },
+        "41": {
+          "name": "DQ13",
+          "net": null,
+          "type": "no_connect"
+        },
+        "42": {
+          "name": "DQ6",
+          "net": "ATA_DD6",
+          "type": "bidirectional"
+        },
+        "43": {
+          "name": "DQ14",
+          "net": null,
+          "type": "no_connect"
+        },
+        "44": {
+          "name": "DQ7",
+          "net": "ATA_DD7",
+          "type": "bidirectional"
+        },
+        "45": {
+          "name": "DQ15/A-1",
+          "net": "ATA_DD8",
+          "type": "input"
+        },
+        "46": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "47": {
+          "name": "BYTE#",
+          "net": "GND",
+          "type": "input"
+        },
+        "48": {
+          "name": "A16",
+          "net": "ROM_A16",
+          "type": "input"
+        }
+      },
+      "sources": [
+        "https://www.macronix.com/Lists/Datasheet/Attachments/8514/MX29LV640E%20T-B%2C%203V%2C%2064Mb%2C%20v1.7.pdf"
+      ],
+      "description": "3.3V custom-bank NOR; no Sega image supplied. Original mask ROM stays on motherboard. BYTE# permanently low. Do not substitute x16-only NOR.",
+      "populate": false,
+      "variant": "BIOS_OPTION",
+      "height_max_mm": 1.2
+    },
+    {
+      "ref": "U41",
+      "value": "SN74LVC2G125 bank-domain buffer",
+      "mpn": "SN74LVC2G125DCTR",
+      "footprint": "Package_TO_SOT_SMD:SOT-23-8",
+      "pins": {
+        "1": {
+          "name": "1OE#",
+          "net": "GND",
+          "type": "input"
+        },
+        "2": {
+          "name": "1A",
+          "net": "BIOS_BANK0",
+          "type": "input"
+        },
+        "3": {
+          "name": "2Y",
+          "net": "BIOS_NOR_BANK1",
+          "type": "tri_state"
+        },
+        "4": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "5": {
+          "name": "2A",
+          "net": "BIOS_BANK1",
+          "type": "input"
+        },
+        "6": {
+          "name": "1Y",
+          "net": "BIOS_NOR_BANK0",
+          "type": "tri_state"
+        },
+        "7": {
+          "name": "2OE#",
+          "net": "GND",
+          "type": "input"
+        },
+        "8": {
+          "name": "VCC",
+          "net": "CONSOLE_3V3",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc2g125.pdf"
+      ],
+      "description": "Ioff isolates held-up logic bank outputs from NOR on disappearing console rail. Address outputs may move during ramp while U40 is reset; they do not directly drive shared data bus.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "U42",
+      "value": "SN74LVC1G11 write-authorize AND",
+      "mpn": "SN74LVC1G11DBVR",
+      "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+      "pins": {
+        "1": {
+          "name": "A",
+          "net": "BIOS_RECOVERYn",
+          "type": "input"
+        },
+        "2": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "3": {
+          "name": "B",
+          "net": "BIOS_FLASH_ARMED",
+          "type": "input"
+        },
+        "4": {
+          "name": "Y",
+          "net": "BIOS_WRITE_ALLOWED",
+          "type": "output"
+        },
+        "5": {
+          "name": "VCC",
+          "net": "CONSOLE_3V3",
+          "type": "power_in"
+        },
+        "6": {
+          "name": "C",
+          "net": "BIOS_WR_EN",
+          "type": "input"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g11.pdf"
+      ],
+      "description": "Write authorization requires CUSTOM switch, physical arm solder jumper, and explicit FPGA request. FPGA request pulldown defaults blocked.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "U43",
+      "value": "SN74LVC1G04 write-block inverter",
+      "mpn": "SN74LVC1G04DBVR",
+      "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+      "pins": {
+        "1": {
+          "name": "NC",
+          "net": null,
+          "type": "no_connect"
+        },
+        "2": {
+          "name": "A",
+          "net": "BIOS_WRITE_ALLOWED",
+          "type": "input"
+        },
+        "3": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "4": {
+          "name": "Y",
+          "net": "BIOS_WRITE_BLOCKED",
+          "type": "output"
+        },
+        "5": {
+          "name": "VCC",
+          "net": "CONSOLE_3V3",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g04.pdf"
+      ],
+      "description": "Converts active-high permission to active-high veto.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "U44",
+      "value": "SN74LVC1G332 NOR WE qualifier",
+      "mpn": "SN74LVC1G332DBVR",
+      "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+      "pins": {
+        "1": {
+          "name": "A",
+          "net": "ATA_DIOWn",
+          "type": "input"
+        },
+        "2": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "3": {
+          "name": "B",
+          "net": "BIOS_NOR_CEn",
+          "type": "input"
+        },
+        "4": {
+          "name": "Y",
+          "net": "BIOS_NOR_WEn",
+          "type": "output"
+        },
+        "5": {
+          "name": "VCC",
+          "net": "CONSOLE_3V3",
+          "type": "power_in"
+        },
+        "6": {
+          "name": "C",
+          "net": "BIOS_WRITE_BLOCKED",
+          "type": "input"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g332.pdf"
+      ],
+      "description": "NOR_WE# = host_DIOW# OR selected_NOR_CE# OR write_veto. Only selected authorized ROM-window write cycles reach custom flash; stock mask ROM has no WE connection.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "U45",
+      "value": "TLV803EB29 console-rail NOR reset",
+      "mpn": "TLV803EB29DBZR",
+      "footprint": "Package_TO_SOT_SMD:SOT-23",
+      "pins": {
+        "1": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "2": {
+          "name": "RESET#",
+          "net": "BIOS_NOR_RESETn",
+          "type": "open_collector"
+        },
+        "3": {
+          "name": "VDD",
+          "net": "CONSOLE_3V3",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/tlv803e.pdf"
+      ],
+      "description": "2.93V monitor; B delay 40us nominal / 80us maximum. Clears NOR state on brownout. Its released output also supplies the physical program-arm jumper. This is not the console CPU reset; qualify first-fetch timing separately.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "J40",
+      "value": "BIOS additional-address / isolated-CE tap",
+      "mpn": "FH12-14S-0.5SH(55)",
+      "footprint": "Connector_FFC-FPC:Hirose_FH12-14S-0.5SH_1x14-1MP_P0.50mm_Horizontal",
+      "pins": {
+        "1": {
+          "name": "ROM_A10",
+          "net": "ROM_A10",
+          "type": "passive"
+        },
+        "2": {
+          "name": "ROM_A11",
+          "net": "ROM_A11",
+          "type": "passive"
+        },
+        "3": {
+          "name": "ROM_A12",
+          "net": "ROM_A12",
+          "type": "passive"
+        },
+        "4": {
+          "name": "ROM_A13",
+          "net": "ROM_A13",
+          "type": "passive"
+        },
+        "5": {
+          "name": "ROM_A14",
+          "net": "ROM_A14",
+          "type": "passive"
+        },
+        "6": {
+          "name": "ROM_A15",
+          "net": "ROM_A15",
+          "type": "passive"
+        },
+        "7": {
+          "name": "ROM_A16",
+          "net": "ROM_A16",
+          "type": "passive"
+        },
+        "8": {
+          "name": "ROM_A17",
+          "net": "ROM_A17",
+          "type": "passive"
+        },
+        "9": {
+          "name": "ROM_A18",
+          "net": "ROM_A18",
+          "type": "passive"
+        },
+        "10": {
+          "name": "ROM_A19",
+          "net": "ROM_A19",
+          "type": "passive"
+        },
+        "11": {
+          "name": "HOLLY_ROM_CE_PAD",
+          "net": "ROM_CEn",
+          "type": "passive"
+        },
+        "12": {
+          "name": "ISOLATED_STOCK_CE_LEG",
+          "net": "STOCK_CEn",
+          "type": "passive"
+        },
+        "13": {
+          "name": "GND",
+          "net": "GND",
+          "type": "passive"
+        },
+        "14": {
+          "name": "GND",
+          "net": "GND",
+          "type": "passive"
+        },
+        "MP": {
+          "name": "MOUNTING_PADS",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.hirose.com/en/product/p/CL0586-0533-0-55",
+        "https://consolemods.org/wiki/images/2/27/Dreamcast_VA1_FULL.pdf"
+      ],
+      "description": "14-way optional FPC tap. ROM_A10..19 and ROM CE are absent from CN503. CE leg must be isolated from its motherboard pad. Return conductor and exact FPC orientation are installation-critical.",
+      "populate": false,
+      "variant": "BIOS_OPTION",
+      "height_max_mm": 2.0
+    },
+    {
+      "ref": "J41",
+      "value": "External DPDT recovery selector harness",
+      "mpn": "FH12-6S-0.5SH(55)",
+      "footprint": "Connector_FFC-FPC:Hirose_FH12-6S-0.5SH_1x06-1MP_P0.50mm_Horizontal",
+      "pins": {
+        "1": {
+          "name": "STOCK_CE",
+          "net": "STOCK_CEn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "HOLLY_ROM_CE_COMMON",
+          "net": "ROM_CEn",
+          "type": "passive"
+        },
+        "3": {
+          "name": "CUSTOM_NOR_CE",
+          "net": "BIOS_NOR_CEn",
+          "type": "passive"
+        },
+        "4": {
+          "name": "STOCK_RECOVERY_GND",
+          "net": "GND",
+          "type": "passive"
+        },
+        "5": {
+          "name": "RECOVERY_INTERLOCK_COMMON",
+          "net": "BIOS_RECOVERYn",
+          "type": "passive"
+        },
+        "6": {
+          "name": "CUSTOM_3V3",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        },
+        "MP": {
+          "name": "MOUNTING_PADS",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.hirose.com/en/product/p/CL0586-0582-5-55"
+      ],
+      "description": "Six-way FPC to remote mechanical switch; no MCU/FPGA in stock CE signal path. Keep CE harness short and route paired returns; timing is not qualified yet.",
+      "populate": false,
+      "variant": "BIOS_OPTION",
+      "height_max_mm": 2.0
+    },
+    {
+      "ref": "SW40",
+      "value": "STOCK_RECOVERY / CUSTOM (OFFBOARD)",
+      "mpn": "7201SYZBE",
+      "footprint": "",
+      "pins": {
+        "1": {
+          "name": "STOCK_CE",
+          "net": "STOCK_CEn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "HOLLY_ROM_CE_COMMON",
+          "net": "ROM_CEn",
+          "type": "passive"
+        },
+        "3": {
+          "name": "CUSTOM_NOR_CE",
+          "net": "BIOS_NOR_CEn",
+          "type": "passive"
+        },
+        "4": {
+          "name": "STOCK_RECOVERY_GND",
+          "net": "GND",
+          "type": "passive"
+        },
+        "5": {
+          "name": "RECOVERY_INTERLOCK_COMMON",
+          "net": "BIOS_RECOVERYn",
+          "type": "passive"
+        },
+        "6": {
+          "name": "CUSTOM_3V3",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.ckswitches.com/media/1394/7000toggle.pdf"
+      ],
+      "description": "Remote C&K gold-contact DPDT ON-NONE-ON. STOCK_RECOVERY closes2-1 and5-4; CUSTOM closes2-3 and5-6. Move only with console power disconnected. Gold contacts chosen for low-level control signals. Not fitted to carrier PCB.",
+      "populate": false,
+      "variant": "BIOS_OPTION",
+      "off_board": true
+    },
+    {
+      "ref": "JP40",
+      "value": "PROGRAM ARM - normally OPEN",
+      "mpn": "PCB_SOLDER_BRIDGE",
+      "footprint": "Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm",
+      "pins": {
+        "1": {
+          "name": "RAIL_GOOD",
+          "net": "BIOS_NOR_RESETn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "ARM",
+          "net": "BIOS_FLASH_ARMED",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/tlv803e.pdf"
+      ],
+      "description": "Open by default. Short only for an intentional custom-NOR programming session; reopen afterward. No jumper cap or elevated header.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R400",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_NOR_CEn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Unselected custom ROM disabled.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R401",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "STOCK_CEn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Unselected stock ROM disabled; CE leg is isolated.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R402",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_NOR_WEn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "WE default high on unpowered/undefined gate outputs.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R403",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_BANK0",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Unconfigured FPGA default bank0 bit0.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R404",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_BANK1",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Unconfigured FPGA default bank0 bit1.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R405",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_NOR_BANK0",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Bank pin defined when domain buffer unpowered.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R406",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_NOR_BANK1",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Bank pin defined when domain buffer unpowered.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R407",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_WR_EN",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "FPGA request blocked by default.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R408",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_WRITE_ALLOWED",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Write permission fails low.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R411",
+      "value": "100k",
+      "mpn": "RC0603FR-07100KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_FLASH_ARMED",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Open-arm pulldown; 100k avoids dividing the supervisor 10k pullup below the logic high threshold when armed.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R412",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_NOR_RESETn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Open-drain supply monitor release pullup.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R413",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_NOR_RBYn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Ready/busy observable without additional FPGA I/O.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R414",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_WP_ACC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Normal programming voltage. WP# is not falsely claimed to protect whole banks.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "R409",
+      "value": "10k",
+      "mpn": "RC0603FR-0710KL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_RECOVERYn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Missing selector harness fails bridge interlock low.",
+      "populate": true,
+      "variant": "ALL"
+    },
+    {
+      "ref": "R410",
+      "value": "0R",
+      "mpn": "RC0603JR-070RL",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_RECOVERYn",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "BASE_ONLY bypass: permits original installed BIOS plus ATA bridge. MUST REMOVE before connecting populated BIOS selector.",
+      "populate": true,
+      "variant": "BASE_ONLY"
+    },
+    {
+      "ref": "C400",
+      "value": "100nF",
+      "mpn": "CC0603KRX7R9BB104",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Local optional BIOS decoupling; place at corresponding IC supply pins.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "C402",
+      "value": "100nF",
+      "mpn": "CC0603KRX7R9BB104",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Local optional BIOS decoupling; place at corresponding IC supply pins.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "C403",
+      "value": "100nF",
+      "mpn": "CC0603KRX7R9BB104",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Local optional BIOS decoupling; place at corresponding IC supply pins.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "C404",
+      "value": "100nF",
+      "mpn": "CC0603KRX7R9BB104",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Local optional BIOS decoupling; place at corresponding IC supply pins.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "C405",
+      "value": "100nF",
+      "mpn": "CC0603KRX7R9BB104",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Local optional BIOS decoupling; place at corresponding IC supply pins.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "C406",
+      "value": "100nF",
+      "mpn": "CC0603KRX7R9BB104",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "Local optional BIOS decoupling; place at corresponding IC supply pins.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "C401",
+      "value": "4.7uF",
+      "mpn": "GRM188R60J475KE19D",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "CONSOLE_3V3",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [],
+      "description": "NOR local bulk; 6.3V X5R. Check effective capacitance/DC bias.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    },
+    {
+      "ref": "TP40",
+      "value": "NOR_RY_BY",
+      "mpn": "PCB_TEST_PAD",
+      "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "BIOS_NOR_RBYn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.macronix.com/Lists/Datasheet/Attachments/8514/MX29LV640E%20T-B%2C%203V%2C%2064Mb%2C%20v1.7.pdf"
+      ],
+      "description": "Logic analyzer status point; no populated header.",
+      "populate": false,
+      "variant": "BIOS_OPTION"
+    }
+  ],
+  "net_contract": {
+    "inputs": [
+      "ATA_DD0..ATA_DD15",
+      "ATA_DA0..ATA_DA2",
+      "ATA_DIORn",
+      "ATA_DIOWn",
+      "ROM_A10..ROM_A19",
+      "ROM_CEn",
+      "BIOS_BANK0",
+      "BIOS_BANK1",
+      "BIOS_WR_EN",
+      "CONSOLE_3V3",
+      "GND"
+    ],
+    "outputs": [
+      "STOCK_CEn",
+      "BIOS_RECOVERYn"
+    ],
+    "forbidden_connection": "Do not join ROM_CEn and STOCK_CEn directly when the optional selector is installed; original CE leg must be isolated. Never connect stock mask ROM to WE.",
+    "front_end_interlock": "BIOS_RECOVERYn must hardware-veto all ATA response outputs independently of configured FPGA logic. BASE_ONLY R410 supplies its high level only while BIOS hardware is absent."
+  },
+  "notes": [
+    "Base assembly populates only R409/R410 from this block; no IC501 modification. Optional hardware remains explicit on native schematic.",
+    "All optional NOR/control devices use CONSOLE_3V3, never the held-up +3V3_LOGIC rail. Ioff control inputs prevent logic-domain backpowering.",
+    "All four custom NOR banks are writable when physically armed and explicitly authorized. No stock image occupies this NOR; whole-chip erase may destroy all custom banks but cannot erase original mask ROM.",
+    "Physical selector is only changed with power disconnected. Stock recovery CE path is passive and remains operative without MCU or FPGA configuration.",
+    "FPGA bank latch remains stable across MCU reset and ATA SRST/G1 reset; write authorization resets blocked. Reconfiguration requires a cold console restart or physical stock recovery.",
+    "Counterfeit/substitute NOR, actual FPC contact orientation, full SI/timing/power ramp and optional populated PCB height require qualification."
+  ]
+}

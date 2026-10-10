@@ -1,0 +1,286 @@
+{
+  "source_url": "https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.zip",
+  "source_sha256": "de3838f8908e40d6f022e43ae3a3261bbdc79d436a39925a1a898824917d7607",
+  "origin": {
+    "source_footprint": "U9",
+    "xy_mm": [
+      108.3977,
+      72.6982
+    ]
+  },
+  "orientation": "Carrier top-view coordinates equal official board top-view coordinates; module F.Cu components face upward, B.Cu pads face carrier. No mirror.",
+  "board_bbox_relative_mm": [
+    -10.4267,
+    -8.9027,
+    10.5537,
+    8.9027
+  ],
+  "pads": {
+    "1": {
+      "xy_mm": [
+        7.62,
+        -8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 1"
+    },
+    "2": {
+      "xy_mm": [
+        5.08,
+        -8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 2"
+    },
+    "3": {
+      "xy_mm": [
+        2.54,
+        -8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 3"
+    },
+    "4": {
+      "xy_mm": [
+        0.0,
+        -8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 4"
+    },
+    "5": {
+      "xy_mm": [
+        -2.54,
+        -8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 5"
+    },
+    "6": {
+      "xy_mm": [
+        -5.08,
+        -8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 6"
+    },
+    "7": {
+      "xy_mm": [
+        -7.62,
+        -8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 7"
+    },
+    "8": {
+      "xy_mm": [
+        -7.62,
+        8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 8"
+    },
+    "9": {
+      "xy_mm": [
+        -5.08,
+        8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 9"
+    },
+    "10": {
+      "xy_mm": [
+        -2.54,
+        8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 10"
+    },
+    "11": {
+      "xy_mm": [
+        0.0,
+        8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 11"
+    },
+    "12": {
+      "xy_mm": [
+        2.54,
+        8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 12"
+    },
+    "13": {
+      "xy_mm": [
+        5.08,
+        8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 13"
+    },
+    "14": {
+      "xy_mm": [
+        7.62,
+        8.028
+      ],
+      "land_mm": [
+        1.626,
+        1.725
+      ],
+      "source": "U9 underside SMD land 14"
+    },
+    "TP1": {
+      "xy_mm": [
+        1.0823,
+        1.3518
+      ],
+      "land_mm": [
+        1.143,
+        1.143
+      ],
+      "source": "TP1.1 on official underside"
+    },
+    "TP2": {
+      "xy_mm": [
+        1.0255,
+        -1.0956
+      ],
+      "land_mm": [
+        1.143,
+        1.143
+      ],
+      "source": "TP2.1 on official underside"
+    },
+    "TP3": {
+      "xy_mm": [
+        6.1055,
+        1.4444
+      ],
+      "land_mm": [
+        1.143,
+        1.143
+      ],
+      "source": "TP3.1 on official underside"
+    },
+    "TP4": {
+      "xy_mm": [
+        8.6455,
+        1.4444
+      ],
+      "land_mm": [
+        1.143,
+        1.143
+      ],
+      "source": "TP4.1 on official underside"
+    },
+    "TP5": {
+      "xy_mm": [
+        3.5655,
+        1.4444
+      ],
+      "land_mm": [
+        1.143,
+        1.143
+      ],
+      "source": "TP5.1 on official underside"
+    },
+    "TP6": {
+      "xy_mm": [
+        8.6455,
+        -1.0956
+      ],
+      "land_mm": [
+        1.143,
+        1.143
+      ],
+      "source": "TP6.1 on official underside"
+    },
+    "TP7": {
+      "xy_mm": [
+        3.5655,
+        -1.0956
+      ],
+      "land_mm": [
+        1.143,
+        1.143
+      ],
+      "source": "TP7.1 on official underside"
+    },
+    "TP8": {
+      "xy_mm": [
+        6.1055,
+        -1.0956
+      ],
+      "land_mm": [
+        1.143,
+        1.143
+      ],
+      "source": "TP8.1 on official underside"
+    },
+    "BAT+": {
+      "xy_mm": [
+        -4.9777,
+        -0.8232
+      ],
+      "land_mm": [
+        2.032,
+        1.016
+      ],
+      "source": "BAT+1.1 on official underside"
+    },
+    "BAT-": {
+      "xy_mm": [
+        -4.9727,
+        1.1768
+      ],
+      "land_mm": [
+        2.032,
+        1.016
+      ],
+      "source": "BAT-1.1 on official underside"
+    }
+  },
+  "mechanical_status": "Coordinate-accurate carrier copper contact artwork only; no selected spring/contact hardware, retention or measured stack height. Not assembly/fabrication-ready without those details.",
+  "license": "Adapted from Seeed Studio XIAO ESP32-C5 V1.1, CC BY-SA4.0 as marked on official schematic; attribution and source archive retained."
+}

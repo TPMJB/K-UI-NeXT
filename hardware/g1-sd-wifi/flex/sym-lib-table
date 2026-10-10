@@ -1,0 +1,3 @@
+(sym_lib_table
+ (lib (name "KUI_Flex") (type "KiCad") (uri "${KIPRJMOD}/KUI_Flex.kicad_sym") (options "") (descr "CN503 passive split flex symbols"))
+)

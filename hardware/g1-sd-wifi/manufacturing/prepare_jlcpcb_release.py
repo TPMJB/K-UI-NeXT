@@ -2,8 +2,9 @@
 """Fail-closed JLCPCB preflight/export. Python 3.10+, stdlib only.
 
 Default mode audits files and recorded design reviews; it does not run KiCad.
-Export additionally requires KiCad 10 ERC/DRC, then creates separate rigid/flex
-packages. Passing this tool is not evidence of working ATA, RF or power-cut
+Export additionally requires KiCad 10 ERC/DRC, then creates separate rigid,
+flex-A and flex-B packages with the exact reviewed native input hierarchy.
+Passing this tool is not evidence of working ATA, RF or power-cut
 behavior. Fabricated prototypes still require electrical and assembled tests.
 """
 import argparse
@@ -35,6 +36,7 @@ LAYERS = {
     "F.Cu", "B.Cu", "F.Mask", "B.Mask", "F.Paste", "B.Paste",
     "F.SilkS", "B.SilkS", "Edge.Cuts", "F.Fab", "B.Fab", "Dwgs.User",
 } | {f"In{i}.Cu" for i in range(1, 31)} | {f"User.{i}" for i in range(1, 10)}
+BOARD_NAMES = {"rigid", "flex_a", "flex_b"}
 
 
 class Blocked(Exception):
@@ -236,8 +238,8 @@ class Audit:
             for value in extra_inputs:
                 self.attempt(lambda value=value: self.input(value))
         boards = manifest.get("boards", {})
-        if not isinstance(boards, dict) or set(boards) != {"rigid", "flex"}:
-            self.errors.append("Manifest must define exactly rigid and flex boards.")
+        if not isinstance(boards, dict) or set(boards) != BOARD_NAMES:
+            self.errors.append("Manifest must define exactly rigid, flex_a and flex_b boards.")
             boards = {}
         for name, board in boards.items():
             if not isinstance(board, dict):
@@ -251,7 +253,7 @@ class Audit:
                 self.errors.append(f"{name}: explicit assembly boolean is required.")
             if name == "rigid" and board.get("assembly") is not True:
                 self.errors.append("Rigid release requires its reviewed PCBA BOM/CPL.")
-            if name == "flex" and (board.get("assembly") is not False
+            if name.startswith("flex_") and (board.get("assembly") is not False
                                   or "bom_csv" in board or "cpl_csv" in board):
                 self.errors.append("Passive flex has assembly:false and no BOM/CPL.")
             for field in fields:
@@ -304,7 +306,7 @@ class Audit:
                                 and all(isinstance(x, str) and x in LAYERS for x in layers)
                                 and len(set(layers)) == len(layers))
                 if (settings.get("manufacturer") != "JLCPCB"
-                        or settings.get("board_type") != name
+                        or settings.get("board_type") != ("flex" if name.startswith("flex_") else "rigid")
                         or settings.get("assembly") is not board.get("assembly")
                         or settings.get("released") is not True
                         or settings.get("origin") != "plot"
@@ -318,8 +320,24 @@ class Audit:
             if not isinstance(entries, list):
                 self.errors.append(f"{name}: extra_fabrication_files must be a list.")
                 entries = []
-            if name == "flex" and not entries:
-                self.errors.append("Flex requires reviewed coverlay/stiffener fabrication files.")
+            configured_layers = settings.get("gerber_layers", [])
+            configured_layers = configured_layers if isinstance(configured_layers, list) else []
+            if (name.startswith("flex_") and not entries
+                    and not {"F.Mask", "B.Mask", "User.1"}.issubset(configured_layers)):
+                self.errors.append(f"{name}: flex requires native coverlay/stiffener layers or reviewed extra fabrication files.")
+            layer_names = settings.get("layer_filenames", {})
+            if not isinstance(layer_names, dict):
+                self.errors.append(f"{name}: layer_filenames must be an object.")
+            else:
+                for layer, filename in layer_names.items():
+                    if (layer not in configured_layers
+                            or not isinstance(filename, str) or not filename
+                            or "/" in filename or "\\" in filename or ":" in filename
+                            or filename in {".", ".."} or not filename.endswith(".gbr")):
+                        self.errors.append(f"{name}: unsafe/unrequested native layer filename.")
+                if (all(isinstance(x, str) for x in layer_names.values())
+                        and len(set(layer_names.values())) != len(layer_names)):
+                    self.errors.append(f"{name}: duplicate native layer filenames.")
             for item in entries:
                 def add_extra(item=item):
                     destination = item["name"]
@@ -409,7 +427,7 @@ def export(audit, output, cli_name):
                         or artwork[0].stat().st_size == 0):
                     raise Blocked(f"{name}: requested layer {layer} did not export "
                                   "exactly one nonempty Gerber.")
-                destination = gerbers / artwork[0].name
+                destination = gerbers / settings.get("layer_filenames", {}).get(layer, artwork[0].name)
                 if destination.exists():
                     raise Blocked(f"{name}: native layer Gerber basename collision.")
                 shutil.copyfile(artwork[0], destination)
@@ -437,6 +455,15 @@ def export(audit, output, cli_name):
             if name == "rigid":
                 shutil.copyfile(paths["bom_csv"], folder / "jlcpcb-bom.csv")
                 shutil.copyfile(paths["cpl_csv"], folder / "jlcpcb-cpl.csv")
+        # Preserve repository-relative paths: split flex projects share a
+        # library, so flattened filenames would lose source relationships.
+        for relative, expected_hash in audit.inputs.items():
+            source = audit.root / relative
+            target = staging / "source" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+            if sha256(target) != expected_hash:
+                raise Blocked("Manufacturing source changed while copying native input hierarchy.")
         final_audit = Audit(audit.root, audit.manifest_path).run()
         if (final_audit.errors or final_audit.inputs != audit.inputs
                 or final_audit.review_sha256 != audit.review_sha256):
@@ -487,7 +514,7 @@ def main(argv=None):
             if args.output is None:
                 raise Blocked("--export requires an explicit --output directory.")
             export(audit, args.output.absolute(), args.kicad_cli)
-            print(f"Created separate rigid/flex prototype fabrication packages: {args.output}")
+            print(f"Created separate rigid/flex-A/flex-B prototype fabrication packages: {args.output}")
         return 0
     except (Blocked, OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"BLOCKED: {exc}", file=sys.stderr)

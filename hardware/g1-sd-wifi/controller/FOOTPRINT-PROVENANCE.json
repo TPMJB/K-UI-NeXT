@@ -1,0 +1,1194 @@
+[
+  {
+    "source": "/usr/share/kicad/footprints/Package_QFP.pretty/TQFP-100_14x14mm_P0.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TQFP-100_14x14mm_P0.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Oscillator.pretty/Oscillator_SMD_Abracon_ASE-4Pin_3.2x2.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Oscillator_SMD_Abracon_ASE-4Pin_3.2x2.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Connector_PinHeader_1.27mm.pretty/PinHeader_2x05_P1.27mm_Vertical.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/PinHeader_2x05_P1.27mm_Vertical.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_DFN_QFN.pretty/QFN-80-1EP_10x10mm_P0.4mm_EP3.4x3.4mm_ThermalVias.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/QFN-80-1EP_10x10mm_P0.4mm_EP3.4x3.4mm_ThermalVias.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Crystal.pretty/Crystal_SMD_3225-4Pin_3.2x2.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Crystal_SMD_3225-4Pin_3.2x2.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/SOIC-8_5.3x5.3mm_P1.27mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOIC-8_5.3x5.3mm_P1.27mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Connector_Card.pretty/microSD_HC_Molex_104031-0811.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/microSD_HC_Molex_104031-0811.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/TSSOP-16_4.4x5mm_P0.65mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TSSOP-16_4.4x5mm_P0.65mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/TSSOP-16_4.4x5mm_P0.65mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TSSOP-16_4.4x5mm_P0.65mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/TSSOP-16_4.4x5mm_P0.65mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TSSOP-16_4.4x5mm_P0.65mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/TSSOP-16_4.4x5mm_P0.65mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TSSOP-16_4.4x5mm_P0.65mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Fuse.pretty/Fuse_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Fuse_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Diode_SMD.pretty/Nexperia_CFP3_SOD-123W.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Nexperia_CFP3_SOD-123W.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_1210_3225Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_1210_3225Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_1210_3225Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_1210_3225Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_1210_3225Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_1210_3225Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_1210_3225Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_1210_3225Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/VSSOP-8_2.3x2mm_P0.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/VSSOP-8_2.3x2mm_P0.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/VSSOP-8_2.3x2mm_P0.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/VSSOP-8_2.3x2mm_P0.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/VSSOP-8_2.3x2mm_P0.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/VSSOP-8_2.3x2mm_P0.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/TSSOP-48_6.1x12.5mm_P0.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TSSOP-48_6.1x12.5mm_P0.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/TSSOP-20_4.4x6.5mm_P0.65mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TSSOP-20_4.4x6.5mm_P0.65mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-363_SC-70-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-363_SC-70-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0805_2012Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/TestPoint.pretty/TestPoint_Pad_D1.0mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TestPoint_Pad_D1.0mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/TestPoint.pretty/TestPoint_Pad_D1.0mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TestPoint_Pad_D1.0mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/TestPoint.pretty/TestPoint_Pad_D1.0mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TestPoint_Pad_D1.0mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/TestPoint.pretty/TestPoint_Pad_D1.0mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TestPoint_Pad_D1.0mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/TestPoint.pretty/TestPoint_Pad_D1.0mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TestPoint_Pad_D1.0mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/TestPoint.pretty/TestPoint_Pad_D1.0mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TestPoint_Pad_D1.0mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/TestPoint.pretty/TestPoint_Pad_D1.0mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TestPoint_Pad_D1.0mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_SO.pretty/TSOP-I-48_18.4x12mm_P0.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TSOP-I-48_18.4x12mm_P0.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-8.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-8.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-5.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-5.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23-6.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23-6.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SOT-23.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Connector_FFC-FPC.pretty/Hirose_FH12-14S-0.5SH_1x14-1MP_P0.50mm_Horizontal.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Hirose_FH12-14S-0.5SH_1x14-1MP_P0.50mm_Horizontal.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Connector_FFC-FPC.pretty/Hirose_FH12-6S-0.5SH_1x06-1MP_P0.50mm_Horizontal.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Hirose_FH12-6S-0.5SH_1x06-1MP_P0.50mm_Horizontal.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Jumper.pretty/SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/C_0603_1608Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/TestPoint.pretty/TestPoint_Pad_D1.0mm.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/TestPoint_Pad_D1.0mm.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Connector_FFC-FPC.pretty/Hirose_FH12-20S-0.5SH_1x20-1MP_P0.50mm_Horizontal.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Hirose_FH12-20S-0.5SH_1x20-1MP_P0.50mm_Horizontal.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Connector_FFC-FPC.pretty/Hirose_FH12-20S-0.5SH_1x20-1MP_P0.50mm_Horizontal.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/Hirose_FH12-20S-0.5SH_1x20-1MP_P0.50mm_Horizontal.kicad_mod"
+  }
+]

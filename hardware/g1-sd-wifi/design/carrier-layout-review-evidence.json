@@ -1,0 +1,3687 @@
+{
+  "status": "current_native_checkpoint_independently_reviewed_not_fabrication_signoff",
+  "review_time_utc": "2026-10-10T05:26:27.848870+00:00",
+  "board_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+  "file_sha256": {
+    "tools/generate_board.py": "0048672732cb892ba211363fb2b8ee1115d85690c1e935e8b8db6931afd55c6e",
+    "design/carrier-placement.json": "fb0bacaf89d2dc31b1c4464883d400493f8eeeae734be51cc105f96ed18aa85e",
+    "design/integrated-components.json": "2b80866bf79a74ff8090cd892e6707b1f3d59beebb03c73473c7dbee46e901ae",
+    "design/sources/xiao-c5-carrier-contact-coordinates.json": "1e8cbeae826adde9de7dea47f96c20f0533770f082aad81be75e592164f8cb7b",
+    "design/sources/xiao-c5-spring-contact-placement.json": "285f926f3cc9023020b50a657f657363a763744bc2a762e0f123777631f4ea6c",
+    "controller/KUI_Footprints.pretty/Harwin_S7221-45R_BodyOrigin.kicad_mod": "29177d44f2574a11fcc7b68f7a8214f2d0906d40cb8051fb3557ee42bacef96b",
+    "controller/KUI-G1-Bridge-RevA.kicad_pro": "adb0050b86e6e4d492ca7c1f1a9957b49cd12365441c1d122ac8b340cd988401",
+    "controller/KUI-G1-Bridge-RevA.kicad_pcb": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+    "controller/KUI-G1-Bridge-RevA.kicad_sch": "e62599d8dcb2bfe5d1b085c476bf20dfb29ce7d5de94d8ebc956957324f7e01c",
+    "controller/checks/netlist.xml": "6b2ed4ba03f8f5bd181fea6182156e810878921cd3a66c4577f09fb8fabb20bb",
+    "design/carrier-critical-routes.json": "b0e4fb76c8abffca96fe13cf8965ea614f50b4aac6db9f5c26fed0baac2eacd5"
+  },
+  "board_footprints": 364,
+  "tracks_and_vias": 755,
+  "tracks_by_layer": {
+    "F.Cu": 432,
+    "In2.Cu": 5
+  },
+  "contact_coordinate_checks": [
+    {
+      "ref": "K201",
+      "module_terminal": "1",
+      "actual_tip_offset_mm": [
+        7.62,
+        -8.028
+      ],
+      "official_source_pad_mm": [
+        7.62,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 270.0,
+      "matches": true
+    },
+    {
+      "ref": "K202",
+      "module_terminal": "2",
+      "actual_tip_offset_mm": [
+        5.08,
+        -8.028
+      ],
+      "official_source_pad_mm": [
+        5.08,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 270.0,
+      "matches": true
+    },
+    {
+      "ref": "K203",
+      "module_terminal": "3",
+      "actual_tip_offset_mm": [
+        2.54,
+        -8.028
+      ],
+      "official_source_pad_mm": [
+        2.54,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 270.0,
+      "matches": true
+    },
+    {
+      "ref": "K204",
+      "module_terminal": "4",
+      "actual_tip_offset_mm": [
+        0.0,
+        -8.028
+      ],
+      "official_source_pad_mm": [
+        0.0,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 270.0,
+      "matches": true
+    },
+    {
+      "ref": "K205",
+      "module_terminal": "5",
+      "actual_tip_offset_mm": [
+        -2.54,
+        -8.028
+      ],
+      "official_source_pad_mm": [
+        -2.54,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 270.0,
+      "matches": true
+    },
+    {
+      "ref": "K206",
+      "module_terminal": "6",
+      "actual_tip_offset_mm": [
+        -5.08,
+        -8.028
+      ],
+      "official_source_pad_mm": [
+        -5.08,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 270.0,
+      "matches": true
+    },
+    {
+      "ref": "K207",
+      "module_terminal": "7",
+      "actual_tip_offset_mm": [
+        -7.62,
+        -8.028
+      ],
+      "official_source_pad_mm": [
+        -7.62,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 270.0,
+      "matches": true
+    },
+    {
+      "ref": "K208",
+      "module_terminal": "8",
+      "actual_tip_offset_mm": [
+        -7.62,
+        8.028
+      ],
+      "official_source_pad_mm": [
+        -7.62,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    },
+    {
+      "ref": "K209",
+      "module_terminal": "9",
+      "actual_tip_offset_mm": [
+        -5.08,
+        8.028
+      ],
+      "official_source_pad_mm": [
+        -5.08,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    },
+    {
+      "ref": "K210",
+      "module_terminal": "10",
+      "actual_tip_offset_mm": [
+        -2.54,
+        8.028
+      ],
+      "official_source_pad_mm": [
+        -2.54,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    },
+    {
+      "ref": "K211",
+      "module_terminal": "11",
+      "actual_tip_offset_mm": [
+        0.0,
+        8.028
+      ],
+      "official_source_pad_mm": [
+        0.0,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    },
+    {
+      "ref": "K212",
+      "module_terminal": "12",
+      "actual_tip_offset_mm": [
+        2.54,
+        8.028
+      ],
+      "official_source_pad_mm": [
+        2.54,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    },
+    {
+      "ref": "K213",
+      "module_terminal": "13",
+      "actual_tip_offset_mm": [
+        5.08,
+        8.028
+      ],
+      "official_source_pad_mm": [
+        5.08,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    },
+    {
+      "ref": "K214",
+      "module_terminal": "14",
+      "actual_tip_offset_mm": [
+        7.62,
+        8.028
+      ],
+      "official_source_pad_mm": [
+        7.62,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    },
+    {
+      "ref": "K215",
+      "module_terminal": "TP2",
+      "actual_tip_offset_mm": [
+        1.0255,
+        -1.0956
+      ],
+      "official_source_pad_mm": [
+        1.0255,
+        -1.0956
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    },
+    {
+      "ref": "K216",
+      "module_terminal": "TP8",
+      "actual_tip_offset_mm": [
+        6.1055,
+        -1.0956
+      ],
+      "official_source_pad_mm": [
+        6.1055,
+        -1.0956
+      ],
+      "error_mm": 0.0,
+      "rotation_deg": 90.0,
+      "matches": true
+    }
+  ],
+  "all_16_nominal_contacts_match": true,
+  "power_clock_memory_pad_distances": [
+    {
+      "from": "U201.64",
+      "to": "C2001.1",
+      "straight_line_pad_center_distance_mm": 1.6008
+    },
+    {
+      "from": "U201.63",
+      "to": "L201.1",
+      "straight_line_pad_center_distance_mm": 3.5265
+    },
+    {
+      "from": "U201.65",
+      "to": "C2002.1",
+      "straight_line_pad_center_distance_mm": 6.4933
+    },
+    {
+      "from": "L201.2",
+      "to": "C2002.1",
+      "straight_line_pad_center_distance_mm": 2.6132
+    },
+    {
+      "from": "U201.61",
+      "to": "C2004.1",
+      "straight_line_pad_center_distance_mm": 1.5028
+    },
+    {
+      "from": "U201.30",
+      "to": "X201.1",
+      "straight_line_pad_center_distance_mm": 3.9644
+    },
+    {
+      "from": "U201.31",
+      "to": "R2002.1",
+      "straight_line_pad_center_distance_mm": 1.2949
+    },
+    {
+      "from": "X201.3",
+      "to": "R2002.2",
+      "straight_line_pad_center_distance_mm": 3.933
+    },
+    {
+      "from": "X201.1",
+      "to": "C2020.1",
+      "straight_line_pad_center_distance_mm": 2.7127
+    },
+    {
+      "from": "X201.3",
+      "to": "C2021.1",
+      "straight_line_pad_center_distance_mm": 2.1833
+    },
+    {
+      "from": "U201.71",
+      "to": "R2003.1",
+      "straight_line_pad_center_distance_mm": 1.4259
+    },
+    {
+      "from": "R2003.2",
+      "to": "U202.6",
+      "straight_line_pad_center_distance_mm": 4.5034
+    },
+    {
+      "from": "R2003.2",
+      "to": "U203.6",
+      "straight_line_pad_center_distance_mm": 3.6755
+    },
+    {
+      "from": "U21.2",
+      "to": "C206.1",
+      "straight_line_pad_center_distance_mm": 1.619
+    },
+    {
+      "from": "U21.1",
+      "to": "C206.2",
+      "straight_line_pad_center_distance_mm": 3.5789
+    },
+    {
+      "from": "U21.7",
+      "to": "L20.1",
+      "straight_line_pad_center_distance_mm": 2.5471
+    },
+    {
+      "from": "L20.2",
+      "to": "C207.1",
+      "straight_line_pad_center_distance_mm": 2.6604
+    },
+    {
+      "from": "L20.2",
+      "to": "C208.1",
+      "straight_line_pad_center_distance_mm": 4.2598
+    },
+    {
+      "from": "U21.6",
+      "to": "C207.1",
+      "straight_line_pad_center_distance_mm": 7.0844
+    },
+    {
+      "from": "U22.2",
+      "to": "C209.1",
+      "straight_line_pad_center_distance_mm": 1.619
+    },
+    {
+      "from": "U22.1",
+      "to": "C209.2",
+      "straight_line_pad_center_distance_mm": 3.5789
+    },
+    {
+      "from": "U22.7",
+      "to": "L21.1",
+      "straight_line_pad_center_distance_mm": 2.05
+    },
+    {
+      "from": "L21.2",
+      "to": "C210.1",
+      "straight_line_pad_center_distance_mm": 2.6604
+    },
+    {
+      "from": "L21.2",
+      "to": "C211.1",
+      "straight_line_pad_center_distance_mm": 4.0139
+    },
+    {
+      "from": "U22.6",
+      "to": "C210.1",
+      "straight_line_pad_center_distance_mm": 6.587
+    }
+  ],
+  "distance_interpretation": "Straight-line distances are minimum geometric separations, not actual routed lengths or electrical qualification. Final routed copper and return-current paths require review.",
+  "mechanical_qualified": false,
+  "electrical_layout_qualified": false,
+  "official_c5_native_pcb_sha256": "de3838f8908e40d6f022e43ae3a3261bbdc79d436a39925a1a898824917d7607",
+  "official_native_pad_checks": [
+    {
+      "module_terminal": "1",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          7.62,
+          -8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        7.62,
+        -8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "2",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          5.08,
+          -8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        5.08,
+        -8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "3",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          2.54,
+          -8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        2.54,
+        -8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "4",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          0.0,
+          -8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        0.0,
+        -8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "5",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          -2.54,
+          -8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        -2.54,
+        -8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "6",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          -5.08,
+          -8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        -5.08,
+        -8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "7",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          -7.62,
+          -8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        -7.62,
+        -8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "8",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          -7.62,
+          8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        -7.62,
+        8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "9",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          -5.08,
+          8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        -5.08,
+        8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "10",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          -2.54,
+          8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        -2.54,
+        8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "11",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          0.0,
+          8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        0.0,
+        8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "12",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          2.54,
+          8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        2.54,
+        8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "13",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          5.08,
+          8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        5.08,
+        8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "14",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          7.62,
+          8.028
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        7.62,
+        8.028
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "TP2",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          1.0255,
+          -1.0956
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        1.0255,
+        -1.0956
+      ],
+      "max_error_mm": 0.0
+    },
+    {
+      "module_terminal": "TP8",
+      "official_b_cu_smd_land_coordinates_mm": [
+        [
+          6.1055,
+          -1.0956
+        ]
+      ],
+      "source_json_coordinates_mm": [
+        6.1055,
+        -1.0956
+      ],
+      "max_error_mm": 0.0
+    }
+  ],
+  "official_c5_underside_footprint_inventory": [
+    {
+      "ref": "TP6",
+      "value": "Test Point",
+      "footprint": "TP-D45MIL"
+    },
+    {
+      "ref": "TP4",
+      "value": "Test Point",
+      "footprint": "TP-D45MIL"
+    },
+    {
+      "ref": "TP5",
+      "value": "Test Point",
+      "footprint": "TP-D45MIL"
+    },
+    {
+      "ref": "G***",
+      "value": "LOGO",
+      "footprint": "LOGO-SEEED-NEW-0.83X7.5MM"
+    },
+    {
+      "ref": "TP8",
+      "value": "Test Point",
+      "footprint": "TP-D45MIL"
+    },
+    {
+      "ref": "BAT+1",
+      "value": "Test Point",
+      "footprint": "TP-80X40MIL"
+    },
+    {
+      "ref": "TP2",
+      "value": "Test Point",
+      "footprint": "TP-D45MIL"
+    },
+    {
+      "ref": "BAT-1",
+      "value": "Test Point",
+      "footprint": "TP-80X40MIL"
+    },
+    {
+      "ref": "TP1",
+      "value": "Test Point",
+      "footprint": "TP-D45MIL"
+    },
+    {
+      "ref": "TP3",
+      "value": "Test Point",
+      "footprint": "TP-D45MIL"
+    },
+    {
+      "ref": "TP7",
+      "value": "Test Point",
+      "footprint": "TP-D45MIL"
+    }
+  ],
+  "source_json_matches_official_native_smd_lands": true,
+  "native_pad_selection": "Only B.Cu SMD lands are comparison targets; through-hole castellation pads share terminal numbers but intentionally have different centers.",
+  "corrected_flex_mating_independent_review": {
+    "carrier_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+    "interface_sha256": "6c19ec3cf9f29d1ca6db30b58ea4a420973ad2fffb807a5592d772e29d84e610",
+    "frame": "Flex:tip north,F.Cu up,B.Cu contacts down; socket mating-mouth north before rotation. Socketrot90 physicalpin1 is south/highY. Both frames physicalpin1left.",
+    "positions": [
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 1,
+        "tail_pad": "1",
+        "tail_xy_mm": [
+          90.5,
+          42.75
+        ],
+        "cn503_contact": "A1",
+        "signal": "CONSOLE_3V3",
+        "carrier_ref": "J50",
+        "carrier_pad": "1",
+        "carrier_net": "CONSOLE_3V3",
+        "carrier_xy_mm": [
+          106.7,
+          104.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 2,
+        "tail_pad": "2",
+        "tail_xy_mm": [
+          91.0,
+          42.75
+        ],
+        "cn503_contact": "A2",
+        "signal": "ATA_RESETn",
+        "carrier_ref": "J50",
+        "carrier_pad": "2",
+        "carrier_net": "ATA_RESETn",
+        "carrier_xy_mm": [
+          106.7,
+          104.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 3,
+        "tail_pad": "3",
+        "tail_xy_mm": [
+          91.5,
+          42.75
+        ],
+        "cn503_contact": "A3",
+        "signal": "CONSOLE_5V",
+        "carrier_ref": "J50",
+        "carrier_pad": "3",
+        "carrier_net": "FLEX_5V",
+        "carrier_xy_mm": [
+          106.7,
+          103.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 4,
+        "tail_pad": "4",
+        "tail_xy_mm": [
+          92.0,
+          42.75
+        ],
+        "cn503_contact": "A4",
+        "signal": "ATA_DD7",
+        "carrier_ref": "J50",
+        "carrier_pad": "4",
+        "carrier_net": "ATA_DD7",
+        "carrier_xy_mm": [
+          106.7,
+          103.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 5,
+        "tail_pad": "5",
+        "tail_xy_mm": [
+          92.5,
+          42.75
+        ],
+        "cn503_contact": "A5",
+        "signal": "ATA_DD8",
+        "carrier_ref": "J50",
+        "carrier_pad": "5",
+        "carrier_net": "ATA_DD8",
+        "carrier_xy_mm": [
+          106.7,
+          102.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 6,
+        "tail_pad": "6",
+        "tail_xy_mm": [
+          93.0,
+          42.75
+        ],
+        "cn503_contact": "A6",
+        "signal": "ATA_DD5",
+        "carrier_ref": "J50",
+        "carrier_pad": "6",
+        "carrier_net": "ATA_DD5",
+        "carrier_xy_mm": [
+          106.7,
+          102.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 7,
+        "tail_pad": "7",
+        "tail_xy_mm": [
+          93.5,
+          42.75
+        ],
+        "cn503_contact": "A7",
+        "signal": "ATA_DD10",
+        "carrier_ref": "J50",
+        "carrier_pad": "7",
+        "carrier_net": "ATA_DD10",
+        "carrier_xy_mm": [
+          106.7,
+          101.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 8,
+        "tail_pad": "8",
+        "tail_xy_mm": [
+          94.0,
+          42.75
+        ],
+        "cn503_contact": "A8",
+        "signal": "GND",
+        "carrier_ref": "J50",
+        "carrier_pad": "8",
+        "carrier_net": "GND",
+        "carrier_xy_mm": [
+          106.7,
+          101.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 9,
+        "tail_pad": "9",
+        "tail_xy_mm": [
+          94.5,
+          42.75
+        ],
+        "cn503_contact": "A9",
+        "signal": "ATA_DD3",
+        "carrier_ref": "J50",
+        "carrier_pad": "9",
+        "carrier_net": "ATA_DD3",
+        "carrier_xy_mm": [
+          106.7,
+          100.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 10,
+        "tail_pad": "10",
+        "tail_xy_mm": [
+          95.0,
+          42.75
+        ],
+        "cn503_contact": "A10",
+        "signal": "ATA_DD12",
+        "carrier_ref": "J50",
+        "carrier_pad": "10",
+        "carrier_net": "ATA_DD12",
+        "carrier_xy_mm": [
+          106.7,
+          100.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 11,
+        "tail_pad": "11",
+        "tail_xy_mm": [
+          95.5,
+          42.75
+        ],
+        "cn503_contact": "A11",
+        "signal": "ATA_DD1",
+        "carrier_ref": "J50",
+        "carrier_pad": "11",
+        "carrier_net": "ATA_DD1",
+        "carrier_xy_mm": [
+          106.7,
+          99.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 12,
+        "tail_pad": "12",
+        "tail_xy_mm": [
+          96.0,
+          42.75
+        ],
+        "cn503_contact": "A12",
+        "signal": "ATA_DD14",
+        "carrier_ref": "J50",
+        "carrier_pad": "12",
+        "carrier_net": "ATA_DD14",
+        "carrier_xy_mm": [
+          106.7,
+          99.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 13,
+        "tail_pad": "13",
+        "tail_xy_mm": [
+          96.5,
+          42.75
+        ],
+        "cn503_contact": "A13",
+        "signal": "GND",
+        "carrier_ref": "J50",
+        "carrier_pad": "13",
+        "carrier_net": "GND",
+        "carrier_xy_mm": [
+          106.7,
+          98.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 14,
+        "tail_pad": "14",
+        "tail_xy_mm": [
+          97.0,
+          42.75
+        ],
+        "cn503_contact": "A14",
+        "signal": "ATA_DMARQ",
+        "carrier_ref": "J50",
+        "carrier_pad": "14",
+        "carrier_net": "ATA_DMARQ",
+        "carrier_xy_mm": [
+          106.7,
+          98.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 15,
+        "tail_pad": "15",
+        "tail_xy_mm": [
+          97.5,
+          42.75
+        ],
+        "cn503_contact": "A15",
+        "signal": "ATA_DIORn",
+        "carrier_ref": "J50",
+        "carrier_pad": "15",
+        "carrier_net": "ATA_DIORn",
+        "carrier_xy_mm": [
+          106.7,
+          97.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 16,
+        "tail_pad": "16",
+        "tail_xy_mm": [
+          98.0,
+          42.75
+        ],
+        "cn503_contact": "A16",
+        "signal": "ATA_DMACKn",
+        "carrier_ref": "J50",
+        "carrier_pad": "16",
+        "carrier_net": "ATA_DMACKn",
+        "carrier_xy_mm": [
+          106.7,
+          97.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 17,
+        "tail_pad": "17",
+        "tail_xy_mm": [
+          98.5,
+          42.75
+        ],
+        "cn503_contact": "A18",
+        "signal": "GND",
+        "carrier_ref": "J50",
+        "carrier_pad": "17",
+        "carrier_net": "GND",
+        "carrier_xy_mm": [
+          106.7,
+          96.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 18,
+        "tail_pad": "18",
+        "tail_xy_mm": [
+          99.0,
+          42.75
+        ],
+        "cn503_contact": "A19",
+        "signal": "ATA_DA0",
+        "carrier_ref": "J50",
+        "carrier_pad": "18",
+        "carrier_net": "ATA_DA0",
+        "carrier_xy_mm": [
+          106.7,
+          96.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 19,
+        "tail_pad": "19",
+        "tail_xy_mm": [
+          99.5,
+          42.75
+        ],
+        "cn503_contact": "A20",
+        "signal": "ATA_CS0n",
+        "carrier_ref": "J50",
+        "carrier_pad": "19",
+        "carrier_net": "ATA_CS0n",
+        "carrier_xy_mm": [
+          106.7,
+          95.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "A",
+        "physical_left_to_right_position": 20,
+        "tail_pad": "20",
+        "tail_xy_mm": [
+          100.0,
+          42.75
+        ],
+        "cn503_contact": "A21",
+        "signal": "GND",
+        "carrier_ref": "J50",
+        "carrier_pad": "20",
+        "carrier_net": "GND",
+        "carrier_xy_mm": [
+          106.7,
+          95.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 1,
+        "tail_pad": "1",
+        "tail_xy_mm": [
+          100.0,
+          42.75
+        ],
+        "cn503_contact": "B21",
+        "signal": "GND",
+        "carrier_ref": "J51",
+        "carrier_pad": "1",
+        "carrier_net": "GND",
+        "carrier_xy_mm": [
+          106.7,
+          127.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 2,
+        "tail_pad": "2",
+        "tail_xy_mm": [
+          100.5,
+          42.75
+        ],
+        "cn503_contact": "B20",
+        "signal": "ATA_CS1n",
+        "carrier_ref": "J51",
+        "carrier_pad": "2",
+        "carrier_net": "ATA_CS1n",
+        "carrier_xy_mm": [
+          106.7,
+          127.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 3,
+        "tail_pad": "3",
+        "tail_xy_mm": [
+          101.0,
+          42.75
+        ],
+        "cn503_contact": "B19",
+        "signal": "ATA_DA2",
+        "carrier_ref": "J51",
+        "carrier_pad": "3",
+        "carrier_net": "ATA_DA2",
+        "carrier_xy_mm": [
+          106.7,
+          126.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 4,
+        "tail_pad": "4",
+        "tail_xy_mm": [
+          101.5,
+          42.75
+        ],
+        "cn503_contact": "B18",
+        "signal": "GND",
+        "carrier_ref": "J51",
+        "carrier_pad": "4",
+        "carrier_net": "GND",
+        "carrier_xy_mm": [
+          106.7,
+          126.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 5,
+        "tail_pad": "5",
+        "tail_xy_mm": [
+          102.0,
+          42.75
+        ],
+        "cn503_contact": "B17",
+        "signal": "ATA_DA1",
+        "carrier_ref": "J51",
+        "carrier_pad": "5",
+        "carrier_net": "ATA_DA1",
+        "carrier_xy_mm": [
+          106.7,
+          125.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 6,
+        "tail_pad": "6",
+        "tail_xy_mm": [
+          102.5,
+          42.75
+        ],
+        "cn503_contact": "B16",
+        "signal": "ATA_INTRQ",
+        "carrier_ref": "J51",
+        "carrier_pad": "6",
+        "carrier_net": "ATA_INTRQ",
+        "carrier_xy_mm": [
+          106.7,
+          125.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 7,
+        "tail_pad": "7",
+        "tail_xy_mm": [
+          103.0,
+          42.75
+        ],
+        "cn503_contact": "B15",
+        "signal": "ATA_IORDY",
+        "carrier_ref": "J51",
+        "carrier_pad": "7",
+        "carrier_net": "ATA_IORDY",
+        "carrier_xy_mm": [
+          106.7,
+          124.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 8,
+        "tail_pad": "8",
+        "tail_xy_mm": [
+          103.5,
+          42.75
+        ],
+        "cn503_contact": "B14",
+        "signal": "ATA_DIOWn",
+        "carrier_ref": "J51",
+        "carrier_pad": "8",
+        "carrier_net": "ATA_DIOWn",
+        "carrier_xy_mm": [
+          106.7,
+          124.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 9,
+        "tail_pad": "9",
+        "tail_xy_mm": [
+          104.0,
+          42.75
+        ],
+        "cn503_contact": "B13",
+        "signal": "GND",
+        "carrier_ref": "J51",
+        "carrier_pad": "9",
+        "carrier_net": "GND",
+        "carrier_xy_mm": [
+          106.7,
+          123.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 10,
+        "tail_pad": "10",
+        "tail_xy_mm": [
+          104.5,
+          42.75
+        ],
+        "cn503_contact": "B12",
+        "signal": "ATA_DD15",
+        "carrier_ref": "J51",
+        "carrier_pad": "10",
+        "carrier_net": "ATA_DD15",
+        "carrier_xy_mm": [
+          106.7,
+          123.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 11,
+        "tail_pad": "11",
+        "tail_xy_mm": [
+          105.0,
+          42.75
+        ],
+        "cn503_contact": "B11",
+        "signal": "ATA_DD0",
+        "carrier_ref": "J51",
+        "carrier_pad": "11",
+        "carrier_net": "ATA_DD0",
+        "carrier_xy_mm": [
+          106.7,
+          122.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 12,
+        "tail_pad": "12",
+        "tail_xy_mm": [
+          105.5,
+          42.75
+        ],
+        "cn503_contact": "B10",
+        "signal": "ATA_DD13",
+        "carrier_ref": "J51",
+        "carrier_pad": "12",
+        "carrier_net": "ATA_DD13",
+        "carrier_xy_mm": [
+          106.7,
+          122.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 13,
+        "tail_pad": "13",
+        "tail_xy_mm": [
+          106.0,
+          42.75
+        ],
+        "cn503_contact": "B9",
+        "signal": "ATA_DD2",
+        "carrier_ref": "J51",
+        "carrier_pad": "13",
+        "carrier_net": "ATA_DD2",
+        "carrier_xy_mm": [
+          106.7,
+          121.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 14,
+        "tail_pad": "14",
+        "tail_xy_mm": [
+          106.5,
+          42.75
+        ],
+        "cn503_contact": "B8",
+        "signal": "GND",
+        "carrier_ref": "J51",
+        "carrier_pad": "14",
+        "carrier_net": "GND",
+        "carrier_xy_mm": [
+          106.7,
+          121.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 15,
+        "tail_pad": "15",
+        "tail_xy_mm": [
+          107.0,
+          42.75
+        ],
+        "cn503_contact": "B7",
+        "signal": "ATA_DD11",
+        "carrier_ref": "J51",
+        "carrier_pad": "15",
+        "carrier_net": "ATA_DD11",
+        "carrier_xy_mm": [
+          106.7,
+          120.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 16,
+        "tail_pad": "16",
+        "tail_xy_mm": [
+          107.5,
+          42.75
+        ],
+        "cn503_contact": "B6",
+        "signal": "ATA_DD4",
+        "carrier_ref": "J51",
+        "carrier_pad": "16",
+        "carrier_net": "ATA_DD4",
+        "carrier_xy_mm": [
+          106.7,
+          120.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 17,
+        "tail_pad": "17",
+        "tail_xy_mm": [
+          108.0,
+          42.75
+        ],
+        "cn503_contact": "B5",
+        "signal": "ATA_DD9",
+        "carrier_ref": "J51",
+        "carrier_pad": "17",
+        "carrier_net": "ATA_DD9",
+        "carrier_xy_mm": [
+          106.7,
+          119.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 18,
+        "tail_pad": "18",
+        "tail_xy_mm": [
+          108.5,
+          42.75
+        ],
+        "cn503_contact": "B4",
+        "signal": "ATA_DD6",
+        "carrier_ref": "J51",
+        "carrier_pad": "18",
+        "carrier_net": "ATA_DD6",
+        "carrier_xy_mm": [
+          106.7,
+          119.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 19,
+        "tail_pad": "19",
+        "tail_xy_mm": [
+          109.0,
+          42.75
+        ],
+        "cn503_contact": "B3",
+        "signal": "CONSOLE_5V",
+        "carrier_ref": "J51",
+        "carrier_pad": "19",
+        "carrier_net": "FLEX_5V",
+        "carrier_xy_mm": [
+          106.7,
+          118.75
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      },
+      {
+        "arm": "B",
+        "physical_left_to_right_position": 20,
+        "tail_pad": "20",
+        "tail_xy_mm": [
+          109.5,
+          42.75
+        ],
+        "cn503_contact": "B1",
+        "signal": "CONSOLE_3V3",
+        "carrier_ref": "J51",
+        "carrier_pad": "20",
+        "carrier_net": "CONSOLE_3V3",
+        "carrier_xy_mm": [
+          106.7,
+          118.25
+        ],
+        "matches": true,
+        "bottom_only_finger": true
+      }
+    ],
+    "files": {
+      "A": {
+        "sha256": "8b782e933807131a473f0c999b446254db2cd1844f67fff8e9a802fbe031710c",
+        "rotation": 0.0
+      },
+      "B": {
+        "sha256": "c672f1015c907e1bd1443473bc733cd6976058030c975dd0b5c9f6cbdfb60c04",
+        "rotation": 0.0
+      }
+    },
+    "all_40_positions_pass": true,
+    "negative_control": {
+      "old_B_handedness_rejected": true
+    }
+  },
+  "withdrawn_spring_placement_snapshot": {
+    "board_sha256": "4d412b896b0b465de445983f6a5a105853c37ae43ba12f7ced33f9fe67e0fca2",
+    "status": "Withdrawn before publication; independent native check found seven misplaced spring contacts. All sixteen tips are restored and independently verified in replacement snapshot.",
+    "contact_coordinate_checks": [
+      {
+        "ref": "K201",
+        "module_terminal": "1",
+        "actual_tip_offset_mm": [
+          7.62,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          7.62,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K202",
+        "module_terminal": "2",
+        "actual_tip_offset_mm": [
+          5.08,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          5.08,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K203",
+        "module_terminal": "3",
+        "actual_tip_offset_mm": [
+          2.539999,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          2.54,
+          -8.028
+        ],
+        "error_mm": 1e-06,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K204",
+        "module_terminal": "4",
+        "actual_tip_offset_mm": [
+          0.0,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          0.0,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K205",
+        "module_terminal": "5",
+        "actual_tip_offset_mm": [
+          -2.54,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          -2.54,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K206",
+        "module_terminal": "6",
+        "actual_tip_offset_mm": [
+          -5.08,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          -5.08,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K207",
+        "module_terminal": "7",
+        "actual_tip_offset_mm": [
+          -7.62,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          -7.62,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K208",
+        "module_terminal": "8",
+        "actual_tip_offset_mm": [
+          -7.62,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          -7.62,
+          8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K209",
+        "module_terminal": "9",
+        "actual_tip_offset_mm": [
+          -5.08,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          -5.08,
+          8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K210",
+        "module_terminal": "10",
+        "actual_tip_offset_mm": [
+          -2.8,
+          10.0
+        ],
+        "official_source_pad_mm": [
+          -2.54,
+          8.028
+        ],
+        "error_mm": 1.9890661,
+        "rotation_deg": 180.0,
+        "matches": false
+      },
+      {
+        "ref": "K211",
+        "module_terminal": "11",
+        "actual_tip_offset_mm": [
+          0.7,
+          10.0
+        ],
+        "official_source_pad_mm": [
+          0.0,
+          8.028
+        ],
+        "error_mm": 2.0925544,
+        "rotation_deg": 180.0,
+        "matches": false
+      },
+      {
+        "ref": "K212",
+        "module_terminal": "12",
+        "actual_tip_offset_mm": [
+          1.7,
+          12.0
+        ],
+        "official_source_pad_mm": [
+          2.54,
+          8.028
+        ],
+        "error_mm": 4.0598502,
+        "rotation_deg": 180.0,
+        "matches": false
+      },
+      {
+        "ref": "K213",
+        "module_terminal": "13",
+        "actual_tip_offset_mm": [
+          4.2,
+          14.0
+        ],
+        "official_source_pad_mm": [
+          5.08,
+          8.028
+        ],
+        "error_mm": 6.0364877,
+        "rotation_deg": 180.0,
+        "matches": false
+      },
+      {
+        "ref": "K214",
+        "module_terminal": "14",
+        "actual_tip_offset_mm": [
+          9.2,
+          14.0
+        ],
+        "official_source_pad_mm": [
+          7.62,
+          8.028
+        ],
+        "error_mm": 6.1774739,
+        "rotation_deg": 180.0,
+        "matches": false
+      },
+      {
+        "ref": "K215",
+        "module_terminal": "TP2",
+        "actual_tip_offset_mm": [
+          11.5,
+          -1.3
+        ],
+        "official_source_pad_mm": [
+          1.0255,
+          -1.0956
+        ],
+        "error_mm": 10.4764941,
+        "rotation_deg": 90.0,
+        "matches": false
+      },
+      {
+        "ref": "K216",
+        "module_terminal": "TP8",
+        "actual_tip_offset_mm": [
+          11.5,
+          -4.8
+        ],
+        "official_source_pad_mm": [
+          6.1055,
+          -1.0956
+        ],
+        "error_mm": 6.5439445,
+        "rotation_deg": 90.0,
+        "matches": false
+      }
+    ],
+    "all_16_nominal_contacts_match": false,
+    "cause": "Scratch candidate fixed only K201\u2013K209 by the K20 prefix; K210\u2013K216 were repacked outside the module reservation.",
+    "restoration_source": "design/sources/xiao-c5-spring-contact-placement.json",
+    "resolved_in_current_snapshot": true,
+    "replacement_board_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8"
+  },
+  "original_placement_snapshot": {
+    "status": "independent_layout_review_not_fabrication_signoff",
+    "review_time_utc": "2026-10-10T04:08:12.259725+00:00",
+    "board_sha256": "70790e869b47f847b7459700a8e2d1341f90f81380403e8076a0fdd48218924e",
+    "file_sha256": {
+      "tools/generate_board.py": "fd5ead9389f28f6a71cecb65c26b3bc79f5335c9d255aae2e205268a7b2ef739",
+      "design/carrier-placement.json": "635f7cf915015bdd387c909739a645c25dff7dd1ae1143cb9d1453c6fef629ac",
+      "design/integrated-components.json": "7e9e08aa44fbb9472407f721d00e5f7ac7aa565511564f1b0bb584b17951ad8a",
+      "design/sources/xiao-c5-carrier-contact-coordinates.json": "1e8cbeae826adde9de7dea47f96c20f0533770f082aad81be75e592164f8cb7b",
+      "design/sources/xiao-c5-spring-contact-placement.json": "285f926f3cc9023020b50a657f657363a763744bc2a762e0f123777631f4ea6c",
+      "controller/KUI_Footprints.pretty/Harwin_S7221-45R_BodyOrigin.kicad_mod": "29177d44f2574a11fcc7b68f7a8214f2d0906d40cb8051fb3557ee42bacef96b",
+      "controller/KUI-G1-Bridge-RevA.kicad_pro": "79e39da4e040bd514984c66a1633ed97cfbeb59f402395a0687fe414e9c1feac",
+      "flex/KUI-CN503-A-Flex-RevA.kicad_pcb": "8b782e933807131a473f0c999b446254db2cd1844f67fff8e9a802fbe031710c",
+      "flex/KUI-CN503-B-Flex-RevA.kicad_pcb": "6969ee5a497e8941e14037eb90eca14b3e0c762f372d2071b2c84f59aeb2a403",
+      "design/flex-interface.json": "dc9833804c0df2ea288c6e7c9c2bdd66e0c7e347673ea6bd977e5f3171741770"
+    },
+    "board_footprints": 325,
+    "tracks_and_vias": 6,
+    "tracks_by_layer": {
+      "F.Cu": 6
+    },
+    "contact_coordinate_checks": [
+      {
+        "ref": "K201",
+        "module_terminal": "1",
+        "actual_tip_offset_mm": [
+          7.62,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          7.62,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K202",
+        "module_terminal": "2",
+        "actual_tip_offset_mm": [
+          5.08,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          5.08,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K203",
+        "module_terminal": "3",
+        "actual_tip_offset_mm": [
+          2.539999,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          2.54,
+          -8.028
+        ],
+        "error_mm": 1e-06,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K204",
+        "module_terminal": "4",
+        "actual_tip_offset_mm": [
+          0.0,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          0.0,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K205",
+        "module_terminal": "5",
+        "actual_tip_offset_mm": [
+          -2.54,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          -2.54,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K206",
+        "module_terminal": "6",
+        "actual_tip_offset_mm": [
+          -5.08,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          -5.08,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K207",
+        "module_terminal": "7",
+        "actual_tip_offset_mm": [
+          -7.62,
+          -8.028
+        ],
+        "official_source_pad_mm": [
+          -7.62,
+          -8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 270.0,
+        "matches": true
+      },
+      {
+        "ref": "K208",
+        "module_terminal": "8",
+        "actual_tip_offset_mm": [
+          -7.62,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          -7.62,
+          8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K209",
+        "module_terminal": "9",
+        "actual_tip_offset_mm": [
+          -5.08,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          -5.08,
+          8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K210",
+        "module_terminal": "10",
+        "actual_tip_offset_mm": [
+          -2.54,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          -2.54,
+          8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K211",
+        "module_terminal": "11",
+        "actual_tip_offset_mm": [
+          0.0,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          0.0,
+          8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K212",
+        "module_terminal": "12",
+        "actual_tip_offset_mm": [
+          2.539999,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          2.54,
+          8.028
+        ],
+        "error_mm": 1e-06,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K213",
+        "module_terminal": "13",
+        "actual_tip_offset_mm": [
+          5.08,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          5.08,
+          8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K214",
+        "module_terminal": "14",
+        "actual_tip_offset_mm": [
+          7.62,
+          8.028
+        ],
+        "official_source_pad_mm": [
+          7.62,
+          8.028
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K215",
+        "module_terminal": "TP2",
+        "actual_tip_offset_mm": [
+          1.0255,
+          -1.0956
+        ],
+        "official_source_pad_mm": [
+          1.0255,
+          -1.0956
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      },
+      {
+        "ref": "K216",
+        "module_terminal": "TP8",
+        "actual_tip_offset_mm": [
+          6.1055,
+          -1.0956
+        ],
+        "official_source_pad_mm": [
+          6.1055,
+          -1.0956
+        ],
+        "error_mm": 0.0,
+        "rotation_deg": 90.0,
+        "matches": true
+      }
+    ],
+    "all_16_nominal_contacts_match": true,
+    "power_clock_memory_pad_distances": [
+      {
+        "from": "U201.64",
+        "to": "C2001.1",
+        "straight_line_pad_center_distance_mm": 2.0304
+      },
+      {
+        "from": "U201.63",
+        "to": "L201.1",
+        "straight_line_pad_center_distance_mm": 2.7949
+      },
+      {
+        "from": "U201.65",
+        "to": "C2002.1",
+        "straight_line_pad_center_distance_mm": 6.4933
+      },
+      {
+        "from": "L201.2",
+        "to": "C2002.1",
+        "straight_line_pad_center_distance_mm": 2.4226
+      },
+      {
+        "from": "U201.61",
+        "to": "C2004.1",
+        "straight_line_pad_center_distance_mm": 2.1266
+      },
+      {
+        "from": "U201.30",
+        "to": "X201.1",
+        "straight_line_pad_center_distance_mm": 1.979
+      },
+      {
+        "from": "U201.31",
+        "to": "R2002.1",
+        "straight_line_pad_center_distance_mm": 3.3129
+      },
+      {
+        "from": "X201.3",
+        "to": "R2002.2",
+        "straight_line_pad_center_distance_mm": 3.389
+      },
+      {
+        "from": "X201.1",
+        "to": "C2020.1",
+        "straight_line_pad_center_distance_mm": 2.7127
+      },
+      {
+        "from": "X201.3",
+        "to": "C2021.1",
+        "straight_line_pad_center_distance_mm": 2.1833
+      },
+      {
+        "from": "U201.71",
+        "to": "R2003.1",
+        "straight_line_pad_center_distance_mm": 1.5401
+      },
+      {
+        "from": "R2003.2",
+        "to": "U202.6",
+        "straight_line_pad_center_distance_mm": 4.3222
+      },
+      {
+        "from": "R2003.2",
+        "to": "U203.6",
+        "straight_line_pad_center_distance_mm": 1.2034
+      },
+      {
+        "from": "U21.2",
+        "to": "C206.1",
+        "straight_line_pad_center_distance_mm": 3.5087
+      },
+      {
+        "from": "U21.1",
+        "to": "C206.2",
+        "straight_line_pad_center_distance_mm": 1.766
+      },
+      {
+        "from": "U21.7",
+        "to": "L20.1",
+        "straight_line_pad_center_distance_mm": 2.5471
+      },
+      {
+        "from": "L20.2",
+        "to": "C207.1",
+        "straight_line_pad_center_distance_mm": 2.6604
+      },
+      {
+        "from": "L20.2",
+        "to": "C208.1",
+        "straight_line_pad_center_distance_mm": 4.2598
+      },
+      {
+        "from": "U21.6",
+        "to": "C207.1",
+        "straight_line_pad_center_distance_mm": 7.0844
+      },
+      {
+        "from": "U22.2",
+        "to": "C209.1",
+        "straight_line_pad_center_distance_mm": 3.5087
+      },
+      {
+        "from": "U22.1",
+        "to": "C209.2",
+        "straight_line_pad_center_distance_mm": 1.766
+      },
+      {
+        "from": "U22.7",
+        "to": "L21.1",
+        "straight_line_pad_center_distance_mm": 2.05
+      },
+      {
+        "from": "L21.2",
+        "to": "C210.1",
+        "straight_line_pad_center_distance_mm": 2.6604
+      },
+      {
+        "from": "L21.2",
+        "to": "C211.1",
+        "straight_line_pad_center_distance_mm": 4.0139
+      },
+      {
+        "from": "U22.6",
+        "to": "C210.1",
+        "straight_line_pad_center_distance_mm": 6.587
+      }
+    ],
+    "distance_interpretation": "Straight-line distances are minimum geometric separations, not actual routed lengths or electrical qualification. Final routed copper and return-current paths require review."
+  },
+  "direct_manufacturer_native_pcb_sha256": "de3838f8908e40d6f022e43ae3a3261bbdc79d436a39925a1a898824917d7607",
+  "direct_manufacturer_native_contact_checks": [
+    {
+      "ref": "K201",
+      "terminal": "1",
+      "native_smd_land_mm": [
+        7.62,
+        -8.028
+      ],
+      "actual_tip_mm": [
+        7.62,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K202",
+      "terminal": "2",
+      "native_smd_land_mm": [
+        5.08,
+        -8.028
+      ],
+      "actual_tip_mm": [
+        5.08,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K203",
+      "terminal": "3",
+      "native_smd_land_mm": [
+        2.54,
+        -8.028
+      ],
+      "actual_tip_mm": [
+        2.54,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K204",
+      "terminal": "4",
+      "native_smd_land_mm": [
+        0.0,
+        -8.028
+      ],
+      "actual_tip_mm": [
+        0.0,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K205",
+      "terminal": "5",
+      "native_smd_land_mm": [
+        -2.54,
+        -8.028
+      ],
+      "actual_tip_mm": [
+        -2.54,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K206",
+      "terminal": "6",
+      "native_smd_land_mm": [
+        -5.08,
+        -8.028
+      ],
+      "actual_tip_mm": [
+        -5.08,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K207",
+      "terminal": "7",
+      "native_smd_land_mm": [
+        -7.62,
+        -8.028
+      ],
+      "actual_tip_mm": [
+        -7.62,
+        -8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K208",
+      "terminal": "8",
+      "native_smd_land_mm": [
+        -7.62,
+        8.028
+      ],
+      "actual_tip_mm": [
+        -7.62,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K209",
+      "terminal": "9",
+      "native_smd_land_mm": [
+        -5.08,
+        8.028
+      ],
+      "actual_tip_mm": [
+        -5.08,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K210",
+      "terminal": "10",
+      "native_smd_land_mm": [
+        -2.54,
+        8.028
+      ],
+      "actual_tip_mm": [
+        -2.54,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K211",
+      "terminal": "11",
+      "native_smd_land_mm": [
+        0.0,
+        8.028
+      ],
+      "actual_tip_mm": [
+        0.0,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K212",
+      "terminal": "12",
+      "native_smd_land_mm": [
+        2.54,
+        8.028
+      ],
+      "actual_tip_mm": [
+        2.54,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K213",
+      "terminal": "13",
+      "native_smd_land_mm": [
+        5.08,
+        8.028
+      ],
+      "actual_tip_mm": [
+        5.08,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K214",
+      "terminal": "14",
+      "native_smd_land_mm": [
+        7.62,
+        8.028
+      ],
+      "actual_tip_mm": [
+        7.62,
+        8.028
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K215",
+      "terminal": "TP2",
+      "native_smd_land_mm": [
+        1.0255,
+        -1.0956
+      ],
+      "actual_tip_mm": [
+        1.0255,
+        -1.0956
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    },
+    {
+      "ref": "K216",
+      "terminal": "TP8",
+      "native_smd_land_mm": [
+        6.1055,
+        -1.0956
+      ],
+      "actual_tip_mm": [
+        6.1055,
+        -1.0956
+      ],
+      "error_mm": 0.0,
+      "matches": true
+    }
+  ],
+  "all_16_match_direct_native_lands": true,
+  "contact_checker_negative_control": {
+    "K210_displaced_by_1mm_rejected": true
+  },
+  "through_vias": 318,
+  "nonvia_track_segments": 437,
+  "current_native_connectivity": {
+    "board_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+    "count_uncapped": 600,
+    "category_counts_uncapped": {
+      "GND": 3,
+      "power": 209,
+      "other_signal": 388
+    },
+    "category_sum": 600,
+    "independent_native_method": "Fresh LoadBoard per category; netcode0 for all pads/tracks/vias/zones outside selected category, then BuildConnectivity/RecalculateRatsnest/GetUnconnectedCount(False)",
+    "native_drc_violations": 0,
+    "native_schematic_parity_issues": 0,
+    "native_drc_unconnected_items_capped": 499,
+    "native_drc_scope": "--format json --all-track-errors --schematic-parity --severity-all --refill-zones; no save-board",
+    "native_drc_included_severities": [
+      "error",
+      "warning",
+      "exclusion"
+    ],
+    "independent_drc_report_sha256": "0d1abd7c8e9eab7697e257fa9930cfd039b49d80a8a9cc973eaa17850370ab85",
+    "native_routing_audit_sha256": "ca83fa6fed9e72e2d5e117677862d4b43a21bd0b5afa9ffe3c43e2f1bb9bba8f",
+    "persisted_eda_drc_report": "controller/checks/drc-placed.json",
+    "persisted_eda_drc_report_sha256": "efad1e15a527bb7e17b6fde7c2270fbf15de844fa3d6e1fc3249de48e6f1fdc7"
+  },
+  "current_assembly_counts": {
+    "physical_footprints": 364,
+    "fitted_smt_components": 277,
+    "all_fitted_smt_components_on_top": true,
+    "fitted_smt_bottom_refs": [],
+    "bare_raw_G1_probe_refs": [
+      "TP100",
+      "TP101",
+      "TP102",
+      "TP103",
+      "TP104",
+      "TP105",
+      "TP106",
+      "TP107",
+      "TP108",
+      "TP109",
+      "TP110",
+      "TP111",
+      "TP112",
+      "TP113",
+      "TP114",
+      "TP115",
+      "TP116",
+      "TP117",
+      "TP118",
+      "TP119",
+      "TP120",
+      "TP121",
+      "TP122",
+      "TP123",
+      "TP124",
+      "TP125",
+      "TP126",
+      "TP127",
+      "TP128",
+      "TP129",
+      "TP130",
+      "TP131",
+      "TP132",
+      "TP133",
+      "TP134",
+      "TP135",
+      "TP136",
+      "TP137",
+      "TP138"
+    ],
+    "fabricated_copper_bottom_refs": [
+      "TP100",
+      "TP101",
+      "TP102",
+      "TP103",
+      "TP104",
+      "TP105",
+      "TP106",
+      "TP107",
+      "TP108",
+      "TP109",
+      "TP110",
+      "TP111",
+      "TP112",
+      "TP113",
+      "TP114",
+      "TP115",
+      "TP116",
+      "TP117",
+      "TP118",
+      "TP119",
+      "TP120",
+      "TP121",
+      "TP122",
+      "TP123",
+      "TP124",
+      "TP125",
+      "TP126",
+      "TP127",
+      "TP128",
+      "TP129",
+      "TP130",
+      "TP131",
+      "TP132",
+      "TP133",
+      "TP134",
+      "TP135",
+      "TP136",
+      "TP137",
+      "TP138"
+    ]
+  },
+  "current_in1_reference_plane_and_bottom_probes": {
+    "board_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+    "zones": [
+      {
+        "name": "In1 reference plane \u2014 no routed traces",
+        "rule": true,
+        "layer": "In1.Cu",
+        "outer_outline_count": 1,
+        "bios_hole_count": 1,
+        "outer_vertices": 8,
+        "hole_vertices": 4,
+        "tracks_disabled": true,
+        "filled_polygons": 0
+      },
+      {
+        "name": "GND reference plane",
+        "rule": false,
+        "layer": "In1.Cu",
+        "outer_outline_count": 1,
+        "bios_hole_count": 1,
+        "outer_vertices": 8,
+        "hole_vertices": 4,
+        "tracks_disabled": true,
+        "filled_polygons": 1
+      }
+    ],
+    "in1_signal_tracks": 0,
+    "probe_details": [
+      {
+        "ref": "TP118",
+        "net": "ATA_DA2",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP103",
+        "net": "ATA_DD3",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP138",
+        "net": "GND",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP136",
+        "net": "GND",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP113",
+        "net": "ATA_DD13",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP125",
+        "net": "ATA_DMARQ",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP108",
+        "net": "ATA_DD8",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP117",
+        "net": "ATA_DA1",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP106",
+        "net": "ATA_DD6",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP109",
+        "net": "ATA_DD9",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP114",
+        "net": "ATA_DD14",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP104",
+        "net": "ATA_DD4",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP115",
+        "net": "ATA_DD15",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP135",
+        "net": "REQ_IORDY_LOW",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP101",
+        "net": "ATA_DD1",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP112",
+        "net": "ATA_DD12",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP120",
+        "net": "ATA_CS1n",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP130",
+        "net": "DMARQ_OEn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP116",
+        "net": "ATA_DA0",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP132",
+        "net": "REQ_DATA_OEn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP100",
+        "net": "ATA_DD0",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP110",
+        "net": "ATA_DD10",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP102",
+        "net": "ATA_DD2",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP131",
+        "net": "IORDY_RELEASE",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP128",
+        "net": "DATA_DIR",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP121",
+        "net": "ATA_DIORn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP127",
+        "net": "ATA_INTRQ",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP105",
+        "net": "ATA_DD5",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP126",
+        "net": "ATA_IORDY",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP122",
+        "net": "ATA_DIOWn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP124",
+        "net": "ATA_DMACKn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP129",
+        "net": "INTRQ_OEn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP119",
+        "net": "ATA_CS0n",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP134",
+        "net": "REQ_DMARQ_OEn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP107",
+        "net": "ATA_DD7",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP133",
+        "net": "REQ_INTRQ_OEn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP123",
+        "net": "ATA_RESETn",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP111",
+        "net": "ATA_DD11",
+        "bare_b_cu_no_paste": true
+      },
+      {
+        "ref": "TP137",
+        "net": "GND",
+        "bare_b_cu_no_paste": true
+      }
+    ],
+    "bottom_non_probe_fitted_components": [],
+    "visual_review": {
+      "checked": true,
+      "finding": "Continuous filled reference around BIOS hole and CN503 notch; no diagonal void. This is plane contour/reference evidence, not a return-current or high-speed qualification.",
+      "native_svg": "controller/checks/carrier-ground-reference.svg",
+      "native_svg_sha256": "74e2a39a206b84d94dbda9bea206cde0f19cf542ce3de8a304a9b73b1ff4c432",
+      "rendered_png_sha256": "0a9fffee6e9ee5f28a968c849293f14e08018d78856fb8ae8886ff06094aed86"
+    }
+  },
+  "current_critical_net_copper_lengths": {
+    "MCU_VREG_LX": {
+      "length_mm": 4.49378,
+      "segments": 5,
+      "vias": 0,
+      "layers": [
+        "F.Cu"
+      ]
+    },
+    "SW_LOGIC": {
+      "length_mm": 2.55076,
+      "segments": 2,
+      "vias": 0,
+      "layers": [
+        "F.Cu"
+      ]
+    },
+    "SW_STORAGE": {
+      "length_mm": 2.05619,
+      "segments": 2,
+      "vias": 0,
+      "layers": [
+        "F.Cu"
+      ]
+    },
+    "MCU_XIN": {
+      "length_mm": 6.78434,
+      "segments": 6,
+      "vias": 0,
+      "layers": [
+        "F.Cu"
+      ]
+    },
+    "MCU_XOUT": {
+      "length_mm": 1.29981,
+      "segments": 2,
+      "vias": 0,
+      "layers": [
+        "F.Cu"
+      ]
+    },
+    "MCU_XTAL_OUT": {
+      "length_mm": 6.38443,
+      "segments": 4,
+      "vias": 0,
+      "layers": [
+        "F.Cu"
+      ]
+    }
+  },
+  "current_critical_net_length_interpretation": "Sum of nonvia native copper lengths for each named net, including capacitor load branches where present; not always source-to-load path length. No electrical qualification.",
+  "whole_board_decoupling_qualified": false,
+  "fabrication_qualified": false,
+  "original_physical_fpc_mating_orientation": {
+    "comparison_frame": "Both tips point north, B.Cu mating gold faces down; selected bottom-contact Hirose unrotated pin1 is left/pin20 right. Socket rotation preserves handedness.",
+    "A_pin1_side": "left",
+    "B_pin1_side": "right",
+    "critical_finding": "B tail physical numbering is mirrored relative to native J51 connector numbering; current mapping reverses all 20 conductors. B1 3V3 would connect J51 GND and B21 GND J51 3V3.",
+    "mapping": [
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 1,
+        "actual_flex_pad": 1,
+        "flex_net_at_mated_position": "/CN503_A1_CONSOLE_3V3",
+        "current_carrier_signal": "CONSOLE_3V3",
+        "current_carrier_cn503_contact": "A1",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 2,
+        "actual_flex_pad": 2,
+        "flex_net_at_mated_position": "/CN503_A2_ATA_RESETn",
+        "current_carrier_signal": "ATA_RESETn",
+        "current_carrier_cn503_contact": "A2",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 3,
+        "actual_flex_pad": 3,
+        "flex_net_at_mated_position": "/CN503_A3_CONSOLE_5V",
+        "current_carrier_signal": "CONSOLE_5V",
+        "current_carrier_cn503_contact": "A3",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 4,
+        "actual_flex_pad": 4,
+        "flex_net_at_mated_position": "/CN503_A4_ATA_DD7",
+        "current_carrier_signal": "ATA_DD7",
+        "current_carrier_cn503_contact": "A4",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 5,
+        "actual_flex_pad": 5,
+        "flex_net_at_mated_position": "/CN503_A5_ATA_DD8",
+        "current_carrier_signal": "ATA_DD8",
+        "current_carrier_cn503_contact": "A5",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 6,
+        "actual_flex_pad": 6,
+        "flex_net_at_mated_position": "/CN503_A6_ATA_DD5",
+        "current_carrier_signal": "ATA_DD5",
+        "current_carrier_cn503_contact": "A6",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 7,
+        "actual_flex_pad": 7,
+        "flex_net_at_mated_position": "/CN503_A7_ATA_DD10",
+        "current_carrier_signal": "ATA_DD10",
+        "current_carrier_cn503_contact": "A7",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 8,
+        "actual_flex_pad": 8,
+        "flex_net_at_mated_position": "/CN503_A8_GND",
+        "current_carrier_signal": "GND",
+        "current_carrier_cn503_contact": "A8",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 9,
+        "actual_flex_pad": 9,
+        "flex_net_at_mated_position": "/CN503_A9_ATA_DD3",
+        "current_carrier_signal": "ATA_DD3",
+        "current_carrier_cn503_contact": "A9",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 10,
+        "actual_flex_pad": 10,
+        "flex_net_at_mated_position": "/CN503_A10_ATA_DD12",
+        "current_carrier_signal": "ATA_DD12",
+        "current_carrier_cn503_contact": "A10",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 11,
+        "actual_flex_pad": 11,
+        "flex_net_at_mated_position": "/CN503_A11_ATA_DD1",
+        "current_carrier_signal": "ATA_DD1",
+        "current_carrier_cn503_contact": "A11",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 12,
+        "actual_flex_pad": 12,
+        "flex_net_at_mated_position": "/CN503_A12_ATA_DD14",
+        "current_carrier_signal": "ATA_DD14",
+        "current_carrier_cn503_contact": "A12",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 13,
+        "actual_flex_pad": 13,
+        "flex_net_at_mated_position": "/CN503_A13_GND",
+        "current_carrier_signal": "GND",
+        "current_carrier_cn503_contact": "A13",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 14,
+        "actual_flex_pad": 14,
+        "flex_net_at_mated_position": "/CN503_A14_ATA_DMARQ",
+        "current_carrier_signal": "ATA_DMARQ",
+        "current_carrier_cn503_contact": "A14",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 15,
+        "actual_flex_pad": 15,
+        "flex_net_at_mated_position": "/CN503_A15_ATA_DIORn",
+        "current_carrier_signal": "ATA_DIORn",
+        "current_carrier_cn503_contact": "A15",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 16,
+        "actual_flex_pad": 16,
+        "flex_net_at_mated_position": "/CN503_A16_ATA_DMACKn",
+        "current_carrier_signal": "ATA_DMACKn",
+        "current_carrier_cn503_contact": "A16",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 17,
+        "actual_flex_pad": 17,
+        "flex_net_at_mated_position": "/CN503_A18_GND",
+        "current_carrier_signal": "GND",
+        "current_carrier_cn503_contact": "A18",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 18,
+        "actual_flex_pad": 18,
+        "flex_net_at_mated_position": "/CN503_A19_ATA_DA0",
+        "current_carrier_signal": "ATA_DA0",
+        "current_carrier_cn503_contact": "A19",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 19,
+        "actual_flex_pad": 19,
+        "flex_net_at_mated_position": "/CN503_A20_ATA_CS0n",
+        "current_carrier_signal": "ATA_CS0n",
+        "current_carrier_cn503_contact": "A20",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "A",
+        "carrier_ref": "J50",
+        "physical_carrier_pin": 20,
+        "actual_flex_pad": 20,
+        "flex_net_at_mated_position": "/CN503_A21_GND",
+        "current_carrier_signal": "GND",
+        "current_carrier_cn503_contact": "A21",
+        "matches_tail_pin_number": true
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 1,
+        "actual_flex_pad": 20,
+        "flex_net_at_mated_position": "/CN503_B21_GND",
+        "current_carrier_signal": "CONSOLE_3V3",
+        "current_carrier_cn503_contact": "B1",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 2,
+        "actual_flex_pad": 19,
+        "flex_net_at_mated_position": "/CN503_B20_ATA_CS1n",
+        "current_carrier_signal": "CONSOLE_5V",
+        "current_carrier_cn503_contact": "B3",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 3,
+        "actual_flex_pad": 18,
+        "flex_net_at_mated_position": "/CN503_B19_ATA_DA2",
+        "current_carrier_signal": "ATA_DD6",
+        "current_carrier_cn503_contact": "B4",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 4,
+        "actual_flex_pad": 17,
+        "flex_net_at_mated_position": "/CN503_B18_GND",
+        "current_carrier_signal": "ATA_DD9",
+        "current_carrier_cn503_contact": "B5",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 5,
+        "actual_flex_pad": 16,
+        "flex_net_at_mated_position": "/CN503_B17_ATA_DA1",
+        "current_carrier_signal": "ATA_DD4",
+        "current_carrier_cn503_contact": "B6",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 6,
+        "actual_flex_pad": 15,
+        "flex_net_at_mated_position": "/CN503_B16_ATA_INTRQ",
+        "current_carrier_signal": "ATA_DD11",
+        "current_carrier_cn503_contact": "B7",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 7,
+        "actual_flex_pad": 14,
+        "flex_net_at_mated_position": "/CN503_B15_ATA_IORDY",
+        "current_carrier_signal": "GND",
+        "current_carrier_cn503_contact": "B8",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 8,
+        "actual_flex_pad": 13,
+        "flex_net_at_mated_position": "/CN503_B14_ATA_DIOWn",
+        "current_carrier_signal": "ATA_DD2",
+        "current_carrier_cn503_contact": "B9",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 9,
+        "actual_flex_pad": 12,
+        "flex_net_at_mated_position": "/CN503_B13_GND",
+        "current_carrier_signal": "ATA_DD13",
+        "current_carrier_cn503_contact": "B10",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 10,
+        "actual_flex_pad": 11,
+        "flex_net_at_mated_position": "/CN503_B12_ATA_DD15",
+        "current_carrier_signal": "ATA_DD0",
+        "current_carrier_cn503_contact": "B11",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 11,
+        "actual_flex_pad": 10,
+        "flex_net_at_mated_position": "/CN503_B11_ATA_DD0",
+        "current_carrier_signal": "ATA_DD15",
+        "current_carrier_cn503_contact": "B12",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 12,
+        "actual_flex_pad": 9,
+        "flex_net_at_mated_position": "/CN503_B10_ATA_DD13",
+        "current_carrier_signal": "GND",
+        "current_carrier_cn503_contact": "B13",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 13,
+        "actual_flex_pad": 8,
+        "flex_net_at_mated_position": "/CN503_B9_ATA_DD2",
+        "current_carrier_signal": "ATA_DIOWn",
+        "current_carrier_cn503_contact": "B14",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 14,
+        "actual_flex_pad": 7,
+        "flex_net_at_mated_position": "/CN503_B8_GND",
+        "current_carrier_signal": "ATA_IORDY",
+        "current_carrier_cn503_contact": "B15",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 15,
+        "actual_flex_pad": 6,
+        "flex_net_at_mated_position": "/CN503_B7_ATA_DD11",
+        "current_carrier_signal": "ATA_INTRQ",
+        "current_carrier_cn503_contact": "B16",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 16,
+        "actual_flex_pad": 5,
+        "flex_net_at_mated_position": "/CN503_B6_ATA_DD4",
+        "current_carrier_signal": "ATA_DA1",
+        "current_carrier_cn503_contact": "B17",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 17,
+        "actual_flex_pad": 4,
+        "flex_net_at_mated_position": "/CN503_B5_ATA_DD9",
+        "current_carrier_signal": "GND",
+        "current_carrier_cn503_contact": "B18",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 18,
+        "actual_flex_pad": 3,
+        "flex_net_at_mated_position": "/CN503_B4_ATA_DD6",
+        "current_carrier_signal": "ATA_DA2",
+        "current_carrier_cn503_contact": "B19",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 19,
+        "actual_flex_pad": 2,
+        "flex_net_at_mated_position": "/CN503_B3_CONSOLE_5V",
+        "current_carrier_signal": "ATA_CS1n",
+        "current_carrier_cn503_contact": "B20",
+        "matches_tail_pin_number": false
+      },
+      {
+        "flex_row": "B",
+        "carrier_ref": "J51",
+        "physical_carrier_pin": 20,
+        "actual_flex_pad": 1,
+        "flex_net_at_mated_position": "/CN503_B1_CONSOLE_3V3",
+        "current_carrier_signal": "GND",
+        "current_carrier_cn503_contact": "B21",
+        "matches_tail_pin_number": false
+      }
+    ],
+    "status": "blocking until B tail pad numbers and corresponding schematic/interface/native carrier mapping are reversed together"
+  },
+  "historical_corrected_in1_reference_plane_check": {
+    "pcb_path": "/workspace/scratch/671921c7e6ab/router-evaluation/carrier-ground-evaluation.kicad_pcb",
+    "pcb_sha256": "6f8cea318f8430f3693c925654ce5015d8a1bd48703d1dc990e8adfee45e548e",
+    "png_sha256": "112f82d0995ffa45ed1ef2cbc999f4725476f72272653ba5eecee70f8c94c387",
+    "native_zone_contours": {
+      "gnd_outline_count": 1,
+      "gnd_outer_vertices": 8,
+      "gnd_bios_hole_count": 1,
+      "gnd_bios_hole_vertices": 4,
+      "gnd_filled_polygon_count": 1,
+      "in1_no_track_rule_outline_count": 1,
+      "in1_no_track_rule_bios_hole_count": 1,
+      "in1_no_track_rule_tracks_disabled": true
+    },
+    "visual_checked": true,
+    "giant_diagonal_void_present": false,
+    "qualified_final_carrier": false
+  },
+  "historical_local_copper_candidate": {
+    "board_sha256": "af54d1f6f2cce41b825d44d843b020a1670ae740fdaef11b9dcf9dfb5c775c85",
+    "footprints": 325,
+    "segments": 185,
+    "vias": 66,
+    "native_geometry_violations": 0,
+    "reported_global_unconnected_items_capped": 499,
+    "native_drc_scope": "--severity-error --all-track-errors --refill-zones",
+    "fabrication_qualified": false,
+    "full_board_decoupling_qualified": false,
+    "remaining_local_bypass_measured_pairs": [
+      {
+        "cap": "C400",
+        "owner": "U40",
+        "pin": "37",
+        "current_positive_pad_straightline_mm": 22.994,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C401",
+        "owner": "U40",
+        "pin": "37",
+        "current_positive_pad_straightline_mm": 21.925,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C119",
+        "owner": "X10",
+        "pin": "4",
+        "current_positive_pad_straightline_mm": 26.741,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C212",
+        "owner": "U23",
+        "pin": "6",
+        "current_positive_pad_straightline_mm": 4.155,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C213",
+        "owner": "U24",
+        "pin": "6",
+        "current_positive_pad_straightline_mm": 5.945,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C214",
+        "owner": "U25",
+        "pin": "6",
+        "current_positive_pad_straightline_mm": 17.469,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C215",
+        "owner": "U26",
+        "pin": "6",
+        "current_positive_pad_straightline_mm": 26.529,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C216",
+        "owner": "U27",
+        "pin": "8",
+        "current_positive_pad_straightline_mm": 10.991,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C217",
+        "owner": "U28",
+        "pin": "8",
+        "current_positive_pad_straightline_mm": 24.23,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C218",
+        "owner": "U29",
+        "pin": "8",
+        "current_positive_pad_straightline_mm": 9.899,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C219",
+        "owner": "U30",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 23.95,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C220",
+        "owner": "U31",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 7.909,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C221",
+        "owner": "U32",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 30.601,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C222",
+        "owner": "U33",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 24.141,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C223",
+        "owner": "U34",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 24.282,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C229",
+        "owner": "U37",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 21.263,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C230",
+        "owner": "U72",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 17.151,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C231",
+        "owner": "U38",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 26.43,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C232",
+        "owner": "U73",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 27.296,
+        "net": "+3V3_LOGIC",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C233",
+        "owner": "U39",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 19.46,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C234",
+        "owner": "U70",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 26.724,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C402",
+        "owner": "U41",
+        "pin": "8",
+        "current_positive_pad_straightline_mm": 18.361,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C403",
+        "owner": "U42",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 31.708,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C404",
+        "owner": "U43",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 30.502,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C405",
+        "owner": "U44",
+        "pin": "5",
+        "current_positive_pad_straightline_mm": 6.047,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C406",
+        "owner": "U45",
+        "pin": "3",
+        "current_positive_pad_straightline_mm": 19.938,
+        "net": "CONSOLE_3V3",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C235",
+        "owner": "U71",
+        "pin": "1",
+        "current_positive_pad_straightline_mm": 5.701,
+        "net": "PRIMARY_5V",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C236",
+        "owner": "U71",
+        "pin": "6",
+        "current_positive_pad_straightline_mm": 15.086,
+        "net": "+5V_C5",
+        "still_open_local_layout_review": true
+      },
+      {
+        "cap": "C2036",
+        "owner": "U71",
+        "pin": "6",
+        "current_positive_pad_straightline_mm": 54.172,
+        "net": "+5V_C5",
+        "still_open_local_layout_review": true
+      }
+    ],
+    "status": "Historical local-copper geometry candidate; mechanical spring placement was withdrawn before publication and restored in the current main snapshot.",
+    "superseded_by_current_main_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8"
+  },
+  "current_secondary_local_bypass_measured_pairs": [
+    {
+      "cap": "C400",
+      "owner": "U40",
+      "pin": "37",
+      "current_positive_pad_straightline_mm": 22.994,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C401",
+      "owner": "U40",
+      "pin": "37",
+      "current_positive_pad_straightline_mm": 21.925,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C119",
+      "owner": "X10",
+      "pin": "4",
+      "current_positive_pad_straightline_mm": 26.741,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C212",
+      "owner": "U23",
+      "pin": "6",
+      "current_positive_pad_straightline_mm": 4.155,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C213",
+      "owner": "U24",
+      "pin": "6",
+      "current_positive_pad_straightline_mm": 5.945,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C214",
+      "owner": "U25",
+      "pin": "6",
+      "current_positive_pad_straightline_mm": 17.469,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C215",
+      "owner": "U26",
+      "pin": "6",
+      "current_positive_pad_straightline_mm": 26.529,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C216",
+      "owner": "U27",
+      "pin": "8",
+      "current_positive_pad_straightline_mm": 10.991,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C217",
+      "owner": "U28",
+      "pin": "8",
+      "current_positive_pad_straightline_mm": 24.23,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C218",
+      "owner": "U29",
+      "pin": "8",
+      "current_positive_pad_straightline_mm": 9.899,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C219",
+      "owner": "U30",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 23.95,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C220",
+      "owner": "U31",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 7.909,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C221",
+      "owner": "U32",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 30.601,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C222",
+      "owner": "U33",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 24.141,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C223",
+      "owner": "U34",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 24.282,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C229",
+      "owner": "U37",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 21.263,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C230",
+      "owner": "U72",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 17.151,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C231",
+      "owner": "U38",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 26.43,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C232",
+      "owner": "U73",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 27.296,
+      "net": "+3V3_LOGIC",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C233",
+      "owner": "U39",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 19.46,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C234",
+      "owner": "U70",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 26.724,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C402",
+      "owner": "U41",
+      "pin": "8",
+      "current_positive_pad_straightline_mm": 18.361,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C403",
+      "owner": "U42",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 31.708,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C404",
+      "owner": "U43",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 30.502,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C405",
+      "owner": "U44",
+      "pin": "5",
+      "current_positive_pad_straightline_mm": 6.047,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C406",
+      "owner": "U45",
+      "pin": "3",
+      "current_positive_pad_straightline_mm": 19.938,
+      "net": "CONSOLE_3V3",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C235",
+      "owner": "U71",
+      "pin": "1",
+      "current_positive_pad_straightline_mm": 5.701,
+      "net": "PRIMARY_5V",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C236",
+      "owner": "U71",
+      "pin": "6",
+      "current_positive_pad_straightline_mm": 15.086,
+      "net": "+5V_C5",
+      "still_open_local_layout_review": true
+    },
+    {
+      "cap": "C2036",
+      "owner": "U71",
+      "pin": "6",
+      "current_positive_pad_straightline_mm": 54.172,
+      "net": "+5V_C5",
+      "still_open_local_layout_review": true
+    }
+  ]
+}

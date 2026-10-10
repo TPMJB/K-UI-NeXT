@@ -1,0 +1,9 @@
+(footprint "RawProbe_Pad_D1.0mm_NoPaste"
+ (version 20260206) (generator "pcbnew") (layer "F.Cu")
+ (descr "Project-defined 1mm bare copper probe; no paste or fitted component")
+ (property "Reference" "REF**" (at 0 0) (layer "F.Fab") (hide yes) (effects (font (size 0.5 0.5) (thickness 0.1))))
+ (property "Value" "RawProbe_Pad_D1.0mm_NoPaste" (at 0 0) (layer "F.Fab") (hide yes) (effects (font (size 0.5 0.5) (thickness 0.1))))
+ (attr exclude_from_pos_files exclude_from_bom allow_missing_courtyard)
+ (pad "1" smd circle (at 0 0) (size 1 1) (layers "F.Cu" "F.Mask"))
+ (embedded_fonts no)
+)

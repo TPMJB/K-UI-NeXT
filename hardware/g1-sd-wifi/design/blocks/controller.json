@@ -1,0 +1,3938 @@
+{
+  "block": "controller",
+  "revision": "implementation-2026-10-10",
+  "components": [
+    {
+      "ref": "U201",
+      "value": "RP2350B",
+      "mpn": "RP2350B",
+      "footprint": "Package_DFN_QFN:QFN-80-1EP_10x10mm_P0.4mm_EP3.4x3.4mm_ThermalVias",
+      "pins": {
+        "1": {
+          "name": "GPIO4",
+          "net": "LINK_D4",
+          "type": "bidirectional"
+        },
+        "2": {
+          "name": "GPIO5",
+          "net": "LINK_D5",
+          "type": "bidirectional"
+        },
+        "3": {
+          "name": "GPIO6",
+          "net": "LINK_D6",
+          "type": "bidirectional"
+        },
+        "4": {
+          "name": "GPIO7",
+          "net": "LINK_D7",
+          "type": "bidirectional"
+        },
+        "5": {
+          "name": "IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "6": {
+          "name": "GPIO8",
+          "net": "LINK_WRn",
+          "type": "bidirectional"
+        },
+        "7": {
+          "name": "GPIO9",
+          "net": "LINK_RDn",
+          "type": "bidirectional"
+        },
+        "8": {
+          "name": "GPIO10",
+          "net": "LINK_A0",
+          "type": "bidirectional"
+        },
+        "9": {
+          "name": "GPIO11",
+          "net": "LINK_A1",
+          "type": "bidirectional"
+        },
+        "10": {
+          "name": "DVDD",
+          "net": "+1V1_MCU",
+          "type": "power_in"
+        },
+        "11": {
+          "name": "GPIO12",
+          "net": "LINK_IRQ",
+          "type": "bidirectional"
+        },
+        "12": {
+          "name": "GPIO13",
+          "net": "LINK_READY",
+          "type": "bidirectional"
+        },
+        "13": {
+          "name": "GPIO14",
+          "net": "FPGA_RESETn",
+          "type": "bidirectional"
+        },
+        "14": {
+          "name": "GPIO15",
+          "net": "BRIDGE_ARM",
+          "type": "bidirectional"
+        },
+        "15": {
+          "name": "IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "16": {
+          "name": "GPIO16",
+          "net": "C5_UART_TX_MCU",
+          "type": "bidirectional"
+        },
+        "17": {
+          "name": "GPIO17",
+          "net": "C5_UART_RX_MCU",
+          "type": "bidirectional"
+        },
+        "18": {
+          "name": "GPIO18",
+          "net": "C5_EN_ASSERT",
+          "type": "bidirectional"
+        },
+        "19": {
+          "name": "GPIO19",
+          "net": "C5_BOOT_ASSERT",
+          "type": "bidirectional"
+        },
+        "20": {
+          "name": "GPIO20",
+          "net": "C5_IO_OEn",
+          "type": "bidirectional"
+        },
+        "21": {
+          "name": "GPIO21",
+          "net": null,
+          "type": "no_connect"
+        },
+        "22": {
+          "name": "GPIO22",
+          "net": null,
+          "type": "no_connect"
+        },
+        "23": {
+          "name": "GPIO23",
+          "net": "USB_VBUS_SENSE",
+          "type": "bidirectional"
+        },
+        "24": {
+          "name": "IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "25": {
+          "name": "GPIO24",
+          "net": "SD_DAT_DIR",
+          "type": "bidirectional"
+        },
+        "26": {
+          "name": "GPIO25",
+          "net": "SD_CMD_DIR",
+          "type": "bidirectional"
+        },
+        "27": {
+          "name": "GPIO26",
+          "net": "SD_IO_EN",
+          "type": "bidirectional"
+        },
+        "28": {
+          "name": "GPIO27",
+          "net": null,
+          "type": "no_connect"
+        },
+        "29": {
+          "name": "IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "30": {
+          "name": "XIN",
+          "net": "MCU_XIN",
+          "type": "input"
+        },
+        "31": {
+          "name": "XOUT",
+          "net": "MCU_XOUT",
+          "type": "output"
+        },
+        "32": {
+          "name": "DVDD",
+          "net": "+1V1_MCU",
+          "type": "power_in"
+        },
+        "33": {
+          "name": "SWCLK",
+          "net": "MCU_SWCLK",
+          "type": "input"
+        },
+        "34": {
+          "name": "SWDIO",
+          "net": "MCU_SWDIO",
+          "type": "bidirectional"
+        },
+        "35": {
+          "name": "RUN",
+          "net": "LOGIC_RESETn",
+          "type": "input"
+        },
+        "36": {
+          "name": "GPIO28",
+          "net": null,
+          "type": "no_connect"
+        },
+        "37": {
+          "name": "GPIO29",
+          "net": null,
+          "type": "no_connect"
+        },
+        "38": {
+          "name": "GPIO30",
+          "net": null,
+          "type": "no_connect"
+        },
+        "39": {
+          "name": "GPIO31",
+          "net": "PWR_FAILn",
+          "type": "bidirectional"
+        },
+        "40": {
+          "name": "GPIO32",
+          "net": "SD_CLK_MCU",
+          "type": "bidirectional"
+        },
+        "41": {
+          "name": "IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "42": {
+          "name": "GPIO33",
+          "net": "SD_CMD_MCU",
+          "type": "bidirectional"
+        },
+        "43": {
+          "name": "GPIO34",
+          "net": "SD_DAT0_MCU",
+          "type": "bidirectional"
+        },
+        "44": {
+          "name": "GPIO35",
+          "net": "SD_DAT1_MCU",
+          "type": "bidirectional"
+        },
+        "45": {
+          "name": "GPIO36",
+          "net": "SD_DAT2_MCU",
+          "type": "bidirectional"
+        },
+        "46": {
+          "name": "GPIO37",
+          "net": "SD_DAT3_MCU",
+          "type": "bidirectional"
+        },
+        "47": {
+          "name": "GPIO38",
+          "net": "SD_DETECTn",
+          "type": "bidirectional"
+        },
+        "48": {
+          "name": "GPIO39",
+          "net": null,
+          "type": "no_connect"
+        },
+        "49": {
+          "name": "GPIO40_ADC0",
+          "net": "C5_MISO_MCU",
+          "type": "bidirectional"
+        },
+        "50": {
+          "name": "IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "51": {
+          "name": "DVDD",
+          "net": "+1V1_MCU",
+          "type": "power_in"
+        },
+        "52": {
+          "name": "GPIO41_ADC1",
+          "net": "C5_CSn_MCU",
+          "type": "bidirectional"
+        },
+        "53": {
+          "name": "GPIO42_ADC2",
+          "net": "C5_SCLK_MCU",
+          "type": "bidirectional"
+        },
+        "54": {
+          "name": "GPIO43_ADC3",
+          "net": "C5_MOSI_MCU",
+          "type": "bidirectional"
+        },
+        "55": {
+          "name": "GPIO44_ADC4",
+          "net": "C5_IRQ_MCU",
+          "type": "bidirectional"
+        },
+        "56": {
+          "name": "GPIO45_ADC5",
+          "net": "C5_READY_MCU",
+          "type": "bidirectional"
+        },
+        "57": {
+          "name": "GPIO46_ADC6",
+          "net": "C5_PWR_EN",
+          "type": "bidirectional"
+        },
+        "58": {
+          "name": "GPIO47_ADC7",
+          "net": "PSRAM_CSn_MCU",
+          "type": "bidirectional"
+        },
+        "59": {
+          "name": "ADC_AVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "60": {
+          "name": "IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "61": {
+          "name": "VREG_AVDD",
+          "net": "MCU_VREG_AVDD",
+          "type": "power_in"
+        },
+        "62": {
+          "name": "VREG_PGND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "63": {
+          "name": "VREG_LX",
+          "net": "MCU_VREG_LX",
+          "type": "power_out"
+        },
+        "64": {
+          "name": "VREG_VIN",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "65": {
+          "name": "VREG_FB",
+          "net": "+1V1_MCU",
+          "type": "passive"
+        },
+        "66": {
+          "name": "USB_DM",
+          "net": "MCU_USB_DM",
+          "type": "bidirectional"
+        },
+        "67": {
+          "name": "USB_DP",
+          "net": "MCU_USB_DP",
+          "type": "bidirectional"
+        },
+        "68": {
+          "name": "USB_OTP_VDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "69": {
+          "name": "QSPI_IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "70": {
+          "name": "QSPI_SD3",
+          "net": "QSPI_D3",
+          "type": "bidirectional"
+        },
+        "71": {
+          "name": "QSPI_SCLK",
+          "net": "QSPI_SCLK_MCU",
+          "type": "output"
+        },
+        "72": {
+          "name": "QSPI_SD0",
+          "net": "QSPI_D0",
+          "type": "bidirectional"
+        },
+        "73": {
+          "name": "QSPI_SD2",
+          "net": "QSPI_D2",
+          "type": "bidirectional"
+        },
+        "74": {
+          "name": "QSPI_SD1",
+          "net": "QSPI_D1",
+          "type": "bidirectional"
+        },
+        "75": {
+          "name": "QSPI_~{SS}",
+          "net": "QSPI_CSn_MCU",
+          "type": "bidirectional"
+        },
+        "76": {
+          "name": "IOVDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "77": {
+          "name": "GPIO0",
+          "net": "LINK_D0",
+          "type": "bidirectional"
+        },
+        "78": {
+          "name": "GPIO1",
+          "net": "LINK_D1",
+          "type": "bidirectional"
+        },
+        "79": {
+          "name": "GPIO2",
+          "net": "LINK_D2",
+          "type": "bidirectional"
+        },
+        "80": {
+          "name": "GPIO3",
+          "net": "LINK_D3",
+          "type": "bidirectional"
+        },
+        "81": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf",
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Main MCU. GPIO0\u201315 asynchronous 8-bit FPGA link; native 4-bit SD; C5 SPI1/UART0; GPIO47 QMI CS1. All 81 physical package terminals included.",
+      "populate": true
+    },
+    {
+      "ref": "L201",
+      "value": "3.3uH",
+      "mpn": "AOTA-B201610S3R3-101-T",
+      "footprint": "KUI_Footprints:AOTA-B201610S3R3-101-T",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "MCU_VREG_LX",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "+1V1_MCU",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf",
+        "https://abracon.com/datasheets/AOTA-B201610S3R3-101-T.pdf"
+      ],
+      "description": "RP2350 native buck inductor. Preserve Raspberry Pi R4-S1 placement and marked winding orientation; do not substitute an unmarked inductor.",
+      "populate": true
+    },
+    {
+      "ref": "C2001",
+      "value": "4.7u",
+      "mpn": "GRM155R60J475ME47D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Native buck input bypass directly at U201 pin64; copied R4-S1 C6.",
+      "populate": true
+    },
+    {
+      "ref": "C2002",
+      "value": "4.7u",
+      "mpn": "GRM155R60J475ME47D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+1V1_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Native buck output capacitor at inductor/U201 feedback; copied R4-S1 C7.",
+      "populate": true
+    },
+    {
+      "ref": "C2003",
+      "value": "4.7u",
+      "mpn": "GRM155R60J475ME47D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+1V1_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Additional DVDD bulk decoupling; copied R4-S1 C9.",
+      "populate": true
+    },
+    {
+      "ref": "R2001",
+      "value": "33",
+      "mpn": "RC0402FR-0733RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "MCU_VREG_AVDD",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Native regulator analog supply filter, copied R4-S1 R3.",
+      "populate": true
+    },
+    {
+      "ref": "C2004",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "MCU_VREG_AVDD",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "VREG_AVDD pin61 bypass after 33-ohm filter.",
+      "populate": true
+    },
+    {
+      "ref": "C2005",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin5 IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2006",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+1V1_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin10 DVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2007",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin15 IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2008",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin24 IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2009",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin29 IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2010",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+1V1_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin32 DVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2011",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin41 IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2012",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin50 IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2013",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+1V1_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin51 DVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2014",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin59 ADC_AVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2015",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin60 IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2016",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin68 USB_OTP_VDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2017",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin69 QSPI_IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2018",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U201 pin76 IOVDD local bypass; placement reference is Raspberry Pi minimal PCB.",
+      "populate": true
+    },
+    {
+      "ref": "C2019",
+      "value": "10u",
+      "mpn": "GRM21BR61C106KE15L",
+      "footprint": "Capacitor_SMD:C_0805_2012Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Controller local bulk bypass.",
+      "populate": true
+    },
+    {
+      "ref": "X201",
+      "value": "12MHz",
+      "mpn": "ABM8-272-T3",
+      "footprint": "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm",
+      "pins": {
+        "1": {
+          "name": "XTAL1",
+          "net": "MCU_XIN",
+          "type": "passive"
+        },
+        "2": {
+          "name": "GND",
+          "net": "GND",
+          "type": "passive"
+        },
+        "3": {
+          "name": "XTAL2",
+          "net": "MCU_XTAL_OUT",
+          "type": "passive"
+        },
+        "4": {
+          "name": "GND",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Official RP crystal recommendation: 12MHz, CL10pF; both case pins grounded.",
+      "populate": true
+    },
+    {
+      "ref": "R2002",
+      "value": "1k",
+      "mpn": "RC0402FR-071KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "MCU_XOUT",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "MCU_XTAL_OUT",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Crystal damping resistor, official 3.3V reference.",
+      "populate": true
+    },
+    {
+      "ref": "C2020",
+      "value": "15p",
+      "mpn": "GRM1555C1H150JA01D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "MCU_XIN",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Crystal input load capacitor C0G.",
+      "populate": true
+    },
+    {
+      "ref": "C2021",
+      "value": "15p",
+      "mpn": "GRM1555C1H150JA01D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "MCU_XTAL_OUT",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Crystal output load capacitor C0G.",
+      "populate": true
+    },
+    {
+      "ref": "R2003",
+      "value": "0",
+      "mpn": "RC0402JR-070RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "QSPI_SCLK_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "QSPI_SCLK",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "QSPI clock source termination/tuning footprint; populate 0ohm initially.",
+      "populate": true
+    },
+    {
+      "ref": "R2004",
+      "value": "0",
+      "mpn": "RC0402JR-070RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "QSPI_CSn_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "FLASH_CSn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Boot flash chip select link; pull-up and BOOTSEL resistor close to flash.",
+      "populate": true
+    },
+    {
+      "ref": "R2005",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "FLASH_CSn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Boot flash chip-select pull-up.",
+      "populate": true
+    },
+    {
+      "ref": "R2006",
+      "value": "1k",
+      "mpn": "RC0402FR-071KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "QSPI_CSn_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "MCU_BOOTSEL_PAD",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "BOOTSEL ground request through 1k, prevents output contention after boot.",
+      "populate": true
+    },
+    {
+      "ref": "R2007",
+      "value": "0",
+      "mpn": "RC0402JR-070RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "PSRAM_CSn_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "PSRAM_CSn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "GPIO47 QMI CS1 link.",
+      "populate": true
+    },
+    {
+      "ref": "R2008",
+      "value": "4.7k",
+      "mpn": "RC0402FR-074K7L",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "PSRAM_CSn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "PSRAM CS high at reset despite RP GPIO default pull-down; stronger than 10k for APS high threshold.",
+      "populate": true
+    },
+    {
+      "ref": "U202",
+      "value": "16MiB boot NOR",
+      "mpn": "W25Q128JVSIQ",
+      "footprint": "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm",
+      "pins": {
+        "1": {
+          "name": "CSn",
+          "net": "FLASH_CSn",
+          "type": "input"
+        },
+        "2": {
+          "name": "DO/IO1",
+          "net": "QSPI_D1",
+          "type": "bidirectional"
+        },
+        "3": {
+          "name": "WPn/IO2",
+          "net": "QSPI_D2",
+          "type": "bidirectional"
+        },
+        "4": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "5": {
+          "name": "DI/IO0",
+          "net": "QSPI_D0",
+          "type": "bidirectional"
+        },
+        "6": {
+          "name": "CLK",
+          "net": "QSPI_SCLK",
+          "type": "input"
+        },
+        "7": {
+          "name": "HOLDn/IO3",
+          "net": "QSPI_D3",
+          "type": "bidirectional"
+        },
+        "8": {
+          "name": "VCC",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf",
+        "https://www.winbond.com/resource-files/w25q128jv%20revf%2003272018%20plus.pdf"
+      ],
+      "description": "Official minimal-reference boot flash, SOIC-8 208mil SI package. Firmware image and configuration; not raw-SD cache.",
+      "populate": true
+    },
+    {
+      "ref": "C2022",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Boot flash pin8 local bypass.",
+      "populate": true
+    },
+    {
+      "ref": "U203",
+      "value": "8MiB QSPI PSRAM",
+      "mpn": "APS6404L-3SQR-ZR",
+      "footprint": "KUI_Footprints:APS6404L_USON8_3x2_P0.5",
+      "pins": {
+        "1": {
+          "name": "CEn",
+          "net": "PSRAM_CSn",
+          "type": "input"
+        },
+        "2": {
+          "name": "SO/SIO1",
+          "net": "QSPI_D1",
+          "type": "bidirectional"
+        },
+        "3": {
+          "name": "SIO2",
+          "net": "QSPI_D2",
+          "type": "bidirectional"
+        },
+        "4": {
+          "name": "VSS",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "5": {
+          "name": "SI/SIO0",
+          "net": "QSPI_D0",
+          "type": "bidirectional"
+        },
+        "6": {
+          "name": "SCLK",
+          "net": "QSPI_SCLK",
+          "type": "input"
+        },
+        "7": {
+          "name": "SIO3",
+          "net": "QSPI_D3",
+          "type": "bidirectional"
+        },
+        "8": {
+          "name": "VDD",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://www.apmemory.com/en/downloadFiles/032411212009597427"
+      ],
+      "description": "8MiB volatile cache, 3.3V USON-8 ZR; height max0.50mm. Separate GPIO47 CS1 shares QSPI clock/data with boot flash. No fictitious center electrical pin.",
+      "populate": true
+    },
+    {
+      "ref": "C2023",
+      "value": "1u",
+      "mpn": "GRM155R61A105KE15D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.apmemory.com/en/downloadFiles/032411212009597427"
+      ],
+      "description": "PSRAM VDD low-ESR bypass required by AP Memory section16.4.",
+      "populate": true
+    },
+    {
+      "ref": "C2024",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.apmemory.com/en/downloadFiles/032411212009597427"
+      ],
+      "description": "PSRAM additional high-frequency bypass.",
+      "populate": true
+    },
+    {
+      "ref": "R2009",
+      "value": "33",
+      "mpn": "RC0402FR-0733RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_CLK_ISO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_CLK",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD CLK series damping/tuning footprint; validate clock edges on installed board.",
+      "populate": true
+    },
+    {
+      "ref": "R2010",
+      "value": "33",
+      "mpn": "RC0402FR-0733RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_CMD_ISO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_CMD",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD CMD series damping/tuning footprint; validate clock edges on installed board.",
+      "populate": true
+    },
+    {
+      "ref": "R2011",
+      "value": "47k",
+      "mpn": "RC0402FR-0747KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_CMD",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Native SD CMD pull-up on card-side storage rail.",
+      "populate": true
+    },
+    {
+      "ref": "R2012",
+      "value": "33",
+      "mpn": "RC0402FR-0733RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_DAT0_ISO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DAT0",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD DAT0 series damping/tuning footprint; validate clock edges on installed board.",
+      "populate": true
+    },
+    {
+      "ref": "R2013",
+      "value": "47k",
+      "mpn": "RC0402FR-0747KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DAT0",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Native SD DAT0 pull-up on card-side storage rail.",
+      "populate": true
+    },
+    {
+      "ref": "R2014",
+      "value": "33",
+      "mpn": "RC0402FR-0733RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_DAT1_ISO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DAT1",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD DAT1 series damping/tuning footprint; validate clock edges on installed board.",
+      "populate": true
+    },
+    {
+      "ref": "R2015",
+      "value": "47k",
+      "mpn": "RC0402FR-0747KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DAT1",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Native SD DAT1 pull-up on card-side storage rail.",
+      "populate": true
+    },
+    {
+      "ref": "R2016",
+      "value": "33",
+      "mpn": "RC0402FR-0733RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_DAT2_ISO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DAT2",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD DAT2 series damping/tuning footprint; validate clock edges on installed board.",
+      "populate": true
+    },
+    {
+      "ref": "R2017",
+      "value": "47k",
+      "mpn": "RC0402FR-0747KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DAT2",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Native SD DAT2 pull-up on card-side storage rail.",
+      "populate": true
+    },
+    {
+      "ref": "R2018",
+      "value": "33",
+      "mpn": "RC0402FR-0733RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_DAT3_ISO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DAT3",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD DAT3 series damping/tuning footprint; validate clock edges on installed board.",
+      "populate": true
+    },
+    {
+      "ref": "R2019",
+      "value": "47k",
+      "mpn": "RC0402FR-0747KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DAT3",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Native SD DAT3 pull-up on card-side storage rail.",
+      "populate": true
+    },
+    {
+      "ref": "J201",
+      "value": "microSD push-pull 1.42mm",
+      "mpn": "1040310811",
+      "footprint": "Connector_Card:microSD_HC_Molex_104031-0811",
+      "pins": {
+        "1": {
+          "name": "DAT2",
+          "net": "SD_DAT2",
+          "type": "passive"
+        },
+        "2": {
+          "name": "DAT3/CD",
+          "net": "SD_DAT3",
+          "type": "passive"
+        },
+        "3": {
+          "name": "CMD",
+          "net": "SD_CMD",
+          "type": "passive"
+        },
+        "4": {
+          "name": "VDD",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "5": {
+          "name": "CLK",
+          "net": "SD_CLK",
+          "type": "passive"
+        },
+        "6": {
+          "name": "VSS",
+          "net": "GND",
+          "type": "passive"
+        },
+        "7": {
+          "name": "DAT0",
+          "net": "SD_DAT0",
+          "type": "passive"
+        },
+        "8": {
+          "name": "DAT1",
+          "net": "SD_DAT1",
+          "type": "passive"
+        },
+        "9": {
+          "name": "DETECT",
+          "net": "SD_DETECTn",
+          "type": "passive"
+        },
+        "10": {
+          "name": "SWITCH_COMMON",
+          "net": "GND",
+          "type": "passive"
+        },
+        "SH": {
+          "name": "SHELL",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.molex.com/content/dam/molex/molex-dot-com/products/automated/en-us/salesdrawingpdf/104/104031/1040310811_sd.pdf",
+        "https://www.molex.com/en-us/products/part-detail/1040310811"
+      ],
+      "description": "Native 4-bit microSD socket. Pins1\u20138 exactly follow Molex drawing. Detect pads9/10 and four shared-number SH shell lands follow verified KiCad footprint plus Molex drawing;14 physical lands total. Detect closes on insertion.",
+      "populate": true
+    },
+    {
+      "ref": "R2020",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_DETECTn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Detect contact pull-up; grounded when card is inserted.",
+      "populate": true
+    },
+    {
+      "ref": "C2025",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD socket high-frequency bypass.",
+      "populate": true
+    },
+    {
+      "ref": "C2026",
+      "value": "10u",
+      "mpn": "GRM21BR61C106KE15L",
+      "footprint": "Capacitor_SMD:C_0805_2012Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD socket bulk bypass.",
+      "populate": true
+    },
+    {
+      "ref": "U204",
+      "value": "C5 off-state isolation",
+      "mpn": "SN74AXC4T245PWR",
+      "footprint": "Package_SO:TSSOP-16_4.4x5mm_P0.65mm",
+      "pins": {
+        "1": {
+          "name": "VCCA",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "2": {
+          "name": "1DIR",
+          "net": "+3V3_LOGIC",
+          "type": "input"
+        },
+        "3": {
+          "name": "2DIR",
+          "net": "GND",
+          "type": "input"
+        },
+        "4": {
+          "name": "1A1",
+          "net": "C5_SCLK_MCU",
+          "type": "input"
+        },
+        "5": {
+          "name": "1A2",
+          "net": "C5_MOSI_MCU",
+          "type": "input"
+        },
+        "6": {
+          "name": "2A1",
+          "net": "C5_MISO_MCU",
+          "type": "output"
+        },
+        "7": {
+          "name": "2A2",
+          "net": "C5_IRQ_MCU",
+          "type": "output"
+        },
+        "8": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "9": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "10": {
+          "name": "2B2",
+          "net": "C5_IRQ",
+          "type": "input"
+        },
+        "11": {
+          "name": "2B1",
+          "net": "C5_MISO",
+          "type": "input"
+        },
+        "12": {
+          "name": "1B2",
+          "net": "C5_MOSI",
+          "type": "output"
+        },
+        "13": {
+          "name": "1B1",
+          "net": "C5_SCLK",
+          "type": "output"
+        },
+        "14": {
+          "name": "2OEn",
+          "net": "C5_IO_OEn",
+          "type": "input"
+        },
+        "15": {
+          "name": "1OEn",
+          "net": "C5_IO_OEn",
+          "type": "input"
+        },
+        "16": {
+          "name": "VCCB",
+          "net": "+3V3_C5_IO",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74axc4t245.pdf"
+      ],
+      "description": "Two fixed-direction pairs: pair1 A-to-B, pair2 B-to-A. Outputs high-impedance when either supply<100mV; Ioff specified. OE defaults high until RP firmware enables after module rail stable.",
+      "populate": true
+    },
+    {
+      "ref": "C2027",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U204 VCCA bypass.",
+      "populate": true
+    },
+    {
+      "ref": "C2028",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_C5_IO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U204 VCCB bypass.",
+      "populate": true
+    },
+    {
+      "ref": "U205",
+      "value": "C5 off-state isolation",
+      "mpn": "SN74AXC4T245PWR",
+      "footprint": "Package_SO:TSSOP-16_4.4x5mm_P0.65mm",
+      "pins": {
+        "1": {
+          "name": "VCCA",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "2": {
+          "name": "1DIR",
+          "net": "+3V3_LOGIC",
+          "type": "input"
+        },
+        "3": {
+          "name": "2DIR",
+          "net": "GND",
+          "type": "input"
+        },
+        "4": {
+          "name": "1A1",
+          "net": "C5_CSn_MCU",
+          "type": "input"
+        },
+        "5": {
+          "name": "1A2",
+          "net": "C5_UART_TX_MCU",
+          "type": "input"
+        },
+        "6": {
+          "name": "2A1",
+          "net": "C5_READY_MCU",
+          "type": "output"
+        },
+        "7": {
+          "name": "2A2",
+          "net": "C5_UART_RX_MCU",
+          "type": "output"
+        },
+        "8": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "9": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "10": {
+          "name": "2B2",
+          "net": "C5_UART_TX",
+          "type": "input"
+        },
+        "11": {
+          "name": "2B1",
+          "net": "C5_READY",
+          "type": "input"
+        },
+        "12": {
+          "name": "1B2",
+          "net": "C5_UART_RX",
+          "type": "output"
+        },
+        "13": {
+          "name": "1B1",
+          "net": "C5_CSn",
+          "type": "output"
+        },
+        "14": {
+          "name": "2OEn",
+          "net": "C5_IO_OEn",
+          "type": "input"
+        },
+        "15": {
+          "name": "1OEn",
+          "net": "C5_IO_OEn",
+          "type": "input"
+        },
+        "16": {
+          "name": "VCCB",
+          "net": "+3V3_C5_IO",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74axc4t245.pdf"
+      ],
+      "description": "Two fixed-direction pairs: pair1 A-to-B, pair2 B-to-A. Outputs high-impedance when either supply<100mV; Ioff specified. OE defaults high until RP firmware enables after module rail stable.",
+      "populate": true
+    },
+    {
+      "ref": "C2029",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U205 VCCA bypass.",
+      "populate": true
+    },
+    {
+      "ref": "C2030",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_C5_IO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U205 VCCB bypass.",
+      "populate": true
+    },
+    {
+      "ref": "U207",
+      "value": "SD4-bit DAT rail isolation",
+      "mpn": "SN74AXC4T245PWR",
+      "footprint": "Package_SO:TSSOP-16_4.4x5mm_P0.65mm",
+      "pins": {
+        "1": {
+          "name": "VCCA",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "2": {
+          "name": "1DIR",
+          "net": "SD_DAT_DIR",
+          "type": "input"
+        },
+        "3": {
+          "name": "2DIR",
+          "net": "SD_DAT_DIR",
+          "type": "input"
+        },
+        "8": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "9": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "14": {
+          "name": "2OEn",
+          "net": "SD_IO_OEn",
+          "type": "input"
+        },
+        "15": {
+          "name": "1OEn",
+          "net": "SD_IO_OEn",
+          "type": "input"
+        },
+        "16": {
+          "name": "VCCB",
+          "net": "+3V3_STORAGE",
+          "type": "power_in"
+        },
+        "4": {
+          "name": "1A1",
+          "net": "SD_DAT0_MCU",
+          "type": "bidirectional"
+        },
+        "13": {
+          "name": "1B1",
+          "net": "SD_DAT0_ISO",
+          "type": "bidirectional"
+        },
+        "5": {
+          "name": "1A2",
+          "net": "SD_DAT1_MCU",
+          "type": "bidirectional"
+        },
+        "12": {
+          "name": "1B2",
+          "net": "SD_DAT1_ISO",
+          "type": "bidirectional"
+        },
+        "6": {
+          "name": "2A1",
+          "net": "SD_DAT2_MCU",
+          "type": "bidirectional"
+        },
+        "11": {
+          "name": "2B1",
+          "net": "SD_DAT2_ISO",
+          "type": "bidirectional"
+        },
+        "7": {
+          "name": "2A2",
+          "net": "SD_DAT3_MCU",
+          "type": "bidirectional"
+        },
+        "10": {
+          "name": "2B2",
+          "net": "SD_DAT3_ISO",
+          "type": "bidirectional"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74axc4t245.pdf"
+      ],
+      "description": "All4 DAT channels reverse together. DIR high=MCU-to-card; low=card-to-MCU. OE high isolates during reset, storage brownout or firmware stop. Both rails need valid supplies for transfer.",
+      "populate": true
+    },
+    {
+      "ref": "U208",
+      "value": "SD CLK/CMD rail isolation",
+      "mpn": "SN74AXC4T245PWR",
+      "footprint": "Package_SO:TSSOP-16_4.4x5mm_P0.65mm",
+      "pins": {
+        "1": {
+          "name": "VCCA",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        },
+        "2": {
+          "name": "1DIR",
+          "net": "+3V3_LOGIC",
+          "type": "input"
+        },
+        "3": {
+          "name": "2DIR",
+          "net": "SD_CMD_DIR",
+          "type": "input"
+        },
+        "4": {
+          "name": "1A1",
+          "net": "SD_CLK_MCU",
+          "type": "input"
+        },
+        "5": {
+          "name": "1A2",
+          "net": "GND",
+          "type": "input"
+        },
+        "6": {
+          "name": "2A1",
+          "net": "SD_CMD_MCU",
+          "type": "bidirectional"
+        },
+        "7": {
+          "name": "2A2",
+          "net": "GND",
+          "type": "passive"
+        },
+        "8": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "9": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "10": {
+          "name": "2B2",
+          "net": "GND",
+          "type": "passive"
+        },
+        "11": {
+          "name": "2B1",
+          "net": "SD_CMD_ISO",
+          "type": "bidirectional"
+        },
+        "12": {
+          "name": "1B2",
+          "net": null,
+          "type": "no_connect"
+        },
+        "13": {
+          "name": "1B1",
+          "net": "SD_CLK_ISO",
+          "type": "output"
+        },
+        "14": {
+          "name": "2OEn",
+          "net": "SD_IO_OEn",
+          "type": "input"
+        },
+        "15": {
+          "name": "1OEn",
+          "net": "SD_IO_OEn",
+          "type": "input"
+        },
+        "16": {
+          "name": "VCCB",
+          "net": "+3V3_STORAGE",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74axc4t245.pdf"
+      ],
+      "description": "CLK fixed MCU-to-card; CMD direction high=MCU-to-card, low=card-to-MCU. Unused bidirectional lane tied low at both ends so either direction has a defined input; unused fixed-direction output explicitly NC.",
+      "populate": true
+    },
+    {
+      "ref": "C2031",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U207 VCCA local bypass.",
+      "populate": true
+    },
+    {
+      "ref": "C2032",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U207 VCCB local bypass.",
+      "populate": true
+    },
+    {
+      "ref": "C2033",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U208 VCCA local bypass.",
+      "populate": true
+    },
+    {
+      "ref": "C2034",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_STORAGE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U208 VCCB local bypass.",
+      "populate": true
+    },
+    {
+      "ref": "R2021",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_DAT_DIR",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD data default receive direction; OE separately disables all channels.",
+      "populate": true
+    },
+    {
+      "ref": "R2022",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_CMD_DIR",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD CMD default receive direction; OE separately disables all channels.",
+      "populate": true
+    },
+    {
+      "ref": "R2023",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "SD_IO_EN",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD driver request default off during RP reset.",
+      "populate": true
+    },
+    {
+      "ref": "R2024",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "SD_IO_OEn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "SD isolation OE default high during logic startup.",
+      "populate": true
+    },
+    {
+      "ref": "U209",
+      "value": "SD enable/power-good NAND",
+      "mpn": "SN74LVC1G00DBVR",
+      "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+      "pins": {
+        "1": {
+          "name": "A",
+          "net": "SD_IO_EN",
+          "type": "input"
+        },
+        "2": {
+          "name": "B",
+          "net": "STORAGE_PGOOD",
+          "type": "input"
+        },
+        "3": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "4": {
+          "name": "Y",
+          "net": "SD_IO_OEn",
+          "type": "output"
+        },
+        "5": {
+          "name": "VCC",
+          "net": "+3V3_LOGIC",
+          "type": "power_in"
+        }
+      },
+      "sources": [
+        "https://www.ti.com/lit/ds/symlink/sn74lvc1g00.pdf"
+      ],
+      "description": "Hardware NAND: SD outputs enable only when both firmware request and storage rail valid. STORAGE_PGOOD must go low before card supply drops below2.7V; power block supplies this signal. LVC1G00 Ioff prevents gate back-power when logic rail is off.",
+      "populate": true
+    },
+    {
+      "ref": "C2035",
+      "value": "100n",
+      "mpn": "GRM155R71E104KE14D",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "U209 NAND local bypass.",
+      "populate": true
+    },
+    {
+      "ref": "R2025",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "STORAGE_PGOOD",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Storage power-good input safe low if monitor absent/unpowered.",
+      "populate": true
+    },
+    {
+      "ref": "R2026",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "C5_IO_OEn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Default disable for all C5 SPI/UART/handshake buffers; MCU GPIO20 drives low only after stable rails.",
+      "populate": true
+    },
+    {
+      "ref": "R2027",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "C5_CSn_MCU",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "RP-side CS idle high before C5 buffers enabled.",
+      "populate": true
+    },
+    {
+      "ref": "R2028",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_C5_IO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "C5_CSn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Module-side SPI CS idle high while isolated.",
+      "populate": true
+    },
+    {
+      "ref": "R2029",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_C5_IO",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "C5_UART_RX",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Module UART RX idle high while isolated.",
+      "populate": true
+    },
+    {
+      "ref": "R2030",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "C5_SCLK",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Module-side idle-low bias while buffers are disabled.",
+      "populate": true
+    },
+    {
+      "ref": "R2031",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "C5_MOSI",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Module-side idle-low bias while buffers are disabled.",
+      "populate": true
+    },
+    {
+      "ref": "R2032",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "C5_MISO_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "RP input defined low when C5 is removed/off/isolated.",
+      "populate": true
+    },
+    {
+      "ref": "R2033",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "C5_IRQ_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "RP input defined low when C5 is removed/off/isolated.",
+      "populate": true
+    },
+    {
+      "ref": "R2034",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "C5_READY_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "RP input defined low when C5 is removed/off/isolated.",
+      "populate": true
+    },
+    {
+      "ref": "R2035",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "C5_UART_RX_MCU",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "RP UART RX idle-high bias when C5 is isolated.",
+      "populate": true
+    },
+    {
+      "ref": "U206",
+      "value": "XIAO ESP32-C5 USB removed",
+      "mpn": "100010048",
+      "footprint": "",
+      "pins": {
+        "1": {
+          "name": "D0/GPIO1",
+          "net": "C5_IRQ",
+          "type": "output"
+        },
+        "2": {
+          "name": "D1/GPIO0",
+          "net": "C5_READY",
+          "type": "output"
+        },
+        "3": {
+          "name": "D2/GPIO25",
+          "net": null,
+          "type": "no_connect"
+        },
+        "4": {
+          "name": "D3/GPIO7",
+          "net": null,
+          "type": "no_connect"
+        },
+        "5": {
+          "name": "D4/GPIO23",
+          "net": "C5_CSn",
+          "type": "input"
+        },
+        "6": {
+          "name": "D5/GPIO24",
+          "net": null,
+          "type": "no_connect"
+        },
+        "7": {
+          "name": "D6/U0TXD/GPIO11",
+          "net": "C5_UART_TX",
+          "type": "output"
+        },
+        "8": {
+          "name": "D7/U0RXD/GPIO12",
+          "net": "C5_UART_RX",
+          "type": "input"
+        },
+        "9": {
+          "name": "D8/SCK/GPIO8",
+          "net": "C5_SCLK",
+          "type": "input"
+        },
+        "10": {
+          "name": "D9/MISO/GPIO9",
+          "net": "C5_MISO",
+          "type": "output"
+        },
+        "11": {
+          "name": "D10/MOSI/GPIO10",
+          "net": "C5_MOSI",
+          "type": "input"
+        },
+        "12": {
+          "name": "3V3_OUT",
+          "net": "+3V3_C5_IO",
+          "type": "power_out"
+        },
+        "13": {
+          "name": "GND",
+          "net": "GND",
+          "type": "power_in"
+        },
+        "14": {
+          "name": "VBUS",
+          "net": "+5V_C5",
+          "type": "power_in"
+        },
+        "TP1": {
+          "name": "3V3_OUT_TEST",
+          "net": null,
+          "type": "no_connect"
+        },
+        "TP2": {
+          "name": "BOOT/GPIO28",
+          "net": "C5_BOOTn",
+          "type": "input"
+        },
+        "TP3": {
+          "name": "GND_TEST",
+          "net": null,
+          "type": "no_connect"
+        },
+        "TP4": {
+          "name": "MTDO/GPIO5",
+          "net": null,
+          "type": "no_connect"
+        },
+        "TP5": {
+          "name": "MTCK/GPIO4",
+          "net": null,
+          "type": "no_connect"
+        },
+        "TP6": {
+          "name": "MTDI/GPIO3",
+          "net": null,
+          "type": "no_connect"
+        },
+        "TP7": {
+          "name": "MTMS/GPIO2",
+          "net": null,
+          "type": "no_connect"
+        },
+        "TP8": {
+          "name": "EN",
+          "net": "C5_ENn",
+          "type": "input"
+        },
+        "BAT+": {
+          "name": "VBAT",
+          "net": null,
+          "type": "no_connect"
+        },
+        "BAT-": {
+          "name": "BAT_GND",
+          "net": null,
+          "type": "no_connect"
+        }
+      },
+      "sources": [
+        "https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.zip",
+        "https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/",
+        "https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32C5-p-6609.html"
+      ],
+      "description": "Complete Seeed module, USB connector removed, no pin headers/battery. 14 numbered edge pads plus actual named underside/battery pads; carrier only contacts edge pads and TP2/TP8. Other underside pads deliberately unconnected. Removable Harwin S7221-45R contacts carry the physical PCB interface. Module is manual off-board assembly with no duplicated carrier copper footprint.",
+      "populate": true,
+      "off_board": true,
+      "on_board": false,
+      "in_bom": true,
+      "manualassembly": true
+    },
+    {
+      "ref": "C2036",
+      "value": "10u",
+      "mpn": "GRM21BR61C106KE15L",
+      "footprint": "Capacitor_SMD:C_0805_2012Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+5V_C5",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "C5 carrier switched5V bulk bypass; module contains its own regulator and bypass.",
+      "populate": true
+    },
+    {
+      "ref": "Q201",
+      "value": "C5 recovery pull-down",
+      "mpn": "2N7002,215",
+      "footprint": "Package_TO_SOT_SMD:SOT-23",
+      "pins": {
+        "1": {
+          "name": "G",
+          "net": "C5_EN_ASSERT",
+          "type": "input"
+        },
+        "2": {
+          "name": "S",
+          "net": "GND",
+          "type": "passive"
+        },
+        "3": {
+          "name": "D",
+          "net": "C5_ENn",
+          "type": "open_collector"
+        }
+      },
+      "sources": [
+        "https://assets.nexperia.com/documents/data-sheet/2N7002.pdf",
+        "https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.zip"
+      ],
+      "description": "Open-drain sink to actual C5 underside recovery testpad. Host3V3 cannot feed module through this path. On-module10k pull-up retained.",
+      "populate": true
+    },
+    {
+      "ref": "R2036",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "C5_EN_ASSERT",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Recovery sink defaults off during MCU reset.",
+      "populate": true
+    },
+    {
+      "ref": "Q202",
+      "value": "C5 recovery pull-down",
+      "mpn": "2N7002,215",
+      "footprint": "Package_TO_SOT_SMD:SOT-23",
+      "pins": {
+        "1": {
+          "name": "G",
+          "net": "C5_BOOT_ASSERT",
+          "type": "input"
+        },
+        "2": {
+          "name": "S",
+          "net": "GND",
+          "type": "passive"
+        },
+        "3": {
+          "name": "D",
+          "net": "C5_BOOTn",
+          "type": "open_collector"
+        }
+      },
+      "sources": [
+        "https://assets.nexperia.com/documents/data-sheet/2N7002.pdf",
+        "https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.zip"
+      ],
+      "description": "Open-drain sink to actual C5 underside recovery testpad. Host3V3 cannot feed module through this path. On-module10k pull-up retained.",
+      "populate": true
+    },
+    {
+      "ref": "R2037",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "C5_BOOT_ASSERT",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Recovery sink defaults off during MCU reset.",
+      "populate": true
+    },
+    {
+      "ref": "R2038",
+      "value": "27",
+      "mpn": "RC0402FR-0727RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "MCU_USB_DM",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "USB_SERVICE_DM",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "USB D- series resistor immediately at RP2350 pin66.",
+      "populate": true
+    },
+    {
+      "ref": "R2039",
+      "value": "27",
+      "mpn": "RC0402FR-0727RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "MCU_USB_DP",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "USB_SERVICE_DP",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "USB D+ series resistor immediately at RP2350 pin67.",
+      "populate": true
+    },
+    {
+      "ref": "R2040",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "USB_SERVICE_VBUS",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "USB_VBUS_SENSE",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "USB VBUS sense divider upper resistor; no power connection to console5V.",
+      "populate": true
+    },
+    {
+      "ref": "R2041",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "USB_VBUS_SENSE",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "USB VBUS sense divider lower resistor;5V becomes2.5V.",
+      "populate": true
+    },
+    {
+      "ref": "R2042",
+      "value": "10k",
+      "mpn": "RC0402FR-0710KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "LOGIC_RESETn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "RP RUN/reset pull-up; service probe can sink reset.",
+      "populate": true
+    },
+    {
+      "ref": "J202",
+      "value": "RP USB service pads",
+      "mpn": "CUSTOM_USB_SERVICE_PADS",
+      "footprint": "KUI_Footprints:Service_USB_4Pad",
+      "pins": {
+        "1": {
+          "name": "GND",
+          "net": "GND",
+          "type": "passive"
+        },
+        "2": {
+          "name": "D-",
+          "net": "USB_SERVICE_DM",
+          "type": "passive"
+        },
+        "3": {
+          "name": "D+",
+          "net": "USB_SERVICE_DP",
+          "type": "passive"
+        },
+        "4": {
+          "name": "VBUS_SENSE_ONLY",
+          "net": "USB_SERVICE_VBUS",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Four copper service contacts for external USB cable/jig. VBUS only feeds sense divider; bridge must be powered from console/bench5V. Native BOOTSEL USB firmware recovery with crystal.",
+      "populate": false
+    },
+    {
+      "ref": "J203",
+      "value": "RP SWD/reset/boot pads",
+      "mpn": "CUSTOM_SWD_SERVICE_PADS",
+      "footprint": "KUI_Footprints:Service_SWD_6Pad",
+      "pins": {
+        "1": {
+          "name": "VTREF",
+          "net": "+3V3_LOGIC",
+          "type": "passive"
+        },
+        "2": {
+          "name": "GND",
+          "net": "GND",
+          "type": "passive"
+        },
+        "3": {
+          "name": "SWCLK",
+          "net": "MCU_SWCLK",
+          "type": "passive"
+        },
+        "4": {
+          "name": "SWDIO",
+          "net": "MCU_SWDIO",
+          "type": "passive"
+        },
+        "5": {
+          "name": "RUNn",
+          "net": "LOGIC_RESETn",
+          "type": "passive"
+        },
+        "6": {
+          "name": "BOOTSEL_REQUEST",
+          "net": "MCU_BOOTSEL_PAD",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "Six copper service contacts, no populated header. VTREF is reference output only; ground BOOTSEL request then pulse RUN low to enter RP ROM USB mode.",
+      "populate": false
+    },
+    {
+      "ref": "J204",
+      "value": "C5 direct UART recovery pads",
+      "mpn": "CUSTOM_C5_SERVICE_PADS",
+      "footprint": "KUI_Footprints:Service_C5_6Pad",
+      "pins": {
+        "1": {
+          "name": "GND",
+          "net": "GND",
+          "type": "passive"
+        },
+        "2": {
+          "name": "VTREF",
+          "net": "+3V3_C5_IO",
+          "type": "passive"
+        },
+        "3": {
+          "name": "C5_TX",
+          "net": "C5_UART_TX",
+          "type": "passive"
+        },
+        "4": {
+          "name": "C5_RX",
+          "net": "C5_UART_RX",
+          "type": "passive"
+        },
+        "5": {
+          "name": "ENn",
+          "net": "C5_ENn",
+          "type": "passive"
+        },
+        "6": {
+          "name": "BOOTn",
+          "net": "C5_BOOTn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.zip",
+        "https://docs.espressif.com/projects/esp-hardware-design-guidelines/en/latest/esp32c5/schematic-checklist.html"
+      ],
+      "description": "Direct3.3V UART jig pads on module side of isolation, usable with RP buffers disabled. VTREF is sense only. Pull BOOT low, pulse EN low, release EN, keep bootstrap for>=3ms. No5V UART and no power output from programmer.",
+      "populate": false
+    },
+    {
+      "ref": "R2043",
+      "value": "100k",
+      "mpn": "RC0402FR-07100KL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "C5_PWR_EN",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
+      ],
+      "description": "C5 switched5V enable default off; actual switch belongs to power block.",
+      "populate": true
+    },
+    {
+      "ref": "K201",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_IRQ",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 1 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        7.62,
+        -7.328
+      ],
+      "placement_rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "1",
+      "mating_tip_offset_mm": [
+        7.62,
+        -8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K202",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_READY",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 2 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        5.08,
+        -7.328
+      ],
+      "placement_rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "2",
+      "mating_tip_offset_mm": [
+        5.08,
+        -8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K203",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": null,
+          "type": "no_connect"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 3 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        2.54,
+        -7.328
+      ],
+      "placement_rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "3",
+      "mating_tip_offset_mm": [
+        2.54,
+        -8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K204",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": null,
+          "type": "no_connect"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 4 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        0.0,
+        -7.328
+      ],
+      "placement_rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "4",
+      "mating_tip_offset_mm": [
+        0.0,
+        -8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K205",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_CSn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 5 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        -2.54,
+        -7.328
+      ],
+      "placement_rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "5",
+      "mating_tip_offset_mm": [
+        -2.54,
+        -8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K206",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": null,
+          "type": "no_connect"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 6 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        -5.08,
+        -7.328
+      ],
+      "placement_rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "6",
+      "mating_tip_offset_mm": [
+        -5.08,
+        -8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K207",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_UART_TX",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 7 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        -7.62,
+        -7.328
+      ],
+      "placement_rotation_deg": 270,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "7",
+      "mating_tip_offset_mm": [
+        -7.62,
+        -8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K208",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_UART_RX",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 8 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        -7.62,
+        7.328
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "8",
+      "mating_tip_offset_mm": [
+        -7.62,
+        8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K209",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_SCLK",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 9 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        -5.08,
+        7.328
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "9",
+      "mating_tip_offset_mm": [
+        -5.08,
+        8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K210",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_MISO",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 10 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        -2.54,
+        7.328
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "10",
+      "mating_tip_offset_mm": [
+        -2.54,
+        8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K211",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_MOSI",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 11 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        0.0,
+        7.328
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "11",
+      "mating_tip_offset_mm": [
+        0.0,
+        8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K212",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "+3V3_C5_IO",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 12 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        2.54,
+        7.328
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "12",
+      "mating_tip_offset_mm": [
+        2.54,
+        8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K213",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "GND",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 13 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        5.08,
+        7.328
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "13",
+      "mating_tip_offset_mm": [
+        5.08,
+        8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K214",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "+5V_C5",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 14 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        7.62,
+        7.328
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "14",
+      "mating_tip_offset_mm": [
+        7.62,
+        8.028
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K215",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_BOOTn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 TP2 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        1.0255,
+        -1.7956
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "TP2",
+      "mating_tip_offset_mm": [
+        1.0255,
+        -1.0956
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    },
+    {
+      "ref": "K216",
+      "value": "C5 removable compression contact",
+      "mpn": "S7221-45R",
+      "footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+      "pins": {
+        "1": {
+          "name": "CONTACT",
+          "net": "C5_ENn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.harwin.com/products/S7221-45R",
+        "https://content.harwin.com/asset/1801555a-aeb3-408d-b163-bf8c8afc2263/DRG-02334-Technical-Drawing-Datasheet-S7221-45R-pdf.pdf"
+      ],
+      "description": "Single electrical terminal across both solder lands. Mates C5 TP8 underside pad. Free1.23mm, working0.90mm, recommended minimum0.63mm, positive stop0.55mm. Actual clamp/support needed.",
+      "populate": true,
+      "placement_group": "C5_CARRIER",
+      "placement_offset_mm": [
+        6.1055,
+        -1.7956
+      ],
+      "placement_rotation_deg": 90,
+      "assembly_centroid_offset_mm": [
+        0,
+        0
+      ],
+      "mating_terminal": "TP8",
+      "mating_tip_offset_mm": [
+        6.1055,
+        -1.0956
+      ],
+      "free_height_mm": 1.23,
+      "working_height_mm": 0.9,
+      "minimum_working_height_mm": 0.63,
+      "positive_stop_height_mm": 0.55,
+      "body_height_at_working_mm": 0.9,
+      "in_bom": true
+    }
+  ],
+  "gpio_assignments": {
+    "0": "LINK_D0",
+    "1": "LINK_D1",
+    "2": "LINK_D2",
+    "3": "LINK_D3",
+    "4": "LINK_D4",
+    "5": "LINK_D5",
+    "6": "LINK_D6",
+    "7": "LINK_D7",
+    "8": "LINK_WRn",
+    "9": "LINK_RDn",
+    "10": "LINK_A0",
+    "11": "LINK_A1",
+    "12": "LINK_IRQ",
+    "13": "LINK_READY",
+    "14": "FPGA_RESETn",
+    "15": "BRIDGE_ARM",
+    "16": "C5_UART_TX_MCU",
+    "17": "C5_UART_RX_MCU",
+    "18": "C5_EN_ASSERT",
+    "19": "C5_BOOT_ASSERT",
+    "20": "C5_IO_OEn",
+    "23": "USB_VBUS_SENSE",
+    "24": "SD_DAT_DIR",
+    "25": "SD_CMD_DIR",
+    "26": "SD_IO_EN",
+    "31": "PWR_FAILn",
+    "32": "SD_CLK_MCU",
+    "33": "SD_CMD_MCU",
+    "34": "SD_DAT0_MCU",
+    "35": "SD_DAT1_MCU",
+    "36": "SD_DAT2_MCU",
+    "37": "SD_DAT3_MCU",
+    "38": "SD_DETECTn",
+    "40": "C5_MISO_MCU",
+    "41": "C5_CSn_MCU",
+    "42": "C5_SCLK_MCU",
+    "43": "C5_MOSI_MCU",
+    "44": "C5_IRQ_MCU",
+    "45": "C5_READY_MCU",
+    "46": "C5_PWR_EN",
+    "47": "PSRAM_CSn_MCU"
+  },
+  "integration_contract": {
+    "inputs": [
+      "+3V3_LOGIC",
+      "+3V3_STORAGE",
+      "+5V_C5",
+      "PWR_FAILn",
+      "STORAGE_PGOOD",
+      "LINK_IRQ",
+      "LINK_READY"
+    ],
+    "outputs": [
+      "C5_PWR_EN",
+      "FPGA_RESETn",
+      "BRIDGE_ARM",
+      "LINK_WRn",
+      "LINK_RDn",
+      "LINK_A0",
+      "LINK_A1"
+    ],
+    "bidirectional": [
+      "LINK_D0",
+      "LINK_D1",
+      "LINK_D2",
+      "LINK_D3",
+      "LINK_D4",
+      "LINK_D5",
+      "LINK_D6",
+      "LINK_D7"
+    ],
+    "generated_rails": [
+      "+1V1_MCU",
+      "+3V3_C5_IO"
+    ],
+    "ground": "GND"
+  },
+  "unresolved_physical_items": [
+    "CN503-relative board envelope and contact geometry",
+    "C5 S7221 spring contact clamp/0.90mm support implementation and total USB-free module height",
+    "C5 underside TP2/TP8 contact height and access",
+    "SD insertion/ejection keepout",
+    "Replicate marked-inductor regulator layout from official RP2350B minimal R4-S1 PCB"
+  ],
+  "firmware_requirements": [
+    "SD via PIO in native4-bit mode, not SPI;GPIO24 DAT direction,25 CMD direction,26 active-high enable request;SD_IO_OEn hardware=NAND(request,STORAGE_PGOOD)",
+    "C5 SPI2 GPIO-matrix configuration must match module mapping",
+    "RP C5 isolation OE remains high until powered/stable and before removal or5V switch-off",
+    "ROM C5 UART recovery proxy and SPI application update path require implementation; circuit does not by itself provide updates",
+    "USB only attaches after USB_SERVICE_VBUS sense high; do not connect host5V to console rails",
+    "Hardware SD isolation uses STORAGE_PGOOD; keep storage rail alive for flush; coordinate PIO direction and OE at CMD/DAT turnaround",
+    "PSRAM QMI CS1 select=GPIO47; initialize>=150us after supply stable,split transfers to meet AP tCEM(max)8us and deselect>=tCPH",
+    "FPGA/front-end owns safe default reset, arm and link-strobe pull resistors",
+    "FPGA transfer engine exact24-bit remaining-word count registers0x16/17/18 must be set before DRQ; transfer-done IRQ distinguishes command completion from temporary FIFO empty"
+  ]
+}

@@ -1,5 +1,7 @@
 # G1 bridge Rev A: review disposition
 
+**Historical review disposition, 9 October 2026.** This records the requirements accepted before the subsequent circuit implementation and owner measurements. See the [10 October implementation status](../design/IMPLEMENTATION-STATUS-2026-10-10.md) for current artifacts and open findings.
+
 Updated 9 October 2026. Responds to [Claude's original review](https://github.com/TPMJB/K-UI-NeXT/blob/b2aa7ab76eefba30c6a959c24e101ba9ad6f5121/docs/g1-bridge-review-2026-10-09.md) of proposal commit `89f6dc6`. That review remains on Claude's branch; this document records the resulting requirements on the design branch.
 
 The review supports the architecture and logical pin allocation. It does not establish an electrically complete design, timing closure or fabrication readiness. No native circuit, firmware or PCB was changed in this documentation pass. Shield measurements, connector access and console validation remain pending.

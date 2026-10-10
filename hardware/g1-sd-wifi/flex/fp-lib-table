@@ -1,0 +1,3 @@
+(fp_lib_table
+ (lib (name "KUI_Flex") (type "KiCad") (uri "${KIPRJMOD}/KUI_Flex.pretty") (options "") (descr "CN503 split-arm flex contacts and mating fingers"))
+)

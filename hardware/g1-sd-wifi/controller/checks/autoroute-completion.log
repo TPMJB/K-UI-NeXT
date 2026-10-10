@@ -1,0 +1,15 @@
+2026-10-09 22:25:18.007 INFO   Freerouting v2.5.0 (build-date: 2026-10-05)
+2026-10-09 22:25:18.073 WARN   freerouting.json at '/root/.config/freerouting/freerouting.json' was written by an older version of Freerouting (file: 2.4.1, current: 2.5.0) - re-saving configuration with the updated version string.
+2026-10-09 22:25:18.322 INFO   Hardware: 8 CPU cores, 394 CPU score, 3072 MB RAM
+2026-10-09 22:25:18.326 WARN   GUI is disabled and you don't have a console available, so the only feedback from Freerouting is in the log.
+2026-10-09 22:25:18.330 INFO   Configured network proxy: 127.0.0.1:38663
+2026-10-09 22:25:19.717 INFO   [FE44AC\0D7256] Loading board file 'carrier-signal-starter.dsn'...
+2026-10-09 22:25:19.897 INFO   Layer 'In1.Cu' contains a power plane / large copper pour covering >=30% of the board; associated net(s) configured for plane routing.
+2026-10-09 22:25:19.946 INFO   [FE44AC\0D7256] Job 'FE44AC\0D7256' started at 2026-10-10T04:25:19.946042577Z.
+2026-10-09 22:25:20.232 INFO   [FE44AC\0D7256] Pipeline thread limits: autorouter pass is single-threaded, optimizer.max_threads=7.
+2026-10-09 22:25:20.474 INFO   [FE44AC\0D7256] Auto-routing stage started on board 'fafd2a8ec3de8b8f4ca41ffddea9f493' with baseline score 7.67 for 945 unrouted items.
+2026-10-09 22:30:01.395 INFO   [FE44AC\0D7256] Auto-routing pass #1 on board 'fafd2a8ec3de8b8f4ca41ffddea9f493' was completed in 280.83 seconds with score 281.03 (553 unrouted and 0 violations), using 277.16 CPU seconds and the job allocated 265.71 GB of memory so far.
+2026-10-09 22:33:54.988 INFO   [FE44AC\0D7256] Auto-routing pass #2 on board 'f9525e383554004e43c5a31a92565832' was completed in 233.44 seconds with score 252.44 (594 unrouted and 0 violations), using 506.14 CPU seconds and the job allocated 479.54 GB of memory so far.
+2026-10-09 22:38:16.073 INFO   [FE44AC\0D7256] Auto-routing pass #3 on board '91d9602f7373eb75990e80e0058bebb1' was completed in 260.91 seconds with score 259.41 (584 unrouted and 0 violations), using 763.43 CPU seconds and the job allocated 727.68 GB of memory so far.
+2026-10-09 22:42:21.026 INFO   [FE44AC\0D7256] Auto-routing pass #4 on board '0e55b98d311c8a3c7c55e7b88bd0048f' was completed in 244.79 seconds with score 235.01 (619 unrouted and 0 violations), using 1005.50 CPU seconds and the job allocated 974.23 GB of memory so far.
+2026-10-09 22:48:35.388 INFO   [FE44AC\0D7256] Auto-routing pass #5 on board '2556748ed9999f2f6541b010e5c4456a' was completed in 374.22 seconds with score 370.99 (451 unrouted and 0 violations), using 1375.67 CPU seconds and the job allocated 1333.24 GB of memory so far.

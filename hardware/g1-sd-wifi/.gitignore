@@ -1,0 +1,15 @@
+# Downloaded manufacturer material is reproducible intermediate data.
+design/sources/*.pdf
+design/sources/*.zip
+design/sources/aps6404l.txt
+design/sources/xiao-c5/
+**/*.kicad_prl
+**/*-backups/
+**/~*.lck
+**/__pycache__/
+controller/debug.kicad_sch
+**/*.bak
+controller/checks/*.dsn
+controller/checks/*.ses
+design/*.dsn
+design/*.ses

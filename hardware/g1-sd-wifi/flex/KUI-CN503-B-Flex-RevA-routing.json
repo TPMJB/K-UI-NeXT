@@ -1,0 +1,162 @@
+[
+  {
+    "cn503_contact": "B1",
+    "fpc_pin": 20,
+    "net": "/CN503_B1_CONSOLE_3V3",
+    "main_layer": "B.Cu",
+    "width_mm": 0.28,
+    "route_centerline_length_mm": 62.682
+  },
+  {
+    "cn503_contact": "B3",
+    "fpc_pin": 19,
+    "net": "/CN503_B3_CONSOLE_5V",
+    "main_layer": "F.Cu",
+    "width_mm": 0.28,
+    "route_centerline_length_mm": 60.597
+  },
+  {
+    "cn503_contact": "B4",
+    "fpc_pin": 18,
+    "net": "/CN503_B4_ATA_DD6",
+    "main_layer": "B.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 59.139
+  },
+  {
+    "cn503_contact": "B5",
+    "fpc_pin": 17,
+    "net": "/CN503_B5_ATA_DD9",
+    "main_layer": "F.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 58.067
+  },
+  {
+    "cn503_contact": "B6",
+    "fpc_pin": 16,
+    "net": "/CN503_B6_ATA_DD4",
+    "main_layer": "B.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 56.611
+  },
+  {
+    "cn503_contact": "B7",
+    "fpc_pin": 15,
+    "net": "/CN503_B7_ATA_DD11",
+    "main_layer": "F.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 55.553
+  },
+  {
+    "cn503_contact": "B8",
+    "fpc_pin": 14,
+    "net": "/CN503_B8_GND",
+    "main_layer": "B.Cu",
+    "width_mm": 0.25,
+    "route_centerline_length_mm": 54.098
+  },
+  {
+    "cn503_contact": "B9",
+    "fpc_pin": 13,
+    "net": "/CN503_B9_ATA_DD2",
+    "main_layer": "F.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 53.055
+  },
+  {
+    "cn503_contact": "B10",
+    "fpc_pin": 12,
+    "net": "/CN503_B10_ATA_DD13",
+    "main_layer": "B.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 51.601
+  },
+  {
+    "cn503_contact": "B11",
+    "fpc_pin": 11,
+    "net": "/CN503_B11_ATA_DD0",
+    "main_layer": "F.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 50.573
+  },
+  {
+    "cn503_contact": "B12",
+    "fpc_pin": 10,
+    "net": "/CN503_B12_ATA_DD15",
+    "main_layer": "B.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 49.12
+  },
+  {
+    "cn503_contact": "B13",
+    "fpc_pin": 9,
+    "net": "/CN503_B13_GND",
+    "main_layer": "F.Cu",
+    "width_mm": 0.25,
+    "route_centerline_length_mm": 48.106
+  },
+  {
+    "cn503_contact": "B14",
+    "fpc_pin": 8,
+    "net": "/CN503_B14_ATA_DIOWn",
+    "main_layer": "B.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 46.655
+  },
+  {
+    "cn503_contact": "B15",
+    "fpc_pin": 7,
+    "net": "/CN503_B15_ATA_IORDY",
+    "main_layer": "F.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 45.655
+  },
+  {
+    "cn503_contact": "B16",
+    "fpc_pin": 6,
+    "net": "/CN503_B16_ATA_INTRQ",
+    "main_layer": "B.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 44.206
+  },
+  {
+    "cn503_contact": "B17",
+    "fpc_pin": 5,
+    "net": "/CN503_B17_ATA_DA1",
+    "main_layer": "F.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 43.22
+  },
+  {
+    "cn503_contact": "B18",
+    "fpc_pin": 4,
+    "net": "/CN503_B18_GND",
+    "main_layer": "B.Cu",
+    "width_mm": 0.25,
+    "route_centerline_length_mm": 41.773
+  },
+  {
+    "cn503_contact": "B19",
+    "fpc_pin": 3,
+    "net": "/CN503_B19_ATA_DA2",
+    "main_layer": "F.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 40.801
+  },
+  {
+    "cn503_contact": "B20",
+    "fpc_pin": 2,
+    "net": "/CN503_B20_ATA_CS1n",
+    "main_layer": "B.Cu",
+    "width_mm": 0.15,
+    "route_centerline_length_mm": 39.355
+  },
+  {
+    "cn503_contact": "B21",
+    "fpc_pin": 1,
+    "net": "/CN503_B21_GND",
+    "main_layer": "F.Cu",
+    "width_mm": 0.25,
+    "route_centerline_length_mm": 38.398
+  }
+]

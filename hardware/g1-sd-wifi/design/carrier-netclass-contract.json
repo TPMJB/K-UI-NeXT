@@ -1,0 +1,23 @@
+{
+  "signal_track_width_mm": 0.15,
+  "signal_clearance_mm": 0.15,
+  "preferred_power_track_width_mm": 0.4,
+  "power_net_names": [
+    "+1V1_MCU",
+    "+3V3_C5_IO",
+    "+3V3_LOGIC",
+    "+3V3_STORAGE",
+    "+5V_C5",
+    "+5V_HOLD",
+    "CONSOLE_5V",
+    "FUSED_5V",
+    "MCU_VREG_AVDD",
+    "MCU_VREG_LX",
+    "PRIMARY_5V",
+    "RESERVE_5V",
+    "SW_LOGIC",
+    "SW_STORAGE"
+  ],
+  "narrow_pad_escape_review_required": true,
+  "ground_plane_layer": "In1.Cu"
+}

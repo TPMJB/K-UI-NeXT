@@ -32,7 +32,7 @@ if args == ["version"]:
 kind = args[1] if args[1] in {"erc", "drc"} else args[2]
 fail = os.environ.get("FAKE_KICAD_FAIL", "")
 if fail == kind or (fail == "flex-drill" and kind == "drill"
-                    and Path(args[-1]).name == "flex.kicad_pcb"):
+                    and Path(args[-1]).name == "flex_b.kicad_pcb"):
     print("deliberate mock KiCad failure", file=sys.stderr)
     raise SystemExit(5)
 out = Path(args[args.index("--output") + 1])
@@ -74,7 +74,7 @@ class ReleaseTests(unittest.TestCase):
         self.manifest_path = self.tool.with_name("release-manifest.json")
         self.review_path = self.tool.with_name("engineering-review.json")
         boards = {}
-        for name in ("rigid", "flex"):
+        for name in ("rigid", "flex_a", "flex_b"):
             folder = self.base / name
             folder.mkdir()
             for suffix, text in (
@@ -87,7 +87,7 @@ class ReleaseTests(unittest.TestCase):
             ):
                 (folder / (name + suffix)).write_text(text, encoding="utf-8")
             settings = {
-                "manufacturer": "JLCPCB", "board_type": name,
+                "manufacturer": "JLCPCB", "board_type": "rigid" if name == "rigid" else "flex",
                 "assembly": name == "rigid", "released": True,
                 "origin": "plot", "drill_files_required": True,
                 "copper_layers": 2, "gerber_layers": ["F.Cu", "B.Cu", "Edge.Cuts"],
@@ -108,8 +108,9 @@ class ReleaseTests(unittest.TestCase):
         self.cpl.write_text("Designator,Mid X,Mid Y,Layer,Rotation\n"
                             "C1,1.0,2.0,top,0\n")
         boards["rigid"].update(bom_csv=self.rel(self.bom), cpl_csv=self.rel(self.cpl))
-        boards["flex"]["extra_fabrication_files"] = [
-            {"path": self.rel(self.base / "coverlay.gbr"), "name": "flex-coverlay.gbr"}]
+        for name in ("flex_a", "flex_b"):
+            boards[name]["extra_fabrication_files"] = [
+                {"path": self.rel(self.base / "coverlay.gbr"), "name": "flex-coverlay.gbr"}]
         self.manifest = {
             "schema_version": 1, "release_id": "mock-test",
             "status": "approved_for_prototype_fabrication", "boards": boards,
@@ -175,12 +176,12 @@ class ReleaseTests(unittest.TestCase):
         self.manifest["ready"] = True
         self.save_manifest()
         (self.base / "rigid/rigid.kicad_pcb").unlink()
-        (self.base / "flex/flex.kicad_sch").unlink()
+        (self.base / "flex_a/flex_a.kicad_sch").unlink()
         result = self.audit()
         self.assertEqual(result.returncode, 2)
         text = result.stdout
         self.assertIn("rigid.kicad_pcb", text)
-        self.assertIn("flex.kicad_sch", text)
+        self.assertIn("flex_a.kicad_sch", text)
 
     def test_blocked_or_missing_manifest_status_is_rejected(self):
         for status in ("blocked_missing_circuit_and_layout", None):
@@ -227,7 +228,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("Unsafe input path", result.stdout)
 
     def test_passive_flex_has_no_fake_assembly_files(self):
-        self.manifest["boards"]["flex"]["bom_csv"] = self.rel(self.bom)
+        self.manifest["boards"]["flex_a"]["bom_csv"] = self.rel(self.bom)
         self.save_manifest()
         result = self.audit()
         self.assertEqual(result.returncode, 2)
@@ -282,15 +283,16 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.output / "rigid/jlcpcb-bom.csv").is_file())
         self.assertTrue((self.output / "rigid/jlcpcb-cpl.csv").is_file())
-        self.assertFalse((self.output / "flex/jlcpcb-bom.csv").exists())
-        self.assertFalse((self.output / "flex/jlcpcb-cpl.csv").exists())
-        for name in ("rigid", "flex"):
+        for name in ("flex_a", "flex_b"):
+            self.assertFalse((self.output / name / "jlcpcb-bom.csv").exists())
+            self.assertFalse((self.output / name / "jlcpcb-cpl.csv").exists())
+        for name in ("rigid", "flex_a", "flex_b"):
             with zipfile.ZipFile(self.output / name / (name + "-gerbers.zip")) as archive:
                 self.assertIn("board-PTH.drl", archive.namelist())
                 for layer in ("F_Cu", "B_Cu", "Edge_Cuts"):
                     self.assertIn("board-" + layer + ".gbr", archive.namelist())
                 self.assertNotIn("partial.gbrjob", archive.namelist())
-                if name == "flex":
+                if name.startswith("flex_"):
                     self.assertIn("flex-coverlay.gbr", archive.namelist())
             command = json.loads((self.output / name / "checks/drc.log").read_text().splitlines()[0])
             for flag in ("--severity-all", "--exit-code-violations",
@@ -298,7 +300,40 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn(flag, command)
         self.assertTrue((self.output / "SHA256SUMS").is_file())
         self.assertTrue((self.output / "engineering-review.json").is_file())
+        self.assertTrue((self.output / "source" / self.rel(self.manifest_path)).is_file())
+        for name in ("rigid", "flex_a", "flex_b"):
+            self.assertTrue((self.output / "source" / self.rel(self.base / name / (name + ".kicad_pcb"))).is_file())
         self.assertFalse(list(self.root.glob(".g1-jlc-stage-*")))
+
+    def test_split_flex_pair_is_required(self):
+        self.manifest["boards"].pop("flex_b")
+        self.save_manifest()
+        result = self.audit()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("exactly rigid, flex_a and flex_b", result.stdout)
+
+    def test_stiffener_layer_is_named_and_packaged(self):
+        settings_path = self.base / "flex_a/order-settings.json"
+        settings = json.loads(settings_path.read_text())
+        settings["gerber_layers"].append("User.1")
+        settings["layer_filenames"] = {"User.1": "pit_0.20.gbr"}
+        settings_path.write_text(json.dumps(settings))
+        snapshot = self.audit()
+        self.evidence["input_sha256"] = json.loads(snapshot.stdout)["input_sha256"]
+        self.review_path.write_text(json.dumps(self.evidence))
+        result = self.export()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with zipfile.ZipFile(self.output / "flex_a/flex_a-gerbers.zip") as archive:
+            self.assertIn("pit_0.20.gbr", archive.namelist())
+
+    def test_unsafe_layer_rename_is_rejected(self):
+        settings_path = self.base / "flex_a/order-settings.json"
+        settings = json.loads(settings_path.read_text())
+        settings["layer_filenames"] = {"F.Cu": "../escape.gbr"}
+        settings_path.write_text(json.dumps(settings))
+        result = self.audit()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("unsafe/unrequested", result.stdout)
 
 if __name__ == "__main__":
     unittest.main()

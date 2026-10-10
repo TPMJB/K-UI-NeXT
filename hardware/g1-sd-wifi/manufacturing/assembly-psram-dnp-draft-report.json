@@ -1,0 +1,59 @@
+{
+  "status": "draft_not_released",
+  "variant": "BASE_PSRAM_DNP",
+  "SMT_parts": 276,
+  "omitted_base_refs": [
+    "U203"
+  ],
+  "psram_policy": "Firmware must not probe or assert CS1/GPIO47; disable PSRAM cache and use SRAM. CS1 pulls and decoupling remain fitted.",
+  "BOM_rows": 52,
+  "manual_offboard_refs": [
+    "U206"
+  ],
+  "exact_jlc_smt_catalog_rows": 52,
+  "assembly_fixture_requirements": [
+    {
+      "mpn": "ASE-50.000MHZ-LC-T",
+      "refs": [
+        "X10"
+      ],
+      "part_code": "C596955",
+      "source": "https://jlcpcb.com/partdetail/AbraconLLC-ASE_50_000MHZ_LCT/C596955",
+      "status": "assembler_fixture_agreement_pending"
+    },
+    {
+      "mpn": "S7221-45R",
+      "refs": [
+        "K201",
+        "K202",
+        "K203",
+        "K204",
+        "K205",
+        "K206",
+        "K207",
+        "K208",
+        "K209",
+        "K210",
+        "K211",
+        "K212",
+        "K213",
+        "K214",
+        "K215",
+        "K216"
+      ],
+      "part_code": "C22445132",
+      "source": "https://jlcpcb.com/partdetail/Harwin-S722145R/C22445132",
+      "status": "assembler_fixture_agreement_pending"
+    }
+  ],
+  "unverified_catalog_rows": [],
+  "pcb_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+  "parts_list_sha256": "64306747166068e243cea88120a834821cd2c3ecc8f89c1c4a03234e5cdce464",
+  "origin_mm": [
+    70.0,
+    150.0
+  ],
+  "coordinates": "Actual footprint body origin; X right, Y up, mm, relative to native aux origin",
+  "rotation_status": "Native orientation only; manufacturer model zero-angle/placement preview review pending",
+  "note": "Catalog identities are checked; placement rotations, factory fixtures and carrier routing remain unqualified. Do not submit as approved PCBA data."
+}

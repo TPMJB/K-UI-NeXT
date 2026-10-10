@@ -1,5 +1,7 @@
 # Independent review request: G1 microSD and Wi-Fi bridge
 
+**Historical proposal review request.** This request predates the selected FPGA circuit and subsequent owner measurements. It remains as the original review scope; the [10 October implementation status](../design/IMPLEMENTATION-STATUS-2026-10-10.md) describes the current hardware and outstanding work.
+
 Review [the architecture](../README.md), [controller schematic](../controller/KUI-G1-Bridge-RevA.kicad_sch), [GPIO CSV](../controller/K-UI-G1-GPIO-RevA.csv), [CN503 mapping](CN503-reference.csv), [opening notes](../controller/START-HERE.txt) and [check limits](../controller/CHECKS.txt).
 
 ## Scope and fixed requirements

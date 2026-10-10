@@ -1,49 +1,49 @@
-rp2350b_gpio,proposed_signal,rp_direction,purpose,status
-0,ATA_DD0,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-1,ATA_DD1,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-2,ATA_DD2,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-3,ATA_DD3,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-4,ATA_DD4,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-5,ATA_DD5,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-6,ATA_DD6,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-7,ATA_DD7,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-8,ATA_DD8,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-9,ATA_DD9,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-10,ATA_DD10,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-11,ATA_DD11,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-12,ATA_DD12,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-13,ATA_DD13,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-14,ATA_DD14,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-15,ATA_DD15,bidirectional,ATA data; released when not responding,PROPOSED - NOT FABRICATION APPROVED
-16,ATA_DA0,input,Register address bit 0,PROPOSED - NOT FABRICATION APPROVED
-17,ATA_DA1,input,Register address bit 1,PROPOSED - NOT FABRICATION APPROVED
-18,ATA_DA2,input,Register address bit 2,PROPOSED - NOT FABRICATION APPROVED
-19,ATA_CS0n,input,Command register bank select,PROPOSED - NOT FABRICATION APPROVED
-20,ATA_CS1n,input,Control register bank select,PROPOSED - NOT FABRICATION APPROVED
-21,ATA_DIORn,input,Host read strobe,PROPOSED - NOT FABRICATION APPROVED
-22,ATA_DIOWn,input,Host write strobe,PROPOSED - NOT FABRICATION APPROVED
-23,ATA_RESETn,input,"Reset sense; selectable path, behavior to qualify",PROPOSED - NOT FABRICATION APPROVED
-24,ATA_IORDY,output / release,Ready / wait; only drive when permitted,PROPOSED - NOT FABRICATION APPROVED
-25,ATA_INTRQ,output / release,Shared interrupt; selected-device rules apply,PROPOSED - NOT FABRICATION APPROVED
-26,ATA_DMARQ,output / release,DMA request; selected-device rules apply,PROPOSED - NOT FABRICATION APPROVED
-27,ATA_DMACKn,input,DMA acknowledge; required even with CS inactive,PROPOSED - NOT FABRICATION APPROVED
-28,DATA_OEn,output,Data-buffer enable; default disabled,PROPOSED - NOT FABRICATION APPROVED
-29,DATA_DIR,output,Data-buffer direction; exact polarity set by part,PROPOSED - NOT FABRICATION APPROVED
-30,G1_RESP_EN,output,Proposed response gate; hardware interlock required,PROPOSED - NOT FABRICATION APPROVED
-31,PFAILn,input,Early warning from unheld console supply,PROPOSED - NOT FABRICATION APPROVED
-32,SD_CLK,output,Native four-bit SD clock; PIO2,PROPOSED - NOT FABRICATION APPROVED
-33,SD_CMD,bidirectional,Native SD command; PIO2,PROPOSED - NOT FABRICATION APPROVED
-34,SD_D0,bidirectional,SD data bit 0; PIO2,PROPOSED - NOT FABRICATION APPROVED
-35,SD_D1,bidirectional,SD data bit 1; PIO2,PROPOSED - NOT FABRICATION APPROVED
-36,SD_D2,bidirectional,SD data bit 2; PIO2,PROPOSED - NOT FABRICATION APPROVED
-37,SD_D3,bidirectional,SD data bit 3; PIO2,PROPOSED - NOT FABRICATION APPROVED
-38,SD_CDn,input,"Socket card-detect switch, if provided",PROPOSED - NOT FABRICATION APPROVED
-39,STATUS_LED,output,Optional; reclaimable if more isolation pins needed,PROPOSED - NOT FABRICATION APPROVED
-40,C5_MISO,input,SPI1 RX -> XIAO D9 / C5 GPIO9,PROPOSED - NOT FABRICATION APPROVED
-41,C5_CSn,output,SIO-controlled CS -> XIAO D0 / C5 GPIO1,PROPOSED - NOT FABRICATION APPROVED
-42,C5_SCK,output,SPI1 SCK -> XIAO D8 / C5 GPIO8,PROPOSED - NOT FABRICATION APPROVED
-43,C5_MOSI,output,SPI1 TX -> XIAO D10 / C5 GPIO10,PROPOSED - NOT FABRICATION APPROVED
-44,C5_IRQn,input,Proposed packet IRQ -> XIAO D5 / C5 GPIO24,PROPOSED - NOT FABRICATION APPROVED
-45,C5_READY,input,Proposed transaction-ready -> XIAO D4 / C5 GPIO23,PROPOSED - NOT FABRICATION APPROVED
-46,C5_POWER_EN,output,Switched-supply enable; USB/back-power review needed,PROPOSED - NOT FABRICATION APPROVED
-47,SPARE,unassigned,Reserve for extra isolation control or diagnostics,PROPOSED - NOT FABRICATION APPROVED
+component,physical_pin,gpio,package_pin_name,net,rp_function_direction,initial_firmware_contract,external_reset_default,purpose,source,status
+U201,77,0,GPIO0,LINK_D0,bidirectional,Input/released for reads; drive only write data after link setup,No external pull; console drivers separately gated off,FPGA byte data bit0,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,78,1,GPIO1,LINK_D1,bidirectional,Input/released for reads; drive only write data after link setup,No external pull; console drivers separately gated off,FPGA byte data bit1,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,79,2,GPIO2,LINK_D2,bidirectional,Input/released for reads; drive only write data after link setup,No external pull; console drivers separately gated off,FPGA byte data bit2,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,80,3,GPIO3,LINK_D3,bidirectional,Input/released for reads; drive only write data after link setup,No external pull; console drivers separately gated off,FPGA byte data bit3,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,1,4,GPIO4,LINK_D4,bidirectional,Input/released for reads; drive only write data after link setup,No external pull; console drivers separately gated off,FPGA byte data bit4,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,2,5,GPIO5,LINK_D5,bidirectional,Input/released for reads; drive only write data after link setup,No external pull; console drivers separately gated off,FPGA byte data bit5,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,3,6,GPIO6,LINK_D6,bidirectional,Input/released for reads; drive only write data after link setup,No external pull; console drivers separately gated off,FPGA byte data bit6,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,4,7,GPIO7,LINK_D7,bidirectional,Input/released for reads; drive only write data after link setup,No external pull; console drivers separately gated off,FPGA byte data bit7,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,6,8,GPIO8,LINK_WRn,output,High before releasing FPGA_RESETn; never overlap RDn,No external pull; held-reset FPGA must ignore link,Active-low byte-link write strobe,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,7,9,GPIO9,LINK_RDn,output,High before releasing FPGA_RESETn; release data for reads,No external pull; held-reset FPGA must ignore link,Active-low byte-link read strobe,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,8,10,GPIO10,LINK_A0,output,Defined low before releasing FPGA reset; stable through READY,No external pull,Byte-link address bit0,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,9,11,GPIO11,LINK_A1,output,Defined low before releasing FPGA reset; stable through READY,No external pull,Byte-link address bit1,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,11,12,GPIO12,LINK_IRQ,input,Input only; service pending command/completion/fault/RX,FPGA-driven; may be undefined while FPGA unconfigured,Active-high FPGA link IRQ,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,12,13,GPIO13,LINK_READY,input,Wait high before transaction and after strobe recovery,FPGA-driven; may be undefined while FPGA unconfigured,Link handshake; not FIFO capacity,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,13,14,GPIO14,FPGA_RESETn,output,Low until link pins/firmware/FPGA image validated,10k pull-down R213; reset asserted,FPGA user reset; separate from PROGRAMn,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,14,15,GPIO15,BRIDGE_ARM,output,Low until all startup validation completes; low on stop/fault,10k pull-down R211; bus unarmed,Independent hardware console-response arm,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,16,16,GPIO16,C5_UART_TX_MCU,output,UART0 TX idle high; isolate until powered/stable,No MCU-side external pull; module RX pulled high R2029,RP UART TX to C5 RX through U204,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,17,17,GPIO17,C5_UART_RX_MCU,input,UART0 RX; input only,10k pull-up R2035,RP UART RX from C5 TX through U205,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,18,18,GPIO18,C5_EN_ASSERT,output,Low normal; high sinks C5 EN for reset,100k gate pull-down R2036; transistor off,Q201 open-drain EN assertion control,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,19,19,GPIO19,C5_BOOT_ASSERT,output,Low normal; high sinks C5 BOOT for recovery,100k gate pull-down R2037; transistor off,Q202 open-drain BOOT assertion control,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,20,20,GPIO20,C5_IO_OEn,output,High until C5 powered/stable; high before power-off/external UART,10k pull-up R2026; buffers disabled,Active-low U204/U205 isolation enable,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,21,21,GPIO21,NC,unconnected,Leave unconfigured/input; no output drive,Physical pin NC; no external connection,Spare; old MCU-direct ATA function superseded,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,22,22,GPIO22,NC,unconnected,Leave unconfigured/input; no output drive,Physical pin NC; no external connection,Spare; old MCU-direct ATA function superseded,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,23,23,GPIO23,USB_VBUS_SENSE,input,Input; application attaches USB only when VBUS valid,100k R2041 to GND;100k/100k USB VBUS divider,USB 5V sense only; not target power,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,25,24,GPIO24,SD_DAT_DIR,output,Defined while SD disabled; high transmit low receive,100k pull-down R2021; receive direction,All four SD DAT translator direction,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,26,25,GPIO25,SD_CMD_DIR,output,Defined while SD disabled; high transmit low receive,100k pull-down R2022; receive direction,SD CMD translator direction,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,27,26,GPIO26,SD_IO_EN,output,Low until storage valid and SD directions/driver ready,100k pull-down R2023; SD outputs disabled,Enable request; actual OE NAND with STORAGE_PGOOD,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,28,27,GPIO27,NC,unconnected,Leave unconfigured/input; no output drive,Physical pin NC; no external connection,Spare; old MCU-direct ATA function superseded,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,36,28,GPIO28,NC,unconnected,Leave unconfigured/input; no output drive,Physical pin NC; no external connection,Spare; old MCU-direct ATA function superseded,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,37,29,GPIO29,NC,unconnected,Leave unconfigured/input; no output drive,Physical pin NC; no external connection,Spare; old MCU-direct ATA function superseded,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,38,30,GPIO30,NC,unconnected,Leave unconfigured/input; no output drive,Physical pin NC; no external connection,Spare; old MCU-direct ATA function superseded,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,39,31,GPIO31,PWR_FAILn,input,Input/interrupt; stop new work and disarm when low,U26 open-drain with10k pull-up R208; high only supply valid,Upstream power-loss warning; not MCU RUN,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,40,32,GPIO32,SD_CLK_MCU,output,Clock low while disabled; initial SD clock conservative,No MCU-side pull; U208 disabled by default,Native four-bit SD PIO clock,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,42,33,GPIO33,SD_CMD_MCU,bidirectional,Input/released while disabled; coordinate SD_CMD_DIR turnaround,Card-side47k pull-up R2011; U208 default isolated,Native SD CMD,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,43,34,GPIO34,SD_DAT0_MCU,bidirectional,Input/released while disabled; coordinate SD_DAT_DIR turnaround,Card-side47k pull-up R2013; U207 default isolated,Native SD DAT0,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,44,35,GPIO35,SD_DAT1_MCU,bidirectional,Input/released while disabled; coordinate SD_DAT_DIR turnaround,Card-side47k pull-up R2015; U207 default isolated,Native SD DAT1,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,45,36,GPIO36,SD_DAT2_MCU,bidirectional,Input/released while disabled; coordinate SD_DAT_DIR turnaround,Card-side47k pull-up R2017; U207 default isolated,Native SD DAT2,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,46,37,GPIO37,SD_DAT3_MCU,bidirectional,Input/released while disabled; coordinate SD_DAT_DIR turnaround,Card-side47k pull-up R2019; U207 default isolated,Native SD DAT3,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,47,38,GPIO38,SD_DETECTn,input,Input; low means card inserted,10k pull-up R2020; switch shorts to GND when inserted,J201 card-detect switch,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,48,39,GPIO39,NC,unconnected,Leave unconfigured/input; no output drive,Physical pin NC; no external connection,Spare; old MCU-direct ATA function superseded,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,49,40,GPIO40_ADC0,C5_MISO_MCU,input,SPI1 RX; input only,100k pull-down R2032,C5 MISO through U205,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,52,41,GPIO41_ADC1,C5_CSn_MCU,output,High idle; enable only powered/stable C5,10k pull-up R2027 on MCU side andR2028 module side,SPI1 CSn to C5 D4/GPIO23,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,53,42,GPIO42_ADC2,C5_SCLK_MCU,output,Defined low idle before C5 buffers enable,No MCU-side pull; module-side100k pull-down R2030,SPI1 SCLK to C5 D8/GPIO8,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,54,43,GPIO43_ADC3,C5_MOSI_MCU,output,Defined before C5 buffers enable,No MCU-side pull; module-side100k pull-down R2031,SPI1 TX/MOSI to C5 D10/GPIO10,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,55,44,GPIO44_ADC4,C5_IRQ_MCU,input,Input; active-high packet/event request,100k pull-down R2033,C5 IRQ from D0/GPIO1,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,56,45,GPIO45_ADC5,C5_READY_MCU,input,Input; wait for agreed protocol READY,100k pull-down R2034,C5 READY from D1/GPIO0,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,57,46,GPIO46_ADC6,C5_PWR_EN,output,Low default; enable only intentional C5 operation,100k pull-down R2043 and10k R218; U34 loss gate cuts power,C5 switched5V request to U34/U71,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified
+U201,58,47,GPIO47_ADC7,PSRAM_CSn_MCU,output,QMI CS1 high idle; select after PSRAM initialization,4.7k pull-up R2008 through0R R2007; overrides chip default pull,PSRAM CS1; shared QSPI data/clock with boot flash,design/blocks/controller.json U201; design/blocks/power-bus.json pull/gate contracts,Implemented circuit; firmware and physical timing unqualified

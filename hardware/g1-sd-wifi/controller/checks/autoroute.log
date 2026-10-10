@@ -1,0 +1,21 @@
+2026-10-09 22:07:49.010 INFO   Freerouting v2.5.0 (build-date: 2026-10-05)
+2026-10-09 22:07:49.303 INFO   Hardware: 8 CPU cores, 381 CPU score, 3072 MB RAM
+2026-10-09 22:07:49.308 WARN   GUI is disabled and you don't have a console available, so the only feedback from Freerouting is in the log.
+2026-10-09 22:07:49.313 INFO   Configured network proxy: 127.0.0.1:42095
+2026-10-09 22:07:50.739 INFO   [9DA1F7\CDF8B3] Loading board file 'carrier-draft.dsn'...
+2026-10-09 22:07:50.952 INFO   Layer 'In1.Cu' contains a power plane / large copper pour covering >=30% of the board; associated net(s) configured for plane routing.
+2026-10-09 22:07:51.010 INFO   [9DA1F7\CDF8B3] Job '9DA1F7\CDF8B3' started at 2026-10-10T04:07:51.010214385Z.
+2026-10-09 22:07:51.312 INFO   [9DA1F7\CDF8B3] Pipeline thread limits: autorouter pass is single-threaded, optimizer.max_threads=4.
+2026-10-09 22:07:51.561 INFO   [9DA1F7\CDF8B3] Fanout stage started on board 'fafd2a8ec3de8b8f4ca41ffddea9f493' with 1163 of 1199 SMD pins needing fanout (36 already connected, 0 netless).
+2026-10-09 22:08:42.604 WARN   BasicBoard.normalizeTraces: reached 2000 iterations for net 'MCU_VREG_LX' — stopping to prevent hang. The board geometry for this net may be oscillating (split/combine cycle); traces are kept as-is and further normalization for this net is suppressed on this board candidate.
+2026-10-09 22:08:43.563 INFO   [9DA1F7\CDF8B3] Fanout pass #1 on board '642ddd9b16b4c881ed81b20b0c6a5cf0' completed in 51.73 seconds with 649 SMD pins fanouted, 498 not routed, 0 insert errors, +77 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-10-09 22:10:31.761 INFO   [9DA1F7\CDF8B3] Fanout pass #2 on board '53d545dd444914ed8fd372377582d23a' completed in 108.13 seconds with 407 SMD pins fanouted, 493 not routed, 0 insert errors, +21 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-10-09 22:10:32.215 INFO   [9DA1F7\CDF8B3] Fanout stage completed: started with 1199 total SMD pins, completed in 160.45 seconds, escaped pins: 664/1199 (55.4%), using 159.49 total CPU seconds, 111.22 GB total allocated, and 362.8 MB peak heap usage.
+2026-10-09 22:10:33.591 INFO   [9DA1F7\CDF8B3] Auto-routing stage started on board '53d545dd444914ed8fd372377582d23a' with baseline score 350.07 for 466 unrouted items.
+2026-10-09 22:13:23.713 INFO   [9DA1F7\CDF8B3] Auto-routing pass #1 on board '53d545dd444914ed8fd372377582d23a' was completed in 169.64 seconds with score 329.14 (484 unrouted and 1 violation), using 328.14 CPU seconds and the job allocated 236.14 GB of memory so far.
+2026-10-09 22:14:00.365 INFO   [9DA1F7\CDF8B3] Auto-routing pass #2 on board '506c54f405e3da7db63685ead83913ce' was completed in 36.46 seconds with score 121.34 (782 unrouted and 0 violations), using 364.57 CPU seconds and the job allocated 260.23 GB of memory so far.
+2026-10-09 22:14:29.239 INFO   [9DA1F7\CDF8B3] Auto-routing pass #3 on board '24a986e02ee53c357b9aca0e746aff6f' was completed in 28.76 seconds with score 32.78 (909 unrouted and 0 violations), using 393.13 CPU seconds and the job allocated 282.00 GB of memory so far.
+2026-10-09 22:15:00.198 INFO   [9DA1F7\CDF8B3] Auto-routing pass #4 on board '51d424122523c347087277329e93bcbb' was completed in 30.84 seconds with score 32.08 (910 unrouted and 0 violations), using 422.67 CPU seconds and the job allocated 308.93 GB of memory so far.
+2026-10-09 22:15:28.434 INFO   [9DA1F7\CDF8B3] Auto-routing pass #5 on board 'c931c6c6f6a3bd7253f61e1282e331c1' was completed in 28.12 seconds with score 32.08 (910 unrouted and 0 violations), using 451.30 CPU seconds and the job allocated 338.35 GB of memory so far.
+2026-10-09 22:15:55.126 INFO   [9DA1F7\CDF8B3] Auto-routing pass #6 on board 'c931c6c6f6a3bd7253f61e1282e331c1' was completed in 26.68 seconds with score 32.08 (910 unrouted and 0 violations), using 477.08 CPU seconds and the job allocated 366.20 GB of memory so far.
+2026-10-09 22:16:24.702 INFO   [9DA1F7\CDF8B3] Auto-routing pass #7 on board 'c931c6c6f6a3bd7253f61e1282e331c1' was completed in 29.56 seconds with score 32.08 (910 unrouted and 0 violations), using 506.66 CPU seconds and the job allocated 395.73 GB of memory so far.

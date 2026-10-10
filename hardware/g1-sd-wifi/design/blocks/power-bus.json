@@ -1,0 +1,4215 @@
+[
+  {
+    "ref": "J20",
+    "value": "5V/GND direct wire pads",
+    "mpn": "PCB solder pads; no fitted connector",
+    "footprint": "KUI_Footprints:Power_Wire_Pads_2x2mm",
+    "pins": {
+      "1": {
+        "name": "5V",
+        "net": "CONSOLE_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT"
+    ],
+    "description": "Direct protected 5-V bridge supply pair; avoid 12-V pin and flex power path.",
+    "populate": true,
+    "height_max_mm": 0
+  },
+  {
+    "ref": "F20",
+    "value": "1.5A fast fuse",
+    "mpn": "046701.5NR",
+    "footprint": "Fuse:Fuse_0603_1608Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FUSED_5V",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d"
+    ],
+    "description": "Local overcurrent protection; time-current/inrush/thermal qualification required.",
+    "populate": true,
+    "height_max_mm": 0.5
+  },
+  {
+    "ref": "Q20",
+    "value": "PMV48XP reverse polarity",
+    "mpn": "PMV48XP,215",
+    "footprint": "Package_TO_SOT_SMD:SOT-23",
+    "pins": {
+      "1": {
+        "name": "G",
+        "net": "GND",
+        "type": "input"
+      },
+      "2": {
+        "name": "S",
+        "net": "PRIMARY_5V",
+        "type": "passive"
+      },
+      "3": {
+        "name": "D",
+        "net": "FUSED_5V",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://assets.nexperia.com/documents/data-sheet/PMV48XP.pdf"
+    ],
+    "description": "Reverse input protection: D input, S protected output, G grounded; not 12-V overvoltage protection.",
+    "populate": true,
+    "height_max_mm": 1.1
+  },
+  {
+    "ref": "C200",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "PRIMARY_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "Primary supply bulk, voltage-bias derating required",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "U20",
+    "value": "TPS2116 automatic mux",
+    "mpn": "TPS2116DRLR",
+    "footprint": "KUI_Footprints:TI_DRL0008A",
+    "pins": {
+      "1": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "2": {
+        "name": "VOUT",
+        "net": "+5V_HOLD",
+        "type": "power_out"
+      },
+      "3": {
+        "name": "VIN1",
+        "net": "PRIMARY_5V",
+        "type": "power_in"
+      },
+      "4": {
+        "name": "PR1",
+        "net": "GND",
+        "type": "input"
+      },
+      "5": {
+        "name": "MODE",
+        "net": "GND",
+        "type": "input"
+      },
+      "6": {
+        "name": "VIN2",
+        "net": "RESERVE_5V",
+        "type": "power_in"
+      },
+      "7": {
+        "name": "VOUT",
+        "net": "+5V_HOLD",
+        "type": "passive"
+      },
+      "8": {
+        "name": "ST",
+        "net": "RESERVE_ACTIVEn",
+        "type": "open_collector"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/tps2116.pdf"
+    ],
+    "description": "MODE=PR1=0 selects higher input; reverse-current blocking excludes console from reserve domain. Exact DRL land pattern must be verified. VOUT pins2/7 are the same internal output node; pin2 is its ERC power driver.",
+    "populate": true,
+    "height_max_mm": 0.6
+  },
+  {
+    "ref": "R200",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "RESERVE_ACTIVEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Mux status: low means primary is not selected",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R201",
+    "value": "1M",
+    "mpn": "RC0402FR-071ML",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "RESERVE_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Anchor unused reserve input low when charge/bank are DNP",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C201",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+5V_HOLD",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "Mux output bulk",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "R202",
+    "value": "22",
+    "mpn": "RC0805FR-0722RL",
+    "footprint": "Resistor_SMD:R_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "PRIMARY_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "RESERVE_CHARGE",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "DNP reserve charging/inrush limit",
+    "populate": false,
+    "height_max_mm": 0.8
+  },
+  {
+    "ref": "D20",
+    "value": "Reserve charge Schottky",
+    "mpn": "PMEG2010ER,115",
+    "footprint": "Diode_SMD:Nexperia_CFP3_SOD-123W",
+    "pins": {
+      "1": {
+        "name": "K",
+        "net": "RESERVE_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "A",
+        "net": "RESERVE_CHARGE",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://assets.nexperia.com/documents/data-sheet/PMEG2010ER.pdf"
+    ],
+    "description": "DNP isolated reserve charge diode; cathode to reserve bank.",
+    "populate": false,
+    "height_max_mm": 1.0
+  },
+  {
+    "ref": "C202",
+    "value": "100uF",
+    "mpn": "GRM32ER61A107ME20L",
+    "footprint": "Capacitor_SMD:C_1210_3225Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "RESERVE_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM32ER61A107ME20L"
+    ],
+    "description": "DNP low-profile reserve bank; effective C under DC bias is unqualified",
+    "populate": false,
+    "height_max_mm": 2.7
+  },
+  {
+    "ref": "C203",
+    "value": "100uF",
+    "mpn": "GRM32ER61A107ME20L",
+    "footprint": "Capacitor_SMD:C_1210_3225Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "RESERVE_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM32ER61A107ME20L"
+    ],
+    "description": "DNP low-profile reserve bank; effective C under DC bias is unqualified",
+    "populate": false,
+    "height_max_mm": 2.7
+  },
+  {
+    "ref": "C204",
+    "value": "100uF",
+    "mpn": "GRM32ER61A107ME20L",
+    "footprint": "Capacitor_SMD:C_1210_3225Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "RESERVE_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM32ER61A107ME20L"
+    ],
+    "description": "DNP low-profile reserve bank; effective C under DC bias is unqualified",
+    "populate": false,
+    "height_max_mm": 2.7
+  },
+  {
+    "ref": "C205",
+    "value": "100uF",
+    "mpn": "GRM32ER61A107ME20L",
+    "footprint": "Capacitor_SMD:C_1210_3225Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "RESERVE_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM32ER61A107ME20L"
+    ],
+    "description": "DNP low-profile reserve bank; effective C under DC bias is unqualified",
+    "populate": false,
+    "height_max_mm": 2.7
+  },
+  {
+    "ref": "U21",
+    "value": "TPS62162 3.3V 1A",
+    "mpn": "TPS62162DSGR",
+    "footprint": "KUI_Footprints:TI_DSG0008A",
+    "pins": {
+      "1": {
+        "name": "PGND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "2": {
+        "name": "VIN",
+        "net": "+5V_HOLD",
+        "type": "power_in"
+      },
+      "3": {
+        "name": "EN",
+        "net": "+5V_HOLD",
+        "type": "input"
+      },
+      "4": {
+        "name": "AGND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "FB",
+        "net": "GND",
+        "type": "input"
+      },
+      "6": {
+        "name": "VOS",
+        "net": "+3V3_LOGIC",
+        "type": "input"
+      },
+      "7": {
+        "name": "SW",
+        "net": "SW_LOGIC",
+        "type": "output"
+      },
+      "8": {
+        "name": "PG",
+        "net": "LOGIC_BUCK_PG",
+        "type": "open_collector"
+      },
+      "9": {
+        "name": "EP",
+        "net": "GND",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+    ],
+    "description": "Fixed 3.3-V buck; FB=AGND; kelvin VOS at output capacitor; EP soldered to AGND.",
+    "populate": true,
+    "height_max_mm": 0.8
+  },
+  {
+    "ref": "L20",
+    "value": "2.2uH shielded",
+    "mpn": "XFL3012-222MEC",
+    "footprint": "KUI_Footprints:Coilcraft_XFL3012",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "SW_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.coilcraft.com/getmedia/f76a3c9b-4fff-4397-8028-ef8e043eb200/xfl3012.pdf"
+    ],
+    "description": "TI-recommended 3.0x3.0x1.2-mm nominal inductor; current derating still required.",
+    "populate": true,
+    "height_max_mm": 1.3
+  },
+  {
+    "ref": "C206",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+5V_HOLD",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "U21 local input bulk",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "C207",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "U21 output capacitor pair; effective aggregate C must satisfy TI range",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "C208",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "U21 output capacitor pair; effective aggregate C must satisfy TI range",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "R203",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "LOGIC_BUCK_PG",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "U21 optional diagnostic PG pullup; supervisor, not PG alone, gates bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "U22",
+    "value": "TPS62162 3.3V 1A",
+    "mpn": "TPS62162DSGR",
+    "footprint": "KUI_Footprints:TI_DSG0008A",
+    "pins": {
+      "1": {
+        "name": "PGND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "2": {
+        "name": "VIN",
+        "net": "+5V_HOLD",
+        "type": "power_in"
+      },
+      "3": {
+        "name": "EN",
+        "net": "+5V_HOLD",
+        "type": "input"
+      },
+      "4": {
+        "name": "AGND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "FB",
+        "net": "GND",
+        "type": "input"
+      },
+      "6": {
+        "name": "VOS",
+        "net": "+3V3_STORAGE",
+        "type": "input"
+      },
+      "7": {
+        "name": "SW",
+        "net": "SW_STORAGE",
+        "type": "output"
+      },
+      "8": {
+        "name": "PG",
+        "net": "STORAGE_BUCK_PG",
+        "type": "open_collector"
+      },
+      "9": {
+        "name": "EP",
+        "net": "GND",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+    ],
+    "description": "Fixed 3.3-V buck; FB=AGND; kelvin VOS at output capacitor; EP soldered to AGND.",
+    "populate": true,
+    "height_max_mm": 0.8
+  },
+  {
+    "ref": "L21",
+    "value": "2.2uH shielded",
+    "mpn": "XFL3012-222MEC",
+    "footprint": "KUI_Footprints:Coilcraft_XFL3012",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "SW_STORAGE",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "+3V3_STORAGE",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.coilcraft.com/getmedia/f76a3c9b-4fff-4397-8028-ef8e043eb200/xfl3012.pdf"
+    ],
+    "description": "TI-recommended 3.0x3.0x1.2-mm nominal inductor; current derating still required.",
+    "populate": true,
+    "height_max_mm": 1.3
+  },
+  {
+    "ref": "C209",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+5V_HOLD",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "U22 local input bulk",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "C210",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_STORAGE",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "U22 output capacitor pair; effective aggregate C must satisfy TI range",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "C211",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_STORAGE",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "U22 output capacitor pair; effective aggregate C must satisfy TI range",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "R204",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_STORAGE",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "STORAGE_BUCK_PG",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "U22 optional diagnostic PG pullup; supervisor, not PG alone, gates bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "U23",
+    "value": "TPS3808G33DBVR",
+    "mpn": "TPS3808G33DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+    "pins": {
+      "1": {
+        "name": "RESETn",
+        "net": "LOGIC_RESETn",
+        "type": "open_collector"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "3": {
+        "name": "MRn",
+        "net": "+3V3_LOGIC",
+        "type": "input"
+      },
+      "4": {
+        "name": "CT",
+        "net": null,
+        "type": "no_connect"
+      },
+      "5": {
+        "name": "SENSE",
+        "net": "+3V3_LOGIC",
+        "type": "input"
+      },
+      "6": {
+        "name": "VDD",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/tps3808.pdf"
+    ],
+    "description": "3.07-V threshold; LOGIC_RESETn goes to MCU RUN and hardware gate; CT open gives 20-ms release delay.",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "R205",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "LOGIC_RESETn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "U23 reset/valid output pullup",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C212",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U23 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U24",
+    "value": "TPS3808G33DBVR",
+    "mpn": "TPS3808G33DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+    "pins": {
+      "1": {
+        "name": "RESETn",
+        "net": "STORAGE_PGOOD",
+        "type": "open_collector"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "3": {
+        "name": "MRn",
+        "net": "+3V3_LOGIC",
+        "type": "input"
+      },
+      "4": {
+        "name": "CT",
+        "net": null,
+        "type": "no_connect"
+      },
+      "5": {
+        "name": "SENSE",
+        "net": "+3V3_STORAGE",
+        "type": "input"
+      },
+      "6": {
+        "name": "VDD",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/tps3808.pdf"
+    ],
+    "description": "3.07-V storage supply threshold; CT open gives 20-ms release delay.",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "R206",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "STORAGE_PGOOD",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "U24 reset/valid output pullup",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C213",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U24 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U25",
+    "value": "TPS3808G33DBVR",
+    "mpn": "TPS3808G33DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+    "pins": {
+      "1": {
+        "name": "RESETn",
+        "net": "HOST_OKn",
+        "type": "open_collector"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "3": {
+        "name": "MRn",
+        "net": "+3V3_LOGIC",
+        "type": "input"
+      },
+      "4": {
+        "name": "CT",
+        "net": null,
+        "type": "no_connect"
+      },
+      "5": {
+        "name": "SENSE",
+        "net": "CONSOLE_3V3",
+        "type": "input"
+      },
+      "6": {
+        "name": "VDD",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/tps3808.pdf"
+    ],
+    "description": "3.07-V host supply monitor remains active while bridge is held up; CT open gives 20-ms release delay.",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "R207",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "HOST_OKn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "U25 reset/valid output pullup",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C214",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U25 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U26",
+    "value": "TPS3808G01DBVR",
+    "mpn": "TPS3808G01DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+    "pins": {
+      "1": {
+        "name": "RESETn",
+        "net": "PWR_FAILn",
+        "type": "open_collector"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "3": {
+        "name": "MRn",
+        "net": "+3V3_LOGIC",
+        "type": "input"
+      },
+      "4": {
+        "name": "CT",
+        "net": null,
+        "type": "no_connect"
+      },
+      "5": {
+        "name": "SENSE",
+        "net": "PRIMARY_SENSE",
+        "type": "input"
+      },
+      "6": {
+        "name": "VDD",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/tps3808.pdf"
+    ],
+    "description": "Adjustable upstream-loss threshold nominal 4.358 V; senses before reserve mux; CT open gives 20-ms release delay.",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "R208",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "PWR_FAILn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "U26 reset/valid output pullup",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C215",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U26 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "R209",
+    "value": "976k",
+    "mpn": "RC0402FR-07976KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "PRIMARY_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "PRIMARY_SENSE",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Loss-monitor upper divider, 1%; threshold tolerance must include both resistors and supervisor",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R210",
+    "value": "100k",
+    "mpn": "RC0402FR-07100KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "PRIMARY_SENSE",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Loss-monitor lower divider, 1%",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "U27",
+    "value": "SN74LVC2G08DCUR",
+    "mpn": "SN74LVC2G08DCUR",
+    "footprint": "Package_SO:VSSOP-8_2.3x2mm_P0.5mm",
+    "pins": {
+      "1": {
+        "name": "1A",
+        "net": "LOGIC_RESETn",
+        "type": "input"
+      },
+      "2": {
+        "name": "1B",
+        "net": "STORAGE_PGOOD",
+        "type": "input"
+      },
+      "7": {
+        "name": "1Y",
+        "net": "PWR_LOCAL_OK",
+        "type": "output"
+      },
+      "5": {
+        "name": "2A",
+        "net": "HOST_OKn",
+        "type": "input"
+      },
+      "6": {
+        "name": "2B",
+        "net": "PWR_FAILn",
+        "type": "input"
+      },
+      "3": {
+        "name": "2Y",
+        "net": "PWR_UPSTREAM_OK",
+        "type": "output"
+      },
+      "4": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "8": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc2g08.pdf"
+    ],
+    "description": "Local and upstream rail qualification",
+    "populate": true,
+    "height_max_mm": 1.1
+  },
+  {
+    "ref": "C216",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U27 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U28",
+    "value": "SN74LVC2G08DCUR",
+    "mpn": "SN74LVC2G08DCUR",
+    "footprint": "Package_SO:VSSOP-8_2.3x2mm_P0.5mm",
+    "pins": {
+      "1": {
+        "name": "1A",
+        "net": "PWR_LOCAL_OK",
+        "type": "input"
+      },
+      "2": {
+        "name": "1B",
+        "net": "PWR_UPSTREAM_OK",
+        "type": "input"
+      },
+      "7": {
+        "name": "1Y",
+        "net": "PWR_GOOD",
+        "type": "output"
+      },
+      "5": {
+        "name": "2A",
+        "net": "BRIDGE_ARM",
+        "type": "input"
+      },
+      "6": {
+        "name": "2B",
+        "net": "FPGA_READY",
+        "type": "input"
+      },
+      "3": {
+        "name": "2Y",
+        "net": "FPGA_ARMED",
+        "type": "output"
+      },
+      "4": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "8": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc2g08.pdf"
+    ],
+    "description": "Rail-good output and independently configured/armed FPGA qualification",
+    "populate": true,
+    "height_max_mm": 1.1
+  },
+  {
+    "ref": "C217",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U28 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U29",
+    "value": "SN74LVC2G08DCUR",
+    "mpn": "SN74LVC2G08DCUR",
+    "footprint": "Package_SO:VSSOP-8_2.3x2mm_P0.5mm",
+    "pins": {
+      "1": {
+        "name": "1A",
+        "net": "BUS_RESETn",
+        "type": "input"
+      },
+      "2": {
+        "name": "1B",
+        "net": "FPGA_RESETn",
+        "type": "input"
+      },
+      "7": {
+        "name": "1Y",
+        "net": "RESET_OK",
+        "type": "output"
+      },
+      "5": {
+        "name": "2A",
+        "net": "RESET_OK",
+        "type": "input"
+      },
+      "6": {
+        "name": "2B",
+        "net": "BIOS_RECOVERYn",
+        "type": "input"
+      },
+      "3": {
+        "name": "2Y",
+        "net": "RESET_RECOVERY_OK",
+        "type": "output"
+      },
+      "4": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "8": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc2g08.pdf"
+    ],
+    "description": "Reset and physical stock-recovery interlock",
+    "populate": true,
+    "height_max_mm": 1.1
+  },
+  {
+    "ref": "C218",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U29 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U30",
+    "value": "SN74LVC1G11DBVR",
+    "mpn": "SN74LVC1G11DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+    "pins": {
+      "1": {
+        "name": "A",
+        "net": "PWR_GOOD",
+        "type": "input"
+      },
+      "3": {
+        "name": "B",
+        "net": "FPGA_ARMED",
+        "type": "input"
+      },
+      "6": {
+        "name": "C",
+        "net": "RESET_RECOVERY_OK",
+        "type": "input"
+      },
+      "4": {
+        "name": "Y",
+        "net": "BUS_SAFE",
+        "type": "output"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g11.pdf"
+    ],
+    "description": "Final hardware bus permit; any missing qualifier disables every G1 output",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "C219",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U30 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U31",
+    "value": "SN74LVC2G04DBVT",
+    "mpn": "SN74LVC2G04DBVT",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+    "pins": {
+      "1": {
+        "name": "1A",
+        "net": "BUS_SAFE",
+        "type": "input"
+      },
+      "6": {
+        "name": "1Y",
+        "net": "BUS_SAFE_n",
+        "type": "output"
+      },
+      "3": {
+        "name": "2A",
+        "net": "IORDY_PULL_LOW",
+        "type": "input"
+      },
+      "4": {
+        "name": "2Y",
+        "net": "IORDY_RELEASE",
+        "type": "output"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc2g04.pdf",
+      "https://jlcpcb.com/partdetail/TexasInstruments-SN74LVC2G04DBVT/C2860342"
+    ],
+    "description": "Bus-disable polarity and open-drain IORDY input inversion; DBVT small reel order option, electrically and mechanically identical to DBVR DBV package",
+    "populate": true,
+    "height_max_mm": 1.45,
+    "lcsc": "C2860342"
+  },
+  {
+    "ref": "C220",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U31 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U32",
+    "value": "SN74LVC1G32DBVR",
+    "mpn": "SN74LVC1G32DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "A",
+        "net": "BUS_SAFE_n",
+        "type": "input"
+      },
+      "2": {
+        "name": "B",
+        "net": "REQ_DATA_OEn",
+        "type": "input"
+      },
+      "4": {
+        "name": "Y",
+        "net": "DATA_OEn",
+        "type": "output"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g32.pdf"
+    ],
+    "description": "Qualified active-low data OE: !BUS_SAFE OR requested OEn",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "C221",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U32 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U33",
+    "value": "SN74LVC1G08DBVR",
+    "mpn": "SN74LVC1G08DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "A",
+        "net": "BUS_SAFE",
+        "type": "input"
+      },
+      "2": {
+        "name": "B",
+        "net": "REQ_IORDY_LOW",
+        "type": "input"
+      },
+      "4": {
+        "name": "Y",
+        "net": "IORDY_PULL_LOW",
+        "type": "output"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g08.pdf"
+    ],
+    "description": "Only a safe configured front end can pull IORDY low",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "C222",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U33 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U34",
+    "value": "SN74LVC1G08DBVR",
+    "mpn": "SN74LVC1G08DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "A",
+        "net": "PWR_FAILn",
+        "type": "input"
+      },
+      "2": {
+        "name": "B",
+        "net": "C5_PWR_EN",
+        "type": "input"
+      },
+      "4": {
+        "name": "Y",
+        "net": "C5_SWITCH_EN",
+        "type": "output"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g08.pdf"
+    ],
+    "description": "Power loss unconditionally turns Wi-Fi off before reserve consumption",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "C223",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U34 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "R211",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BRIDGE_ARM",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: BRIDGE_ARM",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R212",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_READY",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: FPGA_READY",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R213",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_RESETn",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: FPGA_RESETn",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R214",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "DATA_DIR",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: DATA_DIR",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R215",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "REQ_INTRQ",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: REQ_INTRQ",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R216",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "REQ_DMARQ",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: REQ_DMARQ",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R217",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "REQ_IORDY_LOW",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: REQ_IORDY_LOW",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R218",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "C5_PWR_EN",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: C5_PWR_EN",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R219",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_SAFE",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Default-safe pull-down: BUS_SAFE",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R220",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "REQ_DATA_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "FPGA unconfigured data request defaults disabled",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R221",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "DATA_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Translator output enable pullup referenced to VCCA",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R222",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "BUS_SAFE_n",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host output enables default disabled with bridge logic absent",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R223",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD0",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R224",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD0",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R225",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD1",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R226",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD1",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R227",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD2",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R228",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD2",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R229",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R230",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R231",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD4",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R232",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD4",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R233",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD5",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R234",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD5",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R235",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD6",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R236",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD6",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R237",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD7",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R238",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD7",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R239",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD8",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R240",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD8",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R241",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD9",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R242",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD9",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R243",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD10",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R244",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD10",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R245",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD11",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R246",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD11",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R247",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD12",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R248",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD12",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R249",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD13",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R250",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD13",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R251",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD14",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R252",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD14",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R253",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "BUS_DD15",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "BUS data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R254",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_DD15",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "ATA data input weak bias; accommodates tri-state idle bus",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C224",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U35 VCCA pad 31 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "C225",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U35 VCCA pad 42 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "C226",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U35 VCCB pad 7 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "C227",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U35 VCCB pad 18 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U35",
+    "value": "SN74LVC16T245",
+    "mpn": "SN74LVC16T245DGGR",
+    "footprint": "Package_SO:TSSOP-48_6.1x12.5mm_P0.5mm",
+    "pins": {
+      "1": {
+        "name": "1DIR",
+        "net": "DATA_DIR",
+        "type": "input"
+      },
+      "24": {
+        "name": "2DIR",
+        "net": "DATA_DIR",
+        "type": "input"
+      },
+      "48": {
+        "name": "1OEn",
+        "net": "DATA_OEn",
+        "type": "input"
+      },
+      "25": {
+        "name": "2OEn",
+        "net": "DATA_OEn",
+        "type": "input"
+      },
+      "47": {
+        "name": "1A1",
+        "net": "BUS_DD0",
+        "type": "bidirectional"
+      },
+      "2": {
+        "name": "1B1",
+        "net": "ATA_DD0",
+        "type": "bidirectional"
+      },
+      "46": {
+        "name": "1A2",
+        "net": "BUS_DD1",
+        "type": "bidirectional"
+      },
+      "3": {
+        "name": "1B2",
+        "net": "ATA_DD1",
+        "type": "bidirectional"
+      },
+      "44": {
+        "name": "1A3",
+        "net": "BUS_DD2",
+        "type": "bidirectional"
+      },
+      "5": {
+        "name": "1B3",
+        "net": "ATA_DD2",
+        "type": "bidirectional"
+      },
+      "43": {
+        "name": "1A4",
+        "net": "BUS_DD3",
+        "type": "bidirectional"
+      },
+      "6": {
+        "name": "1B4",
+        "net": "ATA_DD3",
+        "type": "bidirectional"
+      },
+      "41": {
+        "name": "1A5",
+        "net": "BUS_DD4",
+        "type": "bidirectional"
+      },
+      "8": {
+        "name": "1B5",
+        "net": "ATA_DD4",
+        "type": "bidirectional"
+      },
+      "40": {
+        "name": "1A6",
+        "net": "BUS_DD5",
+        "type": "bidirectional"
+      },
+      "9": {
+        "name": "1B6",
+        "net": "ATA_DD5",
+        "type": "bidirectional"
+      },
+      "38": {
+        "name": "1A7",
+        "net": "BUS_DD6",
+        "type": "bidirectional"
+      },
+      "11": {
+        "name": "1B7",
+        "net": "ATA_DD6",
+        "type": "bidirectional"
+      },
+      "37": {
+        "name": "1A8",
+        "net": "BUS_DD7",
+        "type": "bidirectional"
+      },
+      "12": {
+        "name": "1B8",
+        "net": "ATA_DD7",
+        "type": "bidirectional"
+      },
+      "36": {
+        "name": "2A1",
+        "net": "BUS_DD8",
+        "type": "bidirectional"
+      },
+      "13": {
+        "name": "2B1",
+        "net": "ATA_DD8",
+        "type": "bidirectional"
+      },
+      "35": {
+        "name": "2A2",
+        "net": "BUS_DD9",
+        "type": "bidirectional"
+      },
+      "14": {
+        "name": "2B2",
+        "net": "ATA_DD9",
+        "type": "bidirectional"
+      },
+      "33": {
+        "name": "2A3",
+        "net": "BUS_DD10",
+        "type": "bidirectional"
+      },
+      "16": {
+        "name": "2B3",
+        "net": "ATA_DD10",
+        "type": "bidirectional"
+      },
+      "32": {
+        "name": "2A4",
+        "net": "BUS_DD11",
+        "type": "bidirectional"
+      },
+      "17": {
+        "name": "2B4",
+        "net": "ATA_DD11",
+        "type": "bidirectional"
+      },
+      "30": {
+        "name": "2A5",
+        "net": "BUS_DD12",
+        "type": "bidirectional"
+      },
+      "19": {
+        "name": "2B5",
+        "net": "ATA_DD12",
+        "type": "bidirectional"
+      },
+      "29": {
+        "name": "2A6",
+        "net": "BUS_DD13",
+        "type": "bidirectional"
+      },
+      "20": {
+        "name": "2B6",
+        "net": "ATA_DD13",
+        "type": "bidirectional"
+      },
+      "27": {
+        "name": "2A7",
+        "net": "BUS_DD14",
+        "type": "bidirectional"
+      },
+      "22": {
+        "name": "2B7",
+        "net": "ATA_DD14",
+        "type": "bidirectional"
+      },
+      "26": {
+        "name": "2A8",
+        "net": "BUS_DD15",
+        "type": "bidirectional"
+      },
+      "23": {
+        "name": "2B8",
+        "net": "ATA_DD15",
+        "type": "bidirectional"
+      },
+      "31": {
+        "name": "VCCA",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "42": {
+        "name": "VCCA",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "7": {
+        "name": "VCCB",
+        "net": "CONSOLE_3V3",
+        "type": "power_in"
+      },
+      "18": {
+        "name": "VCCB",
+        "net": "CONSOLE_3V3",
+        "type": "power_in"
+      },
+      "4": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "10": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "15": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "21": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "28": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "34": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "45": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "39": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc16t245.pdf"
+    ],
+    "description": "A=bridge logic, B=host console3.3; DIR1/2=1 A-to-B (device read), 0 B-to-A (host write); Ioff/rail-zero isolation.",
+    "populate": true,
+    "height_max_mm": 1.2
+  },
+  {
+    "ref": "R255",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "GND",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "ATA_DA0",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-side weak idle bias: DA0",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R256",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "GND",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "ATA_DA1",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-side weak idle bias: DA1",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R257",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "GND",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "ATA_DA2",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-side weak idle bias: DA2",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R258",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "ATA_CS0n",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-side weak idle bias: CS0n",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R259",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "ATA_CS1n",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-side weak idle bias: CS1n",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R260",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "ATA_DIORn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-side weak idle bias: DIORn",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R261",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "ATA_DIOWn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-side weak idle bias: DIOWn",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R262",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "ATA_DMACKn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-side weak idle bias: DMACKn",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "U36",
+    "value": "SN74LVC244A host controls",
+    "mpn": "SN74LVC244APWR",
+    "footprint": "Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm",
+    "pins": {
+      "1": {
+        "name": "1OEn",
+        "net": "GND",
+        "type": "input"
+      },
+      "19": {
+        "name": "2OEn",
+        "net": "GND",
+        "type": "input"
+      },
+      "10": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "20": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      },
+      "2": {
+        "name": "1A1",
+        "net": "ATA_DA0",
+        "type": "input"
+      },
+      "18": {
+        "name": "1Y1",
+        "net": "BUS_DA0",
+        "type": "output"
+      },
+      "4": {
+        "name": "1A2",
+        "net": "ATA_DA1",
+        "type": "input"
+      },
+      "16": {
+        "name": "1Y2",
+        "net": "BUS_DA1",
+        "type": "output"
+      },
+      "6": {
+        "name": "1A3",
+        "net": "ATA_DA2",
+        "type": "input"
+      },
+      "14": {
+        "name": "1Y3",
+        "net": "BUS_DA2",
+        "type": "output"
+      },
+      "8": {
+        "name": "1A4",
+        "net": "ATA_CS0n",
+        "type": "input"
+      },
+      "12": {
+        "name": "1Y4",
+        "net": "BUS_CS0n",
+        "type": "output"
+      },
+      "11": {
+        "name": "2A1",
+        "net": "ATA_CS1n",
+        "type": "input"
+      },
+      "9": {
+        "name": "2Y1",
+        "net": "BUS_CS1n",
+        "type": "output"
+      },
+      "13": {
+        "name": "2A2",
+        "net": "ATA_DIORn",
+        "type": "input"
+      },
+      "7": {
+        "name": "2Y2",
+        "net": "BUS_DIORn",
+        "type": "output"
+      },
+      "15": {
+        "name": "2A3",
+        "net": "ATA_DIOWn",
+        "type": "input"
+      },
+      "5": {
+        "name": "2Y3",
+        "net": "BUS_DIOWn",
+        "type": "output"
+      },
+      "17": {
+        "name": "2A4",
+        "net": "ATA_DMACKn",
+        "type": "input"
+      },
+      "3": {
+        "name": "2Y4",
+        "net": "BUS_DMACKn",
+        "type": "output"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc244a.pdf"
+    ],
+    "description": "8 host-to-logic controls; 5.5-V tolerant inputs and Ioff, both enables tied low.",
+    "populate": true,
+    "height_max_mm": 1.2
+  },
+  {
+    "ref": "C228",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U36 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U37",
+    "value": "SN74LVC1G17 host RESETn",
+    "mpn": "SN74LVC1G17DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "NC",
+        "net": null,
+        "type": "no_connect"
+      },
+      "2": {
+        "name": "A",
+        "net": "ATA_RESETn",
+        "type": "input"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "4": {
+        "name": "Y",
+        "net": "BUS_RESETn",
+        "type": "output"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g17.pdf"
+    ],
+    "description": "Ninth control: asynchronous host reset through Schmitt buffer; held-low default required.",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "R263",
+    "value": "47k",
+    "mpn": "RC0402FR-0747KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "ATA_RESETn",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host reset defaults asserted if disconnected",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C229",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U37 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U72",
+    "value": "SN74LVC1G32DBVR",
+    "mpn": "SN74LVC1G32DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "A",
+        "net": "BUS_SAFE_n",
+        "type": "input"
+      },
+      "2": {
+        "name": "B",
+        "net": "REQ_INTRQ_OEn",
+        "type": "input"
+      },
+      "4": {
+        "name": "Y",
+        "net": "INTRQ_OEn",
+        "type": "output"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g32.pdf"
+    ],
+    "description": "Selected-device protocol ownership plus independent hardware safe gate",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "C230",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U72 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "R264",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "REQ_INTRQ_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Protocol output owner defaults disabled before FPGA configuration",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R265",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "INTRQ_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-powered output OE defaults disabled with logic absent",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "U38",
+    "value": "SN74LVC1G125 qualified ATA_INTRQ",
+    "mpn": "SN74LVC1G125DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "OEn",
+        "net": "INTRQ_OEn",
+        "type": "input"
+      },
+      "2": {
+        "name": "A",
+        "net": "REQ_INTRQ",
+        "type": "input"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "4": {
+        "name": "Y",
+        "net": "ATA_INTRQ",
+        "type": "tri_state"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "CONSOLE_3V3",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g125.pdf"
+    ],
+    "description": "Host-powered Ioff tri-state output; high-impedance unless hardware-safe AND front-end selected-device protocol OEn is low.",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "C231",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U38 host-domain bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U73",
+    "value": "SN74LVC1G32DBVR",
+    "mpn": "SN74LVC1G32DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "A",
+        "net": "BUS_SAFE_n",
+        "type": "input"
+      },
+      "2": {
+        "name": "B",
+        "net": "REQ_DMARQ_OEn",
+        "type": "input"
+      },
+      "4": {
+        "name": "Y",
+        "net": "DMARQ_OEn",
+        "type": "output"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "+3V3_LOGIC",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g32.pdf"
+    ],
+    "description": "Selected-device protocol ownership plus independent hardware safe gate",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "C232",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U73 VCC bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "R266",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+3V3_LOGIC",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "REQ_DMARQ_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Protocol output owner defaults disabled before FPGA configuration",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "R267",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "DMARQ_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-powered output OE defaults disabled with logic absent",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "U39",
+    "value": "SN74LVC1G125 qualified ATA_DMARQ",
+    "mpn": "SN74LVC1G125DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "OEn",
+        "net": "DMARQ_OEn",
+        "type": "input"
+      },
+      "2": {
+        "name": "A",
+        "net": "REQ_DMARQ",
+        "type": "input"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "4": {
+        "name": "Y",
+        "net": "ATA_DMARQ",
+        "type": "tri_state"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "CONSOLE_3V3",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g125.pdf"
+    ],
+    "description": "Host-powered Ioff tri-state output; high-impedance unless hardware-safe AND front-end selected-device protocol OEn is low.",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "C233",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U39 host-domain bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U70",
+    "value": "SN74LVC1G07 open-drain IORDY",
+    "mpn": "SN74LVC1G07DBVR",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "pins": {
+      "1": {
+        "name": "NC",
+        "net": null,
+        "type": "no_connect"
+      },
+      "2": {
+        "name": "A",
+        "net": "IORDY_RELEASE",
+        "type": "input"
+      },
+      "3": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "4": {
+        "name": "Y",
+        "net": "ATA_IORDY",
+        "type": "open_collector"
+      },
+      "5": {
+        "name": "VCC",
+        "net": "CONSOLE_3V3",
+        "type": "power_in"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/sn74lvc1g07.pdf"
+    ],
+    "description": "Only pulls low. BUS_SAFE=0 makes input high/released; host-power-zero Ioff prevents backfeed.",
+    "populate": true,
+    "height_max_mm": 1.45
+  },
+  {
+    "ref": "R268",
+    "value": "10k",
+    "mpn": "RC0402FR-0710KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "IORDY_RELEASE",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Host-domain release defaults high when logic power is absent",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C234",
+    "value": "100nF",
+    "mpn": "GRM155R71C104KA88D",
+    "footprint": "Capacitor_SMD:C_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM155R71C104KA88D"
+    ],
+    "description": "U70 bypass",
+    "populate": true,
+    "height_max_mm": 0.55
+  },
+  {
+    "ref": "U71",
+    "value": "TPS22919 Wi-Fi input switch",
+    "mpn": "TPS22919DCKR",
+    "footprint": "Package_TO_SOT_SMD:SOT-363_SC-70-6",
+    "pins": {
+      "1": {
+        "name": "IN",
+        "net": "PRIMARY_5V",
+        "type": "power_in"
+      },
+      "2": {
+        "name": "GND",
+        "net": "GND",
+        "type": "power_in"
+      },
+      "3": {
+        "name": "ON",
+        "net": "C5_SWITCH_EN",
+        "type": "input"
+      },
+      "4": {
+        "name": "NC",
+        "net": null,
+        "type": "no_connect"
+      },
+      "5": {
+        "name": "QOD",
+        "net": "+5V_C5",
+        "type": "passive"
+      },
+      "6": {
+        "name": "VOUT",
+        "net": "+5V_C5",
+        "type": "power_out"
+      }
+    },
+    "sources": [
+      "https://www.ti.com/lit/ds/symlink/tps22919.pdf"
+    ],
+    "description": "Default-off 1.5-A input switch with controlled rise and output discharge. No reverse blocking claim; USB removed baseline.",
+    "populate": true,
+    "height_max_mm": 1.1
+  },
+  {
+    "ref": "R269",
+    "value": "100k",
+    "mpn": "RC0402FR-07100KL",
+    "footprint": "Resistor_SMD:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "C5_SWITCH_EN",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.yageo.com/en/Download/PDF/Chip%20Resistors/RC.pdf"
+    ],
+    "description": "Load-switch hardware OFF pull-down",
+    "populate": true,
+    "height_max_mm": 0.65
+  },
+  {
+    "ref": "C235",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "PRIMARY_5V",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "U71 input bulk",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "C236",
+    "value": "22uF",
+    "mpn": "GRM21BR61A226ME51L",
+    "footprint": "Capacitor_SMD:C_0805_2012Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "+5V_C5",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "GND",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.murata.com/en-us/api/pdfdownloadapi?cate=luCeramicCapacitorsSMD&partno=GRM21BR61A226ME51L"
+    ],
+    "description": "U71 output bulk; verify module combined inrush",
+    "populate": true,
+    "height_max_mm": 1.4
+  },
+  {
+    "ref": "TP20",
+    "value": "PWR_FAILn",
+    "mpn": "PCB test point",
+    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+    "pins": {
+      "1": {
+        "name": "PWR_FAILn",
+        "net": "PWR_FAILn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT"
+    ],
+    "description": "Unfitted test pad for prototype verification.",
+    "populate": true,
+    "height_max_mm": 0
+  },
+  {
+    "ref": "TP21",
+    "value": "PWR_GOOD",
+    "mpn": "PCB test point",
+    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+    "pins": {
+      "1": {
+        "name": "PWR_GOOD",
+        "net": "PWR_GOOD",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT"
+    ],
+    "description": "Unfitted test pad for prototype verification.",
+    "populate": true,
+    "height_max_mm": 0
+  },
+  {
+    "ref": "TP22",
+    "value": "BUS_SAFE",
+    "mpn": "PCB test point",
+    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+    "pins": {
+      "1": {
+        "name": "BUS_SAFE",
+        "net": "BUS_SAFE",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT"
+    ],
+    "description": "Unfitted test pad for prototype verification.",
+    "populate": true,
+    "height_max_mm": 0
+  },
+  {
+    "ref": "TP23",
+    "value": "DATA_OEn",
+    "mpn": "PCB test point",
+    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+    "pins": {
+      "1": {
+        "name": "DATA_OEn",
+        "net": "DATA_OEn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT"
+    ],
+    "description": "Unfitted test pad for prototype verification.",
+    "populate": true,
+    "height_max_mm": 0
+  },
+  {
+    "ref": "TP24",
+    "value": "+5V_HOLD",
+    "mpn": "PCB test point",
+    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+    "pins": {
+      "1": {
+        "name": "+5V_HOLD",
+        "net": "+5V_HOLD",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT"
+    ],
+    "description": "Unfitted test pad for prototype verification.",
+    "populate": true,
+    "height_max_mm": 0
+  },
+  {
+    "ref": "TP25",
+    "value": "RESERVE_5V",
+    "mpn": "PCB test point",
+    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+    "pins": {
+      "1": {
+        "name": "RESERVE_5V",
+        "net": "RESERVE_5V",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT"
+    ],
+    "description": "Unfitted test pad for prototype verification.",
+    "populate": true,
+    "height_max_mm": 0
+  },
+  {
+    "ref": "TP26",
+    "value": "CONSOLE_3V3",
+    "mpn": "PCB test point",
+    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+    "pins": {
+      "1": {
+        "name": "CONSOLE_3V3",
+        "net": "CONSOLE_3V3",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://github.com/TPMJB/K-UI-NeXT"
+    ],
+    "description": "Unfitted test pad for prototype verification.",
+    "populate": true,
+    "height_max_mm": 0
+  }
+]

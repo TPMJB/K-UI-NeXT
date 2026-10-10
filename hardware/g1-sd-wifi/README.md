@@ -1,126 +1,42 @@
-# K-UI G1 microSD and Wi-Fi bridge proposal
+# K-UI G1 microSD and Wi-Fi bridge — Rev A
 
-**Not ready to order: architecture proposal and controller starter, updated 10 October 2026. No G1 bridge PCB or flex layout exists yet. Initial clearances are owner-reported; complete assembly fit remains pending.**
+The design now has a complete native KiCad circuit, two routed CN503 flex arms, selected components and original FPGA logic. All 53 BASE SMT part types have exact catalog matches, and candidate BOM/CPL files exist. **Prototype fabrication is not released yet:** carrier routing and electrical layout review, mechanical support/fit and assembler placement/fixture review remain open. Device timing and firmware qualification are also outstanding. This directory supersedes the historical MCU-only starter.
 
-Build a custom Dreamcast VA1 board that exposes a microSD card as an ATA slave through an RP2350B, retains the original 3.3 V GD-ROM, and carries a socketed Seeed XIAO ESP32-C5 for Wi-Fi. Optional dual BIOS belongs in the mechanical and electrical planning. This is the successor proposal to the separate [CF board](../cf-board/README.md); the existing CF design remains an independent, unvalidated option.
+The Dreamcast VA1 keeps its original 3.3 V GD-ROM as device0. The bridge supplies ATA device1, raw microSD sectors and Wi-Fi transport. K-UI is the sole filesystem owner; the C5 never independently mounts the card. exFAT is the baseline user choice; ext4 remains a software option. No FAT32 setup is prescribed.
 
-This folder makes the proposal available for independent review. It contains the original controller foundation and the decisions made after it was drafted. It does **not** contain completed G1 buffer, SD, C5, reserve-power or dual-BIOS circuits, an ATA-emulation firmware implementation, or a production PCB.
-
-## Read and review
-
-| File | Purpose |
+| Implemented hardware | Selected component or circuit |
 | --- | --- |
-| [JLCPCB release status and preflight](manufacturing/README.md) | Exact missing fabrication inputs, full Claude feature scope and guarded export tooling; not an order package |
-| [REVIEW.md](docs/REVIEW.md) | Self-contained review request for Claude or a hardware engineer |
-| [Review disposition](docs/review-disposition-2026-10-09.md) | Claude's review, accepted requirements, corrections and revised bring-up order |
-| [Controller, RAM and BIOS update](docs/controller-ram-bios-disposition-2026-10-09.md) | FPGA and PSRAM candidates, IC501 tap evidence, boot recovery and revised measurements |
-| [IC501 candidate tap reference](docs/IC501-candidate-reference.csv) | Schematic-derived alternate points for 20 ATA signals; continuity and signal integrity remain unverified |
-| [GPIO allocation](controller/K-UI-G1-GPIO-RevA.csv) | All 48 RP2350B GPIOs; 47 assigned and one spare |
-| [CN503 reference](docs/CN503-reference.csv) | Logical connector-to-ATA-to-MCU mapping, without a qualified physical tap drawing |
-| [CN503 US Letter PDF](docs/CN503-contact-alignment-RevA-US-Letter.pdf) and [Letter SVG](docs/CN503-contact-alignment-RevA-US-Letter.svg); [A4 PDF](docs/CN503-contact-alignment-RevA.pdf) and [A4 SVG](docs/CN503-contact-alignment-RevA.svg) | Download the PDF and print from a PDF viewer with matching paper and Actual size; 1 mm pitch and 5.03 mm trial row-center spacing; check both 20 mm bars |
-| [START-HERE.txt](controller/START-HERE.txt) | Opening guide and current mounting/power notes |
-| [KiCad project](controller/KUI-G1-Bridge-RevA.kicad_pro) and [schematic](controller/KUI-G1-Bridge-RevA.kicad_sch) | Controller, boot flash, clock and bench programming foundation; requires KiCad 10 or newer |
-| [CHECKS.txt](controller/CHECKS.txt) | Original structural checks and their limits |
-| [Initial pin-plan PDF](docs/initial-pin-plan-2026-10-06.pdf) | Historical 6 October draft; current Markdown and START-HERE notes supersede its mounting assumptions |
+| ATA front end | U10 LCMXO2-2000HC-4TG100C; 50 MHz clock, JTAG, TX/RX FIFOs and hardware isolation |
+| Controller | U201 RP2350B with boot NOR, native four-bit SD, USB/SWD recovery |
+| Bridge cache | U203 APS6404L-3SQR-ZR, 8 MiB PSRAM on QMI CS1/GPIO47; does not add SH-4 system RAM |
+| microSD | Molex1040310811 socket, card detect, pullups and rail-qualified bidirectional isolation |
+| Wi-Fi | Manual USB-free XIAO ESP32-C5, sixteen Harwin spring contacts, switched5 V, isolated SPI/UART and EN/BOOT recovery |
+| Power | Dedicated fused/reverse-protected5 V pair, separate logic/storage bucks, power warning, supervisors and DNP reserve bank |
+| G1 attachment | Independent passive20-conductor A/B arms and Hirose FH12 bottom-contact sockets; audio/+12 V excluded |
+| Optional BIOS | DNP x8 NOR, extra ROM taps, physical independent stock recovery and hardware-qualified write arm; active factory bank0 |
 
-## Architecture
+## Open the actual design
 
-| Part | Proposed responsibility |
-| --- | --- |
-| Dreamcast SH-4 / K-UI | ATA host; sole owner of the mounted exFAT or ext4 filesystem |
-| Original GD-ROM | Remains ATA device 0, with normal disc operation retained |
-| RP2350B | ATA device-1 backend; raw-sector SD, buffering, command handling and C5 link |
-| Optional FPGA/CPLD front end | Candidate for ATA cycle timing, register responses and DMA ownership; part and link are not selected |
-| 8 MiB PSRAM provision | Planned footprint and factory-populated option for read-ahead LBA caching; immediate transfers stay in SRAM/FIFO |
-| microSD | Native four-bit interface to RP2350B; game sectors stored directly on the card |
-| XIAO ESP32-C5 | Wi-Fi packet transport over a separate SPI link to RP2350B |
-| Optional second BIOS | Independent stock/custom selection and chip-enable isolation; absent from the current schematic |
+Open [the controller project](controller/KUI-G1-Bridge-RevA.kicad_pro) with KiCad10. The [root schematic](controller/KUI-G1-Bridge-RevA.kicad_sch) links eleven component sheets. The [carrier PCB](controller/KUI-G1-Bridge-RevA.kicad_pcb) is a draft with a BIOS clearance opening and an open CN503 notch. Both flex projects are under [flex/](flex/); A and B have different contact maps and are not interchangeable.
 
-The bridge presents the actual SD card as a block device, rather than requiring a FAT-formatted card containing virtual-drive image files. exFAT remains a supported user choice and ext4 is the proposed option for journaled writes. FAT32 is not the target setup or validation workflow.
+[Physical component contracts](design/blocks/) drive the deterministic schematic generator. Local symbol and footprint libraries are included. The [physical pad audit](design/physical-pad-audit.json) checks every electrical terminal against KiCad's loaded footprint, including exposed pads and connector anchors. [Controller notes](design/controller-implementation.md), [power/isolation notes](design/power-and-isolation.md) and [BIOS population notes](design/BIOS-variant.md) describe actual pins and circuits. [Current GPIO allocation](controller/K-UI-G1-GPIO-RevA.csv) is controller-to-FPGA/SD/C5, rather than the original direct-ATA candidate.
 
-Network uploads must pass through K-UI's filesystem owner. The C5 must not independently mount and modify the same card. Retail-game networking is a separate compatibility project: a K-UI G1 packet driver does not make existing games recognize a modem or Broadband Adapter.
+The reusable [integration checker](tools/check_integration.py) verifies the source contracts against the integrated native components and exported XML netlist, checks 100 FPGA package functions and 56 pin constraints, and evaluates 8,240 hardware safety combinations using the exported connections. From the repository root, run `python hardware/g1-sd-wifi/tools/check_integration.py --check`. After reviewed source changes and a fresh native netlist export, omit `--check` to refresh [integration-audit.json](design/integration-audit.json).
 
-Storage is the first implementation milestone. Establish identification, verified PIO reads and coexistence with the original drive before DMA, writes and networking. Schedule packet work around game reads instead of promising a fixed division of bus bandwidth. No sustained throughput or game-compatibility claim has been measured on this hardware.
+The [FPGA directory](fpga/) contains synthesizable logic, exact physical-pin LPF, simulation scoreboards and the MCU-link contract. Simulation and MachXO2 resource mapping pass. A Lattice device-fit/timing result and completed RP2350 ATA/media firmware are still required; there is no validated programming image or game-compatibility claim. Initial firmware must advertise PIO0 only. DMA ownership is provisioned and tested in simulation, but performance and physical timing are unqualified.
 
-The [controller/RAM/BIOS follow-up](docs/controller-ram-bios-disposition-2026-10-09.md) makes RP2350B plus a programmable ATA front end the preferred architecture to evaluate. The controller starter and GPIO CSV still describe the original MCU-only allocation. A front end needs a new pin/link allocation and schematic; the existing files are not an implementation of that candidate. PSRAM has a planned 8 MiB footprint and factory-populated option; it remains absent from the native starter. K-UI remains the filesystem owner.
+## Measured mechanical limits
 
-The baseline bridge uses CN503 and needs no BIOS-leg connections. GDEMU keeps the stock BIOS by emulating a replacement optical drive; our retained-drive ATA slave does not provide that boot behavior. Plan a disc bootstrap for initial K-UI/DreamShell validation. Optional BIOS replacement needs additional ROM address/control access and stock-ROM isolation; see [connector-only storage and boot behavior](docs/controller-ram-bios-disposition-2026-10-09.md#connector-only-storage-and-boot-behavior).
+The owner may reassemble the console; no further teardown is requested for this draft. Motherboard-top clearance is6 mm in the BIOS/CN503/lower-shield region,8 mm elsewhere, and zero over the two thermal-contact chips. Nominal carrier underside is2.5 mm above the motherboard;0.8 mm PCB puts its top at3.3 mm. A2 mm FPC connector reaches5.3 mm before tolerances. The C5 assembly is reserved for the8 mm region and needs a supported0.90 mm contact gap and removable clamp.
 
-## GPIO plan and bus behavior
+BIOS body26.68 ×12.65 mm, outer lead span16.66 mm, height approximately2 mm. Its long axis is west-east; CN503's long axis is north-south. CN503 is38.67 mm long,6.56 mm maximum housing width; accepted solder-contact pitch is1.00 mm with approximately0.44 mm metal width. The25-contact measured run is24.39 mm. BIOS-to-connector housing distance is approximately12 mm; the west BIOS strip and east connector strip are approximately7 mm each. Those strips contain existing parts and solder joints. The housing-derived5.03 mm row spacing does not constrain the independent flex arms.
 
-| RP2350B GPIO | Proposed use |
-| --- | --- |
-| 0-15 | ATA D0-D15 |
-| 16-27 | ATA register address, chip selects, read/write, reset, IORDY, IRQ and DMA handshake |
-| 28-30 | Data-buffer enable, direction and response gate |
-| 31 | Early power-failure input |
-| 32-37 | SD CLK, CMD and D0-D3, proposed PIO2 implementation |
-| 38-39 | SD detect and optional status LED |
-| 40-43 | C5 SPI1 RX, CS, SCK and TX |
-| 44-46 | C5 IRQ, ready and switched-power enable |
-| 47 | Spare |
+The59 ×105 mm carrier envelope and cutout/notch north-south registration are provisional. The angled photographs do not establish a production outline or support location. Existing tall capacitors, case features, thermal-pad pressure, C5 height/retention, SD access and shield insulation require mechanical review. No shield cutting is assumed. [Actual-size carrier fit sheets](mechanical/README.md) use native PCB edges and component pads, with Letter/A4 paper choices and independent horizontal/vertical calibration.
 
-Independent review supports the logical connector mapping, PIO pin windows and SPI1 mux. The concrete PIO programs, output ownership between PIO blocks, DMA resources and response timing remain unproven. See the review disposition before implementing its proposed state-machine split or output gate. The LED and card-detect assignment may be reclaimed if the electrical implementation needs more controls. The optional secondary flash circuit from the Raspberry Pi reference was removed to free GPIO0; the dedicated boot flash remains.
+## Manufacture and review
 
-The bridge must track device selection and obey the ATA rules for shared data, IORDY, IRQ and DMA lines. It must not answer device-0 cycles or contend with the drive. Default isolation must be enforced in hardware during MCU boot, reset and power failure, including when MCU pins are unconfigured. DMA acknowledgment must be handled even when register chip selects are inactive. The output gate must preserve data hold and the final DMA word after DMARQ is negated. Exact gate topology, timing and supported transfer modes are unresolved.
+[Manufacturing status](manufacturing/README.md) identifies the current order blockers, native checks, exact draft settings and procurement work. Final release uses three separate archives: rigid carrier, flexA and flexB. The exporter refuses to publish an order package while required checks, assembly data and reviewed source hashes are incomplete.
 
-## Power and interrupted writes
+JLC's exact catalog pages require assembly support fixtures for both the **Harwin S7221-45R contacts (C22445132)** and **Abracon ASE-50.000MHZ-LC-T oscillator (C596955)**. Obtain assembler agreement on those fixtures before releasing an assembly order. The C5 retention clamp is a separate mechanical installation requirement. [The purchasing worksheet](manufacturing/parts-to-buy.csv) records the exact SMT identities and fixture notices.
 
-VA1 G1 signalling is a 3.3 V target. A 5 V supply input is a separate option, not approval for 5 V G1 signalling or VA0 compatibility. The proposed board can use console 5 V with local 3.3 V regulation, or console 3.3 V for MCU/SD plus a separate 5 V C5 feed. A 3.3 V-only complete-board configuration needs a qualified C5 supply solution. The XIAO's 3V3_OUT is not treated as an approved input. USB programming must not back-feed the console.
-
-Plan upstream power-loss detection, isolation and reserve energy for RP2350B plus SD, with C5 switched off first. Reserve capacity awaits measured consumption and SD busy times; no capacitor size or power-loss guarantee is established.
-
-Planned write protection includes read-only collection access during ordinary playback, explicit write sessions for dumping/uploads, temporary files followed by verification and final commit, correct block ordering, honest ATA cache/flush semantics through the entire SD path, and ext4 journal recovery before subsequent writes. Optional SD cache stays disabled until its flush semantics are implemented and qualified. Journal support must be demonstrated in the actual K-UI port. Reserve energy cannot save data still in Dreamcast RAM, and journaling cannot guarantee against failure inside a consumer SD controller.
-
-## Mounting and attachment: still unresolved
-
-The owner's photo shows VA1 mainboard **837-13778-02**, BIOS **IC501** and G1 connector **CN503**. Preferred placement is above the motherboard near IC501/CN503, below the normally seated upper metal shield. The shield is the local height constraint.
-
-The owner confirms **zero usable clearance over the SEGA 315-6267 chip and the large thermal-compound chip directly below it**, and **8.0 mm outside the identified metal area**. Both contact footprints are placement keepouts. The owner now confirms **6.0 mm around IC501/CN503**; the earlier 6.6 mm calculation stays as measurement history. The inline replacement photo resolves the chip reference in the [region description](docs/controller-ram-bios-disposition-2026-10-09.md#lower-metal-region-and-connector-placement). Complete carrier/socket/module assembly fit remains to be checked.
-
-CN503 has two 25-pin rows carrying the required signals. The owner reports a **38.67 × 6.56 mm maximum connector-body envelope**, a **5.03 mm narrower section** and a **centered 24.39 mm pin run**, and confirms all pins are accessible. Prefer a **small custom flex tap** with solder lands aligned to its exposed tails, using the full connector bus and a short tail into a low-profile locking connector on a separately supported rigid bridge. The original GD-ROM connector stays installed. This follows the owner's modchip-style ribbon suggestion; a direct rigid cutout/landing remains an alternative. The owner reports the tails are basically flush with the motherboard. Ordinary rigid-carrier top pads would sit higher; the thin flex addresses that transition, with its solder access and joint cross-section still to be defined. The owner reaffirms the **24.39 mm run** and **approximately 0.44 mm contact width**, with center spacing estimated near 1.01 mm. Use **1.00 mm working pitch** for concept placement: a 25-contact row predicts a 24.44 mm outside-edge span. The owner now identifies the **5.03 mm narrow-section width** as the effective distance between the rows. Use it as provisional row-center spacing in the [US Letter alignment guide](docs/CN503-contact-alignment-RevA-US-Letter.pdf), then test that interpretation by comparing both rows. Download the actual PDF, open it in a PDF viewer, select matching US Letter paper and print at Actual size / 100%; an A4 version is linked above. Check both 20 mm scale bars. [The printer-scale note](docs/controller-ram-bios-disposition-2026-10-09.md#contact-alignment-template) records the owner's original 17.78 mm print result and the conditional 118.11% correction for that unchanged setup. Qualify the final solder footprint separately. The printed 1 mm ruler in close-up **62258.jpg** visually corroborates the working pitch. The later paper-fit photo **62263.jpg** shows the template tracking the exposed row across its run, and the owner accepts any remaining mismatch as negligible. Carry **1.00 mm nominal pitch** into the first flex mechanical draft. [The fit record](docs/controller-ram-bios-disposition-2026-10-09.md#owner-paper-fit-check) accepts that visible-row check; the opposite physical row is hidden in that paper-fit photo, so it does not verify the 5.03 mm trial row-center spacing. Use **about 12 mm BIOS-body-to-CN503 housing gap**, retaining 11.7 mm as the earlier caliper report. The visible tail row begins near/slightly below the BIOS body top, enough for concept placement and a subsequent 1:1 fit check. The lifted paper/perspective prevent precision image calibration. CN503 passes through the shield; its near-flush contact plane and the BIOS's roughly 2 mm body height are reaffirmed. Logical pin mapping does not establish that mechanical footprint. Keep the flex local with adequate ground returns, support and qualified power routing. [The flex attachment discussion](docs/controller-ram-bios-disposition-2026-10-09.md#preferred-local-flex-attachment) covers connector/coverlay/bend and bus-loading checks. The controller/C5 assembly is not assumed to fit under the motherboard.
-
-The later inline close-ups **62264.jpg/62265.jpg** show both CN503 solder rows: A faces the BIOS, B faces the east PCB edge, 25 is at the AV/north end and 1 at the CN601/south end. These are physical silkscreen observations, not verified electrical continuity. The owner reports **about 7 mm west of the BIOS before the large chip** and **about 7 mm east of CN503 to the PCB edge**. Overviews **62266.jpg/62267.jpg** provide enough parts/board-edge context for a conservative first flex and carrier draft. The east strip includes existing solder joints, so neither reported strip is automatically an empty carrier rectangle. [The capture record](docs/controller-ram-bios-disposition-2026-10-09.md#both-row-and-placement-captures) marks the exposed-motherboard capture complete: the owner can reassemble; exact landing geometry and complete assembly fit remain prototype checks.
-
-The supported carrier needs a BIOS clearance cutout wherever its final outline overlaps the existing package; the independent flex tap relaxes registration between the carrier and connector joints. The owner measures IC501's black body as **26.68 × 12.65 mm**, its outer pin span as **16.66 mm**, and its height as roughly **2 mm**. The cutout avoids stacking above IC501; a clearance-only opening must account for the lead envelope and alignment allowance. With the full G1 bus available at CN503, BIOS-leg taps are optional for BIOS features or an alternative attachment. The VA1 traced schematic exposes 20 ATA nets at IC501, including multiplexed address/data nets; the [candidate reference](docs/IC501-candidate-reference.csv) remains unverified electrically and requires eight other control taps if used as the bridge attachment.
-
-The owner reports **4.48 mm total C5 module height including USB**. That leaves **3.52 mm in a usable 8.0 mm region**, or **1.52 mm around IC501/CN503 at its confirmed 6.0 mm working limit**, for carrier elevation, PCB, socket separation, insulation and fit allowance. Prefer the taller region for the C5 where the footprint permits it. The latest owner decision is to remove the USB connector and mount the removable C5 locally on the normal carrier. The figures above describe the earlier USB-equipped module; measure its remaining height and qualify the full carrier/connection/module stack. [The mounting budget](docs/controller-ram-bios-disposition-2026-10-09.md#bios-cutout-and-c5-stack) records that distinction. Retain the intact shield and thermal contacts.
-
-The DragonCity numbered-circle picture discussed in the design conversation is the underside of a **GD-ROM PCB**, not the motherboard. Its numbers refer to **IDE cable pins**, not CN503 contacts or RP2350B GPIOs. Data/control points map to corresponding G1 signals. Its IDE-pin-1-to-3.3-V tie is a reset workaround and is not copied into the MCU design; real G1 reset is A2.
-
-Required physical evidence remains:
-
-- Refine the measured IC501 keepout with opening/alignment allowance and surrounding component positions. BIOS-top gap is needed only for a later overhang.
-- Keep both thermal-contact footprints clear and transfer the resolved zero/6.0/8.0 mm height map to the measured outline. Parts under solid carrier areas require elevation or local cutouts even if below the roughly 2 mm BIOS height.
-- Use the approximately 12 mm gap and close-up alignment for concept placement. The owner has supplied about 5.03 mm as the row-separation reference; check its trial centerline interpretation and the 1 mm working pitch with the actual-size contact guide. Exposed tail length, overlap and final landing tolerances remain to be qualified.
-- Finished carrier, USB-free C5 connection/module and SD-socket stack heights; card, recovery-pad and antenna access.
-- Actual tap continuity and pin orientation; ROM supply and G1 signal levels measured separately if pursuing BIOS functions.
-
-The [remaining measurement checklist](docs/controller-ram-bios-disposition-2026-10-09.md#cn503-cutout-and-remaining-measurements) distinguishes a first outline from a qualified solder-pad footprint. The latest captures complete the measurements/photos requested before reassembly. C5 height after USB removal can be measured off-console; full landing and installed-stack checks wait for the prototype.
-
-Optional dual BIOS requires additional connections and independent stock/custom selection. The RP2350B GPIO table is not a BIOS-bus pin allocation. A ROM piggyback alone does not supply every ATA control, DMA and interrupt signal. Fit, wiring and fallback behavior remain to be designed.
-
-## Factory assembly and remaining measurements
-
-The owner wants provision for 8 MiB PSRAM and the option to receive a board with SMT parts factory-soldered. The USON-8 candidate is only 3 × 2 mm and 0.6 mm high; it is a chip on our board, not a plug-in RAM module. Final package sourcing and a finished manufacturing/BOM/placement set are required for assembly.
-
-Use the owner-selected USB-free C5 mounted locally on the carrier; remote mounting and cable-route measurements are deferred. Provide UART/BOOT/reset recovery contacts and plan K-UI-initiated application updates through RP2350B/SPI; the updater remains to be built. Nominal BIOS pitch is 1.27 mm, but the baseline clearance cutout needs no BIOS solder pads. [The mounting, programming and layout checklist](docs/controller-ram-bios-disposition-2026-10-09.md#local-c5-ram-provision-and-factory-assembly) records the pending CN503 relative position/contact geometry and the complete mounted stack check.
-
-## Next deliverables
-
-1. Check measurements and candidate tap continuity. Review existing software probe evidence and capture baseline bus timing with a qualified passive hookup before freezing the controller/front-end choice. The earlier CF board is unbuilt and unvalidated; a working CF rig is not a prerequisite assumed to exist.
-2. Close output ownership and timing, then finish G1 buffers/front end, SD/C5 interfaces, console/USB power and power-fail circuits; choose qualified production footprints and run ERC. Default stock BIOS recovery must work independently of MCU and FPGA configuration.
-3. Use the completed owner measurement/photo capture to draft the carrier and flex; transfer the resolved height map, then qualify joining geometry and mounted C5 stack on the prototype. No further pre-reassembly capture is requested.
-4. Build a bench prototype: identify, read and hash sectors, test drive coexistence, then qualify DMA and writes.
-5. Demonstrate filesystem recovery and repeated power cuts before adding packet transport and pursuing retail-game networking.
-
-## Primary references and licensing
-
-- [Raspberry Pi RP2350 documentation and reference design](https://pip.raspberrypi.com/categories/1214-rp2350), [datasheet](https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf), [hardware-design guide](https://datasheets.raspberrypi.com/rp2350/hardware-design-with-rp2350.pdf).
-- [Seeed XIAO ESP32-C5 documentation](https://wiki.seeedstudio.com/xiao_esp32c5_getting_started/) and [module schematic](https://files.seeedstudio.com/wiki/XIAO_ESP32C5/res/Seeed_Studio_XIAO_ESP32C5.pdf).
-- [RDC VA1 scans and traced schematics](https://acidmods.com/forum/index.php?topic=44892.0): reverse-engineered references, not a substitute for continuity checks on an installation.
-- [DragonCity IDE installation](https://dragoncity17.wordpress.com/2016/02/12/dreamcast-lire-les-jeux-depuis-un-disque-dur-sans-gdrom-avec-dreamshell/), [connector pinout in G1-ATA guide](https://dragoncity17.wordpress.com/2018/03/16/sega-dreamcast-g1-ata/), and [retained-drive GD-IDE installation](https://dragoncity17.wordpress.com/2018/03/17/sega-dreamcast-gd-ide/).
-- [KallistiOS G1 ATA driver](https://github.com/KallistiOS/KallistiOS/blob/master/kernel/arch/dreamcast/hardware/g1ata.c).
-- [lwext4 upstream](https://github.com/gkostka/lwext4) and [Linux ext4 journal documentation](https://www.kernel.org/doc/html/latest/filesystems/ext4/journal.html).
-
-The controller schematic and bundled reference symbols derive from Raspberry Pi's RP2350B Minimal R4-S1 reference. Preserve [the included MIT license](controller/LICENSE-Raspberry-Pi-MIT.txt). No DragonCity PCB layout or firmware is included. References document prior work; they do not establish our board's hardware validation.
+The historical dispositions remain in [docs/](docs/); Claude's original reviews are pinned to [commit b207dd6](https://github.com/TPMJB/K-UI-NeXT/tree/b207dd659565826ffd757ccf7abe1998f63c9202/docs). The [implementation status](design/IMPLEMENTATION-STATUS-2026-10-10.md) maps each accepted addition to its circuit or source artifact and remaining condition. Software caching/OTA/BIOS programming, runtime bank switching and measured SD power-cut retention are subsequent implementation/qualification work; a DNP reserve capacitor footprint cannot establish safe write completion. The original controller starter is preserved under [controller/reference/](controller/reference/).

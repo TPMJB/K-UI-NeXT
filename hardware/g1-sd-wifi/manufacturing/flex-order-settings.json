@@ -1,11 +1,48 @@
 {
   "manufacturer": "JLCPCB",
   "released": false,
-  "copper_layers": 0,
-  "gerber_layers": [],
+  "copper_layers": 2,
+  "gerber_layers": [
+    "F.Cu",
+    "B.Cu",
+    "F.Mask",
+    "B.Mask",
+    "F.SilkS",
+    "Edge.Cuts",
+    "User.1"
+  ],
+  "layer_filenames": {
+    "User.1": "pit_0.20.gbr"
+  },
   "origin": "plot",
   "board_type": "flex",
   "assembly": false,
-  "drill_files_required": false,
-  "note": "Blocked. Select FPC material/layer stack, finished thickness, selected connector/contact face and matching mating tail, coverlay and any stiffener/adhesive. Add reviewed coverlay/stiffener Gerbers to manifest extra_fabrication_files before release; an empty list is not a decision that none are needed."
+  "drill_files_required": true,
+  "polyimide_core_mm": 0.025,
+  "base_thickness_mm": 0.12,
+  "copper_oz": 0.5,
+  "finish": "ENIG",
+  "coverlay_color": "yellow",
+  "stiffener": {
+    "side": "top",
+    "material": "PI",
+    "thickness_mm": 0.2,
+    "native_layer": "User.1"
+  },
+  "mating_tail": {
+    "contact_side": "bottom",
+    "target_finished_thickness_mm": 0.3,
+    "accepted_finished_thickness_range_mm": [
+      0.25,
+      0.35
+    ],
+    "width_mm": 10.5,
+    "requested_width_tolerance_mm": 0.07,
+    "status": "Supplier must verify exposedfinger stackup and requested tail tolerance"
+  },
+  "regular_vias": {
+    "drill_mm": 0.3,
+    "diameter_mm": 0.55
+  },
+  "note": "Native flexA/B routed prototypes now exist. Not released until logical mapping, installed geometry and supplier production files are reviewed alongside carrier. Baseline load power uses direct fused harness; no SMT assembly on passive flex."
 }

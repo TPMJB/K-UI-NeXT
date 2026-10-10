@@ -1,0 +1,13 @@
+Exception in thread "main" java.awt.AWTError: Can't connect to X11 window server using ':109' as the value of the DISPLAY variable.
+	at java.desktop/sun.awt.X11GraphicsEnvironment.initDisplay(Native Method)
+	at java.desktop/sun.awt.X11GraphicsEnvironment.initStatic(Unknown Source)
+	at java.desktop/sun.awt.X11GraphicsEnvironment.<clinit>(Unknown Source)
+	at java.desktop/sun.awt.PlatformGraphicsInfo.createGE(Unknown Source)
+	at java.desktop/java.awt.GraphicsEnvironment$LocalGE.createGE(Unknown Source)
+	at java.desktop/java.awt.GraphicsEnvironment$LocalGE.<clinit>(Unknown Source)
+	at java.desktop/java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment(Unknown Source)
+	at java.desktop/sun.awt.X11.XToolkit.<clinit>(Unknown Source)
+	at java.desktop/sun.awt.PlatformGraphicsInfo.createToolkit(Unknown Source)
+	at java.desktop/java.awt.Toolkit.getDefaultToolkit(Unknown Source)
+	at java.desktop/javax.swing.UIManager.getSystemLookAndFeelClassName(Unknown Source)
+	at app.freerouting.gui.MainApplication.main(MainApplication.java:207)

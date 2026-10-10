@@ -1,0 +1,2333 @@
+{
+  "board_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+  "status": "routing_present_qualification_pending",
+  "routing_qualified": false,
+  "signal_integrity_qualified": false,
+  "power_layout_qualified": false,
+  "native_connectivity_unconnected_count": 600,
+  "native_connectivity_count_is_uncapped": true,
+  "native_connectivity_unconnected_category_breakdown": {
+    "counts": {
+      "GND": 3,
+      "power": 209,
+      "other_signal": 388
+    },
+    "sum": 600,
+    "matches_full_board_total": true,
+    "counts_are_uncapped": true,
+    "board_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+    "method": "Independent fresh LoadBoard for each category; assign netcode0 to all pads/tracks/vias/zones outside that category; BuildConnectivity/RecalculateRatsnest/GetUnconnectedCount(False)",
+    "power_net_classification": [
+      "+1V1_MCU",
+      "+3V3_C5_IO",
+      "+3V3_LOGIC",
+      "+3V3_STORAGE",
+      "+5V_C5",
+      "+5V_HOLD",
+      "CONSOLE_3V3",
+      "CONSOLE_5V",
+      "FLEX_5V",
+      "FUSED_5V",
+      "MCU_VREG_AVDD",
+      "MCU_VREG_LX",
+      "PRIMARY_5V",
+      "RESERVE_5V",
+      "SW_LOGIC",
+      "SW_STORAGE",
+      "USB_SERVICE_VBUS",
+      "USB_VBUS_SENSE"
+    ],
+    "category_net_names_present": {
+      "GND": [
+        "GND"
+      ],
+      "power": [
+        "+1V1_MCU",
+        "+3V3_C5_IO",
+        "+3V3_LOGIC",
+        "+3V3_STORAGE",
+        "+5V_C5",
+        "+5V_HOLD",
+        "CONSOLE_3V3",
+        "CONSOLE_5V",
+        "FLEX_5V",
+        "FUSED_5V",
+        "MCU_VREG_AVDD",
+        "MCU_VREG_LX",
+        "PRIMARY_5V",
+        "RESERVE_5V",
+        "SW_LOGIC",
+        "SW_STORAGE",
+        "USB_SERVICE_VBUS",
+        "USB_VBUS_SENSE"
+      ],
+      "other_signal": [
+        "ATA_CS0n",
+        "ATA_CS1n",
+        "ATA_DA0",
+        "ATA_DA1",
+        "ATA_DA2",
+        "ATA_DD0",
+        "ATA_DD1",
+        "ATA_DD10",
+        "ATA_DD11",
+        "ATA_DD12",
+        "ATA_DD13",
+        "ATA_DD14",
+        "ATA_DD15",
+        "ATA_DD2",
+        "ATA_DD3",
+        "ATA_DD4",
+        "ATA_DD5",
+        "ATA_DD6",
+        "ATA_DD7",
+        "ATA_DD8",
+        "ATA_DD9",
+        "ATA_DIORn",
+        "ATA_DIOWn",
+        "ATA_DMACKn",
+        "ATA_DMARQ",
+        "ATA_INTRQ",
+        "ATA_IORDY",
+        "ATA_RESETn",
+        "BIOS_BANK0",
+        "BIOS_BANK1",
+        "BIOS_FLASH_ARMED",
+        "BIOS_NOR_BANK0",
+        "BIOS_NOR_BANK1",
+        "BIOS_NOR_CEn",
+        "BIOS_NOR_RBYn",
+        "BIOS_NOR_RESETn",
+        "BIOS_NOR_WEn",
+        "BIOS_RECOVERYn",
+        "BIOS_WP_ACC",
+        "BIOS_WRITE_ALLOWED",
+        "BIOS_WRITE_BLOCKED",
+        "BIOS_WR_EN",
+        "BRIDGE_ARM",
+        "BUS_CS0n",
+        "BUS_CS1n",
+        "BUS_DA0",
+        "BUS_DA1",
+        "BUS_DA2",
+        "BUS_DD0",
+        "BUS_DD1",
+        "BUS_DD10",
+        "BUS_DD11",
+        "BUS_DD12",
+        "BUS_DD13",
+        "BUS_DD14",
+        "BUS_DD15",
+        "BUS_DD2",
+        "BUS_DD3",
+        "BUS_DD4",
+        "BUS_DD5",
+        "BUS_DD6",
+        "BUS_DD7",
+        "BUS_DD8",
+        "BUS_DD9",
+        "BUS_DIORn",
+        "BUS_DIOWn",
+        "BUS_DMACKn",
+        "BUS_RESETn",
+        "BUS_SAFE",
+        "BUS_SAFE_n",
+        "C5_BOOT_ASSERT",
+        "C5_BOOTn",
+        "C5_CSn",
+        "C5_CSn_MCU",
+        "C5_EN_ASSERT",
+        "C5_ENn",
+        "C5_IO_OEn",
+        "C5_IRQ",
+        "C5_IRQ_MCU",
+        "C5_MISO",
+        "C5_MISO_MCU",
+        "C5_MOSI",
+        "C5_MOSI_MCU",
+        "C5_PWR_EN",
+        "C5_READY",
+        "C5_READY_MCU",
+        "C5_SCLK",
+        "C5_SCLK_MCU",
+        "C5_SWITCH_EN",
+        "C5_UART_RX",
+        "C5_UART_RX_MCU",
+        "C5_UART_TX",
+        "C5_UART_TX_MCU",
+        "DATA_DIR",
+        "DATA_OEn",
+        "DMARQ_OEn",
+        "FLASH_CSn",
+        "FPGA_ARMED",
+        "FPGA_CLK50",
+        "FPGA_CLK50_RAW",
+        "FPGA_CSSPIN",
+        "FPGA_DONE",
+        "FPGA_INITn",
+        "FPGA_JTAGEN",
+        "FPGA_PROGRAMn",
+        "FPGA_READY",
+        "FPGA_RESETn",
+        "FPGA_SCL",
+        "FPGA_SDA",
+        "FPGA_SN",
+        "FPGA_TCK",
+        "FPGA_TDI",
+        "FPGA_TDO",
+        "FPGA_TMS",
+        "HOST_OKn",
+        "INTRQ_OEn",
+        "IORDY_PULL_LOW",
+        "IORDY_RELEASE",
+        "LINK_A0",
+        "LINK_A1",
+        "LINK_D0",
+        "LINK_D1",
+        "LINK_D2",
+        "LINK_D3",
+        "LINK_D4",
+        "LINK_D5",
+        "LINK_D6",
+        "LINK_D7",
+        "LINK_IRQ",
+        "LINK_RDn",
+        "LINK_READY",
+        "LINK_WRn",
+        "LOGIC_BUCK_PG",
+        "LOGIC_RESETn",
+        "MCU_BOOTSEL_PAD",
+        "MCU_SWCLK",
+        "MCU_SWDIO",
+        "MCU_USB_DM",
+        "MCU_USB_DP",
+        "MCU_XIN",
+        "MCU_XOUT",
+        "MCU_XTAL_OUT",
+        "PRIMARY_SENSE",
+        "PSRAM_CSn",
+        "PSRAM_CSn_MCU",
+        "PWR_FAILn",
+        "PWR_GOOD",
+        "PWR_LOCAL_OK",
+        "PWR_UPSTREAM_OK",
+        "QSPI_CSn_MCU",
+        "QSPI_D0",
+        "QSPI_D1",
+        "QSPI_D2",
+        "QSPI_D3",
+        "QSPI_SCLK",
+        "QSPI_SCLK_MCU",
+        "REQ_DATA_OEn",
+        "REQ_DMARQ",
+        "REQ_DMARQ_OEn",
+        "REQ_INTRQ",
+        "REQ_INTRQ_OEn",
+        "REQ_IORDY_LOW",
+        "RESERVE_ACTIVEn",
+        "RESERVE_CHARGE",
+        "RESET_OK",
+        "RESET_RECOVERY_OK",
+        "ROM_A10",
+        "ROM_A11",
+        "ROM_A12",
+        "ROM_A13",
+        "ROM_A14",
+        "ROM_A15",
+        "ROM_A16",
+        "ROM_A17",
+        "ROM_A18",
+        "ROM_A19",
+        "ROM_CEn",
+        "SD_CLK",
+        "SD_CLK_ISO",
+        "SD_CLK_MCU",
+        "SD_CMD",
+        "SD_CMD_DIR",
+        "SD_CMD_ISO",
+        "SD_CMD_MCU",
+        "SD_DAT0",
+        "SD_DAT0_ISO",
+        "SD_DAT0_MCU",
+        "SD_DAT1",
+        "SD_DAT1_ISO",
+        "SD_DAT1_MCU",
+        "SD_DAT2",
+        "SD_DAT2_ISO",
+        "SD_DAT2_MCU",
+        "SD_DAT3",
+        "SD_DAT3_ISO",
+        "SD_DAT3_MCU",
+        "SD_DAT_DIR",
+        "SD_DETECTn",
+        "SD_IO_EN",
+        "SD_IO_OEn",
+        "STOCK_CEn",
+        "STORAGE_BUCK_PG",
+        "STORAGE_PGOOD",
+        "USB_SERVICE_DM",
+        "USB_SERVICE_DP",
+        "unconnected-(K203-CONTACT-Pad1)",
+        "unconnected-(K204-CONTACT-Pad1)",
+        "unconnected-(K206-CONTACT-Pad1)",
+        "unconnected-(U10-NC-Pad89)",
+        "unconnected-(U10-PB21A-Pad42)",
+        "unconnected-(U10-PB21B-Pad43)",
+        "unconnected-(U10-PB22A-Pad45)",
+        "unconnected-(U10-PB22B-Pad47)",
+        "unconnected-(U10-PB25B-Pad49)",
+        "unconnected-(U10-PB8A-Pad31)",
+        "unconnected-(U10-PB8B-Pad32)",
+        "unconnected-(U10-PL3A-Pad3)",
+        "unconnected-(U10-PT17A-Pad88)",
+        "unconnected-(U10-PT17B-Pad87)",
+        "unconnected-(U10-PT9A-Pad99)",
+        "unconnected-(U10-PT9B-Pad98)",
+        "unconnected-(U201-GPIO21-Pad21)",
+        "unconnected-(U201-GPIO22-Pad22)",
+        "unconnected-(U201-GPIO27-Pad28)",
+        "unconnected-(U201-GPIO28-Pad36)",
+        "unconnected-(U201-GPIO29-Pad37)",
+        "unconnected-(U201-GPIO30-Pad38)",
+        "unconnected-(U201-GPIO39-Pad48)",
+        "unconnected-(U208-1B2-Pad12)",
+        "unconnected-(U23-CT-Pad4)",
+        "unconnected-(U24-CT-Pad4)",
+        "unconnected-(U25-CT-Pad4)",
+        "unconnected-(U26-CT-Pad4)",
+        "unconnected-(U37-NC-Pad1)",
+        "unconnected-(U40-DQ10-Pad34)",
+        "unconnected-(U40-DQ11-Pad36)",
+        "unconnected-(U40-DQ12-Pad39)",
+        "unconnected-(U40-DQ13-Pad41)",
+        "unconnected-(U40-DQ14-Pad43)",
+        "unconnected-(U40-DQ8-Pad30)",
+        "unconnected-(U40-DQ9-Pad32)",
+        "unconnected-(U43-NC-Pad1)",
+        "unconnected-(U70-NC-Pad1)",
+        "unconnected-(U71-NC-Pad4)"
+      ]
+    },
+    "netclass_contract_sha256": "eed6c4f28ac053ff2e72ecaf603ad1ff0a3497cd5b869fd5b75289d2193755bc"
+  },
+  "kicad_drc_unconnected_report_limit": 499,
+  "kicad_drc_unconnected_report_at_limit_status": "capped_at_499",
+  "drc_count_interpretation": "A DRC report showing 499 means capped_at_499; use uncapped native connectivity for progress.",
+  "physical_footprints": 364,
+  "tracks_and_vias": 755,
+  "through_vias": 318,
+  "C5_rigid_contact_group": {
+    "checked_contacts": 16,
+    "all_origins_orientations_and_tips_match": true,
+    "tolerance_mm": 1e-05,
+    "positions": [
+      {
+        "ref": "K201",
+        "origin_xy_mm": [
+          21.620000000000005,
+          2.671999999999997
+        ],
+        "rotation_deg": -90.0,
+        "tip_xy_mm": [
+          21.620000000000005,
+          1.971999999999997
+        ],
+        "tip_error_mm": 4.311326371230795e-15
+      },
+      {
+        "ref": "K202",
+        "origin_xy_mm": [
+          19.08,
+          2.671999999999997
+        ],
+        "rotation_deg": -90.0,
+        "tip_xy_mm": [
+          19.08,
+          1.971999999999997
+        ],
+        "tip_error_mm": 2.4424906541753444e-15
+      },
+      {
+        "ref": "K203",
+        "origin_xy_mm": [
+          16.540000000000006,
+          2.671999999999997
+        ],
+        "rotation_deg": -90.0,
+        "tip_xy_mm": [
+          16.540000000000006,
+          1.971999999999997
+        ],
+        "tip_error_mm": 7.513511730867176e-15
+      },
+      {
+        "ref": "K204",
+        "origin_xy_mm": [
+          14.0,
+          2.671999999999997
+        ],
+        "rotation_deg": -90.0,
+        "tip_xy_mm": [
+          14.0,
+          1.971999999999997
+        ],
+        "tip_error_mm": 2.4424906541753444e-15
+      },
+      {
+        "ref": "K205",
+        "origin_xy_mm": [
+          11.459999999999994,
+          2.671999999999997
+        ],
+        "rotation_deg": -90.0,
+        "tip_xy_mm": [
+          11.459999999999994,
+          1.971999999999997
+        ],
+        "tip_error_mm": 7.513511730867176e-15
+      },
+      {
+        "ref": "K206",
+        "origin_xy_mm": [
+          8.920000000000002,
+          2.671999999999997
+        ],
+        "rotation_deg": -90.0,
+        "tip_xy_mm": [
+          8.920000000000002,
+          1.971999999999997
+        ],
+        "tip_error_mm": 3.0201331455116262e-15
+      },
+      {
+        "ref": "K207",
+        "origin_xy_mm": [
+          6.3799999999999955,
+          2.671999999999997
+        ],
+        "rotation_deg": -90.0,
+        "tip_xy_mm": [
+          6.3799999999999955,
+          1.971999999999997
+        ],
+        "tip_error_mm": 5.068262347813025e-15
+      },
+      {
+        "ref": "K208",
+        "origin_xy_mm": [
+          6.3799999999999955,
+          17.328000000000003
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          6.3799999999999955,
+          18.028000000000002
+        ],
+        "tip_error_mm": 5.687116766346677e-15
+      },
+      {
+        "ref": "K209",
+        "origin_xy_mm": [
+          8.920000000000002,
+          17.328000000000003
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          8.920000000000002,
+          18.028000000000002
+        ],
+        "tip_error_mm": 3.972054645195637e-15
+      },
+      {
+        "ref": "K210",
+        "origin_xy_mm": [
+          11.459999999999994,
+          17.328000000000003
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          11.459999999999994,
+          18.028000000000002
+        ],
+        "tip_error_mm": 7.944109290391274e-15
+      },
+      {
+        "ref": "K211",
+        "origin_xy_mm": [
+          14.0,
+          17.328000000000003
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          14.0,
+          18.028000000000002
+        ],
+        "tip_error_mm": 3.552713678800501e-15
+      },
+      {
+        "ref": "K212",
+        "origin_xy_mm": [
+          16.540000000000006,
+          17.328000000000003
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          16.540000000000006,
+          18.028000000000002
+        ],
+        "tip_error_mm": 7.944109290391274e-15
+      },
+      {
+        "ref": "K213",
+        "origin_xy_mm": [
+          19.08,
+          17.328000000000003
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          19.08,
+          18.028000000000002
+        ],
+        "tip_error_mm": 3.552713678800501e-15
+      },
+      {
+        "ref": "K214",
+        "origin_xy_mm": [
+          21.620000000000005,
+          17.328000000000003
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          21.620000000000005,
+          18.028000000000002
+        ],
+        "tip_error_mm": 5.0242958677880805e-15
+      },
+      {
+        "ref": "K215",
+        "origin_xy_mm": [
+          15.025499999999994,
+          8.2044
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          15.025499999999994,
+          8.904399999999999
+        ],
+        "tip_error_mm": 7.32410687763558e-15
+      },
+      {
+        "ref": "K216",
+        "origin_xy_mm": [
+          20.105500000000006,
+          8.2044
+        ],
+        "rotation_deg": 90.0,
+        "tip_xy_mm": [
+          20.105500000000006,
+          8.904399999999999
+        ],
+        "tip_error_mm": 7.32410687763558e-15
+      }
+    ]
+  },
+  "all_physical_components_on_top": false,
+  "physical_footprint_layer_counts": {
+    "B.Cu": 39,
+    "F.Cu": 325
+  },
+  "fitted_smt_components": 277,
+  "all_fitted_smt_components_on_top": true,
+  "fitted_smt_bottom_refs": [],
+  "fitted_smt_refs": [
+    "C100",
+    "C101",
+    "C102",
+    "C103",
+    "C104",
+    "C105",
+    "C106",
+    "C107",
+    "C108",
+    "C109",
+    "C110",
+    "C111",
+    "C112",
+    "C113",
+    "C114",
+    "C115",
+    "C116",
+    "C117",
+    "C118",
+    "C119",
+    "C200",
+    "C2001",
+    "C2002",
+    "C2003",
+    "C2004",
+    "C2005",
+    "C2006",
+    "C2007",
+    "C2008",
+    "C2009",
+    "C201",
+    "C2010",
+    "C2011",
+    "C2012",
+    "C2013",
+    "C2014",
+    "C2015",
+    "C2016",
+    "C2017",
+    "C2018",
+    "C2019",
+    "C2020",
+    "C2021",
+    "C2022",
+    "C2023",
+    "C2024",
+    "C2025",
+    "C2026",
+    "C2027",
+    "C2028",
+    "C2029",
+    "C2030",
+    "C2031",
+    "C2032",
+    "C2033",
+    "C2034",
+    "C2035",
+    "C2036",
+    "C206",
+    "C207",
+    "C208",
+    "C209",
+    "C210",
+    "C211",
+    "C212",
+    "C213",
+    "C214",
+    "C215",
+    "C216",
+    "C217",
+    "C218",
+    "C219",
+    "C220",
+    "C221",
+    "C222",
+    "C223",
+    "C224",
+    "C225",
+    "C226",
+    "C227",
+    "C228",
+    "C229",
+    "C230",
+    "C231",
+    "C232",
+    "C233",
+    "C234",
+    "C235",
+    "C236",
+    "F20",
+    "J201",
+    "J50",
+    "J51",
+    "K201",
+    "K202",
+    "K203",
+    "K204",
+    "K205",
+    "K206",
+    "K207",
+    "K208",
+    "K209",
+    "K210",
+    "K211",
+    "K212",
+    "K213",
+    "K214",
+    "K215",
+    "K216",
+    "L20",
+    "L201",
+    "L21",
+    "Q20",
+    "Q201",
+    "Q202",
+    "R100",
+    "R101",
+    "R102",
+    "R103",
+    "R104",
+    "R105",
+    "R106",
+    "R107",
+    "R108",
+    "R109",
+    "R110",
+    "R111",
+    "R112",
+    "R200",
+    "R2001",
+    "R2002",
+    "R2003",
+    "R2004",
+    "R2005",
+    "R2006",
+    "R2007",
+    "R2008",
+    "R2009",
+    "R201",
+    "R2010",
+    "R2011",
+    "R2012",
+    "R2013",
+    "R2014",
+    "R2015",
+    "R2016",
+    "R2017",
+    "R2018",
+    "R2019",
+    "R2020",
+    "R2021",
+    "R2022",
+    "R2023",
+    "R2024",
+    "R2025",
+    "R2026",
+    "R2027",
+    "R2028",
+    "R2029",
+    "R203",
+    "R2030",
+    "R2031",
+    "R2032",
+    "R2033",
+    "R2034",
+    "R2035",
+    "R2036",
+    "R2037",
+    "R2038",
+    "R2039",
+    "R204",
+    "R2040",
+    "R2041",
+    "R2042",
+    "R2043",
+    "R205",
+    "R206",
+    "R207",
+    "R208",
+    "R209",
+    "R210",
+    "R211",
+    "R212",
+    "R213",
+    "R214",
+    "R215",
+    "R216",
+    "R217",
+    "R218",
+    "R219",
+    "R220",
+    "R221",
+    "R222",
+    "R223",
+    "R224",
+    "R225",
+    "R226",
+    "R227",
+    "R228",
+    "R229",
+    "R230",
+    "R231",
+    "R232",
+    "R233",
+    "R234",
+    "R235",
+    "R236",
+    "R237",
+    "R238",
+    "R239",
+    "R240",
+    "R241",
+    "R242",
+    "R243",
+    "R244",
+    "R245",
+    "R246",
+    "R247",
+    "R248",
+    "R249",
+    "R250",
+    "R251",
+    "R252",
+    "R253",
+    "R254",
+    "R255",
+    "R256",
+    "R257",
+    "R258",
+    "R259",
+    "R260",
+    "R261",
+    "R262",
+    "R263",
+    "R264",
+    "R265",
+    "R266",
+    "R267",
+    "R268",
+    "R269",
+    "R409",
+    "R410",
+    "U10",
+    "U20",
+    "U201",
+    "U202",
+    "U203",
+    "U204",
+    "U205",
+    "U207",
+    "U208",
+    "U209",
+    "U21",
+    "U22",
+    "U23",
+    "U24",
+    "U25",
+    "U26",
+    "U27",
+    "U28",
+    "U29",
+    "U30",
+    "U31",
+    "U32",
+    "U33",
+    "U34",
+    "U35",
+    "U36",
+    "U37",
+    "U38",
+    "U39",
+    "U70",
+    "U71",
+    "U72",
+    "U73",
+    "X10",
+    "X201"
+  ],
+  "fitment_scope": "BASE population declared by integrated component contract; fabricated copper and DNP/offboard parts excluded",
+  "fitment_contract_sha256": "2b80866bf79a74ff8090cd892e6707b1f3d59beebb03c73473c7dbee46e901ae",
+  "physical_refs_missing_component_contract": [],
+  "fabricated_copper_footprints": 52,
+  "fabricated_copper_bottom_refs": [
+    "TP100",
+    "TP101",
+    "TP102",
+    "TP103",
+    "TP104",
+    "TP105",
+    "TP106",
+    "TP107",
+    "TP108",
+    "TP109",
+    "TP110",
+    "TP111",
+    "TP112",
+    "TP113",
+    "TP114",
+    "TP115",
+    "TP116",
+    "TP117",
+    "TP118",
+    "TP119",
+    "TP120",
+    "TP121",
+    "TP122",
+    "TP123",
+    "TP124",
+    "TP125",
+    "TP126",
+    "TP127",
+    "TP128",
+    "TP129",
+    "TP130",
+    "TP131",
+    "TP132",
+    "TP133",
+    "TP134",
+    "TP135",
+    "TP136",
+    "TP137",
+    "TP138"
+  ],
+  "bare_raw_G1_probe_refs": [
+    "TP100",
+    "TP101",
+    "TP102",
+    "TP103",
+    "TP104",
+    "TP105",
+    "TP106",
+    "TP107",
+    "TP108",
+    "TP109",
+    "TP110",
+    "TP111",
+    "TP112",
+    "TP113",
+    "TP114",
+    "TP115",
+    "TP116",
+    "TP117",
+    "TP118",
+    "TP119",
+    "TP120",
+    "TP121",
+    "TP122",
+    "TP123",
+    "TP124",
+    "TP125",
+    "TP126",
+    "TP127",
+    "TP128",
+    "TP129",
+    "TP130",
+    "TP131",
+    "TP132",
+    "TP133",
+    "TP134",
+    "TP135",
+    "TP136",
+    "TP137",
+    "TP138"
+  ],
+  "tracks_on_reference_layer_In1_Cu": 0,
+  "aux_origin_mm": [
+    70.0,
+    150.0
+  ],
+  "via_geometry_mm": [
+    [
+      0.5,
+      0.2
+    ],
+    [
+      0.6,
+      0.3
+    ]
+  ],
+  "local_endpoint_distances": [
+    {
+      "purpose": "RP core pin10 decap",
+      "from": "U201.10",
+      "to": "C2006.1",
+      "net": "+1V1_MCU",
+      "endpoint_distance_lower_bound_mm": 1.7575,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP core pin32 decap",
+      "from": "U201.32",
+      "to": "C2010.1",
+      "net": "+1V1_MCU",
+      "endpoint_distance_lower_bound_mm": 1.6636,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP core pin51 decap",
+      "from": "U201.51",
+      "to": "C2013.1",
+      "net": "+1V1_MCU",
+      "endpoint_distance_lower_bound_mm": 1.3825,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP VREG input",
+      "from": "U201.64",
+      "to": "C2001.1",
+      "net": "+3V3_LOGIC",
+      "endpoint_distance_lower_bound_mm": 1.6008,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP VREG analog filter",
+      "from": "U201.61",
+      "to": "C2004.1",
+      "net": "MCU_VREG_AVDD",
+      "endpoint_distance_lower_bound_mm": 1.5028,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP VREG output",
+      "from": "L201.2",
+      "to": "C2002.1",
+      "net": "+1V1_MCU",
+      "endpoint_distance_lower_bound_mm": 2.6132,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP Kelvin feedback",
+      "from": "U201.65",
+      "to": "C2002.1",
+      "net": "+1V1_MCU",
+      "endpoint_distance_lower_bound_mm": 6.4933,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "Logic buck input",
+      "from": "U21.2",
+      "to": "C206.1",
+      "net": "+5V_HOLD",
+      "endpoint_distance_lower_bound_mm": 1.619,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "Logic input ground",
+      "from": "U21.9",
+      "to": "C206.2",
+      "net": "GND",
+      "endpoint_distance_lower_bound_mm": 4.45,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "Logic buck output",
+      "from": "L20.2",
+      "to": "C207.1",
+      "net": "+3V3_LOGIC",
+      "endpoint_distance_lower_bound_mm": 2.6604,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "Logic Kelvin feedback",
+      "from": "U21.6",
+      "to": "C207.1",
+      "net": "+3V3_LOGIC",
+      "endpoint_distance_lower_bound_mm": 7.0844,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "Storage buck input",
+      "from": "U22.2",
+      "to": "C209.1",
+      "net": "+5V_HOLD",
+      "endpoint_distance_lower_bound_mm": 1.619,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "Storage input ground",
+      "from": "U22.9",
+      "to": "C209.2",
+      "net": "GND",
+      "endpoint_distance_lower_bound_mm": 4.45,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "Storage buck output",
+      "from": "L21.2",
+      "to": "C210.1",
+      "net": "+3V3_STORAGE",
+      "endpoint_distance_lower_bound_mm": 2.6604,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "Storage Kelvin feedback",
+      "from": "U22.6",
+      "to": "C210.1",
+      "net": "+3V3_STORAGE",
+      "endpoint_distance_lower_bound_mm": 6.587,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP crystal input",
+      "from": "U201.30",
+      "to": "X201.1",
+      "net": "MCU_XIN",
+      "endpoint_distance_lower_bound_mm": 3.9644,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP crystal damping",
+      "from": "U201.31",
+      "to": "R2002.1",
+      "net": "MCU_XOUT",
+      "endpoint_distance_lower_bound_mm": 1.2949,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "RP crystal output",
+      "from": "R2002.2",
+      "to": "X201.3",
+      "net": "MCU_XTAL_OUT",
+      "endpoint_distance_lower_bound_mm": 3.933,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "QMI clock source",
+      "from": "U201.71",
+      "to": "R2003.1",
+      "net": "QSPI_SCLK_MCU",
+      "endpoint_distance_lower_bound_mm": 1.4259,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "QMI PSRAM branch",
+      "from": "R2003.2",
+      "to": "U203.6",
+      "net": "QSPI_SCLK",
+      "endpoint_distance_lower_bound_mm": 3.6755,
+      "same_net": true,
+      "route_topology_qualified": false
+    },
+    {
+      "purpose": "QMI boot flash branch",
+      "from": "R2003.2",
+      "to": "U202.6",
+      "net": "QSPI_SCLK",
+      "endpoint_distance_lower_bound_mm": 4.5034,
+      "same_net": true,
+      "route_topology_qualified": false
+    }
+  ],
+  "capacitor_ground_via_proximity": [
+    {
+      "ref": "C2001",
+      "nearest_GND_through_copper_distance_mm": 0.72,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C2002",
+      "nearest_GND_through_copper_distance_mm": 0.72,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C2003",
+      "nearest_GND_through_copper_distance_mm": 0.72,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C2004",
+      "nearest_GND_through_copper_distance_mm": 0.82,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C206",
+      "nearest_GND_through_copper_distance_mm": 0.9,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C207",
+      "nearest_GND_through_copper_distance_mm": 0.85,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C208",
+      "nearest_GND_through_copper_distance_mm": 1.0,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C209",
+      "nearest_GND_through_copper_distance_mm": 1.0,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C210",
+      "nearest_GND_through_copper_distance_mm": 0.85,
+      "return_loop_qualified": false
+    },
+    {
+      "ref": "C211",
+      "nearest_GND_through_copper_distance_mm": 1.0,
+      "return_loop_qualified": false
+    }
+  ],
+  "routed_nets": {
+    "+3V3_LOGIC": {
+      "total_trace_length_mm": 68.7888,
+      "trace_widths_mm": [
+        0.15,
+        0.4
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 58,
+      "vias": 0
+    },
+    "GND": {
+      "total_trace_length_mm": 222.7904,
+      "trace_widths_mm": [
+        0.15,
+        0.3,
+        0.4
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 278,
+      "vias": 278
+    },
+    "+3V3_STORAGE": {
+      "total_trace_length_mm": 14.3745,
+      "trace_widths_mm": [
+        0.15,
+        0.4
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 10,
+      "vias": 0
+    },
+    "ATA_DD1": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "+1V1_MCU": {
+      "total_trace_length_mm": 18.4493,
+      "trace_widths_mm": [
+        0.15,
+        0.4
+      ],
+      "copper_layers": [
+        "F.Cu",
+        "In2.Cu"
+      ],
+      "segments": 13,
+      "vias": 2
+    },
+    "MCU_XIN": {
+      "total_trace_length_mm": 6.7843,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 6,
+      "vias": 0
+    },
+    "MCU_XOUT": {
+      "total_trace_length_mm": 1.2998,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 2,
+      "vias": 0
+    },
+    "MCU_VREG_AVDD": {
+      "total_trace_length_mm": 8.7441,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu",
+        "In2.Cu"
+      ],
+      "segments": 7,
+      "vias": 2
+    },
+    "MCU_VREG_LX": {
+      "total_trace_length_mm": 4.4938,
+      "trace_widths_mm": [
+        0.15,
+        0.4
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 5,
+      "vias": 0
+    },
+    "INTRQ_OEn": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_INTRQ": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "CONSOLE_3V3": {
+      "total_trace_length_mm": 4.0318,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 4,
+      "vias": 0
+    },
+    "+3V3_C5_IO": {
+      "total_trace_length_mm": 2.765,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 2,
+      "vias": 0
+    },
+    "REQ_INTRQ_OEn": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "IORDY_RELEASE": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_CS1n": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "REQ_DMARQ_OEn": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "DMARQ_OEn": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "REQ_IORDY_LOW": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD7": {
+      "total_trace_length_mm": 2.9967,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "+5V_HOLD": {
+      "total_trace_length_mm": 4.2981,
+      "trace_widths_mm": [
+        0.15,
+        0.4
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 8,
+      "vias": 0
+    },
+    "SW_STORAGE": {
+      "total_trace_length_mm": 2.0562,
+      "trace_widths_mm": [
+        0.15,
+        0.4
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 2,
+      "vias": 0
+    },
+    "ATA_DA2": {
+      "total_trace_length_mm": 1.9975,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DA1": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DA0": {
+      "total_trace_length_mm": 2.9967,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD15": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD14": {
+      "total_trace_length_mm": 1.9975,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD13": {
+      "total_trace_length_mm": 2.9967,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD12": {
+      "total_trace_length_mm": 1.05,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD11": {
+      "total_trace_length_mm": 1.9975,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD10": {
+      "total_trace_length_mm": 2.9967,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD9": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DIORn": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD0": {
+      "total_trace_length_mm": 1.9975,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD2": {
+      "total_trace_length_mm": 2.9967,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD3": {
+      "total_trace_length_mm": 1.9975,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD4": {
+      "total_trace_length_mm": 1.05,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD5": {
+      "total_trace_length_mm": 2.9967,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD6": {
+      "total_trace_length_mm": 1.05,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DD8": {
+      "total_trace_length_mm": 1.9975,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_DMARQ": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "REQ_DATA_OEn": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_RESETn": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_CS0n": {
+      "total_trace_length_mm": 2.9967,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "SW_LOGIC": {
+      "total_trace_length_mm": 2.5508,
+      "trace_widths_mm": [
+        0.15,
+        0.4
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 2,
+      "vias": 0
+    },
+    "ATA_DMACKn": {
+      "total_trace_length_mm": 1.9975,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "DATA_DIR": {
+      "total_trace_length_mm": 2.9967,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "MCU_XTAL_OUT": {
+      "total_trace_length_mm": 6.3844,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 4,
+      "vias": 0
+    },
+    "ATA_DIOWn": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    },
+    "ATA_IORDY": {
+      "total_trace_length_mm": 1.0,
+      "trace_widths_mm": [
+        0.15
+      ],
+      "copper_layers": [
+        "F.Cu"
+      ],
+      "segments": 1,
+      "vias": 1
+    }
+  },
+  "remaining_reviews": [
+    "Kelvin feedback branching at the output capacitor positive land",
+    "Input/switch/output current loops and capacitor/EP ground returns",
+    "Clock/QMI/SD stubs, return reference and timing",
+    "Full native DRC including unconnected items and schematic parity",
+    "Motherboard obstacles, shield registration and C5 compression fixture"
+  ],
+  "raw_G1_probe_placement_evidence": {
+    "source": "design/raw-g1-probe-placement.json",
+    "source_sha256": "7a2f35b98fe87264d1cc8ae695b75e463de0fd7db949c1d37050dc35a19c115a",
+    "evidence": {
+      "board_sha256": "cb8dee21eaaf9bf57a585996d997c28aff0a8076fba7a8e528f3ba5492d801c2",
+      "fitted_bottom_components": 0,
+      "probe_loading_qualified": false,
+      "pads": [
+        {
+          "ref": "TP132",
+          "net": "REQ_DATA_OEn",
+          "endpoint": "U32.2",
+          "xy_mm": [
+            18.862499999999997,
+            21.087500000000006
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/5754981f-73e0-581a-bcca-0869fa321947",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP135",
+          "net": "REQ_IORDY_LOW",
+          "endpoint": "U33.2",
+          "xy_mm": [
+            8.362499999999997,
+            47.087500000000006
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/3b9b829b-80b6-5f8e-a64f-06bb06fee12f",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP115",
+          "net": "ATA_DD15",
+          "endpoint": "U35.23",
+          "xy_mm": [
+            49.1875,
+            40.332499999999996
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/f5005451-594b-5db5-8c19-e40fbe17b0dd",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP114",
+          "net": "ATA_DD14",
+          "endpoint": "U35.22",
+          "xy_mm": [
+            50.1825,
+            39.732499999999995
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.9975046933611922,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/0b7ea271-4826-521f-a914-e27af475281c",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP113",
+          "net": "ATA_DD13",
+          "endpoint": "U35.20",
+          "xy_mm": [
+            51.1775,
+            38.63249999999999
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 2.9966814979239973,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/b2c16198-4288-5489-aeab-b03e930411c2",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP112",
+          "net": "ATA_DD12",
+          "endpoint": "U35.19",
+          "xy_mm": [
+            49.233504432996334,
+            38.240986470114954
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0500000000000012,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/ea7da69d-bf58-5797-94db-e8593d161241",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP111",
+          "net": "ATA_DD11",
+          "endpoint": "U35.17",
+          "xy_mm": [
+            50.1825,
+            37.232499999999995
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.9975046933611922,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/61b45a53-a9ae-5942-bcb2-843ad64d5285",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP110",
+          "net": "ATA_DD10",
+          "endpoint": "U35.16",
+          "xy_mm": [
+            51.1775,
+            36.63249999999999
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 2.9966814979239973,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/f8e53cef-ad6c-5461-9c23-4b0d813fbd43",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP109",
+          "net": "ATA_DD9",
+          "endpoint": "U35.14",
+          "xy_mm": [
+            49.1875,
+            35.832499999999996
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/5db949aa-4f38-5074-95f8-0ba5eb05f023",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP108",
+          "net": "ATA_DD8",
+          "endpoint": "U35.13",
+          "xy_mm": [
+            50.1825,
+            35.232499999999995
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.9975046933611922,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/99761dba-4fc0-5f25-8fa5-c14a61c9e5cc",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP107",
+          "net": "ATA_DD7",
+          "endpoint": "U35.12",
+          "xy_mm": [
+            51.1775,
+            34.63249999999999
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 2.9966814979239973,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/03b54cb1-b581-5cd9-bd31-b3b5467184fb",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP106",
+          "net": "ATA_DD6",
+          "endpoint": "U35.11",
+          "xy_mm": [
+            49.233504432996334,
+            34.240986470114954
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0500000000000012,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/802510ab-8264-58eb-b610-7b9e1bac1da4",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP136",
+          "net": "GND",
+          "endpoint": "U35.10",
+          "xy_mm": [
+            47.1875,
+            33.832499999999996
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/6f490e5f-8407-5eac-950b-ce50690e2769",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP105",
+          "net": "ATA_DD5",
+          "endpoint": "U35.9",
+          "xy_mm": [
+            51.1775,
+            33.13249999999999
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 2.9966814979239973,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/7332a25f-0730-5efc-8a7c-8a49e3909d07",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP104",
+          "net": "ATA_DD4",
+          "endpoint": "U35.8",
+          "xy_mm": [
+            49.233504432996334,
+            32.740986470114954
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0500000000000012,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/7944b679-101e-5f4e-8305-96b20cdb233f",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP103",
+          "net": "ATA_DD3",
+          "endpoint": "U35.6",
+          "xy_mm": [
+            50.1825,
+            31.732499999999995
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.9975046933611922,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/77c0b52e-a5d9-5f5b-a392-e541b56c0806",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP102",
+          "net": "ATA_DD2",
+          "endpoint": "U35.5",
+          "xy_mm": [
+            51.1775,
+            31.132499999999997
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 2.9966814979239973,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/122bcff3-5dc4-5eca-981e-8c6bca162c8d",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP101",
+          "net": "ATA_DD1",
+          "endpoint": "U35.3",
+          "xy_mm": [
+            49.1875,
+            30.332499999999996
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/afbd3a7e-8e35-5469-9539-83736988bcb3",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP100",
+          "net": "ATA_DD0",
+          "endpoint": "U35.2",
+          "xy_mm": [
+            50.1825,
+            29.732499999999995
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.9975046933611922,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/c18048f9-e02e-5642-a34e-43e658351544/76f8e6bf-e4a9-501f-8b01-5574ad792d5d",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP128",
+          "net": "DATA_DIR",
+          "endpoint": "U35.1",
+          "xy_mm": [
+            51.1775,
+            29.132499999999997
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 2.9966814979239973,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/7dbc51fe-6b7b-5b3e-9cce-9b3548f53120",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP120",
+          "net": "ATA_CS1n",
+          "endpoint": "U36.11",
+          "xy_mm": [
+            32.05,
+            79.925
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/7c13f419-8bee-5ae7-a3c5-a91de8012b44",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP137",
+          "net": "GND",
+          "endpoint": "U36.10",
+          "xy_mm": [
+            29.320000000000004,
+            79.825
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.9975046933611953,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/2642bc62-2261-5430-8a6b-35ae0c82aa14",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP119",
+          "net": "ATA_CS0n",
+          "endpoint": "U36.8",
+          "xy_mm": [
+            30.315000000000005,
+            78.425
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 2.9966814979239973,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/b7e015dd-faa8-5cee-aa87-892de8ef3cfd",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP121",
+          "net": "ATA_DIORn",
+          "endpoint": "U36.13",
+          "xy_mm": [
+            32.05,
+            78.625
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/f4ba74c2-84fb-571a-9487-4bdce330ed33",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP118",
+          "net": "ATA_DA2",
+          "endpoint": "U36.6",
+          "xy_mm": [
+            29.320000000000004,
+            77.22500000000001
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.9975046933611953,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/11a1d1b7-c0f7-5bf7-aaa3-d007bcec6709",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP122",
+          "net": "ATA_DIOWn",
+          "endpoint": "U36.15",
+          "xy_mm": [
+            34.05,
+            77.325
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/a089c049-ce80-5b16-9d7d-a9f1f9b82687",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP117",
+          "net": "ATA_DA1",
+          "endpoint": "U36.4",
+          "xy_mm": [
+            28.325000000000003,
+            76.025
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/7cf8b373-65f4-581f-a36e-3b00b3404b87",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP124",
+          "net": "ATA_DMACKn",
+          "endpoint": "U36.17",
+          "xy_mm": [
+            31.054999999999996,
+            75.92500000000001
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.9975046933611953,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/e08d5046-6a94-5406-8cc7-a6286ae7c2de",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP116",
+          "net": "ATA_DA0",
+          "endpoint": "U36.2",
+          "xy_mm": [
+            30.315000000000005,
+            74.52499999999999
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 2.9966814979239973,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/ecffb950-8fb3-59ec-bfbf-b85fa2588d4e",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP123",
+          "net": "ATA_RESETn",
+          "endpoint": "U37.2",
+          "xy_mm": [
+            37.3625,
+            65.5875
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/7ce2c234-154b-581a-9b07-5cc728c7d147",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP127",
+          "net": "ATA_INTRQ",
+          "endpoint": "U38.4",
+          "xy_mm": [
+            25.637500000000003,
+            73.5375
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/8f31ee2d-d0ff-577f-baae-b33626627953",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP138",
+          "net": "GND",
+          "endpoint": "U38.3",
+          "xy_mm": [
+            23.362499999999997,
+            73.5375
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/45710c61-1b38-57ec-b7ae-a9e7af01cd6c",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP129",
+          "net": "INTRQ_OEn",
+          "endpoint": "U38.1",
+          "xy_mm": [
+            23.362499999999997,
+            71.6375
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/5d0dc46c-8a25-5b50-854c-013426a5b0fd",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP125",
+          "net": "ATA_DMARQ",
+          "endpoint": "U39.4",
+          "xy_mm": [
+            6.137500000000003,
+            47.537499999999994
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/bc266db1-dfc1-5511-a3bd-a382aac04266",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP130",
+          "net": "DMARQ_OEn",
+          "endpoint": "U39.1",
+          "xy_mm": [
+            3.862499999999997,
+            45.6375
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/31ca3a30-d9d9-5fa3-badc-cbbfcb46b4b8",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP126",
+          "net": "ATA_IORDY",
+          "endpoint": "U70.4",
+          "xy_mm": [
+            16.637500000000003,
+            73.5375
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/44e6b325-9f09-52bb-8b11-7ee5edcf8973",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP131",
+          "net": "IORDY_RELEASE",
+          "endpoint": "U70.2",
+          "xy_mm": [
+            14.362499999999997,
+            72.5875
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/de81df04-671a-5fa4-826c-9f35bf301021",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP133",
+          "net": "REQ_INTRQ_OEn",
+          "endpoint": "U72.2",
+          "xy_mm": [
+            3.3463190451025264,
+            31.603425826289072
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.000000000000001,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/f4b1d312-7702-5991-be6a-2da76e1c7de3",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        },
+        {
+          "ref": "TP134",
+          "net": "REQ_DMARQ_OEn",
+          "endpoint": "U73.2",
+          "xy_mm": [
+            2.362499999999997,
+            25.087500000000006
+          ],
+          "side": "B.Cu bare copper",
+          "added_stub_length_mm": 1.0,
+          "maximum_added_stub_mm": 3.0,
+          "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/7d3169e3-350a-58a2-9f4f-d47f4b3bfcac",
+          "bench_access": "carrier removed; insulate underside after installation",
+          "route_loading_qualified": false
+        }
+      ],
+      "final_native_board_sha256": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8"
+    },
+    "qualification": "Placement/route evidence only; probe loading and signal integrity remain unqualified"
+  }
+}

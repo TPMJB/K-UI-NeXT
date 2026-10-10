@@ -1,0 +1,92 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-09T23:05:39",
+    "ignored_checks": [
+        {
+            "description": "Global label only appears once in the schematic",
+            "key": "single_global_label"
+        },
+        {
+            "description": "Four connection points are joined together",
+            "key": "four_way_junction"
+        },
+        {
+            "description": "SPICE model issue",
+            "key": "simulation_model_issue"
+        },
+        {
+            "description": "Assigned footprint doesn't match footprint filters",
+            "key": "footprint_filter"
+        }
+    ],
+    "included_severities": [
+        "error",
+        "warning",
+        "exclusion"
+    ],
+    "kicad_version": "10.0.6",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e",
+            "violations": []
+        },
+        {
+            "path": "/frontend-1/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/c18048f9-e02e-5642-a34e-43e658351544",
+            "violations": []
+        },
+        {
+            "path": "/frontend-2/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/1f4aac18-d1c6-5016-84d6-936bb5450eb3",
+            "violations": []
+        },
+        {
+            "path": "/controller-1/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/49303399-8039-5eb7-9b98-69374bab8183",
+            "violations": []
+        },
+        {
+            "path": "/controller-2/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/09238f50-4969-5356-b262-22809c1c6374",
+            "violations": []
+        },
+        {
+            "path": "/controller-3/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/d5fa38d4-5582-5002-94de-d2722d83a9a5",
+            "violations": []
+        },
+        {
+            "path": "/power-bus-1/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/9854b855-bf35-57c9-9b61-cf8289be694a",
+            "violations": []
+        },
+        {
+            "path": "/power-bus-2/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/c45675e8-8bcb-572e-a87b-771a2c1bd03e",
+            "violations": []
+        },
+        {
+            "path": "/power-bus-3/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/f24537ca-bcf2-50d3-8c55-0581d92136e0",
+            "violations": []
+        },
+        {
+            "path": "/bios-1/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/0d5224e7-4507-5711-9354-eefed3933fb6",
+            "violations": []
+        },
+        {
+            "path": "/cn503-interface-1/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/927d1b8a-d096-52bc-9740-e908cdee7842",
+            "violations": []
+        },
+        {
+            "path": "/power-source-declarations-1/",
+            "uuid_path": "/8477501f-fac0-5337-89a1-fc3585ab7e6e/868262b6-13cc-5899-b592-0eb0bb8258c7",
+            "violations": []
+        }
+    ],
+    "source": "KUI-G1-Bridge-RevA.kicad_sch"
+}

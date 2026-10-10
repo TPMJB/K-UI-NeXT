@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "status": "prototype CAD; geometry and actual motherboard continuity not qualified",
+  "revision": "RevA",
+  "source_reference": "hardware/g1-sd-wifi/docs/CN503-reference.csv",
+  "source_reference_status": "Logical reference; no physical continuity qualification yet",
+  "connector_primary_source": "https://www.hirose.com/en/product/p/CL0586-0524-9-55",
+  "topology": "two separate passive 20-conductor flex arms; A and B are not interchangeable",
+  "cn503_geometry": {
+    "pitch_mm": 1.0,
+    "pitch_status": "owner accepted printed contact alignment",
+    "row_center_spacing_mm": 5.03,
+    "row_center_spacing_status": "provisional housing-derived; independent arms do not fix row spacing",
+    "contact_run_measured_mm": 24.39,
+    "nominal_25_contact_center_span_mm": 24.0,
+    "metal_contact_width_measured_mm": 0.44,
+    "housing_length_mm": 38.67,
+    "housing_max_width_mm": 6.56,
+    "skinny_width_mm": 5.03,
+    "orientation": "A faces BIOS/west; B faces board edge/east; contact1 south/CN601; contact25 north/AV"
+  },
+  "conductors": 40,
+  "excluded_contacts": [
+    "A17",
+    "A22",
+    "A23",
+    "A24",
+    "A25",
+    "B2",
+    "B22",
+    "B23",
+    "B24",
+    "B25"
+  ],
+  "excluded_policy": "No copper pads or traces at excluded contacts; +12V and all audio excluded",
+  "power_limits": {
+    "connector_rating_A_per_contact": 0.5,
+    "conservative_design_A_per_contact": 0.35,
+    "status": "Connector rating only; flex current capacity unqualified. No controller load power over flex in baseline.",
+    "baseline": "Direct fused power harness supplies controller loads. Flex5V links on carrier are DNP; flex3V3 is console rail reference.",
+    "rated_ceiling_A_per_supply_pair": 0.7,
+    "qualified_flex_current_limit_A": null
+  },
+  "fabrication": {
+    "layers": 2,
+    "base_thickness_mm": 0.12,
+    "copper_oz": 0.5,
+    "finish": "ENIG",
+    "stiffener_side": "top/opposite bottom contacts",
+    "stiffener_material": "PI",
+    "stiffener_thickness_mm": 0.2,
+    "nominal_finished_tail_thickness_mm": 0.3,
+    "finished_tail_acceptance_mm": [
+      0.25,
+      0.35
+    ],
+    "tail_width_mm": 10.5,
+    "finger_width_mm": 0.35,
+    "finger_pitch_mm": 0.5,
+    "tail_contact_exposure_length_mm": 3.5,
+    "tail_stiffener_length_mm": 5.0,
+    "solder_window_policy": "Common exposed-copper row windows; no coverlay web between adjacent fingers/contact pads",
+    "minimum_static_bend_radius_mm": 1.2,
+    "installation_route_status": "Unqualified compact initial route; no sharp crease; confirm installed bend envelope with first prototype",
+    "finished_tail_thickness_status": "target at exposed gold fingers; supplier must account for coverlay removal and confirm0.25..0.35mm",
+    "via_drill_mm": 0.3,
+    "via_diameter_mm": 0.55
+  },
+  "connectors": [
+    {
+      "carrier_reference": "J50",
+      "flex_row": "A",
+      "manufacturer": "Hirose Electric",
+      "mpn": "FH12-20S-0.5SH(55)",
+      "positions": 20,
+      "pitch_mm": 0.5,
+      "contact_orientation": "bottom",
+      "finished_tail_thickness_mm": 0.3,
+      "tail_thickness_tolerance_mm": 0.05,
+      "connector_height_mm": 2.0,
+      "footprint": "Connector_FFC-FPC:Hirose_FH12-20S-0.5SH_1x20-1MP_P0.50mm_Horizontal",
+      "pins": [
+        {
+          "pin": 1,
+          "cn503_contact": "A1",
+          "signal": "CONSOLE_3V3",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 2,
+          "cn503_contact": "A2",
+          "signal": "ATA_RESETn",
+          "standard_ide_pin": "1"
+        },
+        {
+          "pin": 3,
+          "cn503_contact": "A3",
+          "signal": "CONSOLE_5V",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 4,
+          "cn503_contact": "A4",
+          "signal": "ATA_DD7",
+          "standard_ide_pin": "3"
+        },
+        {
+          "pin": 5,
+          "cn503_contact": "A5",
+          "signal": "ATA_DD8",
+          "standard_ide_pin": "4"
+        },
+        {
+          "pin": 6,
+          "cn503_contact": "A6",
+          "signal": "ATA_DD5",
+          "standard_ide_pin": "7"
+        },
+        {
+          "pin": 7,
+          "cn503_contact": "A7",
+          "signal": "ATA_DD10",
+          "standard_ide_pin": "8"
+        },
+        {
+          "pin": 8,
+          "cn503_contact": "A8",
+          "signal": "GND",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 9,
+          "cn503_contact": "A9",
+          "signal": "ATA_DD3",
+          "standard_ide_pin": "11"
+        },
+        {
+          "pin": 10,
+          "cn503_contact": "A10",
+          "signal": "ATA_DD12",
+          "standard_ide_pin": "12"
+        },
+        {
+          "pin": 11,
+          "cn503_contact": "A11",
+          "signal": "ATA_DD1",
+          "standard_ide_pin": "15"
+        },
+        {
+          "pin": 12,
+          "cn503_contact": "A12",
+          "signal": "ATA_DD14",
+          "standard_ide_pin": "16"
+        },
+        {
+          "pin": 13,
+          "cn503_contact": "A13",
+          "signal": "GND",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 14,
+          "cn503_contact": "A14",
+          "signal": "ATA_DMARQ",
+          "standard_ide_pin": "21"
+        },
+        {
+          "pin": 15,
+          "cn503_contact": "A15",
+          "signal": "ATA_DIORn",
+          "standard_ide_pin": "25"
+        },
+        {
+          "pin": 16,
+          "cn503_contact": "A16",
+          "signal": "ATA_DMACKn",
+          "standard_ide_pin": "29"
+        },
+        {
+          "pin": 17,
+          "cn503_contact": "A18",
+          "signal": "GND",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 18,
+          "cn503_contact": "A19",
+          "signal": "ATA_DA0",
+          "standard_ide_pin": "35"
+        },
+        {
+          "pin": 19,
+          "cn503_contact": "A20",
+          "signal": "ATA_CS0n",
+          "standard_ide_pin": "37"
+        },
+        {
+          "pin": 20,
+          "cn503_contact": "A21",
+          "signal": "GND",
+          "standard_ide_pin": null
+        }
+      ],
+      "pin1_side_top_view_with_tip_north": "left",
+      "installation_orientation_note": "Contacts remain bottom; socket rotation and tail approach must match native pad numbers. Do not flip a flex to exchange its contact face."
+    },
+    {
+      "carrier_reference": "J51",
+      "flex_row": "B",
+      "manufacturer": "Hirose Electric",
+      "mpn": "FH12-20S-0.5SH(55)",
+      "positions": 20,
+      "pitch_mm": 0.5,
+      "contact_orientation": "bottom",
+      "finished_tail_thickness_mm": 0.3,
+      "tail_thickness_tolerance_mm": 0.05,
+      "connector_height_mm": 2.0,
+      "footprint": "Connector_FFC-FPC:Hirose_FH12-20S-0.5SH_1x20-1MP_P0.50mm_Horizontal",
+      "pins": [
+        {
+          "pin": 20,
+          "cn503_contact": "B1",
+          "signal": "CONSOLE_3V3",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 19,
+          "cn503_contact": "B3",
+          "signal": "CONSOLE_5V",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 18,
+          "cn503_contact": "B4",
+          "signal": "ATA_DD6",
+          "standard_ide_pin": "5"
+        },
+        {
+          "pin": 17,
+          "cn503_contact": "B5",
+          "signal": "ATA_DD9",
+          "standard_ide_pin": "6"
+        },
+        {
+          "pin": 16,
+          "cn503_contact": "B6",
+          "signal": "ATA_DD4",
+          "standard_ide_pin": "9"
+        },
+        {
+          "pin": 15,
+          "cn503_contact": "B7",
+          "signal": "ATA_DD11",
+          "standard_ide_pin": "10"
+        },
+        {
+          "pin": 14,
+          "cn503_contact": "B8",
+          "signal": "GND",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 13,
+          "cn503_contact": "B9",
+          "signal": "ATA_DD2",
+          "standard_ide_pin": "13"
+        },
+        {
+          "pin": 12,
+          "cn503_contact": "B10",
+          "signal": "ATA_DD13",
+          "standard_ide_pin": "14"
+        },
+        {
+          "pin": 11,
+          "cn503_contact": "B11",
+          "signal": "ATA_DD0",
+          "standard_ide_pin": "17"
+        },
+        {
+          "pin": 10,
+          "cn503_contact": "B12",
+          "signal": "ATA_DD15",
+          "standard_ide_pin": "18"
+        },
+        {
+          "pin": 9,
+          "cn503_contact": "B13",
+          "signal": "GND",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 8,
+          "cn503_contact": "B14",
+          "signal": "ATA_DIOWn",
+          "standard_ide_pin": "23"
+        },
+        {
+          "pin": 7,
+          "cn503_contact": "B15",
+          "signal": "ATA_IORDY",
+          "standard_ide_pin": "27"
+        },
+        {
+          "pin": 6,
+          "cn503_contact": "B16",
+          "signal": "ATA_INTRQ",
+          "standard_ide_pin": "31"
+        },
+        {
+          "pin": 5,
+          "cn503_contact": "B17",
+          "signal": "ATA_DA1",
+          "standard_ide_pin": "33"
+        },
+        {
+          "pin": 4,
+          "cn503_contact": "B18",
+          "signal": "GND",
+          "standard_ide_pin": null
+        },
+        {
+          "pin": 3,
+          "cn503_contact": "B19",
+          "signal": "ATA_DA2",
+          "standard_ide_pin": "36"
+        },
+        {
+          "pin": 2,
+          "cn503_contact": "B20",
+          "signal": "ATA_CS1n",
+          "standard_ide_pin": "38"
+        },
+        {
+          "pin": 1,
+          "cn503_contact": "B21",
+          "signal": "GND",
+          "standard_ide_pin": null
+        }
+      ],
+      "pin1_side_top_view_with_tip_north": "left",
+      "installation_orientation_note": "View F.Cu from above with the tip north and B.Cu gold contacts below: tail pin1 is left and pin20 is right, matching the unrotated bottom-contact socket. Mirrored B copper uses reversed tail numbers; carrier pin1 maps B21/GND and pin20 maps B1/CONSOLE_3V3. Rotate the tail and socket together; do not flip the flex."
+    }
+  ],
+  "tail_numbering_datum": "Viewed from the F.Cu/top side with tip north and B.Cu gold down: both A and B tails pin1 left, pin20 right. Tail shape mirroring does not mirror socket pin numbers."
+}
