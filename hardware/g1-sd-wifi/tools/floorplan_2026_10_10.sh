@@ -10,7 +10,9 @@
 #      (the FPGA's I/O pull-down replaces them);
 #   2. the FPGA cluster moves 2.26 mm north; U35 turns +90 degrees and sits
 #      directly under it, so BUS_DD runs straight from the FPGA's south pins
-#      to U35's A side in matching order;
+#      to U35's A side in matching order; a 10 mm band is then inserted
+#      between U35 and the BIOS opening (59 x 115 mm outline), because the
+#      59 x 105 mm board was 76 % full and could not route;
 #   3. displaced and badly placed small ICs, then passives, are re-placed by
 #      connectivity (narrow plane fanout cleared first);
 #   4. bypass capacitors go back next to their owners (the moved ones first),
@@ -36,6 +38,7 @@ run "$T/move_cluster.py" --board "$B" --owner U10 \
     $(printf -- '--lift %s ' C103 C104 C105) --to 16.0,31.74,0 --report "$R/move-u10.json"
 run "$T/move_cluster.py" --board "$B" --owner U35 \
     $(printf -- '--lift %s ' C224 C225 C226 C227) --to 16.5,45.95,90 --report "$R/move-u35.json"
+run "$T/stretch_board.py" --board "$B" --band 10 --report "$R/stretch.json"
 run "$T/replace_passives.py" --board "$B" --clear-plane-fanout --report "$R/replace-parts.json" \
     $(printf -- '--part %s ' X10 J10 J202 U28 U32 U33 U23 U207 U27 U26 U31 Q201 Q202 U34 U29 U30 \
                             U41 U44 U72 U38 U70 U39 U37 U42 U43 U73 U209) \

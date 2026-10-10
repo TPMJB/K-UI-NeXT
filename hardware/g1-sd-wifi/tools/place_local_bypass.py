@@ -20,13 +20,15 @@ import pcbnew
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOARD = ROOT / 'controller' / 'KUI-G1-Bridge-RevA.kicad_pcb'
 ORIGIN = (70.0, 45.0)
-WIDTH, HEIGHT = 59.0, 105.0
-CUTOUT = (6.0, 51.0, 35.0, 70.0)
-NOTCH = (43.8, 42.0, 59.0, 89.0)
+WIDTH, HEIGHT = 59.0, 115.0
+CUTOUT = (6.0, 61.0, 35.0, 80.0)
+NOTCH = (43.8, 52.0, 59.0, 99.0)
 C5_BOX = (3.5733, 1.0973, 24.5537, 18.9027)
 EDGE_MARGIN = 0.30
 PART_GAP = 0.20
 TRACK_GAP = 0.20
+# Routing channels kept free of parts (--channel), local mm boxes.
+CHANNELS = []
 
 # Owner-assigned groups from CARRIER-LAYOUT-REVIEW.md "Whole-board decoupling".
 OWNERS = {
@@ -74,7 +76,7 @@ def inside_outline(b):
     for keep in (CUTOUT, NOTCH, C5_BOX):
         if overlap(b, keep, m):
             return False
-    return True
+    return not any(overlap(b, k, 0) for k in CHANNELS)
 
 
 def top_copper(board):
@@ -102,7 +104,10 @@ def main():
     ap.add_argument('--max-radius', type=float, default=6.0)
     ap.add_argument('--pair', action='append', default=[],
                     help='REF=OWNER[:NET], placed in the order given instead of the default groups')
+    ap.add_argument('--channel', action='append', default=[],
+                    help='x0,y0,x1,y1 (local mm): routing channel no part may enter')
     args = ap.parse_args()
+    CHANNELS.extend(tuple(float(v) for v in c.split(',')) for c in args.channel)
     pairs = []
     for item in args.pair:
         ref, owner = item.split('=')

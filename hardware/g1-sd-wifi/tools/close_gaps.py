@@ -30,7 +30,7 @@ import pcbnew
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOARD = ROOT / 'controller' / 'KUI-G1-Bridge-RevA.kicad_pcb'
 ORIGIN = (70.0, 45.0)
-WIDTH, HEIGHT = 59.0, 105.0
+WIDTH, HEIGHT = 59.0, 115.0
 G = 0.05                      # grid pitch, mm
 TRACK = 0.15                  # routed width, mm
 CLEAR = 0.15                  # copper clearance, mm
@@ -118,11 +118,11 @@ def build(board):
     yy, xx = np.mgrid[0:NY, 0:NX]
     m = (EDGE + TRACK / 2 + SLACK) / G
     edge |= (xx < m) | (yy < m) | (xx > NX - m) | (yy > NY - m)
-    for x0, y0, x1, y1 in [(6.0, 51.0, 35.0, 70.0), (43.8, 42.0, 59.0, 89.0)]:
+    for x0, y0, x1, y1 in [(6.0, 61.0, 35.0, 80.0), (43.8, 52.0, 59.0, 99.0)]:
         edge |= (xx > x0 / G - m) & (xx < x1 / G + m) & (yy > y0 / G - m) & (yy < y1 / G + m)
     vm = (EDGE + VIA_D / 2 + SLACK) / G
     vedge = (xx < vm) | (yy < vm) | (xx > NX - vm) | (yy > NY - vm)
-    for x0, y0, x1, y1 in [(6.0, 51.0, 35.0, 70.0), (43.8, 42.0, 59.0, 89.0)]:
+    for x0, y0, x1, y1 in [(6.0, 61.0, 35.0, 80.0), (43.8, 52.0, 59.0, 99.0)]:
         vedge |= (xx > x0 / G - vm) & (xx < x1 / G + vm) & (yy > y0 / G - vm) & (yy < y1 / G + vm)
     for l in ROUTE_LAYERS:
         track[l][edge] = -1

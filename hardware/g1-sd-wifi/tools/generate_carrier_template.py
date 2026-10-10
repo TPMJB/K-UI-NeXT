@@ -90,7 +90,7 @@ def make_pdf(board, filename, page, checksum):
         ('Gray: actual carrier component pads.',False),
         ('Blue dashed: provisional existing hardware.',False),
         ('',False),
-        ('Carrier: 59 x 105 mm; PCB 0.8 mm.',False),
+        ('Carrier: 59 x 115 mm; PCB 0.8 mm.',False),
         ('Nominal underside: motherboard +2.5 mm.',False),
         ('Nominal top: motherboard +3.3 mm.',False),
         ('Tall existing capacitors need clear openings.',False),
@@ -133,7 +133,7 @@ def main():
     (OUT/'template-provenance.json').write_text(json.dumps({
         'pcb_sha256':checksum,'status':'unqualified_fit_check_draft',
         'native_edges_and_pad_positions':True,'scale':1,
-        'board_envelope_mm':[59,105],'calibration_mm':[50,50],
+        'board_envelope_mm':[59,115],'calibration_mm':[50,50],
         'motherboard_references':'Provisional registration from owner dimensions; not a measured complete obstacle map',
         'files':['carrier-fit-US-Letter.pdf','carrier-fit-A4.pdf']},indent=2)+'\n')
     print('Created exact-size Letter/A4 fit sheets from native PCB.')

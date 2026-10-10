@@ -1,0 +1,12 @@
+{
+  "band_mm": 10.0,
+  "moved_footprints": 124,
+  "moved_islands": 100,
+  "dropped_islands": [],
+  "edges": 12,
+  "zones": [
+    "In1 reference plane \u2014 no routed traces",
+    "GND reference plane",
+    "+3V3_LOGIC distribution plane"
+  ]
+}

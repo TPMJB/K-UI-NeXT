@@ -23,13 +23,15 @@ import pcbnew
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOARD = ROOT / 'controller' / 'KUI-G1-Bridge-RevA.kicad_pcb'
 ORIGIN = (70.0, 45.0)
-WIDTH, HEIGHT = 59.0, 105.0
-CUTOUT = (6.0, 51.0, 35.0, 70.0)
-NOTCH = (43.8, 42.0, 59.0, 89.0)
+WIDTH, HEIGHT = 59.0, 115.0
+CUTOUT = (6.0, 61.0, 35.0, 80.0)
+NOTCH = (43.8, 52.0, 59.0, 99.0)
 C5_BOX = (3.5733, 1.0973, 24.5537, 18.9027)
 EDGE_MARGIN = 0.30
 PART_GAP = 0.20
 TRACK_GAP = 0.20
+# Routing channels kept free of parts (--channel), local mm boxes.
+CHANNELS = []
 GRID = 0.25
 POWER = {'GND', '+3V3_LOGIC', 'CONSOLE_3V3', '+3V3_STORAGE', '+1V1_MCU', 'PRIMARY_5V', '+5V_HOLD',
          'RESERVE_5V', '+5V_C5', '+3V3_C5_IO', 'FUSED_5V', 'CONSOLE_5V', 'FLEX_5V', 'MCU_VREG_AVDD'}
@@ -58,7 +60,8 @@ def inside_outline(b):
     m = EDGE_MARGIN
     if b[0] < m or b[1] < m or b[2] > WIDTH - m or b[3] > HEIGHT - m:
         return False
-    return not any(overlap(b, k, m) for k in (CUTOUT, NOTCH, C5_BOX))
+    return not any(overlap(b, k, m) for k in (CUTOUT, NOTCH, C5_BOX)) \
+        and not any(overlap(b, k, 0) for k in CHANNELS)
 
 
 def bottom_only(fp):
@@ -150,7 +153,10 @@ def main():
     ap.add_argument('--lift-plane-fanout', action='store_true',
                     help='Also lift locked GND/+3V3_LOGIC fanout stubs (pad-to-via only); rerun '
                          'add_carrier_ground_fanout.py for both nets afterwards')
+    ap.add_argument('--channel', action='append', default=[],
+                    help='x0,y0,x1,y1 (local mm): routing channel no part may enter')
     args = ap.parse_args()
+    CHANNELS.extend(tuple(float(v) for v in c.split(',')) for c in args.channel)
     board = pcbnew.LoadBoard(str(args.board))
     fps = {f.GetReference(): f for f in list(board.GetFootprints())}
     tracks = list(board.GetTracks())
@@ -186,6 +192,11 @@ def main():
     unknown = [r for r in args.part if r not in fps]
     if unknown:
         raise ValueError('Unknown --part references: %s' % unknown)
+    # Small parts with a signal net that sit in a routing channel leave it.
+    in_channel = [r for r, f in fps.items() if re.fullmatch(r'(R|C|TP|U)\d+', r) and r not in keep
+                  and signal_nets(f) and len(list(f.Pads())) <= 8
+                  and any(overlap(bbox(f.GetBoundingBox(False)), k, 0) for k in CHANNELS)]
+    args.part += [r for r in in_channel if r not in args.part]
     movable += [r for r in args.part if r not in movable]
     bypass = dict(item.split('=') for item in args.bypass)
     unknown = [r for r in list(bypass) + list(bypass.values()) if r not in fps]
@@ -346,7 +357,7 @@ def main():
     pcbnew.SaveBoard(str(args.board), board)
     summary = {'movable': len(movable), 'placed': sum(1 for x in results if x['placed']),
                'unplaced': [x['ref'] for x in results if not x['placed']], 'removed_copper_items': removed,
-               'cleared_fanout_items': cleared}
+               'cleared_fanout_items': cleared, 'left_channels': in_channel}
     if args.report:
         args.report.write_text(json.dumps({'summary': summary, 'parts': results}, indent=2) + '\n')
     print(json.dumps(summary, indent=2))

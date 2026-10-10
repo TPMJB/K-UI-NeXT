@@ -1,14 +1,14 @@
 [
   {
     "cap": "C119",
-    "owner": "X10.4",
+    "owner": "X10.1",
     "net": "+3V3_LOGIC",
     "placed": true,
-    "before_mm": 2.915,
-    "after_mm": 3.013,
+    "before_mm": 1.62,
+    "after_mm": 1.67,
     "xy_mm": [
-      35.235,
-      5.045
+      9.062,
+      53.04
     ],
     "rotation_deg": 0,
     "removed_copper_items": 0
@@ -22,7 +22,7 @@
     "after_mm": 2.111,
     "xy_mm": [
       28.967,
-      91.246
+      101.246
     ],
     "rotation_deg": 270,
     "removed_copper_items": 0
@@ -36,23 +36,23 @@
     "after_mm": 3.828,
     "xy_mm": [
       30.703,
-      91.496
+      101.496
     ],
     "rotation_deg": 270,
     "removed_copper_items": 0
   },
   {
     "cap": "C212",
-    "owner": "U23.3",
+    "owner": "U23.5",
     "net": "+3V3_LOGIC",
     "placed": true,
-    "before_mm": 9.957,
-    "after_mm": 9.343,
+    "before_mm": 24.066,
+    "after_mm": 1.647,
     "xy_mm": [
-      25.868,
-      49.38
+      52.006,
+      39.698
     ],
-    "rotation_deg": 180,
+    "rotation_deg": 90,
     "removed_copper_items": 0
   },
   {
@@ -71,38 +71,44 @@
   },
   {
     "cap": "C214",
-    "owner": "U25.6",
+    "owner": "U25.3",
     "net": "+3V3_LOGIC",
     "placed": true,
     "before_mm": 3.931,
-    "after_mm": 3.266,
+    "after_mm": 1.72,
     "xy_mm": [
-      32.211,
-      84.641
+      28.714,
+      95.512
     ],
     "rotation_deg": 270,
     "removed_copper_items": 0
   },
   {
     "cap": "C215",
-    "owner": "U26.6",
+    "owner": "U26.3",
     "net": "+3V3_LOGIC",
     "placed": true,
-    "before_mm": 38.772,
-    "after_mm": 6.03,
+    "before_mm": 35.966,
+    "after_mm": 1.555,
     "xy_mm": [
-      57.437,
-      33.974
+      45.258,
+      47.453
     ],
-    "rotation_deg": 90,
+    "rotation_deg": 0,
     "removed_copper_items": 0
   },
   {
     "cap": "C216",
-    "owner": "U27",
+    "owner": "U27.8",
     "net": "+3V3_LOGIC",
-    "placed": false,
-    "before_mm": 13.115,
+    "placed": true,
+    "before_mm": 12.923,
+    "after_mm": 5.013,
+    "xy_mm": [
+      50.36,
+      43.672
+    ],
+    "rotation_deg": 0,
     "removed_copper_items": 0
   },
   {
@@ -111,20 +117,26 @@
     "net": "+3V3_LOGIC",
     "placed": true,
     "before_mm": 9.638,
-    "after_mm": 8.584,
+    "after_mm": 6.679,
     "xy_mm": [
-      25.479,
-      42.67
+      25.602,
+      41.169
     ],
-    "rotation_deg": 180,
+    "rotation_deg": 270,
     "removed_copper_items": 0
   },
   {
     "cap": "C218",
-    "owner": "U29",
+    "owner": "U29.8",
     "net": "+3V3_LOGIC",
-    "placed": false,
-    "before_mm": 24.626,
+    "placed": true,
+    "before_mm": 31.432,
+    "after_mm": 2.496,
+    "xy_mm": [
+      7.683,
+      41.715
+    ],
+    "rotation_deg": 90,
     "removed_copper_items": 0
   },
   {
@@ -132,11 +144,11 @@
     "owner": "U30.5",
     "net": "+3V3_LOGIC",
     "placed": true,
-    "before_mm": 8.684,
-    "after_mm": 7.29,
+    "before_mm": 1.965,
+    "after_mm": 1.665,
     "xy_mm": [
-      3.662,
-      36.207
+      2.648,
+      35.463
     ],
     "rotation_deg": 180,
     "removed_copper_items": 0
@@ -146,21 +158,27 @@
     "owner": "U31.5",
     "net": "+3V3_LOGIC",
     "placed": true,
-    "before_mm": 9.848,
-    "after_mm": 3.92,
+    "before_mm": 15.478,
+    "after_mm": 2.625,
     "xy_mm": [
-      1.962,
-      35.729
+      1.827,
+      34.113
     ],
-    "rotation_deg": 90,
+    "rotation_deg": 0,
     "removed_copper_items": 0
   },
   {
     "cap": "C221",
-    "owner": "U32",
+    "owner": "U32.5",
     "net": "+3V3_LOGIC",
-    "placed": false,
-    "before_mm": 29.146,
+    "placed": true,
+    "before_mm": 25.729,
+    "after_mm": 1.665,
+    "xy_mm": [
+      28.967,
+      44.015
+    ],
+    "rotation_deg": 180,
     "removed_copper_items": 0
   },
   {
@@ -168,13 +186,13 @@
     "owner": "U33.5",
     "net": "+3V3_LOGIC",
     "placed": true,
-    "before_mm": 18.949,
-    "after_mm": 1.665,
+    "before_mm": 2.785,
+    "after_mm": 1.718,
     "xy_mm": [
-      1.261,
-      34.079
+      8.687,
+      48.627
     ],
-    "rotation_deg": 180,
+    "rotation_deg": 90,
     "removed_copper_items": 0
   },
   {
@@ -182,21 +200,27 @@
     "owner": "U34.5",
     "net": "+3V3_LOGIC",
     "placed": true,
-    "before_mm": 46.514,
-    "after_mm": 8.367,
+    "before_mm": 46.671,
+    "after_mm": 1.665,
     "xy_mm": [
-      56.601,
-      32.222
+      41.973,
+      51.305
     ],
     "rotation_deg": 180,
     "removed_copper_items": 0
   },
   {
     "cap": "C229",
-    "owner": "U37",
+    "owner": "U37.5",
     "net": "+3V3_LOGIC",
-    "placed": false,
-    "before_mm": 20.241,
+    "placed": true,
+    "before_mm": 22.865,
+    "after_mm": 1.67,
+    "xy_mm": [
+      23.981,
+      59.195
+    ],
+    "rotation_deg": 180,
     "removed_copper_items": 0
   },
   {
@@ -209,10 +233,16 @@
   },
   {
     "cap": "C231",
-    "owner": "U38",
+    "owner": "U38.5",
     "net": "CONSOLE_3V3",
-    "placed": false,
-    "before_mm": 19.69,
+    "placed": true,
+    "before_mm": 32.94,
+    "after_mm": 1.665,
+    "xy_mm": [
+      20.967,
+      53.906
+    ],
+    "rotation_deg": 180,
     "removed_copper_items": 0
   },
   {
@@ -220,13 +250,13 @@
     "owner": "U73.5",
     "net": "+3V3_LOGIC",
     "placed": true,
-    "before_mm": 31.777,
-    "after_mm": 4.208,
+    "before_mm": 28.932,
+    "after_mm": 1.665,
     "xy_mm": [
-      2.816,
-      58.447
+      2.848,
+      53.017
     ],
-    "rotation_deg": 270,
+    "rotation_deg": 180,
     "removed_copper_items": 0
   },
   {
@@ -234,11 +264,11 @@
     "owner": "U39.5",
     "net": "CONSOLE_3V3",
     "placed": true,
-    "before_mm": 5.9,
-    "after_mm": 5.321,
+    "before_mm": 26.194,
+    "after_mm": 1.647,
     "xy_mm": [
-      1.624,
-      46.672
+      28.537,
+      51.043
     ],
     "rotation_deg": 90,
     "removed_copper_items": 0
@@ -249,12 +279,12 @@
     "net": "CONSOLE_3V3",
     "placed": true,
     "before_mm": 33.454,
-    "after_mm": 1.683,
+    "after_mm": 1.687,
     "xy_mm": [
-      38.417,
-      88.824
+      37.97,
+      99.446
     ],
-    "rotation_deg": 90,
+    "rotation_deg": 180,
     "removed_copper_items": 0
   },
   {
@@ -266,7 +296,7 @@
     "after_mm": 1.886,
     "xy_mm": [
       3.275,
-      102.962
+      112.962
     ],
     "rotation_deg": 0,
     "removed_copper_items": 0
@@ -280,17 +310,23 @@
     "after_mm": 1.976,
     "xy_mm": [
       3.08,
-      61.326
+      71.326
     ],
     "rotation_deg": 180,
     "removed_copper_items": 0
   },
   {
     "cap": "C404",
-    "owner": "U43",
+    "owner": "U43.5",
     "net": "CONSOLE_3V3",
-    "placed": false,
+    "placed": true,
     "before_mm": 24.146,
+    "after_mm": 4.247,
+    "xy_mm": [
+      18.341,
+      83.04
+    ],
+    "rotation_deg": 270,
     "removed_copper_items": 0
   },
   {
@@ -310,7 +346,7 @@
     "after_mm": 2.734,
     "xy_mm": [
       15.725,
-      99.554
+      109.554
     ],
     "rotation_deg": 270,
     "removed_copper_items": 0
@@ -324,7 +360,7 @@
     "after_mm": 5.33,
     "xy_mm": [
       37.09,
-      68.543
+      78.543
     ],
     "rotation_deg": 0,
     "removed_copper_items": 0
@@ -334,7 +370,7 @@
     "owner": "U71",
     "net": "+5V_C5",
     "placed": false,
-    "before_mm": 62.803,
+    "before_mm": 72.743,
     "removed_copper_items": 0
   },
   {

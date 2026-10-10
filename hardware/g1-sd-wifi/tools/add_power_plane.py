@@ -18,9 +18,9 @@ import pcbnew
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOARD = ROOT / 'controller' / 'KUI-G1-Bridge-RevA.kicad_pcb'
 ORIGIN = (70.0, 45.0)
-WIDTH, HEIGHT = 59.0, 105.0
-CUTOUT = (6.0, 51.0, 35.0, 70.0)
-NOTCH = (43.8, 42.0, 59.0, 89.0)
+WIDTH, HEIGHT = 59.0, 115.0
+CUTOUT = (6.0, 61.0, 35.0, 80.0)
+NOTCH = (43.8, 52.0, 59.0, 99.0)
 NAME = '+3V3_LOGIC distribution plane'
 NET = '+3V3_LOGIC'
 # Pull the plane in from the board edge so it never reaches the outline.

@@ -1,5 +1,5 @@
 {
-  "board_sha256": "b7c11eeea94b2ce2fe9e13eda883d61cc23e758d373c954024df5921c280b49b",
+  "board_sha256": "250d812b6e42a6f5738780e01da55e944ba61a3b7711c804c023103a9c6b8acd",
   "fitted_bottom_components": 0,
   "probe_loading_qualified": false,
   "pads": [
@@ -9,7 +9,7 @@
       "endpoint": "U40.29",
       "xy_mm": [
         25.875,
-        94.75
+        104.75
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -24,7 +24,7 @@
       "endpoint": "U40.31",
       "xy_mm": [
         27.875,
-        93.75
+        103.75
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -39,7 +39,7 @@
       "endpoint": "U40.33",
       "xy_mm": [
         25.875,
-        92.75
+        102.75
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -54,7 +54,7 @@
       "endpoint": "U40.35",
       "xy_mm": [
         27.875,
-        91.75
+        101.75
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -69,7 +69,7 @@
       "endpoint": "U40.38",
       "xy_mm": [
         27.875,
-        90.25
+        100.25
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -84,7 +84,7 @@
       "endpoint": "U40.40",
       "xy_mm": [
         25.875,
-        89.25
+        99.25
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -99,7 +99,7 @@
       "endpoint": "U40.42",
       "xy_mm": [
         27.875,
-        88.25
+        98.25
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -114,7 +114,7 @@
       "endpoint": "U40.44",
       "xy_mm": [
         25.875,
-        87.25
+        97.25
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -129,7 +129,7 @@
       "endpoint": "U40.45",
       "xy_mm": [
         27.875,
-        86.75
+        96.75
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -144,7 +144,7 @@
       "endpoint": "U40.25",
       "xy_mm": [
         27.84092582628907,
-        97.00881904510253
+        107.00881904510253
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0000000000000029,
@@ -159,7 +159,7 @@
       "endpoint": "U40.24",
       "xy_mm": [
         8.207106781186548,
-        97.45710678118655
+        107.45710678118655
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0000000000000042,
@@ -174,7 +174,7 @@
       "endpoint": "U40.23",
       "xy_mm": [
         8.5,
-        96.25
+        106.25
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -189,7 +189,7 @@
       "endpoint": "U40.22",
       "xy_mm": [
         5.9,
-        95.75
+        105.75
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.5999999999999996,
@@ -204,7 +204,7 @@
       "endpoint": "U40.21",
       "xy_mm": [
         9.1,
-        95.25
+        105.25
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.5999999999999996,
@@ -219,7 +219,7 @@
       "endpoint": "U40.20",
       "xy_mm": [
         6.5,
-        94.75
+        104.75
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -234,7 +234,7 @@
       "endpoint": "U40.19",
       "xy_mm": [
         8.5,
-        94.25
+        104.25
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -428,11 +428,11 @@
       "net": "DATA_DIR",
       "endpoint": "U35.1",
       "xy_mm": [
-        9.88397459621556,
-        50.162499999999994
+        10.75,
+        50.662499999999994
       ],
       "side": "B.Cu bare copper",
-      "added_stub_length_mm": 1.0000000000000004,
+      "added_stub_length_mm": 1.0,
       "maximum_added_stub_mm": 3.0,
       "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/7dbc51fe-6b7b-5b3e-9cce-9b3548f53120",
       "bench_access": "carrier removed; insulate underside after installation",
@@ -549,7 +549,7 @@
       "endpoint": "U40.27",
       "xy_mm": [
         27.875,
-        95.75
+        105.75
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
