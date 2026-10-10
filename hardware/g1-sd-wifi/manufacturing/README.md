@@ -1,13 +1,13 @@
 # Rev A fabrication status
 
-**The hardware design is implemented; fabrication is not released yet.** The carrier now has a complete native circuit and a four-layer layout draft. Both independent CN503 flex arms are routed. The parts list and candidate assembly placement derive from the selected physical components. Remaining fabrication blockers are carrier routing/layout review, mechanically supported fit and assembler rotation/fixture review. FPGA device timing and completed firmware remain bring-up limitations.
+**The hardware design is implemented; fabrication is not released yet.** The carrier now has a complete native circuit and a six-layer, 59 × 115 mm layout draft. Both independent CN503 flex arms are routed. The parts list and candidate assembly placement derive from the selected physical components. Remaining fabrication blockers are carrier routing/layout review, mechanically supported fit and assembler rotation/fixture review. FPGA device timing and completed firmware remain bring-up limitations.
 
 | Item | Actual state |
 | --- | --- |
 | Integrated native circuit | KiCad10 ERC0; physical package-pin/footprint-pad audit passes |
 | FlexA and flexB | Each ERC0, DRC0, unconnected0, parity0; independent native mapping check passes |
 | FPGA logic | Original source and regressions; MachXO2 technology mapping fits; vendor place/route timing still open |
-| Carrier PCB | Four-layer0.8 mm native placement/routing draft; actual checks and placement reports accompany CAD |
+| Carrier PCB | Six-layer 0.8 mm, 59 × 115 mm native placement/routing draft; actual checks and placement reports accompany CAD |
 | C5 mount | Sixteen discrete Harwin S7221 contacts,0.90 mm supported working gap; clamp/installed height unqualified |
 | Procurement | All53 BASE carrier SMT part types have exact catalog identities; manual C5 and optional-variant sourcing remain separate |
 | Assembly/release | BASE candidate BOM has277 SMT parts; actual native CPL exists; manufacturer rotation/fixture preview and reviewed release still pending |
@@ -20,7 +20,7 @@ There are **three separate fabrication orders**, rather than integrated rigid-fl
 
 The alternative **BASE_PSRAM_DNP** uses the same fabricated PCB and omits only U203. Its separate candidates are [rigid-psram-dnp-bom.csv](rigid-psram-dnp-bom.csv), [rigid-psram-dnp-cpl.csv](rigid-psram-dnp-cpl.csv) and [assembly-psram-dnp-draft-report.json](assembly-psram-dnp-draft-report.json): 276 SMT parts in 52 exact catalog types. Boot flash, CS1 pullup and bypass capacitors remain fitted. Its firmware must disable PSRAM/cache mapping and must not probe or assert CS1/GPIO47. Generate this candidate with `/usr/bin/python3 hardware/g1-sd-wifi/tools/generate_assembly_draft.py --variant BASE_PSRAM_DNP`; the default invocation generates the populated 8 MiB BASE candidate. Submit one matching population's BOM and CPL together.
 
-Draft settings are in [rigid-order-settings.json](rigid-order-settings.json) and [flex-order-settings.json](flex-order-settings.json). Rigid: FR-4,4 layers,0.8 mm, ENIG,1 oz outer/0.5 oz inner copper, top-side assembly. Its0.20 mm QFN thermal drills use0.50 mm pads, an absolute0.15 mm annular ring; signal routing vias are0.20/0.50 mm and power vias are0.30/0.60 mm. Open thermal-via/paste-window behavior needs assembly review. Flex: two layers,0.12 mm nominal base,0.5 oz copper, ENIG,0.20 mm top PI tail stiffeners, bottom-contact0.5 mm pitch/10.5 mm tails. Supplier must verify the exposed-finger finished0.30 ±0.05 mm tail and required width tolerance. Shared coverlay windows avoid subminimum webs between CN503 solder fingers.
+Draft settings are in [rigid-order-settings.json](rigid-order-settings.json) and [flex-order-settings.json](flex-order-settings.json). Rigid: FR-4, 6 layers, 0.8 mm, ENIG,1 oz outer/0.5 oz inner copper, top-side assembly. Its0.20 mm QFN thermal drills use0.50 mm pads, an absolute0.15 mm annular ring; signal routing vias are0.20/0.50 mm and power vias are0.30/0.60 mm. Open thermal-via/paste-window behavior needs assembly review. Flex: two layers,0.12 mm nominal base,0.5 oz copper, ENIG,0.20 mm top PI tail stiffeners, bottom-contact0.5 mm pitch/10.5 mm tails. Supplier must verify the exposed-finger finished0.30 ±0.05 mm tail and required width tolerance. Shared coverlay windows avoid subminimum webs between CN503 solder fingers.
 
 Power is a separate fused5 V/GND pair at J20. The flex's5 V contacts do not supply the assembled bridge. The chosen FPC contact-current budget cannot be silently used for the full C5/SD/controller load.
 

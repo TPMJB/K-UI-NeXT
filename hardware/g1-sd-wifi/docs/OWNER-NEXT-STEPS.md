@@ -47,6 +47,13 @@ Actual size, check both 50 mm bars). Lay it on the board with the shield off:
   a typical 44-SOP body is about 28.2 mm, which leaves only about 0.4 mm at
   each end.
 - Mark where screws or posts could support the carrier.
+- The carrier is now 59 × 115 mm. The extra 10 mm sits between the FPGA
+  area and the BIOS opening, so with the opening and the CN503 notch on
+  their parts the board reaches 10 mm further north (toward the AV
+  connector) than the earlier 59 × 105 mm draft; the south edge is where it
+  was. Check that the whole north part, the C5 module in particular, still
+  lies in the 8 mm region and clear of both thermal-contact chips. If north
+  does not fit, say so: the same 10 mm can go south instead.
 
 ## Any time, no teardown
 
@@ -75,7 +82,13 @@ S7221-45R spring contacts (C22445132) and the Abracon ASE oscillator
 (C596955) as needing assembly fixtures. Get their agreement before the
 assembly order.
 
-**8. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
+**8. Confirm the input TVS D21 (SMF5.0CA) on JLC.** It was added after
+the catalog check, and the maker's and JLC's sites were not reachable from
+the design environment. On the JLC parts page confirm the exact part:
+bidirectional ("CA"), 5.0 V working voltage, breakdown above 6 V, SOD-123FL
+package. Send back its C-number so the purchasing list can record it.
+
+**9. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
 but a placed-and-routed bitstream and real timing need Lattice's own tools,
 which need a Lattice account and licence file. Open-source tools cannot
 produce a MachXO2 bitstream with timing sign-off.
@@ -85,7 +98,9 @@ produce a MachXO2 bitstream with timing sign-off.
 The bring-up order is in `manufacturing/BRINGUP.md`: bench power first, with
 no console, then the FPGA link, then SD, then the C5, and only then the
 console. The 5 V tap for J20 and its voltage during GD-ROM spin-up are
-measured then; R270 can be changed if the power-fail warning trips.
+measured then; R270 can be changed if the power-fail warning trips. Put a
+fast fuse of about 2 A in the J20 harness at the console end: the board's
+own fuse F20 protects the board, not the wire leading to it.
 
 ## Software still to write
 

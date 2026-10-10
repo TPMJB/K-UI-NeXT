@@ -142,7 +142,7 @@
     "physical_continuity": "unqualified",
     "installed_route": "unqualified",
     "rigid_schematic": "Complete native hierarchy; ERC 0 and physical pad-number audit pass",
-    "rigid_layout": "4-layer 0.8mm carrier placement/routing in progress; prototype mechanics unqualified",
+    "rigid_layout": "6-layer 0.8mm 59 x 115 mm carrier placement/routing in progress; prototype mechanics unqualified",
     "fpga": "Original tested synthesizable logic; MachXO2 resource mapping passes, device P&R/timing open",
     "assembly": "53 exact catalog-matched BASE SMT part types, 277 physical parts, native placement candidate; manufacturer rotation and fixture review pending"
   }
