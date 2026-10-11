@@ -11,7 +11,8 @@
 # 5. rate the supply copper against its normal and fault currents
 #    (IPC-2221, design/power-copper-check.json);
 # 6. native DRC with schematic parity (design/carrier-final-drc.json).
-# Needs KiCad 10's Python as $PY and kicad-cli as $KICAD10_CLI.
+# Needs KiCad 10's Python as $PY (and PYNP with numpy/Pillow for close_gaps.py)
+# and kicad-cli as $KICAD10_CLI. Any failing step stops the script.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 T=$ROOT/tools
@@ -19,12 +20,25 @@ B=$ROOT/controller/KUI-G1-Bridge-RevA.kicad_pcb
 R=${REPORTS:-$ROOT/design/routing-2026-10-10}
 mkdir -p "$R"
 SES=$1
-run() { "$PY" "$@" 2>&1 | grep -v -e '^[0-9:]* Debug' -e 'memory leak' || true; }
+# Each step must succeed; KiCad's debug and SWIG leak chatter is filtered out.
+run_with() {
+    local py=$1; shift
+    local log; log=$(mktemp)
+    if ! "$py" "$@" > "$log" 2>&1; then
+        grep -v -e '^[0-9:]* Debug' -e 'memory leak' "$log" >&2; rm -f "$log"
+        echo "FAILED: $*" >&2; exit 1
+    fi
+    grep -v -e '^[0-9:]* Debug' -e 'memory leak' "$log" || true; rm -f "$log"
+}
+run() { run_with "$PY" "$@"; }
+# close_gaps.py also needs numpy and Pillow: PYNP may name a Python that has
+# them alongside pcbnew (defaults to $PY).
+PYNP=${PYNP:-$PY}
 SUPPLY=(CONSOLE_5V FUSED_5V PRIMARY_5V +5V_HOLD +5V_C5 RESERVE_5V +3V3_STORAGE CONSOLE_3V3 CONSOLE_3V3_FLEX)
 
 run "$T/generate_board.py" import-session "$SES"
 run "$T/remove_dangling_copper.py" --board "$B" --report "$R/dangling-after-import.json"
-run "$T/close_gaps.py" --board "$B" --report "$R/close-gaps.json"
+run_with "$PYNP" "$T/close_gaps.py" --board "$B" --report "$R/close-gaps.json"
 run "$T/remove_dangling_copper.py" --board "$B" --report "$R/dangling-after-gaps.json"
 run "$T/widen_power_tracks.py" --board "$B" $(printf -- '--net %s ' "${SUPPLY[@]}") \
     --width 0.6 --width 0.4 --width 0.3 --report "$R/power-widths.json"

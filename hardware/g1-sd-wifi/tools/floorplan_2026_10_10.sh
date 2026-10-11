@@ -31,7 +31,15 @@ mkdir -p "$R"
 # Start from the last four-layer placement unless told otherwise.
 BASE=${BASE:-4c525f6}
 git -C "$ROOT" show "$BASE:hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_pcb" > "$B"
-run() { "$PY" "$@" 2>&1 | grep -v -e '^[0-9:]* Debug' -e 'memory leak' || true; }
+# Each step must succeed; KiCad's debug and SWIG leak chatter is filtered out.
+run() {
+    local log; log=$(mktemp)
+    if ! "$PY" "$@" > "$log" 2>&1; then
+        grep -v -e '^[0-9:]* Debug' -e 'memory leak' "$log" >&2; rm -f "$log"
+        echo "FAILED: $*" >&2; exit 1
+    fi
+    grep -v -e '^[0-9:]* Debug' -e 'memory leak' "$log" || true; rm -f "$log"
+}
 
 run "$T/update_board_from_netlist.py" --allow-ref U10 --allow-ref D21 --new-at D21=56.5,96.5,90 \
     --allow-ref F21 --new-at F21=34.0,72.5,90 --allow-ref J50 --allow-ref J51 \

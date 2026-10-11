@@ -27,6 +27,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pcbnew
 
+from generate_board import OUTER_ONLY_NETS as OUTER_ONLY
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOARD = ROOT / 'controller' / 'KUI-G1-Bridge-RevA.kicad_pcb'
 ORIGIN = (70.0, 45.0)
@@ -42,6 +44,7 @@ WEIGHT = 1.6                  # weighted A*: faster, at most 60% longer than opt
 MAX_EXPANSIONS = 8_000_000
 SLACK = 0.03                  # quantisation margin, mm
 ROUTE_LAYERS = [pcbnew.F_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.B_Cu]
+OUTER_INDICES = {0, 3}
 NX, NY = int(round(WIDTH / G)), int(round(HEIGHT / G))
 
 
@@ -130,10 +133,11 @@ def build(board):
     return track, via
 
 
-def astar(track, via, net, starts, goals, box):
-    """starts/goals: sets of (layer_index, i, j)."""
+def astar(track, via, net, starts, goals, box, allowed=None):
+    """starts/goals: sets of (layer_index, i, j); allowed: layer indices."""
     x0, y0, x1, y1 = box
-    free = [(t == 0) | (t == net) for t in (track[l] for l in ROUTE_LAYERS)]
+    free = [((t == 0) | (t == net)) if allowed is None or k in allowed else np.zeros_like(t, dtype=bool)
+            for k, t in enumerate(track[l] for l in ROUTE_LAYERS)]
     vfree = (via == 0) | (via == net)
     gx = [g[1] for g in goals]
     gy = [g[2] for g in goals]
@@ -286,7 +290,13 @@ def main():
         ib, jb = to_cell(pcbnew.FromMM(pb[0]), pcbnew.FromMM(pb[1]))
         m = int(args.margin / G)
         box = (max(0, min(ia, ib) - m), max(0, min(ja, jb) - m), min(NX - 1, max(ia, ib) + m), min(NY - 1, max(ja, jb) + m))
-        path = astar(track, via, net, sa, sb, box)
+        # Supply nets that must stay on the 1 oz outer layers (see
+        # generate_board.OUTER_ONLY_NETS) may only use F.Cu and B.Cu.
+        allowed = OUTER_INDICES if name in OUTER_ONLY else None
+        if allowed is not None:
+            sa = {c for c in sa if c[0] in allowed}
+            sb = {c for c in sb if c[0] in allowed}
+        path = astar(track, via, net, sa, sb, box, allowed)
         if path is None:
             results.append({'net': name, 'routed': False, 'reason': 'no path', 'length_mm': round(dist, 2)})
             continue
