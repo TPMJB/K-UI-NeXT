@@ -60,9 +60,15 @@ git add design/routing-checkpoint && git commit  # make the checkpoint durable
 
 ## Finishing in progress (11 October 2026)
 
-`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing. Native DRC 0, parity 0, supply current check passing (+5V_C5 included), 12 signal connections open.
+`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing. Native DRC 0, parity 0, supply current check passing (+5V_C5 included), 9 signal connections open.
 
 It is the 42-open session of the second plain-order run (seed 11), finished with the current tools: the gap closer on a 0.025 mm grid, landing on any point of the other copper island. That beat finishing the 31-open checkpoint session (16 with the earlier gap closer, 14 now): the gap closer's result depends on where the router left its copper, not only on the open count.
+
+From 14 open to 9:
+1. The FPGA -> U36 bundle was unlocked.
+2. Nine boxed-in local connections were laid with `force_supply_route.py --signal` on the 0.025 mm grid; the routes are locked.
+3. One `reroute_finished.sh` round put back the 35 connections they cut.
+4. The gap closer ran again.
 
 To continue:
 1. Copy it over `controller/KUI-G1-Bridge-RevA.kicad_pcb`.
