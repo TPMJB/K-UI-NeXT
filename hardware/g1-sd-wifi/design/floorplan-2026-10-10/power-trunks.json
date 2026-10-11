@@ -1,0 +1,81 @@
+{
+  "trunks": [
+    {
+      "net": "CONSOLE_5V",
+      "from": "J20.1",
+      "to": "F20.1",
+      "width_mm": 1.0,
+      "why": "1.3 A input to the fuse",
+      "necks": 0,
+      "segments": 1,
+      "vias": 0,
+      "length_mm": 1.05
+    },
+    {
+      "net": "FUSED_5V",
+      "from": "F20.2",
+      "to": "Q20.3",
+      "width_mm": 1.0,
+      "why": "1.3 A fuse to reverse-polarity FET",
+      "necks": 0,
+      "segments": 12,
+      "vias": 0,
+      "length_mm": 4.24
+    },
+    {
+      "net": "FUSED_5V",
+      "from": "F20.2",
+      "to": "D21.1",
+      "width_mm": 0.8,
+      "why": "TVS clamp path, fault current until F20 opens",
+      "necks": 0,
+      "segments": 1,
+      "vias": 0,
+      "length_mm": 1.25
+    },
+    {
+      "net": "PRIMARY_5V",
+      "from": "Q20.2",
+      "to": "U20.3",
+      "width_mm": 0.5,
+      "why": "0.75 A into the power mux",
+      "necks": 1,
+      "segments": 5,
+      "vias": 0,
+      "length_mm": 3.44
+    },
+    {
+      "net": "PRIMARY_5V",
+      "from": "Q20.2",
+      "to": "U71.1",
+      "width_mm": 0.6,
+      "why": "0.6 A to the C5 load switch",
+      "necks": 0,
+      "segments": 36,
+      "vias": 2,
+      "length_mm": 32.22
+    },
+    {
+      "net": "PRIMARY_5V",
+      "from": "U71.1",
+      "to": "C235.1",
+      "width_mm": 0.6,
+      "why": "C5 switch input capacitor",
+      "necks": 0,
+      "segments": 5,
+      "vias": 0,
+      "length_mm": 5.19
+    },
+    {
+      "net": "PRIMARY_5V",
+      "from": "Q20.2",
+      "to": "C200.1",
+      "width_mm": 0.8,
+      "why": "input bulk capacitor",
+      "necks": 0,
+      "segments": 25,
+      "vias": 0,
+      "length_mm": 10.46
+    }
+  ]
+}

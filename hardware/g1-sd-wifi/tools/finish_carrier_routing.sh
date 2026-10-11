@@ -34,6 +34,10 @@ run() { run_with "$PY" "$@"; }
 # close_gaps.py also needs numpy and Pillow: PYNP may name a Python that has
 # them alongside pcbnew (defaults to $PY).
 PYNP=${PYNP:-$PY}
+# KiCad rewrites the project file on every board save; a board saved
+# without its project would replace the design rules with defaults.
+PRO=${B%.kicad_pcb}.kicad_pro
+PRO_SUM=$(sha256sum "$PRO")
 SUPPLY=(CONSOLE_5V FUSED_5V PRIMARY_5V +5V_HOLD +5V_C5 RESERVE_5V +3V3_STORAGE CONSOLE_3V3 CONSOLE_3V3_FLEX)
 
 run "$T/generate_board.py" import-session "$SES"
@@ -43,6 +47,9 @@ run "$T/remove_dangling_copper.py" --board "$B" --report "$R/dangling-after-gaps
 run "$T/widen_power_tracks.py" --board "$B" $(printf -- '--net %s ' "${SUPPLY[@]}") \
     --width 0.6 --width 0.4 --width 0.3 --report "$R/power-widths.json"
 run "$T/check_power_copper.py" --board "$B" --report "$ROOT/design/power-copper-check.json"
+if [ "$(sha256sum "$PRO")" != "$PRO_SUM" ]; then
+    echo "FAILED: the project rules file changed during finishing" >&2; exit 1
+fi
 "$KICAD10_CLI" pcb drc --format json --severity-all --schematic-parity --refill-zones \
     -o "$ROOT/design/carrier-final-drc.json" "$B" > /dev/null 2>&1 || true
 python3 - "$ROOT/design/carrier-final-drc.json" <<'PY'

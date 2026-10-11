@@ -23,8 +23,11 @@ protection. Branches that end only at IC sense/control pins or resistors are
 rated for their normal current.
 
 Limits: NORMAL_LIMIT_C rise at the normal current, FAULT_LIMIT_C at the fault
-current; segments no longer than NECK_MM (pad escapes) and via barrels are
-allowed twice the rise because heat spreads into the copper either side.
+current; pad escapes and via barrels are allowed twice the rise because heat
+spreads into the copper either side. A pad escape is a run (consecutive
+segments of one layer and width, joined only end to end) that starts at a pad
+and is no longer than NECK_MM in total; the router splits long tracks into
+short segments, so the length of a single segment says nothing.
 Outer-only nets fail if any inner-layer segment is longer than NECK_MM. Run
 with KiCad 10's Python (pcbnew).
 """
@@ -68,6 +71,40 @@ NETS = {
 }
 
 
+def runs(edges, terminals):
+    """Run length for each edge: the chain of same-layer, same-width edges
+    through nodes that join exactly two edges and are not terminals (pads,
+    vias). Returns per-edge (run length mm, run touches a pad)."""
+    at = collections.defaultdict(list)
+    for idx, (a, b, *_) in enumerate(edges):
+        at[a].append(idx)
+        at[b].append(idx)
+    run_of = {}
+    out = [None] * len(edges)
+    for start in range(len(edges)):
+        if start in run_of:
+            continue
+        seg = edges[start][2]
+        key = (seg.GetLayer(), seg.GetWidth())
+        members, stack = {start}, [start]
+        while stack:
+            idx = stack.pop()
+            for node in edges[idx][:2]:
+                if node in terminals or len(at[node]) != 2:
+                    continue
+                for nxt in at[node]:
+                    s2 = edges[nxt][2]
+                    if nxt not in members and (s2.GetLayer(), s2.GetWidth()) == key:
+                        members.add(nxt)
+                        stack.append(nxt)
+        length = sum(edges[i][3] for i in members)
+        nodes = [n for i in members for n in edges[i][:2]]
+        for i in members:
+            run_of[i] = start
+            out[i] = (length, nodes)
+    return out
+
+
 def rise(current, area_sq_mil, k):
     """Temperature rise in C for a conductor cross-section (IPC-2221 fit)."""
     return (current / (k * area_sq_mil ** 0.725)) ** (1 / 0.44) if current > 0 else 0.0
@@ -89,48 +126,76 @@ class Graph:
 
 
 def net_graph(board, net, pads):
-    """Nodes for pads, vias and track ends; edges for segments."""
+    """Copper graph of a net. Nodes are pads, vias and points on tracks;
+    edges are track pieces (segment, length mm). A track end or via that
+    lands part-way along another track splits that track there, so current
+    is followed along the copper rather than short-circuited across it."""
     items = [t for t in board.GetTracks() if t.GetNetname() == net]
     vias = [t for t in items if t.Type() == pcbnew.PCB_VIA_T]
     segs = [t for t in items if t.Type() != pcbnew.PCB_VIA_T]
     g = Graph()
+    tol = pcbnew.FromMM(0.001)
     ends = []
     for i, s in enumerate(segs):
         for k, p in enumerate((s.GetStart(), s.GetEnd())):
-            node = ('end', i, k)
-            g.find(node)
-            ends.append((node, s.GetLayer(), p, s.GetWidth()))
-    tol = pcbnew.FromMM(0.001)
+            g.find(('end', i, k))
+            ends.append((('end', i, k), s.GetLayer(), p))
+    for j in range(len(vias)):
+        g.find(('via', j))
+    for name in pads:
+        g.find(('pad', name))
+    # Ends that coincide on one layer.
     by_cell = collections.defaultdict(list)
-    for node, layer, p, w in ends:
-        by_cell[(layer, p.x // pcbnew.FromMM(0.05), p.y // pcbnew.FromMM(0.05))].append((node, p))
-    for node, layer, p, w in ends:
-        cx, cy = p.x // pcbnew.FromMM(0.05), p.y // pcbnew.FromMM(0.05)
+    cell = pcbnew.FromMM(0.05)
+    for node, layer, p in ends:
+        by_cell[(layer, p.x // cell, p.y // cell)].append((node, p))
+    for node, layer, p in ends:
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
-                for other, q in by_cell.get((layer, cx + dx, cy + dy), []):
+                for other, q in by_cell.get((layer, p.x // cell + dx, p.y // cell + dy), []):
                     if other != node and abs(p.x - q.x) <= tol and abs(p.y - q.y) <= tol:
                         g.join(node, other)
+    # Ends inside a via or a pad belong to it; vias inside a pad too.
     for j, v in enumerate(vias):
-        g.find(('via', j))
-        for node, layer, p, w in ends:
+        for node, layer, p in ends:
             if v.HitTest(p):
                 g.join(node, ('via', j))
     for name, pad in pads.items():
-        g.find(('pad', name))
-        for node, layer, p, w in ends:
+        for node, layer, p in ends:
             if pad.IsOnLayer(layer) and pad.HitTest(p):
                 g.join(node, ('pad', name))
         for j, v in enumerate(vias):
             if pad.HitTest(v.GetPosition()):
                 g.join(('via', j), ('pad', name))
-    # A track end in the middle of another segment (T junction).
-    for node, layer, p, w in ends:
-        for i, s in enumerate(segs):
-            if s.GetLayer() == layer and node[1] != i and s.HitTest(p, 0):
-                g.join(node, ('end', i, 0))
-                g.join(node, ('end', i, 1))
-    edges = [(g.find(('end', i, 0)), g.find(('end', i, 1)), s) for i, s in enumerate(segs)]
+    # Points part-way along a segment: other ends on its layer, vias.
+    taps = collections.defaultdict(list)
+
+    def tap(i, s, p, node):
+        a, b = s.GetStart(), s.GetEnd()
+        dx, dy = b.x - a.x, b.y - a.y
+        l2 = float(dx * dx + dy * dy)
+        t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2))
+        length = math.sqrt(l2)
+        if t * length <= tol:
+            g.join(node, ('end', i, 0))
+        elif (1 - t) * length <= tol:
+            g.join(node, ('end', i, 1))
+        else:
+            taps[i].append((t, node))
+
+    for i, s in enumerate(segs):
+        for node, layer, p in ends:
+            if node[1] != i and layer == s.GetLayer() and s.HitTest(p, 0):
+                tap(i, s, p, node)
+        for j, v in enumerate(vias):
+            if s.HitTest(v.GetPosition(), 0):
+                tap(i, s, v.GetPosition(), ('via', j))
+    edges = []
+    for i, s in enumerate(segs):
+        points = sorted([(0.0, ('end', i, 0)), (1.0, ('end', i, 1))] + taps[i], key=lambda q: q[0])
+        total = pcbnew.ToMM(s.GetLength())
+        for (t0, n0), (t1, n1) in zip(points, points[1:]):
+            edges.append((g.find(n0), g.find(n1), s, (t1 - t0) * total))
     via_nodes = [(g.find(('via', j)), v) for j, v in enumerate(vias)]
     pad_nodes = {name: g.find(('pad', name)) for name in pads}
     return edges, via_nodes, pad_nodes
@@ -138,7 +203,7 @@ def net_graph(board, net, pads):
 
 def reachable(edges, sources):
     adj = collections.defaultdict(set)
-    for a, b, _ in edges:
+    for a, b, *_ in edges:
         adj[a].add(b)
         adj[b].add(a)
     seen, stack = set(sources), list(sources)
@@ -154,7 +219,7 @@ def branch_currents(edges, sources, loads, fault_points=()):
     """Per edge: load current beyond it from the source (all load in a loop),
     and whether a fault point lies beyond it."""
     adj = collections.defaultdict(list)
-    for idx, (a, b, _) in enumerate(edges):
+    for idx, (a, b, *_) in enumerate(edges):
         adj[a].append((b, idx))
         adj[b].append((a, idx))
     total = sum(loads.values())
@@ -172,7 +237,7 @@ def branch_currents(edges, sources, loads, fault_points=()):
 
     currents, faults = [], []
     points = set(fault_points) | set(loads)
-    for idx, (a, b, _) in enumerate(edges):
+    for idx, (a, b, *_) in enumerate(edges):
         if a == b:
             currents.append(0.0)
             faults.append(False)
@@ -225,33 +290,36 @@ def main():
         currents, faulted = branch_currents(edges, sources, loads, fault_points)
         if not spec['loads']:
             currents = [spec['normal']] * len(edges)
-        worst = {'normal_rise_c': 0.0, 'fault_rise_c': 0.0}
+        worst = {'normal_rise_c': 0.0, 'fault_rise_c': 0.0, 'neck_normal_rise_c': 0.0, 'neck_fault_rise_c': 0.0}
+        pad_set = set(pad_nodes.values())
+        run_info = runs(edges, pad_set | {n for n, _ in via_nodes})
         by_width, inner_long = {}, []
         node_current = collections.defaultdict(float)
-        for (a, b, s), amps, at_fault in zip(edges, currents, faulted):
+        for (a, b, s, length_mm), amps, at_fault, (run_mm, run_nodes) in zip(edges, currents, faulted, run_info):
             node_current[a] = max(node_current[a], amps)
             node_current[b] = max(node_current[b], amps)
             layer = s.GetLayer()
             outer = layer in outer_layers
-            width_mm, length_mm = pcbnew.ToMM(s.GetWidth()), pcbnew.ToMM(s.GetLength())
+            width_mm = pcbnew.ToMM(s.GetWidth())
             area = width_mm * 1000 * (outer_um if outer else inner_um) * UM_TO_MIL ** 2
             k = 0.048 if outer else 0.024
-            neck = length_mm <= NECK_MM
+            neck = run_mm <= NECK_MM and any(n in pad_set for n in run_nodes)
             key = '%s %.2f' % (board.GetLayerName(layer), width_mm)
             by_width[key] = round(by_width.get(key, 0) + length_mm, 2)
-            if spec['outer'] and not outer and not neck:
+            if spec['outer'] and not outer and run_mm > NECK_MM:
                 inner_long.append({'layer': board.GetLayerName(layer), 'length_mm': round(length_mm, 2)})
             cases = [('normal', amps, NORMAL_LIMIT_C)]
             if spec['fault'] and at_fault:
                 cases.append(('fault', spec['fault'], FAULT_LIMIT_C))
             for kind, i, limit in cases:
                 dt = rise(i, area, k)
-                if not neck:
-                    worst[kind + '_rise_c'] = max(worst[kind + '_rise_c'], round(dt, 1))
+                tag = ('neck_' if neck else '') + kind + '_rise_c'
+                worst[tag] = max(worst[tag], round(dt, 1))
                 if dt > limit * (2 if neck else 1):
                     failures.append({'net': net, 'item': 'track', 'case': kind, 'current_a': round(i, 3),
                                      'layer': board.GetLayerName(layer), 'width_mm': round(width_mm, 3),
-                                     'length_mm': round(length_mm, 2), 'rise_c': round(dt, 1),
+                                     'length_mm': round(length_mm, 2), 'run_mm': round(run_mm, 2), 'neck': neck,
+                                     'rise_c': round(dt, 1),
                                      'start_mm': [round(pcbnew.ToMM(s.GetStart().x) - 70, 2),
                                                   round(pcbnew.ToMM(s.GetStart().y) - 45, 2)]})
         # A via carries at most the largest current of a segment it joins;

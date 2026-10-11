@@ -263,16 +263,18 @@ def configure_project():
     path = CAD / (NAME + '.kicad_pro')
     project = json.loads(path.read_text())
     rules = project['board']['design_settings']['rules']
+    # 0.127 mm (5 mil) track and space: JLC's six-layer process goes to
+    # 0.09 mm; the extra density closed routing that stalled at 0.15 mm.
     rules.update({
-        'min_clearance': 0.15, 'min_track_width': 0.15,
+        'min_clearance': 0.127, 'min_track_width': 0.127,
         'min_copper_edge_clearance': 0.30,
         'min_through_hole_diameter': 0.20,
         'min_via_annular_width': 0.15, 'min_via_diameter': 0.50,
     })
     classes = {c['name']: c for c in project['net_settings']['classes']}
-    classes['Default'].update({'clearance': 0.15, 'track_width': 0.15,
+    classes['Default'].update({'clearance': 0.127, 'track_width': 0.127,
                                'via_diameter': 0.50, 'via_drill': 0.20})
-    classes['POWER'].update({'clearance': 0.15, 'track_width': 0.40,
+    classes['POWER'].update({'clearance': 0.127, 'track_width': 0.40,
                              'via_diameter': 0.60, 'via_drill': 0.30})
     path.write_text(json.dumps(project, indent=2) + '\n')
 

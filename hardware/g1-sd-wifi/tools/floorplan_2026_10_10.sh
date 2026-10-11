@@ -20,8 +20,11 @@
 #      and D21 next to F20's output, F21 next to J51's 3.3-V pin,
 #      and the optional reserve bank sits beside the power mux it feeds;
 #   5. the raw-G1 data probes move to U40's pins (same nets, open space);
-#   6. GND and +3V3_LOGIC fanout, power-return and thermal vias, six-layer stack.
-# Needs KiCad 10's Python as $PY and kicad-cli as $KICAD10_CLI.
+#   6. the high-current supply trunks (J20 -> F20 -> Q20, Q20 -> U20/U71/C200)
+#      are laid wide and locked (tools/route_power_trunks.py);
+#   7. GND and +3V3_LOGIC fanout, power-return and thermal vias, six-layer stack.
+# Needs KiCad 10's Python as $PY (and PYNP with numpy/Pillow for the trunk
+# step) and kicad-cli as $KICAD10_CLI. Any failing step stops the script.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 T=$ROOT/tools
@@ -32,14 +35,19 @@ mkdir -p "$R"
 BASE=${BASE:-4c525f6}
 git -C "$ROOT" show "$BASE:hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_pcb" > "$B"
 # Each step must succeed; KiCad's debug and SWIG leak chatter is filtered out.
-run() {
+run_with() {
+    local py=$1; shift
     local log; log=$(mktemp)
-    if ! "$PY" "$@" > "$log" 2>&1; then
+    if ! "$py" "$@" > "$log" 2>&1; then
         grep -v -e '^[0-9:]* Debug' -e 'memory leak' "$log" >&2; rm -f "$log"
         echo "FAILED: $*" >&2; exit 1
     fi
     grep -v -e '^[0-9:]* Debug' -e 'memory leak' "$log" || true; rm -f "$log"
 }
+run() { run_with "$PY" "$@"; }
+# route_power_trunks.py also needs numpy and Pillow: PYNP may name a Python
+# that has them alongside pcbnew (defaults to $PY).
+PYNP=${PYNP:-$PY}
 
 run "$T/update_board_from_netlist.py" --allow-ref U10 --allow-ref D21 --new-at D21=56.5,96.5,90 \
     --allow-ref F21 --new-at F21=34.0,72.5,90 --allow-ref J50 --allow-ref J51 \
@@ -57,8 +65,13 @@ run "$T/replace_passives.py" --board "$B" --clear-plane-fanout --report "$R/repl
     $(printf -- '--bypass %s=U10 ' C103 C104 C105 C111 C112 C114 C115 C118) \
     --bypass C2036=K214 --bypass C119=X10 $(printf -- '--bypass %s=U20 ' C202 C203 C204 C205)
 run "$T/place_local_bypass.py" --board "$B" --max-radius 10 --report "$R/bypass-owners.json" > /dev/null
+# C208 (logic buck output capacitor) moves 1.2 mm towards L20 to open a
+# 1 mm corridor for the F20 -> Q20 input trunk.
+run "$T/move_cluster.py" --board "$B" --owner C208 --to 53.9,104.95,0 --drop-copper --report "$R/move-c208.json"
 run "$T/add_carrier_raw_probes.py" "$B" "$B" \
     $(for n in $(seq 100 115) 128 136; do printf -- '--replace TP%s ' "$n"; done)
+# Supply trunks first, locked, so plane fanouts and the router work around them.
+run_with "$PYNP" "$T/route_power_trunks.py" --board "$B" --report "$R/power-trunks.json"
 run "$T/add_carrier_ground_fanout.py" "$B" "$B" --report "$R/fanout-gnd.json"
 run "$T/add_carrier_ground_fanout.py" "$B" "$B" --net +3V3_LOGIC --report "$R/fanout-3v3.json"
 # The whole 5-V return enters the ground plane at J20.2, and the buck

@@ -1,0 +1,20 @@
+{
+  "owner": "C208",
+  "to": [
+    53.9,
+    104.95,
+    0.0
+  ],
+  "members": [],
+  "lifted": [],
+  "moved_islands": [],
+  "dropped_islands": [
+    {
+      "net": "GND",
+      "items": 2,
+      "refs": [
+        "C208"
+      ]
+    }
+  ]
+}

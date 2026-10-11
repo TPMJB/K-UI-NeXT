@@ -78,6 +78,8 @@ def main():
     ap.add_argument('--owner', required=True)
     ap.add_argument('--member', action='append', default=[])
     ap.add_argument('--lift', action='append', default=[], help='Member whose copper is dropped')
+    ap.add_argument('--drop-copper', action='store_true',
+                    help="Drop the owner's own copper too, for a later fanout step to redo")
     ap.add_argument('--to', required=True, help='x,y,rotation_deg: new owner origin (local mm) and added rotation')
     ap.add_argument('--report', type=pathlib.Path)
     args = ap.parse_args()
@@ -104,7 +106,7 @@ def main():
         return pcbnew.VECTOR2I(int(round(target.x + nx)), int(round(target.y + ny)))
 
     moved, dropped, graveyard = [], [], []
-    rigid = set([args.owner] + args.member)
+    rigid = set(([] if args.drop_copper else [args.owner]) + args.member)
     for island in islands(board):
         refs = touched_refs(island, pads)
         if not refs & set(cluster):
