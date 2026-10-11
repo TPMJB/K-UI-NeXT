@@ -44,7 +44,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BOARD = ROOT / 'controller' / 'KUI-G1-Bridge-RevA.kicad_pcb'
 ORIGIN = (70.0, 45.0)
 WIDTH, HEIGHT = 59.0, 115.0
-G = 0.05                      # grid pitch, mm
+# Grid pitch, mm. 0.025 (KUI_GRID_MM) halves the quantisation margin below,
+# which matters between 0.4 mm-pitch QFN pins; it needs four times the
+# memory and time.
+G = float(os.environ.get('KUI_GRID_MM', '0.05'))
 TRACK = 0.15                  # routed width, mm (load_rules: Default class)
 POWER_TRACKS = (0.4, 0.3)     # supply nets: these widths only, widest first
 CLEAR = 0.15                  # copper clearance, mm (load_rules: board minimum)
@@ -52,10 +55,10 @@ EDGE = 0.30                   # copper-to-edge clearance, mm
 VIA_D, VIA_DRILL = 0.50, 0.20
 POWER_VIA = (0.60, 0.30)      # supply nets: the POWER netclass via
 HOLE_GAP = 0.25               # drilled-hole separation, mm
-VIA_COST = 30                 # in grid steps
+VIA_COST = round(1.5 / G)     # in grid steps (1.5 mm of track)
 WEIGHT = 1.6                  # weighted A*: faster, at most 60% longer than optimal
-MAX_EXPANSIONS = 8_000_000
-SLACK = 0.05                  # quantisation margin, mm (one cell: raster
+MAX_EXPANSIONS = int(8_000_000 * (0.05 / G) ** 2)
+SLACK = G                     # quantisation margin, mm (one cell: raster
                               # error <= 0.43 cell, plus 45-degree steps that
                               # clip a pad corner)
 RIP_PENALTY = 30              # --rip: price per cell of another net's copper
@@ -421,6 +424,57 @@ def item_cells(board, desc_pos, net):
     return cells
 
 
+def island_cells(board, desc_pos, net, allowed=None):
+    """Grid states on every copper item connected to the item DRC named at
+    this position (its island), each mapped to (item, exact point on it).
+    A connection may land anywhere on the island, not only on the item DRC
+    picked as the closest."""
+    x, y = desc_pos
+    p = pcbnew.VECTOR2I(pcbnew.FromMM(x), pcbnew.FromMM(y))
+    seed = None
+    for it in [q for f in board.GetFootprints() for q in f.Pads()] + list(board.GetTracks()):
+        if it.GetNetCode() == net and it.HitTest(p):
+            seed = it
+            break
+    if seed is None:
+        return {}
+    items = [seed] + [q for q in board.GetConnectivity().GetConnectedItems(seed) if q.GetNetCode() == net]
+    cells = {}
+    for it in items:
+        for li, l in enumerate(ROUTE_LAYERS):
+            if (allowed is not None and li not in allowed) or not it.IsOnLayer(l):
+                continue
+            if it.Type() == pcbnew.PCB_TRACE_T:
+                a, b = it.GetStart(), it.GetEnd()
+                n = max(1, int(pcbnew.ToMM(it.GetLength()) / (G / 2)))
+                for k in range(n + 1):
+                    q = pcbnew.VECTOR2I(int(round(a.x + (b.x - a.x) * k / n)), int(round(a.y + (b.y - a.y) * k / n)))
+                    cells.setdefault((li,) + to_cell(q.x, q.y), (it, q))
+            elif it.Type() in (pcbnew.PCB_VIA_T, pcbnew.PCB_PAD_T):
+                q = it.GetPosition()
+                cells.setdefault((li,) + to_cell(q.x, q.y), (it, q))
+    return cells
+
+
+def join(board, anchor, cell, net, records, width):
+    """Connect a path end to its island: split a track exactly where the
+    path meets it (a clean junction for Freerouting as well as KiCad), then
+    run a stub from that point to the grid point. The split-off piece is
+    existing copper, so it is not added to records."""
+    item, q = anchor
+    if item.Type() == pcbnew.PCB_TRACE_T and q != item.GetStart() and q != item.GetEnd():
+        rest = pcbnew.PCB_TRACK(board)
+        rest.SetStart(q)
+        rest.SetEnd(item.GetEnd())
+        rest.SetWidth(item.GetWidth())
+        rest.SetLayer(item.GetLayer())
+        rest.SetNet(item.GetNet())
+        rest.SetLocked(item.IsLocked())
+        board.Add(rest)
+        item.SetEnd(q)
+    stub(board, q, cell, cell[0], net, records, width)
+
+
 def line_free(grid, net, a, b):
     """Every cell next to the straight line between two grid points is free
     for the net (conservative: the four cells around each half-cell sample)."""
@@ -618,20 +672,21 @@ def route_pairs(board, pairs, nets, margin, protected):
     results = []
     for dist, name, pa, pb in pairs:
         net = nets[name]
-        sa, sb = item_cells(board, pa, net), item_cells(board, pb, net)
-        if not sa or not sb:
-            results.append({'net': name, 'routed': False, 'reason': 'endpoint not found'})
+        board.BuildConnectivity()
+        allowed = OUTER_INDICES if name in OUTER_ONLY else None
+        amap, bmap = island_cells(board, pa, net, allowed), island_cells(board, pb, net, allowed)
+        if not amap or not bmap or set(amap) & set(bmap):
+            # Not found, or already joined by an earlier route in this sweep.
+            results.append({'net': name, 'routed': False, 'reason': 'endpoint not found or already joined'})
             continue
+        sa, sb = set(amap), set(bmap)
         ia, ja = to_cell(pcbnew.FromMM(pa[0]), pcbnew.FromMM(pa[1]))
         ib, jb = to_cell(pcbnew.FromMM(pb[0]), pcbnew.FromMM(pb[1]))
         m = int(margin / G)
         box = (max(0, min(ia, ib) - m), max(0, min(ja, jb) - m), min(NX - 1, max(ia, ib) + m), min(NY - 1, max(ja, jb) + m))
         # Supply nets that must stay on the 1 oz outer layers (see
-        # generate_board.OUTER_ONLY_NETS) may only use F.Cu and B.Cu.
-        allowed = OUTER_INDICES if name in OUTER_ONLY else None
-        if allowed is not None:
-            sa = {c for c in sa if c[0] in allowed}
-            sb = {c for c in sb if c[0] in allowed}
+        # generate_board.OUTER_ONLY_NETS) may only use F.Cu and B.Cu; their
+        # island cells are already limited to those layers.
         width = TRACK
         # The margin box keeps searches short; a pair it cannot join is tried
         # once more over the whole board (a detour round a full region).
@@ -658,11 +713,11 @@ def route_pairs(board, pairs, nets, margin, protected):
             results.append({'net': name, 'routed': False, 'reason': 'no path', 'length_mm': round(dist, 2)})
             continue
         added = []
-        stub(board, pcbnew.VECTOR2I(pcbnew.FromMM(pa[0]), pcbnew.FromMM(pa[1])), path[0], path[0][0], net, added, width)
+        join(board, amap[path[0]], path[0], net, added, width)
         # Straight runs where the grid allows (fewer, any-angle segments).
         path = simplify(path, used, net)
         add_path(board, path, net, added, width, POWER_VIA if name in protected else (VIA_D, VIA_DRILL))
-        stub(board, pcbnew.VECTOR2I(pcbnew.FromMM(pb[0]), pcbnew.FromMM(pb[1])), path[-1], path[-1][0], net, added, width)
+        join(board, bmap[path[-1]], path[-1], net, added, width)
         for it in added:
             for l in ROUTE_LAYERS:
                 if it.IsOnLayer(l):

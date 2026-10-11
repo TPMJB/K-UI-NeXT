@@ -60,10 +60,10 @@ git add design/routing-checkpoint && git commit  # make the checkpoint durable
 
 ## Finishing in progress (11 October 2026)
 
-`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing. Native DRC 0, parity 0, supply current check passing, 19 signal connections open. How it got there:
+`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing. Native DRC 0, parity 0, supply current check passing, 18 signal connections open. How it got there:
 
 1. The 31-open session imported and finished (`finish_carrier_routing.sh`).
 2. +5V_C5 laid by `tools/force_supply_route.py` (locked, 0.4 mm, F.Cu/B.Cu), cutting eight signal nets.
-3. One `tools/reroute_finished.sh` round (Freerouting round trip with trace-end healing) brought it from 23 to 19 open.
+3. `tools/reroute_finished.sh` rounds (Freerouting round trip with trace-end healing) brought it from 23 to 18 open.
 
 To continue, copy it over `controller/KUI-G1-Bridge-RevA.kicad_pcb` and repeat `reroute_finished.sh` while it improves. The committed `controller/` board is still the placed board the routing checkpoint belongs to.

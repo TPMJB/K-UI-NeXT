@@ -112,14 +112,28 @@ follow: a net-name pattern routed first in every pass (empty for none), a
 random seed that shuffles the connection order each pass instead of
 alternating it, and a cap that restarts the rip-up price every few passes so
 late passes can still move other nets aside. With a seed the run stops after
-15 passes without improvement instead of 5.
+15 passes without improvement instead of 5. A last optional argument,
+`healUnits`, is for rerouting a board KiCad exported (below).
 
 To continue a run, do not round-trip it through KiCad: Freerouting joins
 copper only where ends coincide exactly, and after an import and re-export
 it saw 245 open connections where KiCad saw 21. `tools/ses_to_dsn.py
 BASE.dsn ROUTED.ses OUT.dsn` appends the session's own wires and vias to the
 DSN it was routed from, and a run on `OUT.dsn` starts where the session
-stopped. The dedicated `In1.Cu`
+stopped.
+
+After `tools/finish_carrier_routing.sh` the board does go back to
+Freerouting, through `tools/reroute_finished.sh`, which keeps the result only
+when native DRC shows fewer open connections. The 245-versus-21 gap was
+mostly locked copper that the board tools lay at KiCad's exact pad centres:
+KiCad and the DSN round pad and track coordinates separately, so those trace
+ends miss their pads by a rounding step or two (at most 2 µm). With
+`healUnits` 20, Headless19Ripup moves such ends onto the pad, via or trace
+end they miss before routing (164 ends on the carrier), and the remaining
+difference is contacts Freerouting does not model (a via or track end
+overlapping a pad rather than centred on it). `tools/force_supply_route.py`
+lays a supply connection the gap closer cannot fit by crossing unlocked signal
+copper and cutting it back for the next round to reroute. The dedicated `In1.Cu`
 reference plane remains inactive for signal traces. Test routing on a fresh
 CF-board DSN with no wiring reduced 44 incompletes to 13 over two bounded
 passes and wrote importable checkpoints. This verifies the runner, not the

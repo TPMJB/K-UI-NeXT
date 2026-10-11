@@ -13,6 +13,11 @@ touched. The new copper is locked. The signal connections it cut are left
 open for tools/reroute_finished.sh to put back (Freerouting rips up and
 reroutes around the locked supply copper).
 
+With --signal the same is done for signal connections that are boxed in
+(all four signal layers, the Default netclass width and via); several --net
+options may be given. Each new route is locked so the next Freerouting round
+reroutes the nets it cut rather than ripping it out again.
+
 Native DRC (zones refilled) must show no new violation other than the
 dangling leftovers of cut tracks, which tools/remove_dangling_copper.py
 clears; otherwise the board is left unchanged. Needs numpy and Pillow
@@ -40,7 +45,7 @@ def crossed(path, net, soft, soft_items, width):
         if foreign[l][j, i]:
             hits.append((cg.ROUTE_LAYERS[l], cg.to_nm(i, j), cg.CLEAR + width / 2 + cg.SLACK + cg.G))
         if b is not None and b[0] != l and vforeign[j, i]:
-            hits.append((None, cg.to_nm(i, j), cg.CLEAR + cg.POWER_VIA[0] / 2 + cg.SLACK + cg.G))
+            hits.append((None, cg.to_nm(i, j), cg.CLEAR + max(cg.POWER_VIA[0], cg.VIA_D) / 2 + cg.SLACK + cg.G))
     found = {}
     for layer, pt, acc in hits:
         for it in soft_items:
@@ -56,12 +61,15 @@ def crossed(path, net, soft, soft_items, width):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--board', type=pathlib.Path, default=cg.BOARD)
-    ap.add_argument('--net', required=True)
+    ap.add_argument('--net', action='append', required=True)
+    ap.add_argument('--signal', action='store_true', help='signal nets: all signal layers, Default width and via')
     ap.add_argument('--width', type=float, action='append', help='mm, widest first (default 0.4 then 0.3)')
     ap.add_argument('--report', type=pathlib.Path)
     args = ap.parse_args()
-    widths = args.width or [0.4, 0.3]
     cg.load_rules(args.board)
+    widths = args.width or ([cg.TRACK] if args.signal else [0.4, 0.3])
+    layers = None if args.signal else cg.OUTER_INDICES
+    via_size = (cg.VIA_D, cg.VIA_DRILL) if args.signal else cg.POWER_VIA
     pro = args.board.with_suffix('.kicad_pro')
     rules_before = pro.read_bytes()
     work = pathlib.Path(tempfile.mkdtemp())
@@ -75,34 +83,35 @@ def main():
     before = cg.drc(scratch, work)
     baseline = cg.hard_violations(before)
     nets = {n.GetNetname(): n.GetNetCode() for n in board.GetNetInfo().NetsByNetcode().values()}
-    net = nets[args.net]
     protected = cg.protected_nets(args.board)
-    pairs = [p for p in cg.open_pairs(before) if p[1] == args.net]
+    pairs = [p for p in cg.open_pairs(before) if p[1] in args.net]
     if not pairs:
-        raise SystemExit('%s has no open connection.' % args.net)
+        raise SystemExit('%s: no open connection.' % ', '.join(args.net))
     rippable = lambda it: (it.Type() in (pcbnew.PCB_TRACE_T, pcbnew.PCB_VIA_T) and not it.IsLocked()
                            and it.GetNetname() not in protected)
     records = []
     for dist, name, pa, pb in pairs:
+        net = nets[name]
         path = None
+        board.BuildConnectivity()
+        amap, bmap = cg.island_cells(board, pa, net, layers), cg.island_cells(board, pb, net, layers)
+        if not amap or not bmap or set(amap) & set(bmap):
+            continue   # joined by an earlier route here
         for width in widths:
-            track, via, soft_track, soft_via, soft_items = cg.build(board, rippable, width, cg.POWER_VIA)
-            sa = {c for c in cg.item_cells(board, pa, net) if c[0] in cg.OUTER_INDICES}
-            sb = {c for c in cg.item_cells(board, pb, net) if c[0] in cg.OUTER_INDICES}
-            if not sa or not sb:
-                continue
+            track, via, soft_track, soft_via, soft_items = cg.build(board, rippable, width, via_size)
             hist = [np.zeros((cg.NY, cg.NX), np.int32) for _ in cg.ROUTE_LAYERS]
-            path = cg.astar(track, via, net, sa, sb, (0, 0, cg.NX - 1, cg.NY - 1), cg.OUTER_INDICES,
+            path = cg.astar(track, via, net, set(amap), set(bmap), (0, 0, cg.NX - 1, cg.NY - 1), layers,
                             (soft_track, soft_via), hist)
             if path is not None:
                 break
         if path is None:
-            raise SystemExit('%s: no way between %s and %s even through signal copper.' % (name, pa, pb))
+            print(json.dumps({'net': name, 'laid': False, 'reason': 'no way even through signal copper'}), flush=True)
+            continue
         victims = crossed(path, net, (soft_track, soft_via), soft_items, width)
         added = []
-        cg.stub(board, pcbnew.VECTOR2I(pcbnew.FromMM(pa[0]), pcbnew.FromMM(pa[1])), path[0], path[0][0], net, added, width)
-        cg.add_path(board, path, net, added, width, cg.POWER_VIA)
-        cg.stub(board, pcbnew.VECTOR2I(pcbnew.FromMM(pb[0]), pcbnew.FromMM(pb[1])), path[-1], path[-1][0], net, added, width)
+        cg.join(board, amap[path[0]], path[0], net, added, width)
+        cg.add_path(board, path, net, added, width, via_size)
+        cg.join(board, bmap[path[-1]], path[-1], net, added, width)
         for it in added:
             it.SetLocked(True)
         for it, pts in victims:

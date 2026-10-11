@@ -5,6 +5,10 @@
 #   tools/reroute_finished.sh [PASSES] [SEED]
 #   UNLOCK='^BUS_' tools/reroute_finished.sh ...   also let Freerouting move
 #                                                  locked copper of these nets
+#   RIP_RADIUS=1.5 tools/reroute_finished.sh ...   first clear unlocked signal
+#       copper within 1.5 mm of each end of every open connection, and route
+#       the open nets first, so they get the freed space before the nets
+#       that were cleared out of it
 #
 # After tools/finish_carrier_routing.sh the board can still have open
 # connections that the grid gap closer cannot join without moving other
@@ -26,7 +30,7 @@ B=$ROOT/controller/KUI-G1-Bridge-RevA.kicad_pcb
 WORK=${WORK:-$(mktemp -d)}
 JAVA=${JAVA_HOME:+$JAVA_HOME/bin/}java
 JAVAC=${JAVA_HOME:+$JAVA_HOME/bin/}javac
-PRIORITY='^(ATA_|BUS_D|BUS_CS|BUS_RESET|LINK_|QSPI|MCU_USB|C5_M|SD_)'
+PRIORITY=${PRIORITY:-'^(ATA_|BUS_D|BUS_CS|BUS_RESET|LINK_|QSPI|MCU_USB|C5_M|SD_)'}
 PASSES=${1:-3}   # on a finished board nearly all the gain comes in the first pass
 SEED=${2:-5}
 REPORTS=(design/carrier-final-drc.json design/power-copper-check.json design/routing-2026-10-10)
@@ -65,6 +69,30 @@ for t in b.GetTracks():
 pcbnew.SaveBoard(sys.argv[1], b)
 print(json.dumps({'unlocked_items': n}))
 PY
+fi
+if [ -n "${RIP_RADIUS:-}" ]; then
+    "$PY" - "$B" "$WORK/drc.json" "$RIP_RADIUS" "$WORK/stuck.txt" <<'PY' 2>&1 | grep -v -e Debug -e 'memory leak' || true
+import json, re, sys, pcbnew
+sys.path.insert(0, sys.argv[1].rsplit('/controller/', 1)[0] + '/tools')
+from generate_board import OUTER_ONLY_NETS
+b = pcbnew.LoadBoard(sys.argv[1])
+r = json.load(open(sys.argv[2]))
+radius = pcbnew.FromMM(float(sys.argv[3]))
+points, stuck = [], set()
+for u in r['unconnected_items']:
+    stuck.add(re.search(r'\[([^\]]+)\]', u['items'][0]['description']).group(1))
+    for it in u['items'][:2]:
+        points.append(pcbnew.VECTOR2I(pcbnew.FromMM(it['pos']['x']), pcbnew.FromMM(it['pos']['y'])))
+keep = set(OUTER_ONLY_NETS) | {'GND', '+3V3_LOGIC', '+1V1_MCU', 'CONSOLE_3V3', 'CONSOLE_3V3_FLEX'} | stuck
+gone = [t for t in b.GetTracks() if not t.IsLocked() and t.GetNetname() not in keep
+        and any(t.HitTest(p, radius) for p in points)]
+for t in gone:
+    b.Remove(t)
+pcbnew.SaveBoard(sys.argv[1], b)
+open(sys.argv[4], 'w').write('|'.join(re.escape(n) for n in sorted(stuck)))
+print(json.dumps({'cleared_items': len(gone), 'cleared_nets': len({t.GetNetname() for t in gone}), 'open_nets': len(stuck)}))
+PY
+    PRIORITY="^($(cat "$WORK/stuck.txt"))\$"
 fi
 "$PY" "$T/generate_board.py" export-dsn --dsn "$WORK/native.dsn" --signal-starter "$WORK/reroute.dsn" \
     --power-width 0.25 > /dev/null 2>&1
