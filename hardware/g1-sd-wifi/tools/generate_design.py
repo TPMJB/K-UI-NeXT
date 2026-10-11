@@ -59,7 +59,7 @@ def load_components():
         blocks['cn503-interface'].append({
             'ref': conn['carrier_reference'], 'value': conn['mpn'], 'mpn': conn['mpn'],
             'footprint': conn['footprint'], 'pins': pins, 'populate': True,
-            'height_max_mm': 2.0, 'sources': [fpc['connector_primary_source']],
+            'height_max_mm': 2.2, 'sources': [fpc['connector_primary_source']],
             'description': 'Independent CN503 ' + conn['flex_row'] + ' arm. Console 5-V contacts are not connected on the carrier; host 3.3 V enters only through F21.'})
     # Power sources behind passive inductors need explicit ERC source declarations.
     # These flags are justified by external supplies and the three regulators;
@@ -84,11 +84,13 @@ def load_components():
             part.setdefault('variant', 'BASE')
     return blocks
 
-def localize_footprints(blocks):
+def localize_footprints(blocks, reuse_localized=False):
     lib = CAD / 'KUI_Footprints.pretty'
     lib.mkdir(exist_ok=True)
     copied = []
     missing = []
+    protection_provenance = json.loads((ROOT / 'design/sources/input-protection-footprints.json').read_text())['footprints']
+    recorded_custom = set()
     for part in (p for b in blocks.values() for p in b):
         fp = part.get('footprint', '')
         if not fp:
@@ -98,15 +100,26 @@ def localize_footprints(blocks):
         destination = lib / (name + '.kicad_mod')
         if nick not in ('KUI_Footprints', 'KUI_G1', 'KUI'):
             source = FOOTPRINT_DIR / (nick + '.pretty') / destination.name
-            if not source.exists():
-                missing.append(str(source))
-                continue
-            shutil.copyfile(source, destination)
+            if reuse_localized:
+                if not destination.exists():
+                    missing.append(str(destination))
+                    continue
+            else:
+                if not source.exists():
+                    missing.append(str(source))
+                    continue
+                shutil.copyfile(source, destination)
             # Record the standard KiCad 10 install location, not a local mirror.
             canonical = pathlib.Path('/usr/share/kicad/footprints') / (nick + '.pretty') / destination.name
             copied.append({'source': str(canonical), 'local': str(destination.relative_to(ROOT))})
         elif not destination.exists():
             missing.append(fp)
+        elif name in protection_provenance and name not in recorded_custom:
+            record = protection_provenance[name]
+            copied.append({'source': 'manufacturer recommended land; design/sources/input-protection-footprints.json',
+                           'local': record['local'], 'manufacturer_source': record['manufacturer_source'],
+                           'prior_library_reference': record['prior_library_reference']})
+            recorded_custom.add(name)
         part['source_footprint'] = fp
         part['footprint'] = 'KUI_Footprints:' + name
         part['on_board'] = True
@@ -281,9 +294,11 @@ def configure_project():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--skip-pad-audit', action='store_true')
+    parser.add_argument('--reuse-localized-footprints', action='store_true',
+                        help='Use committed local library without replacing footprints from an external install')
     args = parser.parse_args()
     blocks = load_components()
-    localize_footprints(blocks)
+    localize_footprints(blocks, reuse_localized=args.reuse_localized_footprints)
     pages = write_schematics(blocks)
     configure_project()
     if not args.skip_pad_audit:

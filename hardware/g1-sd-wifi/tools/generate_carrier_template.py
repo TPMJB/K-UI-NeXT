@@ -24,14 +24,14 @@ OUT = ROOT / 'mechanical'
 
 def make_pdf(board, filename, page, checksum):
     c = canvas.Canvas(str(filename), pagesize=page, invariant=1)
-    c.setTitle('K-UI G1 Rev A - provisional carrier fit sheet - actual size')
+    c.setTitle('K-UI G1 Rev A - routed carrier fit check - actual size')
     c.setAuthor('K-UI design work')
     w, h = page
     c.setFillColor(colors.HexColor('#172638'))
     c.setFont('KUI-Bold', 15)
     c.drawString(18*mm, h-20*mm, 'K-UI G1 carrier: actual-size fit sheet')
     c.setFont('KUI', 9)
-    c.drawString(18*mm, h-27*mm, 'DRAFT - outline registration, support and installed fit are unqualified.')
+    c.drawString(18*mm, h-27*mm, 'ROUTED BOARD - physical fit and mounting still need your Dreamcast check.')
     c.drawString(18*mm, h-33*mm, 'Print this PDF on matching paper: Actual size / 100%; turn off Fit and Shrink.')
     edges = [x for x in board.GetDrawings() if x.GetLayer() == pcbnew.Edge_Cuts]
     ox = min(pcbnew.ToMM(x.GetStart().x) for x in edges)
@@ -83,10 +83,12 @@ def make_pdf(board, filename, page, checksum):
         ('Fit check, before cutting paper', True),
         ('1. Measure BOTH 50 mm bars.',False),
         ('2. Match the BIOS and CN503 outlines.',False),
-        ('3. Check the complete perimeter and',False),
-        ('   every existing part underneath it.',False),
-        ('4. Keep both thermal-contact chips clear.',False),
-        ('5. Check shield, SD access and case posts.',False),
+        ('3. Check the north edge near the AV port.',False),
+        ('4. Mark CE501, CE502 and CE504:',False),
+        ('   none may hit solid carrier laminate.',False),
+        ('5. Keep both thermal-contact chips clear.',False),
+        ('6. Mark case posts and possible supports.',False),
+        ('7. Check SD access and both flex bends.',False),
         ('',False),
         ('Paper geometry is exact; registration is draft.',False),
         ('Black: native carrier edge and openings.',False),
@@ -96,26 +98,30 @@ def make_pdf(board, filename, page, checksum):
         ('Carrier: 59 x 115 mm; PCB 0.8 mm.',False),
         ('Nominal underside: motherboard +2.5 mm.',False),
         ('Nominal top: motherboard +3.3 mm.',False),
+        ('6 mm zone: connector stack up to 5.6 mm.',False),
+        ('Only 0.4 mm before other tolerances.',False),
+        ('8 mm zone: C5 plus clamp <=3.7 mm',False),
+        ('above seating plane at max PCB thickness.',False),
         ('Tall existing capacitors need clear openings.',False),
         ('Paper fit does not establish stack height.',False),
         ('',False),
         ('C5 contacts need a supported 0.90 mm gap',False),
         ('and at least 6.24 N total clamp reaction.',False),
-        ('Retention and support are not yet designed.',False),
+        ('Support and clamp are not yet qualified.',False),
     ]
     for value,bold in lines:
         c.setFont('KUI-Bold' if bold else 'KUI',8)
         c.drawString(textx,texty,value); texty-=4.5*mm
     c.setFont('KUI-Bold',8)
-    c.drawString(25*mm, top-115*mm, '50 mm horizontal calibration')
+    c.drawString(25*mm, top-119*mm, '50 mm horizontal calibration')
     c.setLineWidth(.25*mm)
-    line((0,121),(50,121))
-    for x in range(0,51,10): line((x,119.5),(x,122.5))
+    line((0,124),(50,124))
+    for x in range(0,51,10): line((x,122.5),(x,125.5))
     c.setFont('KUI',7)
-    for x in range(0,51,10): c.drawCentredString(*xy(x,127),str(x))
+    for x in range(0,51,10): c.drawCentredString(*xy(x,130),str(x))
     line((72,108),(72,158))
     for y in range(108,159,10): line((70.5,y),(73.5,y))
-    c.saveState(); c.translate(*xy(78,133)); c.rotate(90)
+    c.saveState(); c.translate(*xy(66,133)); c.rotate(90)
     c.setFont('KUI-Bold',8); c.drawCentredString(0,0,'50 mm vertical calibration'); c.restoreState()
     c.setFont('KUI',8)
     c.drawString(18*mm,34*mm,'If either bar is wrong, the printer scaled the page. Do not resize board geometry.')

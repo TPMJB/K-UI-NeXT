@@ -37,7 +37,7 @@ VARIANTS = {
 QTY_COLUMNS = ['qty_base', 'qty_bios_variant', 'qty_reserve_variant', 'qty_bios_and_reserve_variant',
                'qty_base_psram_dnp_variant', 'qty_bios_psram_dnp_variant', 'qty_reserve_psram_dnp_variant',
                'qty_bios_and_reserve_psram_dnp_variant']
-FIELDS = ['mpn', 'manufacturer', 'description', 'electrical_spec', 'physical_package', 'footprint',
+FIELDS = ['mpn', 'manufacturer', 'description', 'electrical_spec', 'physical_package', 'height_max_mm', 'footprint',
           *QTY_COLUMNS, 'refs_base', 'refs_bios_only', 'refs_reserve_only', 'refs_base_only', 'refs_psram_only', 'refs_all',
           'assembly_method', 'lcsc_code', 'sourcing_status', 'supplier_identity_url',
           'jlc_assembly_status', 'jlc_assembly_url', 'jlc_pcba_type', 'jlc_fixture_notice',
@@ -107,9 +107,15 @@ def make_rows(cs, evidence):
                 raise ValueError('Unverified or non-official supplier identity: ' + mpn)
             if supplier.get('verified_mpn') != mpn or not supplier.get('verified_on'):
                 raise ValueError('Supplier identity must match exact MPN and review date: ' + mpn)
+            if supplier.get('verified_manufacturer') != e['manufacturer']:
+                raise ValueError('Supplier identity must match exact manufacturer: ' + mpn)
         for c in parts:
             if c.get('lcsc') and c['lcsc'] != code:
                 raise ValueError('Circuit supplier ID lacks matching reviewed evidence: ' + c['ref'])
+            if c.get('manufacturer') and c['manufacturer'] != e['manufacturer']:
+                raise ValueError('Circuit manufacturer differs from reviewed identity: ' + c['ref'])
+            if 'height_max_mm' in e and c.get('height_max_mm') != e['height_max_mm']:
+                raise ValueError('Circuit height budget differs from reviewed evidence: ' + c['ref'])
         jlc = e.get('jlc_assembly', {})
         if jlc:
             if (urlparse(jlc.get('url', '')).hostname not in {'jlcpcb.com', 'www.jlcpcb.com'}
@@ -127,6 +133,7 @@ def make_rows(cs, evidence):
             'description': e.get('description', parts[0]['value']),
             'electrical_spec': e.get('electrical_spec', ''),
             'physical_package': e['physical_package'], 'footprint': footprint,
+            'height_max_mm': max((c.get('height_max_mm', 0) for c in parts), default=0),
             'assembly_method': method,
             'lcsc_code': code,
             'sourcing_status': 'catalog_identity_verified_assembly_pending' if code else 'sourcing_pending',
@@ -159,7 +166,12 @@ def main():
     cs = components()
     rows, excluded = make_rows(cs, evidence)
     purchased = [c for c in cs if not exclusion(c)]
-    source_paths = sorted((ROOT / 'design/blocks').glob('*.json')) + [ROOT / 'design/flex-interface.json', ROOT / 'tools/generate_design.py', Path(__file__), evidence_path]
+    source_paths = sorted((ROOT / 'design/blocks').glob('*.json')) + [
+        ROOT / 'design/flex-interface.json', ROOT / 'tools/generate_design.py', Path(__file__), evidence_path,
+        ROOT / 'design/sources/input-protection-footprints.json',
+        ROOT / 'controller/KUI_Footprints.pretty/HighDiode_SMF_SOD123FL.kicad_mod',
+        ROOT / 'controller/KUI_Footprints.pretty/Littelfuse_467_0603_Recommended.kicad_mod',
+    ]
     totals = {name: sum(row[col] for row in rows) for name, col in zip(VARIANTS, QTY_COLUMNS)}
     # Functional population invariants: stock bypass cannot coexist with populated selector.
     byref = {c['ref']: c for c in purchased}

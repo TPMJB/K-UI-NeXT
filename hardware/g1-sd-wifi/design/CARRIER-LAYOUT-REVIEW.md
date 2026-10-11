@@ -1,6 +1,6 @@
 # Carrier layout review — 11 October 2026
 
-Status: **routed, native DRC clean, schematic parity 0 and supply copper rated; owner reviews and the physical fit check remain.** The reviewed PCB is `controller/KUI-G1-Bridge-RevA.kicad_pcb`, SHA-256 **`7d7c3d2693fd01a43f67d1618dabdd9e908bb48c382820c1bf2be7a41367bfc9`**. This report does not qualify electrical operation or mechanical fit and does not by itself authorize an order: the owner reviews in `manufacturing/review-evidence.json` still gate the release exporter.
+Status: **fully routed and native DRC/ERC/parity clean; normal-current screening passes, fault screening and mechanical qualification remain open.** The current PCB SHA-256 is **`8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8`**. This follow-up preserves Claude commit `4b8c7d6` routing, corrects the three protection land patterns and widens existing supply traces without moving routes or vias. The owner reviews in `manufacturing/review-evidence.json` still gate release.
 
 | Current native snapshot | Result |
 |---|---:|
@@ -12,7 +12,7 @@ Status: **routed, native DRC clean, schematic parity 0 and supply copper rated; 
 | Native DRC, all severities, zones refilled | **0 violations** |
 | Unconnected items | **0** |
 | Schematic parity issues | **0** |
-| Supply copper current check (IPC-2221) | **PASS** |
+| Supply copper screen (IPC-2221) | Normal: pass; selected 2.5 A fault screen: 138 failed track/via entries |
 | Schematic ERC (carrier, flex A, flex B) | 0 / 0 / 0 |
 
 ## What changed since the 600-open checkpoint
@@ -39,33 +39,37 @@ Freerouting and the grid gap closer stopped at 4 open connections. The last ones
 | Hazard | Protection on the board | Evidence |
 |---|---|---|
 | Short or overload on the board's 5 V | F20, 1.5 A fast fuse at J20 | `design/power-and-isolation.md` |
-| 12 V connected to J20 by mistake | D21, bidirectional 5 V TVS after F20: conducts above about 6.4 V and opens F20 | same; downstream parts can still be damaged while F20 clears |
+| 12 V connected to J20 by mistake | D21, High Diode SMF5.0CA shunt after F20; TVS/fuse clearing coordination remains unqualified | same; downstream parts can still be damaged while F20 clears |
 | Reversed 5 V | Q20 P-MOSFET blocks it; D21 stays off, F20 survives | same |
 | Short on the host-side 3.3 V buffers | F21, 0.5 A fast fuse at the only host 3.3 V entry (J51 B1) | `design/flex-interface.json`, flex checks |
 | Chafed or cut flex | No console 5 V on either flex arm; contacts A1, A3, B3 end at dead fingers | `flex/tools/check_flex.py` |
-| Supply copper overheating before a fuse acts | 5 V and storage nets routed only on 1 oz outer layers; widened; IPC-2221 rated at normal and fault current | `design/power-copper-check.json` |
+| Supply copper overheating before a fuse acts | 5 V/storage nets use 1 oz outer layers; normal-current screening passes; fault-current and fuse-clearing qualification remains open | `design/power-copper-check.json` |
 | Thin return path | J20's ground pad has four 0.3 mm vias into the plane; each TPS62162 thermal pad two | `design/floorplan-2026-10-10/power-vias.json` |
 | Underside contact with the motherboard | Vias tented both sides; bare probe pads must be covered with Kapton after probing | `manufacturing/BRINGUP.md` |
 | Harness wire before F20 | Not on the board: a ~2 A fuse at the console tap is an owner step | `docs/OWNER-NEXT-STEPS.md` |
 
-## Supply copper current check
+## Supply copper screen and its limit
 
-`tools/check_power_copper.py` turns each supply net's copper into a graph, works out the current in every segment from the net's source to its loads (the budget in `power-and-isolation.md`), and rates each segment and via with the IPC-2221 fit for its layer's copper. Trunk nets must also carry their fuse or regulator current to any point where a capacitor, connector, spring contact, test point or load could short. Limits: 10 °C rise at normal current, 45 °C at fault current, doubled for pad escapes of 2 mm or less and for via barrels.
+The corrected checker models finite via barrels by copper layer and sums branch
+currents. It faults each local capacitor, IC and other rail pad, including the
+logic-plane stubs omitted by the previous checker. TI TPS6216x Rev E gives a
+2.45 A maximum static high-side threshold at VIN=12 V, TJ=25°C; the selected
+2.5 A screen is not a guaranteed continuous fault-current bound. Dynamic peaks
+may be higher. Fuse nameplate current is also not a fault-current bound.
 
-| Net | Budget / fault A | Worst rise along runs, normal / fault (°C) | Worst rise at pad necks (°C) | Copper (layer, width: length mm) |
-|---|---:|---:|---:|---|
-| CONSOLE_5V | 1.3 / 1.5 | 0.0 / 0.0 | 2.5 / 3.5 | F.Cu 0.60: 1.75, F.Cu 1.00: 1.05 |
-| FUSED_5V | 1.3 / 1.5 | 2.5 / 3.5 | 0.0 / 0.0 | F.Cu 0.60: 2.34, F.Cu 0.80: 1.25, F.Cu 1.00: 4.23 |
-| PRIMARY_5V | 1.3 / 1.5 | 1.0 / 8.1 | 1.0 / 8.1 | B.Cu 0.25: 41.42, B.Cu 0.40: 3.25, B.Cu 0.60: 34.11, F.Cu 0.25: 1.57, F.Cu 0.30: 6.1, F.Cu 0.40: 1.68, F.Cu 0.60: 24.03, F.Cu 0.80: 10.45 |
-| +5V_HOLD | 0.75 / 1.5 | 7.1 / 34.3 | 1.6 / 15.8 | B.Cu 0.25: 9.26, B.Cu 0.30: 2.82, B.Cu 0.60: 18.61, F.Cu 0.25: 4.35, F.Cu 0.30: 6.15, F.Cu 0.40: 3.06, F.Cu 0.60: 4.93 |
-| +5V_C5 | 0.6 / 1.5 | 2.0 / 15.8 | 1.0 / 8.1 | B.Cu 0.40: 51.8, B.Cu 0.60: 42.26, F.Cu 0.40: 26.1, F.Cu 0.60: 29.88 |
-| RESERVE_5V | 0.75 / 1.5 | 5.4 / 34.3 | 5.4 / 25.4 | B.Cu 0.25: 7.72, B.Cu 0.30: 3.35, B.Cu 0.40: 8.19, B.Cu 0.60: 20.88, F.Cu 0.30: 3.2, F.Cu 0.60: 16.18 |
-| +3V3_STORAGE | 0.5 / 1.5 | 2.8 / 34.3 | 0.4 / 34.3 | B.Cu 0.25: 60.28, B.Cu 0.30: 19.47, B.Cu 0.40: 3.0, B.Cu 0.60: 11.62, F.Cu 0.25: 41.71, F.Cu 0.30: 26.78, F.Cu 0.40: 9.88, F.Cu 0.60: 40.76 |
-| CONSOLE_3V3_FLEX | 0.1 / 0.5 | 0.8 / 31.7 | 0.0 / 1.3 | F.Cu 0.40: 0.9, F.Cu 0.60: 3.6, In3.Cu 0.30: 3.87, In3.Cu 0.60: 1.92 |
-| CONSOLE_3V3 | 0.1 / 0.5 | 1.1 / 42.8 | 0.1 / 2.8 | F.Cu 0.25: 43.25, F.Cu 0.30: 41.92, F.Cu 0.40: 21.85, F.Cu 0.60: 101.45, In2.Cu 0.25: 42.93, In2.Cu 0.40: 18.78, In2.Cu 0.60: 12.81, In3.Cu 0.40: 7.83, In3.Cu 0.60: 5.3 |
-| +3V3_LOGIC | 0.35 / 1.5 | 2.9 / 0.0 | 2.9 / 0.0 | F.Cu 0.15: 134.92, F.Cu 0.25: 12.61, F.Cu 0.40: 12.49, F.Cu 0.60: 1.35 |
+A bounded widening pass changed 1,298 logic, eight storage and four FUSED_5V
+segments. Every route coordinate, layer, net, footprint placement and via
+geometry was preserved. All 92 attempted 0.5/0.8 mm via enlargements failed
+native spacing checks and were restored. Final DRC/parity/opens are zero.
+Normal-current screening passes; the fault screen still has 138 failed entries:
+34 storage track pieces + five vias, and 12 logic track pieces + 87 vias.
+The IPC numbers are steady-current estimates, not measured transient heating.
 
-Limits: 10.0 °C normal, 45.0 °C fault; pad necks of 2.0 mm or less and via barrels are allowed twice that. The +3V3_LOGIC plane is fed through 3 vias rated together at 1.5 A (assumed TPS62162 current limit; owner confirms), worst 4.5 °C. Result: **PASS**.
+`power-copper-check.json`, `power-native-preservation-check.json`,
+`power-bounded-widths.json` and `power-bounded-vias.json` record the exact result.
+The former unconditional supply PASS is superseded. Remaining local paths
+require fault-current/clearing and transient thermal qualification or a layout/
+protection change. Neither a clean DRC nor owner acceptance supplies that evidence.
 
 ## Checks passed on this snapshot
 
@@ -76,17 +80,17 @@ Limits: 10.0 °C normal, 45.0 °C fault; pad necks of 2.0 mm or less and via bar
 
 ## Open layout items (not safety)
 
-- **Signal copper on the +3V3_LOGIC plane (In4.Cu), 120 mm in all:** BIOS_BANK0 28.9 mm, BUS_SAFE 20.8 mm, ATA_DIORn 19.2 mm, BUS_CS1n 16.1 mm, ATA_DMACKn 14.6 mm, ATA_DD12 10.5 mm, ATA_DD5 3.8 mm, ATA_INTRQ 3.5 mm, BUS_DA2 2.4 mm. On the finished board each hop was tried again with the exhaustive grid search limited to the four signal layers: ATA_DD6's found a way and moved back, these have none. The plane is refilled around them, native DRC confirms every +3V3_LOGIC pad and via is still connected, and the supply check passes. They cut slots in the plane: B.Cu and In3.Cu signals that cross a slot lose their nearest return path there. Acceptable for these bus and control lines (ATA PIO strobes at most, edges of a few ns); the owner confirms in the layout review.
+- **Signal copper on the +3V3_LOGIC plane (In4.Cu), 120 mm in all:** BIOS_BANK0 28.9 mm, BUS_SAFE 20.8 mm, ATA_DIORn 19.2 mm, BUS_CS1n 16.1 mm, ATA_DMACKn 14.6 mm, ATA_DD12 10.5 mm, ATA_DD5 3.8 mm, ATA_INTRQ 3.5 mm, BUS_DA2 2.4 mm. On the finished board each hop was tried again with the exhaustive grid search limited to the four signal layers: ATA_DD6's found a way and moved back, these have none. The plane is refilled around them, native DRC confirms every +3V3_LOGIC pad and via is still connected, and native connectivity passes; fault qualification remains open. They cut slots in the plane: B.Cu and In3.Cu signals that cross a slot lose their nearest return path there. PIO transaction rate alone does not establish edge/return-path integrity; prototype signal-level and timing tests must qualify these crossings.
 - **Locked copper:** supply trunks, the critical regulator/crystal routes and the raw-G1 probe stubs are locked; finishing tools never move them.
 - **Return paths:** In1.Cu is an unbroken ground plane with 0 signal tracks; F.Cu and In2.Cu reference it. B.Cu and In3.Cu reference the In4 +3V3 plane.
-- **Router artefacts:** long detours remain where the corridors beside the BIOS opening are full (some ATA and bus lines exceed 70 mm). The ATA interface runs at PIO timings; lengths are not matched and need no matching at these speeds.
+- **Router artefacts:** long detours remain where the corridors beside the BIOS opening are full (some ATA and bus lines exceed 70 mm). The ATA interface runs at PIO timings; routed detours and their return paths remain hardware timing/edge-integrity qualification items.
 
 ## Mechanical findings that block release
 
 1. **The larger outline is unregistered.** The carrier is now 59 × 115 mm and reaches 10 mm further north than the earlier draft; the C5 module and everything north of the BIOS opening moved 10 mm north relative to the motherboard. The paper template must show CE501, CE502 and CE504 outside the outline or under a cutout, the C5 inside the 8 mm region and clear of both zero-clearance thermal chips, and the north edge clear of the AV connector area. If north does not fit, the same band can be inserted south of the notch instead.
-2. **The C5 compression fixture has no finished mechanical design.** An insulating rigid support and removable clamp must hold the copper-to-module gap at 0.90 mm, keep XY alignment and resist at least 6.24 N of spring reaction without bowing either board; hard stops must prevent over-compression.
-3. **C5 height without USB is not measured.** With the 2.5 mm stand-off, 0.8 mm carrier and 0.90 mm spring gap, the module plus clamp has at most 3.80 mm nominal in the 8 mm region.
-4. **Stand-off and insulation are not established by DRC.** The 2.0 mm FPC connectors reach 5.30 mm in the 6 mm BIOS/CN503 region, leaving 0.70 mm before tolerances and insulation. Shield contact with pads, springs, solder joints or connector shells is unacceptable.
+2. **The C5 compression fixture has no finished mechanical design. All four old mounting holes hit the current copper/pads (`mechanical-support-review.md`); an independent support must use physically verified anchors.** An insulating rigid support and removable clamp must hold the copper-to-module gap at 0.90 mm, keep XY alignment and resist at least 6.24 N of spring reaction without bowing either board; hard stops must prevent over-compression.
+3. **C5 height without USB is not measured.** With the 2.5 mm stand-off, 0.8 mm carrier and 0.90 mm spring gap, the module plus clamp has at most 3.80 mm nominal, or 3.70 mm with maximum carrier thickness, before other tolerances in the 8 mm region.
+4. **Stand-off and insulation are not established by DRC.** FH12 closed height is 2.0 ±0.2 mm. At the 0.9 mm maximum carrier thickness, 2.5 +0.9 +2.2 =5.6 mm in the 6 mm BIOS/CN503 region, leaving 0.4 mm before other tolerances and insulation. See `sources/connector-height-review.json`. Shield contact with pads, springs, solder joints or connector shells is unacceptable.
 5. **Card, flex and harness service envelopes** (microSD access, flex insertion and bend, J20 harness route and strain relief) need physical fit checks.
 
 ## Manufacturing notes

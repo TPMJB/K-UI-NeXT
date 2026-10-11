@@ -1,5 +1,16 @@
 {
-  "method": "IPC-2221 chart fit; outer 35 um, inner 17 um, via plating 18 um; branch currents from the copper graph",
+  "method": "IPC-2221 chart fit; outer 35 um, inner 17 um, via plating 18 um; branch currents from a layer-aware resistive copper graph with finite via barrels and ideal filled plane islands",
+  "board_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
+  "converter_screen_current_a": 2.5,
+  "converter_screen_basis": "TI TPS62160 family Rev E electrical characteristics: static ILIM max 2.45 A at VIN=12 V, TJ=25 C, rounded to 2.5 A; dynamic comparator delay is typical 30 ns, so this is a screening envelope, not a guaranteed peak bound.",
+  "converter_primary_source": "https://www.ti.com/lit/ds/symlink/tps62160.pdf",
+  "protection_coordination_qualified": false,
+  "limitations": [
+    "Fuse cases use nameplate currents, not hard limits; source prospective current, fuse time-current/clearing I-squared-t and short-pulse copper survival need validation.",
+    "Board fuses do not protect entry copper upstream of themselves; the 5-V harness requires its documented tap-end fuse, and the host 3.3-V entry short needs source review.",
+    "Filled planes are ideal electrical hubs; plane constrictions, ground return, thermal environment and actual supplier stack/plating require engineering review.",
+    "2.5-A converter screen does not bound dynamic peaks or all input/temperature conditions."
+  ],
   "limits_c": {
     "normal": 10.0,
     "fault": 45.0,
@@ -8,42 +19,56 @@
   },
   "nets": {
     "CONSOLE_5V": {
-      "budget_current_a": 1.3,
+      "budget_current_a": 1.35,
       "fault_current_a": 1.5,
       "outer_only": true,
       "segments": 5,
       "vias": 0,
+      "fault_cases": 2,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
         "F.Cu 0.60": 1.75,
         "F.Cu 1.00": 1.05
       },
       "normal_rise_c": 0.0,
       "fault_rise_c": 0.0,
-      "neck_normal_rise_c": 2.5,
-      "neck_fault_rise_c": 3.5
+      "neck_normal_rise_c": 2.8,
+      "neck_fault_rise_c": 3.5,
+      "via_normal_rise_c": 0.0,
+      "via_fault_rise_c": 0.0
     },
     "FUSED_5V": {
-      "budget_current_a": 1.3,
+      "budget_current_a": 1.35,
       "fault_current_a": 1.5,
       "outer_only": true,
       "segments": 21,
       "vias": 0,
+      "fault_cases": 1,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
-        "F.Cu 1.00": 4.23,
+        "F.Cu 1.00": 3.82,
+        "F.Cu 0.95": 0.41,
         "F.Cu 0.60": 2.34,
         "F.Cu 0.80": 1.25
       },
-      "normal_rise_c": 2.5,
+      "normal_rise_c": 2.8,
       "fault_rise_c": 3.5,
       "neck_normal_rise_c": 0.0,
-      "neck_fault_rise_c": 0.0
+      "neck_fault_rise_c": 0.0,
+      "via_normal_rise_c": 0.0,
+      "via_fault_rise_c": 0.0
     },
     "PRIMARY_5V": {
-      "budget_current_a": 1.3,
+      "budget_current_a": 1.35,
       "fault_current_a": 1.5,
       "outer_only": true,
       "segments": 201,
       "vias": 3,
+      "fault_cases": 4,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
         "F.Cu 0.80": 10.45,
         "F.Cu 0.60": 24.03,
@@ -57,7 +82,9 @@
       "normal_rise_c": 1.0,
       "fault_rise_c": 8.1,
       "neck_normal_rise_c": 1.0,
-      "neck_fault_rise_c": 8.1
+      "neck_fault_rise_c": 8.1,
+      "via_normal_rise_c": 6.9,
+      "via_fault_rise_c": 55.2
     },
     "+5V_HOLD": {
       "budget_current_a": 0.75,
@@ -65,6 +92,9 @@
       "outer_only": true,
       "segments": 40,
       "vias": 4,
+      "fault_cases": 10,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
         "F.Cu 0.60": 4.93,
         "F.Cu 0.40": 3.06,
@@ -77,7 +107,9 @@
       "normal_rise_c": 7.1,
       "fault_rise_c": 34.3,
       "neck_normal_rise_c": 1.6,
-      "neck_fault_rise_c": 15.8
+      "neck_fault_rise_c": 15.8,
+      "via_normal_rise_c": 3.6,
+      "via_fault_rise_c": 55.2
     },
     "+5V_C5": {
       "budget_current_a": 0.6,
@@ -85,6 +117,9 @@
       "outer_only": true,
       "segments": 298,
       "vias": 12,
+      "fault_cases": 4,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
         "F.Cu 0.60": 29.88,
         "F.Cu 0.40": 26.1,
@@ -93,8 +128,10 @@
       },
       "normal_rise_c": 2.0,
       "fault_rise_c": 15.8,
-      "neck_normal_rise_c": 1.0,
-      "neck_fault_rise_c": 8.1
+      "neck_normal_rise_c": 0.2,
+      "neck_fault_rise_c": 8.1,
+      "via_normal_rise_c": 6.9,
+      "via_fault_rise_c": 55.2
     },
     "RESERVE_5V": {
       "budget_current_a": 0.75,
@@ -102,6 +139,9 @@
       "outer_only": true,
       "segments": 62,
       "vias": 5,
+      "fault_cases": 6,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
         "F.Cu 0.60": 16.18,
         "F.Cu 0.30": 3.2,
@@ -113,28 +153,37 @@
       "normal_rise_c": 5.4,
       "fault_rise_c": 34.3,
       "neck_normal_rise_c": 5.4,
-      "neck_fault_rise_c": 25.4
+      "neck_fault_rise_c": 25.4,
+      "via_normal_rise_c": 11.8,
+      "via_fault_rise_c": 55.2
     },
     "+3V3_STORAGE": {
       "budget_current_a": 0.5,
-      "fault_current_a": 1.5,
+      "fault_current_a": 2.5,
       "outer_only": true,
       "segments": 101,
       "vias": 5,
+      "fault_cases": 11,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
         "F.Cu 0.60": 40.76,
         "F.Cu 0.25": 41.71,
         "F.Cu 0.30": 26.78,
-        "F.Cu 0.40": 9.88,
+        "F.Cu 0.50": 9.22,
+        "F.Cu 0.45": 0.66,
         "B.Cu 0.30": 19.47,
         "B.Cu 0.25": 60.28,
-        "B.Cu 0.40": 3.0,
-        "B.Cu 0.60": 11.62
+        "B.Cu 0.40": 0.85,
+        "B.Cu 0.60": 11.62,
+        "B.Cu 0.45": 2.15
       },
       "normal_rise_c": 2.8,
-      "fault_rise_c": 34.3,
+      "fault_rise_c": 109.7,
       "neck_normal_rise_c": 0.4,
-      "neck_fault_rise_c": 34.3
+      "neck_fault_rise_c": 109.7,
+      "via_normal_rise_c": 4.5,
+      "via_fault_rise_c": 176.3
     },
     "CONSOLE_3V3_FLEX": {
       "budget_current_a": 0.1,
@@ -142,6 +191,9 @@
       "outer_only": false,
       "segments": 9,
       "vias": 2,
+      "fault_cases": 2,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
         "F.Cu 0.60": 3.6,
         "F.Cu 0.40": 0.9,
@@ -151,7 +203,9 @@
       "normal_rise_c": 0.8,
       "fault_rise_c": 31.7,
       "neck_normal_rise_c": 0.0,
-      "neck_fault_rise_c": 1.3
+      "neck_fault_rise_c": 1.3,
+      "via_normal_rise_c": 0.1,
+      "via_fault_rise_c": 4.5
     },
     "CONSOLE_3V3": {
       "budget_current_a": 0.1,
@@ -159,6 +213,9 @@
       "outer_only": false,
       "segments": 180,
       "vias": 7,
+      "fault_cases": 26,
+      "filled_plane_islands": 0,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
         "F.Cu 0.40": 21.85,
         "F.Cu 0.60": 101.45,
@@ -173,29 +230,2018 @@
       "normal_rise_c": 1.1,
       "fault_rise_c": 42.8,
       "neck_normal_rise_c": 0.1,
-      "neck_fault_rise_c": 2.8
+      "neck_fault_rise_c": 2.8,
+      "via_normal_rise_c": 0.1,
+      "via_fault_rise_c": 4.5
     },
     "+3V3_LOGIC": {
       "budget_current_a": 0.35,
-      "fault_current_a": null,
+      "fault_current_a": 2.5,
       "outer_only": false,
       "segments": 3658,
       "vias": 122,
+      "fault_cases": 119,
+      "filled_plane_islands": 1,
+      "unfed_pads": [],
       "length_by_layer_width_mm": {
-        "F.Cu 0.25": 12.61,
-        "F.Cu 0.15": 134.92,
-        "F.Cu 0.40": 12.49,
-        "F.Cu 0.60": 1.35
+        "F.Cu 0.50": 107.03,
+        "F.Cu 0.45": 3.12,
+        "F.Cu 0.30": 42.71,
+        "F.Cu 0.25": 0.41,
+        "F.Cu 0.15": 5.64,
+        "F.Cu 0.60": 1.35,
+        "F.Cu 0.40": 1.06
       },
       "normal_rise_c": 2.9,
-      "fault_rise_c": 0.0,
+      "fault_rise_c": 254.5,
       "neck_normal_rise_c": 2.9,
-      "neck_fault_rise_c": 0.0,
-      "plane_feed_fault_current_a": 1.5,
-      "plane_feed_vias": 3,
-      "plane_feed_worst_rise_c": 4.5
+      "neck_fault_rise_c": 254.5,
+      "via_normal_rise_c": 3.9,
+      "via_fault_rise_c": 343.8
     }
   },
-  "failures": [],
-  "pass": true
+  "failures": [
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.25,
+      "length_mm": 6.42,
+      "run_mm": 6.42,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "106e91ec-801b-4426-b6c4-15914f20eb44",
+      "start_mm": [
+        46.35,
+        7.79
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 1.1,
+      "run_mm": 5.37,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "1e38e4ad-242b-49b0-aacd-b2d9914edd93",
+      "start_mm": [
+        44.8,
+        111.9
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.25,
+      "length_mm": 0.83,
+      "run_mm": 4.03,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "32e0f460-ee06-4f53-9798-97cb1b3066d8",
+      "start_mm": [
+        55.76,
+        30.72
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.25,
+      "length_mm": 3.91,
+      "run_mm": 3.91,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "498684b0-5eb7-4344-803b-17226f12229c",
+      "start_mm": [
+        56.33,
+        9.26
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.25,
+      "length_mm": 3.2,
+      "run_mm": 4.03,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "4c989f96-546d-4b30-a78b-b30049bd9406",
+      "start_mm": [
+        55.76,
+        29.89
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 3.61,
+      "run_mm": 3.61,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "5254c680-8dad-47c8-b7e9-e7494c9f245e",
+      "start_mm": [
+        53.24,
+        23.6
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 8.24,
+      "run_mm": 8.24,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "647a4d9c-7bab-4536-ae9c-ad9e0250385a",
+      "start_mm": [
+        54.01,
+        19.22
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 1.82,
+      "run_mm": 1.82,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "904ef9b2-b585-41ab-be76-71afc6aca1b1",
+      "start_mm": [
+        39.93,
+        7.79
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 2.6,
+      "run_mm": 2.6,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "ddb4ee0f-e15d-4a3d-a97e-a30a5bf79666",
+      "start_mm": [
+        51.84,
+        1.15
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.25,
+      "length_mm": 1.51,
+      "run_mm": 1.51,
+      "neck": true,
+      "rise_c": 109.7,
+      "uuid": "e3ffa595-738f-4a27-a0af-1604726473ad",
+      "start_mm": [
+        54.01,
+        10.98
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 4.27,
+      "run_mm": 5.37,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "f648787b-9d0e-4bc7-9d96-b02cd4413bd7",
+      "start_mm": [
+        40.1,
+        111.9
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.25,
+      "length_mm": 24.21,
+      "run_mm": 24.21,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "fb644baa-9f07-4a49-ac78-b86675a1a222",
+      "start_mm": [
+        41.88,
+        71.04
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.3,
+      "length_mm": 0.91,
+      "run_mm": 1.29,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "01664a80-5616-4a59-ab7c-989b6b1768cb",
+      "start_mm": [
+        37.91,
+        61.22
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.3,
+      "length_mm": 5.69,
+      "run_mm": 5.69,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "04aaa8fc-5adf-41ca-883f-c9cc55cdd15d",
+      "start_mm": [
+        27.33,
+        38.95
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 0.41,
+      "run_mm": 8.61,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "1287b1b5-477c-4865-b635-00b96b913ca6",
+      "start_mm": [
+        37.31,
+        93.47
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 9.72,
+      "run_mm": 9.72,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "14d3ef81-19d9-4172-a54d-e3f8ca9b618a",
+      "start_mm": [
+        39.93,
+        13.51
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 1.91,
+      "run_mm": 12.59,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "183a6232-ac22-47e4-8f61-ca34d40daa06",
+      "start_mm": [
+        30.81,
+        24.79
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.4,
+      "length_mm": 0.85,
+      "run_mm": 0.85,
+      "neck": false,
+      "rise_c": 50.6,
+      "uuid": "18c08fc3-4c84-4dc1-bcd4-6de21bbea5de",
+      "start_mm": [
+        36.1,
+        58.93
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 5.1,
+      "run_mm": 8.61,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "2cfb5ac5-20e5-44bd-88ae-d3ed7d5f4c00",
+      "start_mm": [
+        37.02,
+        93.76
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 2.5,
+      "run_mm": 2.5,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "3fe25427-70ae-4e4e-94e1-71a772717a48",
+      "start_mm": [
+        32.58,
+        20.87
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.3,
+      "length_mm": 1.77,
+      "run_mm": 2.12,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "53fd9bf2-b285-4ee0-a306-2702b0698ade",
+      "start_mm": [
+        27.46,
+        44.77
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 0.42,
+      "run_mm": 0.42,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "5ae7abbd-5013-4308-b88e-904f523d04f7",
+      "start_mm": [
+        33.06,
+        20.57
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 1.86,
+      "run_mm": 8.61,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "6502b21a-d4d9-4f05-8658-ae9b78917a12",
+      "start_mm": [
+        37.02,
+        98.86
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.3,
+      "length_mm": 2.3,
+      "run_mm": 10.37,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "7cf996ba-4df3-4d9f-aff1-d86f0ad0f5f7",
+      "start_mm": [
+        38.34,
+        108.25
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.3,
+      "length_mm": 0.35,
+      "run_mm": 2.12,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "994b54e4-493a-4012-9abf-b5986d3c1f7b",
+      "start_mm": [
+        27.46,
+        46.54
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 3.25,
+      "run_mm": 15.83,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "9c3fdb27-92e1-4a0d-a255-e79f9b9d551f",
+      "start_mm": [
+        27.21,
+        46.78
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 1.23,
+      "run_mm": 8.61,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "b905d192-4972-4884-99d5-d7f549c29a22",
+      "start_mm": [
+        38.55,
+        93.47
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 5.85,
+      "run_mm": 8.23,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "c33797da-f7d6-41d3-bd66-c8954eab18bd",
+      "start_mm": [
+        38.56,
+        61.86
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.3,
+      "length_mm": 0.38,
+      "run_mm": 1.29,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "cc25113d-66ce-4866-8ea0-9f9c64d87329",
+      "start_mm": [
+        37.53,
+        61.22
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.3,
+      "length_mm": 8.07,
+      "run_mm": 10.37,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "cdbc89c2-1462-46d1-bc1d-115206dff6a1",
+      "start_mm": [
+        38.34,
+        100.18
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 12.58,
+      "run_mm": 15.83,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "eea568bc-0804-4382-aa9b-0d7d5d834cc0",
+      "start_mm": [
+        27.21,
+        50.04
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 2.02,
+      "run_mm": 2.02,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "f1e1a9d6-2933-41a1-9fef-f070e8f00d5a",
+      "start_mm": [
+        36.1,
+        59.78
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 2.38,
+      "run_mm": 8.23,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "f524a3f3-5e35-4664-a146-1e4a3d7b7627",
+      "start_mm": [
+        38.56,
+        67.71
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "B.Cu",
+      "width_mm": 0.25,
+      "length_mm": 10.68,
+      "run_mm": 12.59,
+      "neck": false,
+      "rise_c": 109.7,
+      "uuid": "ffe09f33-76ff-4df6-bf17-0e14c1e9a298",
+      "start_mm": [
+        29.45,
+        26.14
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.3,
+      "rise_c": 176.3,
+      "uuid": "07e2f323-3c85-40f8-bbf0-31f9442396d4",
+      "at_mm": [
+        39.93,
+        9.61
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.3,
+      "rise_c": 176.3,
+      "uuid": "3488b81f-1f67-4477-90e1-813d4e805965",
+      "at_mm": [
+        41.11,
+        96.03
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.3,
+      "rise_c": 176.3,
+      "uuid": "b261d98c-8126-4b7c-b256-193b101535ac",
+      "at_mm": [
+        39.96,
+        110.56
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.3,
+      "rise_c": 176.3,
+      "uuid": "e31f8d87-c4d7-4488-9bab-2a090d296a9f",
+      "at_mm": [
+        27.11,
+        38.95
+      ]
+    },
+    {
+      "net": "+3V3_STORAGE",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.3,
+      "rise_c": 176.3,
+      "uuid": "f9151181-c9df-49b4-a24c-2dc3ccada4e5",
+      "at_mm": [
+        40.24,
+        69.39
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.15,
+      "length_mm": 0.6,
+      "run_mm": 0.6,
+      "neck": false,
+      "rise_c": 254.5,
+      "uuid": "13c7275c-07ac-4d3f-8204-3d0de1fd9ebb",
+      "start_mm": [
+        40.6,
+        27.05
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.15,
+      "length_mm": 0.14,
+      "run_mm": 0.79,
+      "neck": false,
+      "rise_c": 254.5,
+      "uuid": "1cbce68d-807c-46f9-9657-3faaa33de420",
+      "start_mm": [
+        41.3,
+        27.1
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.15,
+      "length_mm": 0.86,
+      "run_mm": 0.86,
+      "neck": true,
+      "rise_c": 254.5,
+      "uuid": "2334d653-dda9-4beb-8388-d80e6c2ff4b9",
+      "start_mm": [
+        39.7,
+        27.67
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 1.48,
+      "run_mm": 2.08,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "4421fd72-46b4-4337-aae3-3d1aed564177",
+      "start_mm": [
+        49.55,
+        102.25
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.15,
+      "length_mm": 0.7,
+      "run_mm": 1.55,
+      "neck": true,
+      "rise_c": 254.5,
+      "uuid": "60355565-5c8e-46fe-94c7-96392c1988ce",
+      "start_mm": [
+        38.59,
+        38.95
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.15,
+      "length_mm": 0.45,
+      "run_mm": 0.98,
+      "neck": true,
+      "rise_c": 254.5,
+      "uuid": "6bc6543c-11f9-4d61-a984-fb8bf1904db0",
+      "start_mm": [
+        44.67,
+        34.2
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.15,
+      "length_mm": 0.53,
+      "run_mm": 0.98,
+      "neck": true,
+      "rise_c": 254.5,
+      "uuid": "8af7408c-44d5-4aba-92a2-b179d7413baa",
+      "start_mm": [
+        44.14,
+        34.2
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 0.6,
+      "run_mm": 2.08,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "8e97d122-04be-402b-a985-7823a4b5bc31",
+      "start_mm": [
+        48.95,
+        102.25
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.15,
+      "length_mm": 0.65,
+      "run_mm": 0.79,
+      "neck": false,
+      "rise_c": 254.5,
+      "uuid": "9dc5389c-2b88-4317-b8e1-94b6b2696570",
+      "start_mm": [
+        41.4,
+        27.2
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 4.2,
+      "run_mm": 5.54,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "a7972bb8-b549-419e-83f4-2a2b73948fea",
+      "start_mm": [
+        50.6,
+        103.9
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.3,
+      "length_mm": 1.34,
+      "run_mm": 5.54,
+      "neck": false,
+      "rise_c": 81.2,
+      "uuid": "c6f3d795-a79b-4ae5-86ad-d17b8d28b516",
+      "start_mm": [
+        54.8,
+        103.9
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "track",
+      "case": "fault",
+      "current_a": 2.5,
+      "layer": "F.Cu",
+      "width_mm": 0.15,
+      "length_mm": 0.85,
+      "run_mm": 1.55,
+      "neck": true,
+      "rise_c": 254.5,
+      "uuid": "e5a54817-0521-4314-b599-0055b287bcfe",
+      "start_mm": [
+        38.59,
+        39.65
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "00a0571e-0c93-4ad8-954e-dd6738991426",
+      "at_mm": [
+        2.45,
+        31.49
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "022ee5c7-b4c7-497b-9cc9-4459720ef73d",
+      "at_mm": [
+        7.28,
+        30.74
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "02bd9d52-e08a-4e84-99c3-991e841c8e95",
+      "at_mm": [
+        34.99,
+        31.8
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "0da6a028-cf09-4050-9d8f-6c03c5b122af",
+      "at_mm": [
+        20.0,
+        22.82
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "0fc360d7-d9db-440d-9eac-27e6aaa29186",
+      "at_mm": [
+        10.0,
+        22.82
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "123291ef-d92c-4892-ba14-6bc98abbdf67",
+      "at_mm": [
+        43.39,
+        34.2
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "140d29e1-26f4-478e-ab3b-bb89618da906",
+      "at_mm": [
+        20.0,
+        38.15
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "1c5ad09f-6be9-453b-8dd2-e6ef6beb9e27",
+      "at_mm": [
+        44.7,
+        46.65
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "1d2e14d6-79d6-4a67-a3bd-b3744fafe716",
+      "at_mm": [
+        6.59,
+        31.41
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "1d895318-4ac1-4e87-aa66-ab845cd48cf6",
+      "at_mm": [
+        6.93,
+        42.2
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "23989fbb-fd9a-414b-9fd0-9317627f6016",
+      "at_mm": [
+        42.91,
+        49.67
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "23c5c067-d223-44da-8132-0d38b6c2f483",
+      "at_mm": [
+        49.28,
+        43.67
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "286e7966-d051-45be-a8b7-d22870b4eb56",
+      "at_mm": [
+        43.05,
+        51.3
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "2ac02824-94a9-49c1-a0ec-1c8dc194640e",
+      "at_mm": [
+        27.86,
+        94.29
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "2d12d593-926d-4d4a-b17f-ba1a78f296f2",
+      "at_mm": [
+        23.75,
+        42.91
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "3430e586-9fe1-4c12-80ad-ea0a20b72596",
+      "at_mm": [
+        46.97,
+        43.25
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "36fed030-34bf-402a-9850-a8cb07550d93",
+      "at_mm": [
+        38.59,
+        18.49
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "3cd5ab31-5778-40ea-b590-82dbf8a40af3",
+      "at_mm": [
+        29.91,
+        42.38
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "405070d8-4166-4897-9105-fcc9e4b8fce9",
+      "at_mm": [
+        51.38,
+        39.95
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "4681cb80-ae57-4c8b-8e58-b5adf9c5acde",
+      "at_mm": [
+        45.92,
+        40.0
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "4a5c478a-623a-40b2-85c5-8a52024b4116",
+      "at_mm": [
+        30.14,
+        90.89
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "55d3483c-8976-40ba-ab17-8527092306c9",
+      "at_mm": [
+        44.1,
+        20.38
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "55de5a18-d3e1-44e6-9bdd-0db3176fe856",
+      "at_mm": [
+        24.92,
+        35.74
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "56912176-517f-4bf3-ad6b-916051bc825d",
+      "at_mm": [
+        24.92,
+        26.74
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "5c2e01e4-73a5-4b6a-993a-dd8050dab1ad",
+      "at_mm": [
+        48.1,
+        41.65
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "5f70b22e-9ab4-4203-96f5-7630777c1296",
+      "at_mm": [
+        43.71,
+        38.22
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "61814d59-fd31-4a18-9b2a-b2e57c1d9147",
+      "at_mm": [
+        3.0,
+        43.78
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "61cacf83-8340-4359-8594-76173229be5f",
+      "at_mm": [
+        6.59,
+        37.41
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "62e67fed-6aca-4026-aa39-1c2891615dab",
+      "at_mm": [
+        36.59,
+        38.2
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "65560e17-1422-4bce-ac61-1f85128cb72e",
+      "at_mm": [
+        27.51,
+        34.14
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "687d5cb9-c76e-41f0-857b-eb4ee4c73886",
+      "at_mm": [
+        7.79,
+        48.63
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "6ff2250c-9a9d-431d-9541-fb763e2826b3",
+      "at_mm": [
+        3.79,
+        51.38
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "72cd682b-9733-4215-bab1-50035b9bf23e",
+      "at_mm": [
+        7.98,
+        53.04
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "7aa69fdf-d9d4-4d81-a966-cccbfbed31ed",
+      "at_mm": [
+        50.58,
+        19.88
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "7b2abe00-4b6b-4d62-befe-074e5e163b9f",
+      "at_mm": [
+        50.38,
+        38.25
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "7d204080-f387-40fe-942d-5496fd1b1cdb",
+      "at_mm": [
+        34.88,
+        16.17
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "7e918c46-cea9-4db9-8938-a08ccadc5284",
+      "at_mm": [
+        9.4,
+        39.4
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "809173d2-64ae-4927-b70a-4619961feb75",
+      "at_mm": [
+        0.75,
+        34.11
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "83213ec5-c31c-44d9-a0c2-94986ab866c3",
+      "at_mm": [
+        24.5,
+        42.22
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "8335abda-07c4-44ee-8d10-3faee9c360a0",
+      "at_mm": [
+        36.99,
+        29.8
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "84c418eb-bd3e-4af0-94e4-8f93c3694421",
+      "at_mm": [
+        19.25,
+        43.49
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "87a14c8e-dfa3-455b-be8a-68ea842f66eb",
+      "at_mm": [
+        7.17,
+        28.99
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "8be5a2f4-8bec-4a53-a2e2-bc6b52389a06",
+      "at_mm": [
+        26.33,
+        12.68
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "8d65b2da-5b66-4157-af4f-3f071eab5bdc",
+      "at_mm": [
+        52.01,
+        40.78
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "8e6b48b5-69a3-4fdb-9ed5-6cb34480ba6a",
+      "at_mm": [
+        57.3,
+        16.5
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "8e7b8cf9-d6bc-47ec-990c-20b39dfde039",
+      "at_mm": [
+        13.75,
+        43.49
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "903a2494-4f52-49be-a72c-28988836ddce",
+      "at_mm": [
+        9.34,
+        22.01
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "90918727-d47e-4dd4-bc43-43af9c1f8323",
+      "at_mm": [
+        6.28,
+        35.5
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "9306291f-f709-46bc-b13e-cb6a3b8d08a7",
+      "at_mm": [
+        3.93,
+        53.02
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "9713b4b1-4132-473a-86bf-bdda5ed575a3",
+      "at_mm": [
+        28.71,
+        94.43
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "9ba27037-08d0-4d3c-90ef-38d17c25bf26",
+      "at_mm": [
+        25.6,
+        40.09
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "9e29bff0-0dd3-4c87-856f-152e255158aa",
+      "at_mm": [
+        7.28,
+        27.74
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "ab937669-4028-44da-b373-f8286259c712",
+      "at_mm": [
+        33.05,
+        83.47
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "af1d0d7e-c83c-4108-a659-8b58d107bece",
+      "at_mm": [
+        2.34,
+        26.27
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "b4cba2b5-4d5a-41c5-937a-fdaaedf097b9",
+      "at_mm": [
+        22.6,
+        39.4
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "b5088319-ab31-400f-9d5e-e6efd97d8ac6",
+      "at_mm": [
+        30.0,
+        24.78
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "b7ac0489-9b1a-4209-bb3d-7e7c401a66eb",
+      "at_mm": [
+        49.33,
+        18.62
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "b8e29e0d-3a72-49be-8a71-08441e558400",
+      "at_mm": [
+        26.13,
+        59.94
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "babb61c6-cda1-4464-ab23-735f371a4048",
+      "at_mm": [
+        44.89,
+        30.6
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c004cb13-67c1-4574-8a46-136bbbfd3770",
+      "at_mm": [
+        51.95,
+        104.95
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c099e1d0-b8d2-4919-980e-8c2192b0e23e",
+      "at_mm": [
+        3.86,
+        28.99
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c1ad8cec-7e5f-45e3-ae60-dacc96091e9e",
+      "at_mm": [
+        25.06,
+        59.19
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c4577bb4-58b9-4dcc-968f-71ab1423e6ba",
+      "at_mm": [
+        57.64,
+        8.21
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c52cec45-5054-4766-ad4c-4ac6d81b0a19",
+      "at_mm": [
+        15.06,
+        20.99
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c55bcb93-14f3-4e09-b9f0-61bcee3026e4",
+      "at_mm": [
+        6.83,
+        44.23
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c758e90e-1c53-42e2-b190-14f503d0b4f8",
+      "at_mm": [
+        25.08,
+        13.88
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c89ef1ac-9658-499a-ad64-1f41032d260a",
+      "at_mm": [
+        30.5,
+        37.5
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "c9b24656-c527-4003-bf14-846aa2d671cb",
+      "at_mm": [
+        44.18,
+        47.45
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "cb61ea49-ec5a-4b09-a5bf-7d118cb96cea",
+      "at_mm": [
+        3.73,
+        35.46
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "d3663275-8f0d-4de1-abee-c85812160868",
+      "at_mm": [
+        2.84,
+        38.1
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "d3680b55-185b-4cb1-8309-00c4cd4616fb",
+      "at_mm": [
+        51.55,
+        26.5
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "d9f46133-4ebc-445d-9dd8-f1fccae5b962",
+      "at_mm": [
+        48.72,
+        31.44
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "da3f8fc9-a46c-4d6d-8e3e-126ea1ae5529",
+      "at_mm": [
+        38.59,
+        38.2
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "da52ccef-8de9-429b-bdc0-05b3d52618a0",
+      "at_mm": [
+        35.9,
+        24.85
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "db21d4d3-9c80-4b1e-a1cc-a2ab1689e417",
+      "at_mm": [
+        28.22,
+        20.29
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "db9d5eca-3356-42d2-bf68-aca8cc4d4a6a",
+      "at_mm": [
+        34.99,
+        35.8
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "e7433b82-eaa3-4807-bb46-9d8c11bb2f06",
+      "at_mm": [
+        55.36,
+        11.61
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "e7910fb2-2bc4-4051-b2c2-8348a4bea609",
+      "at_mm": [
+        7.28,
+        36.74
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "eca36804-3db5-41b4-a194-f8f6f6e9edc7",
+      "at_mm": [
+        33.62,
+        14.92
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "ed2f333f-9fea-4ffc-a680-fd7d05cdf2b7",
+      "at_mm": [
+        8.0,
+        45.08
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "ef12e2f3-5cf9-44a3-bd6c-184f768fd6c3",
+      "at_mm": [
+        39.79,
+        28.3
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "f4b275ac-6bc3-4b79-a9c3-22b1017933c3",
+      "at_mm": [
+        54.62,
+        12.07
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "f8423d11-b838-4406-9183-8663dacbfacf",
+      "at_mm": [
+        13.5,
+        22.82
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "fe26f276-c9f3-45b4-ae43-434234f78db8",
+      "at_mm": [
+        29.45,
+        44.77
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "febe48cf-4745-4d60-b792-563891d4a1b3",
+      "at_mm": [
+        27.72,
+        47.07
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "fefe649f-a78d-4800-8c2a-6eedebaf0abb",
+      "at_mm": [
+        8.69,
+        49.71
+      ]
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "item": "via",
+      "case": "fault",
+      "current_a": 2.5,
+      "drill_mm": 0.2,
+      "rise_c": 343.8,
+      "uuid": "ff3da38a-a78c-4936-9ff1-6232000abb44",
+      "at_mm": [
+        12.59,
+        22.01
+      ]
+    }
+  ],
+  "normal_screen_pass": true,
+  "fault_screen_pass": false,
+  "copper_screen_pass": false,
+  "pass": false
 }

@@ -16,3 +16,14 @@ is `design/sources/raw-g1-probe-footprint.json`; the KiCad library license and
 exception above also apply to this derivative. Missing assembly courtyard is
 explicitly allowed only for this bare probe footprint; copper, mask, via and
 board-edge clearance checks remain enabled.
+
+`HighDiode_SMF_SOD123FL` and `Littelfuse_467_0603_Recommended` use
+manufacturer suggested/recommended lands, recorded with drawing axes and source
+PDF hashes in `design/sources/input-protection-footprints.json`. Their drawing
+conventions and generic model references derive from the KiCad `D_SOD-123F` and
+`Fuse_0603_1608Metric` footprints; the KiCad license and exception above apply to
+these derivatives. Manufacturer dimensional evidence controls the height budget;
+the generic KiCad models are visual references, not exact manufacturer models.
+The bidirectional High Diode part has no electrical polarity indication in its
+custom footprint. These dimensional sources do not approve paste/reflow,
+installed fit, or circuit fault/thermal performance.

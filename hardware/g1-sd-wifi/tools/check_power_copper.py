@@ -1,41 +1,29 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Current-capacity check of the routed supply copper (IPC-2221).
+"""IPC-2221 engineering screen of routed supply tracks and via barrels.
 
-Every track segment and via on the supply nets below is rated with the
-IPC-2221 chart fit I = k * dT^0.44 * A^0.725 (A in square mils; k = 0.048
-for outer layers, 0.024 for inner layers and via barrels), using the copper
-weights in manufacturing/rigid-order-settings.json and a conservative via
-plating thickness.
+Track currents follow a resistor graph. Each via has a separate node on each
+copper layer and finite barrel resistance between adjacent layers: current
+through a via is the solved barrel current, including sums of load branches.
+Filled plane islands are ideal equipotential hubs, not a plane thermal model.
+Every capacitor, connector, test point and IC rail pad is faulted separately,
+including the +3V3_LOGIC plane's local stubs. Unmapped distribution stubs are
+also screened conservatively at the whole normal budget.
 
-Normal current: the copper of each net is turned into a graph (pads, vias and
-points on tracks are nodes, track pieces are edges) and solved as a resistor
-network (conductance = width x copper thickness / length; vias and pads join
-their layers without resistance): the source supplies the loads of the power
-budget in design/power-and-isolation.md, and every edge is rated for the
-current it then carries. On a tree this is exactly the sum of the loads
-beyond each edge; where copper runs in parallel the paths share it as real
-copper does. Distribution nets without a load map charge every edge the
-whole budget.
+The 2.5-A converter case rounds up TPS6216x Rev E's 2.45-A maximum static
+current limit at 12 V / 25 C. It is a selected peak-current engineering screen,
+not a guaranteed bound over all operating conditions; the typical dynamic
+comparator delay and inductor ramp can produce higher peaks. Fuse cases use
+nameplate current and do not establish clearing/I-squared-t coordination or
+protection of entry copper upstream of the fuse. A passing report therefore
+means copper_screen_pass, never protection coordination or release approval.
 
-Fault current: for trunk nets, each point where a part can realistically
-short (a load, a capacitor, a connector, spring contact or test point) is
-shorted in turn at the current the upstream fuse or regulator passes
-indefinitely, and every edge and via is rated for the largest current any
-such short drives through it, so copper outlasts the protection. Branches
-that end only at IC sense/control pins or resistors carry no fault current.
-
-Limits: NORMAL_LIMIT_C rise at the normal current, FAULT_LIMIT_C at the fault
-current; pad escapes and via barrels are allowed twice the rise because heat
-spreads into the copper either side. A pad escape is a run (consecutive
-segments of one layer and width, joined only end to end) that starts at a pad
-and is no longer than NECK_MM in total; the router splits long tracks into
-short segments, so the length of a single segment says nothing.
-Outer-only nets fail if any inner-layer segment is longer than NECK_MM. Run
-with KiCad 10's Python (pcbnew) with numpy available.
+The original 10-C normal / 45-C fault rises, 2x short pad-neck / via allowance,
+and 2-mm neck length remain unchanged. Run with KiCad 10 pcbnew and numpy.
 """
 import argparse
 import collections
+import hashlib
 import json
 import math
 import pathlib
@@ -52,12 +40,12 @@ NORMAL_LIMIT_C = 10.0
 FAULT_LIMIT_C = 45.0
 NECK_MM = 2.0
 UM_TO_MIL = 1 / 25.4
-# net: budget current A, fault current A (None = distribution net, no
-# per-leaf fault check), outer layers only, source pads, load pads in A.
+# Source pads, load budgets and explicit screening currents (not fuse limits).
+CONVERTER_FAULT_SCREEN_A = 2.5
 NETS = {
-    'CONSOLE_5V': dict(normal=1.3, fault=1.5, outer=True, source=['J20.1'], loads={'F20.1': 1.3}),
-    'FUSED_5V': dict(normal=1.3, fault=1.5, outer=True, source=['F20.2'], loads={'Q20.3': 1.3}),
-    'PRIMARY_5V': dict(normal=1.3, fault=1.5, outer=True, source=['Q20.2'],
+    'CONSOLE_5V': dict(normal=1.35, fault=1.5, outer=True, source=['J20.1'], loads={'F20.1': 1.35}),
+    'FUSED_5V': dict(normal=1.35, fault=1.5, outer=True, source=['F20.2'], loads={'Q20.3': 1.35}),
+    'PRIMARY_5V': dict(normal=1.35, fault=1.5, outer=True, source=['Q20.2'],
                        loads={'U20.3': 0.75, 'U71.1': 0.6}),
     '+5V_HOLD': dict(normal=0.75, fault=1.5, outer=True, source=['U20.2', 'U20.7'],
                      loads={'U21.2': 0.3, 'U22.2': 0.45}),
@@ -65,17 +53,13 @@ NETS = {
     # DNP reserve bank, rated as if populated: discharge into U20.
     'RESERVE_5V': dict(normal=0.75, fault=1.5, outer=True, source=['U20.6'],
                        loads={'C202.1': 0.19, 'C203.1': 0.19, 'C204.1': 0.19, 'C205.1': 0.19}),
-    '+3V3_STORAGE': dict(normal=0.5, fault=1.5, outer=True, source=['L21.2'],
+    '+3V3_STORAGE': dict(normal=0.5, fault=CONVERTER_FAULT_SCREEN_A, outer=True, source=['L21.2'],
                          loads={'J201.4': 0.4, 'U207.16': 0.05, 'U208.16': 0.05}),
     'CONSOLE_3V3_FLEX': dict(normal=0.1, fault=0.5, outer=False, source=['J51.20'], loads={'F21.1': 0.1}),
-    # F21 limits this rail to 0.5 A; every branch is rated for it.
+    # F21 nameplate screen; clearing/protection coordination remains separate.
     'CONSOLE_3V3': dict(normal=0.1, fault=0.5, outer=False, source=['F21.2'], loads=None),
-    # Plane net: each track is an IC's stub to a plane via; budget only.
-    # Its feed from the converter (L20.2 to the vias into the In4 plane) must
-    # also carry the converter's short-circuit current, shared by the feed
-    # vias. 1.5 A is the assumed TPS62162 current limit, as for
-    # +3V3_STORAGE; confirm against the datasheet limit.
-    '+3V3_LOGIC': dict(normal=0.35, fault=None, outer=False, source=['L20.2'], loads=None, plane_feed_fault=1.5),
+    '+3V3_LOGIC': dict(normal=0.35, fault=CONVERTER_FAULT_SCREEN_A, outer=False,
+                        source=['L20.2'], loads=None, plane=True),
 }
 
 
@@ -133,7 +117,7 @@ class Graph:
         self.parent[self.find(a)] = self.find(b)
 
 
-def net_graph(board, net, pads):
+def net_graph(board, net, pads, copper_layers, layer_z):
     """Copper graph of a net. Nodes are pads, vias and points on tracks;
     edges are track pieces (segment, length mm). A track end or via that
     lands part-way along another track splits that track there, so current
@@ -148,8 +132,10 @@ def net_graph(board, net, pads):
         for k, p in enumerate((s.GetStart(), s.GetEnd())):
             g.find(('end', i, k))
             ends.append((('end', i, k), s.GetLayer(), p))
-    for j in range(len(vias)):
-        g.find(('via', j))
+    for j, v in enumerate(vias):
+        for layer in copper_layers:
+            if v.IsOnLayer(layer):
+                g.find(('via', j, layer))
     for name in pads:
         g.find(('pad', name))
     # Ends that coincide on one layer.
@@ -172,15 +158,17 @@ def net_graph(board, net, pads):
 
     for j, v in enumerate(vias):
         for node, layer, p in ends:
-            if v.HitTest(p, reach(node)):
-                g.join(node, ('via', j))
+            if v.IsOnLayer(layer) and v.HitTest(p, reach(node)):
+                g.join(node, ('via', j, layer))
     for name, pad in pads.items():
         for node, layer, p in ends:
             if pad.IsOnLayer(layer) and pad.HitTest(p, reach(node)):
                 g.join(node, ('pad', name))
         for j, v in enumerate(vias):
             if pad.HitTest(v.GetPosition()):
-                g.join(('via', j), ('pad', name))
+                for layer in copper_layers:
+                    if pad.IsOnLayer(layer) and v.IsOnLayer(layer):
+                        g.join(('via', j, layer), ('pad', name))
     # Points part-way along a segment: other ends on its layer, vias.
     taps = collections.defaultdict(list)
 
@@ -204,17 +192,44 @@ def net_graph(board, net, pads):
             if node[1] != i and layer == s.GetLayer() and s.HitTest(p, reach(node)):
                 tap(i, s, p, node)
         for j, v in enumerate(vias):
-            if s.HitTest(v.GetPosition(), 0):
-                tap(i, s, v.GetPosition(), ('via', j))
+            if v.IsOnLayer(s.GetLayer()) and s.HitTest(v.GetPosition(), 0):
+                tap(i, s, v.GetPosition(), ('via', j, s.GetLayer()))
+    # Filled islands are separate ideal hubs. Only actual filled copper at
+    # a terminal is connected, so a void or isolated island cannot silently
+    # feed a stub. Plane thermal/choke analysis remains a separate review.
+    plane_islands = 0
+    for zi, zone in enumerate(board.Zones()):
+        if zone.GetNetname() != net or zone.GetIsRuleArea():
+            continue
+        for layer in copper_layers:
+            if not zone.IsOnLayer(layer) or not zone.HasFilledPolysForLayer(layer):
+                continue
+            polys = zone.GetFilledPolysList(layer)
+            plane_islands += polys.OutlineCount()
+            terminals = [(node, p) for node, l, p in ends if l == layer]
+            terminals += [(('via', j, layer), v.GetPosition()) for j, v in enumerate(vias) if v.IsOnLayer(layer)]
+            terminals += [(('pad', name), p.GetPosition()) for name, p in pads.items() if p.IsOnLayer(layer)]
+            for node, p in terminals:
+                for island in range(polys.OutlineCount()):
+                    if polys.Contains(p, island):
+                        g.join(node, ('plane', zi, layer, island))
+                        break
     edges = []
     for i, s in enumerate(segs):
         points = sorted([(0.0, ('end', i, 0)), (1.0, ('end', i, 1))] + taps[i], key=lambda q: q[0])
         total = pcbnew.ToMM(s.GetLength())
         for (t0, n0), (t1, n1) in zip(points, points[1:]):
             edges.append((g.find(n0), g.find(n1), s, (t1 - t0) * total))
-    via_nodes = [(g.find(('via', j)), v) for j, v in enumerate(vias)]
+    via_edges = []
+    for j, v in enumerate(vias):
+        layers = [l for l in copper_layers if v.IsOnLayer(l)]
+        indices = []
+        for a, b in zip(layers, layers[1:]):
+            indices.append(len(edges))
+            edges.append((g.find(('via', j, a)), g.find(('via', j, b)), v, layer_z[b] - layer_z[a]))
+        via_edges.append((v, indices))
     pad_nodes = {name: g.find(('pad', name)) for name in pads}
-    return edges, via_nodes, pad_nodes
+    return edges, via_edges, pad_nodes, plane_islands
 
 
 def reachable(edges, sources):
@@ -242,8 +257,14 @@ def nodal_currents(edges, sources, cases, outer_layers, outer_um, inner_um):
     cond = np.zeros((size, size))
     g_edge = []
     for a, b, s, length_mm in edges:
-        thick = outer_um if s.GetLayer() in outer_layers else inner_um
-        g = pcbnew.ToMM(s.GetWidth()) * thick / max(length_mm, 0.01)
+        if s.Type() == pcbnew.PCB_VIA_T:
+            # Same conductance units as tracks: mm * um / mm. Each barrel
+            # span gets finite resistance; no post-hoc equal-sharing rule.
+            area = math.pi * pcbnew.ToMM(s.GetDrillValue()) * VIA_PLATING_UM
+        else:
+            thick = outer_um if s.GetLayer() in outer_layers else inner_um
+            area = pcbnew.ToMM(s.GetWidth()) * thick
+        g = area / max(length_mm, 0.01)
         g_edge.append(g)
         if a != b and a in index and b in index:
             i, j = index[a], index[b]
@@ -271,7 +292,7 @@ def nodal_currents(edges, sources, cases, outer_layers, outer_um, inner_um):
     out = []
     for (a, b, *_), g in zip(edges, g_edge):
         if a in index and b in index:
-            out.append(np.abs(g * (volts[index[a]] - volts[index[b]])))
+            out.append(g * (volts[index[a]] - volts[index[b]]))
         else:
             out.append(np.zeros(len(cases)))
     return out
@@ -287,20 +308,33 @@ def main():
     inner_um = settings['inner_copper_oz'] * OZ_UM
     board = pcbnew.LoadBoard(str(args.board))
     outer_layers = {pcbnew.F_Cu, pcbnew.B_Cu}
+    copper_layers = [board.GetLayerID(n) for n in settings['gerber_layers'] if n.endswith('.Cu')]
+    # Use the selected nominal dielectric plan for relative span lengths,
+    # normalized to the complete board thickness. The supplier must confirm
+    # the actual stack; changing it requires re-running this screen.
+    dielectric = [v for _, v in settings['stackup']['dielectric_plan_mm']]
+    if len(dielectric) != len(copper_layers) - 1:
+        raise ValueError('Dielectric plan does not match copper layer count')
+    scale = settings['board_thickness_mm'] / sum(dielectric)
+    z = [0.0]
+    for span in dielectric:
+        z.append(z[-1] + span * scale)
+    layer_z = dict(zip(copper_layers, z))
     all_pads = {'%s.%s' % (f.GetReference(), p.GetNumber()): p for f in board.GetFootprints() for p in f.Pads()}
     nets, failures = {}, []
     for net, spec in NETS.items():
         if not board.FindNet(net):
+            failures.append({'net': net, 'item': 'missing_net'})
             continue
         pads = {n: p for n, p in all_pads.items() if p.GetNetname() == net}
         missing = [n for n in spec['source'] + list(spec['loads'] or {}) if n not in pads]
         if missing:
             raise ValueError('%s: pads not on the net: %s' % (net, missing))
-        edges, via_nodes, pad_nodes = net_graph(board, net, pads)
+        edges, via_edges, pad_nodes, plane_islands = net_graph(board, net, pads, copper_layers, layer_z)
         # Where a part can realistically short: capacitors, connectors,
         # spring contacts, test points and the loads themselves.
         fault_points = [node for n, node in pad_nodes.items() if n.split('.')[0].rstrip('0123456789') in
-                        ('C', 'J', 'K', 'TP')]
+                        ('C', 'J', 'K', 'TP', 'U')]
         loads = collections.Counter()
         for n, c in (spec['loads'] or {}).items():
             loads[pad_nodes[n]] += c
@@ -309,24 +343,24 @@ def main():
         # through copper (or a plane, for plane nets).
         fed = reachable(edges, sources)
         unfed = sorted(n for n, node in pad_nodes.items() if node not in fed)
-        if unfed and net != '+3V3_LOGIC':
+        if unfed:
             failures.append({'net': net, 'item': 'not_fed_from_source', 'pads': unfed})
+        if spec.get('plane') and not plane_islands:
+            failures.append({'net': net, 'item': 'missing_filled_plane'})
         shorts = sorted(set(fault_points) | set(loads), key=str) if spec['fault'] else []
         solved = nodal_currents(edges, sources, [dict(loads)] + [{p: spec['fault']} for p in shorts],
                                 outer_layers, outer_um, inner_um)
-        currents = [float(x[0]) for x in solved] if spec['loads'] else [spec['normal']] * len(edges)
-        fault_amps = [float(x[1:].max()) if len(x) > 1 else 0.0 for x in solved]
-        worst = {'normal_rise_c': 0.0, 'fault_rise_c': 0.0, 'neck_normal_rise_c': 0.0, 'neck_fault_rise_c': 0.0}
+        currents = [abs(float(x[0])) for x in solved] if spec['loads'] else [spec['normal']] * len(edges)
+        fault_amps = [float(np.abs(x[1:]).max()) if len(x) > 1 else 0.0 for x in solved]
+        worst = {'normal_rise_c': 0.0, 'fault_rise_c': 0.0, 'neck_normal_rise_c': 0.0, 'neck_fault_rise_c': 0.0,
+                 'via_normal_rise_c': 0.0, 'via_fault_rise_c': 0.0}
         pad_set = set(pad_nodes.values())
-        run_info = runs(edges, pad_set | {n for n, _ in via_nodes})
+        tracks = [(idx, edge) for idx, edge in enumerate(edges) if edge[2].Type() != pcbnew.PCB_VIA_T]
+        via_nodes = {n for v, indices in via_edges for idx in indices for n in edges[idx][:2]}
+        run_info = runs([edge for _, edge in tracks], pad_set | via_nodes)
         by_width, inner_long = {}, []
-        node_current = collections.defaultdict(float)
-        node_fault = collections.defaultdict(float)
-        for (a, b, s, length_mm), amps, at_fault, (run_mm, run_nodes) in zip(edges, currents, fault_amps, run_info):
-            node_current[a] = max(node_current[a], amps)
-            node_current[b] = max(node_current[b], amps)
-            node_fault[a] = max(node_fault[a], at_fault)
-            node_fault[b] = max(node_fault[b], at_fault)
+        for (idx, (a, b, s, length_mm)), (run_mm, run_nodes) in zip(tracks, run_info):
+            amps, at_fault = currents[idx], fault_amps[idx]
             layer = s.GetLayer()
             outer = layer in outer_layers
             width_mm = pcbnew.ToMM(s.GetWidth())
@@ -349,66 +383,53 @@ def main():
                                      'layer': board.GetLayerName(layer), 'width_mm': round(width_mm, 3),
                                      'length_mm': round(length_mm, 2), 'run_mm': round(run_mm, 2), 'neck': neck,
                                      'rise_c': round(dt, 1),
+                                     'uuid': s.m_Uuid.AsString(),
                                      'start_mm': [round(pcbnew.ToMM(s.GetStart().x) - 70, 2),
                                                   round(pcbnew.ToMM(s.GetStart().y) - 45, 2)]})
-        # A via carries at most the largest current of a segment it joins;
-        # parallel vias at one node share it.
-        per_node = collections.Counter(n for n, _ in via_nodes)
-        for node, v in via_nodes:
+        for v, indices in via_edges:
             drill_mm = pcbnew.ToMM(v.GetDrillValue())
             area = math.pi * drill_mm * 1000 * VIA_PLATING_UM * UM_TO_MIL ** 2
-            share = per_node[node]
-            cases = [('normal', node_current[node] / share, NORMAL_LIMIT_C)]
-            if node_fault[node] > 1e-6:
-                cases.append(('fault', node_fault[node] / share, FAULT_LIMIT_C))
+            normal = max((currents[i] for i in indices), default=0.0)
+            fault = max((fault_amps[i] for i in indices), default=0.0)
+            cases = [('normal', normal, NORMAL_LIMIT_C)]
+            if fault > 1e-6:
+                cases.append(('fault', fault, FAULT_LIMIT_C))
             for kind, i, limit in cases:
                 dt = rise(i, area, 0.024)
+                worst['via_' + kind + '_rise_c'] = max(worst['via_' + kind + '_rise_c'], round(dt, 1))
                 if dt > limit * 2:
                     failures.append({'net': net, 'item': 'via', 'case': kind, 'current_a': round(i, 3),
-                                     'drill_mm': round(drill_mm, 2), 'parallel': share, 'rise_c': round(dt, 1),
+                                     'drill_mm': round(drill_mm, 2), 'rise_c': round(dt, 1), 'uuid': v.m_Uuid.AsString(),
                                      'at_mm': [round(pcbnew.ToMM(v.GetPosition().x) - 70, 2),
                                                round(pcbnew.ToMM(v.GetPosition().y) - 45, 2)]})
         if inner_long:
             failures.append({'net': net, 'item': 'inner_layer_copper', 'segments': inner_long})
-        feed = {}
-        if spec.get('plane_feed_fault'):
-            amps = spec['plane_feed_fault']
-            feed_vias = [(node, v) for node, v in via_nodes if node in fed]
-            if not feed_vias:
-                failures.append({'net': net, 'item': 'no_plane_feed_via'})
-            else:
-                share = amps / len(feed_vias)
-                feed_loads = collections.Counter()
-                for node, _ in feed_vias:
-                    feed_loads[node] += share
-                feed_currents = [float(x[0]) for x in nodal_currents(edges, sources, [dict(feed_loads)],
-                                                                     outer_layers, outer_um, inner_um)]
-                worst_feed = 0.0
-                for (a, b, s, length_mm), i, (run_mm, run_nodes) in zip(edges, feed_currents, run_info):
-                    outer = s.GetLayer() in outer_layers
-                    area = pcbnew.ToMM(s.GetWidth()) * 1000 * (outer_um if outer else inner_um) * UM_TO_MIL ** 2
-                    dt = rise(i, area, 0.048 if outer else 0.024)
-                    neck = run_mm <= NECK_MM and any(n in pad_set for n in run_nodes)
-                    worst_feed = max(worst_feed, round(dt, 1))
-                    if dt > FAULT_LIMIT_C * (2 if neck else 1):
-                        failures.append({'net': net, 'item': 'plane_feed_track', 'case': 'fault', 'current_a': round(i, 3),
-                                         'layer': board.GetLayerName(s.GetLayer()), 'width_mm': round(pcbnew.ToMM(s.GetWidth()), 3),
-                                         'rise_c': round(dt, 1)})
-                for node, v in feed_vias:
-                    area = math.pi * pcbnew.ToMM(v.GetDrillValue()) * 1000 * VIA_PLATING_UM * UM_TO_MIL ** 2
-                    dt = rise(share, area, 0.024)
-                    worst_feed = max(worst_feed, round(dt, 1))
-                    if dt > FAULT_LIMIT_C * 2:
-                        failures.append({'net': net, 'item': 'plane_feed_via', 'case': 'fault', 'current_a': round(share, 3),
-                                         'drill_mm': round(pcbnew.ToMM(v.GetDrillValue()), 2), 'rise_c': round(dt, 1)})
-                feed = {'plane_feed_fault_current_a': amps, 'plane_feed_vias': len(feed_vias),
-                        'plane_feed_worst_rise_c': worst_feed}
         nets[net] = {'budget_current_a': spec['normal'], 'fault_current_a': spec['fault'], 'outer_only': spec['outer'],
-                     'segments': len(edges), 'vias': len(via_nodes), 'length_by_layer_width_mm': by_width, **worst, **feed}
+                     'segments': len(tracks), 'vias': len(via_edges), 'fault_cases': len(shorts),
+                     'filled_plane_islands': plane_islands, 'unfed_pads': unfed,
+                     'length_by_layer_width_mm': by_width, **worst}
     report = {'method': 'IPC-2221 chart fit; outer %.0f um, inner %.0f um, via plating %.0f um; branch currents from '
-                        'the copper graph' % (outer_um, inner_um, VIA_PLATING_UM),
+                        'a layer-aware resistive copper graph with finite via barrels and ideal filled plane islands' %
+                        (outer_um, inner_um, VIA_PLATING_UM),
+              'board_sha256': hashlib.sha256(args.board.read_bytes()).hexdigest(),
+              'converter_screen_current_a': CONVERTER_FAULT_SCREEN_A,
+              'converter_screen_basis': 'TI TPS62160 family Rev E electrical characteristics: static ILIM max 2.45 A '
+                                       'at VIN=12 V, TJ=25 C, rounded to 2.5 A; dynamic comparator delay is typical '
+                                       '30 ns, so this is a screening envelope, not a guaranteed peak bound.',
+              'converter_primary_source': 'https://www.ti.com/lit/ds/symlink/tps62160.pdf',
+              'protection_coordination_qualified': False,
+              'limitations': ['Fuse cases use nameplate currents, not hard limits; source prospective current, '
+                              'fuse time-current/clearing I-squared-t and short-pulse copper survival need validation.',
+                              'Board fuses do not protect entry copper upstream of themselves; the 5-V harness '
+                              'requires its documented tap-end fuse, and the host 3.3-V entry short needs source review.',
+                              'Filled planes are ideal electrical hubs; plane constrictions, ground return, '
+                              'thermal environment and actual supplier stack/plating require engineering review.',
+                              '2.5-A converter screen does not bound dynamic peaks or all input/temperature conditions.'],
               'limits_c': {'normal': NORMAL_LIMIT_C, 'fault': FAULT_LIMIT_C, 'neck_mm': NECK_MM, 'neck_and_via_factor': 2},
-              'nets': nets, 'failures': failures, 'pass': not failures}
+              'nets': nets, 'failures': failures,
+              'normal_screen_pass': not any(f.get('case') != 'fault' for f in failures),
+              'fault_screen_pass': not any(f.get('case') != 'normal' for f in failures),
+              'copper_screen_pass': not failures, 'pass': not failures}
     if args.report:
         args.report.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps({'pass': not failures, 'failures': len(failures),
@@ -416,7 +437,8 @@ def main():
                       'worst_rise_c': {n: [v['normal_rise_c'], v['fault_rise_c'],
                                            v.get('neck_normal_rise_c', 0.0), v.get('neck_fault_rise_c', 0.0)]
                                        for n, v in nets.items()}}))
+    return 0 if not failures else 1
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <export version="E">
   <design>
-    <source>/home/user/g1-design/hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_sch</source>
-    <date>2026-10-10T23:30:13</date>
-    <tool>Eeschema 10.0.6</tool>
+    <source>/workspace/scratch/671921c7e6ab/review-4b8c7d6/hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_sch</source>
+    <date>2026-10-11T16:48:23</date>
+    <tool>Eeschema 10.0.7-10.0.7~ubuntu24.04.1</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
         <title>G1 microSD / Wi-Fi bridge — Rev A circuit implementation</title>
@@ -6502,19 +6502,19 @@
     </comp>
     <comp ref="D21">
       <value>5 V bidirectional TVS</value>
-      <footprint>KUI_Footprints:D_SOD-123F</footprint>
-      <datasheet>https://www.littelfuse.com/products/overvoltage-protection/tvs-diodes/surface-mount/smf</datasheet>
+      <footprint>KUI_Footprints:HighDiode_SMF_SOD123FL</footprint>
+      <datasheet>https://datasheet.lcsc.com/datasheet/pdf/d7261141784d0c4389ea587ce555a8ce.pdf?productCode=C22458622</datasheet>
       <fields>
         <field name="MPN">SMF5.0CA</field>
-        <field name="LCSC"/>
+        <field name="LCSC">C22458622</field>
         <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:D_SOD-123F</field>
-        <field name="Datasheet">https://www.littelfuse.com/products/overvoltage-protection/tvs-diodes/surface-mount/smf</field>
+        <field name="Footprint">KUI_Footprints:HighDiode_SMF_SOD123FL</field>
+        <field name="Datasheet">https://datasheet.lcsc.com/datasheet/pdf/d7261141784d0c4389ea587ce555a8ce.pdf?productCode=C22458622</field>
         <field name="Description"/>
       </fields>
       <libsource lib="KUI_G1" part="D21" description=""/>
       <property name="MPN" value="SMF5.0CA"/>
-      <property name="LCSC" value=""/>
+      <property name="LCSC" value="C22458622"/>
       <property name="Variant" value="BASE"/>
       <property name="Sheetname" value="power-bus-1"/>
       <property name="Sheetfile" value="power-bus-1.kicad_sch"/>
@@ -6531,13 +6531,13 @@
     </comp>
     <comp ref="F20">
       <value>1.5A fast fuse</value>
-      <footprint>KUI_Footprints:Fuse_0603_1608Metric</footprint>
+      <footprint>KUI_Footprints:Littelfuse_467_0603_Recommended</footprint>
       <datasheet>https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d</datasheet>
       <fields>
         <field name="MPN">046701.5NR</field>
         <field name="LCSC"/>
         <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:Fuse_0603_1608Metric</field>
+        <field name="Footprint">KUI_Footprints:Littelfuse_467_0603_Recommended</field>
         <field name="Datasheet">https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d</field>
         <field name="Description"/>
       </fields>
@@ -6560,19 +6560,19 @@
     </comp>
     <comp ref="F21">
       <value>0.5A fast fuse</value>
-      <footprint>KUI_Footprints:Fuse_0603_1608Metric</footprint>
+      <footprint>KUI_Footprints:Littelfuse_467_0603_Recommended</footprint>
       <datasheet>https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d</datasheet>
       <fields>
         <field name="MPN">0467.500NR</field>
-        <field name="LCSC"/>
+        <field name="LCSC">C206990</field>
         <field name="Variant">BASE</field>
-        <field name="Footprint">KUI_Footprints:Fuse_0603_1608Metric</field>
+        <field name="Footprint">KUI_Footprints:Littelfuse_467_0603_Recommended</field>
         <field name="Datasheet">https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d</field>
         <field name="Description"/>
       </fields>
       <libsource lib="KUI_G1" part="F21" description=""/>
       <property name="MPN" value="0467.500NR"/>
-      <property name="LCSC" value=""/>
+      <property name="LCSC" value="C206990"/>
       <property name="Variant" value="BASE"/>
       <property name="Sheetname" value="power-bus-1"/>
       <property name="Sheetfile" value="power-bus-1.kicad_sch"/>
@@ -12337,7 +12337,7 @@
       <fields>
         <field name="Reference">D</field>
         <field name="Value">5 V bidirectional TVS</field>
-        <field name="Footprint">KUI_Footprints:D_SOD-123F</field>
+        <field name="Footprint">KUI_Footprints:HighDiode_SMF_SOD123FL</field>
         <field name="Datasheet"/>
         <field name="Description"/>
       </fields>
@@ -12350,7 +12350,7 @@
       <fields>
         <field name="Reference">F</field>
         <field name="Value">1.5A fast fuse</field>
-        <field name="Footprint">KUI_Footprints:Fuse_0603_1608Metric</field>
+        <field name="Footprint">KUI_Footprints:Littelfuse_467_0603_Recommended</field>
         <field name="Datasheet"/>
         <field name="Description"/>
       </fields>
@@ -12363,7 +12363,7 @@
       <fields>
         <field name="Reference">F</field>
         <field name="Value">0.5A fast fuse</field>
-        <field name="Footprint">KUI_Footprints:Fuse_0603_1608Metric</field>
+        <field name="Footprint">KUI_Footprints:Littelfuse_467_0603_Recommended</field>
         <field name="Datasheet"/>
         <field name="Description"/>
       </fields>

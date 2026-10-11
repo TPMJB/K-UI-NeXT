@@ -1,6 +1,6 @@
 {
-  "review_date": "2026-10-10",
-  "scope": "Exact component purchasing identities and variant quantities derived from physical circuit contracts. 52 of the 54 BASE SMT purchase rows have exact official JLC SMT catalog identity evidence; the input TVS SMF5.0CA and host 3.3-V fuse 0467.500NR, added later, still need their catalog identities confirmed; one BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. This is not an order acceptance or production release.",
+  "review_date": "2026-10-11",
+  "scope": "Exact purchasing identities and variant quantities derived from physical circuit contracts. All 54 BASE SMT purchase rows have exact official JLC SMT catalog identity evidence, including D21 High Diode SMF5.0CA C22458622 and F21 Littelfuse 0467.500NR C206990. One BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. Catalog identity is not inventory, allocation, quotation, assembler acceptance or production release.",
   "parts": {
     "046701.5NR": {
       "manufacturer": "Littelfuse",
@@ -11,7 +11,7 @@
         "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d"
       ],
       "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
-      "notes": "Exact NR suffix retained. Separate halogen-free NRHF supplier listing is not selected.",
+      "notes": "Exact NR suffix retained; NRHF is not selected. Manufacturer 467 p3 reflow land is now reproduced: X 0.762/Y 1.09 mm pads at X 1.778 mm center pitch, X 2.54 mm overall. Coated height 0.432 mm maximum; CAD budget 0.5 mm. Fuse/TVS fault clearing, inrush, thermal and reflow qualification remain pending.",
       "supplier_identity": {
         "lcsc_code": "C99559",
         "url": "https://www.lcsc.com/product-detail/C99559.html",
@@ -30,7 +30,9 @@
         "pcba_type": "Economic and Standard",
         "fixture_required_by_catalog": false,
         "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
-      }
+      },
+      "footprint_provenance": "design/sources/input-protection-footprints.json",
+      "height_max_mm": 0.5
     },
     "100010048": {
       "manufacturer": "Seeed Studio",
@@ -1772,31 +1774,76 @@
       }
     },
     "SMF5.0CA": {
-      "manufacturer": "Littelfuse",
+      "manufacturer": "High Diode",
       "description": "5 V bidirectional TVS",
-      "physical_package": "SOD-123FL",
-      "electrical_spec": "200 W (10/1000 us), VRWM 5.0 V, bidirectional; breakdown and clamp per datasheet",
+      "physical_package": "High Diode SOD-123FL, 2.8 +/-0.15 x 1.8 +/-0.1 mm body, 3.7 +/-0.15 mm overall length, 1.4 mm maximum height",
+      "electrical_spec": "Bidirectional TVS; VRWM 5.0 V, VBR 6.4-7.0 V at 10 mA, VC 9.2 V at 21.7 A, 200 W/10-1000 us, IR 800 uA maximum at VRWM",
       "manufacturer_sources": [
-        "https://www.littelfuse.com/products/overvoltage-protection/tvs-diodes/surface-mount/smf"
+        "https://datasheet.lcsc.com/datasheet/pdf/d7261141784d0c4389ea587ce555a8ce.pdf?productCode=C22458622"
       ],
-      "spec_review_status": "Exact circuit MPN selected from the manufacturer family; the datasheet and catalog were not reachable from the design environment. Confirm VRWM 5.0 V, breakdown above 6 V, SOD-123FL land pattern and JLC catalog identity before ordering.",
-      "notes": "Added 10 October 2026 at the owner's request as 12-V mis-wiring protection. Supplier identity pending."
+      "spec_review_status": "Exact manufacturer electrical specification, mechanical dimensions, recommended land drawing and exact JLC catalog identity reviewed; native matching, assembly process and circuit fault/thermal qualification remain pending.",
+      "notes": "Manufacturer explicitly selected as High Diode; do not silently substitute Littelfuse or a different SMF vendor. Manufacturer p4 suggested land reproduced as X 1.2/Y 1.4 mm rectangular pads, X 2.85 mm center pitch. This TVS is a shunt after F20; 200 W is a nonrepetitive transient rating, not sustained 12-V fault qualification or a guarantee that F20 clears before downstream damage. Native pad dimensions, paste/reflow and installed height remain review items.",
+      "supplier_identity": {
+        "lcsc_code": "C22458622",
+        "url": "https://jlcpcb.com/partdetail/HighDiode-SMF50CA/C22458622",
+        "verified_mpn": "SMF5.0CA",
+        "verified_manufacturer": "High Diode",
+        "verified_package_or_nominal": "SOD-123FL; bidirectional 5-V TVS, 200 W at 10/1000 us",
+        "verified_on": "2026-10-11",
+        "verification_scope": "Official exact MPN, manufacturer, physical package and nominal catalog identity; no inventory, allocation, quotation, basic/extended status or order acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/HighDiode-SMF50CA/C22458622",
+        "verified_mpn": "SMF5.0CA",
+        "verified_manufacturer": "High Diode",
+        "verified_lcsc_code": "C22458622",
+        "verified_on": "2026-10-11",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and Economic and Standard service type. Fixture flag records explicit catalog notice only; stock, quotation, PCB acceptance and assembly-order release remain unconfirmed."
+      },
+      "footprint_provenance": "design/sources/input-protection-footprints.json",
+      "height_max_mm": 1.4
     },
     "0467.500NR": {
       "manufacturer": "Littelfuse",
       "description": "0.5A fast fuse",
-      "physical_package": "Littelfuse 467-series SMT fuse, 0603 imperial / 1608 metric",
-      "electrical_spec": "0.5A fast fuse",
+      "physical_package": "Littelfuse 467-series 0603/1608 fuse, body 1.60 +/-0.102 x 0.813 +/-0.076 mm, coated height 0.432 mm maximum; 0.5 mm conservative CAD budget",
+      "electrical_spec": "0.5-A fast-acting fuse; 32 V AC/DC; 50-A interrupt at 32 V; nominal cold resistance 0.187 ohm, melting I2t 0.0087 A2s",
       "manufacturer_sources": [
         "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d"
       ],
-      "spec_review_status": "Exact circuit MPN selected from the same 467 family as F20; catalog not reachable from the design environment. Confirm 0.5 A rating, 0603 package and JLC catalog identity before ordering.",
-      "notes": "Added 10 October 2026 as host 3.3-V entry protection. Supplier identity pending."
+      "spec_review_status": "Exact manufacturer electrical specification, mechanical dimensions, recommended land drawing and exact JLC catalog identity reviewed; native matching, assembly process and circuit fault/thermal qualification remain pending.",
+      "notes": "Exact NR suffix retained; NRHF is not selected. Manufacturer p3 reflow land: X 0.762/Y 1.09 mm pads at X 1.778 mm center pitch, X 2.54 mm overall. 1.02 mm labels rounded inner gap, not pad length. Manufacturer standard 25% continuous-current derating and temperature curve apply; F21/contact thermal coordination and voltage drop still require bench qualification.",
+      "supplier_identity": {
+        "lcsc_code": "C206990",
+        "url": "https://jlcpcb.com/partdetail/Littelfuse-0467500NR/C206990",
+        "verified_mpn": "0467.500NR",
+        "verified_manufacturer": "Littelfuse",
+        "verified_package_or_nominal": "0603; 0.5-A fast-acting fuse, 32 V",
+        "verified_on": "2026-10-11",
+        "verification_scope": "Official exact MPN, manufacturer, physical package and nominal catalog identity; no inventory, allocation, quotation, basic/extended status or order acceptance guarantee."
+      },
+      "jlc_assembly": {
+        "url": "https://jlcpcb.com/partdetail/Littelfuse-0467500NR/C206990",
+        "verified_mpn": "0467.500NR",
+        "verified_manufacturer": "Littelfuse",
+        "verified_lcsc_code": "C206990",
+        "verified_on": "2026-10-11",
+        "assembly_type": "SMT Assembly",
+        "pcba_type": "Economic and Standard",
+        "fixture_required_by_catalog": false,
+        "verification_scope": "Official exact part page lists SMT Assembly and Economic and Standard service type. Fixture flag records explicit catalog notice only; stock, quotation, PCB acceptance and assembly-order release remain unconfirmed."
+      },
+      "footprint_provenance": "design/sources/input-protection-footprints.json",
+      "height_max_mm": 0.5
     }
   },
   "open_release_items": [
     "Carrier PCB is a design draft; procurement worksheet does not authorize fabrication or assembly release.",
     "Obtain assembler confirmation and live sourcing for every selected MPN; blank supplier codes intentionally remain sourcing_pending.",
+    "D21 High Diode SMF5.0CA and F20/F21 Littelfuse 467 source footprints reproduce manufacturer recommended lands; verify matching native pads and assembly preview. Sustained 12-V input fault clearing/energy, fuse current derating and host flex-contact coordination require bench qualification.",
     "Verify capacitor effective capacitance versus DC bias, temperature, tolerance and aging, especially 22 uF converter outputs and optional 100 uF reserve bank.",
     "Qualify switcher current peaks/thermal behavior and native RP235x marked-inductor orientation after placement/routing.",
     "Optional reserve charge resistor RC0805FR-0722RL needs pulse-overload qualification: ideal initial 1.14 W, approximately 5 mJ at 400 uF and 5 V; continuous wattage is insufficient evidence.",

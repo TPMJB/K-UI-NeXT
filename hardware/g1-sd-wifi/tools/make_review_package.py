@@ -48,13 +48,14 @@ def sha256(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--output', type=pathlib.Path, required=True)
+    ap.add_argument('--skip-3d-renders', action='store_true', help='Plot artwork/checks without optional package-model renders')
     args = ap.parse_args()
     if args.output.exists():
         raise SystemExit('Output exists; choose a new directory.')
     out = args.output
     out.mkdir(parents=True)
     summary = {'generated_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
-               'approved_for_order': False, 'boards': {}}
+               'approved_for_order': False, 'three_d_renders_included': not args.skip_3d_renders, 'boards': {}}
     for name, (pcb, settings_path) in BOARDS.items():
         settings = json.loads(settings_path.read_text())
         folder = out / name
@@ -89,7 +90,7 @@ def main():
                 shutil.copyfile(MFG / f, folder / f)
             renders = folder / 'renders'
             renders.mkdir()
-            for label, side, rotate in RENDERS:
+            for label, side, rotate in ([] if args.skip_3d_renders else RENDERS):
                 extra = ['--rotate', rotate, '--perspective'] if rotate else []
                 cli('pcb', 'render', '-o', renders / ('%s.png' % label), '-w', 1600, '-h', 2400 if not rotate else 1600,
                     '--side', side, '--quality', 'high', '--background', 'opaque', *extra, pcb)

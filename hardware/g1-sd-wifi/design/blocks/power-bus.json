@@ -27,7 +27,7 @@
     "ref": "F20",
     "value": "1.5A fast fuse",
     "mpn": "046701.5NR",
-    "footprint": "Fuse:Fuse_0603_1608Metric",
+    "footprint": "KUI_Footprints:Littelfuse_467_0603_Recommended",
     "pins": {
       "1": {
         "name": "1",
@@ -45,7 +45,8 @@
     ],
     "description": "Local overcurrent protection; time-current/inrush/thermal qualification required.",
     "populate": true,
-    "height_max_mm": 0.5
+    "height_max_mm": 0.5,
+    "manufacturer": "Littelfuse"
   },
   {
     "ref": "Q20",
@@ -80,7 +81,7 @@
     "ref": "D21",
     "value": "5 V bidirectional TVS",
     "mpn": "SMF5.0CA",
-    "footprint": "Diode_SMD:D_SOD-123F",
+    "footprint": "KUI_Footprints:HighDiode_SMF_SOD123FL",
     "pins": {
       "1": {
         "name": "1",
@@ -94,17 +95,20 @@
       }
     },
     "sources": [
-      "https://www.littelfuse.com/products/overvoltage-protection/tvs-diodes/surface-mount/smf"
+      "https://datasheet.lcsc.com/datasheet/pdf/d7261141784d0c4389ea587ce555a8ce.pdf?productCode=C22458622",
+      "https://jlcpcb.com/partdetail/HighDiode-SMF50CA/C22458622"
     ],
-    "description": "Over-voltage crowbar after F20: a wrong 12-V feed drives it into breakdown and F20 opens. Bidirectional, so a reversed 5-V feed stays below breakdown and Q20 blocks it without blowing F20. Does not hold the rail below downstream absolute maximums during the fault.",
+    "description": "Bidirectional 5-V TVS shunt after F20: VBR 6.4-7.0 V, VC 9.2 V at 21.7 A/10-1000 us. A wrong 12-V feed drives breakdown; clearing F20, TVS survival energy and downstream absolute maxima require fault qualification. Reverse 5 V remains below breakdown while Q20 blocks.",
     "populate": true,
-    "height_max_mm": 1.1
+    "height_max_mm": 1.4,
+    "manufacturer": "High Diode",
+    "lcsc": "C22458622"
   },
   {
     "ref": "F21",
     "value": "0.5A fast fuse",
     "mpn": "0467.500NR",
-    "footprint": "Fuse:Fuse_0603_1608Metric",
+    "footprint": "KUI_Footprints:Littelfuse_467_0603_Recommended",
     "pins": {
       "1": {
         "name": "1",
@@ -118,11 +122,14 @@
       }
     },
     "sources": [
-      "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d"
+      "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d",
+      "https://jlcpcb.com/partdetail/Littelfuse-0467500NR/C206990"
     ],
     "description": "Host 3.3-V entry fuse: a short on the carrier's CONSOLE_3V3 opens F21 instead of loading the console's 3.3-V supply through 0.5-A flex contacts.",
     "populate": true,
-    "height_max_mm": 0.5
+    "height_max_mm": 0.5,
+    "manufacturer": "Littelfuse",
+    "lcsc": "C206990"
   },
   {
     "ref": "C200",

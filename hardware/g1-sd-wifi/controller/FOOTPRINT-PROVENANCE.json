@@ -504,20 +504,20 @@
     "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
   },
   {
-    "source": "/usr/share/kicad/footprints/Fuse.pretty/Fuse_0603_1608Metric.kicad_mod",
-    "local": "controller/KUI_Footprints.pretty/Fuse_0603_1608Metric.kicad_mod"
+    "source": "manufacturer recommended land; design/sources/input-protection-footprints.json",
+    "local": "controller/KUI_Footprints.pretty/Littelfuse_467_0603_Recommended.kicad_mod",
+    "manufacturer_source": "Littelfuse_467",
+    "prior_library_reference": "Fuse:Fuse_0603_1608Metric"
   },
   {
     "source": "/usr/share/kicad/footprints/Package_TO_SOT_SMD.pretty/SOT-23.kicad_mod",
     "local": "controller/KUI_Footprints.pretty/SOT-23.kicad_mod"
   },
   {
-    "source": "/usr/share/kicad/footprints/Diode_SMD.pretty/D_SOD-123F.kicad_mod",
-    "local": "controller/KUI_Footprints.pretty/D_SOD-123F.kicad_mod"
-  },
-  {
-    "source": "/usr/share/kicad/footprints/Fuse.pretty/Fuse_0603_1608Metric.kicad_mod",
-    "local": "controller/KUI_Footprints.pretty/Fuse_0603_1608Metric.kicad_mod"
+    "source": "manufacturer recommended land; design/sources/input-protection-footprints.json",
+    "local": "controller/KUI_Footprints.pretty/HighDiode_SMF_SOD123FL.kicad_mod",
+    "manufacturer_source": "High_Diode_SMF",
+    "prior_library_reference": "Diode_SMD:D_SOD-123F"
   },
   {
     "source": "/usr/share/kicad/footprints/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",

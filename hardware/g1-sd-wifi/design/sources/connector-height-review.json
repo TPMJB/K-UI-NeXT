@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "verified_on": "2026-10-11",
+  "method": "Visual review of Hirose drawing EDC3-150229-11, page1, <=34 contacts; nominal plus printed positive tolerance",
+  "connector": {
+    "mpns": [
+      "FH12-20S-0.5SH(55)",
+      "FH12-14S-0.5SH(55)",
+      "FH12-6S-0.5SH(55)"
+    ],
+    "max_mm": 2.2,
+    "source": "https://www.hirose.com/en/product/p/CL0586-0524-9-55/documents?path=%2Fapi%2Fv1%2Fproducts%2FCL0586-0524-9-55%2Fdocuments%2Fdrawing_2d%2Fcontent%3Flang%3DEN",
+    "location": "PDFp1 (<34 contacts): closed height2.0\u00b10.2mm relative to drawing datum b; derived upper2.2mm. Open actuator dimension(4.8) is reference only; no service envelope maximum.",
+    "source_document_sha256": "1981bd7a1b41a9fa386e1738257da6c85219c7078aa82561d4799e1c8f50e695",
+    "evidence_scope": "manufacturer FH12 horizontal bottom-contact family; drawing covers selected6/14/20 contacts and(55)",
+    "published_height_mm": 2.0,
+    "height_bound_method": "nominal plus printed positive tolerance",
+    "actuator_open_reference_height_mm": 4.8,
+    "actuator_service_envelope_max_mm": null
+  },
+  "whole_stack_mm": {
+    "motherboard_to_carrier_bottom_nominal": 2.5,
+    "carrier_nominal": 0.8,
+    "carrier_max_from_order_tolerance": 0.9,
+    "connector_closed_max": 2.2,
+    "top_nominal_board_plus_max_connector": 5.5,
+    "top_max_board_plus_max_connector": 5.6,
+    "remaining_in_6mm_zone_before_other_tolerances": 0.4
+  },
+  "limitations": [
+    "Does not include support tolerance, solder stand-off, insulation or shield deflection.",
+    "Open actuator service envelope must be checked physically.",
+    "C5 plus clamp budget is3.8mm nominal or3.7mm with maximum board thickness, before other tolerances."
+  ]
+}

@@ -1,0 +1,530 @@
+{
+  "review_date_utc": "2026-10-11",
+  "status": "previous_four_hole_fixture_incompatible_with_current_carrier",
+  "approved_for_fabrication": false,
+  "board_mutated": false,
+  "native_pcb": "controller/KUI-G1-Bridge-RevA.kicad_pcb",
+  "board_sha256": "7d7c3d2693fd01a43f67d1618dabdd9e908bb48c382820c1bf2be7a41367bfc9",
+  "carrier_origin_native_mm": [
+    70,
+    45
+  ],
+  "carrier_outline_nominal_mm": [
+    59,
+    115
+  ],
+  "existing_npth_footprint_refs": [],
+  "previous_support_inputs": {
+    "contract_path": "../K-UI-NeXT/hardware/g1-sd-wifi/mechanical/c5-support/contract.json",
+    "contract_sha256": "9ac25c449c9aba4d881e7cb17f2810f6c34aca1f414c8122d5652ba29b1a66ca",
+    "old_carrier_hash_at_design": "fa3e88489094eb537a993f7c3f23d4d93129e2101b7172367934f1d7267eb7b8",
+    "geometry_check_sha256": "61152e6196dde32e1eee0c85c870277b969dfd3671cfdbebffc09e997cbf533b",
+    "models_copied_into_current_tree": false
+  },
+  "c5_registration": {
+    "native_module_origin_mm": [
+      84,
+      55
+    ],
+    "local_module_origin_mm": [
+      14,
+      10
+    ],
+    "same_official_module_source_sha256": true,
+    "official_module_source_sha256": "de3838f8908e40d6f022e43ae3a3261bbdc79d436a39925a1a898824917d7607",
+    "contacts_checked": 16,
+    "max_body_position_error_mm": 0.0,
+    "max_rotation_error_deg": 0.0,
+    "checks": [
+      {
+        "ref": "K201",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K202",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K203",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K204",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K205",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K206",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K207",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K208",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K209",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K210",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K211",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K212",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K213",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K214",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K215",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      },
+      {
+        "ref": "K216",
+        "body_position_error_mm": 0.0,
+        "rotation_error_deg": 0.0
+      }
+    ]
+  },
+  "proposed_hole_contract": {
+    "npth_diameter_mm": 1.8,
+    "all_layer_copper_clearance_from_drill_edge_mm": 0.3,
+    "copper_exclusion_diameter_mm": 2.4,
+    "boss_body_envelope_diameter_mm": 3.6,
+    "mechanical_model_requires_through_board_fasteners": true
+  },
+  "mounts": [
+    {
+      "name": "NW",
+      "local_xy_mm": [
+        2.0999999999999943,
+        2.799999999999997
+      ],
+      "native_xy_mm": [
+        72.1,
+        47.8
+      ],
+      "pads_with_centres_inside_1p8mm_drill": [
+        {
+          "ref": "R2028",
+          "pin": "1",
+          "net": "+3V3_C5_IO",
+          "native_xy_mm": [
+            71.69999999999999,
+            47.997
+          ],
+          "distance_to_hole_centre_mm": 0.44588
+        },
+        {
+          "ref": "R2028",
+          "pin": "2",
+          "net": "C5_CSn",
+          "native_xy_mm": [
+            72.72,
+            47.997
+          ],
+          "distance_to_hole_centre_mm": 0.650545
+        }
+      ],
+      "track_intersections_with_drill": 3,
+      "track_clearance_violations_at_0p30mm": 3,
+      "via_clearance_violations_at_0p30mm": 1,
+      "via_intersections_with_drill": 0,
+      "affected_trace_layers": [
+        "F.Cu"
+      ],
+      "closest_track_example": {
+        "start_mm": [
+          85.7863,
+          62.003
+        ],
+        "end_mm": [
+          71.7803,
+          47.997
+        ],
+        "width_mm": 0.25,
+        "layer": "F.Cu",
+        "net": "+3V3_C5_IO",
+        "uuid": "cb8d3607-48c4-4719-9775-f07ee87f7686",
+        "copper_edge_distance_from_hole_center_mm": 0.240362,
+        "drill_intersection": true
+      },
+      "native_trace_and_via_counts_confirmed": true
+    },
+    {
+      "name": "NE",
+      "local_xy_mm": [
+        26.299999999999997,
+        2.799999999999997
+      ],
+      "native_xy_mm": [
+        96.3,
+        47.8
+      ],
+      "pads_with_centres_inside_1p8mm_drill": [
+        {
+          "ref": "C2036",
+          "pin": "1",
+          "net": "+5V_C5",
+          "native_xy_mm": [
+            95.87,
+            48.053000000000004
+          ],
+          "distance_to_hole_centre_mm": 0.498908
+        }
+      ],
+      "track_intersections_with_drill": 3,
+      "track_clearance_violations_at_0p30mm": 3,
+      "via_clearance_violations_at_0p30mm": 0,
+      "via_intersections_with_drill": 0,
+      "affected_trace_layers": [
+        "F.Cu"
+      ],
+      "closest_track_example": {
+        "start_mm": [
+          95.87,
+          48.053
+        ],
+        "end_mm": [
+          95.87,
+          48.4975
+        ],
+        "width_mm": 0.6,
+        "layer": "F.Cu",
+        "net": "+5V_C5",
+        "uuid": "06f217a9-a03a-4443-8656-d1214cec1915",
+        "copper_edge_distance_from_hole_center_mm": 0.198908,
+        "drill_intersection": true
+      },
+      "native_trace_and_via_counts_confirmed": true
+    },
+    {
+      "name": "SW",
+      "local_xy_mm": [
+        2.0999999999999943,
+        17.200000000000003
+      ],
+      "native_xy_mm": [
+        72.1,
+        62.2
+      ],
+      "pads_with_centres_inside_1p8mm_drill": [
+        {
+          "ref": "R2030",
+          "pin": "1",
+          "net": "C5_SCLK",
+          "native_xy_mm": [
+            72.68,
+            62.003
+          ],
+          "distance_to_hole_centre_mm": 0.612543
+        },
+        {
+          "ref": "R2030",
+          "pin": "2",
+          "net": "GND",
+          "native_xy_mm": [
+            71.66,
+            62.003
+          ],
+          "distance_to_hole_centre_mm": 0.482088
+        }
+      ],
+      "track_intersections_with_drill": 6,
+      "track_clearance_violations_at_0p30mm": 7,
+      "via_clearance_violations_at_0p30mm": 3,
+      "via_intersections_with_drill": 2,
+      "affected_trace_layers": [
+        "B.Cu",
+        "F.Cu"
+      ],
+      "closest_track_example": {
+        "start_mm": [
+          72.1559,
+          61.4934
+        ],
+        "end_mm": [
+          72.1559,
+          62.5561
+        ],
+        "width_mm": 0.127,
+        "layer": "F.Cu",
+        "net": "FPGA_TCK",
+        "uuid": "115a74dc-7eb4-45d8-9d6e-c229a3987ced",
+        "copper_edge_distance_from_hole_center_mm": -0.0076,
+        "drill_intersection": true
+      },
+      "native_trace_and_via_counts_confirmed": true
+    },
+    {
+      "name": "SE",
+      "local_xy_mm": [
+        26.299999999999997,
+        17.200000000000003
+      ],
+      "native_xy_mm": [
+        96.3,
+        62.2
+      ],
+      "pads_with_centres_inside_1p8mm_drill": [
+        {
+          "ref": "U204",
+          "pin": "6",
+          "net": "C5_MISO_MCU",
+          "native_xy_mm": [
+            96.325,
+            61.475
+          ],
+          "distance_to_hole_centre_mm": 0.725431
+        },
+        {
+          "ref": "U204",
+          "pin": "7",
+          "net": "C5_IRQ_MCU",
+          "native_xy_mm": [
+            96.325,
+            62.125
+          ],
+          "distance_to_hole_centre_mm": 0.079057
+        },
+        {
+          "ref": "U204",
+          "pin": "8",
+          "net": "GND",
+          "native_xy_mm": [
+            96.325,
+            62.775
+          ],
+          "distance_to_hole_centre_mm": 0.575543
+        }
+      ],
+      "track_intersections_with_drill": 11,
+      "track_clearance_violations_at_0p30mm": 16,
+      "via_clearance_violations_at_0p30mm": 4,
+      "via_intersections_with_drill": 1,
+      "affected_trace_layers": [
+        "B.Cu",
+        "F.Cu",
+        "In3.Cu"
+      ],
+      "closest_track_example": {
+        "start_mm": [
+          96.325,
+          62.125
+        ],
+        "end_mm": [
+          96.567,
+          62.367
+        ],
+        "width_mm": 0.127,
+        "layer": "F.Cu",
+        "net": "C5_IRQ_MCU",
+        "uuid": "8a75fc32-5c8b-4f98-b287-7e12f378e00a",
+        "copper_edge_distance_from_hole_center_mm": 0.007211,
+        "drill_intersection": true
+      },
+      "native_trace_and_via_counts_confirmed": true
+    }
+  ],
+  "audit_method": {
+    "status": "native_pcb_serialized_geometry_read_only",
+    "pads": "Native serialized footprint-local pad centres rotated about native footprint origins; centre inside proposed drill is a definitive pad cut independent of pad corner rounding.",
+    "tracks": "Exact distance to serialized global straight segments less half trace width, compared against 0.9mm drill radius and 1.2mm exclusion radius.",
+    "vias": "Native via copper radius and centre.",
+    "zones": "Not required to prove incompatibility; zones were not used to certify any candidate hole as safe.",
+    "native_pcbnew_cross_check": {
+      "status": "passed_read_only",
+      "version": "10.0.7-10.0.7~ubuntu24.04.1",
+      "board_sha256_before_and_after": "7d7c3d2693fd01a43f67d1618dabdd9e908bb48c382820c1bf2be7a41367bfc9",
+      "drilled_pad_centres_confirmed": 8,
+      "c5_centroids_and_rotations_confirmed": 16,
+      "mounts": [
+        {
+          "mount": "NW",
+          "pad_checks": [
+            {
+              "ref": "R2028",
+              "pin": "1",
+              "native_xy_mm": [
+                71.7,
+                47.997
+              ],
+              "distance_to_hole_centre_mm": 0.44588,
+              "confirmed_inside_drill": true
+            },
+            {
+              "ref": "R2028",
+              "pin": "2",
+              "native_xy_mm": [
+                72.72,
+                47.997
+              ],
+              "distance_to_hole_centre_mm": 0.650545,
+              "confirmed_inside_drill": true
+            }
+          ]
+        },
+        {
+          "mount": "NE",
+          "pad_checks": [
+            {
+              "ref": "C2036",
+              "pin": "1",
+              "native_xy_mm": [
+                95.87,
+                48.053
+              ],
+              "distance_to_hole_centre_mm": 0.498908,
+              "confirmed_inside_drill": true
+            }
+          ]
+        },
+        {
+          "mount": "SW",
+          "pad_checks": [
+            {
+              "ref": "R2030",
+              "pin": "1",
+              "native_xy_mm": [
+                72.68,
+                62.003
+              ],
+              "distance_to_hole_centre_mm": 0.612543,
+              "confirmed_inside_drill": true
+            },
+            {
+              "ref": "R2030",
+              "pin": "2",
+              "native_xy_mm": [
+                71.66,
+                62.003
+              ],
+              "distance_to_hole_centre_mm": 0.482088,
+              "confirmed_inside_drill": true
+            }
+          ]
+        },
+        {
+          "mount": "SE",
+          "pad_checks": [
+            {
+              "ref": "U204",
+              "pin": "6",
+              "native_xy_mm": [
+                96.325,
+                61.475
+              ],
+              "distance_to_hole_centre_mm": 0.725431,
+              "confirmed_inside_drill": true
+            },
+            {
+              "ref": "U204",
+              "pin": "7",
+              "native_xy_mm": [
+                96.325,
+                62.125
+              ],
+              "distance_to_hole_centre_mm": 0.079057,
+              "confirmed_inside_drill": true
+            },
+            {
+              "ref": "U204",
+              "pin": "8",
+              "native_xy_mm": [
+                96.325,
+                62.775
+              ],
+              "distance_to_hole_centre_mm": 0.575543,
+              "confirmed_inside_drill": true
+            }
+          ]
+        }
+      ],
+      "trace_and_via_counts_confirmed_all_mounts": true
+    }
+  },
+  "decision": {
+    "add_previous_four_holes": false,
+    "reason": "Every proposed hole cuts populated pads and routed copper. Inserting these holes would require moving components/rerouting and native DRC/connectivity requalification. It cannot preserve the current layout unchanged.",
+    "reuse_module_only_geometry": "Official source hash, C5 origin and all sixteen spring-centroid positions agree. The former module pocket and corner bearing patches are useful reference geometry, but the complete bases/caps/backers are incompatible because their attachment is through the four obstructed holes.",
+    "selected_next_path": "Independent rigid carrier support and C5 end clamp anchored outside current populated/routed carrier. Exact chassis/fixture anchors must come from physical fit measurements; do not infer mounting points from the paper perimeter.",
+    "new_fixture_cad_generated": false,
+    "new_fixture_cad_reason": "Current carrier provides no proven native mounting holes and no measured external anchor/obstacle map. A printable fixture would invent its attachment geometry.",
+    "bounded_hole_relocation_review_performed": false,
+    "bounded_hole_relocation_reason": "No new design loop was authorized for this one-pass reconciliation; changing hole positions would also change arm/pocket geometry and require full copper, component and force validation."
+  },
+  "required_physical_checks": [
+    {
+      "check": "Print carrier template at 100%; measure both 50 mm calibration bars, then confirm board perimeter and north/south registration against assembled console.",
+      "purpose": "Choose verified independent support points without exposing or assuming motherboard clearance."
+    },
+    {
+      "check": "Measure modified USB-free C5 bare PCB thickness, total height, antenna connector/cable and removal envelope.",
+      "purpose": "Replace source thickness metadata and qualify actual clamp seat and shield clearance."
+    },
+    {
+      "check": "Map local underside obstacles and shield height at all independent fixture anchors and C5 corners.",
+      "purpose": "2.5 mm underside stand-off and 8 mm upper region are nominal assumptions, not verified clearances."
+    },
+    {
+      "check": "Use insulating precision supports to establish 0.90 mm nominal module underside-to-carrier gap; measure loaded gap at all corners to0.87\u20130.93mm and confirm XYalignment within\u00b10.10mm.",
+      "purpose": "Keep sixteen contacts within published working limits without relying on raw printer dimensions."
+    },
+    {
+      "check": "Bench-test retention above 6.24 N aggregate spring reaction, including spring maximum/lot variation, PCB deflection, fastener retention and operating-temperature creep.",
+      "purpose": "6.24 N is a minimum-contact-force sum; it is not an established maximum force or mechanical load proof."
+    }
+  ],
+  "contact_height_and_load_contract": {
+    "mpn": "Harwin S7221-45R",
+    "recommended_working_gap_mm": 0.9,
+    "minimum_working_gap_mm": 0.63,
+    "free_height_range_mm": [
+      1.1,
+      1.23
+    ],
+    "minimum_contact_force_N": 0.39,
+    "contacts": 16,
+    "minimum_total_contact_force_N": 6.24,
+    "source": "Existing manufacturer-derived spring contract in design/sources/xiao-c5-spring-contact-placement.json; exact dimensional/force qualification remains required."
+  },
+  "limitations": [
+    "This audit establishes that the former four holes are destructive on the current carrier; it does not establish that every possible new mounting position is impossible.",
+    "Previous module-only component-interference checks and elastic estimates do not qualify a carrier attachment, spring maximum, installed console fit or thermal endurance.",
+    "Do not drill the carrier or fabricate the old attachment models from this review."
+  ],
+  "followup_board_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
+  "followup_unchanged_geometry_evidence": "design/power-native-preservation-check.json confirms every footprint placement/pin net and route coordinate unchanged. Thus destructive pad drilling remains proven; per-mount track counts refer to the original reviewed routed baseline."
+}

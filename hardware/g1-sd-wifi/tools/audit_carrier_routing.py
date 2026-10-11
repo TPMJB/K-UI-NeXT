@@ -173,7 +173,7 @@ def main():
             'native_connectivity_count_is_uncapped':True,
             'native_connectivity_unconnected_category_breakdown':category_counts,
             'kicad_drc_unconnected_report_limit':499,
-            'kicad_drc_unconnected_report_at_limit_status':'capped_at_499',
+            'kicad_drc_unconnected_report_at_limit_status':'capped_at_499' if unconnected>=499 else 'not_at_limit',
             'drc_count_interpretation':'A DRC report showing 499 means capped_at_499; use uncapped native connectivity for progress.',
             'physical_footprints':len(footprints),'tracks_and_vias':len(tracks),'through_vias':len(vias),
             'C5_rigid_contact_group':c5_group,
@@ -187,7 +187,7 @@ def main():
             'remaining_reviews':['Kelvin feedback branching at the output capacitor positive land',
                                  'Input/switch/output current loops and capacitor/EP ground returns',
                                  'Clock/QMI/SD stubs, return reference and timing',
-                                 'Full native DRC including unconnected items and schematic parity',
+                                 'Electrical/thermal qualification beyond native DRC/ERC and schematic parity',
                                  'Motherboard obstacles, shield registration and C5 compression fixture']}
     if PROBE_PLACEMENT.exists():
         report['raw_G1_probe_placement_evidence']={

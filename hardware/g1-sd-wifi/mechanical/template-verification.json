@@ -1,0 +1,28 @@
+{
+  "pcb_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
+  "status": "pass_actual_size_pdf_geometry_and_render; physical_fit_unqualified",
+  "files": [
+    {
+      "file": "carrier-fit-US-Letter.pdf",
+      "page_size_pt": [
+        612,
+        792
+      ],
+      "horizontal_bar_mm": 49.99999172222221,
+      "vertical_bar_mm": 50.00000583333333,
+      "sha256": "5e1f7edaf4d3b2f81f4ed18d1d9168ad2fcd72baaf6ab198406dbe940cc0015c",
+      "rendered_visual_inspection": "passed; no overlaps or clipping"
+    },
+    {
+      "file": "carrier-fit-A4.pdf",
+      "page_size_pt": [
+        595.2756,
+        841.8898
+      ],
+      "horizontal_bar_mm": 49.99999172222221,
+      "vertical_bar_mm": 50.00000583333332,
+      "sha256": "2ad971fd9129a82d83f529006084782a5da8b903f68a1e33f0546342d157abe2",
+      "rendered_visual_inspection": "passed; no overlaps or clipping"
+    }
+  ]
+}

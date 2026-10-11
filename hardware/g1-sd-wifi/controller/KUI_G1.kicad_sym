@@ -2130,7 +2130,7 @@
 (symbol "F20" (pin_names (offset 0.508)) (in_bom yes) (on_board yes)
  (property "Reference" "F" (at 0 5.08 0) (effects (font (size 1.27 1.27))))
  (property "Value" "1.5A fast fuse" (at 0 7.62 0) (effects (font (size 1.27 1.27))))
- (property "Footprint" "KUI_Footprints:Fuse_0603_1608Metric" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+ (property "Footprint" "KUI_Footprints:Littelfuse_467_0603_Recommended" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
  (symbol "F20_0_1" (rectangle (start -3.81 2.54) (end 3.81 -2.54) (stroke (width 0.254) (type default)) (fill (type background))))
  (symbol "F20_1_1"
   (pin passive line (at -6.35 0 0) (length 2.54) (name "1" (effects (font (size 0.85 0.85)))) (number "1" (effects (font (size 0.85 0.85)))))
@@ -2151,7 +2151,7 @@
 (symbol "D21" (pin_names (offset 0.508)) (in_bom yes) (on_board yes)
  (property "Reference" "D" (at 0 5.08 0) (effects (font (size 1.27 1.27))))
  (property "Value" "5 V bidirectional TVS" (at 0 7.62 0) (effects (font (size 1.27 1.27))))
- (property "Footprint" "KUI_Footprints:D_SOD-123F" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+ (property "Footprint" "KUI_Footprints:HighDiode_SMF_SOD123FL" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
  (symbol "D21_0_1" (rectangle (start -3.81 2.54) (end 3.81 -2.54) (stroke (width 0.254) (type default)) (fill (type background))))
  (symbol "D21_1_1"
   (pin passive line (at -6.35 0 0) (length 2.54) (name "1" (effects (font (size 0.85 0.85)))) (number "1" (effects (font (size 0.85 0.85)))))
@@ -2161,7 +2161,7 @@
 (symbol "F21" (pin_names (offset 0.508)) (in_bom yes) (on_board yes)
  (property "Reference" "F" (at 0 5.08 0) (effects (font (size 1.27 1.27))))
  (property "Value" "0.5A fast fuse" (at 0 7.62 0) (effects (font (size 1.27 1.27))))
- (property "Footprint" "KUI_Footprints:Fuse_0603_1608Metric" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+ (property "Footprint" "KUI_Footprints:Littelfuse_467_0603_Recommended" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
  (symbol "F21_0_1" (rectangle (start -3.81 2.54) (end 3.81 -2.54) (stroke (width 0.254) (type default)) (fill (type background))))
  (symbol "F21_1_1"
   (pin passive line (at -6.35 0 0) (length 2.54) (name "1" (effects (font (size 0.85 0.85)))) (number "1" (effects (font (size 0.85 0.85)))))

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "release_id": "KUI-G1-RevA-bringup-prototype",
-  "status": "blocked_carrier_layout_and_mechanical_assembly_review",
-  "purpose": "Native circuit and flex implementation; carrier layout draft and prototype fabrication qualification in progress.",
+  "status": "blocked_fault_mechanical_and_manufacturing_qualification",
+  "purpose": "Fully routed Claude4b8c7d6 baseline with source-verified protection parts and current order-data checks; fault and mechanical qualification remain open.",
   "claude_review_commit": "b207dd659565826ffd757ccf7abe1998f63c9202",
   "boards": {
     "rigid": {
@@ -111,9 +111,29 @@
     "hardware/g1-sd-wifi/design/carrier-placement.json",
     "hardware/g1-sd-wifi/design/raw-g1-probe-placement.json",
     "hardware/g1-sd-wifi/controller/checks/carrier-routing-audit.json",
-    "hardware/g1-sd-wifi/controller/checks/drc-placed.json",
-    "hardware/g1-sd-wifi/controller/checks/carrier-ground-reference.svg",
-    "hardware/g1-sd-wifi/controller/FOOTPRINT-LICENSES.md"
+    "hardware/g1-sd-wifi/controller/FOOTPRINT-LICENSES.md",
+    "hardware/g1-sd-wifi/design/sources/input-protection-footprints.json",
+    "hardware/g1-sd-wifi/design/sources/connector-height-review.json",
+    "hardware/g1-sd-wifi/design/mechanical-support-review.json",
+    "hardware/g1-sd-wifi/design/mechanical-support-review.md",
+    "hardware/g1-sd-wifi/design/power-copper-check.json",
+    "hardware/g1-sd-wifi/tools/check_power_copper.py",
+    "hardware/g1-sd-wifi/tools/test_power_copper.py",
+    "hardware/g1-sd-wifi/docs/OWNER-NEXT-STEPS.md",
+    "hardware/g1-sd-wifi/docs/ORDER-READINESS-2026-10-11.md",
+    "hardware/g1-sd-wifi/controller/checks/erc.json",
+    "hardware/g1-sd-wifi/controller/checks/netlist.xml",
+    "hardware/g1-sd-wifi/design/carrier-final-drc.json",
+    "hardware/g1-sd-wifi/design/power-copper-followup-2026-10-11.md",
+    "hardware/g1-sd-wifi/design/power-copper-before-followup.json",
+    "hardware/g1-sd-wifi/design/power-bounded-widths.json",
+    "hardware/g1-sd-wifi/design/power-bounded-vias.json",
+    "hardware/g1-sd-wifi/design/power-native-preservation-check.json",
+    "hardware/g1-sd-wifi/tools/update_native_power_footprints.py",
+    "hardware/g1-sd-wifi/tools/enlarge_power_vias.py",
+    "hardware/g1-sd-wifi/tools/make_review_package.py",
+    "hardware/g1-sd-wifi/manufacturing/SUPPLIER-CHECKLIST.md",
+    "hardware/g1-sd-wifi/mechanical/template-verification.json"
   ],
   "review_evidence": "hardware/g1-sd-wifi/manufacturing/review-evidence.json",
   "requested_provisions": [
@@ -126,7 +146,7 @@
     "C5 UART/BOOT/EN recovery and SPI update hardware",
     "Power-loss detection, radio cutoff and controller/SD reserve-power provision",
     "Optional custom/dual BIOS variant explicitly decided, original immutable stock recovery",
-    "CN503 passive flex and independently supported carrier with 6/8 mm/thermal keepouts",
+    "CN503 passive flex and carrier support provision with 6/8 mm/thermal keepouts",
     "Debug access, conservative bring-up protocol and K-UI filesystem/write ownership"
   ],
   "measurement_capture": "Complete for first draft; owner can reassemble. Installed prototype fit/landing qualification remains.",
@@ -142,8 +162,9 @@
     "physical_continuity": "unqualified",
     "installed_route": "unqualified",
     "rigid_schematic": "Complete native hierarchy; ERC 0 and physical pad-number audit pass",
-    "rigid_layout": "6-layer 0.8mm 59 x 115 mm carrier placement/routing in progress; prototype mechanics unqualified",
+    "rigid_layout": "Six-layer0.8mm59x115mm fully routed native carrier; current native checks recorded, power-fault and prototype mechanics qualification open",
     "fpga": "Original tested synthesizable logic; MachXO2 resource mapping passes, device P&R/timing open",
-    "assembly": "53 exact catalog-matched BASE SMT part types, 277 physical parts, native placement candidate; manufacturer rotation and fixture review pending"
-  }
+    "assembly": "54 exact catalog-matched BASE SMT part types,264 physical SMT parts; manufacturer rotation and fixture review pending"
+  },
+  "claude_routed_baseline_commit": "4b8c7d6876aaa2a1808bc46c1ccce587e028ebf5"
 }

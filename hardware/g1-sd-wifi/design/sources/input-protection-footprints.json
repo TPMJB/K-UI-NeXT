@@ -1,0 +1,95 @@
+{
+  "review_date": "2026-10-11",
+  "status": "manufacturer_dimensional_source_review; assembly_process_and_installed_fit_pending",
+  "license": "Footprint drawing/model conventions derived from KiCad libraries: CC-BY-SA-4.0 with KiCad libraries exception. Manufacturer dimensions are factual source data; project generation code is GPL-3.0-only.",
+  "sources": {
+    "High_Diode_SMF": {
+      "url": "https://datasheet.lcsc.com/datasheet/pdf/d7261141784d0c4389ea587ce555a8ce.pdf?productCode=C22458622",
+      "manufacturer": "High Diode Semiconductor",
+      "pdf_sha256": "a0dcca41ddb84c364c08152e537db80516355b01844245151d41b0eac2b42b25",
+      "pages": {
+        "electrical": 2,
+        "package_and_suggested_pad_layout": 4
+      }
+    },
+    "Littelfuse_467": {
+      "url": "https://www.littelfuse.com/assetdocs/fuse-467-datasheet?assetguid=4a59f034-1cca-460e-a5ba-e1e66247c76d",
+      "manufacturer": "Littelfuse",
+      "revision": "GD. 02/27/23",
+      "pdf_sha256": "82a43b6727e54b8d7b6d54c24e4e678aebdf29d18dc122700b7aaad0f27054aa",
+      "pages": {
+        "electrical": 1,
+        "derating_and_time_current": 2,
+        "package_and_reflow_land": 3
+      }
+    }
+  },
+  "footprints": {
+    "HighDiode_SMF_SOD123FL": {
+      "footprint": "KUI_Footprints:HighDiode_SMF_SOD123FL",
+      "mpns": [
+        "SMF5.0CA"
+      ],
+      "applies_to": [
+        "D21"
+      ],
+      "manufacturer_source": "High_Diode_SMF",
+      "pad_size_xy_mm": [
+        1.2,
+        1.4
+      ],
+      "pad_center_pitch_x_mm": 2.85,
+      "pads_are_rectangular": true,
+      "body_dimensions_mm": {
+        "length_nominal": 2.8,
+        "length_tolerance": 0.15,
+        "width_nominal": 1.8,
+        "width_tolerance": 0.1,
+        "overall_length_nominal": 3.7,
+        "overall_length_tolerance": 0.15
+      },
+      "manufacturer_height_max_mm": 1.4,
+      "prior_library_reference": "Diode_SMD:D_SOD-123F",
+      "model": {
+        "reference": "${KICAD10_3DMODEL_DIR}/Diode_SMD.3dshapes/D_SOD-123F.step",
+        "purpose": "Generic KiCad package visualization only; manufacturer dimensional evidence controls installed height, not this model"
+      },
+      "local": "controller/KUI_Footprints.pretty/HighDiode_SMF_SOD123FL.kicad_mod",
+      "drawing_axis_note": "Manufacturer p4 suggested layout: horizontal pad length1.2, vertical pad width1.4, horizontal centerline spacing2.85. Bidirectional CA part has no orientation-dependent electrical polarity; generic unidirectional cathode artwork is deliberately absent."
+    },
+    "Littelfuse_467_0603_Recommended": {
+      "footprint": "KUI_Footprints:Littelfuse_467_0603_Recommended",
+      "mpns": [
+        "046701.5NR",
+        "0467.500NR"
+      ],
+      "applies_to": [
+        "F20",
+        "F21"
+      ],
+      "manufacturer_source": "Littelfuse_467",
+      "pad_size_xy_mm": [
+        0.762,
+        1.09
+      ],
+      "pad_center_pitch_x_mm": 1.778,
+      "pads_are_rectangular": true,
+      "body_dimensions_mm": {
+        "length_nominal": 1.6,
+        "length_tolerance": 0.102,
+        "width_nominal": 0.813,
+        "width_tolerance": 0.076,
+        "coated_height_nominal": 0.33,
+        "coated_height_tolerance": 0.102
+      },
+      "manufacturer_height_max_mm": 0.432,
+      "prior_library_reference": "Fuse:Fuse_0603_1608Metric",
+      "model": {
+        "reference": "${KICAD10_3DMODEL_DIR}/Fuse.3dshapes/Fuse_0603_1608Metric.step",
+        "purpose": "Generic KiCad package visualization only; manufacturer dimensional evidence controls installed height, not this model"
+      },
+      "local": "controller/KUI_Footprints.pretty/Littelfuse_467_0603_Recommended.kicad_mod",
+      "drawing_axis_note": "Manufacturer reflow sketch is vertical: 1.09 is pad width, 0.762 is pad length, 1.02 is rounded inner gap, and 2.54 is overall span. Rotate into footprint X: each pad 0.762x1.09; center pitch 2.54-0.762=1.778; inner gap 1.778-0.762=1.016."
+    }
+  }
+}

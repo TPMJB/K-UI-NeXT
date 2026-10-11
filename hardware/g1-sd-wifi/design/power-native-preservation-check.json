@@ -1,0 +1,14 @@
+{
+  "tracks_and_vias": 12322,
+  "footprints": 351,
+  "route_coordinates_layers_nets_preserved": true,
+  "via_geometry_preserved": true,
+  "footprint_identity_placement_orientation_pin_nets_preserved": true,
+  "width_changes_by_net": {
+    "+3V3_LOGIC": 1298,
+    "+3V3_STORAGE": 8,
+    "FUSED_5V": 4
+  },
+  "before_board_sha256": "7d7c3d2693fd01a43f67d1618dabdd9e908bb48c382820c1bf2be7a41367bfc9",
+  "after_board_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8"
+}

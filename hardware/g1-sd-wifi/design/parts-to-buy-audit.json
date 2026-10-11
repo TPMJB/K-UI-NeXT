@@ -1,16 +1,19 @@
 {
   "status": "SOURCING_WORKSHEET; NOT_A_PRODUCTION_RELEASE",
-  "evidence_review_date": "2026-10-10",
+  "evidence_review_date": "2026-10-11",
   "quantity_basis": "Full component quantities for one complete assembly per variant; no scrap allowance, reel/MOQ rounding or inventory promise.",
   "source_sha256": {
     "design/blocks/bios.json": "6c78b14bf1bffda7ebc4ca913427aa4b466e4fa0b61a81a36b96ff39dee9ebe7",
     "design/blocks/controller.json": "d5fa2fa23fa4b1c01efa0ac48c27fdb21b2bb02ef6e40d25a76b317961147bd2",
     "design/blocks/frontend.json": "8756a42cfff6185fc4f77298d7800dd9c5f92a740fce2f05e43822d25e68b386",
-    "design/blocks/power-bus.json": "e498b10684d5ca5f264dbfeee7e0dad1069630c22c2f61d5993f13000b34d11f",
+    "design/blocks/power-bus.json": "7db62a4633f06aaae56ad7c7adaa0ab73f66799f8115d1b656d7958e2bbcf9fd",
     "design/flex-interface.json": "2fcee6e0acc78c7d8c799e0687c211fa49bbbc1af7ba152ec395a2c623cfa964",
-    "tools/generate_design.py": "4cb7549ac17aec16969d2dc496c6ff8dfac81f4176726de2e40fe0a4471fbec0",
-    "tools/generate_parts_list.py": "ccd5d715efd4e6ea3a7894859e0a712dd3b6b3e65d0fc441e638d5838a55fd59",
-    "design/procurement-evidence.json": "8f0a57dd23104c6d7770db0e37e21bc19d9cccf34f3cce283756aac7b1b3b38b"
+    "tools/generate_design.py": "bc56500116a58107408abca4843882647c212cabc5aaea59db4b2951f3e61842",
+    "tools/generate_parts_list.py": "87fab246286bb221e4f89bb769f3e9446921bb245d378ce396f0f0dc92df0c89",
+    "design/procurement-evidence.json": "83e04188782b4b68f2bfadd96e5f4b59dbc80c53ea9c8ed2f1e1f356c5d13cfd",
+    "design/sources/input-protection-footprints.json": "0b841fa295075a4d3e4e68c64615e4587bdce7668ace139e02cf07cebc12557a",
+    "controller/KUI_Footprints.pretty/HighDiode_SMF_SOD123FL.kicad_mod": "9021a815ab48310c281d3f9cfa8b39abb3529cc934b21c230f0af43ae0a02289",
+    "controller/KUI_Footprints.pretty/Littelfuse_467_0603_Recommended.kicad_mod": "112ea9cfbe1606d1f283a5e5ba72a96c6d91da92ecbd2a5fea0be818b36de11e"
   },
   "source_component_refs": 362,
   "purchased_component_refs": 300,
@@ -191,22 +194,17 @@
       "U203"
     ]
   },
-  "supplier_identity_verified_rows": 52,
-  "sourcing_pending_rows": 17,
-  "catalog_identity_verified_base_rows": 52,
+  "supplier_identity_verified_rows": 54,
+  "sourcing_pending_rows": 15,
+  "catalog_identity_verified_base_rows": 54,
   "sourcing_pending_base_rows": [
-    "0467.500NR",
-    "100010048",
-    "SMF5.0CA"
+    "100010048"
   ],
   "manual_base_purchase_rows": [
     "100010048"
   ],
-  "jlc_smt_catalog_verified_base_rows": 52,
-  "jlc_assembly_pending_base_rows": [
-    "0467.500NR",
-    "SMF5.0CA"
-  ],
+  "jlc_smt_catalog_verified_base_rows": 54,
+  "jlc_assembly_pending_base_rows": [],
   "jlc_fixture_required_base_rows": [
     "ASE-50.000MHZ-LC-T",
     "S7221-45R"
@@ -537,6 +535,7 @@
   "open_release_items": [
     "Carrier PCB is a design draft; procurement worksheet does not authorize fabrication or assembly release.",
     "Obtain assembler confirmation and live sourcing for every selected MPN; blank supplier codes intentionally remain sourcing_pending.",
+    "D21 High Diode SMF5.0CA and F20/F21 Littelfuse 467 source footprints reproduce manufacturer recommended lands; verify matching native pads and assembly preview. Sustained 12-V input fault clearing/energy, fuse current derating and host flex-contact coordination require bench qualification.",
     "Verify capacitor effective capacitance versus DC bias, temperature, tolerance and aging, especially 22 uF converter outputs and optional 100 uF reserve bank.",
     "Qualify switcher current peaks/thermal behavior and native RP235x marked-inductor orientation after placement/routing.",
     "Optional reserve charge resistor RC0805FR-0722RL needs pulse-overload qualification: ideal initial 1.14 W, approximately 5 mJ at 400 uF and 5 V; continuous wattage is insufficient evidence.",

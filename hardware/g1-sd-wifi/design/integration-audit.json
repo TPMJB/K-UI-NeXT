@@ -18,7 +18,7 @@
     },
     {
       "path": "design/blocks/power-bus.json",
-      "sha256": "e498b10684d5ca5f264dbfeee7e0dad1069630c22c2f61d5993f13000b34d11f"
+      "sha256": "7db62a4633f06aaae56ad7c7adaa0ab73f66799f8115d1b656d7958e2bbcf9fd"
     },
     {
       "path": "design/flex-interface.json",
@@ -34,11 +34,11 @@
     },
     {
       "path": "design/integrated-components.json",
-      "sha256": "a43f995ecb219ba7b7e22f150983aff83ba63a754957d325831f738f38c0a8cb"
+      "sha256": "decfdc150f128684002009b1d7cad4258c322ae34b83eeae503c9565b4332c41"
     },
     {
       "path": "controller/checks/netlist.xml",
-      "sha256": "791e47b16933a51b3abd7ea3e1ec6630f5aa6d4f806e0bc4bf2bd664c15cda6f"
+      "sha256": "5f7682c0132157ca532bb681e613cfde72322fb4ed3d9c092a8d6f13a1533cc3"
     },
     {
       "path": "tools/check_integration.py",

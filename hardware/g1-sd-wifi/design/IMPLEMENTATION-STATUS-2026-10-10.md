@@ -4,7 +4,7 @@ The design branch now contains the actual KiCad circuit, physical footprints, ca
 
 | Addition or decision | Implemented artifact | Remaining condition |
 | --- | --- | --- |
-| Retain GD-ROM device 0 and add ATA device 1 | MachXO2 taskfile/selection logic and separate hardware-qualified output enables | Native carrier route closure, physical bus timing and RP media firmware |
+| Retain GD-ROM device 0 and add ATA device 1 | MachXO2 taskfile/selection logic and separate hardware-qualified output enables | Physical bus timing, fault qualification and RP media firmware |
 | Explicit bridge activation | Default-off FPGA latch, two fresh keyed vendor frames on device 1, host/MCU relock and asynchronous safety-loss invalidation | Host and MCU must implement the documented protocol; physical timing remains open |
 | Shared device diagnostic | ATA 0x90 captured with either DEV selection, MCU result mailbox and no invented pass/IRQ | Actual firmware diagnostic and DASP/PDIAG discovery behavior remain unimplemented or unqualified |
 | Correct shared taskfile reception and final-write completion | Independent regression catches both original defects; final received write word asserts BSY until storage completion | MCU must actually implement media commit/error handling |
@@ -17,13 +17,13 @@ The design branch now contains the actual KiCad circuit, physical footprints, ca
 | C5 RF access | Local module and intact shield remain the mechanical baseline | External antenna route outside the metal shield and installed RF behavior remain unqualified |
 | C5 recovery without module USB | EN/BOOT sinks, controller UART and separate six-pad powered-module UART service access | RP/C5 update software; external UART recovery remains documented |
 | Power sequencing/backfeed | Separate logic/storage bucks, supervisors, supply-aware bus gates, C5 I/O powered from module output | Collapse-rate/off-state bench tests |
-| Separate power feed and fault protection | J20 5 V/GND pads behind F20 (1.5 A fast fuse), D21 (bidirectional 5 V TVS: a 12 V mis-wire opens F20) and Q20 (reverse block); host 3.3 V enters through one flex contact and F21 (0.5 A); the flex carries no console 5 V; 5 V and storage supply copper kept on the 1 oz outer layers and rated by an IPC-2221 check | Harness fuse at the console tap, installed harness and supply measurements |
+| Separate power feed and fault-protection provision | J20 5 V/GND pads behind F20 (1.5 A fast fuse), D21 (bidirectional 5 V TVS: intended mis-wire shunt; fuse/TVS coordination unqualified) and Q20 (reverse block); host 3.3 V enters through one flex contact and F21 (0.5 A); the flex carries no console 5 V; 5 V and storage supply copper kept on the 1 oz outer layers and rated by an IPC-2221 check | Corrected local-fault screen, fuse/TVS coordination, harness fuse at the console tap and supply measurements |
 | Power-loss provision | Upstream loss monitor, radio cutoff, DNP reserve mux/capacitors | Reserve energy and arbitrary-card durability are unqualified; no write-survival promise |
 | Optional BIOS | DNP x8 NOR, additional ROM-tap connector, hardware write qualification and physical independent stock CE recovery | Optional tap/switch harness, preprogrammed bank 0 and installation qualification; R410 must be removed in BIOS variant |
 | BIOS bank behavior | Factory bank 0; reset/power-warning do not silently switch a running CPU's mapped ROM | Runtime bank switching intentionally unavailable without whole-console reset control |
 | Modchip-style CN503 attachment | Two independent 20-conductor passive flex arms, retained connector housing, 0.5 mm Hirose sockets | Physical continuity/orientation and assembled bend/landing fit |
 | Measured heat-shield space | Provisional BIOS opening/CN503 notch and 6/8 mm height assumptions in a 59 × 115 mm native carrier (grown 10 mm north on 10 October to make routing possible) | Full existing-part obstacle map, registration of the larger outline, support and installed clearance |
-| Parts and assembly | BASE: 53 exact JLC SMT catalog types, 277 fitted SMT parts, actual native candidate CPL; separate manual C5 | Stock allocation, factory fixture agreement and manufacturer rotation preview |
+| Parts and assembly | BASE: 54 exact JLC SMT catalog types, 264 fitted SMT parts, actual native candidate CPL; separate manual C5 | Stock allocation, factory fixture agreement and manufacturer rotation preview |
 | Factory assembly conditions | Harwin contacts and Abracon clock oscillator explicitly identified as requiring assembly fixtures | Assembler confirmation; these are separate from the installed C5 clamp |
 | Filesystem ownership | K-UI sole filesystem owner; C5 transport does not mount media; exFAT baseline | Storage/filesystem software and power-cut testing |
 

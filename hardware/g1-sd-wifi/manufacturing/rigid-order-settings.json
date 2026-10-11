@@ -55,7 +55,7 @@
     "carrier_nominal_top_mm": 3.3,
     "status": "Support fixture and motherboard obstacle checks pending"
   },
-  "primary_capability_source": "https://jlcpcb.com/capabilities/pcb-capabilities/",
+  "primary_capability_source": "https://jlcpcb.com/resources/6-layer-pcbs",
   "note": "Draft fabrication settings matching native CAD. released:false until route, assembly, mechanical and engineering review close. No order ZIP is approved.",
   "power_vias": {
     "diameter_mm": 0.6,
@@ -94,6 +94,36 @@
         0.1
       ]
     ],
-    "note": "Nominal plan for a 0.8 mm six-layer build. Confirm that the fabricator offers six layers at 0.8 mm and substitute its standard stack of that thickness; the C5 and connector height budget assumes 0.8 mm. No impedance control is requested."
+    "note": "Nominal 0.8-mm six-layer plan. JLC six-layer capability page lists 0.8 mm; confirm actual order stack and replace this dielectric plan with the fabricator standard stack of that thickness. C5 and connector height budget assumes 0.8 mm. No impedance control requested; capability evidence is not order acceptance."
+  },
+  "capability_evidence": {
+    "review_date": "2026-10-11",
+    "source": "https://jlcpcb.com/resources/6-layer-pcbs",
+    "section": "6-Layer PCB Capabilities",
+    "status": "published_capability_comparison_only; order_draft_not_released",
+    "supplier_copper_layers": 6,
+    "offered_board_thickness_mm": [
+      0.8,
+      1.0,
+      1.2,
+      1.6,
+      2.0
+    ],
+    "thickness_tolerance_below_1mm_mm": 0.1,
+    "minimum_trace_width_mm": 0.09,
+    "minimum_trace_spacing_mm": 0.09,
+    "minimum_via_hole_mm": 0.15,
+    "minimum_via_diameter_mm": 0.25,
+    "finished_outer_copper_options_oz": [
+      1,
+      2
+    ],
+    "finished_inner_copper_options_oz": [
+      0.5,
+      1,
+      2
+    ],
+    "selected_design_comparison": "Six layers at 0.8 mm, 1-oz outer and 0.5-oz inner are listed. CAD 0.127-mm trace/clearance and 0.2/0.5-mm drilled vias exceed the published 0.09-mm trace/spacing and 0.15/0.25-mm via limits. Order-specific stackup, drilling/mask/assembly process and installed-fit acceptance remain unconfirmed.",
+    "scope": "Capabilities establish a published offered configuration and minimum comparison only; they do not promise inventory, price, delivery, factory acceptance or approved ordering."
   }
 }

@@ -28,9 +28,9 @@ For the C5, hard supports must establish a nominal 0.90 mm carrier-copper-to-mod
 
 These are the board's protection layers; keep every one of them in place.
 
-- **J20 5-V input:** F20 (1.5 A fast fuse), then D21 (bidirectional 5-V TVS: a mistaken 12-V feed opens F20) and Q20 (reverse-polarity block). F20 protects the board, not the wire to it: put a fast fuse of about 2 A in the harness at the console end, keep the pair short, and route it clear of shield edges and screw bosses. Strain-relieve the wires at J20 so they cannot tear the pads.
+- **J20 5-V input:** F20 (1.5 A fast fuse), then D21 (bidirectional 5-V TVS: intended to divert a mistaken 12-V feed; TVS/fuse clearing coordination unqualified) and Q20 (reverse-polarity block). F20 protects the board, not the wire to it: put a fast fuse of about 2 A in the harness at the console end, keep the pair short, and route it clear of shield edges and screw bosses. Strain-relieve the wires at J20 so they cannot tear the pads.
 - **Host 3.3 V from the flex:** one contact (B1) through F21 (0.5 A fast fuse). The flex carries no console 5 V at all.
-- **Copper:** every 5-V and storage supply track stays on the 1 oz outer layers and is rated by `tools/check_power_copper.py` (IPC-2221) to survive its fuse or regulator current; the report is in `design/power-copper-check.json`.
+- **Copper:** 5-V and storage supply tracks stay on the 1 oz outer layers. `tools/check_power_copper.py` screens local paths using IPC-2221; `design/power-copper-check.json` records remaining failures. Fuse nameplate current is not a fault-current bound, and converter peak limits are not a continuous-current guarantee. Resolve the fault-current/clearing review before console-powered use.
 - **Underside:** the 39 raw-G1 probe pads are bare copper on the bottom face, 2.5 mm above the motherboard. Cover the carrier underside with polyimide (Kapton) tape after probing, and use insulating supports, so no pad or via can touch a motherboard part or the shield.
 - **C5 module:** never fit a battery to the XIAO ESP32-C5. Its underside battery lands are not contacted by the carrier, and a lithium cell under the heat shield is a fire risk.
 - **First power:** always the current-limited bench start in step 2 below, before the board ever sees the console's supply.

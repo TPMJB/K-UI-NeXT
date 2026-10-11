@@ -1,164 +1,167 @@
 # Owner next steps — G1 bridge Rev A
 
-11 October 2026. Everything that can be done without the console, a meter
-or an account has been done on the design branch. These are the remaining
-items that need you, in the order that saves the most money and rework.
-Each says why it matters and what to send back.
+11 October 2026. Claude's `4b8c7d6` is the routed-board baseline. This
+follow-up resolves the JLCPCB/TI lookups, corrects protection-part lands
+and power screening, and refreshes the printable fit sheets. Final native
+checks are still required; **the release remains unapproved**. See
+[current order readiness](ORDER-READINESS-2026-10-11.md).
 
-## Before ordering the flex arms (one console-open session)
+Original item numbers are retained to match earlier messages. Items 8 and
+9 no longer need research from you. Fit alone will not resolve the power
+qualification or unfinished mounting fixture.
 
-**1. Prove which CN503 row is A and which is B (power off, meter on ohms).**
-CN503's supply and ground contacts are identical on both rows (A1/B1 3.3 V,
-A3/B3 5 V, grounds at 8/13/18/21, A25/B25 12 V), so no voltage check can tell
-the rows apart. The CSV comes from the iceGDROM riser symbol (the mating
-half) and the RDC trace, never from your board. If the rows are swapped,
-every data line lands on the wrong flex conductor and both arms must be
-remade. Four readings settle it, and also prove that the BIOS chip shares
-the bus. Expect low ohms (there are small series resistors, RA507–RA515):
+## One console-open session
 
-| IC501 pin | CN503 contact | Signal |
+**1. Prove CN503 row A/B by continuity before either flex order.** Power
+off; use ohms. Supply/ground contacts are identical on both rows: A1/B1
+3.3 V, A3/B3 5 V, grounds 8/13/18/21, A25/B25 12 V. Voltage cannot
+distinguish the rows. The proposed mapping came from a mating riser
+symbol and trace references, not a test on your motherboard. Swapped rows
+require new artwork for both arms.
+
+| IC501 pin | Proposed CN503 contact | Signal |
 |---|---|---|
 | 14 | A15 | DIOR- |
 | 15 | B11 | DD0 |
 | 17 | A11 | DD1 |
 | 4 | A19 | DA0 |
 
-Send back: the four readings, and the A/B silkscreen you probed against.
+Record all four readings and identify the physical row you call A in a
+photo or sketch. Expect low resistance including any series resistors.
 
-**2. Three voltages with the console on (careful probing).**
+**2. Confirm the supply levels if not already measured.**
 
 | Point | Expected |
 |---|---|
-| CN503 A1 or B1 (south end) | 3.3 V |
+| CN503 A1 or B1, proposed south/CN601 end | 3.3 V |
 | CN503 A3 or B3 | 5 V |
-| IC501 pin 23 (BIOS supply) | 3.3 V on VA1 |
+| IC501 pin 23, BIOS supply | 3.3 V on VA1 |
 
-These confirm the contact numbering runs from the south (CN601) end, and the
-3.3 V G1 level the buffers assume. A25/B25 (north end) carry 12 V; never
-bridge them.
+These check supply assumptions, not row identity or numbering by
+themselves. A25/B25 at the proposed north end carry 12 V. Use an insulated
+probe exposing only its tip.
 
-**3. One fit check with the 1:1 paper template** (`mechanical/`, print at
-Actual size, check both 50 mm bars). Lay it on the board with the shield off.
-Use sheets printed from commit 1488fac or later: earlier sheets drew the
-BIOS and CN503 reference boxes 10 mm north of the opening and notch they
-must line up with.
+**3. Check the refreshed 1:1 template.** Choose the Letter or A4 PDF in
+`mechanical/`, print at **Actual size / 100%**, and measure both 50 mm bars
+before cutting it out.
 
-- Do the capacitors CE501, CE502 and CE504 fall outside the carrier outline,
-  or under a cutout? Note their heights if they are under solid board.
-- Does the BIOS opening (29 × 19 mm) clear the chip body with margin? The
-  recorded 26.68 mm "body length" matches a 44-pin SOP's lead span exactly;
-  a typical 44-SOP body is about 28.2 mm, which leaves only about 0.4 mm at
-  each end.
-- Mark where screws or posts could support the carrier.
-- The carrier is now 59 × 115 mm. The extra 10 mm sits between the FPGA
-  area and the BIOS opening, so with the opening and the CN503 notch on
-  their parts the board reaches 10 mm further north (toward the AV
-  connector) than the earlier 59 × 105 mm draft; the south edge is where it
-  was. Check that the whole north part, the C5 module in particular, still
-  lies in the 8 mm region and clear of both thermal-contact chips. If north
-  does not fit, say so: the same 10 mm can go south instead.
+- Align the BIOS opening and CN503 notch, including the connector's wider
+  6.56 mm ends. Check body clearance, leads and solder access separately.
+- Mark CE501, CE502 and CE504; record height and overlap wherever a
+  capacitor would sit under solid carrier material.
+- Check the north extension near the AV connector, SD access, flex bends,
+  case posts and shield edges. The routed outline is 59 × 115 mm, extending
+  10 mm further north than the earlier 59 × 105 mm draft.
+- Mark both thermal-contact chips as zero-clearance keepouts. Confirm the
+  6 mm BIOS/CN503 region and the 8 mm region containing the C5.
+- Mark usable support anchors and photograph the template in place. The
+  earlier four-hole C5 support model intersects current copper; those are
+  not approved holes. Carrier support and C5 retention still need a new
+  mechanical design.
 
-## Any time, no teardown
+Paper checks XY fit. Separately check the complete vertical stack against
+its shield: 2.5 mm stand-off + 0.9 mm maximum carrier + 2.2 mm maximum
+FH12 connector = **5.6 mm**, leaving only **0.4 mm** in the 6 mm zone before
+other tolerances and insulation. Connector evidence is in
+`design/sources/connector-height-review.json`.
 
-**4. Free check of whether the GD-ROM answers for device 1 (B4).** Boot K-UI
-with no card in the SCI adapter and nothing on the rear port, and read the
-`IDE/CF initialization failed: ATA=N` line in the log. 5 means the drive
-likely answers for device 1 (bad news for the shared-bus design), 3 is
-favourable, 4 is inconclusive.
+**5. Measure the USB-free C5 and retained stack.** With a 2.5 mm stand-off,
+0.8 mm carrier and 0.90 mm copper-to-module-underside gap, the 8 mm zone
+allows **3.80 mm nominal for module plus clamp above the seating plane**.
+A 0.9 mm carrier reduces this to 3.70 mm before other tolerances and
+insulation. Measure the tallest feature after USB removal; the earlier
+4.48 mm reading included USB.
 
-**5. C5 height without its USB connector.** After you remove the USB
-connector, measure the tallest point of the module. The 8 mm region allows
-at most about 3.8 mm including the clamp.
+Sixteen spring contacts require at least 6.24 N combined reaction at the
+working gap. Hard supports and retention must maintain alignment and
+prevent bow or over-compression. Paper fit does not qualify this fixture.
 
-## Accounts and orders
+## No teardown needed
 
-**6. Confirm a six-layer 0.8 mm board on the JLCPCB order page.** The
-carrier is now six layers (signal / ground / signal / signal / 3.3 V /
-signal). Four layers could not route this outline. The C5 and connector
-height budget assumes 0.8 mm total thickness, so pick the fabricator's
-standard six-layer stack at 0.8 mm (no impedance control needed). If 0.8 mm
-is not offered for six layers, tell me the thinnest option; 1.0 mm costs
-0.2 mm of the 3.8 mm C5 budget. On the same capability page, confirm these
-minimums, which the board uses (the fabricator's site was not reachable
-from the design environment):
+**4. Check retained-GD-ROM device-1 response (B4).** Boot K-UI with no card
+in the SCI adapter and nothing on the rear port. Record the
+`IDE/CF initialization failed: ATA=N` line. The existing diagnostic treats
+5 as likely device-1 response, 3 as favourable and 4 as inconclusive.
+This preliminary check does not qualify shared-bus coexistence.
 
-- 0.127 mm (5 mil) track width and copper-to-copper spacing, on outer and
-  inner layers. At 0.15 mm the board could not be routed.
-- Vias with a 0.2 mm drill and 0.5 mm pad (signals), and a 0.3 mm drill
-  and 0.6 mm pad (supplies).
-- 1 oz outer and 0.5 oz inner copper. The supply current check assumes
-  these weights.
+## Supplier and release checks
 
-**7. Ask JLCPCB about two assembly fixtures.** Their catalog flags the Harwin
-S7221-45R spring contacts (C22445132) and the Abracon ASE oscillator
-(C596955) as needing assembly fixtures. Get their agreement before the
-assembly order.
+**6. Select the verified rigid-board options in the actual JLCPCB quote.**
+The official [six-layer capabilities](https://jlcpcb.com/resources/6-layer-pcbs)
+list 0.8 mm boards, 0.09 mm track/space and sufficiently small vias.
+Research is complete; confirm the uploaded-board quote retains:
 
-**8. Confirm two protection parts on JLC.** Both were added after the
-catalog check, and the makers' and JLC's sites were not reachable from the
-design environment. On the JLC parts page confirm:
+| Option | Required setting |
+|---|---|
+| Layers | Six: signal / ground / signal / signal / +3V3_LOGIC / signal |
+| Finished thickness | 0.8 mm; published tolerance ±0.1 mm |
+| Track/space | Support 0.127 mm / 0.127 mm minimum |
+| Signal vias | 0.2 mm drill / 0.5 mm copper diameter |
+| Supply vias | 0.3 mm drill / 0.6 mm copper diameter |
+| Copper | 1 oz outer / 0.5 oz inner |
 
-- D21, input TVS, SMF5.0CA: bidirectional ("CA"), 5.0 V working voltage,
-  breakdown above 6 V, SOD-123FL package.
-- F21, host 3.3 V fuse, Littelfuse 0467.500NR: 0.5 A fast, 0603, the same
-  family as F20 (C99559).
+Height and copper checks depend on these settings. A substituted stack
+needs a revised check before ordering.
 
-Send back both C-numbers so the purchasing list can record them.
+**7. Obtain assembly agreement.** Harwin S7221-45R, C22445132, and Abracon
+ASE, C596955, have catalog assembly-fixture flags. Have JLCPCB confirm the
+selected service can assemble them and explain any fixture charge or
+handling requirement. Inspect its placement/orientation preview. Factory
+assembly fixtures are separate from in-console C5 retention.
 
-**9. One datasheet number: the TPS62162 current limit.** TI's site was not
-reachable from the design environment. The supply check rates the 3.3 V
-storage rail and the logic-plane feed at 1.5 A, the assumed short-circuit
-current of the two TPS62162 converters. From the datasheet's electrical
-characteristics, send back the maximum high-side (switch) current limit.
-If it is above 1.5 A, I re-run the check at that current before you order.
+**8. Protection-part lookup completed.**
 
-**10. Accept or reject the engineering reviews.** The release exporter
-(`manufacturing/prepare_jlcpcb_release.py`) refuses to build order archives
-until every topic in `manufacturing/review-evidence.json` is accepted by
-you and `approved` is true. I do not mark these myself. Read
-`design/CARRIER-LAYOUT-REVIEW.md` and the check reports it links, then set
-each topic's status, reviewer, date and notes.
+| Ref | Exact selected part | JLCPCB code |
+|---|---|---|
+| D21 | High Diode SMF5.0CA, bidirectional 5 V, SOD-123FL, 1.4 mm maximum height | [C22458622](https://jlcpcb.com/partdetail/HighDiode-SMF50CA/C22458622) |
+| F21 | Littelfuse 0467.500NR, 0.5 A fast, 0603, exact NR suffix | [C206990](https://jlcpcb.com/partdetail/Littelfuse-0467500NR/C206990) |
 
-The carrier is now fully routed (DRC 0, unconnected 0, parity 0, supply
-check passing). Three layout choices deserve your eye in the review:
+Manufacturer-recommended lands have been applied to D21 and the F20/F21
+467-family fuses. Fresh native DRC/opens/parity/ERC are zero; BASE/DNP assembly exports use the final board. Catalog
+identity does not reserve stock; substitutions need electrical and
+package review.
 
-- Some signals run on In4.Cu, the +3V3_LOGIC plane layer, where the four
-  signal layers had no way left (listed with lengths in the review). They
-  cut slots in the plane; the plane stays connected and the supply check
-  passes, but signals crossing a slot on B.Cu or In3.Cu lose their nearest
-  return path there. For these slow bus and control lines that is
-  acceptable; say so if you disagree.
-- R2038 (USB D− series resistor) and C2016 (bypass for RP2350 pin 68)
-  swapped places beside the RP2350's north pins.
-- The review package (`tools/make_review_package.py`) plots the Gerbers
-  and renders for inspection; the files marked REVIEW-ONLY are not an
-  order.
+**9. TI current-limit lookup completed; corrected power review remains open.**
+The [TPS62160-family datasheet](https://www.ti.com/lit/ds/symlink/tps62160.pdf)
+gives a TPS62162 high-side limit of 1.45 A minimum, 1.95 A typical and
+**2.45 A maximum at VIN = 12 V, TJ = 25°C**. Delay can temporarily increase
+the peak. The corrected local-branch copper screen uses 2.5 A. It is not
+a guaranteed continuous fault-current bound or fuse-clearing qualification;
+the previous 1.5 A assumption was insufficient. Failures under that
+conservative screen require correction or justified qualification before
+release, not an automatic conclusion that continuous overheating occurs.
 
-**11. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
-but a placed-and-routed bitstream and real timing need Lattice's own tools,
-which need a Lattice account and licence file. Open-source tools cannot
-produce a MachXO2 bitstream with timing sign-off.
+**10. Review current evidence before release approval.** Read
+`design/CARRIER-LAYOUT-REVIEW.md` and its refreshed reports. The exporter
+requires an approved manifest and accepted reviews bound to current
+input hashes. Do not change approval flags merely to obtain an archive.
+REVIEW-ONLY files support inspection/quotation; they are not order files.
 
-## After the boards arrive
+Signal routes on In4.Cu cut slots in the +3V3_LOGIC plane. Connected planes
+and DC screening do not prove return-path integrity, bus timing or
+retained-drive coexistence. Final DRC, opens, parity, physical-pad and
+power reports must match the final board; unresolved checks remain
+release conditions.
 
-The bring-up order is in `manufacturing/BRINGUP.md`: bench power first, with
-no console, then the FPGA link, then SD, then the C5, and only then the
-console. The 5 V tap for J20 and its voltage during GD-ROM spin-up are
-measured then; R270 can be changed if the power-fail warning trips. Put a
-fast fuse of about 2 A in the J20 harness at the console end: the board's
-own fuse F20 protects the board, not the wire leading to it.
+**11. Diamond for functional bring-up.** FPGA simulation/mapping exists;
+vendor placement/routing, a bitstream and timing verification still need
+Lattice Diamond and an account/licence. This is a bring-up dependency,
+separate from consciously ordering an accepted first hardware prototype.
 
-Measure the board's steady 5 V input current once everything runs. F20 is
-rated 1.5 A, and the worst-case budget of 1.3 A loads it to 87 %. If the
-sustained current is above about 1.1 A, the fuse may open in normal use.
-That fails safe, but it is a nuisance; tell me and I will propose a
-larger fuse with matching copper.
+## After fabrication
 
-## Software still to write
+Follow `manufacturing/BRINGUP.md`: current-limited bench power, FPGA, SD,
+C5, then console integration. Do not seat the spring-contact C5 without
+qualified supports/retention. Measure J20 during GD-ROM spin-up and
+establish upstream harness protection: F20 cannot protect wire ahead of
+it, and fuse nameplate current alone does not bound fault current.
 
-Not hardware tasks, but needed before the bridge does anything:
+Compare measured steady 5 V current with exact F20 time-current and
+temperature derating data. The summed 1.35 A budget is 90% of its 1.5 A rating;
+check nuisance opening in the enclosure. Fuse changes need matching
+copper and protection coordination.
 
-- RP2350 firmware: ATA command engine, SD driver, FPGA link, PSRAM cache.
-- K-UI host driver: the two-frame NOP unlock, IDENTIFY, PIO mode 0 reads.
-- C5 firmware changes for the RP2350 link (the existing Wi-Fi bridge
-  firmware is a starting point).
+Firmware still needed before operation: RP2350 ATA/SD/link/PSRAM cache;
+K-UI NOP unlock, IDENTIFY and PIO reads; and C5-to-RP2350 link changes.
+These and real timing/coexistence tests remain deliberate prototype
+bring-up work, not completed functionality.
