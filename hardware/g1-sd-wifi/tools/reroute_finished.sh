@@ -3,6 +3,8 @@
 # Give the finished carrier back to Freerouting for more rip-up passes.
 #
 #   tools/reroute_finished.sh [PASSES] [SEED]
+#   UNLOCK='^BUS_' tools/reroute_finished.sh ...   also let Freerouting move
+#                                                  locked copper of these nets
 #
 # After tools/finish_carrier_routing.sh the board can still have open
 # connections that the grid gap closer cannot join without moving other
@@ -25,7 +27,7 @@ WORK=${WORK:-$(mktemp -d)}
 JAVA=${JAVA_HOME:+$JAVA_HOME/bin/}java
 JAVAC=${JAVA_HOME:+$JAVA_HOME/bin/}javac
 PRIORITY='^(ATA_|BUS_D|BUS_CS|BUS_RESET|LINK_|QSPI|MCU_USB|C5_M|SD_)'
-PASSES=${1:-8}
+PASSES=${1:-3}   # on a finished board nearly all the gain comes in the first pass
 SEED=${2:-5}
 REPORTS=(design/carrier-final-drc.json design/power-copper-check.json design/routing-2026-10-10)
 mkdir -p "$WORK/keep"
@@ -45,6 +47,25 @@ echo "before: $open_before unconnected, $bad_before violations"
 cp "$B" "$WORK/keep/"
 for r in "${REPORTS[@]}"; do [ -e "$ROOT/$r" ] && cp -r "$ROOT/$r" "$WORK/keep/"; done
 
+if [ -n "${UNLOCK:-}" ]; then
+    # Signal copper laid early and locked (the FPGA -> U36 bundle) may
+    # wander; unlocked, Freerouting can rip it up like the rest. Supply
+    # nets stay locked whatever the pattern says.
+    "$PY" - "$B" "$UNLOCK" <<'PY' 2>&1 | grep -v -e Debug -e 'memory leak' || true
+import json, re, sys, pcbnew
+sys.path.insert(0, sys.argv[1].rsplit('/controller/', 1)[0] + '/tools')
+from generate_board import OUTER_ONLY_NETS
+b = pcbnew.LoadBoard(sys.argv[1])
+keep = set(OUTER_ONLY_NETS) | {'GND', '+3V3_LOGIC', '+1V1_MCU', 'CONSOLE_3V3', 'CONSOLE_3V3_FLEX'}
+n = 0
+for t in b.GetTracks():
+    if t.IsLocked() and re.search(sys.argv[2], t.GetNetname()) and t.GetNetname() not in keep:
+        t.SetLocked(False)
+        n += 1
+pcbnew.SaveBoard(sys.argv[1], b)
+print(json.dumps({'unlocked_items': n}))
+PY
+fi
 "$PY" "$T/generate_board.py" export-dsn --dsn "$WORK/native.dsn" --signal-starter "$WORK/reroute.dsn" \
     --power-width 0.25 > /dev/null 2>&1
 if [ ! -f "$WORK/classes/Headless19Ripup.class" ]; then
@@ -53,7 +74,7 @@ if [ ! -f "$WORK/classes/Headless19Ripup.class" ]; then
 fi
 "$JAVA" -Xmx3g -Djava.awt.headless=true -cp "$FREEROUTING19:$WORK/classes" Headless19Ripup \
     "$WORK/reroute.dsn" "$WORK/reroute.ses" "$PASSES" 3600 3000 false "$PRIORITY" "$SEED" 3 20 \
-    > "$WORK/reroute.log" 2>&1
+    > "$WORK/reroute.log" 2>&1 || echo "Router stopped early; finishing its last saved session."
 grep -E '^(HEALED|LOADED|PASS|DONE)' "$WORK/reroute.log" | sed -E 's/ traces=.*//'
 
 bash "$T/finish_carrier_routing.sh" "$WORK/reroute.ses" || true
