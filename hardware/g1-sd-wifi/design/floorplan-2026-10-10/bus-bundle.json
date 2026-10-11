@@ -1,0 +1,57 @@
+{
+  "bundle": [
+    {
+      "net": "BUS_DMACKn",
+      "laid": true,
+      "segments": 33,
+      "vias": 2,
+      "length_mm": 70.3
+    },
+    {
+      "net": "BUS_DIOWn",
+      "laid": true,
+      "segments": 54,
+      "vias": 2,
+      "length_mm": 72.2
+    },
+    {
+      "net": "BUS_DIORn",
+      "laid": true,
+      "segments": 38,
+      "vias": 2,
+      "length_mm": 75.2
+    },
+    {
+      "net": "BUS_CS1n",
+      "laid": true,
+      "segments": 79,
+      "vias": 2,
+      "length_mm": 75.3
+    },
+    {
+      "net": "BUS_DA0",
+      "laid": true,
+      "segments": 116,
+      "vias": 2,
+      "length_mm": 81.6
+    },
+    {
+      "net": "BUS_DA1",
+      "laid": true,
+      "segments": 171,
+      "vias": 2,
+      "length_mm": 84.0
+    },
+    {
+      "net": "BUS_DA2",
+      "laid": false
+    },
+    {
+      "net": "BUS_CS0n",
+      "laid": true,
+      "segments": 48,
+      "vias": 2,
+      "length_mm": 80.8
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "board_sha256": "1cdfaf97173e7c8b3646aa9710358f1f7fa8fac37f7b0e19b50d0e6877848bed",
+  "board_sha256": "438d9f532a3a976d72de23daa49bd515411fb257bf12fb228ded69c7a68211b6",
   "fitted_bottom_components": 0,
   "probe_loading_qualified": false,
   "pads": [
@@ -248,11 +248,11 @@
       "net": "ATA_DA0",
       "endpoint": "U36.2",
       "xy_mm": [
-        30.315000000000005,
-        74.52499999999999
+        30.125000000000004,
+        84.725
       ],
       "side": "B.Cu bare copper",
-      "added_stub_length_mm": 2.9966814979239973,
+      "added_stub_length_mm": 2.8000000000000007,
       "maximum_added_stub_mm": 3.0,
       "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/ecffb950-8fb3-59ec-bfbf-b85fa2588d4e",
       "bench_access": "carrier removed; insulate underside after installation",
@@ -263,11 +263,11 @@
       "net": "ATA_DA1",
       "endpoint": "U36.4",
       "xy_mm": [
-        28.325000000000003,
-        76.025
+        25.330000000000002,
+        86.125
       ],
       "side": "B.Cu bare copper",
-      "added_stub_length_mm": 1.0,
+      "added_stub_length_mm": 1.9975046933611953,
       "maximum_added_stub_mm": 3.0,
       "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/7cf8b373-65f4-581f-a36e-3b00b3404b87",
       "bench_access": "carrier removed; insulate underside after installation",
@@ -278,11 +278,11 @@
       "net": "ATA_DA2",
       "endpoint": "U36.6",
       "xy_mm": [
-        29.320000000000004,
-        77.22500000000001
+        25.19996318216405,
+        87.89440189922553
       ],
       "side": "B.Cu bare copper",
-      "added_stub_length_mm": 1.9975046933611953,
+      "added_stub_length_mm": 2.1999999999999997,
       "maximum_added_stub_mm": 3.0,
       "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/11a1d1b7-c0f7-5bf7-aaa3-d007bcec6709",
       "bench_access": "carrier removed; insulate underside after installation",
@@ -293,8 +293,8 @@
       "net": "ATA_CS0n",
       "endpoint": "U36.8",
       "xy_mm": [
-        30.315000000000005,
-        78.425
+        24.335,
+        88.825
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 2.9966814979239973,
@@ -308,11 +308,11 @@
       "net": "ATA_CS1n",
       "endpoint": "U36.11",
       "xy_mm": [
-        32.05,
-        79.925
+        31.054999999999996,
+        90.025
       ],
       "side": "B.Cu bare copper",
-      "added_stub_length_mm": 1.0,
+      "added_stub_length_mm": 1.9975046933611953,
       "maximum_added_stub_mm": 3.0,
       "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/7c13f419-8bee-5ae7-a3c5-a91de8012b44",
       "bench_access": "carrier removed; insulate underside after installation",
@@ -324,7 +324,7 @@
       "endpoint": "U36.13",
       "xy_mm": [
         32.05,
-        78.625
+        88.625
       ],
       "side": "B.Cu bare copper",
       "added_stub_length_mm": 1.0,
@@ -338,11 +338,11 @@
       "net": "ATA_DIOWn",
       "endpoint": "U36.15",
       "xy_mm": [
-        34.05,
-        77.325
+        31.054999999999996,
+        87.42499999999998
       ],
       "side": "B.Cu bare copper",
-      "added_stub_length_mm": 1.0,
+      "added_stub_length_mm": 1.9975046933611953,
       "maximum_added_stub_mm": 3.0,
       "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/a089c049-ce80-5b16-9d7d-a9f1f9b82687",
       "bench_access": "carrier removed; insulate underside after installation",
@@ -368,11 +368,11 @@
       "net": "ATA_DMACKn",
       "endpoint": "U36.17",
       "xy_mm": [
-        31.054999999999996,
-        75.92500000000001
+        30.059999999999995,
+        86.22500000000001
       ],
       "side": "B.Cu bare copper",
-      "added_stub_length_mm": 1.9975046933611953,
+      "added_stub_length_mm": 2.9966814979239973,
       "maximum_added_stub_mm": 3.0,
       "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/e08d5046-6a94-5406-8cc7-a6286ae7c2de",
       "bench_access": "carrier removed; insulate underside after installation",
@@ -563,11 +563,11 @@
       "net": "GND",
       "endpoint": "U36.10",
       "xy_mm": [
-        29.320000000000004,
-        79.825
+        25.325000000000003,
+        89.92500000000001
       ],
       "side": "B.Cu bare copper",
-      "added_stub_length_mm": 1.9975046933611953,
+      "added_stub_length_mm": 2.0,
       "maximum_added_stub_mm": 3.0,
       "native_hierarchy_path": "/1f4aac18-d1c6-5016-84d6-936bb5450eb3/2642bc62-2261-5430-8a6b-35ae0c82aa14",
       "bench_access": "carrier removed; insulate underside after installation",

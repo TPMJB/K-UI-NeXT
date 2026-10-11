@@ -73,22 +73,33 @@ def add_probes(board,replace=None,components=ROOT/'design/integrated-components.
     bankindex={}
     for ref,c,src in endpoints:
         a=f.point(src.GetPosition());net=src.GetNetname();owner=c['probe_access']['endpoint_reference'];candidates=[]
+        body=None
+        if owner=='U36':
+            # No track fits between U36's 0.65 mm pins, so its east-row
+            # FPGA-side outputs run west under the body on F.Cu and drop
+            # through vias in the body's west half. Every U36 probe staggers
+            # west (east-row probes under the east half, west-row probes
+            # outside), and none may sit in the west half of the body.
+            box=g.physical_box(fps[owner])
+            body=(box[0]-g.ORIGIN[0]-.6,box[1]-g.ORIGIN[1]-.6,(box[0]+box[2])/2-g.ORIGIN[0],box[3]-g.ORIGIN[1]+.6)
         if owner in ['U35','U36']:
             box=g.physical_box(fps[owner]);cx=(box[0]+box[2])/2-g.ORIGIN[0]
             direction=1 if a[0]<cx else -1
+            if owner=='U36':direction=-1
             index=bankindex.get(owner,0);bankindex[owner]=index+1
             col=index%3;candidates.append((a[0]+direction*[1.0,1.995,2.99][col],a[1]+ORDER*[0,.1,.2][col]))
         for radius in [1.0,1.2,1.4,1.6,1.8,2.0,2.2,2.4,2.6,2.8,3.0]:
             for angle in range(0,360,15):
                 r=math.radians(angle);candidates.append((a[0]+radius*math.cos(r),a[1]+radius*math.sin(r)))
-        candidate=next((v for v in candidates if math.dist(a,v)<=3.00001 and check(a,v,net)),None)
+        clear=lambda v:body is None or not (body[0]<v[0]<body[2] and body[1]<v[1]<body[3])
+        candidate=next((v for v in candidates if math.dist(a,v)<=3.00001 and clear(v) and check(a,v,net)),None)
         if candidate is None:
             fine=[]
             for step in range(18,61):
                 radius=step*.05
                 for angle in range(0,360,5):
                     rad=math.radians(angle);fine.append((a[0]+radius*math.cos(rad),a[1]+radius*math.sin(rad)))
-            candidate=next((v for v in fine if check(a,v,net)),None)
+            candidate=next((v for v in fine if clear(v) and check(a,v,net)),None)
         if candidate is None:failed.append(ref);continue
         fp=g.footprint(c);board.Add(fp);fp.SetPosition(g.p(*candidate));fp.Flip(fp.GetPosition(),False)
         fp.SetPath(pcbnew.KIID_PATH(native[ref]['path']));fp.SetValue(native[ref]['value'])

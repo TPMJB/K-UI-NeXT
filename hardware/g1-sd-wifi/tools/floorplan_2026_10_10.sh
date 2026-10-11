@@ -19,10 +19,13 @@
 #   4. bypass capacitors go back next to their owners (the moved ones first)
 #      and D21 next to F20's output, F21 next to J51's 3.3-V pin,
 #      and the optional reserve bank sits beside the power mux it feeds;
-#   5. the raw-G1 data probes move to U40's pins (same nets, open space);
+#   5. the raw-G1 data probes move to U40's pins (same nets, open space), and
+#      U36's control probes move out from under its body;
 #   6. the high-current supply trunks (J20 -> F20 -> Q20, Q20 -> U20/U71/C200)
 #      are laid wide and locked, and the logic converter's output gets three
-#      power vias into its plane (tools/route_power_trunks.py);
+#      power vias into its plane (tools/route_power_trunks.py); the eight
+#      FPGA -> U36 host-control lines are laid as a locked bundle down the
+#      west corridor (tools/route_bus_bundle.py);
 #   7. GND and +3V3_LOGIC fanout, power-return and thermal vias, six-layer stack.
 # Needs KiCad 10's Python as $PY (and PYNP with numpy/Pillow for the trunk
 # step) and kicad-cli as $KICAD10_CLI. Any failing step stops the script.
@@ -70,7 +73,7 @@ run "$T/place_local_bypass.py" --board "$B" --max-radius 10 --report "$R/bypass-
 # 1 mm corridor for the F20 -> Q20 input trunk.
 run "$T/move_cluster.py" --board "$B" --owner C208 --to 53.9,104.95,0 --drop-copper --report "$R/move-c208.json"
 run "$T/add_carrier_raw_probes.py" "$B" "$B" \
-    $(for n in $(seq 100 115) 128 136; do printf -- '--replace TP%s ' "$n"; done)
+    $(for n in $(seq 100 115) 128 136 $(seq 116 122) 124 137; do printf -- '--replace TP%s ' "$n"; done)
 # Supply trunks first, locked, so plane fanouts and the router work around them.
 run_with "$PYNP" "$T/route_power_trunks.py" --board "$B" --report "$R/power-trunks.json"
 run "$T/add_carrier_ground_fanout.py" "$B" "$B" --report "$R/fanout-gnd.json"
@@ -80,3 +83,5 @@ run "$T/add_carrier_ground_fanout.py" "$B" "$B" --net +3V3_LOGIC --report "$R/fa
 run "$T/add_power_vias.py" --board "$B" --pad J20.2=2x2@0.3/0.6 \
     --pad U21.9=1x2@0.2/0.5 --pad U22.9=1x2@0.2/0.5 --report "$R/power-vias.json"
 run "$T/set_six_layer_stack.py" --board "$B"
+# The bundle uses In2/In3, which exist only on the six-layer board.
+run_with "$PYNP" "$T/route_bus_bundle.py" --board "$B" --report "$R/bus-bundle.json"

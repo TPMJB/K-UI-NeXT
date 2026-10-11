@@ -664,10 +664,10 @@
     {
       "pad": "R203.1",
       "xy_mm": [
-        44.089999999999996,
+        42.69,
         100.2525
       ],
-      "stub_length_mm": 0.6000000000000014,
+      "stub_length_mm": 2.0,
       "via_diameter_mm": 0.5,
       "via_drill_mm": 0.2
     },
@@ -1207,8 +1207,8 @@
     "C2001.1"
   ],
   "already_serviced_pads": 30,
-  "native_unconnected_count_after": 477,
+  "native_unconnected_count_after": 476,
   "complete_layout_qualified": false,
-  "input_board_sha256": "d493d9b9d9a86eac924a73cb5ef5682cdc394927c9579a86f8c683a22b2ea39c",
-  "output_board_sha256": "c90de1a384d484476f399efe7f5121a5305a20eb5441592163b668b960c02d3f"
+  "input_board_sha256": "0c7619751fb874d74e65d62fb7529d4173d9ebc0a7c4e81af38fdf7a17a11f57",
+  "output_board_sha256": "b24992c37a380b9c24f5387d13d92546f68c88f21123644c5052b2832ab771b1"
 }

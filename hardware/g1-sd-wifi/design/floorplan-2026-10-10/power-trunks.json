@@ -47,24 +47,24 @@
     {
       "net": "PRIMARY_5V",
       "from": "Q20.2",
-      "to": "U71.1",
+      "to": "C235.1",
       "width_mm": 0.6,
-      "why": "0.6 A to the C5 load switch",
+      "why": "0.6 A towards the C5 load switch",
       "necks": 0,
-      "segments": 36,
+      "segments": 30,
       "vias": 2,
-      "length_mm": 32.42
+      "length_mm": 31.02
     },
     {
       "net": "PRIMARY_5V",
-      "from": "U71.1",
-      "to": "C235.1",
+      "from": "C235.1",
+      "to": "U71.1",
       "width_mm": 0.6,
-      "why": "C5 switch input capacitor",
+      "why": "C5 load switch input, through its capacitor",
       "necks": 0,
-      "segments": 5,
+      "segments": 9,
       "vias": 0,
-      "length_mm": 5.19
+      "length_mm": 5.21
     },
     {
       "net": "PRIMARY_5V",

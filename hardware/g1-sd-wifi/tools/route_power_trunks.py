@@ -40,10 +40,17 @@ TRUNKS = [
     ('FUSED_5V', 'F20.2', 'Q20.3', (1.0, 0.8, 0.6), {F}, '1.3 A fuse to reverse-polarity FET'),
     ('FUSED_5V', 'F20.2', 'D21.1', (0.8, 0.6, 0.5), {F}, 'TVS clamp path, fault current until F20 opens'),
     ('PRIMARY_5V', 'Q20.2', 'U20.3', (0.5, 0.4), {F}, '0.75 A into the power mux'),
-    ('PRIMARY_5V', 'Q20.2', 'U71.1', (0.6, 0.5, 0.4), {F, B}, '0.6 A to the C5 load switch'),
-    ('PRIMARY_5V', 'U71.1', 'C235.1', (0.6, 0.5, 0.4), {F, B}, 'C5 switch input capacitor'),
+    ('PRIMARY_5V', 'Q20.2', 'C235.1', (0.6, 0.5, 0.4), {F, B}, '0.6 A towards the C5 load switch'),
+    ('PRIMARY_5V', 'C235.1', 'U71.1', (0.6, 0.5, 0.4), {F, B}, 'C5 load switch input, through its capacitor'),
     ('PRIMARY_5V', 'Q20.2', 'C200.1', (0.8, 0.6, 0.5), {F}, 'input bulk capacitor'),
 ]
+
+
+# Local mm (x0, y0, x1, y1) no trunk may enter: U36's pin rows and their
+# escapes towards J51. Every pin of that 0.65 mm-pitch buffer must leave
+# straight out and drop through a via beside it; a supply trunk under it
+# (even on B.Cu, which blocks those vias) cut off the FPGA control lines.
+KEEPOUT = [(25.0, 83.0, 36.3, 95.0)]
 
 
 # Plane feeds: net, pad, number of POWER vias beside the pad (never inside
@@ -137,6 +144,11 @@ def main():
         done = None
         for width in widths:
             track, via = cg.build(board, None, width, cg.POWER_VIA)
+            for x0, y0, x1, y1 in KEEPOUT:
+                win = (slice(int(y0 / cg.G), int(y1 / cg.G) + 1), slice(int(x0 / cg.G), int(x1 / cg.G) + 1))
+                via[win] = -1
+                for layer in cg.ROUTE_LAYERS:
+                    track[layer][win] = -1
             sa, sb = end_cells(track, pa, net, allowed), end_cells(track, pb, net, allowed)
             necks, reachable = [], True
             for pads, cells in ((pa, sa), (pb, sb)):
@@ -179,6 +191,11 @@ def main():
         placed = []
         for _ in range(count):
             track, via = cg.build(board, None, width, cg.POWER_VIA)
+            for x0, y0, x1, y1 in KEEPOUT:
+                win = (slice(int(y0 / cg.G), int(y1 / cg.G) + 1), slice(int(x0 / cg.G), int(x1 / cg.G) + 1))
+                via[win] = -1
+                for layer in cg.ROUTE_LAYERS:
+                    track[layer][win] = -1
             start = end_cells(track, pads, net, {F})
             c = pads[0].GetPosition()
             ci, cj = cg.to_cell(c.x, c.y)
