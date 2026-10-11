@@ -163,14 +163,20 @@ def net_graph(board, net, pads):
                 for other, q in by_cell.get((layer, p.x // cell + dx, p.y // cell + dy), []):
                     if other != node and abs(p.x - q.x) <= tol and abs(p.y - q.y) <= tol:
                         g.join(node, other)
-    # Ends inside a via or a pad belong to it; vias inside a pad too.
+    # Ends on a via or a pad belong to it; vias inside a pad too. A track's
+    # round end may stop just outside a pad (a rounded corner, say) and
+    # still overlap it; it counts when its centre is within a quarter of the
+    # track width of the pad, so the overlap is at least 87 % of the width.
+    def reach(node):
+        return segs[node[1]].GetWidth() // 4
+
     for j, v in enumerate(vias):
         for node, layer, p in ends:
-            if v.HitTest(p):
+            if v.HitTest(p, reach(node)):
                 g.join(node, ('via', j))
     for name, pad in pads.items():
         for node, layer, p in ends:
-            if pad.IsOnLayer(layer) and pad.HitTest(p):
+            if pad.IsOnLayer(layer) and pad.HitTest(p, reach(node)):
                 g.join(node, ('pad', name))
         for j, v in enumerate(vias):
             if pad.HitTest(v.GetPosition()):

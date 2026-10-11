@@ -3,6 +3,7 @@
 // No router algorithms or design-rule checks are patched. Native KiCad DRC
 // and circuit parity remain required after every imported session.
 import app.freerouting.board.*;
+import app.freerouting.geometry.planar.*;
 import app.freerouting.designforms.specctra.DsnFile;
 import app.freerouting.designforms.specctra.SpecctraSesFileWriter;
 import app.freerouting.datastructures.*;
@@ -21,6 +22,44 @@ public final class Headless19Ripup {
     public boolean is_stop_requested() { return stopped || System.nanoTime()>=expires; }
   }
   static int incomplete(RoutingBoard b) { return new RatsNest(b,Locale.US).incomplete_count(); }
+  // Rerouting a finished board exported by KiCad: some imported trace ends
+  // miss a pin, via or trace end by a rounding step or two (KiCad and the
+  // DSN round pad and track coordinates separately). KiCad counts those as
+  // connected; Freerouting needs exact contact. Move such an end onto the
+  // item it misses (at most tol DSN units), so the router starts from the
+  // board's real open connections.
+  static int heal(RoutingBoard b,int tol) {
+    int healed=0;
+    for(int round=0;round<4;round++) {
+      Set<Item> done=new HashSet<>();
+      for(RatsNest.AirLine l:new RatsNest(b,Locale.US).get_airlines()) {
+        if(l.from_corner.distance(l.to_corner)>tol) continue;
+        Item tr,other; FloatPoint end,target;
+        if(l.from_item instanceof PolylineTrace&&!done.contains(l.from_item)) {tr=l.from_item;other=l.to_item;end=l.from_corner;target=l.to_corner;}
+        else if(l.to_item instanceof PolylineTrace&&!done.contains(l.to_item)) {tr=l.to_item;other=l.from_item;end=l.to_corner;target=l.from_corner;}
+        else continue;
+        // Locked copper (supply trunks, the bus bundle, fanouts) is laid at
+        // KiCad's exact pad centres, so it is the copper that misses most; it
+        // is moved by at most tol and keeps its fixed state.
+        if(done.contains(other)) continue;
+        PolylineTrace t=(PolylineTrace)tr;
+        // Imported copper has integer corners; rounding the approximations
+        // gives them back exactly (corner_arr() may hold rational points).
+        FloatPoint[] f=t.polyline().corner_approx_arr();
+        Point[] c=new Point[f.length];
+        for(int i=0;i<f.length;i++) c[i]=f[i].round();
+        boolean first=f[0].distance(end)<=f[f.length-1].distance(end);
+        c[first?0:c.length-1]=other instanceof DrillItem?((DrillItem)other).get_center():target.round();
+        int[] nets=new int[t.net_count()];
+        for(int i=0;i<nets.length;i++) nets[i]=t.get_net_no(i);
+        b.remove_item(t);
+        b.insert_trace(c,t.get_layer(),t.get_half_width(),nets,t.clearance_class_no(),t.get_fixed_state());
+        done.add(t);done.add(other);healed++;
+      }
+      if(done.isEmpty()) break;
+    }
+    return healed;
+  }
   static void checkpoint(RoutingBoard b,Path path,String design) throws Exception {
     Path temp=path.resolveSibling(path.getFileName().toString()+".writing");
     try(OutputStream out=Files.newOutputStream(temp)) {
@@ -58,7 +97,7 @@ public final class Headless19Ripup {
     return result;
   }
   public static void main(String[] args) throws Exception {
-    if(args.length<2) throw new IllegalArgumentException("Headless19Ripup input.dsn output.ses [maxPasses=4] [globalSeconds=300] [perItemMillis=800] [fanout=false] [priorityNetRegex] [seed=0] [ripupCap=0]");
+    if(args.length<2) throw new IllegalArgumentException("Headless19Ripup input.dsn output.ses [maxPasses=4] [globalSeconds=300] [perItemMillis=800] [fanout=false] [priorityNetRegex] [seed=0] [ripupCap=0] [healUnits=0]");
     Path input=Paths.get(args[0]),output=Paths.get(args[1]);
     int maxPasses=args.length>2?Integer.parseInt(args[2]):4;
     int globalSeconds=args.length>3?Integer.parseInt(args[3]):300;
@@ -73,6 +112,9 @@ public final class Headless19Ripup {
     // other nets aside.
     final long seed=args.length>7?Long.parseLong(args[7]):0L;
     final int ripupCap=args.length>8?Integer.parseInt(args[8]):0;
+    // Rerouting a KiCad-exported finished board: snap trace ends within this
+    // many DSN units of the item they touch in KiCad (0 = off; see heal()).
+    final int healUnits=args.length>9?Integer.parseInt(args[9]):0;
     final Random rng=new Random(seed);
     String design=input.getFileName().toString();
     BoardHandlingHeadless h=new BoardHandlingHeadless(Locale.US,false,0.01f);
@@ -97,6 +139,7 @@ public final class Headless19Ripup {
     settings.autoroute_settings.set_preferred_direction_trace_costs(bottom,1.2);
     settings.autoroute_settings.set_against_preferred_direction_trace_costs(bottom,2.2);
     Deadline stop=new Deadline(globalSeconds);
+    if(healUnits>0) System.out.printf("HEALED trace_ends=%d%n",heal(b,healUnits));
     int initial=incomplete(b),best=initial;
     System.out.printf("LOADED pins=%d traces=%d vias=%d incomplete=%d layers=%d%n",b.get_pins().size(),b.get_traces().size(),b.get_vias().size(),initial,b.get_layer_count());
     checkpoint(b,output,design);

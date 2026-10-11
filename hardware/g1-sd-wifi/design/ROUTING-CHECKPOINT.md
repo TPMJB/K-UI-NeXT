@@ -57,3 +57,7 @@ git add design/routing-checkpoint && git commit  # make the checkpoint durable
    - Confirm 0.127 mm track and space with the fabricator.
    - Confirm the TPS62162 current limit; 1.5 A is assumed for the plane-feed and storage fault ratings.
    - F20 runs at 87 % of its 1.5 A rating at the full 1.3 A worst-case budget. Measure the real load: sustained current should stay under about 1.1 A, or the fuse may open in normal use. That is a safe failure, but a nuisance.
+
+## Finishing in progress (11 October 2026, 05:26 UTC)
+
+`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing: the 31-open session imported and finished (`finish_carrier_routing.sh`), then +5V_C5 laid by `tools/force_supply_route.py` (locked, 0.4 mm, F.Cu/B.Cu), which cut eight signal nets. Copy it over `controller/KUI-G1-Bridge-RevA.kicad_pcb` and continue with `tools/reroute_finished.sh` (Freerouting round trip with trace-end healing, kept only when it lowers the open count), repeated while it improves. The committed `controller/` board is still the placed board the routing checkpoint belongs to.
