@@ -1,6 +1,6 @@
 # Owner next steps — G1 bridge Rev A
 
-10 October 2026. Everything that can be done without the console, a meter
+11 October 2026. Everything that can be done without the console, a meter
 or an account has been done on the design branch. These are the remaining
 items that need you, in the order that saves the most money and rework.
 Each says why it matters and what to send back.
@@ -38,7 +38,10 @@ These confirm the contact numbering runs from the south (CN601) end, and the
 bridge them.
 
 **3. One fit check with the 1:1 paper template** (`mechanical/`, print at
-Actual size, check both 50 mm bars). Lay it on the board with the shield off:
+Actual size, check both 50 mm bars). Lay it on the board with the shield off.
+Use sheets printed from commit 1488fac or later: earlier sheets drew the
+BIOS and CN503 reference boxes 10 mm north of the opening and notch they
+must line up with.
 
 - Do the capacitors CE501, CE502 and CE504 fall outside the carrier outline,
   or under a cutout? Note their heights if they are under solid board.
@@ -75,7 +78,16 @@ signal). Four layers could not route this outline. The C5 and connector
 height budget assumes 0.8 mm total thickness, so pick the fabricator's
 standard six-layer stack at 0.8 mm (no impedance control needed). If 0.8 mm
 is not offered for six layers, tell me the thinnest option; 1.0 mm costs
-0.2 mm of the 3.8 mm C5 budget.
+0.2 mm of the 3.8 mm C5 budget. On the same capability page, confirm these
+minimums, which the board uses (the fabricator's site was not reachable
+from the design environment):
+
+- 0.127 mm (5 mil) track width and copper-to-copper spacing, on outer and
+  inner layers. At 0.15 mm the board could not be routed.
+- Vias with a 0.2 mm drill and 0.5 mm pad (signals), and a 0.3 mm drill
+  and 0.6 mm pad (supplies).
+- 1 oz outer and 0.5 oz inner copper. The supply current check assumes
+  these weights.
 
 **7. Ask JLCPCB about two assembly fixtures.** Their catalog flags the Harwin
 S7221-45R spring contacts (C22445132) and the Abracon ASE oscillator
@@ -93,7 +105,21 @@ design environment. On the JLC parts page confirm:
 
 Send back both C-numbers so the purchasing list can record them.
 
-**9. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
+**9. One datasheet number: the TPS62162 current limit.** TI's site was not
+reachable from the design environment. The supply check rates the 3.3 V
+storage rail and the logic-plane feed at 1.5 A, the assumed short-circuit
+current of the two TPS62162 converters. From the datasheet's electrical
+characteristics, send back the maximum high-side (switch) current limit.
+If it is above 1.5 A, I re-run the check at that current before you order.
+
+**10. Accept or reject the engineering reviews.** The release exporter
+(`manufacturing/prepare_jlcpcb_release.py`) refuses to build order archives
+until every topic in `manufacturing/review-evidence.json` is accepted by
+you and `approved` is true. I do not mark these myself. Read
+`design/CARRIER-LAYOUT-REVIEW.md` and the check reports it links, then set
+each topic's status, reviewer, date and notes.
+
+**11. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
 but a placed-and-routed bitstream and real timing need Lattice's own tools,
 which need a Lattice account and licence file. Open-source tools cannot
 produce a MachXO2 bitstream with timing sign-off.
@@ -106,6 +132,12 @@ console. The 5 V tap for J20 and its voltage during GD-ROM spin-up are
 measured then; R270 can be changed if the power-fail warning trips. Put a
 fast fuse of about 2 A in the J20 harness at the console end: the board's
 own fuse F20 protects the board, not the wire leading to it.
+
+Measure the board's steady 5 V input current once everything runs. F20 is
+rated 1.5 A, and the worst-case budget of 1.3 A loads it to 87 %. If the
+sustained current is above about 1.1 A, the fuse may open in normal use.
+That fails safe, but it is a nuisance; tell me and I will propose a
+larger fuse with matching copper.
 
 ## Software still to write
 

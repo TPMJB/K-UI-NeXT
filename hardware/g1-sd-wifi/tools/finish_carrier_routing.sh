@@ -53,10 +53,16 @@ if [ "$(sha256sum "$PRO")" != "$PRO_SUM" ]; then
 fi
 "$KICAD10_CLI" pcb drc --format json --severity-all --schematic-parity --refill-zones \
     -o "$ROOT/design/carrier-final-drc.json" "$B" > /dev/null 2>&1 || true
-python3 - "$ROOT/design/carrier-final-drc.json" <<'PY'
+# Release gates: DRC, unconnected and parity all 0, and the supply current
+# check passing. The board is saved either way so the work can continue.
+python3 - "$ROOT/design/carrier-final-drc.json" "$ROOT/design/power-copper-check.json" <<'PY'
 import collections, json, sys
 r = json.load(open(sys.argv[1]))
 v = collections.Counter(x['type'] for x in r['violations'])
-print(json.dumps({'violations': sum(v.values()), 'by_type': dict(v), 'unconnected': len(r['unconnected_items']),
-                  'parity': len(r.get('schematic_parity', []))}))
+gates = {'violations': sum(v.values()), 'by_type': dict(v), 'unconnected': len(r['unconnected_items']),
+         'parity': len(r.get('schematic_parity', [])), 'power_check_pass': json.load(open(sys.argv[2]))['pass']}
+print(json.dumps(gates))
+if gates['violations'] or gates['unconnected'] or gates['parity'] or not gates['power_check_pass']:
+    sys.exit('NOT FINISHED: a release gate is open (see above).')
+print('All release gates pass.')
 PY

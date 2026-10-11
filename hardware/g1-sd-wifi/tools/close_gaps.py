@@ -633,21 +633,34 @@ def route_pairs(board, pairs, nets, margin, protected):
             sa = {c for c in sa if c[0] in allowed}
             sb = {c for c in sb if c[0] in allowed}
         width = TRACK
+        # The margin box keeps searches short; a pair it cannot join is tried
+        # once more over the whole board (a detour round a full region).
+        boxes = (box, (0, 0, NX - 1, NY - 1))
+        path = None
         if name in protected:
             # Supply copper is routed at a supply width or not at all.
-            path = None
             for width in POWER_TRACKS:
                 wide = build(board, None, width, POWER_VIA)
-                path = astar(wide[0], wide[1], net, sa, sb, box, allowed)
+                used = wide[0]
+                for b in boxes:
+                    path = astar(wide[0], wide[1], net, sa, sb, b, allowed)
+                    if path is not None:
+                        break
                 if path is not None:
                     break
         else:
-            path = astar(grids[0], grids[1], net, sa, sb, box, allowed)
+            used = grids[0]
+            for b in boxes:
+                path = astar(grids[0], grids[1], net, sa, sb, b, allowed)
+                if path is not None:
+                    break
         if path is None:
             results.append({'net': name, 'routed': False, 'reason': 'no path', 'length_mm': round(dist, 2)})
             continue
         added = []
         stub(board, pcbnew.VECTOR2I(pcbnew.FromMM(pa[0]), pcbnew.FromMM(pa[1])), path[0], path[0][0], net, added, width)
+        # Straight runs where the grid allows (fewer, any-angle segments).
+        path = simplify(path, used, net)
         add_path(board, path, net, added, width, POWER_VIA if name in protected else (VIA_D, VIA_DRILL))
         stub(board, pcbnew.VECTOR2I(pcbnew.FromMM(pb[0]), pcbnew.FromMM(pb[1])), path[-1], path[-1][0], net, added, width)
         for it in added:

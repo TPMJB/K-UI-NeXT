@@ -404,7 +404,10 @@ def main():
     if args.report:
         args.report.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps({'pass': not failures, 'failures': len(failures),
-                      'worst_rise_c': {n: [v['normal_rise_c'], v['fault_rise_c']] for n, v in nets.items()}}))
+                      # [normal, fault] along runs, then [normal, fault] at pad necks (2x allowance)
+                      'worst_rise_c': {n: [v['normal_rise_c'], v['fault_rise_c'],
+                                           v.get('neck_normal_rise_c', 0.0), v.get('neck_fault_rise_c', 0.0)]
+                                       for n, v in nets.items()}}))
 
 
 if __name__ == '__main__':
