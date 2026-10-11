@@ -102,7 +102,7 @@ def main():
         'origin_mm': [pcbnew.ToMM(origin.x), pcbnew.ToMM(origin.y)],
         'coordinates': 'Actual footprint body origin; X right, Y up, mm, relative to native aux origin',
         'rotation_status': 'Native orientation only; manufacturer model zero-angle/placement preview review pending',
-        'note': 'Catalog identities are checked; placement rotations, factory fixtures and carrier routing remain unqualified. Do not submit as approved PCBA data.'}
+        'note': 'Catalog identities are checked except the rows listed as unverified; placement rotations, factory fixtures and the owner layout review remain open. Do not submit as approved PCBA data.'}
     (MFG / report_name).write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps({'variant':args.variant,'SMT_parts':len(cpl),'BOM_rows':len(bom),'pending_catalog_rows':len(pending),'status':report['status']}))
 

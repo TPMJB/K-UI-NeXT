@@ -119,6 +119,21 @@ you and `approved` is true. I do not mark these myself. Read
 `design/CARRIER-LAYOUT-REVIEW.md` and the check reports it links, then set
 each topic's status, reviewer, date and notes.
 
+The carrier is now fully routed (DRC 0, unconnected 0, parity 0, supply
+check passing). Three layout choices deserve your eye in the review:
+
+- Some signals run on In4.Cu, the +3V3_LOGIC plane layer, where the four
+  signal layers had no way left (listed with lengths in the review). They
+  cut slots in the plane; the plane stays connected and the supply check
+  passes, but signals crossing a slot on B.Cu or In3.Cu lose their nearest
+  return path there. For these slow bus and control lines that is
+  acceptable; say so if you disagree.
+- R2038 (USB D− series resistor) and C2016 (bypass for RP2350 pin 68)
+  swapped places beside the RP2350's north pins.
+- The review package (`tools/make_review_package.py`) plots the Gerbers
+  and renders for inspection; the files marked REVIEW-ONLY are not an
+  order.
+
 **11. Lattice Diamond (free licence).** The FPGA logic simulates and maps,
 but a placed-and-routed bitstream and real timing need Lattice's own tools,
 which need a Lattice account and licence file. Open-source tools cannot

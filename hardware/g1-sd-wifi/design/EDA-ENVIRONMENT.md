@@ -133,7 +133,14 @@ end they miss before routing (164 ends on the carrier), and the remaining
 difference is contacts Freerouting does not model (a via or track end
 overlapping a pad rather than centred on it). `tools/force_supply_route.py`
 lays a supply connection the gap closer cannot fit by crossing unlocked signal
-copper and cutting it back for the next round to reroute. The dedicated `In1.Cu`
+copper and cutting it back for the next round to reroute.
+`tools/close_gaps.py --exhaustive` falls back, when the weighted grid search
+gives up, to a uniform-cost search over the whole board that either finds the
+cheapest way or proves there is none; `--net` (repeatable) limits a run to
+those nets in that order. `KUI_PLANE_HOPS=1` lets signals use In4.Cu, the
++3V3_LOGIC plane, and `KUI_PLANE_BOX='x0,y0,x1,y1'` confines that to a box
+(board mm). `tools/fanout_pins.py` gives chosen fine-pitch pins a straight
+escape to a via of their own. The dedicated `In1.Cu`
 reference plane remains inactive for signal traces. Test routing on a fresh
 CF-board DSN with no wiring reduced 44 incompletes to 13 over two bounded
 passes and wrote importable checkpoints. This verifies the runner, not the

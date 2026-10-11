@@ -1,0 +1,201 @@
+{
+  "method": "IPC-2221 chart fit; outer 35 um, inner 17 um, via plating 18 um; branch currents from the copper graph",
+  "limits_c": {
+    "normal": 10.0,
+    "fault": 45.0,
+    "neck_mm": 2.0,
+    "neck_and_via_factor": 2
+  },
+  "nets": {
+    "CONSOLE_5V": {
+      "budget_current_a": 1.3,
+      "fault_current_a": 1.5,
+      "outer_only": true,
+      "segments": 5,
+      "vias": 0,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.60": 1.75,
+        "F.Cu 1.00": 1.05
+      },
+      "normal_rise_c": 0.0,
+      "fault_rise_c": 0.0,
+      "neck_normal_rise_c": 2.5,
+      "neck_fault_rise_c": 3.5
+    },
+    "FUSED_5V": {
+      "budget_current_a": 1.3,
+      "fault_current_a": 1.5,
+      "outer_only": true,
+      "segments": 21,
+      "vias": 0,
+      "length_by_layer_width_mm": {
+        "F.Cu 1.00": 4.23,
+        "F.Cu 0.60": 2.34,
+        "F.Cu 0.80": 1.25
+      },
+      "normal_rise_c": 2.5,
+      "fault_rise_c": 3.5,
+      "neck_normal_rise_c": 0.0,
+      "neck_fault_rise_c": 0.0
+    },
+    "PRIMARY_5V": {
+      "budget_current_a": 1.3,
+      "fault_current_a": 1.5,
+      "outer_only": true,
+      "segments": 201,
+      "vias": 3,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.80": 10.45,
+        "F.Cu 0.60": 24.03,
+        "F.Cu 0.40": 1.68,
+        "F.Cu 0.25": 1.57,
+        "F.Cu 0.30": 6.1,
+        "B.Cu 0.25": 41.42,
+        "B.Cu 0.60": 34.11,
+        "B.Cu 0.40": 3.25
+      },
+      "normal_rise_c": 1.0,
+      "fault_rise_c": 8.1,
+      "neck_normal_rise_c": 1.0,
+      "neck_fault_rise_c": 8.1
+    },
+    "+5V_HOLD": {
+      "budget_current_a": 0.75,
+      "fault_current_a": 1.5,
+      "outer_only": true,
+      "segments": 40,
+      "vias": 4,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.60": 4.93,
+        "F.Cu 0.40": 3.06,
+        "F.Cu 0.30": 6.15,
+        "F.Cu 0.25": 4.35,
+        "B.Cu 0.25": 9.26,
+        "B.Cu 0.30": 2.82,
+        "B.Cu 0.60": 18.61
+      },
+      "normal_rise_c": 7.1,
+      "fault_rise_c": 34.3,
+      "neck_normal_rise_c": 1.6,
+      "neck_fault_rise_c": 15.8
+    },
+    "+5V_C5": {
+      "budget_current_a": 0.6,
+      "fault_current_a": 1.5,
+      "outer_only": true,
+      "segments": 298,
+      "vias": 12,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.60": 29.88,
+        "F.Cu 0.40": 26.1,
+        "B.Cu 0.40": 51.8,
+        "B.Cu 0.60": 42.26
+      },
+      "normal_rise_c": 2.0,
+      "fault_rise_c": 15.8,
+      "neck_normal_rise_c": 1.0,
+      "neck_fault_rise_c": 8.1
+    },
+    "RESERVE_5V": {
+      "budget_current_a": 0.75,
+      "fault_current_a": 1.5,
+      "outer_only": true,
+      "segments": 62,
+      "vias": 5,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.60": 16.18,
+        "F.Cu 0.30": 3.2,
+        "B.Cu 0.60": 20.88,
+        "B.Cu 0.25": 7.72,
+        "B.Cu 0.40": 8.19,
+        "B.Cu 0.30": 3.35
+      },
+      "normal_rise_c": 5.4,
+      "fault_rise_c": 34.3,
+      "neck_normal_rise_c": 5.4,
+      "neck_fault_rise_c": 25.4
+    },
+    "+3V3_STORAGE": {
+      "budget_current_a": 0.5,
+      "fault_current_a": 1.5,
+      "outer_only": true,
+      "segments": 101,
+      "vias": 5,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.60": 40.76,
+        "F.Cu 0.25": 41.71,
+        "F.Cu 0.30": 26.78,
+        "F.Cu 0.40": 9.88,
+        "B.Cu 0.30": 19.47,
+        "B.Cu 0.25": 60.28,
+        "B.Cu 0.40": 3.0,
+        "B.Cu 0.60": 11.62
+      },
+      "normal_rise_c": 2.8,
+      "fault_rise_c": 34.3,
+      "neck_normal_rise_c": 0.4,
+      "neck_fault_rise_c": 34.3
+    },
+    "CONSOLE_3V3_FLEX": {
+      "budget_current_a": 0.1,
+      "fault_current_a": 0.5,
+      "outer_only": false,
+      "segments": 9,
+      "vias": 2,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.60": 3.6,
+        "F.Cu 0.40": 0.9,
+        "In3.Cu 0.60": 1.92,
+        "In3.Cu 0.30": 3.87
+      },
+      "normal_rise_c": 0.8,
+      "fault_rise_c": 31.7,
+      "neck_normal_rise_c": 0.0,
+      "neck_fault_rise_c": 1.3
+    },
+    "CONSOLE_3V3": {
+      "budget_current_a": 0.1,
+      "fault_current_a": 0.5,
+      "outer_only": false,
+      "segments": 180,
+      "vias": 7,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.40": 21.85,
+        "F.Cu 0.60": 101.45,
+        "F.Cu 0.30": 41.92,
+        "F.Cu 0.25": 43.25,
+        "In2.Cu 0.60": 12.81,
+        "In2.Cu 0.40": 18.78,
+        "In2.Cu 0.25": 42.93,
+        "In3.Cu 0.60": 5.3,
+        "In3.Cu 0.40": 7.83
+      },
+      "normal_rise_c": 1.1,
+      "fault_rise_c": 42.8,
+      "neck_normal_rise_c": 0.1,
+      "neck_fault_rise_c": 2.8
+    },
+    "+3V3_LOGIC": {
+      "budget_current_a": 0.35,
+      "fault_current_a": null,
+      "outer_only": false,
+      "segments": 3658,
+      "vias": 122,
+      "length_by_layer_width_mm": {
+        "F.Cu 0.25": 12.61,
+        "F.Cu 0.15": 134.92,
+        "F.Cu 0.40": 12.49,
+        "F.Cu 0.60": 1.35
+      },
+      "normal_rise_c": 2.9,
+      "fault_rise_c": 0.0,
+      "neck_normal_rise_c": 2.9,
+      "neck_fault_rise_c": 0.0,
+      "plane_feed_fault_current_a": 1.5,
+      "plane_feed_vias": 3,
+      "plane_feed_worst_rise_c": 4.5
+    }
+  },
+  "failures": [],
+  "pass": true
+}

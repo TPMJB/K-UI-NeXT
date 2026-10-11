@@ -60,7 +60,7 @@
       ]
     }
   ],
-  "pcb_sha256": "a2cf5b6e6dd286e738f48096360ecde29b118bfc6d08fa0fc9993a582113332f",
+  "pcb_sha256": "7d7c3d2693fd01a43f67d1618dabdd9e908bb48c382820c1bf2be7a41367bfc9",
   "parts_list_sha256": "9c9a293d65ce016224ec6ea4fd8ae43682deb08ea80711c673f3476352e63ff1",
   "origin_mm": [
     70.0,
@@ -68,5 +68,5 @@
   ],
   "coordinates": "Actual footprint body origin; X right, Y up, mm, relative to native aux origin",
   "rotation_status": "Native orientation only; manufacturer model zero-angle/placement preview review pending",
-  "note": "Catalog identities are checked; placement rotations, factory fixtures and carrier routing remain unqualified. Do not submit as approved PCBA data."
+  "note": "Catalog identities are checked except the rows listed as unverified; placement rotations, factory fixtures and the owner layout review remain open. Do not submit as approved PCBA data."
 }
