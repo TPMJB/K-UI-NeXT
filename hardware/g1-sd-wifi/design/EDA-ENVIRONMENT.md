@@ -107,7 +107,19 @@ java -Djava.awt.headless=true \
 ```
 
 The final four arguments are maximum passes, total seconds, milliseconds per
-connection attempt, and whether to fan out first. The dedicated `In1.Cu`
+connection attempt, and whether to fan out first. Three optional arguments
+follow: a net-name pattern routed first in every pass (empty for none), a
+random seed that shuffles the connection order each pass instead of
+alternating it, and a cap that restarts the rip-up price every few passes so
+late passes can still move other nets aside. With a seed the run stops after
+15 passes without improvement instead of 5.
+
+To continue a run, do not round-trip it through KiCad: Freerouting joins
+copper only where ends coincide exactly, and after an import and re-export
+it saw 245 open connections where KiCad saw 21. `tools/ses_to_dsn.py
+BASE.dsn ROUTED.ses OUT.dsn` appends the session's own wires and vias to the
+DSN it was routed from, and a run on `OUT.dsn` starts where the session
+stopped. The dedicated `In1.Cu`
 reference plane remains inactive for signal traces. Test routing on a fresh
 CF-board DSN with no wiring reduced 44 incompletes to 13 over two bounded
 passes and wrote importable checkpoints. This verifies the runner, not the

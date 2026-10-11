@@ -58,7 +58,7 @@ public final class Headless19Ripup {
     return result;
   }
   public static void main(String[] args) throws Exception {
-    if(args.length<2) throw new IllegalArgumentException("Headless19Ripup input.dsn output.ses [maxPasses=4] [globalSeconds=300] [perItemMillis=800] [fanout=false] [priorityNetRegex]");
+    if(args.length<2) throw new IllegalArgumentException("Headless19Ripup input.dsn output.ses [maxPasses=4] [globalSeconds=300] [perItemMillis=800] [fanout=false] [priorityNetRegex] [seed=0] [ripupCap=0]");
     Path input=Paths.get(args[0]),output=Paths.get(args[1]);
     int maxPasses=args.length>2?Integer.parseInt(args[2]):4;
     int globalSeconds=args.length>3?Integer.parseInt(args[3]):300;
@@ -66,7 +66,14 @@ public final class Headless19Ripup {
     boolean fanout=args.length>5&&Boolean.parseBoolean(args[5]);
     // Optional net-name pattern routed first in every pass, so dense buses
     // get their corridors before general nets use the space.
-    final java.util.regex.Pattern priority=args.length>6?java.util.regex.Pattern.compile(args[6]):null;
+    final java.util.regex.Pattern priority=args.length>6&&!args[6].isEmpty()?java.util.regex.Pattern.compile(args[6]):null;
+    // Finishing options: a nonzero seed shuffles the connection order every
+    // pass (instead of alternating it), and a nonzero cap stops the rip-up
+    // price from growing past start*cap, so late passes can still move
+    // other nets aside.
+    final long seed=args.length>7?Long.parseLong(args[7]):0L;
+    final int ripupCap=args.length>8?Integer.parseInt(args[8]):0;
+    final Random rng=new Random(seed);
     String design=input.getFileName().toString();
     BoardHandlingHeadless h=new BoardHandlingHeadless(Locale.US,false,0.01f);
     try(InputStream in=Files.newInputStream(input)) {
@@ -115,7 +122,8 @@ public final class Headless19Ripup {
       long began=System.nanoTime();int attempted=0,routed=0,failed=0;
       ArrayList<Pin> pins=new ArrayList<Pin>(b.get_pins());
       // Alternate end ordering without modifying the core route algorithm.
-      if(pass%2==0) Collections.reverse(pins);
+      if(seed!=0) Collections.shuffle(pins,rng);
+      else if(pass%2==0) Collections.reverse(pins);
       if(priority!=null) {
         final RoutingBoard rb=b;
         // Stable sort: pattern nets first, original order otherwise.
@@ -131,7 +139,7 @@ public final class Headless19Ripup {
         int viaCosts=plane?settings.autoroute_settings.get_plane_via_costs():settings.autoroute_settings.get_via_costs();
         AutorouteEngine.AutorouteResult result;
         try {
-          result=routeWithRipup(b,pin,settings,viaCosts,pass,stop,perItemMillis);
+          result=routeWithRipup(b,pin,settings,viaCosts,ripupCap>0?1+(pass-1)%ripupCap:pass,stop,perItemMillis);
         } catch(RuntimeException e) {
           // Freerouting 1.9 occasionally throws inside trace insertion
           // (Polyline.projection_line NPE). Count the connection as failed
@@ -155,7 +163,7 @@ public final class Headless19Ripup {
       if(open<=best) { checkpoint(b,output,design);stagnant=open==best?stagnant+1:0;best=open; }
       else stagnant++;
       System.out.printf("PASS %d attempted=%d routed=%d failed=%d incomplete=%d best=%d traces=%d vias=%d seconds=%.3f checkpoint=%s%n",pass,attempted,routed,failed,open,best,b.get_traces().size(),b.get_vias().size(),(System.nanoTime()-began)/1e9,passPath);
-      if(open==0 || stagnant>=5) break;
+      if(open==0 || stagnant>=(seed!=0?15:5)) break;
     }
     System.out.printf("DONE initial=%d best_incomplete=%d stopped=%s output=%s%n",initial,best,stop.is_stop_requested(),output);
   }
