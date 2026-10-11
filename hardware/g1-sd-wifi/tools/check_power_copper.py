@@ -9,18 +9,21 @@ weights in manufacturing/rigid-order-settings.json and a conservative via
 plating thickness.
 
 Normal current: the copper of each net is turned into a graph (pads, vias and
-track ends are nodes, segments are edges). A segment carries the sum of the
-load currents beyond it as seen from the net's source; a segment inside a
-loop is charged the whole net load. Loads come from the power budget in
-design/power-and-isolation.md. Distribution nets without a load map charge
-every segment the whole budget.
+points on tracks are nodes, track pieces are edges) and solved as a resistor
+network (conductance = width x copper thickness / length; vias and pads join
+their layers without resistance): the source supplies the loads of the power
+budget in design/power-and-isolation.md, and every edge is rated for the
+current it then carries. On a tree this is exactly the sum of the loads
+beyond each edge; where copper runs in parallel the paths share it as real
+copper does. Distribution nets without a load map charge every edge the
+whole budget.
 
-Fault current: for trunk nets, every segment and via that leads towards a
-point where a part can realistically short (a load, a capacitor, a
-connector, spring contact or test point) must also survive the current the
-upstream fuse or regulator passes indefinitely, so copper outlasts the
-protection. Branches that end only at IC sense/control pins or resistors are
-rated for their normal current.
+Fault current: for trunk nets, each point where a part can realistically
+short (a load, a capacitor, a connector, spring contact or test point) is
+shorted in turn at the current the upstream fuse or regulator passes
+indefinitely, and every edge and via is rated for the largest current any
+such short drives through it, so copper outlasts the protection. Branches
+that end only at IC sense/control pins or resistors carry no fault current.
 
 Limits: NORMAL_LIMIT_C rise at the normal current, FAULT_LIMIT_C at the fault
 current; pad escapes and via barrels are allowed twice the rise because heat
@@ -29,7 +32,7 @@ segments of one layer and width, joined only end to end) that starts at a pad
 and is no longer than NECK_MM in total; the router splits long tracks into
 short segments, so the length of a single segment says nothing.
 Outer-only nets fail if any inner-layer segment is longer than NECK_MM. Run
-with KiCad 10's Python (pcbnew).
+with KiCad 10's Python (pcbnew) with numpy available.
 """
 import argparse
 import collections
@@ -37,6 +40,7 @@ import json
 import math
 import pathlib
 
+import numpy as np
 import pcbnew
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -219,44 +223,50 @@ def reachable(edges, sources):
     return seen
 
 
-def branch_currents(edges, sources, loads, fault_points=()):
-    """Per edge: load current beyond it from the source (all load in a loop),
-    and whether a fault point lies beyond it."""
-    adj = collections.defaultdict(list)
-    for idx, (a, b, *_) in enumerate(edges):
-        adj[a].append((b, idx))
-        adj[b].append((a, idx))
-    total = sum(loads.values())
-
-    def reach(start, skip):
-        seen = {start}
-        stack = [start]
-        while stack:
-            n = stack.pop()
-            for m, idx in adj[n]:
-                if idx != skip and m not in seen:
-                    seen.add(m)
-                    stack.append(m)
-        return seen
-
-    currents, faults = [], []
-    points = set(fault_points) | set(loads)
-    for idx, (a, b, *_) in enumerate(edges):
-        if a == b:
-            currents.append(0.0)
-            faults.append(False)
-            continue
-        from_source = set()
-        for s in sources:
-            from_source |= reach(s, idx)
-        if a in from_source and b in from_source:
-            currents.append(total)          # inside a loop
-            faults.append(True)
-            continue
-        far = reach(b, idx) if a in from_source else reach(a, idx) if b in from_source else set()
-        currents.append(sum(c for n, c in loads.items() if n in far))
-        faults.append(bool(far & points))
-    return currents, faults
+def nodal_currents(edges, sources, cases, outer_layers, outer_um, inner_um):
+    """Current in every edge for each case by nodal analysis. A case maps
+    node -> current drawn there; the sources (tied together) supply it.
+    Returns one array per edge with a value per case; edges not fed from the
+    source carry nothing."""
+    fed = reachable(edges, sources)
+    index = {n: k for k, n in enumerate(sorted(fed, key=str))}
+    size = len(index)
+    cond = np.zeros((size, size))
+    g_edge = []
+    for a, b, s, length_mm in edges:
+        thick = outer_um if s.GetLayer() in outer_layers else inner_um
+        g = pcbnew.ToMM(s.GetWidth()) * thick / max(length_mm, 0.01)
+        g_edge.append(g)
+        if a != b and a in index and b in index:
+            i, j = index[a], index[b]
+            cond[i, i] += g
+            cond[j, j] += g
+            cond[i, j] -= g
+            cond[j, i] -= g
+    ground = index[sources[0]]
+    for extra in sources[1:]:
+        if extra in index and index[extra] != ground:
+            i, j = ground, index[extra]
+            cond[i, i] += 1e9
+            cond[j, j] += 1e9
+            cond[i, j] -= 1e9
+            cond[j, i] -= 1e9
+    drawn = np.zeros((size, len(cases)))
+    for c, case in enumerate(cases):
+        for node, amps in case.items():
+            if node in index:
+                drawn[index[node], c] -= amps
+    keep = [k for k in range(size) if k != ground]
+    volts = np.zeros((size, len(cases)))
+    if keep:
+        volts[keep] = np.linalg.solve(cond[np.ix_(keep, keep)], drawn[keep])
+    out = []
+    for (a, b, *_), g in zip(edges, g_edge):
+        if a in index and b in index:
+            out.append(np.abs(g * (volts[index[a]] - volts[index[b]])))
+        else:
+            out.append(np.zeros(len(cases)))
+    return out
 
 
 def main():
@@ -283,7 +293,9 @@ def main():
         # spring contacts, test points and the loads themselves.
         fault_points = [node for n, node in pad_nodes.items() if n.split('.')[0].rstrip('0123456789') in
                         ('C', 'J', 'K', 'TP')]
-        loads = {pad_nodes[n]: c for n, c in (spec['loads'] or {}).items()}
+        loads = collections.Counter()
+        for n, c in (spec['loads'] or {}).items():
+            loads[pad_nodes[n]] += c
         sources = [pad_nodes[s] for s in spec['source']]
         # No vacuous pass: every pad of the net must be fed from the source
         # through copper (or a plane, for plane nets).
@@ -291,17 +303,22 @@ def main():
         unfed = sorted(n for n, node in pad_nodes.items() if node not in fed)
         if unfed and net != '+3V3_LOGIC':
             failures.append({'net': net, 'item': 'not_fed_from_source', 'pads': unfed})
-        currents, faulted = branch_currents(edges, sources, loads, fault_points)
-        if not spec['loads']:
-            currents = [spec['normal']] * len(edges)
+        shorts = sorted(set(fault_points) | set(loads), key=str) if spec['fault'] else []
+        solved = nodal_currents(edges, sources, [dict(loads)] + [{p: spec['fault']} for p in shorts],
+                                outer_layers, outer_um, inner_um)
+        currents = [float(x[0]) for x in solved] if spec['loads'] else [spec['normal']] * len(edges)
+        fault_amps = [float(x[1:].max()) if len(x) > 1 else 0.0 for x in solved]
         worst = {'normal_rise_c': 0.0, 'fault_rise_c': 0.0, 'neck_normal_rise_c': 0.0, 'neck_fault_rise_c': 0.0}
         pad_set = set(pad_nodes.values())
         run_info = runs(edges, pad_set | {n for n, _ in via_nodes})
         by_width, inner_long = {}, []
         node_current = collections.defaultdict(float)
-        for (a, b, s, length_mm), amps, at_fault, (run_mm, run_nodes) in zip(edges, currents, faulted, run_info):
+        node_fault = collections.defaultdict(float)
+        for (a, b, s, length_mm), amps, at_fault, (run_mm, run_nodes) in zip(edges, currents, fault_amps, run_info):
             node_current[a] = max(node_current[a], amps)
             node_current[b] = max(node_current[b], amps)
+            node_fault[a] = max(node_fault[a], at_fault)
+            node_fault[b] = max(node_fault[b], at_fault)
             layer = s.GetLayer()
             outer = layer in outer_layers
             width_mm = pcbnew.ToMM(s.GetWidth())
@@ -313,8 +330,8 @@ def main():
             if spec['outer'] and not outer and run_mm > NECK_MM:
                 inner_long.append({'layer': board.GetLayerName(layer), 'length_mm': round(length_mm, 2)})
             cases = [('normal', amps, NORMAL_LIMIT_C)]
-            if spec['fault'] and at_fault:
-                cases.append(('fault', spec['fault'], FAULT_LIMIT_C))
+            if at_fault > 1e-6:
+                cases.append(('fault', at_fault, FAULT_LIMIT_C))
             for kind, i, limit in cases:
                 dt = rise(i, area, k)
                 tag = ('neck_' if neck else '') + kind + '_rise_c'
@@ -334,8 +351,8 @@ def main():
             area = math.pi * drill_mm * 1000 * VIA_PLATING_UM * UM_TO_MIL ** 2
             share = per_node[node]
             cases = [('normal', node_current[node] / share, NORMAL_LIMIT_C)]
-            if spec['fault'] and node_current[node] > 0:
-                cases.append(('fault', spec['fault'] / share, FAULT_LIMIT_C))
+            if node_fault[node] > 1e-6:
+                cases.append(('fault', node_fault[node] / share, FAULT_LIMIT_C))
             for kind, i, limit in cases:
                 dt = rise(i, area, 0.024)
                 if dt > limit * 2:
@@ -356,7 +373,8 @@ def main():
                 feed_loads = collections.Counter()
                 for node, _ in feed_vias:
                     feed_loads[node] += share
-                feed_currents, _ = branch_currents(edges, sources, dict(feed_loads))
+                feed_currents = [float(x[0]) for x in nodal_currents(edges, sources, [dict(feed_loads)],
+                                                                     outer_layers, outer_um, inner_um)]
                 worst_feed = 0.0
                 for (a, b, s, length_mm), i, (run_mm, run_nodes) in zip(edges, feed_currents, run_info):
                     outer = s.GetLayer() in outer_layers
