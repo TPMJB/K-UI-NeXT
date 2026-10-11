@@ -58,12 +58,15 @@ def make_pdf(board, filename, page, checksum):
         line((pcbnew.ToMM(a.x)-ox,pcbnew.ToMM(a.y)-oy),
              (pcbnew.ToMM(b.x)-ox,pcbnew.ToMM(b.y)-oy))
     c.setDash(2,2); c.setStrokeColor(colors.HexColor('#267799'))
-    rectangle(7,54,26.68,12.65)
-    rectangle(45.68,47,6.56,38.67)
+    # Motherboard references register to the BIOS opening and CN503 notch,
+    # which tools/stretch_board.py moved 10 mm south with everything below
+    # y = 41.4 mm; the C5 module reference sits in the unmoved north part.
+    rectangle(7,64,26.68,12.65)
+    rectangle(45.68,57,6.56,38.67)
     rectangle(3.5733,1.0973,20.9804,17.8054)
     c.setDash()
     c.setFont('KUI-Bold',6.5); c.setFillColor(colors.HexColor('#267799'))
-    for text,x,y in [('BIOS body reference',7,60),('CN503',46,66),('C5 module reference',4,10)]:
+    for text,x,y in [('BIOS body reference',7,70),('CN503',46,76),('C5 module reference',4,10)]:
         c.drawString(*xy(x,y),text)
     c.setFillColor(colors.HexColor('#172638'))
     c.setFont('KUI-Bold',6)
