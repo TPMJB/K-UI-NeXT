@@ -35,6 +35,9 @@ run() { run_with "$PY" "$@"; }
 # close_gaps.py and check_power_copper.py also need numpy (and Pillow): PYNP
 # may name a Python that has them alongside pcbnew (defaults to $PY).
 PYNP=${PYNP:-$PY}
+# The gap closer's 0.025 mm grid halves its quantisation margin; between
+# 0.4 mm-pitch pins that is the difference between a way and none.
+export KUI_GRID_MM=${KUI_GRID_MM:-0.025}
 # KiCad rewrites the project file on every board save; a board saved
 # without its project would replace the design rules with defaults.
 PRO=${B%.kicad_pcb}.kicad_pro
