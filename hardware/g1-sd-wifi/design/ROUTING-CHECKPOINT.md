@@ -60,7 +60,7 @@ git add design/routing-checkpoint && git commit  # make the checkpoint durable
 
 ## Finishing in progress (11 October 2026)
 
-`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing. Native DRC 0, parity 0, supply current check passing (+5V_C5 included), 7 signal connections open. One plane hop: ATA_DD12 runs 10.5 mm on In4.Cu (the +3V3_LOGIC plane), laid by the gap closer with KUI_PLANE_HOPS=1; DRC with zones refilled accepts it and no net lost its plane connection.
+`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing. Native DRC 0, parity 0, supply current check passing (+5V_C5 included), 5 signal connections open. One plane hop: ATA_DD12 runs 10.5 mm on In4.Cu (the +3V3_LOGIC plane), laid by the gap closer with KUI_PLANE_HOPS=1; DRC with zones refilled accepts it and no net lost its plane connection.
 
 It is the 42-open session of the second plain-order run (seed 11), finished with the current tools: the gap closer on a 0.025 mm grid, landing on any point of the other copper island. That beat finishing the 31-open checkpoint session (16 with the earlier gap closer, 14 now): the gap closer's result depends on where the router left its copper, not only on the open count.
 

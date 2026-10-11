@@ -64,9 +64,12 @@ def main():
     ap.add_argument('--net', action='append', required=True)
     ap.add_argument('--signal', action='store_true', help='signal nets: all signal layers, Default width and via')
     ap.add_argument('--width', type=float, action='append', help='mm, widest first (default 0.4 then 0.3)')
+    ap.add_argument('--budget', type=float, default=1.0,
+                    help='multiply the search budget: a long detour (round the BIOS opening) needs several times the default')
     ap.add_argument('--report', type=pathlib.Path)
     args = ap.parse_args()
     cg.load_rules(args.board)
+    cg.MAX_EXPANSIONS = int(cg.MAX_EXPANSIONS * args.budget)
     widths = args.width or ([cg.TRACK] if args.signal else [0.4, 0.3])
     layers = None if args.signal else cg.OUTER_INDICES
     via_size = (cg.VIA_D, cg.VIA_DRILL) if args.signal else cg.POWER_VIA
