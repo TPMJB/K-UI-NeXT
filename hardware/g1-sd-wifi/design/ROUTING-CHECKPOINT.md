@@ -60,10 +60,12 @@ git add design/routing-checkpoint && git commit  # make the checkpoint durable
 
 ## Finishing in progress (11 October 2026)
 
-`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing. Native DRC 0, parity 0, supply current check passing, 14 signal connections open. How it got there:
+`design/routing-checkpoint/finishing-wip.kicad_pcb` is the board part-way through finishing. Native DRC 0, parity 0, supply current check passing (+5V_C5 included), 12 signal connections open.
 
-1. The 31-open session imported and finished (`finish_carrier_routing.sh`).
-2. +5V_C5 laid by `tools/force_supply_route.py` (locked, 0.4 mm, F.Cu/B.Cu), cutting eight signal nets.
-3. `tools/reroute_finished.sh` rounds (Freerouting round trip with trace-end healing) brought it from 23 to 18 open, and the gap closer on its 0.025 mm grid to 14.
+It is the 42-open session of the second plain-order run (seed 11), finished with the current tools: the gap closer on a 0.025 mm grid, landing on any point of the other copper island. That beat finishing the 31-open checkpoint session (16 with the earlier gap closer, 14 now): the gap closer's result depends on where the router left its copper, not only on the open count.
 
-To continue, copy it over `controller/KUI-G1-Bridge-RevA.kicad_pcb` and repeat `reroute_finished.sh` while it improves. The committed `controller/` board is still the placed board the routing checkpoint belongs to.
+To continue:
+1. Copy it over `controller/KUI-G1-Bridge-RevA.kicad_pcb`.
+2. Repeat `tools/reroute_finished.sh` while it improves.
+
+`tools/force_supply_route.py` (and `--signal`) lays connections that are boxed in, cutting the unlocked signal copper they cross for the next round to reroute. The committed `controller/` board is still the placed board the routing checkpoint belongs to.

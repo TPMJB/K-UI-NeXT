@@ -199,7 +199,9 @@ def net_graph(board, net, pads):
 
     for i, s in enumerate(segs):
         for node, layer, p in ends:
-            if node[1] != i and layer == s.GetLayer() and s.HitTest(p, 0):
+            # The same quarter-width overlap rule as for pads: a round end
+            # just outside a narrower track's edge still overlaps it.
+            if node[1] != i and layer == s.GetLayer() and s.HitTest(p, reach(node)):
                 tap(i, s, p, node)
         for j, v in enumerate(vias):
             if s.HitTest(v.GetPosition(), 0):
