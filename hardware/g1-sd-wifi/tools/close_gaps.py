@@ -65,8 +65,16 @@ RIP_PENALTY = 30              # --rip: price per cell of another net's copper
 HIST_WEIGHT = 15              # --rip: added per earlier rip at that cell
 RIP_MARGIN = 0.65             # --rip: cut-back beyond the crossing, mm
 MAX_VICTIMS = 4               # --rip: most tracks and vias one route may cut
-ROUTE_LAYERS = [pcbnew.F_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.B_Cu]
+# Plane hops (KUI_PLANE_HOPS=1): signals may also use In4.Cu, the
+# +3V3_LOGIC plane, at PLANE_PRICE per cell, for short jumps where the four
+# signal layers are full. The plane refills around a hop; In1.Cu (the ground
+# reference) is never used, and supply nets never hop. Native DRC (zones
+# refilled) still has to accept every hop and the plane's connectivity.
+PLANE_HOPS = os.environ.get('KUI_PLANE_HOPS') == '1'
+PLANE_PRICE = 4.0
+ROUTE_LAYERS = [pcbnew.F_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.B_Cu] + ([pcbnew.In4_Cu] if PLANE_HOPS else [])
 OUTER_INDICES = {0, 3}
+SIGNAL_INDICES = {0, 1, 2, 3}
 NX, NY = int(round(WIDTH / G)), int(round(HEIGHT / G))
 
 
@@ -351,6 +359,11 @@ def astar(track, via, net, starts, goals, box, allowed=None, soft=None, hist=Non
         else:
             price = [np.where(s, RIP_PENALTY + HIST_WEIGHT * h, 0).astype(np.float32) for s, h in zip(foreign, hist)]
             vprice = np.where(vforeign, RIP_PENALTY * 4, 0).astype(np.float32)
+    if PLANE_HOPS:
+        if price is None:
+            price = [np.zeros((NY, NX), np.float32) for _ in ROUTE_LAYERS]
+            vprice = np.zeros((NY, NX), np.float32)
+        price[4] = price[4] + np.float32(PLANE_PRICE)
     lib = c_astar()
     if lib is not None:
         ptr = lambda a: a.ctypes.data_as(ctypes.c_void_p) if a is not None else None
@@ -673,7 +686,7 @@ def route_pairs(board, pairs, nets, margin, protected):
     for dist, name, pa, pb in pairs:
         net = nets[name]
         board.BuildConnectivity()
-        allowed = OUTER_INDICES if name in OUTER_ONLY else None
+        allowed = OUTER_INDICES if name in OUTER_ONLY else (SIGNAL_INDICES if PLANE_HOPS and name in protected else None)
         amap, bmap = island_cells(board, pa, net, allowed), island_cells(board, pb, net, allowed)
         if not amap or not bmap or set(amap) & set(bmap):
             # Not found, or already joined by an earlier route in this sweep.
