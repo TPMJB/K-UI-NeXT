@@ -1091,16 +1091,6 @@
       "via_drill_mm": 0.2
     },
     {
-      "pad": "D21.2",
-      "xy_mm": [
-        58.01682099999999,
-        105.66730100000001
-      ],
-      "stub_length_mm": 1.0,
-      "via_diameter_mm": 0.5,
-      "via_drill_mm": 0.2
-    },
-    {
       "pad": "C225.2",
       "xy_mm": [
         24.5,
@@ -1651,6 +1641,16 @@
       "via_drill_mm": 0.2
     },
     {
+      "pad": "D21.2",
+      "xy_mm": [
+        58.01682099999999,
+        105.66730100000001
+      ],
+      "stub_length_mm": 1.0,
+      "via_diameter_mm": 0.5,
+      "via_drill_mm": 0.2
+    },
+    {
       "pad": "R254.2",
       "xy_mm": [
         34.7,
@@ -2185,8 +2185,8 @@
     "U44.2"
   ],
   "already_serviced_ground_pads": 50,
-  "native_unconnected_count_after": 599,
+  "native_unconnected_count_after": 598,
   "complete_layout_qualified": false,
-  "input_board_sha256": "81e62c5c239374f85485cb10e8b1c81b3e98f71a874a455c8b116623d75d27d2",
-  "output_board_sha256": "1629f5e335c68590c96d6fd12cac7d90e56aa0a42ee9cdc8910dd33daf012bd5"
+  "input_board_sha256": "ed928b6a675ed07dc467d6c7cd8e73a1680b836b01812d1146dd9c2b3bf0da53",
+  "output_board_sha256": "d493d9b9d9a86eac924a73cb5ef5682cdc394927c9579a86f8c683a22b2ea39c"
 }

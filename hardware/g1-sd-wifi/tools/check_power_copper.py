@@ -67,7 +67,11 @@ NETS = {
     # F21 limits this rail to 0.5 A; every branch is rated for it.
     'CONSOLE_3V3': dict(normal=0.1, fault=0.5, outer=False, source=['F21.2'], loads=None),
     # Plane net: each track is an IC's stub to a plane via; budget only.
-    '+3V3_LOGIC': dict(normal=0.35, fault=None, outer=False, source=['L20.2'], loads=None),
+    # Its feed from the converter (L20.2 to the vias into the In4 plane) must
+    # also carry the converter's short-circuit current, shared by the feed
+    # vias. 1.5 A is the assumed TPS62162 current limit, as for
+    # +3V3_STORAGE; confirm against the datasheet limit.
+    '+3V3_LOGIC': dict(normal=0.35, fault=None, outer=False, source=['L20.2'], loads=None, plane_feed_fault=1.5),
 }
 
 
@@ -341,8 +345,40 @@ def main():
                                                round(pcbnew.ToMM(v.GetPosition().y) - 45, 2)]})
         if inner_long:
             failures.append({'net': net, 'item': 'inner_layer_copper', 'segments': inner_long})
+        feed = {}
+        if spec.get('plane_feed_fault'):
+            amps = spec['plane_feed_fault']
+            feed_vias = [(node, v) for node, v in via_nodes if node in fed]
+            if not feed_vias:
+                failures.append({'net': net, 'item': 'no_plane_feed_via'})
+            else:
+                share = amps / len(feed_vias)
+                feed_loads = collections.Counter()
+                for node, _ in feed_vias:
+                    feed_loads[node] += share
+                feed_currents, _ = branch_currents(edges, sources, dict(feed_loads))
+                worst_feed = 0.0
+                for (a, b, s, length_mm), i, (run_mm, run_nodes) in zip(edges, feed_currents, run_info):
+                    outer = s.GetLayer() in outer_layers
+                    area = pcbnew.ToMM(s.GetWidth()) * 1000 * (outer_um if outer else inner_um) * UM_TO_MIL ** 2
+                    dt = rise(i, area, 0.048 if outer else 0.024)
+                    neck = run_mm <= NECK_MM and any(n in pad_set for n in run_nodes)
+                    worst_feed = max(worst_feed, round(dt, 1))
+                    if dt > FAULT_LIMIT_C * (2 if neck else 1):
+                        failures.append({'net': net, 'item': 'plane_feed_track', 'case': 'fault', 'current_a': round(i, 3),
+                                         'layer': board.GetLayerName(s.GetLayer()), 'width_mm': round(pcbnew.ToMM(s.GetWidth()), 3),
+                                         'rise_c': round(dt, 1)})
+                for node, v in feed_vias:
+                    area = math.pi * pcbnew.ToMM(v.GetDrillValue()) * 1000 * VIA_PLATING_UM * UM_TO_MIL ** 2
+                    dt = rise(share, area, 0.024)
+                    worst_feed = max(worst_feed, round(dt, 1))
+                    if dt > FAULT_LIMIT_C * 2:
+                        failures.append({'net': net, 'item': 'plane_feed_via', 'case': 'fault', 'current_a': round(share, 3),
+                                         'drill_mm': round(pcbnew.ToMM(v.GetDrillValue()), 2), 'rise_c': round(dt, 1)})
+                feed = {'plane_feed_fault_current_a': amps, 'plane_feed_vias': len(feed_vias),
+                        'plane_feed_worst_rise_c': worst_feed}
         nets[net] = {'budget_current_a': spec['normal'], 'fault_current_a': spec['fault'], 'outer_only': spec['outer'],
-                     'segments': len(edges), 'vias': len(via_nodes), 'length_by_layer_width_mm': by_width, **worst}
+                     'segments': len(edges), 'vias': len(via_nodes), 'length_by_layer_width_mm': by_width, **worst, **feed}
     report = {'method': 'IPC-2221 chart fit; outer %.0f um, inner %.0f um, via plating %.0f um; branch currents from '
                         'the copper graph' % (outer_um, inner_um, VIA_PLATING_UM),
               'limits_c': {'normal': NORMAL_LIMIT_C, 'fault': FAULT_LIMIT_C, 'neck_mm': NECK_MM, 'neck_and_via_factor': 2},

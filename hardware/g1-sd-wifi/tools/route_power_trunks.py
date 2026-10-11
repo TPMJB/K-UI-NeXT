@@ -46,6 +46,15 @@ TRUNKS = [
 ]
 
 
+# Plane feeds: net, pad, number of POWER vias beside the pad (never inside
+# an SMD land, where an open via would draw solder from the joint), stub
+# width, why. Each via joins the pad by its own short stub on the pad layer.
+FEEDS = [
+    ('+3V3_LOGIC', 'L20.2', 3, 0.6, 'converter output into the In4 plane; the vias share its short-circuit current'),
+]
+FEED_RADIUS_MM = 2.5
+
+
 def pads_of(board, spec):
     fps = {f.GetReference(): f for f in board.GetFootprints()}
     out = []
@@ -164,6 +173,47 @@ def main():
             raise SystemExit('%s %s -> %s: no route at any of %s mm' % (name, a, b, widths))
         records.append(done)
         print(json.dumps({k: v for k, v in done.items() if k != 'uuids'}), flush=True)
+    for name, spec, count, width, why in FEEDS:
+        net = nets[name]
+        pads = pads_of(board, spec)
+        placed = []
+        for _ in range(count):
+            track, via = cg.build(board, None, width, cg.POWER_VIA)
+            start = end_cells(track, pads, net, {F})
+            c = pads[0].GetPosition()
+            ci, cj = cg.to_cell(c.x, c.y)
+            r = int(FEED_RADIUS_MM / cg.G)
+            window = (slice(max(0, cj - r), cj + r + 1), slice(max(0, ci - r), ci + r + 1))
+            ok = (((via[window] == 0) | (via[window] == net)) &
+                  ((track[cg.ROUTE_LAYERS[F]][window] == 0) | (track[cg.ROUTE_LAYERS[F]][window] == net)))
+            js, is_ = np.nonzero(ok)
+            goals = {(F, int(i) + window[1].start, int(j) + window[0].start) for i, j in zip(is_, js)
+                     if (i + window[1].start - ci) ** 2 + (j + window[0].start - cj) ** 2 <= r * r}
+            if not start or not goals:
+                break
+            box = (max(0, ci - r), max(0, cj - r), min(cg.NX - 1, ci + r), min(cg.NY - 1, cj + r))
+            path = cg.astar(track, via, net, start, goals, box, {F})
+            if path is None:
+                break
+            added = []
+            cg.add_path(board, cg.simplify(path, track, net), net, added, width, cg.POWER_VIA)
+            v = pcbnew.PCB_VIA(board)
+            v.SetPosition(cg.to_nm(path[-1][1], path[-1][2]))
+            v.SetWidth(pcbnew.FromMM(cg.POWER_VIA[0]))
+            v.SetDrill(pcbnew.FromMM(cg.POWER_VIA[1]))
+            v.SetViaType(pcbnew.VIATYPE_THROUGH)
+            v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+            v.SetNet(board.GetNetInfo().GetNetItem(net))
+            board.Add(v)
+            added.append(v)
+            for it in added:
+                it.SetLocked(True)
+            placed.extend(added)
+        if sum(1 for it in placed if it.Type() == pcbnew.PCB_VIA_T) < count:
+            raise SystemExit('%s %s: placed %d of %d feed vias' % (name, spec, sum(1 for it in placed if it.Type() == pcbnew.PCB_VIA_T), count))
+        records.append({'net': name, 'from': spec, 'to': 'plane', 'width_mm': width, 'why': why,
+                        'vias': count, 'uuids': [it.m_Uuid.AsString() for it in placed]})
+        print(json.dumps({'net': name, 'feed': spec, 'vias': count, 'stub_width_mm': width}), flush=True)
     # Native DRC with refilled zones must accept every trunk item.
     work = pathlib.Path(tempfile.mkdtemp())
     for extra in (pro, args.board.parent / 'fp-lib-table'):

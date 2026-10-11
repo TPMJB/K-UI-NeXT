@@ -652,16 +652,6 @@
       "via_drill_mm": 0.2
     },
     {
-      "pad": "L20.2",
-      "xy_mm": [
-        54.515,
-        102.0
-      ],
-      "stub_length_mm": 1.0,
-      "via_diameter_mm": 0.5,
-      "via_drill_mm": 0.2
-    },
-    {
       "pad": "C118.1",
       "xy_mm": [
         15.0625,
@@ -1214,12 +1204,11 @@
   ],
   "unroutable_pads": [
     "U201.64",
-    "U21.6",
     "C2001.1"
   ],
-  "already_serviced_pads": 28,
+  "already_serviced_pads": 30,
   "native_unconnected_count_after": 477,
   "complete_layout_qualified": false,
-  "input_board_sha256": "1629f5e335c68590c96d6fd12cac7d90e56aa0a42ee9cdc8910dd33daf012bd5",
-  "output_board_sha256": "bc45ddae4cee6270e96aa316a4b76911e75e05156e91952c0569bfffe3c204c7"
+  "input_board_sha256": "d493d9b9d9a86eac924a73cb5ef5682cdc394927c9579a86f8c683a22b2ea39c",
+  "output_board_sha256": "c90de1a384d484476f399efe7f5121a5305a20eb5441592163b668b960c02d3f"
 }

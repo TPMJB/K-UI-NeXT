@@ -21,7 +21,8 @@
 #      and the optional reserve bank sits beside the power mux it feeds;
 #   5. the raw-G1 data probes move to U40's pins (same nets, open space);
 #   6. the high-current supply trunks (J20 -> F20 -> Q20, Q20 -> U20/U71/C200)
-#      are laid wide and locked (tools/route_power_trunks.py);
+#      are laid wide and locked, and the logic converter's output gets three
+#      power vias into its plane (tools/route_power_trunks.py);
 #   7. GND and +3V3_LOGIC fanout, power-return and thermal vias, six-layer stack.
 # Needs KiCad 10's Python as $PY (and PYNP with numpy/Pillow for the trunk
 # step) and kicad-cli as $KICAD10_CLI. Any failing step stops the script.

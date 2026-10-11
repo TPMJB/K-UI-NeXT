@@ -53,7 +53,7 @@
       "necks": 0,
       "segments": 36,
       "vias": 2,
-      "length_mm": 32.22
+      "length_mm": 32.42
     },
     {
       "net": "PRIMARY_5V",
@@ -76,6 +76,14 @@
       "segments": 25,
       "vias": 0,
       "length_mm": 10.46
+    },
+    {
+      "net": "+3V3_LOGIC",
+      "from": "L20.2",
+      "to": "plane",
+      "width_mm": 0.6,
+      "why": "converter output into the In4 plane; the vias share its short-circuit current",
+      "vias": 3
     }
   ]
 }

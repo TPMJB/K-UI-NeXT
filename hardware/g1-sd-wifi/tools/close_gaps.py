@@ -61,7 +61,7 @@ SLACK = 0.05                  # quantisation margin, mm (one cell: raster
 RIP_PENALTY = 30              # --rip: price per cell of another net's copper
 HIST_WEIGHT = 15              # --rip: added per earlier rip at that cell
 RIP_MARGIN = 0.65             # --rip: cut-back beyond the crossing, mm
-MAX_VICTIMS = 3               # --rip: most tracks one route may cut
+MAX_VICTIMS = 4               # --rip: most tracks and vias one route may cut
 ROUTE_LAYERS = [pcbnew.F_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.B_Cu]
 OUTER_INDICES = {0, 3}
 NX, NY = int(round(WIDTH / G)), int(round(HEIGHT / G))
@@ -290,10 +290,11 @@ def build(board, rippable=None, width=TRACK, via_size=(VIA_D, VIA_DRILL)):
             paint(tg[l], polys(it, l, t_grow), net)
             paint(vg, polys(it, l, v_grow), net)
         if it.Type() == pcbnew.PCB_PAD_T and not it.GetDrillSize().x:
-            # No via in an SMD land, whatever its net (solder wicking).
+            # No via in or touching an SMD land, whatever its net: an open
+            # via there draws solder from the joint.
             for l in (pcbnew.F_Cu, pcbnew.B_Cu):
                 if it.IsOnLayer(l):
-                    paint(via, polys(it, l, VIA_D / 2 + 0.05), -1)
+                    paint(via, polys(it, l, via_size[0] / 2 + 0.1), -1)
         drill = 0.0
         if it.Type() == pcbnew.PCB_VIA_T:
             drill = pcbnew.ToMM(it.GetDrill())
@@ -593,38 +594,6 @@ def cut(board, item, points):
     return gap
 
 
-def end_cells(track, net, layer_index, pos):
-    """Grid states next to a free end: the nearest free cells on its layer."""
-    i0, j0 = to_cell(pos.x, pos.y)
-    out = set()
-    for r in range(0, 3):
-        for i in range(i0 - r, i0 + r + 1):
-            for j in range(j0 - r, j0 + r + 1):
-                if 0 <= i < NX and 0 <= j < NY:
-                    v = track[ROUTE_LAYERS[layer_index]][j, i]
-                    if v == 0 or v == net:
-                        out.add((layer_index, i, j))
-        if out:
-            return out
-    return out
-
-
-def join(board, start, goal, net, width, start_pos, goal_pos, grids, allowed=None, box_margin=8.0):
-    """Route between two known cell sets and stub to the real positions."""
-    m = int(box_margin / G)
-    xs = [c[1] for c in start | goal]
-    ys = [c[2] for c in start | goal]
-    box = (max(0, min(xs) - m), max(0, min(ys) - m), min(NX - 1, max(xs) + m), min(NY - 1, max(ys) + m))
-    path = astar(grids[0], grids[1], net, start, goal, box, allowed)
-    if path is None:
-        return None
-    added = []
-    stub(board, start_pos, path[0], path[0][0], net, added, width)
-    add_path(board, path, net, added, width)
-    stub(board, goal_pos, path[-1], path[-1][0], net, added, width)
-    return added
-
-
 # Leftover pieces of cut tracks; remove_dangling_copper.py clears them.
 CLEANUP_TYPES = {'track_dangling', 'via_dangling'}
 
@@ -692,15 +661,16 @@ def route_pairs(board, pairs, nets, margin, protected):
     return results
 
 
-def rip_transaction(board, pair, nets, margin, protected, banned):
-    """Route one open pair through other nets' signal tracks, cut those
-    tracks back and reroute each of them around the new route. Returns
-    (record, None) when every piece is placed, else (None, nets to ban)."""
+def rip_transaction(board, pair, nets, margin, protected, banned, work, scratch):
+    """Route one open pair through other nets' unlocked signal copper (tracks
+    and vias), cut that copper back, and reroute whatever native DRC then
+    reports open on those nets. Returns (record, None) when every victim
+    connection is placed again, else (None, nets to ban next time)."""
     dist, name, pa, pb = pair
     net = nets[name]
     if name in protected:
         return None, set()
-    rippable = lambda it: (it.Type() == pcbnew.PCB_TRACE_T and not it.IsLocked()
+    rippable = lambda it: (it.Type() in (pcbnew.PCB_TRACE_T, pcbnew.PCB_VIA_T) and not it.IsLocked()
                            and it.GetNetname() not in protected and it.GetNetname() not in banned)
     track, via, soft_track, soft_via, soft_items = build(board, rippable)
     sa, sb = item_cells(board, pa, net), item_cells(board, pb, net)
@@ -717,30 +687,28 @@ def rip_transaction(board, pair, nets, margin, protected, banned):
         return None, set()
     crossed = victims(path, net, (soft_track, soft_via), soft_items)
     crossed_nets = {it.GetNetname() for it, _ in crossed}
-    if len(crossed) > MAX_VICTIMS:
+    if not crossed or len(crossed) > MAX_VICTIMS:
         return None, crossed_nets
     added = []
     stub(board, pcbnew.VECTOR2I(pcbnew.FromMM(pa[0]), pcbnew.FromMM(pa[1])), path[0], path[0][0], net, added)
-    add_path(board, path, net, added)
+    add_path(board, simplify(path, track, net), net, added)
     stub(board, pcbnew.VECTOR2I(pcbnew.FromMM(pb[0]), pcbnew.FromMM(pb[1])), path[-1], path[-1][0], net, added)
-    gaps = [cut(board, it, pts) for it, pts in crossed]
-    grids = build(board)
-    rerouted = []
-    for layer, vnet, width, a, b in gaps:
-        li = ROUTE_LAYERS.index(layer)
-        sa2, sb2 = end_cells(grids[0], vnet, li, a), end_cells(grids[0], vnet, li, b)
-        vname = board.GetNetInfo().GetNetItem(vnet).GetNetname()
-        piece = join(board, sa2, sb2, vnet, max(width, TRACK), a, b, grids,
-                     OUTER_INDICES if vname in OUTER_ONLY else None) if sa2 and sb2 else None
-        if piece is None:
-            return None, {vname}
-        for it in piece:
-            for l in ROUTE_LAYERS:
-                if it.IsOnLayer(l):
-                    paint(grids[0][l], polys(it, l, CLEAR + TRACK / 2 + SLACK), vnet)
-                    paint(grids[1], polys(it, l, CLEAR + VIA_D / 2 + SLACK), vnet)
-        rerouted.append(vname)
-    return {'net': name, 'routed': True, 'ripped_and_rerouted': rerouted, 'length_mm': round(dist, 2)}, None
+    graveyard = []
+    for it, pts in crossed:
+        if it.Type() == pcbnew.PCB_TRACE_T:
+            cut(board, it, pts)
+        else:
+            board.Remove(it)
+        graveyard.append(it)
+    pcbnew.SaveBoard(str(scratch), board)
+    report = drc(scratch, work)
+    reopen = [p for p in open_pairs(report) if p[1] in crossed_nets]
+    results = route_pairs(board, reopen, nets, margin, protected)
+    failed = {r['net'] for r in results if not r.get('routed')}
+    if failed:
+        return None, failed
+    return {'net': name, 'routed': True, 'ripped': sorted(crossed_nets), 'rerouted_pairs': len(reopen),
+            'length_mm': round(dist, 2)}, None
 
 
 def main():
@@ -815,7 +783,7 @@ def main():
                 banned = set()
                 for attempt in range(args.attempts):
                     board = pcbnew.LoadBoard(str(committed))
-                    record, ban = rip_transaction(board, pair, nets, args.margin, protected, banned)
+                    record, ban = rip_transaction(board, pair, nets, args.margin, protected, banned, work, scratch)
                     if record is None:
                         if not ban:
                             break
@@ -832,7 +800,7 @@ def main():
                         print(json.dumps(record), flush=True)
                         progress = True
                         break
-                    banned |= set(record['ripped_and_rerouted'])
+                    banned |= set(record['ripped'])
                 else:
                     failed_pairs.add(key)
                 if progress:
