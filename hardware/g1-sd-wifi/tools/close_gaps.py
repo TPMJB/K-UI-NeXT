@@ -50,6 +50,7 @@ WIDTH, HEIGHT = 59.0, 115.0
 G = float(os.environ.get('KUI_GRID_MM', '0.05'))
 TRACK = 0.15                  # routed width, mm (load_rules: Default class)
 POWER_TRACKS = (0.4, 0.3)     # supply nets: these widths only, widest first
+PIN_ESCAPE = 0.15             # supply nets other than outer-only trunks: last resort at a fine-pitch pin
 CLEAR = 0.15                  # copper clearance, mm (load_rules: board minimum)
 EDGE = 0.30                   # copper-to-edge clearance, mm
 VIA_D, VIA_DRILL = 0.50, 0.20
@@ -71,7 +72,11 @@ MAX_VICTIMS = 4               # --rip: most tracks and vias one route may cut
 # reference) is never used, and supply nets never hop. Native DRC (zones
 # refilled) still has to accept every hop and the plane's connectivity.
 PLANE_HOPS = os.environ.get('KUI_PLANE_HOPS') == '1'
-PLANE_PRICE = 4.0
+PLANE_PRICE = float(os.environ.get('KUI_PLANE_PRICE', '4.0'))
+# KUI_PLANE_BOX='x0,y0,x1,y1;...' (board mm from the top-left corner) confines
+# hops to those boxes: a corridor where a slot in the plane runs alongside the
+# signals it carries rather than across them.
+PLANE_BOXES = [tuple(map(float, b.split(','))) for b in os.environ.get('KUI_PLANE_BOX', '').split(';') if b]
 ROUTE_LAYERS = [pcbnew.F_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.B_Cu] + ([pcbnew.In4_Cu] if PLANE_HOPS else [])
 OUTER_INDICES = {0, 3}
 SIGNAL_INDICES = {0, 1, 2, 3}
@@ -235,6 +240,165 @@ def c_astar():
     return _LIB[0]
 
 
+# --exhaustive: a uniform-cost (Dijkstra) search over the whole board with a
+# bucket queue, used when the weighted search above gives up. A long detour
+# round the BIOS opening can exhaust the weighted search's budget although a
+# way exists; this one visits each grid state at most once, so it either
+# finds the cheapest way or proves there is none. Costs are in tenths of a
+# cell: 10 straight, 14 diagonal, VIA_COST * 10 per via.
+C_DIJKSTRA = r"""
+#include <stdint.h>
+#include <stdlib.h>
+
+typedef struct { int32_t *a; long n, cap; } vec;
+
+static int vpush(vec *v, int32_t x) {
+    if (v->n == v->cap) {
+        long cap = v->cap ? v->cap * 2 : 1024;
+        int32_t *p = realloc(v->a, cap * sizeof(int32_t));
+        if (!p) return 1;
+        v->a = p; v->cap = cap;
+    }
+    v->a[v->n++] = x;
+    return 0;
+}
+
+/* freeg: nl*ny*nx cells a track may use; vfree: ny*nx cells a via may use;
+   price: extra cost per cell or NULL. Writes the cheapest path, start to
+   goal, as (layer, i, j) triples; returns its length, -1 if there is none,
+   below -1 on failure. */
+long dijkstra(int nl, int nx, int ny, const uint8_t *freeg, const uint8_t *vfree, const int32_t *price,
+              int via_cost, int ns, const int32_t *starts, int ng, const int32_t *goals,
+              int32_t *out, long out_cap) {
+    static const int di[8] = {1, -1, 0, 0, 1, 1, -1, -1};
+    static const int dj[8] = {0, 0, 1, -1, 1, -1, 1, -1};
+    static const int dc[8] = {10, 10, 10, 10, 14, 14, 14, 14};
+    enum { RING = 1 << 14 };
+    long plane = (long)ny * nx, n = (long)nl * plane, found = -1, result = -1, pending = 0;
+    int32_t *dist = malloc(n * sizeof(int32_t));
+    uint8_t *from = malloc(n);      /* 0-7: step direction, 8 + m: via from layer m, 255: start */
+    uint8_t *goal = calloc(n, 1);
+    vec *ring = calloc(RING, sizeof(vec));
+    if (!dist || !from || !goal || !ring) { result = -3; goto done; }
+    for (long k = 0; k < n; k++) dist[k] = INT32_MAX;
+    for (int k = 0; k < ng; k++) goal[goals[3 * k] * plane + (long)goals[3 * k + 2] * nx + goals[3 * k + 1]] = 1;
+    for (int k = 0; k < ns; k++) {
+        long s = starts[3 * k] * plane + (long)starts[3 * k + 2] * nx + starts[3 * k + 1];
+        if (dist[s] == 0) continue;
+        dist[s] = 0; from[s] = 255;
+        if (vpush(&ring[0], (int32_t)s)) { result = -3; goto done; }
+        pending++;
+    }
+    for (int32_t cost = 0; pending > 0 && found < 0; cost++) {
+        vec *b = &ring[cost % RING];
+        while (b->n > 0) {
+            int32_t s = b->a[--b->n];
+            pending--;
+            if (dist[s] != cost) continue;
+            if (goal[s]) { found = s; break; }
+            int l = s / plane;
+            long r = s % plane;
+            int j = r / nx, i = r % nx;
+            for (int d = 0; d < 8; d++) {
+                int ni = i + di[d], nj = j + dj[d];
+                if (ni < 0 || nj < 0 || ni >= nx || nj >= ny) continue;
+                long t = l * plane + (long)nj * nx + ni;
+                if (!freeg[t]) continue;
+                int32_t c = cost + dc[d] + (price ? price[t] : 0);
+                if (c < dist[t]) {
+                    dist[t] = c; from[t] = d;
+                    if (vpush(&ring[c % RING], (int32_t)t)) { result = -3; goto done; }
+                    pending++;
+                }
+            }
+            if (!vfree[r]) continue;
+            for (int m = 0; m < nl; m++) {
+                long t = m * plane + r;
+                if (m == l || !freeg[t]) continue;
+                int32_t c = cost + via_cost + (price ? price[t] : 0);
+                if (c < dist[t]) {
+                    dist[t] = c; from[t] = 8 + l;
+                    if (vpush(&ring[c % RING], (int32_t)t)) { result = -3; goto done; }
+                    pending++;
+                }
+            }
+        }
+    }
+    if (found >= 0) {
+        long len = 0;
+        for (long s = found;;) {
+            len++;
+            if (from[s] == 255) break;
+            int l = s / plane; long r = s % plane; int d = from[s];
+            s = d < 8 ? l * plane + (long)(r / nx - dj[d]) * nx + (r % nx - di[d]) : (long)(d - 8) * plane + r;
+        }
+        if (len > out_cap) { result = -2; goto done; }
+        long k = len;
+        for (long s = found;;) {
+            int l = s / plane; long r = s % plane; int d = from[s];
+            k--;
+            out[3 * k] = l; out[3 * k + 1] = r % nx; out[3 * k + 2] = r / nx;
+            if (d == 255) break;
+            s = d < 8 ? l * plane + (long)(r / nx - dj[d]) * nx + (r % nx - di[d]) : (long)(d - 8) * plane + r;
+        }
+        result = len;
+    }
+done:
+    if (ring) for (int k = 0; k < RING; k++) free(ring[k].a);
+    free(ring); free(dist); free(from); free(goal);
+    return result;
+}
+"""
+_DLIB = []
+EXHAUSTIVE = False
+
+
+def c_dijkstra():
+    if not _DLIB:
+        lib = None
+        cache = pathlib.Path(tempfile.gettempdir()) / ('close_gaps_dij_%s.so' % hashlib.sha256(C_DIJKSTRA.encode()).hexdigest()[:16])
+        try:
+            if not cache.exists():
+                src = cache.with_suffix('.c')
+                src.write_text(C_DIJKSTRA)
+                subprocess.run([os.environ.get('CC', 'cc'), '-O2', '-shared', '-fPIC', '-o', str(cache), str(src)],
+                               check=True, capture_output=True)
+            lib = ctypes.CDLL(str(cache))
+            P = ctypes.c_void_p
+            lib.dijkstra.restype = ctypes.c_long
+            lib.dijkstra.argtypes = [ctypes.c_int] * 3 + [P] * 3 + [ctypes.c_int, ctypes.c_int, P, ctypes.c_int, P,
+                                     P, ctypes.c_long]
+        except (OSError, subprocess.CalledProcessError):
+            lib = None
+        _DLIB.append(lib)
+    return _DLIB[0]
+
+
+def exhaustive(track, via, net, starts, goals, allowed=None):
+    """The cheapest path over the whole board, or None when there is none."""
+    lib = c_dijkstra()
+    if lib is None:
+        raise SystemExit('--exhaustive needs a C compiler')
+    free = [((t == 0) | (t == net)) if allowed is None or k in allowed else np.zeros_like(t, dtype=bool)
+            for k, t in enumerate(track[l] for l in ROUTE_LAYERS)]
+    fg = np.ascontiguousarray(np.stack(free).astype(np.uint8))
+    vf = np.ascontiguousarray(((via == 0) | (via == net)).astype(np.uint8))
+    price = None
+    if PLANE_HOPS:
+        price = np.zeros(fg.shape, np.int32)
+        price[4] = int(round(PLANE_PRICE * 10))
+    st = np.array(sorted(starts), np.int32).ravel()
+    gl = np.array(sorted(goals), np.int32).ravel()
+    cap = 2000000
+    out = np.zeros(3 * cap, np.int32)
+    ptr = lambda a: a.ctypes.data_as(ctypes.c_void_p) if a is not None else None
+    n = lib.dijkstra(len(ROUTE_LAYERS), NX, NY, ptr(fg), ptr(vf), ptr(price), int(VIA_COST * 10),
+                     len(starts), ptr(st), len(goals), ptr(gl), ptr(out), cap)
+    if n < -1:
+        raise RuntimeError('exhaustive search failed (%d)' % n)
+    return None if n < 0 else [tuple(int(v) for v in out[3 * k:3 * k + 3]) for k in range(n)]
+
+
 def to_cell(x_nm, y_nm):
     return (int(round((pcbnew.ToMM(x_nm) - ORIGIN[0]) / G)), int(round((pcbnew.ToMM(y_nm) - ORIGIN[1]) / G)))
 
@@ -333,6 +497,11 @@ def build(board, rippable=None, width=TRACK, via_size=(VIA_D, VIA_DRILL)):
     for l in ROUTE_LAYERS:
         track[l][edge] = -1
     via[vedge] = -1
+    if PLANE_HOPS and PLANE_BOXES:
+        inside = np.zeros((NY, NX), bool)
+        for x0, y0, x1, y1 in PLANE_BOXES:
+            inside |= (xx >= x0 / G) & (xx <= x1 / G) & (yy >= y0 / G) & (yy <= y1 / G)
+        track[pcbnew.In4_Cu][~inside] = -1
     if rippable:
         return track, via, soft_track, soft_via, soft_items
     return track, via
@@ -444,9 +613,11 @@ def island_cells(board, desc_pos, net, allowed=None):
     picked as the closest."""
     x, y = desc_pos
     p = pcbnew.VECTOR2I(pcbnew.FromMM(x), pcbnew.FromMM(y))
+    want = END_LAYER.get((board.GetNetInfo().GetNetItem(net).GetNetname(), round(x, 4), round(y, 4)))
+    want = board.GetLayerID(want) if want else None
     seed = None
     for it in [q for f in board.GetFootprints() for q in f.Pads()] + list(board.GetTracks()):
-        if it.GetNetCode() == net and it.HitTest(p):
+        if it.GetNetCode() == net and it.HitTest(p) and (want is None or it.IsOnLayer(want)):
             seed = it
             break
     if seed is None:
@@ -669,12 +840,22 @@ def hard_violations(report):
     return sum(1 for v in report['violations'] if v['type'] not in CLEANUP_TYPES)
 
 
+# Layer DRC named for each open end, keyed by (net, x, y): two pieces of a
+# net can sit at the same point on different layers (a via that joined them
+# was removed), and the island must start from the piece DRC meant.
+END_LAYER = {}
+
+
 def open_pairs(report):
     pairs = []
     for u in report['unconnected_items']:
         a, b = u['items'][:2]
         name = re.search(r'\[([^\]]+)\]', a['description']).group(1)
         pa, pb = (a['pos']['x'], a['pos']['y']), (b['pos']['x'], b['pos']['y'])
+        for it, p in ((a, pa), (b, pb)):
+            m = re.search(r' on ([A-Za-z0-9.]+\.Cu)(?! -)', it['description'])
+            if m and not it['description'].startswith(('Via', 'Pad')):
+                END_LAYER[(name, round(p[0], 4), round(p[1], 4))] = m.group(1)
         pairs.append((math.dist(pa, pb), name, pa, pb))
     return sorted(pairs)
 
@@ -707,8 +888,12 @@ def route_pairs(board, pairs, nets, margin, protected):
         path = None
         if name in protected:
             # Supply copper is routed at a supply width or not at all.
-            for width in POWER_TRACKS:
-                wide = build(board, None, width, POWER_VIA)
+            # Plane-fed supply pins (a 0.4 mm-pitch QFN's IOVDD, say) take a
+            # 0.15 mm escape when no supply width fits, as the reviewed
+            # local bypass feeds do; outer-only trunks never narrow.
+            for width in POWER_TRACKS + (() if name in OUTER_ONLY else (PIN_ESCAPE,)):
+                via_size = (VIA_D, VIA_DRILL) if width == PIN_ESCAPE else POWER_VIA
+                wide = build(board, None, width, via_size)
                 used = wide[0]
                 for b in boxes:
                     path = astar(wide[0], wide[1], net, sa, sb, b, allowed)
@@ -722,6 +907,8 @@ def route_pairs(board, pairs, nets, margin, protected):
                 path = astar(grids[0], grids[1], net, sa, sb, b, allowed)
                 if path is not None:
                     break
+            if path is None and EXHAUSTIVE:
+                path = exhaustive(grids[0], grids[1], net, sa, sb, allowed)
         if path is None:
             results.append({'net': name, 'routed': False, 'reason': 'no path', 'length_mm': round(dist, 2)})
             continue
@@ -729,7 +916,7 @@ def route_pairs(board, pairs, nets, margin, protected):
         join(board, amap[path[0]], path[0], net, added, width)
         # Straight runs where the grid allows (fewer, any-angle segments).
         path = simplify(path, used, net)
-        add_path(board, path, net, added, width, POWER_VIA if name in protected else (VIA_D, VIA_DRILL))
+        add_path(board, path, net, added, width, via_size if name in protected else (VIA_D, VIA_DRILL))
         join(board, bmap[path[-1]], path[-1], net, added, width)
         for it in added:
             for l in ROUTE_LAYERS:
@@ -799,8 +986,14 @@ def main():
     ap.add_argument('--rip', action='store_true',
                     help='After the plain sweep, route the rest through other signal tracks and reroute those')
     ap.add_argument('--attempts', type=int, default=4, help='--rip: tries per open pair')
+    ap.add_argument('--exhaustive', action='store_true',
+                    help='when the weighted search fails, search the whole board exhaustively (slow, but finds any way)')
+    ap.add_argument('--net', action='append',
+                    help='only these nets, routed in the order given (default: every open pair, shortest first)')
     ap.add_argument('--report', type=pathlib.Path)
     args = ap.parse_args()
+    global EXHAUSTIVE
+    EXHAUSTIVE = args.exhaustive
     load_rules(args.board)
     work = pathlib.Path(tempfile.mkdtemp())
     scratch = work / args.board.name
@@ -826,7 +1019,10 @@ def main():
     nets = {n.GetNetname(): n.GetNetCode() for n in board.GetNetInfo().NetsByNetcode().values()}
     protected = protected_nets(args.board)
     # 1. Plain sweep; any route that native DRC rejects is removed again.
-    results = route_pairs(board, open_pairs(report), nets, args.margin, protected)
+    pairs = open_pairs(report)
+    if args.net:
+        pairs = sorted((p for p in pairs if p[1] in args.net), key=lambda p: (args.net.index(p[1]), p[0]))
+    results = route_pairs(board, pairs, nets, args.margin, protected)
     pcbnew.SaveBoard(str(scratch), board)
     check = drc(scratch, work)
     bad = {}

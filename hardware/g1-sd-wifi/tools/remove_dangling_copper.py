@@ -46,7 +46,9 @@ def main():
             shutil.copy(extra, work / extra.name.replace(args.board.stem, scratch.stem))
     board = pcbnew.LoadBoard(str(args.board))
     graveyard, removed, locked = [], [], set()
-    for _ in range(12):
+    # One pass per stub end: a grid route's staircase can leave a chain of
+    # many short pieces, each exposed only when the one beyond it goes.
+    for _ in range(400):
         pcbnew.SaveBoard(str(scratch), board)
         found = dangling(scratch, work)
         items = [t for t in board.GetTracks() if t.m_Uuid.AsString() in found]

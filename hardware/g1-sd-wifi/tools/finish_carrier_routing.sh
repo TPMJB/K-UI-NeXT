@@ -48,12 +48,14 @@ run "$T/generate_board.py" import-session "$SES"
 run "$T/remove_dangling_copper.py" --board "$B" --report "$R/dangling-after-import.json"
 run_with "$PYNP" "$T/close_gaps.py" --board "$B" --report "$R/close-gaps.json"
 run "$T/remove_dangling_copper.py" --board "$B" --report "$R/dangling-after-gaps.json"
+run "$T/remove_floating_copper.py" --board "$B" --report "$R/floating-after-gaps.json"
 # A second sweep: the cleanup can free room the first sweep lacked.
 run_with "$PYNP" "$T/close_gaps.py" --board "$B" --report "$R/close-gaps-2.json"
 run "$T/remove_dangling_copper.py" --board "$B" --report "$R/dangling-after-gaps-2.json"
 run "$T/widen_power_tracks.py" --board "$B" $(printf -- '--net %s ' "${SUPPLY[@]}") \
     --width 0.6 --width 0.4 --width 0.3 --report "$R/power-widths.json"
 run "$T/remove_dangling_copper.py" --board "$B" --report "$R/dangling-after-widening.json"
+run "$T/remove_floating_copper.py" --board "$B" --report "$R/floating-after-widening.json"
 run_with "$PYNP" "$T/check_power_copper.py" --board "$B" --report "$ROOT/design/power-copper-check.json"
 if [ "$(sha256sum "$PRO")" != "$PRO_SUM" ]; then
     echo "FAILED: the project rules file changed during finishing" >&2; exit 1
