@@ -21,6 +21,19 @@ DATA_SCHEDULE_MODE ?= 0
 DATA_BUDGET_PROFILE ?= 0
 AD_FOLLOWUP_PROFILE ?= 0
 DATA_TUNING_PROFILE ?= 0
+STARTUP_IRQ_PROFILE ?= 0
+ifneq ($(words $(STARTUP_IRQ_PROFILE)),1)
+$(error STARTUP_IRQ_PROFILE must be one value from 0, 1 or 2)
+endif
+ifneq ($(filter $(STARTUP_IRQ_PROFILE),0 1 2),$(STARTUP_IRQ_PROFILE))
+$(error STARTUP_IRQ_PROFILE must be 0, 1 or 2)
+endif
+ifneq ($(STARTUP_IRQ_PROFILE),0)
+ifneq ($(DATA_TUNING_PROFILE):$(AD_FOLLOWUP_PROFILE):$(DATA_BUDGET_PROFILE):$(DATA_SCHEDULE_MODE),1:2:4:2)
+$(error Startup IRQ experiments require the admitted AI configuration)
+endif
+IRQ_CONFIG = STARTUP_IRQ_PROFILE=$(STARTUP_IRQ_PROFILE)
+endif
 ifneq ($(words $(DATA_TUNING_PROFILE)),1)
 $(error DATA_TUNING_PROFILE must be one value from 0, 1, 2, 3 or 4)
 endif
@@ -166,6 +179,7 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  $(if $(BUDGET_CONFIG),-DKUI_TOY_PILOT_DATA_BUDGET_PROFILE=$(DATA_BUDGET_PROFILE)) \
  $(if $(FOLLOWUP_CONFIG),-DKUI_TOY_PILOT_AD_FOLLOWUP_PROFILE=$(AD_FOLLOWUP_PROFILE)) \
  $(if $(TUNING_CONFIG),-DKUI_TOY_PILOT_DATA_TUNING_PROFILE=$(DATA_TUNING_PROFILE)) \
+ $(if $(IRQ_CONFIG),-DKUI_TOY_PILOT_STARTUP_IRQ_PROFILE=$(STARTUP_IRQ_PROFILE)) \
  -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
  -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
  -Iinclude -Isrc/loader -I$(BUILD) -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -226,7 +240,7 @@ resident: $(BUILD)/resident-sci.bin
 force-config:
 $(BUILD)/build-config: force-config
 	@mkdir -p $(@D)
-	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') $(if $(FOLLOWUP_CONFIG),'$(FOLLOWUP_CONFIG)') $(if $(TUNING_CONFIG),'$(TUNING_CONFIG)') > $@.new
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') $(if $(FOLLOWUP_CONFIG),'$(FOLLOWUP_CONFIG)') $(if $(TUNING_CONFIG),'$(TUNING_CONFIG)') $(if $(IRQ_CONFIG),'$(IRQ_CONFIG)') > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
 $(BUILD)/sci/%.o: %.c

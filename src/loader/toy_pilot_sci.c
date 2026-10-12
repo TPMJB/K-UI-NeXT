@@ -11,7 +11,7 @@
 #endif
 #define IPRB UINT32_C(0xffd00008)
 #define SCI_FIELD 0x00f0u
-#define SCI_LEVEL 0x0010u
+#define SCI_LEVEL KUI_TOY_STARTUP_SCI_LEVEL
 #define TOKEN_LIMIT 65536u
 #define RETRIES 8u
 #define POLLED_AFTER 2u

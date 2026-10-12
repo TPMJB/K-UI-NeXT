@@ -1,0 +1,192 @@
+{
+  "schema": "toy-tuning-CRC-glyph-errata-v1",
+  "created_utc_date": "2026-10-12",
+  "word_indexing": "zero-based within16wordpage",
+  "original_schema_source": "aeaf-tuning-source/include/kui/toy_loader_schedule_report.h and tools/package_toy_loader_budget.py",
+  "CRC_contract": "First credited sector CRC32 only. This fingerprint does not verify other sectors or originalGDI.",
+  "glyph_source": "ad-followup-source/src/loader/retail_display.c",
+  "glyph_rows": {
+    "0": [
+      14,
+      17,
+      19,
+      21,
+      25,
+      17,
+      14
+    ],
+    "D": [
+      30,
+      17,
+      17,
+      17,
+      17,
+      17,
+      30
+    ]
+  },
+  "entries": [
+    {
+      "profile": "AF",
+      "capture": "62417.mp4",
+      "report": "SCHED",
+      "page_hex": "07",
+      "page_word_index_zero_based": 1,
+      "global_word": 113,
+      "schema_field": "record[3].first_sector_CRC32",
+      "record_geometry_as_stored": {
+        "LBA_hex": "0007829D",
+        "sector_count": 1
+      },
+      "stored_hex_before_QA": "D990CACB",
+      "pixel_verified_hex": "D99DCACB",
+      "native_pixel_basis": "The fourth character is hollow D without the internal diagonal of0; it matches the first D in the same printed word. Each listed current/historical frame was viewed directly. No CRC expected value or arithmetic supplied a glyph.",
+      "provenance": [
+        {
+          "frame": "followup-matrix-20261012/62417/frames/frame-054.jpg",
+          "sha256": "12d729ab6b2d6a0213cbcc9368503d89bd834866e3e6783553ab1e54b1dee7df",
+          "approximate_video_seconds": 53.5
+        },
+        {
+          "frame": "followup-matrix-20261012/62417/frames/frame-055.jpg",
+          "sha256": "1ab1d544f2dbb215cc8fdf9b600869b617f98bba08c2abce22aa223fa2001b57",
+          "approximate_video_seconds": 54.5
+        }
+      ],
+      "primary_file": "followup-matrix-20261012/62417/sched-pages.json",
+      "primary_sha256_before": "2352a3a8b1419143b4c00b5c365caa3248defe0e5e9c6a8a7bca0fe40c108568",
+      "historical_primary_immutable": true,
+      "current_primary_mutated": false,
+      "primary_sha256_after": "2352a3a8b1419143b4c00b5c365caa3248defe0e5e9c6a8a7bca0fe40c108568"
+    },
+    {
+      "profile": "AI",
+      "capture": "62418.mp4",
+      "report": "SCHED",
+      "page_hex": "09",
+      "page_word_index_zero_based": 5,
+      "global_word": 149,
+      "schema_field": "record[5].first_sector_CRC32",
+      "record_geometry_as_stored": {
+        "LBA_hex": "0007829D",
+        "sector_count": 1
+      },
+      "stored_hex_before_QA": "D990CACB",
+      "pixel_verified_hex": "D99DCACB",
+      "native_pixel_basis": "The fourth character is hollow D without the internal diagonal of0; it matches the first D in the same printed word. Each listed current/historical frame was viewed directly. No CRC expected value or arithmetic supplied a glyph.",
+      "provenance": [
+        {
+          "frame": "tuning-matrix-20261012/62418/frames/frame-048.jpg",
+          "sha256": "37a3dc4da930b58491ad3a16d89cabe58060229112e53660a3bf63837224543c",
+          "approximate_video_seconds": 47.5
+        }
+      ],
+      "primary_file": "tuning-matrix-20261012/62418/sched-pages.json",
+      "primary_sha256_before": "bb4765944b3e43cc27f3ebf0372fd3d1bf90653f664356584c019f98274db092",
+      "historical_primary_immutable": false,
+      "current_primary_mutated": true,
+      "primary_sha256_after": "f2eddfdb8150d124d0e9f48fd01ab1d23d93d7d5c23ccf01f62a4eb2aeca409e"
+    },
+    {
+      "profile": "AJ",
+      "capture": "62419.mp4",
+      "report": "SCHED",
+      "page_hex": "07",
+      "page_word_index_zero_based": 1,
+      "global_word": 113,
+      "schema_field": "record[3].first_sector_CRC32",
+      "record_geometry_as_stored": {
+        "LBA_hex": "0007829D",
+        "sector_count": 1
+      },
+      "stored_hex_before_QA": "D990CACB",
+      "pixel_verified_hex": "D99DCACB",
+      "native_pixel_basis": "The fourth character is hollow D without the internal diagonal of0; it matches the first D in the same printed word. Each listed current/historical frame was viewed directly. No CRC expected value or arithmetic supplied a glyph.",
+      "provenance": [
+        {
+          "frame": "tuning-matrix-20261012/62419/frames/frame-044.jpg",
+          "sha256": "7593248a11a013100776a9176879d15e6bb8611b08ce7e68e7209cc695902bbb",
+          "approximate_video_seconds": 43.5
+        },
+        {
+          "frame": "tuning-matrix-20261012/62419/frames/frame-045.jpg",
+          "sha256": "c233fba47ef7cfef98af2ec49b5142e1010d99da73f2c6ceffdbabe7182da832",
+          "approximate_video_seconds": 44.5
+        }
+      ],
+      "primary_file": "tuning-matrix-20261012/62419/sched-pages.json",
+      "primary_sha256_before": "89ab16c98fc5ab24a1432b78c87e1583ba56870ce592e109b923c1277867dae6",
+      "historical_primary_immutable": false,
+      "current_primary_mutated": true,
+      "primary_sha256_after": "230a45f8976bfd82b713a737f88b309a9c8e384440b6c7d7229c6813b5bef9c3"
+    },
+    {
+      "profile": "AK",
+      "capture": "62420.mp4",
+      "report": "SCHED",
+      "page_hex": "09",
+      "page_word_index_zero_based": 5,
+      "global_word": 149,
+      "schema_field": "record[5].first_sector_CRC32",
+      "record_geometry_as_stored": {
+        "LBA_hex": "0007829D",
+        "sector_count": 1
+      },
+      "stored_hex_before_QA": "D99DCACB",
+      "pixel_verified_hex": "D99DCACB",
+      "native_pixel_basis": "The fourth character is hollow D without the internal diagonal of0; it matches the first D in the same printed word. Each listed current/historical frame was viewed directly. No CRC expected value or arithmetic supplied a glyph.",
+      "provenance": [
+        {
+          "frame": "tuning-matrix-20261012/62420/frames/frame-047.jpg",
+          "sha256": "789ca439d6aaee4b1b6a3415e9af7ba2000468e190e9b4fbddf40f53c3b5b1c5",
+          "approximate_video_seconds": 46.5
+        }
+      ],
+      "primary_file": "tuning-matrix-20261012/62420/sched-pages.json",
+      "primary_sha256_before": "aa85c9ce32db6435d859dfe58f35c514d5745eafd269559a66408bad192df755",
+      "historical_primary_immutable": false,
+      "current_primary_mutated": false,
+      "primary_sha256_after": "aa85c9ce32db6435d859dfe58f35c514d5745eafd269559a66408bad192df755"
+    },
+    {
+      "profile": "AL",
+      "capture": "62421.mp4",
+      "report": "SCHED",
+      "page_hex": "07",
+      "page_word_index_zero_based": 1,
+      "global_word": 113,
+      "schema_field": "record[3].first_sector_CRC32",
+      "record_geometry_as_stored": {
+        "LBA_hex": "0007829D",
+        "sector_count": 1
+      },
+      "stored_hex_before_QA": "D990CACB",
+      "pixel_verified_hex": "D99DCACB",
+      "native_pixel_basis": "The fourth character is hollow D without the internal diagonal of0; it matches the first D in the same printed word. Each listed current/historical frame was viewed directly. No CRC expected value or arithmetic supplied a glyph.",
+      "provenance": [
+        {
+          "frame": "tuning-matrix-20261012/62421/frames/frame-058.jpg",
+          "sha256": "cd7d2cc03d6f56268928c1d2a958c7d1aa83560619f6d1557c227de5b79cd1ae",
+          "approximate_video_seconds": 57.5
+        },
+        {
+          "frame": "tuning-matrix-20261012/62421/frames/frame-059.jpg",
+          "sha256": "149dc140c64c75e939f91f8a08ce0fede80bbbe8047ca8a0c619675c61051f5f",
+          "approximate_video_seconds": 58.5
+        }
+      ],
+      "primary_file": "tuning-matrix-20261012/62421/sched-pages.json",
+      "primary_sha256_before": "dc275fb4599bb4e3d50937d32d33576913799ee8d664f70967bea782db32e9cc",
+      "historical_primary_immutable": false,
+      "current_primary_mutated": true,
+      "primary_sha256_after": "64462960653500b7149c830986b09ed2d8ba10ef518a3b75783bb0ae99bd85e1"
+    }
+  ],
+  "result": {
+    "all_five_direct_native_CRC_reads": "D99DCACB",
+    "old_AF_primary_unchanged": true,
+    "current_AI_AJ_AL_exact_CRC_words_and_numeric_derivatives_corrected": true,
+    "AK_was_already_correct": true,
+    "unresolved_disputes": []
+  }
+}

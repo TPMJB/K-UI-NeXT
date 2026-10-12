@@ -4,6 +4,7 @@
 #if !KUI_TOY_PILOT_SHARED_SCI && KUI_TOY_PILOT_DATA_SCHEDULE_MODE != 2
 #error High SCI vectors require the separate shared or startup DATA Toy build
 #endif
+#include "kui/toy_loader_irq_progress.h"
 #define C_SYMBOL(name) _ ## name
     .section .text.toy_sci_vectors,"ax"
     .align 2
@@ -240,7 +241,7 @@ C_SYMBOL(kui_toy_pilot_sci_rehook):
     ldc r1,vbr
     mov.l .Lrehook_iprb,r1
     mov.w @r1,r0
-    xor #0x10,r0
+    xor #KUI_TOY_STARTUP_SCI_NIBBLE,r0
     and #0xf0,r0
     mov.w @r1,r2
     xor r0,r2

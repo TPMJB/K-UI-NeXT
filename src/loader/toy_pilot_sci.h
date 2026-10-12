@@ -39,7 +39,13 @@ enum kui_toy_pilot_sci_result {
 /* Foreground CHECK/EXEC admission, checked between finite stream steps. */
 #if KUI_TOY_PILOT_DATA_TUNING_PROFILE
 #define KUI_TOY_SCI_SERVICE_BLOCKS KUI_TOY_TUNING_BLOCKS
+#if KUI_TOY_PILOT_STARTUP_IRQ_PROFILE == 2
+/* AN returns after one finite transport step, including a not-ready poll.
+ * It never unmasks this entry; the card IRQ may run after the game resumes. */
+#define KUI_TOY_SCI_SERVICE_STEPS 1u
+#else
 #define KUI_TOY_SCI_SERVICE_STEPS KUI_TOY_TUNING_STEPS
+#endif
 #define KUI_TOY_SCI_SERVICE_TICKS KUI_TOY_TUNING_TICKS
 #else
 #if KUI_TOY_PILOT_AD_FOLLOWUP_PROFILE == 1 || KUI_TOY_PILOT_AD_FOLLOWUP_PROFILE == 2
