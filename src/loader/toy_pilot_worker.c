@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/toy_pilot.h"
+#include "kui/toy_loader_ad_followup.h"
 #if KUI_TOY_PILOT_ASYNC_CDDA && !KUI_TOY_PILOT_SHARED_SCI
 #error Asynchronous CDDA requires the shared SCI owner
 #endif
@@ -40,8 +41,8 @@ extern uint8_t __toy_pilot_gd_stack_top[] __asm__("__toy_pilot_gd_stack_top");
 #define CLOCK_GAP_LIMIT 7812500u /* Fail closed on >10s or a clock reset. */
 #define APPLY_LIMIT_TICKS 781250u /* 1s; checked only while game service runs. */
 #define SETUP_BURST_TICKS 1563u /* 2ms plus at most one bounded publication. */
-#define REFILL_VISIT_TICKS 12500u /* 16ms admission budget, not a card timeout. */
-#define REFILL_QUANTA 4u
+#define REFILL_VISIT_TICKS KUI_TOY_AD_REFILL_TICKS /* Admission, not a card timeout. */
+#define REFILL_QUANTA KUI_TOY_AD_REFILL_QUANTA
 #define STACK_PATTERN UINT32_C(0xa55a5aa5)
 #define CMD_PLAY 20u
 #define CMD_PLAY2 21u
@@ -1362,7 +1363,7 @@ void kui_toy_pilot_worker_step(void) {
     playback_step(now);if(owner.disabled) goto done;
     /* Add bounded capture opportunities at both work boundaries. The same
      * proof and expiry rules apply; the admission clock remains the original
-     * now above, so entry observations consume the16ms visit budget too. */
+     * now above, so entry observations consume the visit budget too. */
     if(owner.ring_running && !owner.stop_wait && !owner.bus_deferred &&
        owner.mailbox.generation==owner.model.generation) (void)ring_observe();
     if(owner.bus_deferred) goto done;
@@ -1379,7 +1380,7 @@ void kui_toy_pilot_worker_step(void) {
          * before EXTRA work: a slow first quantum is still allowed, but
          * cannot cause an unbounded burst of slow reads. The quantum cap
          * also bounds a stopped timer. Existing card/G2 deadlines bound each operation;
-         * the 16ms admission budget can overrun by one complete quantum. */
+         * the admission budget can overrun by one complete quantum. */
         for(unsigned quantum=0;quantum<REFILL_QUANTA;quantum++) {
             if(quantum && ticks()-now>=REFILL_VISIT_TICKS) break;
             uint32_t before=owner.ring_fill_stream;

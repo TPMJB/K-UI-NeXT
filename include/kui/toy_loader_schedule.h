@@ -11,6 +11,7 @@
 #ifndef KUI_TOY_PILOT_DATA_BUDGET_PROFILE
 #define KUI_TOY_PILOT_DATA_BUDGET_PROFILE 0
 #endif
+#include "kui/toy_loader_ad_followup.h"
 #if KUI_TOY_PILOT_DATA_BUDGET_PROFILE < 0 || KUI_TOY_PILOT_DATA_BUDGET_PROFILE > 4
 #error Toy loader DATA budget profile must be 0, 1, 2, 3 or 4
 #endif

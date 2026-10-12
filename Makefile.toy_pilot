@@ -19,6 +19,19 @@ DATA_PROBE ?= 0
 DATA_PAYLOAD_MODE ?= 0
 DATA_SCHEDULE_MODE ?= 0
 DATA_BUDGET_PROFILE ?= 0
+AD_FOLLOWUP_PROFILE ?= 0
+ifneq ($(words $(AD_FOLLOWUP_PROFILE)),1)
+$(error AD_FOLLOWUP_PROFILE must be one value from 0, 1, 2, 3 or 4)
+endif
+ifneq ($(filter $(AD_FOLLOWUP_PROFILE),0 1 2 3 4),$(AD_FOLLOWUP_PROFILE))
+$(error AD_FOLLOWUP_PROFILE must be 0, 1, 2, 3 or 4)
+endif
+ifneq ($(AD_FOLLOWUP_PROFILE),0)
+ifneq ($(DATA_BUDGET_PROFILE):$(DATA_SCHEDULE_MODE),4:2)
+$(error AD follow-ups require the admitted AD startup DATA profile)
+endif
+FOLLOWUP_CONFIG = AD_FOLLOWUP_PROFILE=$(AD_FOLLOWUP_PROFILE)
+endif
 ifneq ($(filter $(DATA_BUDGET_PROFILE),0 1 2 3 4),$(DATA_BUDGET_PROFILE))
 $(error DATA_BUDGET_PROFILE must be 0, 1, 2, 3 or 4)
 endif
@@ -138,6 +151,7 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -DKUI_TOY_PILOT_DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE) \
  -DKUI_TOY_PILOT_DATA_SCHEDULE_MODE=$(DATA_SCHEDULE_MODE) \
  $(if $(BUDGET_CONFIG),-DKUI_TOY_PILOT_DATA_BUDGET_PROFILE=$(DATA_BUDGET_PROFILE)) \
+ $(if $(FOLLOWUP_CONFIG),-DKUI_TOY_PILOT_AD_FOLLOWUP_PROFILE=$(AD_FOLLOWUP_PROFILE)) \
  -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
  -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
  -Iinclude -Isrc/loader -I$(BUILD) -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -198,7 +212,7 @@ resident: $(BUILD)/resident-sci.bin
 force-config:
 $(BUILD)/build-config: force-config
 	@mkdir -p $(@D)
-	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') > $@.new
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') $(if $(FOLLOWUP_CONFIG),'$(FOLLOWUP_CONFIG)') > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
 $(BUILD)/sci/%.o: %.c

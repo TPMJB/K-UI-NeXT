@@ -299,7 +299,7 @@ void kui_toy_pilot_sci_init(const struct kui_retail_manifest *manifest,
     e.startup.enabled=1u;
 #endif
 #if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
-    e.budget.profile=KUI_TOY_PILOT_DATA_BUDGET_PROFILE;
+    e.budget.profile=KUI_TOY_AD_BUDGET_REPORT_PROFILE;
     e.budget.block_limit=KUI_TOY_SCI_SERVICE_BLOCKS;
     e.budget.tick_limit=KUI_TOY_SCI_SERVICE_TICKS;
 #endif
