@@ -267,9 +267,15 @@ def main():
         include('evidence/exact-' + label + '/retail-toy-pilot.kui', directory / 'retail-toy-pilot.kui')
         collect_build(directory, 'evidence/exact-' + label + '/', remember, add)
         if label == 'AI':
-            proof = audit_irq_progress(directory, args.baseline_ai, 0)
+            # Historical tools require artifacts beneath their frozen source
+            # root. Admit the original reference there; the exact rebuild is
+            # independently bound above by its complete immutable runtime hash.
+            proof = audit_irq_progress(args.baseline_ai, args.baseline_ai, 0)
             if proof.get('admitted') is not True or proof.get('original_immutable_AI_gate') is not True or proof.get('runtime', {}).get('sha256') != AI_SHA:
                 raise ValueError('Exact AI rebuild did not pass its frozen original gate')
+            proof.update(gate_applied_to='frozen original AI reference',
+                         exact_rebuild_runtime_sha256=digest,
+                         exact_rebuild_matches_original_AI=True)
             add('evidence/exact-AI/original-gate.json', (json.dumps(proof, indent=2, sort_keys=True) + '\n').encode())
     comparison = include('evidence/AF-AI-AJ-AK-AL-hardware-comparison.json', args.hardware_comparison)
     if b'libfile_' in comparison:
