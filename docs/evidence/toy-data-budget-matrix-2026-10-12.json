@@ -65,7 +65,7 @@
       "sectors": 480
     },
     {
-      "LBA_hex": "00085A8A",
+      "LBA_hex": "00085ABA",
       "all_LBA_count_destination_matches": true,
       "completion_seconds": {
         "AA": 4.4350464,
@@ -73,7 +73,7 @@
         "AC": 3.91966464,
         "AD": 1.33730432
       },
-      "destination_hex": "AC5A5038",
+      "destination_hex": "AC5A5D38",
       "sectors": 422
     },
     {
@@ -149,6 +149,554 @@
       "sectors": 592
     }
   ],
+  "pixel_errata_applied": {
+    "errata_sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c",
+    "geometry_only": true,
+    "original_reference_sha256": "5315e745627f19f2d148d0fd7f35e0016a8c7759049839e5d83a7dd760ac53a9",
+    "proof": {
+      "created_utc_date": "2026-10-12",
+      "geometry_checks": [
+        {
+          "build_as_stored": "e680281d1601",
+          "changes": [
+            {
+              "correction_required": true,
+              "field": "lba",
+              "page_word_index_zero_based": 1,
+              "pixel_verified_hex": "00085ABA",
+              "stored_hex": "00085A8A"
+            },
+            {
+              "correction_required": true,
+              "field": "destination",
+              "page_word_index_zero_based": 3,
+              "pixel_verified_hex": "AC5A5D38",
+              "stored_hex": "AC5A5038"
+            }
+          ],
+          "confidence": "resolved",
+          "count_hex": "000001A6",
+          "count_sectors": 422,
+          "geometry_pixel_verified": {
+            "destination_hex": "AC5A5D38",
+            "lba_hex": "00085ABA"
+          },
+          "page_hex": "0D",
+          "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+          "profile": "AA",
+          "provenance": [
+            {
+              "approximate_video_seconds": 138.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AA139.png",
+              "crop_native_bbox_xyxy": [
+                65,
+                270,
+                990,
+                315
+              ],
+              "crop_scale": 2,
+              "frame": "morning-matrix-20261012/62413/frames/frame-139.jpg",
+              "sha256": "0fb49fec0c11adda960c9fd597af61faf832fefc1a7dc41f974251bd680c05a9"
+            }
+          ],
+          "raw_file": "morning-matrix-20261012/62413/trace-pages.json",
+          "token_hex": "00000027"
+        },
+        {
+          "build_as_stored": "e680281d1602",
+          "changes": [
+            {
+              "correction_required": true,
+              "field": "lba",
+              "page_word_index_zero_based": 1,
+              "pixel_verified_hex": "00085ABA",
+              "stored_hex": "00085A8A"
+            },
+            {
+              "correction_required": true,
+              "field": "destination",
+              "page_word_index_zero_based": 3,
+              "pixel_verified_hex": "AC5A5D38",
+              "stored_hex": "AC5A5038"
+            }
+          ],
+          "confidence": "resolved",
+          "count_hex": "000001A6",
+          "count_sectors": 422,
+          "geometry_pixel_verified": {
+            "destination_hex": "AC5A5D38",
+            "lba_hex": "00085ABA"
+          },
+          "page_hex": "0C",
+          "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+          "profile": "AB",
+          "provenance": [
+            {
+              "approximate_video_seconds": 130.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AB131.png",
+              "crop_native_bbox_xyxy": [
+                10,
+                268,
+                900,
+                316
+              ],
+              "crop_scale": 2,
+              "frame": "morning-matrix-20261012/62411/frames/frame-131.jpg",
+              "sha256": "3c576678fdfd826abb1ca468845e31ce222443f49bc0f961683914a99c97685c"
+            }
+          ],
+          "raw_file": "morning-matrix-20261012/62411/trace-pages.json",
+          "token_hex": "00000027"
+        },
+        {
+          "build_as_stored": "e680281d1603",
+          "changes": [
+            {
+              "correction_required": true,
+              "field": "lba",
+              "page_word_index_zero_based": 9,
+              "pixel_verified_hex": "00085ABA",
+              "stored_hex": "00085A8A"
+            },
+            {
+              "correction_required": true,
+              "field": "destination",
+              "page_word_index_zero_based": 11,
+              "pixel_verified_hex": "AC5A5D38",
+              "stored_hex": "AC5A5038"
+            }
+          ],
+          "confidence": "resolved",
+          "count_hex": "000001A6",
+          "count_sectors": 422,
+          "geometry_pixel_verified": {
+            "destination_hex": "AC5A5D38",
+            "lba_hex": "00085ABA"
+          },
+          "page_hex": "0B",
+          "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+          "profile": "AC",
+          "provenance": [
+            {
+              "approximate_video_seconds": 127.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AC128.png",
+              "crop_native_bbox_xyxy": [
+                80,
+                435,
+                1100,
+                496
+              ],
+              "crop_scale": 2,
+              "frame": "morning-matrix-20261012/62412/frames/frame-128.jpg",
+              "sha256": "fd2c991623083ccda786ce2521005000afd321ac4487215e096ae143591b6efc"
+            },
+            {
+              "approximate_video_seconds": 128.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AC129.png",
+              "crop_native_bbox_xyxy": [
+                80,
+                435,
+                1100,
+                496
+              ],
+              "crop_scale": 2,
+              "frame": "morning-matrix-20261012/62412/frames/frame-129.jpg",
+              "sha256": "61f5154a445662713cc7e9e299566ae2c9dd8f832c53ce7e43bf088372fcd18d"
+            }
+          ],
+          "raw_file": "morning-matrix-20261012/62412/trace-pages.json",
+          "token_hex": "00000027"
+        },
+        {
+          "build_as_stored": "e680281d1604",
+          "changes": [
+            {
+              "correction_required": true,
+              "field": "lba",
+              "page_word_index_zero_based": 9,
+              "pixel_verified_hex": "00085ABA",
+              "stored_hex": "00085A8A"
+            },
+            {
+              "correction_required": true,
+              "field": "destination",
+              "page_word_index_zero_based": 11,
+              "pixel_verified_hex": "AC5A5D38",
+              "stored_hex": "AC5A5038"
+            }
+          ],
+          "confidence": "resolved",
+          "count_hex": "000001A6",
+          "count_sectors": 422,
+          "geometry_pixel_verified": {
+            "destination_hex": "AC5A5D38",
+            "lba_hex": "00085ABA"
+          },
+          "page_hex": "0A",
+          "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+          "profile": "AD",
+          "provenance": [
+            {
+              "approximate_video_seconds": 111.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AD112.png",
+              "crop_native_bbox_xyxy": [
+                15,
+                420,
+                940,
+                492
+              ],
+              "crop_scale": 2,
+              "frame": "ad-hardware-20261012/frames/frame-112.jpg",
+              "sha256": "6be39216c649923763f2b6fed37634e94de3ec8b2dfe30d78f02f2d062db8efb"
+            },
+            {
+              "approximate_video_seconds": 112.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AD113.png",
+              "crop_native_bbox_xyxy": [
+                15,
+                420,
+                940,
+                492
+              ],
+              "crop_scale": 2,
+              "frame": "ad-hardware-20261012/frames/frame-113.jpg",
+              "sha256": "c64a093bc0156960ef8565e66f4f0e3e7eaa602ee7ed41bfbc1bc15e7424e135"
+            }
+          ],
+          "raw_file": "ad-hardware-20261012/trace-pages.json",
+          "token_hex": "00000027"
+        },
+        {
+          "build_as_stored": "025646791d01",
+          "changes": [
+            {
+              "correction_required": true,
+              "field": "lba",
+              "page_word_index_zero_based": 9,
+              "pixel_verified_hex": "00085ABA",
+              "stored_hex": "00085A8A"
+            },
+            {
+              "correction_required": true,
+              "field": "destination",
+              "page_word_index_zero_based": 11,
+              "pixel_verified_hex": "AC5A5D38",
+              "stored_hex": "AC5A5038"
+            }
+          ],
+          "confidence": "resolved",
+          "count_hex": "000001A6",
+          "count_sectors": 422,
+          "geometry_pixel_verified": {
+            "destination_hex": "AC5A5D38",
+            "lba_hex": "00085ABA"
+          },
+          "page_hex": "0D",
+          "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+          "profile": "AE",
+          "provenance": [
+            {
+              "approximate_video_seconds": 122.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AE123.png",
+              "crop_native_bbox_xyxy": [
+                0,
+                400,
+                1050,
+                520
+              ],
+              "crop_scale": 2,
+              "frame": "followup-matrix-20261012/62415/frames/frame-123.jpg",
+              "sha256": "4dee3c4cf0f03398b2323381a79f74ed358bb4aca8414b5bec7a0e13a5e0b469"
+            }
+          ],
+          "raw_file": "followup-matrix-20261012/62415/trace-pages.json",
+          "token_hex": "00000027"
+        },
+        {
+          "build_as_stored": "025646791D02",
+          "changes": [
+            {
+              "correction_required": true,
+              "field": "lba",
+              "page_word_index_zero_based": 9,
+              "pixel_verified_hex": "00085ABA",
+              "stored_hex": "00085A8A"
+            },
+            {
+              "correction_required": true,
+              "field": "destination",
+              "page_word_index_zero_based": 11,
+              "pixel_verified_hex": "AC5A5D38",
+              "stored_hex": "AC5A5038"
+            }
+          ],
+          "confidence": "resolved",
+          "count_hex": "000001A6",
+          "count_sectors": 422,
+          "geometry_pixel_verified": {
+            "destination_hex": "AC5A5D38",
+            "lba_hex": "00085ABA"
+          },
+          "page_hex": "0D",
+          "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+          "profile": "AF",
+          "provenance": [
+            {
+              "approximate_video_seconds": 132.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AF133.png",
+              "crop_native_bbox_xyxy": [
+                0,
+                400,
+                1050,
+                520
+              ],
+              "crop_scale": 2,
+              "frame": "followup-matrix-20261012/62417/frames/frame-133.jpg",
+              "sha256": "8bd9925638a14b7160f53261e04eecfdef75e36ee74dba2f97afdcf8158663ef"
+            }
+          ],
+          "raw_file": "followup-matrix-20261012/62417/trace-pages.json",
+          "token_hex": "00000027"
+        },
+        {
+          "build_as_stored": "025646791d03",
+          "changes": [
+            {
+              "correction_required": false,
+              "field": "lba",
+              "page_word_index_zero_based": 9,
+              "pixel_verified_hex": "00085ABA",
+              "stored_hex": "00085ABA"
+            },
+            {
+              "correction_required": false,
+              "field": "destination",
+              "page_word_index_zero_based": 11,
+              "pixel_verified_hex": "AC5A5D38",
+              "stored_hex": "AC5A5D38"
+            }
+          ],
+          "confidence": "resolved",
+          "count_hex": "000001A6",
+          "count_sectors": 422,
+          "geometry_pixel_verified": {
+            "destination_hex": "AC5A5D38",
+            "lba_hex": "00085ABA"
+          },
+          "page_hex": "0C",
+          "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+          "profile": "AG",
+          "provenance": [
+            {
+              "approximate_video_seconds": 124.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AG125.png",
+              "crop_native_bbox_xyxy": [
+                0,
+                390,
+                1050,
+                520
+              ],
+              "crop_scale": 2,
+              "frame": "followup-matrix-20261012/62414/frames/frame-125.jpg",
+              "sha256": "5173bc1c106f6b0650c9830afd98e013538196d36915e30f7f34093dc8569be3"
+            }
+          ],
+          "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+          "token_hex": "00000027"
+        },
+        {
+          "build_as_stored": "025646791d04",
+          "changes": [
+            {
+              "correction_required": true,
+              "field": "lba",
+              "page_word_index_zero_based": 1,
+              "pixel_verified_hex": "00085ABA",
+              "stored_hex": "00085A8A"
+            },
+            {
+              "correction_required": true,
+              "field": "destination",
+              "page_word_index_zero_based": 3,
+              "pixel_verified_hex": "AC5A5D38",
+              "stored_hex": "AC5A5038"
+            }
+          ],
+          "confidence": "resolved",
+          "count_hex": "000001A6",
+          "count_sectors": 422,
+          "geometry_pixel_verified": {
+            "destination_hex": "AC5A5D38",
+            "lba_hex": "00085ABA"
+          },
+          "page_hex": "0D",
+          "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+          "profile": "AH",
+          "provenance": [
+            {
+              "approximate_video_seconds": 125.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AH126.png",
+              "crop_native_bbox_xyxy": [
+                0,
+                240,
+                1050,
+                380
+              ],
+              "crop_scale": 2,
+              "frame": "followup-matrix-20261012/62416/frames/frame-126.jpg",
+              "sha256": "d9c52a3a9c78825cea25e976d7af29d4f87b03df467857b24c8154e135af9c6e"
+            }
+          ],
+          "raw_file": "followup-matrix-20261012/62416/trace-pages.json",
+          "token_hex": "00000027"
+        }
+      ],
+      "glyph_reference": {
+        "distinctions": "B has a solid left column at its cap/middle/bottom where8 does not. Zero has internal diagonal pixels; D is hollow.",
+        "image": "followup-matrix-20261012/glyph-qa/font-reference-0-8-B-D.png",
+        "low_five_bit_rows": {
+          "0": [
+            14,
+            17,
+            19,
+            21,
+            25,
+            17,
+            14
+          ],
+          "8": [
+            14,
+            17,
+            17,
+            14,
+            17,
+            17,
+            14
+          ],
+          "B": [
+            30,
+            17,
+            17,
+            30,
+            17,
+            17,
+            30
+          ],
+          "D": [
+            30,
+            17,
+            17,
+            17,
+            17,
+            17,
+            30
+          ]
+        },
+        "source": "ad-followup-source/src/loader/retail_display.c",
+        "table_order": "A-Z then0-9"
+      },
+      "method": "Read enlarged crops from the listed native JPEG frames and compare distinctive pixel strokes with the production compact 5x7 font. Stored values are recorded only as the before-values; no expected geometry or arithmetic was used to fill the pixel read.",
+      "result": {
+        "all_eight_captures_independently_same_422_sector_geometry": true,
+        "comparison_implication": "The 422-sector exact geometry match is retained after applying the explicit B/D transcription errata. Geometry corrections change no timing fields. AG timing corrections add48ticks (0.06144ms) to the retained592-sector first-credit and observed DATA service-body maximum.",
+        "correct_geometry": {
+          "count_hex": "000001A6",
+          "destination_hex": "AC5A5D38",
+          "lba_hex": "00085ABA"
+        },
+        "geometry_already_correct_capture_count": 1,
+        "geometry_corrected_capture_count": 7,
+        "geometry_words_corrected": 14,
+        "timing_words_corrected": 2,
+        "unresolved_disputes": []
+      },
+      "schema": "toy-historical-glyph-errata-v1",
+      "task_scope": "Read-only independent native-pixel QA; save errata and diagnostic crops only. No historical/current primary JSON or runtime files were changed.",
+      "timing_checks": [
+        {
+          "confidence": "resolved",
+          "correction_required": true,
+          "delta_milliseconds": 0.06144,
+          "field": "592-sector retained first-credit ticks",
+          "page_hex": "0B",
+          "page_word_index_zero_based": 4,
+          "pixel_basis": "Disputed character has a continuous left column, matching B. Both adjacent TRACE0B frames independently show 000017BA; the separately captured TRACE04 word14 also shows 000017BA.",
+          "pixel_verified_hex": "000017BA",
+          "pixel_verified_milliseconds": 7.77472,
+          "pixel_verified_ticks": 6074,
+          "profile": "AG",
+          "provenance": [
+            {
+              "approximate_video_seconds": 121.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AG122.png",
+              "crop_native_bbox_xyxy": [
+                10,
+                323,
+                930,
+                376
+              ],
+              "crop_scale": 2,
+              "frame": "followup-matrix-20261012/62414/frames/frame-122.jpg",
+              "sha256": "4912482812bed8e121692e11bb99ad53be1b5d2afb16fae0eeb5e8f11ca5f0c8"
+            },
+            {
+              "approximate_video_seconds": 122.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AG123.png",
+              "crop_native_bbox_xyxy": [
+                10,
+                323,
+                930,
+                376
+              ],
+              "crop_scale": 2,
+              "frame": "followup-matrix-20261012/62414/frames/frame-123.jpg",
+              "sha256": "e232d419f3381cda915fa605f9cf00d126ce1ebacd355502555e6b1d0821f3bb"
+            }
+          ],
+          "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+          "scope_note": "TRACE04 related observation added during the requested TRACE0B check; primary files are unchanged.",
+          "stored_hex": "0000178A",
+          "stored_ticks": 6026,
+          "tick_seconds": 1.28e-06
+        },
+        {
+          "confidence": "resolved",
+          "correction_required": true,
+          "delta_milliseconds": 0.06144,
+          "field": "DATA service body maximum ticks",
+          "page_hex": "04",
+          "page_word_index_zero_based": 14,
+          "pixel_basis": "Disputed character has a continuous left column, matching B. Both adjacent TRACE0B frames independently show 000017BA; the separately captured TRACE04 word14 also shows 000017BA.",
+          "pixel_verified_hex": "000017BA",
+          "pixel_verified_milliseconds": 7.77472,
+          "pixel_verified_ticks": 6074,
+          "profile": "AG",
+          "provenance": [
+            {
+              "approximate_video_seconds": 108.5,
+              "crop": "followup-matrix-20261012/glyph-qa/AG109.png",
+              "crop_native_bbox_xyxy": [
+                10,
+                470,
+                940,
+                535
+              ],
+              "crop_scale": 2,
+              "frame": "followup-matrix-20261012/62414/frames/frame-109.jpg",
+              "sha256": "c20c7875e9385e0edd46c2e4fae5def530efd642c566eba4afc1e39bcb5cdceb"
+            }
+          ],
+          "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+          "scope_note": "TRACE04 related observation added during the requested TRACE0B check; primary files are unchanged.",
+          "stored_hex": "0000178A",
+          "stored_ticks": 6026,
+          "tick_seconds": 1.28e-06
+        }
+      ],
+      "word_indexing": "zero-based within each 16-word TRACE page"
+    },
+    "timing_words_unchanged": true
+  },
   "profiles": {
     "AA": {
       "DATA_PILOT": {
@@ -6515,58 +7063,12 @@
         "unresolved_ambiguities": []
       },
       "TRACE_decoded": {
-        "build": "e680281d1601",
-        "checks": {
-          "accepted_completed_acknowledged_DATA_match": true,
-          "all_26_pages_present": true,
-          "all_metric_histograms_sum_to_sample_count": true,
-          "each_page_16_words": true,
-          "header_call_samples_equals_phase_calls": true,
-          "pages_12_through_19_all_zero": true,
-          "phase0_classified_calls_plus_initial_INIT_matches_calls": true,
-          "phase0_read_geometry_classification_counts_match_requests_minus_first": true,
-          "phase_DATA_service_total_does_not_exceed_all_call_body_total": true,
-          "progress_and_zero_EXEC_do_not_exceed_EXEC_calls": true,
-          "request_size_histograms_sum_to_accepted_DATA": true,
-          "requested_and_delivered_bytes_match_2048_times_sectors": true,
-          "worst_completion_max_matches_phase0_metric": true
+        "additional_geometry_pixel_review": {
+          "file": "historical-glyph-errata.json",
+          "scope": "Current capture record geometry and the explicitly listed AG timing fields; historical comparisons are superseded by the canonical new comparison.",
+          "sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c"
         },
-        "first_observed_GD_entry_to_accepted_PLAY_ms": 43939.8912,
-        "first_observed_GD_entry_to_accepted_PLAY_ticks": 34328040,
-        "header": {
-          "accepted_play_requests": 1,
-          "active_phase": 1,
-          "boundary_clock_valid": 1,
-          "boundary_command": 20,
-          "boundary_generation": 9,
-          "boundary_tick": 4260423684,
-          "boundary_token": 219,
-          "clock_epoch": 0,
-          "counters_saturated": 0,
-          "first_clock_valid": 1,
-          "first_tick": 4294751724,
-          "frozen": 1,
-          "magic": 1280594481,
-          "nested_begins": 0,
-          "phase_words": 192,
-          "record_words": 8,
-          "tick_hz": 781250,
-          "total_call_samples": 8121,
-          "unmatched_ends": 0,
-          "version": 1,
-          "words": 416,
-          "worst_per_phase": 8
-        },
-        "limitations": [
-          "Manual visual transcription; no raw report dump or report CRC is available.",
-          "The first accepted PLAY mailbox is the phase boundary, not proof of audible audio start.",
-          "The retained eight worst DATA records are unordered, not request chronology.",
-          "PVR changes are sampled at GD calls; they do not prove a continuous frame rate.",
-          "Whole-run request totals differ across captures; compare matched LBA/count/destination requests before attributing aggregate timing changes to a profile.",
-          "TRACE records core completion and byte credits; neither alone proves every payload byte matches the original GDI.",
-          "Independent critical-word visual confirmation is pending after primary transcription."
-        ],
-        "paired_prior_worst_request_comparison": {
+        "archived_paired_prior_worst_request_comparison": {
           "basis": "Match by LBA and sector count and explicitly record destination equality. Whole-run workloads differ; these are retained worst records, not a representative complete workload.",
           "rows": [
             {
@@ -6867,6 +7369,58 @@
             }
           ]
         },
+        "build": "e680281d1601",
+        "canonical_comparison_file": "AD-AE-AF-AG-AH-Hardware-Comparison.json",
+        "checks": {
+          "accepted_completed_acknowledged_DATA_match": true,
+          "all_26_pages_present": true,
+          "all_metric_histograms_sum_to_sample_count": true,
+          "each_page_16_words": true,
+          "header_call_samples_equals_phase_calls": true,
+          "pages_12_through_19_all_zero": true,
+          "phase0_classified_calls_plus_initial_INIT_matches_calls": true,
+          "phase0_read_geometry_classification_counts_match_requests_minus_first": true,
+          "phase_DATA_service_total_does_not_exceed_all_call_body_total": true,
+          "progress_and_zero_EXEC_do_not_exceed_EXEC_calls": true,
+          "request_size_histograms_sum_to_accepted_DATA": true,
+          "requested_and_delivered_bytes_match_2048_times_sectors": true,
+          "worst_completion_max_matches_phase0_metric": true
+        },
+        "first_observed_GD_entry_to_accepted_PLAY_ms": 43939.8912,
+        "first_observed_GD_entry_to_accepted_PLAY_ticks": 34328040,
+        "header": {
+          "accepted_play_requests": 1,
+          "active_phase": 1,
+          "boundary_clock_valid": 1,
+          "boundary_command": 20,
+          "boundary_generation": 9,
+          "boundary_tick": 4260423684,
+          "boundary_token": 219,
+          "clock_epoch": 0,
+          "counters_saturated": 0,
+          "first_clock_valid": 1,
+          "first_tick": 4294751724,
+          "frozen": 1,
+          "magic": 1280594481,
+          "nested_begins": 0,
+          "phase_words": 192,
+          "record_words": 8,
+          "tick_hz": 781250,
+          "total_call_samples": 8121,
+          "unmatched_ends": 0,
+          "version": 1,
+          "words": 416,
+          "worst_per_phase": 8
+        },
+        "limitations": [
+          "Manual visual transcription; no raw report dump or report CRC is available.",
+          "The first accepted PLAY mailbox is the phase boundary, not proof of audible audio start.",
+          "The retained eight worst DATA records are unordered, not request chronology.",
+          "PVR changes are sampled at GD calls; they do not prove a continuous frame rate.",
+          "Whole-run request totals differ across captures; compare matched LBA/count/destination requests before attributing aggregate timing changes to a profile.",
+          "TRACE records core completion and byte credits; neither alone proves every payload byte matches the original GDI.",
+          "Independent critical-word visual confirmation is pending after primary transcription."
+        ],
         "phases": [
           {
             "counts": {
@@ -7153,13 +7707,13 @@
                 "acknowledge_ticks": 69,
                 "complete_ms": 4435.0464,
                 "complete_ticks": 3464880,
-                "destination": 2891599928,
-                "destination_hex": "AC5A5038",
+                "destination": 2891603256,
+                "destination_hex": "AC5A5D38",
                 "first_credit_ms": 5.4336,
                 "first_credit_ticks": 4245,
                 "flags": 15,
-                "lba": 547466,
-                "lba_hex": "00085A8A",
+                "lba": 547514,
+                "lba_hex": "00085ABA",
                 "sectors": 422,
                 "token": 39,
                 "token_hex": "00000027"
@@ -7381,8 +7935,40 @@
         ]
       },
       "TRACE_raw": {
+        "additional_pixel_corrections": [
+          {
+            "after": "00085ABA",
+            "before": "00085A8A",
+            "page": "0000000D",
+            "word_index": 1
+          },
+          {
+            "after": "AC5A5D38",
+            "before": "AC5A5038",
+            "page": "0000000D",
+            "word_index": 3
+          }
+        ],
         "build": "e680281d1601",
         "capture": "upload/62413.mp4",
+        "independent_pixel_errata": {
+          "applied_corrections": [
+            {
+              "after": "00085ABA",
+              "before": "00085A8A",
+              "page": "0000000D",
+              "word_index": 1
+            },
+            {
+              "after": "AC5A5D38",
+              "before": "AC5A5038",
+              "page": "0000000D",
+              "word_index": 3
+            }
+          ],
+          "file": "historical-glyph-errata.json",
+          "sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c"
+        },
         "pages": [
           {
             "ambiguities": [],
@@ -8112,9 +8698,9 @@
             "rows": [
               [
                 "00000027",
-                "00085A8A",
+                "00085ABA",
                 "000001A6",
-                "AC5A5038"
+                "AC5A5D38"
               ],
               [
                 "00001095",
@@ -8137,9 +8723,9 @@
             ],
             "words": [
               "00000027",
-              "00085A8A",
+              "00085ABA",
               "000001A6",
-              "AC5A5038",
+              "AC5A5D38",
               "00001095",
               "0034DEB0",
               "00000045",
@@ -8983,9 +9569,9 @@
           ],
           "0D": [
             "00000027",
-            "00085A8A",
+            "00085ABA",
             "000001A6",
-            "AC5A5038",
+            "AC5A5D38",
             "00001095",
             "0034DEB0",
             "00000045",
@@ -8999,6 +9585,548 @@
             "00000044",
             "0000000F"
           ]
+        },
+        "additional_geometry_pixel_review": {
+          "created_utc_date": "2026-10-12",
+          "geometry_checks": [
+            {
+              "build_as_stored": "e680281d1601",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AA",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 138.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AA139.png",
+                  "crop_native_bbox_xyxy": [
+                    65,
+                    270,
+                    990,
+                    315
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62413/frames/frame-139.jpg",
+                  "sha256": "0fb49fec0c11adda960c9fd597af61faf832fefc1a7dc41f974251bd680c05a9"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62413/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1602",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0C",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AB",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 130.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AB131.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    268,
+                    900,
+                    316
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62411/frames/frame-131.jpg",
+                  "sha256": "3c576678fdfd826abb1ca468845e31ce222443f49bc0f961683914a99c97685c"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62411/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1603",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0B",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AC",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 127.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AC128.png",
+                  "crop_native_bbox_xyxy": [
+                    80,
+                    435,
+                    1100,
+                    496
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62412/frames/frame-128.jpg",
+                  "sha256": "fd2c991623083ccda786ce2521005000afd321ac4487215e096ae143591b6efc"
+                },
+                {
+                  "approximate_video_seconds": 128.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AC129.png",
+                  "crop_native_bbox_xyxy": [
+                    80,
+                    435,
+                    1100,
+                    496
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62412/frames/frame-129.jpg",
+                  "sha256": "61f5154a445662713cc7e9e299566ae2c9dd8f832c53ce7e43bf088372fcd18d"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62412/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1604",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0A",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AD",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 111.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AD112.png",
+                  "crop_native_bbox_xyxy": [
+                    15,
+                    420,
+                    940,
+                    492
+                  ],
+                  "crop_scale": 2,
+                  "frame": "ad-hardware-20261012/frames/frame-112.jpg",
+                  "sha256": "6be39216c649923763f2b6fed37634e94de3ec8b2dfe30d78f02f2d062db8efb"
+                },
+                {
+                  "approximate_video_seconds": 112.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AD113.png",
+                  "crop_native_bbox_xyxy": [
+                    15,
+                    420,
+                    940,
+                    492
+                  ],
+                  "crop_scale": 2,
+                  "frame": "ad-hardware-20261012/frames/frame-113.jpg",
+                  "sha256": "c64a093bc0156960ef8565e66f4f0e3e7eaa602ee7ed41bfbc1bc15e7424e135"
+                }
+              ],
+              "raw_file": "ad-hardware-20261012/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d01",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AE",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 122.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AE123.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    400,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62415/frames/frame-123.jpg",
+                  "sha256": "4dee3c4cf0f03398b2323381a79f74ed358bb4aca8414b5bec7a0e13a5e0b469"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62415/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791D02",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AF",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 132.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AF133.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    400,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62417/frames/frame-133.jpg",
+                  "sha256": "8bd9925638a14b7160f53261e04eecfdef75e36ee74dba2f97afdcf8158663ef"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62417/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d03",
+              "changes": [
+                {
+                  "correction_required": false,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085ABA"
+                },
+                {
+                  "correction_required": false,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5D38"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0C",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 124.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG125.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    390,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-125.jpg",
+                  "sha256": "5173bc1c106f6b0650c9830afd98e013538196d36915e30f7f34093dc8569be3"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d04",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AH",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 125.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AH126.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    240,
+                    1050,
+                    380
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62416/frames/frame-126.jpg",
+                  "sha256": "d9c52a3a9c78825cea25e976d7af29d4f87b03df467857b24c8154e135af9c6e"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62416/trace-pages.json",
+              "token_hex": "00000027"
+            }
+          ],
+          "glyph_reference": {
+            "distinctions": "B has a solid left column at its cap/middle/bottom where8 does not. Zero has internal diagonal pixels; D is hollow.",
+            "image": "followup-matrix-20261012/glyph-qa/font-reference-0-8-B-D.png",
+            "low_five_bit_rows": {
+              "0": [
+                14,
+                17,
+                19,
+                21,
+                25,
+                17,
+                14
+              ],
+              "8": [
+                14,
+                17,
+                17,
+                14,
+                17,
+                17,
+                14
+              ],
+              "B": [
+                30,
+                17,
+                17,
+                30,
+                17,
+                17,
+                30
+              ],
+              "D": [
+                30,
+                17,
+                17,
+                17,
+                17,
+                17,
+                30
+              ]
+            },
+            "source": "ad-followup-source/src/loader/retail_display.c",
+            "table_order": "A-Z then0-9"
+          },
+          "method": "Read enlarged crops from the listed native JPEG frames and compare distinctive pixel strokes with the production compact 5x7 font. Stored values are recorded only as the before-values; no expected geometry or arithmetic was used to fill the pixel read.",
+          "result": {
+            "all_eight_captures_independently_same_422_sector_geometry": true,
+            "comparison_implication": "The 422-sector exact geometry match is retained after applying the explicit B/D transcription errata. Geometry corrections change no timing fields. AG timing corrections add48ticks (0.06144ms) to the retained592-sector first-credit and observed DATA service-body maximum.",
+            "correct_geometry": {
+              "count_hex": "000001A6",
+              "destination_hex": "AC5A5D38",
+              "lba_hex": "00085ABA"
+            },
+            "geometry_already_correct_capture_count": 1,
+            "geometry_corrected_capture_count": 7,
+            "geometry_words_corrected": 14,
+            "timing_words_corrected": 2,
+            "unresolved_disputes": []
+          },
+          "schema": "toy-historical-glyph-errata-v1",
+          "task_scope": "Read-only independent native-pixel QA; save errata and diagnostic crops only. No historical/current primary JSON or runtime files were changed.",
+          "timing_checks": [
+            {
+              "confidence": "resolved",
+              "correction_required": true,
+              "delta_milliseconds": 0.06144,
+              "field": "592-sector retained first-credit ticks",
+              "page_hex": "0B",
+              "page_word_index_zero_based": 4,
+              "pixel_basis": "Disputed character has a continuous left column, matching B. Both adjacent TRACE0B frames independently show 000017BA; the separately captured TRACE04 word14 also shows 000017BA.",
+              "pixel_verified_hex": "000017BA",
+              "pixel_verified_milliseconds": 7.77472,
+              "pixel_verified_ticks": 6074,
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 121.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG122.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    323,
+                    930,
+                    376
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-122.jpg",
+                  "sha256": "4912482812bed8e121692e11bb99ad53be1b5d2afb16fae0eeb5e8f11ca5f0c8"
+                },
+                {
+                  "approximate_video_seconds": 122.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG123.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    323,
+                    930,
+                    376
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-123.jpg",
+                  "sha256": "e232d419f3381cda915fa605f9cf00d126ce1ebacd355502555e6b1d0821f3bb"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "scope_note": "TRACE04 related observation added during the requested TRACE0B check; primary files are unchanged.",
+              "stored_hex": "0000178A",
+              "stored_ticks": 6026,
+              "tick_seconds": 1.28e-06
+            },
+            {
+              "confidence": "resolved",
+              "correction_required": true,
+              "delta_milliseconds": 0.06144,
+              "field": "DATA service body maximum ticks",
+              "page_hex": "04",
+              "page_word_index_zero_based": 14,
+              "pixel_basis": "Disputed character has a continuous left column, matching B. Both adjacent TRACE0B frames independently show 000017BA; the separately captured TRACE04 word14 also shows 000017BA.",
+              "pixel_verified_hex": "000017BA",
+              "pixel_verified_milliseconds": 7.77472,
+              "pixel_verified_ticks": 6074,
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 108.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG109.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    470,
+                    940,
+                    535
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-109.jpg",
+                  "sha256": "c20c7875e9385e0edd46c2e4fae5def530efd642c566eba4afc1e39bcb5cdceb"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "scope_note": "TRACE04 related observation added during the requested TRACE0B check; primary files are unchanged.",
+              "stored_hex": "0000178A",
+              "stored_ticks": 6026,
+              "tick_seconds": 1.28e-06
+            }
+          ],
+          "word_indexing": "zero-based within each 16-word TRACE page"
         },
         "build": "e680281d1601",
         "checks": {
@@ -11737,60 +12865,12 @@
         ]
       },
       "TRACE_decoded": {
-        "build": "e680281d1602",
-        "capture": "upload/62411.mp4",
-        "checks": {
-          "all_26_pages_present": true,
-          "all_accepted_DATA_completed_and_ACKed": true,
-          "all_metric_histograms_sum_to_sample_count": true,
-          "each_page_16_words": true,
-          "header_call_samples_equals_phase_calls": true,
-          "header_matches_production_abi": true,
-          "no_DATA_failure_reset_abort_or_ownership_loss": true,
-          "pages_12_through_19_all_zero": true,
-          "phase0_adjacent_DATA_classifications_equal_accepted_minus_one": true,
-          "phase_DATA_service_total_does_not_exceed_all_call_body_total": true,
-          "request_size_histograms_sum_to_accepted_DATA": true,
-          "requested_and_delivered_bytes_match_2048_times_sectors": true,
-          "worst_completion_max_matches_phase0_metric": true
+        "additional_geometry_pixel_review": {
+          "file": "historical-glyph-errata.json",
+          "scope": "Current capture record geometry and the explicitly listed AG timing fields; historical comparisons are superseded by the canonical new comparison.",
+          "sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c"
         },
-        "first_observed_GD_entry_to_accepted_PLAY_ms": 43330.96832,
-        "first_observed_GD_entry_to_accepted_PLAY_ticks": 33852319,
-        "header": {
-          "accepted_play_requests": 1,
-          "active_phase": 1,
-          "boundary_clock_valid": 1,
-          "boundary_command": 20,
-          "boundary_generation": 9,
-          "boundary_tick": 4260899410,
-          "boundary_token": 227,
-          "clock_epoch": 0,
-          "counters_saturated": 0,
-          "first_clock_valid": 1,
-          "first_tick": 4294751729,
-          "frozen": 1,
-          "magic": 1280594481,
-          "nested_begins": 0,
-          "phase_words": 192,
-          "record_words": 8,
-          "tick_hz": 781250,
-          "total_call_samples": 7552,
-          "unmatched_ends": 0,
-          "version": 1,
-          "words": 416,
-          "worst_per_phase": 8
-        },
-        "legend_source": "budget-source/include/kui/toy_loader_trace.h",
-        "limitations": [
-          "Manual visual transcription; no raw report dump or report CRC is available.",
-          "Timing is measured at GD adapter entry/exit, not exact DMA completion or masked IRQ spans.",
-          "Retained eight worst contexts are unordered and may represent different chronological occurrences across captures.",
-          "Whole captures have different workloads; aggregate means and totals are descriptive, not a matched benchmark.",
-          "Accepted PLAY mailbox is not proof of audible start; phase1 has no DATA requests in this capture.",
-          "TRACE contains no first-sector CRC; any fingerprint agreement belongs to separate SCHED evidence.",
-          "Zero recorded DATA failures does not establish smooth playback or explain the reported crash."
-        ],
-        "paired_prior_worst_request_comparison": {
+        "archived_paired_prior_worst_request_comparison": {
           "geometry_match_counts": {
             "AD": {
               "same_LBA_and_count": 8,
@@ -12186,6 +13266,60 @@
           },
           "whole_run_comparison_qualification": "All aggregate metrics describe different total workloads and observation counts; only exact retained geometry matches support the paired request latency comparison."
         },
+        "build": "e680281d1602",
+        "canonical_comparison_file": "AD-AE-AF-AG-AH-Hardware-Comparison.json",
+        "capture": "upload/62411.mp4",
+        "checks": {
+          "all_26_pages_present": true,
+          "all_accepted_DATA_completed_and_ACKed": true,
+          "all_metric_histograms_sum_to_sample_count": true,
+          "each_page_16_words": true,
+          "header_call_samples_equals_phase_calls": true,
+          "header_matches_production_abi": true,
+          "no_DATA_failure_reset_abort_or_ownership_loss": true,
+          "pages_12_through_19_all_zero": true,
+          "phase0_adjacent_DATA_classifications_equal_accepted_minus_one": true,
+          "phase_DATA_service_total_does_not_exceed_all_call_body_total": true,
+          "request_size_histograms_sum_to_accepted_DATA": true,
+          "requested_and_delivered_bytes_match_2048_times_sectors": true,
+          "worst_completion_max_matches_phase0_metric": true
+        },
+        "first_observed_GD_entry_to_accepted_PLAY_ms": 43330.96832,
+        "first_observed_GD_entry_to_accepted_PLAY_ticks": 33852319,
+        "header": {
+          "accepted_play_requests": 1,
+          "active_phase": 1,
+          "boundary_clock_valid": 1,
+          "boundary_command": 20,
+          "boundary_generation": 9,
+          "boundary_tick": 4260899410,
+          "boundary_token": 227,
+          "clock_epoch": 0,
+          "counters_saturated": 0,
+          "first_clock_valid": 1,
+          "first_tick": 4294751729,
+          "frozen": 1,
+          "magic": 1280594481,
+          "nested_begins": 0,
+          "phase_words": 192,
+          "record_words": 8,
+          "tick_hz": 781250,
+          "total_call_samples": 7552,
+          "unmatched_ends": 0,
+          "version": 1,
+          "words": 416,
+          "worst_per_phase": 8
+        },
+        "legend_source": "budget-source/include/kui/toy_loader_trace.h",
+        "limitations": [
+          "Manual visual transcription; no raw report dump or report CRC is available.",
+          "Timing is measured at GD adapter entry/exit, not exact DMA completion or masked IRQ spans.",
+          "Retained eight worst contexts are unordered and may represent different chronological occurrences across captures.",
+          "Whole captures have different workloads; aggregate means and totals are descriptive, not a matched benchmark.",
+          "Accepted PLAY mailbox is not proof of audible start; phase1 has no DATA requests in this capture.",
+          "TRACE contains no first-sector CRC; any fingerprint agreement belongs to separate SCHED evidence.",
+          "Zero recorded DATA failures does not establish smooth playback or explain the reported crash."
+        ],
         "phases": [
           {
             "counts": {
@@ -12440,13 +13574,13 @@
                 "acknowledge_ticks": 68,
                 "complete_ms": 4449.53216,
                 "complete_ticks": 3476197,
-                "destination": 2891599928,
-                "destination_hex": "AC5A5038",
+                "destination": 2891603256,
+                "destination_hex": "AC5A5D38",
                 "first_credit_ms": 5.3184,
                 "first_credit_ticks": 4155,
                 "flags": 15,
-                "lba": 547466,
-                "lba_hex": "00085A8A",
+                "lba": 547514,
+                "lba_hex": "00085ABA",
                 "sectors": 422,
                 "token": 39,
                 "token_hex": "00000027"
@@ -12825,6 +13959,20 @@
         "user_observation": "AB worst; all three intros bad. Observation supplied by user, not inferred from counters."
       },
       "TRACE_raw": {
+        "additional_pixel_corrections": [
+          {
+            "after": "00085ABA",
+            "before": "00085A8A",
+            "page": "0000000C",
+            "word_index": 1
+          },
+          {
+            "after": "AC5A5D38",
+            "before": "AC5A5038",
+            "page": "0000000C",
+            "word_index": 3
+          }
+        ],
         "build": "e680281d1602",
         "capture": "upload/62411.mp4",
         "duration_seconds": 159.160622,
@@ -12866,6 +14014,24 @@
             "words": "000085E0"
           }
         ],
+        "independent_pixel_errata": {
+          "applied_corrections": [
+            {
+              "after": "00085ABA",
+              "before": "00085A8A",
+              "page": "0000000C",
+              "word_index": 1
+            },
+            {
+              "after": "AC5A5D38",
+              "before": "AC5A5038",
+              "page": "0000000C",
+              "word_index": 3
+            }
+          ],
+          "file": "historical-glyph-errata.json",
+          "sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c"
+        },
         "pages": [
           {
             "ambiguities": [],
@@ -13527,9 +14693,9 @@
             "rows": [
               [
                 "00000027",
-                "00085A8A",
+                "00085ABA",
                 "000001A6",
-                "AC5A5038"
+                "AC5A5D38"
               ],
               [
                 "0000103B",
@@ -13552,9 +14718,9 @@
             ],
             "words": [
               "00000027",
-              "00085A8A",
+              "00085ABA",
               "000001A6",
-              "AC5A5038",
+              "AC5A5D38",
               "0000103B",
               "00350AE5",
               "00000044",
@@ -14412,9 +15578,9 @@
           ],
           "0C": [
             "00000027",
-            "00085A8A",
+            "00085ABA",
             "000001A6",
-            "AC5A5038",
+            "AC5A5D38",
             "0000103B",
             "00350AE5",
             "00000044",
@@ -14446,6 +15612,548 @@
             "00000000",
             "0000000F"
           ]
+        },
+        "additional_geometry_pixel_review": {
+          "created_utc_date": "2026-10-12",
+          "geometry_checks": [
+            {
+              "build_as_stored": "e680281d1601",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AA",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 138.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AA139.png",
+                  "crop_native_bbox_xyxy": [
+                    65,
+                    270,
+                    990,
+                    315
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62413/frames/frame-139.jpg",
+                  "sha256": "0fb49fec0c11adda960c9fd597af61faf832fefc1a7dc41f974251bd680c05a9"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62413/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1602",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0C",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AB",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 130.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AB131.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    268,
+                    900,
+                    316
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62411/frames/frame-131.jpg",
+                  "sha256": "3c576678fdfd826abb1ca468845e31ce222443f49bc0f961683914a99c97685c"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62411/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1603",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0B",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AC",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 127.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AC128.png",
+                  "crop_native_bbox_xyxy": [
+                    80,
+                    435,
+                    1100,
+                    496
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62412/frames/frame-128.jpg",
+                  "sha256": "fd2c991623083ccda786ce2521005000afd321ac4487215e096ae143591b6efc"
+                },
+                {
+                  "approximate_video_seconds": 128.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AC129.png",
+                  "crop_native_bbox_xyxy": [
+                    80,
+                    435,
+                    1100,
+                    496
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62412/frames/frame-129.jpg",
+                  "sha256": "61f5154a445662713cc7e9e299566ae2c9dd8f832c53ce7e43bf088372fcd18d"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62412/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1604",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0A",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AD",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 111.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AD112.png",
+                  "crop_native_bbox_xyxy": [
+                    15,
+                    420,
+                    940,
+                    492
+                  ],
+                  "crop_scale": 2,
+                  "frame": "ad-hardware-20261012/frames/frame-112.jpg",
+                  "sha256": "6be39216c649923763f2b6fed37634e94de3ec8b2dfe30d78f02f2d062db8efb"
+                },
+                {
+                  "approximate_video_seconds": 112.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AD113.png",
+                  "crop_native_bbox_xyxy": [
+                    15,
+                    420,
+                    940,
+                    492
+                  ],
+                  "crop_scale": 2,
+                  "frame": "ad-hardware-20261012/frames/frame-113.jpg",
+                  "sha256": "c64a093bc0156960ef8565e66f4f0e3e7eaa602ee7ed41bfbc1bc15e7424e135"
+                }
+              ],
+              "raw_file": "ad-hardware-20261012/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d01",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AE",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 122.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AE123.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    400,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62415/frames/frame-123.jpg",
+                  "sha256": "4dee3c4cf0f03398b2323381a79f74ed358bb4aca8414b5bec7a0e13a5e0b469"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62415/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791D02",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AF",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 132.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AF133.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    400,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62417/frames/frame-133.jpg",
+                  "sha256": "8bd9925638a14b7160f53261e04eecfdef75e36ee74dba2f97afdcf8158663ef"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62417/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d03",
+              "changes": [
+                {
+                  "correction_required": false,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085ABA"
+                },
+                {
+                  "correction_required": false,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5D38"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0C",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 124.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG125.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    390,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-125.jpg",
+                  "sha256": "5173bc1c106f6b0650c9830afd98e013538196d36915e30f7f34093dc8569be3"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d04",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AH",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 125.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AH126.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    240,
+                    1050,
+                    380
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62416/frames/frame-126.jpg",
+                  "sha256": "d9c52a3a9c78825cea25e976d7af29d4f87b03df467857b24c8154e135af9c6e"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62416/trace-pages.json",
+              "token_hex": "00000027"
+            }
+          ],
+          "glyph_reference": {
+            "distinctions": "B has a solid left column at its cap/middle/bottom where8 does not. Zero has internal diagonal pixels; D is hollow.",
+            "image": "followup-matrix-20261012/glyph-qa/font-reference-0-8-B-D.png",
+            "low_five_bit_rows": {
+              "0": [
+                14,
+                17,
+                19,
+                21,
+                25,
+                17,
+                14
+              ],
+              "8": [
+                14,
+                17,
+                17,
+                14,
+                17,
+                17,
+                14
+              ],
+              "B": [
+                30,
+                17,
+                17,
+                30,
+                17,
+                17,
+                30
+              ],
+              "D": [
+                30,
+                17,
+                17,
+                17,
+                17,
+                17,
+                30
+              ]
+            },
+            "source": "ad-followup-source/src/loader/retail_display.c",
+            "table_order": "A-Z then0-9"
+          },
+          "method": "Read enlarged crops from the listed native JPEG frames and compare distinctive pixel strokes with the production compact 5x7 font. Stored values are recorded only as the before-values; no expected geometry or arithmetic was used to fill the pixel read.",
+          "result": {
+            "all_eight_captures_independently_same_422_sector_geometry": true,
+            "comparison_implication": "The 422-sector exact geometry match is retained after applying the explicit B/D transcription errata. Geometry corrections change no timing fields. AG timing corrections add48ticks (0.06144ms) to the retained592-sector first-credit and observed DATA service-body maximum.",
+            "correct_geometry": {
+              "count_hex": "000001A6",
+              "destination_hex": "AC5A5D38",
+              "lba_hex": "00085ABA"
+            },
+            "geometry_already_correct_capture_count": 1,
+            "geometry_corrected_capture_count": 7,
+            "geometry_words_corrected": 14,
+            "timing_words_corrected": 2,
+            "unresolved_disputes": []
+          },
+          "schema": "toy-historical-glyph-errata-v1",
+          "task_scope": "Read-only independent native-pixel QA; save errata and diagnostic crops only. No historical/current primary JSON or runtime files were changed.",
+          "timing_checks": [
+            {
+              "confidence": "resolved",
+              "correction_required": true,
+              "delta_milliseconds": 0.06144,
+              "field": "592-sector retained first-credit ticks",
+              "page_hex": "0B",
+              "page_word_index_zero_based": 4,
+              "pixel_basis": "Disputed character has a continuous left column, matching B. Both adjacent TRACE0B frames independently show 000017BA; the separately captured TRACE04 word14 also shows 000017BA.",
+              "pixel_verified_hex": "000017BA",
+              "pixel_verified_milliseconds": 7.77472,
+              "pixel_verified_ticks": 6074,
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 121.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG122.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    323,
+                    930,
+                    376
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-122.jpg",
+                  "sha256": "4912482812bed8e121692e11bb99ad53be1b5d2afb16fae0eeb5e8f11ca5f0c8"
+                },
+                {
+                  "approximate_video_seconds": 122.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG123.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    323,
+                    930,
+                    376
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-123.jpg",
+                  "sha256": "e232d419f3381cda915fa605f9cf00d126ce1ebacd355502555e6b1d0821f3bb"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "scope_note": "TRACE04 related observation added during the requested TRACE0B check; primary files are unchanged.",
+              "stored_hex": "0000178A",
+              "stored_ticks": 6026,
+              "tick_seconds": 1.28e-06
+            },
+            {
+              "confidence": "resolved",
+              "correction_required": true,
+              "delta_milliseconds": 0.06144,
+              "field": "DATA service body maximum ticks",
+              "page_hex": "04",
+              "page_word_index_zero_based": 14,
+              "pixel_basis": "Disputed character has a continuous left column, matching B. Both adjacent TRACE0B frames independently show 000017BA; the separately captured TRACE04 word14 also shows 000017BA.",
+              "pixel_verified_hex": "000017BA",
+              "pixel_verified_milliseconds": 7.77472,
+              "pixel_verified_ticks": 6074,
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 108.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG109.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    470,
+                    940,
+                    535
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-109.jpg",
+                  "sha256": "c20c7875e9385e0edd46c2e4fae5def530efd642c566eba4afc1e39bcb5cdceb"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "scope_note": "TRACE04 related observation added during the requested TRACE0B check; primary files are unchanged.",
+              "stored_hex": "0000178A",
+              "stored_ticks": 6026,
+              "tick_seconds": 1.28e-06
+            }
+          ],
+          "word_indexing": "zero-based within each 16-word TRACE page"
         },
         "build": "e680281d1602",
         "checks": {
@@ -17544,7 +19252,266 @@
         "unresolved_ambiguities": []
       },
       "TRACE_decoded": {
+        "additional_geometry_pixel_review": {
+          "file": "historical-glyph-errata.json",
+          "scope": "Current capture record geometry and the explicitly listed AG timing fields; historical comparisons are superseded by the canonical new comparison.",
+          "sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c"
+        },
+        "archived_paired_prior_worst_request_comparison": {
+          "basis": "Match LBA and sector count; record exact destination equality separately. Workloads and record tokens differ; retained worst records are not representative whole-run samples.",
+          "rows": [
+            {
+              "complete_ms": {
+                "AC": 4579.48672,
+                "AD": 1519.0016,
+                "B": 2221.80864,
+                "Y": 2389.36192,
+                "Z": 5212.39808
+              },
+              "destination_hex": {
+                "AC": "AC588B3C",
+                "AD": "AC588B3C",
+                "B": "AC588B3C",
+                "Y": "AC588B3C",
+                "Z": "AC588B3C"
+              },
+              "first_credit_ms": {
+                "AC": 5.5296,
+                "AD": 7.71072,
+                "B": 5.50528,
+                "Y": 5.09824,
+                "Z": 5.24672
+              },
+              "lba_hex": "00078091",
+              "same_destination_as": {
+                "AD": true,
+                "B": true,
+                "Y": true,
+                "Z": true
+              },
+              "sectors": 480
+            },
+            {
+              "complete_ms": {
+                "AC": 1210.7136,
+                "AD": 420.75136,
+                "B": 625.2736,
+                "Y": 672.33664,
+                "Z": 1311.3856
+              },
+              "destination_hex": {
+                "AC": "AC6353BC",
+                "AD": "AC6353BC",
+                "B": "AC6353BC",
+                "Y": "AC6353BC",
+                "Z": "AC6353BC"
+              },
+              "first_credit_ms": {
+                "AC": 5.39776,
+                "AD": 7.5776,
+                "B": 5.5104,
+                "Y": 5.90464,
+                "Z": 5.36448
+              },
+              "lba_hex": "00078009",
+              "same_destination_as": {
+                "AD": true,
+                "B": true,
+                "Y": true,
+                "Z": true
+              },
+              "sectors": 135
+            },
+            {
+              "complete_ms": {
+                "AC": 3239.54944,
+                "AD": 1081.11616,
+                "B": 1583.03744,
+                "Y": 1703.33824,
+                "Z": 3688.17664
+              },
+              "destination_hex": {
+                "AC": "AC5CD794",
+                "AD": "AC5CD794",
+                "B": "AC5CD794",
+                "Y": "AC5CD794",
+                "Z": "AC5CD794"
+              },
+              "first_credit_ms": {
+                "AC": 5.4784,
+                "AD": 7.64288,
+                "B": 5.43616,
+                "Y": 5.09056,
+                "Z": 5.43488
+              },
+              "lba_hex": "000858BD",
+              "same_destination_as": {
+                "AD": true,
+                "B": true,
+                "Y": true,
+                "Z": true
+              },
+              "sectors": 342
+            },
+            {
+              "complete_ms": {
+                "AC": 3919.66464,
+                "AD": 1337.30432,
+                "B": 1952.94848,
+                "Y": 2102.40256,
+                "Z": 4585.75488
+              },
+              "destination_hex": {
+                "AC": "AC5A5038",
+                "AD": "AC5A5038",
+                "B": "AC5A5038",
+                "Y": "AC5A5038",
+                "Z": "AC5A5038"
+              },
+              "first_credit_ms": {
+                "AC": 5.44768,
+                "AD": 7.6096,
+                "B": 5.38752,
+                "Y": 5.952,
+                "Z": 5.41056
+              },
+              "lba_hex": "00085A8A",
+              "same_destination_as": {
+                "AD": true,
+                "B": true,
+                "Y": true,
+                "Z": true
+              },
+              "sectors": 422
+            },
+            {
+              "complete_ms": {
+                "AC": 3625.96608,
+                "AD": 1218.83648,
+                "B": 1777.19424,
+                "Y": 1911.03744,
+                "Z": 2755.72096
+              },
+              "destination_hex": {
+                "AC": "0C774200",
+                "AD": "0C774200",
+                "B": "0C774200",
+                "Y": "0C774200",
+                "Z": "0C774200"
+              },
+              "first_credit_ms": {
+                "AC": 5.5168,
+                "AD": 7.68512,
+                "B": 5.45664,
+                "Y": 6.016,
+                "Z": 5.47072
+              },
+              "lba_hex": "000690B2",
+              "same_destination_as": {
+                "AD": true,
+                "B": true,
+                "Y": true,
+                "Z": true
+              },
+              "sectors": 384
+            },
+            {
+              "complete_ms": {
+                "AC": 1553.22112,
+                "AD": 504.56064,
+                "B": 759.82592,
+                "Y": 801.6832,
+                "Z": 1770.36672
+              },
+              "destination_hex": {
+                "AC": "AC626B5C",
+                "AD": "AC626B5C",
+                "B": "AC626B5C",
+                "Y": "AC626B5C",
+                "Z": "AC626B5C"
+              },
+              "first_credit_ms": {
+                "AC": 5.38752,
+                "AD": 7.57248,
+                "B": 10.51392,
+                "Y": 5.9072,
+                "Z": 5.35936
+              },
+              "lba_hex": "00085A14",
+              "same_destination_as": {
+                "AD": true,
+                "B": true,
+                "Y": true,
+                "Z": true
+              },
+              "sectors": 164
+            },
+            {
+              "complete_ms": {
+                "AC": 3411.0336,
+                "AD": 1203.8144,
+                "B": 1778.10944,
+                "Y": 1913.7664,
+                "Z": 4042.87488
+              },
+              "destination_hex": {
+                "AC": "0C77C600",
+                "AD": "0C77C600",
+                "B": "0C77C600",
+                "Y": "0C77C600",
+                "Z": "0C77C600"
+              },
+              "first_credit_ms": {
+                "AC": 5.50144,
+                "AD": 7.6672,
+                "B": 10.61632,
+                "Y": 6.01088,
+                "Z": 5.46048
+              },
+              "lba_hex": "0006E8CC",
+              "same_destination_as": {
+                "AD": true,
+                "B": true,
+                "Y": true,
+                "Z": true
+              },
+              "sectors": 384
+            },
+            {
+              "complete_ms": {
+                "AC": 5609.40544,
+                "AD": 1869.1008,
+                "B": 2757.02272,
+                "Y": 2973.91104,
+                "Z": 6389.0304
+              },
+              "destination_hex": {
+                "AC": "AC33FA8C",
+                "AD": "AC33FA8C",
+                "B": "AC3FA3BC",
+                "Y": "AC3FA3BC",
+                "Z": "AC33FA8C"
+              },
+              "first_credit_ms": {
+                "AC": 5.59872,
+                "AD": 7.76576,
+                "B": 9.90976,
+                "Y": 5.25568,
+                "Z": 5.56544
+              },
+              "lba_hex": "00085C85",
+              "same_destination_as": {
+                "AD": true,
+                "B": false,
+                "Y": false,
+                "Z": true
+              },
+              "sectors": 592
+            }
+          ]
+        },
         "build": "e680281d1603",
+        "canonical_comparison_file": "AD-AE-AF-AG-AH-Hardware-Comparison.json",
         "checks": {
           "DATA_service_total_le_all_call_body_total": true,
           "accepted_completed_acknowledged_DATA_match": true,
@@ -18429,259 +20396,6 @@
           "Whole-run workloads differ across captures; compare matching LBA/count/destination before attributing aggregate timing changes to a profile.",
           "TRACE completion and byte credits do not prove every payload byte matches the original GDI."
         ],
-        "paired_prior_worst_request_comparison": {
-          "basis": "Match LBA and sector count; record exact destination equality separately. Workloads and record tokens differ; retained worst records are not representative whole-run samples.",
-          "rows": [
-            {
-              "complete_ms": {
-                "AC": 4579.48672,
-                "AD": 1519.0016,
-                "B": 2221.80864,
-                "Y": 2389.36192,
-                "Z": 5212.39808
-              },
-              "destination_hex": {
-                "AC": "AC588B3C",
-                "AD": "AC588B3C",
-                "B": "AC588B3C",
-                "Y": "AC588B3C",
-                "Z": "AC588B3C"
-              },
-              "first_credit_ms": {
-                "AC": 5.5296,
-                "AD": 7.71072,
-                "B": 5.50528,
-                "Y": 5.09824,
-                "Z": 5.24672
-              },
-              "lba_hex": "00078091",
-              "same_destination_as": {
-                "AD": true,
-                "B": true,
-                "Y": true,
-                "Z": true
-              },
-              "sectors": 480
-            },
-            {
-              "complete_ms": {
-                "AC": 1210.7136,
-                "AD": 420.75136,
-                "B": 625.2736,
-                "Y": 672.33664,
-                "Z": 1311.3856
-              },
-              "destination_hex": {
-                "AC": "AC6353BC",
-                "AD": "AC6353BC",
-                "B": "AC6353BC",
-                "Y": "AC6353BC",
-                "Z": "AC6353BC"
-              },
-              "first_credit_ms": {
-                "AC": 5.39776,
-                "AD": 7.5776,
-                "B": 5.5104,
-                "Y": 5.90464,
-                "Z": 5.36448
-              },
-              "lba_hex": "00078009",
-              "same_destination_as": {
-                "AD": true,
-                "B": true,
-                "Y": true,
-                "Z": true
-              },
-              "sectors": 135
-            },
-            {
-              "complete_ms": {
-                "AC": 3239.54944,
-                "AD": 1081.11616,
-                "B": 1583.03744,
-                "Y": 1703.33824,
-                "Z": 3688.17664
-              },
-              "destination_hex": {
-                "AC": "AC5CD794",
-                "AD": "AC5CD794",
-                "B": "AC5CD794",
-                "Y": "AC5CD794",
-                "Z": "AC5CD794"
-              },
-              "first_credit_ms": {
-                "AC": 5.4784,
-                "AD": 7.64288,
-                "B": 5.43616,
-                "Y": 5.09056,
-                "Z": 5.43488
-              },
-              "lba_hex": "000858BD",
-              "same_destination_as": {
-                "AD": true,
-                "B": true,
-                "Y": true,
-                "Z": true
-              },
-              "sectors": 342
-            },
-            {
-              "complete_ms": {
-                "AC": 3919.66464,
-                "AD": 1337.30432,
-                "B": 1952.94848,
-                "Y": 2102.40256,
-                "Z": 4585.75488
-              },
-              "destination_hex": {
-                "AC": "AC5A5038",
-                "AD": "AC5A5038",
-                "B": "AC5A5038",
-                "Y": "AC5A5038",
-                "Z": "AC5A5038"
-              },
-              "first_credit_ms": {
-                "AC": 5.44768,
-                "AD": 7.6096,
-                "B": 5.38752,
-                "Y": 5.952,
-                "Z": 5.41056
-              },
-              "lba_hex": "00085A8A",
-              "same_destination_as": {
-                "AD": true,
-                "B": true,
-                "Y": true,
-                "Z": true
-              },
-              "sectors": 422
-            },
-            {
-              "complete_ms": {
-                "AC": 3625.96608,
-                "AD": 1218.83648,
-                "B": 1777.19424,
-                "Y": 1911.03744,
-                "Z": 2755.72096
-              },
-              "destination_hex": {
-                "AC": "0C774200",
-                "AD": "0C774200",
-                "B": "0C774200",
-                "Y": "0C774200",
-                "Z": "0C774200"
-              },
-              "first_credit_ms": {
-                "AC": 5.5168,
-                "AD": 7.68512,
-                "B": 5.45664,
-                "Y": 6.016,
-                "Z": 5.47072
-              },
-              "lba_hex": "000690B2",
-              "same_destination_as": {
-                "AD": true,
-                "B": true,
-                "Y": true,
-                "Z": true
-              },
-              "sectors": 384
-            },
-            {
-              "complete_ms": {
-                "AC": 1553.22112,
-                "AD": 504.56064,
-                "B": 759.82592,
-                "Y": 801.6832,
-                "Z": 1770.36672
-              },
-              "destination_hex": {
-                "AC": "AC626B5C",
-                "AD": "AC626B5C",
-                "B": "AC626B5C",
-                "Y": "AC626B5C",
-                "Z": "AC626B5C"
-              },
-              "first_credit_ms": {
-                "AC": 5.38752,
-                "AD": 7.57248,
-                "B": 10.51392,
-                "Y": 5.9072,
-                "Z": 5.35936
-              },
-              "lba_hex": "00085A14",
-              "same_destination_as": {
-                "AD": true,
-                "B": true,
-                "Y": true,
-                "Z": true
-              },
-              "sectors": 164
-            },
-            {
-              "complete_ms": {
-                "AC": 3411.0336,
-                "AD": 1203.8144,
-                "B": 1778.10944,
-                "Y": 1913.7664,
-                "Z": 4042.87488
-              },
-              "destination_hex": {
-                "AC": "0C77C600",
-                "AD": "0C77C600",
-                "B": "0C77C600",
-                "Y": "0C77C600",
-                "Z": "0C77C600"
-              },
-              "first_credit_ms": {
-                "AC": 5.50144,
-                "AD": 7.6672,
-                "B": 10.61632,
-                "Y": 6.01088,
-                "Z": 5.46048
-              },
-              "lba_hex": "0006E8CC",
-              "same_destination_as": {
-                "AD": true,
-                "B": true,
-                "Y": true,
-                "Z": true
-              },
-              "sectors": 384
-            },
-            {
-              "complete_ms": {
-                "AC": 5609.40544,
-                "AD": 1869.1008,
-                "B": 2757.02272,
-                "Y": 2973.91104,
-                "Z": 6389.0304
-              },
-              "destination_hex": {
-                "AC": "AC33FA8C",
-                "AD": "AC33FA8C",
-                "B": "AC3FA3BC",
-                "Y": "AC3FA3BC",
-                "Z": "AC33FA8C"
-              },
-              "first_credit_ms": {
-                "AC": 5.59872,
-                "AD": 7.76576,
-                "B": 9.90976,
-                "Y": 5.25568,
-                "Z": 5.56544
-              },
-              "lba_hex": "00085C85",
-              "same_destination_as": {
-                "AD": true,
-                "B": false,
-                "Y": false,
-                "Z": true
-              },
-              "sectors": 592
-            }
-          ]
-        },
         "phases": [
           {
             "counts": {
@@ -18923,13 +20637,13 @@
                 "acknowledge_ticks": 68,
                 "complete_ms": 3919.66464,
                 "complete_ticks": 3062238,
-                "destination": 2891599928,
-                "destination_hex": "AC5A5038",
+                "destination": 2891603256,
+                "destination_hex": "AC5A5D38",
                 "first_credit_ms": 5.44768,
                 "first_credit_ticks": 4256,
                 "flags": 15,
-                "lba": 547466,
-                "lba_hex": "00085A8A",
+                "lba": 547514,
+                "lba_hex": "00085ABA",
                 "sectors": 422,
                 "slot": 3,
                 "token": 39,
@@ -19194,8 +20908,40 @@
         "profile": "AC"
       },
       "TRACE_raw": {
+        "additional_pixel_corrections": [
+          {
+            "after": "00085ABA",
+            "before": "00085A8A",
+            "page": "0000000B",
+            "word_index": 9
+          },
+          {
+            "after": "AC5A5D38",
+            "before": "AC5A5038",
+            "page": "0000000B",
+            "word_index": 11
+          }
+        ],
         "build": "e680281d1603",
         "capture": "upload/62412.mp4",
+        "independent_pixel_errata": {
+          "applied_corrections": [
+            {
+              "after": "00085ABA",
+              "before": "00085A8A",
+              "page": "0000000B",
+              "word_index": 9
+            },
+            {
+              "after": "AC5A5D38",
+              "before": "AC5A5038",
+              "page": "0000000B",
+              "word_index": 11
+            }
+          ],
+          "file": "historical-glyph-errata.json",
+          "sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c"
+        },
         "limitations": [
           "Frame130 is a blank page transition; TRACE0C was read from clearframes131/132.",
           "No raw telemetry dump or report CRC available."
@@ -19843,9 +21589,9 @@
               ],
               [
                 "00000027",
-                "00085A8A",
+                "00085ABA",
                 "000001A6",
-                "AC5A5038"
+                "AC5A5D38"
               ],
               [
                 "000010A0",
@@ -19864,9 +21610,9 @@
               "00000044",
               "0000000F",
               "00000027",
-              "00085A8A",
+              "00085ABA",
               "000001A6",
-              "AC5A5038",
+              "AC5A5D38",
               "000010A0",
               "002EB9DE",
               "00000044",
@@ -20808,9 +22554,9 @@
             "00000044",
             "0000000F",
             "00000027",
-            "00085A8A",
+            "00085ABA",
             "000001A6",
-            "AC5A5038",
+            "AC5A5D38",
             "000010A0",
             "002EB9DE",
             "00000044",
@@ -20852,6 +22598,548 @@
             "00000000",
             "0000000F"
           ]
+        },
+        "additional_geometry_pixel_review": {
+          "created_utc_date": "2026-10-12",
+          "geometry_checks": [
+            {
+              "build_as_stored": "e680281d1601",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AA",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 138.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AA139.png",
+                  "crop_native_bbox_xyxy": [
+                    65,
+                    270,
+                    990,
+                    315
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62413/frames/frame-139.jpg",
+                  "sha256": "0fb49fec0c11adda960c9fd597af61faf832fefc1a7dc41f974251bd680c05a9"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62413/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1602",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0C",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AB",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 130.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AB131.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    268,
+                    900,
+                    316
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62411/frames/frame-131.jpg",
+                  "sha256": "3c576678fdfd826abb1ca468845e31ce222443f49bc0f961683914a99c97685c"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62411/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1603",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0B",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AC",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 127.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AC128.png",
+                  "crop_native_bbox_xyxy": [
+                    80,
+                    435,
+                    1100,
+                    496
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62412/frames/frame-128.jpg",
+                  "sha256": "fd2c991623083ccda786ce2521005000afd321ac4487215e096ae143591b6efc"
+                },
+                {
+                  "approximate_video_seconds": 128.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AC129.png",
+                  "crop_native_bbox_xyxy": [
+                    80,
+                    435,
+                    1100,
+                    496
+                  ],
+                  "crop_scale": 2,
+                  "frame": "morning-matrix-20261012/62412/frames/frame-129.jpg",
+                  "sha256": "61f5154a445662713cc7e9e299566ae2c9dd8f832c53ce7e43bf088372fcd18d"
+                }
+              ],
+              "raw_file": "morning-matrix-20261012/62412/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "e680281d1604",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0A",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AD",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 111.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AD112.png",
+                  "crop_native_bbox_xyxy": [
+                    15,
+                    420,
+                    940,
+                    492
+                  ],
+                  "crop_scale": 2,
+                  "frame": "ad-hardware-20261012/frames/frame-112.jpg",
+                  "sha256": "6be39216c649923763f2b6fed37634e94de3ec8b2dfe30d78f02f2d062db8efb"
+                },
+                {
+                  "approximate_video_seconds": 112.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AD113.png",
+                  "crop_native_bbox_xyxy": [
+                    15,
+                    420,
+                    940,
+                    492
+                  ],
+                  "crop_scale": 2,
+                  "frame": "ad-hardware-20261012/frames/frame-113.jpg",
+                  "sha256": "c64a093bc0156960ef8565e66f4f0e3e7eaa602ee7ed41bfbc1bc15e7424e135"
+                }
+              ],
+              "raw_file": "ad-hardware-20261012/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d01",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AE",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 122.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AE123.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    400,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62415/frames/frame-123.jpg",
+                  "sha256": "4dee3c4cf0f03398b2323381a79f74ed358bb4aca8414b5bec7a0e13a5e0b469"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62415/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791D02",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AF",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 132.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AF133.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    400,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62417/frames/frame-133.jpg",
+                  "sha256": "8bd9925638a14b7160f53261e04eecfdef75e36ee74dba2f97afdcf8158663ef"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62417/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d03",
+              "changes": [
+                {
+                  "correction_required": false,
+                  "field": "lba",
+                  "page_word_index_zero_based": 9,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085ABA"
+                },
+                {
+                  "correction_required": false,
+                  "field": "destination",
+                  "page_word_index_zero_based": 11,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5D38"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0C",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 124.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG125.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    390,
+                    1050,
+                    520
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-125.jpg",
+                  "sha256": "5173bc1c106f6b0650c9830afd98e013538196d36915e30f7f34093dc8569be3"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "token_hex": "00000027"
+            },
+            {
+              "build_as_stored": "025646791d04",
+              "changes": [
+                {
+                  "correction_required": true,
+                  "field": "lba",
+                  "page_word_index_zero_based": 1,
+                  "pixel_verified_hex": "00085ABA",
+                  "stored_hex": "00085A8A"
+                },
+                {
+                  "correction_required": true,
+                  "field": "destination",
+                  "page_word_index_zero_based": 3,
+                  "pixel_verified_hex": "AC5A5D38",
+                  "stored_hex": "AC5A5038"
+                }
+              ],
+              "confidence": "resolved",
+              "count_hex": "000001A6",
+              "count_sectors": 422,
+              "geometry_pixel_verified": {
+                "destination_hex": "AC5A5D38",
+                "lba_hex": "00085ABA"
+              },
+              "page_hex": "0D",
+              "pixel_basis": "LBA character after 85A has a solid full left column and B-shaped double bowl; destination character after AC5A5 is hollow D without the diagonal pixels present in the zero glyph. Read each capture directly; no geometry copied from another capture.",
+              "profile": "AH",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 125.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AH126.png",
+                  "crop_native_bbox_xyxy": [
+                    0,
+                    240,
+                    1050,
+                    380
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62416/frames/frame-126.jpg",
+                  "sha256": "d9c52a3a9c78825cea25e976d7af29d4f87b03df467857b24c8154e135af9c6e"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62416/trace-pages.json",
+              "token_hex": "00000027"
+            }
+          ],
+          "glyph_reference": {
+            "distinctions": "B has a solid left column at its cap/middle/bottom where8 does not. Zero has internal diagonal pixels; D is hollow.",
+            "image": "followup-matrix-20261012/glyph-qa/font-reference-0-8-B-D.png",
+            "low_five_bit_rows": {
+              "0": [
+                14,
+                17,
+                19,
+                21,
+                25,
+                17,
+                14
+              ],
+              "8": [
+                14,
+                17,
+                17,
+                14,
+                17,
+                17,
+                14
+              ],
+              "B": [
+                30,
+                17,
+                17,
+                30,
+                17,
+                17,
+                30
+              ],
+              "D": [
+                30,
+                17,
+                17,
+                17,
+                17,
+                17,
+                30
+              ]
+            },
+            "source": "ad-followup-source/src/loader/retail_display.c",
+            "table_order": "A-Z then0-9"
+          },
+          "method": "Read enlarged crops from the listed native JPEG frames and compare distinctive pixel strokes with the production compact 5x7 font. Stored values are recorded only as the before-values; no expected geometry or arithmetic was used to fill the pixel read.",
+          "result": {
+            "all_eight_captures_independently_same_422_sector_geometry": true,
+            "comparison_implication": "The 422-sector exact geometry match is retained after applying the explicit B/D transcription errata. Geometry corrections change no timing fields. AG timing corrections add48ticks (0.06144ms) to the retained592-sector first-credit and observed DATA service-body maximum.",
+            "correct_geometry": {
+              "count_hex": "000001A6",
+              "destination_hex": "AC5A5D38",
+              "lba_hex": "00085ABA"
+            },
+            "geometry_already_correct_capture_count": 1,
+            "geometry_corrected_capture_count": 7,
+            "geometry_words_corrected": 14,
+            "timing_words_corrected": 2,
+            "unresolved_disputes": []
+          },
+          "schema": "toy-historical-glyph-errata-v1",
+          "task_scope": "Read-only independent native-pixel QA; save errata and diagnostic crops only. No historical/current primary JSON or runtime files were changed.",
+          "timing_checks": [
+            {
+              "confidence": "resolved",
+              "correction_required": true,
+              "delta_milliseconds": 0.06144,
+              "field": "592-sector retained first-credit ticks",
+              "page_hex": "0B",
+              "page_word_index_zero_based": 4,
+              "pixel_basis": "Disputed character has a continuous left column, matching B. Both adjacent TRACE0B frames independently show 000017BA; the separately captured TRACE04 word14 also shows 000017BA.",
+              "pixel_verified_hex": "000017BA",
+              "pixel_verified_milliseconds": 7.77472,
+              "pixel_verified_ticks": 6074,
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 121.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG122.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    323,
+                    930,
+                    376
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-122.jpg",
+                  "sha256": "4912482812bed8e121692e11bb99ad53be1b5d2afb16fae0eeb5e8f11ca5f0c8"
+                },
+                {
+                  "approximate_video_seconds": 122.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG123.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    323,
+                    930,
+                    376
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-123.jpg",
+                  "sha256": "e232d419f3381cda915fa605f9cf00d126ce1ebacd355502555e6b1d0821f3bb"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "scope_note": "TRACE04 related observation added during the requested TRACE0B check; primary files are unchanged.",
+              "stored_hex": "0000178A",
+              "stored_ticks": 6026,
+              "tick_seconds": 1.28e-06
+            },
+            {
+              "confidence": "resolved",
+              "correction_required": true,
+              "delta_milliseconds": 0.06144,
+              "field": "DATA service body maximum ticks",
+              "page_hex": "04",
+              "page_word_index_zero_based": 14,
+              "pixel_basis": "Disputed character has a continuous left column, matching B. Both adjacent TRACE0B frames independently show 000017BA; the separately captured TRACE04 word14 also shows 000017BA.",
+              "pixel_verified_hex": "000017BA",
+              "pixel_verified_milliseconds": 7.77472,
+              "pixel_verified_ticks": 6074,
+              "profile": "AG",
+              "provenance": [
+                {
+                  "approximate_video_seconds": 108.5,
+                  "crop": "followup-matrix-20261012/glyph-qa/AG109.png",
+                  "crop_native_bbox_xyxy": [
+                    10,
+                    470,
+                    940,
+                    535
+                  ],
+                  "crop_scale": 2,
+                  "frame": "followup-matrix-20261012/62414/frames/frame-109.jpg",
+                  "sha256": "c20c7875e9385e0edd46c2e4fae5def530efd642c566eba4afc1e39bcb5cdceb"
+                }
+              ],
+              "raw_file": "followup-matrix-20261012/62414/trace-pages.json",
+              "scope_note": "TRACE04 related observation added during the requested TRACE0B check; primary files are unchanged.",
+              "stored_hex": "0000178A",
+              "stored_ticks": 6026,
+              "tick_seconds": 1.28e-06
+            }
+          ],
+          "word_indexing": "zero-based within each 16-word TRACE page"
         },
         "build": "e680281d1603",
         "checks": {
@@ -23954,63 +26242,12 @@
         "unresolved_ambiguities": []
       },
       "TRACE_decoded": {
-        "build": "e680281d1604",
-        "checks": {
-          "accepted_completed_acknowledged_DATA_match": true,
-          "all_26_pages_present": true,
-          "all_416_words_agree_with_independent_visual_reader": true,
-          "all_metric_histograms_sum_to_sample_count": true,
-          "each_page_16_words": true,
-          "header_call_samples_equals_phase_calls": true,
-          "pages_12_through_19_all_zero": true,
-          "phase0_read_geometry_classification_counts_match_requests_minus_first": true,
-          "phase_DATA_service_total_does_not_exceed_all_call_body_total": true,
-          "progress_and_zero_EXEC_do_not_exceed_EXEC_calls": true,
-          "request_size_histograms_sum_to_accepted_DATA": true,
-          "requested_and_delivered_bytes_match_2048_times_sectors": true,
-          "worst_completion_max_matches_phase0_metric": true
+        "additional_geometry_pixel_review": {
+          "file": "historical-glyph-errata.json",
+          "scope": "Current capture record geometry and the explicitly listed AG timing fields; historical comparisons are superseded by the canonical new comparison.",
+          "sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c"
         },
-        "first_observed_GD_entry_to_accepted_PLAY_ms": 28930.34624,
-        "first_observed_GD_entry_to_accepted_PLAY_ticks": 22601833,
-        "header": {
-          "accepted_play_requests": 1,
-          "active_phase": 1,
-          "boundary_clock_valid": 1,
-          "boundary_command": 20,
-          "boundary_generation": 9,
-          "boundary_tick": 4272149892,
-          "boundary_token": 516,
-          "clock_epoch": 0,
-          "counters_saturated": 0,
-          "first_clock_valid": 1,
-          "first_tick": 4294751725,
-          "frozen": 1,
-          "magic": 1280594481,
-          "nested_begins": 0,
-          "phase_words": 192,
-          "record_words": 8,
-          "tick_hz": 781250,
-          "total_call_samples": 6009,
-          "unmatched_ends": 0,
-          "version": 1,
-          "words": 416,
-          "worst_per_phase": 8
-        },
-        "independent_visual_check": {
-          "disputed_glyphs_resolved_by_native_and_adjacent_frame_crops": 12,
-          "file": "trace-independent.json",
-          "raw_word_differences": 0,
-          "words_compared": 416
-        },
-        "limitations": [
-          "Manual visual transcription; no raw report dump or report CRC is available.",
-          "The first accepted PLAY mailbox is the phase boundary, not proof of audible audio start.",
-          "The retained eight worst DATA records are unordered, not request chronology.",
-          "PVR changes are sampled at GD calls; they do not prove a continuous frame rate.",
-          "Whole-run request totals differ across captures; compare matched LBA/count/destination requests before attributing aggregate timing changes to a profile.",
-          "TRACE records core completion and byte credits; neither alone proves every payload byte matches the original GDI."
-        ],
-        "paired_prior_worst_request_comparison": {
+        "archived_paired_prior_worst_request_comparison": {
           "basis": "Match by LBA and sector count and explicitly record destination equality. Whole-run workloads differ; these are retained worst records, not a representative complete workload.",
           "rows": [
             {
@@ -24311,6 +26548,63 @@
             }
           ]
         },
+        "build": "e680281d1604",
+        "canonical_comparison_file": "AD-AE-AF-AG-AH-Hardware-Comparison.json",
+        "checks": {
+          "accepted_completed_acknowledged_DATA_match": true,
+          "all_26_pages_present": true,
+          "all_416_words_agree_with_independent_visual_reader": true,
+          "all_metric_histograms_sum_to_sample_count": true,
+          "each_page_16_words": true,
+          "header_call_samples_equals_phase_calls": true,
+          "pages_12_through_19_all_zero": true,
+          "phase0_read_geometry_classification_counts_match_requests_minus_first": true,
+          "phase_DATA_service_total_does_not_exceed_all_call_body_total": true,
+          "progress_and_zero_EXEC_do_not_exceed_EXEC_calls": true,
+          "request_size_histograms_sum_to_accepted_DATA": true,
+          "requested_and_delivered_bytes_match_2048_times_sectors": true,
+          "worst_completion_max_matches_phase0_metric": true
+        },
+        "first_observed_GD_entry_to_accepted_PLAY_ms": 28930.34624,
+        "first_observed_GD_entry_to_accepted_PLAY_ticks": 22601833,
+        "header": {
+          "accepted_play_requests": 1,
+          "active_phase": 1,
+          "boundary_clock_valid": 1,
+          "boundary_command": 20,
+          "boundary_generation": 9,
+          "boundary_tick": 4272149892,
+          "boundary_token": 516,
+          "clock_epoch": 0,
+          "counters_saturated": 0,
+          "first_clock_valid": 1,
+          "first_tick": 4294751725,
+          "frozen": 1,
+          "magic": 1280594481,
+          "nested_begins": 0,
+          "phase_words": 192,
+          "record_words": 8,
+          "tick_hz": 781250,
+          "total_call_samples": 6009,
+          "unmatched_ends": 0,
+          "version": 1,
+          "words": 416,
+          "worst_per_phase": 8
+        },
+        "independent_visual_check": {
+          "disputed_glyphs_resolved_by_native_and_adjacent_frame_crops": 12,
+          "file": "trace-independent.json",
+          "raw_word_differences": 0,
+          "words_compared": 416
+        },
+        "limitations": [
+          "Manual visual transcription; no raw report dump or report CRC is available.",
+          "The first accepted PLAY mailbox is the phase boundary, not proof of audible audio start.",
+          "The retained eight worst DATA records are unordered, not request chronology.",
+          "PVR changes are sampled at GD calls; they do not prove a continuous frame rate.",
+          "Whole-run request totals differ across captures; compare matched LBA/count/destination requests before attributing aggregate timing changes to a profile.",
+          "TRACE records core completion and byte credits; neither alone proves every payload byte matches the original GDI."
+        ],
         "phases": [
           {
             "counts": {
@@ -24517,13 +26811,13 @@
                 "acknowledge_ticks": 69,
                 "complete_ms": 1337.30432,
                 "complete_ticks": 1044769,
-                "destination": 2891599928,
-                "destination_hex": "AC5A5038",
+                "destination": 2891603256,
+                "destination_hex": "AC5A5D38",
                 "first_credit_ms": 7.6096,
                 "first_credit_ticks": 5945,
                 "flags": 15,
-                "lba": 547466,
-                "lba_hex": "00085A8A",
+                "lba": 547514,
+                "lba_hex": "00085ABA",
                 "sectors": 422,
                 "token": 39,
                 "token_hex": "00000027"
@@ -24814,8 +27108,40 @@
         ]
       },
       "TRACE_raw": {
+        "additional_pixel_corrections": [
+          {
+            "after": "00085ABA",
+            "before": "00085A8A",
+            "page": "0000000A",
+            "word_index": 9
+          },
+          {
+            "after": "AC5A5D38",
+            "before": "AC5A5038",
+            "page": "0000000A",
+            "word_index": 11
+          }
+        ],
         "build": "e680281d1604",
         "capture": "upload/62409.mp4",
+        "independent_pixel_errata": {
+          "applied_corrections": [
+            {
+              "after": "00085ABA",
+              "before": "00085A8A",
+              "page": "0000000A",
+              "word_index": 9
+            },
+            {
+              "after": "AC5A5D38",
+              "before": "AC5A5038",
+              "page": "0000000A",
+              "word_index": 11
+            }
+          ],
+          "file": "historical-glyph-errata.json",
+          "sha256": "baf36a21fcfe6241dfa0f05d61036bfbbc58efdef35343fd56690a464d101f0c"
+        },
         "pages": [
           {
             "ambiguities": [],
@@ -25381,9 +27707,9 @@
               ],
               [
                 "00000027",
-                "00085A8A",
+                "00085ABA",
                 "000001A6",
-                "AC5A5038"
+                "AC5A5D38"
               ],
               [
                 "00001739",
@@ -25402,9 +27728,9 @@
               "00000000",
               "0000000F",
               "00000027",
-              "00085A8A",
+              "00085ABA",
               "000001A6",
-              "AC5A5038",
+              "AC5A5D38",
               "00001739",
               "000FF121",
               "00000045",

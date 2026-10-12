@@ -37,6 +37,11 @@ enum kui_toy_pilot_sci_result {
     KUI_TOY_SCI_OK = 0, KUI_TOY_SCI_PENDING = 1, KUI_TOY_SCI_FAULT = -1
 };
 /* Foreground CHECK/EXEC admission, checked between finite stream steps. */
+#if KUI_TOY_PILOT_DATA_TUNING_PROFILE
+#define KUI_TOY_SCI_SERVICE_BLOCKS KUI_TOY_TUNING_BLOCKS
+#define KUI_TOY_SCI_SERVICE_STEPS KUI_TOY_TUNING_STEPS
+#define KUI_TOY_SCI_SERVICE_TICKS KUI_TOY_TUNING_TICKS
+#else
 #if KUI_TOY_PILOT_AD_FOLLOWUP_PROFILE == 1 || KUI_TOY_PILOT_AD_FOLLOWUP_PROFILE == 2
 #define KUI_TOY_SCI_SERVICE_BLOCKS 24u
 #elif KUI_TOY_PILOT_DATA_BUDGET_PROFILE == 2 || KUI_TOY_PILOT_DATA_BUDGET_PROFILE == 4
@@ -51,6 +56,7 @@ enum kui_toy_pilot_sci_result {
 #define KUI_TOY_SCI_SERVICE_TICKS 6000u
 #else
 #define KUI_TOY_SCI_SERVICE_TICKS 1500u
+#endif
 #endif
 struct kui_toy_pilot_sci_stats {
     /* Verified physical blocks include DATA and asynchronous RAW work. */

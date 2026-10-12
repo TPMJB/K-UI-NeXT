@@ -28,9 +28,13 @@
 #error Toy AD follow-ups require the complete admitted AD reader configuration
 #endif
 
+#include "kui/toy_loader_data_tuning.h"
+
 /* The unchanged twelve-word SCHED budget snapshot identifies these four
  * experiments as profiles 5..8; their build IDs identify the audio factor. */
-#if KUI_TOY_PILOT_AD_FOLLOWUP_PROFILE
+#if KUI_TOY_PILOT_DATA_TUNING_PROFILE
+#define KUI_TOY_AD_BUDGET_REPORT_PROFILE KUI_TOY_TUNING_REPORT_PROFILE
+#elif KUI_TOY_PILOT_AD_FOLLOWUP_PROFILE
 #define KUI_TOY_AD_BUDGET_REPORT_PROFILE (4u + KUI_TOY_PILOT_AD_FOLLOWUP_PROFILE)
 #else
 #define KUI_TOY_AD_BUDGET_REPORT_PROFILE KUI_TOY_PILOT_DATA_BUDGET_PROFILE
