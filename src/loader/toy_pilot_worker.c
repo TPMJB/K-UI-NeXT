@@ -3,8 +3,11 @@
 #if KUI_TOY_PILOT_ASYNC_CDDA && !KUI_TOY_PILOT_SHARED_SCI
 #error Asynchronous CDDA requires the shared SCI owner
 #endif
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
 #include "toy_pilot_sci.h"
+#endif
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+#include "toy_pilot_resident_symbols.h"
 #endif
 #if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_LOADER_TRACE
 extern uint8_t __toy_pilot_gd_stack_bottom[] __asm__("__toy_pilot_gd_stack_bottom");
@@ -275,7 +278,12 @@ static const struct kui_retail_manifest *manifest(void) {
 }
 /* No private-stack selection, allocation or SDK call. Mandatory lifecycle
  * revocation is safe even when it interrupts a suspended worker bridge. */
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+bool kui_sci_sd_healthy(void) {
+    return owner.configured &&
+        ((bool (*)(void))(uintptr_t)KUI_TOY_PILOT_LOW_SCI_HEALTHY)();
+}
+#elif KUI_TOY_PILOT_SHARED_SCI
 bool kui_sci_sd_healthy(void) {
     return owner.configured &&
         ((bool (*)(void))(uintptr_t)owner.config.sci_healthy)();
@@ -336,6 +344,14 @@ uint32_t kui_toy_pilot_worker_initialize(const struct kui_toy_pilot_config *c) {
     kui_toy_pilot_sci_init(manifest(),(const struct kui_loader_sd *)(uintptr_t)c->sci_card,
         (enum kui_loader_sd_result (*)(void))(uintptr_t)c->sci_acquire,
         (void (*)(void))(uintptr_t)c->sci_release);
+#endif
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+    /* Generated typed low addresses; the audio config and all audio paths
+     * retain the synchronous profile. Only startup DATA leases this engine. */
+    kui_toy_pilot_sci_init(manifest(),
+        (const struct kui_loader_sd *)(uintptr_t)KUI_TOY_PILOT_LOW_SCI_CARD,
+        (enum kui_loader_sd_result (*)(void))(uintptr_t)KUI_TOY_PILOT_LOW_SCI_ACQUIRE,
+        (void (*)(void))(uintptr_t)KUI_TOY_PILOT_LOW_SCI_RELEASE);
 #endif
     kui_toy_pilot_model_init(&owner.model);
     owner.stats=(struct kui_toy_pilot_snapshot){.magic=KUI_TOY_PILOT_MAGIC,.version=KUI_TOY_PILOT_API,

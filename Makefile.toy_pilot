@@ -17,6 +17,16 @@ SYNTHETIC_SOURCE ?= 0
 LOADER_TRACE ?= 0
 DATA_PROBE ?= 0
 DATA_PAYLOAD_MODE ?= 0
+DATA_SCHEDULE_MODE ?= 0
+ifneq ($(filter $(DATA_SCHEDULE_MODE),0 1 2 3),$(DATA_SCHEDULE_MODE))
+$(error DATA_SCHEDULE_MODE must be 0, 1, 2 or 3)
+endif
+ifneq ($(DATA_SCHEDULE_MODE),0)
+ifneq ($(DATA_PROBE):$(DATA_PAYLOAD_MODE),1:0)
+$(error DATA scheduling requires DATA_PROBE=1 and original DATA_PAYLOAD_MODE=0)
+endif
+SCHEDULE_CONFIG = DATA_SCHEDULE_MODE=$(DATA_SCHEDULE_MODE)
+endif
 ifneq ($(filter $(DATA_PAYLOAD_MODE),0 1 2),$(DATA_PAYLOAD_MODE))
 $(error DATA_PAYLOAD_MODE must be 0, 1 or 2)
 endif
@@ -116,6 +126,7 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -DKUI_TOY_PILOT_SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE) \
  -DKUI_TOY_PILOT_LOADER_TRACE=$(LOADER_TRACE) -DKUI_TOY_PILOT_DATA_PROBE=$(DATA_PROBE) \
  -DKUI_TOY_PILOT_DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE) \
+ -DKUI_TOY_PILOT_DATA_SCHEDULE_MODE=$(DATA_SCHEDULE_MODE) \
  -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
  -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
  -Iinclude -Isrc/loader -I$(BUILD) -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -141,7 +152,19 @@ endif
 ifeq ($(DATA_PROBE),1)
 WORKER_SRC += src/loader/toy_loader_data_probe.c src/loader/toy_loader_payload_control.c
 endif
+ifneq ($(DATA_SCHEDULE_MODE),0)
+WORKER_SRC += src/loader/toy_loader_schedule_report.c
+SCHEDULE_RESIDENT_EXPORTS = -Wl,-u,_kui_retail_toy_data_schedule_play
+endif
+ifeq ($(DATA_SCHEDULE_MODE),2)
+WORKER_SRC += src/loader/toy_pilot_sci.c src/loader/sci_stream.c src/core/retail_cursor.c
+SCHEDULE_RESIDENT_EXPORTS += -Wl,-u,_kui_toy_pilot_card_pointer -Wl,-u,_kui_toy_pilot_startup_sci_healthy
+FLAGS += -DKUI_RETAIL_GD_REJECTION_DETAILS=1
+endif
 WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o $(BUILD)/pause_asm.o
+ifeq ($(DATA_SCHEDULE_MODE),2)
+WORKER_OBJ += $(BUILD)/worker/async_gd.o $(BUILD)/sci_irq_asm.o
+endif
 ifeq ($(SHARED_SCI),1)
 FLAGS += -DKUI_RETAIL_GD_REJECTION_DETAILS=1
 WORKER_SRC += src/loader/toy_pilot_sci.c src/loader/sci_stream.c src/core/retail_cursor.c
@@ -164,7 +187,7 @@ resident: $(BUILD)/resident-sci.bin
 force-config:
 $(BUILD)/build-config: force-config
 	@mkdir -p $(@D)
-	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') > $@.new
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
 $(BUILD)/sci/%.o: %.c
@@ -186,7 +209,7 @@ $(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) $(RESIDENT_SCRIPT)
 	 -Wl,-u,_kui_toy_pilot_read_raw -Wl,-u,_kui_toy_pilot_heap_hook \
 	 -Wl,-u,_kui_toy_pilot_return_hook -Wl,-u,_kui_toy_pilot_manifest_pointer \
 	 -Wl,-u,_kui_toy_pilot_pending_pointer -Wl,-u,_kui_toy_pilot_active_pointer \
-	 $(SHARED_RESIDENT_EXPORTS) -T$(RESIDENT_SCRIPT) -Wl,-Map,$(BUILD)/resident-sci.map -o $@ $(RESIDENT_OBJ) -lgcc
+	 $(SHARED_RESIDENT_EXPORTS) $(SCHEDULE_RESIDENT_EXPORTS) -T$(RESIDENT_SCRIPT) -Wl,-Map,$(BUILD)/resident-sci.map -o $@ $(RESIDENT_OBJ) -lgcc
 	cp $(BUILD)/resident-sci.elf.ltrans*.su $(BUILD)/sci/lto/
 $(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
 	$(OBJCOPY) -O binary $< $@
@@ -195,9 +218,20 @@ $(BUILD)/toy_pilot_resident_symbols.h: $(BUILD)/resident-sci.elf tools/toy_pilot
 ifeq ($(DATA_PROBE),1)
 $(BUILD)/worker/src/loader/toy_loader_data_probe.o $(BUILD)/worker/src/loader/toy_loader_payload_control.o: $(BUILD)/toy_pilot_resident_symbols.h
 endif
+ifneq ($(DATA_SCHEDULE_MODE),0)
+$(BUILD)/worker/src/loader/toy_pilot_gd.o: $(BUILD)/toy_pilot_resident_symbols.h
+endif
+ifeq ($(DATA_SCHEDULE_MODE),2)
+$(BUILD)/worker/src/loader/toy_pilot_worker.o: $(BUILD)/toy_pilot_resident_symbols.h
+endif
 $(BUILD)/worker/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(FLAGS) $(WORKER_EXTRA_FLAGS) $(BUS_ADMISSION) -MMD -MP -c $< -o $@
+ifeq ($(DATA_SCHEDULE_MODE),2)
+$(BUILD)/worker/src/loader/toy_pilot_sci.o: src/loader/toy_pilot_sci.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -DKUI_RETAIL_GD_ASYNC=1 $(BUS_ADMISSION) -MMD -MP -c $< -o $@
+endif
 $(BUILD)/worker_asm.o: src/loader/toy_pilot_worker.S
 	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
 $(BUILD)/worker/async_gd.o: src/core/retail_gd.c

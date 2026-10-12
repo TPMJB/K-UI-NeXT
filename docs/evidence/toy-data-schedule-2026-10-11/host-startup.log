@@ -1,0 +1,5 @@
+Masked-IRQ time-driven DMA: 32 baseline EXEC/CHECK entries, 8 bounded top-up entries
+Startup DATA SCI engine: 8873 checks passed; private partial DMA fenced, ownership restored and retirement permanent
+Startup DATA GD adapter: acceptance boundary, rejected mailbox, cleanup failure, original raw/audio/post-PLAY routing and terminal handles pass
+Startup DATA SCI real-wire integration: 445790 checks passed; CMD18/CRC/fragmentation/partial fence and retired inactivity
+Startup DATA scheduling suites passed (independent audio profile)

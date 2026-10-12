@@ -1,0 +1,5 @@
+PROTOCOL calls=283 digest=edb17d84c34e364e
+PROTOCOL calls=283 digest=edb17d84c34e364e
+Toy loader trace production: first mailbox PLAY phase, wrong-token/invalid-destination CHECK, exact data/progress, cancellation/reset, clock wrap/zero/profile rejection, inclusive histograms, saturation, nested accounting, PVR observation and frozen evidence PASS
+Toy loader trace negative mutations: refused mailbox, unconsumed CHECK, inclusive histogram and early RESET rejected
+Toy loader trace production differential, telemetry and report suites passed

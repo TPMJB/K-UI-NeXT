@@ -1,0 +1,6 @@
+DATA probe production: exact callbacks/arguments/results, timing partition, SR bins, phase, audio exclusion, failure cleanup, wrap/profile rejection, conflict/reentrancy, saturation and frozen report PASS
+DATA probe actual GD/adapter off/V/W/X protocol match and accepted PLAY cutoff: PROTOCOL calls=283 digest=edb17d84c34e364e
+DATA probe selected wrapper span, feature modes, counter saturation and frozen snapshot PASS
+DATA probe invalid profile guards PASS
+DATA probe exact diagnostic/image typed low admission PASS
+Toy loader DATA probe production telemetry and report suites passed

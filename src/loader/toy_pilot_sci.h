@@ -6,6 +6,13 @@
 #ifndef KUI_TOY_PILOT_ASYNC_CDDA
 #define KUI_TOY_PILOT_ASYNC_CDDA 0
 #endif
+#ifndef KUI_TOY_PILOT_DATA_SCHEDULE_MODE
+#define KUI_TOY_PILOT_DATA_SCHEDULE_MODE 0
+#endif
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2 && \
+    (KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_ASYNC_CDDA || !KUI_TOY_PILOT_PRIVATE_P2)
+#error Startup DATA scheduling requires private P2 and the unchanged synchronous audio profile
+#endif
 
 /* This engine is linked only into the exact-title high worker. Calls run
  * with CPU interrupts masked; its SCI handler has a separate guarded stack.
@@ -44,6 +51,20 @@ int kui_toy_pilot_sci_pump(struct kui_retail_gd *);
 int kui_toy_pilot_sci_service(struct kui_retail_gd *);
 /* Invalidate the token before fencing/stopping DMA. No completion is forged. */
 void kui_toy_pilot_sci_cancel(struct kui_retail_gd *);
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+struct kui_toy_pilot_sci_startup_stats {
+    uint32_t enabled,retired,quiesces,quiesce_failed;
+};
+/* Startup DATA alone owns this receiver. Quiesce revokes its cursor before
+ * fencing DMA and restoring the game's vectors/card ownership. A failed
+ * quiesce must never be followed by publication of an audio PLAY mailbox.
+ * Retirement is permanent for this cold boot; rejected PLAY/mailbox calls
+ * may quiesce safely without retiring the startup scheduler. */
+bool kui_toy_pilot_sci_startup_active(void);
+bool kui_toy_pilot_sci_quiesce(void);
+void kui_toy_pilot_sci_retire(void);
+const struct kui_toy_pilot_sci_startup_stats *kui_toy_pilot_sci_startup_snapshot(void);
+#else
 /* 0: the shared bus was yielded and raw audio may claim it; 1: wait for
  * an arriving data block; -1: transport failed. A failed/pending claim must
  * not be followed by a raw callback. Release exactly one successful claim.
@@ -58,6 +79,7 @@ void kui_toy_pilot_sci_audio_release(void);
  * Does not cancel data, touch an acquired raw lease or access hardware. */
 #endif
 void kui_toy_pilot_sci_audio_cancel(void);
+#endif
 #if KUI_TOY_PILOT_ASYNC_CDDA
 /* Fixed 2352-byte raw audio request, called with exact saved SR masked.
  * (lba,generation,output) identifies a request; generation must be nonzero

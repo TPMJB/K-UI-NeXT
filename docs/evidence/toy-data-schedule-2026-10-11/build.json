@@ -1,0 +1,33 @@
+{
+  "CDDA_algorithm_changed": false,
+  "audio_or_video_improvement_proven": false,
+  "format": 1,
+  "hardware_behavior_verified": false,
+  "profiles": [
+    {
+      "build": "143d51bf7603",
+      "label": "B",
+      "mode": 3,
+      "runtime_sha256": "bb2d25eb99b3ee6b75db87b643239bce7ef755b3f6bd017ca5525a4ebf6e6a97"
+    },
+    {
+      "build": "143d51bf7601",
+      "label": "Y",
+      "mode": 1,
+      "runtime_sha256": "0f0a362345c43ff35cfd8960728dce19f72b24b04f1e253b958458245eacf9a3"
+    },
+    {
+      "build": "143d51bf7602",
+      "label": "Z",
+      "mode": 2,
+      "runtime_sha256": "f58f8dad7f51233f01088f68eb09fa78a7228aea3489ce8b62c12d691a77a1ef"
+    }
+  ],
+  "runtime_source_commit": "143d51bf76dd23ab86a128ff30a492b4f5ad8bac",
+  "source_snapshot_commit": "64eafa35fa3879820eb20332dc684b73b3bca395",
+  "test_package": {
+    "bytes": 9294319,
+    "filename": "K-UI-Toy-DATA-Scheduling-Tests.zip",
+    "sha256": "f34c202c560de4ed56ca451b2380694285d32ea9563bbc0bcc2fe6e41b8f8cde"
+  }
+}

@@ -5,6 +5,7 @@
 #include "kui/retail_pace.h"
 #include "retail_storage.h"
 #include "retail_display.h"
+#include "kui/toy_loader_schedule.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -46,6 +47,17 @@ static struct kui_retail_pace pace;
 static struct { uint32_t paced, spun; } pacing;
 #endif
 static enum kui_loader_sd_result card_result;
+#endif
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE
+#if !KUI_RETAIL_TOY_PILOT || defined(KUI_RETAIL_ASYNC) || defined(KUI_RETAIL_CE)
+#error Toy loader DATA scheduling is restricted to the separate native Toy test
+#endif
+/* BSS is cleared once by the cold boot stage. Keep this latch independent
+ * of service INIT/RESET, which belong to the game's GD protocol. */
+static uint32_t toy_data_play_accepted;
+void kui_retail_toy_data_schedule_play(void) {
+    toy_data_play_accepted=1u;
+}
 #endif
 uint32_t kui_retail_original_menu;
 extern void kui_retail_menu_hook(void);
@@ -672,6 +684,11 @@ static int32_t step(uint32_t r4, uint32_t r5) {
 }
 #else
 /* One EXEC, sized by the pacing policy and timed for the next estimate. */
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 1
+/* Keep the single-sector branch on its own bounded frame rather than
+ * duplicating that frame in the low dispatcher under size-optimizing LTO. */
+__attribute__((noinline))
+#endif
 static int32_t step(uint32_t r4, uint32_t r5) {
 #if KUI_TOY_PILOT_SHARED_SCI
     pace.spin=0;service.step=KUI_TOY_PILOT_GD_FIXED_STEP;
@@ -682,7 +699,11 @@ static int32_t step(uint32_t r4, uint32_t r5) {
     uint32_t started = toy_gd_clock_valid() ?
         *(volatile const uint32_t *)(uintptr_t)0xffd8000cu : 0u;
     pace.spin = 0;
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 1
+    service.step = kui_toy_loader_schedule_step(toy_data_play_accepted);
+#else
     service.step = KUI_TOY_PILOT_GD_FIXED_STEP;
+#endif
 #else
     uint32_t frames = pace.frames, line = pace.line, before = service.diag.sectors_read;
     uint32_t epoch = pace.epoch;

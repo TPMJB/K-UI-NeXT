@@ -5,11 +5,18 @@
 #include "kui/toy_pilot_gd.h"
 #include "kui/toy_pilot_gd_status.h"
 #include "kui/toy_loader_trace.h"
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE && !defined(KUI_TOY_LOADER_SCHEDULE_HOST_TEST)
+#include "kui/toy_loader_schedule_report.h"
+#endif
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE && !defined(KUI_TOY_LOADER_SCHEDULE_HOST_TEST)
+#include "toy_pilot_resident_symbols.h"
+#endif
+#include "kui/toy_loader_schedule.h"
 #if KUI_TOY_PILOT_DATA_PROBE
 #include "kui/toy_loader_data_probe.h"
 #endif
 #include <stddef.h>
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
 #include "toy_pilot_sci.h"
 #endif
 
@@ -41,7 +48,7 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
     uint32_t r4,uint32_t r5,uint32_t r7,uintptr_t base_address) {
     diagnostic_service=s;
     base_fn base=(base_fn)base_address;
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
     /* Revoke the old destination before the low service changes its token
      * or drops pending. A data ABORT cannot revoke the audio mailbox. */
     if(r7==KUI_GD_INIT || r7==KUI_GD_RESET ||
@@ -60,6 +67,9 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
      * both calls, including a terminal CHECK, directly through the high
      * async core. Its EXEC never invokes the low ops.read callback. */
     if(kui_toy_pilot_gd_data_owned(s) &&
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+       kui_toy_pilot_sci_startup_active() && s->sector_bytes==KUI_GAME_DATA_BYTES &&
+#endif
        (r7==KUI_GD_EXEC || r7==KUI_GD_CHECK)) {
 #if !KUI_TOY_PILOT_ASYNC_CDDA
         (void)kui_toy_pilot_sci_service(s);
@@ -97,10 +107,14 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
        (s->command==KUI_RETAIL_GD_REQ_STAT || s->command==KUI_RETAIL_GD_GETSCD)))
         audio=kui_toy_pilot_gd_project(s,p);
     int32_t result=base(r4,r5,0,r7);
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
     /* Submission retains the low core's complete source/destination checks.
      * Only its accepted positive handle may start background data work. */
-    if(r7==KUI_GD_REQUEST && result>0 && kui_toy_pilot_gd_data_pending(s))
+    if(r7==KUI_GD_REQUEST && result>0 && kui_toy_pilot_gd_data_pending(s)
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+       && kui_toy_pilot_sci_startup_active() && s->sector_bytes==KUI_GAME_DATA_BYTES
+#endif
+       )
         (void)kui_toy_pilot_sci_pump(s);
 #endif
     if(r7==KUI_GD_CHECK) {
@@ -124,10 +138,30 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
         r4==KUI_RETAIL_GD_PAUSE || r4==KUI_RETAIL_GD_RELEASE ||
         r4==KUI_GD_STOP || r4==KUI_GD_COMMAND_INIT)) {
         uint32_t command=r4==KUI_GD_COMMAND_INIT?KUI_TOY_PILOT_RESET:r4;
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+        /* The low core has accepted this PLAY handle only after its previous
+         * DATA handle was consumed. Fence the DATA receiver and restore game
+         * vectors before the original worker can observe a PLAY mailbox.
+         * A rejected mailbox leaves the startup scheduler enabled and may
+         * safely reopen the closed receiver on a later DATA request. */
+        if((r4==KUI_RETAIL_GD_PLAY || r4==KUI_RETAIL_GD_PLAY2) &&
+           kui_toy_pilot_sci_startup_active() && !kui_toy_pilot_sci_quiesce()) {
+            s->error=KUI_GD_ERROR_UNAVAILABLE;s->status=KUI_GD_FAILED;s->pending=0;
+            return result;
+        }
+#endif
         s->count=kui_toy_pilot_request(command,s->outputs[0],s->outputs[1],s->outputs[2]);
         if(!s->count) {
             s->error=KUI_GD_ERROR_UNAVAILABLE;s->status=KUI_GD_FAILED;s->pending=0;
         }
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE
+        else if(r4==KUI_RETAIL_GD_PLAY || r4==KUI_RETAIL_GD_PLAY2) {
+            kui_toy_loader_schedule_accepted_play();
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+            kui_toy_pilot_sci_retire();
+#endif
+        }
+#endif
     }
     return result;
 }
@@ -135,11 +169,17 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
 #if KUI_TOY_PILOT_LOADER_TRACE
 int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
     uint32_t r4,uint32_t r5,uint32_t r7,uintptr_t base_address) {
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE && !defined(KUI_TOY_LOADER_SCHEDULE_HOST_TEST)
+    kui_toy_loader_schedule_report_begin(s);
+#endif
     kui_toy_loader_trace_begin(s,r7,r4,r5);
 #if KUI_TOY_PILOT_DATA_PROBE
     kui_toy_loader_data_probe_begin(s,r7,kui_toy_loader_trace_words()[7]);
 #endif
     int32_t result=dispatch_body(s,r4,r5,r7,base_address);
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE && !defined(KUI_TOY_LOADER_SCHEDULE_HOST_TEST)
+    kui_toy_loader_schedule_report_end(s,r7,r4,result);
+#endif
 #if KUI_TOY_PILOT_DATA_PROBE
     kui_toy_loader_data_probe_end(s);
 #endif

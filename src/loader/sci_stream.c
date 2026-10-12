@@ -251,7 +251,7 @@ static uint8_t command(const uint8_t packet[6], bool stop) {
     for(unsigned i = 0; i < 20u && (value & 0x80u); ++i) value = byte(0xff);
     return value;
 }
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
 /* Shared-worker visits must not clock an entire legacy busy timeout while
  * the game's decoder is paused. Keep the first hardware trial's idle and
  * CMD12 R1b windows bounded; a timeout is a transport fault, never a grant

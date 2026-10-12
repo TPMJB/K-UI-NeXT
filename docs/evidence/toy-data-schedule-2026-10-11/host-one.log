@@ -1,0 +1,7 @@
+RESULT completed=40 cancelled=3 boundaries=2 digest=5a0d55aaf178f0ae
+Production DATA schedule: per-visit credit, full payload, CHECK completion/ack, wrong token/map, read failure, abort/reset, busy/invalid/mailbox-refused PLAY and permanent PLAY/PLAY2 handoff PASS
+RESULT completed=40 cancelled=3 boundaries=2 digest=5a0d55aaf178f0ae
+Production DATA schedule: per-visit credit, full payload, CHECK completion/ack, wrong token/map, read failure, abort/reset, busy/invalid/mailbox-refused PLAY and permanent PLAY/PLAY2 handoff PASS
+RESULT completed=40 cancelled=3 boundaries=2 digest=5a0d55aaf178f0ae
+Production DATA schedule: per-visit credit, full payload, CHECK completion/ack, wrong token/map, read failure, abort/reset, busy/invalid/mailbox-refused PLAY and permanent PLAY/PLAY2 handoff PASS
+DATA schedule production differential: 40 completions, 3 cancellations/failures, 2 accepted/rejected PLAY boundaries per mode; 3 behavioral mutations and 10 unsafe configs rejected

@@ -17,7 +17,7 @@
 /* Export initialized pointer words so the stage symbol generator need not
  * depend on compiler names for local LTO objects. */
 const void * const kui_toy_pilot_manifest_pointer=&manifest;
-#if KUI_TOY_PILOT_SHARED_SCI
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
 const void * const kui_toy_pilot_card_pointer=&card.device.sd;
 #endif
 /* The worker treats only command16/17 as data priority. An audio mailbox

@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Exact-title high SCI vectors and forwarding. This is adapted from K-UI's
  * authored native retail vector handoff; no external loader code is used. */
-#if !KUI_TOY_PILOT_SHARED_SCI
-#error High SCI vectors require the separate shared Toy build
+#if !KUI_TOY_PILOT_SHARED_SCI && KUI_TOY_PILOT_DATA_SCHEDULE_MODE != 2
+#error High SCI vectors require the separate shared or startup DATA Toy build
 #endif
 #define C_SYMBOL(name) _ ## name
     .section .text.toy_sci_vectors,"ax"

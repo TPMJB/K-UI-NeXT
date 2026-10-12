@@ -1,0 +1,7 @@
+SCHED protocol/payload digest=0decd2504975f837
+SCHED production chronology: read-only CRC, first-credit/terminal/consumed CHECK, wrong token/map, rolling eviction, rejected/accepted PLAY, clock wrap/profile rejection, abort/reset and immutable pre-cleanup freeze PASS
+SCHED protocol/payload digest=0decd2504975f837
+SCHED production chronology: read-only CRC, first-credit/terminal/consumed CHECK, wrong token/map, rolling eviction, rejected/accepted PLAY, clock wrap/profile rejection, abort/reset and immutable pre-cleanup freeze PASS
+SCHED protocol/payload digest=0decd2504975f837
+SCHED production chronology: read-only CRC, first-credit/terminal/consumed CHECK, wrong token/map, rolling eviction, rejected/accepted PLAY, clock wrap/profile rejection, abort/reset and immutable pre-cleanup freeze PASS
+SCHED production report modes1/2/3: protocol/payload match, chronology/cancellation/timing/rolling/CRC/freeze checks and five adverse mutations passed

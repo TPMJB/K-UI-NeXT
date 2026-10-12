@@ -86,10 +86,21 @@ def generate(path, *, private_p2=False, data_probe=False):
            "LOW_HEAP_HOOK":"_kui_toy_pilot_heap_hook",
            "LOW_RETURN_HOOK":"_kui_toy_pilot_return_hook",
            "LOW_READ_RAW":"_kui_toy_pilot_read_raw"}
+    schedule_name="_kui_retail_toy_data_schedule_play"
+    if schedule_name in syms:
+        at,size,kind,section=_linked_symbols(data,{schedule_name}).get(
+            schedule_name,(0,0,0,None))
+        if (kind!=2 or not size or size%2 or at%2 or at!=syms[schedule_name] or
+                not 0x8c004000<=at<at+size<=0x8c004000+len(image["payload"]) or
+                section is None or section[2]&7!=6 or
+                not section[3]<=at<at+size<=section[3]+section[5]):
+            raise ValueError("DATA schedule lacks exact cached low phase setter")
+        names["LOW_DATA_SCHEDULE_PLAY"]=schedule_name
     if "_kui_toy_pilot_card_pointer" in syms:
         names.update({"LOW_SCI_ACQUIRE":"_kui_sci_sd_acquire",
                       "LOW_SCI_RELEASE":"_kui_sci_sd_release",
-                      "LOW_SCI_HEALTHY":"_kui_sci_sd_healthy"})
+                      "LOW_SCI_HEALTHY":("_kui_toy_pilot_startup_sci_healthy"
+                          if "_kui_toy_pilot_startup_sci_healthy" in syms else "_kui_sci_sd_healthy")})
     values={key:syms[name] for key,name in names.items()}
     for key,name in (("LOW_MANIFEST","manifest"),("LOW_ACTIVE","active"),
                      ("LOW_DATA_PENDING","pending")):

@@ -6,8 +6,8 @@
 #include <stddef.h>
 #include <string.h>
 
-#if !KUI_TOY_PILOT_SHARED_SCI
-#error The shared SCI adapter requires its isolated Toy build
+#if !KUI_TOY_PILOT_SHARED_SCI && KUI_TOY_PILOT_DATA_SCHEDULE_MODE != 2
+#error The SCI adapter requires its isolated shared or startup DATA Toy build
 #endif
 #define IPRB UINT32_C(0xffd00008)
 #define SCI_FIELD 0x00f0u
@@ -16,6 +16,12 @@
 #define RETRIES 8u
 #define POLLED_AFTER 2u
 #define STACK_GUARD UINT32_C(0xa55a5aa5)
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+/* Keep the new engine's local ownership names distinct from retained TRACE
+ * and pause objects in the same linked high resident. */
+#define report sci_startup_report
+#define fail sci_startup_fail
+#endif
 
 /* Offsets are used only by our high vector forwarding assembly. Three
  * nested native interrupt returns fit; exceptions retain their original SPC. */
@@ -57,6 +63,9 @@ static struct {
     uint32_t configured,active,opened,failed,retry,audio_waiting,audio_held,in_irq,hooked;
     uint32_t boundary_needed,transport_fault,verified_since;
     struct kui_toy_pilot_sci_stats stats;
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+    struct kui_toy_pilot_sci_startup_stats startup;
+#endif
     uint8_t area0[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
     uint8_t area1[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
 #if KUI_TOY_PILOT_ASYNC_CDDA
@@ -94,8 +103,16 @@ __asm__(".section .text.toy_sci_publish,\"ax\"\n"
     ".align 2\n1: .long 2b+0x20000000\n5: .long 0xff00001c\n6: .long 0x00000800\n.previous\n");
 extern void toy_sci_publish(uint32_t,uint32_t);
 static void publish_vectors(void) {
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+    /* The stage already retired cached aliases before initializing private
+     * P2 state. Vector publication nevertheless addresses its physical P1
+     * cache lines, never an uncached sweep endpoint. */
+    uint32_t begin=(uint32_t)(uintptr_t)&kui_toy_pilot_sci_vectors-UINT32_C(0x20000000);
+    toy_sci_publish(begin,begin+sizeof(kui_toy_pilot_sci_vectors));
+#else
     toy_sci_publish((uint32_t)(uintptr_t)&kui_toy_pilot_sci_vectors,
         (uint32_t)(uintptr_t)&kui_toy_pilot_sci_vectors+sizeof(kui_toy_pilot_sci_vectors));
+#endif
 }
 #endif
 static uint32_t our_vbr(void) {return (uint32_t)(uintptr_t)&kui_toy_pilot_sci_vectors-0x100u;}
@@ -267,6 +284,9 @@ void kui_toy_pilot_sci_init(const struct kui_retail_manifest *manifest,
     kui_toy_pilot_sci_irq_fault=0u;
     e.manifest=manifest;e.card=card;e.acquire=acquire;e.release=release;
     e.configured=manifest && card && acquire && release && card->ready && !card->slow;
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+    e.startup.enabled=1u;
+#endif
     memcpy(kui_toy_pilot_sci_vectors.vector100,kui_toy_pilot_sci_forward,3u*sizeof(uint32_t));
     kui_toy_pilot_sci_vectors.vector100[2]=(uint32_t)(uintptr_t)kui_toy_pilot_sci_release_100;
     memcpy(kui_toy_pilot_sci_vectors.vector400,kui_toy_pilot_sci_forward,3u*sizeof(uint32_t));
@@ -300,7 +320,11 @@ static bool begin(struct kui_retail_gd *s) {
     e.lba=s->lba;e.count=s->count;e.destination=s->destination;e.sector_bytes=s->sector_bytes;
     e.failed=e.retry=e.boundary_needed=e.verified_since=0u;
     e.cursor.done=0u;e.active=1u;e.stats.active_token=e.token;
-    if(!e.configured || e.transport_fault || kui_retail_cursor_begin(&e.cursor,e.manifest,e.lba,e.count,
+    if(!e.configured || e.transport_fault
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+       || !e.startup.enabled || e.sector_bytes!=KUI_GAME_DATA_BYTES
+#endif
+       || kui_retail_cursor_begin(&e.cursor,e.manifest,e.lba,e.count,
         e.sector_bytes==KUI_GAME_RAW_BYTES?KUI_GAME_SECTOR_RAW:KUI_GAME_SECTOR_MODE1,
         write_out,NULL)!=KUI_GAME_OK) {fail(KUI_GD_ERROR_IO);return false;}
     return true;
@@ -388,6 +412,9 @@ static int pump_work(bool foreground) {
 #endif
 }
 static void prepare(struct kui_retail_gd *s) {
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+    if(!e.startup.enabled) return;
+#endif
 #if KUI_TOY_PILOT_ASYNC_CDDA
     /* Audio-only CHECK/EXEC may have no data handle to pass. It can service
      * RAW without interpreting NULL as a request to revoke live DATA. */
@@ -399,12 +426,18 @@ static void prepare(struct kui_retail_gd *s) {
         (void)begin(s);
 }
 int kui_toy_pilot_sci_pump(struct kui_retail_gd *s) {
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+    if(!e.startup.enabled)return KUI_TOY_SCI_OK;
+#endif
     uint32_t before=ticks();++e.stats.calls;
     prepare(s);kui_sci_stream_token_budget(true);
     int result=pump_work(false);
     maximum(&e.stats.work_ticks_max,ticks()-before);return result;
 }
 int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+    if(!e.startup.enabled)return KUI_TOY_SCI_OK;
+#endif
     uint32_t before=ticks();++e.stats.calls;
     prepare(s);kui_sci_stream_token_budget(true);
     int result=e.active
@@ -443,6 +476,23 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
     e.verified_since=0u;
     maximum(&e.stats.work_ticks_max,ticks()-before);return result;
 }
+#if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+bool kui_toy_pilot_sci_startup_active(void) {return e.startup.enabled!=0u;}
+bool kui_toy_pilot_sci_quiesce(void) {
+    ++e.startup.quiesces;
+    kui_toy_pilot_sci_cancel(NULL);
+    bool ok=!e.opened && !kui_sci_stream_busy() && !e.transport_fault &&
+        !kui_toy_pilot_sci_irq_fault;
+    if(!ok)++e.startup.quiesce_failed;
+    return ok;
+}
+void kui_toy_pilot_sci_retire(void) {
+    e.startup.enabled=0u;e.startup.retired=1u;
+}
+const struct kui_toy_pilot_sci_startup_stats *kui_toy_pilot_sci_startup_snapshot(void) {
+    return &e.startup;
+}
+#else
 int kui_toy_pilot_sci_audio_acquire(void) {
 #if KUI_TOY_PILOT_ASYNC_CDDA
     /* This candidate admits RAW only through the asynchronous tuple API. */
@@ -476,6 +526,7 @@ void kui_toy_pilot_sci_audio_cancel(void) {
     e.audio_waiting=0u;
 #endif
 }
+#endif
 #if KUI_TOY_PILOT_ASYNC_CDDA
 int kui_toy_pilot_sci_audio_read(uint32_t lba,uint32_t generation,void *output) {
     uint32_t before=ticks();++e.stats.calls;

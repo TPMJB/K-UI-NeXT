@@ -1,0 +1,1814 @@
+{
+  "admitted": true,
+  "audio_or_video_improvement_proven": false,
+  "bridges": {
+    "gd_fifth_argument_copied_before_save": true,
+    "gd_incoming_SR_preserved": true,
+    "gd_pre_and_post_guard_checks": true,
+    "gd_stack_owned_guard_initialization": true,
+    "initializer_extra_SCI_call_only_changes_guard_loop_branch_displacements": true,
+    "terminal_mask_before_first_save": "0x100000f0",
+    "terminal_original_SR_PR_SP_and_r8_r9_restored": true
+  },
+  "build": "143d51bf7602",
+  "cache_audio_heap": {
+    "actual_CCR_snapshot": {
+      "mask": "0x00000105",
+      "probe": "0x8cfd21b4"
+    },
+    "audio_or_video_improvement_proven": false,
+    "early_policy": {
+      "cache_word_published_before_heap_hook": true,
+      "hardware_observed": false,
+      "original": "0x00000105",
+      "selected": "0x101"
+    },
+    "frame_helpers": {
+      "pause": {
+        "canonical_P1_ocbp": true,
+        "compiled_alignment_cases": 128,
+        "helper": "0x8cfd814c",
+        "r0_arguments_and_callee_saved_preserved": true,
+        "scope": "Exact linked authored helper; cache hardware behavior is not simulated"
+      },
+      "retail": {
+        "canonical_P1_ocbp": true,
+        "compiled_alignment_cases": 128,
+        "helper": "0x8c006a80",
+        "r0_arguments_and_callee_saved_preserved": true,
+        "scope": "Exact linked authored helper; cache hardware behavior is not simulated"
+      },
+      "worker": {
+        "canonical_P1_ocbp": true,
+        "compiled_alignment_cases": 128,
+        "helper": "0x8cfd8020",
+        "r0_arguments_and_callee_saved_preserved": true,
+        "scope": "Exact linked authored helper; cache hardware behavior is not simulated"
+      }
+    },
+    "masked_HOLD_scope": {
+      "compiled_closed_callees": {
+        "_data_blocked_close": [
+          "_data_blocked_close_masked.part.0",
+          "_mask_begin"
+        ],
+        "_data_blocked_close_masked.part.0": [],
+        "_kui_toy_pilot_worker_allstop": [
+          "_kui_toy_pilot_worker_revoke"
+        ],
+        "_kui_toy_pilot_worker_revoke": [
+          "_data_blocked_close"
+        ],
+        "_kui_toy_pilot_worker_shutdown": [
+          "_kui_toy_pilot_worker_revoke"
+        ],
+        "_mask_begin": []
+      },
+      "native_SDK_or_CCR_targets": false,
+      "scope": "Exact SHARED0 HOLD graph; caller frames are separately published",
+      "temporary_C_frames_die_before_exact_wrapper_SR_pop": true
+    },
+    "masked_low_frame_exceptions": {
+      "BL_IMASK_held_until_frame_dead": true,
+      "GD_saved_bytes": 36,
+      "heap_initial_saved_bytes": 4,
+      "native_heap_SP_and_SR_restored_before_call": true,
+      "scope": "SHARED0 only; reachable dispatch callees separately constrained"
+    },
+    "native_cache": false,
+    "native_heap_saved_state": {
+      "exact_native_SR_including_T_saved": true,
+      "original_PR_r0_to_r8_MAC_restoration": true,
+      "original_r9_r10_restored_from_P2_before_installer": true,
+      "published_bytes": 52,
+      "saved_r9_r10": "0xac00774c"
+    },
+    "native_metadata_publication": {
+      "active_flag_last_before_bounded_record_OCBP": true,
+      "allocator_manager_line": "0x8c10e560",
+      "allocator_record_bytes": 20,
+      "metadata_published_under_IMASK_before_native_return": true,
+      "queue_commands_line": "0x8c0a8920",
+      "queue_producer_line": "0x8c112b00",
+      "scope": "Authored SH-RAM writes only; original SDK internals are not modeled"
+    },
+    "native_scratch": {
+      "P2_native_parameter_and_P1_map_callback_distinguished": true,
+      "actual_mask_before_first_stack_save": true,
+      "capability_zero_before_dispatch_and_after_return": true,
+      "compiled_P2_dispatch_cases": 22,
+      "compiled_protected_map_cases": 90,
+      "original_PR_SP_capture_before_P2_stack": true,
+      "scope": "Actual compiled authored C with opaque SDK/core callback; native IRQ delivery unproved"
+    },
+    "pause_stack": {
+      "actual_P2_saved_SP_anchor": true,
+      "actual_stack_bottom": "0xacfddc20",
+      "actual_stack_top": "0xacfdfc20",
+      "borrowed_game_stack_maps_gd_scratch": true,
+      "bridge_anchor": "0x8cfdfc10",
+      "bridge_anchor_bytes": 16,
+      "bridge_original_caller_saved_bytes": 36,
+      "compatibility_view": "Only the old physical native-scratch simulation uses a projected bridge",
+      "helper": "0x8cfd8128",
+      "helper_bytes": 36,
+      "helper_private_saved_bytes": 8,
+      "native_check_scratch_bytes": 16,
+      "native_scratch_reviewed_bytes": 128,
+      "native_target": "0x8c0b1704",
+      "private_sp_r8_pr_restored": true,
+      "scope": "Exact linked authored helper and bridge; original SDK reviewed separately",
+      "unscoped_private_stack_rejected_as_gd_scratch": true
+    },
+    "private_P2": true,
+    "private_stack_bottom": "0xacfddc20",
+    "private_stack_top": "0xacfdfc20",
+    "published_hook_frames": {
+      "_kui_toy_pilot_allstop_hook": [
+        "0x8cfd7f38"
+      ],
+      "_kui_toy_pilot_am_init_hook": [
+        "0x8cfd7e40",
+        "0x8cfd7e76"
+      ],
+      "_kui_toy_pilot_driver_load_hook": [
+        "0x8cfd7ea6",
+        "0x8cfd7ec8"
+      ],
+      "_kui_toy_pilot_heap_hook": [
+        "0x8c006b9c"
+      ],
+      "_kui_toy_pilot_pause_hook": [
+        "0x8cfd80e2",
+        "0x8cfd8104"
+      ],
+      "_kui_toy_pilot_service_hook": [
+        "0x8cfd7dd2",
+        "0x8cfd7e0a"
+      ],
+      "_kui_toy_pilot_shutdown_hook": [
+        "0x8cfd7f02"
+      ],
+      "_kui_toy_pilot_worker_bridge": [
+        "0x8cfd7f8c"
+      ]
+    },
+    "stage_alias_publication": {
+      "handoff_physical_RAM": [
+        "0x8c000000",
+        "0x8d000000"
+      ],
+      "private_BSS_zero_after_pre_purge": true,
+      "whole_RAM_OCBP_before_CCR_reset": true,
+      "worker_byte_verification_uses_P2": true,
+      "worker_pre_purge_end": "admitted exports.worker_end (physical offset52)"
+    },
+    "worker_physical_end": "0x8cfdfc20"
+  },
+  "emitted_frames": {
+    "resident-sci:begin": 0,
+    "resident-sci:check_sectors": 4,
+    "resident-sci:diagnostic_fault": 0,
+    "resident-sci:end": 0,
+    "resident-sci:file_read": 40,
+    "resident-sci:guest": 0,
+    "resident-sci:kui_loader_sd_stream_next": 52,
+    "resident-sci:kui_retail_gd_dispatch": 152,
+    "resident-sci:kui_retail_image_read": 92,
+    "resident-sci:kui_retail_menu_return": 12,
+    "resident-sci:kui_retail_resident_dispatch": 20,
+    "resident-sci:kui_retail_resident_init": 44,
+    "resident-sci:kui_retail_toy_data_schedule_play": 0,
+    "resident-sci:kui_sci_sd_acquire": 0,
+    "resident-sci:kui_sci_sd_release": 8,
+    "resident-sci:kui_toy_pilot_base_dispatch": 24,
+    "resident-sci:kui_toy_pilot_read_raw": 20,
+    "resident-sci:kui_toy_pilot_startup_sci_healthy": 0,
+    "resident-sci:map_guest": 0,
+    "resident-sci:memcpy": 0,
+    "resident-sci:memset": 0,
+    "resident-sci:msf": 0,
+    "resident-sci:multi_active": 12,
+    "resident-sci:multi_ready": 28,
+    "resident-sci:prepare": 20,
+    "resident-sci:range_check": 4,
+    "resident-sci:read_block": 0,
+    "resident-sci:read_run": 36,
+    "resident-sci:read_sectors": 40,
+    "resident-sci:release": 8,
+    "resident-sci:report_fault": 16,
+    "resident-sci:retail_display_line": 48,
+    "resident-sci:retail_display_values": 68,
+    "resident-sci:reverse": 0,
+    "resident-sci:select_card": 8,
+    "resident-sci:step": 36,
+    "resident-sci:stream_finish": 40,
+    "resident-sci:toy_gd_clock_valid": 0,
+    "resident-sci:toy_map": 0,
+    "resident-sci:transfer_block": 52,
+    "resident-sci:video_sample": 0,
+    "resident-sci:wait_flag": 8,
+    "worker:add": 0,
+    "worker:address_valid": 0,
+    "worker:begin": 0,
+    "worker:budget": 0,
+    "worker:bus_result": 4,
+    "worker:byte": 0,
+    "worker:clock_sample": 8,
+    "worker:close_bus": 20,
+    "worker:command": 20,
+    "worker:consumed": 36,
+    "worker:copy_plane": 36,
+    "worker:data_blocked_close": 8,
+    "worker:data_blocked_close_masked.part.0": 0,
+    "worker:data_blocked_sample": 12,
+    "worker:data_probe_metric": 0,
+    "worker:data_probe_payload": 60,
+    "worker:data_probe_read": 56,
+    "worker:data_probe_sample": 0,
+    "worker:data_work": 40,
+    "worker:dispatch_body": 32,
+    "worker:drain": 16,
+    "worker:fail": 28,
+    "worker:fault": 40,
+    "worker:fill_step": 60,
+    "worker:finish": 40,
+    "worker:guest": 0,
+    "worker:hook": 0,
+    "worker:initialize": 0,
+    "worker:kui_retail_cursor_begin": 28,
+    "worker:kui_retail_cursor_feed": 56,
+    "worker:kui_retail_gd_dispatch": 152,
+    "worker:kui_retail_gd_progress": 12,
+    "worker:kui_sci_sd_healthy": 0,
+    "worker:kui_sci_stream_busy": 0,
+    "worker:kui_sci_stream_discard": 0,
+    "worker:kui_sci_stream_fetch": 44,
+    "worker:kui_sci_stream_open": 8,
+    "worker:kui_sci_stream_poll": 0,
+    "worker:kui_sci_stream_stats": 0,
+    "worker:kui_sci_stream_stop": 8,
+    "worker:kui_sci_stream_take": 48,
+    "worker:kui_sci_stream_token_budget": 0,
+    "worker:kui_sci_stream_token_pending": 0,
+    "worker:kui_sci_stream_wait": 12,
+    "worker:kui_sha256_digest": 268,
+    "worker:kui_sha256_init": 4,
+    "worker:kui_sha256_update": 340,
+    "worker:kui_toy_loader_data_probe_begin": 0,
+    "worker:kui_toy_loader_data_probe_end": 0,
+    "worker:kui_toy_loader_data_probe_freeze": 0,
+    "worker:kui_toy_loader_data_probe_words": 0,
+    "worker:kui_toy_loader_schedule_report_begin": 16,
+    "worker:kui_toy_loader_schedule_report_end": 68,
+    "worker:kui_toy_loader_schedule_report_freeze": 12,
+    "worker:kui_toy_loader_schedule_report_words": 4,
+    "worker:kui_toy_loader_trace_begin": 60,
+    "worker:kui_toy_loader_trace_end": 104,
+    "worker:kui_toy_loader_trace_freeze": 4,
+    "worker:kui_toy_loader_trace_report_capture": 24,
+    "worker:kui_toy_loader_trace_report_page": 8,
+    "worker:kui_toy_loader_trace_terminal": 52,
+    "worker:kui_toy_loader_trace_word_count": 0,
+    "worker:kui_toy_loader_trace_words": 4,
+    "worker:kui_toy_pilot_bus_copy": 40,
+    "worker:kui_toy_pilot_bus_publish": 40,
+    "worker:kui_toy_pilot_bus_read": 28,
+    "worker:kui_toy_pilot_bus_write": 32,
+    "worker:kui_toy_pilot_gd_capture": 0,
+    "worker:kui_toy_pilot_gd_dispatch": 28,
+    "worker:kui_toy_pilot_gd_project": 0,
+    "worker:kui_toy_pilot_lease_allocate": 60,
+    "worker:kui_toy_pilot_model_fill_begin": 32,
+    "worker:kui_toy_pilot_model_fill_commit": 4,
+    "worker:kui_toy_pilot_model_init": 4,
+    "worker:kui_toy_pilot_model_reset": 28,
+    "worker:kui_toy_pilot_model_start_applied": 4,
+    "worker:kui_toy_pilot_model_start_queued": 0,
+    "worker:kui_toy_pilot_model_stop_applied": 24,
+    "worker:kui_toy_pilot_pause_after": 28,
+    "worker:kui_toy_pilot_request": 20,
+    "worker:kui_toy_pilot_sci_cancel": 24,
+    "worker:kui_toy_pilot_sci_init": 28,
+    "worker:kui_toy_pilot_sci_irq": 16,
+    "worker:kui_toy_pilot_sci_pump": 16,
+    "worker:kui_toy_pilot_sci_quiesce": 8,
+    "worker:kui_toy_pilot_sci_retire": 0,
+    "worker:kui_toy_pilot_sci_service": 32,
+    "worker:kui_toy_pilot_sci_snapshot": 0,
+    "worker:kui_toy_pilot_sci_startup_active": 0,
+    "worker:kui_toy_pilot_sci_startup_snapshot": 0,
+    "worker:kui_toy_pilot_snapshot": 0,
+    "worker:kui_toy_pilot_worker_allstop": 8,
+    "worker:kui_toy_pilot_worker_initialize": 32,
+    "worker:kui_toy_pilot_worker_pause_fault": 12,
+    "worker:kui_toy_pilot_worker_post_init": 12,
+    "worker:kui_toy_pilot_worker_post_load": 176,
+    "worker:kui_toy_pilot_worker_pre_init": 16,
+    "worker:kui_toy_pilot_worker_revoke": 4,
+    "worker:kui_toy_pilot_worker_shutdown": 4,
+    "worker:kui_toy_pilot_worker_step": 252,
+    "worker:live": 0,
+    "worker:locate": 28,
+    "worker:mask_begin": 0,
+    "worker:measured": 28,
+    "worker:memcmp": 0,
+    "worker:memcpy": 4,
+    "worker:memset": 0,
+    "worker:msf": 0,
+    "worker:native_context": 0,
+    "worker:observe_ports": 20,
+    "worker:outstanding.part.0": 0,
+    "worker:prepare": 36,
+    "worker:queue_operation": 40,
+    "worker:reset_selection": 8,
+    "worker:retail_display_line": 48,
+    "worker:retail_display_pause": 4,
+    "worker:retail_display_restore": 12,
+    "worker:retail_display_values": 76,
+    "worker:retry": 0,
+    "worker:reverse": 0,
+    "worker:ring_primed": 0,
+    "worker:ring_recover": 32,
+    "worker:ring_resume": 12,
+    "worker:ring_write_allowed": 32,
+    "worker:schedule_add": 0,
+    "worker:schedule_clock_sample": 0,
+    "worker:schedule_initialize": 0,
+    "worker:sci_startup_fail": 8,
+    "worker:sci_startup_report": 4,
+    "worker:select": 0,
+    "worker:select_play": 0,
+    "worker:sound_word": 16,
+    "worker:stable": 28,
+    "worker:stack_sample": 0,
+    "worker:start_dma": 0,
+    "worker:start_step": 36,
+    "worker:stop_begin": 40,
+    "worker:stop_card": 28,
+    "worker:terminal_dispatch": 4,
+    "worker:token": 32,
+    "worker:token_count": 0,
+    "worker:unhook": 0,
+    "worker:write_out": 20
+  },
+  "exports": {
+    "boot_bytes": 56,
+    "boot_control": "0xac007714",
+    "bytes": 80,
+    "gd_bridge": "0x8cfd803c",
+    "gd_stack_bottom": "0xacfdcc20",
+    "gd_stack_bytes": 4096,
+    "gd_stack_top": "0xacfddc20",
+    "terminal_bridge": "0x8cfd8084",
+    "version": 8,
+    "words": 20
+  },
+  "frozen_sources": {
+    "src/core/hash.c": "451f915eb8d85d0c94ef2af91cca2e25604e2eee81072d316ca708982d14485f",
+    "src/core/retail_gd.c": "d6a46d3f9df4c2dbb51611d998b32479e07a183fa04740e5eb2c38ffd8661f9c",
+    "src/core/retail_image.c": "432e677b0f81fe358a7012551754d2efa36dbf57586dbc71479c573547479aba",
+    "src/core/toy_pilot.c": "43d672705a3746359c11496998304bfd20ff537366735dcd64ab8651d7dbff4d",
+    "src/loader/retail_sd.c": "51a943a5c1f58b9e8e07b2aa0fcb58d46d680c77059b6b578ebad685f210cc40",
+    "src/loader/retail_storage.c": "3d588b0db76f5a4af7c28e8f9eebe73f9cdc12253a4675b7c3551d689302c8a9",
+    "src/loader/sci_sd_bus.c": "a141af6127f6a73b27042dac6109a3c967ed2fa6243c5626afea1e3babea2a96",
+    "src/loader/sci_sd_bus.h": "f1b4d423b74498d4bba28fceeacd16648953fe7e6f0622572ad9014f130711e5",
+    "src/loader/sd_reader.c": "d590bf058eaf73b435dd1ba0b2e090b3c3d455d16c69f12697c3cb44b206c1da",
+    "src/loader/toy_loader_trace.c": "e4c68ed60fac3b97d5b353b88263e5de9d51f54f329b03777516141a7f7c7dde",
+    "src/loader/toy_pilot_boot.S": "9b6f6fef5edb6775df7548cb4f6f6d12aeb9eb8605ef8769fd8c1ff12d62640b",
+    "src/loader/toy_pilot_bus.c": "e1298b0bd8226284c3601cdb89bcc5d83683d2fe6fb1e27e96c79ee26257a0a7",
+    "src/loader/toy_pilot_lease.c": "d6d03ff94c596ab778ba7a29bd90d0d752bc6845c28304953dee546bd3586e8b",
+    "src/loader/toy_pilot_pause.S": "714775804d2883d39a3bebe5138f94101c030a379263862ccb69bee77df67a39",
+    "src/loader/toy_pilot_pause.c": "327eb90f9bac0ddbd2da044514e26f9aabbe1ddd00416aeede5a259be8b0a2e9",
+    "src/loader/toy_pilot_worker.S": "76a1fb395779a4238fed901ebadfd9fa373fd2e85479ad2b2fffec479905358e"
+  },
+  "hardware_behavior_verified": false,
+  "owned_objects": {
+    "resident-sci": {
+      "_card": {
+        "address": "0xac0076a0",
+        "bytes": 72
+      },
+      "_card_result": {
+        "address": "0xac00769c",
+        "bytes": 4
+      },
+      "_diagnostic": {
+        "address": "0xac006efc",
+        "bytes": 64
+      },
+      "_display": {
+        "address": "0xac006f40",
+        "bytes": 56
+      },
+      "_image": {
+        "address": "0xac007080",
+        "bytes": 544
+      },
+      "_kui_retail_hook_active": {
+        "address": "0xac006eec",
+        "bytes": 4
+      },
+      "_kui_retail_hook_fault": {
+        "address": "0xac006ee4",
+        "bytes": 4
+      },
+      "_kui_retail_hook_source": {
+        "address": "0xac006ef0",
+        "bytes": 4
+      },
+      "_kui_retail_hook_sr": {
+        "address": "0xac006ee0",
+        "bytes": 4
+      },
+      "_kui_retail_native_caller": {
+        "address": "0xac006ef4",
+        "bytes": 8
+      },
+      "_kui_retail_original_menu": {
+        "address": "0xac006ee8",
+        "bytes": 4
+      },
+      "_manifest": {
+        "address": "0xac0072a0",
+        "bytes": 1020
+      },
+      "_pace": {
+        "address": "0xac0076e8",
+        "bytes": 44
+      },
+      "_pacing": {
+        "address": "0xac006f7c",
+        "bytes": 8
+      },
+      "_port": {
+        "address": "0xac007068",
+        "bytes": 20
+      },
+      "_row": {
+        "address": "0xac006f3c",
+        "bytes": 4
+      },
+      "_service": {
+        "address": "0xac006f9c",
+        "bytes": 204
+      },
+      "_toy_gd_timing": {
+        "address": "0xac006f84",
+        "bytes": 24
+      },
+      "_toy_scratch": {
+        "address": "0xac006f78",
+        "bytes": 4
+      }
+    },
+    "worker": {
+      "_attempts": {
+        "address": "0xacfda238",
+        "bytes": 4
+      },
+      "_data_probe_read_state": {
+        "address": "0xacfdb248",
+        "bytes": 112
+      },
+      "_data_probe_report": {
+        "address": "0xacfdb2dc",
+        "bytes": 768
+      },
+      "_data_probe_scope": {
+        "address": "0xacfdb2b8",
+        "bytes": 36
+      },
+      "_diagnostic_service": {
+        "address": "0xacfda208",
+        "bytes": 4
+      },
+      "_e": {
+        "address": "0xacfdb8e0",
+        "bytes": 1312
+      },
+      "_first_tick": {
+        "address": "0xacfda234",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_bridge_active": {
+        "address": "0xacfda204",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_bridge_skips": {
+        "address": "0xacfda200",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_native_diagnostics": {
+        "address": "0xacfda20c",
+        "bytes": 32
+      },
+      "_kui_toy_pilot_pause_detail": {
+        "address": "0xacfda1e4",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_pause_entries": {
+        "address": "0xacfda1f4",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_pause_max_attempts": {
+        "address": "0xacfda1e0",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_pause_pumps": {
+        "address": "0xacfda1ec",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_pause_retired": {
+        "address": "0xacfda1e8",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_pause_retries": {
+        "address": "0xacfda1f0",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_sci_irq_fault": {
+        "address": "0xacfdc340",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_sci_release": {
+        "address": "0xacfdc344",
+        "bytes": 56
+      },
+      "_kui_toy_pilot_sci_vectors": {
+        "address": "0xacfdbe00",
+        "bytes": 1344
+      },
+      "_kui_toy_pilot_updater_entries": {
+        "address": "0xacfda1fc",
+        "bytes": 4
+      },
+      "_kui_toy_pilot_updater_returns": {
+        "address": "0xacfda1f8",
+        "bytes": 4
+      },
+      "_last_tick": {
+        "address": "0xacfda230",
+        "bytes": 4
+      },
+      "_owner": {
+        "address": "0xacfd9260",
+        "bytes": 3968
+      },
+      "_page": {
+        "address": "0xacfda988",
+        "bytes": 4
+      },
+      "_pilot_words": {
+        "address": "0xacfdb00c",
+        "bytes": 512
+      },
+      "_report": {
+        "address": "0xacfda308",
+        "bytes": 1664
+      },
+      "_request": {
+        "address": "0xacfda23c",
+        "bytes": 96
+      },
+      "_retry_context": {
+        "address": "0xacfda22c",
+        "bytes": 4
+      },
+      "_row": {
+        "address": "0xacfdb244",
+        "bytes": 4
+      },
+      "_s": {
+        "address": "0xacfdc37c",
+        "bytes": 148
+      },
+      "_schedule_report": {
+        "address": "0xacfdb604",
+        "bytes": 704
+      },
+      "_schedule_visit": {
+        "address": "0xacfdb5dc",
+        "bytes": 40
+      },
+      "_stopped_display": {
+        "address": "0xacfdb20c",
+        "bytes": 56
+      },
+      "_trace_words": {
+        "address": "0xacfda98c",
+        "bytes": 1664
+      },
+      "_visit": {
+        "address": "0xacfda29c",
+        "bytes": 108
+      }
+    }
+  },
+  "profile": "Z-startup-async",
+  "publication": {
+    "exports_offset68_to_boot48": true,
+    "exports_offset76_to_boot52": true,
+    "installed_status_after_all_callbacks": true,
+    "published_bytes": 56,
+    "terminal_no_guest_render_callback": true,
+    "terminal_register_arguments": [
+      "display",
+      "timing[6]",
+      "service.diag",
+      "zero"
+    ]
+  },
+  "retained": {
+    "baseline_build": "52562af7aba3",
+    "baseline_runtime": {
+      "all_ELF_images_bound_to_runtime": true,
+      "sha256": "a6505d0330a75c6d199a7e3420c8561d51da66a0f92edceefc27530f91adfff5"
+    },
+    "function_identities": {
+      "resident-sci": {
+        "___udivsi3": "a1bbd265f17b24557e772a22f1c9d2bf57f5ac8cbf0e2f36c1d238931395bdb0",
+        "_begin": "a5dc1981843f89829128e6757733de5de66e67679be5b43fafa5bbb77279cc4c",
+        "_check_sectors": "e1066589d8abcce65fe34dad23cb94ebd3f3708c62736b7020a2b2b7a6522dda",
+        "_diagnostic_fault": "9fe6ba1bd6923d0fbfa5d011246dbeaf2cb242d95dc135e7520655d1653f62f3",
+        "_end": "00fa8b09805ace1a36a21c60ae0dd11ca937fedd290d49247a5bf0d329fb5877",
+        "_file_read": "6d18004876b72cb227dfd2841d5da09d8f2e4cefcc21de9900396887b4bdff58",
+        "_guest": "67104ab408d665ee9a05d483612139f2178d440ceb36abc07d1c871b965ea6c9",
+        "_kui_loader_sd_stream_next": "737d353db8858daa89ef34f5266d8839aef38dcc68b9ac730cb8b3f658b49b70",
+        "_kui_retail_gd_dispatch": "c8baae55d9f75273af428594cfbff93b59de21bc036288e4302c3a1d3c158dc0",
+        "_kui_retail_image_read": "9ea10315ee4f663b65024cf93590df79f47b4838882f9d40f96dcf8f162787d1",
+        "_kui_retail_menu_return": "ef75e17dc6365911eeb519490ce200758d012b8e47876ffec28527291495b98b",
+        "_kui_retail_resident_dispatch": "318c6cd89532aa2ebd6b59973e609d49479afacf2f73e1872fe9f4d352c208e5",
+        "_kui_retail_resident_init": "92cdbee8d33d35e868cb29620a7d98d4f2f2f0f06dcc2362c2efa651b36cb45b",
+        "_kui_sci_sd_acquire": "241065d1ee099cfb5d69c236d760141a5dd1222e5394351274255184a4f65fb3",
+        "_kui_sci_sd_release": "3568613752669e2a71eafc8a8eb047edb2ffba6af8de150bb1d73ac6517b220a",
+        "_kui_toy_pilot_base_dispatch": "542f83ad96ea6a0da7c65ff5e3a27d8c9e5450f520f1607e08eb67b37a4dd87d",
+        "_kui_toy_pilot_frame_publish_retail": "1dd6127de8a823aaa357d48eed7aaade9e82625bed323f067655cb284f328eee",
+        "_kui_toy_pilot_read_raw": "8d58a21e93097c62128c123c61d862c6eefcbc291aa1b8974522e661943b1844",
+        "_map_guest": "19a6b97ae2d0d40f99e8a63e1dd969216f72d0896a3dcb8c683bdf0c287767a5",
+        "_memcpy": "23bc89a138654cc4a6518e2df86c977ac32869402941965f0f4627db21760a38",
+        "_memset": "5513752608640a74892c0801581c1269aa8838a9f4efb1b854e4434e133abea0",
+        "_msf": "aa77065b3cf832467f65296be5dcd20c9203ba9cd4793c81b57217af73442e52",
+        "_multi_active": "e0ccbdb2bf6ce3817b3fcddfdd4dd7bb4442ba2c6bea3c5ce6bd0e270e75adf9",
+        "_multi_command.constprop.0": "b601764f45930d9d4a52145f7f759eb8aeb098784c3f3c29178bbfd9a6f59377",
+        "_multi_ready": "8e3dda945e1663b6ec70f9434e0a6aaa51d8d196467cba5326a9232fbff93d86",
+        "_prepare": "b908de76d23a8416fdbf45e57e952ba8410754362a86b1050c3302713b32abe3",
+        "_range_check": "a7c5df555109145b153d33184e2482cac28bdb6fc20fcca76e1bfaa6a2f15718",
+        "_read_block": "3bc2a6e5e32afe9b83c332a578c5a01d8a7be96c022fe0b6925e1ce834c9751a",
+        "_read_run": "f11c82ef4990918d0e4b426718561fd3f299025d0718f0b8b80ecf11416832aa",
+        "_read_sectors": "e5d26ad8a83473f4874985dd6cb142756ad68b32f970a61258edca41cbd6e61c",
+        "_release": "c76e3551190e90d458b5246835b3d8bf73fec1ebd6a48d3b865f90fdc11fe4e0",
+        "_report_fault": "1df65310867c02284d9c7e247e0f58cc932290915b4e1a396062c1994bd28d46",
+        "_retail_display_line": "3289858159bd3345ef97a0cc3b10c27b18d09db4f0707ae42487c62a5d06717d",
+        "_retail_display_restore.constprop.0": "06b7d8f54253f03e956cb6224245fa9d88fd070f7666a73887f35ad3d0f4ede3",
+        "_retail_display_values": "54075248b993f481752a64073263bd859cc744712b50bf585874a516950b37e2",
+        "_reverse": "31b424de427d97623459fd782340df1be7c19fc595b3a32ee00107e9846eb235",
+        "_select_card": "bebf379d6e37cdd2c5214abd8bf6874059d859e9171da321cac611d465f358f6",
+        "_step": "9f314e9d6858c44f6f1c8e583adb5ee409fdeff348f21a6af133e34e2e8c41f8",
+        "_stream_finish": "70d8578219e704c6b34c8576646a3335455e94ad8c74801e57452d2a561bf0d6",
+        "_ticks.lto_priv.0": "c022c4662351985d17bf9e3a588e1cd20c7befe3d323ad99dd3da352615f6675",
+        "_ticks.lto_priv.1": "e0dbc47a45871a5b6174c52040cf0ad4b91cddbab74d7572b309c4ebe9510cc3",
+        "_toy_gd_clock_valid": "04c5f65cb1135d253f6769054828cafa98fcd8adc0eb537db32344ca5785fe36",
+        "_toy_map": "5c7d3088981eafa5b40c01394db7a740eec2c2fb7a5f8f193e94bd8d585eca98",
+        "_transfer.lto_priv.0": "c0640c5269bca03f77839d3c81e3703e9f2b6d1eb1e5e34c0f616deb034663b2",
+        "_transfer.lto_priv.1": "35675e2174057c46cf23e7196d66ba7b6692839c1347aeba1b2676be912a4a45",
+        "_transfer_block": "a1957fa02142fee537c6ba37f79f2d907fc8052abf4b2bb023e114e9cdfa2813",
+        "_video_sample": "3b05e7b141b8210ba48efbf3ffd767f56540fbc05abbc523e2247003d0e3bbad",
+        "_wait_flag": "922c1f91b57066e99405d4e1bd7eeba259a470c64592e960af3c81957173df56"
+      },
+      "stage": {
+        "___ashldi3": "054a9575e40cac239d5eb968430825ed0d620d6e72b68a78b10d51f9bd47d1a6",
+        "___lshrdi3": "3990996fe9c59be17621fa403d6b91736f0d1be10691c62f36314972518be032",
+        "___udiv_qrnnd_16": "aca8e29770bac5ca4bcd30d0474b634c8534df57a08dadae9aa78a5b90d39e26",
+        "___udivdi3": "f62bdb1a1a2a0e456a560b933d6eac7765529eb04ef717075f7ea8e5b6b3429a",
+        "_activate": "82405539b8104924e03129fd300c90507ef2f5367237e13dec7cd361f2ffa8d0",
+        "_begin": "c5d33ac422533af35ef4de08ce68fc22b1e070210aae8b639b67905477bfd42e",
+        "_bus_begin": "a5dc1981843f89829128e6757733de5de66e67679be5b43fafa5bbb77279cc4c",
+        "_bus_end": "dbd73b4c7e04d09be6866e38c4392c97d070ba9b6a702843b14e28eba2c66358",
+        "_bus_select": "6962eaef251c3979122a3c2d5877d68c64381aef71d9dcab16ea29728e4a298b",
+        "_bus_ticks": "e0dbc47a45871a5b6174c52040cf0ad4b91cddbab74d7572b309c4ebe9510cc3",
+        "_bus_transfer": "620414c6dca09b64821a7041f101f64539c4df38766f9a69d3d7c71d88526689",
+        "_command": "40dee331e32b853124f7f6a69f240385b74e51bbf227c90029b5800e7d66ba7a",
+        "_command_crc.constprop.0": "d493ecd42b1820f3c6c7c2a48c974e0649d40370c24b567d0b815a34c72cce84",
+        "_data_header": "427391b00e71dd44e2c628a2dbb4fa0bbcad3b5c340a131c8c9678c25a37bd66",
+        "_diagnostic_fault": "9fe6ba1bd6923d0fbfa5d011246dbeaf2cb242d95dc135e7520655d1653f62f3",
+        "_dma_busy": "0ccac6913dbc46239e47ede0e0cf47982d91090bb63681dd76e707c256212da5",
+        "_end": "3d658a189aecebf54c36457558e2d63a05766ec5ddc1087b64d568829dedd934",
+        "_file_read": "e2e0ef95196bca9aed145a2b8908944cd7725fbcb3bdea8da158b44b64f8b395",
+        "_finish_read": "d79d1c4f610310be2b55592a2866826e33d7dccdcdcda641b7de0f58bb3fa7ce",
+        "_get32": "a08cc087b636965f08e7974e6747406162f75f82f9460deba821b0e5f9741f24",
+        "_get64": "31c4d9c52bef26efd6271b981b41e644e10d9b2b193fc70e0b4f4a446629caa5",
+        "_issue_transfer": "22d5c6c707d7b9077d61e8bd68b2c8aeb010954f895174ec9bb1aa1382ae447a",
+        "_kui_ata_init": "3dd64d6ae2f44521138f6886212fb18fd3ebb02ea4fc03f56feeaae30aae550d",
+        "_kui_ata_native_bus": "4b207bc9f9c68d519599dc422cc9f494c75f966e1f761a28a42531af081e9ac6",
+        "_kui_ata_read_run": "9d11c72d5b210e3f985a828d0cabfa32843b84c6e0299e8f1860c0d100a22645",
+        "_kui_ata_read_stop": "090e0b3503d66542590bba18d51ee041f12589190bb88c183953c4a39e672763",
+        "_kui_loader_sd_init_bus": "d70e0430586a7938ab0eb6365486537ce72fa1d7d0e40f4e9acfa8300552866e",
+        "_kui_loader_sd_stream_next": "8f21553c7c70a4b4b52a0d227ccda7c2613755d689002f193c848a19d4615cba",
+        "_kui_loader_sd_stream_start": "06a2f53727f281b2eb272bc2fbe41d64236239bc70565f36f558a40a400d1b6d",
+        "_kui_loader_sd_stream_stop": "9c5c50578e9ce488eb294c6ef23b15143cbaa1d8729f42d5cc0d27a8f3569a8a",
+        "_kui_retail_boot_returned": "87e614c7bed8d3db1f9160f75654f4ed88f875921060b17196d5a29ece6d6218",
+        "_kui_retail_crc32": "f7a183ea7763c98a5d1b1dccf93262488579cc5d64dff42d91f758ca17f0c10c",
+        "_kui_retail_image_check_validated": "97e2656631de7ce96ea1fb7de4c480515794049a9a611561b14a79070587a236",
+        "_kui_retail_image_init": "b444df03b702b22f08fa0cd9db7d4f79183eba26be02571a5c80ba22d08cacd4",
+        "_kui_retail_image_read": "3d4e92ad0295aa86497aa76a2b77195b64a3e719e3f8397673079b8ef4666b87",
+        "_kui_retail_manifest_decode": "13affae15b3ba1bbc3800f1a7779445305c7e23d8bc4ad3facf725d9eea10217",
+        "_kui_retail_manifest_validate": "53bd47c62146e2d535bb888536a15cf7d3cfc27ff2301018bb46a7af1fe7a205",
+        "_kui_retail_observe_admit": "f3f1fc220c4cc20c866e5a90b7436a3e588f01b002a3a78a35eaaa4979f3efe7",
+        "_kui_retail_observe_native_ip": "79814ef78ab2b4146499b0429d9af9e68de563769758f4851f858b3edf9f5a95",
+        "_kui_retail_sd_acquire": "e246a8f578862efcaacf2aefce61505b95758336e0462322a631545c7d25f981",
+        "_kui_retail_sd_init": "05656c7b76fad98ad81d0e6a25a2e42a32928ef6b9319479b10eef507e30d147",
+        "_kui_retail_sd_read_run": "28d560026cd9fb943a2cca8c74ca586b4746ed520b3a9d9d6bae462312623f0e",
+        "_kui_retail_sd_release": "131c767a3ae3bf0dea2ccfca95a54ee07f65a2501d88a081d3d6901fe0c4e839",
+        "_kui_retail_sector_header": "d45da7064d98d750838aaf46af61d9616af0f2f49414a9ad969aafc261c1944d",
+        "_kui_retail_stage_main": "4f1aa6d2d73994f7ec3c88450c7146b94374ef0c9691160ffb7211db2f086675",
+        "_kui_retail_stage_relay": "ef68e1b6e9e23bf876ee90e7ffa5a74fbf1e64681dd8304cb71dbf674ba0177a",
+        "_kui_retail_storage_acquire": "d2c1a8a2bd1bac8dc6839ee99ee64858d148e44c58580ad9e7d2aed28492bc0a",
+        "_kui_retail_storage_blocks": "d958e74fd009bd8b0d4cc750d157daa25e25baa635f3a11de139451d02783924",
+        "_kui_retail_storage_init": "b446b4e2f91fe072f57e425db19c15b073cfb17df6b16bfe096404a58315c5ee",
+        "_kui_retail_storage_name": "22d7aba3285cbf1e4ead2a4bdba2f3523b78824dfe1149cdffbf29f5d7795657",
+        "_kui_retail_storage_read_run": "7beec00d0fa939f55423a66accf386efa4148ac444a3b7d7aada3c3c42301ab3",
+        "_kui_retail_storage_release": "542f3bc81a6fdc3773cafe7683f0afa93c795bfeb6a64c7d4d7dc47627277f8f",
+        "_kui_retail_storage_stop": "97e679ff670af5d46495c4da40a7fba2a251f59236a1895d59a9fd2d35857c11",
+        "_kui_retail_track_file_offset.isra.0": "3633fc22df7face6a9d620e97639c0ac1b6d901002e3f678715518f1658f4606",
+        "_kui_retail_track_header_bytes.isra.0": "a39db1d4294515e5d7781815ddf0fe2336a45b05adac7cb5c0ed272e5a3ace94",
+        "_kui_retail_track_sector_bytes.isra.0": "a9cf8a1920b20a399385a5d5fab757b033875eab533847eee53070cb24413b7d",
+        "_kui_sci_sd_acquire": "0d0765ff110135bbae0bc72e7424c901d33e6e55a31df72dea4c2dd5972a2bc9",
+        "_kui_sci_sd_bus": "0cb0d19cd302a9deead79dd8a1e5e9ef5d5bf80011f396501a76d752226aa34a",
+        "_kui_sci_sd_healthy": "7d6a6e87e1a533333615d389b1edc0415c58c879d0835d490c16144d4f896c00",
+        "_kui_sci_sd_release": "e2eb3daf0072f2124a81851eced1d30f4cbb1b8733af8fe64272f373f401678e",
+        "_kui_sha256_digest": "4d546c6d263a81e3a993937710962b4676bc065ca55d7b509a19ffe9306d3eba",
+        "_kui_sha256_init": "146d950eb5caf251da53e1e7bdcef2ece912e31796652b716f770b754a8249aa",
+        "_kui_sha256_update": "c25963e2e879d01af8e7d0e2b4529c85dbb3fab8c60a295d0ba351c04192cde5",
+        "_kui_toy_pilot_base_relay": "0c7ad69e573f3a859cdc31dac7daee15cfa9ed9edc99794ec6021bb6a3ef9c38",
+        "_kui_toy_pilot_stage_install": "567981de2b1bd98590607eadc5d09b08e45a829cca811bddf994816b49685a3a",
+        "_low_firmware_code": "d98d67c7baeafe7bcd85a1e4b2c43d61762d47dbf4f9548184349e624f6adf23",
+        "_memcmp": "b4fadaf56957d89f171199d08afcc8b6e8c2cd03af1d777c085c9a5c66ea3ef5",
+        "_memcpy": "0b85e8e8e87fd60d762cc6a8d0ca17bcfab080ca5f1fbc754b5002c9fd71d1e6",
+        "_memset": "5513752608640a74892c0801581c1269aa8838a9f4efb1b854e4434e133abea0",
+        "_multi_active": "e71e8f14d6851be3051dfa81590c6db1e0bee372f4fa6acd140c813a31aea15f",
+        "_multi_command.constprop.0": "d39df88b111016c5c67813531623853c5c307624593d2a0d4a8f03c72b725d0f",
+        "_multi_ready": "c4d60b4bc9e687b325e24c5579fb13fea9f9e831fcbb17e74cb99bafd97e33fe",
+        "_physical_read": "70d8201b8128071121de19252a460cbba207601d2da0b90040e28aaaa2e4e9bc",
+        "_physical_run": "a05af577ff97da88c5d1ab86b0a772fa7719c19dc713934ab4952b9976703a08",
+        "_prepare": "43949cd586c4a4dc0592763c125f90d1e7687490b605a49c558837519f46cd18",
+        "_profile_time": "26daf2a29f7ff49d22a5b67d3e7ace0850cc11e994295c0e3e11b57831e45392",
+        "_range_check": "5cb3a23c663a3c7d141dad9d67c165a38fa5c149f5ce4e17b52246bbf294d80a",
+        "_rd.isra.0": "f1ee3c3c4dc05770235772f8a37fb356ccefef48a180777da602be8400cf707e",
+        "_read16": "dddedb0313838333cd21da11141755ce5ed693abcdc1a34cbc4c10c6d894d7fd",
+        "_read8": "7303972d0b06a33951e4205d88968fa60bed9cc9b794fd4ffdbff4eff25179f1",
+        "_read_data": "1c7866f724a521ee72935715caee2f6d60a7b22cfea1b1648fb78720bb444804",
+        "_read_payload": "72949f81257ad0c8a3a3e209b3924136d0199fdf08e6a98bca8ccef5288a3b2f",
+        "_read_sector": "d5f9d18231555b3894a9be764abf7292f3a8d05c87c234aab9679c80190d542d",
+        "_read_sectors": "602b7f38ffffa69173db965713abcac41df099383bcb756fed7ca39b1ad8a673",
+        "_relay_stopped": "1461f34e92538d258430c8509d2ae7e23aae9acd4c2debedfffddc587ea1b090",
+        "_release": "3ef3d8747a6bfc67851174f42b601c092d99dfb7665fa0e48faaa676b2e43b42",
+        "_retail_display_capture": "578499a4bf34a314d4b1b388d8eb5bff64b7ab4dd56c93c3b6459170e25aecf1",
+        "_retail_display_hex": "77a99ba4a62b9b528ea60fe7285536a2a1c66459cf18a5715649d709513bc69c",
+        "_retail_display_line": "59a4bafb93f40f166a6524567a20359e75a5e23bcd0ee65b24b3560515f4021f",
+        "_retail_display_pause": "687a1937a5c60d2e6f0dffba7bc52c5b46de5a6331f24676eefaa662bfae31ca",
+        "_retail_display_progress": "cc7928b7597c04394d1793ca521fdfa117f6844b0f06043157dd23613fa3172e",
+        "_retail_display_restore": "78bdd66f6a32e3067f32a4a04e4f2fc3ad91b1ef7b6af1253cc42328f4f291c0",
+        "_reverse": "31b424de427d97623459fd782340df1be7c19fc595b3a32ee00107e9846eb235",
+        "_select_card": "1b387bae944e440bc23de238ef2f70ea7e4c93a6d8d5039429994e1e39da1e17",
+        "_settle": "d8e848ed4c5cb69828c69553e08fa8f973ecb10b501b2d04aa8a327abfead350",
+        "_stopped": "3cd4ead1edde46773b96ca15329ebecc8e2e0c481d50ca8409ac76ae811e66b8",
+        "_stream_finish": "ade0dd5d9561b68ff7b85516f22f9073989dc6078aabb5049a74ca8f4101deb5",
+        "_text_valid": "f94f76c3c65c5f4d1b2d35b7e6b98726f6d112584fe0d79581efe9fca3b6dee6",
+        "_ticks": "b9c6f57a936043456559213837c03589f29946220ea5f5cb88a2dd655f01621d",
+        "_toy_entry": "4a142b0bbc93639228cbe5623f90d668405ad44797c6116912ca83713e6a4693",
+        "_toy_exports_check": "b113fa37c960eec822e86736f0261b37978a2fc0a8b4f14f870d7b1646948f0d",
+        "_toy_failure": "7bc142cebb6f9bf7f6a070e4c2843608f5a8ac49004ae201d26e4db71d322bf4",
+        "_toy_original_patches_check": "6a909b91c3e7e4122f44a0e54462197a7378195fc51511c5f967132a4f2faa64",
+        "_toy_publish": "850cc7bc4080fdcb8ceb1e5b8ccfa79fc1731160dda75ecdd580fa5b1babedb7",
+        "_tracks_valid": "0039c329241e2700aabfcbd87e1fe374e6c690c4a042b9a7066f1c507bf1fc15",
+        "_transfer": "e4bb670e869a621f72028eed170c834dbdc21d55f8246d964844a92611c712e2",
+        "_transfer_block": "750dca893a413596998f893356f46f6cac8435cfc37ec4149b94d4f402f5c117",
+        "_transfer_sector": "c90eb6fb6633d7612956b99b90774199754f7aa0634a7e1710217737ddba1c38",
+        "_wait_flag": "527930c7e2328c607ff1b704f318526492d3dd9d66d5e21d6d8839fefc2f7d4e",
+        "_wait_status": "07300418de90d771ce35afdc0563e76fba5804da3a29190e78c4fafe6c884748",
+        "_wire_crc": "4f4384e5a1054f757d84feb9ea927cc7a347c4ee56f47e6a035690ecc9cb2379",
+        "_wr.isra.0": "3294c072e03277edb853e09bbdc185b96bfcf07df3c9f8f66c3a1ec509c7adcd",
+        "_write16": "15c458bdfc07a41951713ce0ea4824bee6e37eafc4c0d93c55e635a60570149f",
+        "_write8": "2385a41cdc544b6f34b8f4841189d70f5f2287f026da7efd08b94a4de1bac0dc",
+        "_write_sector": "7087833ca01c13645350a275fdc6054b52d1d3bd09bdfd36d045250207001d5f"
+      },
+      "worker": {
+        "___lshrdi3": "3990996fe9c59be17621fa403d6b91736f0d1be10691c62f36314972518be032",
+        "___udivsi3": "a1bbd265f17b24557e772a22f1c9d2bf57f5ac8cbf0e2f36c1d238931395bdb0",
+        "_add": "f145dd01b73adfb04f56125236457494a2720dd29111654e286cab31cea02126",
+        "_address_valid": "1f34a26d22815b38246e779f204440d59fc9cca395e79ea02c4cdf79909c4b17",
+        "_begin": "afbbbc1e9853217b83892b3413dd2d5299ea1ad9e45ac5408a7046f7a2c609b4",
+        "_budget": "9035553a3fe51578cf65640c3c7244e4f0403645ded83b9306cec82c2424613b",
+        "_bus_result": "d5822e1dd725a402ff4f0000d414eb7477df269ab7f5c86a017030d44f1fe763",
+        "_clock_sample": "5d7d8b18b147fe3b33125de7e8ec46efcd2c7243d4a1b5feb27b42dda7078d09",
+        "_consumed": "dc3b87218b6fca1dc7bd67917b917d0615f1758c69b8618eea6cf93fa928fa48",
+        "_copy_plane": "cac9c194ad3f30c371b92b588e7280acf2058d45baf94f8da928f70c2e680819",
+        "_data_blocked_close": "a4273a279ca744bd4d701ae4a9ebc0b015332822a372c75bca5391ed9c9218a2",
+        "_data_blocked_close_masked.part.0": "cb28453850679bcee0fd6fd815db1c45613f6c97bc0e1c2518db01eb11ad792a",
+        "_data_blocked_sample": "41f0075f353609907ad5f45f9b3da270704778fdc83f00627f488b3f7425db96",
+        "_drain": "7bc8c561953166c6052eb50f809a176b492239b2a777ecbad770cf9992b3c77d",
+        "_fail": "ded7bdfd70b77b082d1c0046fa35a25594cb93f3d8a9d267be2a68a2707e0e6c",
+        "_fault": "020226c39187c5949b5f451219ce3b747be6f6df518a133f7982111c28ecd54f",
+        "_fill_step": "af71080bce4e1dd7c9329a0c75d3327eaae768a2492561c6f7f48130dfc75269",
+        "_initialize": "2cc14c18a21d41ce3923feced7b32496ec62f17ee1c6918a9cbe82e68cc21388",
+        "_kui_sha256_digest": "f2e7c73f2663ee6475463515a4d884a5b085c54bb3d50f8ba6b530cce04c4079",
+        "_kui_sha256_init": "7df1ed0d35f9bffec25b7450a6a8f1e65c347478d87017600a0876222c51789d",
+        "_kui_sha256_update": "c25963e2e879d01af8e7d0e2b4529c85dbb3fab8c60a295d0ba351c04192cde5",
+        "_kui_toy_loader_trace_begin": "2db6820e222e41afe01a074183cc016cf031ff1f858e048b0c12c0bf19ff88f6",
+        "_kui_toy_loader_trace_end": "46159d55d17326e9754996b3729d9df23def9941efe9255b371188c26ee28ab9",
+        "_kui_toy_loader_trace_freeze": "47fb3dd56c42cb37b039e4294d13dd36cde16ba5f32c0dcb24dbb532c345b553",
+        "_kui_toy_loader_trace_terminal_bridge": "dafb4bf533bf0c9e23d6130d55c34efadabc1597fa4d6d38dde405e4b84b660c",
+        "_kui_toy_loader_trace_word_count": "fe14cda1ec2556ba045fba1af3b462af8359a03cb70ac2cb12f8d1ff45bd6af9",
+        "_kui_toy_loader_trace_words": "b4875eaf4d53468601566c6137959cee1ac0867d5da82048985b3967c0fe3a1f",
+        "_kui_toy_pilot_bus_copy": "b955476d967ad04863e47106c8b67dde8072969cd131c94bfdbe67309dabf0d0",
+        "_kui_toy_pilot_bus_publish": "cb6ab8fb87533b9203b70e3dbab7ddf82a6afdfd2811e67f8e43057aa508f655",
+        "_kui_toy_pilot_bus_read": "9a2a6cf5958a66107fc6972331bcf92314eb09d2e0207ab62a5b5c1151595ba8",
+        "_kui_toy_pilot_bus_write": "039f7a8865dc06e055018eee70e2c62745df8a8cdfc9efb95c07a96dfdb0f717",
+        "_kui_toy_pilot_driver_load_hook": "b3d444434748d8c590aa5d2e1258afa472eec95a716e343a2e688f351c790b9e",
+        "_kui_toy_pilot_frame_publish_pause": "1dd6127de8a823aaa357d48eed7aaade9e82625bed323f067655cb284f328eee",
+        "_kui_toy_pilot_frame_publish_worker": "1dd6127de8a823aaa357d48eed7aaade9e82625bed323f067655cb284f328eee",
+        "_kui_toy_pilot_gd_bridge": "751d33035f2ccaa57e6a7dd28edf45d9f6adf4864cf8cc41d79ac061f64ceb2b",
+        "_kui_toy_pilot_gd_capture": "98577fe4fe2d4864afdcf9f172a13e42744d392ef79c6345850d81627eab6500",
+        "_kui_toy_pilot_gd_project": "bf59438a424cca81b931d3e92b90765beadc08dfbbf5c253ef748925750cea23",
+        "_kui_toy_pilot_lease_allocate": "2bbaf50111c0c78ecf3cf279c6cc401e20b53e60fdffb367a877b9238422a1a0",
+        "_kui_toy_pilot_model_fill_begin": "0fe9ed07808ee3d7ea4c50a6536f14e29f5491cccd5bba621e3c72acdadcabd2",
+        "_kui_toy_pilot_model_fill_commit": "b37d4eca0c90c0d9879673124dcb8c55c342aa2741685927ca0717fee7df1048",
+        "_kui_toy_pilot_model_init": "c478cffbe601a2139962eb62d772f9c4765373e1ba42e6791e64b98724e8a5c9",
+        "_kui_toy_pilot_model_reset": "5fb4e9c998313a899619eda462d4691ffeac17b62a695c540b603c32813aa4a1",
+        "_kui_toy_pilot_model_start_applied": "8fdbabfb03576f97a24f97a3d4270d51367a9360f1072ec62700311738c892ff",
+        "_kui_toy_pilot_model_start_queued": "6eaa38b64f94f600475fa783483b5f3ae6926a6f9a2708b58eb0e252b8be7996",
+        "_kui_toy_pilot_model_stop_applied": "b319620edbb701493ce3aed9bea1f35a415367c748a9b88ce4067890b4a0c3cc",
+        "_kui_toy_pilot_native_pump": "c8f9e7592667e4f79ae21be259608afae9091f195d9a855f693a59ab77a2cc67",
+        "_kui_toy_pilot_pause_after": "a9eff040ce9c07469d439e6fb9e67d14718261cc186a3ecf842201996efc6f10",
+        "_kui_toy_pilot_pause_hook": "734249826d59abb492b7174c7cdd22f819fc510089f4b3334a845ab0bf5b6317",
+        "_kui_toy_pilot_request": "d1a7f3d0508e4d85ac3dcaeb7520571fc1854ec621ea1c9f249095a096fdb202",
+        "_kui_toy_pilot_snapshot": "516047428386ba898d55445c0d34327f9d5ae0300769a11a24bcbc3b01766145",
+        "_kui_toy_pilot_worker_allstop": "d08e4fffdd843472aaf89c7fcb9b2f5ed6726f58eb013a6fac2ddb81d39216f1",
+        "_kui_toy_pilot_worker_bridge": "787abd3f1b6310e1660fa0af05423fb75c2fb6ca5646ee0a0202b63cd09cf961",
+        "_kui_toy_pilot_worker_pause_fault": "0befe4e61530c578ce1966939c0b397237245e4fdc9a78ed60a8fd4b14fe70b9",
+        "_kui_toy_pilot_worker_post_init": "bff5057703388b504e00257e21e06e361174a2b70d8e4967dbfb6df5e86dc2cf",
+        "_kui_toy_pilot_worker_post_load": "5f903d1a5c0b850514c2558c14ff768541cb15ea763f0e112fcbf4cc9dc87ad2",
+        "_kui_toy_pilot_worker_pre_init": "cb84a2b10d5f5c43268a67c6c8973b170de092b0cf3d0d11b1c164f4ee73b9b9",
+        "_kui_toy_pilot_worker_revoke": "977822b7b3ca8a32bbcd199f5cd3f10e5a825a85aa171652cfbd45eb520378fd",
+        "_kui_toy_pilot_worker_shutdown": "dd2096fcd14841abe6f4a429c0659b349e07ea232ca2be31ab6dd8839798dcc6",
+        "_kui_toy_pilot_worker_step": "842cce286d10f2d4af36c5dcc120e1dd7af0024230b2fc8551b18e0d446c424a",
+        "_mask_begin": "91f20191058d8acf4b2d46c360b6688a14fe161518fc161a00381dc44d5c2267",
+        "_measured": "ab2461f5266067e32d942767f3fcfbe57332435b20474ddb27888f913b76d6cc",
+        "_memcmp": "b4fadaf56957d89f171199d08afcc8b6e8c2cd03af1d777c085c9a5c66ea3ef5",
+        "_memcpy": "0b85e8e8e87fd60d762cc6a8d0ca17bcfab080ca5f1fbc754b5002c9fd71d1e6",
+        "_memset": "5513752608640a74892c0801581c1269aa8838a9f4efb1b854e4434e133abea0",
+        "_native_context": "f6332f8a117553c120857810b0a26cbfbf57513b07005450af7162c71178a602",
+        "_observe_ports": "167d480854ef7be4fff901ef76734d02c1fbb4e553ed41ce22aaafd9f86cce01",
+        "_outstanding.part.0": "2855bc99a379e21ff180bf95f75840b0bc0306aca6a153de2ed4cebdd8992788",
+        "_queue_operation": "afc93a2957c368c0daab66c496993225f37bfee8a458de3e12d5d7011cd7d769",
+        "_reset_selection": "b595c698e170aeec46aec6c8e97815721bac27bc5ad6b80b49382ac6df9bcc21",
+        "_retail_display_line": "59a4bafb93f40f166a6524567a20359e75a5e23bcd0ee65b24b3560515f4021f",
+        "_retail_display_pause": "687a1937a5c60d2e6f0dffba7bc52c5b46de5a6331f24676eefaa662bfae31ca",
+        "_retail_display_restore": "78bdd66f6a32e3067f32a4a04e4f2fc3ad91b1ef7b6af1253cc42328f4f291c0",
+        "_retail_display_values": "9675fb7c231e556ce7cb0cba416719917841dbdac66367a463de1c2f2d642d8c",
+        "_ring_observe.isra.0": "d9875d4cd8bb894b9893e16fe991b5f2aa226a28832ae45972992e11209f3c89",
+        "_ring_primed": "2e3c9632420d2d7080c71376adda30ffec7a7d440a16fa502aae8d6be3d76569",
+        "_ring_recover": "b3a955bd1c1750799d88895ca4857734491acd9480a25c58a0ef24735f641686",
+        "_ring_resume": "8365be435b0045ff620668fd672bf1e4972cce3ea05afc6641b966382300f220",
+        "_ring_write_allowed": "c2408e0c4ff9c69dd3ceab449f5109de8790e977ae3eda9550242ad376438599",
+        "_select_play": "dcfbfbd057585606170a0ca435521afe9a039dc3953d98dda9bda933f785153b",
+        "_sound_word": "05c5fdfee998acbdebe89917c480f570e1a676ad270ce89f6e7634266ab91aee",
+        "_stable": "915ec9311d740003efdd54ab2bb45be491205cdf94d435de92e3262461320730",
+        "_stack.constprop.0": "bff8a3ead692840a860ff587650407972f2b0da7bab949451ad3e71f3195b09c",
+        "_stack_sample": "4567b6e3d5399bada8c960e1fd8924f919b8963511520c8ce42940a318184bdf",
+        "_start_step": "e82c9f440e61f28cfdff0aa27619e66998350fa51b8fdd16bf04d4cbe8270a2c",
+        "_stop_begin": "8bdd0642d72c5d7de47f6d70676929216a84a46e6ce0934ee75fbe3b768b1d19",
+        "_template_matches.constprop.0": "05cf9b145cafd2b3194d918d2f1ac0fe0c7b56d720f98787926c5838c42a276e",
+        "_terminal_dispatch": "87f03682302b9018a52afdd87d9eab3aa35acf810fd1196f42d27a19e18999e9"
+      }
+    },
+    "new_functions": {
+      "resident-sci": [
+        "_kui_retail_toy_data_schedule_play",
+        "_kui_toy_pilot_startup_sci_healthy"
+      ],
+      "stage": [],
+      "worker": [
+        "_byte",
+        "_close_bus",
+        "_command",
+        "_data_work",
+        "_finish",
+        "_guest",
+        "_hook",
+        "_kui_retail_cursor_begin",
+        "_kui_retail_cursor_feed",
+        "_kui_retail_gd_dispatch",
+        "_kui_retail_gd_progress",
+        "_kui_sci_sd_healthy",
+        "_kui_sci_stream_busy",
+        "_kui_sci_stream_discard",
+        "_kui_sci_stream_fetch",
+        "_kui_sci_stream_open",
+        "_kui_sci_stream_poll",
+        "_kui_sci_stream_stats",
+        "_kui_sci_stream_stop",
+        "_kui_sci_stream_take",
+        "_kui_sci_stream_token_budget",
+        "_kui_sci_stream_token_pending",
+        "_kui_sci_stream_wait",
+        "_kui_toy_loader_schedule_report_begin",
+        "_kui_toy_loader_schedule_report_end",
+        "_kui_toy_loader_schedule_report_freeze",
+        "_kui_toy_loader_schedule_report_words",
+        "_kui_toy_pilot_sci_cancel",
+        "_kui_toy_pilot_sci_init",
+        "_kui_toy_pilot_sci_irq",
+        "_kui_toy_pilot_sci_pump",
+        "_kui_toy_pilot_sci_quiesce",
+        "_kui_toy_pilot_sci_retire",
+        "_kui_toy_pilot_sci_service",
+        "_kui_toy_pilot_sci_snapshot",
+        "_kui_toy_pilot_sci_startup_active",
+        "_kui_toy_pilot_sci_startup_snapshot",
+        "_live",
+        "_locate",
+        "_msf",
+        "_prepare",
+        "_retry",
+        "_reverse",
+        "_schedule_add",
+        "_schedule_clock_sample",
+        "_schedule_initialize",
+        "_sci_startup_fail",
+        "_sci_startup_report",
+        "_select",
+        "_start_dma",
+        "_stop_card",
+        "_token",
+        "_token_count",
+        "_unhook",
+        "_write_out"
+      ]
+    },
+    "retained_mismatches": {
+      "resident-sci": {},
+      "stage": {},
+      "worker": {}
+    }
+  },
+  "retained_DATA_probe": {
+    "bindings": {
+      "cooked_DATA_only": true,
+      "diagnostic_bytes": 64,
+      "image_P2_address": "0xac0070a0",
+      "image_block_bytes": 512,
+      "image_block_offset": 32,
+      "image_bytes": 544,
+      "original_read_block_callbacks_direct_and_exact": true,
+      "raw_CDDA_route_unchanged": true,
+      "readonly_counter_offsets": [
+        52,
+        56,
+        60
+      ],
+      "typed_generated_header_exact": true
+    },
+    "passive_callgraph": {
+      "MMIO_reads": [
+        {
+          "address": "0xffc00000",
+          "bytes": 2
+        },
+        {
+          "address": "0xffd80004",
+          "bytes": 1
+        },
+        {
+          "address": "0xffd80008",
+          "bytes": 4
+        },
+        {
+          "address": "0xffd8000c",
+          "bytes": 4
+        },
+        {
+          "address": "0xffd80010",
+          "bytes": 2
+        }
+      ],
+      "MMIO_writes": false,
+      "audio_callbacks": false,
+      "closed_functions": {
+        "_data_probe_metric": [],
+        "_data_probe_payload": [
+          "_data_probe_metric",
+          "_data_probe_sample",
+          "_transfer_block"
+        ],
+        "_data_probe_read": [
+          "_data_probe_metric",
+          "_data_probe_sample",
+          "_read_sectors"
+        ],
+        "_data_probe_sample": [],
+        "_kui_toy_loader_data_probe_begin": [],
+        "_kui_toy_loader_data_probe_end": [],
+        "_kui_toy_loader_data_probe_freeze": [],
+        "_kui_toy_loader_data_probe_words": [],
+        "_memcpy": [],
+        "_memset": []
+      },
+      "interrupt_control_register_writes": false,
+      "low_diagnostic_writes": false,
+      "low_storage_callbacks": [
+        "_read_sectors",
+        "_transfer_block"
+      ],
+      "timer_configuration_writes": false,
+      "unknown_indirect_transfers": false
+    },
+    "schema": {
+      "all_word_offsets_exact": true,
+      "feature_header_offsets": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "phase_words": 88,
+      "version": 2,
+      "words": 192
+    }
+  },
+  "retained_TRACE_graph": {
+    "MMIO_reads": [
+      {
+        "address": "0xa05f8050",
+        "bytes": 4
+      },
+      {
+        "address": "0xa05f80cc",
+        "bytes": 4
+      },
+      {
+        "address": "0xa05f80d8",
+        "bytes": 4
+      },
+      {
+        "address": "0xa05f810c",
+        "bytes": 4
+      },
+      {
+        "address": "0xffc00000",
+        "bytes": 2
+      },
+      {
+        "address": "0xffd80004",
+        "bytes": 1
+      },
+      {
+        "address": "0xffd80008",
+        "bytes": 4
+      },
+      {
+        "address": "0xffd8000c",
+        "bytes": 4
+      },
+      {
+        "address": "0xffd80010",
+        "bytes": 2
+      }
+    ],
+    "MMIO_writes": false,
+    "audio_or_storage_callbacks": false,
+    "closed_functions": {
+      "_add": [],
+      "_clock_sample": [
+        "_add"
+      ],
+      "_initialize": [],
+      "_kui_toy_loader_trace_begin": [
+        "_add",
+        "_clock_sample",
+        "_initialize",
+        "_measured"
+      ],
+      "_kui_toy_loader_trace_end": [
+        "_add",
+        "_clock_sample",
+        "_initialize",
+        "_measured",
+        "_memcpy",
+        "_outstanding.part.0"
+      ],
+      "_kui_toy_loader_trace_freeze": [
+        "_initialize",
+        "_outstanding.part.0"
+      ],
+      "_kui_toy_loader_trace_word_count": [],
+      "_kui_toy_loader_trace_words": [
+        "_initialize"
+      ],
+      "_measured": [
+        "_add"
+      ],
+      "_memcpy": [],
+      "_outstanding.part.0": []
+    },
+    "timer_configuration_writes": false,
+    "unknown_indirect_transfers": false
+  },
+  "reviewed_functions": {
+    "resident-sci": {
+      "_kui_retail_toy_data_schedule_play": "a691b0f95ac4b3eafcfda9319644e0f68de89ac9ea31daa722f3bb701f4ac872",
+      "_kui_toy_pilot_startup_sci_healthy": "377e5aa8320a0418d8fd943094f2f01b782c86b9e54813563b44949b43dba814"
+    },
+    "stage": {},
+    "worker": {
+      "_byte": "31c3ddec5319bda529f99a43dd790394a46fc2595dce4cff4f0425a62a10f57f",
+      "_close_bus": "aea3de16140033f0e186695410c8a8d2e59346761d8b7193efb8c645472559ca",
+      "_command": "8b31e537cc75a82c517a1c6d3d11a6fd4d7cbe5ab302b716a02dc39d25850d62",
+      "_data_probe_metric": "2c552970de2dc13e5734b5e95550b7bd03dfad8da63643817bf6b8ceb9125437",
+      "_data_probe_payload": "3ca7e420eb930c799abe0b9b23aeff6b348115ea08a65531d63bffd5e7e54f26",
+      "_data_probe_read": "860beaac1e185a0c1d4b3e6375502c66128dd9ef1ab07ba3113f10e906962af0",
+      "_data_probe_sample": "3f835d931499c498b7804a2cc78347921aec312bfb8d1263b8e924951d59be13",
+      "_data_work": "a56b6f313e91de86d2b6ac16b682f6e59329e9c9680d60a2061d7774db299130",
+      "_dispatch_body": "a0499857b50c35879e1c98a3e5eed5e31d329ea234bca9fe8421e04841cbc2c1",
+      "_finish": "11c112fd3c9f9fbf46b9685b906661588ca73d98216c0f04047bdb1771779307",
+      "_guest": "1c9f2095b9d91990fd3f84c77d32677e2c703412b8aa7b1d93efcc4926965e81",
+      "_hook": "0a076949c289271f41ccf4af8a75c7e12341199593812d72343d4a71a17d14ce",
+      "_kui_retail_cursor_begin": "527681d5b77972ebde9390188dfdad88beda9e41618c47a71bc4d23752506e97",
+      "_kui_retail_cursor_feed": "81ff614edc3370f9d3d465923014fe1fe1a797ed1f0b768f4ca97304e6eec86c",
+      "_kui_retail_gd_dispatch": "f56f47061a8b2d611dd810fd6c9a18dc2d9b37861b5536ab5b2165288b87ed69",
+      "_kui_retail_gd_progress": "b1ec7bb08471bc1f33b52d843d55894e4c1d7af46be50ca6615c2138f7fb97a5",
+      "_kui_sci_sd_healthy": "e9d09de7108d5110f1fd87bc2fa8c3be1dc40f7d6e86408374efda4ef0b1d86f",
+      "_kui_sci_stream_busy": "a3c4e41dbdb3b5382f7ca92564ac5597e05a615d70cc578941c48c06f6b7555c",
+      "_kui_sci_stream_discard": "91abd7d2fa2986822f71620a9b78a3884387de80fe038122f5a6031dd5b84c71",
+      "_kui_sci_stream_fetch": "1dd7c1eba302958c91fbf6a27a7a7897e4f6ca6f17a7e46de30f1fd18b25002d",
+      "_kui_sci_stream_open": "3c37ecdf2bb3d06581f8ee661c9a47e58f390404b9f94438f37e7cea643b269c",
+      "_kui_sci_stream_poll": "1e0478cad5012975cf5648db68f0e50e741e2697cab8046ba46d6895e373435b",
+      "_kui_sci_stream_stats": "800f4dd7419d8a7c3eab1b1fe9bb779cf95886a70e7968ce0a6e61c5f00bbbaf",
+      "_kui_sci_stream_stop": "e8026d62ba551a950ca2aa958523cc3c657af8871f4263505670a4b0e67059c3",
+      "_kui_sci_stream_take": "a799b704b527bbbaf6a050e724d48b9a09006713734e2f6bd23d178cb31fed96",
+      "_kui_sci_stream_token_budget": "72c59dcda6d22313c6f9c5c7fcf719caca565fdadda543c4ebb8fdbe6d9d15b3",
+      "_kui_sci_stream_token_pending": "4e4f4328b23b1dd474901be16dabb01ea17acd9358ffbd183bb8230571723b73",
+      "_kui_sci_stream_wait": "1804be3ce04b5202e1e98079417fb1877256f830fd76bf940e628ea68aac8f32",
+      "_kui_toy_loader_data_probe_begin": "736efe663971a4030c68a4dc94579546cf310031e26cfbfce73654abd775803a",
+      "_kui_toy_loader_data_probe_end": "2840bdcc8f1c58d564ed104d0e7c9b92a1f6cb5cb7f72472c3f9a05787b14403",
+      "_kui_toy_loader_data_probe_freeze": "396f6fde33d579bbeb881fd88b66f01881c557df19f4d450808be61145a174c2",
+      "_kui_toy_loader_data_probe_words": "3a9aa2418bbdfe0a6fcd90d24af62cf6b28fd840aff265989d773824f3cffb0b",
+      "_kui_toy_loader_schedule_report_begin": "8069cef989808c2ee28d871f07055cc30501a83eca967ee4a4e02892355b78d8",
+      "_kui_toy_loader_schedule_report_end": "315f852a29c1b0e65d293238de02a2953e7f8581420997bdfac243eea6104fb3",
+      "_kui_toy_loader_schedule_report_freeze": "ccf5421751af8050f44e83aeeaa3ef1bc9e11a5f123b7f27c35cdff6f45b2ca4",
+      "_kui_toy_loader_schedule_report_words": "2076cb2d85f7bec0200bf0abb09b7e1e3613b27fdfdf002f33f7f975e9e26c9f",
+      "_kui_toy_loader_trace_report_capture": "7ef317a8fafd0f757b21fb9c6471ac7ce862c8b43f99a2d2dcd958ea0eb525ec",
+      "_kui_toy_loader_trace_report_page": "b25434148a25b5b3943dccbfa885a03535c7cf343876270f266e49ac3e9b2f80",
+      "_kui_toy_loader_trace_terminal": "51a4861bd187e86f4c2298da2ca50f16df7d455ab46c2c57f9af2feec04972c9",
+      "_kui_toy_pilot_gd_dispatch": "03427f0a1b7e2f825a3bdd3ec7b469074b29311fd6557b8415a99c919ca117f0",
+      "_kui_toy_pilot_sci_cancel": "01039169027775e6a7c7cd877de1545e39f5e65afec67d3bfafab066f85b15bd",
+      "_kui_toy_pilot_sci_init": "67414a05ba2969a76e61500aa7e4b32d66a754eae434cc4d275df67fdc2d04e0",
+      "_kui_toy_pilot_sci_irq": "3a984e60febfc7172472c13287b95fc9bf074ce9c6430db6faa5567e92f489d1",
+      "_kui_toy_pilot_sci_pump": "5fd39d70ad1d6c5e96729b972a0ab1c29af815bf12719c1e838b413366b53686",
+      "_kui_toy_pilot_sci_quiesce": "d301cd9ba8d7910ed016fac239eec91ecae03fe1050b93bfcdf2c1769b5df7b8",
+      "_kui_toy_pilot_sci_retire": "91724fcabb541e0b7e4fc97c092c7f0747715a1e73584a7ab40754c563e85940",
+      "_kui_toy_pilot_sci_service": "9f245c23d22a9295587c71ff4e2944fd55e7d562c51e0dd3a6612597d2602b2f",
+      "_kui_toy_pilot_sci_snapshot": "c33d99ef2b86b8e12497edc9ba92bbaa12a166f43d7a46ec3452d9d65ada44b0",
+      "_kui_toy_pilot_sci_startup_active": "5a2ac7963dbef6f0f5241ba37c6bc21706a5c52090ddb8867fd18d27adb6808f",
+      "_kui_toy_pilot_sci_startup_snapshot": "33a2faa17eb88e96952403211bdd8f7731f4b60549b3c14d7f54d39d72da7248",
+      "_kui_toy_pilot_worker_initialize": "0e8bcb17286d9aa81fa5d65a8dd74ed8964ac7e695aa39f9a611710e02d690df",
+      "_live": "5f642094589cd275fad0582994fc08921ac24905d12d38bbac6d9605263b84a8",
+      "_locate": "3b986bf2d21db16552be0929f2d904885f2cb908ce5ab37660b8379153769533",
+      "_msf": "52364641d9531d0ec12723ab385f01fc491a7a6d678634ceb9036d0c5fb1c6fc",
+      "_prepare": "ed0e104beecb8c56b85f72272f6e797bef32de882db79f4a35e69a2b996b130d",
+      "_retry": "4fedf27a3e02f081ab69abe3489c552f5404700c317c6b4c946ebd8ddd13de9f",
+      "_reverse": "364e2caea75e90ef62a8d227f35c3ebf33d177c62b6772b2da0cd7b05216298f",
+      "_schedule_add": "2ca6a0fc5fefb7cc9d6321406567bcacd7d72e584bc6a2f85e46213af3f38d8f",
+      "_schedule_clock_sample": "7e3c1c9d821156f105fc9039eed581afeac94b65a533c155b719960c4f836a83",
+      "_schedule_initialize": "71b386832a96a28860b07f62b109f299e5c64d0806b66277a192ffc6afb7bfb7",
+      "_sci_startup_fail": "74a0e6377665def6961cc42fdbb3a89f8afee065f7bcb76c010285ff80b39359",
+      "_sci_startup_report": "ac4d11f5f286d1d01c6c6e57a37059657b68a419f3ab9774b379d9d194759ac4",
+      "_select": "e148dc7291ec593d664bc9e10acda7c6173151c91c9a01580027dc872ac8678e",
+      "_start_dma": "44c97d304aaea6535a986f75458c8153dc7eb2c3de174177e0ac3b787e9d8b8f",
+      "_stop_card": "bdbdc505b43a43c44ce581a9c498dba92a5d4500d9c6a046e5be034a86ef4442",
+      "_token": "85bf2b8eb505754cd8185ae14d79731644be41dcdbc71584db302e40de9c7a95",
+      "_token_count": "f1648b2765f31f093f4fb6a2d41a36c2ee3af336e6c1d7ec089b06e062b0eca3",
+      "_unhook": "da480cdb00ef3575fd6485a643c5bd64de41c67501bc8370c607e48435596007",
+      "_write_out": "acf68553ff72b83b9b99a309d08f2e5ee0ef5a873685a9503a4ccede0f8a8f6b"
+    }
+  },
+  "runtime": {
+    "all_ELF_images_bound_to_runtime": true,
+    "sha256": "f58f8dad7f51233f01088f68eb09fa78a7228aea3489ce8b62c12d691a77a1ef"
+  },
+  "schedule_schema": {
+    "engine_words": 32,
+    "header_words": 16,
+    "magic": "0x4c534331",
+    "publication_checksum": "first credited sector CRC32",
+    "record_start": 48,
+    "record_words": 16,
+    "records": 8,
+    "version": 1,
+    "words": 176
+  },
+  "stacks": {
+    "GD_all_telemetry_engine_and_low_callback_frames_counted": true,
+    "GD_audio_access": {
+      "_kui_toy_pilot_gd_project": {
+        "address": "0x8cfd32bc",
+        "decoded_nonliteral_halfwords": 147,
+        "leaf_no_calls": true,
+        "no_external_or_indirect_transfers": true,
+        "symbol_bytes": 304
+      },
+      "_kui_toy_pilot_request": {
+        "address": "0x8cfd1fb4",
+        "decoded_nonliteral_halfwords": 191,
+        "leaf_no_calls": true,
+        "no_external_or_indirect_transfers": true,
+        "symbol_bytes": 420
+      },
+      "_kui_toy_pilot_snapshot": {
+        "address": "0x8cfd2158",
+        "decoded_nonliteral_halfwords": 71,
+        "leaf_no_calls": true,
+        "no_external_or_indirect_transfers": true,
+        "symbol_bytes": 208
+      }
+    },
+    "GD_excluded_audio_only_units": [
+      "hash.su",
+      "toy_pilot.su",
+      "toy_pilot_bus.su",
+      "toy_pilot_lease.su",
+      "toy_pilot_pause.su",
+      "toy_pilot_worker.su"
+    ],
+    "GD_participating_rows": [
+      {
+        "bytes": 0,
+        "function": "guest",
+        "report": "build/schedule-z/worker/async_gd.su"
+      },
+      {
+        "bytes": 0,
+        "function": "msf",
+        "report": "build/schedule-z/worker/async_gd.su"
+      },
+      {
+        "bytes": 20,
+        "function": "kui_retail_gd_init_validated",
+        "report": "build/schedule-z/worker/async_gd.su"
+      },
+      {
+        "bytes": 40,
+        "function": "kui_retail_gd_init",
+        "report": "build/schedule-z/worker/async_gd.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_retail_gd_set_disc_type",
+        "report": "build/schedule-z/worker/async_gd.su"
+      },
+      {
+        "bytes": 12,
+        "function": "kui_retail_gd_init_prepared",
+        "report": "build/schedule-z/worker/async_gd.su"
+      },
+      {
+        "bytes": 12,
+        "function": "kui_retail_gd_progress",
+        "report": "build/schedule-z/worker/async_gd.su"
+      },
+      {
+        "bytes": 152,
+        "function": "kui_retail_gd_dispatch",
+        "report": "build/schedule-z/worker/async_gd.su"
+      },
+      {
+        "bytes": 28,
+        "function": "locate",
+        "report": "build/schedule-z/worker/src/core/retail_cursor.su"
+      },
+      {
+        "bytes": 28,
+        "function": "kui_retail_cursor_begin",
+        "report": "build/schedule-z/worker/src/core/retail_cursor.su"
+      },
+      {
+        "bytes": 56,
+        "function": "kui_retail_cursor_feed",
+        "report": "build/schedule-z/worker/src/core/retail_cursor.su"
+      },
+      {
+        "bytes": 0,
+        "function": "memset",
+        "report": "build/schedule-z/worker/src/loader/minic.su"
+      },
+      {
+        "bytes": 4,
+        "function": "memcpy",
+        "report": "build/schedule-z/worker/src/loader/minic.su"
+      },
+      {
+        "bytes": 0,
+        "function": "memmove",
+        "report": "build/schedule-z/worker/src/loader/minic.su"
+      },
+      {
+        "bytes": 0,
+        "function": "memcmp",
+        "report": "build/schedule-z/worker/src/loader/minic.su"
+      },
+      {
+        "bytes": 0,
+        "function": "strlen",
+        "report": "build/schedule-z/worker/src/loader/minic.su"
+      },
+      {
+        "bytes": 0,
+        "function": "retail_display_capture",
+        "report": "build/schedule-z/worker/src/loader/retail_display.su"
+      },
+      {
+        "bytes": 48,
+        "function": "retail_display_line",
+        "report": "build/schedule-z/worker/src/loader/retail_display.su"
+      },
+      {
+        "bytes": 12,
+        "function": "retail_display_restore",
+        "report": "build/schedule-z/worker/src/loader/retail_display.su"
+      },
+      {
+        "bytes": 60,
+        "function": "retail_display_hex",
+        "report": "build/schedule-z/worker/src/loader/retail_display.su"
+      },
+      {
+        "bytes": 76,
+        "function": "retail_display_values",
+        "report": "build/schedule-z/worker/src/loader/retail_display.su"
+      },
+      {
+        "bytes": 4,
+        "function": "retail_display_progress",
+        "report": "build/schedule-z/worker/src/loader/retail_display.su"
+      },
+      {
+        "bytes": 4,
+        "function": "retail_display_pause",
+        "report": "build/schedule-z/worker/src/loader/retail_display.su"
+      },
+      {
+        "bytes": 0,
+        "function": "byte",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "select",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "reverse",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "token_count",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 20,
+        "function": "command",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 32,
+        "function": "token",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 28,
+        "function": "stop_card",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "start_dma",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 40,
+        "function": "finish",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 8,
+        "function": "kui_sci_stream_open",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_sci_stream_busy",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_sci_stream_ready",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_sci_stream_token_budget",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_sci_stream_token_pending",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_sci_stream_stats",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_sci_stream_discard",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 44,
+        "function": "kui_sci_stream_fetch",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_sci_stream_poll",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 12,
+        "function": "kui_sci_stream_wait",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 48,
+        "function": "kui_sci_stream_take",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 8,
+        "function": "kui_sci_stream_stop",
+        "report": "build/schedule-z/worker/src/loader/sci_stream.su"
+      },
+      {
+        "bytes": 0,
+        "function": "data_probe_sample",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 0,
+        "function": "data_probe_metric",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 60,
+        "function": "data_probe_payload",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 56,
+        "function": "data_probe_read",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_loader_data_probe_begin",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_loader_data_probe_end",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_loader_data_probe_words",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_loader_data_probe_word_count",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_loader_data_probe_freeze",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_data_probe.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_loader_payload_call",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_payload_control.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_loader_payload_control_counts",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_payload_control.su"
+      },
+      {
+        "bytes": 0,
+        "function": "schedule_add",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_schedule_report.su"
+      },
+      {
+        "bytes": 0,
+        "function": "schedule_clock_sample",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_schedule_report.su"
+      },
+      {
+        "bytes": 0,
+        "function": "schedule_initialize",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_schedule_report.su"
+      },
+      {
+        "bytes": 16,
+        "function": "kui_toy_loader_schedule_report_begin",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_schedule_report.su"
+      },
+      {
+        "bytes": 68,
+        "function": "kui_toy_loader_schedule_report_end",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_schedule_report.su"
+      },
+      {
+        "bytes": 12,
+        "function": "kui_toy_loader_schedule_report_freeze",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_schedule_report.su"
+      },
+      {
+        "bytes": 4,
+        "function": "kui_toy_loader_schedule_report_words",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_schedule_report.su"
+      },
+      {
+        "bytes": 0,
+        "function": "add",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 0,
+        "function": "initialize",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 8,
+        "function": "clock_sample",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 28,
+        "function": "measured",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 0,
+        "function": "outstanding.part.0",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 60,
+        "function": "kui_toy_loader_trace_begin",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 104,
+        "function": "kui_toy_loader_trace_end",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 4,
+        "function": "kui_toy_loader_trace_words",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_loader_trace_word_count",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 4,
+        "function": "kui_toy_loader_trace_freeze",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace.su"
+      },
+      {
+        "bytes": 24,
+        "function": "kui_toy_loader_trace_report_capture",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace_report.su"
+      },
+      {
+        "bytes": 8,
+        "function": "kui_toy_loader_trace_report_page",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace_report.su"
+      },
+      {
+        "bytes": 52,
+        "function": "kui_toy_loader_trace_terminal",
+        "report": "build/schedule-z/worker/src/loader/toy_loader_trace_report.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_pilot_gd_project",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_gd.su"
+      },
+      {
+        "bytes": 32,
+        "function": "dispatch_body",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_gd.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_pilot_gd_capture",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_gd.su"
+      },
+      {
+        "bytes": 28,
+        "function": "kui_toy_pilot_gd_dispatch",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_gd.su"
+      },
+      {
+        "bytes": 0,
+        "function": "hook",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 0,
+        "function": "live",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 0,
+        "function": "unhook",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 20,
+        "function": "write_out",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 20,
+        "function": "close_bus",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 4,
+        "function": "sci_startup_report",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 8,
+        "function": "sci_startup_fail",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 0,
+        "function": "retry",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 28,
+        "function": "kui_toy_pilot_sci_init",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 24,
+        "function": "kui_toy_pilot_sci_cancel",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 36,
+        "function": "prepare",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 40,
+        "function": "data_work",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 16,
+        "function": "kui_toy_pilot_sci_pump",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 32,
+        "function": "kui_toy_pilot_sci_service",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_pilot_sci_startup_active",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 8,
+        "function": "kui_toy_pilot_sci_quiesce",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_pilot_sci_retire",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_pilot_sci_startup_snapshot",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_pilot_sci_snapshot",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 16,
+        "function": "kui_toy_pilot_sci_irq",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_sci.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_sci_sd_healthy",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_worker.su"
+      },
+      {
+        "bytes": 20,
+        "function": "kui_toy_pilot_request",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_worker.su"
+      },
+      {
+        "bytes": 0,
+        "function": "kui_toy_pilot_snapshot",
+        "report": "build/schedule-z/worker/src/loader/toy_pilot_worker.su"
+      }
+    ],
+    "assembly_allowance_bytes": 256,
+    "audio_retains_original_all_frame_bound": true,
+    "conservative_sums": {
+      "audio_worker": {
+        "available": 8096,
+        "bytes": 4944
+      },
+      "high_GD": {
+        "available": 4000,
+        "bytes": 2792
+      },
+      "low": {
+        "available": 1232,
+        "bytes": 1156
+      }
+    }
+  },
+  "startup_IRQ": {
+    "CDDA_transport_helpers": false,
+    "IRQ_P2_stack_bottom": "0xacfdc420",
+    "IRQ_P2_stack_top": "0xacfdcc20",
+    "independent_stacks": {
+      "all_engine_units_and_shared_low_callbacks_counted": true,
+      "assembly_allowance": 44,
+      "available_bytes": 1968,
+      "conservative_bytes": 1788
+    },
+    "integer_vector_handoff": {
+      "SCI_events": [
+        "0x4e0",
+        "0x500"
+      ],
+      "declined_event": "fully restored integer frame then native VBR/IPRB release",
+      "irq_entry": "0x8cfd8cd4",
+      "native_release_entries": [
+        "0x100",
+        "0x400",
+        "0x600"
+      ],
+      "owned_return": "RTE with untouched hardware SSR/SPC",
+      "preserved_integer_state": "bank1 r0..r7, PR, MACH, MACL; r8..r14 by integer C ABI; R15 from SGR",
+      "private_frame_bytes": 44,
+      "rehook_pending_slots": 3,
+      "scope": "Exact emitted authored template, IRQ entry, release and rehook code",
+      "stack_top_reserved_bytes": 16,
+      "vector_region": "0xacfdbe00",
+      "vector_region_bytes": 1344
+    },
+    "present": true,
+    "vector_cache_publication": {
+      "CCR": "read existing word, OR 0x800 ICI, write once; existing policy bits preserved",
+      "P2_body": "0xacfd6316",
+      "entry": "0x8cfd6310",
+      "operand_cache_lines": "OCBP over supplied vector interval, 32-byte steps"
+    }
+  }
+}
