@@ -8,6 +8,17 @@
 #ifndef KUI_TOY_PILOT_DATA_SCHEDULE_MODE
 #define KUI_TOY_PILOT_DATA_SCHEDULE_MODE 0
 #endif
+#ifndef KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+#define KUI_TOY_PILOT_DATA_BUDGET_PROFILE 0
+#endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE < 0 || KUI_TOY_PILOT_DATA_BUDGET_PROFILE > 4
+#error Toy loader DATA budget profile must be 0, 1, 2, 3 or 4
+#endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE && \
+    (KUI_TOY_PILOT_DATA_SCHEDULE_MODE != 2 || !KUI_TOY_PILOT_LOADER_TRACE || \
+     !KUI_TOY_PILOT_DATA_PROBE)
+#error Toy loader DATA budgets require the observed startup-only DATA engine
+#endif
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE < 0 || KUI_TOY_PILOT_DATA_SCHEDULE_MODE > 3
 #error Toy loader DATA schedule mode must be 0, 1, 2 or 3
 #endif

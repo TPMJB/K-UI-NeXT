@@ -9,6 +9,20 @@
 #ifndef KUI_TOY_PILOT_DATA_SCHEDULE_MODE
 #define KUI_TOY_PILOT_DATA_SCHEDULE_MODE 0
 #endif
+#ifndef KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+#define KUI_TOY_PILOT_DATA_BUDGET_PROFILE 0
+#endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+#include "kui/toy_loader_schedule.h"
+#endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE < 0 || KUI_TOY_PILOT_DATA_BUDGET_PROFILE > 4
+#error Unknown startup DATA budget profile
+#endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE && \
+    (KUI_TOY_PILOT_DATA_SCHEDULE_MODE != 2 || KUI_TOY_PILOT_SHARED_SCI || \
+     KUI_TOY_PILOT_ASYNC_CDDA || !KUI_TOY_PILOT_PRIVATE_P2)
+#error DATA budgets require the private startup DATA engine and retained synchronous audio
+#endif
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2 && \
     (KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_ASYNC_CDDA || !KUI_TOY_PILOT_PRIVATE_P2)
 #error Startup DATA scheduling requires private P2 and the unchanged synchronous audio profile
@@ -22,9 +36,17 @@ enum kui_toy_pilot_sci_result {
     KUI_TOY_SCI_OK = 0, KUI_TOY_SCI_PENDING = 1, KUI_TOY_SCI_FAULT = -1
 };
 /* Foreground CHECK/EXEC admission, checked between finite stream steps. */
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE == 2 || KUI_TOY_PILOT_DATA_BUDGET_PROFILE == 4
+#define KUI_TOY_SCI_SERVICE_BLOCKS 12u
+#else
 #define KUI_TOY_SCI_SERVICE_BLOCKS 4u
+#endif
 #define KUI_TOY_SCI_SERVICE_STEPS 1024u
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE == 3 || KUI_TOY_PILOT_DATA_BUDGET_PROFILE == 4
+#define KUI_TOY_SCI_SERVICE_TICKS 6000u
+#else
 #define KUI_TOY_SCI_SERVICE_TICKS 1500u
+#endif
 struct kui_toy_pilot_sci_stats {
     /* Verified physical blocks include DATA and asynchronous RAW work. */
     uint32_t calls, irq_calls, call_blocks, irq_blocks;
@@ -93,6 +115,19 @@ void kui_toy_pilot_sci_audio_cancel(void);
 int kui_toy_pilot_sci_audio_read(uint32_t lba,uint32_t generation,void *output);
 #endif
 const struct kui_toy_pilot_sci_stats *kui_toy_pilot_sci_snapshot(void);
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+/* Diagnostic foreground admission only. Exactly one exit counter is charged
+ * per enabled service call. Blocks/bytes count work within that call, not
+ * intervening IRQ or one-step work. Mutable counters saturate at UINT32_MAX.
+ * The time allowance admits finite steps; the final step may cross it. */
+struct kui_toy_pilot_sci_budget_stats {
+    uint32_t profile,block_limit,tick_limit,service_calls;
+    uint32_t block_exits,time_exits,token_exits,step_exits;
+    uint32_t finished_or_inactive_exits,service_verified_blocks,zero_credit_calls,credited_bytes;
+};
+_Static_assert(sizeof(struct kui_toy_pilot_sci_budget_stats)==48u,"Startup DATA budget telemetry");
+const struct kui_toy_pilot_sci_budget_stats *kui_toy_pilot_sci_budget_snapshot(void);
+#endif
 /* Returns zero for our SCI event, nonzero for normal game forwarding. */
 uint32_t kui_toy_pilot_sci_irq(void);
 

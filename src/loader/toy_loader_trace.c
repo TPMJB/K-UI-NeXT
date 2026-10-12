@@ -208,7 +208,23 @@ void kui_toy_loader_trace_end(const struct kui_retail_gd *s,uint32_t function,
          * contribute credits, including a CHECK that just consumed it. */
         if(s->token==request.token && credited && function!=KUI_GD_INIT && function!=KUI_GD_RESET) {
             add(&rp->delivered_bytes,credited);
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE > 0
+            /* Only startup cooked 2048-byte DATA enters the asynchronous
+             * receiver. Its IRQ credits can precede this visit's diagnostic
+             * sample, so count persistent logical-sector crossings instead.
+             * This also covers a CHECK that just consumed its terminal
+             * handle; fragments are neither rounded up nor counted twice.
+             * Raw 2352-byte DATA retains the synchronous reader and its
+             * original visit delta. Zero-width corrupt state adds no sector
+             * credit. The fixed shift adds no division/helper to telemetry. */
+            if(s->sector_bytes==2048u)
+                add(&rp->delivered_sectors,(s->completed_bytes>>11)-
+                    (request.credited>>11));
+            else if(s->sector_bytes)
+                add(&rp->delivered_sectors,s->diag.sectors_read-visit.sectors);
+#else
             add(&rp->delivered_sectors,s->diag.sectors_read-visit.sectors);
+#endif
             request.credited=s->completed_bytes;
             if(function==KUI_GD_EXEC) add(&rp->progress_exec,1u);
             if(function==KUI_GD_CHECK) add(&rp->progress_check,1u);

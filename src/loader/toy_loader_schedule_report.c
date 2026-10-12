@@ -15,6 +15,9 @@ static uint32_t schedule_report[KUI_TOY_SCHEDULE_REPORT_WORDS];
 static struct {
     uint32_t initialized,call_active,start,valid,slot,request_start,request_valid;
     uint32_t token,command,credited;
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+    uint32_t call_irq,call_retries,request_irq,request_retries;
+#endif
 } schedule_visit;
 #ifdef KUI_TOY_LOADER_SCHEDULE_REPORT_HOST_TEST
 #define READ(a,n) kui_toy_loader_schedule_report_host_read((a),(n))
@@ -40,14 +43,25 @@ static int schedule_data(uint32_t c){return c==KUI_GD_PIOREAD || c==KUI_GD_DMARE
 static void schedule_initialize(void) {
     if(schedule_visit.initialized)return;
     schedule_visit.initialized=1u;schedule_visit.slot=UINT32_MAX;
-    schedule_report[0]=UINT32_C(0x4c534331);schedule_report[1]=1u;
+    schedule_report[0]=UINT32_C(0x4c534331);schedule_report[1]=KUI_TOY_SCHEDULE_REPORT_VERSION;
     schedule_report[2]=KUI_TOY_SCHEDULE_REPORT_WORDS;
     schedule_report[3]=KUI_TOY_PILOT_DATA_SCHEDULE_MODE;
     schedule_report[4]=781250u;schedule_report[8]=UINT32_MAX;
 }
 static uint32_t *schedule_record(void) {
-    return schedule_visit.slot<KUI_TOY_SCHEDULE_RECORDS?schedule_report+48u+schedule_visit.slot*16u:NULL;
+    return schedule_visit.slot<KUI_TOY_SCHEDULE_RECORDS?schedule_report+48u+
+        schedule_visit.slot*KUI_TOY_SCHEDULE_RECORD_WORDS:NULL;
 }
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+static void schedule_counter_delta(uint32_t *r) {
+    const struct kui_toy_pilot_sci_stats *engine=kui_toy_pilot_sci_snapshot();
+    /* Existing engine counters intentionally wrap. A finite request retains
+     * its modular increment, including work done by the initial pump. */
+    r[16]=engine->irq_blocks-schedule_visit.request_irq;
+    r[17]=engine->retries-schedule_visit.request_retries;
+    if(r[16]==UINT32_MAX || r[17]==UINT32_MAX)schedule_report[10]=1u;
+}
+#endif
 static uint32_t schedule_crc32(const uint8_t *p,uint32_t n) {
     static const uint32_t nibble[16]={0u,0x1db71064u,0x3b6e20c8u,0x26d930acu,
         0x76dc4190u,0x6b6b51f4u,0x4db26158u,0x5005713cu,0xedb88320u,
@@ -65,6 +79,12 @@ void kui_toy_loader_schedule_report_begin(const struct kui_retail_gd *s) {
     schedule_visit.call_active=1u;schedule_visit.valid=schedule_clock_sample(&schedule_visit.start);
     schedule_visit.token=s?s->token:0u;schedule_visit.command=s?s->command:0u;
     schedule_visit.credited=s?s->completed_bytes:0u;
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+    /* REQUEST dispatch may start a bounded pump before end(). Sample on
+     * entry, then adopt these baselines only for an accepted DATA handle. */
+    const struct kui_toy_pilot_sci_stats *engine=kui_toy_pilot_sci_snapshot();
+    schedule_visit.call_irq=engine->irq_blocks;schedule_visit.call_retries=engine->retries;
+#endif
 }
 void kui_toy_loader_schedule_report_end(const struct kui_retail_gd *s,uint32_t f,
     uint32_t command,int32_t result) {
@@ -78,23 +98,33 @@ void kui_toy_loader_schedule_report_end(const struct kui_retail_gd *s,uint32_t f
         schedule_add(&schedule_report[6],1u);schedule_report[8]=slot;
         uint32_t *r=schedule_record();
         if(!r){schedule_add(&schedule_report[11],1u);return;}
-        memset(r,0,16u*sizeof(uint32_t));
+        memset(r,0,KUI_TOY_SCHEDULE_RECORD_WORDS*sizeof(uint32_t));
         r[0]=schedule_report[6];r[1]=s->token;r[2]=s->lba;r[3]=s->count;
         r[4]=s->destination;r[5]=s->sector_bytes;r[6]=command;
         r[7]=schedule_report[9]?16u:0u;
         r[12]=r[13]=UINT32_MAX;
         schedule_visit.request_start=schedule_visit.start;schedule_visit.request_valid=schedule_visit.valid && valid;
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+        schedule_visit.request_irq=schedule_visit.call_irq;
+        schedule_visit.request_retries=schedule_visit.call_retries;
+#endif
     }
     uint32_t *r=schedule_record();
     if(r && f==KUI_GD_ABORT && result==0 && command==r[1] &&
        schedule_visit.token==r[1] && schedule_data(schedule_visit.command))r[7]|=128u;
     if(r && (f==KUI_GD_INIT || f==KUI_GD_RESET)) {
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+        schedule_counter_delta(r);
+#endif
         r[7]|=256u;
         schedule_report[8]=UINT32_MAX;
         schedule_visit.slot=UINT32_MAX;r=NULL;
     }
     if(r && s && s->token==r[1] && (schedule_data(s->command) ||
        (f==KUI_GD_CHECK && schedule_visit.token==r[1] && schedule_data(schedule_visit.command)))) {
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+        schedule_counter_delta(r);
+#endif
         schedule_add(&r[14],1u);
         uint32_t elapsed=schedule_visit.start-end;
         if(schedule_visit.valid && valid && elapsed<=UINT32_C(0x7fffffff)) {
@@ -137,9 +167,20 @@ void kui_toy_loader_schedule_report_freeze(void) {
     schedule_initialize();if(schedule_report[5])return;
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
     /* Retain pre-cleanup engine ownership before cancellation fences DMA. */
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+    uint32_t *active=schedule_record();
+    if(active)schedule_counter_delta(active);
+#endif
     memcpy(schedule_report+16u,kui_toy_pilot_sci_snapshot(),64u);
     const struct kui_toy_pilot_sci_startup_stats *startup=kui_toy_pilot_sci_startup_snapshot();
     memcpy(schedule_report+32u,startup,16u);
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+    const struct kui_toy_pilot_sci_budget_stats *budget=kui_toy_pilot_sci_budget_snapshot();
+    _Static_assert(sizeof(*budget)==48u,"SCHED exact twelve-word budget snapshot");
+    memcpy(schedule_report+36u,budget,48u);
+    for(uint32_t i=36u;i<48u;i++)
+        if(schedule_report[i]==UINT32_MAX)schedule_report[10]=1u;
+#endif
     if(kui_toy_pilot_sci_quiesce())schedule_report[14]=1u;
     else schedule_report[15]=1u;
 #else

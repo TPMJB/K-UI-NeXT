@@ -76,6 +76,9 @@ static struct {
         uint8_t bytes[KUI_GAME_RAW_BYTES] __attribute__((aligned(32)));
     } audio;
 #endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+    struct kui_toy_pilot_sci_budget_stats budget;
+#endif
 } e;
 
 #ifdef KUI_TOY_PILOT_SCI_TEST
@@ -117,6 +120,14 @@ static void publish_vectors(void) {
 #endif
 static uint32_t our_vbr(void) {return (uint32_t)(uintptr_t)&kui_toy_pilot_sci_vectors-0x100u;}
 static void maximum(uint32_t *out,uint32_t value) {if(value>*out)*out=value;}
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+static void __attribute__((noinline)) sci_budget_add(uint32_t *out,uint32_t value) {
+    *out=value>UINT32_MAX-*out?UINT32_MAX:*out+value;
+}
+const struct kui_toy_pilot_sci_budget_stats *kui_toy_pilot_sci_budget_snapshot(void) {
+    return &e.budget;
+}
+#endif
 static void hook(void) {
     uint32_t vbr=vbr_get();
     uint16_t level=rd16(IPRB);
@@ -287,6 +298,11 @@ void kui_toy_pilot_sci_init(const struct kui_retail_manifest *manifest,
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
     e.startup.enabled=1u;
 #endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+    e.budget.profile=KUI_TOY_PILOT_DATA_BUDGET_PROFILE;
+    e.budget.block_limit=KUI_TOY_SCI_SERVICE_BLOCKS;
+    e.budget.tick_limit=KUI_TOY_SCI_SERVICE_TICKS;
+#endif
     memcpy(kui_toy_pilot_sci_vectors.vector100,kui_toy_pilot_sci_forward,3u*sizeof(uint32_t));
     kui_toy_pilot_sci_vectors.vector100[2]=(uint32_t)(uintptr_t)kui_toy_pilot_sci_release_100;
     memcpy(kui_toy_pilot_sci_vectors.vector400,kui_toy_pilot_sci_forward,3u*sizeof(uint32_t));
@@ -439,6 +455,13 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
     if(!e.startup.enabled)return KUI_TOY_SCI_OK;
 #endif
     uint32_t before=ticks();++e.stats.calls;
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+    uint32_t blocks_before=e.stats.call_blocks,credit_before=s?s->completed_bytes:0u;
+    /* Keep the exact branch which ended admission, rather than reconstruct
+     * it from a later ownership or ready-buffer snapshot. */
+    uint32_t *budget_exit=&e.budget.finished_or_inactive_exits;
+    sci_budget_add(&e.budget.service_calls,1u);
+#endif
     prepare(s);kui_sci_stream_token_budget(true);
     int result=e.active
 #if KUI_TOY_PILOT_ASYNC_CDDA
@@ -460,6 +483,21 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
      * opportunity when the game's interrupt mask holds off SCI level 1.
      * Time admission is checked between finite stream steps, so one step
      * may cross it; the step cap also bounds a stopped timer. */
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+    for(unsigned step=stepped;e.active && !e.audio_waiting && !e.audio_held;++step) {
+        if(e.verified_since>=KUI_TOY_SCI_SERVICE_BLOCKS){budget_exit=&e.budget.block_exits;break;}
+        if(step>=KUI_TOY_SCI_SERVICE_STEPS){budget_exit=&e.budget.step_exits;break;}
+        if(step && ticks()-before>=KUI_TOY_SCI_SERVICE_TICKS){budget_exit=&e.budget.time_exits;break;}
+        result=pump_work(true);
+        if(result!=KUI_TOY_SCI_PENDING)break;
+        if(kui_sci_stream_token_pending()){budget_exit=&e.budget.token_exits;break;}
+    }
+    uint32_t credit=s && s->completed_bytes>=credit_before?s->completed_bytes-credit_before:0u;
+    sci_budget_add(budget_exit,1u);
+    sci_budget_add(&e.budget.service_verified_blocks,e.stats.call_blocks-blocks_before);
+    if(!credit)sci_budget_add(&e.budget.zero_credit_calls,1u);
+    sci_budget_add(&e.budget.credited_bytes,credit);
+#else
     for(unsigned step=stepped;(e.active
 #if KUI_TOY_PILOT_ASYNC_CDDA
         || e.audio.active
@@ -470,6 +508,7 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
         result=pump_work(true);
         if(result!=KUI_TOY_SCI_PENDING || kui_sci_stream_token_pending())break;
     }
+#endif
     /* Each CHECK/EXEC starts a new accounting interval, even if its finite
      * admission allowance prevented reaching all four blocks. A newly
      * admitted request and cancellation reset it separately above. */

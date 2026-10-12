@@ -2,7 +2,24 @@
 #ifndef KUI_TOY_LOADER_SCHEDULE_REPORT_H
 #define KUI_TOY_LOADER_SCHEDULE_REPORT_H
 #include "kui/retail_gd.h"
+#ifndef KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+#define KUI_TOY_PILOT_DATA_BUDGET_PROFILE 0
+#endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE < 0 || KUI_TOY_PILOT_DATA_BUDGET_PROFILE > 4
+#error Toy loader DATA budget profile must be 0, 1, 2, 3 or 4
+#endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE && KUI_TOY_PILOT_DATA_SCHEDULE_MODE != 2
+#error Toy loader DATA budget profiles require startup asynchronous DATA scheduling
+#endif
+#if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
+#define KUI_TOY_SCHEDULE_REPORT_VERSION 2u
+#define KUI_TOY_SCHEDULE_REPORT_WORDS 192u
+#define KUI_TOY_SCHEDULE_RECORD_WORDS 18u
+#else
+#define KUI_TOY_SCHEDULE_REPORT_VERSION 1u
 #define KUI_TOY_SCHEDULE_REPORT_WORDS 176u
+#define KUI_TOY_SCHEDULE_RECORD_WORDS 16u
+#endif
 #define KUI_TOY_SCHEDULE_RECORDS 8u
 /* Chronology is diagnostic only. Records retain first-sector CRC32 once
  * bytes have been credited by the original or asynchronous DATA reader. */
