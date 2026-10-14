@@ -337,7 +337,7 @@ static bool tops_up(uint32_t function) { return topping(function); }
 static void deliver_work(uint32_t wait) {
     uint32_t delivered = 0;
 #ifdef KUI_RETAIL_CE
-    uint32_t steps = 0;
+    uint32_t irq_steps = 0;
 #endif
     for(;;) {
 #if KUI_ARMADA_CE_STREAM
@@ -346,14 +346,10 @@ static void deliver_work(uint32_t wait) {
 #ifdef KUI_RETAIL_CE
         if(kui_sci_stream_token_pending() && R.shared.stream.token_bounded &&
            !R.shared.stream.token_budget) return;
-        /* Ready/polled blocks must not turn either masked service context
-         * into a whole-transfer burst. Count failed/retry iterations too.
-         * Only read_part must synchronously fill its complete PIO piece.
-         * With no DMA in flight, wake CE to resume the pending read. */
-        if(wait != UINT32_MAX && steps++ >= 2u) {
-            if(!e.in_irq && !kui_sci_stream_busy()) wake();
-            return;
-        }
+        /* A larger queue must not turn a polled fallback into a long ISR.
+         * A paused active read is woken below; an in-flight block supplies
+         * the next SCI interrupt. Count failed/retry iterations too. */
+        if(e.in_irq && irq_steps++ >= 2u) return;
         drain();
         if(wait == UINT32_MAX && e.piece_set && e.piece_filled == e.piece_bytes) return;
 #endif

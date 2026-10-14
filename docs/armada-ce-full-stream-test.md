@@ -1,6 +1,22 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
+## Restore the booting DATA reader
+
+Console build `c1818d47492b` froze at ENTERING WINDOWS CE after the bootstrap
+and immutable-reader checks passed. This occurs before gameplay and gives no
+CDDA refill evidence. The added foreground DATA visit limit is withdrawn:
+it changed early CE read progress, while the audio scheduling changes take
+effect only after native audio requests. This is the leading source-level
+explanation, not a proven hardware root cause.
+
+The DATA reader is restored byte-for-byte in source to the booting
+`0c0318266201` implementation, including the existing IRQ-only two-iteration
+limit. The CDDA job handoff/cadence and terminal timing history remain. No
+new foreground wakeup hypothesis is included. First confirm Armada reaches
+its title screen. If it does, record the intro/gameplay and three return pages
+as described below. If boot stops again, no long recording is useful.
+
 ## Refill cadence and temporal evidence
 
 Console build `0c0318266201` produced brief/intermittent music, then lost it.
@@ -17,7 +33,7 @@ refill/start, and yields1ms while source work is pending. Full staging awaiting
 ring room still yields20ms. Buffer size, priority, SCI fairness, native binding
 and cursor guards remain unchanged. Sustained hardware supply is unverified.
 
-Separately, CE foreground DATA delivery now has the same two-iteration work
+Withdrawn in the boot restore: CE foreground DATA delivery had the same two-iteration work
 bound as IRQ delivery. A ready or polled fallback cannot run a whole asynchronous
 transfer in one masked visit. Existing DRIVE/DMA_END wakeups resume pending
 work. Synchronous PIO pieces must still complete in their call and remain

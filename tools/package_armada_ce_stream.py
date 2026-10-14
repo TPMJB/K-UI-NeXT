@@ -438,9 +438,13 @@ Select **Original Armada → Y Options → CD music On → START**. This test st
 the requested audio tracks from your image; it is not the earlier two-second
 excerpt loop. This build keeps the native-owner binding correction and removes
 an idle gap between small source reads. Pending source work yields for1ms;
-full staging awaiting ring space retains the20ms idle yield. CE asynchronous
-DATA delivery also has a bounded foreground visit; synchronous PIO pieces
-and individual hardware waits retain their original contracts.
+full staging awaiting ring space retains the20ms idle yield. The foreground
+DATA visit limit from failed console build c1818d47492b has been withdrawn.
+The DATA reader is restored to the exact source from the booting0c0318266201
+build, including its existing IRQ-only limit. The bootstrap passed in the
+failed build, but CE startup froze; this is a boot regression, not audio evidence.
+First confirm Armada reaches its title screen; if it stops again, return that
+screen immediately rather than spending time on the playback test.
 
 Enter the same **in-game scene where the earlier loop was audible** and listen
 there for **30 seconds**. Main-menu CD music has not been verified for Armada.
@@ -523,7 +527,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Refill-Cadence-Fix.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Boot-Reader-Restore.zip")
     args = parser.parse_args()
     try:
         build(args)

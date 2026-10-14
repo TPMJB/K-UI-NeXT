@@ -247,7 +247,7 @@ STREAM_BOOT_BODIES = {
         '0b4804e52ed204e52ed12fd422210b4809002ed20ce52ed12ed422210b4809002dd122902dd20ce5c121118109e012811381'
         '22112ad40b4809002ad115902ad204e5c121a364118109e01281138122110b48090025d226d1222137af00e035af09000020'
         '0008800001d02b40b4d2008ce0c3008c00d4008c1cd1008c5cd1008c60c0008cdcd1008cfcd4008c0080008c0000008d5cd2'
-        '008c00d8008ce0b3008ce000008c4749554b04d8008c3883008c1cc4008c00c4008c00d8008cbc00008c7cbb008cbc0000ac'
+        '008c00d8008ce0b3008ce000008c4749554b04d8008c3883008c1cc4008c00c4008ce0d7008cbc00008c7cbb008cbc0000ac'
         'c000008c82bb008cc00000ac0010008c001000ac88bb008cf010008cf01000ac8ebb008ca0bc008ce00000ac43605b20862f'
         '03c8'
     ),
@@ -314,6 +314,18 @@ STREAM_BOOT_RELOCS = {
         (0x29e, "_kui_retail_gd_1000_hook", 0),
         (0x2aa, "_kui_retail_gd_10f0_hook", 0),
         (0x2ae, "_kui_retail_menu_hook", 0),
+        (0xc2, "_kui_retail_async_region", 3672),
+        (0xc6, "_manifest", 0),
+        (0xca, "_kui_retail_async_region", 3600),
+        (0x22e, "_kui_retail_async_region", 3604),
+        (0x236, "_manifest", 0),
+        (0x23a, "_kui_retail_async_region", 3196),
+        (0x23e, "_kui_retail_async_region", 3260),
+        (0x246, "_kui_retail_async_region", 3388),
+        (0x24a, "_manifest", 252),
+        (0x256, "_kui_retail_async_region", 3516),
+        (0x272, "_kui_retail_original_menu", 0),
+        (0x276, "_kui_retail_hook_caller", 0),
     ),
     # The stage embeds the complete controller, so its existing subsequent
     # state/seed literals move with the controller's verified byte length.
