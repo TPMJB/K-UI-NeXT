@@ -2,6 +2,9 @@
 #ifndef KUI_ARMADA_CE_EXCERPT_ENTRY_H
 #define KUI_ARMADA_CE_EXCERPT_ENTRY_H
 #include <stdint.h>
+#if KUI_ARMADA_CE_STREAM
+#include "kui/armada_ce_stream_trace.h"
+#endif
 
 /* Authored resident-to-controller ABI. The request belongs to the resident,
  * is static direct RAM, and contains the service's accepted parameter copy.
@@ -20,9 +23,18 @@ struct kui_armada_ce_excerpt_entry_snapshot {
     uint32_t cursor[5]; /* Command, first, last, play cursor, write cursor. */
     uint32_t fault[5]; /* Module reason, node, observed, expected, detail. */
     uint32_t deferred;
+#if KUI_ARMADA_CE_STREAM
+    struct kui_armada_ce_stream_trace_snapshot trace;
+    uint32_t report_labels[11]; /* Immutable high-controller text addresses. */
+#endif
 };
+#if KUI_ARMADA_CE_STREAM
+_Static_assert(sizeof(struct kui_armada_ce_excerpt_entry_snapshot)==428u,
+               "Stream snapshot appends a bounded temporal history");
+#else
 _Static_assert(sizeof(struct kui_armada_ce_excerpt_entry_snapshot)==124u,
                "Excerpt entry has six five-word rows and one callback");
+#endif
 /* function=UINT32_MAX takes an integer-only local snapshot. No hardware/guest read or
  * native API is made. An accepted REQUEST can publish only an authored
  * callback, never invoke native CE methods while the resident lock is held. */

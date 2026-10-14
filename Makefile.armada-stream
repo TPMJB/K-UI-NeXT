@@ -13,7 +13,7 @@ include Makefile.armada-audio
 ARMADA_STREAM_FLAGS := $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 -fcallgraph-info=su
 # Override to empty only for the initial high-placement excerpt preflight.
 # Full stream builds require all three independently implemented source units.
-ARMADA_STREAM_EXTRA_SRC ?= src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_native.c src/loader/armada_ce_stream_transport.c src/loader/armada_ce_stream_player.c
+ARMADA_STREAM_EXTRA_SRC ?= src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_native.c src/loader/armada_ce_stream_transport.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_trace.c
 ARMADA_STREAM_EXTRA_OBJS := $(patsubst src/loader/armada_ce_stream_%.c,$(ARMADA_AUDIO_DIR)/stream-%.o,$(ARMADA_STREAM_EXTRA_SRC))
 ARMADA_STREAM_OBJS := $(ARMADA_AUDIO_DIR)/bind-probe.o $(ARMADA_AUDIO_DIR)/excerpt.o $(ARMADA_AUDIO_DIR)/excerpt-asm.o $(ARMADA_AUDIO_DIR)/excerpt-minic.o $(ARMADA_STREAM_EXTRA_OBJS) $(ARMADA_AUDIO_DIR)/stream-image.o $(ARMADA_AUDIO_DIR)/stream-cursor.o
 

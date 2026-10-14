@@ -1,6 +1,52 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
+## Refill cadence and temporal evidence
+
+Console build `0c0318266201` produced brief/intermittent music, then lost it.
+Native Play succeeded four times with no binding refusal and HRESULT0.
+The retained recovery was UNDERRUN (`AUDIO WHY15`): cursor delta `3A00`,
+allowance `45E8`, interval82ms. These counters establish a recovery, not its
+exact relationship to the sound heard. FMV echo reportedly also existed before
+CDDA attempts; no recording has yet established its cause.
+
+Each four-sector job carries9408bytes, only53.33ms of stereo PCM. The worker
+previously waited20ms after each visit and only admitted the next source job
+on a later visit. It now lends the replacement job immediately after a completed
+refill/start, and yields1ms while source work is pending. Full staging awaiting
+ring room still yields20ms. Buffer size, priority, SCI fairness, native binding
+and cursor guards remain unchanged. Sustained hardware supply is unverified.
+
+Separately, CE foreground DATA delivery now has the same two-iteration work
+bound as IRQ delivery. A ready or polled fallback cannot run a whole asynchronous
+transfer in one masked visit. Existing DRIVE/DMA_END wakeups resume pending
+work. Synchronous PIO pieces must still complete in their call and remain
+outside this bound; individual hardware waits are also unchanged. This is a
+specific scheduling correction, not proof of an FMV echo fix.
+
+The return display now shows three pages: summary15seconds, playback events
+10seconds, then the last six one-second samples10seconds. Retained events are
+START1, UNDERRUN2 and FAULT3; SAMPLE4 is periodic. Each row contains code,
+native timestamp in milliseconds, cumulative admitted source bytes, fresh ring
+bytes and an auxiliary elapsed interval/reason/pending flag. UNDERRUN readiness
+is captured before recovery resets the ring. Counts show event/sample totals,
+maximum worker interval, approximate maximum source-job duration and completed
+jobs. Source duration uses existing worker clock samples, not extra clock calls.
+
+Replace both files and cold boot with CD music On. Record a short video with
+sound (roughly2–3minutes, or separate clips): include the opening speech where
+it echoes,30seconds in the same gameplay scene where music was briefly audible,
+and all three diagnostic pages after A+B+X+Y+Start. Return immediately if it
+fails sooner; no main-menu wait is needed. This supplies audible/timing evidence
+beyond a single photo. If feasible, an opening-speech clip with CD music Off
+provides a baseline using the ordinary installed CE loader. A silent intro
+alone does not establish that no CDDA command was issued; the event history
+records actual native starts.
+
+The package includes the saved-options/menu fixes and exact ecf23 excerpt
+rollback. Focused host regressions and console layout/stack checks establish
+transaction behavior and build validity; they cannot establish console audio.
+
 ## Native owner revalidation correction
 
 Console build `5e3bc4bffcae` failed before native playback: SOURCE `00052B00`,

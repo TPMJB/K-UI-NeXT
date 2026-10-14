@@ -436,22 +436,25 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. This build corrects the `41f643fa37bd` bootstrap refusal:
-the controller now stays dormant until the original code, zero-state and
-source-map checks pass. It also replaces the repeated worker cache observer
-with verified native-owner virtual reads and releases audio reads on failure.
-It now timestamps cursors after native position calls and playback after Play
-returns, and skips shared sound-lock acquisition on idle refill visits.
+excerpt loop. This build keeps the native-owner binding correction and removes
+an idle gap between small source reads. Pending source work yields for1ms;
+full staging awaiting ring space retains the20ms idle yield. CE asynchronous
+DATA delivery also has a bounded foreground visit; synchronous PIO pieces
+and individual hardware waits retain their original contracts.
 
 Enter the same **in-game scene where the earlier loop was audible** and listen
 there for **30 seconds**. Main-menu CD music has not been verified for Armada.
-If music is absent, return immediately with **A+B+X+Y+Start** and capture the
-full screen. Do not wait at the main menu as an audio test. This revision
-retains elapsed time across unchanged cursor polls and preserves a real
-binding failure instead of replacing it with an earlier cursor recovery.
-The full binding revalidation now samples values through the native owner
-address domain; bootstrap keeps its existing observer. All identity/mapping
-checks remain. No long playtest is requested until this short check succeeds.
+Record a short **video with sound**, roughly2–3minutes or separate clips,
+covering the echoing opening speech, the music starting/stopping in gameplay,
+and the three return pages after **A+B+X+Y+Start**. The summary remains15seconds,
+then playback events10seconds and buffer samples10seconds. A still photograph
+alone cannot establish when a gap happened or explain repeated FMV speech.
+If music fails sooner, return then. No long playtest is required.
+
+The history records native timestamps, admitted source bytes and fresh ring
+bytes. It also retains start/underrun/fault events and longest worker/source-job
+intervals. The latest prior console run reached native Play but underruns
+continued; sustained audio and the FMV effect remain unverified in this build.
 
 This is a console test of the corrected full-stream path. Build and host checks
 do not establish hardware playback; other CE games are not admitted. No new
@@ -520,7 +523,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Native-Revalidation-Fix.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Refill-Cadence-Fix.zip")
     args = parser.parse_args()
     try:
         build(args)

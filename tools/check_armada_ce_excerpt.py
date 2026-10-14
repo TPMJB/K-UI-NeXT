@@ -204,15 +204,16 @@ STREAM_BUS_RELAY_BYTES = bytes.fromhex("02d0536700e643652b40fee400000000")
 # Relocations are admitted against linked symbols before normalization.
 STREAM_BOOT_BODIES = {
     ('controller', '_kui_armada_ce_bind_probe'): bytes.fromhex(
-        '862f4360962ffe88a62f736ab62f536b224f0a8fd47f5bd07365b3642c7f264ff66bf66af6692b40f66857d0421f0b40611f'
-        '0820f254518df15654d800e14360ff8883694079518f1e1951d151da0b41a364a5511518a6511618a25118210589a7522718'
-        'a8522818a95229181b18f364a351a2621c18a4512a181d18af511e18aa511f18ab511229ac511119ae51121941d110522319'
-        '17522419185225191952261914521551271918193cd10b410c74f351f3641218f4511318f551141838d10b411874f6511821'
-        '08891919f7511a19f8511b19f9511c19fa511d192bd02c7f264ff66bf66af6690b00f66801e24361ff712631098da82a078b'
-        '2ad00b4009000820eb8928d1e9af1e1948242900e58f01ca6330e28d03e2b361ec712631028fb3602188da8b8260ff88018d'
-        '01700228a36003c8068f01e11cd22191ac321632028f01e1caaf1118a350018804898450ff88018d01700418a25100e414d0'
-        'b365122fa1570b40a2660820b7898350ff88018d01700318a3500188af8bc2af0900f0540900a4b4fa8c94b4fa8cc8e7fa8c'
-        '38c6fa8c44e8fa8c84e8fa8c48c5fa8c70c5fa8c20c5fa8c3492fa8c007dff7388c5fa8c'
+        '862f4360962ffe88a62f736ab62f536b224f0a8fd47f61d07365b3642c7f264ff66bf66af6692b40f6685dd0421f0b40611f'
+        '0820f2545d8df1565ad800e14360ff88836940795d8f1e1957d157da0b41a364a5511518a6511618a25118210589a7522718'
+        'a8522818a95229181b18f364a351a2621c18a4512a181d18af511e18aa511f18ab511229ac511119ae51121947d110522319'
+        '175224191852251919522619145215512719181942d10b410c74f351f3641218f4511318f55114183ed10b411874f6511821'
+        '08891919f7511a19f8511b19f9511c19fa511d1937d138d40b41090037d20be137d3222310410473fb8f28722bd02c7f264f'
+        'f66bf66af6690b00f66801e24361ff712631098da82a078b2ed00b4009000820eb892cd1e9af1e1948242900e58f01ca6330'
+        'e28903e2b361ec712631028fb3602188da8b8260ff88018d01700228a36003c8068f01e120d22191ac321632028f01e1caaf'
+        '1118a350018804898450ff88018d01700418a25100e418d0b365122fa1570b40a2660820b7898350ff88018d01700318a350'
+        '0188af8bc2af0900f054090050bbfa8c40bbfa8ca0f4fa8c1cd0fa8c4cf6fa8c8cf6fa8c04cffa8c2ccffa8c4cdcfa8c1cf5'
+        'fa8c68eefa8c20f6fa8cdccefa8ce497fa8c007dff736ccffa8c'
     ),
     ('controller', '_kui_armada_ce_stream_transport_attached'): bytes.fromhex(
         '02d11b5001880b0029000900eceefa8c'
@@ -273,21 +274,25 @@ STREAM_BOOT_BODIES = {
     ),
 }
 STREAM_BOOT_RELOCS = {
+    # Reviewed terminal-only history copy/text publication follows the unchanged
+    # attachment guard. Pre-attachment paths still write no controller state.
     ("controller", "_kui_armada_ce_bind_probe"): (
-        (0x184, "_kui_armada_ce_stream_transport_event", 0),
-        (0x188, "_kui_armada_ce_stream_transport_attached", 0),
-        # Cursor timing/recovery fields change high code and BSS placement.
-        # Pin these existing literals to their exact linked symbols/addends;
-        # every instruction and nonrelocated literal remains byte-exact.
-        (0x18c, "_snapshot", 0),
-        (0x190, "_kui_armada_ce_excerpt_snapshot", 0),
-        (0x194, "_audio", 0),
-        (0x198, "_audio", 64),
-        (0x19c, "_kui_armada_ce_stream_progress", 0),
-        (0x1a0, "_kui_armada_ce_stream_fault", 0),
-        (0x1a4, "_kui_armada_ce_stream_needs_deferred", 0),
-        (0x1a8, "_kui_armada_ce_excerpt_deferred", 0),
-        (0x1b0, "_kui_armada_ce_excerpt_queue", 0)),
+        (0x19c, "_kui_armada_ce_stream_transport_event", 0),
+        (0x1a0, "_kui_armada_ce_stream_transport_attached", 0),
+        (0x1a4, "_snapshot", 0),
+        (0x1a8, "_kui_armada_ce_excerpt_snapshot", 0),
+        (0x1ac, "_audio", 0),
+        (0x1b0, "_audio", 64),
+        (0x1b4, "_kui_armada_ce_stream_progress", 0),
+        (0x1b8, "_kui_armada_ce_stream_fault", 0),
+        (0x1bc, "_kui_armada_ce_stream_trace_snapshot", 0),
+        (0x1c0, "_snapshot", 124),
+        (0x1c4, "_labels.0", 0),
+        (0x1c8, "_snapshot", 384),
+        (0x1cc, "_kui_armada_ce_stream_needs_deferred", 0),
+        (0x1d0, "_kui_armada_ce_excerpt_deferred", 0),
+        (0x1d8, "_kui_armada_ce_excerpt_queue", 0),
+    ),
     ("controller", "_kui_armada_ce_stream_transport_attached"): ((0xc, "_t", 124),),
     ("controller", "_kui_armada_ce_stream_transport_event"): (
         (0x19c, "_bus_valid", 0), (0x1a0, "_t", 124), (0x1a4, "_t", 0),
@@ -297,13 +302,27 @@ STREAM_BOOT_RELOCS = {
         (0x1c4, "_kui_retail_cursor_feed", 0), (0x1c8, "_release_audio", 0),
         (0x1cc, "_audio_failure", 0), (0x284, "_t", 1212),
         (0x288, "_kui_armada_ce_stream_transport_pump", 0), (0x28c, "_data_active", 0)),
+    # Terminal reporting relayout changes address literals only. Every
+    # initializer instruction, bound and activation ordering is unchanged.
+    ("resident", "_kui_retail_resident_init"): (
+        (0xbe, "_memcpy", 0),
+        (0x232, "_bus", 0),
+        (0x242, "_kui_retail_ce_stream_bus", -16),
+        (0x25e, "_kui_retail_async_read_part", 0),
+        (0x282, "_kui_retail_resident_hook", 0),
+        (0x28e, "_kui_retail_gd_c0_hook", 0),
+        (0x29e, "_kui_retail_gd_1000_hook", 0),
+        (0x2aa, "_kui_retail_gd_10f0_hook", 0),
+        (0x2ae, "_kui_retail_menu_hook", 0),
+    ),
     # The stage embeds the complete controller, so its existing subsequent
     # state/seed literals move with the controller's verified byte length.
     ("stage", "_kui_retail_stage_relay"): (
         (0x1a4, "_display", 0), (0x1ec, "_original_entry", 0),
         (0x1f8, "_exec_bytes", 0), (0x1fc, "_boot_crc", 0),
         (0x208, "_resident_bytes", 0), (0x20c, "_ce_kernel", 0),
-        (0x214, "_resident_blob", 0), (0x21c, "__armada_bind_blob_end", 0),
+        (0x214, "_resident_blob", 0), (0x218, "__armada_bind_blob_start", 0),
+        (0x21c, "__armada_bind_blob_end", 0),
         (0x22c, "_armada_original_romhdr", 0), (0x330, "_armada_excerpt_seed", 0),
         (0x33c, "_armada_excerpt_seed", 64), (0x37c, "_manifest", 68)),
 }

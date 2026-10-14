@@ -691,6 +691,15 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
 #else
     retail_display_line("REBOOT K-UI");
     retail_display_pause(900u); /* ~15 seconds at 60 Hz to capture the counters */
+#if KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
+    /* Additional terminal pages retain the timing missing from a single
+     * cumulative photograph. No game, card, clock or native audio resumes. */
+    for(unsigned page=0;page<2u;page++) {
+        retail_display_restore(&display);
+        armada_ce_audio_history(page);
+        retail_display_pause(600u);
+    }
+#endif
     /* Leave through the boot ROM, as KOS arch_reboot() does, with interrupts
      * still masked: the console restarts and boots the K-UI disc in the drive.
      * No game, reader or vector state is relied on afterwards. */

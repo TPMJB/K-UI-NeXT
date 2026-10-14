@@ -710,6 +710,55 @@ static void test_polled_irq_yields(void) {
     CHECK(ram[OUTPUT - BEGIN + 8u * 2048u] == 0xa5);
     CHECK(R.engine.polled_call_max == call_max && R.engine.polled_irq_max == irq_max);
 }
+static void test_polled_foreground_yields(void) {
+    setup(2000, true);
+    mode(2048);
+    m.chcr = 1u; /* Guest owns DMA1 throughout: every card block uses PIO. */
+    int32_t token = request(KUI_GD_DMAREAD, 45000, 8, OUTPUT);
+    CHECK(R.shared.service.pending && R.engine.stats.call_blocks <= 2u);
+    CHECK(!kui_sci_stream_busy() && ev.drive && !ev.dma_end);
+    reference_read(45000, 8);
+    /* Resume only on the drive events CE receives. Each foreground visit
+     * keeps the request pending until its actual destination is complete. */
+    unsigned wake = 0;
+    for(unsigned round = 0; R.shared.service.pending; ++round) {
+        CHECK(round < 100u && ev.drive > wake);
+        wake = ev.drive;
+        uint32_t before = R.engine.stats.call_blocks;
+        CHECK(gd(KUI_GD_EXEC, 0, 0) == 0);
+        CHECK(R.engine.stats.call_blocks - before <= 2u);
+        CHECK(!R.shared.service.callback_due);
+    }
+    CHECK(status(token) == KUI_GD_COMPLETED && get(STATUS + 8) == 8u * 2048u);
+    CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 8u * 2048u));
+    CHECK(ram[OUTPUT - BEGIN + 8u * 2048u] == 0xa5);
+    CHECK(R.engine.polled_call_max <= 2u && !R.engine.stats.irq_blocks);
+
+    /* Large DMA stream pieces resume through the existing drive/DMA-end
+     * events, without a SCI DMA interrupt or an invented PIO callback. */
+    setup(2000, true);
+    mode(2048);
+    m.chcr = 1u;
+    static const uint32_t whole[7] = {0x4000u, 0, 0, 0, 0, 0, 0};
+    dma_stream(45000, 8, whole, 0);
+    CHECK(R.engine.polled_call_max <= 2u && !R.engine.stats.irq_blocks);
+    CHECK(ev.dma_end && !R.shared.service.callback_due);
+
+    /* A synchronous PIO_TRANSFER still returns its entire offered piece
+     * and marks exactly the existing deferred callback as due. */
+    setup(2000, true);
+    mode(2048);
+    m.chcr = 1u;
+    token = request(KUI_RETAIL_GD_PIOREAD_STREAM, 45000, 2, 0);
+    CHECK(R.shared.service.pending && !R.shared.service.callback_due);
+    reference_read(45000, 2);
+    put(PIECE, VBASE); put(PIECE + 4, 4096u);
+    CHECK(gd(KUI_GD_PIO_TRANSFER, (uint32_t)token, PIECE) == 0);
+    CHECK(!R.shared.service.pending && !R.shared.service.error);
+    CHECK(R.shared.service.completed_bytes == 4096u && R.shared.service.callback_due);
+    CHECK(!memcmp(vram, expected, 4096u) && vram[4096] == 0xa5);
+    CHECK(R.engine.polled_call_max > 2u && !R.engine.stats.irq_blocks);
+}
 static void test_first_unrecovered_overrun(void) {
     setup(2000, true);
     mode(2048);
@@ -770,8 +819,9 @@ static void test_other_errors_keep_retry_threshold(void) {
         card.bad_token_count = failures;
         int32_t token = request(KUI_GD_DMAREAD, 45000, 3, OUTPUT);
         CHECK(!R.engine.early_polled && kui_sci_stream_stats()->token_errors == failures);
-        CHECK(kui_sci_stream_stats()->polled == failures - 1u);
+        CHECK(!kui_sci_stream_stats()->polled); /* Third iteration is deferred. */
         CHECK(finish(token, 5) == KUI_GD_COMPLETED);
+        CHECK(kui_sci_stream_stats()->polled == failures - 1u);
         reference_read(45000, 3);
         CHECK(!memcmp(ram + OUTPUT - BEGIN, expected, 3u * 2048u));
     }
@@ -935,6 +985,7 @@ int main(void) {
     test_token_slices();
     test_token_pause_abort();
     test_polled_irq_yields();
+    test_polled_foreground_yields();
     test_first_unrecovered_overrun();
     test_deferred_repair_stays_dma();
     test_other_errors_keep_retry_threshold();

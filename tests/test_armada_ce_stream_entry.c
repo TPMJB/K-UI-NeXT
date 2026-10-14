@@ -49,10 +49,11 @@ uint32_t kui_armada_ce_stream_transport_event(uint32_t event,uintptr_t argument)
 
 static struct kui_retail_gd service;
 static volatile uint32_t kui_retail_ce_deferred[2];
-static unsigned rows;
+static unsigned rows,lines;
 static void retail_display_values(const char *label,const uint32_t *values,unsigned count) {
     assert(label && values && count==5u);++rows;
 }
+static void retail_display_line(const char *label) {assert(label);++lines;}
 static const struct kui_armada_ce_excerpt_entry_snapshot *observer_entry(
     uint32_t function,uint32_t command,int32_t result,uint32_t address);
 #define kui_armada_ce_bind_probe observer_entry
@@ -114,6 +115,8 @@ int main(void) {
     kui_retail_ce_deferred[0]=0;armada_ce_audio_kick(KUI_GD_EXEC);
     assert(kui_retail_ce_deferred[0]==(uint32_t)(uintptr_t)kui_armada_ce_excerpt_deferred);
     unsigned before=samples;armada_ce_audio_report();assert(samples==before+1u && rows==6u && !binds);
+    armada_ce_audio_history(0u);armada_ce_audio_history(1u);
+    assert(samples==before+3u && rows==20u && lines==2u && !binds);
     audio_fault[0]=7u;audio_fault[1]=0x0c2789b4u;
     audio_fault[2]=0x0dcd116cu;audio_fault[3]=0x0dcd116cu;audio_fault[4]=10u;
     s=kui_armada_ce_bind_probe(UINT32_MAX,0,0,0);

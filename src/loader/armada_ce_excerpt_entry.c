@@ -264,6 +264,15 @@ static void capture_audio(void) {
     uint32_t fault[5];
     kui_armada_ce_stream_fault(fault);
     if(fault[0]) for(unsigned i=0;i<5u;i++) snapshot.fault[i]=fault[i];
+    kui_armada_ce_stream_trace_snapshot(&snapshot.trace);
+    static const char labels[11][40]={
+        "GD BIND SOURCE GAPS WORKER", "AUDIO WHY NODE VALUE EXPECT DETAIL",
+        "SR FPSCR CURRENT OWNER DEVICE", "STREAM ATTEMPT PLAY REFUSED HR",
+        "BUFFER CAPS BYTES VOICES CRC", "CMD FIRST LAST PLAYCUR WRITECUR",
+        "EVENTS SAMPLES VISIT-MS JOB-MS JOBS", "LAST SIX PLAYBACK EVENTS",
+        "LAST SIX ONE-SECOND SAMPLES", "CODE MS SOURCE READY AUX",
+        "1 START 2 UNDERRUN 3 FAULT 4 SAMPLE"};
+    for(unsigned i=0;i<11u;i++) snapshot.report_labels[i]=(uint32_t)(uintptr_t)labels[i];
 #endif
 }
 const struct kui_armada_ce_excerpt_entry_snapshot *kui_armada_ce_bind_probe(

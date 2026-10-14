@@ -32,7 +32,8 @@ struct authored_bus {
     uint32_t cursor,frontier,now,epoch,lba,sectors,bytes,raw;
     uint32_t position_delay_ms,play_delay_ms;
     uint32_t submit_epoch[4096],last_lock_offset,last_lock_bytes;
-    unsigned pending_pumps,cancel_pumps,busy_submits,sleep_visits;
+    unsigned pending_pumps,read_latency_pumps,cancel_pumps,busy_submits,sleep_visits;
+    uint32_t last_sleep_ms;
     bool pending,cancelled,revoked,stale_unlock,stale_source,bad_unlock,fail_end;
     bool bad_current,fail_ticks;
     bool bad_object_page,bad_copy_page,lock_held;
@@ -207,6 +208,7 @@ bool kui_armada_ce_stream_native_ticks(struct kui_armada_ce_stream_native *state
 bool kui_armada_ce_stream_native_sleep(struct kui_armada_ce_stream_native *state,
     const struct kui_armada_ce_stream_native_ops *ops,uint32_t ms) {
     CHECK(state==&player.native && !ops && ms<=100u && !bus.consumer && !bus.control);++bus.waits;
+    bus.last_sleep_ms=ms;
     if(bus.sleep_visits) {--bus.sleep_visits;return true;}
     return false;
 }
@@ -240,6 +242,7 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit
     if(bus.busy_submits) {--bus.busy_submits;return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;}
     if(bus.cancelled || bus.pending) return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;
     bus.epoch=epoch;bus.lba=lba;bus.sectors=sectors;bus.raw=(uint32_t)destination;bus.bytes=0;bus.pending=true;bus.revoked=false;
+    if(bus.read_latency_pumps) bus.pending_pumps=bus.read_latency_pumps;
     if(!bus.pending_pumps) complete_bus();
     return bus.pending?KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING:KUI_ARMADA_CE_STREAM_TRANSPORT_DONE;
 }
@@ -318,6 +321,19 @@ int main(void) {
         MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
     CHECK(host==(void *)(uintptr_t)HOST);
     reset(true,1u);prime();++cases;
+    struct kui_armada_ce_stream_trace_snapshot history;
+    kui_armada_ce_stream_trace_snapshot(&history);
+    CHECK(history.counts[0]==1u && history.events[0][0]==KUI_ARMADA_CE_STREAM_TRACE_START &&
+        history.events[0][3]==KUI_ARMADA_CE_STREAM_RING_BYTES);
+    /* An underrun retains the fresh-byte balance before recovery re-primes
+     * the model, and the returned cursor's certified elapsed time. */
+    player.model.produced=player.model.consumed+64u;
+    uint32_t fetched_before=player.source_total;
+    advance(128u);kui_armada_ce_stream_trace_snapshot(&history);
+    CHECK(player.model.recoveries==1u && history.counts[0]==2u &&
+        history.events[1][0]==KUI_ARMADA_CE_STREAM_TRACE_UNDERRUN &&
+        history.events[1][1]==20u && history.events[1][2]==fetched_before &&
+        history.events[1][3]==64u && history.events[1][4]==20u);++cases;
     /* Native calls may wait after the worker entry timestamp. A delayed
      * cursor is checked against a clock captured after that call, and Play
      * records a fresh pre-call time because hardware may start while Play
@@ -340,10 +356,33 @@ int main(void) {
     CHECK(!recovery[0] && !recovery[1] && !recovery[2] && !recovery[3] && !recovery[4]);++cases;
     reset(true,1u);prime();
     /* A synthetic one-sector selection verifies the2352/64 carry at a
-     * consumption rate below its one-request-per-step source service bound.
+     * consumption rate below its bounded source service rate.
      * The long-track case below separately uses the full44100Hz byte rate. */
     for(unsigned i=0;i<720u;i++) {advance(1764u);CHECK(!player.disabled && player.model.native_running);}
     CHECK(player.model.consumed>3u*KUI_ARMADA_CE_STREAM_RING_BYTES && player.model.recoveries==0u);++cases;
+    /* A completed asynchronous job immediately starts its replacement,
+     * before the worker yields or makes another native position call. */
+    reset(true,128u);bus.read_latency_pumps=2u;
+    kui_armada_ce_stream_trace_snapshot(&history);uint32_t completed_before=history.counts[4];
+    visit();
+    CHECK(bus.submits==1u && player.read_active && step_delay()==SOURCE_STEP_MS);
+    bus.now+=20u;visit();CHECK(bus.submits==1u && player.source_total==0u);
+    bus.now+=20u;visit();CHECK(player.source_total==9408u && bus.submits==2u &&
+        player.read_active && bus.pending && player.model.staged<64u &&
+        step_delay()==SOURCE_STEP_MS);
+    kui_armada_ce_stream_trace_snapshot(&history);
+    CHECK(history.counts[4]==completed_before+1u && history.counts[3]>=40u);++cases;
+    /* Waiting for native ring space retains the20ms idle cadence; a
+     * pending source ticket uses the shorter native yield. */
+    reset(true,128u);prime();
+    CHECK(player.model.staged>=64u && !player.read_active && step_delay()==STEP_MS);
+    bus.sleep_visits=0u;
+    CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
+    CHECK(bus.last_sleep_ms==STEP_MS);++cases;
+    reset(true,128u);bus.read_latency_pumps=8u;bus.sleep_visits=0u;
+    CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
+    CHECK(player.read_active && bus.last_sleep_ms==SOURCE_STEP_MS);++cases;
+    reset(true,128u);prime();
     reset(true,128u);prime();
     for(unsigned i=0;i<360u;i++) {advance(3528u);CHECK(!player.disabled && player.model.native_running);}
     CHECK(player.model.consumed>3u*KUI_ARMADA_CE_STREAM_RING_BYTES && player.model.recoveries==0u);++cases;
@@ -379,7 +418,7 @@ int main(void) {
     visit();read_id=player.model.read.id;model_epoch=player.model.epoch;
     for(unsigned i=0;i<2u;i++) {visit();CHECK(player.model.read.id==read_id && player.model.epoch==model_epoch);}
     CHECK(bus.submit_epoch[0]==read_id && bus.submit_epoch[1]==read_id && bus.submit_epoch[2]==read_id);
-    visit();CHECK(!player.disabled && player.model.fetch==2352u);++cases;
+    visit();CHECK(!player.disabled && player.model.fetch==2u*2352u);++cases;
     /* Unlock is the publication boundary: newer mail revokes the commit. */
     reset(true,1u);CHECK(create_buffer());CHECK(source());uint64_t produced=player.model.produced;
     uint32_t staged=player.model.staged;bus.stale_unlock=true;CHECK(refill());
@@ -401,7 +440,8 @@ int main(void) {
      * identity failure. An already-issued next reception is revoked, fenced
      * over bounded worker visits, and never promoted to native playback. */
     reset(true,128u);
-    for(unsigned i=0;i<20u;i++) visit();
+    CHECK(create_buffer());
+    for(unsigned i=0;i<20u;i++) {CHECK(source());CHECK(refill());}
     CHECK(player.source_total==20u*4u*2352u && bus.submits==20u && !bus.plays && !player.read_active);
     bus.pending_pumps=8u;visit();CHECK(player.read_active && bus.pending && bus.submits==21u);
     bus.cancel_pumps=5u;bus.bad_object_page=true;visit();
@@ -451,7 +491,7 @@ int main(void) {
     CHECK(!bus.starts && !player.worker_started && !player.dispatching);++cases;
     /* If native context refuses LeaveCS, pure revocation is still permitted.
      * No Stop, SCI pump, Sleep or forced lease clear may follow it. */
-    reset(true,1u);prime();bus.pending_pumps=5u;advance(3528u);
+    reset(true,1u);prime();bus.pending_pumps=5u;advance(3528u);advance(3528u);
     CHECK(player.read_active);unsigned pumps=bus.pumps,cancels=bus.cancels,stops=bus.stops;
     bus.fail_end=true;step(SR_REQUIRED,0x40000u);
     CHECK(player.disabled && bus.consumer==1u && player.native.consumer_cs==DEVICE+108u &&
@@ -461,6 +501,17 @@ int main(void) {
     CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
     CHECK(bus.consumer==1u && player.native.consumer_cs==DEVICE+108u &&
         bus.stops==stops && bus.pumps==pumps && bus.waits==sleeps && bus.cancels==cancels+1u);++cases;
+    /* Retained event rows remain chronological after wrapping the six-row
+     * ring; total event count continues independently of retention. */
+    kui_armada_ce_stream_trace_snapshot(&history);uint32_t previous_events=history.counts[0];
+    for(uint32_t i=0;i<8u;i++)
+        kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_START,10000u+i,i,64u,i);
+    kui_armada_ce_stream_trace_snapshot(&history);
+    CHECK(history.counts[0]==previous_events+8u);
+    for(uint32_t i=0;i<KUI_ARMADA_CE_STREAM_TRACE_ROWS;i++)
+        CHECK(history.events[i][1]==10002u+i && history.events[i][2]==i+2u &&
+            history.events[i][4]==i+2u);
+    ++cases;
     CHECK(munmap(source_mapping,512u*1024u)==0 && munmap(host,0x60000u)==0);
     printf("armada stream player: %u cases, %u checks\n",cases,checks);return 0;
 }

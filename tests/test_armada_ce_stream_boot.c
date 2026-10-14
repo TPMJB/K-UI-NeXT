@@ -19,7 +19,7 @@
 #include "test_retail_async_ce.c"
 #undef main
 
-static unsigned audio_visits,rows,wakes;
+static unsigned audio_visits,rows,lines,wakes;
 static volatile uint32_t kui_retail_ce_deferred[2];
 static struct {
     uint32_t binds,queues,samples,pending,command,first,last,repeat;
@@ -82,6 +82,7 @@ void kui_retail_ce_stream_wake(void) {++wakes;take_events();}
 void retail_display_values(const char *label,const uint32_t *values,unsigned count) {
     CHECK(label && values && count==5u);++rows;
 }
+void retail_display_line(const char *label) {CHECK(label);++lines;}
 #define service R.shared.service
 #define kui_armada_ce_bind_probe observer_entry
 #include "../src/loader/armada_ce_audio_observe.inc"
@@ -169,6 +170,8 @@ int main(void) {
     armada_ce_audio_kick(KUI_GD_EXEC);
     CHECK(kui_retail_ce_deferred[0]==(uint32_t)(uintptr_t)kui_armada_ce_excerpt_deferred);
     armada_ce_audio_report();CHECK(rows==6u);
+    armada_ce_audio_history(0u);armada_ce_audio_history(1u);
+    CHECK(rows==20u && lines==2u);
 
     /* The adopted SCI descriptor still reads full audio bytes after the
      * delayed handoff. No detached synthetic bus or separate card model. */

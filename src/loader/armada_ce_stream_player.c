@@ -4,6 +4,7 @@
 #include "kui/armada_ce_stream_model.h"
 #include "kui/armada_ce_stream_native.h"
 #include "kui/armada_ce_stream_transport.h"
+#include "kui/armada_ce_stream_trace.h"
 #if !KUI_ARMADA_CE_STREAM_PLAYER_TEST
 #define KUI_ARMADA_CE_STREAM_OWNER_WORD_SCOPE static __attribute__((noinline,noclone))
 #endif
@@ -29,6 +30,7 @@
 #define DEVICE_CS_OFFSET 88u
 #define WORKER_TOKEN UINT32_C(0x5354524d)
 #define STEP_MS 20u
+#define SOURCE_STEP_MS 1u
 #define COPY_PAGES 4u
 #ifndef KUI_ARMADA_CE_STREAM_PLAYER_TEST
 #define KUI_ARMADA_CE_STREAM_PLAYER_TEST 0
@@ -61,6 +63,20 @@ struct stream_player {
 static struct stream_player player;
 
 static void publish(void) { __asm__ __volatile__("" : : : "memory"); }
+static uint32_t ready_bytes(void) {
+    return player.model.produced>=player.model.consumed?
+        (uint32_t)(player.model.produced-player.model.consumed):0u;
+}
+static uint32_t step_delay(void) {
+    /* Four raw sectors carry only53ms of PCM. Do not add a20ms handoff
+     * delay while that small source job is pending or staging can accept
+     * another. A full staged block awaiting ring room keeps the idle rate. */
+    bool filling=player.model.state==KUI_ARMADA_CE_STREAM_PREFILL ||
+        player.model.state==KUI_ARMADA_CE_STREAM_PLAYING;
+    bool eof=!player.model.infinite && player.model.fetch==player.model.finite_end;
+    return filling && (player.read_active || player.model.read.id ||
+        (player.model.staged<64u && !eof))?SOURCE_STEP_MS:STEP_MS;
+}
 static uint32_t word(uint32_t address) {
 #if KUI_ARMADA_CE_STREAM_PLAYER_TEST
     extern uint32_t kui_armada_ce_stream_player_test_word(uint32_t);
@@ -377,6 +393,7 @@ static bool observe(void) {
      * returned cursor, not the earlier worker entry before guards/calls. */
     uint32_t now;
     if(!clock_now(&now)) return false;
+    player.now_ms=now;
     if(!kui_armada_ce_stream_native_write_begin(&player.native,NULL,player.binding.device)) return false;
     struct kui_armada_ce_ram_binding frontier;
     bool valid=mapped_word(player.stats.buffer+116u,&frontier) &&
@@ -388,8 +405,12 @@ static bool observe(void) {
         uint32_t delta=positions[0]>=player.model.last_play?positions[0]-player.model.last_play:
             KUI_ARMADA_CE_STREAM_RING_BYTES-player.model.last_play+positions[0];
         uint32_t allowance=kui_armada_ce_stream_cursor_allowance(&player.model,now);
+        uint32_t ready=ready_bytes();
         player.last_model_result=kui_armada_ce_stream_observe(&player.model,player.model.ring_epoch,
             positions[0],frontier.value,now);
+        if(player.last_model_result==KUI_ARMADA_CE_STREAM_UNDERRUN)
+            kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_UNDERRUN,
+                now,player.source_total,ready,elapsed);
         if(player.last_model_result>=KUI_ARMADA_CE_STREAM_CURSOR &&
            player.last_model_result<=KUI_ARMADA_CE_STREAM_UNDERRUN) {
             player.recovery[1]=positions[0];player.recovery[2]=delta;
@@ -543,6 +564,7 @@ static bool source(void) {
         if(s==KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY) return true;
         if(s!=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING && s!=KUI_ARMADA_CE_STREAM_TRANSPORT_DONE) return false;
         player.read_active=1u;
+        kui_armada_ce_stream_trace_source_begin(player.now_ms);
     }
     uint32_t sr=mask_begin();
     (void)kui_armada_ce_stream_transport_pump();
@@ -560,8 +582,10 @@ static bool source(void) {
     bool current=mail_current();
     if(current) player.last_model_result=kui_armada_ce_stream_read_complete(
         &player.model,&player.read,true,player.read.bytes);
-    if(current && player.last_model_result==KUI_ARMADA_CE_STREAM_OK)
+    if(current && player.last_model_result==KUI_ARMADA_CE_STREAM_OK) {
         player.source_total+=player.read.bytes;
+        kui_armada_ce_stream_trace_source_end(player.now_ms);
+    }
     mask_end(sr);player.read_active=0;
     return !current || player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
 }
@@ -574,6 +598,7 @@ static bool start(void) {
      * already played audio as an impossible jump after the return. */
     uint32_t started_ms;
     if(!clock_now(&started_ms)) return false;
+    player.now_ms=started_ms;
     (void)call(player.binding.enter_cs,player.binding.device+DEVICE_CS_OFFSET,0,0,0);
     player.stats.free_voices=0;
     bool owners_valid=true;
@@ -595,7 +620,10 @@ static bool start(void) {
     if(player.stats.last_hresult || player.last_model_result!=KUI_ARMADA_CE_STREAM_OK) {
         refuse(KUI_ARMADA_CE_EXCERPT_PLAY);return false;
     }
-    ++player.stats.play_ok;return true;
+    ++player.stats.play_ok;
+    kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_START,
+        started_ms,player.source_total,ready_bytes(),0u);
+    return true;
 }
 static void step(uint32_t sr,uint32_t fpscr) {
     bool native_allowed=false;
@@ -617,7 +645,14 @@ static void step(uint32_t sr,uint32_t fpscr) {
     if(!mail_current()) return;
     if(player.model.state==KUI_ARMADA_CE_STREAM_PREFILL || player.model.state==KUI_ARMADA_CE_STREAM_PLAYING) {
         if(!player.stats.buffer && !create_buffer()) goto failed;
+        uint32_t before=player.source_total;
         if(!refill() || !source() || !refill() || !start()) goto failed;
+        /* Once a job has been admitted and drained, lend its replacement to
+         * SCI immediately. Waiting for the next fully guarded native visit
+         * leaves the transport idle through the yield and position call.
+         * Start comes first because a new read ticket prevents ring prime
+         * admission. This second source visit never waits for reception. */
+        if(player.source_total!=before && !source()) goto failed;
     }
     switch(player.model.state) {
     case KUI_ARMADA_CE_STREAM_PLAYING: player.stats.status=KUI_ARMADA_CE_EXCERPT_PLAYING;break;
@@ -629,6 +664,9 @@ static void step(uint32_t sr,uint32_t fpscr) {
     return;
 failed:
     player.disabled=1u;
+    kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_FAULT,
+        player.now_ms,player.source_total,ready_bytes(),
+        player.fault[0]?player.fault[0]:player.stats.status);
     /* Revocation only changes authored transport state, so it remains legal
      * under an ambiguous consumer lease. Pumping and native Stop remain
      * forbidden; the existing IRQ/DATA route can fence the revoked block. */
@@ -674,16 +712,20 @@ uint32_t kui_armada_ce_stream_worker(uint32_t argument) {
             if(!kui_armada_ce_stream_native_ticks(&player.native,NULL,&player.now_ms)) {
                 (void)fault(STREAM_FAULT_TICKS,0u,player.native.status,0u,player.native.last_result);
                 refuse(KUI_ARMADA_CE_EXCERPT_CONTEXT);player.disabled=1u;
+                kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_FAULT,
+                    player.now_ms,player.source_total,ready_bytes(),STREAM_FAULT_TICKS);
                 cancel_read();
             } else {
                 player.worker_step=1u;publish();
                 kui_armada_ce_excerpt_owner_deferred(0);
                 publish();player.worker_step=0;
+                kui_armada_ce_stream_trace_sample(player.now_ms,player.source_total,
+                    ready_bytes(),player.read_active);
             }
         }
         if(player.disabled) continue;
         /* No SD or COM lock is held while this native CE thread yields. */
-        if(!kui_armada_ce_stream_native_sleep(&player.native,NULL,STEP_MS))
+        if(!kui_armada_ce_stream_native_sleep(&player.native,NULL,step_delay()))
             return UINT32_MAX;
     }
 }

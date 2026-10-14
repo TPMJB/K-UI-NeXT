@@ -46,24 +46,35 @@ static void armada_ce_audio_kick(uint32_t function) {
 static void armada_ce_audio_report(void) {
     const struct kui_armada_ce_excerpt_entry_snapshot *s=kui_armada_ce_bind_probe(UINT32_MAX,0,0,0);
 #if KUI_ARMADA_CE_STREAM
-    retail_display_values("GD BIND SOURCE GAPS WORKER",s->binding,5);
+    if(!s->report_labels[0]) return;
+    /* Text lives in the existing high controller, keeping the low reader
+     * within its unchanged service-stack reservation. */
+    static const uint8_t order[6]={0u,5u,1u,2u,3u,4u};
+    for(unsigned i=0;i<6u;i++)
+        retail_display_values((const char *)(uintptr_t)s->report_labels[i],
+            (const uint32_t *)(const void *)s+order[i]*5u,5);
 #else
     retail_display_values("GD BIND READ QUEUE PIO SKIP",s->binding,5);
-#endif
-#if KUI_ARMADA_CE_STREAM
-    retail_display_values("AUDIO WHY NODE VALUE EXPECT DETAIL",s->fault,5);
-#else
     retail_display_values("BIND WHY NODE VALUE EXPECT DETAIL",s->fault,5);
-#endif
     retail_display_values("SR FPSCR CURRENT OWNER DEVICE",s->context,5);
-#if KUI_ARMADA_CE_STREAM
-    retail_display_values("STREAM ATTEMPT PLAY REFUSED HR",s->playback,5);
-#else
     retail_display_values("EXCERPT ATTEMPT PLAY REFUSED HR",s->playback,5);
-#endif
     retail_display_values("BUFFER CAPS BYTES VOICES CRC",s->buffer,5);
     retail_display_values("CMD FIRST LAST PLAYCUR WRITECUR",s->cursor,5);
+#endif
 }
+#if KUI_ARMADA_CE_STREAM
+static void armada_ce_audio_history(unsigned samples) {
+    /* Terminal execution has stopped: copy authored history only, without
+     * sampling guest memory, clocks or native sound methods. */
+    const struct kui_armada_ce_excerpt_entry_snapshot *s=kui_armada_ce_bind_probe(UINT32_MAX,0,0,0);
+    if(!s->report_labels[7]) return;
+    retail_display_line((const char *)(uintptr_t)s->report_labels[samples?8u:7u]);
+    retail_display_values((const char *)(uintptr_t)s->report_labels[6],s->trace.counts,5);
+    for(unsigned i=0;i<KUI_ARMADA_CE_STREAM_TRACE_ROWS;i++)
+        retail_display_values((const char *)(uintptr_t)s->report_labels[9],
+            samples?s->trace.samples[i]:s->trace.events[i],5);
+}
+#endif
 #elif KUI_ARMADA_CE_RAM_BIND
 #include "kui/armada_ce_bind_probe.h"
 static void armada_ce_audio_record(uint32_t function, uint32_t command,
