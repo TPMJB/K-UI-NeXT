@@ -283,6 +283,7 @@ void kui_armada_ce_excerpt_snapshot(struct kui_armada_ce_excerpt_snapshot *out) 
 }
 uint32_t kui_armada_ce_excerpt_owner_callback(uint32_t token) {
     if(!player.dispatching || token!=CALLBACK_TOKEN || word(CURRENT_PROCESS)!=player.binding.owner_process) return 0;
+    if(!kui_armada_ce_stream_admit_owner(&player.binding) || !binding_valid(&player.binding)) return 0;
     kui_armada_ce_excerpt_owner_deferred(0);return CALLBACK_DONE;
 }
 void kui_armada_ce_excerpt_dispatch(uint32_t sr,uint32_t stack) {
@@ -290,7 +291,12 @@ void kui_armada_ce_excerpt_dispatch(uint32_t sr,uint32_t stack) {
     player.dispatching=1u;publish();
     if((sr&SR_CHECK)!=SR_REQUIRED || (stack&3u) ||
        !((stack>=0x02000000u && stack<0x80000000u) || (stack>=0x8c000000u && stack<0x8d000000u))) goto failed;
-    if(!kui_armada_ce_stream_bind_deferred(&player.binding) || !binding_valid(&player.binding) ||
+    /* Discovery publishes only the stable process/slot. The pinned kernel
+     * callback enters that owner before DLL values or sound APIs are read. */
+    if(!kui_armada_ce_stream_bind_deferred(&player.binding) ||
+       player.binding.owner_process<0x8c14e6e0u || player.binding.owner_process>=0x8c14fa60u ||
+       (player.binding.owner_process-0x8c14e6e0u)%0x9cu ||
+       player.binding.owner_slot!=((1u+(player.binding.owner_process-0x8c14e6e0u)/0x9cu)<<25) ||
        word(0x8c14fa80u)!=0x8c011b20u || word(0x8c011b20u)!=0x32336e57u ||
        word(0x8c011b24u)!=0x00900003u || word(0x8c011b28u)!=0x8c0118e0u ||
        word(0x8c011aa4u)!=UINT32_MAX) goto failed;
@@ -694,8 +700,11 @@ void kui_armada_ce_excerpt_attempt(uint32_t sr,uint32_t fpscr) {
        (!player.initialized && !initialize())) goto failed;
     player.stats.owner_process=player.binding.owner_process;player.stats.device=player.binding.device;
     player.worker_started=1u;publish();
-    if(!kui_armada_ce_stream_native_start(&player.native,&player.native.api,
-        (uint32_t)(uintptr_t)kui_armada_ce_stream_worker,(uint32_t)(uintptr_t)&player,NULL)) goto failed;
+    bool started=kui_armada_ce_stream_native_start(&player.native,&player.native.api,
+        (uint32_t)(uintptr_t)kui_armada_ce_stream_worker,(uint32_t)(uintptr_t)&player,NULL);
+    kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_WORKER,0u,0u,0u,
+        started?0u:player.native.status);
+    if(!started) goto failed;
     publish();player.booting=0;return;
 failed:
     player.disabled=1u;refuse(KUI_ARMADA_CE_EXCERPT_CALLBACK);publish();player.booting=0;

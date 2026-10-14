@@ -133,6 +133,10 @@ int main(void) {
     assert(!kui_armada_ce_stream_bind_deferred(&binding_out) && !binds);
     assert(snapshot.binding[1]==KUI_ARMADA_CE_LIVE_OWNER &&
         snapshot.fault[2]==KUI_ARMADA_CE_STREAM_OWNER_PROCESS);
+    struct kui_armada_ce_stream_trace_snapshot history;
+    kui_armada_ce_stream_trace_snapshot(&history);
+    assert(history.counts[0]==1u && history.events[0][0]==KUI_ARMADA_CE_STREAM_TRACE_DISCOVERY &&
+        history.events[0][4]==KUI_ARMADA_CE_LIVE_OWNER && !history.counts[1]);
     puts("PASS Armada full-stream entry: scalar masked queue, retained PIO priority, bootstrap retry, bus dispatch and deferred-only binding");
     return 0;
 }

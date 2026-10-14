@@ -7,12 +7,17 @@ enum kui_armada_ce_stream_trace_code {
     KUI_ARMADA_CE_STREAM_TRACE_START=1,
     KUI_ARMADA_CE_STREAM_TRACE_UNDERRUN=2,
     KUI_ARMADA_CE_STREAM_TRACE_FAULT=3,
-    KUI_ARMADA_CE_STREAM_TRACE_SAMPLE=4
+    KUI_ARMADA_CE_STREAM_TRACE_SAMPLE=4,
+    KUI_ARMADA_CE_STREAM_TRACE_DISCOVERY=5,
+    KUI_ARMADA_CE_STREAM_TRACE_OWNER_BIND=6,
+    KUI_ARMADA_CE_STREAM_TRACE_WORKER=7
 };
 struct kui_armada_ce_stream_trace_snapshot {
     /* Chronological retained rows: code, native elapsed ms, fetched bytes,
      * fresh ring bytes, auxiliary (elapsed/reason/sample flags).
      * Sample flags: bit0 pending read, bit1 native running, bits8+ state. */
+    /* Startup codes5/6/7 have MS0 until a native clock exists; AUX is the
+     * discovery/binding/native-start status (zero means successful admission). */
     uint32_t events[KUI_ARMADA_CE_STREAM_TRACE_ROWS][5];
     uint32_t samples[KUI_ARMADA_CE_STREAM_TRACE_ROWS][5];
     /* Totals, longest worker interval, longest source job, completed jobs. */

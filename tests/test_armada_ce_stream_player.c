@@ -28,18 +28,19 @@ static unsigned checks,cases;
 
 struct authored_bus {
     unsigned consumer,control,locks,unlocks,plays,stops,releases;
-    unsigned submits,pumps,cancels,waits,starts;
+    unsigned submits,pumps,cancels,waits,starts,owner_admissions;
     uint32_t cursor,frontier,now,epoch,lba,sectors,bytes,raw;
     uint32_t position_delay_ms,play_delay_ms;
     uint32_t submit_epoch[4096],last_lock_offset,last_lock_bytes;
     unsigned pending_pumps,read_latency_pumps,cancel_pumps,busy_submits,sleep_visits;
     uint32_t last_sleep_ms;
     bool pending,cancelled,revoked,stale_unlock,stale_source,bad_unlock,fail_end;
-    bool bad_current,fail_ticks;
+    bool bad_current,fail_ticks,driver_context,fail_owner_admission;
     bool bad_object_page,bad_copy_page,lock_held;
     uint32_t copy_page_address;
     unsigned copy_page_hits,copy_page_flip;
 } bus;
+static struct kui_armada_ce_excerpt_binding admitted_binding;
 
 static int __attribute__((aligned(4))) revalidate(
     const struct kui_armada_ce_excerpt_binding *binding) {
@@ -64,7 +65,7 @@ static uint8_t expected_byte(uint64_t logical) {
     return sample_byte(player.model.first_lba+(uint32_t)(at/2352u),(uint32_t)(at%2352u));
 }
 uint32_t kui_armada_ce_stream_player_test_word(uint32_t address) {
-    if(address==CURRENT_PROCESS) return bus.bad_current?OWNER+0x9cu:OWNER;
+    if(address==CURRENT_PROCESS) return bus.bad_current || bus.driver_context?OWNER+0x9cu:OWNER;
     if(address==OWNER+12u) return SLOT;
     if(address==OWNER+8u) return OWNER_HANDLE;
     if(address==0x8c14fa80u) return 0x8c011b20u;
@@ -110,6 +111,14 @@ bool kui_armada_ce_stream_player_test_mapped(uint32_t address,
 
 uint32_t kui_armada_ce_excerpt_ce_call(uint32_t target,const uint32_t args[8]) {
     CHECK(args);
+    if(target==OWNER_CALLBACK) {
+        CHECK(bus.driver_context && args[0]==(uint32_t)(uintptr_t)player.callback_info &&
+            player.callback_info[0]==OWNER_HANDLE && player.callback_info[2]==CALLBACK_TOKEN &&
+            !player.binding.device && !player.binding.play && !bus.starts && !bus.plays);
+        bus.driver_context=false;
+        uint32_t result=kui_armada_ce_excerpt_owner_callback(CALLBACK_TOKEN);
+        bus.driver_context=true;return result;
+    }
     if(target==player.binding.add_ref) {CHECK(!bus.consumer);return 4u;}
     if(target==player.binding.create_buffer) {
         CHECK(!bus.consumer);
@@ -181,7 +190,13 @@ uint32_t kui_armada_ce_excerpt_ce_call(uint32_t target,const uint32_t args[8]) {
     fprintf(stderr,"unexpected player CE target %08" PRIx32 "\n",target);abort();
 }
 int kui_armada_ce_stream_bind_deferred(struct kui_armada_ce_excerpt_binding *out) {
-    CHECK(out);*out=player.binding;return 1;
+    CHECK(out);memset(out,0,sizeof(*out));out->owner_process=OWNER;out->owner_slot=SLOT;return 1;
+}
+int kui_armada_ce_stream_admit_owner(struct kui_armada_ce_excerpt_binding *out) {
+    CHECK(out==&player.binding && !bus.driver_context && !bus.starts && !bus.plays);
+    ++bus.owner_admissions;
+    if(bus.fail_owner_admission) return 0;
+    *out=admitted_binding;return 1;
 }
 int kui_armada_ce_stream_bind_native(struct kui_armada_ce_live_stream_api *out) {
     CHECK(out);*out=player.native.api;return 1;
@@ -287,6 +302,7 @@ static void reset(bool infinite,uint32_t sectors) {
         DS+0x1994u,DS+0x199cu,DS+0x19dcu,DS+0x11ccu,DS+0x2910u,DS+0x29fcu,DS+0x2cbcu,
         DS+0x39acu,DS+0x2e54u,DS+0x3898u,DS+0x2c2cu,DS+0x2a44u,
         CORE+0x8ea0u,CORE+0x8efcu,(uint32_t)(uintptr_t)revalidate};
+    admitted_binding=player.binding;
     player.native.api=(struct kui_armada_ce_live_stream_api){.owner_process=OWNER,.owner_slot=SLOT,
         .owner_handle=OWNER_HANDLE,.coredll_module=0x8c300300u,.create_thread=CORE+0x8d20u,
         .resume_thread=CORE+0x8814u,.sleep=CORE+0x8708u,.set_thread_priority=CORE+0x8834u,
@@ -517,6 +533,19 @@ int main(void) {
     CHECK(bus.last_lock_offset==4032u && bus.last_lock_bytes==RAW_BYTES &&
         bus.copy_page_hits==2u && player.model.produced==produced &&
         player.model.staged==RAW_BYTES && !bus.consumer && bus.unlocks==1u);++cases;
+    /* A driver-context discovery has no sound targets. The owner callback
+     * must admit the full binding before any native thread or COM operation. */
+    reset(true,1u);player.worker_started=0u;bus.driver_context=true;
+    kui_armada_ce_excerpt_dispatch(SR_REQUIRED,0x081ff000u);
+    CHECK(bus.owner_admissions==1u && bus.starts==1u && player.worker_started &&
+        !player.dispatching && !player.disabled && bus.driver_context && !bus.plays);++cases;
+    reset(true,1u);player.worker_started=0u;bus.driver_context=true;bus.fail_owner_admission=true;
+    kui_armada_ce_excerpt_dispatch(SR_REQUIRED,0x081ff000u);
+    CHECK(bus.owner_admissions==1u && !bus.starts && !player.worker_started &&
+        !player.dispatching && !player.binding.device && !bus.plays && !bus.locks);++cases;
+    reset(true,1u);player.worker_started=0u;player.dispatching=1u;
+    CHECK(!kui_armada_ce_excerpt_owner_callback(CALLBACK_TOKEN^1u) &&
+        !bus.owner_admissions && !bus.starts);++cases;
     /* Bootstrap initializes state before handing its entry to nativeThreadBase. */
     reset(true,1u);player.worker_started=0u;player.dispatching=1u;
     kui_armada_ce_excerpt_attempt(SR_REQUIRED,0x40000u);

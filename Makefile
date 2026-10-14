@@ -24,7 +24,7 @@ LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
 .PHONY: test test-recovery test-images deps diagnostic clean
 .PHONY: test-armada-ce-excerpt
 .PHONY: test-armada-ce-stream
-test-armada-ce-stream: build/test-armada-ce-stream-model build/test-armada-ce-stream-native build/test-armada-ce-stream-api build/test-armada-ce-stream-transport build/test-armada-ce-stream-boot build/test-armada-ce-stream-entry build/test-armada-ce-stream-player build/test-armada-ce-stream-owner-word build/test-armada-ce-stream-initial-word build/test-armada-ce-excerpt-prepare
+test-armada-ce-stream: build/test-armada-ce-stream-model build/test-armada-ce-stream-native build/test-armada-ce-stream-api build/test-armada-ce-stream-transport build/test-armada-ce-stream-boot build/test-armada-ce-stream-entry build/test-armada-ce-stream-player build/test-armada-ce-stream-owner-word build/test-armada-ce-stream-initial-word build/test-armada-ce-stream-discover-owner build/test-armada-ce-excerpt-prepare
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-model
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-native
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-api
@@ -34,6 +34,7 @@ test-armada-ce-stream: build/test-armada-ce-stream-model build/test-armada-ce-st
 	./build/test-armada-ce-stream-player
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-owner-word
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-initial-word
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-discover-owner
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-excerpt-prepare
 .PHONY: test-armada-ce-stream-owner-word
 test-armada-ce-stream-owner-word: build/test-armada-ce-stream-owner-word
@@ -51,6 +52,12 @@ build/test-armada-ce-stream-rebind-word: tests/test_armada_ce_stream_rebind_word
 test-armada-ce-stream-initial-word: build/test-armada-ce-stream-initial-word
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-initial-word
 build/test-armada-ce-stream-initial-word: tests/test_armada_ce_stream_initial_word.c tests/test_armada_ce_live_sound.c include/kui/armada_ce_stream_initial_word.h include/kui/armada_ce_stream_rebind_word.h include/kui/armada_ce_live_sound.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+.PHONY: test-armada-ce-stream-discover-owner
+test-armada-ce-stream-discover-owner: build/test-armada-ce-stream-discover-owner
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-discover-owner
+build/test-armada-ce-stream-discover-owner: tests/test_armada_ce_stream_discover_owner.c tests/test_armada_ce_live_sound.c include/kui/armada_ce_stream_initial_word.h include/kui/armada_ce_live_sound.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
 build/test-armada-ce-stream-model: tests/test_armada_ce_stream_model.c src/loader/armada_ce_stream_model.c include/kui/armada_ce_stream_model.h

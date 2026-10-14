@@ -102,7 +102,7 @@ STREAM_NATIVE_PATH = frozenset({
     "kui_armada_ce_stream_rebind_owner", "kui_armada_ce_stream_rebind_word",
     "worker_mapped_read", "worker_native_read", "worker_address",
     "worker_mask_begin", "worker_mask_end", "worker_sr",
-    "bind_initial", "kui_armada_ce_stream_initial_owner",
+    "bind_initial", "kui_armada_ce_stream_discover_owner", "kui_armada_ce_stream_admit_owner", "kui_armada_ce_stream_initial_owner",
     "kui_armada_ce_stream_initial_module", "kui_armada_ce_stream_initial_address",
     "kui_armada_ce_stream_trace_event", "kui_armada_ce_stream_trace_sample",
     "kui_armada_ce_stream_trace_source_begin", "kui_armada_ce_stream_trace_source_end",

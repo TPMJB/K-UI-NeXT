@@ -124,6 +124,7 @@ struct worker_observer {
     const struct kui_armada_ce_live_workspace *bootstrap;
 };
 static struct worker_observer initial_observer;
+static struct kui_armada_ce_stream_initial_owner discovered_owner;
 static uint32_t worker_mask_begin(void) {
 #if defined(__sh__)
     uint32_t saved,next;
@@ -275,12 +276,53 @@ done:
 }
 int kui_armada_ce_stream_bind_deferred(struct kui_armada_ce_excerpt_binding *out) {
     if(!out) return 0;
-    enum kui_armada_ce_live_status status=bind_now(true);
-    snapshot.binding[1]=(uint32_t)status;snapshot.binding[2]=deferred_live.reads;
+    memset(out,0,sizeof(*out));memset(&discovered_owner,0,sizeof(discovered_owner));
+    uint32_t saved=worker_mask_begin(),sr=worker_sr();
+    uint32_t ttb=cpu_word(0xff000008u),ccr=cpu_word(0xff00001cu);
+    snapshot.context[2]=cpu_word(KUI_ARMADA_CE_LIVE_CURRENT_PROCESS);
+    snapshot.context[3]=snapshot.context[4]=0;
+    enum kui_armada_ce_live_status status=KUI_ARMADA_CE_LIVE_OWNER;
+    if((sr&0x700000f0u)==0x400000f0u)
+        status=kui_armada_ce_stream_discover_owner(ttb,ccr,read_ram,NULL,
+            &deferred_workspace,&discovered_owner);
+    else {
+        memset(&deferred_workspace,0,sizeof(deferred_workspace));
+        kui_armada_ce_live_witness(&deferred_workspace,KUI_ARMADA_CE_LIVE_FAULT_MAPPING,
+            snapshot.context[2],KUI_ARMADA_CE_STREAM_OWNER_PROCESS,
+            KUI_ARMADA_CE_STREAM_OWNER_OK,sr);
+    }
+    if(cpu_word(0xff000008u)!=ttb || cpu_word(0xff00001cu)!=ccr ||
+       cpu_word(KUI_ARMADA_CE_LIVE_CURRENT_PROCESS)!=snapshot.context[2] ||
+       !kui_armada_ce_stream_owner_sr_stable(sr,worker_sr()))
+        status=KUI_ARMADA_CE_LIVE_CHANGED;
+    worker_mask_end(saved);
+    for(unsigned i=0;i<5u;i++) snapshot.fault[i]=deferred_workspace.fault[i];
+    snapshot.binding[1]=(uint32_t)status;snapshot.binding[2]=deferred_workspace.reads;
+    kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_DISCOVERY,0u,0u,0u,status);
     if(status!=KUI_ARMADA_CE_LIVE_OK) return 0;
-    make_binding(out,&deferred_live);
-    snapshot.context[3]=out->owner_process;snapshot.context[4]=out->device;
+    /* Only a process/slot is published before the kernel owner callback.
+     * DLL values and every callable sound target are admitted inside it. */
+    out->owner_process=discovered_owner.process;out->owner_slot=discovered_owner.slot;
+    snapshot.context[3]=out->owner_process;
     return 1;
+}
+int kui_armada_ce_stream_admit_owner(struct kui_armada_ce_excerpt_binding *out) {
+    enum kui_armada_ce_live_status status=KUI_ARMADA_CE_LIVE_OWNER;
+    if(out && out->owner_process==discovered_owner.process &&
+       out->owner_slot==discovered_owner.slot && discovered_owner.handle &&
+       cpu_word(KUI_ARMADA_CE_LIVE_CURRENT_PROCESS)==discovered_owner.process &&
+       cpu_word(discovered_owner.process+8u)==discovered_owner.handle) {
+        status=bind_now(true);
+        if(status==KUI_ARMADA_CE_LIVE_OK &&
+           (deferred_live.owner_process!=discovered_owner.process ||
+            deferred_live.owner_slot!=discovered_owner.slot ||
+            cpu_word(discovered_owner.process+8u)!=discovered_owner.handle))
+            status=KUI_ARMADA_CE_LIVE_CHANGED;
+        if(status==KUI_ARMADA_CE_LIVE_OK) make_binding(out,&deferred_live);
+    }
+    snapshot.binding[1]=(uint32_t)status;snapshot.binding[2]=deferred_live.reads;
+    kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_OWNER_BIND,0u,0u,0u,status);
+    return status==KUI_ARMADA_CE_LIVE_OK;
 }
 int kui_armada_ce_stream_bind_native(struct kui_armada_ce_live_stream_api *out) {
     if(!out || deferred_live.current_process!=deferred_live.owner_process ||
@@ -319,7 +361,7 @@ static void capture_audio(void) {
         "GD BIND SOURCE GAPS WORKER", "AUDIO WHY NODE VALUE EXPECT DETAIL",
         "SR FPSCR CURRENT OWNER DEVICE", "STREAM ATTEMPT PLAY REFUSED HR",
         "BUFFER CAPS BYTES VOICES CRC", "CMD FIRST LAST PLAYCUR WRITECUR",
-        "EVENTS SAMPLES VISIT-MS JOB-MS JOBS", "LAST SIX PLAYBACK EVENTS",
+        "EVENTS SAMPLES VISIT-MS JOB-MS JOBS", "LAST SIX AUDIO EVENTS",
         "LAST SIX ONE-SECOND SAMPLES", "CODE MS SOURCE READY AUX",
         "5S PER PAGE - POWER OFF TO EXIT"};
     for(unsigned i=0;i<11u;i++) snapshot.report_labels[i]=(uint32_t)(uintptr_t)labels[i];

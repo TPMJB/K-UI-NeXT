@@ -3,20 +3,22 @@
 
 ## What this revision changes
 
-Recording `62652.mp4` supplies all three return pages from `b1cd5b774eb5`.
-SOURCE, WORKER, PLAY and every timing/history counter are zero. BIND is `8`
-(CHANGED); the retained witness is WHY `10`, address `03CD1104`, observed
-read status `8`, CCR `105`. Initial sound binding failed before the worker
-started. This recording cannot measure streaming bandwidth or underruns.
+Recording `62653.mp4` shows initial binding still refused in `4185d3932103`:
+BIND `A`, WHY `10`, address `03CC6198`, read status `1` (ARGUMENT), current
+process `8C14E8B4` (disc driver index 3). Armada's sound owner is process 5.
+SOURCE, WORKER, PLAY and all running history remain zero. A focused authored
+fixture reproduces the exact refusal; the last reader wrongly required the
+sound DLL to be attached to the current driver before the owner callback.
 
-The initial restored CE caller now observes sound-module values through its
-native virtual address context. It captures the current process, index,
-slot and handle twice; every native word read retains before/after mapping,
-TTB, CCR and privilege checks. Candidate DLL ranges are available only while
-checking their sections and CRC. Full module identity, reference, object and
-method checks remain. Static callback storage survives initial API admission.
-Worker revalidation already used native observations; this closes the earlier
-initial-admission path that still used cache-array values.
+Startup now discovers only the destination process from bounded kernel
+module/process metadata. It repeats module links, exact profile fields,
+attachment/ref counts and the selected process/index/slot/handle. It reads
+no virtual DLL, game, object or API word in this phase. The existing pinned
+kernel callback then enters that process and runs the complete native sound
+binder. Game/module CRCs, sections, references, objects, methods and mapping
+proofs must all pass before sound or thread APIs are used. An ambiguous owner
+or changed generation is refused. Native values are never read through the
+foreign driver's access-key context.
 
 Worker priority changes from `4` to `2`, above kernel normal priority `3`.
 SNDCORE explicitly requests priority `1`, so native sound service keeps
@@ -42,7 +44,12 @@ GitHub link beneath the logo and removal of the unused L Memory shortcut.
 
 The summary retains binding, source, worker, native Play, buffer and cursor
 values. The other pages retain six playback events and six periodic samples.
-Events are START `1`, UNDERRUN `2`, FAULT `3`; samples use `4`. Rows contain
+Events are START `1`, UNDERRUN `2`, FAULT `3`; samples use `4`.
+Startup events DISCOVERY `5`, OWNER BIND `6` and WORKER `7` are recorded even
+before the worker exists. Their MS field is zero because no native clock
+exists yet, and AUX carries the admission/start status (zero means success).
+Thus initial refusals no longer leave the event page empty; periodic samples
+correctly stay zero until the worker starts. Rows contain
 code, native milliseconds, cumulative source bytes, fresh ring bytes and AUX.
 Sample AUX bit 0 means pending read, bit 1 means native playback running;
 bits 8 onward contain model state. Counts include maximum worker visit and
