@@ -286,10 +286,12 @@ STREAM_BOOT_RELOCS = {
         (0x19c, "_kui_armada_ce_stream_progress", 0),
         (0x1a0, "_kui_armada_ce_stream_fault", 0),
         (0x1a4, "_kui_armada_ce_stream_needs_deferred", 0),
+        (0x1a8, "_kui_armada_ce_excerpt_deferred", 0),
         (0x1b0, "_kui_armada_ce_excerpt_queue", 0)),
     ("controller", "_kui_armada_ce_stream_transport_attached"): ((0xc, "_t", 124),),
     ("controller", "_kui_armada_ce_stream_transport_event"): (
         (0x19c, "_bus_valid", 0), (0x1a0, "_t", 124), (0x1a4, "_t", 0),
+        (0x1a8, "_memcmp", 0), (0x1ac, "_memcpy", 0),
         (0x1b0, "_t", 1212), (0x1bc, "_t", 636),
         (0x1b4, "_refresh_holds", 0), (0x1c0, "_finish", 0),
         (0x1c4, "_kui_retail_cursor_feed", 0), (0x1c8, "_release_audio", 0),

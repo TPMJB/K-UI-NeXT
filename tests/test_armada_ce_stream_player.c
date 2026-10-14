@@ -185,6 +185,11 @@ int kui_armada_ce_stream_bind_deferred(struct kui_armada_ce_excerpt_binding *out
 int kui_armada_ce_stream_bind_native(struct kui_armada_ce_live_stream_api *out) {
     CHECK(out);*out=player.native.api;return 1;
 }
+int kui_armada_ce_stream_rebind_owner(const struct kui_armada_ce_excerpt_binding *binding,
+    uint32_t owner_handle,struct kui_armada_ce_live_stream_api *out) {
+    CHECK(binding==&player.binding && player.worker_started && owner_handle==OWNER_HANDLE && out);
+    *out=player.native.api;return 1;
+}
 void kui_armada_ce_excerpt_owner_deferred(uint32_t unused) {(void)unused;kui_armada_ce_excerpt_attempt(SR_REQUIRED,0x40000u);}
 bool kui_armada_ce_stream_native_start(struct kui_armada_ce_stream_native *state,
     const struct kui_armada_ce_live_stream_api *api,uint32_t worker,uint32_t arg,

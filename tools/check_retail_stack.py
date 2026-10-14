@@ -99,6 +99,9 @@ STREAM_NATIVE_PATH = frozenset({
     "kui_armada_ce_stream_native_sleep", "kui_armada_ce_stream_native_write_begin",
     "kui_armada_ce_stream_native_write_end", "native_call", "native_publish",
     "kui_armada_ce_stream_owner_word", "mapped_word", "read_native",
+    "kui_armada_ce_stream_rebind_owner", "kui_armada_ce_stream_rebind_word",
+    "worker_mapped_read", "worker_native_read", "worker_address",
+    "worker_mask_begin", "worker_mask_end", "worker_sr",
 })
 # The immutable resident bus descriptor is separately pinned in the linked
 # audit. These indirect targets cross back to that low image only; they may

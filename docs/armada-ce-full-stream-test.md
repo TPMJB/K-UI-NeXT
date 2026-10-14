@@ -1,6 +1,27 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
+## Native owner revalidation correction
+
+Console build `5e3bc4bffcae` failed before native playback: SOURCE `00052B00`,
+GAPS `0`, PLAY `0` and STREAM `13`. AUDIO WHY `10` records a mapping refusal
+at shared DSOUND address `03CD2E5C`: observed read status `8` (CHANGED),
+expected `0`, CCR `105`. The prior cursor rejection was not reported in this
+run. This remains a failed CD music test.
+
+The worker's repeated full binding check still used the bootstrap cache-array
+observer. Revalidation now reads values through the admitted native owner's
+virtual address domain, including the shared DLL slot. It retains the full
+module, section, CRC, owner, handle, object, method and mapping checks. The
+bootstrap observer keeps its existing reader because it runs before the native
+owner context is established. The change is not a relaxation of identity
+checks, and it remains unverified on the console.
+
+Replace both KUI files and cold boot with CD music On. Enter the in-game scene
+where the earlier excerpt was audible and listen for 30 seconds. If silent,
+return with A+B+X+Y+Start and photograph the complete screen. Do not use the
+main menu as an assumed CD music test.
+
 ## Coarse cursor observation correction
 
 Console build `a2659555d4bb` still had silent CD music. The user reported

@@ -87,6 +87,9 @@ void kui_armada_ce_stream_progress(uint32_t out[3]);
 void kui_armada_ce_stream_fault(uint32_t out[5]);
 int kui_armada_ce_stream_bind_deferred(struct kui_armada_ce_excerpt_binding *);
 int kui_armada_ce_stream_bind_native(struct kui_armada_ce_live_stream_api *);
+/* Full identity/CRC rebind only from the retained native owner's worker. */
+int kui_armada_ce_stream_rebind_owner(const struct kui_armada_ce_excerpt_binding *,
+    uint32_t owner_handle,struct kui_armada_ce_live_stream_api *);
 /* Native ThreadBase enters this integer C function only through the owned
  * CE P0 veneer. Every player step uses the existing full-FPU owner bridge. */
 uint32_t kui_armada_ce_stream_worker(uint32_t argument);

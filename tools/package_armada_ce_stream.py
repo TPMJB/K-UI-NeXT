@@ -449,7 +449,9 @@ If music is absent, return immediately with **A+B+X+Y+Start** and capture the
 full screen. Do not wait at the main menu as an audio test. This revision
 retains elapsed time across unchanged cursor polls and preserves a real
 binding failure instead of replacing it with an earlier cursor recovery.
-No long playtest is requested until this short gameplay test succeeds.
+The full binding revalidation now samples values through the native owner
+address domain; bootstrap keeps its existing observer. All identity/mapping
+checks remain. No long playtest is requested until this short check succeeds.
 
 This is a console test of the corrected full-stream path. Build and host checks
 do not establish hardware playback; other CE games are not admitted. No new
@@ -518,7 +520,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Cumulative-Cursor-Fix.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Native-Revalidation-Fix.zip")
     args = parser.parse_args()
     try:
         build(args)

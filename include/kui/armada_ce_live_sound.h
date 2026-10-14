@@ -73,16 +73,19 @@ struct kui_armada_ce_live_workspace {
     kui_armada_ce_ram_read32 read32;
     kui_armada_ce_ram_read_mapped mapped32;
     void *context;
-    uint32_t ttb,ccr,reads; /* Budgeted RAM/page-table reads. Each optional
-                           * mapped callback has at most ten array/P2 reads
-                           * and one CCR sample; its mandatory budgeted walk
-                           * bounds callback count by this same read cap. */
+    uint32_t ttb,ccr,reads; /* Budgeted RAM/page-table reads. Each legacy mapped
+                           * callback has at most ten array/P2 reads and one
+                           * CCR sample. Native rebind callbacks have bounded
+                           *18 metadata reads and one native VA sample. The
+                           * mandatory budgeted walk bounds callback count. */
     enum kui_armada_ce_live_status failure;
     uint32_t fault[5]; /* Reason, node, observed, expected, profile/section. */
     unsigned links,pages;
     struct kui_armada_ce_live_link link[KUI_ARMADA_CE_LIVE_MODULE_LIMIT];
     struct kui_armada_ce_live_page page[KUI_ARMADA_CE_LIVE_PAGE_LIMIT];
     struct kui_armada_ce_live_module dsound,sndcore,coredll;
+    /* Set only by the verified native worker's explicit binder entry. */
+    bool native_values;
 };
 static inline void kui_armada_ce_live_witness(
     struct kui_armada_ce_live_workspace *w,uint32_t reason,uint32_t node,
@@ -129,7 +132,17 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_word(
     }
     if(address<UINT32_C(0x02000000)) return KUI_ARMADA_CE_LIVE_MAPPING;
     struct kui_armada_ce_ram_binding b;
-    enum kui_armada_ce_ram_bind_status result=kui_armada_ce_ram_bind_with_reader(
+    enum kui_armada_ce_ram_bind_status result;
+    if(w->native_values) {
+        /* CCR0 requests mapping only even for matching VA/P1 colors. The
+         * worker callback owns every mapped value, with its own masked
+         * owner/TTB checks and repeated mapping witnesses. */
+        result=kui_armada_ce_ram_bind(w->ttb,address,0u,
+            kui_armada_ce_live_physical,w,&b);
+        if(result==KUI_ARMADA_CE_RAM_BIND_CACHE)
+            result=kui_armada_ce_live_mapped(w,address,b.physical_address,
+                b.page_word,w->ccr,&b.value);
+    } else result=kui_armada_ce_ram_bind_with_reader(
         w->ttb,address,w->ccr,kui_armada_ce_live_physical,
         w->mapped32?kui_armada_ce_live_mapped:NULL,w,&b);
     if(result!=KUI_ARMADA_CE_RAM_BIND_OK) {
@@ -279,14 +292,16 @@ static inline bool kui_armada_ce_live_method(uint32_t pointer,uint32_t slot,uint
     if(!kui_armada_ce_live_owner_pointer(pointer,slot,out)) return false;
     return *out==(slot|((base&0x01ffffffu)+rva)) || *out==base+rva;
 }
-static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_reader(
+static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_value_reader(
     uint32_t ttb,uint32_t ccr,kui_armada_ce_ram_read32 read32,void *context,
-    kui_armada_ce_ram_read_mapped mapped32,struct kui_armada_ce_live_workspace *w,struct kui_armada_ce_live_sound *out) {
+    kui_armada_ce_ram_read_mapped mapped32,bool native_values,
+    struct kui_armada_ce_live_workspace *w,struct kui_armada_ce_live_sound *out) {
     uint32_t head,low,high,node,current,candidate=0,slot=0,id=0,value,again,p1,owner_ref[3]={0};
     enum kui_armada_ce_live_status status=KUI_ARMADA_CE_LIVE_ARGUMENT;
     if(!out) return status;
     memset(out,0,sizeof(*out));
-    if(!w || !read32 || !kui_armada_ce_ram_table_p1(ttb,&p1)) return status;
+    if(!w || !read32 || (native_values && !mapped32) ||
+       !kui_armada_ce_ram_table_p1(ttb,&p1)) return status;
     /* Workspace metadata is mutable scratch, while the result is published
      * only after every witness repeats. An aliased output cannot satisfy that
      * contract. Check with subtraction to avoid an address-end overflow. */
@@ -294,6 +309,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     if((output_address>=workspace_address && output_address-workspace_address<sizeof(*w)) ||
        (output_address<workspace_address && workspace_address-output_address<sizeof(*out))) return status;
     memset(w,0,sizeof(*w));w->read32=read32;w->mapped32=mapped32;w->context=context;w->ttb=ttb;w->ccr=ccr;
+    w->native_values=native_values;
     w->failure=KUI_ARMADA_CE_LIVE_READ;
     if((ccr&0xa1u)!=1u) {status=KUI_ARMADA_CE_LIVE_CACHE;goto done;}
     if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS,&current) ||
@@ -530,6 +546,13 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
 done:
     if(status==KUI_ARMADA_CE_LIVE_OK) memset(w->fault,0,sizeof(w->fault));
     out->reads=w->reads;return status;
+}
+static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_reader(
+    uint32_t ttb,uint32_t ccr,kui_armada_ce_ram_read32 read32,void *context,
+    kui_armada_ce_ram_read_mapped mapped32,struct kui_armada_ce_live_workspace *w,
+    struct kui_armada_ce_live_sound *out) {
+    return kui_armada_ce_live_sound_bind_with_value_reader(ttb,ccr,read32,context,
+        mapped32,false,w,out);
 }
 static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind(
     uint32_t ttb,uint32_t ccr,kui_armada_ce_ram_read32 read32,void *context,

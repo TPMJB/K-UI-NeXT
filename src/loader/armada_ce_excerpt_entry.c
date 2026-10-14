@@ -7,6 +7,7 @@
 #include "kui/retail_gd.h"
 #if KUI_ARMADA_CE_STREAM
 #include "kui/armada_ce_stream_transport.h"
+#include "kui/armada_ce_stream_rebind_word.h"
 #endif
 
 #if !defined(KUI_ARMADA_CE_EXCERPT) || KUI_ARMADA_CE_EXCERPT != 1 || !defined(KUI_RETAIL_CE)
@@ -109,6 +110,119 @@ static int revalidate(const struct kui_armada_ce_excerpt_binding *expected) {
     return deferred_live.current_process==deferred_live.owner_process;
 }
 #if KUI_ARMADA_CE_STREAM
+struct worker_observer {
+    uint32_t process,slot,handle,ttb,ccr;
+    uint32_t base[3],span[3];
+};
+static uint32_t worker_mask_begin(void) {
+#if defined(__sh__)
+    uint32_t saved,next;
+    __asm__ __volatile__("stc sr,%0" : "=r"(saved));next=saved|0xf0u;
+    __asm__ __volatile__("ldc %0,sr" : : "r"(next) : "memory");return saved;
+#else
+    return 0u;
+#endif
+}
+static void worker_mask_end(uint32_t saved) {
+#if defined(__sh__)
+    __asm__ __volatile__("ldc %0,sr" : : "r"(saved) : "memory");
+#else
+    (void)saved;
+#endif
+}
+static uint32_t worker_sr(void) {
+#if defined(__sh__)
+    uint32_t sr;__asm__ __volatile__("stc sr,%0" : "=r"(sr));return sr;
+#else
+    return 0u;
+#endif
+}
+static bool worker_address(const struct worker_observer *owner,uint32_t va) {
+    if(!owner || (va&3u) || va>=0x80000000u || (va&0x01ffffffu)<0x10000u) return false;
+    uint32_t slot=va&0xfe000000u;
+    if(slot==owner->slot) return true;
+    if(slot!=0x02000000u) return false;
+    /* A previous complete binder admitted these module spans. This rebind
+     * repeats their layout, code CRCs, attachment refs and PFN witnesses. */
+    for(unsigned i=0;i<3u;i++)
+        if(va>=owner->base[i] && va-owner->base[i]<owner->span[i] &&
+           owner->span[i]-(va-owner->base[i])>=4u) return true;
+    return false;
+}
+static bool __attribute__((noinline,noclone)) worker_native_read(
+    void *context,uint32_t va,uint32_t *value) {
+    const struct worker_observer *owner=context;
+    if(!value || !worker_address(owner,va) ||
+       cpu_word(KUI_ARMADA_CE_LIVE_CURRENT_PROCESS)!=owner->process) return false;
+    *value=*(volatile const uint32_t *)(uintptr_t)va;return true;
+}
+static enum kui_armada_ce_ram_bind_status __attribute__((noinline,noclone))
+worker_mapped_read(void *context,uint32_t va,uint32_t p1,uint32_t page,
+    uint32_t ccr,uint32_t *value) {
+    const struct worker_observer *owner=context;
+    struct kui_armada_ce_ram_binding observed;
+    if(!value) return KUI_ARMADA_CE_RAM_BIND_ARGUMENT;
+    *value=0;
+    if(!worker_address(owner,va) || ccr!=owner->ccr)
+        return KUI_ARMADA_CE_RAM_BIND_ARGUMENT;
+    uint32_t saved=worker_mask_begin(),sr=worker_sr();
+    enum kui_armada_ce_stream_owner_status status=KUI_ARMADA_CE_STREAM_OWNER_CHANGED;
+    if(cpu_word(0xff000008u)==owner->ttb && cpu_word(0xff00001cu)==ccr)
+        status=kui_armada_ce_stream_rebind_word(owner->ttb,sr,owner->process,
+            owner->slot,owner->handle,va,p1,page,read_ram,worker_native_read,context,&observed);
+    uint32_t after=worker_sr();
+    if(cpu_word(0xff000008u)!=owner->ttb || cpu_word(0xff00001cu)!=ccr ||
+       !kui_armada_ce_stream_owner_sr_stable(sr,after))
+        status=KUI_ARMADA_CE_STREAM_OWNER_CHANGED;
+    if(status==KUI_ARMADA_CE_STREAM_OWNER_OK) *value=observed.value;
+    worker_mask_end(saved);
+    if(status==KUI_ARMADA_CE_STREAM_OWNER_OK) return KUI_ARMADA_CE_RAM_BIND_OK;
+    if(status==KUI_ARMADA_CE_STREAM_OWNER_READ || status==KUI_ARMADA_CE_STREAM_OWNER_NATIVE_READ)
+        return KUI_ARMADA_CE_RAM_BIND_READ;
+    return KUI_ARMADA_CE_RAM_BIND_CHANGED;
+}
+int kui_armada_ce_stream_rebind_owner(const struct kui_armada_ce_excerpt_binding *expected,
+    uint32_t owner_handle,struct kui_armada_ce_live_stream_api *out) {
+    if(!expected || !out || !owner_handle || owner_handle==UINT32_MAX ||
+       deferred_live.current_process!=deferred_live.owner_process ||
+       expected->owner_process!=deferred_live.owner_process ||
+       expected->owner_slot!=deferred_live.owner_slot ||
+       cpu_word(KUI_ARMADA_CE_LIVE_CURRENT_PROCESS)!=expected->owner_process ||
+       cpu_word(expected->owner_process+8u)!=owner_handle) return 0;
+    make_binding(&fresh,&deferred_live);
+    const uint32_t *a=(const uint32_t *)expected,*b=(const uint32_t *)&fresh;
+    for(unsigned i=0;i<sizeof(fresh)/sizeof(uint32_t);i++) if(a[i]!=b[i]) return 0;
+    struct worker_observer owner={expected->owner_process,expected->owner_slot,owner_handle,
+        cpu_word(0xff000008u),cpu_word(0xff00001cu),
+        {deferred_workspace.dsound.base,deferred_workspace.sndcore.base,deferred_workspace.coredll.base},
+        {deferred_workspace.dsound.span,deferred_workspace.sndcore.span,deferred_workspace.coredll.span}};
+    snapshot.context[2]=owner.process;snapshot.context[3]=snapshot.context[4]=0;
+    enum kui_armada_ce_live_status status=kui_armada_ce_live_sound_bind_with_value_reader(
+        owner.ttb,owner.ccr,read_ram,&owner,worker_mapped_read,true,&deferred_workspace,&deferred_live);
+    for(unsigned i=0;i<5u;i++) snapshot.fault[i]=deferred_workspace.fault[i];
+    snapshot.binding[1]=(uint32_t)status;snapshot.binding[2]=deferred_live.reads;
+    if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
+    make_binding(&fresh,&deferred_live);
+    for(unsigned i=0;i<sizeof(fresh)/sizeof(uint32_t);i++)
+        if(a[i]!=b[i]) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
+    if(deferred_live.current_process!=owner.process || deferred_live.owner_process!=owner.process) {
+        status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;
+    }
+    status=kui_armada_ce_live_stream_api_bind(&deferred_workspace,&deferred_live,out);
+    for(unsigned i=0;i<5u;i++) snapshot.fault[i]=deferred_workspace.fault[i];
+    if(status==KUI_ARMADA_CE_LIVE_OK && out->owner_handle!=owner_handle)
+        status=KUI_ARMADA_CE_LIVE_CHANGED;
+    if(status==KUI_ARMADA_CE_LIVE_OK) {
+        snapshot.context[3]=deferred_live.owner_process;snapshot.context[4]=deferred_live.device;
+    }
+done:
+    /* The short-lived native observer remains valid through both binders.
+     * A later bootstrap always establishes its own legacy reader afresh. */
+    deferred_workspace.context=NULL;deferred_workspace.mapped32=read_mapped;
+    deferred_workspace.native_values=false;
+    snapshot.binding[1]=(uint32_t)status;
+    return status==KUI_ARMADA_CE_LIVE_OK;
+}
 int kui_armada_ce_stream_bind_deferred(struct kui_armada_ce_excerpt_binding *out) {
     if(!out) return 0;
     enum kui_armada_ce_live_status status=bind_now(true);

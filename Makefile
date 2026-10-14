@@ -40,6 +40,12 @@ test-armada-ce-stream-owner-word: build/test-armada-ce-stream-owner-word
 build/test-armada-ce-stream-owner-word: tests/test_armada_ce_stream_owner_word.c include/kui/armada_ce_stream_owner_word.h include/kui/armada_ce_ram_bind.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+.PHONY: test-armada-ce-stream-rebind-word
+test-armada-ce-stream-rebind-word: build/test-armada-ce-stream-rebind-word
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-rebind-word
+build/test-armada-ce-stream-rebind-word: tests/test_armada_ce_stream_rebind_word.c include/kui/armada_ce_stream_rebind_word.h include/kui/armada_ce_stream_owner_word.h include/kui/armada_ce_live_sound.h include/kui/armada_ce_ram_bind.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
 build/test-armada-ce-stream-model: tests/test_armada_ce_stream_model.c src/loader/armada_ce_stream_model.c include/kui/armada_ce_stream_model.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_armada_ce_stream_model.c src/loader/armada_ce_stream_model.c -o $@

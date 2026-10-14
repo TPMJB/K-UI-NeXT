@@ -308,8 +308,11 @@ static bool fresh_identity(void) {
     struct kui_armada_ce_live_stream_api fresh;
     kui_armada_ce_excerpt_revalidate_fn validate=(kui_armada_ce_excerpt_revalidate_fn)
         (uintptr_t)player.binding.revalidate;
-    if(!binding_valid(&player.binding) || !validate(&player.binding) ||
-       !kui_armada_ce_stream_bind_native(&fresh) ||
+    if(!binding_valid(&player.binding)) return false;
+    bool valid=player.worker_started?
+        kui_armada_ce_stream_rebind_owner(&player.binding,player.native.api.owner_handle,&fresh):
+        (validate(&player.binding) && kui_armada_ce_stream_bind_native(&fresh));
+    if(!valid ||
        (player.worker_started && !same_words(&fresh,&player.native.api,sizeof(fresh)))) return false;
     if(!player.worker_started) player.native.api=fresh;
     return true;
