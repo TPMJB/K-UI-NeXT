@@ -14,7 +14,6 @@ priority 2, the DATA reader and the SCI transport are unchanged.
 | Cursor "moved too fast" recovery | Total cursor progress compared with total GetTickCount time plus 20 ms | Removed |
 | Play starts / restarts after a recovery at | whole 2 s ring fresh | 1 s fresh |
 | Staging after a partial refill | Remainder (up to 37 KB) shifted byte by byte with IRQs masked | Head offset; only the sub-64-byte carry moves, unmasked |
-| Yield while a source job is pending | 1 ms (full guard/clock/position visit each time) | 5 ms |
 | One-second sample AUX | bit 0 pending, bit 1 running, bits 8-15 state | same, plus bits 16-31 = worker visits in that second |
 
 The removed check accumulated elapsed playback since `011f71d`. The cursor
@@ -43,6 +42,10 @@ Note each cut-out and roughly when it happened. Return with
 | Events | `1` START only | `2` UNDERRUN: READY at the time and the visit interval in AUX. |
 | Samples `SOURCE` | Grows by about `2B110` per one-second row while playing | Slower growth with READY falling is a supply shortfall. |
 | Samples `AUX` bits 16-31 | `0014` (20) or more visits per second | Low values mean the worker is still starved. |
+
+CE's scheduler tick on this kernel is 25 ms (`tools/armada_ce_rom_audit.py`),
+so worker sleeps of 1-20 ms all wake on the next tick and a visit comes at
+best every 25 ms. A 16-sector job per visit still allows about 1.5 MB/s.
 
 `13` should no longer occur. If cut-outs remain with `15`, the samples show
 whether the card (SOURCE) or the worker (visits) fell behind.

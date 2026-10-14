@@ -30,11 +30,7 @@
 #define DEVICE_CS_OFFSET 88u
 #define WORKER_TOKEN UINT32_C(0x5354524d)
 #define STEP_MS 20u
-/* A 16-sector job spends tens of milliseconds on the card. Polling it every
- * 1ms at above-normal priority repeats the full guard, clock and position
- * calls (and their sound locks) dozens of times per job; 5ms adds at most
- * 5ms to a 213ms job. */
-#define SOURCE_STEP_MS 5u
+#define SOURCE_STEP_MS 1u
 #define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
 _Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
     "raw batch and carry staging must fit the already reserved source bank");
