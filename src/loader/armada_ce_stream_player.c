@@ -64,10 +64,11 @@ struct stream_player {
     uint32_t callback_info[3],applied_epoch,applied_play_epoch,applied_stop_epoch;
     uint32_t initialized,read_active,read_bus_epoch,device_page,buffer_page,frontier_page;
     uint32_t now_ms,copied_frontier,last_model_result,source_total,cleanup_epoch;
-    uint32_t stage_head; /* Offset of the model's first staged byte. */
     uint32_t fault[5],mapping_status,mapping_address;
     struct kui_armada_ce_stream_read read;
     uint32_t recovery[5];
+    /* Last, so the audited owner-reader offsets into player stay fixed. */
+    uint32_t stage_head; /* Offset of the model's first staged byte. */
 };
 static struct stream_player player;
 
